@@ -1720,8 +1720,14 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "soft-present must blit readPixels into the 2D overlay");
   assert.match(src, /awaitSoftPresent/,
     "garage settle / SAVE SCREENSHOT wait on awaitSoftPresent");
+  assert.match(src, /SOFT_BLIT_EVERY/,
+    "soft-present must throttle full-frame readPixels (car-group SwiftShader tax)");
   assert.match(src, /softPresent:\s*\(\)\s*=>\s*!!_softPresent/,
     "softPresent() capability bit for renderer-picker / probes");
+  assert.match(src, /function invalidateSoftPresent\(/,
+    "snapCam calls gfx.invalidateSoftPresent — GLX must define it (WGX already does)");
+  assert.match(src, /invalidateSoftPresent,/,
+    "invalidateSoftPresent must be on the GLX export surface");
   const awaitFn = src.slice(src.indexOf("function awaitSoftPresent"), src.indexOf("function init(canvasEl)"));
   assert.match(awaitFn, /const start = _softBlitGen/,
     "GLX must wait for a newer blit, not return the last gen already on the overlay");
@@ -1731,6 +1737,12 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "timeout splice must find the same function push() stored");
   assert.doesNotMatch(awaitFn, /_softPresentWaiters\.push\(wrap\)/,
     "do not push a wrapper the timeout cannot indexOf");
+});
+
+test("menuBlank hides #game-soft with #game", () => {
+  const src = code("js/game.js");
+  assert.match(src, /getElementById\("game-soft"\)/,
+    "soft-present overlay must follow menuBlank visibility with #game");
 });
 
 test("SAVE SCREENSHOT reads #game-soft when the overlay exists", () => {

@@ -149,9 +149,10 @@ async function captureBackend(backend) {
     const path = resolve(outDir, `${label}-${backend}.png`);
     const shot = await screenshotPresentedCanvas(page, { path, skipAwait: true, timeout: 60_000 });
     const buf = shot.buf;
+    const blank = shot.bytes < 5000;
     shots.push({ backend, path, bytes: buf.length, state, consoleLines });
     console.log(`  ${backend}: ${path} (${(buf.length / 1024).toFixed(1)} KB) bound=${state.backend}`
-      + (buf.length < 5000 ? "  ⚠ looks blank" : ""));
+      + (blank ? "  ⚠ looks blank" : ""));
   } finally {
     await browser.close();
   }

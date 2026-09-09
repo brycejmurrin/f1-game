@@ -24,6 +24,13 @@ const GLX = (function () {
   let _softBlitGen = 0;
   let _softPresentWaiters = [];
   let _softLastMaxPx = 0;
+  let _softBlitPace = 0;
+  // Full-frame readPixels every present() on SwiftShader starved the car
+  // group (measured: five Test timeouts under loadavg ~3 with the garage
+  // still drawing). Cap the overlay at ~7.5 Hz; awaitSoftPresent waiters
+  // force the next present through so settle/screenshot still get a fresh
+  // blit.
+  const SOFT_BLIT_EVERY = 8;
   // Mobile tier: iOS home-screen web apps (WKWebView) get a tight jetsam memory
   // budget that GPU/IOSurface allocations count against — a hard kill, no JS
   // error, no contextlost event. Shrink every discretionary GPU allocation on
@@ -426,9 +433,8 @@ const GLX = (function () {
     if (canvas.parentNode) canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
     else if (document.body) document.body.appendChild(_displayCanvas);
     _displayCtx = _displayCanvas.getContext("2d", { alpha: false });
-    // WebGL layer stays for the GPU path but must not paint over the blit —
-    // under SwiftShader it is the black void the soft path exists to hide.
-    if (canvas.style) canvas.style.opacity = "0";
+    // Keep #game opacity at 1 — hiding it broke element screenshots and
+    // visibility waits. The overlay sits on top with opaque putImageData.
     try { Log.info("gfx", "GLX soft-present on"); } catch (_) { /* harness */ }
   }
 
@@ -444,6 +450,11 @@ const GLX = (function () {
 
   function softBlit() {
     if (!_softPresent || !_displayCtx || !gl || ctxGone()) return;
+    const force = _softPresentWaiters.length > 0;
+    if (!force) {
+      _softBlitPace++;
+      if ((_softBlitPace % SOFT_BLIT_EVERY) !== 0) return;
+    }
     const w = width | 0, h = height | 0;
     if (w < 1 || h < 1) return;
     if (_displayCanvas.width !== w || _displayCanvas.height !== h) {
@@ -461,19 +472,15 @@ const GLX = (function () {
     }
     const dst = _softImg.data;
     const row = w * 4;
-    let maxPx = 0;
+    // Flip Y (GL origin is bottom-left) via row copies, then force opaque alpha.
     for (let y = 0; y < h; y++) {
-      const srcOff = (h - 1 - y) * row;
-      const dstOff = y * row;
-      for (let i = 0; i < row; i += 4) {
-        const r = _softBuf[srcOff + i], g = _softBuf[srcOff + i + 1], b = _softBuf[srcOff + i + 2];
-        dst[dstOff + i] = r;
-        dst[dstOff + i + 1] = g;
-        dst[dstOff + i + 2] = b;
-        dst[dstOff + i + 3] = 255;
-        const s = r + g + b;
-        if (s > maxPx) maxPx = s;
-      }
+      dst.set(_softBuf.subarray((h - 1 - y) * row, (h - y) * row), y * row);
+    }
+    let maxPx = 0;
+    for (let i = 0; i < dst.length; i += 4) {
+      dst[i + 3] = 255;
+      const s = dst[i] + dst[i + 1] + dst[i + 2];
+      if (s > maxPx) maxPx = s;
     }
     _softLastMaxPx = maxPx;
     // Skip near-black frames so a clear does not wipe a good garage still
@@ -490,8 +497,17 @@ const GLX = (function () {
       on: !!_softPresent,
       gen: _softBlitGen,
       maxPx: _softLastMaxPx,
+      every: SOFT_BLIT_EVERY,
       display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
     };
+  }
+
+  // snapCam() / park() call gfx.invalidateSoftPresent — WGX bumps sceneGen;
+  // GLX forces the next present past the SOFT_BLIT_EVERY throttle so waiters
+  // see a post-camera blit instead of hanging on a stale overlay.
+  function invalidateSoftPresent() {
+    if (!_softPresent) return;
+    _softBlitPace = SOFT_BLIT_EVERY - 1;
   }
 
   function awaitSoftPresent(timeoutMs) {
@@ -2516,6 +2532,7 @@ const GLX = (function () {
     softPresent: () => !!_softPresent,
     softPresentState,
     awaitSoftPresent,
+    invalidateSoftPresent,
     gpuErrors: () => _glErrors,
     gpuFirstError: () => _glFirstError || null,
     // The bound backend's account of itself, one shape on all three (TLX

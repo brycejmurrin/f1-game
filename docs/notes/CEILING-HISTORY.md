@@ -2636,3 +2636,13 @@ rejects `"no display ctx"` instead of resolving as success.
 `netPeerSend` refuses a `cars[]` index as a wire id; `carInput` distinguishes
 a missing car (`false`) from a clear (`{ ok: true, cleared: true }`).
 
+## 2026-09-09 — union hunt-fix remainder + garage/soft-present deploy
+
+`js/game.js` lines 10355 -> **10363** (+8) / codeLines 5600 -> **5604** (+4).
+Union of dual-car seat / `garageSeat()` with their garage SETUP class,
+pair-at floor, and landscape `#cs-cam-panel`.
+
+`js/render/glx/glx.js` lines 2589 -> **2606** (+17). Union of waiter `keep[]`
+with their `invalidateSoftPresent` (force `SOFT_BLIT_EVERY` so `snapCam`
+sees a post-camera blit) and HeadlessChrome blit throttle.
+

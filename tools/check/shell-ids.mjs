@@ -62,12 +62,9 @@ export const RUNTIME_IDS = {
   "pm-metrics-logns":  "metrics-overlay makeMetricsBtn()",
   "pm-metrics-loglvl": "metrics-overlay makeMetricsBtn()",
   "pm-halo":           "cockpit-opts builds its rows from a table whose entries carry `id`",
-  // NOT runtime-created any more: #game-soft was TLX's separate 2D blit canvas
-  // and TLX left the shipped tree in the 2026-09-03 spike-out. The read is
-  // null-guarded and its else branch ("say so plainly when there is not") is
-  // the documented answer, so this is correct-but-dead rather than a defect.
-  // It comes back with the backend; delete both together if it does not.
-  "game-soft":         "js/render/three/tlx.js only — null-guarded, else-branch is the documented answer",
+  // Runtime soft-present overlay: GLX (HeadlessChrome) and TLX (WebGPU soft
+  // path) insert #game-soft; reads are null-guarded with a documented else.
+  "game-soft":         "js/render/glx/glx.js + js/render/three/tlx.js — null-guarded soft-present overlay",
 };
 
 const jsFiles = (dir, out = []) => {

@@ -224,9 +224,13 @@
   const LIV_FIELDS = ["finShape", "finStyle", "finBadge", "spineLogo", "spineSide",
                       "spineHeight", "tcam", "coverVents", "wingCarbon", "numFont",
                       "cover", "rearWing", "stripe", "accent", "nose", "pod", "wing",
-                      "halo", "fin", "finArt", "noseStripe", "logo", "logo2", "logo3"];
+                      "halo", "fin", "finArt", "noseStripe", "logo", "logo2", "logo3",
+                      "spineTint", "sideTint"];
+  // logo*/spineTint/sideTint are RGB triples — without HEX_FIELDS they stay
+  // strings and markPalette crashes on .slice (same class as wrap+partial).
   const HEX_FIELDS = new Set(["cover", "rearWing", "stripe", "accent", "nose", "pod",
-                              "wing", "halo", "fin", "finArt", "noseStripe"]);
+                              "wing", "halo", "fin", "finArt", "noseStripe",
+                              "logo", "logo2", "logo3", "spineTint", "sideTint"]);
   const hexRgb = (h) => { const v = parseInt(String(h).replace(/^#/, ""), 16);
     return Number.isFinite(v) ? [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255] : null; };
   const LIV_OVER = (() => {
@@ -261,6 +265,7 @@
     return { c1: S.colors ? S.colors[0] : l.c1, c2: S.colors ? S.colors[1] : l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null,
+             logo: l.logo || null, logo2: l.logo2 || null, logo3: l.logo3 || null,
              noseStripe: l.noseStripe || null,
              // The tail DESIGN picks (js/car/liveries.js): geometry AND paint,
              // so the studio shows the same fin the game builds.
@@ -268,6 +273,9 @@
              finBadge: l.finBadge || null, spineLogo: l.spineLogo || null,
              tcam: l.tcam || null, coverVents: l.coverVents || null,
              spineHeight: l.spineHeight || null, spineSide: l.spineSide || null,
+             cover: l.cover || null, rearWing: l.rearWing || null,
+             wingCarbon: l.wingCarbon || null,
+             spineTint: l.spineTint || null, sideTint: l.sideTint || null,
              // ?finish= overrides the livery's own, so a finish can be inspected
              // without authoring a livery for it (Car3D.FINISH_SURFACE).
              finish: S.finish || l.finish || null };

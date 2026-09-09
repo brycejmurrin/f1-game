@@ -1158,8 +1158,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "garage compact always stacks — pair-on starves #cs-options");
   assert.equal(decl(css("css/carsetup.css"), '#cs-inner[data-density="compact"] .cs-opt-desc', "display"), "none",
     "compact garage hides part blurbs so more option rows fit");
-  assert.equal(decl(css("css/carsetup.css"), '#cs-inner[data-density="compact"] #cs-options .cs-liv-editor > .adv-help:not(#cs-rake-readout)', "display"), "none",
+  assert.equal(decl(css("css/carsetup.css"), /#cs-options \.cs-tune-editor > \.adv-help:not\(#cs-rake-readout\)/, "display"), "none",
     "compact SETUP hides the long tune note and keeps the rake readout");
+  assert.match(code("js/garage/setup-sheet.js"), /wrap\.className\s*=\s*"cs-tune-editor"/,
+    "SETUP must not reuse cs-liv-editor (that class translucents the paint sheet)");
+  assert.equal(decl(css("css/carsetup.css"), /#cs-options \.cs-liv-editor > \.adv-help:not\(#cs-rake-readout\)/, "display"), "none",
+    "compact paint editor still hides its long help notes");
   assert.equal(decl(css("css/menus.css"), "#sel-daily", "flex"), "0 0 auto",
     "TODAY is a chip on the pan-x toolbar, first in the row");
   assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"] #sel-daily > span', "display"), "none",

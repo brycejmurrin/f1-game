@@ -203,6 +203,23 @@ test("resolveLivery falls back through the team's own list", () => {
     "{ c1, c2 } literal drops finShape/spineHeight/spineSide and regrows the fin");
 });
 
+test("resolveLivery and the live preview keep spineTint / sideTint / id", () => {
+  // Aston's launch car authors spineTint; dropping it in resolveLivery painted
+  // stripe||accent (lime) on the crown band. The draft path needs the same
+  // keys, and livePreviewDraft needs id:"default" so mark plates stay on.
+  const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(GAME, /spineTint:\s*l\.spineTint\s*\|\|\s*null/,
+    "draft resolveLivery must copy spineTint");
+  assert.match(GAME, /sideTint:\s*l\.sideTint\s*\|\|\s*null/,
+    "draft resolveLivery must copy sideTint");
+  assert.match(GAME, /spineTint:\s*liv\.spineTint\s*\|\|\s*null/,
+    "cached resolveLivery must copy spineTint");
+  assert.match(GAME, /sideTint:\s*liv\.sideTint\s*\|\|\s*null/,
+    "cached resolveLivery must copy sideTint");
+  assert.match(SHEET, /id:\s*"default"/,
+    "livePreviewDraft must set id:\"default\" so brand plates stay on while editing");
+});
+
 /* ── The reverse conversion, and the sheet that has to explain itself ────────
  *
  * livDraftTo() replaced the last two hand-written copies of the field list —

@@ -27,7 +27,8 @@
 //   identity -> scratch/captures/apex-capture/identity
 //   lap-tour -> scratch/captures/apex-capture/lap-tour
 //   modes    -> scratch/captures/apex-capture/modes
-// A frame under ~5 KB is flagged blank:true.
+// Soft-present blank gate: sample max-channel on #game-soft / 2D canvas when
+// present (byte-size is a poor blank proxy for JPEG and soft-blit PNGs).
 
 import { mkdirSync, createReadStream, statSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
@@ -133,6 +134,36 @@ async function waitFrames(page, n = 2) {
   }), n);
 }
 
+/** Await soft-present blit while the loop still runs; prefer #game-soft when armed. */
+async function resolveGameShot(page) {
+  await page.evaluate(async () => {
+    if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
+      try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try the canvas */ }
+    }
+  });
+  return page.evaluate(() =>
+    document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
+}
+
+/** Blank = near-black max channel on a 2D soft canvas; never byte-size. */
+async function blankFromTarget(page, sel) {
+  return page.evaluate((s) => {
+    const g = document.querySelector(s) || document.getElementById("game-soft")
+      || document.getElementById("game");
+    if (!g) return true;
+    const ctx = g.getContext && g.getContext("2d");
+    if (!ctx || !(g.width > 0) || !(g.height > 0)) return false;
+    const w = Math.min(g.width | 0, 96), h = Math.min(g.height | 0, 96);
+    const id = ctx.getImageData(0, 0, w, h);
+    let max = 0;
+    for (let i = 0; i < id.data.length; i += 4) {
+      const c = id.data[i] + id.data[i + 1] + id.data[i + 2];
+      if (c > max) max = c;
+    }
+    return max < 8;
+  }, sel).catch(() => false);
+}
+
 async function shotPng(page, dir, name, sel = "canvas#game") {
   // Match survey-track.mjs: compositor clip of the presented canvas.
   // Do NOT use canvas.toDataURL — WebGL clears the backbuffer (black frame).
@@ -145,7 +176,9 @@ async function shotPng(page, dir, name, sel = "canvas#game") {
   }
   await waitFrames(page, 2);
   const shot = await screenshotPresentedCanvas(page, { path: `${dir}/${name}.png`, timeout: 60000 });
-  return { name: `${name}.png`, bytes: shot.bytes, blank: shot.bytes < 5000 };
+  const target = await page.evaluate(() =>
+    document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
+  return { name: `${name}.png`, bytes: shot.bytes, blank: await blankFromTarget(page, target) };
 }
 
 async function shotJpg(page, dir, name) {
@@ -156,7 +189,9 @@ async function shotJpg(page, dir, name) {
     quality: 72,
     timeout: 60000,
   });
-  return { name: `${name}.jpg`, bytes: shot.bytes, blank: shot.bytes < 5000 };
+  const target = await page.evaluate(() =>
+    document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
+  return { name: `${name}.jpg`, bytes: shot.bytes, blank: await blankFromTarget(page, target) };
 }
 
 /**

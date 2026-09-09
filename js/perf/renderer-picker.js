@@ -366,6 +366,11 @@ function presentStatus() {
     }
     return "THREE.JS AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, and stays on three WebGL2 if GPU is missing, this tab already lost WebGPU, or the browser is Safari/iOS (WebKit WebGPU drew nothing on a phone — THREE PATH: WEBGPU opts back in).";
   }
+  try {
+    if (typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent()) {
+      return "WEBGL2 paints via #game-soft under HeadlessChrome — screenshots read the 2D blit, not the WebGL swapchain. Headed players see #game." + live;
+    }
+  } catch (_) { /* no live backend yet */ }
   return "WEBGL2 paints the GPU canvas. HeadlessChrome presents via #game-soft; headed players see #game. Screenshots just work.";
 }
 function paintPresent() {
@@ -397,23 +402,23 @@ function saveScreenshot() {
         try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try the canvas */ }
       }
       const g = typeof document !== "undefined" ? document.getElementById("game") : null;
-      let href = null;
-      // HeadlessChrome GLX (and TLX-WebGPU) hide #game and blit onto #game-soft.
-      // toDataURL(#game) is the uncomposited GPU canvas — often black, even
-      // with preserveDrawingBuffer. The overlay is what CDP / the player sees.
       const softEl = typeof document !== "undefined" ? document.getElementById("game-soft") : null;
+      let href = null;
+      // Soft-present paints #game-soft (GLX/TLX). Prefer that toDataURL; #game is
+      // often the GPU swapchain (black under software). capturePixels is fallback.
       if (softEl && softEl.width > 0 && typeof softEl.toDataURL === "function") {
         try { href = softEl.toDataURL("image/png"); } catch (_) { href = null; }
       }
       const soft = typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent();
-      // Soft-present #game is the native WebGPU swapchain (often black). Prefer
-      // capturePixels (LDR copyTextureToBuffer) when the 2D blit is armed.
       let capFailed = false;
       if (!href && soft && typeof GLX.capturePixels === "function") {
         try {
           const cap = await GLX.capturePixels();
           href = hrefFromPixels(cap);
         } catch (_) { href = null; capFailed = true; /* fall through to #game */ }
+      }
+      if (!href && softEl && typeof softEl.toDataURL === "function") {
+        try { href = softEl.toDataURL("image/png"); } catch (_) { href = null; }
       }
       if (!href && g && typeof g.toDataURL === "function") {
         try { href = g.toDataURL("image/png"); } catch (_) { href = null; }
