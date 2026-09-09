@@ -152,13 +152,41 @@ test("spineLogo none drops the crest from the cover and keeps it on the fin", ()
 // did, every mark on a dorsal cover came out 14 % too narrow and the owner saw
 // it as "the side designs look squished". So re-measure it here, against the
 // real Car3D, rather than trusting the number.
-// SPINE TINT: the crown band's OWN colour. Every SPINE TOP design took
-// `stripe || accent`, and neither can be set for the crown alone — `stripe`
-// runs the whole spine INCLUDING THE NOSE, and `accent` is tertiary trim used
-// all over the car. Aston Martin's launch car is a dark band on a body-green
-// cover whose accent is LIME, so it came out lime, and the only way to fix it
-// without this field also darkened the nose. Absent, the default must be
-// exactly what it was, or every shipped livery moves.
+// SPINE TINT: the crown band's OWN colour. Optional paints (BODY STRIPE,
+// DETAIL) must not steal it — each row owns one surface. Absent, the band
+// derives from the BASE colours (secondary, then primary) against the cover.
+test("saddle / crown band ignore BODY STRIPE; SPINE TINT is the override", () => {
+  // Audi-shaped custom: dark cover, red secondary, titanium stripe. SPINE TOP
+  // saddle is the secondary PANEL — stripe used to win BAND_ORDER (and remap
+  // the working accent) and paint the cover silver.
+  const RED = [0.98, 0.28, 0.05], SILVER = [0.702, 0.722, 0.741], COVER = [0.075, 0.078, 0.085];
+  const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+  const carries = (styles, c) => {
+    const want = to255(c).join(",");
+    return [...styles].some((v) => v && v.replace(/^rgba?\(/, "").replace(/[)\s]/g, "").startsWith(want));
+  };
+  const stylesOf = (ops) => new Set(opsIn(ops, R.crest).map((op) => op.style).filter(Boolean));
+  const base = {
+    c1: [0.05, 0.06, 0.07], c2: RED, cover: COVER,
+    spineLogo: "saddle", finShape: "none", spineHeight: "dorsal"
+  };
+  const withStripe = A.paint("audi", { ...base, stripe: SILVER });
+  const noStripe = A.paint("audi", base);
+  assert.ok(carries(stylesOf(withStripe), RED),
+            `saddle crown must carry secondary ${to255(RED)}; got ${[...stylesOf(withStripe)].join(", ")}`);
+  assert.equal(carries(stylesOf(withStripe), SILVER), false,
+               "BODY STRIPE must not steal the saddle");
+  // Same crown with or without a body stripe — the stripe row is elsewhere.
+  assert.deepEqual([...stylesOf(withStripe)].sort(), [...stylesOf(noStripe)].sort(),
+                   "adding BODY STRIPE changed the saddle crown");
+
+  // SPINE TINT alone recolours the band.
+  const PINK = [1, 0.2, 0.6];
+  const tinted = A.paint("audi", { ...base, stripe: SILVER, spineTint: PINK });
+  assert.ok(carries(stylesOf(tinted), PINK),
+            `SPINE TINT must paint the saddle; got ${[...stylesOf(tinted)].join(", ")}`);
+});
+
 test("spineTint colours the crown band alone, and is absent-identical", () => {
   const LIME = [0.718, 0.882, 0.106], DARK = [0.008, 0.086, 0.078];
   const AM = { c1: [0.0, 0.349, 0.31], c2: LIME, spineLogo: "stripe" };
