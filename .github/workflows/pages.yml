@@ -184,7 +184,13 @@ jobs:
 
   deploy:
     needs: publishable
-    if: needs.publishable.outputs.deploy == 'true'
+    # `!cancelled()` is load-bearing, not decoration: a job's implicit
+    # success() looks at every job upstream of it, TRANSITIVELY, so when the
+    # gate was skipped (nothing new, or a reused pass) this job was skipped too
+    # even though publishable ran and said yes (run 2237, 2026-09-10). The
+    # explicit result check keeps the failure semantics: a failed or skipped
+    # publishable still stops here.
+    if: ${{ !cancelled() && needs.publishable.result == 'success' && needs.publishable.outputs.deploy == 'true' }}
     # The ONLY step that actually touches GitHub's single-slot Pages queue.
     # cancel-in-progress stays false: a publish in flight is never interrupted,
     # and a newer run simply queues behind it and publishes next.
@@ -292,6 +298,8 @@ jobs:
   verify-live:
     name: Live version.json equals the stamped build
     needs: deploy
+    # Same transitive-skip rule as deploy: run exactly when deploy succeeded.
+    if: ${{ !cancelled() && needs.deploy.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

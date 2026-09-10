@@ -189,8 +189,15 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
     "the pre-environment check asks the one question that matters: may THIS commit still be published?");
 
   assert.match(deploy, /needs: publishable/);
-  assert.match(deploy, /if: needs\.publishable\.outputs\.deploy == 'true'/,
-    "a run that cannot publish must skip the environment job entirely");
+  // `!cancelled()` plus an explicit result check: a job's implicit success()
+  // looks at every job upstream TRANSITIVELY, so with the gate skipped (nothing
+  // new / reused pass) deploy was skipped even though publishable said yes
+  // (run 2237). The result check keeps a failed or skipped publishable fatal.
+  assert.match(deploy, /if: \$\{\{ !cancelled\(\) && needs\.publishable\.result == 'success' && needs\.publishable\.outputs\.deploy == 'true' \}\}/,
+    "a run that cannot publish must skip the environment job entirely; a reused gate must not");
+  const verifyLive = pagesWorkflow.split("\n  verify-live:")[1];
+  assert.match(verifyLive, /if: \$\{\{ !cancelled\(\) && needs\.deploy\.result == 'success' \}\}/,
+    "verify-live must run exactly when deploy succeeded, whatever was skipped upstream");
   assert.match(deploy, /environment:\s*\n\s+name: github-pages/);
   assert.match(deploy, /tools\/ci\/pages-publishable\.sh "\$GITHUB_SHA"[\s\S]*?REFUSING DEPLOY:[\s\S]*?exit 1/,
     "the in-lock recheck must fail the run, never become a successful no-op deployment");
@@ -299,15 +306,27 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     'node -e \'const m=JSON.parse(process.env.FAKE_RUNS||"{}");console.log(JSON.stringify({workflow_runs:m[process.argv[1]]||[]}))\' "$sha"\n');
   fs.chmodSync(path.join(bin, "gh"), 0o755);
   const script = new URL("../../tools/ci/pages-reuse-verdict.sh", import.meta.url).pathname;
-  const run = (over) => ({ id: 7, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", html_url: "https://example.test/run/7", ...over });
+  const run = (over) => ({ id: 7, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", head_branch: "feature", html_url: "https://example.test/run/7", ...over });
   const verdict = (sha, runs, env = {}) => Object.fromEntries(cp.execFileSync("bash", [script, sha], {
     cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", FAKE_RUNS: JSON.stringify(runs), ...env },
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), ...env },
   }).trim().split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2)));
 
   assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7" },
     "merge with a parent's exact tree + that parent's green PR run: reuse");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
+  // THE FAST TIER IS NOT A GATE. Run 2237 reused the merge commit's own
+  // deploy-branch push run (guards + node suites only) as if it were the full
+  // gate; the head_sha candidate is checked first, so this must be rejected
+  // before the parent's real run is even looked at.
+  assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })], [D]: [run()] }),
+    { reuse: "true", source: D, run: "https://example.test/run/7" },
+    "a deploy-branch push run (fast tier) must be skipped in favour of the parent's full run");
+  assert.equal(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })] }).reuse, "false",
+    "a fast-tier run alone never reuses");
+  assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }, { DEPLOY_BRANCH: "" }).reuse, "false",
+    "without DEPLOY_BRANCH no push run can be told from the fast tier: fail safe into the gate");
+  assert.equal(verdict(M2, { [D]: [run({ path: ".github/workflows/pages.yml", event: "schedule" })] }).reuse, "true", "a train tick that deployed the same tree counts");
   assert.equal(verdict(M2, { [D]: [run({ path: ".github/workflows/pages.yml", event: "push" })] }).reuse, "true", "an earlier deploy of the same tree counts");
   assert.equal(verdict(M2, { [D]: [run({ conclusion: "failure" })] }).reuse, "false", "a failed run is not a gate");
   assert.equal(verdict(M2, { [D]: [run({ conclusion: "cancelled" })] }).reuse, "false", "a cancelled run is not a gate");
