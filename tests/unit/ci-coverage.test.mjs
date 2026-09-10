@@ -194,8 +194,14 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
     "the pre-environment check asks the one question that matters: may THIS commit still be published?");
 
   assert.match(deploy, /needs: publishable/);
-  assert.match(deploy, /if: needs\.publishable\.outputs\.deploy == 'true'/,
-    "a run that cannot publish must skip the environment job entirely");
+  // !cancelled() + the explicit result: a bare `needs.publishable.outputs.deploy
+  // == 'true'` carries an implicit success(), and success() reads every job
+  // upstream — the `ci` job the verdict SKIPS on a reused gate included. Runs
+  // 2237 and 2238 (2026-09-10) reported green and published nothing that way.
+  assert.match(deploy, /if: \$\{\{ !cancelled\(\) && needs\.publishable\.result == 'success' && needs\.publishable\.outputs\.deploy == 'true' \}\}/,
+    "a run that cannot publish must skip the environment job entirely — and a run that reused its gate must not");
+  assert.match(pagesWorkflow, /\n  verify-live:\n[\s\S]*?if: \$\{\{ !cancelled\(\) && needs\.deploy\.result == 'success' \}\}/,
+    "verify-live sits downstream of the same skipped ci job");
   assert.match(deploy, /environment:\s*\n\s+name: github-pages/);
   assert.match(deploy, /tools\/ci\/pages-publishable\.sh "\$GITHUB_SHA"[\s\S]*?REFUSING DEPLOY:[\s\S]*?exit 1/,
     "the in-lock recheck must fail the run, never become a successful no-op deployment");
