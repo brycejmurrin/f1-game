@@ -222,7 +222,11 @@ printf '%s\n' '{"design":{"spineLogo":"wrap"},"frame":"spineTop","shot":"wrap"}'
 (team, out, fast) once, then `team / livery / design / frame / shot / diff /
 sheet / reload / status / close`, every key riding along in order. It holds
 the browser lock while open and needs the MCP *server* (`serve` /
-`serve-http`); a one-shot `call` ends the session with the process.
+`serve-http`); a one-shot `call` ends the session with the process. Like
+every browser `apex_*` wrap it refuses `playwright_live` while the host
+`@playwright/mcp` server is attached (this container: always) — drive the CLI
+`--serve` directly then, or set `APEX_MCP_PS=""` for the server (the test
+hook that blanks the process scan; docs/AGENT-SURFACE.md §known gaps).
 
 ### Output
 
