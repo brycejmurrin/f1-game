@@ -204,10 +204,24 @@ try {
     if (out.crashed || out.browserGone) break;
     try {
       const beat = await Promise.race([
-        page.evaluate(() => ({
-          t: (window.__apex && window.__apex.info && window.__apex.info().track) || null,
-          f: (window.__apex && window.__apex.info && Math.round(window.__apex.info().fps || 0)) || 0,
-        })),
+        // `f` READ info().fps, WHICH DOES NOT EXIST — so every beat of every leg
+        // of every census has logged f: 0, and the one per-second time series on
+        // real hardware has always been blank. The governor snapshot is where fps
+        // lives (renderScale()/perf()); tier and scale come with it for free, so a
+        // leg that starts at 60 and decays now shows the CURVE instead of one
+        // settled number. A settled number cannot see a decay, which is exactly
+        // the shape a player reports as "fine for a few seconds, then not".
+        page.evaluate(() => {
+          const A = window.__apex; let g = null;
+          try { g = A && A.renderScale && A.renderScale(); } catch (_) { /* pre-boot */ }
+          return {
+            t: (A && A.info && A.info().track) || null,
+            f: g && g.fps != null ? Math.round(g.fps) : 0,
+            ms: g && g.floorMs != null ? +(+g.floorMs).toFixed(1) : null,
+            ti: g ? g.tier : null,
+            sc: g && g.scale != null ? +(+g.scale).toFixed(2) : null,
+          };
+        }),
         new Promise((_, rj) => setTimeout(() => rj(new Error("beat timeout")), 8000)),
       ]);
       out.beats.push({ s: +((Date.now() - t0) / 1000).toFixed(1), ...beat });
