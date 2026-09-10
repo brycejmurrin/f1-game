@@ -29,7 +29,8 @@ const Teams = (function () {
       /* The W17 is a BLACK car with a SILVER engine cover: the launch photos show
          the airbox, roll structure and cover crown in bare-metal silver over a
          black chassis, with the star flake on the tail. */
-      livery: { cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "none", spineHeight: "dorsal", spineLogo: "twin", spineSide: "sash" },
+      livery: { cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "none", spineHeight: "dorsal",
+                spineLogo: "fade", spineSide: "starfield", coverBind: "spineOnly" },
       engine: "Mercedes", tier: 0,
       stats: { speed: 96, accel: 91, cornering: 93, braking: 90 },
       drivers: [
@@ -42,7 +43,9 @@ const Teams = (function () {
       color: [0.863, 0.0, 0.0], color2: [1.0, 1.0, 1.0],           /* red #DC0000 / white */
       /* The SF-26 runs a WHITE engine cover over the red car — the strongest
          zone split on the 2026 grid, and the reason the cover colour exists. */
-      livery: { cover: [0.95, 0.95, 0.96], finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate" },
+      livery: { cover: [0.95, 0.95, 0.96], finShape: "none", spineHeight: "dorsal",
+                spineLogo: "cap", spineSide: "shoulder", coverBind: "saddleWrap", finHandoff: "contrast",
+                saddleTint: [0.95, 0.95, 0.96], fin: [0.863, 0.0, 0.0] },
       engine: "Ferrari", tier: 1,
       stats: { speed: 97, accel: 88, cornering: 91, braking: 92 },
       drivers: [
@@ -114,7 +117,9 @@ const Teams = (function () {
          claimed a white engine cover — the official release omits the cover
          from its white list, and a look at the launch photograph reads the
          cover as black. See docs/notes/LIVERY-2026-REFERENCE.md. */
-      livery: { cover: [0.055, 0.058, 0.070], finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "code" },
+      livery: { cover: [0.055, 0.058, 0.070], finShape: "none", spineHeight: "dorsal",
+                spineLogo: "ridge", spineSide: "rake", coverBind: "independent",
+                ridgeTint: [0.0, 0.82, 0.95], sideTint: [0.059, 0.235, 0.788] },
       engine: "Mercedes", tier: 3,
       stats: { speed: 82, accel: 78, cornering: 80, braking: 79 },
       drivers: [
@@ -124,9 +129,8 @@ const Teams = (function () {
     },
     {
       id: "audi", name: "Audi", short: "AUD",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "band",
-                cover: [0.075, 0.078, 0.085] },
-/* titanium silver #B3B8BD / Audi red-orange #FA470D, with a CARBON BLACK
+      color: [0.702, 0.722, 0.741], color2: [0.98, 0.28, 0.05],
+      /* titanium silver #B3B8BD / Audi red-orange #FA470D, with a CARBON BLACK
          engine cover. This was a black car here until 2026-09-08, described in
          this comment as "2026 black car, red-orange + titanium" with no source.
          The R26 is the other way round: silver body, black cover, red accents
@@ -134,8 +138,12 @@ const Teams = (function () {
          agreeing with the launch report ("titanium silver and bright Audi red
          body, with the four-ring logo on a carbon black engine cover"), so this
          is observation, not the inference the old comment rightly refused to
-         act on. docs/notes/LIVERY-2026-REFERENCE.md carries the sources. */
-      color: [0.702, 0.722, 0.741], color2: [0.98, 0.28, 0.05],
+         act on. docs/notes/LIVERY-2026-REFERENCE.md carries the sources.
+         Spine zones bind: cap + rake, independent bind, red saddle/spine tints. */
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "cap", spineSide: "rake",
+                coverBind: "independent", cover: [0.075, 0.078, 0.085],
+                saddleTint: [0.98, 0.28, 0.05], spineTint: [0.98, 0.28, 0.05],
+                ridgeTint: [0.04, 0.04, 0.05] },
       engine: "Audi", tier: 4,
       stats: { speed: 76, accel: 74, cornering: 75, braking: 73 },
       drivers: [
