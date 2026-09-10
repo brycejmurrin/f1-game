@@ -3022,6 +3022,7 @@ async function startRace() {
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
+  try { if (gfx.warm) gfx.warm(); } catch (_) { /* TLX links programs synchronously on first draw — warm them during the LIGHTS. Optimisation only; GLX/WGX have no warm and no-op. */ }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   clearMenuScreens();

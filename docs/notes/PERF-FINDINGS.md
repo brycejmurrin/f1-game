@@ -2673,6 +2673,152 @@ run where the webgpu leg gets past ~600 frames. Whatever answers it, note that
 this 4.9 fps mode is itself recurring and undiagnosed, and a census that lands
 in it cannot answer any question about env-probe content.
 
+### 2026-09-09 — the cube readback does not work as called, and envBlank never answered the question (run 76)
+
+Two things, one useful and one a dead end.
+
+**envState().blank is a BRANCH MARKER, not a content check.** `_envBlank` is set
+true only on the software clear path and false on every hardware latch, so on a
+real GPU it reads false BY CONSTRUCTION. Five Verdicts have now printed
+`envBlank=false` next to a black world and not one of them was evidence about
+what the cube holds. Do not read that column as content.
+
+**The readback added to answer it FAILS.**
+`renderer.readRenderTargetPixelsAsync(envRT, 0, 0, 64, 64, face)` on a
+`CubeRenderTarget` throws `Invalid value used as weak map key` inside three r185
+— identically on BOTH legs, so it is the call that is wrong, not anything about
+WebGPU. A different route is needed: copy a face into a plain RenderTarget and
+read that, or render one probe face into a 2D target alongside the cube. Not
+attempted, because the path runs only on hardware, so every iteration is a
+4-minute dispatch against library internals — the same shape as the resolution
+theory that cost four runs, and not worth repeating blind.
+
+The instrument does fail safe: it reports `cube.error` rather than throwing into
+a probe face, latches `_envCubeRead` so it never retries, and costs one call per
+session. It stays in place so whoever has a local hardware repro can fix the
+call rather than rebuild the scaffolding.
+
+Run 76 also confirms the black world a THIRD time on a leg that fully worked:
+`envReady=true`, `mipRan=87`, 528 frames, `meanLuma 2.9`, against webgl2 at
+`mipRan=89` and 64.6.
+
+**STATE OF THIS DEFECT.** Cause confirmed (the env cube, by within-leg A/B across
+runs 69/70). Two mechanisms excluded by measurement: the mip chain (75, 76) and
+the readback path (the 2.9 is not a capture artefact — maxLuma 247). Not yet
+distinguished: whether the cube CONTENTS are void, or the lit pass APPLIES a
+valid cube destructively. The lit-pass side is the cheaper of the two to test
+next and needs no readback: `envCC` absorbs via
+`color.mulAssign(envW.mul(0.94).oneMinus())`, so a knob that zeroes env strength
+WHILE the cube stays latched separates "nothing in it" from "applied wrong" —
+`carEnvCube` is that knob, and gfx-probe already takes `--tune`.
+
+### 2026-09-09 — the mip pass was NOT the black world (run 75, the first leg that actually tested it)
+
+The beat fix bought the measurement: the webgpu leg went from 6 frames to **547**
+at 51.1 fps, latched the probe (`envReady=true`, `begins=545 ends=545`,
+`badProbes=0`) and ran the repaired cube-mip pass **90 times** via the backend.
+
+`meanLuma 2.9`. Black, exactly as before.
+
+So the missing mip pass is REFUTED as the mechanism. It was a genuine defect —
+`renderer.generateMipmaps` does not exist in r185, so that pass had never once
+executed — and fixing it costs nothing and is worth keeping, but it does not
+explain the near-black world. The suspicion recorded above was wrong, and it was
+wrong in the way the code read predicted it might be: a minified-bundle argument
+that survived until something measured it.
+
+What run 75 settles that nothing before it could. BOTH TLX legs now hold
+`envReady=true` with `mipRan >= 90`, and they read 2.9 and 64.6. Together with
+the 69/70 A/B — the SAME webgpu leg, same present path, 39.2 probe-off against
+2.9 probe-on — the env cube as applied on the WebGPU path is the cause, and the
+mip chain is not the reason it hurts.
+
+Note the present-path caveat still forbids reading 2.9 against 64.6 as the
+measurement. It is not needed: the load-bearing comparison is within one leg,
+across the probe, and it has held across four runs.
+
+Where to look next, in order of what the evidence supports:
+1. **What is IN the cube on the WebGPU path.** `envBlank=false` is the code
+   checking itself, and that check has never been independently confirmed. A
+   readback of `envRT` (the `__tlx.lumaDbg()` half-float decoder already does
+   this for the post targets) says whether the faces hold a world or a void.
+2. **How the lit pass applies it.** `envStr` and the clearcoat `envCC` path —
+   `color.mulAssign(envW.mul(0.94).oneMinus())` ABSORBS under the mirror, so a
+   cube that reads near-zero darkens rather than merely failing to brighten.
+3. Colour space or format on the cube (`NoColorSpace` is set on the target).
+
+### 2026-09-09 — the slow leg was never slow: TLX stalls the main thread and the census calls it dead
+
+The evidence was already in the job logs, in checkpoints the tool has printed
+all along. Run 74, the four legs side by side:
+
+| leg | racing | next checkpoint | live beats |
+|---|---|---|---|
+| webgpu | +15.7s | **page-stopped-answering +25.6s** | 1, then `beat timeout` |
+| webgl2 | +29.3s | **page-stopped-answering +37.3s** | **0** — the FIRST beat missed |
+| glx | +8.6s | settled +24.1s | 15, one per second |
+| wgx | +8.9s | settled +25.7s | 15, one per second |
+
+The settle phase is a 15-beat heartbeat, each `page.evaluate` raced against an
+8 s timeout, and ONE miss broke the loop. So a TLX leg that blocks its main
+thread past a single beat ends the settle immediately — and the run then reports
+5-7 frames at 4.9-9 fps with `envReady=false`, which reads as a slow renderer
+and is nothing of the kind. The frame counter stopped because the harness gave
+up, not because the GPU was struggling. GLX and WGX answered every beat on the
+same runs, on the same machine, at the same pinned resolution.
+
+That also explains run 74 exactly: pinning `resMode` forced a TSL graph rebuild,
+so BOTH three legs stalled where only webgpu had before — the control was not
+destroyed by resolution, it was destroyed by a recompile.
+
+`gpu-game-check.mjs` now requires TWO CONSECUTIVE misses before declaring the
+page stopped. The 8 s per-beat timeout is unchanged: this is not a widened
+tolerance, it is refusing to call one slow beat a corpse — the same reasoning
+`tlx.js` already uses for `HEAL_MIN_FRAMES = 2`, where healing on a single
+transient reloaded a healthy tab.
+
+The lesson is where the evidence was. Four dispatches went into a resolution
+theory while the checkpoint timeline that refutes it was printed in every one of
+those job logs, unread — and the code comment beside the beat loop already said
+"on Apple Metal both three paths went silent here and the run learned nothing
+for twenty minutes". READ THE PHASE TIMELINE FIRST on any census leg that
+reports few frames; the `run:` INCONCLUSIVE row says the leg measured nothing,
+and the checkpoints say why.
+
+### 2026-09-09 — the slow-leg mode is NOT resolution, and pinning it made things worse (run 74)
+
+Runs 54, 72 and 73 all showed the webgpu leg crawling (4.9-9 fps, 6-7 frames,
+probe never latching) and all three sat at `scale=1`, while the one good run (71,
+600 frames at 53.1 fps) sat at `scale=0.8`. That correlation is WRONG. Run 74
+pinned `apex26.resMode="low"` (scale 0.5) to buy the frames, and:
+
+| leg | scale | fps | frames |
+|---|---|---|---|
+| webgpu | 0.5 | 5 | 6 |
+| webgl2 | 0.5 | 9.4 | **5** (600 in runs 72/73) |
+| glx | 0.5 | 51.9 | 600 |
+| wgx | 0.5 | 58.3 | 600 |
+
+The webgpu leg was not rescued, and the HEALTHY CONTROL was destroyed: webgl2
+had rendered 600 frames at 59.9 fps in the two runs before this one. GLX and WGX
+at the same pinned scale were untouched, so the harm is specific to the two
+three.js legs — which is what a TSL graph rebuild on a knob change costs, paid
+at boot on both of them. **Do not pin resMode on a TLX census leg.** It removes
+the control and answers nothing.
+
+So the slow mode is still undiagnosed, and it is not about resolution: three
+points sharing a value is not a mechanism, which is the same error the fps
+column and the two-TLX-leg comparison each produced earlier in this file. What
+it is NOT: the governor shedding (tier=0 autoTier=0 on every slow leg), GPU
+errors (0 throughout), or pixel count (run 74). A diagnosis needs the boot
+timeline of a three.js leg that crawls against one that does not — where the
+first six frames go — not another dispatch with a knob moved.
+
+What DID work is the INCONCLUSIVE row added the same day: it fired correctly on
+every affected leg in runs 73 and 74, including both TLX legs here, so none of
+these numbers can be mined as a result. That is the whole of the win from this
+stretch, and it is worth more than the four dispatches it took to get it.
+
 ### 2026-09-09 — the TLX heap gap is opened by the TRACK BUILD, not boot
 
 `scratch/heap-stages.mjs`, montreal, CDP `Runtime.getHeapUsage` after three
