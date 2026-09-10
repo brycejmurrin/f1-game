@@ -2843,3 +2843,11 @@ the only way a spec that diffs two captures of one scene can hold the feature
 ladder at one tier (image-grade tonal tests, lighting-ab fog glow — Metal run
 3469 read a tier shed as a grade curve), and `renderScale(v)` cannot be
 widened to do it without changing what the tuner's pinned modes mean.
+
+## 2026-09-10 — skid stamp moved ahead of the cockpit branch
+
+`js/game.js` 8589 → 8593 lines (codeLines unchanged): the player's
+`skids.stamp` moved from after the body draw to before the cockpit rig's
+`continue`, with four comment lines saying why — in cockpit view (the shipped
+default camera) the stamp was never reached, found by tlx-probes M6's timeout
+diag. Raised deliberately for the comment.

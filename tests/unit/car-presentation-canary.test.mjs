@@ -36,6 +36,19 @@ test("render interpolates world px/pz for every car, not only humans", () => {
   assert.doesNotMatch(anc[0], /c\.human && c\.px/);
 });
 
+// The player's skid stamp must run BEFORE the cockpit rig's `continue`. It sat
+// after the body draw, so in cockpit view — CAM_MODES[3], the shipped default
+// camera — the player never laid a mark (tlx-probes M6 read cam:"cockpit" with
+// every stamp-gate term true and an empty batch). World state, not a draw.
+test("the player's skid stamp precedes the cockpit-rig continue", () => {
+  const game = read("js/game.js");
+  const stamp = game.indexOf("skids.stamp(tmpMat,");
+  const cockpit = game.indexOf("if (c.isPlayer && cockpitRigOnly) {");
+  assert.ok(stamp > 0 && cockpit > 0, "both sites present");
+  assert.ok(stamp < cockpit, `skids.stamp at ${stamp} must come before the cockpit branch at ${cockpit}`);
+  assert.equal(game.split("skids.stamp(").length - 1, 1, "one stamp site");
+});
+
 test("xVis is a dump field — render and shadows do not damp it", () => {
   const game = read("js/game.js");
   assert.doesNotMatch(game, /damp\(\s*c\.xVis/);

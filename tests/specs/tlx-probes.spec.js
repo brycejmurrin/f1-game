@@ -356,13 +356,18 @@ test.describe("TLX — boot", () => {
     // js/game.js — `state === "race"`, `(skid > 0.25 || c.offroad) && speed > 10`,
     // where offroad is |x| > hw && !onKerb (js/game.js:4136) — from (b) a
     // stamped ring buffer the TLX batch never drew (drawSkidBatch returns
-    // early on a null fx). This diag reads every term of (a) and the fx
-    // counters of (b) so the next hardware run names the link, not the backend.
+    // early on a null fx). `cam` is there because the cockpit rig `continue`s
+    // past the stamp (js/game.js, cockpitRigOnly) — a persisted camera choice
+    // is the one term of (a) that lives outside the physics. This diag reads
+    // every term of (a) and the fx counters of (b) so the next hardware run
+    // names the link, not the backend. Read here on a loaded box (load 9,
+    // 6 frames rendered in the whole 60 s window): every term true, batch
+    // empty — that is the machine, not the defect; rule 8 in AGENTS.md.
     await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().skidVerts > 0, null, { polling: 100, timeout: 60_000 }).catch(async (e) => {
       const d = await page.evaluate(() => {
         const a = window.__apex, p = a.physState() || {};
         const c = a.carState().find((k) => k.isPlayer) || {};
-        return { state: a.info().state, frozen: a.freeze(), speed: p.speed, x: p.x, offroad: c.offroad, onKerb: c.onKerb, skidIntensity: c.skidIntensity, fx: GLX.__tlx.fxState(), gov: a.renderScale() };
+        return { state: a.info().state, frozen: a.freeze(), cam: (a.camera() || {}).mode, speed: p.speed, x: p.x, offroad: c.offroad, onKerb: c.onKerb, skidIntensity: c.skidIntensity, fx: GLX.__tlx.fxState(), gov: a.renderScale() };
       }).catch((err) => ({ diagFailed: String(err) }));
       throw new Error("no skid mark reached the TLX batch in 60 s: " + JSON.stringify(d) + " — " + e.message);
     });

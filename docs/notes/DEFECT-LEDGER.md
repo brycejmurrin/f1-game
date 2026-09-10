@@ -1076,6 +1076,16 @@ byte-identical to this container's — the timeout now dumps `state`, `offroad`,
 says which link broke. Lesson for the table above: read the diag the failure
 already printed before calling a failure hardware.
 
+*M6, same day, from that diag run solo here:* `cam: "cockpit"` with every
+gate term true (state race, offroad true, onKerb false, skidIntensity 0.5,
+speed 29) and `marks: 0`. The stamp sat after the body draw, past the cockpit
+rig's `continue` (`cockpitRigOnly`), and the shipped default camera is
+`CAM_MODES[3]` = COCKPIT — so with the default camera the player never laid a
+mark; rubber appeared only after a camera switch. A GAME defect, on every
+backend and every GPU, that only the TLX spec happened to drive in the default
+camera. Fixed by moving the stamp ahead of the branch (world state, not a
+draw). The Metal "premise holds, marks never record" row above was this.
+
 
 ## 8. Backlog
 

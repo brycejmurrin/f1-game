@@ -7008,6 +7008,14 @@ function render(dt) {
     // YAWed axes, so the eye sits at (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in
     // rig space every frame. A road-locked basis made turn-chasing glance
     // the view while the halo and wheel sat still on the tangent.
+    // SKID STAMP BEFORE THE COCKPIT `continue`: it sat after the body draw, so
+    // in cockpit view (CAM_MODES[3], the shipped default) the player never laid
+    // a mark — tlx-probes M6's diag read cam:"cockpit" with every gate term true.
+    // World state (the skidmarks ring buffer), not a draw: camera-independent.
+    if (c.isPlayer && state === "race") {
+      const skid = c.skidIntensity || 0;
+      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);
+    }
     if (c.isPlayer && cockpitRigOnly) {
       GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP);
       basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
@@ -7144,10 +7152,6 @@ function render(dt) {
         _hazeWorld[1] = tmpMat[13] + tmpMat[5] * 0.85 - tmpMat[9] * 3.5;
         _hazeWorld[2] = tmpMat[14] + tmpMat[6] * 0.85 - tmpMat[10] * 3.5;
       }
-    }
-    if (c.isPlayer && state === "race") {
-      const skid = c.skidIntensity || 0;
-      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);
     }
     // ── Transient particle FX emitters (visual-only: they READ car state and
     // write none of it, so headless physics is untouched). They live HERE
