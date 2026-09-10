@@ -621,9 +621,9 @@ const LiveryTex = (function () {
     let mark = markBase(teamId, liv);
     const brandPair = !!(B && plate && B.plate &&
       plate.join() === B.plate.join() && mark.join() === B.mark.join());
-    // Mark colour is free when authored (liv.logo) or brand-table. Derived
-    // marks (other-livery c1/c2) still floor so unreadible defaults cannot
-    // ship. Lettering auto-inks elsewhere.
+    // Mark colour is free when authored (liv.logo). Brand-table marks still
+    // floor against the field so stock cars (Mercedes star on silver, etc.)
+    // stay readable; brandPair (mark on its own plate) stays exempt.
     const authoredLogo = !!(liv && liv.logo);
     const brandMark = !!(B && mark.join() === B.mark.join());
     // FREE = the colour is never substituted, for an authored TEAM LOGO and

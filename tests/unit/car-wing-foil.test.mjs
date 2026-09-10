@@ -234,7 +234,7 @@ test("a shadow silhouette keeps the helmet shape without paint-split cost", () =
   assert.ok(field < splitBody, `field ${field} should drop paint-split vs ${splitBody}`);
   assert.ok(field > sil, `field ${field} still carries the in-tub torso :sh drops (${sil})`);
   assert.match(SRC, /sil \|\| field/);
-  const GAME = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const GAME = readFileSync(join(ROOT, "js/car/car-draw.js"), "utf8");   // teamMesh lives in the car-draw seam
   assert.match(GAME, /teamMeshKey\(team\) \+ ":sh"/);
   assert.match(GAME, /silhouette: true/);
 });

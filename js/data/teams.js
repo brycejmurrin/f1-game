@@ -50,7 +50,11 @@ const Teams = (function () {
          (crown + flanks). Same split as the launch photos, expressed as zones. */
       livery: { cover: [0.863, 0.0, 0.0], finShape: "none", spineHeight: "dorsal",
                 spineLogo: "cap", spineSide: "shoulder", coverBind: "saddleWrap", finHandoff: "contrast",
-                saddleTint: [0.95, 0.95, 0.96], fin: [0.863, 0.0, 0.0] },
+                saddleTint: [0.95, 0.95, 0.96], fin: [0.863, 0.0, 0.0],
+                // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the black horse is 3.75:1 on
+                // the red cover wherever it paints WITHOUT its shield (bigmark, flank logo). A
+                // shield-yellow rim reads 4.3:1 on red and vanishes on the shield itself.
+                logo3: [1.0, 0.925, 0.0] },
       engine: "Ferrari", tier: 1,
       stats: { speed: 97, accel: 88, cornering: 91, braking: 92 },
       drivers: [
@@ -75,7 +79,11 @@ const Teams = (function () {
     },
     {
       id: "redbull", name: "Red Bull Racing", short: "RBR",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "wrap", spineSide: "duo" },
+      // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the red bulls are 2.27:1 on navy
+      // wherever they paint WITHOUT the sun disc (bigmark, flank logo). A sun-gold rim reads
+      // 11:1 on navy and vanishes on the disc itself.
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "wrap", spineSide: "duo",
+                logo3: [1.0, 0.788, 0.024] },
       color: [0.086, 0.137, 0.294], color2: [1.0, 0.843, 0.0],     /* navy #16234B / yellow #FFD700 */
       engine: "Red Bull Ford", tier: 2,
       stats: { speed: 90, accel: 88, cornering: 91, braking: 87 },

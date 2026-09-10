@@ -2830,3 +2830,21 @@ car-space `target` and a `lamp`, `garageTeam` a `seat`. That is the whole
 production cost of letting `garage-angles` aim at the crown / fin / wall from
 any orbit, walk the inspection lamp and the driver seat as axes, instead of a
 preset for each — the tool owns every name; the game owns three numbers.
+## 2026-09-10 — car-draw extraction
+
+`js/game.js` 9656 → 9041 lines (codeLines 5175 → 4739, topLets 153 → 146):
+the car-drawing seam moved to `js/car/car-draw.js` (`CarDraw.create(G, deps)`)
+— the bounded mesh / livery-atlas caches, the player's resolved wheel spec and
+cosmetic key, the decal queue and its flush, the cockpit rig, the planted
+wheels, the warm-ups and the optional GLB body. game.js keeps the render
+loop, the shadow batches and the ground/attitude matrices and reaches the
+caches only through the module's surface. No new façade members. Ceilings
+lowered with `ratchets.mjs --update`.
+
+## 2026-09-10 — merge: car-draw extraction × garage-angles axes
+
+`js/game.js` lines 9062 / codeLines 4745 / gMembers 241 / topLets 146 on the
+merged tree (the extraction's 9054 / 4748 / 240 plus `setSetupAim` and the
+`migrateLivery` fold from the livery branch); `js/agent/apex.js` 2819 / 2093
+(the deploy side's 2827 / 2101 were the pre-merge PR 124 values, superseded).
+Set with `ratchets.mjs --update` after the conflict resolution; nothing raised.

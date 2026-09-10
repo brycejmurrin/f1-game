@@ -177,12 +177,15 @@ test("stats() overlay mounts, updates and tears down", async ({ page }) => {
   // The stats.js role, but for a renderer stats.js cannot attach to. Worth a
   // test because it touches the DOM on a canvas-only page and leaves an
   // interval behind — a leaked timer would keep writing after teardown.
-  await page.evaluate(() => window.__apex.race("monza"));
-  await page.waitForTimeout(1200);
-
-  const on = await page.evaluate(() => window.__apex.stats(true));
+  const on = await page.evaluate(async () => {
+    // This exercises DOM and timers; software drawing can starve both.
+    window.__apex.headless(true);
+    await window.__apex.race("monza");
+    return window.__apex.stats(true);
+  });
   expect(on).toBe(true);
-  await page.waitForTimeout(700);            // let at least two 250ms ticks land
+  await page.waitForFunction(() => !!document.getElementById("__apexStats")?.textContent,
+    null, { polling: 100, timeout: BOOT_MS });
 
   const txt = await page.evaluate(() => document.getElementById("__apexStats").textContent);
   // Render scale and tier are the point: the governor holds fps by dropping
@@ -191,6 +194,11 @@ test("stats() overlay mounts, updates and tears down", async ({ page }) => {
   expect(txt).toContain("scale");
   expect(txt).toContain("matTex");
   expect(txt).not.toContain("stats error");
+
+  // Observe a subsequent timer update, not just the initial text.
+  await page.evaluate(() => window.__apex.matTex(0.5));
+  await page.waitForFunction(() => document.getElementById("__apexStats")?.textContent.includes("matTex 0.50"),
+    null, { polling: 100, timeout: BOOT_MS });
 
   // Toggling must remove the node AND stop the interval.
   const off = await page.evaluate(() => window.__apex.stats(false));
