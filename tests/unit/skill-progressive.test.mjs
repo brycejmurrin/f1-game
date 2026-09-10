@@ -41,9 +41,19 @@ test("mcp-probe SKILL.md stays a thin index (not the war-story dump)", () => {
 
 test("mcp-probe references keep the measured traps and recipes", () => {
   const traps = fs.readFileSync(path.join(MCP, "references/traps.md"), "utf8");
+  const chrome = fs.readFileSync(path.join(MCP, "references/traps-chrome.md"), "utf8");
+  const camera = fs.readFileSync(path.join(MCP, "references/traps-camera.md"), "utf8");
+  const scene = fs.readFileSync(path.join(MCP, "references/traps-scene.md"), "utf8");
   const recipes = fs.readFileSync(path.join(MCP, "references/recipes.md"), "utf8");
+  // Index stays thin; war stories live in chrome / camera / scene slices.
   assert.match(traps, /never render in the MCP browser while Playwright/);
   assert.match(traps, /snapCam/);
+  assert.match(traps, /traps-chrome\.md/);
+  assert.match(traps, /traps-camera\.md/);
+  assert.match(traps, /traps-scene\.md/);
+  assert.match(chrome, /never render in the MCP browser while Playwright/);
+  assert.match(camera, /snapCam/);
+  assert.ok(scene.split("\n").length > 40, "traps-scene.md lost its measured content");
   assert.match(recipes, /tinyfish|deploy-check/);
   assert.match(recipes, /Probing a specific renderer|secure context|navigator\.gpu/i);
 });

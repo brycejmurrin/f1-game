@@ -2,6 +2,23 @@
 
 Load this when driving a lap, writing a policy, or debugging a typed error. The SKILL.md index is the entry points only.
 
+
+## Three ways in (same surface, different cost)
+
+- `node tools/shot/agent.mjs <track> <tool> [flags]` — stages `race`/`go`/`jump` +
+  frames. **Each call boots its own browser (~30–40 s)**; one read per boot.
+  Don't chain several in one shell command. Cap parallel jobs at **2–3**.
+  Renames: `trackInfo`→`track`, `carView`→`car`, `agentHelp`→`help`;
+  `model` = `render({what:"circuit"})`. `terminal`/`seed` are in-page only.
+- `node tools/shot/apex-eval.mjs <track> "<expr>"` — one boot, `a` = `__apex`.
+  Batch multi-reads into one expression. Stages `race()` only — stage the rest
+  inside the expression (or use the CLI).
+- `window.__apex.<tool>(...)` in a live page — **stage first**: `race(id)` →
+  `go()` → `jump(frac, speed)`, then two frames. Skip it → `PlayerNotPlacedError`
+  or a stale camera. Full rules under Staging below.
+
+`frac` = lap position 0→1; `s` = metres along centreline; `lateralM` = +right.
+
 ## The tools, by the question they answer
 
 **Where am I? (dynamic — read per decision)**

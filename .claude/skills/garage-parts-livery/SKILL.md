@@ -25,7 +25,7 @@ cover/draft lockstep, paint-sheet rules) → [references/livery-fields.md](refer
 
 - Pure driving feel → **tune-physics**. Career economy with no parts edit →
   **career-mode**. Isolated car shots → **playwright-probe** (`references/car-studio.md`). Cache bump →
-  `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
+  `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md): `?v=dev`, no bump).
 
 ## Quick Reference
 
