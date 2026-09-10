@@ -32,6 +32,9 @@ async function tlxDiag(page) {
       tlxFail: safe(() => localStorage.getItem("apex26.gfxTlxFail")),
       post: safe(() => GLX.__tlx.postState()),
       env: safe(() => GLX.__tlx.envState()),
+      // The governor: tier/autoTier/scale/floorMs/fps and its latches. Bloom is
+      // zeroed at autoTier >= 4 and the env probe needs tier < 1 (js/game.js).
+      gov: safe(() => window.__apex.renderScale()),
       logs: safe(() => window.__apex.logs().filter((l) => l.level === "warn" || l.level === "error")
         .map((l) => l.t + "ms " + l.ns + ": " + l.msg).slice(-12)),
     });

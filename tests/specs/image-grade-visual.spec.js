@@ -239,6 +239,7 @@ test.describe("rendered image grade", () => {
     const diag = JSON.stringify({
       px: [baseline.length / 4, raisedPx.length / 4, crushedPx.length / 4],
       baseline: histogramStats(baseline), raised, crushed,
+      gov: await page.evaluate(() => window.__apex.renderScale()),   // a mid-test resize is the governor's auto-res
     });
     expect(raised.count, diag).toBeGreaterThan(1000);
     expect(raised.signed, diag).toBeGreaterThan(1);
@@ -252,10 +253,14 @@ test.describe("rendered image grade", () => {
     await setTune(page, { shadows: 0.5 });
     const changed = await pixels(page);
     const delta = tonalChanges(baseline, changed);
-    expect(delta.darkCount).toBeGreaterThan(1000);
-    expect(delta.brightCount).toBeGreaterThan(1000);
-    expect(delta.darkSigned).toBeGreaterThan(0.5);
-    expect(delta.dark).toBeGreaterThanOrEqual(delta.bright * 2);
+    const diag = JSON.stringify({
+      px: [baseline.length / 4, changed.length / 4], delta,
+      gov: await page.evaluate(() => window.__apex.renderScale()),   // a mid-test resize is the governor's auto-res
+    });
+    expect(delta.darkCount, diag).toBeGreaterThan(1000);
+    expect(delta.brightCount, diag).toBeGreaterThan(1000);
+    expect(delta.darkSigned, diag).toBeGreaterThan(0.5);
+    expect(delta.dark, diag).toBeGreaterThanOrEqual(delta.bright * 2);
   });
 
   test("highlights predominantly change bright pixels", async ({ page }) => {
