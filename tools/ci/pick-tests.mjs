@@ -166,8 +166,8 @@ export const RULES = [
   // to guard it. `js/ui/driving-line-opts.js` is the one that proved it: it
   // matches "js/ui/ -> ui", its suite is in `sweeps`, and a rename of the store
   // key it owns went green locally and red in CI on that very suite.
-  // tests/unit/pick-tests.test.mjs holds the invariant, so an eleventh cannot
-  // appear in silence — these ten are what it measured.
+  // tests/unit/pick-tests.test.mjs holds the invariant, so a twelfth cannot
+  // appear in silence — these eleven are what it measured.
   [/^js\/race\/race-settings\.js/, ["game-vm"], "race-settings-vm.test.mjs"],
   [/^js\/career\/custom-team\.js/, ["car"], "custom-team.spec.js"],
   [/^js\/car\/helmets\.js/, ["garage-unit"], "helmets.test.mjs"],
@@ -175,6 +175,7 @@ export const RULES = [
   [/^js\/lighting\/presets\.js/, ["input"], "presets.test.mjs"],
   [/^js\/render\/shared\/driving-line\.js/, ["sweeps"], "driving-line.test.mjs"],
   [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],
+  [/^js\/ui\/debris-opts\.js/, ["state-unit"], "debris-opts.test.mjs"],
   [/^js\/ui\/key-binds\.js/, ["steering-unit"], "key-binds.test.mjs"],
   [/^js\/ui\/onboard\.js/, ["steering-unit"], "onboard.test.mjs"],
   [/^js\/ui\/settings-export\.js/, ["steering-unit"], "settings-export.test.mjs"],

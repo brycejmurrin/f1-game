@@ -7087,7 +7087,7 @@ const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
 const _rsEl = $("race-settings");      // the one menu screen that shows the flyby
 function render(dt) {
-  if (headlessMode) return;
+  if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
   // race-settings flyby, or the garage's car preview; under every other menu it is
   // HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat behind the
@@ -8866,13 +8866,13 @@ function tickBody(now) {
   const _dtMs = now - lastFrame;
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race.
-  if (!paused && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
+  if (!paused && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick();   // pad + brake-cue; before pause so Start can un-pause
   onboard.tick(dt);                // first-run coach marks — reads reports only, never the car
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
-  netPlay.tick(now);
+  netPlay.tick(now); if (gfx.warming && gfx.warming()) { Input.clearEdges(); return; }
   if (paused && !netPlay.active()) {
     // Nothing downstream reads the pad's edge latches while we are parked here,
     // so drop them rather than let a pause-menu button-mash queue up and fire

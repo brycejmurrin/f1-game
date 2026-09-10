@@ -4454,3 +4454,106 @@ MB against GLX's ~47–49 on a phone profile (§2n, §2q).
 SETTINGS and a stored `"three"` the player chose deliberately are the same three
 bytes; a migration that cleared it would silently override a real choice. The
 answer is the RENDERER row in SETTINGS, and knowing to look at it.
+
+## 2u. Only ONE of the ladder's four rungs is reachable on a slow phone (2026-09-10)
+
+A fourth live iPhone capture, this one on **Suzuka** — which answers the
+question three earlier notes asked and could not: the circuit the owner
+remembers at 60 fps is the circuit measuring **32.2 fps**. GLX, `mobileTier`,
+MSAA 0, 22 cars, cockpit, dry, day.
+
+The line worth stopping on is not the fps:
+
+```
+perf: { scale: 0.5, fps: 32.2, auto: true, tier: 0, tierFloor: 0 }
+```
+
+`tier: 0` with the scale lever already at its 0.5 floor. **Nothing optional has
+been shed** — bloom, god-rays, SSR and per-chunk lamps all still on, on a device
+at half resolution missing half its frames.
+
+### Reproduced, then re-reproduced after the first model was found biased
+
+`tests/unit/perf-governor.test.mjs` already has the makeGov/feed rig. Boot it at
+the phone's 0.5 scale and feed the phone's frame cost (31.06 ms).
+
+The FIRST model held `dt` constant against tier, and showed the shed rung being
+reverted. That result was an artefact and is recorded here because it is the
+trap: a model where shedding cannot help makes every shed "buy nothing" **by
+construction**, so `_pendingVerify` reverts it and latches `_tierFutile`. That
+is the governor being right, not wrong.
+
+Re-run with shedding actually worth something (`cost ∝ scale²`, and each shed
+rung `gain` cheaper), 6000 frames:
+
+```
+a shed rung buys nothing    peakShed=1 endShed=0 tier=0 scale=0.56 floor=38.9 fps=25.7
+each rung is  4% cheaper    peakShed=1 endShed=1 tier=1 scale=0.56 floor=37.3 fps=26.7
+each rung is  8% cheaper    peakShed=1 endShed=1 tier=1 scale=0.56 floor=35.8 fps=27.9
+each rung is 15% cheaper    peakShed=1 endShed=1 tier=1 scale=0.56 floor=33.1 fps=30.2
+each rung is 25% cheaper    peakShed=1 endShed=1 tier=1 scale=0.56 floor=29.2 fps=34.2
+```
+
+**`peakShed=1` in every row.** That is the finding, and it is the one thing that
+does not depend on the model: whether the rung sticks varies sensibly with how
+much it buys, but the ladder never takes a SECOND step — not at 4% and not at
+25%, not at 26 fps and not at 34.
+
+### Why the other three rungs are unreachable
+
+`_floorMs` creeps toward the observed frame interval at `FLOOR_UP_A` (0.02) —
+about 130 frames, ~4 s at 32 fps. Simulated against a sustained 31.06 ms from
+the 16.7 ms cold start, `_frameEMA > degradeAt` is true for frames **3..90 only**
+(~2.7 s) and false forever after. The degrade branch is the ONLY caller that
+steps the ladder down, so whatever it managed inside that 2.7 s window is all
+the shedding this device will ever get. One evaluation happens per 45 frames
+with a 30–90 frame cooldown after a step, which is why the answer is exactly one
+rung and not two.
+
+After the window closes the EMA sits BELOW `restoreAt` (floor + 0.6), so the
+governor spends the session in the RESTORE branch instead: it climbs 0.50 ->
+0.56, the player pays **32.2 -> 25.7 fps for ~285 frames (~9 s)**, and
+`_pendingVerify` correctly reverts it. `_upBackoff` doubles each refusal (10 s,
+20 s, 40 s … 2 min cap) so the attempts thin out — traced gaps of 900, 1485 and
+2700 frames — but they never stop. On the phone this should be visible as frames
+dropping for ~9 s every minute or two and then recovering. That is a testable
+prediction, not a measurement.
+
+The phone reading `tier: 0` rather than 1 is consistent with its one available
+rung buying nothing measurable — `lightTune` in the same capture has
+`shadowStr`, `aoStr`, `contactStr`, `carShadow` and `lampShadow` ALL already 0,
+so the first rung may have little left to switch off.
+
+### Why this is a design question and not a bug
+
+`_floorMs` exists for a real defect: an iOS device throttled to a hard 30 fps
+rAF cap used to be downscaled to the floor and stripped of every optional
+feature within ~27 s, and none of it could help, because the clock was capped
+externally and had nothing to do with draw cost. `perf-governor.test.mjs`'s
+first test pins that fix.
+
+But a capped device and a genuinely expensive one are **identical to that
+instrument**: neither ever produces a fast frame. The same mechanism that
+correctly stops chasing a 30 Hz cap also caps a genuinely slow phone at one
+shed rung.
+
+The discriminator exists and is already computed: **an external cap is
+indifferent to render scale; a fill-bound frame is not.** `_pendingVerify`
+measures exactly that delta on every scale step — a step that moves the EMA by
+nothing is the signature of a cap; a step that moves it a lot (31.06 -> 38.9 ms,
+traced) is proof the device is compute-bound and the ladder should be shedding
+rather than restoring. Nothing reads it that way yet.
+
+Not changed here. Any fix trades directly against the defect `_floorMs` was
+built to prevent, and that is the owner's call.
+
+### What this note DID change
+
+`_scaleFutile` and `_tierFutile` — the two latches that can park a lever — were
+module-private with no accessor, and `floorMs`/`autoShed` were on
+`__apex.renderScale()` but dropped from the diagnostic payload. So none of the
+above was answerable from the capture; it took re-deriving governor state from
+source, and the first attempt at that got the cause wrong. All four now reach
+the payload. `tier` alone was never enough: it folds in the crash floor and the
+player's GRAPHICS preset, so only `autoShed` says what the governor shed on its
+own evidence.

@@ -2713,3 +2713,22 @@ once per run) is NOT fixed by this and is written up in the tool's header and
 ## 2026-09-09 — resolveLivery copies every editor tint
 
 `js/game.js` lines 10422 -> **10428** (+6) / codeLines 5644 -> **5648** (+4). `sunTint` / `crestInk` / `bandTint2` / `plateTint` / `plateInk` pass through both resolveLivery branches so those garage rows reach the atlas.
+
+## 2026-09-10 — shellNodes +6: the DEBRIS set-row
+
+`(tree) shellNodes` 1353 -> **1359** (+6). One `SettingRow` in the DISPLAY
+panel's renderer block costs exactly six shell nodes — the `set-row` div, its
+`tune-label` span, the wrapper div, two chevron buttons and the select — and
+that is the shape every other row in the sheet already pays.
+
+The switch itself is not new: `js/physics/debris-world.js` has read
+`apex26.debris` since it landed, and `__apex.debris(false)` has always turned
+the Rapier side-world off. What was missing is that it is a PERF LEVER on a
+handset (a WASM physics world stepping every frame for spall, marbles and
+trackside furniture) reachable only from a console. The iPhone measurements on
+2026-09-09 put the phone at 26 ms/frame against the 16.7 it needs, and the two
+levers that moved it — renderer and driving line — were both already rows.
+This is the third.
+
+Paid, not avoided: there is no way to add a settings row without shell nodes,
+and folding it into an existing row would make one control mean two things.

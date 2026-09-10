@@ -494,6 +494,7 @@
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
+        "tests/unit/debris-opts.test.mjs",
         "tests/unit/quali-persist.test.mjs"
       ]
     },
