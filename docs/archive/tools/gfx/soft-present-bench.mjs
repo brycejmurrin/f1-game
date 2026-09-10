@@ -4,7 +4,7 @@
  * ON vs OFF at a fixed renderScale (default 0.75). Software readback ≠ player
  * headed FPS; report path/softPresent and wall times only.
  *
- *   node tools/gfx/soft-present-bench.mjs [track] [--frames N] [--scale 0.75]
+ *   node docs/archive/tools/gfx/soft-present-bench.mjs [track] [--frames N] [--scale 0.75]
  *     [--out artifacts/soft-present-bench.json]
  *
  * @doc Soft-present upscale ON/OFF timing (software blit ≠ player FPS).

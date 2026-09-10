@@ -48,6 +48,7 @@ during a Playwright run.
 ```sh
 npm run test:service-worker
 npm run test:tooling-fast
+node tools/check/offline-precache-check.cjs   # offline precache contract (no browser)
 ```
 
 Related: `node tools/gen/gen-shell.mjs --check`, **check-changes**.

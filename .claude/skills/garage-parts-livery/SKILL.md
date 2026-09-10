@@ -46,6 +46,7 @@ node tools/ci/test-bg.mjs modes            # browser-gated              # resear
 node tools/car/audit-parts.mjs             # browser-gated (needs :3456) [--cats=engine,aero]
 node tools/car/spine-station.mjs --team=redbull [--logo=wrap] [--png=artifacts/spine]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
+# audit-aero.mjs is a thin alias of render-car --preset=wing — prefer the parent
 node tools/shot/shot.mjs bahrain 0.06 orbit out.png --team audi --dist 5.5 --el 26 --az 205
 ```
 

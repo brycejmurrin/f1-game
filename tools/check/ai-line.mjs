@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * @doc Where the AI actually puts the car in a corner: approach offset and apex depth per baked corner, with run-to-run range.
- * @skill tune-physics
+ * @skill ai-racecraft
  * ai-line.mjs — does the AI drive a racing LINE, or just a fast lap?
  *
  * The instrument this repo was missing, and the gap is not hypothetical. On

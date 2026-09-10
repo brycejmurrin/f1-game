@@ -51,3 +51,22 @@ were indexed only by `docs/README.md`. Recover any of them with
 
 Dropped from `docs/PERF-FINDINGS.md` the same day: the pre-2026-08-18 "Left on
 the table" narrative, now `research/PERF-LEDGER-2026-08.md` in this directory.
+
+## Tools surface cleanup (2026-09-10)
+
+Live plans stay in `tools/moves/` (`spike-backends.json` only). Applied Phase 2/4
+batch maps and closed gfx/orphan CLIs moved under `docs/archive/`:
+
+| Original path | Archive path | Why |
+|---|---|---|
+| `tools/moves/phase2.json` + `phase4-tools*.json` + `batches/` | `docs/archive/moves/` | Applied; `from` paths gone |
+| `tools/gfx/wgx-vid-repro.mjs` | `docs/archive/tools/gfx/` | Closed vertex_index repro |
+| `tools/gfx/wgpu-flag-test.mjs` | `docs/archive/tools/gfx/` | Flag matrix evidence already filed |
+| `tools/gfx/soft-present-bench.mjs` | `docs/archive/tools/gfx/` | Perf note ≠ player FPS |
+| `tools/gfx/heap-stages.mjs` | `docs/archive/tools/gfx/` | One-off heap staging |
+| `tools/hud-metrics-audit.mjs` | `docs/archive/tools/` | Orphan; use `layout-audit.mjs` |
+| `tools/mcp/ui-readable-survey-mcp.py` | `docs/archive/tools/` | Duplicate of layout-audit matrix |
+
+Folded (thin aliases kept): `wgx-capture` / `wgx-lavapipe-probe` → `gfx-probe`;
+`audit-aero` → `render-car --preset=wing`; AI trio → `ai-race.mjs` dispatcher.
+

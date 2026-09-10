@@ -212,6 +212,6 @@ behind `127.0.0.1:3712` that `call` auto-routes to — and `chrome-stop` before
 any Playwright run. Details in `.claude/skills/mcp-probe`.
 
 Local agents can also drive chrome-devtools via `tools/mcp/chrome-devtools-mcp.sh run`
-over stdio (`tools/mcp/cdmcp-cli.py`, `tools/mcp/ui-readable-survey-mcp.py`,
-`tools/mcp/mcp-cli.mjs`). When writing a custom client, handle **server→client**
+over stdio (`tools/mcp/cdmcp-cli.py`, `tools/mcp/mcp-cli.mjs`)
+(UI matrix → `tools/ui/layout-audit.mjs`; `ui-readable-survey-mcp.py` archived). When writing a custom client, handle **server→client**
 `roots/list` or restrict artifact paths to `/tmp`.

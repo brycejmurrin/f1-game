@@ -869,7 +869,7 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    frame's draws to ~7%). Merged run length: median 1425 -> **22968** verts,
    max 24801 — that max is marginally above the largest N the repro tested
    (24576), a small extrapolation inside the same regime.
-   Evidence, in descending strength: (a) `tools/gfx/wgx-vid-repro.mjs` 30/30 OK
+   Evidence, in descending strength: (a) `docs/archive/tools/gfx/wgx-vid-repro.mjs` 30/30 OK
    on SwiftShader-Dawn incl. `firstVertex` and whole `draw(N)` to 24576 —
    a third run agreeing with round 4's two; (b) real-Dawn `wgx-validate`
    before vs after: `ok`, 0 GPU errors, 0 WGSL parse errors, and the
@@ -914,7 +914,7 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    (2026-08-27), implementation scheduled for its own round.** The block
    rested on a 2026-08-17 "vertex_index stays 0 on large non-indexed
    draws (and drawIndexed)" finding whose origin commit is beyond the
-   shallow-clone graft. `tools/gfx/wgx-vid-repro.mjs` (committed as the
+   shallow-clone graft. `docs/archive/tools/gfx/wgx-vid-repro.mjs` (committed as the
    re-runnable primary evidence) now measures the actual matrix: draw
    shapes {draw(N) whole, 4095-piece control, draw(n,1,firstVertex) over
    one shared vbuf, drawIndexed(N) identity} × N ∈ {4092, 4095, 4098,

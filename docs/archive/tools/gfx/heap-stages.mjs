@@ -10,7 +10,7 @@
 //   track    race(<track>) resolved           — scene + geometry construction
 //   settled  driven for a fixed WALL TIME        — per-frame allocation that sticks
 //
-//   node tools/gfx/heap-stages.mjs [track] [--seconds N] [--json]
+//   node docs/archive/tools/gfx/heap-stages.mjs [track] [--seconds N] [--json]
 //
 // Equal wall time, not equal frames: the legs do not run at the same rate
 // (measured here — GLX managed 24 frames in the budget TLX ran 120 in), so a
