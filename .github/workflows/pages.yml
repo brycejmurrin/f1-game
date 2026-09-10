@@ -142,6 +142,16 @@ jobs:
   ci:
     needs: verdict
     if: needs.verdict.outputs.nothing_new != 'true' && needs.verdict.outputs.reuse != 'true'
+    # A CALLED workflow may not request more than its caller passes, and the
+    # check happens at startup for every job, skipped or not. ci.yml's
+    # `poke-train` job asks for actions:write (it never runs on a Pages call,
+    # but it is declared), so this call must grant it or the whole run dies
+    # with `startup_failure` before the verdict job exists — run 2241, the
+    # first poked train, 2026-09-10. Nothing here needs pages/id-token; those
+    # stay with the deploy job's own token.
+    permissions:
+      contents: read
+      actions: write
     uses: ./.github/workflows/ci.yml
     with:
       # The live commit, when it is an ancestor of this tip: the sweeps and
