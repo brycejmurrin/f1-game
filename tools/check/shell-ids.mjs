@@ -53,6 +53,7 @@ const DYNAMIC_RE = /(?:document\.getElementById|(?<![.\w$])\$)\(\s*(?!["'])([^)]
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
   "pm-three-path":     "renderer-picker addBtn(), and only when the backend files exist — the read at paintPresent() is null-guarded",
+  "pm-car-reflect":    "renderer-picker addBtn() CAR REFLECTIONS, injected only when the three files exist — every read is null-guarded",
   "pm-screenshots":    "renderer-picker addBtn(), same condition and same null-guarded read",
   "pm-save-shot":      "renderer-picker addBtn()",
   "pm-metrics":        "metrics-overlay makeMetricsBtn(), guarded by its own getElementById check",

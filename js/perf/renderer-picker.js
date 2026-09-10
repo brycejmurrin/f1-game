@@ -283,6 +283,36 @@ function applyThreePath(next, opts) {
   }
   return false;
 }
+// CAR REFLECTIONS — the three.js env probe, DEFAULT OFF and measured that way.
+// Census 84 ran the WebGL2 three leg with the probe off: a flat 60 fps at scale
+// 1.0, frame times to 10.8 ms, no beat gap over 2 s. With it on, the same leg
+// dips to 10-13 fps and sheds resolution to 0.9, because the probe re-renders
+// the world SIX times per cycle every 4th frame for the whole race — a
+// sustained multiplier, not a warm-up. On the three-WebGPU path the latched
+// cube also renders the world near-black (PERF-FINDINGS 2t), which is why the
+// title says so rather than selling this as free detail.
+// Reloads like THREE PATH: tlx.js reads the flag once when the backend is
+// created, so a live toggle would paint a state the renderer is not in.
+const ENV_PROBES = ["off", "on"];
+function readEnvProbe() {
+  return GameStore.store.raw("apex26.tlxEnvProbe") === "1" ? "on" : "off";
+}
+function envProbeLabel(v) { return v === "on" ? "ON" : "OFF"; }
+function applyEnvProbe(next, opts) {
+  if (readBackend() === "three" && !(opts && opts.noReload) &&
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-car-reflect") : null, "CAR REFLECTIONS: END THIS RACE & RELOAD?", paintPresent)) return false;
+  if (next === "on") GameStore.store.rawSet("apex26.tlxEnvProbe", "1");
+  else GameStore.store.rawDel("apex26.tlxEnvProbe");
+  paintPresent();
+  if (readBackend() === "three" && !(opts && opts.noReload)) {
+    const btn = typeof document !== "undefined" ? document.getElementById("pm-car-reflect") : null;
+    if (btn) btn.textContent = "CAR REFLECTIONS: " + envProbeLabel(next) + " — RELOADING…";
+    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in a harness */ }
+    setTimeout(() => { try { location.reload(); } catch (_) { /* file:// / test host */ } }, 350);
+    return true;
+  }
+  return false;
+}
 function readShotMode() {
   try {
     const s = sessionStorage.getItem("apex26.wgxCapture");
@@ -380,6 +410,8 @@ function paintPresent() {
   if (pathBtn) pathBtn.textContent = "THREE PATH: " + threePathLabel(readThreePath());
   const shotBtn = typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null;
   if (shotBtn) shotBtn.textContent = "SCREENSHOTS: " + shotModeLabel(readShotMode());
+  const envBtn = typeof document !== "undefined" ? document.getElementById("pm-car-reflect") : null;
+  if (envBtn) envBtn.textContent = "CAR REFLECTIONS: " + envProbeLabel(readEnvProbe());
   const st = typeof document !== "undefined" ? document.getElementById("pm-gfx-status") : null;
   if (st) st.textContent = presentStatus();
 }
@@ -515,6 +547,8 @@ function initPresentControls() {
   const backendTools = hasBackendFiles("three") || hasBackendFiles("webgpu");
   const pathBtn = backendTools ? addBtn("pm-three-path",
     "three.js GPU path. AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, except on Safari/iOS (three WebGL2). WEBGL2 / WEBGPU pin one path.") : null;
+  const envBtn = hasBackendFiles("three") ? addBtn("pm-car-reflect",
+    "Mirror the real surroundings in the car paint on the three.js backend. OFF by default: the probe re-renders the world six times per cycle and measured a drop to 10-13 fps with a resolution shed on real hardware, and on the three-WebGPU path it currently darkens the scene. OFF falls back to the analytic mirror.") : null;
   const shotBtn = backendTools ? addBtn("pm-screenshots",
     "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.") : null;
   const saveBtn = addBtn("pm-save-shot",
@@ -538,6 +572,10 @@ function initPresentControls() {
   if (pathBtn) pathBtn.onclick = function () {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
     applyThreePath(cycleOf(THREE_PATHS, readThreePath()));
+  };
+  if (envBtn) envBtn.onclick = function () {
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
+    applyEnvProbe(cycleOf(ENV_PROBES, readEnvProbe()));
   };
   if (shotBtn) shotBtn.onclick = function () {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
@@ -709,5 +747,6 @@ return { BACKENDS, init,
   nextBackend, prevBackend, applyBackend, backendLabel, readBackend, liveBackend, clearRendererStorage,
   RENDERER_LS_KEYS, RENDERER_SS_KEYS,
   THREE_PATHS, SHOT_MODES, readThreePath, applyThreePath, threePathLabel, liveThreeApi,
+  ENV_PROBES, readEnvProbe, applyEnvProbe, envProbeLabel,
   readShotMode, applyShotMode, shotModeLabel, presentStatus, saveScreenshot, ARM_MS };
 })();

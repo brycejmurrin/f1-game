@@ -1661,8 +1661,10 @@ const TLX = (function () {
       // falling back to the analytic mirror until the probe is fixed.
       // The path below is INTACT: apex26.tlxEnvProbe=1 re-enables it for that
       // work, and this is one early return, not a deletion.
+      // Read through GameStore like every other setting, so CAR REFLECTIONS
+      // exports, imports and resets with the rest of DISPLAY.
       let _envOptOut = true;
-      try { _envOptOut = localStorage.getItem("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no storage: stay opted out */ }
+      try { _envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no store: stay opted out */ }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
