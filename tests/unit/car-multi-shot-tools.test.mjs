@@ -50,9 +50,11 @@ test("render-car walks a team LIST in one browser, and grids the sheet by team",
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
-  assert.match(src, /viewsDefault = rollupOnly && !argvHas\("--views"\)/,
-    "multi-team rollup defaults to one view unless --full-views");
-  assert.match(src, /preset && !argvHas\("--views"\) \? preset\.views : "spine"/,
+  assert.match(src, /if \(preset && !argvHas\("--views"\)\) return preset\.views/,
+    "preset views win over multi-team rollup default");
+  assert.match(src, /if \(rollupOnly && !argvHas\("--views"\)\) return rollupViewFlag \|\| "side"/,
+    "multi-team rollup defaults to one view unless --full-views or a preset");
+  assert.match(src, /return "spine"/,
     "single-team default views=spine unless a preset overrides");
   assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
   assert.match(src, /screenshotGameCanvas\(page, png, \{[\s\S]*skipAwait: true/,
@@ -155,6 +157,8 @@ test("liveries.js publishes ONE field list and forTeam consumes it", () => {
   }
   assert.equal(list.includes('"crestInk"'), false, "crestInk left the paint sheet / FIELDS");
   assert.equal(list.includes('"plateInk"'), false, "plateInk left the paint sheet / FIELDS");
+  assert.equal(list.includes('"ridgeTint"'), false, "ridgeTint folded into spineTint");
+  assert.equal(list.includes('"airboxTint"'), false, "airboxTint folded into cover");
 });
 
 test("garage-angles labels frames and can A/B a ref without touching the tree", () => {
@@ -186,15 +190,77 @@ test("garage-angles reports per-phase timing and reads the loadavg", () => {
     "teams walk inside ONE browser — boot was being paid per team");
 });
 
-test("garage-angles has presets, --plan, --fast, and tunable settle", () => {
+test("a preset is a bundle of plain flags, and a named camera is parameters", () => {
+  // Presets used to BE the vocabulary: a question they did not ask meant
+  // editing the tool, and two survey framings (bay / bayFront) were pushed
+  // into production SP_VIEWS just so this tool could name them. Now every
+  // preset key is a plain flag and every named camera is an az/el/dist bundle,
+  // so a preset is a starting point you can sweep away from.
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /const PRESETS = \{/, "purpose presets like render-car");
+  assert.match(src, /const CAM_ALIAS = \{/, "named cameras are a table of parameter bundles");
+  assert.match(src, /bay:\s*"hero:0\.68pi/, "bay = a base view plus an absolute orbit");
+  assert.match(src, /bayFront:\s*"front:0\.32pi/, "bayFront = the opposite diagonal");
+  assert.match(src, /saddleWall: \{ views: "bayFront"/, "saddleWall is a flag bundle over that camera");
   assert.match(src, /presetRaw === "list"/, "--preset=list prints and exits");
+  assert.match(src, /presetRaw !== "none"/, "--preset=none is a first-class 'no preset'");
+  assert.match(src, /function aliasKey/, "a modified named camera gets its own file name");
+  for (const f of ["--az-nudge", "--el-nudge", "--logos", "--site"]) {
+    assert.ok(src.includes(`"${f}"`), `${f} must be one of the tool's OWN flags`);
+  }
+  assert.match(src, /clearLogos/, "applyDesign honours logos=default");
+  assert.match(src, /delete liv\.logo;/, "logos=default strips the authored mark rows");
+  assert.match(src, /argvHas\("--site"\) \|\| argvHas\("--cdn"\)/,
+    "--site/--cdn opens github.io; --live is gallery-only");
+  assert.match(src, /if \(preset && !argvHas\("--views"\)\) return preset\.views/,
+    "preset views win over the multi-team rollup default");
   assert.match(src, /argvHas\("--plan"\)/, "--plan prints the matrix without booting");
   assert.match(src, /liverySettle/, "livery/design apply uses --settle");
   assert.match(src, /viewSettle/, "camera-only moves use --view-settle");
   assert.match(src, /keepPage: !!againstRef/, "--against reuses the page for pass B");
   assert.match(src, /argvHas\("--live"\)/, "--live writes auto-refresh live.html after each shot");
+  assert.doesNotMatch(src, /if \(doLive && !againstRef\)/,
+    "--live must not switch gameUrl to the CDN (that is --site)");
+});
+
+test("garageFrame takes an absolute camera, not only counted clicks", () => {
+  const src = code("js/agent/apex.js");
+  const at = src.indexOf("garageFrame(view, opts)");
+  assert.ok(at > 0, "garageFrame hook must exist");
+  const body = src.slice(at, at + 1600);
+  assert.match(body, /azNudge/, "UI left/right click counts");
+  assert.match(body, /elNudge/, "UI up/down click counts");
+  assert.match(body, /nudgeAz/, "their nudgeAz / nudgeEl aliases keep working");
+  assert.match(body, /num\(o\.az\) != null/, "absolute az applied after the preset");
+  assert.match(body, /num\(o\.el\) != null/, "absolute el applied after the preset");
+  assert.match(body, /o\.dist \/ G\.setupPreviewDist/,
+    "absolute dist goes through the game's own zoom clamp");
+  assert.match(body, /view !== "free"/, "`free` keeps the camera the last call left");
+  assert.match(body, /nudgeSetupCam/, "orbit goes through G.nudgeSetupCam");
+});
+
+test("every garage camera preset is one a PLAYER can reach", () => {
+  // A survey framing is not a game preset. `bay` / `bayFront` were added to
+  // SP_VIEWS with no #cs-stack button — production data carrying a shot tool's
+  // camera — and with absolute az/el/dist in garageFrame they are parameters
+  // (garage-angles CAM_ALIAS). So: everything in SP_VIEWS has a button, and
+  // the tool's named cameras are not in SP_VIEWS at all.
+  const game = code("js/game.js");
+  const block = /const SP_VIEWS = \{([\s\S]*?)\n\};/.exec(game);
+  assert.ok(block, "SP_VIEWS must still be a named const");
+  const presets = [...block[1].matchAll(/^\s{2}([A-Za-z]+):\s*\{/gm)].map((m) => m[1]);
+  assert.ok(presets.length >= 7, `expected the shipped camera stack, got ${presets.join(",")}`);
+  const shell = read("index.html");
+  const buttons = new Set([...shell.matchAll(/data-cs-view="([A-Za-z]+)"/g)].map((m) => m[1]));
+  for (const p of presets) {
+    assert.ok(buttons.has(p), `SP_VIEWS.${p} has no #cs-stack button — a tool camera belongs in CAM_ALIAS`);
+  }
+  const tool = code("tools/shot/garage-angles.mjs");
+  const alias = /const CAM_ALIAS = \{([\s\S]*?)\n\};/.exec(tool);
+  assert.ok(alias, "the tool must own its survey framings");
+  for (const name of [...alias[1].matchAll(/^\s{2}([A-Za-z]+):/gm)].map((m) => m[1])) {
+    assert.ok(!presets.includes(name), `${name} is a tool camera and must not be in SP_VIEWS`);
+  }
 });
 
 test("garage-angles multi-team rollup uses __apex fast path from PR #96 port", () => {

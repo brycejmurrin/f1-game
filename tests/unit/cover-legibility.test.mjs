@@ -140,6 +140,13 @@ const KNOWN = new Set([]);
 // while sampling the flank re-measures one unchanged flank thirteen times and
 // then reports it as thirteen failures — which is how the first version of this
 // arrived at "Aston's flank is broken in ten designs" for a badge that is fine.
+// Crown and flank designs whose painted thing is the TEAM MARK (crest-marks
+// owns their legibility; see the loop below). `lockup` and `wrap` stay here:
+// the number and the sun disc are area.
+const MARK_DESIGNS = {
+  spineLogo: new Set(["logo", "bigmark"]),
+  spineSide: new Set(["logo", "emblem"]),
+};
 const ROWS = [
   { key: "spineLogo", name: "crown", region: "crest",     ids: "SPINE_LOGO_IDS" },
   { key: "spineSide", name: "flank", region: "spineSide", ids: "SPINE_SIDE_IDS" },
@@ -154,6 +161,14 @@ test("every cover design a player can pick is visible on every car", () => {
     for (const row of ROWS) {
       const floor = AREA[row.name];
       for (const id of A.LT[row.ids]) {
+        // A MARK is not an AREA. This instrument scores contrasting fill area
+        // against the cover, which is the right question for a band, a saddle,
+        // a sun or a sash and the wrong one for a crest: a mark keeps its
+        // authored colour and reads through its OUTLINE or plate, and an
+        // outline is a small area by definition. crest-marks.test.mjs scores
+        // marks the way they are actually made legible (mark, outline, halo,
+        // plate — per background it lands on), so the mark designs are its.
+        if (MARK_DESIGNS[row.key].has(id)) continue;
         const liv = Object.assign({}, base, { [row.key]: id });
         A.LT.buildAtlas(team.id, liv, 7, true);
         const s = survey(A.ops(), A.LT.REGIONS[row.region], bg);

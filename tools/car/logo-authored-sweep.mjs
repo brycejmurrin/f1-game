@@ -7,16 +7,8 @@
  * thing between that value and the pixels, so scoring markPalette scores the
  * whole chain. Offline via crest-sweep's node:vm loader — no browser.
  *
- * Baseline 2026-08-29, before the authored-halo path: cover kept 17.2%, badge
- * kept 33.9%. Audi's fin is [0.96,0.02,0.22] and only near-white and
- * near-black clear MARK_FLOOR against it, so every mid-tone in the picker
- * collapsed to the same fallback — the reported "TEAM LOGO does nothing on the
- * tail". After: cover 37.4%, badge 91.2%.
- *
- * The cover cannot reach the badge's number and that is geometry, not a bug:
- * drawTailGraphic washes it with an alpha gradient of stripe||c2, so the mark
- * is scored against c1 AND c2 at once, and for Audi (near-black + bright red)
- * NO colour clears 4.2 against both — a halo included.
+ * Authored TEAM LOGO / LOGO DETAIL / OUTLINE are taken as selected (no MARK_FLOOR
+ * substitution, no auto-halo). Kept rate should be 100% on both surfaces.
  *
  * The companion row is LOGO DETAIL (`liv.logo2`), scored the same way: it
  * lands in whichever slot that mark's second colour occupies, so "kept"

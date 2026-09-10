@@ -1513,14 +1513,24 @@ preview is off; `{ok:false, error:"unknown_team"}` when `id` is not in
 
 ### `garageFrame(view, opts?) → {ok, view, az, el, dist, pan?, error?}`
 One-shot camera framing — mirrors `#cs-stack`, `#cs-view-*` and `#cs-pan-*`.
-`view` is a preset name (the base: it resets orbit, target and pan) or `"free"`,
-which keeps the current camera. Then, in order: ABSOLUTE `opts.az` / `opts.el`
-(radians) and `opts.dist` (metres, clamped by the game's own limits), counted
-UI clicks `opts.azNudge` / `opts.elNudge` (±0.18 / ±0.12 rad each), `opts.zoom`
-(positive = in), `opts.strafe` (positive = right) and `opts.dolly` (positive =
-forward), and finally `opts.pan = [strafe, dolly]` in metres of the screen
-frame. Returns `garageCam()` after framing. `tools/shot/garage-angles.mjs`
-walks cameras as lists through this (views × az × el × dist × zoom × pan).
+`view` is a camera preset name (the BASE: it resets orbit, target and pan) or
+`"free"`, which keeps the camera the last call left. `opts` then apply in this
+order, so a survey framing is a set of PARAMETERS rather than a named preset:
+
+| opt | meaning |
+|---|---|
+| `az` / `el` | ABSOLUTE orbit radians, applied after the named preset |
+| `dist` | ABSOLUTE orbit distance in metres, clamped by the game's own limits |
+| `azNudge` / `elNudge` | UI orbit clicks (`±0.18` / `±0.12` rad; aliases `nudgeAz` / `nudgeEl`) |
+| `zoom` / `strafe` / `dolly` | click counts (positive zoom = in, strafe = right, dolly = forward) |
+| `pan` | `[strafe, dolly]` in metres of the screen frame |
+
+Returns `garageCam()` after framing — but `effDist` is published by the last
+RENDERED frame, so a caller that wants the camera it just set must step or
+settle first and read `garageCam()` again (`garage-angles` does).
+`tools/shot/garage-angles.mjs` walks cameras as lists through this (views × az
+× el × dist × zoom × pan), which is why survey framings like `bay` are flag
+bundles in the tool and not presets in `SP_VIEWS`.
 
 ### `garageParts(parts) → {ok, team?, parts?, error?}`
 Merge catalog part ids into the current team's garage setup (`getTeamParts` /

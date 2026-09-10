@@ -1463,7 +1463,9 @@ const _livResolveCache = new Map();
 function resolveLivery(team) {
   // The live creator draft wins while it is open — through the same field list
   // as a saved livery, so no editor row can stop short of the atlas or mesh.
-  if (livDraftOverride && livDraftOverride.teamId === team.id) return pickLivery(livDraftOverride.liv);
+  // migratePaint folds the retired keys (ridge, airbox) and drops the retired
+  // inks on the way in, so ONE list is still the only thing the atlas reads.
+  if (livDraftOverride && livDraftOverride.teamId === team.id) return pickLivery(migrateLivery(livDraftOverride.liv));
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
   // A STORED ID THAT NO LONGER RESOLVES FALLS BACK TO THE TEAM'S OWN PAINT JOB.
@@ -1473,7 +1475,7 @@ function resolveLivery(team) {
   // races. Reachable via an imported garage file (js/ui/settings-export.js).
   const list = getLiveries(team);
   const liv = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
-  const val = liv ? pickLivery(liv) : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
+  const val = liv ? pickLivery(migrateLivery(liv)) : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
 }
@@ -1484,8 +1486,20 @@ function resolveLivery(team) {
 const LIVERY_FIELDS = ["stripe", "accent", "nose", "pod", "wing", "halo", "fin", "finArt", "logo", "logo2",
   "logo3", "noseStripe", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape",
   "tcam", "coverVents", "spineHeight", "spineSide", "rearWing", "wingCarbon", "cover", "spineTint", "sideTint",
-  "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk",
-  "saddleTint", "ridgeTint", "airboxTint", "coverBind", "finHandoff"];
+  "sunTint", "bandTint2", "plateTint",
+  "saddleTint", "coverBind", "finHandoff"];
+// A stored garage file may still carry the four RETIRED keys, so every read
+// path folds them once, here, and the list above never mentions them again:
+// RIDGE was the crown's centreline only and is now the BAND it always fell
+// back to; CREST INK and PLATE INK are auto-inked (see Liveries.migratePaint).
+// AIRBOX is DROPPED rather than folded onto `cover`: it painted the roll hoop
+// and intake lips ALONE, while `cover` paints the whole loft AND is the surface
+// the atlas inks the crest and every spine design against — promoting it would
+// repaint the cover and flip the crown ink on any file that set it.
+function migrateLivery(l) {
+  return (typeof Liveries !== "undefined" && Liveries.migratePaint)
+    ? Liveries.migratePaint(Object.assign({}, l)) : l;
+}
 function pickLivery(l) {
   const v = { id: l.id || null, c1: l.c1, c2: l.c2 };
   for (let i = 0; i < LIVERY_FIELDS.length; i++) { const k = LIVERY_FIELDS[i]; v[k] = l[k] || null; }
@@ -3480,8 +3494,8 @@ const G = {
   stepSetupAero: (dt) => stepSetupAero(dt),
   setSetupView: (...a) => setSetupView(...a),
   setupPan: (...a) => setupPan(...a),
-  nudgeSetupZoom: (mul) => nudgeSetupCam(0, 0, mul),
   nudgeSetupCam: (...a) => nudgeSetupCam(...a),
+  nudgeSetupZoom: (mul) => nudgeSetupCam(0, 0, mul),
   // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
   // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
   // a null style tests a car nobody is driving.
@@ -6200,6 +6214,11 @@ const SP_EL_MIN = 0, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
 // rather than one nominal distance that crops the nose off two of the five.
 const SP_VIEWS = {
   hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.35 },   // rear three-quarter
+  // A SURVEY FRAMING IS NOT A GAME PRESET. `bay` / `bayFront` lived here with
+  // no #cs-stack button — production data carrying a shot tool's camera. They
+  // are `az` / `el` / `dist` parameters now (garage-angles CAM_ALIAS), which
+  // also lets the tool sweep between them; anything a PLAYER can pick belongs
+  // in this table, and everything else is a parameter.
   front: { az: 0,              el: 0.20, dist: 8.2 },
   side:  { az: Math.PI * 0.5,  el: 0.10, dist: 11.2 },
   rear:  { az: Math.PI,        el: 0.22, dist: 8.4 },

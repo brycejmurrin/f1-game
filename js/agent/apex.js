@@ -425,8 +425,8 @@ const api = {
     if (num(o.el) != null) G.nudgeSetupCam(0, o.el - G.setupPreviewEl, 0);
     if (num(o.dist) > 0) G.nudgeSetupZoom(o.dist / G.setupPreviewDist);   // clamped by the game
     const steps = (n, fn) => { for (let i = 0; i < Math.abs(n | 0); i++) fn(n > 0 ? 1 : -1); };
-    steps(o.azNudge, (s) => G.nudgeSetupCam(0.18 * s, 0, 0));
-    steps(o.elNudge, (s) => G.nudgeSetupCam(0, 0.12 * s, 0));
+    steps(o.azNudge != null ? o.azNudge : o.nudgeAz, (s) => G.nudgeSetupCam(0.18 * s, 0, 0));
+    steps(o.elNudge != null ? o.elNudge : o.nudgeEl, (s) => G.nudgeSetupCam(0, 0.12 * s, 0));
     steps(o.zoom, (s) => G.nudgeSetupZoom(s > 0 ? 1 / 1.12 : 1.12));
     steps(o.strafe, (s) => G.setupPan(0.15 * s, 0));
     steps(o.dolly, (s) => G.setupPan(0, 0.15 * s));
