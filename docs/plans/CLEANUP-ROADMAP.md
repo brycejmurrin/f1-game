@@ -135,7 +135,7 @@ Review size is flexible: one carve per PR (safest) or batched Tier A slices (fas
 
 ## Next action
 
-1. **Carve save-migrate** from store.js — versioned localStorage migration helper.
-2. Continue Tier A queue: race-settings + custom-team, res-row, lobby-codes.
+1. Merge PR #108 (save-migrate) when ready.
+2. Continue Tier A queue: res-row, lobby-codes, car-aero.
 
 Scratch working matrix (agent IDs, line-level BLOAT rows): `scratch/cleanup-roadmap-draft.md` (gitignored).
