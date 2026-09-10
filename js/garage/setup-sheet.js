@@ -511,9 +511,15 @@ function buildSetup() {
 
     row.onclick = () => {
       if (active) return;
+      // ONE CLICK, ONE SOUND. Researching a locked part then fitting it is two
+      // steps of one action, and both used to play uiSelect — an audible double
+      // blip on every locked row (reported 2026-09-10). Deleting the first is
+      // wrong: the unlock can succeed and the fit still refuse on budget below,
+      // which returns early, and that blip is the only feedback that path has.
+      let _blipped = false;
       if (locked) {
         if (!Career.research(opt)) { reject(); return; }
-        if (G.soundOn) GameAudio.uiSelect();
+        if (G.soundOn) { GameAudio.uiSelect(); _blipped = true; }
       }
       const p = getTeamParts(team.id);
       const co = activeCat.options.find((o) => o.id === (p[activeCat.id] || Parts.DEFAULTS[activeCat.id]));
@@ -525,7 +531,7 @@ function buildSetup() {
       }
       p[activeCat.id] = opt.id;
       saveTeamParts(team.id, p);
-      if (G.soundOn) GameAudio.uiSelect();
+      if (G.soundOn && !_blipped) GameAudio.uiSelect();
       buildSetup();
       if (CAT_VIEW[activeCat.id]) framePreset(CAT_VIEW[activeCat.id]);   // show the part
       if (window.GarageScene && GarageScene.pulse) GarageScene.pulse();    // and the bay acknowledges it
