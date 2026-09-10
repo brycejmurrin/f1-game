@@ -1152,7 +1152,21 @@ outright. Booting them headless took the seven state-only tests (the
 M9 budget-aware waits are capped at 300 s so the gpu config's 600 s x
 test.slow() cannot let a dead probe burn 30 min per attempt. Skipping the
 Smoke matrix for renderer groups stays on the table for the pixel specs,
-no longer urgent. The fog-glow row stayed red WITH `tier [0,0]` —
+no longer urgent. Measured on run 3505 (ef46b9e): all four Linux shards
+green, shard 4 in 11 min (was 75-78).
+
+*Run 3505's Metal job* moved the image-grade intermittent again: "blacks"
+attempt 1 (crushed +9.7, the same brighter-either-way number as 3484/3488)
+and "red gain" on its retry (green and blue moved 19.5 alongside red: a
+whole-frame change, not a channel gain) — neither carried the post-path
+diag, only "shadows" did. And the PASSING shadows pair the run attached is
+crisp in BOTH frames — no bloom, hard halo edges, the lift visible in the
+cockpit — so on Metal the ordinary capture is the crisp kind and a failing
+pair is one where a capture came out soft and bloomed; here both are
+always soft. All four two-capture tests now share one helper: frames
+attached, capture state (gen, freeze, pack, post path) at each, and the
+premise — same tier, same post path, a newer present — asserted before
+any tonal maths, so the next failure names the pass that flipped. The fog-glow row stayed red WITH `tier [0,0]` —
 dry 80.1, foggy 72.6, the same −9 % this container reads (65.4 → 60.1) — so
 it was never the tier either: the sampled band is pure sky, the sky shader
 carries no lamp-fog term (`glsl-sky.js`), and what the test measured was the

@@ -293,33 +293,57 @@ test.describe("rendered image grade", () => {
   // layers=14`), before a single pixel was read. Same defect and same cure as
   // the three overrides removed from lighting-ab.spec.js.
 
+  // ONE two-capture comparison: baseline, tune, changed — both frames
+  // attached, the capture state (present gen, physics freeze, asset pack,
+  // post-chain path) recorded at each, and the PREMISE asserted before any
+  // tonal maths: same governor tier, same post-chain path, a newer present.
+  // Metal runs 3469-3505 failed shadows, blacks and red gain by turns with
+  // knob-INDEPENDENT deltas (blacks −1 read +9.7 brighter; red gain moved
+  // green and blue by 19.5 alongside red), and the two frames "shadows"
+  // attached on 3497 were a crisp, bloomless baseline against a soft, bloomed
+  // changed frame — two post chains, never the grade. A premise that fails
+  // here names the pass that differed; the tonal assertion never sees it.
+  async function capturePair(page, name, tune) {
+    await pixels(page);   // discard the first composited frame while render caches settle
+    const baseline = await pixels(page);
+    const baselineJpeg = _lastCapture;
+    const cap0 = await captureState(page);
+    const tier0 = await tierAt(page);
+    await setTune(page, tune);
+    const changed = await pixels(page);
+    const changedJpeg = _lastCapture;
+    const cap1 = await captureState(page);
+    const tier1 = await tierAt(page);
+    await test.info().attach(`${name}-baseline.jpg`, { body: baselineJpeg, contentType: "image/jpeg" });
+    await test.info().attach(`${name}-changed.jpg`, { body: changedJpeg, contentType: "image/jpeg" });
+    const gov = await page.evaluate(() => window.__apex.renderScale());
+    const premise = JSON.stringify({ name, tune, tier: [tier0, tier1], cap0, cap1, gov });
+    expect(tier1, "governor tier moved between captures — a tier shed, not the grade: " + premise).toBe(tier0);
+    expect(JSON.stringify(cap1.post), "the post chain took a different path for the two captures — two pipelines, not the grade: " + premise).toBe(JSON.stringify(cap0.post));
+    expect(cap1.gen, "the changed capture is not a newer present than the baseline: " + premise).toBeGreaterThan(cap0.gen);
+    return { baseline, changed, cap0, premise };
+  }
+
   test("blacks visibly change the deepest image detail", async ({ page }) => {
     await boot(page);
-    await pixels(page);
-    const baseline = await pixels(page);
-    // Drive to the REGISTRY's own extremes rather than a literal ±1. What this
-    // test cares about is that the knob's ENDS move the deepest detail, not that
-    // any particular number does — and a literal goes stale the moment the bound
-    // is retuned, which is the trap tests/specs/lighting-tuner-grade.spec.js
-    // already documents from the widening direction.
     const b = await page.evaluate(() => {
       const d = LightTune.TUNE_DEFS.find((x) => x.id === "blacks");
       return { min: d.min, max: d.max };
     });
     expect(b.max, "BLACKS has no positive travel — this test would be vacuous").toBeGreaterThan(0);
     expect(b.min, "BLACKS has no negative travel — this test would be vacuous").toBeLessThan(0);
-    await setTune(page, { blacks: b.max });
-    const raisedPx = await pixels(page);
+    const { baseline, changed: raisedPx, cap0, premise } = await capturePair(page, "blacks-raised", { blacks: b.max });
     const raised = rangeChanges(baseline, raisedPx, 2, 30);
+    // The third capture (crushed) holds to the same premise as the pair.
     await setTune(page, { blacks: b.min });
     const crushedPx = await pixels(page);
+    await test.info().attach("blacks-crushed.jpg", { body: _lastCapture, contentType: "image/jpeg" });
+    const cap2 = await captureState(page);
+    expect(JSON.stringify(cap2.post), "the post chain took a different path for the crushed capture: " + JSON.stringify({ cap0, cap2 })).toBe(JSON.stringify(cap0.post));
     const crushed = rangeChanges(baseline, crushedPx, 2, 30);
-    // A NaN here is two captures of DIFFERENT sizes (luminance past the end
-    // of the shorter array), not a grade that did nothing: say which.
     const diag = JSON.stringify({
       px: [baseline.length / 4, raisedPx.length / 4, crushedPx.length / 4],
-      baseline: histogramStats(baseline), raised, crushed,
-      gov: await page.evaluate(() => window.__apex.renderScale()),   // a mid-test resize is the governor's auto-res
+      baseline: histogramStats(baseline), raised, crushed, premise,
     });
     expect(raised.count, diag).toBeGreaterThan(1000);
     expect(raised.signed, diag).toBeGreaterThan(1);
@@ -328,23 +352,9 @@ test.describe("rendered image grade", () => {
 
   test("shadows predominantly change dark pixels", async ({ page }) => {
     await boot(page);
-    await pixels(page); // discard first composited frame while render caches settle
-    const baseline = await pixels(page);
-    const baselineJpeg = _lastCapture;
-    const cap0 = await captureState(page);
-    const tier0 = await tierAt(page);
-    await setTune(page, { shadows: 0.5 });
-    const changed = await pixels(page);
-    const changedJpeg = _lastCapture;
-    await test.info().attach("shadows-baseline.jpg", { body: baselineJpeg, contentType: "image/jpeg" });
-    await test.info().attach("shadows-changed.jpg", { body: changedJpeg, contentType: "image/jpeg" });
-    const tier1 = await tierAt(page);
-    expect(tier1, "governor tier moved between captures — the delta below is a tier shed, not the grade").toBe(tier0);
+    const { baseline, changed, premise } = await capturePair(page, "shadows", { shadows: 0.5 });
     const delta = tonalChanges(baseline, changed);
-    const diag = JSON.stringify({
-      px: [baseline.length / 4, changed.length / 4], delta, tier: tier0, cap0, cap1: await captureState(page),
-      gov: await page.evaluate(() => window.__apex.renderScale()),   // a mid-test resize is the governor's auto-res
-    });
+    const diag = JSON.stringify({ px: [baseline.length / 4, changed.length / 4], delta, premise });
     expect(delta.darkCount, diag).toBeGreaterThan(1000);
     expect(delta.brightCount, diag).toBeGreaterThan(1000);
     expect(delta.darkSigned, diag).toBeGreaterThan(0.5);
@@ -353,31 +363,17 @@ test.describe("rendered image grade", () => {
 
   test("highlights predominantly change bright pixels", async ({ page }) => {
     await boot(page);
-    await pixels(page);
-    const baseline = await pixels(page);
-    const tier0 = await tierAt(page);
-    await setTune(page, { highlights: 0.5 });
-    const changed = await pixels(page);
-    const tier1 = await tierAt(page);
-    expect(tier1, "governor tier moved between captures — the delta below is a tier shed, not the grade").toBe(tier0);
+    const { baseline, changed, premise } = await capturePair(page, "highlights", { highlights: 0.5 });
     const delta = tonalChanges(baseline, changed);
-    const diag = JSON.stringify({ delta, tier: tier0, gov: await page.evaluate(() => window.__apex.renderScale()) });
+    const diag = JSON.stringify({ delta, premise });
     expect(delta.bright, diag).toBeGreaterThanOrEqual(delta.dark * 2);
   });
 
   test("red gain predominantly changes the red channel", async ({ page }) => {
     await boot(page);
-    await pixels(page);
-    const baseline = await pixels(page);
-    const tier0 = await tierAt(page);
-    await setTune(page, { gainR: 1.2 });
-    const changed = await pixels(page);
-    const tier1 = await tierAt(page);
-    expect(tier1, "governor tier moved between captures — the delta below is a tier shed, not the grade").toBe(tier0);
+    const { baseline, changed, premise } = await capturePair(page, "red-gain", { gainR: 1.2 });
     const [red, green, blue] = channelChanges(baseline, changed);
-    // Metal run 3477 read red 26.2 vs green*1.5 = 29.6 on a first attempt and
-    // passed the retry with no diag to say why; now it says.
-    const diag = JSON.stringify({ red, green, blue, tier: tier0, gov: await page.evaluate(() => window.__apex.renderScale()) });
+    const diag = JSON.stringify({ red, green, blue, premise });
     expect(red, diag).toBeGreaterThan(green * 1.5);
     expect(red, diag).toBeGreaterThan(blue * 1.5);
   });
