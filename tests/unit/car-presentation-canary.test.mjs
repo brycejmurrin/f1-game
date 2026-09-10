@@ -90,8 +90,8 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.match(teamBodySrc, /carDecalNum\(team, car\)/, "teamBodyMesh must resolve the driver number");
   assert.match(teamBodySrc, /teamMeshKey\(team\) \+ ":" \+ carDecalNum\(team, car\)/, "teamBodyMesh must key on the driver number");
   assert.match(teamBodySrc, /num: carDecalNum\(team, car\)/, "teamBodyMesh must build with the driver number");
-  assert.match(game, /function playerBodyMesh\(team, car\)/);
-  assert.match(game, /playerVisualKey \+ ":" \+ carDecalNum\(team, car\)/, "the player's own body is keyed on the seat too");
+  assert.match(game, /function playerBodyMesh\(team, car, visualKey = playerVisualKey\)/);
+  assert.match(game, /visualKey \+ ":" \+ carDecalNum\(team, car\)/, "the player's own body is keyed on the seat too");
   assert.match(game, /function getFieldWheelMeshes\(team\)/);
   // Field wheels resolve from the FACTORY setup, via the permanently cached
   // teamDecalState(team, false) — whose builder still derives from
@@ -116,7 +116,7 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
     "czPreview must push the full structural draft, not bare {c1,c2}");
   assert.doesNotMatch(custom, /setLivDraftOverride\(\{ teamId: "custom", liv: \{ c1:/,
     "bare {c1,c2} override regrows the shark fin while customize is open");
-  assert.match(game, /function cockpitBodyMesh\(team, car\)/);
+  assert.match(game, /function cockpitBodyMesh\(team, car, visualKey = playerVisualKey\)/);
   assert.match(game, /function garageSeat\(\)/);
   const draw = game.match(
     /const body = carModelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
