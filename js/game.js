@@ -1455,10 +1455,9 @@ let livDraftOverride = null;
 const _livResolveCache = new Map();
 function resolveLivery(team) {
   if (livDraftOverride && livDraftOverride.teamId === team.id) {
-    const l = livDraftOverride.liv;
-    // Every LIV_DRAFT_COLORS tint must pass through here — sunTint / crestInk /
-    // bandTint2 / plateTint / plateInk used to stop at the editor: saved and
-    // live-preview values never reached the atlas or the mesh.
+    const l = Object.assign({}, livDraftOverride.liv);
+    if (typeof Liveries !== "undefined" && Liveries.migratePaint) Liveries.migratePaint(l);
+    // Every live LIV_DRAFT_COLORS tint must pass through here.
     return { id: l.id || null, c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
@@ -1467,9 +1466,9 @@ function resolveLivery(team) {
              tcam: l.tcam || null, coverVents: l.coverVents || null, spineHeight: l.spineHeight || null,
              spineSide: l.spineSide || null, rearWing: l.rearWing || null, wingCarbon: l.wingCarbon || null, cover: l.cover || null,
              spineTint: l.spineTint || null, sideTint: l.sideTint || null,
-             sunTint: l.sunTint || null, crestInk: l.crestInk || null, bandTint2: l.bandTint2 || null,
-             plateTint: l.plateTint || null, plateInk: l.plateInk || null,
-             saddleTint: l.saddleTint || null, ridgeTint: l.ridgeTint || null, airboxTint: l.airboxTint || null,
+             sunTint: l.sunTint || null, bandTint2: l.bandTint2 || null,
+             plateTint: l.plateTint || null,
+             saddleTint: l.saddleTint || null,
              coverBind: l.coverBind || null, finHandoff: l.finHandoff || null };
   }
   const c = _livResolveCache.get(team.id);
@@ -1480,10 +1479,10 @@ function resolveLivery(team) {
   // spineSide, so a dangling id grew a shark fin instead of the car the team
   // races. Reachable via an imported garage file (js/ui/settings-export.js).
   const list = getLiveries(team);
-  const liv = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
-  // Optional livery detail colours — additive. Every LIV_DRAFT_COLORS tint must
-  // be listed: dropping sunTint / crestInk / bandTint2 / plateTint / plateInk
-  // made those editor rows inert on track and in the live preview.
+  const raw = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
+  const liv = raw ? (typeof Liveries !== "undefined" && Liveries.migratePaint
+    ? Liveries.migratePaint(Object.assign({}, raw)) : raw) : null;
+  // Optional livery detail colours — additive. Every live draft tint must be listed.
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
@@ -1492,9 +1491,9 @@ function resolveLivery(team) {
                       tcam: liv.tcam || null, coverVents: liv.coverVents || null, spineHeight: liv.spineHeight || null,
                       spineSide: liv.spineSide || null, rearWing: liv.rearWing || null, wingCarbon: liv.wingCarbon || null, cover: liv.cover || null,
                       spineTint: liv.spineTint || null, sideTint: liv.sideTint || null,
-                      sunTint: liv.sunTint || null, crestInk: liv.crestInk || null, bandTint2: liv.bandTint2 || null,
-                      plateTint: liv.plateTint || null, plateInk: liv.plateInk || null,
-                      saddleTint: liv.saddleTint || null, ridgeTint: liv.ridgeTint || null, airboxTint: liv.airboxTint || null,
+                      sunTint: liv.sunTint || null, bandTint2: liv.bandTint2 || null,
+                      plateTint: liv.plateTint || null,
+                      saddleTint: liv.saddleTint || null,
                       coverBind: liv.coverBind || null, finHandoff: liv.finHandoff || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });

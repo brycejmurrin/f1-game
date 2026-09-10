@@ -1462,22 +1462,19 @@ const LiveryTex = (function () {
     if (logo === "saddle" || bind === "saddleWrap") return bandC;
     return null;
   }
-  // RIDGE zone fill: an explicit ridgeTint is a pick (never re-derived). When
-  // omitted, fall back to bandC re-picked against the cover so catalog
-  // team×ridge cannot vanish into a dark cover.
+  // RIDGE zone fill: always the band colour (spineTint / derived bandC).
+  // ridgeTint was folded into spineTint by Liveries.migratePaint.
   function ridgeFill(liv, bandC, coverPaint) {
-    if (liv && liv.ridgeTint) return liv.ridgeTint;
     return pickOn(
       [bandC, INK_LIGHT, INK_DARK].filter(Boolean),
       coverPaint || bandC, SUN_FLOOR);
   }
   const FIN_ON_BLOCK = 2.0;
   // AIRBOX mesh paint (Car3D roll hoop / snorkel / intake lips). Under WRAP the
-  // resolved sun wins over airboxTint; otherwise airboxTint or ENGINE COVER.
+  // resolved sun wins; otherwise ENGINE COVER (airboxTint folded into cover).
   function airboxMeshColour(teamId, liv, coverC) {
     const logo = (liv && liv.spineLogo) || "logo";
     if (logo === "wrap") return sunColour(teamId, liv).slice();
-    if (liv && liv.airboxTint) return liv.airboxTint.slice();
     return coverC ? coverC.slice() : [0.1, 0.1, 0.12];
   }
   // Crown/saddle block the fin root meets — contrast handoff scores against this.
@@ -1725,7 +1722,7 @@ const LiveryTex = (function () {
           ctx.fillRect(X, cutY, W * 0.012, bh); ctx.fillRect(X + W * 0.988, cutY, W * 0.012, bh);
         }
       }
-      if (liv.ridgeTint) {
+      if (liv.spineTint) {
         const ridgeC = ridgeFill(liv, acc, c1), rw = W * 0.018;
         ctx.fillStyle = cssA(ridgeC, 0.9);
         ctx.fillRect(X + W * 0.5 - rw / 2, cutY, rw, bh);
@@ -2035,7 +2032,8 @@ const LiveryTex = (function () {
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = true;
 
-    colors = colors || {};
+    colors = Object.assign({}, colors || {});
+    if (typeof Liveries !== "undefined" && Liveries.migratePaint) Liveries.migratePaint(colors);
     const c1 = colors.c1 || [0.1, 0.1, 0.12];
     const c2 = colors.c2 || [0.9, 0.9, 0.92];
     const stripe = colors.stripe || null;
@@ -2063,11 +2061,8 @@ const LiveryTex = (function () {
     // which is what the fin badge already uses; every shipped car now sets
     // finShape "none", so a fin that is not there was choosing the ink for a
     // mark that is.
-    // CREST INK (liv.crestInk) — legacy lettering override. The paint sheet no
-    // longer offers this row (logo/logo2/logo3 own the mark; glyphs auto-ink).
-    // Still honoured when present on a stored garage file so a re-open does not
-    // jump the lettering until the player re-saves.
-    const inkCrest = colors.crestInk || inkOn([coverPaint]);
+    // Lettering auto-inks against the cover. crestInk was dropped by migratePaint.
+    const inkCrest = inkOn([coverPaint]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks (titleA only)
     const inkNose = inkOn([c1, c2]);          // titleB — the monocoque top
     const inkStrip = inkOn(stripBg);
@@ -2368,10 +2363,10 @@ const LiveryTex = (function () {
     // gold). Clamp wordmark/duo ONTO the saddle panel, and stroke a forced halo
     // when a mark still shares the rake. Recorded in the flank-clear guard —
     // KNOWN must shrink when this holds.
-    const inkFlank = colors.crestInk || inkOn(spineLogo === "wrap" ? [coverPaint] : flankBgs);
+    const inkFlank = inkOn(spineLogo === "wrap" ? [coverPaint] : flankBgs);
     // The MARK's own ink, against the MARK's own surfaces. Identical to
     // inkFlank everywhere the two lists are (every crown but the wrap).
-    const inkMark = colors.crestInk || inkOn(markBgs);
+    const inkMark = inkOn(markBgs);
     // Force a halo on the saddle: inkFlank.worst is high against bandC, so
     // haloIf would skip — and that is exactly when the aft letters leave the
     // panel onto the cover.
@@ -2501,9 +2496,7 @@ const LiveryTex = (function () {
       // The plate has to separate from the FLANK, and the saddle paints that
       // flank in stripe||accent — the plate's own first choice. Ferrari shipped
       // a number board the exact colour of the panel it sits on.
-      // PLATE PANEL (liv.plateTint) is the board colour. PLATE INK is legacy —
-      // the sheet no longer offers it; board lettering auto-inks unless a
-      // stored liv still carries plateInk.
+      // PLATE PANEL (liv.plateTint) is the board colour. Board lettering auto-inks.
       // PLATE PANEL is its own row. Unset = bases against the mark/flank field —
       // not BODY STRIPE or DETAIL (those are other rows). Contrast vs markBg
       // (wrap may put the plate on the bull colour, not bare cover).
@@ -2516,9 +2509,9 @@ const LiveryTex = (function () {
       // Ink for the BOARD. Glyph overhang onto the flank is a halo/clip problem;
       // scoring ink against plate+flank together forced a light ink on Red Bull's
       // gold saddle (no colour clears navy board AND gold flank).
-      const plateInk = colors.plateInk || inkOn([plateC]);
-      flankMark((Rm) => drawNumber(ctx, raceNum, Rm, plateInk, inkMark, plateC, colors.numFont, 0,
-                                   contrast(plateInk, markBg) < 2.0 ? haloFor(plateInk) : null));
+      const plateGlyph = inkOn([plateC]);
+      flankMark((Rm) => drawNumber(ctx, raceNum, Rm, plateGlyph, inkMark, plateC, colors.numFont, 0,
+                                   contrast(plateGlyph, markBg) < 2.0 ? haloFor(plateGlyph) : null));
     } else if (spineSide === "wordmark") {
       // The title sponsor along the UPPER half — the W17's PETRONAS, McLaren's
       // title on the papaya cover. Under a wrap it rides the CREASE STRIP that
@@ -2573,7 +2566,7 @@ const LiveryTex = (function () {
         }
       }
       // Same board-first ink as PLATE; halo when the flank would swallow a spill.
-      const boardInk = colors.plateInk || inkOn([boardC]);
+      const boardInk = inkOn([boardC]);
       eachFlank((F) => {
         // Under a saddle stay on the panel — past u 0.50 is bare cover, and a
         // teal TITLE board on Mercedes' pale cover measured 1.53:1.

@@ -124,7 +124,7 @@ const Teams = (function () {
          cover as black. See docs/notes/LIVERY-2026-REFERENCE.md. */
       livery: { cover: [0.055, 0.058, 0.070], finShape: "none", spineHeight: "dorsal",
                 spineLogo: "ridge", spineSide: "rake", coverBind: "independent",
-                ridgeTint: [0.0, 0.82, 0.95], sideTint: [0.059, 0.235, 0.788] },
+                spineTint: [0.0, 0.82, 0.95], sideTint: [0.059, 0.235, 0.788] },
       engine: "Mercedes", tier: 3,
       stats: { speed: 82, accel: 78, cornering: 80, braking: 79 },
       drivers: [

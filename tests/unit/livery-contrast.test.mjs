@@ -54,7 +54,7 @@ test("no design paints a large area that cannot be seen on what it covers", () =
   // may choose same-on-same. This sweep scores DERIVED defaults only; pick
   // survival is asserted in "a colour you PICK…" below.
   const STRIP = ["saddleTint", "sideTint", "spineTint", "sunTint", "plateTint",
-                 "bandTint2", "accent", "fin", "ridgeTint", "airboxTint"];
+                 "bandTint2", "accent", "fin"];
   const bad = [];
   for (const t of A.Teams.LIST) {
     const base = A.Liveries.forTeam(t)[0];
@@ -189,7 +189,7 @@ test("SPINE TOP wrap survives a partial livery (no c1/c2)", () => {
 // asks whether the picked colour REACHES the region, and — the half that makes
 // it a real test — that it is absent when the field is unset. Without the
 // negative, a colour that happened to be in the livery already would pass.
-test("the five formerly-derived surfaces are picks, and only when picked", () => {
+test("design fills are picks, and only when picked", () => {
   const PICK = [1, 0, 1];                       // magenta: in no shipped livery
   const hit = /^rgba?\(255,0,255[,)]/;          // css()/cssA() emit no spaces
   const reaches = (teamId, liv, region) => {
@@ -201,12 +201,11 @@ test("the five formerly-derived surfaces are picks, and only when picked", () =>
     }
     return false;
   };
+  // crestInk / plateInk dropped — lettering auto-inks. Remaining design fills:
   const cases = [
-    ["crestInk  the crown's lettering", "mercedes", { spineLogo: "wordmark" }, "crest"],
     ["bandTint2 the tricolour's 2nd band", "alpine", { spineLogo: "tricolour" }, "crest"],
     ["sunTint   the wrap's sun", "redbull", { spineLogo: "wrap" }, "crest"],
     ["plateTint the flank number board", "ferrari", { spineSide: "plate" }, "spineSide"],
-    ["plateInk  the number on that board", "ferrari", { spineSide: "plate" }, "spineSide"],
   ];
   const bad = [];
   for (const [what, teamId, design, region] of cases) {

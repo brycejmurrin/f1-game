@@ -237,16 +237,33 @@ test("coverBind saddleWrap paints saddle flanks without a saddle crown", () => {
                "spineOnly keeps non-saddle crowns off the flanks");
 });
 
-test("airboxMeshColour: wrap sun wins over airboxTint", () => {
-  const cover = [0.9, 0.9, 0.92], sun = [0.95, 0.75, 0.1], airbox = [0.2, 0.8, 0.3];
-  const liv = { spineLogo: "wrap", sunTint: sun, airboxTint: airbox, cover };
+test("airboxMeshColour: wrap sun wins over cover", () => {
+  const cover = [0.9, 0.9, 0.92], sun = [0.95, 0.75, 0.1];
+  const liv = { spineLogo: "wrap", sunTint: sun, cover };
   assert.deepEqual(A.LT.airboxMeshColour("redbull", liv, cover), sun);
 });
 
-test("airboxMeshColour: non-wrap uses airboxTint, else cover", () => {
+test("airboxMeshColour: non-wrap uses cover (airboxTint folded away)", () => {
   const cover = [0.9, 0.9, 0.92], airbox = [0.2, 0.8, 0.3];
-  assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", airboxTint: airbox, cover }, cover), airbox);
+  // airboxTint is ignored — migrate folds it into cover when cover empty.
+  assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", airboxTint: airbox, cover }, cover), cover);
   assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", cover }, cover), cover);
+});
+
+test("migratePaint folds ridge/airbox and drops lettering overrides", () => {
+  const M = A.Liveries || globalThis.Liveries;
+  assert.ok(M && M.migratePaint, "Liveries.migratePaint must exist");
+  const ridge = [0, 0.82, 0.95], air = [0.2, 0.3, 0.4];
+  const a = M.migratePaint({ ridgeTint: ridge, c1: [0.1, 0.1, 0.1] });
+  assert.deepEqual(a.spineTint, ridge);
+  assert.equal(a.ridgeTint, undefined);
+  const b = M.migratePaint({ airboxTint: air, c1: [0.1, 0.1, 0.1] });
+  assert.deepEqual(b.cover, air);
+  assert.equal(b.airboxTint, undefined);
+  const c = M.migratePaint({ crestInk: [1, 1, 1], plateInk: [0, 0, 0], spineTint: ridge });
+  assert.equal(c.crestInk, undefined);
+  assert.equal(c.plateInk, undefined);
+  assert.deepEqual(c.spineTint, ridge);
 });
 
 test("finHandoff contrast derives when fin unset; authored fin always wins", () => {

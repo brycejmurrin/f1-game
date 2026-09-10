@@ -156,6 +156,8 @@ test("liveries.js publishes ONE field list and forTeam consumes it", () => {
   }
   assert.equal(list.includes('"crestInk"'), false, "crestInk left the paint sheet / FIELDS");
   assert.equal(list.includes('"plateInk"'), false, "plateInk left the paint sheet / FIELDS");
+  assert.equal(list.includes('"ridgeTint"'), false, "ridgeTint folded into spineTint");
+  assert.equal(list.includes('"airboxTint"'), false, "airboxTint folded into cover");
 });
 
 test("garage-angles labels frames and can A/B a ref without touching the tree", () => {
