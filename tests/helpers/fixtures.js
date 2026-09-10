@@ -236,6 +236,44 @@ test.afterEach(async ({ page }, testInfo) => {
   } catch (_) { /* page may be closed / __apex absent — best-effort only */ }
 });
 
+// STOP RASTERISING BEFORE THE CONTEXT GOES AWAY. Registered AFTER the capture
+// above on purpose: hooks run in registration order, so a failing test still
+// snapshots a live page, and only then does the page go quiet.
+//
+// THE FAILURE THIS TARGETS. On the shared CI runner a worker runs one heavy
+// browser test, and the NEXT test dies in `browser.newContext()` having never
+// entered its body: "Test timeout of 180000ms exceeded while setting up
+// context", at exactly the cap. A replacement worker — i.e. a new BROWSER —
+// then runs the same kind of test in seconds. Seen on race-control,
+// telemetry-compare and carview-parts, which share no fixture and no subject;
+// two of them import raw @playwright/test, whose context fixture is nothing but
+// browser.newContext(), so the stall is browser-side, not ours.
+//
+// WHY THIS SHOULD HELP, stated as the guess it is. LAUNCH sets
+// --disable-renderer-backgrounding and --disable-background-timer-throttling
+// (playwright.config.js), which switch OFF the throttling Chromium would
+// otherwise apply to a page nobody is looking at. A game page rAFs forever, and
+// SwiftShader rasterises on the CPU, so a renderer that outlives its test keeps
+// a core busy at full rate while the next newContext() is trying to start one.
+// __apex.headless(true) stops render(), so the page is idle before teardown.
+// The config's own measured lesson is that CPU headroom is the lever, not the
+// frame rate — this frees headroom rather than changing any clock.
+//
+// NOT PROVEN: the stall does not reproduce on a quiet box, so only CI can say.
+// It is also best-effort by construction (a closed page, a missing hook, a spec
+// with no __apex at all must never turn a green test red), and it does NOT
+// reach specs that import @playwright/test directly — today telemetry-compare
+// and carview-parts. Those need the import switched before they see this.
+//
+// Safe for sharedTest, which reuses one page: its per-test reset already calls
+// headless(false) before each test, so the page wakes back up. Between tests it
+// now idles instead of rasterising, which is the same win.
+test.afterEach(async ({ page }) => {
+  try {
+    await page.evaluate(() => { try { window.__apex && window.__apex.headless(true); } catch (_) {} });
+  } catch (_) { /* page already closed, or never had __apex — nothing to quiet */ }
+});
+
 /* ─────────────────────────────────────────────────────────────────────────────
    sharedTest — ONE booted page per worker, reused by every test in the file.
 
