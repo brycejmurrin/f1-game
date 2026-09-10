@@ -505,10 +505,10 @@ const LiveryTex = (function () {
   //         BOTH `mark` and whatever is behind it
   //   plate the backing shield/disc/panel, or null. Never a shape that has to
   //         read on its own. Always null when `bare`
-  //   halo  a colour to stroke UNDER the mark, or null. Non-null only when the
-  //         mark is UNSET in the editor and cannot reach INK_TARGET on the
-  //         field — a rescue for derived / brand defaults. An authored
-  //         liv.logo / logo2 / logo3 is taken as selected: no floor, no halo.
+  //   halo  a colour to stroke UNDER the mark, or null. Non-null only for a
+  //         DERIVED mark (no authored logo, not the brand table) that sits
+  //         under INK_TARGET. Authored logo / logo2 / logo3 and brand marks
+  //         paint exactly as selected — no floor, no auto-halo.
   // ALL FOUR ARE OPAQUE. A crest may not paint with alpha: behind the atlas is
   // drawTailGraphic's gradient, so an alpha fill's effective colour is
   // unprovable and no contrast guarantee survives it.
@@ -608,13 +608,13 @@ const LiveryTex = (function () {
     let mark = markBase(teamId, liv);
     const brandPair = !!(B && plate && B.plate &&
       plate.join() === B.plate.join() && mark.join() === B.mark.join());
-    // An AUTHORED TEAM LOGO (`liv.logo`) is taken as selected: no MARK_FLOOR
-    // substitution and no auto-halo. Derived / brand-default marks still floor
-    // against `under` so unreadible defaults cannot ship on plate-less crowns
-    // and flanks (livery-contrast area sweeps). Pick any colour in the editor —
-    // it paints exactly that colour.
+    // Mark colour is free when authored (liv.logo) or brand-table. Derived
+    // marks (other-livery c1/c2) still floor so unreadible defaults cannot
+    // ship. Lettering auto-inks elsewhere.
     const authoredLogo = !!(liv && liv.logo);
-    if (!brandPair && !authoredLogo && cMin(mark, under) < MARK_FLOOR) {
+    const brandMark = !!(B && mark.join() === B.mark.join());
+    const freeMark = authoredLogo || brandMark;
+    if (!brandPair && !freeMark && cMin(mark, under) < MARK_FLOOR) {
       const alts = [B && B.mark, liv && liv.c2, liv && liv.c1];
       mark = null;
       for (const c of alts) if (c && cMin(c, under) >= MARK_FLOOR) { mark = c.slice(); break; }
@@ -656,21 +656,19 @@ const LiveryTex = (function () {
     }
     return {
       mark: mark.slice(), alt: alt.slice(), plate: plate, part,
-      brandPair,
+      brandPair, brandMark, freeMark,
       // What the mark ACTUALLY sits on, after the plate has been resolved: the
       // one list every legibility question here is asked against. Exported
       // because the tests used to re-derive it as `plate ? [plate] : fields`,
       // and that stopped being the rule the day a backing could be a DISC the
       // mark hangs off the edges of.
       under: under.map((c) => c.slice()),
-      // Authored TEAM LOGO: no auto-halo — the pick is the paint. Derived /
-      // brand marks (and authored LOGO DETAIL islands) still get an outline
-      // when they sit under INK_TARGET so a same-ink part cannot vanish.
-      halo: authoredLogo ? null : (() => {
-        const mNeed = !brandPair && cMin(mark, under) < INK_TARGET;
-        const pNeed = !!part && cMin(part, under) < INK_TARGET;
-        if (!mNeed && !pNeed) return null;
-        if (pNeed) return inkOn(under).slice();
+      // Free marks (authored TEAM LOGO or brand table): no auto-halo — the
+      // pick is the paint. Authored LOGO DETAIL islands likewise. Only a
+      // DERIVED mark (other-livery c1/c2 with no brand row) still gets an
+      // outline when it sits under INK_TARGET.
+      halo: freeMark || part ? null : (() => {
+        if (brandPair || cMin(mark, under) >= INK_TARGET) return null;
         return haloFor(mark).slice();
       })(),
       // The OUTLINE row (liv.logo3), and it is now offered on EVERY mark rather
