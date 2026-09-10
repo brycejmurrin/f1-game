@@ -237,7 +237,7 @@ Recommended UI: **one `SettingRow` labelled `UPSCALE`**, values ON/OFF, default 
 
 1. **Settings first (small, shippable alone):** ON/OFF `SettingRow` next to RESOLUTION, same `apex26.spatialUpscale` key, default OFF. Works for GLX immediately; WGX/TLX keep `available` until ported.
 2. **Backend port: strategy A (shared SGSR1)** for WGX then TLX — one kernel, fail closed without letterboxing, soft-present at present size only when the flag is active. Do **not** introduce FSR1's second pass.
-3. **Optional follow-up (landed 2026-09-09):** WGX-only `textureGather` fast path (`SGSR_GATHER`) preferred when the module links; `apex26.spatialUpscaleGather=0` forces 4-tap. Soft-present cost bench: `node tools/gfx/soft-present-bench.mjs`. Real-GPU A/B via `gpu-census.yml` with `apex26.resMode=med` ± `apex26.spatialUpscale=1` — still required before default ON.
+3. **Optional follow-up (landed 2026-09-09):** WGX-only `textureGather` fast path (`SGSR_GATHER`) preferred when the module links; `apex26.spatialUpscaleGather=0` forces 4-tap. Soft-present cost bench: `node docs/archive/tools/gfx/soft-present-bench.mjs`. Real-GPU A/B via `gpu-census.yml` with `apex26.resMode=med` ± `apex26.spatialUpscale=1` — still required before default ON.
 4. **Still required before default ON:** device A/B at RESOLUTION MED/LOW — SwiftShader cannot judge (§6). Default remains **OFF**.
 
 ### 7.5 Out of scope (unchanged)

@@ -2,6 +2,8 @@
 // fit-audit — does every menu FIT, and is everything on it big enough to hit?
 // @doc The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll.
 // @skill ui-menu-a11y
+// Companion numbers matrix beside layout-audit (tap/type/spacing/overflow).
+// survey-ui-matrix owns layout-audit; use this when you need the type/spacing floors.
 //
 // menu-fit answers "is this screen clipped at one viewport" and takes pictures.
 // This answers the questions that only show up across a MATRIX of sizes and

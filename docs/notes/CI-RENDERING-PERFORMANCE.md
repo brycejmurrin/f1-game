@@ -62,7 +62,7 @@ Three software paths matter for Apex probing; they are **not interchangeable**:
 Commands that produced the table:
 
 ```sh
-node tools/gfx/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
+node docs/archive/tools/gfx/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
 node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal
 node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite
 APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \

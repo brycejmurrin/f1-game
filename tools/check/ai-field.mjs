@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * @doc Field behaviour of the AI race: pace spread, how fast it strings out, settled passes vs oscillation, nose-to-tail dwell.
- * @skill tune-physics
+ * @skill ai-racecraft
  * ai-field.mjs — does the AI field RACE, or does it shuffle?
  *
  * `ai-pace.mjs` answers "how fast is the field"; this answers "what does the

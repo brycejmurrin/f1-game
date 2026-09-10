@@ -32,12 +32,10 @@ composites (hidden WebGPU canvas stays black), and the FIRST
 `getCurrentTexture()` call permanently breaks `mapAsync` on that device — WGX
 never touches the swapchain on software adapters. Visible pixels: soft-present
 2D blit on `#game` — probe with `node tools/gfx/gfx-probe.mjs --backend webgpu`
-(`awaitSoftPresent` + `#game` luma). Readback oracle:
-`node tools/gfx/wgx-capture.mjs <track>` → `frame.png` via `GLX.capturePixels()`
-(same `COPY_SRC` texture; can flake when concurrent with display readback).
-Prefer hooks/capture over reasoning from absence. Still true: SwiftShader is
-not a PERFORMANCE oracle, software adapters force MSAA 1, and
-`deviceLostHint: true` after a clean init is a note, not a failure.
+(`awaitSoftPresent` + `#game` luma). `wgx-capture.mjs` is a thin alias of that
+probe (prefer the parent). Prefer hooks/probe over reasoning from absence.
+Still true: SwiftShader is not a PERFORMANCE oracle, software adapters force
+MSAA 1, and `deviceLostHint: true` after a clean init is a note, not a failure.
 
 ## 2. Backend and error state
 
@@ -71,7 +69,7 @@ Live session: **mcp-probe** with
 `node tools/gfx/gfx-probe.mjs --backend webgpu <track>` (`#game` after
 `awaitSoftPresent`). Multi-track gallery: `node tools/gfx/wgx-shot.mjs --gallery`
 (or `npm run wgx:gallery`).
-Readback oracle: `node tools/gfx/wgx-capture.mjs <track>`.
+(`wgx-capture.mjs` / `wgx-lavapipe-probe.mjs` are aliases — prefer `gfx-probe`.)
 
 ## Load on demand
 
