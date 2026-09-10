@@ -1133,15 +1133,26 @@ Run 3500 (17bbf07) never got there: after 12 green TLX tests both workers
 wedged in Playwright's "Create context" — before any spec code ran — and
 sat 25 min each on the 30 min per-test budget (`--timeout=600000` x
 test.slow()); cancelled by hand. A Chromium/GPU-process hang on the macOS
-runner, not the diff. Re-dispatched.
+runner, not the diff. Re-dispatched as 3504: 48/48 green, no retries —
+the first clean Metal run; "shadows" passed first time, so it is an
+intermittent, and the post-path diag prints when it next fails.
 
 *The Linux Smoke matrix on a `gfx` dispatch (runs 3495 and 3497, shard 4,
 75-78 min each):* the six lighting tests timed out identically both times
 — `applyRaceSettings tod=night` 226 s after page load, `wx=fog` 353 s, the
 45 s boot waits and 420 s budgets long gone — and webgl-probes passed at
 82-135 s a test. No assertion fired in either run; the box is ~10x this
-container and the group's only real signal is the Metal job. Proposed:
-skip the Smoke matrix for renderer groups on dispatch. The fog-glow row stayed red WITH `tier [0,0]` —
+container and the group's only real signal is the Metal job.
+The fix was in the tests, not the matrix: not one of those six reads a
+pixel — five assert the tuner's DOM and lightTune() state, the sixth
+lightState().exposure — and `__apex.headless(true)` skips render()
+outright. Booting them headless took the seven state-only tests (the
+"weather() applies lighting live" one included) from ~3 min each here to
+61 s for all seven; the fog-floor test alone went 726 s → 20 s. The M4/M8/
+M9 budget-aware waits are capped at 300 s so the gpu config's 600 s x
+test.slow() cannot let a dead probe burn 30 min per attempt. Skipping the
+Smoke matrix for renderer groups stays on the table for the pixel specs,
+no longer urgent. The fog-glow row stayed red WITH `tier [0,0]` —
 dry 80.1, foggy 72.6, the same −9 % this container reads (65.4 → 60.1) — so
 it was never the tier either: the sampled band is pure sky, the sky shader
 carries no lamp-fog term (`glsl-sky.js`), and what the test measured was the

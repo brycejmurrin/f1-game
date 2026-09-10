@@ -41,9 +41,17 @@ const at = (rel) => join(ROOT, rel);
 // and these captures cost up to 150 s each under contention.
 test.describe.configure({ timeout: 420_000 });
 
-async function boot(page, track, tod, wx, frac) {
+// `headless: true` for a test that reads lightState()/lightTune() and never
+// a pixel: __apex.headless(true) skips render() (js/game.js), and rendering
+// was the whole cost on the Linux Smoke runner of a gfx dispatch — the fog
+// floor test below spent 726 s drawing Vegas-night frames nobody sampled and
+// died on its budget twice over (runs 3495/3497, shard 4). applyRaceSettings
+// writes frame.exposure/sunColor with or without a render; frame.lights is
+// built on the render path, so the lamp-budget test keeps rendering.
+async function boot(page, track, tod, wx, frac, { headless = false } = {}) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  if (headless) await page.evaluate(() => window.__apex.headless(true));
   await page.evaluate((t) => window.__apex.race(t), track);
   await page.waitForFunction(() => window.__apex.info && window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
   if (tod) await page.evaluate((t) => window.__apex.setTimeOfDay(t), tod);
@@ -102,7 +110,7 @@ test("A/B knob catalog matches the source exactly (1 hit per knob)", () => {
 });
 
 test("weather() applies lighting live (fog mutes sun + lifts exposure)", async ({ page }) => {
-  await boot(page, "monza", "day", "dry");
+  await boot(page, "monza", "day", "dry", undefined, { headless: true });
   const before = await page.evaluate(() => window.__apex.lightState());
   await page.evaluate(() => window.__apex.weather("fog"));
   await page.waitForTimeout(300);
@@ -200,7 +208,7 @@ test("PCSS contact-hardening rig is alive", async ({ page }) => {
 });
 
 test("dark sessions keep their exposure floors in fog (night must stay night)", async ({ page }) => {
-  await boot(page, "vegas", "night", "fog");
+  await boot(page, "vegas", "night", "fog", undefined, { headless: true });
   const ls = await page.evaluate(() => window.__apex.lightState());
   // Night fog floor is 0.95 — NOT the daytime 1.08 (that grey-washed the dark).
   expect(ls.exposure).toBeGreaterThanOrEqual(0.94);

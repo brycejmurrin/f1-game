@@ -191,7 +191,7 @@ test.describe("TLX — boot", () => {
     // runner is a program compile of up to 93 s (three's WebGL2-on-ANGLE path,
     // docs/notes/TESTING-FIELD-NOTES.md), and runs 3477 and 3484 both burned
     // a retry here at 42 s with the chain simply not yet presented once.
-    const left = Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000);
+    const left = Math.min(300_000, Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000));
     await page.waitForFunction(
       () => { const p = GLX.__tlx && GLX.__tlx.postState(); return !!(p && p.on && p.targets[0] > 0 && p.blocks.fxaa); },
       null, { polling: 100, timeout: left },
@@ -449,9 +449,11 @@ test.describe("TLX — boot", () => {
     // the assertion below says which, with the env counters in the message.
     // The clock on the wait is whatever the test has LEFT (test.slow() gives
     // this file 360 s), so a slow boot and a slow wait share one budget and
-    // the failure names the frame count, not "Test timeout of 360000ms".
+    // the failure names the frame count, not "Test timeout of 360000ms" —
+    // capped at 300 s: the gpu config's 600 s x test.slow() would otherwise
+    // let a probe that never captures burn 30 min per attempt on Metal.
     const p0 = await page.evaluate(() => GLX.__tlx.backendState().presents);
-    const left = Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000);
+    const left = Math.min(300_000, Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000));
     try {
       await page.waitForFunction((p0) => {
         const e = GLX.__tlx.envState();
@@ -515,7 +517,7 @@ test.describe("TLX — boot", () => {
     // Metal runner is a program compile of up to 93 s (see M8/M9), and run
     // 3493 burned a retry here at 46 s with no frame yet presented.
     await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.carShadowState().arms > 0, null,
-      { polling: 100, timeout: Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000) });
+      { polling: 100, timeout: Math.min(300_000, Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000)) });
     const st = await page.evaluate(() => ({ car: GLX.carShadowState(), lamp: GLX.lampShadowState() }));
     expect(st.car.enabled).toBe(true);
     expect(st.car.arms).toBeGreaterThan(0);
