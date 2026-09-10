@@ -1050,3 +1050,26 @@ Deferred with reasoning, none lost:
   not the fix**: "still happening, on X not Y" is a bisect the reporter has
   already run for you, and the second cause was found by taking it literally
   rather than re-examining the first.
+
+## 2026-09-10 — parts-mesh-cache eviction tests are budget-marginal on this box
+
+`tests/specs/parts-mesh-cache.spec.js` "player body and cockpit caches keep at
+most 3 visual keys" (240 s budget) and "wheel mesh cache keeps at most 8
+tyre/brake pairs" (360 s) failed three times on the car-draw extraction
+(32b04b9): twice with the second garage pick still "performing click action"
+at the budget, once with the cockpit-mesh wait (20 s) expiring. The one run on
+the pre-extraction commit 88f8515 passed at 222 s — 18 s under its budget.
+Measured on both commits with the same script, idle box: opening the garage
+10–34 s, an engine pick 33–38 s (tab click 17–19 s, option click 15–20 s —
+Playwright's stability wait against a garage that renders at ~0.6 fps under
+SwiftShader, one texture created and freed per frame on both commits), race
+boot + park 23–27 s. Four iterations of that is ~300 s, so a 222 s pass is
+the fast tail, not the norm. The spec's own mesh probe, installed on the
+extraction, counts body=1 after park, cockpit=1 within 10 s of
+`camera("cockpit")`, wheels=4, field=32 — the caches it audits are reached.
+The moved code is byte-identical to the base modulo the façade rewrites
+(`G.` / `deps.` / `PhysicsConsts.` / `M4.clamp` / `CamModes.CAM_MODES`; 616
+lines, 0 diff). Verdict: not a regression; the test's budget assumes a
+faster garage than this box has (its header already calls the 5→3 boot
+change "UNVERIFIED IN A BROWSER"). Left as is — never widen a budget to make
+a spec pass; CI's `parts` group on a real runner is the gate for these two.
