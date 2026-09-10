@@ -106,7 +106,7 @@ through the merge path above.
    BLOB
    ```
 
-2. **Bake + bump** (writes presets, increments `?v=` + `version.json`;
+2. **Bake** (writes presets only; shell tags stay `?v=dev` —
    validates shape, never commits):
    ```sh
    node .claude/skills/lighting-tuner/scripts/bake.mjs artifacts/tmp/presets.txt

@@ -36,9 +36,9 @@ await new Promise(r => setTimeout(r, 500));
 2. **Hide `#game` before any screenshot.** MCP captures are correct once the
    WebGL canvas is hidden (`docs/archive/research/UI-SCALE-AND-ZOOM.md`
    blamed the MCP; re-measured 2026-08-08, the canvas was the problem).
-3. **Bump `?v=N` + `version.json` BEFORE you reload** after a CSS/JS edit.
-   Cost: a `min-height` fix measured as "not applied" because the browser
-   served cached `menus.css`.
+3. **Hard-reload after CSS/JS edits** (committed tags stay `?v=dev`). Prefer
+   css-play `?play=` hot-swap for one-screen work. Do not hand-bump numeric
+   `?v=N` / `version.json` — see check-changes `references/bump.md`.
 4. **Park the browser (`navigate_page about:blank`) before starting
    Playwright.** A live game page in the MCP browser held 21.7% CPU.
 
