@@ -205,6 +205,52 @@ and mutates in place, whereas capturing `G.gfx` at create would freeze a null.
 Rule for the remaining carves: rebindable state through the `G` getter, a
 mutated-in-place object may be captured once. Evidence: docs/notes/DEFECT-LEDGER.md.
 
+## What happens next (2026-09-10) — rough order
+
+Not a re-plan: Phase 3's carve list below still stands. This is the queue as it
+actually sits, with the verification each item needs, because two of them are
+not carves at all and one came out of the shadow-pass work.
+
+**1. Land PR #127 (shadow-pass).** Merged, verified locally (guards 170/170,
+tooling-fast 171/171), and dispatched once for the `gfx` group + Metal, which is
+the only way a renderer change gets renderer specs (see item 2). Read that run,
+separate any failure from the six already red on the deploy tip, merge.
+
+**2. The renderer coverage hole — decide, then act.** Measured in
+docs/notes/TESTING-FIELD-NOTES.md (2026-09-10): 51 of 116 specs can never be
+selected by the change-aware gate, and FOUR areas — `js/render/glx/` (the
+shipped path), `js/render/webgpu/`, `js/render/three/`, `js/lighting/` — have
+ZERO eligible routed specs, so a push touching them gets no blocking browser
+spec at all. The one spec that empirically catches a dead render pass
+(`menu-baseline`, the golden menu PNGs) is unrouted AND outside the gate.
+ci.yml already prescribes the way in and the order matters:
+   a. run `test:baseline` on a PR as a NON-BLOCKING step; compare the six
+      goldens rendered on a GitHub runner against the dev-container ones;
+   b. only if they match, route renderer + lighting paths to `baseline` in
+      `tools/ci/pick-tests.mjs` and add the group to the gate;
+   c. if they do not match, the images are the problem to solve first —
+      routing to a permanently-red gate is the failure ci.yml's comment
+      exists to prevent.
+   Until (b) lands, the interim rule is manual and belongs in every renderer
+   PR: **a renderer or lighting carve needs a dispatched `gfx` run
+   (`renderer_macos: true`), because neither automatic gate provides one.**
+
+**3. Remaining Phase 3 carves,** in the order §3 already gives:
+garage-preview → quali-net + race-settings-ui → custom-team-ui → live weather →
+atmosphere. Each meets the eval-time destructure hazard (119 names; see the
+2026-09-10 status section) — rewrite those reads to the owning global or take
+them through `deps`, and let the call-time-reads guard confirm it.
+
+**4. Two items that are not carves** and are sequenced last because they carry
+the most risk per line changed:
+   - `tests/` guards-VM split — tests only, cheap, `tooling-fast` is the gate.
+   - three.js r186 and Rapier 0.20 — vendor bumps. Each its own PR, each with a
+     real browser group, and r186 additionally with a dispatched `gfx` +
+     Metal run: TLX is one of the four blind areas above.
+
+Phases 4 and 5 (tools/, docs/) are unchanged and still interleave with feature
+work.
+
 ## Status and remaining steps (2026-09-03)
 
 Order of landing: **0 → 1-lite → 2 (splits, then the move window) → 1 → 3
