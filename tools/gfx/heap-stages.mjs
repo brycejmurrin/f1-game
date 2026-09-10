@@ -118,6 +118,36 @@ async function leg(browser, port, backend) {
   // hypothetical — it hung here for eight minutes with no output and had to be
   // killed, which is a measurement lost to the harness rather than to the game.
   // The frame count is REPORTED, not targeted — it is a rate observation.
+  // GPU-SIDE SAMPLES, because the JS heap is the wrong number for a handset.
+  // Runtime.getHeapUsage cannot see textures, buffers or pipelines, and iOS
+  // jetsam counts exactly those (glx.js mobile-tier note). three tracks them in
+  // renderer.info.memory/render, which TLX already surfaces on __tlx.memState().
+  // Sampled ON A CLOCK through the soak: an end-to-end delta cannot tell a
+  // filling working set from a slope, which is the distinction this whole file
+  // exists for.
+  const series = [];
+  const sample = () => page.evaluate(() => {
+    const t = typeof window.__tlx !== "undefined" && window.__tlx.memState
+      ? window.__tlx.memState() : null;
+    const out = { t: Math.round(performance.now()) };
+    if (t) {
+      // memState()'s shape is FLAT — rGeo/rTex/progs/calls, not info.memory.*.
+      // backendData is three's WebGPU DataMap size: the per-object GPU state
+      // the renderer retains, and the counter closest to what iOS jetsam
+      // actually charges the tab for.
+      out.mats = t.mats; out.pool = t.pool; out.geoKeys = t.geoKeys;
+      out.rGeo = t.rGeo; out.rTex = t.rTex; out.progs = t.progs; out.calls = t.calls;
+      out.backendData = t.backendData;
+      if (t.mirror) out.sweeps = t.mirror.sweeps;
+    }
+    return out;
+  }).catch(() => null);
+
+  // Node-side clock, running CONCURRENTLY with the soak's evaluate below.
+  const every = Math.max(5000, Math.round(seconds * 1000 / 8));
+  series.push(await sample());
+  const ticker = setInterval(() => { sample().then((r) => r && series.push(r)); }, every);
+
   const framesRun = await page.evaluate(async ({ budgetMs, frameMs }) => {
     const t0 = performance.now();
     let i = 0;
@@ -133,10 +163,12 @@ async function leg(browser, port, backend) {
     }
     return i;
   }, { budgetMs: seconds * 1000, frameMs: 3000 });
+  clearInterval(ticker);
   const settled = await heap(cdp);
+  series.push(await sample());
 
   await page.close();
-  return { backend, gfx: got.gfx, track: got.track, boot, built, settled, framesRun };
+  return { backend, gfx: got.gfx, track: got.track, boot, built, settled, framesRun, series };
 }
 
 const { srv, port } = await serve();
