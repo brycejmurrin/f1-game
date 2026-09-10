@@ -1,6 +1,8 @@
 {
   "images": "macos-latest,windows-latest",
   "track": "montreal",
-  "ls": "apex26.resMode=\"med\" apex26.spatialUpscale=1",
-  "leg": "med-upscale-json"
+  "ls": "",
+  "force": "",
+  "census_only": false,
+  "leg": "post-cube-mip-baseline"
 }
