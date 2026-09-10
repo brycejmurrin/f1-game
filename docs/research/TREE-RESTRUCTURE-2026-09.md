@@ -162,6 +162,108 @@ regex; and a path built from separate quoted segments, which is now REPORTED
 at plan time rather than guessed at. The last one paid for itself immediately:
 it named all six of batch 4's hazards before that batch ran.
 
+## Where this stands (2026-09-10, two Phase 3 carves)
+
+`js/game.js` **9,273 → 8,589 lines** (codeLines 4,559; topLets 141; gMembers
+239). Two carves landed from the Phase 3 list below, each its own PR into the
+deploy branch, each with its ratchet lowered in the same commit:
+
+| carve | file | game.js | state |
+|---|---|---|---|
+| car-draw | `js/car/car-draw.js` (686) | 9,656 → 9,041 | DEPLOYED (PR #126, Pages run 2228 green incl. verify-live) |
+| shadow-pass | `js/render/shared/shadow-pass.js` (530) | 9,041 → 8,589 | PR #127, awaiting review |
+
+**The shadow-pass carve is a deliberate departure from §3 below, which says
+`render()` stays whole.** That rule was written because both design panels
+fenced `render()` and no VM gate observes it — the risk was carving blind. What
+changed is the evidence available: the three shadow-map passes are reachable
+through instrumentable backend seams, so the carve can be PROVEN rather than
+argued. Booted, with the camera moving: 9 `shadowBegin`/`shadowEnd` with 27
+`castShadowChunked` and 342 `castShadowInstanced`; 5 `carShadowBegin`/`End`
+with 5 `carShadowKeep`; at night 6 `lampShadowBegin`/`End` with the sun pass
+correctly gated off by key luminance. The rest of `render()` still stays whole:
+what left is three self-contained passes with their own caches, not the loop.
+
+**The hazard this exposed, which every remaining carve will meet.** The moved
+code carried ~40 reads of `LT`. `LT` is not a global — game.js binds it at eval
+with `const { TUNE_DEFS, LT, buildTrackLights } = LightTune;` — so in any other
+file the name does not exist, and every sun-map rebuild would have thrown
+`ReferenceError`. No browser spec would have caught it: a pass that never runs
+raises nothing, it just stops drawing. `tests/unit/global-registry.test.mjs`'s
+call-time-reads rule caught it before any test ran.
+
+The sweep behind that: **119 of game.js's top-level names exist only as
+eval-time destructures** — `PhysicsConsts` 58 (`VMAX`, `ACCEL`, `BRAKE`…),
+`CarMesh` 15, `carDraw` 12, `GameStore` 6, `LightTune` 3, `Teams` 2. Any carve
+that moves a read of one of these must rewrite it to the owning global or take
+it through `deps`. Two things make this survivable: not one game.js local
+shares a name with a real global (158 of them), so the failure is always loud
+rather than a silently wrong value; and the guard sees the whole class. The
+residual risk it cannot see is a create-time capture of a REBINDABLE value —
+`const LT = LightTune.LT` is safe only because knobs.js declares `const LT = {}`
+and mutates in place, whereas capturing `G.gfx` at create would freeze a null.
+Rule for the remaining carves: rebindable state through the `G` getter, a
+mutated-in-place object may be captured once. Evidence: docs/notes/DEFECT-LEDGER.md.
+
+## What happens next (2026-09-10) — rough order
+
+Not a re-plan: Phase 3's carve list below still stands. This is the queue as it
+actually sits, with the verification each item needs, because two of them are
+not carves at all and one came out of the shadow-pass work.
+
+**1. Land PR #127 (shadow-pass).** Merged, verified locally (guards 170/170,
+tooling-fast 171/171), and dispatched once for the `gfx` group + Metal, which is
+the only way a renderer change gets renderer specs (see item 2). Read that run,
+separate any failure from the six already red on the deploy tip, merge.
+
+**2. The renderer coverage hole — the first instrument turned out to be the
+wrong one.** Measured in docs/notes/TESTING-FIELD-NOTES.md (2026-09-10): 51 of
+116 specs can never be selected by the change-aware gate, and FOUR areas —
+`js/render/glx/` (the shipped path), `js/render/webgpu/`, `js/render/three/`,
+`js/lighting/` — have ZERO eligible routed specs, so a push touching them gets
+no blocking browser spec at all. That hole is real and unchanged.
+
+The plan's step (b) was to route those paths to `baseline` (the six golden menu
+PNGs). **That is now ruled out on evidence**: the spec calls
+`__apex.headless(true)` and hides `#game` before it shoots, so it is a DOM
+identity gate by construction and cannot see a renderer fault. Re-breaking the
+shadow pass produced byte-identical golden failures — the goldens noticed
+nothing. Whoever picks this up next needs a CANVAS instrument with a per-test
+budget under 180 s; the six `gfx` specs (240-540 s each) are the reason the hole
+exists and cannot themselves be the fix.
+
+The trial job (step (a), landed) still paid for itself by refuting the reason
+`test:baseline` is out of the gate. ci.yml says the goldens are
+environment-sensitive; measured, the GitHub runner and this container agree to
+within 1-17 pixels while BOTH miss the committed PNGs by 10k-49k against a 1%
+tolerance. The images are portable and were STALE — three of six had not been
+re-blessed since the UI moved (garage content: budget, a new catalog entry,
+prices, percentage stat chips, and the compact-density rule hiding
+descriptions). **Re-blessed 2026-09-10, and run 3464 passed all six on a
+GitHub runner**, which confirms portability by experiment. Remaining: keep the
+trial non-blocking for a few more PRs, then gate `test:baseline` as a DOM
+identity gate. Worth doing, and a different job from covering the renderer.
+
+Until a canvas instrument exists, the interim rule stands for every renderer PR:
+**a renderer or lighting carve needs a dispatched `gfx` run
+(`renderer_macos: true`), because neither automatic gate provides one.**
+
+**3. Remaining Phase 3 carves,** in the order §3 already gives:
+garage-preview → quali-net + race-settings-ui → custom-team-ui → live weather →
+atmosphere. Each meets the eval-time destructure hazard (119 names; see the
+2026-09-10 status section) — rewrite those reads to the owning global or take
+them through `deps`, and let the call-time-reads guard confirm it.
+
+**4. Two items that are not carves** and are sequenced last because they carry
+the most risk per line changed:
+   - `tests/` guards-VM split — tests only, cheap, `tooling-fast` is the gate.
+   - three.js r186 and Rapier 0.20 — vendor bumps. Each its own PR, each with a
+     real browser group, and r186 additionally with a dispatched `gfx` +
+     Metal run: TLX is one of the four blind areas above.
+
+Phases 4 and 5 (tools/, docs/) are unchanged and still interleave with feature
+work.
+
 ## Status and remaining steps (2026-09-03)
 
 Order of landing: **0 → 1-lite → 2 (splits, then the move window) → 1 → 3
@@ -604,10 +706,14 @@ exact before/after, ratchet lowered in the same commit:
 2. Delete the 10 passthroughs; replace the dead banners with a region table
    at the top of the file, guarded by a cheap banner-order test.
 3. Extract: boot-loaders (8 free refs; mostly gone after roster.js) →
-   collisions (11) → car-draw (~68 refs, owns its 16 lets) → garage-preview
-   (0 new G members once car-draw exists) → quali-net + race-settings-ui →
-   custom-team-ui → live weather → atmosphere. `render()` and `updateCar()`
-   stay whole (both panels fenced them; no VM gate observes render).
+   collisions (11) → ~~car-draw (~68 refs, owns its 16 lets)~~ **done, deployed
+   (PR #126)** → garage-preview (0 new G members once car-draw exists) →
+   quali-net + race-settings-ui → custom-team-ui → live weather → atmosphere.
+   `updateCar()` stays whole. `render()` stays whole EXCEPT the three
+   shadow-map passes, which left in PR #127 with live per-pass counts as
+   evidence (see the 2026-09-10 status section): the bar for carving anything
+   else out of `render()` is the same — an instrumentable seam that proves the
+   moved work still runs, not a code read.
 4. `hooks-documented` moves to the espree walker shared with
    `gen-hooks-table` (retires the "comment must not quote `const api = {`"
    hazard); apex.js stays one file.

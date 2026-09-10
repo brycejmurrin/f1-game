@@ -36,6 +36,19 @@ test("render interpolates world px/pz for every car, not only humans", () => {
   assert.doesNotMatch(anc[0], /c\.human && c\.px/);
 });
 
+// The player's skid stamp must run BEFORE the cockpit rig's `continue`. It sat
+// after the body draw, so in cockpit view — CAM_MODES[3], the shipped default
+// camera — the player never laid a mark (tlx-probes M6 read cam:"cockpit" with
+// every stamp-gate term true and an empty batch). World state, not a draw.
+test("the player's skid stamp precedes the cockpit-rig continue", () => {
+  const game = read("js/game.js");
+  const stamp = game.indexOf("skids.stamp(tmpMat,");
+  const cockpit = game.indexOf("if (c.isPlayer && cockpitRigOnly) {");
+  assert.ok(stamp > 0 && cockpit > 0, "both sites present");
+  assert.ok(stamp < cockpit, `skids.stamp at ${stamp} must come before the cockpit branch at ${cockpit}`);
+  assert.equal(game.split("skids.stamp(").length - 1, 1, "one stamp site");
+});
+
 test("xVis is a dump field — render and shadows do not damp it", () => {
   const game = read("js/game.js");
   assert.doesNotMatch(game, /damp\(\s*c\.xVis/);
@@ -125,8 +138,10 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
     /const body = carDraw\.modelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
   );
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
-  assert.match(game, /if \(_hasLivePlayerShadow\) gfx\.castShadow\(teamMesh\(player\.team, player, true\)/);
-  assert.match(game, /gfx\.castShadow\(teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\), _shadowMats\[i\]\)/);
+  // The caster passes live in js/render/shared/shadow-pass.js (teamMesh through deps, the player through G).
+  const sp = read("js/render/shared/shadow-pass.js");
+  assert.match(sp, /if \(_hasLivePlayerShadow\) G\.gfx\.castShadow\(deps\.teamMesh\(G\.player\.team, G\.player, true\)/);
+  assert.match(sp, /G\.gfx\.castShadow\(deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\), _shadowMats\[i\]\)/);
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
   assert.match(game, /1\.5 \* Math\.max\(PACE, 0\.05\)/,
     "beached gate additive floor must scale with PACE like the grass speed floor");

@@ -507,6 +507,7 @@ const GLX = (function () {
       gen: _softBlitGen,
       maxPx: _softLastMaxPx,
       display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
+      post: (PST && PST.postPath) ? PST.postPath() : null,   // js/render/glx/post.js _lastPath
     };
   }
 

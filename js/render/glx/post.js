@@ -75,6 +75,13 @@ const GLXPost = (function () {
     // Which FBO soft-present readPixels uses after the last present() — must
     // match where the composite/FXAA chain actually landed this frame.
     let _softReadFB = null;   // null = default framebuffer
+    // What the LAST present actually did — the pass flags and the buffer a
+    // soft-present readback would read. Surfaced through GLX.softPresentState()
+    // so a two-capture spec can prove both captures came off the same chain:
+    // image-grade "shadows" on the Metal runner attached a crisp, bloomless
+    // baseline and a soft, bloomed changed frame (run 3497), and nothing in
+    // its diag could say which pass was on for which capture.
+    let _lastPath = null;
     function uf1(loc, key, v) {
       if (!loc) return;
       if (_compUf[key] !== v) { gl.uniform1f(loc, v); _compUf[key] = v; }
@@ -484,7 +491,7 @@ const GLXPost = (function () {
       SH.carArmed = false;
       const lampArmed = SH.lampArmed;
       SH.lampArmed = false;
-      if (!postEnabled) { core.gpuTimerEnd(); return; }
+      if (!postEnabled) { _lastPath = { on: false }; core.gpuTimerEnd(); return; }
       const { width, height } = core.getSize();
       const threshold = opts && opts.threshold !== undefined ? opts.threshold : 0.75;
       const bloomAmt = opts && opts.bloom !== undefined ? opts.bloom : 0.55;
@@ -965,6 +972,8 @@ const GLXPost = (function () {
       } else {
         _softReadFB = null;
       }
+      _lastPath = { on: true, fxaa: useFxaa, upscale: useUpscale, toLdr: !!toLdr, bloom: bloomAmt, ao: aoStr,
+        readFb: _softReadFB === null ? "default" : (_softReadFB === ldrFBO ? "ldr" : "aa") };
 
       // Discard depth buffers we never read across frames (regenerated every frame
       // by the geometry pass). On tiled mobile GPUs this frees the tiler from
@@ -1022,6 +1031,7 @@ const GLXPost = (function () {
       present,
       readbackLdrPixels,
       invalidateUniformCache,
+      postPath: () => _lastPath,
     };
   }
 

@@ -84,8 +84,13 @@ test("it does not claim to cover what it cannot", () => {
 // The change-aware gate (2026-09-10): `select` plans, `selected` runs the plan
 // as a matrix. The plan job is the trigger; the step script it delegates to
 // carries the fail-closed strings.
+// Both bounded at the next job head. An unbounded `split("\n  selected:")[1]`
+// reads every job appended after it as part of it, so a later job's
+// `continue-on-error: true` (the golden-menu trial) fails the gate assertion
+// below against a gate nobody touched — the parser defect first fixed on
+// 2026-09-10 for the single `selected` job, re-introduced with the two-job gate.
 const selectJob = ciWorkflow.split("\n  select:")[1]?.split("\n  selected:")[0];
-const selectedJob = ciWorkflow.split("\n  selected:")[1];
+const selectedJob = (ciWorkflow.split("\n  selected:")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
 const selectStep = fs.readFileSync(new URL("../../tools/ci/ci-select-specs-step.sh", import.meta.url), "utf8");
 
 test("the change-aware gate blocks pushes, pull requests AND the deploy gate", () => {
@@ -458,7 +463,10 @@ test("the renderer specs have their own macOS job that runs test:gfx", () => {
   assert.ok(rendererFilter, "renderer-filter job missing from ci.yml");
   assert.match(rendererJob, /^    runs-on: macos-latest$/m, "the renderer job must run on the image with the Metal adapter");
   assert.match(rendererJob, /run: npm run test:gfx -- --config=playwright\.gpu\.config\.js --timeout=\d+/);
-  assert.match(rendererJob, /APEX_WORKERS: 2/);
+  // ONE worker: two Chromium instances on the shared Metal GPU wedged
+  // Playwright's "Create context" in two of four runs (3500, 3509), 27 min
+  // each on the per-test budget until a hand cancel (docs/notes/DEFECT-LEDGER.md).
+  assert.match(rendererJob, /APEX_WORKERS: 1/);
   assert.match(rendererJob, /^    timeout-minutes: 30$/m);
   assert.deepEqual(report.rendererGate.specs, groupSpecs("test:gfx"));
   // >= 5, not 6: tlx-probes.spec.js left test:gfx with the 2026-09-03 WGX/TLX
@@ -488,11 +496,15 @@ test("the renderer job never passes --use-angle=vulkan (it drops macOS to SwiftS
   assert.match(baseCfg, /"--use-angle=swiftshader",/, "the base config still pins SwiftShader for every other run");
 });
 
-test("the renderer job proves the adapter before trusting the run, and uploads on failure", () => {
+test("the renderer job proves the adapter before trusting the run, and uploads its report on every run", () => {
   assert.match(rendererJob, /node tools\/gfx\/gpu-census\.mjs --json census-macos\.json/);
   assert.match(rendererJob, /r\.anyHardware !== true/, "the tri-state census must be compared with === true, never coerced");
   assert.equal(report.rendererGate.censusGated, true);
-  assert.match(rendererJob, /if: failure\(\)\s*\n\s*uses: actions\/upload-artifact@v4/);
+  // always(), not failure(): a spec that fails its first attempt and passes
+  // the retry leaves the job green, and a green job uploaded nothing — the
+  // frames image-grade "shadows" attaches were unretrievable on run 3495
+  // exactly when they were the next step (docs/notes/DEFECT-LEDGER.md).
+  assert.match(rendererJob, /if: always\(\)\s*\n\s*uses: actions\/upload-artifact@v4/);
   assert.match(rendererJob, /name: playwright-artifacts-renderer-macos/);
   // The full browser, cached at macOS's path; never apt.
   assert.match(rendererJob, /id: pwcache/);
