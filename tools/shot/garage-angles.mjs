@@ -124,13 +124,14 @@ const liveryAwait = fast ? 8000 : 12000;
 const viewAwait = fast ? 5000 : 8000;
 const gateRetries = fast ? 1 : 3;
 const doPlan = argvHas("--plan");
+const doLive = argvHas("--live");
 
 // Everything the tool owns. Anything ELSE of the form --name=value is taken as
 // a livery field and validated in-page — so the flag surface grows with
 // Liveries.FIELDS instead of with this file.
 const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom", "--pan",
   "--views", "--against", "--label", "--sheet", "--cell", "--spine-side", "--spine-logo",
-  "--preset", "--plan", "--fast", "--settle", "--view-settle"]);
+  "--preset", "--plan", "--fast", "--settle", "--view-settle", "--live"]);
 const axes = [];
 const addAxis = (field, raw) => {
   const values = String(raw).split(",").map((s) => s.trim()).filter(Boolean);
@@ -224,6 +225,27 @@ async function labelPng(file, title, sub) {
     .composite([{ input: body, left: 0, top: 0 }, { input: svg, left: 0, top: h }])
     .png().toFile(tmp);
   renameSync(tmp, file);
+}
+
+/** Auto-refreshing HTML gallery — one card per shot as it lands (`--live`). */
+function writeLiveGallery(shots, file, heading) {
+  const cards = shots.map((s, i) => {
+    const fn = basename(s.png);
+    const title = `${s.team} · ${s.name} · ${s.view}`;
+    return `<figure style="margin:0;background:#1a1d24;border-radius:8px;overflow:hidden">`
+      + `<img src="${fn}" style="width:100%;display:block" loading="lazy" alt="${esc(title)}"/>`
+      + `<figcaption style="padding:8px 10px;font:12px/1.3 monospace;color:#c8cdd8">`
+      + `#${i + 1} ${esc(title)}</figcaption></figure>`;
+  }).join("\n");
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">`
+    + `<meta http-equiv="refresh" content="3">`
+    + `<title>${esc(heading)} (${shots.length})</title>`
+    + `<style>body{margin:0;padding:16px;background:#0d0f14;color:#e8eaed;font-family:system-ui,sans-serif}`
+    + `h1{font-size:16px;font-weight:600;margin:0 0 12px}`
+    + `.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}</style>`
+    + `</head><body><h1>${esc(heading)} — ${shots.length} shot(s)</h1>`
+    + `<div class="grid">${cards}</div></body></html>`;
+  writeFileSync(file, html);
 }
 
 /** A labelled grid of frames. `items` is [{png, title, sub}]. */
@@ -533,6 +555,10 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
           console.log(`shot ${teamId}/${tag}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist}`
             + ` spread ${s.spread} [settle ${s.ms.settle} cap ${s.ms.capture} gate ${s.ms.gate}`
             + `${s.ms.tries > 1 ? ` tries ${s.ms.tries}` : ""}] -> ${s.png}`);
+          if (doLive) {
+            writeLiveGallery(shots, join(dir, "live.html"),
+              `garage — ${teams.join(",")} · ${views.join(",")}`);
+          }
         }
       }
     }

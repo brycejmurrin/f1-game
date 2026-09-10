@@ -189,4 +189,5 @@ test("garage-angles has presets, --plan, --fast, and tunable settle", () => {
   assert.match(src, /liverySettle/, "livery/design apply uses --settle");
   assert.match(src, /viewSettle/, "camera-only moves use --view-settle");
   assert.match(src, /keepPage: !!againstRef/, "--against reuses the page for pass B");
+  assert.match(src, /argvHas\("--live"\)/, "--live writes auto-refresh live.html after each shot");
 });
