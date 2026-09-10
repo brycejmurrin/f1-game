@@ -656,6 +656,13 @@ test("a green fast-tier run pokes the train; a red or called one never does", ()
   assert.ok(cond.includes("(needs.selected.result == 'success' || needs.selected.result == 'skipped')"),
     "an empty plan skips `selected`, which is a pass");
   assert.match(poke, /permissions:\s*\n\s+actions: write/, "workflow_dispatch via the token needs actions:write");
+  // A called workflow may not request more than its caller passes, and GitHub
+  // checks that at STARTUP for every declared job, skipped or not: the first
+  // poked train (run 2241) died with startup_failure because pages.yml's call
+  // passed contents/pages/id-token and ci.yml's poke job asked for actions.
+  const pagesCi = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
+  assert.match(pagesCi, /permissions:\s*\n\s+contents: read\s*\n\s+actions: write/,
+    "pages.yml's call must grant actions:write or the poke job's declaration kills every train at startup");
   assert.match(poke, /gh workflow run pages\.yml --repo "\$GITHUB_REPOSITORY" --ref "\$GITHUB_REF_NAME"/);
   // The heavy jobs are not in the poke's needs: smoke and sweeps are the train's.
   const pokeNeeds = (poke.match(/needs: \[([^\]]*)\]/)?.[1] || "").split(",").map((s) => s.trim());
