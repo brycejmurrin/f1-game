@@ -163,6 +163,32 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   assert.match(code("js/render/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*Rg\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
 });
 
+test("GLX upscale toggles preserve scene targets at unchanged render resolution", () => {
+  const h = bootGlx();
+  h.GLX.setRenderScale(0.75);
+  h.reset();
+  h.GLX.setSpatialUpscale(true);
+  assert.equal(h.canvas.width, 640);
+  assert.equal(h.GLX.width, 480);
+  assert.equal(h.count("texImage2D"), 1, "only the FXAA intermediate is allocated");
+  assert.equal(h.count("deleteTexture"), 0, "scene and post textures survive");
+  h.reset();
+  h.GLX.setSpatialUpscale(true);
+  h.GLX.resize();
+  assert.equal(h.count("texImage2D"), 0, "reapplying the setting allocates nothing");
+  h.GLX.setRenderScale(0.6);
+  assert.ok(h.count("texImage2D") > 1, "active upscale resizes scene and AA targets");
+  assert.equal(h.canvas.width, 640, "presentation stays full sized");
+  h.reset();
+  h.GLX.setSpatialUpscale(false);
+  assert.equal(h.canvas.width, 384);
+  assert.equal(h.count("texImage2D"), 0);
+  assert.equal(h.count("deleteTexture"), 1, "only the upscale intermediate is freed");
+  h.reset();
+  h.GLX.setRenderScale(0.5);
+  assert.ok(h.count("texImage2D") > 1, "real scene resizing still rebuilds targets");
+});
+
 test("GLX create* / draw* fail closed when the context is lost", () => {
   // BEHAVIOUR on the mock: after `webglcontextlost` every creator returns
   // null and every draw entry (core, chunked, shadow, post) makes NO gl call.
