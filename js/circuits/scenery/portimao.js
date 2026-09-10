@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["portimao"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
         pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, runoffApron,
         cameraTower, sponsorHoarding, signBoard, groundedSegments, bankedKerbStrip,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       {
         const CORK_LEAF  = [0.24, 0.34, 0.19];
@@ -285,9 +284,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [125, 44, 130, 44, 18, 12, [0.28, 0.34, 0.20]],
         [225, 34, 180, 60, 32, 20, [0.30, 0.33, 0.24]],

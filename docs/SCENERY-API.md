@@ -5,7 +5,7 @@ Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 (`buildProps`, split across the `js/track/scenery/nature.js` / `scenery-city.js`
 / `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
 `js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
-primitives, and composite models. The **111-member `api` surface is a frozen
+primitives, and composite models. The **112-member `api` surface is a frozen
 contract** — `tests/unit/scenery-api-contract.test.mjs` fails on any rename/removal,
 because every circuit callback destructures from it. Everything emits
 flat-shaded geometry into the track's prop mesh.
@@ -46,7 +46,15 @@ hwZones: [{ s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 }]
 ## Positioning model
 
 Trackside helpers take `(k, side, dist, …)`:
-- `k` — node index, `0 … n-1` (a lap-fraction `s` maps to `k = Math.round(s*n)%n`).
+- `k` — node index, `0 … n-1`. `api.K(s)` maps a lap-fraction `s` to it
+  (`Math.round(s*n)%n`, UN-shifted: the wrapped helpers remap the node they
+  receive on shifted/reversed circuits, so pass `K(s)` straight through — never
+  pre-shift it). It replaces the identical local `const K = …` that 37 circuit
+  files used to declare.
+- `api.lapBounds()` — `{ cx, cz, radius }`: the lap's XZ centroid and the
+  farthest node's distance from it, for sky/horizon rings (`mountain(cx +
+  cos(a) * (radius + 400), …)`). Computed once per build and cached; it
+  replaces the centroid/max-radius loop 30 files each re-ran.
 - `side` — `-1` left, `+1` right of the racing direction.
 - `dist` — metres **beyond the road edge**.
 
@@ -147,7 +155,7 @@ through the same guarded emitters, so geometry and on-track suppression are
 unchanged — the build simply also leaves behind `track.graph`, a description of
 what stands where.
 
-This is internal to `js/track/`: the 111-member `scenery(api)` surface a circuit
+This is internal to `js/track/`: the 112-member `scenery(api)` surface a circuit
 destructures is untouched, and circuit files need no changes. Gate any migration
 with `node tools/track/graph-parity.cjs --all`. See
 [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).
@@ -224,7 +232,16 @@ model and records `reason: "vertex budget exceeded"`.
 
 ### Shared dressing exclusions
 
-Generic city, foliage, and lamps can be disabled by racing-lap sector and side.
+Generic city, foliage, and lamps can be disabled by lap sector and side. The
+windows and sides are authored in the def's SCENERY frame — the same frame as
+`wall()` / `hedge()` / `cityFront()` ranges: the engine maps each rule through
+`TrackSpace.sceneryRange` (origin shift, `sceneryCoordinates: "source"`,
+`sceneryLapMirror`) and flips `side` on a `reverse: true` lap, so a rule copied
+from a `cityFront(s0, s1, side, …)` call excludes the generic pass under exactly
+that facade. (Until 2026-09-10 rules took the origin shift alone; Monaco's
+windows were converted to source fractions so they land where they always did,
+and Singapore's now sit under its facades and over its bay instead of a third
+of a lap away.)
 Track lighting is one system: `"lamps"` is the canonical dressing kind for the
 generic mast pass (street posts and flood banks). `"floodlights"` is kept as an
 alias; `"lighting"` matches either:
@@ -253,7 +270,7 @@ throws; bespoke posts go through `lampPost` / `floodMast`). Tuner
 `px/py/pz/hw` (per-node arrays), `pyMin` (lap's low point), plus resolved
 `sceneryTheme`, `landmarkKit`, and `circuitKit`.
 
-Also on the 111-member contract but not detailed in this doc: `MAT` (material
+Also on the 112-member contract but not detailed in this doc: `MAT` (material
 ids), the math utilities `lerp` / `norm` / `cross` / `upOf`, the `night`
 session flag, `groundUnder` (world-XZ ground query — ribbon-aware, distinct
 from `terrainYAt`/`groundYAt`), the grounding helpers `seat` / `foundation` / `frameAt` / `cantilever` and
@@ -552,7 +569,8 @@ if (!bakedModel("grandstand_tifosi", K(0.12), -1, 14, { scale: 1.2 }))
   grandstand(K(0.12), -1, 14, 40);          // procedural fallback
 ```
 
-`bakedModels()` lists the ids the installed pack actually has.
+(`Assets.models()` lists the ids the installed pack actually has; the old
+`api.bakedModels()` re-export was dropped — no circuit ever called it.)
 
 Never async: `js/render/shared/assets.js` prefetches every model at boot precisely so
 prop placement cannot vary with network timing — the same circuit must build

@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["sepang"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
         palm, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterBand,
         sponsorHoarding, cameraTower, seat,
         addBox, addCyl, addCone, addPrism } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const PALM_F = [0.16, 0.42, 0.18], PALM_FD = [0.12, 0.34, 0.15];
       const JUNGLE = [0.11, 0.34, 0.14], JUNGLE_L = [0.20, 0.46, 0.20];
@@ -241,9 +240,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 10);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [130, 50, 130, 34, 12, 4, [0.14, 0.36, 0.16]],   // plantation canopy wall
         [220, 40, 170, 44, 16, 6, [0.12, 0.31, 0.15]],

@@ -453,3 +453,4 @@ const TrackModels = (function () {
 
   return { create, validateGeometry, scratch, sealGeometry };
 })();
+Object.freeze(TrackModels);

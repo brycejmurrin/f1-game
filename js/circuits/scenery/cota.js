@@ -6,8 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["cota"] =
   function (api) {
-      const { out, MAT, n, ds, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, terrace, acacia, plane, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop } = api;
-      const K = (s) => Math.round(s * n) % n;
+      const { K, out, MAT, n, ds, hw, place, addBox, addPrism, addCyl, addCone, addFrustum, along, onTrack, anchor, vadd, hash, modelGroup, overheadSpan, groundPatch, waterSurface, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, terrace, acacia, plane, cameraTower, building, motorhome, billboard, marshalPost, fence, guardrail, tyreWall, wall, forestEdge, cityFront, backdrop } = api;
 
       // -- Speckled crowd palette (casual Texan race-day colours) --
       const crowdCols = [

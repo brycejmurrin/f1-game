@@ -36,7 +36,7 @@ function tuneDefs() {
   const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };
   sb.window = sb; vm.createContext(sb);
   seedLog(sb);
-  for (const f of ["js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"])
+  for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb);
   return sb.LightTune.TUNE_DEFS;
 }

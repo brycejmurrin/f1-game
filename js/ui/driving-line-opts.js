@@ -91,3 +91,4 @@ const DrivingLineOpts = (function () {
 
   return { K_PALETTE, K_OPACITY, K_CUE, brakeCue, setBrakeCue, initUI };
 })();
+Object.freeze(DrivingLineOpts);

@@ -4,6 +4,7 @@ description: Read-only verification subagent. Runs tools/ci/verify-change.mjs --
 model: inherit
 readonly: true
 is_background: true
+background: true
 tools: Bash, Read, Grep, Glob
 ---
 

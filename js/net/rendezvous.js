@@ -9,8 +9,6 @@ const NetRendezvous = (function () {
   const DEFAULT_URL = "";
   const STORE_KEY = "apex26.rendezvous";
 
-  const TOPIC = "apex26/rv";
-
   const POLL_MS = 1200;             // how often to ask if the other side arrived
   const POLL_TIMEOUT_MS = 120000;   // give up after two minutes — see the TTL
   const FETCH_TIMEOUT_MS = 8000;
@@ -34,12 +32,25 @@ const NetRendezvous = (function () {
     } catch (e) { return false; }
   }
 
+  // REJECTION SAMPLING, not `byte % 31`: 256 is not a multiple of 31, so the
+  // modulo made the first 8 letters (2..9) 9/8 as likely as the rest — a
+  // measurable bias in the only secret a room code has. Bytes at or above the
+  // largest multiple of the alphabet size are thrown away and redrawn.
+  const RAND_LIMIT = 256 - (256 % ALPHABET.length);   // 248 for 31 letters
+  function randomBytes(n) {
+    const out = new Uint8Array(n);
+    if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(out);
+    else for (let i = 0; i < n; i++) out[i] = Math.floor(Math.random() * 256);
+    return out;
+  }
   function makeCode() {
-    const n = new Uint8Array(CODE_LEN);
-    if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(n);
-    else for (let i = 0; i < CODE_LEN; i++) n[i] = Math.floor(Math.random() * 256);
     let out = "";
-    for (let i = 0; i < CODE_LEN; i++) out += ALPHABET[n[i] % ALPHABET.length];
+    while (out.length < CODE_LEN) {
+      const n = randomBytes(CODE_LEN * 2);
+      for (let i = 0; i < n.length && out.length < CODE_LEN; i++) {
+        if (n[i] < RAND_LIMIT) out += ALPHABET[n[i] % ALPHABET.length];
+      }
+    }
     return out;
   }
 
@@ -91,14 +102,27 @@ const NetRendezvous = (function () {
     }
   }
 
-  const SALT = enc().encode("apex26-rendezvous-v1");
+  // ENVELOPE v2: [salt 16][iv 12][AES-GCM ciphertext+tag], AAD = the slot
+  // name ("offer" / "answer"). v1 derived one AES key straight from the code
+  // under a CONSTANT salt and bound nothing: a sealed offer could be replayed
+  // into the answer slot, and every room ever hosted under one code shared a
+  // key. Now PBKDF2 runs ONCE per code (below) to a memoised HKDF base, and
+  // each envelope derives its own AES key from a fresh random salt; the slot
+  // rides as additional data so an offer opened as an answer fails the tag.
+  // open() accepts v2 only — both peers run the same build (the handshake's
+  // build check refuses anything else), so there is nobody to stay
+  // compatible with.
+  const PBKDF2_SALT = enc().encode("apex26-rendezvous-v2");
+  const HKDF_INFO = enc().encode("apex26-rendezvous-v2/envelope");
+  const SALT_LEN = 16, IV_LEN = 12, MIN_ENVELOPE = SALT_LEN + IV_LEN + 16;
 
-  // One-entry memo: the key depends ONLY on the code, which is fixed for a
+  // One-entry memo: the base depends ONLY on the code, which is fixed for a
   // whole exchange — but seal() and open() both derived it per call, and their
   // callers are hot (publish per 5 s repost AND per relay onopen, heard per
   // inbound frame). That was a 120 000-round PBKDF2 every few seconds for the
   // full join window, on exactly the phone the room-code path exists for. The
-  // CryptoKey is extractable:false, so caching it discloses nothing new.
+  // HKDF CryptoKey is extractable:false, so caching it discloses nothing new;
+  // the per-envelope HKDF step it feeds is microseconds.
   let _keyCode = null, _keyP = null;
   function keyFor(code) {
     const norm = normalise(code);
@@ -106,75 +130,67 @@ const NetRendezvous = (function () {
     _keyCode = norm;
     _keyP = (async () => {
       const base = await crypto.subtle.importKey(
-        "raw", enc().encode(norm), "PBKDF2", false, ["deriveKey"]);
-      return crypto.subtle.deriveKey(
-        { name: "PBKDF2", salt: SALT, iterations: 120000, hash: "SHA-256" },
-        base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+        "raw", enc().encode(norm), "PBKDF2", false, ["deriveBits"]);
+      const bits = await crypto.subtle.deriveBits(
+        { name: "PBKDF2", salt: PBKDF2_SALT, iterations: 120000, hash: "SHA-256" }, base, 256);
+      return crypto.subtle.importKey("raw", bits, "HKDF", false, ["deriveKey"]);
     })();
-    return _keyP;
+    const p = _keyP;
+    p.catch(() => { if (_keyP === p) { _keyP = null; _keyCode = null; } });   // a failed derive must not stick
+    return p;
   }
 
-  // The topic must not reveal the code, so it is a truncated hash of it. 80
-  // bits of it: collisions are irrelevant at this scale and the string stays
-  // short enough to read in a broker log without wrapping.
-  async function topicFor(code, slot) {
-    const h = await crypto.subtle.digest("SHA-256", enc().encode("t|" + normalise(code)));
-    const hex = [...new Uint8Array(h).slice(0, 10)]
-      .map((b) => b.toString(16).padStart(2, "0")).join("");
-    return `${TOPIC}/${hex}/${slot}`;
+  async function envelopeKey(code, salt) {
+    return crypto.subtle.deriveKey(
+      { name: "HKDF", hash: "SHA-256", salt, info: HKDF_INFO },
+      await keyFor(code), { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
   }
 
-  async function seal(code, text) {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
+  const aad = (slot) => enc().encode(String(slot || ""));
+
+  async function seal(code, text, slot) {
+    const salt = crypto.getRandomValues(new Uint8Array(SALT_LEN));
+    const iv = crypto.getRandomValues(new Uint8Array(IV_LEN));
     const ct = await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv }, await keyFor(code), enc().encode(text));
-    const out = new Uint8Array(12 + ct.byteLength);
-    out.set(iv); out.set(new Uint8Array(ct), 12);
+      { name: "AES-GCM", iv, additionalData: aad(slot) },
+      await envelopeKey(code, salt), enc().encode(text));
+    const out = new Uint8Array(SALT_LEN + IV_LEN + ct.byteLength);
+    out.set(salt); out.set(iv, SALT_LEN); out.set(new Uint8Array(ct), SALT_LEN + IV_LEN);
     return out;
   }
 
-  async function open(code, bytes) {
-    if (!bytes || bytes.length <= 12) return null;
+  async function open(code, bytes, slot) {
+    if (!bytes || bytes.length < MIN_ENVELOPE) return null;
     try {
+      const salt = bytes.slice(0, SALT_LEN);
+      const iv = bytes.slice(SALT_LEN, SALT_LEN + IV_LEN);
       const pt = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: bytes.slice(0, 12) }, await keyFor(code), bytes.slice(12));
+        { name: "AES-GCM", iv, additionalData: aad(slot) },
+        await envelopeKey(code, salt), bytes.slice(SALT_LEN + IV_LEN));
       return dec().decode(pt);
     } catch (e) {
       return null;
     }
   }
 
-  function b64url(bytes) {
-    let binary = "";
-    for (let i = 0; i < bytes.length; i += 0x4000) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x4000));
-    }
-    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const ENVELOPE_TAG = "v2.";
+  async function sealPrivate(code, slot, payload) {
+    return ENVELOPE_TAG + NetBytes.bytesToB64url(await seal(code, payload, slot));
   }
 
-  function unb64url(text) {
-    const s = String(text || "").replace(/-/g, "+").replace(/_/g, "/");
-    const binary = atob(s + "=".repeat((4 - s.length % 4) % 4));
-    const out = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-    return out;
-  }
-
-  async function sealPrivate(code, payload) {
-    return "v1." + b64url(await seal(code, payload));
-  }
-
-  async function openPrivate(code, payload) {
-    if (typeof payload !== "string" || !payload) return null;
-    if (!payload.startsWith("v1.")) return payload;
-    try { return await open(code, unb64url(payload.slice(3))); }
+  // v2 only. The Worker used to be allowed to hand back unversioned plaintext
+  // "during a rolling deployment"; that branch let a relay operator (or anyone
+  // who could answer for one) substitute an SDP of their choosing. Gone.
+  async function openPrivate(code, slot, payload) {
+    if (typeof payload !== "string" || !payload.startsWith(ENVELOPE_TAG)) return null;
+    try { return await open(code, NetBytes.b64urlToBytes(payload.slice(ENVELOPE_TAG.length)), slot); }
     catch (e) { return null; }
   }
 
   function ownerCapability() {
     const bytes = new Uint8Array(18);
     crypto.getRandomValues(bytes);
-    return b64url(bytes);
+    return NetBytes.bytesToB64url(bytes);
   }
 
   // Deliberately the same shape as NetHandshake's: publish a blob, then wait for
@@ -188,7 +204,7 @@ const NetRendezvous = (function () {
   // which is the default, and the reason room codes need nothing deployed.
   async function httpPut(code, slot, payload, owner) {
     try {
-      const sealed = await sealPrivate(code, payload);
+      const sealed = await sealPrivate(code, slot, payload);
       return call(`/r/${normalise(code)}/${slot}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -202,7 +218,7 @@ const NetRendezvous = (function () {
   async function httpGet(code, slot) {
     const got = await call(`/r/${normalise(code)}/${slot}`, { method: "GET" });
     if (!got.ok) return got;
-    const payload = got.body && await openPrivate(code, got.body.payload);
+    const payload = got.body && await openPrivate(code, slot, got.body.payload);
     if (!payload) return ERR("corrupt", "The room service returned an unreadable code. Use the invite link instead.");
     return { ok: true, body: { payload } };
   }
@@ -301,10 +317,11 @@ const NetRendezvous = (function () {
   }
 
   return {
-    ALPHABET, CODE_LEN, POLL_TIMEOUT_MS, STORE_KEY, DEFAULT_URL, TOPIC,
+    ALPHABET, CODE_LEN, POLL_TIMEOUT_MS, STORE_KEY, DEFAULT_URL, ENVELOPE_TAG,
     configured, usingPrivateRelay, setUrl, baseUrl, swap, hostRoom,
-    seal, open, topicFor,
+    seal, open, sealPrivate, openPrivate,
     makeCode, normalise, valid,
     put, get, waitFor,
   };
 })();
+Object.freeze(NetRendezvous);

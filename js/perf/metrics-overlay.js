@@ -1145,3 +1145,4 @@ return {
   snapshot, PANEL_STYLE, setTelemetryLoader,
 };
 })();
+Object.freeze(GameMetrics);

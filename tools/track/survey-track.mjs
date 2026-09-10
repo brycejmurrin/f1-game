@@ -30,7 +30,7 @@ import {
   resolveContainedChild,
   resolveRepoDefault,
 } from "../lib/output-paths.mjs";
-import { awaitPresentedFrame, screenshotPresentedCanvas } from "../capture/probe-page.mjs";
+import { awaitPresentedFrame, screenshotPresentedCanvas } from "../shot/probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 export const SURVEY_USAGE = "usage: survey-track.mjs <id> [label] [fracs] [--oblique]";

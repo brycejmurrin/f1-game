@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["catalunya"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
         pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         floodMast, sailCanopy, sponsorHoarding, seat, groundedSegments,
         addBox, addCyl, addCone } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const PINE = [0.14, 0.31, 0.16], PINE_D = [0.11, 0.25, 0.14];
       const SCRUB = [0.33, 0.38, 0.20], SCRUB_D = [0.27, 0.32, 0.17];
@@ -180,9 +179,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [130, 30, 150, 46, 14, 9, [0.42, 0.42, 0.26]],   // bleached near ridges
         [230, 26, 195, 60, 24, 14, [0.36, 0.37, 0.25]],

@@ -245,6 +245,7 @@ const GLXShadow = (function () {
         // rebound it to shadowIbo).
         if (batch.shadowIbo) {
           gl.bindVertexArray(batch.vao);
+          core.invalidateVAO();   // direct bind: keep glx.js's VAO bind cache honest (chunked.js does the same)
           gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
           for (let c = 0; c < 4; c++) {
             gl.vertexAttribPointer(5 + c, 4, gl.FLOAT, false, 64, c * 16);
@@ -258,6 +259,7 @@ const GLXShadow = (function () {
         // Light-culled pack lives on shadowIbo — bind it for this draw only and
         // leave the camera ibo / cell-set cache alone (upload:false contract).
         gl.bindVertexArray(batch.vao);
+        core.invalidateVAO();   // direct bind, and this branch returns before bindVAO() runs
         gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
         for (let c = 0; c < 4; c++) {
           gl.vertexAttribPointer(5 + c, 4, gl.FLOAT, false, 64, c * 16);
@@ -388,3 +390,4 @@ const GLXShadow = (function () {
 
   return { init };
 })();
+Object.freeze(GLXShadow);

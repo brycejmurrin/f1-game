@@ -105,7 +105,7 @@ const createActionWireManager = ({ getPeer, getPeerIds, canReceiveFromPeer, thro
 					chunk.set([nonce >> 8, nonce & oneByteMax], nonceIndex);
 					chunk.set([Number(isLast) | Number(isMeta) << 1 | Number(isBinary) << 2 | Number(isJson) << 3], tagIndex);
 					chunk.set([Math.round((i + 1) / chunkTotal * oneByteMax)], progressIndex);
-					chunk.set(hasMeta ? isMeta ? metaEncoded ?? new Uint8Array() : buffer.subarray((i - 1) * chunkSize, i * chunkSize) : buffer.subarray(i * chunkSize, (i + 1) * chunkSize), payloadIndex);
+					chunk.set(hasMeta ? isMeta ? metaEncoded ?? /* @__PURE__ */ new Uint8Array() : buffer.subarray((i - 1) * chunkSize, i * chunkSize) : buffer.subarray(i * chunkSize, (i + 1) * chunkSize), payloadIndex);
 					return chunk;
 				});
 				nonce = nonce + 1 & twoByteMax;

@@ -251,7 +251,7 @@ test("TODAY's challenge stages the day's circuit as a time trial with the day's 
 
 // ── the RED FLAG in the live game ─────────────────────────────────────────────
 
-test("a red flag re-grids the field in race order with laps and the clock kept, and lights-out resumes the race", async () => {
+test("a red flag re-grids in race order to re-run the current lap, keeps the clock, and resumes at lights-out", async () => {
   g.G.timeTrial = false; g.G.seasonMode = false; g.G.raceGrid = "tier"; g.G.raceChangeable = false;
   await g.race("monza", "day", "dry");
   const A = g.apex;
@@ -265,7 +265,10 @@ test("a red flag re-grids the field in race order with laps and the clock kept, 
   assert.equal(A.redFlag(), false, "a second call while counting is refused");
   const after = A.fieldState();
   assert.deepEqual(after.map((c) => c.code), before.map((c) => c.code), "race order is the grid order");
-  assert.deepEqual(after.map((c) => c.lap), before.map((c) => c.lap), "laps are kept");
+  // Boxes are behind the line: roll back one crossing so the restart re-enters
+  // the same lap instead of awarding an undriven lap (red-flag-vm tests crossing).
+  assert.ok(before.some((c) => c.lap > 0), "the field has crossed the line before the flag");
+  assert.deepEqual(after.map((c) => c.lap), before.map((c) => Math.max(0, c.lap - 1)), "the current lap is re-run");
   assert.ok(after.every((c) => c.speed === 0), "the field is standing");
   assert.ok(after.every((c, i) => i === 0 || after[i - 1].gap <= c.gap), "boxes in order");
   assert.equal(g.G.raceT, raceT, "the clock is stopped, not reset");

@@ -39,6 +39,13 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 // Shader files are GLSL/WGSL/TSL-as-data; strip JS and shader comments so a
 // pin can only match CODE, and a comment edit can neither fail nor satisfy it.
 const shader = (p) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+// The knob registry (js/lighting/knobs.js) evaluated alone — the defaults the
+// backends read through PostCommon.knob.
+const tuneDefs = () => {
+  const sb = {}; vm.createContext(sb);
+  vm.runInContext(read("js/lighting/knobs.js").replace(/^const\b/gm, "var"), sb);
+  return sb.LightKnobs.TUNE_DEFS;
+};
 const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
 /* ── the shared headless game (draw order, cull maths, props fuse) ──────── */
@@ -324,6 +331,10 @@ test("composite skips dummy SSAO / bloom / godray fetches", () => {
   // default and so still counts as SSR-on (that omission once skipped the blit
   // on a dry night with AO/godray/flare off). uHaveGodray rides the cache.
   const h = bootGlx();
+  // The omitted-knob default comes from the registry (PostCommon.knob ->
+  // LightKnobs.TUNE_DEFS). knobs.js loads AFTER glx.js in the manifest (it
+  // reads GLX.isMobile at eval), so the GLX-only mock never has it: run it in.
+  vm.runInContext(read("js/lighting/knobs.js").replace(/^const\b/gm, "var"), h.sandbox);
   const blitMask = (frame, opts) => {
     h.GLX.begin(frame); h.reset(); h.GLX.present(opts);
     const blit = h.calls.find((c) => c[0] === "blitFramebuffer");
@@ -348,7 +359,8 @@ test("composite skips dummy SSAO / bloom / godray fetches", () => {
   const wgx = shader("js/render/webgpu/wgx.js");
   assert.match(wgx, /_needDepth\s*=\s*_haveAOEarly\s*\|\|\s*_haveGREarly\s*\|\|\s*_ssrEarly\s*\|\|\s*_flareEarly/);
   assert.match(wgx, /if\s*\(\s*_needDepth\s*&&\s*_passSamples\s*>\s*1\s*&&\s*pDepthResolve/);
-  assert.match(wgx, /_carReflEarly\s*=\s*o\.carReflect\s*!=\s*null\s*\?\s*o\.carReflect[\s\S]{0,120}?:\s*0\.05/, "WGX omitted carReflect is the 0.05 default");
+  // The omitted-carReflect default is the TUNE_DEFS def (0.05) via PostCommon.knob.
+  assert.match(wgx, /_carReflEarly\s*=\s*o\.carReflect\s*!=\s*null\s*\?\s*o\.carReflect[\s\S]{0,120}?:\s*PostCommon\.knob\(o\.tune, "carReflect"\)/, "WGX omitted carReflect is the tuner default");
   assert.match(wgx, /_wetEarly\s*>\s*0\.01\s*&&\s*_ssrStrEarly\s*>\s*0\.001\s*\)\s*\|\|\s*_carReflEarly\s*>\s*0\.001/);
   // Skipped SSAO / bloom / godray no longer pay a dummy clear.
   assert.doesNotMatch(wgx, /_clearTarget\(\s*(?:godrayView|ssaoView|bloomLv)/);
@@ -477,8 +489,12 @@ test("WGX SSR pass omitted carReflect is the 0.05 tuner default", () => {
   // the option must share the default; the GLX twin of this rule is the
   // blit-mask behaviour test above.
   const wgx = shader("js/render/webgpu/wgx.js");
-  for (const name of ["_carRefl", "_carReflEarly"]) {
-    assert.match(wgx, new RegExp(`${name}\\s*=\\s*o\\.carReflect\\s*!=\\s*null\\s*\\?\\s*o\\.carReflect[\\s\\S]{0,120}?:\\s*0\\.05\\s*\\)`),
-      `${name} must default an omitted carReflect to 0.05`);
+  // Both reads resolve the omitted knob through PostCommon.knob — the ONE
+  // default source (TUNE_DEFS carReflect def, pinned at 0.05 here).
+  const carReflectDef = tuneDefs().find((d) => d.id === "carReflect");
+  assert.equal(carReflectDef && carReflectDef.def, 0.05, "TUNE_DEFS carReflect def is the 0.05 the SSR gate was tuned for");
+  for (const [name, T] of [["_carRefl", "T"], ["_carReflEarly", "o\\.tune"]]) {
+    assert.match(wgx, new RegExp(`${name}\\s*=\\s*o\\.carReflect\\s*!=\\s*null\\s*\\?\\s*o\\.carReflect[\\s\\S]{0,120}?:\\s*PostCommon\\.knob\\(${T}, "carReflect"\\)`),
+      `${name} must default an omitted carReflect through PostCommon.knob`);
   }
 });

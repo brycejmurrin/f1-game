@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["qatar"] =
   function (api) {
-      const { out, MAT, n, px, pz, pyMin, night, hash, vadd, every,
+      const { K, lapBounds, out, MAT, n, px, pz, pyMin, night, hash, vadd, every,
         place, backdrop, anchor, addBox, addCyl, addFrustum,
         palm, building, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along,
         modelGroup, groundPatch, floodMast, floodMastRing, circuitKit,
         bankedKerbStrip, sponsorHoarding, bleacher, acacia } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
         circuitKit.hospitality({
@@ -122,11 +121,7 @@
       const SHELL_CONCRETE  = [0.51, 0.52, 0.53];
 
       (function duneRing() {
-        let cx = 0, cz = 0;
-        for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-        cx /= n; cz /= n;
-        let rad = 0;
-        for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+        const { cx, cz, radius: rad } = lapBounds();
         for (const [extra, wMin, hMin, count, sand, dark] of [
           [200, 140, 4,  22, SAND,   SAND_D],
           [360, 200, 7,  16, DUNE,   DUNE_N],
@@ -501,9 +496,12 @@
         }
       });
 
+      // Verge gap 1.5, not 0.3: a 14 m straight slab hugging the edge at 0.3 m
+      // swings over the tarmac on every curve, and modelGroup's footprint test
+      // rejected 129 of ~190 of these each build (verify-track's report).
       every(12, (k) => {
         for (const side of [-1, 1]) {
-          groundPatch(k, side, 0.3, [3.6, 0.16, 14], GRASS,
+          groundPatch(k, side, 1.5, [3.6, 0.16, 14], GRASS,
             { id: `qatar-green-verge-${k}-${side}`, samples: 2 });
         }
       });

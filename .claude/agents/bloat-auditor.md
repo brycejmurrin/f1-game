@@ -4,6 +4,7 @@ description: Read-only agent-bloat / simplify auditor. Use when a file, skill, o
 model: inherit
 readonly: true
 is_background: true
+background: true
 tools: Bash, Read, Grep, Glob, WebFetch, WebSearch
 ---
 

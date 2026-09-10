@@ -14,7 +14,7 @@ const deriveRoomNamespace = async (appId, roomId) => toHex(await hashWith("SHA-2
 const joinChar = "$";
 const ivJoinChar = ",";
 const encrypt = async (keyP, plaintext) => {
-	const iv = crypto.getRandomValues(new Uint8Array(16));
+	const iv = crypto.getRandomValues(/* @__PURE__ */ new Uint8Array(16));
 	return iv.join(ivJoinChar) + joinChar + pack(await crypto.subtle.encrypt({
 		name: algo,
 		iv

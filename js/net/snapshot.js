@@ -210,3 +210,4 @@ const NetSnapshot = (function () {
     createInterp,
   };
 })();
+Object.freeze(NetSnapshot);

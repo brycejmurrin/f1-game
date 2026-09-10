@@ -105,3 +105,4 @@ const SetupTune = (function () {
 
   return { RANGE, FIELDS, BASE, DEFAULTS, BB_REF, defaults, get, set, reset, isDefault, mods, rake, aero, brakeBias, bbScales, clampField };
 })();
+Object.freeze(SetupTune);

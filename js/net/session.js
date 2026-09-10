@@ -51,6 +51,22 @@ const NetSession = (function () {
 
     let pingId = 0;
     let lastPingAt = -Infinity;
+    // THE LAST FEW PINGS WE SENT. A PONG carries the id and t0 the peer
+    // ECHOES, and both used to be taken on trust: a peer (or anything that
+    // could inject on the state channel) choosing t0 chose our RTT and clock
+    // offset — the number every one of its timestamps is converted through.
+    // Now a PONG counts only if it names an outstanding ping AND carries that
+    // ping's original t0; each is answered once. Eight is more than the
+    // sync-cadence burst a slow link can have in flight.
+    const SENT_PINGS_MAX = 8;
+    const sentPings = [];                // [{ id, t0 }], oldest first
+    function takePing(id, t0) {
+      for (let i = 0; i < sentPings.length; i++) {
+        const p = sentPings[i];
+        if (p.id === id && p.t0 === t0) { sentPings.splice(i, 1); return true; }
+      }
+      return false;
+    }
     let lastHeardAt = null;            // null until the first packet ever
     let best = null;                   // { rtt, offset } — lowest-RTT sample
     let samples = [];
@@ -94,7 +110,8 @@ const NetSession = (function () {
       }
       if (type === PONG) {
         if (dv.byteLength >= PONG_BYTES) {
-          const t0 = dv.getFloat64(5), t1 = dv.getFloat64(13);
+          const id = dv.getUint32(1), t0 = dv.getFloat64(5), t1 = dv.getFloat64(13);
+          if (!takePing(id, t0)) return;   // not a ping of ours, or already answered
           const roundTrip = now - t0;
           // Assume a symmetric path: their t1 lines up with our midpoint.
           addSample(roundTrip, t1 - (t0 + roundTrip / 2));
@@ -173,7 +190,10 @@ const NetSession = (function () {
       const pingGap = synced() ? cfg.pingEveryMs : cfg.syncPingEveryMs;
       if (alive && now - lastPingAt >= pingGap) {
         lastPingAt = now;
-        transport.send(CH_STATE, encodePing(++pingId, now));
+        const id = (++pingId) >>> 0;
+        sentPings.push({ id, t0: now });
+        if (sentPings.length > SENT_PINGS_MAX) sentPings.shift();
+        transport.send(CH_STATE, encodePing(id, now));
       }
       // Only start the death clock once we have actually heard from them, so
       // a slow connect is never mistaken for a disconnect.
@@ -267,3 +287,4 @@ const NetSession = (function () {
 
   return { create, autoPong, PING, PONG };
 })();
+Object.freeze(NetSession);

@@ -4,7 +4,10 @@ This is the **only server** in Apex 26, it is **optional**, and the game works
 completely without it. Its whole job is to hold two small encrypted envelopes
 for two minutes so that two browsers can find each other with a short room code
 instead of pasting an invite back and forth. The six-character room code derives
-the browser-side AES-GCM key; the Worker stores only versioned ciphertext.
+the browser-side AES-GCM key; the Worker stores only `v2.` ciphertext envelopes
+and refuses anything else, so the operator cannot read what it carries — and
+because the client opens only a `v2.` envelope under the slot's own AAD, the
+operator cannot alter or replay it either.
 
 Once WebRTC connects, every byte of gameplay goes **directly** between the two
 players. The relay never sees another packet.
@@ -63,8 +66,10 @@ the SQLite-backed class is the one available on the free plan.
 - No persistence past the TTL: the alarm calls `deleteAll()`, so "nothing is
   retained" is enforced rather than intended.
 - No accounts, usernames, or directory.
-- Plaintext compatibility payloads are capped at 8 KB and encrypted envelopes
-  at 12 KB, so the unauthenticated endpoint cannot be used as bulk storage.
+- Only `v2.` envelopes are stored (no plaintext compatibility path), capped at
+  12 KB, so the unauthenticated endpoint cannot be used as bulk storage.
+- Any method other than GET/POST/OPTIONS is answered 405 in the outer Worker,
+  before the rate limiter and before a Durable Object is named.
 - The Worker applies a defense-in-depth, per-isolate fixed-window limit before
   allocating a Durable Object (20 writes and 180 reads per IP per minute). This
   protects normal deployments without changing the browser protocol, but is not

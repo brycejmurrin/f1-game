@@ -200,5 +200,10 @@ const TrackSceneryData = (function () {
   // while staying recognisably one place; this is the permanent-circuit default.
   const STAND_SET_DEF = ["steel", "darkSteel", "concrete"];
 
-  return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, FURN_DEF, THEME_DEF, resolveCityStyle, ATM, COL, STAND_LIVERIES, STAND_SET_DEF, KIT_DEF };
+  // Regulation Grand Prix distance (km): the fewest laps past `default`, except
+  // the circuit(s) listed by id. tracks.js derives every def's gpLaps from it.
+  const GP_DISTANCE_KM = { default: 305, monaco: 260 };
+
+  return { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS, MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, FURN_DEF, THEME_DEF, resolveCityStyle, ATM, COL, STAND_LIVERIES, STAND_SET_DEF, KIT_DEF, GP_DISTANCE_KM };
 })();
+Object.freeze(TrackSceneryData);

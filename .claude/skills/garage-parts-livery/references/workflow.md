@@ -48,6 +48,7 @@ resolution.
    ```sh
    node tools/car/render-car.mjs --team=ferrari --preset=livery
    node tools/car/render-car.mjs --team=ferrari --views=tail
+   # Own static server; dead DISPLAY cleared by launchChromium (see garage-angles.md)
    node tools/shot/garage-angles.mjs --team=ferrari --views=spine --out=scratch/renders/garage-ferrari
    node tools/car/audit-parts.mjs --cats=aero
    ```
@@ -89,4 +90,3 @@ resolution.
 - Setting `finArt` equal to `fin` — tail graphic disappears.
 - Using livery id `chrome` as chrome finish — it is a gloss palette named
   "Chrome".
-- Editing `js/car/*.js` without a cache bump.

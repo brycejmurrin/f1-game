@@ -40,6 +40,7 @@
  *     upscale (opt-in; feature-detect). See docs/research/UPSCALING-2026-09.md.
  *   width / height / aspect    getters (backing-store pixels).
  *   hdrMode()->bool            scene buffer is float (HDR) vs 8-bit.
+ *   maxLights()->int           lit-shader point-light slots (LightBudget.slots() mirrors it).
  *   msaa()->int                active MSAA sample count (1 = off).
  *   pcss()->bool               PCSS-lite soft shadows active.
  *   isMobile / mobileTier      booleans (memory-safe caps on phones).

@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["hockenheim"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
         px, pz, pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         sponsorHoarding, cameraTower, seat, forestEdge, terrace, bleacher,
         addBox, addCyl, addPrism, addCone } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const tiltBasis = (a, ang) => {
         const c = Math.cos(ang), s = Math.sin(ang);
@@ -290,9 +289,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [110, 58, 96, 26, 13, 6, [0.13, 0.32, 0.16]],
         [180, 48, 118, 30, 16, 7, [0.11, 0.28, 0.14]],

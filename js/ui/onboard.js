@@ -99,3 +99,4 @@ const Onboard = (function () {
 
   return { create, MARKS, BIT, ALL };
 })();
+Object.freeze(Onboard);

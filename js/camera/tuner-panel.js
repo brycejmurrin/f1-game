@@ -210,3 +210,4 @@ return { buildCamTunePanel, refreshCamTunePanel, openCamTuner, closeCamTuner, is
 
 return { create, refresh: () => { if (_refresh) _refresh(); } };
 })();
+Object.freeze(CamTunerPanel);

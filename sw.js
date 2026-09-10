@@ -12,11 +12,15 @@
 //     time it's fetched, so a full offline install follows naturally from one
 //     normal play session.
 //
-// Cache name embeds version.json's build number, so every cache-bust bump
-// (already required for any JS/CSS change per CLAUDE.md) automatically starts
-// a fresh cache generation and the old one is swept on activate — no manual
-// cache-invalidation step to remember.
+// Cache name embeds version.json's build number. There is no manual cache
+// bump: the deploy (pages.yml) stamps the build and content-hashes every `?v=`
+// tag while staging, so each release automatically starts a fresh cache
+// generation and the old one is swept on activate.
 const CACHE_PREFIX = "apex26-";
+// A navigation / version.json fetch races this before the cache answers.
+const NAV_RACE_MS = 3000;
+// An OPTIONAL precache asset is abandoned (and aborted) after this long.
+const OPTIONAL_ASSET_MS = 4000;
 // A dev host serves the committed shell, whose asset tags all read `?v=dev`
 // (see the fetch handler). Playwright pages run on 127.0.0.1, so the suite
 // exercises this branch; the deployed site never does.
@@ -60,10 +64,6 @@ async function precacheAssetLists() {
     "icons/icon-192.png",
     "icons/icon-512.png",
     "icons/icon-maskable-512.png",
-    // The QR reader (js/net/scan.js) injects this ON DEMAND the first time
-    // someone scans an answer code, so the tag parser below never sees it.
-    // OPTIONAL for the same reason as three.js: most sessions never scan, and
-    // an install must not fail over 257 KB they will not run.
     // The vendored three.js island TLX imports at runtime. Hand-authored
     // because it is reached through the importmap, not a <script> tag, so
     // the parser below cannot see it. OPTIONAL: an install must not fail
@@ -71,6 +71,10 @@ async function precacheAssetLists() {
     "vendor/three-0.185.1/three.webgpu.min.js",
     "vendor/three-0.185.1/three.core.min.js",
     "vendor/three-0.185.1/three.tsl.min.js",
+    // The QR reader (js/net/scan.js) injects this ON DEMAND the first time
+    // someone scans an answer code, so the tag parser below never sees it.
+    // OPTIONAL for the same reason as three.js: most sessions never scan, and
+    // an install must not fail over 257 KB they will not run.
     "vendor/jsqr-1.4.0/jsQR.js",
     // Rapier (js/physics/debris-world.js) is dynamic-import()ed, never tagged, so
     // the parser below cannot find it either. Unlike the entries around it this
@@ -83,9 +87,9 @@ async function precacheAssetLists() {
     // the importmap for the room-code path only. OPTIONAL for the same reason
     // as three.js: most sessions never open a room code, and an install must
     // not fail over ~170 KB they will not run.
-    "vendor/trystero-0.25.3/nostr/index.js",
-    "vendor/trystero-0.25.3/core/index.js",
-    "vendor/trystero-0.25.3/noble-secp256k1.js",
+    "vendor/trystero-0.25.4/nostr/index.js",
+    "vendor/trystero-0.25.4/core/index.js",
+    "vendor/trystero-0.25.4/noble-secp256k1.js",
     // Self-hosted fonts (referenced from css/tokens.css @font-face, so the tag
     // parser below never sees them). Immutable vendored assets — no ?v=. Seeded
     // as OPTIONAL: font-display:swap means a missed precache just falls back to
@@ -164,6 +168,7 @@ async function precacheAssetLists() {
     "js/data/live.js",
     "js/data/hub.js",
     // LAZY_NET — the multiplayer stack behind VS FRIEND
+    "js/net/bytes.js",
     "js/net/nostr.js",
     "js/net/rendezvous.js",
     "js/net/sdp.js",
@@ -234,7 +239,7 @@ async function cacheOptionalAsset(cache, url) {
       timeout = setTimeout(() => {
         if (ctrl) ctrl.abort();
         resolve(null);
-      }, 4000);
+      }, OPTIONAL_ASSET_MS);
     });
     const res = await Promise.race([fetch(url, ctrl ? { signal: ctrl.signal } : undefined), expired]);
     if (res && res.ok) await cache.put(url, res);
@@ -346,8 +351,14 @@ self.addEventListener("fetch", (event) => {
     // entry per launch until the next build bump sweeps the generation. The
     // precache already holds the bare "version.json" key, which is what the
     // offline fallback below reads.
+    // Only a QUERY-LESS navigation is written, and it is written under its own
+    // URL. Every deep link (`?b=` shell bust, `?log=`, `?track=`) used to be
+    // put under its full URL — one more entry per distinct query, none of
+    // which caches.match(req) ever hit again from the fallback below, which
+    // reads "index.html". A query navigation is served from the network and,
+    // offline, from the precached shell like everything else.
     const network = fetch(req, { cache: "no-store" }).then(async (res) => {
-      if (res && res.ok && !isVersion) {
+      if (res && res.ok && !isVersion && url.search === "") {
         // The write is awaited (the waitUntil below depends on that) but must
         // never reject the chain: a version.json hiccup (deploy window,
         // captive portal) or a quota-refused put was turning a SUCCESSFUL
@@ -363,16 +374,24 @@ self.addEventListener("fetch", (event) => {
     // Keep the worker alive until both the fetch and its cache write settle.
     event.waitUntil(network.then(() => undefined, () => undefined));
     event.respondWith((async () => {
-      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 3000));
+      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));
       const online = typeof navigator !== "undefined" && navigator.onLine;
+      // FAIL FAST ONLY WHERE A STALE ANSWER IS WORSE THAN NO ANSWER: version.json
+      // (a stale build number makes the shell guard skip its reload) and the
+      // `?b=` shell bust (the one-shot guard blocks a second try). A PLAIN
+      // navigation that loses the race while navigator.onLine is true used to
+      // return Response.error() too — an installed PWA on a slow link opened to
+      // the browser's error page instead of the shell it had precached, and
+      // "online" says only that a link exists, not that the host answers. The
+      // precached shell is the right answer there: its own version guard
+      // refreshes it the moment version.json does come through.
+      const failFast = online && (isVersion || isShellBust);
       try {
         const res = await Promise.race([network, timeout]);
         if (res && res.ok) return res;
-        // A timeout (null) or a thrown fetch while online must not advertise a
-        // stale version.json as network truth — the shell guard then skips reload.
-        if (res == null && online && (isVersion || req.mode === "navigate")) return Response.error();
+        if (res == null && failFast) return Response.error();
       } catch (_) {
-        if (online && (isVersion || req.mode === "navigate")) return Response.error();
+        if (failFast) return Response.error();
       }
       // Offline: the version request reads the PRECACHED bare key. Without this
       // it fell through to the index.html fallback below and answered a JSON

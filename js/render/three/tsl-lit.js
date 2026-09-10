@@ -52,7 +52,8 @@
 "use strict";
 
 (function () {
-  const MAX_LIGHTS_DEF = 48;
+  // Slot counts live in LightBudget (js/render/shared/light-budget.js): MAX 48,
+  // LITE 16 — read at factory time so this file evaluates without it.
   // iOS Safari rendered NOTHING on the lit path at 48. WebGL2's fragment floor
   // is 224 vec4 ROWS and a uniform array is always VERTICAL — vec3[48] costs 48
   // rows, not 12 (webgl2fundamentals, "WebGL2 Cross Platform Issues"). So
@@ -61,14 +62,13 @@
   // the same 192 and squeaks under with a lean hand-written shader; three/TSL
   // adds its own block on top and goes OVER, so the shader fails to LINK and
   // every lit surface draws nothing — while textured/emissive ones still draw.
-  // 16 lamps = 64 rows. Same _liteGpu gate as samples/outputType in tlx.js.
-  const MAX_LIGHTS_LITE = 16;
+  // 16 lamps = 64 rows (LightBudget.LITE). Same _liteGpu gate as samples/outputType in tlx.js.
 
   function lit(THREE, TSL, ctx) {
     // Read from ctx so the cap is decided at factory time, BEFORE the TSL graph
     // is built: the Loop bounds and the CPU-side arrays must agree, and both
     // read this one binding.
-    const MAX_LIGHTS = (ctx && ctx.maxLights > 0) ? (ctx.maxLights | 0) : MAX_LIGHTS_DEF;
+    const MAX_LIGHTS = (ctx && ctx.maxLights > 0) ? (ctx.maxLights | 0) : LightBudget.MAX;
     const {
       Fn, If, Loop, Break, uniform, uniformArray, attribute, varying, texture, cubeTexture,
       float, int, vec2, vec3, vec4, mrt,

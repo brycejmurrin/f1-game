@@ -19,7 +19,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
-import { awaitPresentedFrame, presentedCanvasClip } from "../capture/probe-page.mjs";
+import { awaitPresentedFrame, presentedCanvasClip } from "../shot/probe-page.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");

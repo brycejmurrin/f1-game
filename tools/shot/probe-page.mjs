@@ -3,11 +3,15 @@
 import { writeFileSync } from "node:fs";
 import { WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
 
-/** Chromium flags per renderer backend (must match backend-compare / gfx-probe). */
+/** Chromium flags per renderer backend (must match backend-compare / gfx-probe / carshot). */
 export function chromiumArgsForBackend(backend) {
+  // --enable-unsafe-swiftshader: Chromium 1xx blocks automatic SwiftShader
+  // WebGL without it (carshot / gfx-probe already pin this; probe helpers did not).
   if (backend === "webgpu") return [...WEBGPU_CHROMIUM_ARGS];
-  if (backend === "three") return ["--use-angle=swiftshader", "--no-sandbox"];
-  return ["--use-angle=swiftshader", "--no-sandbox"];
+  if (backend === "three") {
+    return ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
+  }
+  return ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--no-sandbox"];
 }
 
 /**
@@ -54,13 +58,49 @@ export function installProbeInit(page, { backend = "webgl2", team = null, tlxFor
   }, { be: backend, teamIdx: team, forceGl: tlxForceGL });
 }
 
+/** Snapshot why boot stalled — bare waitForFunction timeouts never name WebGL. */
+export async function gotoGameBootDiag(page) {
+  return page.evaluate(() => {
+    let gl2 = false;
+    try {
+      const c = document.createElement("canvas");
+      gl2 = !!c.getContext("webgl2");
+    } catch (_) { /* ignore */ }
+    const err = document.getElementById("__err_overlay");
+    return {
+      apex: !!window.__apex,
+      race: !!(window.__apex && window.__apex.race),
+      gl2,
+      Game: typeof window.Game,
+      Teams: typeof window.Teams,
+      overlay: err && err.style.display !== "none"
+        ? (err.textContent || "").slice(0, 160) : null,
+    };
+  }).catch((e) => ({ evaluateError: String(e && e.message || e) }));
+}
+
 /** Boot wait — domcontentloaded; full load can hang on slow boxes. */
 export async function gotoGame(page, url, waitMs = 120000) {
   await page.goto(url, { waitUntil: "domcontentloaded", timeout: waitMs });
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, {
-    polling: 200,
-    timeout: waitMs,
-  });
+  try {
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, {
+      polling: 200,
+      timeout: waitMs,
+    });
+  } catch (err) {
+    const diag = await gotoGameBootDiag(page);
+    const hints = [];
+    if (diag && diag.gl2 === false) {
+      hints.push("WebGL2 missing — a stale DISPLAY kills headless SwiftShader "
+        + "(harness clears dead :N sockets; else unset DISPLAY or xvfb-run -a)");
+    }
+    if (diag && diag.overlay) hints.push("error overlay: " + diag.overlay);
+    const detail = hints.length ? hints.join("; ") : "see diag";
+    throw new Error(
+      `gotoGame: __apex never appeared within ${waitMs}ms (${detail}). diag=${JSON.stringify(diag)}`,
+      { cause: err },
+    );
+  }
 }
 
 /** One .screen visible? Resolves false on timeout instead of throwing. */

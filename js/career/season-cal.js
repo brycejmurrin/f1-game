@@ -133,24 +133,10 @@ function scoreMap(raw) {
 // finishes: driverId -> sparse array of per-position counts (see award()).
 // roundPts: driverId -> sparse array of points per ROUND (both legs of a sprint
 // weekend land in the same index). netPts() reads it when scores are dropped.
-function roundMap(o) {
-  const out = {};
-  if (!o || typeof o !== "object") return out;
-  for (const k of Object.keys(o)) {
-    if (!Array.isArray(o[k])) continue;
-    out[k] = o[k].map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
-  }
-  return out;
-}
-function finishMap(o) {
-  const out = {};
-  if (!o || typeof o !== "object") return out;
-  for (const k of Object.keys(o)) {
-    if (!Array.isArray(o[k])) continue;
-    out[k] = o[k].map((v) => (Number.isInteger(v) && v > 0 ? v : 0));
-  }
-  return out;
-}
+// Both sanitisers live in SaveMigrate so a career's nested championship
+// (migrateCareer -> remapPoints) and the standalone save (resume) agree.
+function roundMap(o) { return SaveMigrate.roundMap(o); }
+function finishMap(o) { return SaveMigrate.finishMap(o); }
 function codeMap(raw) {
   const out = {};
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;

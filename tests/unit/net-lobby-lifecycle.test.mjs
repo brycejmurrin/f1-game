@@ -5,6 +5,10 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const SOURCE = await readFile(new URL("../../js/net/lobby.js", import.meta.url), "utf8");
+// The REAL NetPlay: the lobby registers its QUALI/QLIVE receivers and senders
+// through NetPlay.bindQuali / qualiReporters (one validation site for both
+// phases), and a stub of those would only pin the stub.
+const NETPLAY = await readFile(new URL("../../js/net/netplay.js", import.meta.url), "utf8");
 
 function deferred() {
   let resolve;
@@ -12,7 +16,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus } = {}) {
+function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus, handshake, parts } = {}) {
   const elements = new Map();
   const element = (id) => {
     const el = { id, hidden: true, value: "", textContent: "", focus() {} };
@@ -21,6 +25,11 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   };
   element("vsfriend");
   element("vs-pick");
+  const room = element("vs-room");
+  const status = element("vs-status");
+  status.classList = { toggle() {} };
+  for (const id of ["vs-close", "vs-invite-more", "vs-host", "vs-join", "vs-make-answer", "vs-accept",
+                    "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join"]) element(id);
   const scan = element("vs-scan");
   const video = element("vs-scan-video");
   const listeners = new Map();
@@ -48,21 +57,25 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
       prefetchIce: prefetchIce || (() => null),
       supported: () => true,
     },
-    NetHandshake: {
+    NetHandshake: Object.assign({
       createInvite: async () => ({ ok: true, code: "invite" }),
       inviteFromUrl: () => null,
-    },
+      inviteUrl: (code) => "https://x.test/#vs=" + code,
+    }, handshake || null),
+    NetQr: { draw: () => false },
+    Parts: parts || { BUDGET: 780, getFactorySetup: () => "factory", getCost: () => 0 },
     NetScan: {
       supported: () => true,
       create: () => scanFactory(),
     },
     NetRendezvous: {},
     NetSession: { create: netSession || (() => { throw new Error("no NetSession in this harness"); }) },
-    NetPlay: { EV: { SETTINGS: "settings", HELLO: "hello", READY: "ready", GO: "go", QUALI: "quali", QLIVE: "qlive" } },
+    NetPlay: null,
     Teams: { LIST: teams || [{ id: "alpha", short: "ALP", name: "Alpha", color: [1, 0, 0], drivers: [] }] },
     Tracks: { LIST: [{ id: "track" }] },
   });
   seedLog(context);
+  context.NetPlay = vm.runInContext(NETPLAY + ";NetPlay", context, { filename: "netplay.js" });
   const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: "lobby.js" });
   const G = {
     teamIdx: 0, driverIdx: 0, trackIdx: 0, raceLaps: 3,
@@ -75,7 +88,8 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     return { status: transportStatus || "new", onClose() {}, close() {} };
   });
   return {
-    lobby, elements, scan, video, transports, G,
+    lobby, elements, scan, video, transports, G, room, status,
+    click(id) { const el = elements.get(id); return el && el.onclick ? el.onclick() : undefined; },
     emit(type) { for (const fn of listeners.get(type) || []) fn(); },
   };
 }
@@ -293,4 +307,111 @@ test("the host tags relayed HELLOs and its own with the join rank", () => {
   assert.match(SOURCE, /Object\.assign\(\{\}, p, \{ from: id, rank: joinRank\(id\) \}\)/);
   assert.match(SOURCE, /Object\.assign\(\{\}, prof, \{ from: k, rank: joinRank\(k\) \}\)/);
   assert.match(SOURCE, /role === "host" \? \{ rank: joinRank\(id\) \} : null/);
+});
+
+// ── a peer's parts must fit the budget the garage enforces ──────────────────
+// Ids-not-multipliers stops {cornering: 9}; it did not stop every top-tier id
+// at once, which is a legal set of ids no garage would let a player afford.
+test("modsFromProfile falls back to the factory setup when the declared parts exceed the budget", () => {
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }),
+    parts: { BUDGET: 780, getFactorySetup: (team) => "factory:" + team.id,
+             getCost: (setup) => (setup === "rich" ? 781 : 700) },
+  });
+  h.G.modsFor = (team, parts) => ({ team: team.id, parts });
+  assert.deepEqual(h.lobby.modsFromProfile({ team: "alpha", parts: "rich" }), { team: "alpha", parts: "factory:alpha" });
+  assert.deepEqual(h.lobby.modsFromProfile({ team: "alpha", parts: "fair" }), { team: "alpha", parts: "fair" });
+  assert.deepEqual(h.lobby.modsFromProfile({ team: "alpha" }), { team: "alpha", parts: "factory:alpha" });
+  assert.equal(h.lobby.modsFromProfile({ team: "nope", parts: "fair" }), null);
+  h.lobby.cancel();
+});
+
+// ── the camera never outlives the step that opened it ───────────────────────
+// X on a sub-step while in a room kept the room (right) but never called
+// stopScan() (wrong); INVITE ANOTHER had the same hole.
+async function connectedHost(extra = {}) {
+  const made = [];
+  const scanners = [];
+  const h = harness(Object.assign({
+    scanFactory: () => { const s = { stops: 0, stop() { this.stops++; }, start: async () => ({ ok: true }) }; scanners.push(s); return s; },
+    teams: TWO_TEAMS, netSession: fakeNetSession(made), transportStatus: "open",
+  }, extra));
+  h.lobby.wire();
+  await h.lobby.host();
+  h.lobby.watchForOpen();
+  for (let i = 0; i < 40 && !made.length; i++) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(made.length, 1, "the host's session was bound");
+  return { h, scanners };
+}
+
+test("X on a sub-step while in a room stops the scanner as well as keeping the room", async () => {
+  const { h, scanners } = await connectedHost();
+  try {
+    await h.lobby.inviteAnother();                 // leaves the room step for the pick step
+    assert.equal((await h.lobby.scan("answer")).ok, true);
+    assert.equal(h.scan.hidden, false);
+    h.room.hidden = true;                           // on a sub-step
+    h.click("vs-close");
+    assert.equal(scanners[0].stops, 1, "the camera is stopped");
+    assert.equal(h.scan.hidden, true);
+    assert.equal(h.room.hidden, false, "…and the room is still there");
+    assert.equal(h.lobby.status().connected, true);
+  } finally { h.lobby.cancel(); }
+});
+
+test("INVITE ANOTHER stops a scanner left running from the previous sub-step", async () => {
+  const { h, scanners } = await connectedHost();
+  try {
+    assert.equal((await h.lobby.scan("answer")).ok, true);
+    await h.lobby.inviteAnother();
+    assert.equal(scanners[0].stops, 1);
+    assert.equal(h.scan.hidden, true);
+  } finally { h.lobby.cancel(); }
+});
+
+// ── one answer per invite ───────────────────────────────────────────────────
+// The paste event and MAKE ANSWER both route to makeAnswer(); a paste then a
+// click ran acceptInvite twice on one RTCPeerConnection and the second
+// setRemoteDescription threw out of an async click handler with nothing on
+// screen.
+test("makeAnswer refuses a second run for the same invite and reports a thrown handshake", async () => {
+  let accepts = 0;
+  const gate = deferred();
+  const h = harness({
+    scanFactory: () => ({ stop() {}, start() {} }),
+    handshake: { acceptInvite: async () => { accepts++; await gate.promise; return { ok: true, code: "answer", peer: null }; } },
+  });
+  try {
+    await h.lobby.join();
+    const first = h.lobby.makeAnswer("APEX1.s.X");
+    const second = await h.lobby.makeAnswer("APEX1.s.X");
+    assert.equal(second.error, "already_answered", "the re-entry is refused while the first is in flight");
+    assert.match(h.status.textContent, /already answered/i);
+    gate.resolve();
+    assert.equal((await first).ok, true);
+    assert.equal(accepts, 1, "acceptInvite ran once");
+  } finally { h.lobby.cancel(); }
+
+  const boom = harness({
+    scanFactory: () => ({ stop() {}, start() {} }),
+    handshake: { acceptInvite: async () => { throw new Error("setRemoteDescription: bad SDP"); } },
+  });
+  try {
+    await boom.lobby.join();
+    const res = await boom.lobby.makeAnswer("APEX1.s.X");
+    assert.equal(res.error, "answer_failed", "a throw is a typed failure, not an unhandled rejection");
+    assert.match(boom.status.textContent, /bad SDP/);
+    assert.equal((await boom.lobby.makeAnswer("APEX1.s.X")).error, "answer_failed", "…and the guard is released for a retry");
+  } finally { boom.lobby.cancel(); }
+});
+
+test("a pc that already took an offer is not answered again", async () => {
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }),
+    handshake: { acceptInvite: async () => ({ ok: true, code: "answer", peer: null }) } });
+  h.lobby.setTransportFactory(() => ({ status: "new", onClose() {}, close() {},
+    pc: { signalingState: "stable", remoteDescription: { type: "offer" } } }));
+  try {
+    await h.lobby.join();
+    assert.equal((await h.lobby.makeAnswer("APEX1.s.X")).error, "already_answered");
+  } finally { h.lobby.cancel(); }
 });

@@ -320,10 +320,7 @@ const NetTransport = (function () {
     deriving = sub.importKey("raw", enc(OPEN_RELAY_SECRET), { name: "HMAC", hash: "SHA-1" }, false, ["sign"])
       .then((key) => sub.sign("HMAC", key, enc(username)))
       .then((sig) => {
-        const bytes = new Uint8Array(sig);
-        let bin = "";
-        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-        const credential = btoa(bin);
+        const credential = NetBytes.bytesToB64(new Uint8Array(sig));
         derived = OPEN_RELAY_HOSTS.map((urls) => ({ urls, username, credential }));
         derivedAt = Date.now();
         return derived;
@@ -360,9 +357,12 @@ const NetTransport = (function () {
     } catch (e) { return null; }
   }
 
-  function iceServers(opts) {
+  // `stunOnly` leaves every fetched/derived relay out — the retry path in
+  // rtc() below, after a construction that a fetched entry made throw.
+  function iceServers(opts, stunOnly) {
     if (opts.iceServers) return opts.iceServers;
     const list = [{ urls: STUN }];
+    if (stunOnly) return list;
     const mine = turnFromStore();
     if (mine) list.push(mine);
     if (iceCredFresh()) list.push(...fetchedIce);
@@ -390,15 +390,33 @@ const NetTransport = (function () {
     if (!PC) return null;                      // caller falls back / reports
 
     const ep = makeEndpoint(opts.name || "rtc");
-    let pc;
-    try {
-      const cfg = { iceServers: iceServers(opts) };
+    const build = (stunOnly) => {
+      const cfg = { iceServers: iceServers(opts, stunOnly) };
       const policy = opts.iceTransportPolicy || (relayOnly() ? "relay" : null);
       if (policy) cfg.iceTransportPolicy = policy;
-      pc = new PC(cfg);
+      return new PC(cfg);
+    };
+    let pc;
+    try {
+      pc = build(false);
     } catch (e) {
-      Log.warn("net", "rtc create fail");
-      return null;
+      // A MALFORMED ICE ENTRY IS NOT "NO WEBRTC". The credentials endpoint is
+      // third-party, and prefetchIce() only checks that each entry HAS a
+      // `urls` — one reading `urls: "garbage"` makes the constructor throw.
+      // Returning null here made the lobby say "This browser cannot do
+      // WebRTC", and fetchedIce stayed cached for 55 minutes, so every retry
+      // said it again. So: forget the fetched list (the next prefetch gets a
+      // fresh answer) and try once more with STUN alone — which is exactly
+      // what the connection would have had before the relay existed.
+      Log.warn("net", "rtc create fail (" + ((e && e.message) || e) + ") — dropping fetched ICE, retrying STUN-only");
+      fetchedIce = null;
+      fetchedIceAt = 0;
+      try {
+        pc = build(true);
+      } catch (e2) {
+        Log.warn("net", "rtc create fail");
+        return null;
+      }
     }
     Log.info("net", "rtc create");
     const chans = {};

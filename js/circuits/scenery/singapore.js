@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["singapore"] =
   function (api) {
-      const { out, MAT, def, n, place, backdrop,
+      const { K, out, MAT, def, n, place, backdrop, groundUnder,
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
               addPrism, addFrustum, addPyramid, grandstand, grandstandEx, sponsorHoarding,
               gantry, marshalPost, palm, bush, ds, recordBarrier,
               fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
               overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit } = api;
-      const K = (s) => Math.round(s * n) % n;
       // Landing a raw anchor() on a circuitKit structure (the pit-race-control
       // beacon below). `anchor` is NOT raw here: transformSceneryApi wraps every
       // k-keyed helper as f(sceneryNode(k), -side) for this reverse +
@@ -475,6 +474,17 @@
           const ang = t2 * Math.PI;
           const up  = Math.sin(ang) * 13;
           const c   = vadd(vadd(a.c, a.t, (t2 - 0.5) * 66), a.u, up + 2);
+          // Piers at the abutments and the third points, down to the rendered
+          // ground under each. The deck starts 2 m up and the arch reaches 15 m,
+          // and nothing else of the bridge touches the ground: it used to read
+          // as supported only because the generic city pass stacked buildings
+          // under it — the very buildings the side-1 0.78-0.90 exclusion is
+          // there to remove (float-audit: 5 clusters once that rule landed).
+          if (j % 5 === 0) {
+            const gy = groundUnder(c[0], c[2]) - 0.5;
+            const ph = c[1] - gy + 1.0;
+            if (ph > 0) addCyl(out, [c[0], gy, c[2]], 1.1, ph, [0.62, 0.64, 0.68], 6);
+          }
           // Main structural tube
           addCyl(out, c, 2.4, 4.4, [0.88, 0.90, 0.95], 6, [a.r, a.u, a.t]);
           // Side lattice bar

@@ -21,18 +21,10 @@ const NetHandshake = (function () {
     return res;
   }
 
-  function bytesToB64url(bytes) {
-    let s = "";
-    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  }
-  function b64urlToBytes(str) {
-    const s = str.replace(/-/g, "+").replace(/_/g, "/");
-    const bin = atob(s + "=".repeat((4 - (s.length % 4)) % 4));
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
-  }
+  // Bound at call time: NetBytes loads first in LAZY_NET, but nothing here
+  // needs it at eval, so the order is not a hard edge.
+  const bytesToB64url = (bytes) => NetBytes.bytesToB64url(bytes);
+  const b64urlToBytes = (str) => NetBytes.b64urlToBytes(str);
 
   const enc = () => new TextEncoder();
   const dec = () => new TextDecoder();
@@ -146,9 +138,29 @@ const NetHandshake = (function () {
     });
   }
 
+  // THE BUILD THIS TAB IS RUNNING, not the build the server has. The shell
+  // carries its own generation in <meta name="apex-build"> (stamped by the
+  // deploy alongside version.json), and that is the JS actually loaded. A
+  // fetch of version.json answers a different question: a tab left open
+  // across a deploy read the NEW number while running the OLD scripts, so two
+  // such tabs matched each other's builds — and a fresh tab's — while racing
+  // on different splines. The meta is authoritative when present; the fetch
+  // is the fallback for a shell with no stamp (a local checkout serves the
+  // committed meta, which is the same generation version.json holds).
+  function metaBuild() {
+    try {
+      if (typeof document === "undefined" || !document.querySelector) return null;
+      const m = document.querySelector('meta[name="apex-build"]');
+      const n = m && m.content != null ? parseInt(String(m.content).trim(), 10) : NaN;
+      return Number.isFinite(n) ? n : null;
+    } catch (e) { return null; }
+  }
+
   let _buildCache = null;
   async function localBuild() {
     if (_buildCache != null) return _buildCache;
+    const meta = metaBuild();
+    if (meta != null) { _buildCache = meta; return meta; }
     try {
       const r = await fetch("version.json?_=" + Date.now(), { cache: "no-store" });
       const v = await r.json();
@@ -287,8 +299,9 @@ const NetHandshake = (function () {
   return {
     MAGIC,
     encodeCode, decodeCode, normaliseSdp,
-    localBuild, checkBuild, waitForIce,
+    localBuild, metaBuild, checkBuild, waitForIce,
     createInvite, acceptInvite, acceptAnswer,
     inviteUrl, inviteFromUrl,
   };
 })();
+Object.freeze(NetHandshake);

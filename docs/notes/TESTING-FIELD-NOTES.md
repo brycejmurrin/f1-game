@@ -1640,3 +1640,60 @@ calls `renderClock`. So the new code path is provably byte-identical here. A
 re-run then confirmed 10/10. **Read the code path before buying a bisect** — the
 cheapest disproof is often that the change cannot reach the failure at all, and
 an A/B is only evidence when both sides are invoked identically.
+
+## Why the verification rules exist — the incidents behind AGENTS.md §Verification (moved 2026-09-10)
+
+`AGENTS.md` states each rule in one to three lines and points here. These are
+the measurements that put each rule there; they are dated by design.
+
+**Rule 1 — install first.** `test:tooling-fast` reported 344 pass / 18 fail on
+a fresh container and 439 / 0 after `npm install`, with no source change
+between them (2026-08-13). `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` keeps the
+install to seconds but leaves the BROWSER absent, and a missing
+`chromium-headless-shell` reads exactly like a boot regression. The SessionStart
+hook (`.claude/hooks/session-start.sh`) now does both.
+
+**Rule 3 — guards before every commit.** Judging which tests a change "needs"
+is how four failures shipped past review in one session: a suite registered in
+none of its four registries (two deploys lost to it), `tools/README.md` and
+`package.json` hand-edited when both are GENERATED, and a missing comma in a
+garage file that would have broken the whole game's boot. Every one was inside
+the 14 guards, and each cost a ~10-minute deploy cycle to discover. The Bash
+hook (`.claude/hooks/bash-guard.sh`) now runs the guards before `git commit`.
+
+**Rule 6 — `--stop`, never kill by PID.** Measured 2026-09-09: `kill -9` on the
+test-bg supervisor reached only the `npm run test:<group>` shim; npm does not
+forward the signal, so run-playwright, the Playwright runner and every Chromium
+it opened were orphaned — 8 Chromium processes at ~290 % CPU, still writing to
+the log the next run truncates, invisible to `--status` because the pid it
+held was dead, and enough to hold the box above the deploy's own load gate. Six
+commands to recover. The rule had previously said "`kill -9` it by PID" without
+mentioning `--stop`, which is what taught the wrong move.
+
+**Rule 7 — reap what you launched; never `pkill -f`.** One backgrounded probe
+script that never exited ran 113 minutes at ~350 % CPU beside two orphaned
+headless shells and put the box at loadavg 8.15 — where the deploy REFUSES
+(>= 3) and where every browser verdict becomes a measurement of the machine.
+The same day, a `pkill -f <pattern>` matched the shell that issued it (its own
+command line contained the pattern), killed the cleanup mid-command and left
+the job half done. Kill by PID from a listed set
+(`ps -eo pid,comm | awk '$2=="chrome"{print $1}'`).
+
+**Rule 8 — `cancelled` with zero failures is a timeout.** GitHub reports a
+`timeout-minutes` kill as cancelled, never as failed. Four `ui` dispatches were
+logged as "looks like manual cancels" across three sessions and six days; the
+shards had run 50:13 against a 50-minute cap. Simultaneous end times at
+DIFFERENT elapsed times is the other shape, and that one is a real run-level
+cancel (see the 2026-09-09 entry above).
+
+**Rule 10 — subagents never run browsers.** Parallelism produced ten
+confident, entirely fake failures when two groups shared four cores
+(`docs/notes/PARALLEL-WORK.md`); worktrees isolate files, not CPU, and a
+worktree checked out at a stale base measures the wrong tree.
+
+**Renderer evidence (now `.claude/rules/render-*.md`).** A mock device stayed
+green while four defects made the real WGX backend refuse to boot. Three of
+the five WGSL rules shipped a defect on the owner's iPhone in one week. Four
+hours went into a WebGPU-vs-WebGL2 "gap" in the census on 2026-09-08 before
+the harness was re-read: the two TLX legs run DIFFERENT present paths (a
+readback against a direct present), and `headless=true` printed on both.

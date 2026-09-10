@@ -239,3 +239,33 @@ test("the quota purge evicts telemetry bodies largest-first before any small sch
   assert.equal(store.has(smallKeys[12]), true, "the second-freshest standings entry must survive");
   assert.equal(store.has("apex26.api.https://api.openf1.org/v1/weather?session_key=9"), true, "the new entry landed after the purge");
 });
+
+test("lastRace falls back to the previous season when the current year has no race yet", async () => {
+  // Between Jan 1 and the opener `<year>/last/results.json` is an empty
+  // RaceTable, and the LAST RACE tab sat blank for two months. The previous
+  // finale is the honest answer — fetched through request(), so it queues and
+  // caches like every other call, and only when the current year is empty.
+  const year = new Date().getFullYear();
+  const urls = [];
+  const context = vm.createContext({
+    fetch: async (url) => {
+      urls.push(url);
+      const races = url.includes("/" + (year - 1) + "/")
+        ? [{ raceName: "Abu Dhabi Grand Prix", round: "24", date: (year - 1) + "-12-07", Results: [] }]
+        : [];
+      return { ok: true, status: 200, headers: { get: () => null },
+        json: async () => ({ MRData: { RaceTable: { Races: races } } }) };
+    },
+    AbortController,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} },
+    Date, setTimeout, clearTimeout,
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.__api=F1API", context);
+  const race = await context.__api.lastRace();
+  assert.equal(race && race.name, "Abu Dhabi Grand Prix");
+  assert.equal(race.round, 24);
+  assert.deepEqual(urls.map((u) => u.replace(/^.*\/f1\//, "")),
+    [year + "/last/results.json", (year - 1) + "/last/results.json"],
+    "the current year is asked first, the previous year only on an empty result");
+});

@@ -29,6 +29,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { DOM_SOURCE } from "../helpers/seed-dom.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -129,6 +130,7 @@ function loadCareerUi(careerOpts = {}) {
     Reliability: { REASONS: ["engine"], TIER_RISK: [0.02, 0.06] },
     PhysicsConsts: { DIFF: { EASY: 1 } },
   });
+  vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
   vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
   const ui = sb.CareerUI.create(G);
   return { dom, ui, Career, G, $: G.$ };
@@ -276,6 +278,7 @@ function loadSeasonUi(trackIds = ["a", "b"]) {
     },
     Tracks: { LIST: [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
   });
+  vm.runInNewContext(DOM_SOURCE, sb, { filename: "js/ui/dom.js" });   // Dom.el, over this sandbox's document
   vm.runInNewContext(src("js/career/season-ui.js"), sb, { filename: "js/career/season-ui.js" });
   return { dom, ui: sb.SeasonUI.create(G), $: G.$ };
 }

@@ -395,3 +395,4 @@ const SceneryIdentity = (function () {
 
   return { create };
 })();
+Object.freeze(SceneryIdentity);

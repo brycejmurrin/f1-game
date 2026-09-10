@@ -65,4 +65,3 @@ Escape routes through `data-esc-close="pm-settings-close"` (same ladder in
 - Forgetting that `zoom` changes layout boxes.
 - Using `requestAnimationFrame` for non-visual ARIA/scroll bookkeeping that
   must also run when rendering is suspended.
-- Editing JS/CSS and forgetting the cache bump.

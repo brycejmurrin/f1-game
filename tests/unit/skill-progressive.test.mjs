@@ -306,6 +306,8 @@ test("every custom subagent declares name, description, and model", () => {
     assert.equal(fm.name, id, `${f}: name must match the filename`);
     assert.ok(fm.description, `${f}: description is required`);
     assert.ok(fm.model, `${f}: model is required (use inherit unless a specific model is justified)`);
+    // Cursor reads is_background, Claude Code reads background — both or neither.
+    assert.equal(fm.background, fm.is_background, `${f}: background and is_background must agree`);
     // One prohibition line replaces the five verbatim blocks (2026-09).
     assert.ok(text.includes(ONE_LINE), `${f}: must carry the single flat-prohibitions line verbatim`);
     assert.doesNotMatch(text, /^## Flat prohibitions/m, `${f}: the verbatim prohibition block is gone`);
@@ -392,6 +394,8 @@ test("readonly review agents stay --fast and never start Playwright", () => {
     const fm = frontmatter(text);
     assert.equal(fm.name, id);
     assert.equal(fm.readonly, "true", `${id} must be readonly`);
+    assert.doesNotMatch(fm.tools || "", /\b(Write|Edit|MultiEdit|NotebookEdit)\b/,
+      `${id}: readonly is Cursor's field; Claude Code enforces it through tools:`);
     assert.equal(fm.model, "inherit");
     assert.doesNotMatch(text, /verify-change\.mjs --wait/);
     assert.doesNotMatch(text, /test-solo\.mjs/);
@@ -444,21 +448,21 @@ test("apex-shared.mdc stays a pointer, not a second AGENTS.md", () => {
   assert.match(text, /does \*\*not\*\* auto-load|does not auto-load/i);
 });
 
-test("no skill declares the Cursor-only `paths` field — every skill matches from chat", () => {
-  // Cursor's `paths` hides a skill unless matching files are in play; Claude
-  // Code ignores it. Until 2026-09 four file-family skills carried it and
-  // were invisible to a chat-only ask ("why is WGX black?" with no file open).
-  // The cross-cutting half of the old assertion is now universal.
+test("file-family skills keep their file anchors in the body, and `paths` stays a list if set", () => {
+  // Claude Code and Cursor both honour a `paths` glob list on a skill
+  // (auto-attach only when matching files are in play; the user can always
+  // invoke it). Until 2026-09 four file-family skills carried it and were
+  // invisible to a chat-only ask ("why is WGX black?" with no file open), so
+  // none use it today — but a skill that does must give a real glob list,
+  // not a bare string the parser would treat as one pattern.
   const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
-  const scoped = [];
   for (const d of dirs) {
     const file = path.join(SKILLS, d.name, "SKILL.md");
     if (!fs.existsSync(file)) continue;
     const fm = frontmatter(fs.readFileSync(file, "utf8"));
-    if (fm.paths !== undefined) scoped.push(d.name);
+    if (fm.paths !== undefined)
+      assert.match(fm.paths, /^(\[|"|[a-z])/, `${d.name}: paths must be a glob or list, got ${fm.paths}`);
   }
-  assert.deepEqual(scoped, [], "leave `paths` unset — the description is the trigger");
-  // The four former file-family skills still name their files in the body.
   for (const [name, re] of Object.entries({
     "webgl-debug": /js\/render\/glx/,
     "new-track": /js\/circuits/,
@@ -505,9 +509,6 @@ test("survey-ui-matrix names the layout-audit CLI recipes", () => {
   assert.match(text, /npm run ui:survey/);
 });
 
-// The webgpu-debug SKILL.md test that stood here moved with its skill in the
-// 2026-09-03 spike-out (spike/backends/skills/webgpu-debug/).
-
 test("skills README says the committed shell reads ?v=dev and the deploy stamps hashes", () => {
   const text = fs.readFileSync(path.join(SKILLS, "README.md"), "utf8");
   assert.match(text, /\?v=dev/);
@@ -515,9 +516,6 @@ test("skills README says the committed shell reads ?v=dev and the deploy stamps 
   assert.doesNotMatch(text, /\?v=N\b/);
   assert.doesNotMatch(text, /\?v=<sha256>/);
 });
-
-// Likewise the wgx-capture / webgpu-debug pairing row: both the tool and the
-// skill are in spike/backends/ now, so tools/README.md has no such row.
 
 test("slim-bloat is the Claude-simplify analog and stays a thin index", () => {
   const skill = fs.readFileSync(path.join(SKILLS, "slim-bloat/SKILL.md"), "utf8");

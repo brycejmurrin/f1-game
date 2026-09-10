@@ -6,12 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["jeddah"] =
   function (api) {
-      const { out, MAT, n, pyMin, place, backdrop,
+      const { K, out, MAT, n, pyMin, place, backdrop,
         addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
         grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
         cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit,
         lampPost } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       // ── Night Corniche palette ─────────────────────────────────────────────
       const SEA     = [0.02, 0.04, 0.08];   // deep black-mirror water

@@ -1312,22 +1312,32 @@ const Tracks = (function () {
       const stp = Math.max(1, Math.round(m / ds));
       for (let i = 0; i < n; i += stp) fn((i + HKSHIFT) % n);
     };
+    // dressingExclusions are authored in the def's scenery frame, exactly like
+    // the range helpers on the api (wall / hedge / cityFront …), so each window
+    // goes through TrackSpace.sceneryRange and its side flips on a reversed lap
+    // — the rule then sits where the circuit's own bespoke calls land. This
+    // used to add the origin shift alone: on singapore (reverse + mirror) the
+    // "no generic city under my cityFront facades" rules landed on the other
+    // side of the road, a third of a lap away. Resolved ONCE per build; an
+    // absent s0/s1 still means the whole lap.
+    const exclusionRules = (def.dressingExclusions || []).map((rule) => {
+      const kinds = rule.kinds || (rule.kind ? [rule.kind] : ["all"]);
+      const open = rule.s0 == null || rule.s1 == null;
+      const r = open ? { s0: 0, s1: 1 } : TrackSpace.sceneryRange(def, Number(rule.s0), Number(rule.s1));
+      const full = open || Math.abs(r.s1 - r.s0) >= 1 - 1e-9;
+      const side = rule.side == null ? null : (def.reverse ? -Number(rule.side) : Number(rule.side));
+      return { kinds, side, s0: r.s0, s1: r.s1, full };
+    });
     const dressingExcluded = (kind, k, side) => {
-      const rules = def.dressingExclusions;
-      if (!rules || !rules.length) return false;
+      if (!exclusionRules.length) return false;
       const frac = (((k % n) + n) % n) / n;
-      const shift = TrackSpace.sceneryOriginDelta(def);
-      for (const rule of rules) {
-        const kinds = rule.kinds || (rule.kind ? [rule.kind] : ["all"]);
-        let hit = kinds.includes("all") || kinds.includes(kind);
+      for (const rule of exclusionRules) {
+        let hit = rule.kinds.includes("all") || rule.kinds.includes(kind);
         // Any lighting-family rule matches any lighting-family query.
-        if (!hit && LIGHTING_KINDS[kind]) hit = kinds.some((knd) => LIGHTING_KINDS[knd]);
+        if (!hit && LIGHTING_KINDS[kind]) hit = rule.kinds.some((knd) => LIGHTING_KINDS[knd]);
         if (!hit) continue;
-        if (rule.side != null && side != null && Number(rule.side) !== Number(side)) continue;
-        const s0 = TrackSpace.wrap01((rule.s0 == null ? 0 : rule.s0) + shift);
-        const s1 = TrackSpace.wrap01((rule.s1 == null ? 1 : rule.s1) + shift);
-        const full = rule.s0 == null || rule.s1 == null || Math.abs(Number(rule.s1) - Number(rule.s0)) >= 1 - 1e-9;
-        const inside = full || (s1 < s0 ? frac >= s0 || frac <= s1 : frac >= s0 && frac <= s1);
+        if (rule.side != null && side != null && rule.side !== Number(side)) continue;
+        const inside = rule.full || (rule.s1 < rule.s0 ? frac >= rule.s0 || frac <= rule.s1 : frac >= rule.s0 && frac <= rule.s1);
         if (inside) return true;
       }
       return false;
@@ -1838,8 +1848,28 @@ const Tracks = (function () {
     // the one it could not reach.
     if (!sceneryFn) Log.warn("track", "no scenery closure for " + def.id + " — building bare");
     if (sceneryFn) {
+      // Frac -> node, UN-shifted: the `Math.round(s * n) % n` that 37 circuit
+      // files each declared locally. The wrapped helpers (transformSceneryApi)
+      // remap the node they are handed, so this stays raw — it is copied, never
+      // wrapped, on shifted / reversed circuits.
+      const K = (s) => Math.round(s * n) % n;
+      // Lap centroid + the farthest node's distance from it, for horizon rings.
+      // Computed once, lazily, in the exact order the 30 local copies summed
+      // (sequential px[i] sum / n, then max hypot) so their rings stay
+      // vertex-identical.
+      let _lapBounds = null;
+      const lapBounds = () => {
+        if (_lapBounds) return _lapBounds;
+        let cx = 0, cz = 0;
+        for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
+        cx /= n; cz /= n;
+        let radius = 0;
+        for (let i = 0; i < n; i++) radius = Math.max(radius, Math.hypot(px[i] - cx, pz[i] - cz));
+        return (_lapBounds = Object.freeze({ cx, cz, radius }));
+      };
       let sceneryApi = {
         out, track, def, theme, pal, n, ds, px, py, pz, hw, pyMin,
+        K, lapBounds,
         night: NIGHT,
         MAT,
         ATM, COL,
@@ -1886,7 +1916,7 @@ const Tracks = (function () {
         // driving limits.
         indexSolid,
         // baked asset pack — returns false (and emits nothing) with no pack
-        bakedModel, bakedModels: () => (typeof Assets !== "undefined" ? Assets.models() : []),
+        bakedModel,
       };
       if (def.reverse || def.sceneryCoordinates === "source" || TrackSpace.sceneryOriginDelta(def))
         sceneryApi = transformSceneryApi(sceneryApi, def, n);
@@ -2181,7 +2211,8 @@ const Tracks = (function () {
   const LIST = DEFS.map((d) => {
     const def = {
       id: d.id, name: d.name, gp: d.gp, country: d.country, laps: 3,
-      gpLaps: Math.ceil((d.id === "monaco" ? 260 : 305) / (d.lengthKm || 5)),
+      // Fewest laps covering the regulation race distance (TrackSceneryData.GP_DISTANCE_KM).
+      gpLaps: Math.ceil((TrackSceneryData.GP_DISTANCE_KM[d.id] || TrackSceneryData.GP_DISTANCE_KM.default) / (d.lengthKm || 5)),
       night: d.night, theme: d.theme, lengthKm: d.lengthKm,
       classic: !!d.classic,
       palette: (d.night ? nightPal : dayPal)(d.pal || {}),

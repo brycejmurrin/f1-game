@@ -752,3 +752,4 @@ function getOtLamp(active) {
 
   return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawMirrorLights, ersLightCode, gridStrobe };
 })();
+Object.freeze(CarMesh);

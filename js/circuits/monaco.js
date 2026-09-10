@@ -15,12 +15,20 @@
     terrainOuter: 28,
     sceneryCoordinates: "source",
     barrierGap: 2.0,
+    // SOURCE-trace fractions + source sides, like every range call in this
+    // def's scenery (sceneryCoordinates: "source", reverse: true): the engine
+    // maps them through TrackSpace.sceneryRange and flips the side, exactly as
+    // it does wall()/hedge(). Converted from the old shift-only numbers
+    // (0.50-0.60, 0.17-0.24, 0.29-0.70 R, 0-0.14 R) via s' = startFrac - s,
+    // side' = -side, so every window lands where it always has: tunnel
+    // 0.438-0.538 racing (measured bore 0.449-0.524), Casino 0.108-0.178,
+    // 0.228-0.638 R, 0.938-0.078 R.
     dressingExclusions: [
       // Keep generic city furniture out of the tunnel and the Casino sightline.
-      { kinds: ["city", "foliage", "lighting"], s0: 0.50, s1: 0.60 },
-      { kind: "city", s0: 0.17, s1: 0.24 },
-      { kinds: ["city", "foliage"], s0: 0.29, s1: 0.70, side: 1 },
-      { kinds: ["city", "foliage"], s0: 0, s1: 0.14, side: 1 },
+      { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
+      { kind: "city", s0: 0.0116, s1: 0.0816 },
+      { kinds: ["city", "foliage"], s0: 0.5516, s1: 0.9616, side: -1 },
+      { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2516, side: -1 },
     ],
     reverse: true,
     // Rotate the start/finish line onto the main pit/harbour straight so the lap

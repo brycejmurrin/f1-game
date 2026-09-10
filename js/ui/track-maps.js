@@ -369,6 +369,16 @@ const TrackMaps = (function () {
         merged.push(peaks[i]);
       }
     }
+    // The lap is a loop: a peak just before the seam and one just after it are
+    // the same corner, which the linear pass above numbers twice (a start/finish
+    // corner became T1 and T<last>). Merge across the seam like any other pair.
+    if (merged.length > 1) {
+      const first = merged[0], last = merged[merged.length - 1];
+      if (n - last.k + first.k < gap) {
+        if (last.v > first.v) merged[0] = last;
+        merged.pop();
+      }
+    }
     return merged.map(function (p, i) {
       const frac = p.k / n;
       return cornerAt(tr, frac, i + 1);
@@ -582,3 +592,4 @@ const TrackMaps = (function () {
     SECTOR_COLORS, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses
   };
 })();
+Object.freeze(TrackMaps);

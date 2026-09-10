@@ -1,8 +1,9 @@
 // probe-mcp.test.mjs — unified Chrome DevTools + TinyFish bridge, CLI ONLY.
 // Not MCP-attached since 2026-09 (.mcp.json is apex-tools / playwright-official
 // / chrome-devtools). Does NOT launch Chromium or hit TinyFish (CI-safe). The
-// chrome-start daemon + call auto-routing is why the CLI stays. Runs in
-// `npm run test:mcp`; the mcp-cli / gfx-probe / Chrome-flag assertions are in
+// chrome-start daemon + call auto-routing is why the CLI stays. Lives in
+// tests/manual/ (2026-09-10): `node --test tests/manual/probe-mcp.test.mjs`,
+// gated nowhere; the mcp-cli / gfx-probe / Chrome-flag assertions are in
 // tests/unit/mcp-cli.test.mjs on the fast gate.
 import { test } from "node:test";
 import assert from "node:assert/strict";

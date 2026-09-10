@@ -86,7 +86,7 @@ import vm from 'node:vm';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { screenshotPresentedCanvas } from '../capture/probe-page.mjs';
+import { screenshotPresentedCanvas } from '../shot/probe-page.mjs';
 
 /* How many distinct colours are in the middle of a written shot. Cheap, and it
    is the only thing that separates "rendered" from "wrote a file". */

@@ -6,8 +6,8 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["shanghai"] =
   function (api) {
-      const { out, track, n, px, pz, py, hw, pyMin, hash, vadd,
-        place, prop, backdrop, groundYAt, anchor, addBox, addCyl, addCone, seat,
+      const { K, out, track, n, px, pz, py, hw, pyMin, hash, vadd,
+        place, prop, groundYAt, anchor, addBox, addCyl, addCone, seat,
         addFrustum, addPrism, addPyramid, along, every,
         building, motorhome, tower, cityFront, grandstand, grandstandEx, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall, tree, bush, hedge, pine, palm, recordBarrier,
@@ -16,7 +16,18 @@
         cameraTower, broadcastCompound, sponsorHoarding,
         groundUnder,
       } = api;
-      const K = (s) => Math.round(s * n) % n;
+      // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
+      // Ask the same question first, so a hill that overlaps a parallel stretch
+      // is skipped instead of staged and dropped (16 per build here,
+      // every build, visible in verify-track's guard-drop report). Same node,
+      // side and XZ as the engine's own test; the props that survive are the
+      // props that always did (graph-parity).
+      const backdrop = (k, side, dist, sz, col) => {
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 6)) return;
+        api.backdrop(k, side, dist, sz, col);
+      };
+
 
       {
         const BUND   = [0.44, 0.38, 0.28];

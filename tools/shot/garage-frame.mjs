@@ -10,8 +10,8 @@ import {
 import {
   chromiumArgsForBackend, installProbeInit, gotoGame, openGarage, settleGarage,
   garageDiagnostics, screenshotGameCanvas,
-} from "../capture/probe-page.mjs";
-import { assertGarageInterior, sampleGarageGapPixels } from "../capture/garage-interior.mjs";
+} from "./probe-page.mjs";
+import { assertGarageInterior, sampleGarageGapPixels } from "./garage-interior.mjs";
 import sharp from "sharp";
 import { resolveRepoDefault, resolveContainedChild } from "../lib/output-paths.mjs";
 

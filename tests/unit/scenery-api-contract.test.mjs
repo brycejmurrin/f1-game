@@ -21,9 +21,9 @@ const { buildContext } = require("../../tools/track/verify-track.cjs");
 const MANIFEST = require("../../tools/manifest.cjs");
 
 const CONTRACT = [
-  "ATM", "COL", "MAT",
+  "ATM", "COL", "K", "MAT",
   "acacia", "addBox", "addCone", "addCyl", "addFrustum", "addMountain", "addPrism", "addPyramid",
-  "along", "anchor", "backdrop", "bakedModel", "bakedModels", "bankedKerbStrip",
+  "along", "anchor", "backdrop", "bakedModel", "bankedKerbStrip",
   "billboard", "bleacher", "bowlSeatWall",
   "broadcastCompound", "broadleafFall", "building", "bush", "cameraTower", "cantilever", "circuitKit",
   "cityFront", "concreteCanyon", "conifer",
@@ -31,7 +31,7 @@ const CONTRACT = [
   "floodMastRing", "forestEdge", "foundation", "frameAt", "gantry", "grandstand", "grandstandEx",
   "gridshellCanopy",
   "groundPatch", "groundPlane", "groundUnder", "groundYAt", "groundedSegments", "guardrail",
-  "hash", "hedge", "house", "hw", "indexSolid", "lampPost", "landmarkKit", "ledFacadeBands", "lerp",
+  "hash", "hedge", "house", "hw", "indexSolid", "lampPost", "landmarkKit", "lapBounds", "ledFacadeBands", "lerp",
   "marshalPost", "modelDiagnostics", "modelGroup", "motorhome", "mountain",
   "n", "night", "norm", "onTrack", "out", "overheadSpan", "pal", "palm",
   "pastelStreetRow", "peak", "pine", "place", "plane", "prop", "px", "py", "pyMin",
@@ -47,7 +47,10 @@ const CONTRACT = [
 // that drops one name while adding another still satisfies "these are sorted and
 // equal" if BOTH lists are edited together, and the count is the cheap tripwire
 // that says how many things circuits may call. Bump it deliberately.
-const CONTRACT_SIZE = 111;
+// 111 -> 112 (2026-09-10): `bakedModels` dropped (no circuit ever called it);
+// `K` (frac -> un-shifted node) and `lapBounds()` (cached lap centroid +
+// radius) added — the two pieces of boilerplate 37 and 30 files carried.
+const CONTRACT_SIZE = 112;
 
 test("the frozen contract is the size it declares", () => {
   assert.equal(CONTRACT.length, CONTRACT_SIZE);

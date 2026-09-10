@@ -109,6 +109,12 @@ window.PhysicsConsts = {
   OT_TIME_LO: 3.2, OT_TIME_HI: 5.2,  // overtake push, seconds
   OT_COOL_LO: 9, OT_COOL_HI: 14,     // ...and its lockout, best -> worst deploy
   OT_GAP: 1.0,
+  // The slipstream window, shared by the AI scan, the player scan and
+  // game.js wakeOf(): a car 0.5–TOW_RANGE m ahead and within TOW_HALF_W m
+  // laterally; the wake fades over the last TOW_FADE m of that range.
+  // BLOCKER_HALF_W is the narrower lane box the AI queues behind.
+  TOW_RANGE: 34, TOW_FADE: 28, TOW_HALF_W: 4,
+  BLOCKER_HALF_W: 2.2,
 
   // GEARBOX. 8-speed with realistic PROGRESSIVE ratios (real F1 gearboxes space
   // the ratios so the steps shrink in the higher gears): GEAR_TOP is each

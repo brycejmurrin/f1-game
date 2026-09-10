@@ -95,3 +95,4 @@ const V3 = (function () {
   }
   return { norm };
 })();
+Object.freeze(M4);

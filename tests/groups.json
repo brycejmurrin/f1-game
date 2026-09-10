@@ -1,17 +1,17 @@
 {
   "//": [
-    "tests/groups.json — the single definition of every `test:*` group.",
+    "tests/groups.json \u2014 the single definition of every `test:*` group.",
     "package.json's test scripts and tools/ci/tooling-fast.mjs's file list are",
     "GENERATED from this file by tools/gen/gen-test-groups.mjs; edit here, then",
     "run that generator. `--check` is on the fast gate, so drift fails at once.",
     "Adding a group used to mean three coordinated edits (package.json, the",
     "tooling-fast list, docs/TESTING.md); it is one edit here now.",
-    "In `toolingFast`, an entry beginning `//` is a comment line emitted verbatim into the generated block — the notes explaining why a given file earns a place in the edit loop live here, not in the generated file."
+    "In `toolingFast`, an entry beginning `//` is a comment line emitted verbatim into the generated block \u2014 the notes explaining why a given file earns a place in the edit loop live here, not in the generated file."
   ],
   "toolingFast": [
     "tests/unit/ghost.test.mjs",
     "// The three suites the feature batches added. Each is pure rules over a",
-    "// store or a source string — no DOM, no rasteriser — so all three together",
+    "// store or a source string \u2014 no DOM, no rasteriser \u2014 so all three together",
     "// cost under a second and belong where the rule they guard is edited.",
     "tests/unit/daily-challenge.test.mjs",
     "tests/unit/setup-tune.test.mjs",
@@ -37,16 +37,27 @@
     "tests/unit/lamp-chunks.test.mjs",
     "tests/unit/all-lights-fill.test.mjs",
     "// Sibling of cockpit-pale-surfaces, which moved to test:node-slow for costing",
-    "// 69 s. This one is 2.5 s — 178 differential builds, no rasteriser — so it",
+    "// 69 s. This one is 2.5 s \u2014 178 differential builds, no rasteriser \u2014 so it",
     "// stays in the edit loop where a cockpit geometry change is actually made.",
     "tests/unit/cockpit-crest-stripe.test.mjs",
     "// Both node-only and both under half a second: the catalog LADDER (no paid",
     "// option dominated by a cheaper one, no row that is never optimal) and the",
     "// garage's per-vertex MATERIAL column. Neither was in the edit loop, which",
-    "// for the garage one defeats its whole purpose — a dropped material column",
+    "// for the garage one defeats its whole purpose \u2014 a dropped material column",
     "// looks exactly like the bug it guards against.",
     "tests/unit/parts-ladder.test.mjs",
     "tests/unit/garage-mesh.test.mjs",
+    "// GATE GAP (2026-09-10): these three garage files and the three steering",
+    "// files below sat in test:garage-unit / test:steering-unit, which ran in NO",
+    "// gate \u2014 not here, not ci.yml's node step, so not deploy.mjs either. Each is",
+    "// under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);",
+    "// livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.",
+    "tests/unit/livery-decal-surfaces.test.mjs",
+    "tests/unit/body-split.test.mjs",
+    "tests/unit/helmets.test.mjs",
+    "tests/unit/digital-steer.test.mjs",
+    "tests/unit/key-binds.test.mjs",
+    "tests/unit/settings-export.test.mjs",
     "// ...and the garage's SIGNS: no prop mounted within half a metre in front of",
     "// a wall quad. Two shipped cut-off wordmarks and one never-visible live",
     "// trace were each found by a screenshot; this puts them in the edit loop.",
@@ -97,6 +108,11 @@
     "tests/unit/generated-docs.test.mjs",
     "tests/unit/gen-arch-table.test.mjs",
     "tests/unit/skill-progressive.test.mjs",
+    "// Host configs \u2014 the three MCP catalogs, the path-scoped rules, the hooks \u2014",
+    "// asserted instead of described; under a second.",
+    "tests/unit/agent-config.test.mjs",
+    "// Every freezable module surface stays frozen (pure file read; < 1 s).",
+    "tests/unit/frozen-globals.test.mjs",
     "tests/unit/component-inventory.test.mjs",
     "tests/unit/sheet-per-screen.test.mjs",
     "tests/unit/sheetshape-registry.test.mjs",
@@ -130,7 +146,7 @@
     "// test:sweeps: sweeps is skipped by ci.yml when a push cannot move circuit",
     "// geometry, and a parts-mesh regression is exactly the kind that would then",
     "// sail through. tooling-fast runs unconditionally in the deploy gate, which is",
-    "// the whole point — the front-wing assertion this file ports sat red on the",
+    "// the whole point \u2014 the front-wing assertion this file ports sat red on the",
     "// deploy tip through five consecutive green Pages runs because the browser",
     "// group that held it is not gated at all.",
     "tests/unit/car-mesh-anchors.test.mjs",
@@ -141,6 +157,7 @@
     "tests/unit/setup-preview-hull.test.mjs",
     "tests/unit/garage-interior-gate.test.mjs",
     "tests/unit/car-multi-shot-tools.test.mjs",
+    "tests/unit/harness-display.test.mjs",
     "tests/unit/track-night-override.test.mjs",
     "// The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit",
     "// sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy",
@@ -149,7 +166,7 @@
     "tests/unit/renderer-soft-lifecycle.test.mjs",
     "// that touches the LUT rather than on every edit.",
     "// The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,",
-    "// crest-marks 41 s, slider-effect 42 s — 48 % of this loop, measured",
+    "// crest-marks 41 s, slider-effect 42 s \u2014 48 % of this loop, measured",
     "// 2026-09-01) run in test:node-slow: CI guards always, locally when",
     "// pick-tests names it (js/car/ or tools/lighting/slider-effect.mjs).",
     "tests/unit/deploy-stamp.test.mjs",
@@ -223,23 +240,11 @@
     "test": {
       "kind": "browser"
     },
-    "test:update": {
-      "kind": "browser",
-      "flags": [
-        "--update-snapshots"
-      ]
-    },
     "test:render": {
       "kind": "browser",
       "flags": [
         "--project=render",
         "--workers=4"
-      ]
-    },
-    "test:headless": {
-      "kind": "browser",
-      "flags": [
-        "--project=headless"
       ]
     },
     "test:smoke": {
@@ -257,13 +262,6 @@
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/lighting-tuner-grade.spec.js",
         "tests/specs/tlx-probes.spec.js"
-      ]
-    },
-    "test:webgpu-lifecycle": {
-      "kind": "node",
-      "files": [
-        "tests/unit/webgpu-lifecycle.test.mjs",
-        "tests/unit/renderer-soft-lifecycle.test.mjs"
       ]
     },
     "test:hooks": {
@@ -353,13 +351,6 @@
         "tests/specs/camera-tuner.spec.js"
       ]
     },
-    "test:parts-unit": {
-      "kind": "node",
-      "files": [
-        "tests/unit/parts-ladder.test.mjs",
-        "tests/unit/setup-tune.test.mjs"
-      ]
-    },
     "test:garage-unit": {
       "kind": "node",
       "files": [
@@ -370,6 +361,7 @@
         "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/livery-contrast.test.mjs",
         "tests/unit/team-livery.test.mjs",
+        "tests/unit/setup-tune.test.mjs",
         "tests/unit/body-split.test.mjs",
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/parts-distinct-mesh.test.mjs",
@@ -423,13 +415,6 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
-      ]
-    },
-    "test:data-unit": {
-      "kind": "node",
-      "files": [
-        "tests/unit/data-results.test.mjs",
-        "tests/unit/meeting-picker-labels.test.mjs"
       ]
     },
     "test:modes": {
@@ -512,12 +497,6 @@
       "kind": "command",
       "cmd": "node tools/ci/tooling-fast.mjs"
     },
-    "test:generated-docs": {
-      "kind": "node",
-      "files": [
-        "tests/unit/generated-docs.test.mjs"
-      ]
-    },
     "test:game-vm": {
       "kind": "node",
       "files": [
@@ -543,14 +522,13 @@
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",
-        "tests/unit/race-settings-vm.test.mjs"
+        "tests/unit/race-settings-vm.test.mjs",
+        "tests/unit/red-flag-vm.test.mjs"
       ]
     },
     "test:mcp": {
       "kind": "node",
       "files": [
-        "tests/unit/tinyfish-mcp.test.mjs",
-        "tests/unit/probe-mcp.test.mjs",
         "tests/unit/environment-json.test.mjs"
       ]
     },
@@ -619,14 +597,6 @@
     "test:audit": {
       "kind": "command",
       "cmd": "node tools/ci/test-coverage-audit.mjs"
-    },
-    "test:pick": {
-      "kind": "command",
-      "cmd": "node tools/ci/pick-tests.mjs"
-    },
-    "test:bg": {
-      "kind": "command",
-      "cmd": "node tools/ci/test-bg.mjs"
     },
     "test:guards": {
       "kind": "node",

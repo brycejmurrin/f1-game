@@ -34,8 +34,11 @@ Skills (workflows) live in `.claude/skills/`. Canonical rules live in
 New agents must be listed here and remain trackable
 (`.gitignore` allowlists `!.claude/agents/`).
 
-Frontmatter (Cursor `https://cursor.com/docs/subagents`): `name` (matches the
-filename), `description` (what + when), `model: inherit` unless a specific
-model is justified. `readonly: true` for research/verify agents;
-`is_background: true` when the job is a long verify/fetch that must not hold
-the parent. `tests/unit/skill-progressive.test.mjs` asserts name/description/model.
+Frontmatter is read by two hosts, and each ignores the other's fields:
+`name` (matches the filename) and `description` (what + when) for both;
+`tools:` is the Claude Code allowlist (read-only agents list no Write/Edit)
+and `background: true` keeps a Claude Code agent off the foreground;
+`readonly: true` and `is_background: true` are the Cursor equivalents
+(`https://cursor.com/docs/subagents`); `model: inherit` unless a specific
+model is justified. `tests/unit/skill-progressive.test.mjs` asserts
+name/description/model and the paired fields.

@@ -583,6 +583,13 @@ shell has no `navigator.gpu`). System packages (`mesa-vulkan-drivers`,
 environment dashboard; `test -f /usr/share/vulkan/icd.d/lvp_icd.json` proves
 Lavapipe. The npm ECONNRESET note is in §Part 3.
 
+**Dead `DISPLAY` kills headless WebGL (2026-09-10).** A stale `DISPLAY=:1`
+with no `/tmp/.X11-unix/X1` made `getContext("webgl2")` return null under
+SwiftShader, so `__apex` never appeared and `garage-angles` timed out at
+120 s. Unsetting DISPLAY restored GL; `xvfb-run -a` also works. Fix:
+`tools/lib/harness.mjs` `clearDeadDisplay()` runs from `launchChromium` for
+headless launches (opt out `APEX_KEEP_DISPLAY=1`).
+
 
 ## The census's two TLX legs are not comparable (2026-09-08)
 

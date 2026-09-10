@@ -6,12 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["kyalami"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
         tree, bush, ridge, building, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const THORN = [0.24, 0.36, 0.20], THORN_D = [0.19, 0.30, 0.17];
       const GUM = [0.20, 0.34, 0.22];
@@ -230,9 +229,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [150, 40, 180, 50, 10, 6, [0.40, 0.38, 0.22]],
         [280, 32, 250, 70, 20, 12, [0.34, 0.34, 0.24]],

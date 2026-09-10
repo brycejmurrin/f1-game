@@ -22,6 +22,95 @@ const NetPlay = (function () {
     LEFT: "left",                         // host -> guests: this wire id went back to AI
   };
 
+  // ---------------------------------------------------------------------------
+  // WIRE CLAMPS AND THE QUALI SEAM — module-level, shared with the lobby.
+  // ---------------------------------------------------------------------------
+
+  // CLAMP BEFORE ANYTHING READS IT. Every field here is peer-supplied, and
+  // `s`/`lap` feed c.prog — the one number the whole field order sorts on,
+  // which the host then RELAYS onward. An out-of-range s (the wire carries up
+  // to 42.9 M m) or a rolled-over uint8 lap ranks a rival first for everyone;
+  // the same s also indexes Tracks.sample(). head/x/speed reach two unbounded
+  // angle wraps (`while (psi > Math.PI)`) — head: Infinity hung the tab, and
+  // head: 1e9 cost ~1.6e8 iterations PER FRAME. ONE helper for the posed
+  // sample AND the predicted one: predict() used to hand its output to the
+  // contact solver (c._nProg/_nX/_nSpd) unclamped, so the same packet that
+  // was refused as a pose was accepted as a collision partner.
+  const X_LIMIT = 200, SPEED_LIMIT = 200;
+  function clampWire(st, total, lapsTarget, out) {
+    out = out || {};
+    const _s = Number(st.s), _lap = Number(st.lap);
+    const _head = +st.head, _x = +st.x, _sp = +st.speed;
+    out.s = Number.isFinite(_s) ? Math.min(Math.max(_s, 0), total || _s) : 0;
+    out.lap = Number.isFinite(_lap) ? Math.min(Math.max(Math.floor(_lap), 0), (lapsTarget || 0) + 1) : 0;
+    // Wrapped, not clamped: a heading IS periodic, so folding it is lossless
+    // for any finite value and the wraps downstream then terminate at once.
+    out.head = Number.isFinite(_head) ? Math.atan2(Math.sin(_head), Math.cos(_head)) : 0;
+    out.x = Number.isFinite(_x) ? Math.min(Math.max(_x, -X_LIMIT), X_LIMIT) : 0;
+    out.speed = Number.isFinite(_sp) ? Math.min(Math.max(_sp, -SPEED_LIMIT), SPEED_LIMIT) : 0;
+    out.gear = st.gear;
+    out.deploying = !!st.deploying;
+    out.offroad = !!st.offroad;
+    out.onKerb = !!st.onKerb;
+    out.braking = !!st.braking;
+    out.extrapolated = !!st.extrapolated;
+    return out;
+  }
+
+  // ONE VALIDATION SITE for a peer's qualifying time. Both receivers — the
+  // lobby's (qualifying runs while the LOBBY still holds the connection) and
+  // this file's bindSession — used to gate on a bare `d.t > 0`, which "70"
+  // and `true` both pass; the value was stored as-is and quali-model.js then
+  // threw on `.toFixed`. Coerced here, bounded to a lap a human can drive
+  // (20 s .. 1 h), and handed on as a NUMBER.
+  const QUALI_MIN_S = 20, QUALI_MAX_S = 3600;
+  function validQuali(d) {
+    if (!d || typeof d !== "object" || d.driverId == null) return null;
+    const t = Number(d.t);
+    if (!(Number.isFinite(t) && t > QUALI_MIN_S && t < QUALI_MAX_S)) return null;
+    return Object.assign({}, d, { t });
+  }
+  // QLIVE never reaches the classification — it is a clock on somebody
+  // else's screen — so it is bounded rather than refused.
+  function validQualiLive(d) {
+    if (!d || typeof d !== "object" || d.driverId == null) return null;
+    const t = Number(d.t), frac = Number(d.frac);
+    return Object.assign({}, d, {
+      t: Number.isFinite(t) && t >= 0 ? Math.min(t, QUALI_MAX_S) : 0,
+      frac: Number.isFinite(frac) ? Math.min(Math.max(frac, 0), 1) : 0,
+    });
+  }
+  // Register the QUALI/QLIVE receivers on a session. `ownsDriver(d)` is the
+  // caller's sender binding — the lobby keys it on the HELLO profile filed
+  // under the connection, NetPlay on the remote car it seated — because the
+  // two phases hold different truths about who a connection speaks for.
+  function bindQuali(s, ownsDriver, G) {
+    s.onEvent(EV.QUALI, (d) => {
+      const q = validQuali(d);
+      if (q && ownsDriver(q) && G.onPeerQuali) G.onPeerQuali(q);
+    });
+    s.onEvent(EV.QLIVE, (d) => {
+      const q = validQualiLive(d);
+      if (q && ownsDriver(q) && G.onPeerQualiLive) G.onPeerQualiLive(q);
+    });
+  }
+  // The senders, one shape for both phases. A driven lap rides the reliable
+  // channel: a lost qualifying time is a wrong grid for the whole race, not
+  // one stuttered frame. The lap IN PROGRESS is allowed to be wrong, late or
+  // lost, so it is fire-and-forget and never gated on anything.
+  function qualiReporters(broadcast, live) {
+    return {
+      reportQuali(driverId, t) {
+        if (!live() || !(t > 0)) return false;
+        return broadcast(EV.QUALI, { driverId, t: +Number(t).toFixed(3) });
+      },
+      reportQualiLive(driverId, t, frac) {
+        if (!live() || !(t >= 0)) return false;
+        return broadcast(EV.QLIVE, { driverId, t: +Number(t).toFixed(2), frac: +(Number(frac) || 0).toFixed(3) });
+      },
+    };
+  }
+
   function create(G) {
     const sessions = new Map();
     const sessionList = () => [...sessions.values()];
@@ -112,31 +201,10 @@ const NetPlay = (function () {
       humans.forEach((c, i) => move(c, first + i));
     }
 
+    const _clamped = {};                  // poseRemote's scratch; never escapes
     function poseRemote(c, st) {
-      // CLAMP BEFORE ANYTHING READS IT. Every field here is peer-supplied, and
-      // `s`/`lap` feed c.prog — the one number the whole field order sorts on,
-      // which the host then RELAYS onward. An out-of-range s (the wire carries
-      // up to 42.9 M m) or a rolled-over uint8 lap ranks a rival first for
-      // everyone; the same s also indexes Tracks.sample() below.
-      const _total = (G.track && G.track.total) || 0;
-      const _s = Number(st.s), _lap = Number(st.lap);
-      // head/x/speed were NOT validated, and `head` reaches two unbounded angle
-      // wraps — `while (psi > Math.PI) psi -= 2*Math.PI` here and the same shape
-      // in headInterp/yawVisInterp on the render path. A peer sending
-      // head: Infinity hangs the tab forever; head: 1e9 costs ~1.6e8 iterations
-      // PER FRAME, which is a freeze in practice. Same class as the out-of-range
-      // `s` this block was already written to reject, and a peer packet is the
-      // one input here that is genuinely untrusted.
-      const _head = +st.head, _x = +st.x, _sp = +st.speed;
-      st = Object.assign({}, st, {
-        s: Number.isFinite(_s) ? Math.min(Math.max(_s, 0), _total || _s) : 0,
-        lap: Number.isFinite(_lap) ? Math.min(Math.max(Math.floor(_lap), 0), (G.lapsTarget || 0) + 1) : 0,
-        // Wrapped, not clamped: a heading IS periodic, so folding it is lossless
-        // for any finite value and the wraps downstream then terminate at once.
-        head: Number.isFinite(_head) ? Math.atan2(Math.sin(_head), Math.cos(_head)) : 0,
-        x: Number.isFinite(_x) ? Math.min(Math.max(_x, -200), 200) : 0,
-        speed: Number.isFinite(_sp) ? Math.min(Math.max(_sp, -200), 200) : 0,
-      });
+      // clampWire (module scope) — the same clamp the predicted sample gets.
+      st = clampWire(st, (G.track && G.track.total) || 0, G.lapsTarget, _clamped);
       c.s = st.s;
       c.x = st.x;
       c.xVis = st.x;
@@ -312,11 +380,10 @@ const NetPlay = (function () {
             // and told again to whoever arms after it was named.
             else if (named) { try { s.sendEvent(EV.START, { at: s.localToPeer(named.at), hold: named.hold }); } catch (e) {} }
           }
-          if (name === EV.QUALI && d && d.t > 0 && sendersOwnDriver(d) && G.onPeerQuali) G.onPeerQuali(d);
-          // QLIVE never reaches the classification, but it is keyed by the
-          // same driverId — unbound, the same spoof paints a lap-in-progress
-          // over another driver's name on the host's waiting screen.
-          if (name === EV.QLIVE && d && sendersOwnDriver(d) && G.onPeerQualiLive) G.onPeerQualiLive(d);
+          // QUALI / QLIVE: bindQuali below — the one validation site, shared
+          // with the lobby phase. (QLIVE never reaches the classification, but
+          // it is keyed by the same driverId — unbound, the same spoof paints a
+          // lap-in-progress over another driver's name on the host's screen.)
           if (name === EV.LAP && d && sendersOwnDriver(d)) {
             peerLaps.push(d);
             if (peerLaps.length > PEER_LAPS_CAP) peerLaps.splice(0, peerLaps.length - PEER_LAPS_CAP);
@@ -342,6 +409,7 @@ const NetPlay = (function () {
           if (name === EV.CAUTION && d && !ownsRaceControl() && G.applyCaution) G.applyCaution(d);
         });
       }
+      bindQuali(s, sendersOwnDriver, G);
     }
 
     function handBackToAI(reason, id) {
@@ -528,21 +596,9 @@ const NetPlay = (function () {
       return true;
     }
 
-    // Publish OUR driven qualifying lap. Rides the reliable channel: a lost
-    // qualifying time is a wrong grid for the whole race, not one stuttered
-    // frame, so it cannot go on the snapshot channel with the positions.
-    // The lap so far. Unlike reportQuali this is allowed to be wrong, late or
-    // lost — it is a clock on somebody else's screen, not an input to the
-    // grid — so it is fire-and-forget and never gated on anything.
-    function reportQualiLive(driverId, t, frac) {
-      if (!sessionList().length || !(t >= 0)) return false;
-      return broadcast(EV.QLIVE, { driverId, t: +t.toFixed(2), frac: +(frac || 0).toFixed(3) });
-    }
-
-    function reportQuali(driverId, t) {
-      if (!sessions.size || !(t > 0)) return false;
-      return broadcast(EV.QUALI, { driverId, t: +t.toFixed(3) });
-    }
+    // Publish OUR driven qualifying lap / the lap so far — qualiReporters
+    // (module scope), the same senders the lobby phase uses.
+    const { reportQuali, reportQualiLive } = qualiReporters(broadcast, () => sessions.size > 0);
 
     function reportLap(data) {
       return sessions.size ? broadcast(EV.LAP, data) : false;
@@ -648,13 +704,13 @@ const NetPlay = (function () {
         // out and pred is consumed below, so neither object escapes the tick.
         const st = r.interp.sample(now, r._smpSt || (r._smpSt = {}));
         if (st) poseRemote(r.car, st);
-        const pred = r.interp.predict(now, r._smpPred || (r._smpPred = {}));
+        const raw = r.interp.predict(now, r._smpPred || (r._smpPred = {}));
         const c = r.car;
-        if (pred) {
+        if (raw) {
           const total = (G.track && G.track.total) || 0;
-          const lap = Number.isFinite(pred.lap) ? pred.lap : 0;
+          const pred = clampWire(raw, total, G.lapsTarget, r._smpClamp || (r._smpClamp = {}));
           c._nOk = true;
-          c._nProg = (lap - 1) * total + pred.s;   // same convention as poseRemote
+          c._nProg = (pred.lap - 1) * total + pred.s;   // same convention as poseRemote
           c._nX = pred.x;
           c._nSpd = pred.speed;
         } else {
@@ -707,7 +763,8 @@ const NetPlay = (function () {
       predict: (c, now) => {
         if (!active) return null;
         const r = c == null ? remoteList()[0] : remotes.get(G.wireId(c));
-        return r ? r.interp.predict(now == null ? nowMs() : now) : null;
+        const raw = r ? r.interp.predict(now == null ? nowMs() : now) : null;
+        return raw ? clampWire(raw, (G.track && G.track.total) || 0, G.lapsTarget) : null;
       },
       sendEvent: (type, data) => (sessions.size ? broadcast(type, data) : false),
       onEvent: (type, fn) => (session ? session.onEvent(type, fn) : false),
@@ -731,5 +788,7 @@ const NetPlay = (function () {
     };
   }
 
-  return { create, EV, PUBLISH_HZ, INTERP_DELAY_MS };
+  return { create, EV, PUBLISH_HZ, INTERP_DELAY_MS,
+    clampWire, validQuali, validQualiLive, bindQuali, qualiReporters, QUALI_MIN_S, QUALI_MAX_S };
 })();
+Object.freeze(NetPlay);

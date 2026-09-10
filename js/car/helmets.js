@@ -695,3 +695,4 @@ const Helmets = (function () {
   return { DESIGNS, COLORS: C, designFor, painter, shell, isVisor, generated, ZONES, SHAPE, pointAt, build,
            RINGS, SLICES, FIELD_RINGS, FIELD_SLICES, ringT, MAX_SPLIT };   // the tessellation, so previews/tests can name both detail levels
 })();
+Object.freeze(Helmets);

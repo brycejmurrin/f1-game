@@ -40,12 +40,7 @@ function create(G) {
     });
   }
 
-  function el(tag, cls, text) {
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (text != null) n.textContent = text;
-    return n;
-  }
+  const el = Dom.el;   // js/ui/dom.js — the one createElement helper
 
   function starterTeams() {
     return Teams.LIST.filter((t) => !t.custom && t.tier >= STARTER_TIER_MIN);
@@ -1239,3 +1234,4 @@ function create(G) {
 
 return { create, STARTER_TIER_MIN };
 })();
+Object.freeze(CareerUI);

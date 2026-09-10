@@ -206,8 +206,7 @@ const DataTelemetry = (function () {
         });
         const loadBtn = el("button", "dh-livebtn");
         loadBtn.textContent = tray.length === 1 ? "LOAD LAP" : "COMPARE " + tray.length + " LANES";
-        loadBtn.style.marginTop = "12px";
-        loadBtn.style.width = "100%";
+        loadBtn.dataset.block = "full";   // css/data.css .dh-livebtn[data-block]
         loadBtn.type = "button";
         loadBtn.addEventListener("click", function () {
           const focus = chipByNum[tray[0].d.num] || loadBtn;
@@ -216,7 +215,7 @@ const DataTelemetry = (function () {
         summary.appendChild(loadBtn);
         if (tray.length > 1) {
           const clr = el("button", "dh-livebtn dh-lane-clear", "CLEAR LANES");
-          clr.type = "button"; clr.style.width = "100%"; clr.style.marginTop = "6px";
+          clr.type = "button"; clr.dataset.block = "tight";
           clr.addEventListener("click", function () { tray = []; syncChips(); });
           summary.appendChild(clr);
         }
@@ -424,7 +423,7 @@ const DataTelemetry = (function () {
         if (err && err.message && err.message.indexOf("Live F1 session") !== -1) msg = err.message;
         detail.appendChild(emptyMsg(msg));
         const backBtn = el("button", "dh-livebtn", "BACK");
-        backBtn.style.marginTop = "12px";
+        backBtn.dataset.block = "full";
         backBtn.addEventListener("click", function() { if (syncChips) syncChips(); });
         detail.appendChild(backBtn);
       });
@@ -1110,12 +1109,8 @@ const DataTelemetry = (function () {
     }
   }
 
-  function fmtLap(sec) {
-    if (sec === null || sec === undefined || !isFinite(sec)) return "—";
-    const m = Math.floor(sec / 60);
-    const s = sec - m * 60;
-    return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3);
-  }
+  // Lap time as 1:21.163, "—" when there is none (js/ui/dom.js).
+  const fmtLap = (sec) => Dom.fmtLap(sec, "—");
 
   // rebuild the cached static layers (chart traces + coloured track map + delta)
   function buildBases(view) {
@@ -1530,3 +1525,4 @@ const DataTelemetry = (function () {
   return { create, _dropStrays: dropStrays, _locBounds: locBounds,
            _gapLimitMs: gapLimitMs, _isGap: isGap, _locAt: locAt, _cumDist: cumDist };
 })();
+Object.freeze(DataTelemetry);

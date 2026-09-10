@@ -9,8 +9,10 @@ alwaysApply: true
   imports it; do not edit rules into `CLAUDE.md`.
 - **Skills / subagents:** `.claude/skills/*/SKILL.md` and `.claude/agents/*.md`
   (shared with Claude Code). Codex reads the same skill bodies via
-  `.agents/skills/<name>` symlinks — keep lockstep, never fork. Do not add
-  `.cursor/skills/` or `.cursor/agents/` unless a file is explicitly Cursor-only.
+  `.agents/skills/<name>` (`bash tools/env/mirror-skills.sh` fills it) — keep
+  lockstep, never fork. Do not add `.cursor/skills/` or `.cursor/agents/`
+  unless a file is explicitly Cursor-only. The glob rules here (`render-wgx`,
+  `render-tlx`) carry the same bodies as `.claude/rules/` — edit both.
 - **Route:** deploy/`version.json` → `deploy-research` (host fetch / WebFetch);
   pre-push → `verify-agent` (`--base <ref>` for "was it already red?");
   live canvas → `mcp-probe`; host browser → `playwright-official`;

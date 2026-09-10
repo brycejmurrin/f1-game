@@ -4,6 +4,7 @@ description: Read-only physics-contract sweep. Use when game.js, physics-consts,
 model: inherit
 readonly: true
 is_background: true
+background: true
 tools: Bash, Read, Grep, Glob
 ---
 

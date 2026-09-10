@@ -37,7 +37,10 @@ export const SWEEP_ROOTS = ["js", "tools", "tests", "docs", "types", "assets", "
 // Never descend into another checkout: .claude/worktrees/ holds subagent
 // worktrees (each with its own .git), and a nested .git anywhere means the
 // same — rewriting those would edit a sibling branch's files in place.
-// tools/moves/ holds the move PLANS themselves (old -> new JSON maps). A
+// tools/moves/ holds the move PLANS themselves (old -> new JSON maps; the
+// APPLIED phase-2/phase-4 plans and their batches were archived to
+// docs/archive/moves/ on 2026-09-10 — only the pending spike-backends plan
+// stays here). A
 // plan's own "from" keys are exact-path tokens too, so sweeping this
 // directory rewrote a just-applied batch's keys to old===new identity
 // entries AND corrupted phase2.json's not-yet-applied entries for paths a

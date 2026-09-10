@@ -227,3 +227,4 @@ const Teams = (function () {
 
   return { LIST: LIST, POINTS: POINTS, TIER_V: TIER_V, DEFAULT_CUSTOM: DEFAULT_CUSTOM };
 })();
+Object.freeze(Teams);

@@ -432,3 +432,4 @@ const TrackLine = (function () {
 
   return { bake, at, attackAt, pathK, K_ON, MARGIN, ZONE_M, PATH_FLOOR };
 })();
+Object.freeze(TrackLine);

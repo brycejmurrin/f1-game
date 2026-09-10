@@ -1296,15 +1296,19 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     var baseRefl = mix(0.14, 0.72, probeLive);
     if (visorSurface) { baseRefl = mix(0.05, 0.16, probeLive); }
     let envW = clamp(clearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
+    // Probe faces are rendered y-DOWN (WebGPU RTT) with GL up-vectors, so each
+    // face is stored mirrored vertically; sampling with -y (and the +-Y cameras
+    // swapped in wgx.js ENV_FACES) reads the correct texel. Analytic sky uses Rg.
+    let RgEnv = vec3<f32>(Rg.x, -Rg.y, Rg.z);
     var envCC : vec3<f32>;
     if (envProbeStr >= 0.999) {
-      envCC = textureSampleLevel(envCube, envCubeSamp, Rg, rough * 2.5).rgb;
+      envCC = textureSampleLevel(envCube, envCubeSamp, RgEnv, rough * 2.5).rgb;
     } else {
       let horiz = smoothstep(-0.12, 0.30, Rg.y);
       let skyR = mix(F.skyHorizon.xyz * 1.2, F.skyZenith.xyz, sqrt(max(Rg.y, 0.0)));
       envCC = mix(F.ambGround.xyz * 0.6, skyR, horiz);
       if (envProbeStr > 0.001) {
-        let envReal = textureSampleLevel(envCube, envCubeSamp, Rg, rough * 2.5).rgb;
+        let envReal = textureSampleLevel(envCube, envCubeSamp, RgEnv, rough * 2.5).rgb;
         envCC = mix(envCC, envReal, clamp(envProbeStr, 0.0, 1.0));
       }
     }

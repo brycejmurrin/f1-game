@@ -65,6 +65,3 @@ If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache
   [references/game-feel-workflow.md](references/game-feel-workflow.md);
   trauma-shake math (inspiration only) in
   [references/game-feel-feedback-recipes.md](references/game-feel-feedback-recipes.md).
-
-Folded in 2026-09-03: `game-feel`. Its trigger words now live in this
-description; the physics/juice boundary is the first line of the reference.

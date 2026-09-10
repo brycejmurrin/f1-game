@@ -102,7 +102,11 @@ const SceneryCity = (function () {
     };
     const building = (k, side, gap, w, h, d, opts) => {
       opts = opts || {};
-      if (w > d * 2.5)
+      // Swapped-argument heuristic for HAND-PLACED calls only: cityFront's
+      // facade units are wide and shallow by design (14–30 m wide on a
+      // jittered depth), and fired this 14 times per Baku boot on its own
+      // output. It marks its calls with `opts._kit`.
+      if (w > d * 2.5 && !opts._kit)
         Log.warn("scenery", `building: w=${w} >> d=${d} at k=${k} — dimensions likely swapped`);
       const dist = gap + w / 2;
       const p = anchor(k, side, dist), b = [p.r, p.u, p.t];
@@ -599,6 +603,7 @@ const SceneryCity = (function () {
         const col = palette[((idx % palette.length) + palette.length) % palette.length];
         const wcol = lit ? WINTINTS[Math.floor(hash(k * 2.1 + side) * WINTINTS.length) % WINTINTS.length] : undefined;
         building(k, side, gap, w, h, depth + (s - 0.5) * depth * 0.3, {
+          _kit: true,   // kit-internal: skip building()'s swapped-dimensions heuristic
           wall: col, floor: opts.floor || (4 + s * 3),
           lit: lit, windowCol: opts.windowCol || wcol,
           // NO `setback:` KEY HERE. This used to pass `setback: <bool>`, which
@@ -790,3 +795,4 @@ const SceneryCity = (function () {
 
   return { create };
 })();
+Object.freeze(SceneryCity);

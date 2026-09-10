@@ -72,6 +72,7 @@ export const TREE_METRICS = {
   shellNodes: async () => (await import("./tree-counts.mjs")).shellNodes(),
   bareCatches: async () => (await import("./tree-counts.mjs")).bareCatches(),
   waitNoPolling: async () => (await import("./tree-counts.mjs")).waitNoPolling(),
+  waitForTimeout: async () => (await import("./tree-counts.mjs")).waitForTimeout(),
   subFloorFontSize: async () => (await import("./tree-counts.mjs")).subFloorFontSize(),
   rawSpacing: async () => (await import("./tree-counts.mjs")).rawSpacing(),
   rawColor: async () => (await import("./tree-counts.mjs")).rawColor(),

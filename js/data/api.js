@@ -23,7 +23,9 @@ const F1API = (function () {
   //
   // Between Jan 1 and the season opener the standings endpoints return an
   // empty list. That is CORRECT — there are no standings yet — and every
-  // caller already handles the empty/null case.
+  // caller already handles the empty/null case. lastRace() is the exception:
+  // "the last race" has an answer in January (the previous finale), so on an
+  // empty result it asks season()-1 once, through the same queue and cache.
   const season = () => String(new Date().getFullYear());
   const CACHE_PREFIX = "apex26.api.";
   const MIN_GAP_MS = 400;
@@ -212,6 +214,14 @@ const F1API = (function () {
     lastNetAt = Date.now();
     return fetchTimed(url).then(function (res) {
       if (!res.ok) {
+        // Retry-After is NOT a CORS-safelisted response header, so on a
+        // cross-origin 429 `hdr` is null unless the API lists it in
+        // Access-Control-Expose-Headers — OpenF1/Jolpica do not today, so this
+        // branch is dormant and the backoff ladder in request() (RETRY_BASE_MS
+        // doubling to RETRY_CAP_MS) is what actually paces retries. Kept
+        // because it is harmless when null and correct the day the header is
+        // exposed: honoured AS SENT up to RETRY_AFTER_MAX_MS, past which the
+        // request fails fast rather than sleeping behind a spinner.
         const hdr = res.headers && res.headers.get && res.headers.get("retry-after");
         let ra = parseFloat(hdr);
         if (!isFinite(ra) && hdr) ra = (Date.parse(hdr) - Date.now()) / 1000;   // HTTP-date form
@@ -399,8 +409,18 @@ const F1API = (function () {
     });
   }
 
+  // Between Jan 1 and the opener `<year>/last` is empty, and the LAST RACE
+  // tab sat blank for two months. The previous season's finale is the honest
+  // answer, so an empty current year asks season()-1 ONCE — through request(),
+  // so it queues, retries and caches like every other call.
   function lastRace() {
-    return request(JOLPICA + "/" + season() + "/last/results.json", TTL_STANDINGS).then(function (json) {
+    const year = Number(season());
+    return lastRaceOf(year).then(function (race) {
+      return race || lastRaceOf(year - 1);
+    });
+  }
+  function lastRaceOf(year) {
+    return request(JOLPICA + "/" + year + "/last/results.json", TTL_STANDINGS).then(function (json) {
       const race = jRaces(json)[0];
       if (!race) return null;
       return {
@@ -800,6 +820,10 @@ const F1API = (function () {
 
   return {
     cancelAll: cancelAll,
+    // The raw queued/timed/retried GET, JSON-parsed: `request(url, 0, { cache: false })`
+    // is what __apex.openf1/jolpica use so an ad-hoc probe cannot bypass the
+    // rate-limit queue or hang without the FETCH_TIMEOUT_MS abort.
+    request: request,
     schedule: schedule,
     driverStandings: driverStandings,
     constructorStandings: constructorStandings,

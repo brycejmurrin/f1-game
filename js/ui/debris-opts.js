@@ -89,3 +89,4 @@ const DebrisOpts = (function () {
 
   return { KEY, on, set, initUI };
 })();
+Object.freeze(DebrisOpts);

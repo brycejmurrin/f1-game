@@ -1,7 +1,7 @@
 // tinyfish-mcp.test.mjs — guards the TinyFish proxy helper + RPC unwrap.
-// Runs in `npm run test:mcp` (the Pages gate's node suites), not tooling-fast:
-// the tool is CLI-only and egress-blocked in-container, and the spawns cost
-// 11 s of the edit loop. The assertions about the tools that stay on the fast
+// Lives in tests/manual/ (2026-09-10): run by path, gated nowhere — the tool
+// is CLI-only, egress-blocked in-container and not MCP-attached, and the
+// spawns cost 11 s. `node --test tests/manual/tinyfish-mcp.test.mjs`. The assertions about the tools that stay on the fast
 // gate (chrome-devtools-mcp.sh, mcp-cli.mjs, the MCP release pins) live in
 // tests/unit/mcp-cli.test.mjs.
 // Does NOT hit the live TinyFish API (needs a key + network). Fixtures cover

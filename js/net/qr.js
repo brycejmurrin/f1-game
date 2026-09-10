@@ -334,3 +334,4 @@ const NetQr = (function () {
 
   return { encode, draw, QUIET, MAX_VERSION, byteCapacity, capacity: () => byteCapacity(MAX_VERSION) };
 })();
+Object.freeze(NetQr);

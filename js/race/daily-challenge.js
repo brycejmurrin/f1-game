@@ -102,3 +102,4 @@ const DailyChallenge = (function () {
 
   return { create, plan, dayKey, prevDay };
 })();
+Object.freeze(DailyChallenge);

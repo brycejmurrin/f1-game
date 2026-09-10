@@ -57,7 +57,3 @@ Live MCP session (already on localhost): `browser_resize` →
   [references/restructure.md](references/restructure.md); the 15 checkable
   rules (screens/layers, CSS variation, DOM size, anti-methodology) in
   [references/restructure-screens-css-rules.md](references/restructure-screens-css-rules.md).
-
-Folded in 2026-09-03: `restructure-screens-css`. Same files, same CLIs; the
-difference was one screen versus the whole class system, which is a scope of
-the same task, not a different one.

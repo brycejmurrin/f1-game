@@ -37,12 +37,7 @@ const DataHub = (function () {
   const state = {};               // id -> {node, at}
   const gen = {};                 // id -> load generation (ignores stale resolutions)
 
-  function el(tag, cls, text) {
-    const e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined && text !== null) e.textContent = String(text);
-    return e;
-  }
+  const el = Dom.el;   // js/ui/dom.js — the one createElement helper
 
   function clear(node) {
     while (node.firstChild) node.removeChild(node.firstChild);
@@ -313,8 +308,11 @@ const DataHub = (function () {
     });
   }
 
+  // role=status: the load / error state is announced to a screen reader
+  // (polite live region) instead of the tab silently going blank.
   function spinner() {
     const w = el("div", "dh-loading");
+    w.setAttribute("role", "status");
     w.appendChild(el("div", "dh-spinner"));
     w.appendChild(el("div", "dh-loading-text", "LOADING"));
     return w;
@@ -322,6 +320,7 @@ const DataHub = (function () {
 
   function errorBlock(id, err) {
     const w = el("div", "dh-error");
+    w.setAttribute("role", "status");
     let msg = "Couldn't load data. Check your connection and try again.";
     if (err && err.message && err.message.indexOf("Live F1 session") !== -1) {
       msg = err.message;
@@ -550,3 +549,4 @@ const DataHub = (function () {
   const { loadExport } = DataExport.create({ el: el, clear: clear, isOpen: isOpen });
   return { init: init, open: open, close: close, isOpen: isOpen };
 })();
+Object.freeze(DataHub);

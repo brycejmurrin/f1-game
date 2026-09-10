@@ -242,3 +242,36 @@ test("host: an ARMED that lands after the moment was named is answered with STAR
   s2.deliver("armed", {});
   assert.equal(starts(s2).length, 1, "all armed: named once, sent once");
 });
+
+// ── predict() output is clamped exactly like the posed sample (NetPlay.clampWire)
+// The contact solver reads c._nProg/_nX/_nSpd from predict(); they used to be
+// the raw interp values while poseRemote clamped its copy, so one packet was
+// refused as a pose and accepted as a collision partner.
+test("predict() and the tick's _n fields are clamped through the same helper as the pose", () => {
+  const G = stubG(2);
+  G.lapsTarget = 5;
+  const net = NetPlay.create(G);
+  const s = fakeSession();
+  assert.equal(net.start({ role: "guest", session: s, interpDelayMs: 0 }).ok, true);
+  const rival = G.cars[1];
+  const pkt = (t, car) => NetSnapshot.encodeSnapshot(t, [{ id: rival.idx, car }]);
+  // Beyond the track (total 5000), beyond ±200 m laterally, beyond ±200 m/s,
+  // and a lap past the target+1 clamp — every field the wire can carry wrong.
+  s.deliverState(pkt(1000, { s: 40000000, x: 300, head: 3, speed: 320, lap: 200 }));
+  s.deliverState(pkt(1100, { s: 40000000, x: 300, head: 3, speed: 320, lap: 200 }));
+  net.tick(1100);
+  const p = net.predict(rival, 1100);
+  assert.ok(p, "a prediction exists");
+  assert.ok(p.s <= 5000 && p.s >= 0, `s clamped to the lap, got ${p.s}`);
+  assert.equal(p.x, 200); assert.equal(p.speed, 200); assert.equal(p.lap, 6);
+  assert.ok(rival._nOk);
+  assert.equal(rival._nX, 200); assert.equal(rival._nSpd, 200);
+  assert.ok(rival._nProg <= 6 * 5000, `_nProg follows the clamped lap/s, got ${rival._nProg}`);
+  assert.equal(rival.s, p.s, "the posed s and the predicted s agree (delay 0)");
+  // The helper itself, on the shapes that used to hang the tab.
+  const c = NetPlay.clampWire({ s: Infinity, x: NaN, head: 1e9, speed: -Infinity, lap: "7" }, 5000, 5);
+  assert.deepEqual([c.s, c.x, c.speed, c.lap], [0, 0, 0, 6], "non-finite reads as 0, exactly as the pose always did");
+  assert.deepEqual(NetPlay.clampWire({ s: -5, x: -999, head: 0, speed: -999, lap: -3 }, 5000, 5).speed, -200);
+  assert.ok(Math.abs(c.head) <= Math.PI, "head is wrapped into one turn");
+  net.stop("local");
+});

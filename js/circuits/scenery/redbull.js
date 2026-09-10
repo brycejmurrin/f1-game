@@ -6,18 +6,25 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["redbull"] =
   function (api) {
-      const { out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, backdrop, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
-      const K = (s) => Math.round(s * n) % n;
+      const { K, lapBounds, out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
+      // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
+      // Ask the same question first, so a hill that overlaps a parallel stretch
+      // is skipped instead of staged and dropped (295 per build here,
+      // every build, visible in verify-track's guard-drop report). Same node,
+      // side and XZ as the engine's own test; the props that survive are the
+      // props that always did (graph-parity).
+      const backdrop = (k, side, dist, sz, col) => {
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 6)) return;
+        api.backdrop(k, side, dist, sz, col);
+      };
+
 
       if (ATM && ATM.alpineGreen) {
         Object.assign(pal, ATM.alpineGreen, { runoff: [0.32, 0.52, 0.24] });
       }
 
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       const ranges = [
         { extra: 210, wMin: 160, hMin: 48, hVar: 56, count: 14, seg: 5, opts: { forest: [0.15, 0.28, 0.16], rock: [0.36, 0.34, 0.32], snow: [0.90, 0.92, 0.96], snowline: 0.75, rough: 0.40 } },
         { extra: 480, wMin: 280, hMin: 140, hVar: 100, count: 10, seg: 4, opts: { forest: [0.28, 0.38, 0.30], rock: [0.48, 0.50, 0.54], snow: [0.94, 0.95, 0.99], snowline: 0.50, rough: 0.32 } },

@@ -209,3 +209,4 @@ const TrackSpline = (function () {
 
   return { SCALE, centerline, cr, sample, curvatureRaw, curvature, project, wallAt };
 })();
+Object.freeze(TrackSpline);

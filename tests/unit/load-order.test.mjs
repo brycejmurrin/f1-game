@@ -96,7 +96,7 @@ test("shell locks scale and cancels iOS double-tap / gesture zoom", () => {
   console.log("[load-order] viewport content:", m ? m[1] : "NOT FOUND");
   assert.ok(m, "index.html must declare a viewport");
   assert.match(m[1], /maximum-scale=1/, "viewport must cap scale");
-  assert.match(m[1], /user-scalable=no/, "viewport must disable pinch/double-tap scale");
+  assert.doesNotMatch(m[1], /user-scalable=no/, "viewport must leave pinch-zoom to the user (WCAG 1.4.4; docs/PLATFORM.md)");
   const hasGesture = /addEventListener\("gesturestart"/.test(indexHtml);
   const hasTouchEnd = /addEventListener\("touchend"/.test(indexHtml);
   console.log("[load-order] gesturestart listener present:", hasGesture);

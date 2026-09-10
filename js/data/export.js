@@ -294,3 +294,4 @@ const DataExport = (function () {
 
   return { create };
 })();
+Object.freeze(DataExport);

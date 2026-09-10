@@ -48,34 +48,35 @@ with enough interfaces to need one
 ### `js/net/nostr.js` — `NetNostr`
 
 the room-code rendezvous, over PUBLIC NOSTR RELAYS via a vendored Trystero
-(vendor/trystero-0.25.3, MIT, dynamic import()). Nostr and not a public MQTT
+(vendor/trystero-0.25.4, MIT, dynamic import()). Nostr and not a public MQTT
 broker because accepting arbitrary events from anonymous clients is what a
 relay is FOR — HiveMQ's and EMQX's free brokers say outright they must NOT be
 used by real applications, and an earlier build did exactly that. SIGNALLING
 ONLY: it carries the two invite/answer STRINGS and the race then runs over our
-own PC. The DEFAULT path is `directExchange()`: our own WebSockets straight to
-the relays, reusing Trystero's framing helpers (createEvent/subscribe) so the
-events are well-formed Nostr — the payload sealed with AES-GCM under a key
-derived from the room code (`NetRendezvous.seal`/`open`, called on every
-exchange), offers and answers on SEPARATE hashed topics so neither side reads
-its own message back. The full Trystero room join (createDataChannel("data"),
-no options, i.e. reliable+ordered — precisely wrong for snapshots) survives
-only as an OPT-IN LEGACY branch behind localStorage apex26.nostrTrystero. The
-host posts and waits; the guest passes a `reply` because it cannot answer
-until it has seen the invite. ROOM CODES ARE BEST-EFFORT AND THE INVITE LINK
-IS NOT: public relays increasingly refuse anonymous ephemeral events with a
-NIP-01 OK=false, and getRelaySockets() still reports a refusing relay OPEN
-because the WebSocket is. The `all_rejected` detection for that is
-LEGACY-BRANCH-ONLY: the vendor turns each refusal into a console.warn and
-nothing else, so the legacy exchange() intercepts that warning and reports
-`all_rejected` when every live relay has refused — but the default
-directExchange() reads only `["EVENT", …]` frames and ignores OK=false, so a
-pool refusing every event is a silent wait until the timeout. Measured on
-hardware (legacy branch): all six shipped relays healthy, wellorder answering
-"blocked: spam not permitted", both players on spinners. Pick relays with
-tools/net/nostr-probe.mjs — which tests the only criterion that decides this,
-whether a relay accepts an ephemeral event from an UNKNOWN pubkey — never by
-reputation or uptime
+own PC. The ONLY path is `directExchange()` (`exchange()` is an alias): our
+own WebSockets straight to the relays, reusing exactly two of Trystero's
+framing helpers (createEvent/subscribe) so the events are well-formed Nostr —
+the payload sealed with AES-GCM under a key derived from the room code
+(`NetRendezvous.seal`/`open`, v2 envelope, the slot name as AAD, called on
+every exchange), offers and answers on SEPARATE hashed topics so neither side
+reads its own message back. The full Trystero room join (its own
+RTCPeerConnection carrying the answer, which died exactly when ours started;
+its only failure signal a console.warn we had to intercept) was an opt-in
+legacy branch behind apex26.nostrTrystero and was deleted 2026-09-10 — the
+vendored tree is still the whole core graph because nostr/index.js imports the
+core barrel, but only createEvent/subscribe are called
+(tests/unit/net-trystero-api.test.mjs pins that). The host posts and waits;
+the guest passes a `reply` because it cannot answer until it has seen the
+invite. ROOM CODES ARE BEST-EFFORT AND THE INVITE LINK IS NOT: public relays
+increasingly refuse anonymous ephemeral events with a NIP-01 OK=false, and a
+refusing relay's WebSocket is still OPEN. Because we own the sockets we read
+the `["OK", id, false, why]` and `["CLOSED", subId, why]` frames first-hand
+and report `all_rejected` (advisory — the room keeps running) once every live
+relay has refused. Measured on hardware: all six shipped relays healthy,
+wellorder answering "blocked: spam not permitted", both players on spinners.
+Pick relays with tools/net/nostr-probe.mjs — which tests the only criterion
+that decides this, whether a relay accepts an ephemeral event from an UNKNOWN
+pubkey — never by reputation or uptime
 
 ### `js/net/rendezvous.js` — `NetRendezvous`
 
@@ -87,16 +88,24 @@ set. On the DEFAULT public path the payload is sealed with AES-GCM under a key
 derived from the room code (`seal()`/`open()`, called by
 `NetNostr.directExchange` on every exchange) and the room id is a hash of the
 code, so a relay operator carries bytes it cannot read and the code is the only
-secret.
+secret. ENVELOPE v2 (2026-09-10): PBKDF2 runs once per code into a memoised
+HKDF base, every envelope derives its own AES key from a random 16-byte salt
+(`[salt 16][iv 12][ct+tag]`), and the slot name ("offer"/"answer") is the
+AES-GCM additional data — so a sealed offer replayed into the answer slot fails
+the tag instead of being accepted, and two rooms under one code never share a
+key. v1 (constant salt, no AAD) is not accepted: both peers run the same build.
+Codes are minted by rejection sampling, not `byte % 31` (256 is not a multiple
+of 31, so the modulo made the first eight letters 9/8 as likely).
 
-The optional private Worker path now uses the same browser-side AES-GCM
-envelope. `httpPut` sends versioned ciphertext and `httpGet` opens it locally,
-so the Worker operator cannot read the SDP it carries. Because a fresh AES-GCM
-IV makes even identical retries produce different bytes, the host also sends a
-separate random owner capability; the Worker uses that stable capability—not
-ciphertext equality—to permit a retry while rejecting another writer. During a
-rolling deployment the client can still read a legacy plaintext record and the
-Worker accepts legacy payloads, but every new private-relay write is sealed. A
+The optional private Worker path uses the same browser-side envelope as a
+`v2.<base64url>` string. `httpPut` sends versioned ciphertext and `httpGet`
+opens it locally, so the Worker operator cannot read the SDP it carries — and
+cannot ALTER it either, because `openPrivate` refuses anything that is not a
+v2 envelope (the legacy "read a plaintext record" branch is gone, and the
+Worker itself refuses to store one). Because a fresh salt and IV make even
+identical retries produce different bytes, the host also sends a separate
+random owner capability; the Worker uses that stable capability — never
+ciphertext equality — to permit a retry while rejecting another writer. A
 code is DISPOSABLE, not an account: nothing personal is retained and the Worker
 deletes the room after two minutes. It carries the SAME invite/answer strings
 the manual flow uses, so the relay is a courier and never a participant. Every
@@ -109,10 +118,10 @@ guarantees nobody discovers it
 
 byte-mode, level-L QR ENCODER (versions 1-20, standard mask selection). The
 invite QR holds the invite LINK, so the guest scans it with their ORDINARY
-CAMERA APP and lands in the lobby with the code already filled in — no in-page
-scanner, and none possible: BarcodeDetector is absent on desktop Linux Chrome
-and iOS Safari (measured). Encoder only; decoding is an order more code for a
-job the OS already does. Verified by jsQR (a devDependency) in
+CAMERA APP and lands in the lobby with the code already filled in; the answer
+leg, which has no link to open, is read in-page by NetScan below. Encoder
+only here; decoding is an order more code for a job the OS already does.
+Verified by jsQR (a devDependency) in
 tests/unit/net-qr.test.mjs — self-consistency proves nothing here, since a wrong mask or a
 transposed format field produces a picture that looks exactly right and cannot
 be read
@@ -122,10 +131,13 @@ be read
 reading a QR with the device CAMERA, so the answer stops being a copy/paste.
 Two transfers are unavoidable — each side must learn the other's DTLS
 fingerprint, and generateCertificate() takes no seed — so the second one is
-scanned instead of typed. Carries a VENDORED jsQR (Apache-2.0,
-vendor/jsqr-1.4.0, injected ON DEMAND and never in the boot path) because
-BarcodeDetector exists on neither iOS Safari nor desktop Linux Chrome, which
-is exactly the iOS-to-desktop pairing this is for. stop() kills every track
+scanned instead of typed. The platform's `BarcodeDetector` is used first
+wherever `getSupportedFormats()` includes `qr_code` (Android Chrome, macOS
+Safari 16+: hardware-assisted, no script inject); everywhere else a VENDORED
+jsQR (Apache-2.0, vendor/jsqr-1.4.0, injected ON DEMAND and never in the boot
+path) decodes, because BarcodeDetector exists on neither iOS Safari nor
+desktop Linux Chrome (measured), which is exactly the iOS-to-desktop pairing
+this is for. stop() kills every track
 and is wired to decode, cancel, lobby close and page-hide: a camera outliving
 its screen is a privacy bug nothing on screen would reveal
 
@@ -133,9 +145,12 @@ its screen is a privacy bug nothing on screen would reveal
 
 signalling with no server: vanilla ICE (gather fully, so one static string
 suffices) → slimmed SDP → deflate → base64url invite code, pasted between
-players. Embeds version.json's build and REFUSES a mismatched peer — different
-builds mean different splines, barriers and constants. Scenery is deliberately
-not checked (props never affect physics)
+players. Embeds THIS SHELL's build — `<meta name="apex-build">`, the
+generation of the scripts actually running, with a version.json fetch only as
+the fallback for an unstamped shell (a tab left open across a deploy used to
+fetch the NEW number while running the OLD code) — and REFUSES a mismatched
+peer: different builds mean different splines, barriers and constants. Scenery
+is deliberately not checked (props never affect physics)
 
 ### `js/net/snapshot.js` — `NetSnapshot`
 
@@ -152,7 +167,10 @@ the delayed DRAWN pose
 clock sync (NTP-style; keeps the LOWEST-RTT sample, since a slow reply is a
 queued reply and queuing is pure error), packet routing, typed JSON events,
 and a heartbeat, so an abandoned car can be handed back to the AI instead of
-standing still on track
+standing still on track. A PONG is a clock sample only if it echoes an
+outstanding ping's id AND that ping's own t0 (the last eight sent are kept,
+each answered once) — the echoed t0 is what every peer timestamp is converted
+through, and it used to be taken on trust
 
 ### `js/net/netplay.js` — `NetPlay`
 
@@ -161,7 +179,13 @@ car; the host additionally owns the AI and race control. So your own car is
 NEVER corrected — no rollback, no reconciliation, no host advantage — at the
 cost of the two screens disagreeing by ~1 m under heavy contact. A rival is
 POSED from replicated state, so updateCar() early-outs on netPlay.owns(c),
-exactly as it already does for an incident-sim takeover. tick() also runs
+exactly as it already does for an incident-sim takeover. The posed sample and
+the predicted one (`predict()`, which the contact solver reads) go through ONE
+clamp, `NetPlay.clampWire` — s to the lap, x/speed to ±200, head wrapped, lap
+to target+1. The QUALI/QLIVE receivers and senders are NetPlay's too
+(`bindQuali` / `qualiReporters`): the lobby registers the same handlers during
+qualifying, so a peer's `t` is coerced and bounded (20 s .. 1 h) at ONE site in
+both phases and stored as a number. tick() also runs
 through the paused gate: one player opening a menu cannot stop a shared world.
 UP TO FOUR PLAYERS, in a STAR: the host holds one session per guest and each
 guest holds one, to the host. Rivals are a Map keyed by G.wireId(c) =
@@ -191,6 +215,10 @@ start without, and the one thing two people already have between them. Opens
 the session ITSELF (the guest learns which race to load from the host, so the
 session must exist before a track does) and hands it to NetPlay once the race
 is up. The profile it sends is part IDS, never resolved multipliers — a peer
-declaring {cornering: 9} would simply be faster. Its transport factory is
+declaring {cornering: 9} would simply be faster — and a declared setup over
+`Parts.BUDGET` resolves as the team's factory setup, because every top-tier id
+at once is a legal set of ids no garage would let a player afford. HELLO and
+READY are rate-limited per connection (five a second each; the rest are
+dropped). Its transport factory is
 injectable: an RTCPeerConnection whose ICE never completes spins forever, so a
 test that builds one HANGS rather than fails (__apex.lobbyFake)

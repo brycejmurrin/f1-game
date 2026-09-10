@@ -107,16 +107,15 @@ const NetNostr = (function () {
   ];
 
   // localStorage apex26.nostrRelays = ["wss://…", …] overrides the list above,
-  // used verbatim — Trystero prefixes wss:// only onto ITS defaults, so a
-  // ws://127.0.0.1 fixture works through here and nowhere else.
+  // used verbatim — no wss:// is prefixed, so a ws://127.0.0.1 fixture works
+  // through here and nowhere else.
   // A STORED OVERRIDE MUST NOT BE ABLE TO BRICK THE FEATURE, and until now it
-  // could: the list was handed to Trystero verbatim if it merely PARSED as a
-  // non-empty array. Trystero then does `new WebSocket(url)` on each entry, and
-  // a malformed one throws SyntaxError — "The string did not match the
-  // expected pattern" — out of joinRoom, which our catch reported as "could
-  // not reach the room service". A device could be left permanently unable to
-  // use room codes by one bad localStorage write, while the invite link (which
-  // touches no relay) kept working and hid it.
+  // could: the list was used verbatim if it merely PARSED as a non-empty
+  // array. `new WebSocket(url)` on a malformed entry throws SyntaxError — "The
+  // string did not match the expected pattern" — which the old catch reported
+  // as "could not reach the room service". A device could be left permanently
+  // unable to use room codes by one bad localStorage write, while the invite
+  // link (which touches no relay) kept working and hid it.
   //
   // Not hypothetical: it happened here, from a copy-pasted debugging line whose
   // ellipsis placeholders — "wss://…" — are valid JSON and an invalid URL.
@@ -210,10 +209,9 @@ const NetNostr = (function () {
    * reimplemented.
    *
    * WHAT THE RELAYS SEE. The payload is sealed with AES-GCM under a key
-   * derived from the room code (NetRendezvous.seal/open) and the topic is a
-   * hash of it — the same guarantee Trystero's `password` gave us, now applied
-   * where we can see it. Offers and answers use SEPARATE topics, so neither
-   * side ever reads its own message back.
+   * derived from the room code (NetRendezvous.seal/open, v2 envelope: random
+   * salt, slot name as AAD) and the topic is a hash of it. Offers and answers
+   * use SEPARATE topics, so neither side ever reads its own message back.
    */
   async function directExchange(opts) {
     const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail } = opts;
@@ -232,8 +230,13 @@ const NetNostr = (function () {
     }
 
     const hosting = !reply;
-    const mineTopic  = await roomId(code + (hosting ? "|offer" : "|answer"));
-    const theirTopic = await roomId(code + (hosting ? "|answer" : "|offer"));
+    // The slot name is also the envelope's AAD (NetRendezvous.seal), so an
+    // offer replayed onto the answer topic fails to open rather than being
+    // mistaken for one.
+    const mineSlot = hosting ? "offer" : "answer";
+    const theirSlot = hosting ? "answer" : "offer";
+    const mineTopic  = await roomId(code + "|" + mineSlot);
+    const theirTopic = await roomId(code + "|" + theirSlot);
 
     const sockets = [];
     const socketUrl = new Map();
@@ -273,10 +276,8 @@ const NetNostr = (function () {
         if (!text) return;
         let frame;
         try {
-          const sealed = await NetRendezvous.seal(code, text);
-          let bin = "";
-          for (let i = 0; i < sealed.length; i++) bin += String.fromCharCode(sealed[i]);
-          frame = await mod.createEvent(mineTopic, btoa(bin));
+          const sealed = await NetRendezvous.seal(code, text, mineSlot);
+          frame = await mod.createEvent(mineTopic, NetBytes.bytesToB64(sealed));
           try {
             const parsed = JSON.parse(frame);
             if (parsed[1] && parsed[1].id) {
@@ -291,10 +292,7 @@ const NetNostr = (function () {
       const heard = async (b64) => {
         let text = null;
         try {
-          const bin = atob(b64);
-          const bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          text = await NetRendezvous.open(code, bytes);
+          text = await NetRendezvous.open(code, NetBytes.b64ToBytes(b64), theirSlot);
         } catch (e) { text = null; }
         if (!text || done) return;                 // not ours, or too late
 
@@ -434,349 +432,18 @@ const NetNostr = (function () {
     });
   }
 
-  async function exchange(opts) {
-    let legacy = false;
-    try { legacy = localStorage.getItem("apex26.nostrTrystero") === "true"; } catch (e) {}
-    if (!legacy) return directExchange(opts);
-    Log.info("net", "nostr start");
-    const { code, send, reply, token, onTick, mintOffer, onJoiner, onFail } = opts;
-    if (!available()) {
-      return nostrLog({ ok: false, error: "unsupported",
-               message: "This browser cannot reach the room service." });
-    }
-    let mod;
-    try { mod = await load(); }
-    catch (e) {
-      // Carry the ACTUAL failure. "Could not load the room service" on its own
-      // is unreportable — it cannot distinguish a 404 from a MIME rejection
-      // from a blocked network, and those need completely different fixes.
-      // Reported from a real device, and the message left nothing to go on:
-      // the truth was a plain 404, because the deploy workflow never staged
-      // vendor/. Naming the exception would have pointed straight at it.
-      const why = (e && (e.message || String(e))) || "unknown";
-      return nostrLog({ ok: false, error: "no_module", detail: why,
-               message: "Could not load the room service (" + why.slice(0, 90) + ")."
-                      + " Use the invite link or QR instead." });
-    }
-
-    let room = null;
-    const leave = () => { if (room) { try { room.leave(); } catch (e) {} room = null; } };
-
-    return new Promise((resolve) => {
-      let rotate = null;       // swap the offer on the table for a fresh one
-      let rebroadcast = null;  // the repeating re-post of the offer on the table
-      let done = false;        // torn down: room left, nothing more can happen
-      let settled = false;     // the promise has been answered
-      // SUBSCRIPTION MODE RESOLVES EARLY and the room stays open, so "answered"
-      // and "finished" stopped being the same event. Conflating them switched
-      // off every failure detector below — the relay-health probe and the join
-      // timeout both bail on `done` — so a host whose relays were all dead was
-      // told nothing and sat on a spinner forever. Reported from a real
-      // console: damus rate-limiting and nos.social timing out, with the page
-      // showing no error at all.
-      // WHICH RELAYS ARE REFUSING US, which is otherwise unknowable.
-      //
-      // A Nostr relay that dislikes our traffic answers NIP-01
-      // ["OK", id, false, "blocked: spam not permitted"] — and Trystero turns
-      // that into a console.warn and nothing else (nostr/index.js): no retry,
-      // no backoff, the relay is not dropped, and no callback, event or return
-      // value reaches us. Meanwhile getRelaySockets() still reports the socket
-      // OPEN, because it is: the WebSocket handshake succeeded, it is the
-      // EVENTS that are being thrown away. So the health probe below passes,
-      // the host waits the full two minutes, and reports "nobody joined" —
-      // when the truth was knowable in five seconds and is something else
-      // entirely.
-      //
-      // That is exactly what happened on a real phone: every relay live,
-      // wellorder answering "blocked: spam not permitted", and both players
-      // staring at spinners. Trystero announces once per relay every ~5.3 s
-      // plus an event per ICE candidate, which is what reads as spam.
-      //
-      // Intercepting console.warn is not elegant. It is the ONLY seam the
-      // vendored library offers, it is scoped to this exchange and restored in
-      // finish(), and the alternative is shipping a feature whose failure mode
-      // is a silent two-minute wait. Everything is guarded: if the shape of
-      // that warning ever changes we simply learn nothing, exactly as today.
-      const rejectedBy = new Set();
-      const warnRe = /relay failure from (\S+?)\/?\s*-\s*(.*)$/i;
-      const realWarn = (typeof console !== "undefined" && console.warn) || null;
-      if (realWarn) {
-        console.warn = function (...args) {
-          try {
-            const first = args.length ? String(args[0]) : "";
-            const m = first.match(warnRe);
-            // "blocked", "rate-limited", "restricted", "not permitted" — a
-            // refusal. A transport hiccup is not, and must not be counted, or
-            // a flapping relay would be reported as a policy rejection.
-            if (m && /block|spam|rate|restrict|not permitted|invalid|reject|pow|proof.of.work/i.test(m[2] || "")) {
-              rejectedBy.add(m[1]);
-            }
-          } catch (e) { /* never let diagnostics break the caller */ }
-          return realWarn.apply(console, args);
-        };
-      }
-      const restoreWarn = () => { if (realWarn) console.warn = realWarn; };
-
-      // CARRY THE ACTUAL FAILURE. This file already learned that lesson once,
-      // for the dynamic import — "Could not load the room service" on its own
-      // could not distinguish a 404 from a MIME rejection from a blocked
-      // network, and the truth turned out to be a plain 404 because the deploy
-      // workflow never staged vendor/.
-      //
-      // The very next catch threw its exception away anyway, and it cost
-      // hours: on real hardware, hosting a room returned a bare
-      // {error:"relay"} while a raw joinRoom() in the same console worked
-      // perfectly. "Could not reach the room service" was actively
-      // misleading — the relays were reachable, six of them, and something in
-      // OUR setup was throwing. Naming it would have pointed straight at it.
-      const relayFail = (e) => {
-        const why = (e && (e.message || String(e))) || "unknown";
-        // The stack too. A message alone said "The string did not match the
-        // expected pattern" — Safari's SyntaxError — while every individual
-        // step of this setup, run by hand in the same console, succeeded. A
-        // message names WHAT; only the stack names WHERE, and without it the
-        // only method left is elimination, which took several rounds and did
-        // not converge.
-        const where = (e && e.stack) ? String(e.stack).split("\n").slice(0, 4).join(" | ") : "";
-        return { ok: false, error: "relay", detail: why, stack: where,
-                 message: "Could not reach the room service (" + why.slice(0, 90) + ")."
-                        + " Use the invite link instead." };
-      };
-
-      const timers = [];
-      const later = (fn, ms) => timers.push(setTimeout(fn, ms));
-      const finish = (r) => {
-        if (done) return;
-        done = true;
-        clearInterval(tick);
-        clearInterval(rebroadcast);
-        for (const id of timers) clearTimeout(id);
-        timers.length = 0;
-        restoreWarn();
-        leave();
-        nostrLog(r);
-        if (!settled) { settled = true; resolve(r); return; }
-        if (onFail) { try { onFail(r); } catch (e) {} }
-      };
-
-      const tick = setInterval(() => {
-        if (token && token.cancelled) finish({ ok: false, error: "cancelled", message: "" });
-        else if (onTick) { try { onTick(); } catch (e) {} }
-      }, 1000);
-
-      later(() => finish({ ok: false, error: "expired",
-        message: "Nobody joined that code. Codes only last a couple of minutes." }),
-        JOIN_TIMEOUT_MS);
-
-      // "No relay would talk to us" and "nobody joined" are different answers
-      // and deserve different waits. Without this check, a player with every
-      // relay blocked — a captive portal, a corporate proxy, an offline
-      // laptop — stares at "waiting for them to join" for two full minutes
-      // before being told something that was knowable in five seconds.
-      later(() => {
-        if (done || !room) return;
-        let live = 0;
-        try {
-          const sockets = mod.getRelaySockets ? mod.getRelaySockets() : {};
-          live = Object.values(sockets).filter((s) => s && s.readyState === 1).length;
-        } catch (e) { live = 0; }
-        if (!live) {
-          finish({ ok: false, error: "no_relay",
-            message: "Could not reach any room service — this network may be blocking it."
-                   + " Use the invite link or QR instead." });
-          return;
-        }
-        // CONNECTED AND REFUSED is a third state, and the one that actually
-        // happens. Reported only when EVERY live relay has rejected us: one
-        // fussy relay out of six is survivable and must not scare anybody off
-        // a working room.
-        if (rejectedBy.size >= live) {
-          // TELL, DO NOT TEAR DOWN. finish() leaves the Trystero room, and the
-          // room is the only route the guest's answer has home — so reporting
-          // a rejection by ending the rendezvous would DESTROY a handshake
-          // that was still perfectly capable of completing. Rejections are
-          // survivable and demonstrably so: room codes work on hardware where
-          // one relay of six answers "blocked: spam not permitted" throughout.
-          // This is advisory, and the room keeps running.
-          if (onFail) {
-            try {
-              onFail({ ok: false, error: "all_rejected", advisory: true,
-                message: "Every room relay is refusing this code. It may still connect —"
-                       + " if it does not, use the invite link or QR, which need no"
-                       + " third party." });
-            } catch (e) {}
-          }
-        }
-      }, RELAY_CHECK_MS);
-
-      try {
-        roomId(code).then((id) => {
-          if (done) return;
-          room = mod.joinRoom(Object.assign(
-            { appId: APP_ID, password: code },
-            relayUrls() ? { relayConfig: { urls: relayUrls() } } : null,
-          ), id);
-          // Trystero 0.25 returns an OBJECT from makeAction, not the [send,
-          // receive] tuple older versions did, and its onMessage is a setter
-          // like onPeerJoin. Both mistakes throw into the catch below and come
-          // back as "could not reach the room service" — a bug wearing a
-          // network failure's clothes. tests/unit/net-trystero-api.test.mjs pins
-          // both shapes against the vendored source.
-          const swap = room.makeAction("swap");
-          const post = (data, to) => (to ? swap.send(data, { target: to }) : swap.send(data));
-          const handling = new Set();
-
-          swap.onMessage = (async (data, ctx) => {
-            const from = (ctx && ctx.peerId) || null;
-            if (done) return;
-            if (typeof data !== "string" || !data) return;
-            if (onJoiner) { Promise.resolve().then(() => onJoiner(from, data)).catch(() => {}); return; }
-            if (handling.has(from)) return;
-            if (!reply) { finish({ ok: true, payload: data }); return; }
-            handling.add(from);
-            let out;
-            try { out = await reply(data); }
-            catch (e) { out = null; }
-            if (done) return;
-            if (!out) {
-              finish({ ok: false, error: "reply_failed",
-                       message: "Could not answer that invite." });
-              return;
-            }
-            // THE ANSWER IS THE FRAGILE HALF, and it was being sent once, to a
-            // peer id captured up to EIGHT SECONDS EARLIER.
-            //
-            // reply() is a full ICE gather — GATHER_TIMEOUT_MS is 8000 — so by
-            // the time there is an answer to send, the Trystero peer that
-            // delivered the offer may be gone: a relay reconnect, a peer
-            // re-announce, and the id we are targeting no longer resolves.
-            // Trystero's response to that is console.warn("no peer with id …
-            // found") and DROPPING THE MESSAGE. Nothing throws, nothing
-            // returns false, and the host waits out its full two minutes on
-            // "Waiting for them to join…" — which is exactly what a real pair
-            // of devices showed: the guest reached "Connecting…" (so the offer
-            // arrived) while the host never left "Waiting" (so the answer
-            // never did). Every symptom downstream — both peers deaf, no
-            // candidate pair ever answered — follows from the host simply
-            // never having started.
-            //
-            // So: targeted AND untargeted, repeatedly, for a few seconds.
-            // Untargeted reaches whoever is actually in the room when the id
-            // has gone stale; repeating covers a reconnect in flight. The host
-            // dedupes on the answer string itself (answersSeen), so extra
-            // copies cost one comparison each.
-            const shout = () => {
-              try { post(out, from); } catch (e) {}
-              try { post(out); } catch (e) {}
-            };
-            shout();
-            let tries = 0;
-            const resend = setInterval(() => {
-              if (done || ++tries > 4) { clearInterval(resend); return; }
-              shout();
-            }, 1200);
-            later(() => { clearInterval(resend); finish({ ok: true, payload: data }); }, 6500);
-          });
-
-          // Post on join AND immediately: whoever is already in the room gets
-          // it now, whoever arrives later gets it then. Without the join hook
-          // the second peer never sees the first one's string.
-          //
-          // onPeerJoin is a SETTER, not a method — Trystero 0.25 changed it,
-          // and calling it threw an exception this file's own catch turned into
-          // a generic "could not reach the room service". A wrong API used
-          // inside a try/catch does not look like a bug, it looks like the
-          // network being down.
-          if (mintOffer || onJoiner) {
-            let current = send || null;
-            // NOTE — DO NOT "refresh a stale offer" HERE. Build 975 tried it:
-            // a joiner arriving more than 25 s after the offer was gathered
-            // got a freshly minted one, on the theory that a phone's NAT
-            // mappings die during the walk to the other machine. It is a real
-            // problem and this is the wrong place to fix it, because the
-            // lobby's mintOffer calls newTransport(), which REPLACES the
-            // pending RTCPeerConnection. The offer was already broadcast to
-            // the room the moment it opened, so the guest is by then answering
-            // the ORIGINAL — and that answer comes back to a connection that
-            // has just been thrown away. The symptom is a permanent
-            // "Connecting…" on the same Wi-Fi, where ICE could not possibly be
-            // at fault. Refreshing offers needs an offer -> transport map, not
-            // a timer.
-            const put = (to) => { if (current) { try { post(current, to); } catch (e) {} } };
-            if (!current && mintOffer) {
-              Promise.resolve(mintOffer(null)).then((o) => { if (!done && o) { current = o; put(); } }).catch(() => {});
-            } else {
-              put();
-            }
-            room.onPeerJoin = (id) => { if (!done) put(id); };
-            // A cheap safety net for ONE narrow case, and — read this before
-            // reasoning about it — NOT a fix for anything at the relay.
-            //
-            // WHAT THIS ACTUALLY DOES. post() is swap.send(), and a Trystero
-            // action sends over the WEBRTC DATA CHANNEL to peers already in
-            // peerMap (core/action-wire.js). It publishes no Nostr event
-            // whatsoever. With nobody connected it is a silent no-op. So the
-            // only thing this interval buys is covering a put() that raced its
-            // data channel opening — worth the near-zero cost, worth nothing
-            // more.
-            //
-            // WHAT IT DOES NOT DO, because build 977 shipped claiming it did:
-            // it cannot help a guest that has not been discovered yet. Peer
-            // discovery is Trystero's own announce, over the relay, and by the
-            // time this timer can reach anyone that handshake has already
-            // succeeded. A guest the host has never seen is unreachable by
-            // definition here, and re-running this faster would only have
-            // added load to a path already being refused for spam.
-            //
-            // The real failure that 977 mistook for this: public relays reject
-            // Trystero's announce ("blocked: spam not permitted"), which is
-            // console.warn-only inside the vendor and invisible to us. See the
-            // rejection tracking above.
-            rebroadcast = setInterval(() => { if (!done) put(); }, REPOST_MS);
-            rotate = async (next) => {
-              current = next || null;
-              if (!current && mintOffer) {
-                try { current = await mintOffer(null); } catch (e) { current = null; }
-              }
-              if (!done) put();
-            };
-          } else if (send) {
-            // Post on join AND immediately: whoever is already in the room gets
-            // it now, whoever arrives later gets it then. Without the join hook
-            // the second peer never sees the first one's string.
-            //
-            // onPeerJoin is a SETTER, not a method — Trystero 0.25 changed it,
-            // and calling it threw an exception this file's own catch turned
-            // into a generic "could not reach the room service". A wrong API
-            // used inside a try/catch does not look like a bug, it looks like
-            // the network being down.
-            room.onPeerJoin = () => { try { post(send); } catch (e) {} };
-            try { post(send); } catch (e) {}
-            // Same reasoning as the subscription branch above: the room has no
-            // memory, so the offer must keep being said for as long as nobody
-            // has taken it.
-            rebroadcast = setInterval(() => {
-              if (!done) { try { post(send); } catch (e) {} }
-            }, REPOST_MS);
-          }
-          if (onJoiner && !settled) {
-            settled = true;
-            nostrLog({ ok: true, subscribed: true });
-            resolve({
-              ok: true, subscribed: true,
-              rotate: (next) => (rotate ? rotate(next) : null),
-              stop: () => finish({ ok: false, error: "stopped", message: "" }),
-            });
-          }
-        }).catch((e) => finish(relayFail(e)));
-      } catch (e) {
-        finish(relayFail(e));
-      }
-    });
-  }
+  // exchange() IS directExchange(). The full Trystero room join (joinRoom /
+  // makeAction / onPeerJoin, behind localStorage apex26.nostrTrystero) was
+  // deleted 2026-09-10: it carried the answer over Trystero's OWN
+  // RTCPeerConnection, which died exactly when ours started (measured, see
+  // the directExchange header), and its only diagnostic seam was a
+  // console.warn interception. Nothing in the vendored tree beyond
+  // createEvent/subscribe is reached any more.
+  const exchange = directExchange;
 
   return { APP_ID, JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, roomId, exchange, directExchange, load,
     RELAYS, relayUrls, validRelay,
     MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE,
     readRelayFrame, createBoundedInbox };
 })();
+Object.freeze(NetNostr);

@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["silverstone"] =
   function (api) {
-      const { out, MAT, n, ds, px, pz, pyMin, place, backdrop, every, onTrack, hash, pal,
+      const { lapBounds, out, MAT, n, ds, px, pz, pyMin, place, every, onTrack, hash, pal,
               indexSolid,
               grandstandEx, building, motorhome, hedge, billboard, mountain, anchor, vadd, addBox,
               pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism,
@@ -15,6 +15,18 @@
               groundedSegments, recordBarrier, circuitKit,
               signBoard, seat,
               spectatorHill, cameraTower, sponsorHoarding, bakedModel, along } = api;
+      // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
+      // Ask the same question first, so a hill that overlaps a parallel stretch
+      // is skipped instead of staged and dropped (64 per build here,
+      // every build, visible in verify-track's guard-drop report). Same node,
+      // side and XZ as the engine's own test; the props that survive are the
+      // props that always did (graph-parity).
+      const backdrop = (k, side, dist, sz, col) => {
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 6)) return;
+        api.backdrop(k, side, dist, sz, col);
+      };
+
       const k = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
@@ -65,11 +77,7 @@
       });
 
       // two overlapping rings of low green rises — dense enough to read as a wall
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, wMin, hMin, hVar, fc, rc] of [
         [270, 20, 180,  9, 6, [0.16, 0.36, 0.18], [0.22, 0.40, 0.22]],
         [370, 18, 220, 11, 7, [0.14, 0.32, 0.16], [0.20, 0.36, 0.20]],

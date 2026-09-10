@@ -155,3 +155,4 @@ const RaceSettings = (function () {
 
   return { create };
 })();
+Object.freeze(RaceSettings);
