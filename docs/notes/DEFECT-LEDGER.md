@@ -1166,7 +1166,28 @@ pair is one where a capture came out soft and bloomed; here both are
 always soft. All four two-capture tests now share one helper: frames
 attached, capture state (gen, freeze, pack, post path) at each, and the
 premise — same tier, same post path, a newer present — asserted before
-any tonal maths, so the next failure names the pass that flipped. The fog-glow row stayed red WITH `tier [0,0]` —
+any tonal maths, so the next failure names the pass that flipped.
+Run 3509 (87720ea, the merged head) answered: "blacks" failed on both
+attempts WITH THE PREMISE INTACT — `cap0.post` and `cap1.post` identical
+(fxaa true, upscale false, toLdr true, bloom 0.6, ao 0.95, readFb
+"default"), gen 4 → 6, frozen, pack uploaded — and crushed blacks read
++10.9 brighter, then +5.9. Not two post chains. The tell is
+`readFb: "default"`: with FXAA on, the soft-present readback reads the
+DEFAULT framebuffer after the draw. SwiftShader keeps that buffer; on
+ANGLE-Metal with preserveDrawingBuffer false it is a swap-chain surface
+whose contents after the draw are not guaranteed — hardware-only,
+attempt-dependent, knob-independent, and a "changed" frame that looks like
+a differently composed buffer (3497), all of it. The readback must read an
+FBO the chain wrote, never the default framebuffer.
+The "Create context" wedge recurred on the same run (2 of the last 4
+Metal runs), both times while the other worker was inside M9's env probe;
+the job sat 27 min on the 30 min per-test budget before a hand cancel.
+The Metal job runs ONE worker now (two Chromium instances on one shared
+GPU is the common factor of both wedges). And one more premise on the
+image-grade pair, the last thing that can change a frozen, clock-held,
+pack-loaded frame by itself: the env probe's ready state — on hardware
+the cube is real and its reflections brighten the dark cockpit interior,
+exactly the range "blacks" reads; SwiftShader clears the faces. The fog-glow row stayed red WITH `tier [0,0]` —
 dry 80.1, foggy 72.6, the same −9 % this container reads (65.4 → 60.1) — so
 it was never the tier either: the sampled band is pure sky, the sky shader
 carries no lamp-fog term (`glsl-sky.js`), and what the test measured was the

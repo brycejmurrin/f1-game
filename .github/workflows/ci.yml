@@ -1057,8 +1057,13 @@ jobs:
       # --timeout=600000 is a CEILING for the first runs, not a tolerance: the
       # specs keep their own budgets, and the job cap is the real backstop.
       - name: Renderer specs (test:gfx)
+        # ONE worker on the Metal box. Two Chromium instances on one shared GPU
+        # wedged Playwright's "Create context" twice in four runs (3500, 3509),
+        # both times while the other worker was inside M9's env probe, and each
+        # sat 27 min on the 30 min per-test budget until a hand cancel. One
+        # worker costs ~8 min of wall time; a wedge costs the run.
         env:
-          APEX_WORKERS: 2
+          APEX_WORKERS: 1
         run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000
       # ALWAYS, not failure(): a spec that fails its first attempt and passes
       # the retry leaves the job green and its report — the attached frames

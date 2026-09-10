@@ -175,7 +175,13 @@ async function captureState(page) {
   return page.evaluate(() => {
     const a = window.__apex.assets();
     const sp = GLX.softPresentState();
-    return { gen: sp.gen, post: sp.post, frozen: window.__apex.freeze(), state: window.__apex.info().state,
+    // The env probe (car reflections) is the one thing left that can change a
+    // frozen, clock-held, pack-loaded frame by itself: on hardware the cube is
+    // real and its reflections brighten the dark cockpit interior; a rebuild
+    // between two captures is a knob-independent delta in exactly the dark
+    // range "blacks" reads. SwiftShader clears the faces, so never here.
+    const env = { ready: typeof GLX.envProbeReady === "function" ? GLX.envProbeReady() : null };
+    return { gen: sp.gen, post: sp.post, env, frozen: window.__apex.freeze(), state: window.__apex.info().state,
       pack: { uploaded: a.uploaded, layers: a.layers, error: a.error, matTexMix: window.__apex.lightTune().matTexMix } };
   });
 }
@@ -321,6 +327,7 @@ test.describe("rendered image grade", () => {
     expect(tier1, "governor tier moved between captures — a tier shed, not the grade: " + premise).toBe(tier0);
     expect(JSON.stringify(cap1.post), "the post chain took a different path for the two captures — two pipelines, not the grade: " + premise).toBe(JSON.stringify(cap0.post));
     expect(cap1.gen, "the changed capture is not a newer present than the baseline: " + premise).toBeGreaterThan(cap0.gen);
+    expect(JSON.stringify(cap1.env), "the env probe changed state between the two captures — reflections, not the grade: " + premise).toBe(JSON.stringify(cap0.env));
     return { baseline, changed, cap0, premise };
   }
 

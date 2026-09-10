@@ -362,7 +362,10 @@ test("the renderer specs have their own macOS job that runs test:gfx", () => {
   assert.ok(rendererFilter, "renderer-filter job missing from ci.yml");
   assert.match(rendererJob, /^    runs-on: macos-latest$/m, "the renderer job must run on the image with the Metal adapter");
   assert.match(rendererJob, /run: npm run test:gfx -- --config=playwright\.gpu\.config\.js --timeout=\d+/);
-  assert.match(rendererJob, /APEX_WORKERS: 2/);
+  // ONE worker: two Chromium instances on the shared Metal GPU wedged
+  // Playwright's "Create context" in two of four runs (3500, 3509), 27 min
+  // each on the per-test budget until a hand cancel (docs/notes/DEFECT-LEDGER.md).
+  assert.match(rendererJob, /APEX_WORKERS: 1/);
   assert.match(rendererJob, /^    timeout-minutes: 30$/m);
   assert.deepEqual(report.rendererGate.specs, groupSpecs("test:gfx"));
   // >= 5, not 6: tlx-probes.spec.js left test:gfx with the 2026-09-03 WGX/TLX
