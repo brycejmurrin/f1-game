@@ -361,3 +361,4 @@ const DataLive = (function () {
   }
   return { create, _mergePositionBatch: mergePositionBatch, _mergeIntervalBatch: mergeIntervalBatch };
 })();
+Object.freeze(DataLive);

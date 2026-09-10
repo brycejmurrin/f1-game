@@ -339,3 +339,4 @@ const CircuitKit = (function () {
 
   return { create };
 })();
+Object.freeze(CircuitKit);

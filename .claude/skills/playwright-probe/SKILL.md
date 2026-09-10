@@ -1,22 +1,19 @@
 ---
 name: playwright-probe
-description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-capture.mjs, apex-eval.mjs), before/after frames, Playwright headless probes, flicker/shimmer/z-fighting while driving (a recorded driven clip via motion-capture.mjs), or a game-loop CPU profile / flame chart / GC spikes (profile-gameloop.mjs). Also the CAR STUDIO — show/render/check the car, a team livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated front/side/rear shots (carview.html, render-car.mjs) — and CAMERA SEMANTICS: switch or check camera modes, cockpit/chase/orbit/cinematic/roadside, frame a corner, camState/viewState, camera lag. For hook catalogs use agent-view; for a live canvas use mcp-probe. WGX on SwiftShader: use gfx-probe.mjs for visible #game (soft-present blit), not raw canvas screenshots. HeadlessChrome GLX: awaitSoftPresent then #game-soft (opacity-0 #game is black). Live version.json is deploy-research.
+description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-capture.mjs, apex-eval.mjs), before/after frames, Playwright headless probes, flicker/shimmer/z-fighting while driving (a recorded driven clip via motion-capture.mjs), or a game-loop CPU profile / flame chart / GC spikes (profile-gameloop.mjs). Also the CAR STUDIO — show/render/check the car, a team livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated front/side/rear shots (carview.html, render-car.mjs) — and CAMERA SEMANTICS: switch or check camera modes, cockpit/chase/orbit/cinematic/roadside, frame a corner, camState/viewState, camera lag. For hook catalogs use agent-view; for a live canvas use mcp-probe; live version.json is deploy-research.
 ---
 
 # Headless Playwright probing (parallel)
 
-## Prerequisites (always)
+## Prerequisites
 
-A fresh container needs the browser before any shot/eval — AGENTS.md
-§Verification 1:
-
-```bash
-bash tools/env/cloud-agent-install.sh
-# or: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install && npx playwright install chromium-headless-shell
-```
-
-`browserType.launch: Executable doesn't exist` means the browser is missing;
-"Cannot find module" means `npm install` is.
+The SessionStart hook installs deps and the headless shell (AGENTS.md
+§Verification 1); `browserType.launch: Executable doesn't exist` means it did
+not run — `bash tools/env/cloud-agent-install.sh`. Capture rules that differ by
+backend: WGX on SwiftShader needs `tools/gfx/gfx-probe.mjs` for the visible
+`#game` (soft-present blit), never a raw canvas screenshot; HeadlessChrome GLX
+hides `#game` (opacity 0, reads black) and blits onto `#game-soft` — await
+`awaitSoftPresent()` then capture that.
 
 Interactive resize / DOM / CSS survey is the **playwright-official** MCP
 (`browser_*`, skill `survey-ui-matrix`), not this batch harness.
@@ -95,6 +92,3 @@ both references say what the numbers mean before you A/B on them.
   [references/cameras.md](references/cameras.md), free-cam table and framing
   recipes in
   [references/debug-cameras-framing.md](references/debug-cameras-framing.md).
-
-Folded in 2026-09-03: `car-viewer` and `debug-cameras`. Both were one hop
-before every capture this skill already owned.

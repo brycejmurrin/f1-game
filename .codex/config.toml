@@ -1,16 +1,26 @@
-# Project MCP for Codex CLI / IDE. Loaded only when this repo is trusted.
-# Keep lockstep with root `.mcp.json` (three servers). Skills live under
-# `.agents/skills/` (symlink mirror of `.claude/skills/`). See
-# docs/AGENT-SURFACE.md §Bootstrap.
+# Codex CLI project config — loaded only once you mark this project trusted.
+# Mirrors the three MCP servers in .mcp.json (Claude Code) and .cursor/mcp.json
+# (Cursor); tests/unit/agent-config.test.mjs locksteps the three files.
+# Codex Desktop currently reads only ~/.codex/config.toml for MCP servers
+# (openai/codex#13025): copy these tables there if the CLI's do not appear.
+#
+# Codex reads AGENTS.md natively (32 KiB cap) and scans .agents/skills/, not
+# .claude/skills/ — run `bash tools/env/mirror-skills.sh` after a pull.
 
 [mcp_servers.apex-tools]
 command = "bash"
 args = ["tools/mcp/apex-tools-mcp.sh", "serve"]
+# apex_verify_change_fast runs the whole fast gate; the default 60 s per-tool
+# timeout would abort it.
+tool_timeout_sec = 900
 
 [mcp_servers.playwright-official]
 command = "npx"
 args = ["-y", "@playwright/mcp@0.0.79"]
+startup_timeout_sec = 60
 
 [mcp_servers.chrome-devtools]
 command = "bash"
 args = ["tools/mcp/chrome-devtools-mcp.sh", "run"]
+startup_timeout_sec = 60
+tool_timeout_sec = 300

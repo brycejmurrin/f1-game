@@ -6,14 +6,13 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["suzuka"] =
   function (api) {
-      const { out, track, n, px, py, pz, hw, pyMin, place, every, ferrisWheel,
+      const { K, lapBounds, out, track, n, px, py, pz, hw, pyMin, place, every, ferrisWheel,
               hash, mountain, pine, tree, bush, grandstandEx, spectatorHill,
               bleacher, cypress, broadleafFall,
               building, tower, billboard,
               marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
               addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, groundYAt, onTrack, forestEdge, backdrop,
               MAT, modelGroup, overheadSpan, circuitKit, cameraTower, broadcastCompound } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       // ── Suzuka palette ──────────────────────────────────────────────────────
       const navy      = [0.18, 0.26, 0.46];
@@ -38,11 +37,7 @@
       const openBank = (s, side, gap, lenM, opts) =>
         bleacher(s - lenM * M / 2, s + lenM * M / 2, side, gap, opts);
 
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, wMin, wVar, hMin, hVar, count, seg, fc, rc] of [
         [160, 280, 85, 44, 46, 44, 8, [0.20, 0.38, 0.23], [0.30, 0.36, 0.28]],    // near base — tighter, denser green wall
         [310, 320, 110, 68, 60, 36, 8, [0.25, 0.42, 0.28], [0.36, 0.42, 0.32]],   // mid green ridge

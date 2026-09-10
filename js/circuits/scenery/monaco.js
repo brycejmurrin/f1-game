@@ -6,8 +6,19 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monaco"] =
   function (api) {
-      const { out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, backdrop, bakedModel } = api;
-      const K = (s) => Math.round(s * n) % n;
+      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, bakedModel } = api;
+      // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
+      // Ask the same question first, so a hill that overlaps a parallel stretch
+      // is skipped instead of staged and dropped (15 per build here,
+      // every build, visible in verify-track's guard-drop report). Same node,
+      // side and XZ as the engine's own test; the props that survive are the
+      // props that always did (graph-parity).
+      const backdrop = (k, side, dist, sz, col) => {
+        const a = anchor(k, side, dist);
+        if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 6)) return;
+        api.backdrop(k, side, dist, sz, col);
+      };
+
       const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
       /* KOLD: OLD-RACING frac -> current racing node. Most of this file's raw
          px/rx/tx readers were authored when startFrac was 0.28; 7a17351 moved

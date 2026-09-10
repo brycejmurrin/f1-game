@@ -163,6 +163,9 @@ const GLX = (function () {
   // Full baked track light list + the PER-CHUNK LAMPS toggle. GLXChunked reads
   // both to bind a per-chunk light subset instead of this frame's global 32.
   let frameAllLights = null, framePerChunkLights = 0, frameTailStart = 0, frameTailCount = 0;
+  // PER-CHUNK ROAD: 1 when the road (surfaceId 16) may take per-chunk lamp sets
+  // too (game.js frame.roadChunkLamps; GLXChunked reads F.roadChunkLamps).
+  let frameRoadChunkLamps = 0;
   // Track-lamp intensity scale applied in uploadLightSet. 1 unless PER-CHUNK
   // LAMPS is on, in which case it is that knob's value — see begin().
   // Point-light upload scratch (lit program). Sized for MAX_LIGHTS (48) and
@@ -170,7 +173,7 @@ const GLX = (function () {
   // typed-array allocs (GC jitter on dense night grids). Mirrors the _gr*
   // god-ray scratch, which moved to js/render/glx/post.js with present().
   // Four vec4s match lit.js packing (pos+rad / col+bleed / dir+coneIn / coneOut).
-  const MAX_LIGHTS = 48;
+  const MAX_LIGHTS = LightBudget.MAX;   // eval-time read: tools/manifest.cjs HARD_EDGES (light-budget.js first)
   // ONE interleaved scratch, stride 16 floats (4 vec4s) per light — matches
   // uLight[] in shaders/lit.js so a chunk uploads in a single uniform4fv.
   const _luL = new Float32Array(MAX_LIGHTS * 16);
@@ -179,8 +182,11 @@ const GLX = (function () {
   let frameProj = null;
   let frameSunVS = null;
   let frameUpVS = null;
-  let frameSkyHi = null;
-  let frameSkyLo = null;
+  // frame.skyHorizon / frame.skyZenith for the composite's SSR sky fallback.
+  // The seam names are skyHi / skyLo (post.js uReflSkyHi/Lo, TLX _postF):
+  // "Hi" is the HORIZON — the reflection's bright band — not the zenith.
+  let frameSkyHorizon = null;
+  let frameSkyZenith = null;
   let frameSunColor = null;
   let frameDecalSun = null;   // keyMul-scaled sun for the decal pass (raw frameSunColor feeds god rays)
   const _decalSunScr = [0, 0, 0];
@@ -204,6 +210,7 @@ const GLX = (function () {
   // its only writer on this program; post.js's godray pass writes its OWN
   // program's uNumLights through a different location and cannot collide.
   let _luNL = -1;
+  let _envUnitSet = false;   // uEnvCube -> unit 6 uploaded since the last link (begin() does it ONCE, not every frame)
 
   // Active-program cache — gl.useProgram is a pipeline-flushing state change, so
   // skip it when the requested program is already bound. Route every bind here.
@@ -229,6 +236,9 @@ const GLX = (function () {
   // every begin() — and begin() runs up to eight times a game frame.
   const ZERO3 = [0, 0, 0];
   const SKY_ZENITH_DEF = [0.18, 0.40, 0.78], SKY_HORIZON_DEF = [0.62, 0.74, 0.88];
+  // begin() fallbacks (hoisted: these used to be allocated every begin()).
+  const REFL_SKY_HORIZON_DEF = [0.05, 0.06, 0.09], REFL_SKY_ZENITH_DEF = [0.02, 0.025, 0.05];
+  const AMB_SKY_DEF = [0.3, 0.32, 0.36], AMB_GROUND_DEF = [0.2, 0.19, 0.18];
 
   function _clearUf(o) { for (const k in o) delete o[k]; }
   function uf1(loc, cache, key, v) {
@@ -541,6 +551,7 @@ const GLX = (function () {
 
   function init(canvasEl) {
     canvas = canvasEl;
+    LightBudget.setSlots(MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
     watchCanvasSize();
     // HeadlessChrome's CDP / Playwright page screenshots race the cleared
     // backbuffer when preserveDrawingBuffer is false — and even with it true,
@@ -763,11 +774,12 @@ const GLX = (function () {
         get proj() { return frameProj; },
         get sunVS() { return frameSunVS; },
         get upVS() { return frameUpVS; },
-        get skyHi() { return frameSkyHi; },
-        get skyLo() { return frameSkyLo; },
+        get skyHi() { return frameSkyHorizon; },
+        get skyLo() { return frameSkyZenith; },
         get lights() { return frameLights; },
         get allLights() { return frameAllLights; },
         get perChunkLights() { return framePerChunkLights; },
+        get roadChunkLamps() { return frameRoadChunkLamps; },
         get tailStart() { return frameTailStart; },
         get tailCount() { return frameTailCount; },
         get time() { return frameTime; },
@@ -789,6 +801,7 @@ const GLX = (function () {
     // state, not VAO state, so setting it once here covers every mesh.
     gl.vertexAttrib3f(9, 1, 1, 1);
     _luNL = -1;   // a relink resets every uniform on the program — see the cache's note
+    _envUnitSet = false;   // uEnvCube's sampler unit is program state: re-point it once after this link
     litU = locs(litProg, ["uModel", "uInstanced", "uViewProj", "uEye", "uSunDir", "uSunColor",
       "uAmbGround", "uAmbSky", "uFogColor", "uFogDensity", "uEmissive", "uAlpha",
       "uRoughness", "uMetalness", "uSpecular", "uDetail", "uClearcoat", "uCarPaint", "uSparkle", "uWetness", "uEnvCube", "uEnvStr",
@@ -1527,10 +1540,10 @@ const GLX = (function () {
     frameProj = frame.proj || null;
     frameSunVS = frame.sunViewDir || null;
     frameUpVS = frame.upViewDir || null;
-    frameSkyHi = frame.skyHorizon || [0.05, 0.06, 0.09];
-    frameSkyLo = frame.skyZenith || [0.02, 0.025, 0.05];
-    frameAmbSky = frame.ambientSky || [0.3, 0.32, 0.36];
-    frameAmbGround = frame.ambientGround || [0.2, 0.19, 0.18];
+    frameSkyHorizon = frame.skyHorizon || REFL_SKY_HORIZON_DEF;
+    frameSkyZenith = frame.skyZenith || REFL_SKY_ZENITH_DEF;
+    frameAmbSky = frame.ambientSky || AMB_SKY_DEF;
+    frameAmbGround = frame.ambientGround || AMB_GROUND_DEF;
     frameTime = frame.time != null ? frame.time : 0;
     frameCloud = frame.cloud != null ? frame.cloud : 0;
     frameCloudSpeed = frame.cloudSpeed != null ? frame.cloudSpeed : 1;
@@ -1540,6 +1553,7 @@ const GLX = (function () {
     // strongly they light. Kept numeric all the way through — coercing to 1
     // here is what made it a toggle.
     framePerChunkLights = +frame.perChunkLights || 0;
+    frameRoadChunkLamps = +frame.roadChunkLamps || 0;
     // The knob is NO LONGER a brightness multiplier. It used to dim every track
     // lamp to compensate for chunked scenery reading too bright — and the reason
     // it read too bright is that the per-chunk path was fed the RAW baked list,
@@ -1576,6 +1590,10 @@ const GLX = (function () {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
     useProg(litProg);
+    // Sampler units are program state: point uEnvCube at unit 6 ONCE per link
+    // (the cube itself is bound there every frame below). This used to be a
+    // uniform1i on every begin() — up to eight a game frame.
+    if (!_envUnitSet) { gl.uniform1i(litU.uEnvCube, 6); _envUnitSet = true; }
     gl.uniformMatrix4fv(litU.uViewProj, false, frame.viewProj);
     uf3(litU.uEye, _litUf, "eye", frame.eye);
     uf3(litU.uSunDir, _litUf, "sunDir", frame.sunDir);
@@ -1764,7 +1782,6 @@ const GLX = (function () {
     gl.activeTexture(gl.TEXTURE6);
     gl.bindTexture(gl.TEXTURE_CUBE_MAP, (envTex && !_envActive) ? envTex : envDummyTex);
     gl.activeTexture(gl.TEXTURE0);
-    gl.uniform1i(litU.uEnvCube, 6);
     // uEnvStr stays 0 until the first full 6-face cycle (probe still black), and
     // frame.noEnv forces it off for probe-less views (the SETUP MENU preview)
     // even when a stale cube lingers from a prior race — so the menu car reads
@@ -1937,33 +1954,7 @@ const GLX = (function () {
     // "nearby" means.
     if (opts && opts.cellSize > 0) {
       const cell = opts.cellSize;
-      // Conservative per-instance reach: the model's own extent, scaled by the
-      // largest scale any instance applies. Cheap and never under-estimates.
-      let reach = opts.radius || 0;
-      if (!reach) {
-        // Largest |component| in the canonical mesh: the model sits at the origin
-        // (TrackGraph guarantees it), so this is its radius in every direction.
-        const p0 = data.pos;
-        for (let i = 0; i < p0.length; i++) { const a = Math.abs(p0[i]); if (a > reach) reach = a; }
-      }
-      const buckets = new Map();
-      for (let i = 0; i < mesh.instances; i++) {
-        const b = i * 16, x = matrices[b + 12], y = matrices[b + 13], z = matrices[b + 14];
-        // Column lengths ARE the per-instance scale (orthonormal basis * scale).
-        const sx = Math.hypot(matrices[b], matrices[b + 1], matrices[b + 2]);
-        const sy = Math.hypot(matrices[b + 4], matrices[b + 5], matrices[b + 6]);
-        const sz = Math.hypot(matrices[b + 8], matrices[b + 9], matrices[b + 10]);
-        const r = reach * Math.max(sx, sy, sz);
-        const key = (Math.floor(x / cell) + 1024) * 4096 + (Math.floor(z / cell) + 1024);
-        let bk = buckets.get(key);
-        if (!bk) buckets.set(key, (bk = { idx: [], mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity] }));
-        bk.idx.push(i);
-        const mn = bk.mn, mx = bk.mx;
-        if (x - r < mn[0]) mn[0] = x - r; if (x + r > mx[0]) mx[0] = x + r;
-        if (y - r < mn[1]) mn[1] = y - r; if (y + r > mx[1]) mx[1] = y + r;
-        if (z - r < mn[2]) mn[2] = z - r; if (z + r > mx[2]) mx[2] = z + r;
-      }
-      mesh.cells = [...buckets.values()];
+      mesh.cells = Frustum.bucketInstances(matrices, mesh.instances, data.pos, cell, opts.radius);
       mesh.srcMatrices = matrices;      // CPU copies the repack reads from
       mesh.srcColors = colors && colors.length ? colors : null;
       mesh.packMatrices = new Float32Array(matrices.length);
@@ -2576,6 +2567,7 @@ const GLX = (function () {
     get height() { return height; },
     get aspect() { return aspect; },
     hdrMode: () => PST.hdrOk(),
+    maxLights: () => MAX_LIGHTS,   // lit-shader light slots (LightBudget.slots() mirrors it)
     // Debug introspection for the dynamic car shadow map (used by tests/tools).
     // `armed` is the frame-live gate the LIT uniform reads; `arms` is a lifetime
     // counter that stays true straight through a strobe, which is exactly why the

@@ -391,7 +391,27 @@ test("an online version.json fetch reject does not serve a stale precache", asyn
   assert.equal((await version.responsePromise).status, 0);
 });
 
-test("an online navigate timeout does not serve a stale cached shell", async () => {
+test("a slow online navigate serves the precached shell", async () => {
+  // navigator.onLine only says a link exists. An installed PWA on a slow link
+  // used to lose the 3 s race and get Response.error() — the browser's error
+  // page instead of the shell it had precached. The shell's own version guard
+  // refreshes it once version.json does answer, so the cached shell is safe.
+  const harness = createHarness({
+    immediateTimeoutMs: 3000,
+    navigator: { onLine: true },
+    fetchImpl: () => new Promise(() => {}),
+  });
+  harness.stores.set("apex26-old", new Map([
+    [`${ORIGIN}/index.html`, new Response("precached shell", { status: 200 })],
+  ]));
+
+  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
+  const res = await nav.responsePromise;
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), "precached shell");
+});
+
+test("a slow online shell-bust navigate still fails fast instead of serving the stale shell", async () => {
   const harness = createHarness({
     immediateTimeoutMs: 3000,
     navigator: { onLine: true },
@@ -401,8 +421,33 @@ test("an online navigate timeout does not serve a stale cached shell", async () 
     [`${ORIGIN}/index.html`, new Response("stale shell", { status: 200 })],
   ]));
 
-  const nav = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/race` });
-  assert.equal((await nav.responsePromise).status, 0);
+  const bust = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?b=321` });
+  assert.equal((await bust.responsePromise).status, 0);
+});
+
+test("a deep-link navigation is not cached under its query URL", async () => {
+  // Every `?b=` / `?log=` navigation used to be put under its full URL — one
+  // entry per distinct query that no fallback ever read back (the offline
+  // path matches "index.html"). Only the bare shell URL is written.
+  const harness = createHarness({
+    fetchImpl: (request) => {
+      const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+      if (url.pathname.endsWith("/version.json")) {
+        return Promise.resolve(new Response('{"build":321}', { status: 200 }));
+      }
+      return Promise.resolve(new Response("online shell", { status: 200 }));
+    },
+  });
+
+  const deep = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/?log=data:debug` });
+  assert.equal(await (await deep.responsePromise).text(), "online shell");
+  await Promise.all(deep.lifetimes);
+  assert.equal(harness.stores.has("apex26-321"), false, "a query navigation opens no cache");
+
+  const bare = harness.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
+  assert.equal(await (await bare.responsePromise).text(), "online shell");
+  await Promise.all(bare.lifetimes);
+  assert.ok(harness.stores.get("apex26-321").has(`${ORIGIN}/`), "the bare shell URL is still written");
 });
 
 test("an online cache-first miss rides a slow network instead of erroring", async () => {

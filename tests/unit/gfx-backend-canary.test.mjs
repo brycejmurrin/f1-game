@@ -163,6 +163,32 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   assert.match(code("js/render/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*Rg\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
 });
 
+test("GLX upscale toggles preserve scene targets at unchanged render resolution", () => {
+  const h = bootGlx();
+  h.GLX.setRenderScale(0.75);
+  h.reset();
+  h.GLX.setSpatialUpscale(true);
+  assert.equal(h.canvas.width, 640);
+  assert.equal(h.GLX.width, 480);
+  assert.equal(h.count("texImage2D"), 1, "only the FXAA intermediate is allocated");
+  assert.equal(h.count("deleteTexture"), 0, "scene and post textures survive");
+  h.reset();
+  h.GLX.setSpatialUpscale(true);
+  h.GLX.resize();
+  assert.equal(h.count("texImage2D"), 0, "reapplying the setting allocates nothing");
+  h.GLX.setRenderScale(0.6);
+  assert.ok(h.count("texImage2D") > 1, "active upscale resizes scene and AA targets");
+  assert.equal(h.canvas.width, 640, "presentation stays full sized");
+  h.reset();
+  h.GLX.setSpatialUpscale(false);
+  assert.equal(h.canvas.width, 384);
+  assert.equal(h.count("texImage2D"), 0);
+  assert.equal(h.count("deleteTexture"), 1, "only the upscale intermediate is freed");
+  h.reset();
+  h.GLX.setRenderScale(0.5);
+  assert.ok(h.count("texImage2D") > 1, "real scene resizing still rebuilds targets");
+});
+
 test("GLX create* / draw* fail closed when the context is lost", () => {
   // BEHAVIOUR on the mock: after `webglcontextlost` every creator returns
   // null and every draw entry (core, chunked, shadow, post) makes NO gl call.
@@ -2216,8 +2242,13 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // a phone (the env probe is tier-gated off at PerfGov.tier() < 1), so the
   // configuration that blanked a player's road and terrain cannot be reproduced
   // at all without it. The knob must stay DEFAULT OFF — asserted below.
-  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*_chunkRelOptIn\s*\|\|\s*envReady\s*\|\|\s*_envGaveUp\s*\|\|\s*!envRT\s*\)/,
+  // `|| !envRT` is OUT (2026-09-10): it opened the gate on exactly the devices
+  // where the env target failed to allocate, before any later pass had
+  // compiled against the attribute. Those devices keep their mirrors.
+  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*_chunkRelOptIn\s*\|\|\s*envReady\s*\|\|\s*_envGaveUp\s*\)/,
     "the CPU mirrors must not be freed while the env probe still has passes to compile");
+  assert.doesNotMatch(src, /_envGaveUp\s*\|\|\s*!envRT/,
+    "a failed env-target allocation must not free the chunk mirrors");
   assert.match(src, /_chunkRelOptIn[\s\S]{0,200}apex26\.tlxChunkRelease"\)\s*===\s*"1"[\s\S]{0,80}return false/,
     "and the chunk-release override must default OFF, reachable only by an explicit opt-in");
   // Nulling is what shipped and rendered; assigning a zero-length array instead
@@ -2798,12 +2829,14 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   // every mesh and atlas; startRace now does it before the first render.
   const sr = game.slice(game.indexOf("async function startRace("), game.indexOf("function showTouchControls("));
   assert.match(sr, /warmCarAssets\(\);\s*[^\n]*\n\s*DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
-  const wa = game.slice(game.indexOf("function warmCarAssets("), game.indexOf("function drawCarDecals("));
+  // The warm-up and the decal atlas cache live in the car-draw seam (js/car/car-draw.js).
+  const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wa = cd.slice(cd.indexOf("function warmCarAssets("), cd.indexOf("function drawCarDecals("));
   assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team, c\); else teamBodyMesh\(c\.team, c\);/, "same mesh cache keys the draw uses — the CAR, so the warm-up fills the per-driver key the draw asks for");
   assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
   // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
-  assert.match(game, /const key = decalKeyPrefix\(team\) \+/, "getCarDecalTexture builds its key from the memoised prefix");
-  assert.match(game, /if \(c && c\.rev === store\.rev\) return c\.val;[\s\S]{0,200}team\.id \+ ":" \+ getLiveryId\(team\.id\) \+ ":"/, "decalKeyPrefix invalidates on store.rev");
+  assert.match(cd, /const key = decalKeyPrefix\(team\) \+/, "getCarDecalTexture builds its key from the memoised prefix");
+  assert.match(cd, /if \(c && c\.rev === G\.store\.rev\) return c\.val;[\s\S]{0,200}team\.id \+ ":" \+ G\.getLiveryId\(team\.id\) \+ ":"/, "decalKeyPrefix invalidates on store.rev");
 });
 
 test("GLX links its core programs as one parallel batch when KHR_parallel_shader_compile exists", () => {
@@ -2870,11 +2903,13 @@ test("the flyby shows under race settings only; the picker pre-builds it hidden 
 test("driving feel: the player tows on car positions only, the fronts lock, every car pops on lift", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const human = game.slice(game.indexOf("throttleLvl = inp ? (inp.throttleLevel ?? 1)"), game.indexOf("AiDrive.beginLook();"));
-  assert.match(human, /c\.towing = clamp\(\(34 - tg\) \/ 28, 0, 1\)/, "the player's tow uses the AI's window and fade");
+  assert.match(human, /c\.wake = wakeOf\(tg, tc\.x - c\.x\)/, "the player's tow uses the AI's window and fade");
   assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
   assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
   assert.match(game, /c\.wheelLock = braking && axFrac > 0\.92/, "a lock-up is the top of the friction budget under braking");
-  assert.match(game, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");
+  // The planted wheels spin in the car-draw seam (js/car/car-draw.js), which reads WHEEL_R off PhysicsConsts.
+  const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(cd, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");
   assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
   assert.match(game, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05\) \{/, "the flame draws for every car, not only the player");
   const eng = read("js/audio/engine.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -3039,7 +3074,7 @@ test("WGX SSR car streak uses carGloss like GLX/TLX", () => {
   assert.match(tsl, /float\(1\.4\)\.sub\(C\.carGloss\)\.mul\(0\.5\)/,
     "TLX still owns the carSoft formula — WGX is the port");
   const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(wgx, /s\[48\] = \(T && T\.carGloss != null\) \? T\.carGloss : 1\.0/,
+  assert.match(wgx, /s\[48\] = PostCommon\.knob\(T, "carGloss"\)/,
     "WGX must pack carGloss into SsrU gloss.x");
 });
 
@@ -3994,12 +4029,14 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
   const playerBodies = {}, playerBodyOrder = [], PLAYER_BODY_CACHE_MAX = 3;
   const cockpitBodies = {}, cockpitBodyOrder = [], COCKPIT_BODY_CACHE_MAX = 3;
   const CockpitOpts = { halo: () => true }, Parts = { getVisualTiers: () => ({}) };
-  const Car3D = { build: () => { builds++; return {}; } }, gfx = { createMesh: x => x };
-  const getTeamParts = () => ({}), resolveLivery = () => ({ c1: [], c2: [] });
+  const Car3D = { build: () => { builds++; return {}; } };
+  // js/car/car-draw.js reads the backend and the parts through the G façade and the livery through deps.
+  const G = { gfx: { createMesh: x => x }, getTeamParts: () => ({}) };
+  const deps = { resolveLivery: () => ({ c1: [], c2: [] }) };
   const carDecalNum = (t, c) => c.num;
   const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
-  const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/game.js"), "playerBodyMesh") + "})");
-  const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/game.js"), "cockpitBodyMesh") + "})");
+  const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "playerBodyMesh") + "})");
+  const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/car/car-draw.js"), "cockpitBodyMesh") + "})");
   const team = { id: "mclaren" }, car = { num: 81 };
   const preparedBody = body(team, car, "selected-setup"), preparedCockpit = cockpit(team, car, "selected-setup");
   assert.equal(playerVisualKey, "previous-setup", "menu preparation does not mutate race globals");
@@ -4010,19 +4047,24 @@ test("menu player and cockpit preparation reuse the real race mesh keys", () => 
 
 test("selector car assets yield per driver, preserve simulation, and cancel stale settings", async () => {
   for (const cancel of ["none", "screen", "store", "team", "driver", "compile", "model", "solo", "headless"]) {
-    let carModelBuf = null, headlessMode = false, teamIdx = 0, driverIdx = 1, camMode = 0;
+    let carModelBuf = null;
     let active = true, compiling = false, solo = false, yields = 0;
-    const store = { rev: 1 }, cars = [{ live: true }], player = cars[0];
+    // js/car/car-draw.js reads race state through the G façade; the seam's four
+    // game.js helpers arrive through deps.
+    const G = { headlessMode: false, teamIdx: 0, driverIdx: 1, camMode: 0, store: { rev: 1 },
+                cars: [{ live: true }], gfx: { warming: () => compiling } };
+    const cars = G.cars, player = cars[0];
     const Teams = { LIST: [
       { id: "a", drivers: [{ num: 1 }, { num: 2 }] },
       { id: "b", drivers: [{ num: 3 }] },
       { id: "custom", custom: true, drivers: [{ num: 4 }] }
     ] };
     const Career = { gridDrivers: t => t.drivers, driverOverride: (id, di) => id === "a" && di === 1 ? { num: 99 } : null };
-    const calls = [], gfx = { warming: () => compiling }, CAM_MODES = [{ id: "cockpit" }];
+    const calls = [], CamModes = { CAM_MODES: [{ id: "cockpit" }] };
     const Log = { info() {}, warn() {} }, performance = { now: () => 0 };
-    const isTimeTrial = () => solo, isQuali = () => false, current = () => active;
-    const partsVisualKey = id => "parts:" + id, carDecalNum = (t, c) => c.num;
+    const current = () => active;
+    const deps = { isTimeTrial: () => solo, isQuali: () => false, partsVisualKey: id => "parts:" + id };
+    const carDecalNum = (t, c) => c.num;
     const playerBodyMesh = (t, c, key) => calls.push(["player", c.num, key]);
     const cockpitBodyMesh = (t, c, key) => calls.push(["cockpit", c.num, key]);
     const teamBodyMesh = (t, c) => calls.push(["field", c.num]);
@@ -4031,24 +4073,24 @@ test("selector car assets yield per driver, preserve simulation, and cancel stal
       yields++;
       if (yields === 2) {
         if (cancel === "screen") active = false;
-        if (cancel === "store") store.rev++;
-        if (cancel === "team") teamIdx = 1;
-        if (cancel === "driver") driverIdx = 0;
+        if (cancel === "store") G.store.rev++;
+        if (cancel === "team") G.teamIdx = 1;
+        if (cancel === "driver") G.driverIdx = 0;
         if (cancel === "compile") compiling = true;
         if (cancel === "model") carModelBuf = {};
         if (cancel === "solo") solo = true;
-        if (cancel === "headless") headlessMode = true;
+        if (cancel === "headless") G.headlessMode = true;
       }
       Promise.resolve().then(fn);
     };
-    const prepare = eval("(async function(current){" + fnBody(read("js/game.js"), "prepareMenuCarAssets") + "})");
+    const prepare = eval("(async function(current){" + fnBody(read("js/car/car-draw.js"), "prepareMenuCarAssets") + "})");
     await prepare(current);
     assert.deepEqual(calls.slice(0, 3), [["player", 99, "parts:a"], ["cockpit", 99, "parts:a"], ["atlas", 99, true]]);
     assert.equal(calls.length, cancel === "none" ? 7 : 3, cancel);
     assert.equal(yields, cancel === "none" ? 3 : 2, "one driver per yielded task");
     assert.equal(cars[0], player); assert.deepEqual(cars, [{ live: true }]);
-    calls.length = 0; active = true; compiling = false; carModelBuf = null; headlessMode = false;
-    teamIdx = 0; driverIdx = 1; solo = true; yields = 10;
+    calls.length = 0; active = true; compiling = false; carModelBuf = null; G.headlessMode = false;
+    G.teamIdx = 0; G.driverIdx = 1; solo = true; yields = 10;
     await prepare(current);
     assert.equal(calls.length, 3, "solo sessions prepare only their player");
   }

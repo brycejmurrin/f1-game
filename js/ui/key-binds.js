@@ -216,3 +216,4 @@ function create(G) {
 
 return { create };
 })();
+Object.freeze(KeyBinds);

@@ -20,6 +20,27 @@ test.beforeEach(async ({ page }) => {
 /* Call headless(true) before canvas screenshots — park() freezes physics, not
    rendering. smoke.spec.js measured 88–96 s vs 29–32 s once the loop stops.
    Present a frame first (wait on readiness), then headless(true). */
+/* On a failure the state that decided it: TLX's own backend decision, the
+   reason it persisted for a present failure (apex26.gfxTlxFail), and the
+   warn/error lines of the Log ring — the attachment prints only the last
+   eight ring entries, which are car builds by the time a race is up. */
+async function tlxDiag(page) {
+  return page.evaluate(() => {
+    const safe = (f) => { try { return f(); } catch (e) { return "ERR " + e.message; } };
+    return JSON.stringify({
+      backend: safe(() => GLX.__tlx.backendState()),
+      tlxFail: safe(() => localStorage.getItem("apex26.gfxTlxFail")),
+      post: safe(() => GLX.__tlx.postState()),
+      env: safe(() => GLX.__tlx.envState()),
+      // The governor: tier/autoTier/scale/floorMs/fps and its latches. Bloom is
+      // zeroed at autoTier >= 4 and the env probe needs tier < 1 (js/game.js).
+      gov: safe(() => window.__apex.renderScale()),
+      logs: safe(() => window.__apex.logs().filter((l) => l.level === "warn" || l.level === "error")
+        .map((l) => l.t + "ms " + l.ns + ": " + l.msg).slice(-12)),
+    });
+  });
+}
+
 async function stopRendering(page) {
   await awaitPresentedFrame(page);
   await page.evaluate(() => window.__apex.headless(true));
@@ -158,12 +179,13 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.park(0.1));
     await page.waitForTimeout(600);
     const st = await page.evaluate(() => GLX.__tlx.postState());
-    expect(st.on).toBe(true);
-    expect(st.hdr).toBe(true);
-    expect(st.blocks.bloom).toBe(true);     // day defaults keep bloomAmt > 0
-    expect(st.blocks.fxaa).toBe(true);      // the unconditional LDR resolve
-    expect(st.targets[0]).toBeGreaterThan(0);
-    expect(st.targets[1]).toBeGreaterThan(0);
+    const diag = await tlxDiag(page);
+    expect(st.on, diag).toBe(true);
+    expect(st.hdr, diag).toBe(true);
+    expect(st.blocks.bloom, diag).toBe(true);     // day defaults keep bloomAmt > 0 (game.js zeroes it at autoTier >= 4)
+    expect(st.blocks.fxaa, diag).toBe(true);      // the unconditional LDR resolve
+    expect(st.targets[0], diag).toBeGreaterThan(0);
+    expect(st.targets[1], diag).toBeGreaterThan(0);
     // The chain must still produce a real image on the canvas.
     await stopRendering(page);
     const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
@@ -354,20 +376,31 @@ test.describe("TLX — boot", () => {
   test("M9 env probe captures a full cube on a parked race (car reflections live)", async ({ page }) => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    // TLX reads apex26.tlxEnvProbe ONCE at create (js/render/three/tlx.js
+    // _envOptOut), so the opt-in has to be in storage before the page boots.
+    await page.addInitScript(() => { try { localStorage.setItem("apex26.tlxEnvProbe", "1"); } catch (_) {} });
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
     // The probe only runs when CAR ENV REFLECTION (carEnvCube) > 0 — many
     // shipped profiles default it to 0, so opt the knob on for this test.
+    // Since f9c25e5 TLX also opts OUT of the probe unless the CAR REFLECTIONS
+    // setting (apex26.tlxEnvProbe = "1", js/perf/renderer-picker.js) is on:
+    // it cost a resolution tier and drew a black world on WebGPU. This spec
+    // is about the probe WORKING when a player turns it on, so turn it on.
     await page.evaluate(() => window.__apex.lightTune({ carEnvCube: 0.6 }));
     await page.evaluate(() => window.__apex.park(0.1));
     // A full 6-face cube takes ~12 frames (one face every OTHER frame); wait on
     // the ready flag rather than a fixed sleep (SwiftShader is slow).
-    await page.waitForFunction(() => {
-      const e = GLX.__tlx.envState();
-      return e && e.on && e.ready;
-    }, null, { polling: 100, timeout: 60_000 });
+    try {
+      await page.waitForFunction(() => {
+        const e = GLX.__tlx.envState();
+        return e && e.on && e.ready;
+      }, null, { polling: 100, timeout: 60_000 });
+    } catch (e) {
+      throw new Error("env probe never became ready: " + await tlxDiag(page) + "\n" + (e && e.message));
+    }
     const st = await page.evaluate(() => ({
       env: GLX.__tlx.envState(),
       readyHook: GLX.envProbeReady(),

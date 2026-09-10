@@ -5,4 +5,4 @@ export {
   awaitPresentedFrame,
   presentedCanvasClip,
   screenshotPresentedCanvas,
-} from "../../tools/capture/probe-page.mjs";
+} from "../../tools/shot/probe-page.mjs";

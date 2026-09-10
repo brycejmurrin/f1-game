@@ -1,14 +1,29 @@
 ---
-description: TLX / three.js backend — ForceGL default, opaque canvas, instancing
-globs: js/render/three/**/*
+description: TLX / three.js backend — ForceGL default, opaque canvas, census legs
+globs: js/render/three/**
 alwaysApply: false
 ---
 
-# TLX (three.js)
+# TLX (three.js / TSL) — loads with js/render/three/
 
-- Opt-in via `apex26.gfxBackend=three`. Probe/tests pin WebGL2 with
+- Opt-in via `apex26.gfxBackend=three`. Probes and tests pin WebGL2 with
   `apex26.tlxForceGL=1` — three's WebGPU path dies under SwiftShader
   (`mappedAtCreation`); use `--tlx-webgpu` only on purpose.
-- Canvas alpha must be opaque for correct compositing (transparent-cars class).
-- Read `docs/RENDERERS.md` §Cross-backend parity when a look differs vs GLX/WGX.
-- Live probe: `mcp-probe` / `mcp-cli.mjs probe --backend three`.
+- Canvas alpha must be opaque for correct compositing (the transparent-cars
+  class of defect).
+- Gate: `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe montreal`,
+  then the same with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/
+  `chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. Then dispatch
+  `gpu-census.yml` on `macos-latest` and read its Verdict step: a software
+  probe is not evidence about a player's machine (two shipped defects were
+  invisible to every software test). Dispatch `ci.yml` with
+  `renderer_macos: true` when a gfx spec or its launch config changed.
+- Never compare the census's two TLX legs on frames, FPS or luma without
+  reading the `path:` row. The WebGPU leg pins `tlxForceGL=0` and `tlx.js`
+  soft-blits (GPU readback + `putImageData` every frame) whenever
+  `!forceWebGL && (_softAdapter || _headless || cap==="1")`; the WebGL2 leg
+  pins `"1"` and short-circuits that off. `headless=true` prints on both and
+  discriminates nothing; a headed player has neither flag.
+- A look that differs from GLX/WGX: `docs/ARCHITECTURE.md` §Cross-backend
+  parity. Skills: `webgl-debug`, `webgpu-debug`. Live probe: `mcp-probe` /
+  `node tools/mcp/mcp-cli.mjs probe --backend three`.

@@ -13,14 +13,14 @@ textarea or paste into a message. It now exports only the local overrides, as
 `window.LightEdits`, current condition first. That is a DELTA: feeding it to
 `bake.mjs` would write those few keys and delete ~800 others, so `bake.mjs`
 refuses it by name and points here. Either way this skill writes shipped
-`js/lighting/presets.js`, bumps cache, and commits. localStorage still
+`js/lighting/presets.js` and commits (no cache bump). localStorage still
 outranks the file until RESET.
 
 Live knob work without a paste → the lighting-tuner index (`SKILL.md`).
 
 Per-track agent proposals → `artifacts/lighting/proposals/<id>.json`, then
 `node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs` (validates + merges;
-does not bump cache). Never let a subagent write `light-presets.js`.
+does not bump cache). Never let a subagent write `js/lighting/presets.js`.
 
 ## CRITICAL — `bake.mjs` is a FULL REPLACE
 

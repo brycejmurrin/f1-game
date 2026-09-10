@@ -85,7 +85,7 @@ const BrakeCue = (function () {
       return { level, on: fromSlider(level).on, lookSec: +fromSlider(level).lookSec.toFixed(2), urgency: +lastU.toFixed(3) };
     }
 
-    inst = { tick, setLevel, debug, fromSlider, urgencyOf };
+    inst = { tick, setLevel, debug, fromSlider, urgencyOf, on: () => cfg.on };
     return inst;
   }
 
@@ -95,7 +95,11 @@ const BrakeCue = (function () {
     urgencyOf,
     labelOf,
     tick() { if (inst) inst.tick(); },
+    // The slider cue owns GameAudio.brakeCue while it is on; the driving line's
+    // cue (game.js) stands down so one producer drives the pulse clock.
+    on() { return !!inst && inst.on(); },
     debug() { return inst ? inst.debug() : null; },
     setLevel(v) { if (inst) inst.setLevel(v); },
   };
 })();
+Object.freeze(BrakeCue);

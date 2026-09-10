@@ -37,7 +37,7 @@ tool that MENTIONS WebGPU is not automatically a WebGPU-only tool.
   `vendor/three-0.185.1/PATCHES.md` — re-apply both on any future re-attach.
 - `tools/` — the WGX/TLX-only CLIs: `gfx-probe.mjs`, `road-lut-census.mjs`,
   `wgx-{capture,lavapipe-probe,shot,validate,vid-repro}.mjs`,
-  `tlx-pack-check.cjs`, `wgpu-flag-test.mjs`. (`gpu-census.mjs` and
+  `tlx-pack-check.cjs` (`wgpu-flag-test.mjs` was removed 2026-09-10 as unreferenced). (`gpu-census.mjs` and
   `webgpu-chrome-args.cjs` stayed shipped — see above.)
 - `tests/` — `unit/webgpu-lifecycle.test.mjs`, `unit/renderer-soft-lifecycle.test.mjs`,
   `unit/road-lut-frame.test.mjs`, `specs/tlx-probes.spec.js`.

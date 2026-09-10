@@ -6,12 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["vegas"] =
   function (api) {
-      const { out, MAT, seat, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
+      const { K, lapBounds, out, MAT, seat, track, upOf, n, px, py, pz, hw, pyMin, place, prop, backdrop, addBox, addCyl,
         addFrustum, addPyramid, groundPlane, anchor, vadd, onTrack, building, tower, billboard,
         grandstand, grandstandEx, marshalPost, gantry, palm, fence, wall, guardrail, tyreWall, hash, addCone, addPrism,
         cityFront, modelGroup, overheadSpan, waterSurface, circuitKit, broadcastCompound, cameraTower,
         bakedModel } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const ferrisWheel = (k, side, dist, radius) => {
         const a = anchor(k, side, dist);
@@ -179,11 +178,7 @@
       gantry(0.50, 8.5, [0.12, 0.12, 0.16]);                       // DRS detection on Strip
       gantry(0.80, 8.5, [0.12, 0.12, 0.16]);
 
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let trad = 0;
-      for (let i = 0; i < n; i++) trad = Math.max(trad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: trad } = lapBounds();
       const ring = trad + 520;
       const desertN = 22;
       for (let i = 0; i < desertN; i++) {

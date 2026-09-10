@@ -66,7 +66,7 @@ test("harness exports display helpers and clears a dead DISPLAY for headless", a
 });
 
 test("chromiumArgsForBackend pins unsafe SwiftShader for GLX/TLX", () => {
-  const src = readFileSync(join(ROOT, "tools/capture/probe-page.mjs"), "utf8");
+  const src = readFileSync(join(ROOT, "tools/shot/probe-page.mjs"), "utf8");
   assert.match(src, /--enable-unsafe-swiftshader/,
     "Chromium 1xx blocks SwiftShader WebGL without this flag");
   assert.match(src, /gotoGameBootDiag|__apex never appeared/,

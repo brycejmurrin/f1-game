@@ -59,3 +59,4 @@ const DataSchedule = (function () {
 
   return { create };
 })();
+Object.freeze(DataSchedule);

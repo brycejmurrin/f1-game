@@ -598,11 +598,10 @@ test("every tool named in tools/README.md exists on disk", () => {
 });
 
 test("tools/README documents live test-infra knobs and stays two-column in the runner section", () => {
-  // SPLIT=N and FLOOR_SLACK are load-bearing: an agent who only reads the index
-  // will not know test-shards can fan a group across Playwright shards, or that
-  // fixture-consumer-audit fails when FLOOR lags actual adoption by more than 5.
+  // FLOOR_SLACK is load-bearing: an agent who only reads the index will not
+  // know fixture-consumer-audit fails when FLOOR lags actual adoption by more
+  // than 5. (SPLIT=N left with the ci/test-shards.sh fan-out on 2026-09-10.)
   const index = read("tools/README.md");
-  assert.match(index, /SPLIT=N/, "test-shards SPLIT fan-out must be indexed");
   assert.match(index, /FLOOR_SLACK/, "fixture-consumer upper-bound slack must be indexed");
   const specs = index.split("\n").find((l) => l.includes("**ci/select-specs.mjs**")) || "";
   const recall = index.split("\n").find((l) => l.includes("**ci/select-recall.mjs**")) || "";

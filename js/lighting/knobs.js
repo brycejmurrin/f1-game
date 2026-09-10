@@ -246,3 +246,4 @@ for (const d of TUNE_DEFS) LT[d.id] = d.def;
 
   return { TUNE_DEFS, LT };
 })();
+Object.freeze(LightKnobs);

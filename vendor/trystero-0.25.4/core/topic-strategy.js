@@ -6,6 +6,7 @@ const signalKeys = [
 	"answer",
 	"candidate"
 ];
+const defaultSteadyAnnounceIntervalMs = 6e4;
 const toPayload = (msg) => {
 	if (typeof msg === "string") try {
 		const parsed = fromJson(msg);
@@ -41,11 +42,11 @@ const publishContext = (context, kind, rootTopic, selfTopic) => ({
 	rootTopic,
 	selfTopic
 });
-var topic_strategy_default = ({ init, subscribeTopic, publishTopic, unpublishTopic }) => strategy_default({
+var topic_strategy_default = ({ steadyAnnounceIntervalMs = defaultSteadyAnnounceIntervalMs, reannounceOnDisconnect = true, init, subscribeTopic, publishTopic, unpublishTopic }) => strategy_default({
 	init,
 	subscribe: async (relay, rootTopic, selfTopic, onMessage, _getOffers, rawContext) => {
 		const context = requireContext(rawContext);
-		const signalPeer = (peerTopic, signal) => publishTopic(relay, peerTopic, signal, publishContext(context, "signal", rootTopic, selfTopic));
+		const signalPeer = (peerTopic, signal) => void publishTopic(relay, peerTopic, signal, publishContext(context, "signal", rootTopic, selfTopic));
 		let selfCleanup = null;
 		let selfCleanupDone = false;
 		let selfSubscriptionP = null;
@@ -76,15 +77,20 @@ var topic_strategy_default = ({ init, subscribeTopic, publishTopic, unpublishTop
 			rootCleanup();
 		};
 	},
-	announce: (relay, rootTopic, selfTopic, extraPayload, rawContext) => {
+	announce: async (relay, rootTopic, selfTopic, extraPayload, rawContext) => {
 		const context = requireContext(rawContext);
-		return publishTopic(relay, rootTopic, toJson({
+		const result = await publishTopic(relay, rootTopic, toJson({
 			peerId: selfId,
 			...extraPayload
 		}), publishContext(context, "announce", rootTopic, selfTopic));
+		return typeof result === "number" || result !== void 0 && "stopAnnouncing" in result ? result : {
+			nextAnnounceMs: result?.nextAnnounceMs ?? steadyAnnounceIntervalMs,
+			reannounceOnDisconnect: result?.reannounceOnDisconnect ?? reannounceOnDisconnect
+		};
 	},
 	...unpublishTopic ? { deactivate: (relay, rootTopic, selfTopic, rawContext) => {
-		return unpublishTopic(relay, rootTopic, publishContext(requireContext(rawContext), "announce", rootTopic, selfTopic));
+		const context = requireContext(rawContext);
+		return unpublishTopic(relay, rootTopic, publishContext(context, "announce", rootTopic, selfTopic));
 	} } : {}
 });
 //#endregion

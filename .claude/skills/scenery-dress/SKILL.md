@@ -6,7 +6,7 @@ description: Use when the user asks to add/edit track scenery, dress a circuit, 
 # Dress a circuit's scenery
 
 `buildProps` (`js/track/scenery-*.js`, orchestrated by `js/track/tracks.js`;
-the 111-member `api` surface is frozen by
+the 112-member `api` surface is frozen by
 `tests/unit/scenery-api-contract.test.mjs`) calls `def.scenery(api)` then
 merges one mesh. Full reference: `docs/SCENERY-API.md`.
 

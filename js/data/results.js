@@ -22,13 +22,9 @@ const DataResults = (function () {
     return (t.indexOf("sprint") !== -1 ? "SQ" : "Q") + (i + 1);
   }
 
-  // Lap time: 1:21.163, or 58.402 under the minute.
-  function fmtLap(s) {
-    if (typeof s !== "number" || !isFinite(s) || s <= 0) return null;
-    const m = Math.floor(s / 60);
-    const r = s - m * 60;
-    return m ? m + ":" + (r < 10 ? "0" : "") + r.toFixed(3) : r.toFixed(3);
-  }
+  // Lap time: 1:21.163, or 58.402 under the minute; null when there is none
+  // (a blank cell — the callers add their own "—" where a dash is wanted).
+  const fmtLap = (s) => Dom.fmtLap(s, null);
 
   // Race distance: 2:04:44.859 (an hour is not guaranteed — a red-flagged
   // sprint can come in under one).
@@ -356,3 +352,4 @@ const DataResults = (function () {
 
   return { create };
 })();
+Object.freeze(DataResults);

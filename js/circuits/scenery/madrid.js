@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["madrid"] =
   function (api) {
       const {
-        out, MAT, seat, n, px, pz, hw, pyMin, night, hash, anchor, vadd,
+        lapBounds, out, MAT, seat, n, px, pz, hw, pyMin, night, hash, anchor, vadd,
         modelGroup, overheadSpan, groundPatch, groundedSegments,
         addBox, addCyl, addPrism, addFrustum,
         ridge, floodMast, tree, bush, hedge,
@@ -681,13 +681,7 @@
 
       const SIERRA = [0.55, 0.60, 0.66];
       const SIERRA_FAR = [0.61, 0.66, 0.72];
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n;
-      cz /= n;
-      let radius = 0;
-      for (let i = 0; i < n; i++)
-        radius = Math.max(radius, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius } = lapBounds();
       for (let i = 0; i < 16; i++) {
         const angle = i / 16 * Math.PI * 2;
         const R = radius + 1150 + hash(i * 3) * 180;

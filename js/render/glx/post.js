@@ -32,6 +32,7 @@ const GLXPost = (function () {
     // to present size; otherwise FXAA writes the default framebuffer.
     let sgsrProg = null, sgsrU = null, aaFBO = null, aaTex = null;
     let sgsrTried = false;
+    let targetW = 0, targetH = 0, aaW = 0, aaH = 0;
 
     // Post-processing state. postEnabled stays false (and rendering goes straight
     // to the default framebuffer, exactly as before) if any target/program setup
@@ -62,6 +63,7 @@ const GLXPost = (function () {
           _grRad = new Float32Array(6), _grDir = new Float32Array(18),
           _grCone = new Float32Array(12), _grVolW = new Float32Array(6), _grSel = [];
     const _sunUV = [-2, -2];
+    const _sunScr = { visible: false, ndcx: -5, ndcy: -5, flare: 0, shaft: 0 };   // PostCommon.sunScreen scratch
     const _ONE3 = [1, 1, 1];
     const _NEGZ = [0, 0, -1];
     const _SKY_HI = [0.05, 0.06, 0.09];
@@ -93,33 +95,9 @@ const GLXPost = (function () {
         _compUf[key] = a; _compUf[k1] = b; _compUf[k2] = c; _compUf[k3] = d;
       }
     }
-    // Partial select nearest-K (match WGX): avoid sorting the full floodlight list.
-    function _grKeepNearest(total, k) {
-      const n = Math.min(k, total);
-      for (let i = 1; i < n; i++) {
-        const cur = _grSel[i];
-        let j = i - 1;
-        while (j >= 0 && _grSel[j].d > cur.d) { _grSel[j + 1] = _grSel[j]; j--; }
-        _grSel[j + 1] = cur;
-      }
-      for (let i = n; i < total; i++) {
-        const cur = _grSel[i];
-        if (cur.d >= _grSel[n - 1].d) continue;
-        let j = n - 2;
-        while (j >= 0 && _grSel[j].d > cur.d) j--;
-        const insertAt = j + 1;
-        // Swap, not overwrite: the shift orphans the evicted top-k object and
-        // left `cur` aliased at two indices — the next frame's by-index fill
-        // then wrote one lamp's data into both slots (a beam uploaded twice,
-        // another lamp permanently unselectable). Keeping the pool a
-        // permutation is the whole contract.
-        const evicted = _grSel[n - 1];
-        for (let m = n - 1; m > insertAt; m--) _grSel[m] = _grSel[m - 1];
-        _grSel[insertAt] = cur;
-        _grSel[i] = evicted;
-      }
-      return n;
-    }
+    // Partial select nearest-K over _grSel — PostCommon.keepNearest (one copy for
+    // GLX / WGX / TLX; swap-not-overwrite eviction).
+    const _grKeepNearest = (total, k) => PostCommon.keepNearest(_grSel, total, k);
 
     function ensureSpatial() {
       if (sgsrProg || sgsrTried) return !!sgsrProg;
@@ -220,54 +198,8 @@ const GLXPost = (function () {
     // into a veil and to break the sun flare into a blotchy, smudged one.
     function makeDirtTex() {
       try {
-        const S = 256;
-        const cv = document.createElement("canvas");
-        cv.width = cv.height = S;
-        const c2 = cv.getContext("2d");
-        if (!c2) return;
-        let seed = 0x9e3779b9;
-        const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-        c2.fillStyle = "#000"; c2.fillRect(0, 0, S, S);
-        // value-noise base: coarse random luminance grid, bilinearly upscaled
-        const N = 16;
-        const nc = document.createElement("canvas");
-        nc.width = nc.height = N;
-        const n2 = nc.getContext("2d");
-        const img = n2.createImageData(N, N);
-        for (let i = 0; i < N * N; i++) {
-          const v = (rnd() * 42) | 0;
-          img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
-          img.data[i * 4 + 3] = 255;
-        }
-        n2.putImageData(img, 0, 0);
-        c2.imageSmoothingEnabled = true;
-        c2.globalCompositeOperation = "lighter";
-        c2.drawImage(nc, 0, 0, N, N, 0, 0, S, S);
-        // soft grime blobs (the "smudge" body)
-        for (let i = 0; i < 130; i++) {
-          const x = rnd() * S, y = rnd() * S, r = 3 + rnd() * rnd() * 30;
-          const a = 0.03 + rnd() * rnd() * 0.12;
-          const g = c2.createRadialGradient(x, y, 0, x, y, r);
-          g.addColorStop(0, "rgba(255,255,255," + a.toFixed(3) + ")");
-          g.addColorStop(1, "rgba(255,255,255,0)");
-          c2.fillStyle = g;
-          c2.beginPath(); c2.arc(x, y, r, 0, 6.2832); c2.fill();
-        }
-        // bright dust specks
-        for (let i = 0; i < 70; i++) {
-          const x = rnd() * S, y = rnd() * S, r = 0.6 + rnd() * 1.7;
-          c2.fillStyle = "rgba(255,255,255," + (0.10 + rnd() * 0.28).toFixed(3) + ")";
-          c2.beginPath(); c2.arc(x, y, r, 0, 6.2832); c2.fill();
-        }
-        // faint diagonal wipe streaks
-        for (let i = 0; i < 9; i++) {
-          const x = rnd() * S, y = rnd() * S, len = 30 + rnd() * 100, ang = rnd() * 6.2832;
-          c2.strokeStyle = "rgba(255,255,255," + (0.02 + rnd() * 0.05).toFixed(3) + ")";
-          c2.lineWidth = 1 + rnd() * 3;
-          c2.beginPath(); c2.moveTo(x, y);
-          c2.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
-          c2.stroke();
-        }
+        const cv = PostCommon.makeDirtCanvas();   // shared generator (GLX / WGX / TLX)
+        if (!cv) return;
         dirtTex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, dirtTex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, cv);
@@ -316,6 +248,11 @@ const GLXPost = (function () {
     function createTargets() {
       if (!postEnabled) return;
       const { width, height } = core.getSize();
+      // A present-size change (UPSCALE toggle) leaves the scene size intact.
+      // Preserve its textures/MSAA storage; only the AA intermediate changes.
+      if (sceneTex && width === targetW && height === targetH) {
+        syncSpatialTarget(width, height); return;
+      }
       const internal = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
       // Slimmer formats where full RGBA16F is waste (bandwidth is the tiled-GPU
       // frame cost): SSAO stores one scalar (sampled .r) -> R8; bloom + godray
@@ -469,11 +406,17 @@ const GLXPost = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, ldrFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ldrTex, 0);
       }
+      targetW = width; targetH = height;
+      syncSpatialTarget(width, height);
+    }
+
+    function syncSpatialTarget(width, height) {
       // SGSR intermediate (render res): FXAA writes here when upscaling so the
       // present-size pass samples the AA'd LDR. Without FXAA, SGSR samples
       // ldrTex directly — no aa target. Freed when the flag is off / scale≈1.
       const wantUp = !!(sgsrProg && fxaaProg && core.wantSpatialUpscale && core.wantSpatialUpscale());
       if (wantUp) {
+        if (aaTex && aaW === width && aaH === height) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); return; }
         if (!aaFBO) aaFBO = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
         if (aaTex) gl.deleteTexture(aaTex);
@@ -486,6 +429,7 @@ const GLXPost = (function () {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, aaTex, 0);
+        aaW = width; aaH = height;
       } else if (aaFBO || aaTex) {
         if (aaFBO) gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
         if (aaTex) gl.deleteTexture(aaTex);
@@ -559,7 +503,7 @@ const GLXPost = (function () {
       // `opts.carReflect > 0.001` is false for undefined and skipped the blit
       // on a dry night with AO/godray/flare already off.
       const _carReflPre = opts && opts.carReflect != null ? opts.carReflect
-        : (opts && opts.tune && opts.tune.carReflect != null ? opts.tune.carReflect : 0.05);
+        : (PostCommon.knob(opts && opts.tune, "carReflect"));
       const ssrOn = ((opts && opts.reflect) > 0.001) || _carReflPre > 0.001;
       const _slPre = F.sunColor ? Math.max(F.sunColor[0], F.sunColor[1], F.sunColor[2]) : 1;
       const flareMaybe = !!(F.sunDir && F.sunDir[1] > -0.02 && _slPre > 0.35);
@@ -613,7 +557,7 @@ const GLXPost = (function () {
         gl.uniform2f(ssaoU.uTexel, 1 / ssaoW, 1 / ssaoH);
         gl.uniform1f(ssaoU.uStrength, aoStr);
         // AO RADIUS knob: world-space sampling reach (def 0.6).
-        gl.uniform1f(ssaoU.uRadius, opts && opts.tune && opts.tune.ssaoRadius != null ? opts.tune.ssaoRadius : 0.6);
+        gl.uniform1f(ssaoU.uRadius, PostCommon.knob(opts && opts.tune, "ssaoRadius"));
         // Contact shadows ride along in the AO pass when proj + view-sun are present.
         const csOn = contactStr > 0 && F.proj && F.sunVS;
         gl.uniformMatrix4fv(ssaoU.uProj, false, F.proj || F.invProj);
@@ -713,8 +657,8 @@ const GLXPost = (function () {
         gl.activeTexture(gl.TEXTURE0);
         // GOD-RAY FOCUS / HAZE knobs (defaults reproduce the shipped shaft phase).
         const GT = opts && opts.tune || null;
-        gl.uniform1f(godrayU.uHgAniso, GT && GT.godrayAniso != null ? GT.godrayAniso : 0.60);
-        gl.uniform1f(godrayU.uHgFloor, GT && GT.godrayFloor != null ? GT.godrayFloor : 0.020);
+        gl.uniform1f(godrayU.uHgAniso, PostCommon.knob(GT, "godrayAniso"));
+        gl.uniform1f(godrayU.uHgFloor, PostCommon.knob(GT, "godrayFloor"));
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         useProg(blurProg);
         gl.uniform1i(blurU.uTex, 0);
@@ -774,7 +718,7 @@ const GLXPost = (function () {
         useProg(upProg);
         gl.uniform1i(upU.uTex, 0);
         // BLOOM SPREAD knob: widen/tighten every octave's tent radius uniformly.
-        gl.uniform1f(upU.uSpread, opts && opts.tune && opts.tune.bloomSpread != null ? opts.tune.bloomSpread : 1);
+        gl.uniform1f(upU.uSpread, PostCommon.knob(opts && opts.tune, "bloomSpread"));
         for (let i = nLv - 1; i >= 1; i--) {
           // Intermediate levels accumulate (ONE, ONE) so every octave sums; the FINAL
           // pass into level 0 OVERWRITES instead — level 0 still holds the sharp
@@ -833,37 +777,12 @@ const GLXPost = (function () {
       gl.uniform1i(compU.uGodray, 3);
       uf1(compU.uHaveGodray, "haveGodray", haveGR ? 1 : 0);
       // Project sun direction to screen UV for lens flare
-      let flareStr = 0, sunShaft = 0;
-      _sunUV[0] = -2; _sunUV[1] = -2;
-      if (F.sunDir && F.viewProj) {
-        const s = F.sunDir;
-        // Treat sun as infinitely distant: clip pos = VP * (sunDir, 0)
-        const vp = F.viewProj;
-        const cx = vp[0]*s[0] + vp[4]*s[1] + vp[8]*s[2];
-        const cy = vp[1]*s[0] + vp[5]*s[1] + vp[9]*s[2];
-        const cw = vp[3]*s[0] + vp[7]*s[1] + vp[11]*s[2];
-        if (cw > 0) {
-          _sunUV[0] = cx / cw * 0.5 + 0.5;
-          _sunUV[1] = cy / cw * 0.5 + 0.5;
-          // Lens flare peaks at GOLDEN HOUR (low sun), fading as the sun climbs —
-          // the opposite of the old height-scaled version that vanished at sunset.
-          // Gate flare + shafts by the sun's actual BRIGHTNESS, not just elevation:
-          // at night the key light is dim moonlight kept above the horizon for sky
-          // glow, and without this gate the radial pass streaked every bright lamp
-          // head toward the moon — random "beams from the sky".
-          const _sl = F.sunColor ? Math.max(F.sunColor[0], F.sunColor[1], F.sunColor[2]) : 1;
-          const _sunGate = Math.min(1, Math.max(0, (_sl - 0.35) / 0.45));
-          if (s[1] > -0.02) {
-            const golden = 1.0 - Math.min(Math.max(s[1], 0) / 0.45, 1.0);
-            // Lower floor + peak (was 0.30 + golden*0.55, peaking ~0.85): combined
-            // with the streak shape above, that washed the whole frame during
-            // ordinary dusk driving. The shader-side soft-clip already taming the
-            // wash, so this just keeps typical dusk flare present but subtle.
-            flareStr = (0.14 + golden * 0.30) * _sunGate;
-          }
-          if (s[1] > 0.05) sunShaft = s[1] * 0.8 * _sunGate;
-        }
-      }
+      // Sun screen-UV + golden-hour flare / sun-shaft strengths with the
+      // sun-BRIGHTNESS gate — PostCommon.sunScreen (shared with WGX / TLX).
+      const sun = PostCommon.sunScreen(F.sunDir, F.viewProj, F.sunColor, _sunScr);
+      _sunUV[0] = sun.visible ? sun.ndcx * 0.5 + 0.5 : -2;
+      _sunUV[1] = sun.visible ? sun.ndcy * 0.5 + 0.5 : -2;
+      const flareStr = sun.flare, sunShaft = sun.shaft;
       gl.uniform2fv(compU.uSunUV, _sunUV);
       // LENS FLARE knob scales the whole sun/lamp flare + ghost stack (def 1).
       gl.uniform1f(compU.uFlareStr, flareStr * (opts && opts.flareMul != null ? opts.flareMul : 1));
@@ -881,7 +800,7 @@ const GLXPost = (function () {
       // already shed god-rays, SSAO and SSR still paid for this one.
       // Bit-identical: 0.0 * finite == 0.0. Same shape as the po.contact/lampVol
       // sheds in docs/PERF-FINDINGS.md §2 — another operand of an armed producer.
-      gl.uniform1f(compU.uSunShaft, doBloom ? sunShaft * (opts && opts.tune && opts.tune.sunShaftMul != null ? opts.tune.sunShaftMul : 1) : 0);
+      gl.uniform1f(compU.uSunShaft, doBloom ? sunShaft * (PostCommon.knob(opts && opts.tune, "sunShaftMul")) : 0);
       // Cinematic split-tone grade (neutral by default → existing look unchanged).
       const grade = opts && opts.grade;
       const gSh = grade && grade.shadow ? grade.shadow : _ONE3;
@@ -889,95 +808,88 @@ const GLXPost = (function () {
       uf3(compU.uGradeShadow, "gradeShadow", gSh[0], gSh[1], gSh[2]);
       uf3(compU.uGradeHi, "gradeHi", gHi[0], gHi[1], gHi[2]);
       uf1(compU.uGradeStr, "gradeStr", grade && grade.str !== undefined ? grade.str : 0);
-      // Live colour-grade tunables (IMAGE & COLOUR panel); defaults reproduce the
-      // shipped grade so a missing tune object changes nothing.
+      // Live colour-grade tunables (IMAGE & COLOUR panel). Defaults are the
+      // TUNE_DEFS defs (PostCommon.knob) so a missing tune object changes nothing.
       const CT = opts && opts.tune || null;
       uf4(compU.uTone0, "tone0",
-        CT && CT.blacks != null ? CT.blacks : 0,
-        CT && CT.shadows != null ? CT.shadows : 0,
-        CT && CT.midtones != null ? CT.midtones : 0,
-        CT && CT.highlights != null ? CT.highlights : 0);
+        PostCommon.knob(CT, "blacks"),
+        PostCommon.knob(CT, "shadows"),
+        PostCommon.knob(CT, "midtones"),
+        PostCommon.knob(CT, "highlights"));
       uf4(compU.uTone1, "tone1",
-        CT && CT.whites != null ? CT.whites : 0,
-        CT && CT.toe != null ? CT.toe : 0,
-        CT && CT.shoulder != null ? CT.shoulder : 0, 0);
+        PostCommon.knob(CT, "whites"),
+        PostCommon.knob(CT, "toe"),
+        PostCommon.knob(CT, "shoulder"), 0);
       uf3(compU.uLift, "lift",
-        CT && CT.liftR != null ? CT.liftR : 0,
-        CT && CT.liftG != null ? CT.liftG : 0,
-        CT && CT.liftB != null ? CT.liftB : 0);
+        PostCommon.knob(CT, "liftR"),
+        PostCommon.knob(CT, "liftG"),
+        PostCommon.knob(CT, "liftB"));
       uf3(compU.uGamma, "gamma",
-        CT && CT.gammaR != null ? CT.gammaR : 1,
-        CT && CT.gammaG != null ? CT.gammaG : 1,
-        CT && CT.gammaB != null ? CT.gammaB : 1);
+        PostCommon.knob(CT, "gammaR"),
+        PostCommon.knob(CT, "gammaG"),
+        PostCommon.knob(CT, "gammaB"));
       uf3(compU.uGain, "gain",
-        CT && CT.gainR != null ? CT.gainR : 1,
-        CT && CT.gainG != null ? CT.gainG : 1,
-        CT && CT.gainB != null ? CT.gainB : 1);
-      uf1(compU.uContrast,   "contrast",   CT && CT.contrast   != null ? CT.contrast   : 1.12);
-      uf1(compU.uVibrance,   "vibrance",   CT && CT.vibrance   != null ? CT.vibrance   : 0.20);
-      uf1(compU.uSaturation, "saturation", CT && CT.saturation != null ? CT.saturation : 1.0);
+        PostCommon.knob(CT, "gainR"),
+        PostCommon.knob(CT, "gainG"),
+        PostCommon.knob(CT, "gainB"));
+      uf1(compU.uContrast,   "contrast",   PostCommon.knob(CT, "contrast"));
+      uf1(compU.uVibrance,   "vibrance",   PostCommon.knob(CT, "vibrance"));
+      uf1(compU.uSaturation, "saturation", PostCommon.knob(CT, "saturation"));
       // Skip the whole HDR lift/gamma/gain/tone block when every knob sits at
       // neutral (the shipped default): applyHdrGrade is then a mathematical
       // no-op, but it still cost ~20 ALU incl. 4-5 transcendentals on every
       // full-screen pixel of every frame.
-      const _hg = CT && (
-        (CT.blacks || 0) !== 0 || (CT.shadows || 0) !== 0 || (CT.midtones || 0) !== 0 ||
-        (CT.highlights || 0) !== 0 || (CT.whites || 0) !== 0 || (CT.toe || 0) !== 0 ||
-        (CT.shoulder || 0) !== 0 || (CT.liftR || 0) !== 0 || (CT.liftG || 0) !== 0 ||
-        (CT.liftB || 0) !== 0 || (CT.gammaR != null && CT.gammaR !== 1) ||
-        (CT.gammaG != null && CT.gammaG !== 1) || (CT.gammaB != null && CT.gammaB !== 1) ||
-        (CT.gainR != null && CT.gainR !== 1) || (CT.gainG != null && CT.gainG !== 1) ||
-        (CT.gainB != null && CT.gainB !== 1));
+      const _hg = PostCommon.hdrGradeOn(CT);
       uf1(compU.uHdrGradeOn, "hdrGradeOn", _hg ? 1.0 : 0.0);
-      uf1(compU.uTint,       "tint",       CT && CT.tint       != null ? CT.tint       : 0.0);
-      uf1(compU.uVignette,   "vignette",   CT && CT.vignette   != null ? CT.vignette   : 0.80);
-      uf1(compU.uVigSoft,    "vigSoft",    CT && CT.vignetteSoft != null ? CT.vignetteSoft : 0.35);
-      uf1(compU.uBloomKnee,  "bloomKnee",  CT && CT.bloomKnee  != null ? CT.bloomKnee  : 0.5);
+      uf1(compU.uTint,       "tint",       PostCommon.knob(CT, "tint"));
+      uf1(compU.uVignette,   "vignette",   PostCommon.knob(CT, "vignette"));
+      uf1(compU.uVigSoft,    "vigSoft",    PostCommon.knob(CT, "vignetteSoft"));
+      uf1(compU.uBloomKnee,  "bloomKnee",  PostCommon.knob(CT, "bloomKnee"));
       // opts.carReflect is the governor shed (tier ≥ 2 → 0). Must win over the
       // tuner default: po.reflect = 0 is also the DRY-session value, so pairing
       // uCarReflect to po.reflect would kill car-paint SSR on every dry lap.
       // Leaving the 0.05 default up after the wet-road shed is the contact /
       // lampVol operand-pair bug — car pixels still enter the ~36-fetch march.
       gl.uniform1f(compU.uCarReflect, opts && opts.carReflect != null ? opts.carReflect
-        : (CT && CT.carReflect != null ? CT.carReflect : 0.05));
-      uf1(compU.uCarGloss, "carGloss", CT && CT.carGloss != null ? CT.carGloss : 1.0);
+        : (PostCommon.knob(CT, "carReflect")));
+      uf1(compU.uCarGloss, "carGloss", PostCommon.knob(CT, "carGloss"));
       // IMAGE & COLOUR extras (all default to a no-op reproducing the shipped look).
-      uf1(compU.uChromAb,    "chromAb",    CT && CT.chromAb    != null ? CT.chromAb    : 0.0);
-      uf1(compU.uGrain,      "grain",      CT && CT.grain      != null ? CT.grain      : 0.0);
+      uf1(compU.uChromAb,    "chromAb",    PostCommon.knob(CT, "chromAb"));
+      uf1(compU.uGrain,      "grain",      PostCommon.knob(CT, "grain"));
       gl.uniform1f(compU.uGrainTime,  F.time);
-      uf1(compU.uSharpen,    "sharpen",    CT && CT.sharpen    != null ? CT.sharpen    : 0.0);
-      uf1(compU.uBlackLift,  "blackLift",  CT && CT.blackLift  != null ? CT.blackLift  : 0.005);
-      uf1(compU.uWhitePoint, "whitePoint", CT && CT.whitePoint != null ? CT.whitePoint : 1.0);
+      uf1(compU.uSharpen,    "sharpen",    PostCommon.knob(CT, "sharpen"));
+      uf1(compU.uBlackLift,  "blackLift",  PostCommon.knob(CT, "blackLift"));
+      uf1(compU.uWhitePoint, "whitePoint", PostCommon.knob(CT, "whitePoint"));
       // ACES TONE CURVE knobs (defaults = the shipped Narkowicz coefficients).
-      uf1(compU.uAcesA, "acesA", CT && CT.acesA != null ? CT.acesA : 2.51);
-      uf1(compU.uAcesB, "acesB", CT && CT.acesB != null ? CT.acesB : 0.03);
-      uf1(compU.uAcesC, "acesC", CT && CT.acesC != null ? CT.acesC : 2.43);
-      uf1(compU.uAcesD, "acesD", CT && CT.acesD != null ? CT.acesD : 0.59);
-      uf1(compU.uAcesE, "acesE", CT && CT.acesE != null ? CT.acesE : 0.14);
+      uf1(compU.uAcesA, "acesA", PostCommon.knob(CT, "acesA"));
+      uf1(compU.uAcesB, "acesB", PostCommon.knob(CT, "acesB"));
+      uf1(compU.uAcesC, "acesC", PostCommon.knob(CT, "acesC"));
+      uf1(compU.uAcesD, "acesD", PostCommon.knob(CT, "acesD"));
+      uf1(compU.uAcesE, "acesE", PostCommon.knob(CT, "acesE"));
       gl.uniform1f(compU.uSpeedBlur,  opts && opts.speedBlur != null ? opts.speedBlur : 0.0);
       // SUN-SHAFT REACH / FLARE STREAK knobs (defaults reproduce the shipped look).
-      uf1(compU.uShaftDecay, "shaftDecay", CT && CT.sunShaftDecay != null ? CT.sunShaftDecay : 0.82);
+      uf1(compU.uShaftDecay, "shaftDecay", PostCommon.knob(CT, "sunShaftDecay"));
       // Reach scales with the SCREEN SUN-SHAFT knob, sub-linearly so the shipped
       // value (1) keeps the shipped radius and turning it up genuinely extends the
       // rays instead of only brightening a fixed disc. sqrt keeps 4x strength at a
       // 2x radius rather than blowing the pass across the whole frame.
-      const _shaftMul = (opts && opts.tune && opts.tune.sunShaftMul != null) ? opts.tune.sunShaftMul : 1;
+      const _shaftMul = PostCommon.knob(opts && opts.tune, "sunShaftMul");
       uf1(compU.uShaftSpread, "shaftSpread", Math.sqrt(Math.max(0.05, _shaftMul)));
-      uf1(compU.uFlareStreak, "flareStreak", CT && CT.flareStreak   != null ? CT.flareStreak   : 7.0);
-      uf1(compU.uFlareStreak2, "flareStreak2", CT && CT.flareStreak2 != null ? CT.flareStreak2  : 0.5);
+      uf1(compU.uFlareStreak, "flareStreak", PostCommon.knob(CT, "flareStreak"));
+      uf1(compU.uFlareStreak2, "flareStreak2", PostCommon.knob(CT, "flareStreak2"));
       // EXHAUST HEAT HAZE: screen-anchored shimmer plume (opts.haze = {u, v, str}
       // computed by the caller from the player tailpipe projection; absent = off).
       const hz = opts && opts.haze;
       gl.uniform2f(compU.uHazeUV, hz ? hz.u : -9, hz ? hz.v : -9);
       gl.uniform1f(compU.uHazeStr, hz ? hz.str : 0);
       gl.uniform1f(compU.uHazeTime, F.time);
-      uf1(compU.uSsrThick,   "ssrThick",   CT && CT.ssrThick   != null ? CT.ssrThick   : 0.20);
+      uf1(compU.uSsrThick,   "ssrThick",   PostCommon.knob(CT, "ssrThick"));
       // LENS DIRT: bind the procedural smudge map (black fallback = veil term is
       // zero even if the knob is up, so a failed canvas init degrades silently).
       gl.activeTexture(gl.TEXTURE5);
       gl.bindTexture(gl.TEXTURE_2D, dirtTex || blackTex);
       gl.uniform1i(compU.uDirt, 5);
-      uf1(compU.uLensDirt, "lensDirt", CT && CT.lensDirt != null ? CT.lensDirt : 0.15);
+      uf1(compU.uLensDirt, "lensDirt", PostCommon.knob(CT, "lensDirt"));
       // uReflTexel drives both SSR and SHARPEN, so upload it every frame (not only
       // inside the haveRefl block) — otherwise sharpen samples with a stale texel.
       gl.uniform2f(compU.uReflTexel, 1 / width, 1 / height);
@@ -1115,3 +1027,4 @@ const GLXPost = (function () {
 
   return { init };
 })();
+Object.freeze(GLXPost);

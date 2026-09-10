@@ -16,7 +16,7 @@
 import { mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
-import { screenshotPresentedCanvas } from "../capture/probe-page.mjs";
+import { screenshotPresentedCanvas } from "../shot/probe-page.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");

@@ -61,7 +61,7 @@ function boot(extra = {}) {
     document: { addEventListener() {}, hidden: false }, addEventListener() {}, removeEventListener() {},
     setTimeout: () => 0, clearTimeout() {}, navigator: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     AudioContext: function () { return ctx; },
-    fetch: () => new Promise((res) => held.push(() => res({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
+    fetch: () => new Promise((res) => held.push(() => res({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
   };
   Object.assign(sb, extra);
   sb.window = sb;
@@ -101,7 +101,7 @@ test("music PCM cache: a phone keeps only the playing track, desktop the two mos
   const play = async (isMobile) => {
     let fetches = 0;
     const held = [];
-    const fetch = () => { fetches++; return new Promise((res) => held.push(() => res({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))); };
+    const fetch = () => { fetches++; return new Promise((res) => held.push(() => res({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))); };
     const { GameAudio } = boot({ fetch, ...(isMobile ? { GLX: { isMobile: true } } : {}) });
     const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
     GameAudio.init(); await release();           // engine samples (2 fetches)

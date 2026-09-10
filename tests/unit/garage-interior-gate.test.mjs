@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-import { assertGarageInterior, sampleGarageGapPixels } from "../../tools/capture/garage-interior.mjs";
+import { assertGarageInterior, sampleGarageGapPixels } from "../../tools/shot/garage-interior.mjs";
 
 describe("garage-interior gate", () => {
   it("rejects a flat teal wall (uniform mid luminance)", () => {
@@ -130,7 +130,7 @@ describe("the interior gate on a cleared-buffer frame", () => {
   it("garage-frame samples the CAPTURED png, never the live canvas", () => {
     const rd = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
     const frame = rd("tools/shot/garage-frame.mjs");
-    const probe = rd("tools/capture/probe-page.mjs");
+    const probe = rd("tools/shot/probe-page.mjs");
     assert.match(frame, /sampleGarageGapPixels/, "the gate's input comes from the sampler");
     assert.match(frame, /sharp\(pngPath\)/, "…fed from the captured PNG");
     assert.doesNotMatch(probe, /drawImage\(el/,

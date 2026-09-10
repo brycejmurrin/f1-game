@@ -10,7 +10,8 @@
 // it never takes back, and the two eviction tests count builds against caches
 // that a shared page would already have warm (a warm key means no build, the
 // "wait for the Nth mesh" never resolves, and the eviction order is whatever
-// the previous test left). 5 boots became 3. UNVERIFIED IN A BROWSER.
+// the previous test left). 5 boots became 3, and the two eviction tests then
+// went from a garage walk + race boot PER PART to one boot each (see raceOnce).
 import { sharedTest as test, test as freshTest, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { ensureLive, toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
@@ -100,46 +101,27 @@ async function installMeshProbe(page) {
   });
 }
 
-// THE GARAGE DOOR. The eviction test below opens this screen NINE times in one
-// test, and the old route was menu -> #mb-race -> #select -> #sel-go, which
-// builds the circuit picker and then the TRACK on the way to a screen about
-// neither — and then applyPartsAndPark throws that track away by calling
-// __apex.race("monza") itself. Measured on this box: 27.6 s that way against
-// 11.1 s through #mb-garage, so nine openings were ~250 s of pure waste against
-// a 360 s budget the test was blowing at 366 s. See docs/TESTING.md.
-async function openSetup(page) {
-  const onSetup = await page.locator("#carsetup").isVisible().catch(() => false);
-  if (onSetup) return;
-  const onMenu = await page.locator("#overlay").isVisible().catch(() => false);
-  if (!onMenu) {
-    // Mid-race, or on the select screen: get back to the menu first.
-    const racing = await page.locator("#pausebtn").isVisible().catch(() => false);
-    if (racing) { await page.locator("#pausebtn").click(); await page.locator("#pm-quit").click(); }
-    else await page.locator("#sel-back").click().catch(() => {});
-    await page.locator("#overlay").waitFor({ state: "visible", timeout: 20_000 });
-  }
-  await page.locator("#mb-garage").click();
-  await page.locator("#carsetup").waitFor({ state: "visible" });
-}
-
-async function ensureUnlimited(page) {
-  const on = await page.locator("#cs-unlimited").evaluate((el) => el.classList.contains("on"));
-  if (!on) await page.locator("#cs-unlimited").click();
-}
-
-async function pickOpt(page, catId, optId) {
-  await page.locator(`#cs-tabs [data-cs-cat="${catId}"]`).click();
-  await page.locator(`#cs-options [data-cs-opt="${optId}"]`).click();
-}
-
-async function applyPartsAndPark(page) {
-  await page.locator("#cs-done").click();
-  // Wait for the GARAGE to close, not for #race-settings to open: entered
-  // through #mb-garage, DONE returns to the menu (openGarage sets
-  // garageReturn), and this helper never used race-settings for anything —
-  // it starts the race through the hook on the next line.
-  await page.locator("#carsetup").waitFor({ state: "hidden" });
-  // Skip race-settings UI — startRace via the public hook (recomputes mods).
+// ONE BOOT PER TEST. The eviction tests used to walk the GARAGE for every part
+// — open the sheet, click the tab, click the option, DONE, boot a race through
+// the hook, wait for the mesh, pause, quit — four times for the body test and
+// nine for the wheels. Every one of those clicks needs Playwright's
+// actionability poll, which ticks on rAF, and a page running the game loop
+// under SwiftShader starves rAF: measured 2026-09-10, 23-29 s PER CLICK with
+// one worker on an otherwise idle 4-core box, so the body test ran 258 s
+// against its 240 s budget and the wheel test 391 s against 360 s, alone,
+// with nothing asserted wrong. The garage route had already been cut once
+// (menu -> #mb-garage instead of the circuit picker, docs/TESTING.md) and it
+// was still the whole cost.
+//
+// The caches are keyed on the RESOLVED part ids (playerVisualKey,
+// playerTyreId:playerBrakeId), refreshed by recomputePlayerMods — which the
+// garage's DONE runs and a race boot runs. __apex.garageParts(parts) writes
+// the same setup the sheet writes and, with the garage closed, runs that same
+// recompute, so the NEXT FRAME of a race already running re-keys the player
+// body, the cockpit body and the wheel pair and builds the miss. No sheet, no
+// second boot, no pause/quit: the subject (a bounded GPU cache evicting in
+// order) is exactly what is left.
+async function raceOnce(page) {
   await page.evaluate(() => {
     window.__apex.race("monza");
     window.__apex.park(0.1);
@@ -148,28 +130,11 @@ async function applyPartsAndPark(page) {
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
-async function quitRace(page) {
-  // STOP THE RENDER LOOP ACROSS THE CLICKS, then hand it back.
-  //
-  // Playwright will not click until the element is visible, enabled and STABLE
-  // — not moving between two animation frames. A page running the game loop
-  // under SwiftShader starves rAF so badly that "stable" never arrives, so
-  // #pm-quit sat in `attempting click action / waiting for element to be
-  // visible, enabled and stable` until the 360 s test budget expired. Measured
-  // on an IDLE box (loadavg 1.2), so this is not the machine: it is the same
-  // starvation wait-polling.test.mjs documents for timeouts, reaching
-  // actionability instead.
-  //
-  // This is the one place in this file where the loop can be stopped safely.
-  // The mesh counting depends on it — getPlayerWheelMeshes() and
-  // getFieldWheelMeshes() are reached from the DRAW path, so nothing is built
-  // while it is off — and quitting is pure menu work with no mesh in it. Hence
-  // off for the two clicks, on again before the caller races anything.
-  await page.evaluate(() => window.__apex.headless(true));
-  await page.locator("#pausebtn").click();
-  await page.locator("#pm-quit").click();
-  await page.locator("#overlay").waitFor({ state: "visible", timeout: 15_000 });
-  await page.evaluate(() => window.__apex.headless(false));
+// Fit catalog part ids onto the current team mid-race. Throws on a refused
+// hook rather than letting the mesh wait below time out and blame the box.
+async function fitParts(page, parts) {
+  const r = await page.evaluate((p) => window.__apex.garageParts(p), parts);
+  if (!r || !r.ok) throw new Error("__apex.garageParts refused: " + JSON.stringify(r));
 }
 
 test.describe("Parts mesh caches — eviction bounds", () => {
@@ -291,12 +256,15 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       if (team) localStorage.removeItem("apex26.parts." + team.id);
     });
 
+    await raceOnce(page);
+    // Four engines with DIFFERENT geometry recipes, so each fit is a new visual
+    // key: the chase camera draws the player body on the next frame and the
+    // cockpit camera the cockpit body, and each miss is one build the probe
+    // counts. The first is the default already built by the boot frame.
     const engines = ["stock", "lean_burn", "performance", "turbo"];
     for (let i = 0; i < engines.length; i++) {
-      await openSetup(page);
-      await ensureUnlimited(page);
-      await pickOpt(page, "engine", engines[i]);
-      await applyPartsAndPark(page);
+      await fitParts(page, { engine: engines[i] });
+      await page.evaluate(() => window.__apex.camera("chase"));
       await page.waitForFunction(
         (min) => window.__partsMeshProbe.bodyMeshes.length >= min,
         i + 1,
@@ -308,7 +276,6 @@ test.describe("Parts mesh caches — eviction bounds", () => {
         i + 1,
         { polling: 100, timeout: 20_000 }
       );
-      await quitRace(page);
     }
 
     const stats = await page.evaluate(() => ({
@@ -366,19 +333,15 @@ test.describe("Parts mesh caches — eviction bounds", () => {
       ["qualigum", "regen_brakes"],
     ];
 
+    await raceOnce(page);
     for (let i = 0; i < combos.length; i++) {
-      const [tyre, brake] = combos[i];
-      await openSetup(page);
-      await ensureUnlimited(page);
-      await pickOpt(page, "tyres", tyre);
-      await pickOpt(page, "brakes", brake);
-      await applyPartsAndPark(page);
+      const [tyres, brakes] = combos[i];
+      await fitParts(page, { tyres, brakes });
       await page.waitForFunction(
         (min) => window.__partsMeshProbe.wheelMeshes.length >= min,
         (i + 1) * 4,
         { polling: 100, timeout: 20_000 }
       );
-      await quitRace(page);
     }
 
     const stats = await page.evaluate(() => ({

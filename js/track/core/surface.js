@@ -108,3 +108,4 @@ const TrackSurface = (function () {
 
   return { profile, heightAt };
 })();
+Object.freeze(TrackSurface);

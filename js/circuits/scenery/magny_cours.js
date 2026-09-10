@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["magny_cours"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
         pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const LEAF = [0.19, 0.44, 0.20], LEAF_D = [0.14, 0.35, 0.17];
       const POPLAR = [0.26, 0.48, 0.24], POPLAR_D = [0.20, 0.40, 0.20];
@@ -253,9 +252,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [120, 48, 150, 40, 10, 5, [0.20, 0.40, 0.20]],
         [220, 38, 200, 54, 16, 8, [0.17, 0.35, 0.18]],

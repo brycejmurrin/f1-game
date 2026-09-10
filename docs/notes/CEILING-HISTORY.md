@@ -1687,6 +1687,20 @@ adoption was 54.
   and a HOST's plan for the race about to start is set before `startRace` runs,
   so calling it there threw the plan away. Caught by the game-VM suite.)
 
+### `waitForTimeout` — fixed sleeps in the suite (added 2026-09-10)
+
+```
+Measured 2026-09-10: 157 `waitForTimeout(` sites under tests/specs and
+tests/helpers, none of them linted. A sleep is a guess about the machine:
+tests/helpers/track-helpers.js slept 2.5 s + 1.8 s per lap position to "let
+the pose present", which is two frames on an idle SwiftShader box and none on
+a loaded one — the non-determinism the file's own header documents. Those two
+became condition waits on __apex.renderClock() advancing (a rendered frame,
+however long it takes), so the ceiling is set at the resulting 155 with the
+default slack. LOWER it as sites are converted to `__apex`-state waits with
+{ polling: 100 }; a raise needs a reason at the call site.
+```
+
 ## CSS token adoption (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-04)
 
 Four counts left `tests/unit/css-token-adoption.test.mjs` for the one ratchet
@@ -2747,6 +2761,21 @@ This is the third.
 Paid, not avoided: there is no way to add a settings row without shell nodes,
 and folding it into an existing row would make one control mean two things.
 
+## 2026-09-10 — the whole-tree audit pass
+
+`js/game.js` 9915 → 9609 lines (5323 → 5123 code lines): the car-car contact
+resolver moved to `js/physics/collide.js`. `js/render/glx/glx.js` 2609 → 2601
+(post helpers shared through `PostCommon`). `bareCatches` 156 → 145.
+
+Raised, each for a reason that is the change itself: `js/track/tracks.js`
+2401 → 2433 (`api.K` / `api.lapBounds()` replace 37 per-circuit copies, and
+`dressingExcluded` now goes through `TrackSpace.sceneryRange`);
+`js/net/lobby.js` 1712 → 1753 (quali coercion, parts budget check, HELLO rate
+limit, `makeAnswer` re-entry guard, `stopScan` on every exit);
+`js/agent/agentview.js` 2455 → 2456 and `js/car/car3d.js` 4135 → 4136 (one
+`Object.freeze` tail line each — `tests/unit/frozen-globals.test.mjs`).
+New tree ratchet `waitForTimeout` at 155 (fixed sleeps in specs and helpers;
+the two track-helper sleeps became frame waits).
 ## 2026-09-10 — re-merge deploy (renderer / garage-angles)
 
 `js/game.js` lines -> **9916** / codeLines -> **5324**;
@@ -2769,6 +2798,12 @@ reuse matching preparation, and handle failed optional loads. No new facade
 members or top-level lets; the existing flyby scheduler owns this lifecycle.
 Ceilings remeasured with `ratchets.mjs --update` for this added behavior.
 
+2026-09-10 — `js/game.js` gMembers 238 -> **239**: `recomputePlayerMods` joins
+the façade so `__apex.garageParts` can refit parts on a RUNNING race. The two
+mesh-cache eviction specs walked the garage sheet and booted a race per part
+(23-29 s per click under SwiftShader; 258 s and 391 s alone against 240 s and
+360 s budgets); one boot plus the hook is the whole test now. Lines unchanged
+(the member joins an existing list line).
 ## 2026-09-10 — incremental selector car assets
 
 `js/game.js` gains 37 code lines to prepare car body/cockpit meshes and livery
@@ -2777,3 +2812,14 @@ work, and log selector versus race-time CPU preparation cost. It uses existing
 bounded caches and visual-only descriptors; no live field or simulation RNG is
 changed. Ceilings remeasured with `ratchets.mjs --update`; no new facade members
 or top-level lets. GPU program compilation remains race-owned and unmeasured.
+
+## 2026-09-10 — car-draw extraction
+
+`js/game.js` 9656 → 9041 lines (codeLines 5175 → 4739, topLets 153 → 146):
+the car-drawing seam moved to `js/car/car-draw.js` (`CarDraw.create(G, deps)`)
+— the bounded mesh / livery-atlas caches, the player's resolved wheel spec and
+cosmetic key, the decal queue and its flush, the cockpit rig, the planted
+wheels, the warm-ups and the optional GLB body. game.js keeps the render
+loop, the shadow batches and the ground/attitude matrices and reaches the
+caches only through the module's surface. No new façade members. Ceilings
+lowered with `ratchets.mjs --update`.

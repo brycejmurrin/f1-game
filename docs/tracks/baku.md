@@ -2,6 +2,10 @@
 
 **Theme:** `street_night` · **Setting:** NIGHT-ish / dusk street race
 
+> The real Azerbaijan Grand Prix runs in DAYTIME (a 15:00–17:00 local start);
+> the def's `night: true` is a look choice for the neon-and-floodlight brief
+> below, not a claim about the race. Leave it unless the brief changes.
+
 ## 1. Setting
 A 6.0 km, 20-corner street circuit threading through the heart of Baku. The lap mixes wide modern boulevards along the Caspian Sea with a tight, twisting climb around the medieval walls of Içerisheher (the Old City). The Tilke-designed track wraps Government House, the Presidential Palace, and runs beneath the Flame Towers on the hill above. Two worlds collide: ancient sandstone fortress walls versus glass-and-steel Caspian-front towers.
 

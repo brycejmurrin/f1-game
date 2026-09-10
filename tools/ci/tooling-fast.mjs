@@ -88,6 +88,17 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // looks exactly like the bug it guards against.
   "tests/unit/parts-ladder.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
+  // GATE GAP (2026-09-10): these three garage files and the three steering
+  // files below sat in test:garage-unit / test:steering-unit, which ran in NO
+  // gate — not here, not ci.yml's node step, so not deploy.mjs either. Each is
+  // under 3 s (livery-decal-surfaces 2.8 s, body-split and helmets 0.3 s);
+  // livery-contrast (9.7 s) and cover-legibility (7.4 s) stay CI-only.
+  "tests/unit/livery-decal-surfaces.test.mjs",
+  "tests/unit/body-split.test.mjs",
+  "tests/unit/helmets.test.mjs",
+  "tests/unit/digital-steer.test.mjs",
+  "tests/unit/key-binds.test.mjs",
+  "tests/unit/settings-export.test.mjs",
   // ...and the garage's SIGNS: no prop mounted within half a metre in front of
   // a wall quad. Two shipped cut-off wordmarks and one never-visible live
   // trace were each found by a screenshot; this puts them in the edit loop.
@@ -138,6 +149,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/generated-docs.test.mjs",
   "tests/unit/gen-arch-table.test.mjs",
   "tests/unit/skill-progressive.test.mjs",
+  // Host configs — the three MCP catalogs, the path-scoped rules, the hooks —
+  // asserted instead of described; under a second.
+  "tests/unit/agent-config.test.mjs",
+  // Every freezable module surface stays frozen (pure file read; < 1 s).
+  "tests/unit/frozen-globals.test.mjs",
   "tests/unit/component-inventory.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
   "tests/unit/sheetshape-registry.test.mjs",

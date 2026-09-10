@@ -218,21 +218,22 @@ test("resolveLivery falls back through the team's own list", () => {
 
 test("resolveLivery and the live preview keep every editor tint", () => {
   // Aston's launch car authors spineTint; dropping it in resolveLivery painted
-  // stripe||accent (lime) on the crown band. Editor tints must reach the atlas.
-  // Dead keys (crestInk / plateInk / ridgeTint / airboxTint) are migrated away
-  // and must NOT be copied through resolveLivery.
+  // stripe||accent (lime) on the crown band. Both paths go through pickLivery /
+  // LIVERY_FIELDS; migratePaint strips dead keys before pick.
   const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const fields = GAME.match(/const LIVERY_FIELDS = \[([\s\S]*?)\];/);
+  assert.ok(fields, "LIVERY_FIELDS is gone from js/game.js");
   for (const k of ["spineTint", "sideTint", "sunTint", "bandTint2", "plateTint",
     "saddleTint", "coverBind", "finHandoff"]) {
-    assert.match(GAME, new RegExp(k + ":\\s*l\\." + k + "\\s*\\|\\|\\s*null"),
-      `draft resolveLivery must copy ${k}`);
-    assert.match(GAME, new RegExp(k + ":\\s*liv\\." + k + "\\s*\\|\\|\\s*null"),
-      `cached resolveLivery must copy ${k}`);
+    assert.match(fields[1], new RegExp('"' + k + '"'), `LIVERY_FIELDS must carry ${k}`);
   }
   for (const k of ["crestInk", "plateInk", "ridgeTint", "airboxTint"]) {
-    assert.equal(new RegExp(k + ":\\s*l(?:iv)?\\." + k).test(GAME), false,
-      `resolveLivery must not copy dead key ${k}`);
+    assert.equal(new RegExp('"' + k + '"').test(fields[1]), false,
+      `LIVERY_FIELDS must not carry dead key ${k}`);
   }
+  assert.match(GAME, /return pickLivery\(l\)/, "draft resolveLivery must resolve through pickLivery");
+  assert.match(GAME, /liv \? pickLivery\(liv\)/, "cached resolveLivery must resolve through pickLivery");
+  assert.match(GAME, /Liveries\.migratePaint/, "resolveLivery must migrate before pick");
   assert.match(SHEET, /id:\s*"default"/,
     "livePreviewDraft must set id:\"default\" so brand plates stay on while editing");
   assert.equal(/colorRow\("CREST INK"/.test(SHEET), false, "CREST INK row must be gone");

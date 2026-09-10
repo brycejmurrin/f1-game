@@ -109,7 +109,7 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
 const LIV_ROW_HINT = {
   c1: "PRIMARY — the bodywork itself: monocoque, nose, sidepods, engine cover.",
   c2: "ACCENT — the second BASE colour. Unset optional rows fall back to this or PRIMARY — not to each other.",
-  accent: "DETAIL — trim only (pinstripe, sidepod flash, nose flank spans, floor-edge lip, fin strip). The colour you pick is used as-is. Unset = ACCENT (then contrast-checked). Does not recolour stripe, saddle, sun, plate, or marks.",
+  accent: "DETAIL — trim only (pinstripe, sidepod flash, nose flank spans, floor-edge lip, fin strip) and the keyline round the race number. The colour you pick is used as-is. Unset = ACCENT (then contrast-checked). Does not recolour stripe, saddle, sun, plate, or marks.",
   stripe: "BODY STRIPE — full spine, nose tip to engine cover. This row only.",
   noseStripe: "NOSE STRIPE — the nose crown only, tip to bulkhead. Layers on top of BODY STRIPE.",
   nose: "NOSE CAP — a painted nose cone. Unset = the bodywork colour.",
@@ -126,7 +126,7 @@ const LIV_ROW_HINT = {
   fin: "TAIL FIN — the shark-fin plate. The colour you pick is used as-is (even under FIN HANDOFF CONTRAST). Unset = ACCENT, or a contrast-derived colour when HANDOFF is CONTRAST. Needs a FIN SHAPE other than NONE.",
   finArt: "TAIL GRAPHIC — fin motif / badge ink. The colour you pick is used as-is. Unset = first base colour that clears the fin plate.",
   halo: "HALO — the cockpit halo loop.",
-  logo: "TEAM LOGO — the dominant shape of the team mark everywhere it is drawn: crown, fin badge, SPINE SIDE logo/emblem/lockup, garage wall. The colour you pick is used as-is (no contrast override). Lettering (numbers, wordmarks) auto-contrasts; it is not this row.",
+  logo: "TEAM LOGO — the dominant shape of the team mark everywhere it is drawn: crown, fin badge, SPINE SIDE logo/emblem/lockup, WRAP flank bull, garage wall. The colour you pick is used as-is (no contrast override). Lettering (numbers, wordmarks) auto-contrasts; it is not this row.",
   logo2: "LOGO DETAIL — the mark's second shape (shield, disc, traced layer, or island), named per team. One-loop marks have no such row. The colour you pick is used as-is. Authored plates reach the flank logo/emblem too.",
   logo3: "OUTLINE — a rim around the mark only, in the colour you pick. Off by default.",
   finish: "FINISH — the paint surface: gloss, satin or chrome.",
@@ -142,7 +142,7 @@ const LIV_ROW_HINT = {
   tcam: "T-CAM — the camera housing colour. AUTO is the real rule: car 1 black, car 2 yellow.",
   coverVents: "COVER VENTS — cooling slits cut into the engine cover. Geometry, not paint.",
   spineHeight: "SPINE HEIGHT — how tall the cover crown runs behind the roll hoop. DORSAL is the fin-less 2026 look every team uses.",
-  spineSide: "SPINE SIDE — what the cover FLANK carries, both sides: number, mark, code, wordmark, title board, emblem, ribbon, lockup, band, sash, or slash.",
+  spineSide: "SPINE SIDE — what the cover FLANK carries, both sides: number, mark, code, number plate, wordmark, duo, ribbon, lockup, title board, emblem, or a colour fill (band, sash, slash, rake, shoulder, starfield — SIDE TINT paints those).",
   bodySplit: "BODY SPLIT — paint the body LEFT (primary) / RIGHT (secondary). Cadillac's black/white launch car.",
 };
 // `liv` is a saved livery for edit/copy, or a bare {c1,c2} for a new one: an

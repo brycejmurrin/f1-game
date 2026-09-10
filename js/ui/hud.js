@@ -888,3 +888,4 @@ return { updateHud, invalidateMap, flashSector };
 
 return { create };
 })();
+Object.freeze(GameHud);

@@ -120,3 +120,4 @@ const DataStandings = (function () {
   }
   return { create };
 })();
+Object.freeze(DataStandings);

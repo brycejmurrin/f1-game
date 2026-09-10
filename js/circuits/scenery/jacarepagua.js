@@ -6,21 +6,18 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["jacarepagua"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
         tree, bush, ridge, mountain, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         floodMast, cameraTower, sponsorHoarding, palm, terrace,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
         addBox, addCyl, addCone, addPrism } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const PALM = [0.18, 0.44, 0.20], PALM_D = [0.14, 0.36, 0.17];
       const RESTINGA = [0.34, 0.44, 0.24];   // low sandy coastal scrub
       const SAND = [0.76, 0.71, 0.56];
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const rg of [
         { extra: 220, wMin: 190, hMin: 150, hVar: 90, wVar: 70, count: 16, arc: [0.55, 1.35],
           opts: { seg: 8, rough: 0.20, forest: [0.12, 0.32, 0.16], rock: [0.44, 0.42, 0.40], snowline: 2 } },

@@ -54,7 +54,7 @@ function loadLightTune() {
   sb.window = sb;
   vm.createContext(sb);
   seedLog(sb);
-  for (const f of ["js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"])
+  for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"])
     vm.runInContext(readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), sb);
   return sb.LightTune;
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Bake copied LIGHTING TUNER settings into js/lighting/presets.js and bump the
-// cache version — the "apply" step of the in-game tuner's COPY VALUES export.
+// Bake copied LIGHTING TUNER settings into js/lighting/presets.js (no cache
+// bump) — the "apply" step of the in-game tuner's COPY VALUES export.
 //
 // Usage:
 //   node .claude/skills/lighting-tuner/scripts/bake.mjs <file>    # read the blob from a file

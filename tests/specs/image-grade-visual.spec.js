@@ -229,12 +229,21 @@ test.describe("rendered image grade", () => {
     expect(b.max, "BLACKS has no positive travel — this test would be vacuous").toBeGreaterThan(0);
     expect(b.min, "BLACKS has no negative travel — this test would be vacuous").toBeLessThan(0);
     await setTune(page, { blacks: b.max });
-    const raised = rangeChanges(baseline, await pixels(page), 2, 30);
+    const raisedPx = await pixels(page);
+    const raised = rangeChanges(baseline, raisedPx, 2, 30);
     await setTune(page, { blacks: b.min });
-    const crushed = rangeChanges(baseline, await pixels(page), 2, 30);
-    expect(raised.count).toBeGreaterThan(1000);
-    expect(raised.signed).toBeGreaterThan(1);
-    expect(crushed.signed).toBeLessThan(-1);
+    const crushedPx = await pixels(page);
+    const crushed = rangeChanges(baseline, crushedPx, 2, 30);
+    // A NaN here is two captures of DIFFERENT sizes (luminance past the end
+    // of the shorter array), not a grade that did nothing: say which.
+    const diag = JSON.stringify({
+      px: [baseline.length / 4, raisedPx.length / 4, crushedPx.length / 4],
+      baseline: histogramStats(baseline), raised, crushed,
+      gov: await page.evaluate(() => window.__apex.renderScale()),   // a mid-test resize is the governor's auto-res
+    });
+    expect(raised.count, diag).toBeGreaterThan(1000);
+    expect(raised.signed, diag).toBeGreaterThan(1);
+    expect(crushed.signed, diag).toBeLessThan(-1);
   });
 
   test("shadows predominantly change dark pixels", async ({ page }) => {
@@ -244,10 +253,14 @@ test.describe("rendered image grade", () => {
     await setTune(page, { shadows: 0.5 });
     const changed = await pixels(page);
     const delta = tonalChanges(baseline, changed);
-    expect(delta.darkCount).toBeGreaterThan(1000);
-    expect(delta.brightCount).toBeGreaterThan(1000);
-    expect(delta.darkSigned).toBeGreaterThan(0.5);
-    expect(delta.dark).toBeGreaterThanOrEqual(delta.bright * 2);
+    const diag = JSON.stringify({
+      px: [baseline.length / 4, changed.length / 4], delta,
+      gov: await page.evaluate(() => window.__apex.renderScale()),   // a mid-test resize is the governor's auto-res
+    });
+    expect(delta.darkCount, diag).toBeGreaterThan(1000);
+    expect(delta.brightCount, diag).toBeGreaterThan(1000);
+    expect(delta.darkSigned, diag).toBeGreaterThan(0.5);
+    expect(delta.dark, diag).toBeGreaterThanOrEqual(delta.bright * 2);
   });
 
   test("highlights predominantly change bright pixels", async ({ page }) => {

@@ -21,7 +21,7 @@
     country: "Portugal",
     night: false,
     theme: "modern",
-    lengthKm: 4.3,
+    lengthKm: 4.182,  // official length of the traced (post-2000) layout; builds 4.140 km
     baseHW: 7,
     sceneryCoordinates: "racing",
     terrainOuter: 110,

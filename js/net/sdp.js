@@ -18,15 +18,8 @@ const NetSdp = (function () {
 
   const line = (sdp, re) => { const m = sdp.match(re); return m ? m[1] : null; };
 
-  function hexToBytes(hex) {
-    const clean = hex.replace(/[^0-9a-fA-F]/g, "");
-    if (clean.length % 2) return null;
-    const out = new Uint8Array(clean.length / 2);
-    for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
-    return out;
-  }
-  const bytesToHex = (b, sep) =>
-    Array.from(b, (v) => v.toString(16).toUpperCase().padStart(2, "0")).join(sep || "");
+  const hexToBytes = (hex) => NetBytes.hexToBytes(hex);
+  const bytesToHex = (b, sep) => NetBytes.bytesToHex(b, sep);
 
   function v4ToBytes(addr) {
     const p = addr.split(".");
@@ -263,11 +256,7 @@ const NetSdp = (function () {
     ]).join("\r\n");
   }
 
-  function ascii(bytes, off, len) {
-    let s = "";
-    for (let i = 0; i < len; i++) s += String.fromCharCode(bytes[off + i]);
-    return s;
-  }
+  const ascii = (bytes, off, len) => NetBytes.ascii(bytes, off, len);
 
   // Hand our own reconstruction to a throwaway RTCPeerConnection before any
   // human ever sees it. This is the difference between "shortening the SDP is
@@ -305,3 +294,4 @@ const NetSdp = (function () {
 
   return { VERSION, pack, unpack, packChecked, verify };
 })();
+Object.freeze(NetSdp);

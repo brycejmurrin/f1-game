@@ -1,0 +1,38 @@
+---
+paths:
+  - "js/render/webgpu/**"
+---
+
+# WGX (WebGPU) — loads with js/render/webgpu/
+
+- Opt-in via `apex26.gfxBackend=webgpu`; GLX is the default fallback. The
+  soft-adapter gate refuses Dawn/SwiftShader or empty adapter info unless
+  `apex26.gfxWgxAllowSoftware=1`, so players get GLX rather than a white canvas.
+- Gate every WGSL or pipeline edit with `node tools/gfx/wgx-validate.mjs`
+  (~5 s, real Dawn WGSL + pipeline validation in-container; never ship
+  "read-verified" WGSL) plus `tests/unit/webgpu-lifecycle.test.mjs` and
+  `renderer-soft-lifecycle.test.mjs` (both in `test:tooling-fast`). Then
+  `node tools/gfx/gfx-probe.mjs --backend webgpu montreal` with `gpuErrors` 0.
+  Pixel truth needs a real GPU: dispatch `gpu-census.yml` on `macos-latest`
+  and read its Verdict step.
+- Five WGSL rules a mock device cannot enforce; breaking any makes the backend
+  refuse silently and fall back (`docs/research/WEBGPU-PARITY.md` §5a):
+  `sampleCount` is 1 or 4 only; `dpdx`/`dpdy`/`fwidth` only under uniform
+  control flow (WebKit errors where Dawn warns — hoist derivatives to the top
+  of `fs_main`); a TSL placeholder texture must carry the sampling state of the
+  texture that replaces it; register `addEventListener("uncapturederror")`
+  before `device.onuncapturederror` (deaf on iOS/Safari 26.0–26.5); WebKit caps
+  module-scope `var<private>` at 8,192 bytes per module.
+- A unit test is not boot evidence. Boot it live from a secure context
+  (`npx serve -l 3456 .`, then
+  `node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'`)
+  and confirm one positive signal: a clean WGX boot writes nothing, so assert
+  `canvas.getContext("webgl2") === null`. Traps: `docs/ARCHITECTURE.md`
+  §Boot evidence, `.claude/skills/mcp-probe/references/recipes.md`.
+- Real pixels on SwiftShader: `node tools/gfx/wgx-capture.mjs <track>` reads
+  back via `GLX.capturePixels()` (software adapters soft-present into a
+  COPY_SRC texture and never call `getCurrentTexture()`, whose first call breaks
+  `mapAsync` device-wide in headless). Not a performance oracle; MSAA paths
+  never run on software (forced MSAA 1).
+- Skill: `webgpu-debug`. Live probe: `mcp-probe`. Never probe github.io from
+  Chrome in this container — the deployed build is `deploy-research`.

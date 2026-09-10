@@ -426,3 +426,78 @@ test("a flank MARK lands where the flank is visible, under every crown", async (
   assert.deepEqual([...KNOWN].filter((k) => !bad.includes(k)), [],
     "these KNOWN gaps now pass — delete them from KNOWN");
 });
+
+// EVERY ROW OWNS ONE SURFACE — the two leaks left after the paint sheet went
+// logo-only (2026-09-10). A colour that reaches a surface its row does not
+// name is a coupling: the sheet cannot explain it, and the player finds it by
+// changing one thing and watching another move.
+const fillsIn = (ops, R) => new Set(ops
+  .filter((op) => op.kind === "fill" && op.style && alphaOf(op.style) >= 0.9)
+  .filter((op) => (op.pts || []).flat().some(([x, y]) => x >= R.x && x <= R.x + R.w && y >= R.y && y <= R.y + R.h))
+  .map((op) => op.style));
+
+test("a leftover CREST INK on a stored livery moves lettering only, never a derived fill", () => {
+  // crestInk left the sheet but is still read for glyphs on old garage files.
+  // It also seeded the DERIVED chains for the tricolour's 2nd band and the
+  // rake / shoulder flank fills, so one legacy key recoloured three surfaces
+  // that have rows of their own (2ND BAND / SIDE TINT).
+  const PICK = [1, 0, 1];
+  const hit = /^rgba?\(255,0,255[,)]/;
+  const bad = [];
+  for (const t of A.Teams.LIST) {
+    const base = A.Liveries.forTeam(t)[0];
+    // A cover/band pairing the magenta clears on either side, so the old chain
+    // would have taken it: near-black cover, white band.
+    const dark = { ...base, c1: [0.06, 0.06, 0.07], c2: [1, 1, 1], cover: null, spineTint: null, sideTint: null, bandTint2: null };
+    for (const [design, region] of [
+      [{ spineLogo: "tricolour" }, "crest"],
+      [{ spineLogo: "logo", spineSide: "rake" }, "spineSide"],
+      [{ spineLogo: "logo", spineSide: "shoulder" }, "spineSide"],
+      [{ spineLogo: "wrap", spineSide: "rake" }, "spineSide"],
+      [{ spineLogo: "wrap", spineSide: "shoulder" }, "spineSide"],
+      [{ spineLogo: "saddle", coverBind: "saddleWrap", spineSide: "shoulder" }, "spineSide"],
+    ]) {
+      for (const liv of [{ ...base, ...design }, { ...dark, ...design }]) {
+        const R = A.LT.REGIONS[region];
+        const off = fillsIn(A.paint(t.id, liv), R);
+        const on = fillsIn(A.paint(t.id, { ...liv, crestInk: PICK }), R);
+        if ([...on].some((s) => hit.test(s))) bad.push(`${t.id} ${JSON.stringify(design)}: crestInk painted a fill`);
+        else if ([...off].join("|") !== [...on].join("|"))
+          bad.push(`${t.id} ${JSON.stringify(design)}: fills moved with crestInk (${[...off]} → ${[...on]})`);
+      }
+    }
+  }
+  assert.deepEqual(bad, []);
+});
+
+test("an authored DETAIL is the number keyline, contrast or not", () => {
+  // DETAIL (liv.accent) paints the mesh trim as picked, and the atlas keyline
+  // round the race number used to be the same colour — until the legibility
+  // guard re-scored it and swapped in c2 or an ink. The guard owns the DEFAULT:
+  // a pick that fails it is still the pick, like every other row.
+  const strokesIn = (ops, R) => ops
+    .filter((op) => op.kind === "stroke" && op.style)
+    .filter((op) => (op.pts || []).flat().some(([x, y]) => x >= R.x && x <= R.x + R.w && y >= R.y && y <= R.y + R.h))
+    .map((op) => op.style);
+  for (const t of A.Teams.LIST) {
+    const base = A.Liveries.forTeam(t)[0];
+    const c1 = base.c1;
+    // A hair off the body colour: fails the guard's 1.6 floor against c1 by
+    // construction, so the old code would have replaced it.
+    const PICK = c1.map((v) => Math.max(0, Math.min(1, v * 0.94 + 0.02)));
+    const want = "rgba(" + PICK.map((v) => Math.round(v * 255)).join(",") + ",";
+    assert.ok(A.LT.contrast(PICK, c1) < 1.6, `${t.id}: the pick has to FAIL the guard or this proves nothing`);
+    // The nose board is the one number that ALWAYS strokes its keyline (the
+    // flank number's outline depends on the NUMBER FONT recipe).
+    const ops = A.paint(t.id, { ...base, accent: PICK });
+    const st = strokesIn(ops, A.LT.REGIONS.num);
+    assert.ok(st.some((s) => s.startsWith(want)),
+      `${t.id}: DETAIL ${want}..) never reaches the nose number keyline; strokes: ${[...new Set(st)].join(" ")}`);
+    // …and the DEFAULT is still guarded: with DETAIL unset and c2 == c1 the
+    // keyline must not be c1 on c1.
+    const same = A.paint(t.id, { ...base, accent: null, c2: c1 });
+    const c1css = "rgba(" + c1.map((v) => Math.round(v * 255)).join(",") + ",";
+    assert.ok(!strokesIn(same, A.LT.REGIONS.num).some((s) => s.startsWith(c1css + "0.9)")),
+      `${t.id}: the derived keyline still paints the body colour on itself`);
+  }
+});

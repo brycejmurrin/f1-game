@@ -100,17 +100,27 @@ jobs:
 
       - name: Render
         shell: bash
+        # Dispatch inputs reach the script through `env`, never interpolated
+        # into `run:` — a `${{ inputs.x }}` inside the script body is pasted
+        # verbatim before bash sees it, so a value with a quote or `;` is a
+        # command (import-models.yml has always done it this way).
+        env:
+          SHOT_TEAM: ${{ inputs.team || 'mclaren' }}
+          SHOT_TOD: ${{ inputs.tod || 'day' }}
+          SHOT_LIVERY: ${{ inputs.livery }}
+          SHOT_VIEWS: ${{ inputs.views }}
+          SHOT_PRESET: ${{ inputs.preset || 'cockpit' }}
         run: |
-          ARGS="--team=${{ inputs.team || 'mclaren' }} --tod=${{ inputs.tod || 'day' }}"
+          ARGS="--team=$SHOT_TEAM --tod=$SHOT_TOD"
           ARGS="$ARGS --out=scratch/renders/cars/ci --w=1100 --h=800"
           # The GPU is the whole reason this job exists — but keep the Linux
           # control on swiftshader, which is what it is a control FOR.
           if [ "$RUNNER_OS" != "Linux" ]; then ARGS="$ARGS --gpu=1"; fi
-          if [ -n "${{ inputs.livery }}" ]; then ARGS="$ARGS --livery=${{ inputs.livery }}"; fi
-          if [ -n "${{ inputs.views }}" ]; then
-            ARGS="$ARGS --views=${{ inputs.views }}"
+          if [ -n "$SHOT_LIVERY" ]; then ARGS="$ARGS --livery=$SHOT_LIVERY"; fi
+          if [ -n "$SHOT_VIEWS" ]; then
+            ARGS="$ARGS --views=$SHOT_VIEWS"
           else
-            ARGS="$ARGS --preset=${{ inputs.preset || 'cockpit' }}"
+            ARGS="$ARGS --preset=$SHOT_PRESET"
           fi
           echo "render-car $ARGS"
           node tools/car/render-car.mjs $ARGS

@@ -33,6 +33,7 @@ globalThis.localStorage = {
   removeItem(k) { this._m.delete(k); },
 };
 
+globalThis.NetBytes = eval(fs.readFileSync(path.join(ROOT, "js/net/bytes.js"), "utf8") + ";NetBytes");
 const NetRendezvous = eval(
   fs.readFileSync(path.join(ROOT, "js/net/rendezvous.js"), "utf8") + ";NetRendezvous");
 
@@ -67,11 +68,12 @@ function relay(opts = {}) {
       const parsed = JSON.parse(body || "{}");
       const payload = parsed.payload;
       const owner = parsed.owner || null;
-      if (typeof payload !== "string" || !payload) return send(400, { error: "bad_payload" });
+      // v2 envelopes only, like worker/rendezvous.js: the operator never holds
+      // a plaintext SDP, and a retry is recognised by the owner capability.
+      if (typeof payload !== "string" || !payload.startsWith("v2.")) return send(400, { error: "bad_payload" });
       if (slot === "offer" && room.offer) {
         const sameOwner = owner && room.offer.owner && owner === room.offer.owner;
-        const sameLegacy = !owner && !room.offer.owner && room.offer.payload === payload;
-        if (!sameOwner && !sameLegacy) return send(409, { error: "taken" });
+        if (!sameOwner) return send(409, { error: "taken" });
       }
       room[slot] = { payload, owner };
       rooms.set(code, room);
@@ -104,6 +106,25 @@ test("codes avoid the characters people mishear", () => {
   }
 });
 
+test("codes are drawn without modulo bias", () => {
+  // 256 % 31 = 8, so `byte % 31` made the first eight letters 9/8 as likely
+  // as the rest. Rejection sampling redraws any byte at or above 248: feed
+  // the generator exactly those bytes first and they must never become a
+  // letter, while the in-range bytes that follow map straight through.
+  const orig = crypto.getRandomValues.bind(crypto);
+  const feed = [255, 254, 250, 248, 0, 31, 62, 247, 1, 2, 3];   // 4 rejects, then 7 draws
+  let cursor = 0;
+  Object.defineProperty(crypto, "getRandomValues", {
+    configurable: true,
+    value: (arr) => { for (let i = 0; i < arr.length; i++) arr[i] = feed[cursor++ % feed.length]; return arr; },
+  });
+  try {
+    const c = NetRendezvous.makeCode();
+    const A = NetRendezvous.ALPHABET;
+    assert.equal(c, A[0] + A[0] + A[0] + A[247 % 31] + A[1] + A[2], "rejected bytes vanish, the rest map in order");
+  } finally { delete crypto.getRandomValues; assert.equal(typeof orig, "function"); }
+});
+
 test("codes are not sequential or repeated", () => {
   // A predictable code is one somebody else can already be sitting on.
   const seen = new Set();
@@ -132,7 +153,7 @@ test("the two halves meet at the same code", async () => {
     const code = NetRendezvous.makeCode();
     assert.equal((await NetRendezvous.put(code, "offer", "APEX1.s.OFFER")).ok, true);
     const stored = r.rooms.get(code).offer;
-    assert.match(stored.payload, /^v1\./, "private relay must store a versioned ciphertext envelope");
+    assert.match(stored.payload, /^v2\./, "private relay must store a versioned ciphertext envelope");
     assert.ok(!stored.payload.includes("APEX1.s.OFFER"), "SDP code must not be visible to the relay");
     assert.match(stored.owner, /^[A-Za-z0-9_-]{16,128}$/, "offer carries a stable ownership capability");
     const got = await NetRendezvous.get(code, "offer");
@@ -159,14 +180,19 @@ test("an encrypted offer retry changes ciphertext but keeps ownership", async ()
   } finally { await r.close(); }
 });
 
-test("new clients can read a legacy two-minute plaintext mailbox record", async () => {
+test("a plaintext (or v1) mailbox record from the relay is refused, never used as an SDP", async () => {
+  // The legacy branch let the Worker operator hand back any string as the
+  // payload. Gone: a record that is not a v2 envelope reads as corrupt and the
+  // lobby falls back to the invite link.
   const r = await relay();
   try {
     const code = NetRendezvous.makeCode();
     r.rooms.set(code, { offer: { payload: "LEGACY-OFFER", owner: null } });
     const got = await NetRendezvous.get(code, "offer");
-    assert.equal(got.ok, true);
-    assert.equal(got.body.payload, "LEGACY-OFFER");
+    assert.equal(got.ok, false);
+    assert.equal(got.error, "corrupt");
+    r.rooms.set(code, { offer: { payload: "v1.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", owner: null } });
+    assert.equal((await NetRendezvous.get(code, "offer")).error, "corrupt");
   } finally { await r.close(); }
 });
 
@@ -347,15 +373,37 @@ test("two seals of the same text differ", async () => {
   assert.notDeepEqual([...one], [...two]);
 });
 
-test("the topic does not leak the room code", async () => {
-  // Topics on a public broker are enumerable. If the topic contained the code,
-  // watching the namespace would hand out the codes themselves.
+test("the envelope is bound to its slot: an offer cannot be replayed as an answer", async () => {
+  // v2 carries the slot name as AES-GCM additional data. A relay operator (or
+  // anyone who can answer for one) holding a sealed offer must not be able to
+  // hand it back through the answer slot and have the host accept it.
   const code = NetRendezvous.makeCode();
-  const topic = await NetRendezvous.topicFor(code, "offer");
-  assert.ok(!topic.includes(code), `${topic} must not contain ${code}`);
-  assert.ok(topic.endsWith("/offer"));
-  // ...but it must be stable, or the two peers would never meet.
-  assert.equal(await NetRendezvous.topicFor(code.toLowerCase(), "offer"), topic);
+  const sealed = await NetRendezvous.seal(code, "APEX1.s.OFFER", "offer");
+  assert.equal(await NetRendezvous.open(code, sealed, "offer"), "APEX1.s.OFFER");
+  assert.equal(await NetRendezvous.open(code, sealed, "answer"), null, "wrong slot fails the tag");
+  assert.equal(await NetRendezvous.open(code, sealed), null, "and so does no slot at all");
+  // Fresh salt AND fresh IV per envelope, so the first 28 bytes never repeat.
+  const again = await NetRendezvous.seal(code, "APEX1.s.OFFER", "offer");
+  assert.notDeepEqual([...sealed.slice(0, 16)], [...again.slice(0, 16)], "random salt");
+  assert.notDeepEqual([...sealed.slice(16, 28)], [...again.slice(16, 28)], "random iv");
+  // Too short to hold salt + iv + tag is refused without touching WebCrypto.
+  assert.equal(await NetRendezvous.open(code, sealed.slice(0, 40), "offer"), null);
+});
+
+test("the private-relay envelope is v2 only — plaintext from the Worker is refused", async () => {
+  // The old openPrivate() returned an unversioned string AS the payload, so a
+  // relay operator could substitute any SDP. Both peers run the same build
+  // (the handshake's build check refuses anything else), so nobody legitimate
+  // can still be sending v1 or plaintext.
+  const code = NetRendezvous.makeCode();
+  const env = await NetRendezvous.sealPrivate(code, "offer", "APEX1.s.X");
+  assert.match(env, /^v2\.[A-Za-z0-9_-]+$/, "versioned, url-safe base64");
+  assert.equal(await NetRendezvous.openPrivate(code, "offer", env), "APEX1.s.X");
+  assert.equal(await NetRendezvous.openPrivate(code, "answer", env), null, "slot-bound here too");
+  assert.equal(await NetRendezvous.openPrivate(code, "offer", "APEX1.s.PLAINTEXT"), null);
+  assert.equal(await NetRendezvous.openPrivate(code, "offer", "v1." + env.slice(3)), null);
+  assert.equal(await NetRendezvous.openPrivate(code, "offer", "v2."), null);
+  assert.equal(await NetRendezvous.openPrivate(code, "offer", null), null);
 });
 
 // ── round 8: the key derives once per code ───────────────────────────────────
@@ -364,11 +412,13 @@ test("repeated seals and opens of one code run PBKDF2 exactly once", async () =>
   // one per relay onopen, one per inbound frame). The memo keys on the
   // normalised code; the wrong-code test above already proves a DIFFERENT
   // code cannot be served the cached key.
-  const orig = crypto.subtle.deriveKey.bind(crypto.subtle);
+  // The per-envelope HKDF step is a deriveKey too, so count the PBKDF2 —
+  // which is now a deriveBits into the memoised HKDF base.
+  const orig = crypto.subtle.deriveBits.bind(crypto.subtle);
   let derives = 0;
-  Object.defineProperty(crypto.subtle, "deriveKey", {
+  Object.defineProperty(crypto.subtle, "deriveBits", {
     configurable: true,
-    value: (...args) => { derives++; return orig(...args); },
+    value: (...args) => { if (args[0] && args[0].name === "PBKDF2") derives++; return orig(...args); },
   });
   try {
     const code = "APEX1.z.MEMOCODE";
@@ -380,7 +430,7 @@ test("repeated seals and opens of one code run PBKDF2 exactly once", async () =>
     await NetRendezvous.seal("APEX1.z.OTHERCODE", "x");
     assert.equal(derives, 2, "a new code derives a new key");
   } finally {
-    delete crypto.subtle.deriveKey;
+    delete crypto.subtle.deriveBits;
   }
 });
 

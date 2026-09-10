@@ -541,6 +541,53 @@ test("GRAPHICS: LOW can still shed by evidence — the ladder is not short-circu
   assert.ok(PerfGov.tier() <= 4, "the ladder never invents a rung above 4");
 });
 
+test("LOW releases measured post shedding after recovery without raising the preset", () => {
+  const gov = makeGovAtFloor();
+  gov.setUserTier(4);
+  feed(gov, () => 34 - gov.autoShed() * 6, 3000);
+  assert.equal(gov.autoTier(), 4);
+  assert.ok(gov.autoShed() > 0);
+  feed(gov, () => 8, 40000);
+  assert.equal(gov.tier(), 4, "LOW still disables its preset features");
+  assert.equal(gov.autoShed(), 0, "measured lamp shedding recovers");
+  assert.equal(gov.autoTier(), 0, "post effects return to the healthy LOW state");
+});
+
+test("LOW recovery rolls back when restoring post makes frames slow again", () => {
+  const gov = makeGovAtFloor();
+  gov.setUserTier(4);
+  feed(gov, () => 34 - gov.autoShed() * 6, 3000);
+  let attempted = false;
+  for (let i = 0; i < 2000; i++) {
+    gov.tick(8);
+    if (gov.autoShed() === 0) { attempted = true; break; }
+  }
+  assert.ok(attempted, "recovery was actually attempted");
+  feed(gov, () => 34, 350);
+  assert.equal(gov.autoTier(), 4, "the expensive post stack is shed again");
+  assert.equal(gov.autoShed(), 1, "rollback restores the original measured cut");
+  assert.equal(gov.tier(), 4);
+});
+
+test("switching to LOW after several measured cuts recovers the whole shed counter", () => {
+  const gov = makeGovAtFloor();
+  feed(gov, i => i % 20 === 0 ? 12 : 30 - gov.tier() * 4, 2000);
+  assert.equal(gov.autoTier(), 4);
+  const shed = gov.autoShed();
+  assert.ok(shed > 1, "several measured cuts preceded the preset switch");
+  gov.setUserTier(4);
+  for (let i = 0; i < 2000 && gov.autoShed() > 0; i++) gov.tick(8);
+  assert.equal(gov.autoShed(), 0);
+  assert.equal(gov.autoTier(), 0);
+  assert.equal(gov.tier(), 4, "the user's LOW floor remains");
+  feed(gov, () => 34, 350);
+  assert.equal(gov.autoShed(), shed, "a failed recovery restores every measured cut");
+  feed(gov, () => 8, 40000);
+  assert.equal(gov.autoShed(), 0, "a later healthy recovery clears all cuts");
+  assert.equal(gov.autoTier(), 0);
+  assert.equal(gov.tier(), 4);
+});
+
 test("the opening window keeps the frames every EMA in this file forgets", () => {
   // "It lags for the first few seconds and then runs fine" is a report about
   // frames that are gone before anyone can read perf(): _frameEMA at alpha 0.1

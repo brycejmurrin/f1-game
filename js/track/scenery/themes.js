@@ -92,3 +92,4 @@ const SceneryThemes = (function () {
 
   return { resolve, variant };
 })();
+Object.freeze(SceneryThemes);

@@ -301,7 +301,7 @@ test.describe("Apex 26 — steering sliders", () => {
   });
 
   // The pace > 1 half of the same bug, and the worst of it: in MANUAL gears the
-  // top-gear limiter clamped speedCap to gearHi(8) + 1.5 = 73.5 m/s, so a
+  // top-gear limiter clamped accelCeil (then named speedCap) to gearHi(8) + 1.5 = 73.5 m/s, so a
   // manual-shifting player was pinned at ~264 km/h wherever the slider sat while
   // the auto/AI cars scaled past it. gearHi() tracks pace now.
   test("OVERALL SPEED clears the old top-gear limiter in MANUAL gears", async ({ page }) => {
@@ -323,7 +323,7 @@ test.describe("Apex 26 — steering sliders", () => {
         window.__apex.step(1 / 60, 8);
       }
       // Now plant it just above the OLD clamp and hold the throttle. Before the
-      // fix speedCap pinned this to 73.5 m/s on the very first tick.
+      // fix (accelCeil, then speedCap) pinned this to 73.5 m/s on the very first tick.
       window.__apex.jump(0.1, 80, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
       for (let b = 0; b < 6; b++) {

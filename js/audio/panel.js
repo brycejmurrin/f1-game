@@ -99,35 +99,29 @@ const AudioPanel = (() => {
       syncAudioPanel();
     }
 
-    function paintFold(el, bits) {
-      if (!el) return;
-      el.innerHTML = bits.map((p, i) => (i ? '<span data-fold="sep"> · </span>' : "") +
-        '<span data-fold="' + p[0] + '">' + p[1] + "</span>").join("");
-    }
-
     function paintAudioFolds() {
       const SRC_FOLD = { all: "ALL", builtin: "DEFAULT", user: "MY TRACKS", spotify: "SPOTIFY" };
       const srcOn = (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
         ? "spotify" : ((typeof GameAudio !== "undefined" && GameAudio.musicSource)
           ? GameAudio.musicSource() : musicSrc);
-      paintFold($("as-music-sum"), [
+      Dom.paintFold($("as-music-sum"), [
         ["k", "MUSIC"],
         [G.musicEnabled ? "on" : "off", G.musicEnabled ? "ON" : "OFF"],
         ["val", SRC_FOLD[srcOn] || "ALL"],
       ]);
-      paintFold($("as-sound-sum"), [
+      Dom.paintFold($("as-sound-sum"), [
         ["k", "SOUND"],
         [sfxOn ? "on" : "off", sfxOn ? "ON" : "OFF"],
       ]);
       const prof = (typeof GameAudio !== "undefined" && GameAudio.profile) ? GameAudio.profile() : "team";
-      paintFold($("as-engine-sum"), [
+      Dom.paintFold($("as-engine-sum"), [
         ["k", "ENGINE TONE"],
         ["val", (prof || "team").toUpperCase()],
       ]);
       const counts = (typeof GameAudio !== "undefined" && GameAudio.sourceCounts)
         ? GameAudio.sourceCounts() : { user: 0 };
       const n = counts.user || 0;
-      paintFold($("as-tracks-sum"), n
+      Dom.paintFold($("as-tracks-sum"), n
         ? [["k", "YOUR TRACKS"], ["val", String(n)]]
         : [["k", "YOUR TRACKS"]]);
       let spKind = "off", spWord = "OFF";
@@ -137,7 +131,7 @@ const AudioPanel = (() => {
         else if (st === "configured" || st === "connecting") { spKind = "val"; spWord = "SAVED"; }
         else if (st === "error") { spKind = "off"; spWord = "ERR"; }
       }
-      paintFold($("as-sp-sum"), [["k", "SPOTIFY"], [spKind, spWord]]);
+      Dom.paintFold($("as-sp-sum"), [["k", "SPOTIFY"], [spKind, spWord]]);
     }
 
     // SOURCE is a setting row (js/ui/setting-row.js): MY TRACKS and SPOTIFY

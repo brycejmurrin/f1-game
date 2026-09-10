@@ -4,6 +4,7 @@ description: Circuit accuracy subagent. Surveys one circuit with the survey/audi
 model: inherit
 tools: Bash, Read, Grep, Glob, Edit
 is_background: true
+background: true
 ---
 
 You improve ONE assigned circuit in Apex 26. Your write access is exactly one

@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <script>
 // ── iOS DOUBLE-TAP / GESTURE ZOOM ────────────────────────────────────────────
 // CSS `touch-action: manipulation` plus `maximum-scale=1` is not enough:
 // Safari ignores the viewport cap (a11y, since iOS 10), and `pan-y` / `pan-x`
 // on scroll panes override the * reset — WebKit still double-tap-zooms those.
+// No `user-scalable=no`: Safari ignored it anyway, and Android Chrome honours
+// it — which blocked pinch-zoom for low-vision players (WCAG 1.4.4). The
+// touchend canceller below is what actually does the iOS work.
 // A second tap on the same spot within 350 ms is the zoom gesture; cancel it.
 // A second tap on a DIFFERENT control (rapid menu work) is left alone.
 // Another finger still down is driving (GAS+steer), not a double-tap.
@@ -115,6 +118,20 @@
       // which is Safari). Offline capability is identical one beat later.
       var reg = function () {
         navigator.serviceWorker.register("sw.js" + (loaded ? "?v=" + loaded : "")).catch(function () {});
+        // DURABLE STORAGE. Without it the origin's localStorage / IndexedDB
+        // sit in the "best effort" bucket the browser evicts under pressure —
+        // a season of career saves gone because the phone ran low on space.
+        // persist() moves them to the durable bucket (an installed PWA and
+        // Chrome's engagement heuristics grant it silently; Firefox prompts).
+        // Best-effort: a refusal or an absent API changes nothing, and the
+        // answer is only logged (Log has loaded by the time this runs).
+        try {
+          if (navigator.storage && typeof navigator.storage.persist === "function") {
+            navigator.storage.persist().then(function (granted) {
+              if (typeof Log !== "undefined") Log.info("game", "storage.persist " + (granted ? "granted" : "denied"));
+            }, function () { /* a rejected persist() request is the same as denied */ });
+          }
+        } catch (e) { /* storage API absent or gated (private mode): best effort only */ }
       };
       var idle = function () {
         if (typeof requestIdleCallback === "function") requestIdleCallback(reg, { timeout: 4000 });
@@ -301,7 +318,7 @@
 })();
 </script>
 </head>
-<body><canvas id="game"></canvas>
+<body><canvas id="game" aria-hidden="true"></canvas>
 <!-- BODY DENSITY, BEFORE THE BROWSER CAN PAINT ANYTHING.
      body[data-density] selects #overlay's one- vs two-column title grid
      (css/menus.css, css/responsive.css). js/game/sheetshape.js owns this answer
@@ -392,10 +409,10 @@
     </div>
     <div id="dock-right" class="dock"></div>
   </div>
-  <canvas id="minimap" width="140" height="140"></canvas>
+  <canvas id="minimap" width="140" height="140" role="img" aria-label="Track map"></canvas>
   <div id="hud-sectors"></div>
   <div id="hud-limits" hidden>LIMITS <span class="limits-dots"></span></div>
-  <div id="hud-flag" hidden></div>
+  <div id="hud-flag" role="status" aria-live="assertive" hidden></div>
 </div>
 
 <div id="lights" hidden>
@@ -2162,9 +2179,9 @@
     "three/webgpu": "./vendor/three-0.185.1/three.webgpu.min.js",
     "three/tsl": "./vendor/three-0.185.1/three.tsl.min.js",
     "three/addons/": "./vendor/three-0.185.1/addons/",
-    "@trystero-p2p/core": "./vendor/trystero-0.25.3/core/index.js",
-    "@trystero-p2p/nostr": "./vendor/trystero-0.25.3/nostr/index.js",
-    "@noble/secp256k1": "./vendor/trystero-0.25.3/noble-secp256k1.js"
+    "@trystero-p2p/core": "./vendor/trystero-0.25.4/core/index.js",
+    "@trystero-p2p/nostr": "./vendor/trystero-0.25.4/nostr/index.js",
+    "@noble/secp256k1": "./vendor/trystero-0.25.4/noble-secp256k1.js"
   }
 }
 </script>
@@ -2179,6 +2196,8 @@
 <script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-sky.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-fx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/shaders/glsl-post.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/light-budget.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/post-common.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/post.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/shadow.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/lamp-chunks.js?v=dev"></script>
@@ -2200,6 +2219,7 @@
 <script defer crossorigin="anonymous" src="js/data/driver-ratings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/save-migrate.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/geom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/data.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/space.js?v=dev"></script>
@@ -2339,6 +2359,8 @@
 <script defer crossorigin="anonymous" src="js/ui/onboard.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/debris-world.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/incident-sim.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/collide.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/car-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game.js?v=dev"></script>
 <!-- /@gen-shell:scripts -->
 </body></html>

@@ -12,9 +12,14 @@
 // Usage:
 //   node tools/track/verify-track.cjs <trackId>     # verify one track
 //   node tools/track/verify-track.cjs --all         # verify every track in js/track/tracks.js
+//   node tools/track/verify-track.cjs <id> --quiet  # OK line only (no diagnostics report)
 //
-// Success: prints "OK <id>: props N verts (road Y, terrain Z)"
-// Failure: prints the error and exits 1.
+// Success: prints "OK <id>: props N verts (road Y, terrain Z)" and, unless
+// --quiet, a diagnostics report: modelDiagnostics counts (suppressed / invalid /
+// unsafe), the per-kind guard drops, and every UNIQUE console.warn/error line
+// the build logged. The VM used to stub console to silence, so a build that
+// warned "suppressed backdrop=295" reported plain OK.
+// Failure: prints the error and exits 1. The report never changes the exit code.
 
 "use strict";
 
@@ -29,7 +34,9 @@ const MANIFEST = require("../manifest.cjs");
 if (require.main === module) main();
 
 function main() {
-if (process.argv[2] === "--all") {
+const quiet = process.argv.includes("--quiet");
+const args = process.argv.slice(2).filter((a) => a !== "--quiet");
+if (args[0] === "--all") {
   // Extract ids by loading the script once and reading LIST
   let uniqueIds;
   try {
@@ -42,7 +49,7 @@ if (process.argv[2] === "--all") {
   let failures = 0;
   for (const id of uniqueIds) {
     try {
-      verifyTrack(id);
+      verifyTrack(id, { quiet });
     } catch (e) {
       failures++;
       console.error(`FAIL ${id}: ${e.message}`);
@@ -56,13 +63,13 @@ if (process.argv[2] === "--all") {
     process.exit(0);
   }
 } else {
-  const id = process.argv[2];
+  const id = args[0];
   if (!id) {
-    console.error("Usage: node tools/track/verify-track.cjs <trackId>  |  --all");
+    console.error("Usage: node tools/track/verify-track.cjs <trackId>  |  --all   [--quiet]");
     process.exit(1);
   }
   try {
-    verifyTrack(id);
+    verifyTrack(id, { quiet });
   } catch (e) {
     console.error(`FAIL ${id}: ${e.message}`);
     if (process.env.VERBOSE) console.error(e.stack);
@@ -113,13 +120,17 @@ function buildContext(rootOverride, opts) {
     });
   }
 
+  // console never prints from the VM — a track's scenery() may log — but
+  // warn/error are CAPTURED (opts.quiet: false, the default) so verifyTrack can
+  // report them after its OK line. Every other method is a no-op stub.
+  const captured = [];
+  const keep = opts.quiet ? () => {} : (...a) => { captured.push(a.map(String).join(" ")); };
   const sandbox = {
     // Browser globals the scripts reference
     Math, Array, Float32Array, Float64Array, Uint16Array, Uint32Array, Object, JSON,
     isNaN, isFinite, parseInt, parseFloat,
     GLX,
-    // console silenced — a track's scenery() may log; stub every method it might call.
-    console: { log: () => {}, warn: () => {}, error: () => {}, info: () => {},
+    console: { log: () => {}, warn: keep, error: keep, info: () => {},
                debug: () => {}, trace: () => {}, assert: () => {}, group: () => {},
                groupEnd: () => {}, table: () => {}, dir: () => {}, count: () => {},
                time: () => {}, timeEnd: () => {} },
@@ -172,6 +183,8 @@ function buildContext(rootOverride, opts) {
   // to assert LIST ordering or Tracks.SEASON, which depend on load order.
   try {
     Object.defineProperty(Tracks, "_vmContext", { value: ctx, enumerable: false });
+    // The console.warn/error lines the VM swallowed, in order (empty under quiet).
+    Object.defineProperty(Tracks, "_vmConsole", { value: captured, enumerable: false });
   } catch (_) {}
   return Tracks;
 }
@@ -181,8 +194,9 @@ function loadTrackIds() {
   return Tracks.LIST.map(d => d.id);
 }
 
-function verifyTrack(id) {
-  const Tracks = buildContext();
+function verifyTrack(id, opts) {
+  opts = opts || {};
+  const Tracks = buildContext(null, { quiet: !!opts.quiet });
 
   const def = Tracks.LIST.find(d => d.id === id);
   if (!def) {
@@ -243,6 +257,28 @@ function verifyTrack(id) {
 
   console.log(`OK ${id}: props ${props} verts (road ${road}, terrain ${terrain})` +
     (inst ? ` — ${inst} instanced` : "") + ` — ${total} total`);
+  if (!opts.quiet) reportDiagnostics(diagnostics, Tracks._vmConsole || []);
+}
+
+// The report behind the OK line. Informational only: a required-model failure
+// already threw above, and everything here is what the build logged and moved
+// on from — the guard drops are the number that says a circuit is asking for
+// props the engine refuses every build (redbull once asked for 295 backdrops it
+// never got, invisible under the old console stub).
+function reportDiagnostics(diagnostics, consoleLines) {
+  if (diagnostics) {
+    const d = diagnostics;
+    console.log(`  diagnostics: suppressed ${d.suppressed.length}, invalid ${d.invalid.length}, unsafe ${d.unsafe.length}`);
+    const drops = d.suppressedCounts || {};
+    const kinds = Object.keys(drops).sort();
+    if (kinds.length)
+      console.log(`  guard drops: ${kinds.map((k) => `${k}=${drops[k]}`).join(" ")}`);
+  }
+  const uniq = [...new Set(consoleLines)];
+  if (uniq.length) {
+    console.log(`  warnings (${consoleLines.length}, ${uniq.length} unique):`);
+    for (const line of uniq) console.log(`    ${line}`);
+  }
 }
 
 // Reusable VM harness — consumed by tests (scenery-api-contract, foundation).

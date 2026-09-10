@@ -90,4 +90,3 @@ resolution.
 - Setting `finArt` equal to `fin` — tail graphic disappears.
 - Using livery id `chrome` as chrome finish — it is a gloss palette named
   "Chrome".
-- Editing `js/car/*.js` without a cache bump.

@@ -30,6 +30,25 @@ all. Three consequences, and every defect ever found here falls under one:
 3. **Two-place consistency is manual** — a field authored here and read there,
    a doc describing code, a count quoted in prose.
 
+**Decision, 2026-09-10 — the IIFE tree stays; new subsystems land as ESM
+islands under the existing import map.** Converting the ~150 IIFEs to ES
+modules was weighed and declined. The evidence: V8's own guidance is that an
+unbundled module graph stays fast only while it is small and shallow — on the
+order of 100 modules with an import depth under 5
+(<https://v8.dev/features/modules>) — and this tree is already at that size
+with a much deeper dependency shape, so shipping it unbundled as ESM would
+trade the load-order invariant for a fetch waterfall; papering over the
+waterfall with `<link rel="modulepreload">` costs one preload hint per module
+that the browser must fetch, parse and compile eagerly whether or not the
+page reaches it
+(<https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Attributes/rel/modulepreload>),
+which is a bundler's job by another name and the founding bet forbids a
+bundler. The three.js vendor island already proves the shape that works:
+a new subsystem is ONE ESM entry (its own internal graph is small and
+shallow) registered in `index.html`'s import map, loaded on demand by the IIFE
+side through `import()`, and it never reaches back into the IIFE globals except
+through the `G` façade. The IIFE tree is not migrated file by file.
+
 ### The governing law
 
 > **What a test asserts stays true. What only prose says drifts.**
@@ -42,7 +61,7 @@ than behaviour:
 | Guard | What it holds |
 |---|---|
 | `tests/unit/load-order.test.mjs` | `index.html` == `tools/manifest.cjs`, including `HARD_EDGES` and the three-way `DEFERRED`/`BACKEND_FILES`/sw.js precache agreement |
-| `tests/unit/scenery-api-contract.test.mjs` | the 111-member `scenery(api)` surface every circuit file was written against |
+| `tests/unit/scenery-api-contract.test.mjs` | the 112-member `scenery(api)` surface every circuit file was written against |
 | `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, the topical browser groups DISJOINT (2026-09 regroup), `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
 | `tests/unit/docs-integrity.test.mjs` | live docs reference only files that exist; counts match the repo; no live doc reaches into the archive |
 | `tests/unit/deploy-staging.test.mjs` | every path shipped code can fetch is inside the Pages upload allow-list |

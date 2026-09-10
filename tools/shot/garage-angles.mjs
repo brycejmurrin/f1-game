@@ -78,7 +78,7 @@ import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs"
 import {
   chromiumArgsForBackend, installProbeInit, gotoGame, openGarage, settleGarage,
   screenshotGameCanvas,
-} from "../capture/probe-page.mjs";
+} from "./probe-page.mjs";
 import { loadParts } from "../car/parts-sweep.mjs";
 import { loadAtlas } from "../car/livery-contrast.mjs";
 import { occlusionMap, hiddenIn } from "../car/flank-occlusion.mjs";

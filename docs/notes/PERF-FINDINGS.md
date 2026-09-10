@@ -1773,7 +1773,7 @@ overlay reports the delta between its own paints for the same reason.
 
 ### Verified on a live page, not in the source
 
-`tools/gfx/loop-fault-repro.mjs` injects throws into `Input.poll` (a global
+`gfx/loop-fault-repro.mjs` (removed from tools/ 2026-09-10; in git history) injects throws into `Input.poll` (a global
 `tickBody` calls unconditionally every frame) and reads what the game does.
 Seven checks, all green:
 
@@ -3347,7 +3347,7 @@ matches without `ignoreSearch` — a bare key is one nothing ever asks for.
 `load-order.test.mjs` now asserts both: that every `LAZY_RACE` / `LAZY_SCENERY`
 file is seeded, and that the SW's own stamping predicate — extracted from
 source and RUN, not pattern-matched — covers every path it seeds.
-`tools/check/offline-precache-check.cjs` is the behavioural half; see its README row
+`check/offline-precache-check.cjs` (removed from tools/ 2026-09-10; in git history) is the behavioural half; see its README row
 and `docs/TESTING.md` for why `setOffline(true)` alone measures nothing here.
 
 **Round 16 (2026-09-01): 3,715,772 -> 3,319,340 B, another 396,432 B / 10.7%,

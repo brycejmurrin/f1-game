@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["hungaroring"] =
   function (api) {
-      const { out, MAT, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
+      const { K, lapBounds, out, MAT, n, ds, px, py, pz, pyMin, hash, every, place, prop, backdrop, groundPlane,
               mountain, peak, ridge, tree, pine, bush, hedge, grandstand, grandstandEx, spectatorHill,
               broadcastCompound, cameraTower, building, motorhome, tower,
               billboard, marshalPost, fence, guardrail, tyreWall,
@@ -14,7 +14,6 @@
               seat, foundation, cantilever, lampPost,
               forestEdge, along, modelGroup, overheadSpan, waterSurface, groundPatch, groundedSegments,
               recordBarrier, circuitKit, pal, ATM } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       {
         const POP    = [0.34, 0.50, 0.24];
@@ -116,11 +115,7 @@
       const WIN_COOL = [0.78, 0.84, 0.96];
       const ROOF_DK  = [0.20, 0.21, 0.24];  // covered tribune dark roof
 
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
 
       const ringFar = rad + 460;
       for (let i = 0; i < 16; i++) {

@@ -551,6 +551,12 @@ body[data-width="narrow"] .dh-thint { display: none; }
   color: var(--text);
 }
 .dh-livebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
+/* full-width action under a lane tray / detail (LOAD LAP, CLEAR LANES, BACK) —
+   was three inline style writes in js/data/telemetry.js. A data attribute, not
+   a class: the cssClasses ratchet is at its ceiling and this is a layout
+   variant of .dh-livebtn, not a new component. */
+.dh-livebtn[data-block] { width: 100%; margin-top: var(--gap); }
+.dh-livebtn[data-block="tight"] { margin-top: calc(var(--gap) / 2); }
 /* ---------- compare lanes (multi-driver + cross-session telemetry) ---------- */
 /* session badge on a lane row / header / legend chip (R, Q, P2, …) */
 .dh-lane-ses {

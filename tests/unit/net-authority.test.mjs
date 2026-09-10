@@ -250,6 +250,30 @@ test("a GUEST accepts the host's QUALI for any driver", () => {
   assert.deepEqual(G.caughtQuali, [{ driverId: "anyone-at-all", t: 60.5 }]);
 });
 
+// ---- QUALI t is COERCED and BOUNDED at one site (NetPlay.validQuali) -------
+// Both receivers used to gate on a bare `d.t > 0`, which "70" and `true` pass;
+// the value was stored as sent and quali-model.js threw on `.toFixed`. The
+// wire value is now Number()'d, bounded to a lap a human can drive, and handed
+// on as a number — by NetPlay.bindQuali, which BOTH phases register.
+test("a QUALI whose t is a numeric string arrives as a NUMBER; junk and implausible laps never arrive", () => {
+  const { G, s } = started("guest");                 // guest: no sender binding to get in the way
+  s.deliver("quali", { driverId: "x", t: "70.125" });
+  assert.deepEqual(G.caughtQuali, [{ driverId: "x", t: 70.125 }]);
+  assert.equal(typeof G.caughtQuali[0].t, "number");
+  for (const t of [true, "abc", NaN, Infinity, -5, 0, 5, 20, 3600, 1e9, null, undefined, {}, []]) {
+    s.deliver("quali", { driverId: "x", t });
+  }
+  assert.equal(G.caughtQuali.length, 1, "nothing outside (20 s, 1 h) or non-numeric reaches the game");
+  assert.deepEqual(NetPlay.validQuali({ driverId: "d", t: "61" }), { driverId: "d", t: 61 });
+  assert.equal(NetPlay.validQuali({ t: 61 }), null, "no driverId, no claim");
+  assert.equal(NetPlay.validQuali("61"), null);
+  // QLIVE is bounded rather than refused — it is a clock, not a grid input.
+  s.deliver("qlive", { driverId: "x", t: "12.5", frac: "2" });
+  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "x", t: 12.5, frac: 1 });
+  s.deliver("qlive", { driverId: "x", t: NaN, frac: -1 });
+  assert.deepEqual(G.caughtQLive.at(-1), { driverId: "x", t: 0, frac: 0 });
+});
+
 test("QLIVE is bound to the sender on the host the same way", () => {
   // Display-only, but keyed by the same driverId — unbound, the same spoof
   // paints a lap-in-progress over another driver's name.
@@ -331,6 +355,7 @@ test("on a two-guest host, each guest's QUALI is accepted for its own seat only"
 // ---------------------------------------------------------------------------
 
 globalThis.NetPlay = NetPlay;
+globalThis.NetBytes = eval(src("js/net/bytes.js") + ";NetBytes");   // transport/handshake bind it at call time
 const NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
 globalThis.NetTransport = NetTransport;
 const NetHandshake = eval(src("js/net/handshake.js") + ";NetHandshake");
@@ -432,6 +457,37 @@ test("LOBBY phase: no HELLO filed means no claim at all", async () => {
     peerSays("quali", { driverId: "bravo:1", t: 59.0 });
     await settle();
     assert.deepEqual(G.caughtQuali, []);
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: the same coercion applies before the hand-off", async () => {
+  const { G, lobby, peerSays, settle } = await lobbyUp("guest");
+  try {
+    peerSays("quali", { driverId: "anyone", t: "70" });
+    peerSays("quali", { driverId: "anyone", t: true });
+    peerSays("quali", { driverId: "anyone", t: 4000 });
+    await settle();
+    assert.deepEqual(G.caughtQuali, [{ driverId: "anyone", t: 70 }], "one validation site for both phases");
+  } finally { lobby.cancel(); }
+});
+
+test("LOBBY phase: more than five HELLOs (or READYs) in a second are dropped, per connection", async () => {
+  // Every HELLO re-renders, re-resolves seat clashes and is relayed by the
+  // host; every READY re-renders. Nothing legitimate needs more than a
+  // handful a second, so past the fifth in a rolling second the rest are
+  // ignored — and a second later the window is open again.
+  const { lobby, peerSays, settle } = await lobbyUp("guest");
+  try {
+    for (let i = 0; i < 9; i++) peerSays("hello", { team: "bravo", driver: i % 2, tag: i });
+    await settle();
+    assert.equal(lobby.roomState().peer.tag, 4, "the fifth HELLO is the last one accepted");
+    for (let i = 0; i < 9; i++) peerSays("ready", { ready: i % 2 === 0 });
+    await settle();
+    assert.equal(lobby.roomState().peerReady, true, "READY #5 (index 4, true) stands; #6..9 are dropped");
+    await sleep(1100);
+    peerSays("hello", { team: "bravo", driver: 1, tag: 99 });
+    await settle();
+    assert.equal(lobby.roomState().peer.tag, 99, "the window rolls: a later HELLO is accepted again");
   } finally { lobby.cancel(); }
 });
 

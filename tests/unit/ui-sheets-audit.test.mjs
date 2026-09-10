@@ -33,6 +33,8 @@ import { fileURLToPath } from "node:url";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
+import { seedDom } from "../helpers/seed-dom.mjs";
 import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -64,6 +66,7 @@ function bootResults({ state = "menu", season, cars, netPlay }) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
+  seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
   vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: "js/career/season-cal.js" });
   vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: "js/ui/results-sheet.js" });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
@@ -359,6 +362,7 @@ function bootAudio({ soundOn, musicEnabled }) {
   for (const [id, label] of [["as-music", "MUSIC"], ["as-sound", "SOUND EFFECTS"], ["as-src", "SOURCE"], ["as-p", "PROFILE"]]) {
     dom.body.appendChild(SettingRow.build(id, label).row);
   }
+  seedDom(ctx);   // the closed-fold summaries paint through Dom.paintFold
   vm.runInContext(src("js/audio/panel.js"), ctx, { filename: "js/audio/panel.js" });
   const store = stubStore();
   store.set("musicSource", "builtin");

@@ -31,14 +31,25 @@ const Ghost = (function () {
   // Parsed once and kept: setTrack() runs on EVERY loadTrack (each menu-flyby
   // build), and re-parsing the whole ghost store to read one entry was a
   // ~40 KB JSON.parse per circuit browse.
+  //
+  // ONLY A PLAIN OBJECT IS ACCEPTED. `JSON.parse(raw) || {}` let "5", "true"
+  // and "[]" through (all truthy), memoised them, and every later
+  // `store[id] = snap` in finishLap threw on the primitive — or silently grew
+  // an array property — for the rest of the session. The fallback `{}` is
+  // memoised too, so a corrupt key costs one parse, not one per circuit browse.
   let _storeCache = null;
   function loadStore() {
     if (_storeCache) return _storeCache;
+    let parsed = null;
     try {
-      if (typeof localStorage === "undefined") return {};
-      _storeCache = JSON.parse(localStorage.getItem(KEY)) || {};
-      return _storeCache;
-    } catch (e) { return {}; }
+      if (typeof localStorage !== "undefined") parsed = JSON.parse(localStorage.getItem(KEY));
+    } catch (e) { parsed = null; /* corrupt or unreadable: start empty (memoised below) */ }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      if (parsed !== null) Log.warn("car", "ghost store was not an object; starting empty");
+      parsed = {};
+    }
+    _storeCache = parsed;
+    return _storeCache;
   }
   function saveStore(o) {
     _storeCache = o;

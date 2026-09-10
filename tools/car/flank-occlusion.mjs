@@ -32,7 +32,7 @@
 import { loadParts } from "./parts-sweep.mjs";
 import { makeFlags, runCli } from "../lib/cli-args.mjs";
 
-// game.js WHEELS. Rear tyres are the wide ones and the ones that matter here.
+// js/car/car-draw.js WHEELS. Rear tyres are the wide ones and the ones that matter here.
 const WHEELS = [
   { x: -0.79, y: 0.34, z: 1.7, r: 0.32 }, { x: 0.79, y: 0.34, z: 1.7, r: 0.32 },
   { x: -0.76, y: 0.34, z: -1.6, r: 0.38 }, { x: 0.76, y: 0.34, z: -1.6, r: 0.38 },

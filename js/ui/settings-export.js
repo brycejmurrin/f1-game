@@ -503,3 +503,4 @@ function create(G) {
 return { FORMAT, GARAGE_FORMAT, SPEC, collect, collectGarage, applySettings, applyGarage, isGarageKey, create,
          garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null) };
 })();
+Object.freeze(SettingsExport);

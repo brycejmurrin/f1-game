@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["montreal"] =
   function (api) {
-      const { out, n, py, pyMin, place, backdrop, wall, grandstandEx,
+      const { K, out, n, py, pyMin, place, backdrop, wall, grandstandEx,
         building, anchor, addBox, addCyl, addCone, addPrism, addFrustum, vadd, hash,
         fence, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         scaffoldStand, broadleafFall,
@@ -14,7 +14,6 @@
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, foundation,
         broadcastCompound, cameraTower, sponsorHoarding, circuitKit,
         cross, norm, MAT, COL, frameAt } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       // ── strut(): thin cylinder between two world points (geodesic lattice) ────
       const strut = (a, c, rad, col, seg, target) => {

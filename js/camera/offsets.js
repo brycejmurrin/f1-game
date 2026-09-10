@@ -160,3 +160,4 @@ return { CAM_TUNE_DEFS, FOV_MIN, FOV_MAX,
          count, tunedModes, all, load, persist,
          defs: () => CAM_TUNE_DEFS, active: () => _any };
 })();
+Object.freeze(CamTune);

@@ -461,8 +461,10 @@ const GameAudio = (function () {
 
   function loadEngineSamples() {
     if (!ctx || samplesReady) return;
+    // A 404 body is an HTML page, and decodeAudioData on it rejects with an
+    // opaque EncodingError; throw on !ok so the degrade path below logs WHY.
     const grab = (url) => fetch(url)
-      .then((r) => r.arrayBuffer())
+      .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
       .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
     // ONE sample. f1_rev.mp3 used to be fetched, decoded, loop-scanned and given
     // a running BufferSourceNode beside this one — all behind a gain written to
@@ -2118,7 +2120,7 @@ const GameAudio = (function () {
     // MUSIC_CACHE eviction that only runs afterwards.
     if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); }, () => {}); return; }
     const _load = fetch(url)
-      .then(r => r.arrayBuffer())
+      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
       .then(ab => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
       .then(buf => {
         // Every track, builtin or uploaded, is cached under the same bound

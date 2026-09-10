@@ -43,7 +43,9 @@
    spineSide? optional SPINE SIDE: "none" (absent) or an id in
      LiveryTex.SPINE_SIDE_IDS — number, logo, code, plate, wordmark, duo,
      ribbon, lockup, title (sponsor on a board), emblem (large bare crest),
-     band (crease colour strip), sash (wide diagonal).
+     band (crease colour strip), sash (wide diagonal), slash (one bold
+     diagonal stroke), rake (hard diagonal cut), shoulder (upper-third shelf),
+     starfield (micro dot field). The fills take `sideTint`.
      Paints the engine-cover FLANK, both sides (car-mesh's band).
      Each flank is its own atlas region (spineSide right, spineSideL left),
      authored in that side's outside-view frame, so text reads and a graphic
@@ -54,6 +56,11 @@
      the crown (and the saddle's flank half). Absent = secondary then primary
      against the ENGINE COVER (never BODY STRIPE / DETAIL). An explicit pick is
      honoured as-is — it is a deliberate choice about one surface, like `cover`.
+   sideTint? optional SIDE TINT — the colour of every SPINE SIDE FILL on the
+     cover flank (band, sash, ribbon strip, slash, rake, shoulder, starfield
+     dots), as picked. Its own zone: spineTint paints the flank UNDER these when
+     the crown design is a saddle. Absent = bases against the flank; rake and
+     shoulder borrow saddleTint first when it clears.
    sunTint? optional SUN — the wrap's sun disc over the crown, the cover flanks
      and (Car3D) the airbox and roll hoop. Its own row because SPINE TINT used
      to paint it: one field meant a BAND on most SPINE TOP designs and the SUN
@@ -522,3 +529,4 @@ const Liveries = (function () {
 
   return { UNIVERSAL, BY_TEAM, FIELDS, forTeam, migratePaint };
 })();
+Object.freeze(Liveries);

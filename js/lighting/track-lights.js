@@ -422,3 +422,4 @@ function buildTrackLights(track, onlyAlways) {
 
   return { buildTrackLights, lampStrideNodes };
 })();
+Object.freeze(TrackLights);

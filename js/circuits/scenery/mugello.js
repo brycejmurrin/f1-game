@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["mugello"] =
   function (api) {
-      const { out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz, hw,
+      const { K, lapBounds, out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz, hw,
         indexSolid,
         pine, tree, bush, hedge, ridge, mountain, building, grandstandEx,
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
@@ -16,7 +16,6 @@
         terrainYAt, groundYAt,
         groundUnder,
       } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       // ── VINEYARDS AND CASALI — the other half of Tuscany ─────────────────
       // Mugello already plants the cypress and the olives, which is two of the
@@ -333,9 +332,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const rg of [
         { extra: 200, wMin: 170, hMin: 50, hVar: 44, wVar: 80, count: 28, phase: 0.0,
           opts: { seg: 7, rough: 0.30, forest: [0.14, 0.34, 0.17], rock: [0.40, 0.38, 0.32], snowline: 2 } },

@@ -80,6 +80,24 @@ career being left first**: `settleRound()` already persists, but a garage edit o
 accepted offer lives on the object until something calls `save()`, and switching away
 is exactly when that would be lost.
 
+### The durable mirror (IndexedDB)
+
+localStorage is the synchronous source of truth, and it is also a 5 MB bucket shared
+with every circuit's ghost laps: a career save that meets the quota is cached for the
+session and gone at reload (`store.write()` reports `durable:false`; it cannot prevent
+it). So `js/core/store.js` also queues every `apex26.career*` / `apex26.season*` write
+— debounced, one transaction per burst, flushed on `pagehide` — into a small IndexedDB
+object store (`apex26-store` / `kv`), and at boot writes back any such key localStorage
+LACKS that the mirror holds, dropping its cache entry so the next read sees it.
+Restoration is asynchronous, so it lands after `Career.load()`'s synchronous first
+read; a restored key is announced through the same foreign-write notification a
+second tab's write gets, which is what makes `career.js` re-read its live slot. A
+"clear site data" clears both stores; the mirror is for the quota case and for a
+localStorage wiped on its own. `__apex.persistState().mirror` reports
+`{ supported, restored, flushed, failed, pending }`, and `index.html` asks
+`navigator.storage.persist()` beside the service-worker registration so both buckets
+sit in the browser's durable tier where the platform grants it.
+
 ### Two earlier layouts migrate
 
 | Wrote | Becomes |

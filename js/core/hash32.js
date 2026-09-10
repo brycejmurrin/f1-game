@@ -23,3 +23,4 @@ const Hash32 = (function () {
   }
   return { fnv1a, mix, unit };
 })();
+Object.freeze(Hash32);

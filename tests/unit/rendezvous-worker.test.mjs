@@ -24,13 +24,29 @@ test("Worker stores a valid bounded payload", async () => {
   const response = await h.room.fetch(new Request(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ payload: "APEX1.s.OFFER" }),
+    body: JSON.stringify({ payload: "v2.c2VhbGVkLW9mZmVy" }),
   }));
 
   assert.equal(response.status, 200);
   assert.equal(h.calls.put, 1);
-  assert.equal(h.records.get("offer").payload, "APEX1.s.OFFER");
-  assert.equal(h.records.get("offer").owner, null, "legacy clients remain accepted");
+  assert.equal(h.records.get("offer").payload, "v2.c2VhbGVkLW9mZmVy");
+  assert.equal(h.records.get("offer").owner, null, "an owner capability is optional");
+});
+
+test("Worker stores only the v2 sealed envelope — plaintext and v1 are refused", async () => {
+  // 2026-09-10: the room-code payload is AES-GCM under a per-envelope salt with
+  // the slot as AAD (js/net/rendezvous.js). Anything else is free storage on a
+  // Durable Object, so it is a 400, never a put.
+  const h = roomHarness();
+  for (const payload of ["APEX1.s.OFFER", "v1.legacy-ciphertext", "v2.", ""]) {
+    const response = await h.room.fetch(new Request(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ payload }),
+    }));
+    assert.equal(response.status, 400, JSON.stringify(payload) + " must be refused");
+  }
+  assert.equal(h.calls.put, 0);
 });
 
 test("Worker uses the owner capability instead of randomized ciphertext equality", async () => {
@@ -42,11 +58,11 @@ test("Worker uses the owner capability instead of randomized ciphertext equality
     body: JSON.stringify({ payload, owner: cap }),
   }));
 
-  assert.equal((await post("v1.first-ciphertext")).status, 200);
-  assert.equal((await post("v1.second-ciphertext")).status, 200,
-    "same owner may retry with a fresh AES-GCM IV");
-  assert.equal((await post("v1.attacker", "different_owner_12345")).status, 409);
-  assert.equal(h.records.get("offer").payload, "v1.second-ciphertext");
+  assert.equal((await post("v2.first-ciphertext")).status, 200);
+  assert.equal((await post("v2.second-ciphertext")).status, 200,
+    "same owner may retry with a fresh salt + IV");
+  assert.equal((await post("v2.attacker", "different_owner_12345")).status, 409);
+  assert.equal(h.records.get("offer").payload, "v2.second-ciphertext");
 });
 
 test("Worker rejects an oversized Content-Length before reading the stream", async () => {
@@ -98,12 +114,12 @@ test("Worker rejects irrelevant JSON padding around a short valid payload", asyn
 
 test("Worker applies the payload limit in bytes, not UTF-16 characters", async () => {
   const h = roomHarness();
-  // 4,101 two-byte UTF-8 characters: under 8,192 JS characters, over 8,192
+  // 6,200 two-byte UTF-8 characters: under 12,288 JS characters, over 12,288
   // bytes, while the complete JSON body still fits inside the envelope cap.
   const response = await h.room.fetch(new Request(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ payload: "é".repeat(4101) }),
+    body: JSON.stringify({ payload: "v2." + "é".repeat(6200) }),
   }));
 
   assert.equal(response.status, 413);

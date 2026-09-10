@@ -22,6 +22,7 @@ const load = (rel, name) => eval(fs.readFileSync(path.join(ROOT, rel), "utf8") +
 // The shared math island, published so the files below resolve M4 at eval time
 // (a strict-mode direct eval keeps its own declarations to itself).
 globalThis.M4 = load("js/core/mat4.js", "M4");
+globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");   // transport.js binds it at call time
 const NetTransport = load("js/net/transport.js", "NetTransport");
 // session.js shares NetSnapshot's ONE toView() rather than keeping a second
 // copy that can drift. Loading it is not optional decoration: without it every
@@ -442,4 +443,30 @@ test("the fast cadence stops once the clock has landed", () => {
   const steady = pings - afterSync;
   assert.ok(steady >= 1 && steady <= 3,
     `a synced session pings ~2x per second at 500 ms, sent ${steady}`);
+});
+
+// ── the PONG must answer a ping WE sent ──────────────────────────────────────
+// A PONG carries the id and t0 the peer echoes, and both used to be trusted:
+// whoever chose t0 chose our RTT and the offset every peer timestamp is
+// converted through. Now only a PONG naming an outstanding ping with that
+// ping's own t0 is a sample, and each is a sample once.
+test("a PONG for a ping we never sent, or with a forged t0, is not a clock sample", () => {
+  const { near, far, T0 } = bareFarEnd();
+  const session = NetSession.create({ transport: near });
+  const pong = (id, t0, t1) => {
+    const dv = new DataView(new ArrayBuffer(21));
+    dv.setUint8(0, NetSession.PONG); dv.setUint32(1, id >>> 0); dv.setFloat64(5, t0); dv.setFloat64(13, t1);
+    return new Uint8Array(dv.buffer);
+  };
+  session.pump(T0);                               // PING id 1 at t0 = T0
+  far.pump(T0);
+  far.send(NetTransport.STATE, pong(99, T0, T0 + 5));          // unknown id
+  far.send(NetTransport.STATE, pong(1, T0 - 100000, T0 + 5));  // our id, somebody else's t0
+  session.pump(T0 + 10);
+  assert.equal(session.synced(), false, "neither forged PONG may seed the clock");
+  far.send(NetTransport.STATE, pong(1, T0, T0 + 5));           // the genuine echo
+  far.send(NetTransport.STATE, pong(1, T0, T0 + 5));           // ...replayed
+  session.pump(T0 + 20);
+  assert.equal(session.synced(), true, "the genuine echo syncs");
+  assert.equal(session.stats().samples, 1, "and a replay of it is not a second sample");
 });
