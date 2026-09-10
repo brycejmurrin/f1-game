@@ -28,7 +28,11 @@ test("car viewer exposes a frame sequence that advances after state changes", as
   const before = await page.evaluate(() => window.CARVIEW.frame);
   expect(typeof before).toBe("number");
   await page.evaluate(() => window.CARVIEW.set({ az: 104, el: 10, dist: 3.2, look: 1.7 }));
-  await page.waitForFunction((frame) => window.CARVIEW.frame > frame, before);
+  // Timer polling — default raf starves under SwiftShader and burns the whole
+  // test budget (Pages Selected: 180 s "setting up context" / 162 s sibling).
+  await page.waitForFunction((frame) => window.CARVIEW.frame > frame, before, {
+    polling: 100, timeout: BOOT_MS,
+  });
 });
 
 test("car viewer exposes controls for grounded runtime effect states", async ({ page }) => {
@@ -49,7 +53,9 @@ test("car viewer effect API updates state on a synchronized frame", async ({ pag
     effects: { exhaustFlame: true, brakeGlow: true, ersDeploy: false },
   }));
   expect(accepted).toBe(true);
-  await page.waitForFunction((frame) => window.CARVIEW.frame > frame, before);
+  await page.waitForFunction((frame) => window.CARVIEW.frame > frame, before, {
+    polling: 100, timeout: BOOT_MS,
+  });
   expect(await page.evaluate(() => window.CARVIEW.effects)).toEqual({
     exhaustFlame: true,
     brakeGlow: true,

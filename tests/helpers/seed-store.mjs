@@ -20,6 +20,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog, seedLogGlobal } from "./seed-log.mjs";
+import { seedSaveMigrate, seedSaveMigrateGlobal } from "./seed-save-migrate.mjs";
 
 const STORE_JS = fs.readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/core/store.js"),
@@ -29,6 +30,7 @@ const STORE_JS = fs.readFileSync(
 /** Evaluate js/core/store.js into an existing VM context (seeds Log if absent). */
 export function seedStore(ctx) {
   if (vm.runInContext("typeof Log === \"undefined\"", ctx)) seedLog(ctx);
+  if (vm.runInContext("typeof SaveMigrate === \"undefined\"", ctx)) seedSaveMigrate(ctx);
   vm.runInContext(STORE_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/store.js" });
   return ctx;
 }
@@ -37,6 +39,7 @@ export function seedStore(ctx) {
 export function seedStoreGlobal() {
   if (globalThis.GameStore) return globalThis.GameStore;
   seedLogGlobal();
+  seedSaveMigrateGlobal();
   vm.runInThisContext(STORE_JS.replace(/^const\b/gm, "var") + "\nglobalThis.GameStore = GameStore;");
   return globalThis.GameStore;
 }

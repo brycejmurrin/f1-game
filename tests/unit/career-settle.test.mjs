@@ -18,6 +18,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedHash32 } from "../helpers/seed-hash32.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -50,6 +51,7 @@ function load() {
   });
   // js/core/mat4.js first — the shared scalar helpers (M4.clamp) career.js binds at eval.
   seedLog(ctx);
+  seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });
@@ -177,6 +179,7 @@ function loadDriver(ratings, opts = {}) {
     },
   });
   seedLog(ctx);
+  seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });
@@ -312,6 +315,7 @@ function loadWithSeason(n) {
     },
   });
   seedLog(ctx);
+  seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });

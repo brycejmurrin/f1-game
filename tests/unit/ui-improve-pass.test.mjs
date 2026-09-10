@@ -839,7 +839,7 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
 
 test("garage preview chips hug the sheet and season quali is a label", () => {
   const garage = css("css/carsetup.css");
-  const game = code("js/game.js");
+  const raceSettings = code("js/race/race-settings.js");
   const spotify = code("js/audio/spotify.js");
   assert.equal(decl(garage, "#cs-stack", "left"), "auto");
   assert.equal(decl(garage, "#cs-stack", "width"), "max-content");
@@ -854,9 +854,9 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   // than hiding it (the setting is shown, not offered); every other flow gets
   // the rules, pace order first and the qualifying lap second — the option
   // indices quali.spec.js selects.
-  assert.match(game, /SettingRow\.disable\("rs-quali", !!qForced\)/);
-  assert.match(game, /qForced \? \[\["quali", "QUALIFYING"\]\]/);
-  assert.match(game, /\[\["tier", "PACE ORDER"\], \["quali", "QUALIFYING"\]/);
+  assert.match(raceSettings, /SettingRow\.disable\("rs-quali", !!qForced\)/);
+  assert.match(raceSettings, /qForced \? \[\["quali", "QUALIFYING"\]\]/);
+  assert.match(raceSettings, /\[\["tier", "PACE ORDER"\], \["quali", "QUALIFYING"\]/);
   const menus = css("css/menus.css");
   // The race-settings body is a plain one-or-two column grid of rows now: the
   // data-shape / data-density grid-row placement that fitted seven chip groups
@@ -929,13 +929,14 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "title Settings must not force MORE");
   assert.match(game, /\$\(\s*"pm-settings-close"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*settingsNav\.back\(\s*\)\s*\)\s*closeSettings\(\s*\)/,
     "settings BACK pops the stack before closing");
-  assert.match(game, /els\.selGo\.onclick[\s\S]{0,400}openRaceSettings\(\s*"select"\s*\)/,
+  const raceSettings = code("js/race/race-settings.js");
+  assert.match(raceSettings, /els\.selGo\.onclick[\s\S]{0,400}openRaceSettings\(\s*"select"\s*\)/,
     "SELECT NEXT opens race settings, not the garage");
-  assert.match(game, /\$\(\s*"sel-car"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*openGarage\(\s*"select"\s*\)/,
+  assert.match(raceSettings, /\$\(\s*"sel-car"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*openGarage\(\s*"select"\s*\)/,
     "SELECT YOUR CAR is the garage door");
   assert.match(game, /pmStandings\.hidden\s*=\s*!\(\s*isChampionship\(\s*\)\s*&&\s*SeasonCal\.hasProgress\(\s*season\s*\)\s*&&\s*season\.round\s*<\s*SeasonCal\.rounds\(\s*\)\s*\)/,
     "pause STANDINGS matches the title: hide once the season is finished");
-  assert.match(game, /\$\(\s*"pm-restart"\s*\)\.disabled\s*=\s*!!\s*\(\s*netPlay\.active\(\s*\)\s*\|\|\s*qualiNetDone\s*\)/,
+  assert.match(game, /\$\(\s*"pm-restart"\s*\)\.disabled\s*=\s*!!\s*\(\s*netPlay\.active\(\s*\)\s*\|\|\s*qualiNet\.hasArmed\(\s*\)\s*\)/,
     "RESTART looks dead in net / quali-net, same gate as its click handler");
   assert.equal(decl(css("css/career.css"), '#cr-inner:not([data-pair="on"]):not([data-shape="tall"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body', "grid-template-columns"),
     "minmax(0, 1fr) minmax(0, 1fr)", "wide stacked modes picker is two-up; tall stacks");

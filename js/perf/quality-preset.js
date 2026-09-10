@@ -37,14 +37,13 @@ const PRESETS = [
 // nobody's picture until they touch it: desktop ran the full stack (HIGH), and
 // a phone ran the memory-safe STANDARD tier unless it had opted into
 // apex26.gfxHigh (the old mobile-only toggle this control replaces).
-// Phones moved MEDIUM -> HIGH on 2026-09-08: the owner's own phone has run HIGH
-// with RESOLUTION: LOW for months, and trading pixels for the full post stack is
-// the better half of that bargain on a retina panel. The legacy ULTRA opt-in is
-// unchanged.
+// A fresh phone stays MEDIUM: HIGH removes the tier-2 floor and enables the
+// environment probe plus lamp shadows/SSR before the governor has measured the
+// device. The legacy ULTRA opt-in remains authoritative.
 function defaultId(isMobile) {
   if (!isMobile) return "high";
   const legacy = GameStore.store.raw("apex26.gfxHigh") === "1";
-  return legacy ? "ultra" : "high";
+  return legacy ? "ultra" : "medium";
 }
 
 function byId(id) { return PRESETS.find((p) => p.id === id) || null; }

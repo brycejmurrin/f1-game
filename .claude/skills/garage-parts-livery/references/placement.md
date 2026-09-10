@@ -31,7 +31,7 @@ Three surfaces can answer it and the first is ~2000x cheaper than the last:
 | where on the flank does this land? | `node tools/car/spine-station.mjs --team=redbull` | 0.2 s |
 | does the CAR hide it? | the same, `--occlude` (or `flank-occlusion.mjs` for the map) | 1 s |
 | what does the flat art look like? | the same, `--png=artifacts/spine` | 0.3 s |
-| does it read at racing distance, lit? | `node tools/shot/garage-angles.mjs --team redbull --spine-side logo --views side --zoom 8 --pan 5,0` | ~50 s boot + ~35 s a shot |
+| does it read at racing distance, lit? | `node tools/shot/garage-angles.mjs --preset=flank --team=redbull --spineSide=logo` (or `--fast --preset=quick`) | ~25 s boot + ~12–18 s a shot (~8 s with `--fast`) |
 
 `spine-station.mjs` replays the real `buildAtlas` into crest-sweep's recording
 context and diffs the flank against the same livery wearing `spineSide: "none"`,
@@ -93,8 +93,8 @@ side camera the tyre projects straight over the cover. Measured on the marks:
 **Read the camera column before calling a number a defect** — the row above was
 7 % from the hero preset the garage opens on. It was still a defect, and a
 shipped one: Red Bull's default is crown `wrap` + side `duo`, and the same push
-put 92 % of its sponsor names, 95 % of a wordmark and 100 % of `slash` behind
-the wheel. `sideFrom` started the band aft of the BULL, the bull ends at u 0.58
+put 92 % of its sponsor names, 95 % of a wordmark and 100 % of the then-`slash`
+side behind the wheel. `sideFrom` started the band aft of the BULL, the bull ends at u 0.58
 and `FLANK_SEEN` is 0.62, so "behind the animal" and "behind the wheel" were one
 instruction.
 
@@ -104,7 +104,8 @@ sponsor name's is half a word. So `liverytex.js` carries two axes, `su` for
 bands and `sc` clamped to `FLANK_SEEN` for content; the band clears the SUN
 (a hard disc, `sunReach`) and SHARES the bull (a silhouette, and every mark
 carries a keyline, halo or plate); `SIDE_FILL` puts flat fills UNDER the crown's
-flank graphic and lettering over it, so a solid `split` cannot erase the bull's
+flank graphic and lettering over it, so a solid colour fill (`band`/`sash`; the
+culled `split` was the same class) cannot erase the bull's
 legs and the bull cannot erase a sponsor; and `BULL.top` drops the animal clear
 of the crease strip the lettering rides. Everything that has to be read now
 measures 0 % from the side, and `fin-design.test.mjs` holds content — marks AND

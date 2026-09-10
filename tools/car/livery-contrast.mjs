@@ -8,7 +8,8 @@
 // The crown band had a guard (BAND_ON_COVER); the wrap's sun did not, and painted
 // #ffec00 on Ferrari's #f2f2f5 cover at 1.09:1. The flank bands scored against the
 // COVER while standing on a flank the crown design had already repainted, so on a
-// saddle car split/bars/slash painted that colour onto itself at 1.00:1.
+// saddle car the culled split/bars/slash fills painted that colour onto itself
+// at 1.00:1 (band/sash now carry the fill role and re-pick against the flank).
 //
 // Each site answers the question with its own threshold — there are nine of them
 // in liverytex.js, from 1.6 to 6.5 — so a new design is only as safe as whoever
@@ -17,7 +18,7 @@
 // the recording 2D context crest-sweep.mjs already trusts, finds the ops that own
 // a meaningful share of a region, and compares each against the paint beneath it.
 //
-//   node tools/car/livery-contrast.mjs              every team, every design
+//   node tools/car/livery-contrast.mjs              every team × TOP × SIDE
 //   node tools/car/livery-contrast.mjs --team=ferrari
 //   node tools/car/livery-contrast.mjs --json       machine-readable
 //

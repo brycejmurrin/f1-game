@@ -17,7 +17,10 @@ export function chromiumArgsForBackend(backend) {
 export function installProbeInit(page, { backend = "webgl2", team = null, tlxForceGL = true } = {}) {
   return page.addInitScript(({ be, teamIdx, forceGl }) => {
     try {
-      if (be === "webgl2") localStorage.removeItem("apex26.gfxBackend");
+      // Pin webgl2 explicitly. Clearing the key used to mean "GLX default", but
+      // game.js now picks THREE on (pointer: coarse) when unset — Playwright's
+      // blink pointer settings can trip that and hang boot on a deferred fetch.
+      if (be === "webgl2") localStorage.setItem("apex26.gfxBackend", "webgl2");
       else localStorage.setItem("apex26.gfxBackend", be);
       if (be === "three" && forceGl) localStorage.setItem("apex26.tlxForceGL", "1");
       if (be === "webgpu") {
@@ -148,7 +151,7 @@ function enterGarage(page, team) {
 /** Step the preview loop; await soft-present when present.
  * One page.evaluate for N steps — per-frame round-trips used to dominate
  * multi-angle garage shoots (24× evaluate × 4 views ≈ a minute of IPC). */
-export async function settleGarage(page, { frames = 90, sleepFn } = {}) {
+export async function settleGarage(page, { frames = 90, sleepFn, awaitMs = 12000 } = {}) {
   const pause = sleepFn || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const n = Math.max(0, frames | 0);
   if (n > 0) {
@@ -158,7 +161,7 @@ export async function settleGarage(page, { frames = 90, sleepFn } = {}) {
   }
   // Yield so the compositor can finish the last blit before we await it.
   if (n >= 8) await pause(30);
-  await awaitPresentedFrame(page, 12000);
+  await awaitPresentedFrame(page, awaitMs);
 }
 
 /** JSON diagnostics: backend binding, garageCam, and the gap-sample geometry. */
@@ -383,13 +386,13 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
  * Prefer #game-soft toDataURL while the loop still runs (fast multi-angle path).
  * Fall back to freeze + CDP Page.captureScreenshot — never the Playwright
  * screenshot API (document.fonts.ready hung GHA smoke shards 2/3). */
-export async function screenshotGameCanvas(page, outPath) {
+export async function screenshotGameCanvas(page, outPath, opts = {}) {
   await page.evaluate(() => {
     const c = document.getElementById("carsetup");
     if (c) c.style.opacity = "0";
   });
-  await waitGameVisible(page);
-  await awaitPresentedFrame(page);
+  if (!opts.skipVisible) await waitGameVisible(page);
+  if (!opts.skipAwait) await awaitPresentedFrame(page, opts.awaitMs ?? 8000);
   const soft = await readSoftCanvasBytes(page, { type: "png" });
   if (soft) {
     const buf = Buffer.from(soft.b64, "base64");

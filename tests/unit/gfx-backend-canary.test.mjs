@@ -73,6 +73,39 @@ test("#pm-renderer is visible in the SETTINGS markup (not hidden)", () => {
   assert.doesNotMatch(m[0], /\bhidden\b/, "hidden on the tag hid RENDERER until game.js finished an async backend load");
 });
 
+test("no stored renderer means WebGL2 on touch and desktop alike", () => {
+  const game = code("js/game.js");
+  const select = game.slice(game.indexOf("let pref = null;"), game.indexOf("const PROBE_KEY"));
+  assert.ok(select.length > 0, "renderer preference selection block found");
+  assert.doesNotMatch(select, /matchMedia\s*\([^)]*pointer:\s*coarse/,
+    "a coarse pointer must not silently opt every fresh phone into the larger deferred THREE stack");
+  assert.doesNotMatch(select, /if\s*\(\s*!pref\s*\)[^]*?pref\s*=\s*"three"/,
+    "absence of a preference must remain the WebGL2 default");
+  const picker = code("js/perf/renderer-picker.js");
+  const def = picker.slice(picker.indexOf("function defaultBackend()"), picker.indexOf("function readBackend()"));
+  assert.doesNotMatch(def, /matchMedia\s*\([^)]*pointer:\s*coarse/,
+    "renderer-picker defaultBackend must agree with game.js — no touch THREE default");
+  assert.match(def, /return\s+"webgl2"/, "unset picker read falls back to WebGL2");
+});
+
+test("renderer-picker readBackend is WebGL2 on coarse pointer when unset", () => {
+  const src = read("js/perf/renderer-picker.js");
+  const ls = makeStorage({});
+  const ctx = vm.createContext({
+    window: { matchMedia: () => ({ matches: true }) },
+    document: { readyState: "loading", addEventListener() {} },
+    localStorage: ls,
+    sessionStorage: makeStorage({}),
+    navigator: { gpu: {} },
+    ApexRoster: { DEFERRED: { webgpu: ["js/render/webgpu/wgx.js"], three: ["js/render/three/tlx.js"] } },
+  });
+  seedLog(ctx);
+  seedStore(ctx);
+  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
+  const G = vm.runInContext("RendererPicker", ctx);
+  assert.equal(G.readBackend(), "webgl2");
+});
+
 test("boot canary disarms after a successful bind, not only after present()", () => {
   const game = code("js/game.js");
   const bind = game.search(/Object\.defineProperties\(\s*GLX\s*,\s*Object\.getOwnPropertyDescriptors\(\s*backend\s*\)\s*\)/);
@@ -1751,8 +1784,8 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "soft-present must blit readPixels into the 2D overlay");
   assert.match(src, /awaitSoftPresent/,
     "garage settle / SAVE SCREENSHOT wait on awaitSoftPresent");
-  assert.match(src, /SOFT_BLIT_EVERY/,
-    "soft-present must throttle full-frame readPixels (car-group SwiftShader tax)");
+  assert.match(src, /if\s*\(\s*!_softPresentWaiters\.length\s*&&\s*!_softCaptureDue\s*\)\s*return/,
+    "soft-present must read back only when a capture explicitly waits for it");
   assert.match(src, /softPresent:\s*\(\)\s*=>\s*!!_softPresent/,
     "softPresent() capability bit for renderer-picker / probes");
   assert.match(src, /function invalidateSoftPresent\(/,
@@ -2800,14 +2833,15 @@ test("GLX links its core programs as one parallel batch when KHR_parallel_shader
 
 test("the flyby shows under race settings only; the picker pre-builds it hidden once the pick settles", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const raceSettings = read("js/race/race-settings.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const menus = read("js/ui/select-screen.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.doesNotMatch(game, /\n\s*scheduleFlybyTrack\(\);\s*\n\s*window\.addEventListener\("resize"/,
     "the boot builds no world for the title");
-  assert.match(game, /\$\("race-settings"\)\.hidden = false;\s*scheduleFlybyTrack\(\);/,
+  assert.match(raceSettings, /\$\("race-settings"\)\.hidden = false;\s*scheduleFlybyTrack\(\);/,
     "opening race settings schedules the flyby of the chosen circuit (120 ms)");
   // The TIME OF DAY row's write (js/ui/setting-row.js): every write repaints the
   // screen through wireRaceSettings' `after`, so only the flyby call is pinned.
-  assert.match(game, /wire\("rs-time", \(\) => raceTimeOfDay, \(v\) => \{ raceTimeOfDay = v; scheduleFlybyTrack\(\); \}\)/,
+  assert.match(raceSettings, /wire\("rs-time", getRaceTimeOfDay, \(v\) => \{ setRaceTimeOfDay\(v\); scheduleFlybyTrack\(\); \}\)/,
     "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
   assert.match(menus, /scheduleFlybyTrack\(true\)/,
     "a circuit tile pre-builds after the settle delay, never on the tap itself");

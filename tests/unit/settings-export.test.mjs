@@ -154,6 +154,13 @@ test("the device decides the graphics default", () => {
   assert.deepEqual(f.changed, [], "a phone on MEDIUM is at its default");
 });
 
+test("unset gfxBackend exports as null on touch and desktop alike", () => {
+  assert.equal(boot({ mobile: true }).collect("all").settings.display.gfxBackend, null);
+  assert.equal(boot({ mobile: false }).collect("all").settings.display.gfxBackend, null);
+  const f = boot({ mobile: true }).collect("changes");
+  assert.deepEqual(f.changed, [], "unset backend is not a change from shipped default");
+});
+
 // The allowlist's literal defaults against the source that reads them: every
 // `store.get("<key>", <default>)` in the owning file must agree with SPEC, and
 // every source path must exist. A default moved in the source without the

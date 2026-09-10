@@ -2119,6 +2119,15 @@ const Car3D = (function () {
     };
   }
 
+
+  function applyBodySplit(out, i0, i1, leftC, rightC) {
+    for (let i = i0; i < i1; i++) {
+      if (out.mat[i] !== SURFACES.paint) continue;
+      const c = out.pos[i * 3] < 0 ? leftC : rightC;
+      out.col[i * 3] = c[0]; out.col[i * 3 + 1] = c[1]; out.col[i * 3 + 2] = c[2];
+    }
+  }
+
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
     const teamId = opts && opts.teamId;
@@ -2174,6 +2183,10 @@ const Car3D = (function () {
     // black. Absent = c1, today's look. The atlas inks the crest against this too
     // (liverytex `coverPaint`), or a light cover would swallow a light crest.
     const coverC = _ckAcc(liv.cover) || c1;
+    // BODY SPLIT (liv.bodySplit === "lr"): Cadillac-style L/R body. Left (x<0)
+    // keeps c1, right (x>=0) takes c2. Applied as a paint-only recolour over the
+    // chassis→livery sections so carbon / wings / glass stay untouched.
+    const bodySplitLR = liv.bodySplit === "lr";
     const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
@@ -2198,6 +2211,7 @@ const Car3D = (function () {
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
 
     part("chassis");
+    const bodySplitFrom = out.pos.length / 3;
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
     buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt);
 
@@ -2422,15 +2436,9 @@ const Car3D = (function () {
                      h: Math.max(0.03, 0.968 - hoopF), t: 0.40 },
                    { z: -0.63, y: (hoopR + 0.938) / 2, w: 0.13 * inScale,
                      h: Math.max(0.03, 0.938 - hoopR), t: 0.38 }, sunC);
-      // A SPINE SIDE mark (liv.spineSide) claims the flank band, and the cover's
-      // own trim keeps clear of it (the pinstripe and the service panels).
-      // HOW FAR aft is the CROWN's call: -1.26/-1.36 clear a mark at f 0.19, but
-      // `wrap` paints the front of the flank, so liverytex moves the design into
-      // the MID-flank out to FLANK_SEEN and trim tuned for f 0.19 lands inside
-      // it — measured in the garage, the pinstripe crossed the first sponsor row
-      // and the hatch took the last two letters of the second, white ink on lit
-      // metal. Read off liverytex (guarded, like sunC) so it cannot drift.
-      const sideMark = (liv.spineSide || "none") !== "none";
+      // A SPINE SIDE mark claims the flank band; culled ids leave panels alone.
+      // Under wrap, trim aft tracks FLANK_SEEN so the pinstripe/hatch clear the mid-flank design.
+      const sideMark = (liv.spineSide || "none") !== "none" && (!globalThis.LiveryTex || !LiveryTex.SPINE_SIDE_IDS || LiveryTex.SPINE_SIDE_IDS.includes(liv.spineSide));
       const trimAft = (sideMark && (liv.spineLogo || "logo") === "wrap"
         && typeof LiveryTex !== "undefined" && LiveryTex.FLANK_SEEN)
         ? LiveryTex.FLANK.zF - LiveryTex.FLANK_SEEN * LiveryTex.FLANK.zLen : 0;
@@ -2998,6 +3006,8 @@ const Car3D = (function () {
     const camPod = anchors.noseAt(1.55);
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
 
+    if (bodySplitLR) applyBodySplit(out, bodySplitFrom, out.pos.length / 3, c1, c2);
+
     part("cockpit");
     // NONE OF THIS BELONGS IN THE FIRST-PERSON BUILD. The cockpit body is its
     // own model (opts.cockpit — see cockpitBodyMesh in game.js), drawn from
@@ -3220,7 +3230,7 @@ const Car3D = (function () {
       const field = !!(opts && opts.field);
       Helmets.build(out, 0, 0.715, -0.075, des, {
         paint: SURFACES.paint, glass: SURFACES.visor,
-        maxSplit: (sil || field) ? 0 : undefined,   // depth pass and field cars: keep the lid shape, drop paint-edge splits
+        maxSplit: (sil || field) ? 0 : undefined, simplePaint: sil || field,
       });
       // No brow box and no rear spoiler box: the traced shell carries its own
       // ridge over the aperture and its own aero lip at the back.

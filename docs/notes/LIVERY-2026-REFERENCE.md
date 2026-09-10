@@ -46,11 +46,11 @@ out of using it, and both are load-bearing:
 | McLaren | sourced DISTINCT: black sweeps across the cover | **Already modelled.** McLaren's team livery carries `spineLogo: "panel"` — "a hard-edged panel down the crown with a raked leading edge" — over an anthracite `c2`. That IS the black cover sweep. |
 | Williams | **RESOLVED: black** — applied | See "What the photograph settled" below. The white-cover claim was wrong. |
 | Aston Martin | **RESOLVED and APPLIED**: dark spine stripe on a green cover | The gap this needed — a crown band coloured independently of the body stripe — is closed: `liv.spineTint`, 2026-09-09. See "What the photographs settled (Audi, Aston Martin)" below. |
-| Alpine | **RESOLVED: same blue as the body — no cover colour** | Settled 2026-09-09 off the official launch photograph. See "What the photograph settled (Alpine)" below. (f1technical.net is behind a Cloudflare bot check no automated read gets past — do not retry that page; formula1.com's own article is the route that worked.) |
-| Racing Bulls | same as body (white) | Blue *streaks* on the cover, not a cover colour. |
+| Alpine | **RESOLVED: same blue as the body — no cover colour**; pink **crown stripe APPLIED** | Cover stays body blue. Pink crown stripe confirmed by a second text source (SI/OnSI 2026-01-23) — `spineLogo: "stripe"` + `spineTint` BWT pink. |
+| Racing Bulls | same as body (white) | **APPLIED**: `spineLogo: "streaks"` + `spineTint` blue on the white cover. |
 | Haas | same as body (white) | The cover is named only as a branding location. |
 | Red Bull | same as body (gloss blue) | Already carries its own treatment (`spineLogo: "wrap"`, `spineHeight: "dorsal"`, `finShape: "none"`). |
-| Cadillac | body is split LEFT/RIGHT | The cover follows a black/white split down the centreline. **We cannot express this**: the livery model has no per-side body colour. A real feature request, not a colour. |
+| Cadillac | body is split LEFT/RIGHT | **APPLIED**: `bodySplit: "lr"` — left (x<0) primary, right (x≥0) secondary. Mesh paint recolour in Car3D. |
 
 ## What the photograph settled (Williams)
 
@@ -143,17 +143,12 @@ scheme" with no cover callout, and The Race describes "a largely unchanged
 blue-and-pink gloss paint livery", noting only that the SIDEPODS return to the
 main blue. Nothing anywhere names a distinct cover.
 
-**One thing seen but NOT applied.** The same reading reports "a distinct bright
-pink stripe or band running down the centre of the engine cover", starting at
-the cockpit. That is single-source — one automated look at one photograph, with
-no textual confirmation in either article — and the standard this file already
-sets (Audi changed on ~24 photographs plus a launch report agreeing in words) is
-higher than that. So Alpine keeps its shipped `spineLogo: "tricolour"` and this
-is recorded, not acted on. If it is ever confirmed, note that the fix needs the
-SAME crown-band field Aston Martin needed, which now exists (`liv.spineTint`,
-under "What the photographs settled (Audi, Aston Martin)") —
-though Alpine's accent is already pink, so `spineLogo: "stripe"` alone would
-come close even without it. Either way it waits for a second source.
+**Pink crown stripe — APPLIED 2026-09-09.** The F1 gallery reading of a bright
+pink band on the cover crown stayed single-source until Sports Illustrated /
+Grand Prix On SI (Ewan Gale, 23 Jan 2026) independently named “a strip of the
+engine cover” among the BWT pink zones. Alpine now ships `spineLogo: "stripe"`
++ `spineTint` = BWT pink (`color2`). The cover itself remains body blue — that
+negative answer from the launch photograph still holds.
 
 **Beware the shakedown car.** A technical article describing the A526 at
 Silverstone mentions "the use of black paint in this region" around the engine
@@ -169,4 +164,13 @@ did it exist
 (formula1.com "GALLERY: every angle of…", media.alpinecars.com) and need a
 session whose fetch reaches them, or an owner-supplied photograph — which is
 exactly how Ferrari and Mercedes got theirs, and why those two are the only
-covers in the tree.
+covers in the tree. The container's egress denies those hosts; use a remote
+browser. Do not invent colours.
+
+**Still open (photo-grounded, no invented design):** none.
+
+**Applied this pass:**
+- Alpine pink crown stripe — second source: Sports Illustrated / Grand Prix On SI (Ewan Gale, 23 Jan 2026) names “a strip of the engine cover” in BWT pink; applied as `spineLogo: "stripe"` + `spineTint` (BWT pink). Cover itself stays body blue.
+- Cadillac L/R body — `bodySplit: "lr"` (Car3D paint recolour by sign(x)).
+- Racing Bulls blue *streaks* — `spineLogo: "streaks"` + `spineTint` (blue on white cover).
+- W17-style SIDE `slash` — restored as ONE raked stroke in `SPINE_SIDE_IDS`. Mercedes stays on `sash`.

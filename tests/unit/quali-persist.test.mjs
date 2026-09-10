@@ -19,6 +19,7 @@ import { fnSource } from "../helpers/fn-source.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/quali-model.js"), "utf8");
 const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+const QUALI_NET = fs.readFileSync(path.join(ROOT, "js/race/quali-net.js"), "utf8");
 
 function car(id, code, name, team, isPlayer) {
   return {
@@ -153,9 +154,9 @@ test("a driven simulate persists; an active netPlay session does not", () => {
 });
 
 test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race uses fresh", () => {
-  assert.match(GAME, /function openQuali\(fresh, netDone\)/);
+  assert.match(GAME, /async function openQuali\(fresh, netDone\)/);
   assert.match(GAME, /if \(fresh\) quali\.simulate\(0\); else quali\.begin\(\)/);
-  assert.match(GAME, /openQuali\(true, done \|\| null\)/);   // fresh sim, and the gate handed in
+  assert.match(QUALI_NET, /openQuali\(true, done \|\| null\)/);   // fresh sim, and the gate handed in
   assert.match(GAME, /quali\.clear\(\);   \/\/ memory only/);
   // NOT a blanket whole-file ban. The bug this suite exists for is a
   // clear(true) inside the SHEET'S OWN lifecycle (openQuali / quitToMenu),
@@ -178,12 +179,12 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // the callback. netPlay.start() is reachable only through that callback, so a
   // friend race with grid-by-qualifying silently ran two disconnected solo races.
   assert.match(fnSource(GAME, "async function openQuali(fresh, netDone)"),
-    /qualiNetDone = netDone \|\| null/,
+    /qualiNet\.arm\(netDone\)/,
     "openQuali must arm the gate from its own argument, after its own reset");
-  assert.doesNotMatch(fnSource(GAME, "function openQualiForNet(done)"), /qualiNetDone\s*=/,
+  assert.doesNotMatch(fnSource(QUALI_NET, "function openQualiForNet(done)"), /qualiNetDone\s*=/,
     "openQualiForNet must NOT assign qualiNetDone — the async reset would wipe it");
-  assert.match(GAME, /RIVAL LEFT — TO THE GRID/);
-  assert.match(GAME, /qualiHadRivals/);
+  assert.match(QUALI_NET, /RIVAL LEFT — TO THE GRID/);
+  assert.match(QUALI_NET, /qualiHadRivals/);
   assert.match(GAME, /if \(!p\) \{ closeLightTuner\(false\); closeCamTuner\(false\); exitPhotoMode\(\); \}/);
   assert.match(GAME, /closeCamTuner\(false\); exitPhotoMode\(\);/);
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
@@ -192,13 +193,13 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // finite; SC (3) and VSC (2) are the delta paces they always were.
   assert.match(GAME, /vTop\(\) \* \(lvl >= 4 \? 0\.02 : lvl === 3 \? 0\.45 : 0\.6\)/);
   assert.match(GAME, /if \(netPlay\.active\(\)\) netPlay\.stop\("local"\)/);
-  assert.match(GAME, /if \(netPlay\.active\(\) \|\| qualiNetDone\) return/);
+  assert.match(GAME, /if \(netPlay\.active\(\) \|\| qualiNet\.hasArmed\(\)\) return/);
   assert.match(SRC, /if \(!classification\.some\(\(r\) => r\.human\)\) return/);
 });
 
 test("friend-race BACK aborts to the lobby; a null quali grid does not P12-shuffle", () => {
-  assert.match(GAME, /qualiNetDone \? \(qualiNetDone = null/);
-  assert.match(GAME, /netLobby\.abortQuali\(\)/);
+  assert.match(GAME, /qualiNet\.hasArmed\(\) \? qualiNet\.resetOnBackWithAbort\(\)/);
+  assert.match(QUALI_NET, /netLobby\.abortQuali\(\)/);
   assert.match(GAME, /if \(!isQuali\(\) && gridFromQuali\(\) && !quali\.order\(cars\)\) \{ openQuali\(\); return false; \}/);
 });
 
@@ -207,7 +208,8 @@ test("friend-race title quit cancels the lobby instead of aborting back into it"
   // 2026-09-02: quitToMenu grew and netLobby.cancel() moved to +2605, so this
   // assertion failed for a call that was still there. See tests/helpers/fn-source.mjs.
   const quit = fnSource(GAME, "function quitToMenu()");
-  assert.match(quit, /netLobby\.cancel\(\)/);
+  assert.match(quit, /qualiNet\.resetOnQuitWithCancel\(\)/);
+  assert.match(fnSource(QUALI_NET, "function resetOnQuitWithCancel()"), /netLobby\.cancel\(\)/);
   assert.doesNotMatch(quit, /netLobby\.abortQuali\(\)/);
 });
 

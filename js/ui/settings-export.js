@@ -61,7 +61,7 @@ const SPEC = [
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId" },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
-  { k: "gfxBackend", lane: "raw", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "three" : null, src: "js/perf/renderer-picker.js defaultBackend (unset = three on a touch device, else webgl2)" },
+  { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/game.js boot (unset = WebGL2 on every device)" },
   { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)" },
   // HUD (js/game.js)
   { k: "hudProfile", lane: "json", group: "hud", def: "standard", src: "js/game.js" },

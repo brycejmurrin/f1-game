@@ -13,7 +13,14 @@
 // FLAP is different: setupPreviewXOn/AeroX are module-level and nothing on
 // the way in touches them, so a test that left X open would hand the next one
 // an open flap. The opener shuts it the way the game does (garageAero(false)
-// plus the ease, which clamps to exactly 0). UNVERIFIED IN A BROWSER.
+// plus the ease, which clamps to exactly 0).
+//
+// openGarage always peels to the title and re-enters (that visit is what
+// resets the turntable — skipping it left spin=false and broke "AIMS at the
+// rear wing" on CI #3233). It retries the enter up to three times, and treats
+// "#carsetup already showing" after a wait timeout as success: soft-present
+// ReadPixels stalls can make waitForFunction miss a bay that is already up
+// (Selected specs 2026-09-09). UNVERIFIED IN A BROWSER.
 import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { toMenu } from "../helpers/shared-page.js";
 
@@ -27,16 +34,53 @@ async function clickId(page, id) {
   }, id);
 }
 
-async function openGarage(page) {
-  await toMenu(page);
-  // evaluate click, not locator.click: a Playwright click on the title flyby
-  // costs 80-113 s (docs/TESTING.md) and was the 120 s Selected-specs timeout
-  // on 1e94cdf0 (garage-aero "MOVES the wing" 146 s / "WHOLE-CAR preset" 125 s).
-  await clickId(page, "mb-garage");
+async function garageOpen(page) {
+  return page.evaluate(() => {
+    const el = document.getElementById("carsetup");
+    return !!(el && !el.hidden);
+  });
+}
+
+async function waitGarage(page, ms) {
+  // Wall-clock polling — default rAF polling never fires under SwiftShader
+  // (docs/TESTING.md). Soft-present ReadPixels can still stall the main
+  // thread for seconds; a single long wait cannot recover a swallowed click.
   await page.waitForFunction(() => {
     const el = document.getElementById("carsetup");
     return el && !el.hidden;
-  }, null, { polling: 100, timeout: 20000 });
+  }, null, { polling: 100, timeout: ms });
+}
+
+async function openGarage(page) {
+  // Always title → #mb-garage. Re-entry resets the turntable (js/game.js
+  // openGarage); short-circuiting when already open left spin=false and failed
+  // "AIMS at the rear wing" on harden CI #3233.
+  // evaluate click, not locator.click: a Playwright click on the title flyby
+  // costs 80-113 s (docs/TESTING.md) and was the 120 s Selected-specs timeout
+  // on 1e94cdf0 (garage-aero "MOVES the wing" 146 s / "WHOLE-CAR preset" 125 s).
+  // Retry the enter (same shape as tools/capture/probe-page.mjs openGarage):
+  // a click that never landed cannot be fixed by waiting longer. After a wait
+  // timeout, if #carsetup is showing anyway, accept it — ReadPixels stalls can
+  // block the poll while the bay is already up (Selected specs 2026-09-09).
+  const tries = 3;
+  const stepMs = 8_000;
+  let lastErr = null;
+  for (let i = 0; i < tries; i++) {
+    await toMenu(page);
+    await clickId(page, "mb-garage");
+    try {
+      await waitGarage(page, stepMs);
+      lastErr = null;
+      break;
+    } catch (e) {
+      lastErr = e;
+      if (await garageOpen(page)) {
+        lastErr = null;
+        break;
+      }
+    }
+  }
+  if (lastErr) throw lastErr;
   await page.evaluate(() => {
     window.__apex.garageAero(false);
     window.__apex.garageStep(1 / 60, 120);   // 2 s of closing: X_CLOSE_RATE reaches 0 well inside it

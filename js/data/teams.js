@@ -29,7 +29,7 @@ const Teams = (function () {
       /* The W17 is a BLACK car with a SILVER engine cover: the launch photos show
          the airbox, roll structure and cover crown in bare-metal silver over a
          black chassis, with the star flake on the tail. */
-      livery: { cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "none", spineHeight: "dorsal", spineLogo: "twin", spineSide: "slash" },
+      livery: { cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "none", spineHeight: "dorsal", spineLogo: "twin", spineSide: "sash" },
       engine: "Mercedes", tier: 0,
       stats: { speed: 96, accel: 91, cornering: 93, braking: 90 },
       drivers: [
@@ -74,7 +74,8 @@ const Teams = (function () {
     },
     {
       id: "alpine", name: "Alpine", short: "ALP",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "tricolour", spineSide: "bars" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "band",
+                spineTint: [1.0, 0.529, 0.737] },
       color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737],       /* blue #0093CC / pink #FF87BC */
       engine: "Mercedes", tier: 3,
       stats: { speed: 83, accel: 80, cornering: 82, braking: 80 },
@@ -85,7 +86,8 @@ const Teams = (function () {
     },
     {
       id: "racingbulls", name: "Racing Bulls", short: "RB",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "chevron", spineSide: "split" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "streaks", spineSide: "sash",
+                spineTint: [0.086, 0.204, 0.796] },
       color: [0.957, 0.941, 0.925], color2: [0.086, 0.204, 0.796], /* white #F4F0EC / blue #1634CB */
       engine: "Red Bull Ford", tier: 3,
       stats: { speed: 82, accel: 82, cornering: 81, braking: 80 },
@@ -124,7 +126,7 @@ const Teams = (function () {
     },
     {
       id: "audi", name: "Audi", short: "AUD",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "bars",
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "band",
                 cover: [0.075, 0.078, 0.085] },
 /* titanium silver #B3B8BD / Audi red-orange #FA470D, with a CARBON BLACK
          engine cover. This was a black car here until 2026-09-08, described in
@@ -163,7 +165,8 @@ const Teams = (function () {
     },
     {
       id: "cadillac", name: "Cadillac", short: "CAD",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate",
+                bodySplit: "lr" },
       color: [0.039, 0.039, 0.039], color2: [0.961, 0.961, 0.961], /* black #0A0A0A / white #F5F5F5 */
       engine: "Ferrari", tier: 4,
       stats: { speed: 73, accel: 73, cornering: 73, braking: 72 },

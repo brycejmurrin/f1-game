@@ -31,19 +31,6 @@ const BASE = {
   STR: [74, 72, 70, 72,  80],
 };
 
-// Deterministic 32-bit hash of a string. Used to give an UNKNOWN driver a stable
-// personality instead of a random one — the custom team's driver, or a rookie the
-// career market generates, must rate the same on every load of the same save.
-function hash32(str) {
-  let h = 0x811c9dc5;
-  const s = String(str);   // hoisted: was re-converting twice per character
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
 const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 const rClamp = (v, lo, hi) => Math.round(clamp(v, lo, hi));
 
@@ -52,7 +39,7 @@ const rClamp = (v, lo, hi) => Math.round(clamp(v, lo, hi));
 // drivers are not clones of each other.
 function fromTier(tier, code) {
   const t = clamp(tier | 0, 0, 4);
-  const h = hash32(code || "???");
+  const h = Hash32.fnv1a(code || "???");
   const spread = (n) => ((h >>> (n * 5)) & 31) - 15;      // -15..+16, stable per code
   const anchor = 88 - t * 4;
   return {
@@ -108,6 +95,6 @@ function skill(r, roll) {
   return clamp(SKILL_BASE + (r.pace / 100) * SKILL_SPAN + jitter, 0.90, 1.0);
 }
 
-return { AXES, BASE, get, overall, fromTier, hash32, skill,
+return { AXES, BASE, get, overall, fromTier, hash32: Hash32.fnv1a, skill,
          SKILL_BASE, SKILL_SPAN, SKILL_JITTER };
 })();

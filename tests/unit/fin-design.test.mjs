@@ -152,13 +152,62 @@ test("spineLogo none drops the crest from the cover and keeps it on the fin", ()
 // did, every mark on a dorsal cover came out 14 % too narrow and the owner saw
 // it as "the side designs look squished". So re-measure it here, against the
 // real Car3D, rather than trusting the number.
-// SPINE TINT: the crown band's OWN colour. Every SPINE TOP design took
-// `stripe || accent`, and neither can be set for the crown alone — `stripe`
-// runs the whole spine INCLUDING THE NOSE, and `accent` is tertiary trim used
-// all over the car. Aston Martin's launch car is a dark band on a body-green
-// cover whose accent is LIME, so it came out lime, and the only way to fix it
-// without this field also darkened the nose. Absent, the default must be
-// exactly what it was, or every shipped livery moves.
+// SPINE TINT: the crown band's OWN colour. Optional paints (BODY STRIPE,
+// DETAIL) must not steal it — each row owns one surface. Absent, the band
+// derives from the BASE colours (secondary, then primary) against the cover.
+test("optional paints do not cross-feed other surfaces", () => {
+  // BODY STRIPE / DETAIL / SPINE TINT must not appear in another surface's
+  // unset derivation. Each optional row owns one surface; unset falls back to
+  // bases (c1/c2) and inks only.
+  const src = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
+  assert.doesNotMatch(src, /if\s*\(\s*stripe\s*\)\s*accent\s*=\s*stripe/,
+    "BODY STRIPE must not remap the working accent");
+  assert.match(src, /const BAND_ORDER = \[c2, c1, INK_LIGHT, INK_DARK\]/,
+    "SPINE TOP band derives from bases only");
+  assert.doesNotMatch(src, /if\s*\(\s*liv\.spineTint\s*\)\s*return\s*liv\.spineTint/,
+    "SUN must not inherit SPINE TINT when sunTint is unset");
+  assert.match(src, /finArt \|\| \[c2, c1, inkFin\]/,
+    "TAIL GRAPHIC wash must not prefer BODY STRIPE / DETAIL");
+  assert.match(src, /flankBandC = colors\.sideTint \|\| pickOn\(BAND_ORDER/,
+    "SIDE TINT must not inherit bandC / spineTint when unset");
+  assert.doesNotMatch(src, /plateTint \|\| accent|plateTint \|\| stripe/,
+    "PLATE PANEL must not inherit DETAIL / BODY STRIPE");
+  assert.doesNotMatch(src, /liv\.stripe \|\| liv\.accent \|\| liv\.c2/,
+    "markBase must not prefer stripe / detail over secondary");
+});
+
+test("saddle / crown band ignore BODY STRIPE; SPINE TINT is the override", () => {
+  // Audi-shaped custom: dark cover, red secondary, titanium stripe. SPINE TOP
+  // saddle is the secondary PANEL — stripe used to win BAND_ORDER (and remap
+  // the working accent) and paint the cover silver.
+  const RED = [0.98, 0.28, 0.05], SILVER = [0.702, 0.722, 0.741], COVER = [0.075, 0.078, 0.085];
+  const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+  const carries = (styles, c) => {
+    const want = to255(c).join(",");
+    return [...styles].some((v) => v && v.replace(/^rgba?\(/, "").replace(/[)\s]/g, "").startsWith(want));
+  };
+  const stylesOf = (ops) => new Set(opsIn(ops, R.crest).map((op) => op.style).filter(Boolean));
+  const base = {
+    c1: [0.05, 0.06, 0.07], c2: RED, cover: COVER,
+    spineLogo: "saddle", finShape: "none", spineHeight: "dorsal"
+  };
+  const withStripe = A.paint("audi", { ...base, stripe: SILVER });
+  const noStripe = A.paint("audi", base);
+  assert.ok(carries(stylesOf(withStripe), RED),
+            `saddle crown must carry secondary ${to255(RED)}; got ${[...stylesOf(withStripe)].join(", ")}`);
+  assert.equal(carries(stylesOf(withStripe), SILVER), false,
+               "BODY STRIPE must not steal the saddle");
+  // Same crown with or without a body stripe — the stripe row is elsewhere.
+  assert.deepEqual([...stylesOf(withStripe)].sort(), [...stylesOf(noStripe)].sort(),
+                   "adding BODY STRIPE changed the saddle crown");
+
+  // SPINE TINT alone recolours the band.
+  const PINK = [1, 0.2, 0.6];
+  const tinted = A.paint("audi", { ...base, stripe: SILVER, spineTint: PINK });
+  assert.ok(carries(stylesOf(tinted), PINK),
+            `SPINE TINT must paint the saddle; got ${[...stylesOf(tinted)].join(", ")}`);
+});
+
 test("spineTint colours the crown band alone, and is absent-identical", () => {
   const LIME = [0.718, 0.882, 0.106], DARK = [0.008, 0.086, 0.078];
   const AM = { c1: [0.0, 0.349, 0.31], c2: LIME, spineLogo: "stripe" };
@@ -230,7 +279,7 @@ test("the flank squash table still matches the cover Car3D actually builds", () 
 });
 
 test("every SPINE TOP design paints the crown; wordmark and number carry text", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number"]);
   // The wrap is ONE shape over crown and flanks: it paints the crest region
   // AND the flank band with no spineSide picked, and leaves the tail bare.
   const wrap = A.paint("redbull", { ...BASE, spineLogo: "wrap" });
@@ -240,7 +289,22 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   // is taller than it is wide to hold it.
   assert.ok(A.LT.SIZE_H > A.LT.SIZE && R.spineSideL && R.spineSideL.y + R.spineSideL.h <= A.LT.SIZE_H, "the left flank lives in the atlas's extra rows");
   assert.ok(opsIn(wrap, R.spineSideL).length > 0, "wrap paints the left flank too");
-  for (const id of ["number", "logo", "plate", "wordmark", "duo", "slash", "split", "bars", "ribbon", "lockup"]) {
+  {
+    const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+    const cssOf = (c) => "rgb(" + to255(c).join(",") + ")";
+    const navy = { c1: [0.05, 0.05, 0.35], c2: [1, 1, 1], spineLogo: "wrap" };
+    const pick = [0, 1, 0.8];
+    const def = A.paint("redbull", navy);
+    const auth = A.paint("redbull", { ...navy, logo: pick });
+    const flankFills = (ops) => opsIn(ops, R.spineSide)
+      .filter((op) => op.kind === "fill")
+      .map((op) => op.style);
+    assert.ok(flankFills(auth).includes(cssOf(pick)),
+      `wrap bull not painted ${cssOf(pick)}; got ${[...new Set(flankFills(auth))].join(", ")}`);
+    assert.ok(!flankFills(def).includes(cssOf(pick)),
+      "without TEAM LOGO the bull should not wear the authored colour");
+  }
+  for (const id of ["number", "logo", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash"]) {
     const ops = A.paint("ferrari", { ...BASE, spineSide: id });
     assert.ok(opsIn(ops, R.spineSide).length > 0 && opsIn(ops, R.spineSideL).length > 0, `${id} paints both flanks`);
   }
@@ -258,7 +322,7 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   // fewer ops with a side pick than without one. What must never shrink is the
   // side design's own contribution.
   for (const team of ["redbull", "ferrari"]) {
-    for (const side of ["duo", "wordmark", "slash", "number"]) {
+    for (const side of ["duo", "wordmark", "band", "number"]) {
       const alone = A.paint(team, { ...BASE, spineSide: side });
       const ops = A.paint(team, { ...BASE, spineLogo: "wrap", spineSide: side });
       for (const reg of [R.spineSide, R.spineSideL]) {
@@ -393,7 +457,7 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
 // code or the crest on pick. Mesh: the service panels leave the band's z range
 // so a grey hatch never sits through the number — same vertex count, moved.
 test("spineSide paints the flank band on pick only, and clears the service panels from under it", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash", "split", "bars", "chevron", "ribbon", "lockup"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "slash"]);
   assert.ok(A.LT.FLANK_MARK.v < 0.48 && A.LT.FLANK_MARK.v > 0.30,
             "flank marks sit in the upper half (0.56 sat in the sidepod; 0.42 with the old tall box clipped the crease)");
   assert.ok(A.LT.FLANK_MARK.v - A.LT.FLANK_MARK.halfH > 0.08,
@@ -402,6 +466,20 @@ test("spineSide paints the flank band on pick only, and clears the service panel
             "the mark box stays above the sidepod line");
   assert.ok(A.LT.FLANK_MARK.halfW > A.LT.FLANK_MARK.halfH,
             "the box is wider than tall — flankSquash corrects the along/down anisotropy, it does not reshape the box");
+  assert.equal(typeof A.LT.flankMarkStation, "function", "flankMarkStation is exported");
+  {
+    const saddle = A.LT.flankMarkStation("saddle", false, "logo");
+    assert.equal(saddle.u, A.LT.FLANK_MARK.uOnSaddle, "saddle+logo u centres on the white shoulder");
+    assert.equal(saddle.v, A.LT.FLANK_MARK.vOnSaddle, "saddle+logo v centres on the white shoulder");
+    const wrap = A.LT.flankMarkStation("wrap", true, "none");
+    assert.equal(wrap.u, A.LT.FLANK_MARK.uOnCrown, "wrap flank fill uses the crown u");
+    assert.equal(wrap.v, A.LT.FLANK_MARK.v, "wrap flank fill uses the default v");
+    const plain = A.LT.flankMarkStation("logo", false, "none");
+    assert.equal(plain.u, A.LT.FLANK_MARK.u, "default station u is mid-band");
+    assert.equal(plain.v, A.LT.FLANK_MARK.v, "default station v is mid-band");
+  }
+  assert.ok(A.LT.FLANK_MARK.vOnSaddle < A.LT.FLANK_MARK.v,
+            "saddle station sits higher (closer to crease) than the default");
   // …and the station a crown design pushes it to has to fit BETWEEN the sun and
   // the rear tyre. The box is measured in region HEIGHTS, so its half-width
   // along the flank is halfW scaled by the region's own aspect.
@@ -415,19 +493,24 @@ test("spineSide paints the flank band on pick only, and clears the service panel
     .filter((op) => op.kind === "text").map((op) => op.text);
   assert.ok(texts({ spineSide: "number" }).includes("16"), "number on the flank");
   assert.ok(texts({ spineSide: "code" }).includes("LEC"), "driver code on the flank");
-  // The photo-derived side designs: a plate carries the number, the wordmark a
-  // name, the slashes only bars.
   assert.ok(texts({ spineSide: "plate" }).includes("16"), "plate: number on the plate");
   assert.ok(texts({ spineSide: "wordmark" }).join("").length >= 3, "wordmark: a sponsor name on the flank");
   assert.ok(texts({ spineSide: "duo" }).join("").length > texts({ spineSide: "wordmark" }).join("").length, "duo: two names on the flank");
-  const slash = opsIn(A.paint("ferrari", { ...BASE, spineSide: "slash" }), R.spineSide);
-  assert.ok(slash.length >= 4 && slash.every((op) => op.kind !== "text"), "slash: bars, no text");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "logo" }), R.spineSide).length > 0, "the crest on the flank");
   assert.ok(texts({ spineSide: "ribbon" }).includes("16"), "ribbon: number in the crease band");
   assert.ok(texts({ spineSide: "lockup" }).includes("16"), "lockup: number beside the mark");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "lockup" }), R.spineSide).length >
             opsIn(A.paint("ferrari", { ...BASE, spineSide: "number" }), R.spineSide).length,
             "lockup adds the mark on top of the number");
+  assert.ok(texts({ spineSide: "title" }).join("").length >= 3, "title: sponsor name on a board");
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "emblem" }), R.spineSide).length > 0, "emblem paints a large crest");
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "band" }), R.spineSide).length > 0, "band paints the crease strip");
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "sash" }), R.spineSide).length > 0, "sash paints a diagonal");
+  // Culled band graphics must not paint (unknown id → bare flank).
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "slash" }), R.spineSide).length > 0, "slash paints a single raked stroke");
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "bars" }), R.spineSide).length, 0, "bars was culled");
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "split" }), R.spineSide).length, 0, "split was culled");
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "chevron" }), R.spineSide).length, 0, "chevron was culled");
   const base = build({}), side = build({ spineSide: "number" });
   assert.strictEqual(side.pos.length, base.pos.length, "the panels move, they are not removed");
   assert.ok(!samePos(base, side), "a flank mark relocates the service panels");
@@ -600,10 +683,9 @@ test("nothing that has to be READ is put where the car covers it", async () => {
                                      + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1;
   // CONTENT, not fills. A stripe whose tail runs behind the wheel is still a
   // stripe; a sponsor name whose tail runs behind the wheel is half a word, and
-  // a number behind the wheel is nothing at all. `split`, `slash`, `bars` and
-  // `chevron` are flat geometry that runs the length of the flank on purpose
-  // and are excluded by class, not by exception — they measure 4-73 % and that
-  // is what a full-length band on this car means.
+  // a number behind the wheel is nothing at all. Culled full-length sticker
+  // fills (split/slash/bars/chevron) are gone; band/sash remain colour panels
+  // and are excluded by class — they may run aft on purpose.
   //
   // This is the guard the SHIPPED defect would have failed: Red Bull's default
   // is crown `wrap` + side `duo`, and pushing the side band aft of the bull put
@@ -612,7 +694,9 @@ test("nothing that has to be READ is put where the car covers it", async () => {
   // because duo on a bare crown legitimately reaches 34 %: it hangs two names
   // side by side down the WHOLE flank, so its aft one runs into the tyre's
   // shadow by design. Everything else measures 0-13 %.
-  const READ = ["number", "logo", "code", "plate", "wordmark", "duo", "lockup"];
+  // title (sponsor on a board) and ribbon (number in a crease band) are READ
+  // the same as plate/lockup — lettering that must stay on camera.
+  const READ = ["number", "logo", "code", "plate", "wordmark", "duo", "lockup", "title", "ribbon"];
   for (const spineLogo of At.LT.SPINE_LOGO_IDS) {
     const out = sweep(At, { team: "redbull", logo: spineLogo, sides: READ, grid: 64, hiddenAt });
     for (const r of out.rows)

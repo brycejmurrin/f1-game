@@ -445,40 +445,6 @@ const WGX = (function () {
   const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                      new Float32Array(4), new Float32Array(4), new Float32Array(4)];
   let _fcPlanesIsFrame = false;   // _fcPlanes currently holds this frame's camera planes
-  function _setPlane(p, a, b, c, d) {
-    const inv = 1 / (Math.hypot(a, b, c) || 1);
-    p[0] = a * inv; p[1] = b * inv; p[2] = c * inv; p[3] = d * inv;
-  }
-  function _extractPlanes(m, planes) {
-    const m0=m[0],m4=m[4],m8=m[8],m12=m[12], m1=m[1],m5=m[5],m9=m[9],m13=m[13],
-          m2=m[2],m6=m[6],m10=m[10],m14=m[14], m3=m[3],m7=m[7],m11=m[11],m15=m[15];
-    _setPlane(planes[0], m3+m0, m7+m4, m11+m8,  m15+m12); // left  (w + x >= 0)
-    _setPlane(planes[1], m3-m0, m7-m4, m11-m8,  m15-m12); // right (w - x >= 0)
-    _setPlane(planes[2], m3+m1, m7+m5, m11+m9,  m15+m13); // bottom (w + y >= 0)
-    _setPlane(planes[3], m3-m1, m7-m5, m11-m9,  m15-m13); // top    (w - y >= 0)
-    // frameViewProj is the RAW GL matrix (Z01 is applied only on GPU upload).
-    // Near must be w+z>=0 like GLX/TLX — a WebGPU z>=0 extract on a GL VP
-    // culls the near ribbon (chase/park) and leaves terrain covering the holes.
-    _setPlane(planes[4], m3+m2, m7+m6, m11+m10, m15+m14); // near (GL clip w+z >= 0)
-    _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far  (GL clip w-z >= 0)
-  }
-  function _aabbInFrustum(planes, mn, mx) {
-    for (let i = 0; i < 6; i++) {
-      const p = planes[i];
-      const px = p[0] >= 0 ? mx[0] : mn[0];
-      const py = p[1] >= 0 ? mx[1] : mn[1];
-      const pz = p[2] >= 0 ? mx[2] : mn[2];
-      if (p[0]*px + p[1]*py + p[2]*pz + p[3] < 0) return false;
-    }
-    return true;
-  }
-  function _aabbDist2(mn, mx, ex, ey, ez) {
-    const dx = ex < mn[0] ? mn[0] - ex : ex > mx[0] ? ex - mx[0] : 0;
-    const dy = ey < mn[1] ? mn[1] - ey : ey > mx[1] ? ey - mx[1] : 0;
-    const dz = ez < mn[2] ? mn[2] - ez : ez > mx[2] ? ez - mx[2] : 0;
-    return dx * dx + dy * dy + dz * dz;
-  }
-
   /**
    * WGX.create(canvas, opts) -> Promise<backend | null>
    */
@@ -1224,7 +1190,7 @@ const WGX = (function () {
     let ssaoBG = null, godrayBG = null, compositeBG = null, fxaaBG = null, ssrBG = null, sgsrBG = null;
     let ssaoBlurSrcBG = null, ssaoBlurDstBG = null, godrayBlurSrcBG = null, godrayBlurDstBG = null;
     let pBloomDown, pBloomUp, pSSAO, pBlur, pBlurHDR, pGodray, pComposite, pFXAA, pFXAALdr, pSGSR, pointSampler, pSSR;
-    let _sgsrGather = false;
+    let _sgsrGather = false, _sgsrTried = false;
     // Blur dynamic-offset ring (see _buildPost BLUR block). Reset each present().
     let _blurBGL = null, _blurStride = 256, _blurSlots = 16, _blurWriteSlot = 0;
     // Per-pass CPU scratch for uniform writes (largest block is SSAO, 176 B/44 f).
@@ -1626,20 +1592,20 @@ const WGX = (function () {
       color: { srcFactor: "one", dstFactor: "one", operation: "add" },
       alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
     };
+    const fsPipe = (code, fmt, blend) => {
+      const mod = device.createShaderModule({ code });
+      const target = blend ? { format: fmt, blend } : { format: fmt };
+      return device.createRenderPipeline({
+        layout: "auto",
+        vertex: { module: mod, entryPoint: "vs_main" },
+        fragment: { module: mod, entryPoint: "fs_main", targets: [target] },
+        primitive: { topology: "triangle-list" },
+      });
+    };
     function _buildPost() {
       if (!_Post) return;
       try {
         pointSampler = device.createSampler({ addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
-        const fsPipe = (code, fmt, blend) => {
-          const mod = device.createShaderModule({ code });
-          const target = blend ? { format: fmt, blend } : { format: fmt };
-          return device.createRenderPipeline({
-            layout: "auto",
-            vertex: { module: mod, entryPoint: "vs_main" },
-            fragment: { module: mod, entryPoint: "fs_main", targets: [target] },
-            primitive: { topology: "triangle-list" },
-          });
-        };
         // Bloom mips are POST_HDR_FORMAT textures (ensureTargets) — the
         // pipelines MUST match. These were SCENE_FORMAT for months and no run
         // ever caught it, because the mismatch only exists when the device
@@ -1747,27 +1713,31 @@ const WGX = (function () {
         compositeUBO = device.createBuffer({ size: _Post.COMPOSITE_UNIFORM_BYTES, usage: _UCD });
         fxaaUBO      = device.createBuffer({ size: _Post.FXAA_UNIFORM_BYTES,      usage: _UCD });
         ssrUBO       = device.createBuffer({ size: _Post.SSR_UNIFORM_BYTES,       usage: _UCD });
-        // SGSR1 best-effort: a failed module must NOT kill the post chain —
-        // wantSpatialUpscale() fail-closes so the canvas stays at render size.
-        // Prefer SGSR_GATHER (native textureGather) unless the player pins
-        // apex26.spatialUpscaleGather=0 for a 4-tap A/B; fall back to SGSR.
-        try {
-          let forceTap = false;
-          try { forceTap = localStorage.getItem("apex26.spatialUpscaleGather") === "0"; } catch (_) { /* blocked */ }
-          pSGSR = null; _sgsrGather = false;
-          if (!forceTap && _Post.SGSR_GATHER) {
-            try {
-              pSGSR = fsPipe(_Post.SGSR_GATHER, _presentFormat, null);
-              _sgsrGather = true;
-            } catch (_) { pSGSR = null; _sgsrGather = false; }
-          }
-          if (!pSGSR && _Post.SGSR) {
-            pSGSR = fsPipe(_Post.SGSR, _presentFormat, null);
-            _sgsrGather = false;
-          }
-          if (pSGSR) sgsrUBO = device.createBuffer({ size: _Post.SGSR_UNIFORM_BYTES, usage: _UCD });
-        } catch (_) { pSGSR = null; sgsrUBO = null; _sgsrGather = false; }
       } catch (_) { pComposite = null; }   // disable post; ensureTargets stays inert
+    }
+
+    function _ensureSpatial() {
+      if (_sgsrTried || WGX_MINIMAL || !_Post) return !!(pSGSR && sgsrUBO);
+      _sgsrTried = true;
+      // SGSR1 best-effort: a failed module must NOT kill the post chain.
+      // Prefer native textureGather unless a player pins the 4-tap A/B.
+      try {
+        let forceTap = false;
+        try { forceTap = localStorage.getItem("apex26.spatialUpscaleGather") === "0"; } catch (_) { /* blocked */ }
+        pSGSR = null; _sgsrGather = false;
+        if (!forceTap && _Post.SGSR_GATHER) {
+          try {
+            pSGSR = fsPipe(_Post.SGSR_GATHER, _presentFormat, null);
+            _sgsrGather = true;
+          } catch (_) { pSGSR = null; _sgsrGather = false; }
+        }
+        if (!pSGSR && _Post.SGSR) {
+          pSGSR = fsPipe(_Post.SGSR, _presentFormat, null);
+          _sgsrGather = false;
+        }
+        if (pSGSR) sgsrUBO = device.createBuffer({ size: _Post.SGSR_UNIFORM_BYTES, usage: _UCD });
+      } catch (_) { pSGSR = null; sgsrUBO = null; _sgsrGather = false; }
+      return !!(pSGSR && sgsrUBO);
     }
 
     //    failure leaves _fxReady false and the FX methods no-op. ──
@@ -1965,7 +1935,10 @@ const WGX = (function () {
     // aux targets) and present() takes the tonemap blit — that is the
     // bulk of the discretionary target bytes the device that just died was
     // carrying. FX stay: they record into the lit pass and own no targets.
-    if (!WGX_MINIMAL) _buildPost();
+    if (!WGX_MINIMAL) {
+      _buildPost();
+      if (spatialUpscale) _ensureSpatial();
+    }
     _buildFx();
 
     function _litPipeline(opts) {
@@ -2255,6 +2228,7 @@ const WGX = (function () {
     function setSpatialUpscale(on) {
       spatialUpscale = !!on;
       try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
+      if (spatialUpscale) _ensureSpatial();
       resize();
       _syncSpatialAa();
       return spatialUpscale;
@@ -3965,13 +3939,13 @@ const WGX = (function () {
       }
       // Road (surfaceId 16) uses the same frustum + radial cull as terrain.
       // The skip existed because a WebGPU z>=0 extract on the raw GL VP hid
-      // chase/park chunks; near is now GL clip w+z (see _extractPlanes) so
+      // chase/park chunks; near is now GL clip w+z (see Frustum.extractPlanes) so
       // the exemption was leftover work — env-probe 300 m was thrown away.
       const cull = !!frameViewProj;
       // _fcPlanes is scratch shared with the shadow extracts below; the flag
       // says it currently holds THIS frame's camera planes. Terrain, road,
       // props, glass and water each re-derived the same six planes per frame.
-      if (cull && !_fcPlanesIsFrame) { _extractPlanes(frameViewProj, _fcPlanes); _fcPlanesIsFrame = true; }
+      if (cull && !_fcPlanesIsFrame) { Frustum.extractPlanes(frameViewProj, _fcPlanes); _fcPlanesIsFrame = true; }
       const cd = frameCullDist, cd2 = cd * cd;
       const ex = frameEye ? frameEye[0] : 0, ey = frameEye ? frameEye[1] : 0, ez = frameEye ? frameEye[2] : 0;
       const chunks = mesh.chunks;
@@ -4023,8 +3997,8 @@ const WGX = (function () {
           for (let i = 0; i < chunks.length; i++) {
             const ch = chunks[i];
             if (cull) {
-              const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
-              if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) continue;
+              const dist2 = Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez);
+              if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) continue;
             }
             const cslot = _drawSlot++;
             if (cslot >= MAX_DRAWS) break;
@@ -4066,8 +4040,8 @@ const WGX = (function () {
       _mrMaskL = maskL; _mrSlot = slot; _mrPass = litPass; _mrRoad = o.surfaceId === 16;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
-        const dist2 = _aabbDist2(ch.min, ch.max, ex, ey, ez);
-        if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) {
+        const dist2 = Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez);
+        if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) || (cd > 0 && dist2 > cd2)) {
           _mrFlush();
           continue;
         }
@@ -4188,7 +4162,7 @@ const WGX = (function () {
       let m0 = 0, m1 = 0;
       for (let i = 0; i < n; i++) {
         const o = i * 15, rad = L[o + 6];
-        if (rad > 0 && _aabbDist2(mn, mx, L[o], L[o + 1], L[o + 2]) <= rad * rad) {
+        if (rad > 0 && Frustum.aabbDist2(mn, mx, L[o], L[o + 1], L[o + 2]) <= rad * rad) {
           if (i < 24) m0 |= (1 << i); else m1 |= (1 << (i - 24));
         }
       }
@@ -5056,7 +5030,7 @@ const WGX = (function () {
       });
       shadowPass.setPipeline(shadowPipeline);
       shadowPass.setBindGroup(0, shadowG0BindGroup);
-      if (lightVP) { _extractPlanes(lightVP, _fcPlanes); _fcPlanesIsFrame = false; }   // light frustum for chunk cull
+      if (lightVP) { Frustum.extractPlanes(lightVP, _fcPlanes); _fcPlanesIsFrame = false; }   // light frustum for chunk cull
     }
     function castShadow(mesh, model) {
       if (!shadowPass || !mesh || !mesh.vbuf) return;
@@ -5105,7 +5079,7 @@ const WGX = (function () {
       const run = _srRun;
       for (let i = 0; i < mesh.chunks.length; i++) {
         const ch = mesh.chunks[i];
-        if (cull && !_aabbInFrustum(_fcPlanes, ch.min, ch.max)) { _srFlush(); continue; }
+        if (cull && !Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max)) { _srFlush(); continue; }
         const vbuf = ch.vbuf || mesh.vbuf;
         const ibuf = ch.ibuf || mesh.ibuf || null;
         const attrBG = ch.attrBG || mesh.attrBG;
@@ -5210,7 +5184,7 @@ const WGX = (function () {
       _shadowLightVP = raw;
       _mul4(lampShadowLVPData, Z01, raw);
       device.queue.writeBuffer(lampShadowUBO, 0, lampShadowLVPData);
-      if (lightVP) { _extractPlanes(raw, _fcPlanes); _fcPlanesIsFrame = false; }
+      if (lightVP) { Frustum.extractPlanes(raw, _fcPlanes); _fcPlanesIsFrame = false; }
       _shadowEncoderBegin();
       shadowPass = shadowEncoder.beginRenderPass({
         colorAttachments: [],
@@ -5450,7 +5424,7 @@ const WGX = (function () {
       let ks = batch._cellKeyScratch;
       if (!ks || ks.length < cn) ks = batch._cellKeyScratch = new Int32Array(cn);
       let kN = 0;
-      for (let ci = 0; ci < cn; ci++) if (_aabbInFrustum(planes, cs[ci].mn, cs[ci].mx)) ks[kN++] = ci;
+      for (let ci = 0; ci < cn; ci++) if (Frustum.aabbInFrustum(planes, cs[ci].mn, cs[ci].mx)) ks[kN++] = ci;
       const res = batch._cellKey;
       if (!shadow && res && batch._cellKeyN === kN) {
         let same = true;
@@ -6192,16 +6166,10 @@ const WGX = (function () {
         lost: _lost, format,
       }),
 
-      // Cull-test helpers (GLX parity). Optional `out` reuses a caller pool for
-      // the race prop-batch path; omit it for agentview (fresh planes).
-      makeFrustumPlanes(viewProj, out) {
-        const p = out || [new Float32Array(4), new Float32Array(4), new Float32Array(4),
-                          new Float32Array(4), new Float32Array(4), new Float32Array(4)];
-        _extractPlanes(viewProj, p);
-        return p;
-      },
-      aabbInFrustum: _aabbInFrustum,
-      aabbDist2: _aabbDist2,
+      // Cull-test helpers (Frustum shared module; GLX parity surface).
+      makeFrustumPlanes: Frustum.makeFrustumPlanes,
+      aabbInFrustum: Frustum.aabbInFrustum,
+      aabbDist2: Frustum.aabbDist2,
 
       // These were once absent / explicit `undefined`. They are real WGX
       // implementations now (2026-08 parity pass) and MUST remain listed here

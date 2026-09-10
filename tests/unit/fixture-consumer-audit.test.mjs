@@ -1,8 +1,17 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 import {
   fixtureImportViolations, adoption, readSpecs, FLOOR, FLOOR_SLACK,
 } from "../../tools/ci/fixture-consumer-audit.mjs";
+
+test("worker-scoped shared context preserves configured reduced motion", () => {
+  const source = fs.readFileSync(new URL("../helpers/fixtures.js", import.meta.url), "utf8");
+  assert.match(source,
+    /_bootedPage:\s*\[async \(\{ browser \}, use, workerInfo\) => \{/);
+  assert.match(source,
+    /browser\.newContext\(\{\s*reducedMotion:\s*workerInfo\.project\.use\.reducedMotion,\s*\}\)/);
+});
 
 test("fixture consumer audit rejects direct Playwright imports", () => {
   const files = new Map([
