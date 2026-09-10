@@ -14,7 +14,7 @@ clone of `equivalent` — mesh only. **`FACTORY_PRESETS`** drives **AI meshes
 only**. ERS/aero axes derive from the catalog (`ersProfile` / `aeroLoad`); a
 car with no parts (every AI) sits at the midpoint. Livery finish is
 `finish: "gloss" | "satin" | "chrome"` via `Car3D.FINISH_SURFACE`. Shark fin:
-`fin` (plate, defaults to `c2`) and `finArt` (must contrast or it vanishes);
+`fin` (plate; authored pick is as-is; unset defaults to `c2`, or contrast-derived under `finHandoff: "contrast"`) and `finArt` (authored as-is; unset picks a colour that clears the plate);
 the tail DESIGN is four enum fields with defaults that reproduce the shipped car —
 `finShape` (`Car3D.FIN_SHAPES` + `none`; the ONE non-colour livery field that moves
 a vertex, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,

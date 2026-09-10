@@ -50,11 +50,17 @@ const CROWN = ["logo", "wrap", "saddle", "bigmark"];
 const SIDE = ["none", "band", "sash", "rake", "shoulder", "starfield", "plate", "logo", "ribbon", "lockup", "title", "emblem"];
 
 test("no design paints a large area that cannot be seen on what it covers", () => {
+  // Authored zone paints (saddleTint, sideTint, …) are free picks — the player
+  // may choose same-on-same. This sweep scores DERIVED defaults only; pick
+  // survival is asserted in "a colour you PICK…" below.
+  const STRIP = ["saddleTint", "sideTint", "spineTint", "sunTint", "plateTint",
+                 "bandTint2", "accent", "fin", "ridgeTint", "airboxTint"];
   const bad = [];
   for (const t of A.Teams.LIST) {
     const base = A.Liveries.forTeam(t)[0];
     for (const spineLogo of CROWN) for (const spineSide of SIDE) {
       const liv = Object.assign({}, base, { spineLogo, spineSide });
+      for (const k of STRIP) delete liv[k];
       for (const hit of sweepAtlas(A, t.id, liv, ["crest", "spineSide"], 14))
         bad.push(`${t.id} ${spineLogo}/${spineSide} ${hit.region}: ${hit.paint} over ${hit.over} at ${hit.contrast}:1 (${(hit.share * 100).toFixed(0)}% of the panel)`);
     }
@@ -135,10 +141,23 @@ test("a colour you PICK is the colour that gets painted, contrast or not", () =>
     ["the wrap's sun",       { spineLogo: "wrap",   sunTint: PICK }, "crest"],
     ["the flank band",       { spineLogo: "saddle", spineSide: "band", sideTint: PICK }, "spineSide"],
     ["the flank band, wrap", { spineLogo: "wrap",   spineSide: "band", sideTint: PICK }, "spineSide"],
+    ["the saddle shelf",     { spineLogo: "logo", spineSide: "shoulder", saddleTint: PICK }, "spineSide"],
   ];
   for (const [what, liv, region] of cases)
     assert.ok(dominant(liv, region).startsWith(css),
       `${what}: picked ${css}..) and got ${dominant(liv, region)}`);
+  // DETAIL trim + TAIL FIN under contrast handoff — same free-pick bargain.
+  const pale = [0.92, 0.92, 0.94];
+  const paleHit = /rgba?\(235,235,240[,)]/;
+  const numDom = dominant({ c1: pale, c2: pale, accent: pale, spineLogo: "number" }, "num");
+  assert.ok(paleHit.test(numDom), `DETAIL accent must survive on the number; got ${numDom}`);
+  const white = [0.95, 0.95, 0.96];
+  assert.deepEqual(
+    A.LT.resolveFinPaint("mclaren", {
+      cover: white, c1: pale, c2: [0.98, 0.5, 0.05], fin: white,
+      coverBind: "saddleWrap", saddleTint: white, finHandoff: "contrast",
+    }, white, [0.98, 0.5, 0.05], pale, [0.98, 0.5, 0.05]),
+    white, "authored fin under contrast handoff must not be re-picked");
 });
 
 test("pickOn guards Array.isArray(bg) before reading bg[0]", () => {

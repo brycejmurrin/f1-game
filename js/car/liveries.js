@@ -73,8 +73,8 @@
    plateInk? optional LEGACY plate/title glyph colour (no longer on the paint
      sheet). Still applied when present on a stored file. Absent = automatic ink.
    saddleTint? optional SADDLE — the shoulder shelf and upper-flank saddle block
-     (atlas: crest shoulders + saddleFlanks). Absent = today's bandC path under
-     saddle or saddleWrap; else derived flank fill.
+     (atlas: crest shoulders + saddleFlanks). An explicit pick is honoured as-is.
+     Absent = today's bandC path under saddle or saddleWrap; else derived flank fill.
    ridgeTint? optional RIDGE — the thin centreline ridge only (crest + tail if
      continued). Absent = spineTint if set, else derived band colour.
    airboxTint? optional AIRBOX — roll hoop, snorkel and intake lips on the mesh
@@ -84,8 +84,9 @@
      "independent" (absent), "saddleWrap" (saddle block spans crown shoulders and
      upper flanks), or "spineOnly" (crown/ridge accent only; shoulders stay cover).
    finHandoff? optional FIN HANDOFF — how the fin meets the cover block:
-     "match" (absent), "contrast" (fin resolves against crown/saddle block), or
-     "hardCut" (fin ignores crown graphic continuation at the fin root).
+     "match" (absent), "contrast" (when fin unset, derive against crown/saddle
+     block; authored fin always wins), or "hardCut" (fin ignores crown graphic
+     continuation at the fin root).
    spineLogo? optional SPINE TOP — what the engine-cover crown carries on bare
      body colour (no gradient wash under any design — hard edges only).
      "logo" (absent) draws the crest there as well as on the fin; "none" leaves

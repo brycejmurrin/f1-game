@@ -1486,15 +1486,15 @@ const LiveryTex = (function () {
     return saddle || coverPaint;
   }
   // Fin PLATE colour for mesh + atlas; finHandoff selects match / contrast.
+  // An authored TAIL FIN pick always wins — contrast mode only DERIVES when
+  // fin is unset (same rule as spineTint / sunTint / sideTint).
   function resolveFinPaint(teamId, liv, coverPaint, bandC, c1, c2) {
-    const base = (liv && liv.fin) || c2;
+    if (liv && liv.fin) return liv.fin.slice();
     if (finHandoffOf(liv) === "contrast") {
       const block = finContrastBlock(liv, coverPaint, bandC);
-      const order = [c2, c1, INK_DARK, INK_LIGHT];
-      if (liv && liv.fin && contrast(liv.fin, block) >= FIN_ON_BLOCK) order.unshift(liv.fin);
-      return pickOn(order, block, FIN_ON_BLOCK).slice();
+      return pickOn([c2, c1, INK_DARK, INK_LIGHT], block, FIN_ON_BLOCK).slice();
     }
-    return base.slice();
+    return c2.slice();
   }
   // The saddle's other half: from the airbox back along the crease to
   // mid-cover, then a raked edge down to the sidepod line just behind the
@@ -2078,13 +2078,11 @@ const LiveryTex = (function () {
     // setting one optional paint recoloured numbers, plates and the crown band
     // together. Each optional row owns one surface now — stripe stays on the
     // spine stripe, DETAIL on trim, SPINE TINT on the crown band.
+    // An authored DETAIL pick is used as-is — the contrast guard owns the
+    // derived default only (same rule as spineTint / logo / sunTint).
     let accent = colors.accent || c2;
-    // Guard: the accent has to separate from BOTH the ink it sits beside and the
-    // paint behind it. The old check compared raw luminance difference against a
-    // flat 0.15, which passes plenty of pairs that are indistinguishable in
-    // practice, and its fallback was never re-checked.
-    if (contrast(accent, ink) < 2.0 || contrast(accent, c1) < 1.6) {
-      const options = [colors.accent, c2, c1, INK_LIGHT, INK_DARK].filter(Boolean);
+    if (!colors.accent && (contrast(accent, ink) < 2.0 || contrast(accent, c1) < 1.6)) {
+      const options = [c2, c1, INK_LIGHT, INK_DARK].filter(Boolean);
       let best = accent, bestScore = -1;
       for (const cand of options) {
         const score = Math.min(contrast(cand, ink), contrast(cand, c1));
@@ -2746,17 +2744,13 @@ const LiveryTex = (function () {
       });
     } else if (spineSide === "shoulder") {
       // Upper-third shelf only; lower flank stays cover/body. Explicit sideTint
-      // is a pick. Explicit saddleTint is used only when it clears flankBgs
-      // (otherwise a wrap shelf would paint 1:1 on the saddle block).
+      // or saddleTint is a pick and is never re-derived — same as saddleFill /
+      // rake sideTint. Unset derives against the flank.
       let shoulderC;
       if (colors.sideTint) {
         shoulderC = colors.sideTint;
       } else if (colors.saddleTint) {
-        const bgs = (Array.isArray(flankBgs) && Array.isArray(flankBgs[0])) ? flankBgs : [flankBgs];
-        shoulderC = bgs.every((b) => b && contrast(colors.saddleTint, b) >= BAND_ON_COVER)
-          ? colors.saddleTint
-          : pickOn([flankBandC, inkCrest, c1, c2, INK_DARK, INK_LIGHT].filter(Boolean),
-                   flankBgs, BAND_ON_COVER);
+        shoulderC = colors.saddleTint;
       } else {
         shoulderC = pickOn(
           [flankBandC, inkCrest, c1, c2, INK_DARK, INK_LIGHT].filter(Boolean),

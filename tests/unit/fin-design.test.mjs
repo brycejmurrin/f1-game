@@ -249,15 +249,43 @@ test("airboxMeshColour: non-wrap uses airboxTint, else cover", () => {
   assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", cover }, cover), cover);
 });
 
-test("finHandoff contrast resolves fin against the saddle block, not white-on-white", () => {
+test("finHandoff contrast derives when fin unset; authored fin always wins", () => {
   const WHITE = [0.95, 0.95, 0.96], RED = [0.863, 0, 0], DARK = [0.05, 0.06, 0.07];
-  const liv = {
-    cover: WHITE, c1: DARK, c2: RED, fin: WHITE,
+  const base = {
+    cover: WHITE, c1: DARK, c2: RED,
     spineLogo: "cap", coverBind: "saddleWrap", saddleTint: WHITE, finHandoff: "contrast",
   };
-  const fin = A.LT.resolveFinPaint("ferrari", liv, WHITE, RED, DARK, RED);
-  assert.ok(A.LT.contrast(fin, WHITE) >= 2.0, `fin ${fin} must clear white block`);
-  assert.ok(fin[0] > 0.5, "contrast must pick red body, not white fin/cover");
+  // Unset fin under contrast: derive a colour that clears the white saddle block.
+  const derived = A.LT.resolveFinPaint("ferrari", base, WHITE, RED, DARK, RED);
+  assert.ok(A.LT.contrast(derived, WHITE) >= 2.0, `derived fin ${derived} must clear white block`);
+  assert.ok(derived[0] > 0.5, "contrast must pick red body, not white cover");
+  // Authored TAIL FIN is the pick — even white-on-white under contrast handoff.
+  const authored = A.LT.resolveFinPaint("ferrari", { ...base, fin: WHITE }, WHITE, RED, DARK, RED);
+  assert.deepEqual(authored, WHITE, "authored fin must not be contrast-re-picked");
+});
+
+test("authored DETAIL accent and saddleTint shoulder are used as-is", () => {
+  const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+  const carries = (styles, c) => {
+    const want = to255(c).join(",");
+    return [...styles].some((v) => v && v.replace(/^rgba?\(/, "").replace(/[)\s]/g, "").startsWith(want));
+  };
+  const stylesOf = (ops, region) => new Set(opsIn(ops, region).map((op) => op.style).filter(Boolean));
+  // Pale DETAIL on pale body — old guard re-picked dark ink because accent≈c1.
+  const PALE = [0.92, 0.92, 0.94], BODY = [0.88, 0.88, 0.9];
+  const withAccent = A.paint("ferrari", {
+    ...BASE, c1: BODY, c2: BODY, accent: PALE, spineLogo: "number",
+  });
+  assert.ok(carries(stylesOf(withAccent, R.num), PALE),
+            `number trim must carry authored DETAIL ${to255(PALE)}; got ${[...stylesOf(withAccent, R.num)].join(", ")}`);
+  // Shoulder shelf: white saddleTint on white flank must keep white (no re-pick).
+  const SADDLE = [0.95, 0.95, 0.96];
+  const shoulder = A.paint("ferrari", {
+    ...BASE, cover: SADDLE, c1: SADDLE, c2: [0.86, 0, 0],
+    spineSide: "shoulder", saddleTint: SADDLE, finShape: "none",
+  });
+  assert.ok(carries(stylesOf(shoulder, R.spineSide), SADDLE),
+            `shoulder must carry authored saddleTint ${to255(SADDLE)}; got ${[...stylesOf(shoulder, R.spineSide)].join(", ")}`);
 });
 
 test("finHandoff hardCut stops crown continuation on the tail, fin motif stays", () => {
