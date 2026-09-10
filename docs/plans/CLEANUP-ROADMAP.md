@@ -45,8 +45,8 @@ Eighteen parallel read-only bloat-auditor runs (see agent IDs in scratch matrix)
 | ✅ | `js/core/hash32.js` | career, daily-challenge, driver-ratings | **Done** (`03f8dd62`) |
 | ✅ | Remove `AiDrive.racingLineMix` | ai-drive.js | **Done** (`91d23591`) |
 | ✅ | **quali-net** (js/race/quali-net.js) | game.js (~130 ln) | **Done** (PR #102) |
-| 🔄 | **shared frustum helper** (js/render/shared/frustum.js) | 4 render copies | **In progress** |
-| 2 | save-migrate | store.js | Planned |
+| ✅ | **shared frustum helper** (js/render/shared/frustum.js) | 4 render copies | **Done** (this PR) |
+| 1 | save-migrate | store.js | **NEXT** |
 | 4 | race-settings + custom-team | game.js | Planned |
 | 5 | res-row UI helper | duplicated row builders | Planned |
 | 6 | lobby-codes | lobby.js (~230 ln) | Planned |
@@ -135,8 +135,7 @@ Review size is flexible: one carve per PR (safest) or batched Tier A slices (fas
 
 ## Next action
 
-1. **Merge PR #102** (or mark ready for review) — Tier A items 1–2 of hash32/racingLineMix are done and CI-clean.
-2. **Carve quali-net** on the same branch or a fresh cursor branch — extracts friend-race quali gate/wait logic from game.js (~lines 1101–1211 + wiring), pattern QualiNet.create(G) like DailyChallenge.create(G).
-3. Run `node tools/check/ratchets.mjs --update` on `game.js` after quali-net lands.
+1. **Carve save-migrate** from store.js — versioned localStorage migration helper.
+2. Continue Tier A queue: race-settings + custom-team, res-row, lobby-codes.
 
 Scratch working matrix (agent IDs, line-level BLOAT rows): `scratch/cleanup-roadmap-draft.md` (gitignored).
