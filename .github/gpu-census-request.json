@@ -1,6 +1,9 @@
 {
-  "images": "macos-latest,windows-latest",
+  "images": "macos-latest",
   "track": "montreal",
-  "ls": "apex26.resMode=\"med\" apex26.spatialUpscale=1",
-  "leg": "med-upscale-json"
+  "census_only": false,
+  "ls": "",
+  "force": "",
+  "leg": "pr128-assets-cache",
+  "source_sha": "025dc2f5a98a6113964adf2aef47c3c52934eae5"
 }
