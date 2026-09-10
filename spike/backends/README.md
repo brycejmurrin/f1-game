@@ -3,11 +3,16 @@
 Both backends behind the Gfx seam were opt-in only (`apex26.gfxBackend=
 "webgpu"|"three"`) and moved out of the shipped tree on Phase 2b of the
 2026-09 restructure (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2).
-GLX (WebGL2) is and remains the only shipped renderer.
+GLX (WebGL2) is and remains the only TAGGED renderer.
 
-**Status: LANDED 2026-09-03.** 46 files moved by
-`node tools/gen/move-tree.mjs tools/moves/spike-backends.json`; the non-move
-edits are in `docs/notes/SPIKE-BACKENDS-CHECKLIST.md`.
+**Status: REVERTED.** The move landed 2026-09-03 — 46 files by
+`node tools/gen/move-tree.mjs tools/moves/spike-backends.json`, the non-move
+edits in `docs/notes/SPIKE-BACKENDS-CHECKLIST.md` — and the 2026-09-04
+re-attach put every one of them back. WGX is in `js/render/webgpu/` and TLX in
+`js/render/three/` today, both DEFERRED opt-ins in `tools/manifest.cjs`; this
+directory holds only this README. What follows is the record of that round
+trip, kept because the re-attach checklist below is the only written account of
+which guards the move narrowed.
 
 Two files the inventory listed for the move STAYED in the shipped tree,
 because the move proved they were not WGX/TLX-only:

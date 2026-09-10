@@ -5330,7 +5330,7 @@ const WGX = (function () {
         }
       }
       if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
-      // CELL-SET KEY, ported from glx.js (docs/PERF-FINDINGS 2c: 36-60 % fewer
+      // CELL-SET KEY, ported from glx.js (docs/notes/PERF-FINDINGS.md §2c: 36-60 % fewer
       // uploads there). The pack is a deterministic function of the surviving
       // cell set, a strictly stronger key than exact plane equality, which
       // never held while driving — every camera move repacked and re-uploaded

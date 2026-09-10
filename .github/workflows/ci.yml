@@ -928,7 +928,7 @@ jobs:
   # ubuntu-latest, whose only WebGPU/WebGL adapter is SwiftShader, and the
   # renderer group (`gfx`: 240-480 s budgets under software rasterisation) has
   # never been in CI at all — the header's "deliberately NOT here" clause.
-  # docs/research/CI-RENDERING-PERFORMANCE.md §"There IS a real GPU" measured
+  # docs/notes/CI-RENDERING-PERFORMANCE.md §"There IS a real GPU" measured
   # the runner images: macos-latest (Apple silicon) reports a HARDWARE Metal
   # adapter on STOCK flags, and the two defects that real GPU has found so far
   # were invisible to every software test. So the renderer specs get their own
