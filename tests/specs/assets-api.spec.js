@@ -1,3 +1,4 @@
+// Verification-only PR #128 request: run this unchanged suite through the selected-spec gate.
 // assets-api.spec.js — the baked asset pack's RUNTIME path: js/render/shared/assets.js,
 // the GLX texture-array upload, and the __apex hooks that drive them.
 //
