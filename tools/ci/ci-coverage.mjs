@@ -111,8 +111,14 @@ const rendererGate = {
 };
 
 const outsideFixedGates = ALL_SPECS.filter((s) => !executed.has(s));
-const selectedAt = ci.indexOf("\n  selected:\n");
-const selectedJob = selectedAt >= 0 ? ci.slice(selectedAt) : "";
+// BOUNDED AT THE NEXT JOB, via the same splitter every other reader uses.
+// This used to be `ci.slice(indexOf("\n  selected:\n"))` — to the END OF FILE —
+// so every job appended after `selected` was read as part of it. Adding one
+// with `continue-on-error: true` (the golden-menu trial, 2026-09-10) flipped
+// this gate's reported `blocking` to false while the gate itself was untouched:
+// a parser defect that reads as a CI regression, in the one report that says
+// whether the deploy is gated.
+const selectedJob = jobs.find((j) => j.name === "selected")?.body || "";
 const selectedIf = selectedJob.match(/^    if:\s*(.+)$/m)?.[1] || "";
 const selectionGate = {
   present: Boolean(selectedJob),

@@ -1245,3 +1245,84 @@ jobs:
             artifacts/report-*/
           retention-days: 7
           if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # THE GOLDEN-MENU TRIAL. NON-BLOCKING BY CONSTRUCTION — do not add it to any
+  # `needs:`, and do not remove `continue-on-error` without the comparison this
+  # job exists to produce.
+  #
+  # The header above already names `test:baseline` as the group that arguably
+  # belongs in the gate and is not in it, and gives the reason: the six goldens
+  # were rendered in a dev container, so a font fallback or a different
+  # SwiftShader build on GitHub's runner would make the gate permanently red.
+  # It also prescribes the way in — "run it on a PR as a non-blocking step and
+  # compare, not by putting it straight into `needs:`". This is that step.
+  #
+  # WHY IT IS WORTH THE MINUTES (measured 2026-09-10, docs/notes/TESTING-FIELD-NOTES.md):
+  # 51 of 116 specs can never be selected by the change-aware gate, and four
+  # source areas — js/render/glx (the SHIPPED WebGL2 path), js/render/webgpu,
+  # js/render/three and js/lighting — route ONLY to `gfx`, whose six specs all
+  # declare 240-540 s and are therefore excluded. A push touching the shipped
+  # renderer gets no blocking browser spec at all. When the shadow pass was
+  # deliberately re-broken, `menu-baseline` failed on three shapes (the pass
+  # runs during the menu flyby) while smoke passed — loop-health absorbs the
+  # per-frame throw and __apex keeps answering. These goldens are the cheapest
+  # thing in the tree that notices a dead render pass: 1 declared test.
+  #
+  # READ IT LIKE THIS: green over several PRs means the images survive a runner
+  # and step (b) is safe — route renderer/lighting to `baseline` in
+  # tools/ci/pick-tests.mjs, then add the group to the gate. Red means compare
+  # the uploaded -actual/-diff PNGs against the committed ones and fix the
+  # IMAGES first; routing into a red gate is the failure this comment prevents.
+  baseline-trial:
+    name: Golden menus on a runner (trial, non-blocking)
+    # PRs and dispatches only: never a push, and never the Pages call, whose
+    # conclusion gates the deploy.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Cache Chromium
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Chromium on cache miss
+        if: steps.pwcache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Golden menus (test:baseline)
+        id: goldens
+        run: npm run test:baseline
+      # ALWAYS, not `if: failure()`: a green run still has to hand over what it
+      # rendered, because "it passed here once" is the evidence step (b) needs.
+      - name: The rendered goldens, and any diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-menus-runner
+          path: |
+            tests/specs/menu-baseline.spec.js-snapshots/
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Verdict
+        if: always()
+        run: |
+          if [ "${{ steps.goldens.outcome }}" = "success" ]; then
+            echo "GOLDENS MATCH on ubuntu-latest. One data point for step (b);"
+            echo "collect a few across PRs before routing renderer/lighting here."
+          else
+            echo "GOLDENS DIFFER on ubuntu-latest. This job is non-blocking and"
+            echo "the workflow stays green. Download the golden-menus-runner"
+            echo "artifact and compare -actual/-diff against the committed PNGs:"
+            echo "the IMAGES are the problem to solve before any routing change."
+          fi

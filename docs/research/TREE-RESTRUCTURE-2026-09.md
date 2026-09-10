@@ -225,7 +225,11 @@ spec at all. The one spec that empirically catches a dead render pass
 (`menu-baseline`, the golden menu PNGs) is unrouted AND outside the gate.
 ci.yml already prescribes the way in and the order matters:
    a. run `test:baseline` on a PR as a NON-BLOCKING step; compare the six
-      goldens rendered on a GitHub runner against the dev-container ones;
+      goldens rendered on a GitHub runner against the dev-container ones.
+      **DONE 2026-09-10** — ci.yml's `baseline-trial` job: PRs and dispatches
+      only, `continue-on-error`, in no `needs:`, and it uploads what it
+      rendered on a PASS too, because "it matched here once" is the evidence
+      (b) needs. Collect a few PRs' worth before acting on it;
    b. only if they match, route renderer + lighting paths to `baseline` in
       `tools/ci/pick-tests.mjs` and add the group to the gate;
    c. if they do not match, the images are the problem to solve first —

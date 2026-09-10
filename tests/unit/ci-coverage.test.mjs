@@ -79,7 +79,11 @@ test("it does not claim to cover what it cannot", () => {
 });
 
 test("the selected gate blocks pushes and PRs, but not workflow calls", () => {
-  const selected = ciWorkflow.split("\n  selected:")[1];
+  // Bounded at the next job head — the same defect the parser had: an
+  // unbounded slice reads every job appended after `selected` as part of it,
+  // so a later job's `continue-on-error` fails the assertion below against a
+  // gate nobody touched.
+  const selected = (ciWorkflow.split("\n  selected:")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
   assert.ok(selected, "selected job missing");
   assert.deepEqual(report.selectionGate, {
     present: true,
