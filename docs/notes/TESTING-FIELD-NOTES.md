@@ -1758,11 +1758,26 @@ Measured, that fear is three orders of magnitude too large:
 
 The runner and the dev container agree with each other to within 1-17 pixels
 and BOTH disagree with the committed PNGs by 10k-49k, against a 1% tolerance.
-The images are portable. They are STALE — three of the six have not been
+The images are portable. They were STALE — three of the six had not been
 re-blessed since the UI moved, and they were failing here before any of this
-work started. Re-bless them and `test:baseline` becomes gateable on its own
-merits, as a DOM identity gate; that is worth doing, and it is a different job
-from covering the renderer.
+work started.
+
+**RESOLVED the same day.** What had actually moved was garage CONTENT, not
+rendering: budget 600 -> 780 cr, a new `Torque Curve` catalog entry displacing
+`Performance`, prices 30 -> 35 cr, stat chips gaining percentages, and Stock's
+description suppressed by `#cs-inner[data-density="compact"]` (which trades
+descriptions for rows on a short landscape sheet — that one had to be checked
+rather than assumed, since a missing description is what a regression would
+look like too). The three were re-blessed, and the trial job's NEXT run (3464)
+passed all six on a GitHub runner — portability confirmed by experiment, not
+just by arithmetic. The spec also now waits on `document.fonts.ready` before
+shooting: precautionary, since `font-display: swap` is a timing variable a
+screenshot suite should not carry, and NOT the diagnosis here.
+
+`test:baseline` is therefore gateable on its own merits as a DOM identity gate.
+Follow ci.yml's own prescription before wiring it in: leave the trial
+non-blocking for a few more PRs to confirm the six hold, then add the group to
+the gate. It remains a different job from covering the renderer.
 
 Reproduce the table: `maxDeclaredTimeout(f)` from `tools/ci/select-specs.mjs`
 over `tests/specs/*.spec.js`, and `pick(["<dir>/x.js"])` for the routing.

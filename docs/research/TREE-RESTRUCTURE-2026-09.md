@@ -236,10 +236,13 @@ The trial job (step (a), landed) still paid for itself by refuting the reason
 `test:baseline` is out of the gate. ci.yml says the goldens are
 environment-sensitive; measured, the GitHub runner and this container agree to
 within 1-17 pixels while BOTH miss the committed PNGs by 10k-49k against a 1%
-tolerance. The images are portable and STALE — three of six have not been
-re-blessed since the UI moved. So: re-bless the six, keep the trial
-non-blocking for a few PRs, then gate `test:baseline` as a DOM identity gate.
-Worth doing, and a different job from covering the renderer.
+tolerance. The images are portable and were STALE — three of six had not been
+re-blessed since the UI moved (garage content: budget, a new catalog entry,
+prices, percentage stat chips, and the compact-density rule hiding
+descriptions). **Re-blessed 2026-09-10, and run 3464 passed all six on a
+GitHub runner**, which confirms portability by experiment. Remaining: keep the
+trial non-blocking for a few more PRs, then gate `test:baseline` as a DOM
+identity gate. Worth doing, and a different job from covering the renderer.
 
 Until a canvas instrument exists, the interim rule stands for every renderer PR:
 **a renderer or lighting carve needs a dispatched `gfx` run
