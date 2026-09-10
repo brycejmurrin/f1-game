@@ -1,6 +1,1 @@
-{
-  "images": "macos-latest,windows-latest",
-  "track": "montreal",
-  "ls": "apex26.resMode=\"med\" apex26.spatialUpscale=1",
-  "leg": "med-upscale-json"
-}
+{"images":"macos-latest","track":"suzuka","ls":"apex26.resMode=\"low\" apex26.gfxHigh=0 apex26.debris=0 apex26.forceMobileTier=1","leg":"pr121-merged-3c66ff7"}
