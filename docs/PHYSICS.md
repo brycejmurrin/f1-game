@@ -496,9 +496,27 @@ lines rather than one file. All of this is AI-only — every read sits inside
 the `!c.human` arm, and `otSide`'s corner-inside tie-break is in the arc table
 below.
 
+### Slipstream vs wake — the two are not one number
+
+`c.wake` is the positions-only proximity to the car ahead (game.js `wakeOf`,
+window `TOW_RANGE`/`TOW_FADE`/`TOW_HALF_W` in `js/physics/consts.js`) and is
+recorded for EVERY car every step; `dirtyAirMul(c.wake)` charges it at
+`aeroGrip` (player) and `_aiBr.grip` (AI), so both pay dirty air in the
+corners. `c.towing` is the tow BENEFIT actually applied to vmax — gated on the
+driver (not braking, wheel near straight) for the player and on the curvature
+lookahead for the AI — and is what the HUD chip and engine audio read. The
+player's wake used to be the gated value, so it paid no dirty air in corners
+while the AI always did.
+
+Under a caution (`raceCtl.level >= 2`) a car above the delta pace is braked
+at `CAUTION_BRAKE · BRAKE` (game.js) toward it, on descents too; the cut vmax
+alone was only an acceleration ceiling, and the field was still rolling at the
+restart.
+
 ### Car-to-car contact: what a touch costs
 
-The resolver (`resolveCollisions` → `_colResolvePair` / `_colSepPair`) works in
+The resolver (`Collide.resolveCollisions` → `_colResolvePair` / `_colSepPair`,
+`js/physics/collide.js`, `Collide.create(G)`) works in
 the `(prog, x)` plane on 4.8 × 2.0 m boxes, four relaxation passes and a
 separation pass per step. Its rules, each with the measurement that set it
 (`scratch/collision-bench.mjs`, `tests/unit/collision-contact-vm.test.mjs`):

@@ -2452,3 +2452,4 @@ const AgentView = (function () {
 
   return { create };
 })();
+Object.freeze(AgentView);

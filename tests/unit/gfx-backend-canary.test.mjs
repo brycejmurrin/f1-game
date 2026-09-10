@@ -2216,8 +2216,13 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // a phone (the env probe is tier-gated off at PerfGov.tier() < 1), so the
   // configuration that blanked a player's road and terrain cannot be reproduced
   // at all without it. The knob must stay DEFAULT OFF — asserted below.
-  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*_chunkRelOptIn\s*\|\|\s*envReady\s*\|\|\s*_envGaveUp\s*\|\|\s*!envRT\s*\)/,
+  // `|| !envRT` is OUT (2026-09-10): it opened the gate on exactly the devices
+  // where the env target failed to allocate, before any later pass had
+  // compiled against the attribute. Those devices keep their mirrors.
+  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*_chunkRelOptIn\s*\|\|\s*envReady\s*\|\|\s*_envGaveUp\s*\)/,
     "the CPU mirrors must not be freed while the env probe still has passes to compile");
+  assert.doesNotMatch(src, /_envGaveUp\s*\|\|\s*!envRT/,
+    "a failed env-target allocation must not free the chunk mirrors");
   assert.match(src, /_chunkRelOptIn[\s\S]{0,200}apex26\.tlxChunkRelease"\)\s*===\s*"1"[\s\S]{0,80}return false/,
     "and the chunk-release override must default OFF, reachable only by an explicit opt-in");
   // Nulling is what shipped and rendered; assigning a zero-length array instead
@@ -2870,7 +2875,7 @@ test("the flyby shows under race settings only; the picker pre-builds it hidden 
 test("driving feel: the player tows on car positions only, the fronts lock, every car pops on lift", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const human = game.slice(game.indexOf("throttleLvl = inp ? (inp.throttleLevel ?? 1)"), game.indexOf("AiDrive.beginLook();"));
-  assert.match(human, /c\.towing = clamp\(\(34 - tg\) \/ 28, 0, 1\)/, "the player's tow uses the AI's window and fade");
+  assert.match(human, /c\.wake = wakeOf\(tg, tc\.x - c\.x\)/, "the player's tow uses the AI's window and fade");
   assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
   assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
   assert.match(game, /c\.wheelLock = braking && axFrac > 0\.92/, "a lock-up is the top of the friction budget under braking");
@@ -3039,7 +3044,7 @@ test("WGX SSR car streak uses carGloss like GLX/TLX", () => {
   assert.match(tsl, /float\(1\.4\)\.sub\(C\.carGloss\)\.mul\(0\.5\)/,
     "TLX still owns the carSoft formula — WGX is the port");
   const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(wgx, /s\[48\] = \(T && T\.carGloss != null\) \? T\.carGloss : 1\.0/,
+  assert.match(wgx, /s\[48\] = PostCommon\.knob\(T, "carGloss"\)/,
     "WGX must pack carGloss into SsrU gloss.x");
 });
 

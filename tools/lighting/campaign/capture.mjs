@@ -6,7 +6,7 @@ import { extname, join, resolve, sep } from "node:path";
 import { CAMERA_FRACTIONS, REGIONS } from "./config.mjs";
 import { evaluateGates, measurePixels } from "./metrics.mjs";
 import { launchChromium } from "../../lib/harness.mjs";
-import { screenshotPresentedCanvas } from "../../capture/probe-page.mjs";
+import { screenshotPresentedCanvas } from "../../shot/probe-page.mjs";
 
 const MIME = Object.freeze({
   ".css": "text/css; charset=utf-8",

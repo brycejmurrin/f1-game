@@ -6,12 +6,16 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = new URL("../..", import.meta.url);
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
-const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, FRUSTUM_SOURCE, WGX_SOURCE] = await Promise.all([
+const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, FRUSTUM_SOURCE, WGX_SOURCE,
+       LIGHT_BUDGET_SOURCE, POST_COMMON_SOURCE, KNOBS_SOURCE] = await Promise.all([
   readFile(new URL(P.WGSL_CHUNKS, ROOT), "utf8"),
   readFile(new URL(P.WGSL_POST, ROOT), "utf8"),
   readFile(new URL("js/render/webgpu/wgsl-fx.js", ROOT), "utf8"),
   readFile(new URL(P.FRUSTUM, ROOT), "utf8"),
   readFile(new URL(P.WGX, ROOT), "utf8"),
+  readFile(new URL("js/render/shared/light-budget.js", ROOT), "utf8"),
+  readFile(new URL("js/render/shared/post-common.js", ROOT), "utf8"),
+  readFile(new URL("js/lighting/knobs.js", ROOT), "utf8"),
 ]);
 
 // The light storage buffer's size, DERIVED from the same constants WGX derives
@@ -291,6 +295,11 @@ function makeGpuHarness(opts = {}) {
   vm.runInContext(`${POST_SOURCE}\nwindow.WGSLPost = WGSLPost;`, context);
   vm.runInContext(`${FX_SOURCE}\nwindow.WGSLFx = WGSLFx;`, context);
   vm.runInContext(`${FRUSTUM_SOURCE.replace(/^const\b/gm, "var")}\nwindow.Frustum = Frustum;`, context);
+  // Shared modules WGX reads at call time (manifest FULL entries): the light
+  // slot budget, the post helpers, and the knob registry their defaults come from.
+  vm.runInContext(`${LIGHT_BUDGET_SOURCE.replace(/^const\b/gm, "var")}\nwindow.LightBudget = LightBudget;`, context);
+  vm.runInContext(`${KNOBS_SOURCE.replace(/^const\b/gm, "var")}\nwindow.LightKnobs = LightKnobs;`, context);
+  vm.runInContext(`${POST_COMMON_SOURCE.replace(/^const\b/gm, "var")}\nwindow.PostCommon = PostCommon;`, context);
   vm.runInContext(`${WGX_SOURCE}\nwindow.WGX = WGX;`, context);
 
   return {
@@ -1658,8 +1667,14 @@ test("setMaterialMaps owns pack textures and destroys them on unload/replace", a
   assert.equal(albedo.texture.destroyed, false);
 
   gfx.setMaterialMaps(null);
-  assert.equal(albedo.texture.destroyed, true, "unload must destroy owned albedo");
-  assert.equal(normal.texture.destroyed, true, "unload must destroy owned normal");
+  // Retired, not destroyed in-frame: a draw recorded earlier this frame may
+  // still reference the view, so the texture rides _retiredBufs to the
+  // frame's submit (the same list the VBO growth paths use).
+  assert.equal(albedo.texture.destroyed, false, "unload retires the owned albedo until the frame's submit");
+  assert.equal(gfx.begin({}), true);
+  gfx.present({});
+  assert.equal(albedo.texture.destroyed, true, "unload must destroy owned albedo after the frame submit");
+  assert.equal(normal.texture.destroyed, true, "unload must destroy owned normal after the frame submit");
   for (const p of placeholders) {
     assert.equal(p.destroyed, false, "placeholder must survive unload");
   }
@@ -1674,10 +1689,14 @@ test("setMaterialMaps owns pack textures and destroys them on unload/replace", a
   const a3 = gfx.createTextureArray(1, images, 17);
   const n3 = gfx.createTextureArray(1, images, 17);
   gfx.setMaterialMaps({ albedo: a3, normal: n3, scales });
-  assert.equal(a2.texture.destroyed, true, "replace must destroy previous albedo");
-  assert.equal(n2.texture.destroyed, true, "replace must destroy previous normal");
+  assert.equal(gfx.begin({}), true);
+  gfx.present({});
+  assert.equal(a2.texture.destroyed, true, "replace must destroy previous albedo (after the frame submit)");
+  assert.equal(n2.texture.destroyed, true, "replace must destroy previous normal (after the frame submit)");
   assert.equal(a3.texture.destroyed, false);
   gfx.setMaterialMaps(null);
+  assert.equal(gfx.begin({}), true);
+  gfx.present({});
   assert.equal(a3.texture.destroyed, true);
   assert.equal(n3.texture.destroyed, true);
 });

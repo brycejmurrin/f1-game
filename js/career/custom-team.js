@@ -278,3 +278,4 @@ const CustomTeam = (function () {
 
   return { create };
 })();
+Object.freeze(CustomTeam);

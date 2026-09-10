@@ -42,7 +42,7 @@ import {
 } from "../lib/harness.mjs";
 import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs";
 import { fileURLToPath } from "node:url";
-import { awaitPresentedFrame, screenshotPresentedCanvas } from "../capture/probe-page.mjs";
+import { awaitPresentedFrame, screenshotPresentedCanvas } from "./probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 

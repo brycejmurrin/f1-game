@@ -64,15 +64,24 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   // (it uses the box's along-track length as a radial margin, the same shape
   // this file's header describes for billboards) and is left alone on purpose —
   // an oriented test suppresses MORE, not fewer. Numbers: PERF-FINDINGS 2u.
+  //
+  // The canary was redbull (295 drops). Its scenery file now asks the same
+  // onTrack question BEFORE calling backdrop() (js/circuits/scenery/redbull.js,
+  // also silverstone / shanghai / monaco), so it drops none; spa still asks for
+  // 53 backdrops the guard refuses and stands in.
   const Tracks = buildContext();
-  const c = counts(Tracks, "redbull");
+  const c = counts(Tracks, "spa");
   assert.ok(c.backdrop > 0,
-    "redbull drops backdrops and the count must be visible — a bare Log.info " +
+    "spa drops backdrops and the count must be visible — a bare Log.info " +
     "makes the drop unobservable, which is how 539 of them went unnoticed");
   // Ratchet: this number moving means the guard's behaviour moved. That is
   // allowed, but it must be a deliberate edit with a rendered look behind it,
   // not a side effect. Raise or lower it in the same commit that changes it.
-  assert.equal(c.backdrop, 295,
-    `redbull backdrop drops = ${c.backdrop}, expected 295 — if you changed the ` +
+  assert.equal(c.backdrop, 53,
+    `spa backdrop drops = ${c.backdrop}, expected 53 — if you changed the ` +
     `guard, re-measure and update this with the reason`);
+  // And the pre-check must not have changed what redbull SHIPS: it skips the
+  // 295 calls the engine refused, and only those (graph-parity proved it).
+  assert.equal(counts(Tracks, "redbull").backdrop || 0, 0,
+    "redbull pre-checks its backdrops; a drop here means the circuit-side test drifted from backdrop()'s margin");
 });

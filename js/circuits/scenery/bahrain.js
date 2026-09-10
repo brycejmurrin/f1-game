@@ -6,14 +6,13 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["bahrain"] =
   function (api) {
-      const { out, MAT, n, px, pz, pyMin, hash, vadd,
+      const { K, lapBounds, out, MAT, n, px, pz, pyMin, hash, vadd,
         place, anchor, addBox, addCyl, addCone, addFrustum, addPyramid,
         bush, palm, acacia, terrace, grandstand, grandstandEx, building, cityFront, tower, billboard, overheadSpan, marshalPost,
         mountain, backdrop, fence, wall, guardrail, tyreWall,
         floodMast: apiFloodMast, floodMastRing, ledFacadeBands, cameraTower, broadcastCompound,
         modelGroup, groundPatch, bleacher, onTrack, every,
         circuitKit } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
         circuitKit.pitBuilding({
@@ -71,11 +70,7 @@
       const SCRUB_DRY   = [0.46, 0.40, 0.24];  // dried desert scrub / dead grass
       const SCRUB_MID   = [0.52, 0.44, 0.28];  // mid-tone desert scrub
 
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
 
       for (const [extra, jit, wMin, hMin, count, forestCol, rockCol] of [
         [140, 55,  220, 24, 72, SAND_DARK,  SAND      ],  // near warm-sand band

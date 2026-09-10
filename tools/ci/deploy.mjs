@@ -214,7 +214,7 @@ export function cureableConflicts(conflicted) {
   return { cureable, shellF, ratchetF, pkgF, toolsF };
 }
 
-function mergeDeployTip(tip) {
+function mergeDeployTip() {
   const r = git(["merge", "--no-edit", `${REMOTE}/${DEPLOY_BRANCH}`]);
   if (r.code === 0) return "merged";
   const conflicted = git(["diff", "--name-only", "--diff-filter=U"]).out.split("\n").filter(Boolean);
@@ -354,7 +354,7 @@ export function main() {
   const problems = preflight();
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
   const verdict = { branch: p.branch, merge: "none", verified: [], pushed: false, pr: null };
-  if (!p.fastForward) verdict.merge = mergeDeployTip(p.tip);
+  if (!p.fastForward) verdict.merge = mergeDeployTip();
   run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite on the union"); verdict.verified.push("tooling-fast");
   // The Pages gate runs MORE node suites than tooling-fast (quali-persist,
   // node-slow, the VM twins, …) and two deploys went red on pins tooling-fast

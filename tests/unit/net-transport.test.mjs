@@ -25,6 +25,7 @@ seedLogGlobal();
 const load = (rel, name) =>
   eval(fs.readFileSync(path.join(ROOT, rel), "utf8") + ";" + name);
 
+globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");   // both bind it at call time
 const NetTransport = load("js/net/transport.js", "NetTransport");
 const NetHandshake = load("js/net/handshake.js", "NetHandshake");
 
@@ -618,4 +619,64 @@ test("rtc stamps message ARRIVAL and hands it to onMessage; loopback stays unsta
   a.send(NetTransport.STATE, "y");
   b.pump(1);
   assert.deepEqual(atArgs, [undefined], "loopback must not invent an arrival clock");
+});
+
+// ── a malformed fetched ICE entry is not "this browser cannot do WebRTC" ─────
+// prefetchIce() only checks that each entry HAS `urls`; `urls: "garbage"`
+// passes and makes `new RTCPeerConnection` throw. rtc() then returned null,
+// the lobby said the browser could not do WebRTC, and the bad list stayed
+// cached for 55 minutes so every retry said it again.
+test("a fetched ICE entry that makes the constructor throw is dropped and rtc() retries STUN-only", async () => {
+  const seen = [];
+  class FakePC {
+    constructor(cfg) {
+      seen.push(cfg.iceServers);
+      for (const e of cfg.iceServers) {
+        const urls = Array.isArray(e.urls) ? e.urls : [e.urls];
+        if (urls.some((u) => !/^(stun|turns?):/.test(u))) throw new TypeError("bad ICE url");
+      }
+      this.connectionState = "new"; this.iceConnectionState = "new"; this.iceGatheringState = "new";
+    }
+    createDataChannel(label) { return { label, readyState: "connecting", close() {} }; }
+    close() {}
+  }
+  global.RTCPeerConnection = FakePC;
+  global.localStorage = { getItem: () => null };
+  global.fetch = async () => ({ json: async () => ({ iceServers: [{ urls: "garbage" }] }) });
+  try {
+    const fresh = load("js/net/transport.js", "NetTransport");
+    await fresh.prefetchIce();
+    assert.ok(fresh.iceServers({}).some((e) => e.urls === "garbage"), "the bad entry was cached");
+    const ep = fresh.rtc({ role: "host" });
+    assert.ok(ep && ep.pc, "the second construction must succeed");
+    assert.equal(seen.length, 2, "one throw, one retry");
+    assert.ok(seen[1].every((e) => (Array.isArray(e.urls) ? e.urls : [e.urls]).every((u) => /^stun:/.test(u))),
+      "the retry gathers with STUN only");
+    assert.ok(!fresh.iceServers({}).some((e) => e.urls === "garbage"),
+      "the fetched list is forgotten, so the next prefetch is a fresh answer");
+  } finally {
+    delete global.RTCPeerConnection; delete global.localStorage; delete global.fetch;
+  }
+});
+
+// ── the build is the one THIS shell is running ──────────────────────────────
+// A tab left open across a deploy fetched the NEW version.json while running
+// the OLD scripts. The shell stamps its own generation in <meta
+// name="apex-build">, and that is what the handshake now reports; the fetch
+// is the fallback for a shell with no stamp.
+test("localBuild() reads the shell's apex-build meta before it fetches", async () => {
+  let fetched = 0;
+  global.fetch = async () => { fetched++; return { json: async () => ({ build: 2000 }) }; };
+  global.document = { querySelector: (sel) => (sel === 'meta[name="apex-build"]' ? { content: " 1234 " } : null) };
+  try {
+    const fresh = load("js/net/handshake.js", "NetHandshake");
+    assert.equal(fresh.metaBuild(), 1234);
+    assert.equal(await fresh.localBuild(), 1234, "the meta wins");
+    assert.equal(fetched, 0, "and version.json is never asked");
+    global.document = { querySelector: () => null };
+    const bare = load("js/net/handshake.js", "NetHandshake");
+    assert.equal(bare.metaBuild(), null);
+    assert.equal(await bare.localBuild(), 2000, "no stamp: the fetch still answers");
+    assert.equal(fetched, 1);
+  } finally { delete global.fetch; delete global.document; }
 });

@@ -89,12 +89,18 @@ test("the undocumented list does not name a hook that no longer exists", () => {
 });
 
 test("openf1 and jolpica guard a missing path instead of fetching garbage", () => {
+  // Both hooks route through one apiHook() (2026-09-10: the guard and the
+  // F1API queue live there), so the guard is asserted once and each hook is
+  // asserted to delegate to it.
   const src = read("js/agent/apex.js");
+  const guard = src.match(/function apiHook\(base, path, fix\) \{[\s\S]*?\n\}/);
+  assert.ok(guard, "apiHook body not found");
+  assert.match(guard[0], /error:\s*"missing_path"/);
+  assert.match(guard[0], /ok:\s*false/);
   for (const name of ["openf1", "jolpica"]) {
     const m = src.match(new RegExp(name + "\\(path\\) \\{[\\s\\S]*?\\n  \\},"));
     assert.ok(m, name + " body not found");
-    assert.match(m[0], /error:\s*"missing_path"/);
-    assert.match(m[0], /ok:\s*false/);
+    assert.match(m[0], /apiHook\(/, name + " must delegate to apiHook");
   }
 });
 

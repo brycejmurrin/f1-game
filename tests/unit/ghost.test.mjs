@@ -162,3 +162,22 @@ test("finishLap meta rides with the ghost lap, survives a reload, and a slower l
   assert.equal(Ghost.finishLap(85), true);
   assert.equal(Ghost.medal(), null, "a lap saved without meta carries none");
 });
+
+test("a ghost store that is not a plain object starts empty and still saves", () => {
+  // `JSON.parse(raw) || {}` accepted "5", "true" and "[]" (all truthy),
+  // memoised them, and every later `store[id] = snap` threw (primitive) or
+  // grew a stray array property for the rest of the session.
+  for (const raw of ['"5"', "[]", "true"]) {
+    const { Ghost, store } = createHarness();
+    store.setItem("apex26.ghost.v1", raw);
+    Ghost.setTrack("monza");
+    assert.equal(Ghost.hasGhost(), false, `${raw}: no ghost from a corrupt store`);
+    Ghost.startLap();
+    for (let i = 0; i < 12; i++) Ghost.record(i * 90 / 12, i * 100, 0);
+    assert.equal(Ghost.finishLap(90), true, `${raw}: the lap still becomes the ghost`);
+    const saved = JSON.parse(store.getItem("apex26.ghost.v1"));
+    assert.equal(Array.isArray(saved), false, `${raw}: the corrupt value is replaced by an object`);
+    assert.equal(typeof saved, "object");
+    assert.equal(saved.monza.time, 90, `${raw}: the ghost lap was written`);
+  }
+});

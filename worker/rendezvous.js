@@ -24,7 +24,8 @@
  *   cd worker && npx wrangler deploy
  * then in the game (devtools console, once):
  *   localStorage.setItem("apex26.rendezvous", "https://<your-worker>.workers.dev")
- * With that key unset the feature hides itself and the game is unchanged.
+ * With that key unset the public Nostr relay pool does the rendezvous instead
+ * and the game is unchanged.
  */
 
 // Two minutes is chosen by the thing it has to outlive: a human reading six
@@ -37,11 +38,13 @@ const TTL_MS = 120000;
 const SLOTS = new Set(["offer", "answer"]);
 
 // Bounded because this is an unauthenticated endpoint on the public internet:
-// the real payload is ~250 bytes and 8 KB is generous for a client that packs
-// its SDP badly, while still making the object useless as free storage.
-const MAX_PAYLOAD = 8192;
-// AES-GCM adds an IV/tag and base64 expands by 4/3. New clients prefix that
-// ciphertext with `v1.`; legacy plaintext keeps the tighter original cap.
+// the real payload is ~250 bytes of SDP, sealed browser-side (AES-GCM, a
+// 16-byte salt, a 12-byte IV, a 16-byte tag, base64 at 4/3), and 12 KB is
+// generous for a client that packs its SDP badly while still making the
+// object useless as free storage. ONLY the `v2.` envelope is stored: the
+// operator never holds a plaintext SDP, and a client that sends one is not a
+// shipped build (js/net/rendezvous.js sealPrivate).
+const ENVELOPE_TAG = "v2.";
 const MAX_SEALED_PAYLOAD = 12288;
 // JSON adds a few bytes around `payload` and the stable owner capability.
 const MAX_BODY = MAX_SEALED_PAYLOAD + 512;
@@ -153,9 +156,10 @@ export class Room {
       try { body = JSON.parse(raw.text); } catch (_) {}
       const payload = body && body.payload;
       const owner = body && body.owner;
-      if (typeof payload !== "string" || !payload) return json({ error: "bad_payload" }, 400);
-      const payloadLimit = payload.startsWith("v1.") ? MAX_SEALED_PAYLOAD : MAX_PAYLOAD;
-      if (new TextEncoder().encode(payload).byteLength > payloadLimit) return json({ error: "too_big" }, 413);
+      if (typeof payload !== "string" || !payload.startsWith(ENVELOPE_TAG) || payload.length <= ENVELOPE_TAG.length) {
+        return json({ error: "bad_payload" }, 400);
+      }
+      if (new TextEncoder().encode(payload).byteLength > MAX_SEALED_PAYLOAD) return json({ error: "too_big" }, 413);
       if (owner != null && (typeof owner !== "string" || !/^[A-Za-z0-9_-]{16,128}$/.test(owner))) {
         return json({ error: "bad_owner" }, 400);
       }
@@ -164,10 +168,11 @@ export class Room {
       // Refusing to overwrite a LIVE offer is what stops two hosts silently
       // sharing a code — the second one is told to make a new one rather than
       // stealing the first one's guest.
+      // A retry is recognised by the host's stable owner capability, never by
+      // ciphertext equality — a fresh IV makes every seal of one SDP differ.
       if (slot === "offer" && existing && Date.now() < existing.expires) {
         const sameOwner = owner && existing.owner && owner === existing.owner;
-        const sameLegacyPayload = !owner && !existing.owner && existing.payload === payload;
-        if (!sameOwner && !sameLegacyPayload) return json({ error: "taken" }, 409);
+        if (!sameOwner) return json({ error: "taken" }, 409);
       }
       await this.state.storage.put(slot, { payload, owner: owner || null, expires: Date.now() + TTL_MS });
       // One alarm for the whole object: it wipes everything, so a room cannot
@@ -189,6 +194,13 @@ export class Room {
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+    // Refuse every other method HERE, before the rate limiter is consulted
+    // and before a Durable Object is named: a PUT/DELETE/HEAD used to skip
+    // rateAllowed() (which only keys GET/POST) and still allocate a billable
+    // object just to be told 405 inside it.
+    if (request.method !== "GET" && request.method !== "POST") {
+      return json({ error: "method" }, 405, { allow: "GET, POST, OPTIONS" });
+    }
 
     const url = new URL(request.url);
     // /r/<code>/<slot>
@@ -198,7 +210,7 @@ export default {
     const m = url.pathname.match(/^\/r\/([0-9A-Z]{6})\/(offer|answer)$/);
     if (!m) return json({ error: "not_found" }, 404);
     const [, code, slot] = m;
-    if ((request.method === "GET" || request.method === "POST") && !rateAllowed(request)) {
+    if (!rateAllowed(request)) {
       return json({ error: "rate_limited" }, 429, { "retry-after": "60" });
     }
 

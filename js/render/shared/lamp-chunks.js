@@ -9,27 +9,18 @@
 
 const LampChunks = (function () {
 
-  // Per-chunk lamp cap. 24, not MAX_LIGHTS=48: each chunk binds its own set
-  // and runs a full LIT loop per draw, so the cap is the per-fragment cost
-  // knob. The player-facing PER-CHUNK LAMPS help and the game.js rationale
-  // quote this number — change it here and they follow.
-  const CAP = 24;
+  // Per-chunk lamp cap. LightBudget.CHUNK (24), not MAX (48): each chunk binds
+  // its own set and runs a full LIT loop per draw, so the cap is the
+  // per-fragment cost knob. The player-facing PER-CHUNK LAMPS help and the
+  // game.js rationale quote this number — change it there and they follow.
+  // Eval-time read: tools/manifest.cjs HARD_EDGES (light-budget.js first).
+  const CAP = LightBudget.CHUNK;
 
   // 0..1 knob -> effective cap. Verbatim the shipped GLX formula: a partial
   // knob shrinks the set (floor 8 keeps a chunk from losing its own lamp),
   // 0 and 1 both mean the full cap (0 never reaches here — the feature is off).
   function capFor(knob) {
     return (knob > 0 && knob < 1) ? Math.max(8, Math.round(CAP * knob)) : CAP;
-  }
-
-  // Squared distance from an AABB to a point (0 inside) — the same reach test
-  // GLX frustum culling uses, local so the module stays dependency-free.
-  function _aabbDist2(mn, mx, x, y, z) {
-    let d = 0, t;
-    t = mn[0] - x; if (t > 0) d += t * t; t = x - mx[0]; if (t > 0) d += t * t;
-    t = mn[1] - y; if (t > 0) d += t * t; t = y - mx[1]; if (t > 0) d += t * t;
-    t = mn[2] - z; if (t > 0) d += t * t; t = z - mx[2]; if (t > 0) d += t * t;
-    return d;
   }
 
   // Bake the whole table for one (lights, chunks, knob) triple. lights is the
@@ -48,7 +39,9 @@ const LampChunks = (function () {
       for (let i = 0; i < n; i++) {
         const o = i * 15, rad = lights[o + 6];
         if (!(rad > 0)) continue;
-        const d2 = _aabbDist2(ch.min, ch.max, lights[o], lights[o + 1], lights[o + 2]);
+        // Frustum.aabbDist2 (js/render/shared/frustum.js): the same reach test the
+        // chunk culls use, call-time so this module still evaluates alone.
+        const d2 = Frustum.aabbDist2(ch.min, ch.max, lights[o], lights[o + 1], lights[o + 2]);
         if (d2 <= rad * rad) hits.push({ i, d2 });
       }
       hits.sort((a, b) => a.d2 - b.d2);
@@ -126,3 +119,4 @@ const LampChunks = (function () {
 
   return { CAP, capFor, buildTable, resolve };
 })();
+Object.freeze(LampChunks);

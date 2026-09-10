@@ -870,3 +870,4 @@ const Parts = (function () {
     getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
   };
 })();
+Object.freeze(Parts);

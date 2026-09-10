@@ -25,10 +25,10 @@
 //    (same "no tag" rule, but NOT SW-optional — V8 full-compiles install
 //    puts). FULL ∪ DEFERRED ∪ LAZY_AGENT must cover js/**/*.js.
 //  - The circuit tags ("@circuits") stay in their curated order — that
-//    order IS Tracks.LIST, which is the track-picker order. The season
-//    calendar is Tracks.SEASON, the `classic: false` prefix of that list, so
-//    the 24 season circuits MUST stay first and in calendar order. Do not
-//    sort or reorder them.
+//    order IS Tracks.LIST, which is the track-picker order (NOT the real F1
+//    calendar). Tracks.SEASON is the `classic: false` prefix of that list, so
+//    the 24 season circuits MUST stay first; a stored apex26.track is a
+//    positional index, so do not sort or reorder them.
 //  - A future generated js/track/circuit-elevations.js (tools/
 //    bake-elevation.mjs) must slot immediately BEFORE js/track/tracks.js.
 //  - HARD_EDGES are eval-time dependencies (destructure/call at IIFE
@@ -36,10 +36,10 @@
 
 "use strict";
 
-// Curated circuit order (== Tracks.LIST == picker order).
-// The first 24 are the season calendar (Tracks.SEASON, in round order); the
-// retired circuits below carry `classic: true` and are appended, never
-// interleaved — a stored apex26.track is a positional index into this list.
+// Curated circuit order (== Tracks.LIST == picker order; NOT the real
+// calendar). Tracks.SEASON = the 24 non-classic ids in this order; the retired
+// circuits below carry `classic: true` and are appended, never interleaved —
+// a stored apex26.track is a positional index into this list.
 const CIRCUITS = [
   "bahrain", "monaco", "silverstone", "spa", "monza", "suzuka", "singapore",
   "cota", "interlagos", "vegas", "madrid", "zandvoort", "jeddah",
@@ -76,6 +76,8 @@ const FULL = [
   "js/render/glx/shaders/glsl-sky.js",
   "js/render/glx/shaders/glsl-fx.js",
   "js/render/glx/shaders/glsl-post.js",
+  "js/render/shared/light-budget.js",   // LightBudget: the one light-slot budget (glx MAX_LIGHTS, lamp-chunks CAP read it at eval)
+  "js/render/shared/post-common.js",    // PostCommon: lens-dirt canvas, keepNearest, HDR-grade test, sun-screen, knob defaults — shared by the three post chains
   "js/render/glx/post.js",
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
@@ -96,6 +98,7 @@ const FULL = [
   // and spotify.js's init() runs at EVAL when the document is already complete
   // (the game-vm harness; a late-injected script), so the store must precede it.
   "js/core/store.js",
+  "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
   "js/track/core/geom.js",
   "js/track/scenery/data.js",
   "js/track/core/space.js",
@@ -195,6 +198,7 @@ const FULL = [
   "js/ui/onboard.js",
   "js/physics/debris-world.js",
   "js/physics/incident-sim.js",
+  "js/physics/collide.js",   // car-car contact resolver (Collide.create(G, collideFx)), extracted from game.js
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
   // Multiplayer wire. Pure logic with no game dependency, so position only
@@ -246,6 +250,8 @@ const CARVIEW = [
   "js/render/glx/shaders/glsl-sky.js",
   "js/render/glx/shaders/glsl-fx.js",
   "js/render/glx/shaders/glsl-post.js",
+  "js/render/shared/light-budget.js",   // LightBudget: the one light-slot budget (glx MAX_LIGHTS, lamp-chunks CAP read it at eval)
+  "js/render/shared/post-common.js",    // PostCommon: lens-dirt canvas, keepNearest, HDR-grade test, sun-screen, knob defaults — shared by the three post chains
   "js/render/glx/post.js",
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
@@ -302,6 +308,9 @@ const HARD_EDGES = [
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
+  // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
+  ["js/ui/dom.js", "js/career/career-ui.js"],    // career-ui binds Dom.el at eval
+  ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
   ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
@@ -345,6 +354,8 @@ const HARD_EDGES = [
   ["js/render/glx/shaders/glsl-sky.js", "js/render/glx/glx.js"],
   ["js/render/glx/shaders/glsl-fx.js", "js/render/glx/glx.js"],
   ["js/render/glx/shaders/glsl-post.js", "js/render/glx/glx.js"],
+  ["js/render/shared/light-budget.js", "js/render/glx/glx.js"],          // glx binds LightBudget.MAX at eval
+  ["js/render/shared/light-budget.js", "js/render/shared/lamp-chunks.js"], // lamp-chunks binds LightBudget.CHUNK at eval
   // glx/ subsystem modules before glx.js (GLX.init calls GLXPost/GLXShadow/
   // GLXChunked.init — call-time, but the globals must exist by then; keep the
   // ordering explicit)
@@ -428,6 +439,8 @@ const HARD_EDGES = [
   ["js/race/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval
   ["js/core/mat4.js", "js/physics/ai-drive.js"],         // AiDrive binds M4.clamp/lerp at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
+  ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
+  ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft
   ["js/career/career.js", "js/career/career-ui.js"],  // the screen reads the Career rules
 ];
@@ -548,6 +561,7 @@ const LAZY_DATA_EDGES = LAZY_DATA.filter((f) => f !== "js/data/hub.js")
 // load-order.test.mjs that derives the stub's required surface from the call
 // sites rather than from a hand-written roster.
 const LAZY_NET = [
+  "js/net/bytes.js",        // NetBytes: the one base64url/hex/ascii home (call-time binding, no edge)
   "js/net/nostr.js",
   "js/net/rendezvous.js",
   "js/net/sdp.js",
@@ -601,6 +615,8 @@ const PATHS = {
   FRUSTUM: "js/render/shared/frustum.js",
   GLX_SHADERS_LIT: "js/render/glx/shaders/glsl-lit.js",
   GLX_SHADERS_POST: "js/render/glx/shaders/glsl-post.js", // grade/composite GLSL (image-grade-shaders.test.mjs)
+  LIGHT_BUDGET: "js/render/shared/light-budget.js",
+  POST_COMMON: "js/render/shared/post-common.js",
   WGSL_CHUNKS: "js/render/webgpu/wgsl-chunks.js",
   WGSL_POST: "js/render/webgpu/wgsl-post.js",
   WGX: "js/render/webgpu/wgx.js",
@@ -621,6 +637,8 @@ const sceneryPath = (id) => `${SCENERY_DIR}/${id}.js`;
 // tools/ci/deploy.mjs can name the new path when another session's edit to the
 // old one conflicts. Prune entries once every in-flight branch has rebased.
 const MOVED = {
+  "tools/capture/probe-page.mjs": "tools/shot/probe-page.mjs",         // tools/capture/ folded into tools/shot/ 2026-09-10
+  "tools/capture/garage-interior.mjs": "tools/shot/garage-interior.mjs",
   "js/render/webgpu/wgsl-chunks.js": "js/render/webgpu/wgsl-chunks.js",
   "js/render/webgpu/wgsl-post.js": "js/render/webgpu/wgsl-post.js",
   "js/render/webgpu/wgsl-fx.js": "js/render/webgpu/wgsl-fx.js",

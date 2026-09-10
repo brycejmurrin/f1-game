@@ -151,3 +151,4 @@ const Flags = (function () {
 
   return { code, svg, codes, countries };
 })();
+Object.freeze(Flags);

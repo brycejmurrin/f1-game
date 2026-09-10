@@ -7,20 +7,15 @@
 (window.TrackScenery = window.TrackScenery || {})["miami"] =
   function (api) {
       const {
-        out, MAT, COL, n, px, pz, pyMin, place, prop, backdrop, grandstandEx,
+        K, lapBounds, out, MAT, COL, n, px, pz, pyMin, place, prop, backdrop, grandstandEx,
         building, tower, billboard, palm, bush, fence, wall, guardrail, tyreWall,
         bankedKerbStrip, marshalPost, gantry, anchor, addBox, addCyl, addPrism, addPyramid,
         addCone, addFrustum, vadd, hash, onTrack, every, along, cityFront, forestEdge,
         runoffApron, modelGroup, overheadSpan, waterSurface, groundPatch, recordBarrier,
         scaffoldStand, bleacher, acacia, circuitKit,
       } = api;
-      const K = (s) => Math.round(s * n) % n;
 
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
 
       const TEAL       = [0.20, 0.80, 0.78];
       const CORAL      = [1.0,  0.55, 0.45];

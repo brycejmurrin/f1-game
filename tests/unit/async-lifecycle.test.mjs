@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import { seedDom } from "../helpers/seed-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const scanSource = await readFile(new URL("../../js/net/scan.js", import.meta.url), "utf8");
@@ -74,6 +75,7 @@ function audioPanelHarness() {
     soundOn: false, musicEnabled: true, state: "menu",
   };
   const context = vm.createContext({ GameAudio, SettingRow, Log: { info() {} } });
+  seedDom(context);   // the closed-fold summaries paint through Dom.paintFold
   vm.runInContext(`${audioPanelSource}\nglobalThis.__panel = AudioPanel;`, context,
     { filename: "js/audio/panel.js" });
   return { panel: context.__panel.create(G), G, nodes, calls, writes, wired };

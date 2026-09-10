@@ -1064,13 +1064,16 @@ prefixes are the allowlist: this is the one place anything enumerates the
 namespace, so career and season saves, lap records, ghosts and account tokens
 are filtered out rather than merely unmentioned.
 
-### `persistState() → {ok, broken, keys, rev, foreign}`
+### `persistState() → {ok, broken, keys, rev, foreign, mirror}`
 Is `localStorage` actually storing anything? `ok:false` means a read or write has
 thrown, and `broken` names the exception (`"QuotaExceededError"`,
 `"SecurityError"`); `keys` is how many are cached and `rev` the write counter.
 `foreign` counts cross-tab invalidations applied — a non-zero value means ANOTHER
 tab of this origin has written `apex26.*` keys during this session, which is the
-one condition under which a save can be overwritten from outside.
+one condition under which a save can be overwritten from outside. `mirror` is
+the IndexedDB write-through for career/season keys
+(`{supported, restored, flushed, failed, pending}`): `restored` counts keys
+that localStorage had lost and the mirror put back at boot.
 
 This needs a hook of its own because **the failure is otherwise invisible from
 inside the session**. `js/core/store.js` caches every value it writes, so when
@@ -2267,18 +2270,22 @@ await __apex.f1api.lastRace();
 ```
 
 ### `openf1(path) → Promise<json>`
-Direct OpenF1 fetch — GETs `https://api.openf1.org/v1` + `path` and returns the
-parsed JSON (uncached, bypasses the F1API queue). With no path, or a path that
-does not start with `/`, returns `{ok:false, error:"missing_path", message, fix}`
-instead of hitting a garbage URL.
+OpenF1 fetch through the Data Hub's `F1API.request` (queued, rate-paced,
+15 s-timed, retried on 429; `cache:false` so the result is fresh) — GETs
+`https://api.openf1.org/v1` + `path` and returns the parsed JSON. With no path,
+or a path that does not start with `/`, returns
+`{ok:false, error:"missing_path", message, fix}` instead of hitting a garbage
+URL; before the LAZY_DATA group has loaded (open the DATA HUB once) it returns
+`{ok:false, error:"no_api"}`.
 ```js
 await __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024");
 ```
 
 ### `jolpica(path) → Promise<json>`
-Direct Jolpica (Ergast-compatible) fetch — GETs `https://api.jolpi.ca/ergast/f1`
-+ `path` and returns the parsed JSON (uncached). Same missing-path guard as
-`openf1()` — a bare `jolpica()` used to throw on the HTML 404 page.
+Jolpica (Ergast-compatible) fetch through the same `F1API.request` path as
+`openf1()` — GETs `https://api.jolpi.ca/ergast/f1` + `path` and returns the
+parsed JSON. Same missing-path and `no_api` guards as `openf1()` — a bare
+`jolpica()` used to throw on the HTML 404 page.
 ```js
 await __apex.jolpica("/circuits/monaco.json");
 ```
@@ -3822,7 +3829,7 @@ state that already exists. Highest value per line of code.
 
 **Phase 3 — prop registry.** The only phase that touches the build path, so
 the only one that needs `tools/track/verify-track.cjs` and the scenery contract test
-(`tests/unit/scenery-api-contract.test.mjs`, which freezes a 111-member API) run
+(`tests/unit/scenery-api-contract.test.mjs`, which freezes a 112-member API) run
 against it. Vertex-budget sensitive.
 
 **Phase 4 — rollout summariser and the toolbelt.**

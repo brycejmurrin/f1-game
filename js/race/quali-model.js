@@ -335,3 +335,4 @@ function create(G) {
 
 return { create, STEP, QUALI_TRIM, EXEC_SPREAD, MEDALS, MEDAL_RANK, medalFor };
 })();
+Object.freeze(Quali);

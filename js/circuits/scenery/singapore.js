@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["singapore"] =
   function (api) {
-      const { out, MAT, def, n, place, backdrop,
+      const { K, out, MAT, def, n, place, backdrop,
               building, billboard, anchor, every, onTrack, addBox, addCyl, addCone,
               addPrism, addFrustum, addPyramid, grandstand, grandstandEx, sponsorHoarding,
               gantry, marshalPost, palm, bush, ds, recordBarrier,
               fence, tyreWall, vadd, hash, cityFront, tower, ferrisWheel, modelGroup,
               overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit } = api;
-      const K = (s) => Math.round(s * n) % n;
       // Landing a raw anchor() on a circuitKit structure (the pit-race-control
       // beacon below). `anchor` is NOT raw here: transformSceneryApi wraps every
       // k-keyed helper as f(sceneryNode(k), -side) for this reverse +

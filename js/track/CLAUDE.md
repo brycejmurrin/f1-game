@@ -32,7 +32,7 @@ tables), and `tracks.js` at the root is the registry — `LIST`, `resolve`,
   `{ turn: N }` (1-based into `def.turns`, the curated FIA apex table,
   racing-space, no shift); frac zones that land on a straight >60 m from any
   apex are re-seated on the nearest one.
-- **scenery(api) is a frozen 111-member contract**
+- **scenery(api) is a frozen 112-member contract**
   (`tests/unit/scenery-api-contract.test.mjs`). Adding a member is a
   deliberate contract change: update the test in the same commit.
 - After ANY change here: `node tools/track/verify-track.cjs <id>` (2 s headless

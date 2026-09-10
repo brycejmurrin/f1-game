@@ -146,12 +146,14 @@ on:
       - "**/*.md"
       - ".claude/**"
       - ".cursor/**"
+      - ".codex/**"
   pull_request:
     paths-ignore:
       - "docs/**"
       - "**/*.md"
       - ".claude/**"
       - ".cursor/**"
+      - ".codex/**"
   # NIGHTLY (2026-09-01): the wide browser run — the boot group (73 tests)
   # across 4 shards — moved here from every push. Its whole recorded failure
   # history in this file's header is timeouts on starved runners, never an
@@ -183,26 +185,21 @@ on:
         default: false
   workflow_call:      # pages.yml gates its deploy on this
     inputs:
-      # Caller's push `before` SHA. workflow_call replaces github.event with its
-      # own payload, so without this the sweeps filter always sees a non-push
-      # event and fail-safes into RUNNING the full 15-minute rebuild — every
-      # Pages deploy paid for four fleet rebuilds even when the diff was CSS.
+      # Caller's push `before` SHA, forwarded EXPLICITLY. github.event in a
+      # called workflow is the caller's payload, so the sweeps filter could read
+      # github.event.before itself; the input keeps the contract visible in
+      # pages.yml (and the filter's fallback reads github.event.before anyway).
       before_sha:
         description: "github.event.before from the calling push (empty = run sweeps)"
         type: string
         required: false
         default: ""
-      # pages.yml no longer overrides this (removed 2026-08-12 alongside moving
-      # `concurrency` off the whole workflow and onto just the deploy job —
-      # see pages.yml's top-of-file comment). That was the actual fix for the
-      # symptom this override was papering over (rapid pushes cancelling
-      # in-flight Pages runs mid-smoke, live version.json stuck at 1126); the
-      # smoke gate stays on for every deploy via the default below.
-      smoke:
-        description: "run the Playwright smoke gate (page boots, __apex responds)"
-        type: boolean
-        required: false
-        default: true
+      # There is no `smoke` input any more (2026-09-10). The smoke job's guard
+      # was `github.event_name != 'workflow_call' || inputs.smoke`, and in a
+      # CALLED workflow `github.event_name` is the CALLER's event (`push`), never
+      # `workflow_call` — so the first operand was always true and the input
+      # could never skip anything. pages.yml had stopped passing it on
+      # 2026-08-12 anyway; the smoke gate runs on every push, PR and deploy.
       concurrency_key:
         description: "unique caller run key; empty keeps direct push/PR branch concurrency"
         type: string
@@ -305,7 +302,7 @@ jobs:
     runs-on: ubuntu-latest
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
-    # game-vm 161s = 305s total. Plus npm ci, which cost 3m32s and 5m02s on the
+    # game-vm 161s = 305s total (+ garage-unit 39s, steering-unit 1s, 2026-09-10). Plus npm ci, which cost 3m32s and 5m02s on the
     # two runs that died. 25 = roughly 2x the measured work on top of the worst
     # npm ci seen, the same 2x convention sweeps-parts uses below.
     timeout-minutes: 25
@@ -324,8 +321,19 @@ jobs:
           npm run test:state-unit
           npm run test:agent-contract
           npm run test:audio-unit
-          # The CLI-only MCP wrappers (tinyfish proxy, probe bridge): spawn-heavy,
-          # off the edit loop since 2026-09-03; their fast-gate half is mcp-cli.
+          # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,
+          # livery-contrast, body-split, cover-legibility, helmets) and three
+          # steering files (digital-steer, key-binds, settings-export) were in
+          # these two groups and in NO gate — not tooling-fast, not this step,
+          # so deploy.mjs (which derives its node list from here) never ran
+          # them either. Measured 2026-09-10: garage-unit 39 s, steering-unit
+          # 0.5 s. The sub-5 s files are in tooling-fast too; the two slow
+          # livery rasters (7-10 s each) run only here.
+          npm run test:garage-unit
+          npm run test:steering-unit
+          # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
+          # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
+          # their fast-gate half is mcp-cli. environment-json stays gated below.
           npm run test:mcp
           # The three raster/spawn-heavy car files, out of the edit loop
           # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.
@@ -435,11 +443,13 @@ jobs:
         run: |
           set -u
           run_all() { echo "geometry=true" >> "$GITHUB_OUTPUT"; echo "RUNNING SWEEPS: $1"; exit 0; }
-          # workflow_call from pages.yml is a deploy push in disguise — treat it
-          # like a push when before_sha was forwarded, otherwise fail-safe RUN.
+          # A workflow_call from pages.yml still reports the CALLER's event here
+          # (`push`): in a called workflow github.event_name and github.event
+          # are the caller's, never `workflow_call`. So only `push` passes;
+          # dispatch / schedule / pull_request fail-safe into RUNNING.
           case "$EVENT" in
-            push|workflow_call) ;;
-            *) run_all "event is '$EVENT', not a push/workflow_call" ;;
+            push) ;;
+            *) run_all "event is '$EVENT', not a push" ;;
           esac
           case "${BEFORE:-}" in
             ""|0000000000000000000000000000000000000000) run_all "no before-sha (new branch, first push, or caller omitted input)" ;;
@@ -462,10 +472,14 @@ jobs:
           # js/car, js/game.js and debrisworld are here because four sweep suites
           # load them (parts-visual-distinctness, car-front-wing-width, grid-boxes,
           # debris-hazard-hint) — a wing-width regression in car3d.js used to skip.
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/|js/car/|js/game\.js$|js/game/debrisworld\.js$)' \
+          # tools/ is NARROWED to tools/track/ and tools/lib/ (2026-09-10): the
+          # sweeps build circuits through tools/lib/track-build-vm.cjs and the
+          # tools/track/ audits; a bare `tools/` made every CI/gen/ui tool edit
+          # pay the 15-minute fleet rebuild for geometry it cannot move.
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/(track|lib)/|js/car/|js/game\.js$|js/game/debrisworld\.js$)' \
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SUITES_FILE"; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
-            echo "RUNNING SWEEPS: the diff touches track engine, circuit data, tools or a sweep suite"
+            echo "RUNNING SWEEPS: the diff touches track engine, circuit data, tools/track|lib or a sweep suite"
           else
             echo "geometry=false" >> "$GITHUB_OUTPUT"
             echo "SKIPPING SWEEPS: nothing in this diff can move circuit geometry"
@@ -480,27 +494,16 @@ jobs:
   smoke:
     name: Smoke (page boots, __apex responds)
     runs-on: ubuntu-latest
-    # TEMP: pages.yml can pass smoke:false to skip this job on deploy (see the
-    # workflow_call input). Branch/PR pushes keep the default (true).
-    #
-    # `inputs.smoke != false` did NOT deliver that second sentence, and it was
-    # silently skipping this job on EVERY branch and PR push. A workflow's
-    # `inputs` defaults are applied only for workflow_call / workflow_dispatch;
-    # on a plain push the `inputs` context is empty, so `inputs.smoke` is null,
-    # and GitHub coerces null and false to the same value — making
-    # `null != false` FALSE and the job skip. Measured 2026-08-14 on two
-    # consecutive pushes to a branch (runs 31765883905 and 31766287790): smoke
-    # and selected both `skipped`, each with completed_at BEFORE started_at,
-    # which is the signature of a job-level `if` resolving false rather than of
-    # a step-level filter deciding nothing shipped. The deploy path was
-    # unaffected — pages.yml reaches this through workflow_call, where the
-    # default DOES apply — so the whole CI run still reported green and the
-    # hole stayed invisible.
-    #
-    # Test the EVENT, then the input: on push/pull_request the first operand is
-    # already true and `inputs` is never consulted; under workflow_call it falls
-    # through to the input, so pages.yml keeps its ability to pass smoke:false.
-    if: ${{ github.event_name != 'workflow_call' || inputs.smoke }}
+    # NO job-level `if` (2026-09-10). Two guards lived here and both were wrong
+    # in opposite directions. `inputs.smoke != false` skipped this job on EVERY
+    # branch and PR push: `inputs` is empty on a plain push, null coerces like
+    # false, and `null != false` is FALSE (measured 2026-08-14, runs 31765883905
+    # and 31766287790 — smoke and selected both `skipped` with completed_at
+    # before started_at). Its replacement, `github.event_name != 'workflow_call'
+    # || inputs.smoke`, could never skip: in a called workflow `github.event_name`
+    # is the CALLER's event (`push`), so the first operand was always true and
+    # the input was inert. A guard that either always or never fires is not a
+    # switch — the smoke gate simply runs on every push, PR and deploy.
     # TWO SHARDS, TWO RUNNER VMs — NOT two workers on one VM. The measured rule
     # below (two concurrent SwiftShader contexts on one shared runner blow the
     # per-test timeout) still binds: each shard keeps APEX_WORKERS=1 and runs
@@ -615,9 +618,11 @@ jobs:
         run: |
           set -u
           run_all() { echo "ships=true" >> "$GITHUB_OUTPUT"; echo "RUNNING SMOKE: $1"; exit 0; }
+          # `workflow_call` never appears here: a called workflow sees the
+          # CALLER's event name (`push` from pages.yml), same as the sweeps filter.
           case "$EVENT" in
-            push|workflow_call) ;;
-            *) run_all "event is '$EVENT', not a push/workflow_call" ;;
+            push) ;;
+            *) run_all "event is '$EVENT', not a push" ;;
           esac
           # The staged list is DERIVED from pages.yml's own `Stage site` step, not
           # retyped — the two drifting apart is what would silently let a shipped
@@ -924,8 +929,8 @@ jobs:
     #
     # The Pages call is recognised by `inputs.concurrency_key`, which pages.yml
     # ALWAYS forwards and nothing else sets — not by `github.event_name`, which
-    # a reusable workflow reports as the CALLER's event ("push"), the reason
-    # the sweeps filter accepts `push|workflow_call` either way. Promoting this
+    # a reusable workflow reports as the CALLER's event ("push"), which is why
+    # the sweeps and smoke filters accept `push` alone. Promoting this
     # job into the gate once it has a measured green history is one line:
     # delete this `if:`.
     if: ${{ !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
@@ -1176,7 +1181,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       # STOP AT THREE, don't grind to the cap. Pages #1967 selected 32 tests,
       # failed 6 of the first 7 at the per-test timeout, and kept going until
-      # the job's 26-minute cap killed it — so the run was CANCELLED, the whole
+      # the job's cap (then 26 minutes, 36 now) killed it — so the run was CANCELLED, the whole
       # cap was spent re-learning news it had after the first failure, and
       # `junit-failed.mjs` logged "no failures to carry" because a killed job
       # writes no junit. The fail-fast memory two steps below was blind to
@@ -1191,7 +1196,8 @@ jobs:
       # Three, not one: one failure cannot distinguish "this spec is broken"
       # from "this change broke everything", and the budget below is already
       # modelled on surviving a timeout. Three bounds the failure cost at
-      # 3 x 120 s = 6 min inside a 26-minute cap while still showing a pattern.
+      # 3 x 180 s = 9 min (the --timeout below) inside the 36-minute cap above
+      # while still showing a pattern.
       - name: Run the selection
         if: steps.sel.outputs.specs != ''
         env:

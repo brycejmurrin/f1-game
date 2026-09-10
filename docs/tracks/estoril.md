@@ -1,6 +1,6 @@
 # Autódromo do Estoril — Visual Design Brief
 
-**Setting:** DAY, modern theme (Atlantic coastal hillside west of Lisbon). ~4.36 km, 13 turns, clockwise.
+**Setting:** DAY, modern theme (Atlantic coastal hillside west of Lisbon). 4.182 km (official, the traced post-2000 layout; the OSM trace builds 4.14 km — the 1994–96 F1 layout with the Tanque chicane was 4.36 km), 13 turns, clockwise.
 
 ## 1. Setting
 A 1972 circuit on a dry hillside above the Atlantic between Sintra and Cascais, last used by F1 in 1996. Its palette is only three materials: **limewash, terracotta and rust-primed scaffold tube**. The pit building is one long masonry terrace under a continuous pantile roof with an open first-floor balcony; the crowd sat on open tube scaffold you could see the pines through. Seaward there is nothing but Atlantic haze; inland the Serra de Sintra closes the horizon. The final corner is the long **Parabolica Ayrton Senna**, which feeds a 600 m slipstreaming drag to the line.

@@ -5,10 +5,10 @@
  * test-bg.mjs — start test groups in the BACKGROUND and hand back a log to tail.
  *
  * A foreground Playwright run on this software-rendered suite blocks for
- * minutes and prints nothing an editor can act on. `tools/ci/test-shards.sh`
- * already runs groups concurrently, but it WAITS — so the terminal is still
- * gone. This detaches: it returns as soon as the children are up, prints the
- * tail commands, and leaves a status file per group.
+ * minutes and prints nothing an editor can act on. This detaches: it returns
+ * as soon as the children are up, prints the tail commands, and leaves a
+ * status file per group. (The older `test-shards.sh` fan-out in this directory
+ * WAITED; it duplicated `--parallel` + `--wait` and was removed 2026-09-10.)
  *
  *   node tools/ci/test-bg.mjs smoke                 # start one group (default)
  *   node tools/ci/test-bg.mjs smoke api collision   # SEQUENTIAL: one at a time
@@ -64,7 +64,27 @@ const PARALLEL_MAX = Math.max(1, Math.floor(CORES / (+WORKERS || 2)));
 const readState = () => {
   try { return JSON.parse(fs.readFileSync(STATEFILE, "utf8")); } catch (_) { return { runs: [] }; }
 };
-const writeState = (s) => fs.writeFileSync(STATEFILE, JSON.stringify(s, null, 2));
+// THE REGISTRY IS SHARED between every test-bg process alive at once: a
+// `--wait` stamping `ended` while a second shell starts another group is the
+// ordinary case, not a corner. So a write is (1) a RE-READ immediately before
+// it, so the mutation applies to what is on disk now rather than to a copy
+// taken seconds ago, (2) a merge BY PID — the pid is the one key two writers
+// cannot both own — and (3) a tmp file + renameSync, so a reader never sees a
+// half-written JSON. `mutate(fresh)` returns the next state (or edits in place).
+const updateState = (mutate) => {
+  fs.mkdirSync(LOGDIR, { recursive: true });
+  const fresh = readState();
+  const next = mutate(fresh) || fresh;
+  const tmp = `${STATEFILE}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(next, null, 2));
+  fs.renameSync(tmp, STATEFILE);
+  return next;
+};
+/** `mine` wins for a pid both lists carry; everything else on disk survives. */
+const mergeByPid = (disk, mine) => {
+  const seen = new Set(mine.map((r) => r.pid));
+  return [...disk.filter((r) => !seen.has(r.pid)), ...mine];
+};
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (_) { return false; } };
 const loadavgLine = () => {
   try {
@@ -147,23 +167,26 @@ async function waitForRunning() {
     await new Promise((r) => setTimeout(r, 3000));
   }
   process.stderr.write("\r" + " ".repeat(80) + "\r");
-  // Stamp ended times for finished runs so --status can show duration.
-  const final = readState();
-  let changed = false;
-  for (const r of final.runs) {
+  // Stamp ended times for finished runs so --status can show duration. The
+  // stamps are keyed by pid and applied to a FRESH read inside updateState, so
+  // a group another shell started while this one waited is not clobbered.
+  const stamped = new Map();
+  for (const r of readState().runs) {
     if (!alive(r.pid) && !r.ended) {
-      r.ended = new Date().toISOString();
-      changed = true;
+      const ended = new Date().toISOString();
+      stamped.set(r.pid, ended);
       const started = r.started ? Date.parse(r.started) : NaN;
       const o = outcome(r);
-      say(`END   ${r.group} at=${r.ended} duration=${fmtDur(Date.now() - started)} ${o} ${loadavgLine()}`);
+      say(`END   ${r.group} at=${ended} duration=${fmtDur(Date.now() - started)} ${o} ${loadavgLine()}`);
       try {
         fs.appendFileSync(r.log,
-          `\n[test-bg] END group=${r.group} at=${r.ended} duration=${fmtDur(Date.now() - started)} ${o} ${loadavgLine()}\n`);
+          `\n[test-bg] END group=${r.group} at=${ended} duration=${fmtDur(Date.now() - started)} ${o} ${loadavgLine()}\n`);
       } catch (_) { /* log may be gone */ }
     }
   }
-  if (changed) writeState(final);
+  const final = stamped.size
+    ? updateState((s) => { for (const r of s.runs) if (!r.ended && stamped.has(r.pid)) r.ended = stamped.get(r.pid); })
+    : readState();
   status();
   const bad = final.runs.filter((r) => !/^passed/.test(outcome(r)));
   process.exitCode = bad.length ? 1 : 0;
@@ -193,7 +216,11 @@ async function waitForRunning() {
 // --sweep is the recovery: hunt the SHAPES this tool launches, skipping the
 // harness's own MCP browsers (they idle at 0 % and are not ours to kill) and
 // this process itself.
-const SWEEP_RE = /(run-playwright\.mjs|playwright\/lib\/worker\/workerProcessEntry|node_modules\/\.bin\/playwright test|pw-browsers\/.*chrome-linux\/chrome)/;
+// The browser alternation covers every layout Playwright unpacks — chrome-linux
+// (the sandbox's chromium-1194), chrome-linux64 (newer Linux builds), chrome-mac
+// and chrome-mac-arm64 (`Chromium.app/.../Chromium`) — under either browsers
+// root, /opt/pw-browsers or ~/.cache|Library/Caches/ms-playwright.
+const SWEEP_RE = /(run-playwright\.mjs|playwright\/lib\/worker\/workerProcessEntry|node_modules\/\.bin\/playwright test|(pw-browsers|ms-playwright)\/.*(chrome-linux(64)?|chrome-mac[^/]*)\/(chrome|headless_shell|Chromium))/;
 function sweep() {
   let out = "";
   try { out = execSync("ps -eo pid,args", { encoding: "utf8", maxBuffer: 1 << 24 }); } catch (_) { return 0; }
@@ -379,9 +406,16 @@ function start(groups, { force = false, parallel = false } = {}) {
   // the entry is only SAFE because supersede() has already killed that process:
   // dropping it while it still ran was how a superseded run became invisible
   // and went on interleaving output into the log the new run truncated.
-  const prior = readState().runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+  //
+  // The read happens INSIDE updateState, immediately before the rename, and the
+  // new runs merge by pid — a `--wait` in another shell that stamped an `ended`
+  // between our earlier read and this write keeps its stamp.
+  let prior = [];
+  updateState((s) => {
+    prior = s.runs.filter((r) => alive(r.pid) && !groups.includes(r.group));
+    return { runs: mergeByPid(prior, runs), started: new Date().toISOString(), workers: WORKERS, mode };
+  });
   if (prior.length) say(`still running from an earlier start: ${prior.map((r) => r.group).join(", ")}`);
-  writeState({ runs: [...prior, ...runs], started: new Date().toISOString(), workers: WORKERS, mode });
   say(`tail one:   tail -f ${path.relative(ROOT, runs[0].log)}`);
   say(`tail all:   tail -f ${runs.map((r) => path.relative(ROOT, r.log)).join(" ")}`);
   say(`check:      node tools/ci/test-bg.mjs --status`);

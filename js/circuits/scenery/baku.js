@@ -7,14 +7,13 @@
 (window.TrackScenery = window.TrackScenery || {})["baku"] =
   function (api) {
       const {
-        out, MAT, n, ds, backdrop, groundPatch, waterSurface, waterBand, modelGroup, building, tower, wall,
+        K, out, MAT, n, ds, backdrop, groundPatch, waterSurface, waterBand, modelGroup, building, tower, wall,
         fence, guardrail, tyreWall, grandstand, grandstandEx, sponsorHoarding, broadcastCompound,
         gantry, marshalPost, billboard,
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
         addFrustum, ferrisWheel, vadd, hash, cityFront,
         circuitKit, plane, cypress, terrace,
       } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const SAND        = [0.62, 0.50, 0.34];        // Old-City sandstone
       const SAND_LIT    = [0.85, 0.62, 0.30];        // uplit sandstone

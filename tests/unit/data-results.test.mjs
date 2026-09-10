@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { seedDom } from "../helpers/seed-dom.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -24,6 +25,7 @@ function loadModule(api) {
   const sb = { Math, Array, Object, Number, String, Boolean, isFinite, console, Promise, F1API: api };
   sb.window = sb;
   const ctx = vm.createContext(sb);
+  seedDom(ctx);   // results.js formats lap times through Dom.fmtLap
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/results.js"), "utf8"), ctx, { filename: "results.js" });
   return vm.runInContext("DataResults", ctx);
 }

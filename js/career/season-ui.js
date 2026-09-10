@@ -14,12 +14,7 @@ function create(G) {
   // re-queried, so the refocus never depends on the pane's DOM shape.
   let calBtns = [];
 
-  function el(tag, cls, text) {
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    if (text != null) n.textContent = text;
-    return n;
-  }
+  const el = Dom.el;   // js/ui/dom.js — the one createElement helper
   function head(text, id) {
     const h = el("h3", "sel-label", text);
     if (id) h.id = id;
@@ -243,3 +238,4 @@ function create(G) {
 
 return { create };
 })();
+Object.freeze(SeasonUI);

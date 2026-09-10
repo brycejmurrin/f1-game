@@ -111,3 +111,88 @@ test("the quiet zone is required, and its absence is what breaks scanners", () =
   assert.equal(jsQR(data, side, side), null,
     "if this ever starts decoding, the quiet-zone requirement has changed");
 });
+
+// ---------------------------------------------------------------------------
+// NetScan — the platform decoder first, jsQR as the fallback, stop() absolute
+// ---------------------------------------------------------------------------
+import { seedLogGlobal } from "../helpers/seed-log.mjs";
+seedLogGlobal();
+const NetScan = eval(fs.readFileSync(path.join(ROOT, "js/net/scan.js"), "utf8") + ";NetScan");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function scanWorld({ detector, formats } = {}) {
+  const tracks = [{ stopped: 0, stop() { this.stopped++; } }];
+  const stream = { getTracks: () => tracks };
+  // Node 21+ exposes a getter-only globalThis.navigator: define over it.
+  const hadNav = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  Object.defineProperty(globalThis, "navigator", { configurable: true,
+    value: { mediaDevices: { getUserMedia: async () => stream } } });
+  globalThis.window = detector ? {
+    BarcodeDetector: class {
+      static async getSupportedFormats() { return formats || ["qr_code"]; }
+      detect(v) { return detector(v); }
+    },
+  } : {};
+  globalThis.document = {
+    head: { appendChild() {} },
+    createElement: () => ({ getContext: () => ({ drawImage() {}, getImageData: () => ({ data: new Uint8ClampedArray(4 * 4 * 4) }) }) }),
+  };
+  const video = { videoWidth: 4, videoHeight: 4, setAttribute() {}, play: async () => {}, srcObject: null, muted: false };
+  const cleanup = () => {
+    delete globalThis.navigator;
+    if (hadNav) Object.defineProperty(globalThis, "navigator", hadNav);
+    delete globalThis.window; delete globalThis.document;
+  };
+  return { tracks, video, cleanup };
+}
+
+test("NetScan uses BarcodeDetector when the platform reads qr_code, and stops the camera on a hit", async () => {
+  let calls = 0;
+  const w = scanWorld({ detector: async () => (++calls < 2 ? [] : [{ rawValue: "APEX1.s.SCANNED" }]) });
+  try {
+    const sc = NetScan.create();
+    const got = [];
+    assert.equal((await sc.start(w.video, (t) => got.push(t))).ok, true);
+    assert.equal(sc.decoder(), "barcode");
+    await sleep(450);
+    assert.deepEqual(got, ["APEX1.s.SCANNED"]);
+    assert.equal(sc.active(), false, "a hit stops the scan");
+    assert.equal(w.tracks[0].stopped, 1, "…and the camera track");
+    assert.ok(calls >= 2 && calls <= 4, `detect() runs once per tick, never stacked (${calls})`);
+  } finally { w.cleanup(); }
+});
+
+test("a BarcodeDetector result landing after stop() delivers nothing", async () => {
+  let release = null;
+  const w = scanWorld({ detector: () => new Promise((r) => { release = r; }) });
+  try {
+    const sc = NetScan.create();
+    const got = [];
+    assert.equal((await sc.start(w.video, (t) => got.push(t))).ok, true);
+    await sleep(200);
+    assert.ok(release, "a detect() is in flight");
+    sc.stop();
+    release([{ rawValue: "LATE" }]);
+    await sleep(50);
+    assert.deepEqual(got, [], "the late decode is dropped");
+    assert.equal(w.tracks[0].stopped, 1);
+  } finally { w.cleanup(); }
+});
+
+test("without qr_code support (or without BarcodeDetector) NetScan falls back to jsQR", async () => {
+  globalThis.jsQR = () => null;                      // already "loaded": no script inject needed
+  const w = scanWorld({ detector: async () => [{ rawValue: "NEVER" }], formats: ["ean_13"] });
+  try {
+    assert.equal(await NetScan.platformDetector(), null, "qr_code missing from the formats");
+    const sc = NetScan.create();
+    const got = [];
+    assert.equal((await sc.start(w.video, (t) => got.push(t))).ok, true);
+    assert.equal(sc.decoder(), "jsqr");
+    await sleep(200);
+    assert.deepEqual(got, [], "the platform detector was never consulted");
+    sc.stop();
+    assert.equal(w.tracks[0].stopped, 1);
+    globalThis.window = {};
+    assert.equal(await NetScan.platformDetector(), null, "no BarcodeDetector at all");
+  } finally { w.cleanup(); delete globalThis.jsQR; }
+});

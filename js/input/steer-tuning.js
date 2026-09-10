@@ -190,11 +190,6 @@ function lineBand() {
   return rl === 0 ? "off" : rl >= 5 ? "full" : "corner";
 }
 
-function paintFold(el, bits) {
-  if (!el) return;
-  el.innerHTML = bits.map((p, i) => (i ? '<span data-fold="sep"> · </span>' : "") +
-    '<span data-fold="' + p[0] + '">' + p[1] + "</span>").join("");
-}
 function applyPreset(name) {
   const p = PRESETS[name];
   if (!p) return;
@@ -233,17 +228,17 @@ function refreshMacros() {
   SettingRow.paint($("pm-helplevel"), hb, HELP_VALUES);
   const lb = lineBand();
   SettingRow.paint($("pm-linemode"), lb, LINE_VALUES);
-  paintFold($("adv-feel-sum"), [
+  Dom.paintFold($("adv-feel-sum"), [
     ["k", "FEEL"],
     ["val", STEER_LEVEL_LABEL[lvl] || "CUSTOM"],
     ["val", "TILT " + ts],
   ]);
-  paintFold($("adv-aids-sum"), [
+  Dom.paintFold($("adv-aids-sum"), [
     ["k", "AIDS"],
     dh <= 1 ? ["off", "OFF"] : ["val", HELP_LABEL[hb]],
     [lb === "off" ? "off" : "val", LINE_FOLD[lb]],
   ]);
-  paintFold($("adv-more"), [["k", "ADVANCED"]]);
+  Dom.paintFold($("adv-more"), [["k", "ADVANCED"]]);
 }
 
 //
@@ -566,3 +561,4 @@ return { applySteerTuning };
 
 return { create };
 })();
+Object.freeze(SteerTuning);

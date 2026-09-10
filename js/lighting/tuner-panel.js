@@ -438,3 +438,4 @@ return { buildLightTunePanel, refreshLightTunePanel, closeLightTuner };
 
 return { create };
 })();
+Object.freeze(TunerPanel);

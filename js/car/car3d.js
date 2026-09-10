@@ -4132,3 +4132,4 @@ const Car3D = (function () {
            coverProfile, coverFlankX, coverSurfaceY, COVER_STACK,
            aeroLevelOf, aeroStyleOf };
 })();
+Object.freeze(Car3D);

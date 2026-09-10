@@ -460,3 +460,4 @@ const IncidentSim = (function () {
   return { create, owns, active, notifyWall, notifyCar, preStep, postStep, status,
            setFlags, reset, forceLaunch, release };
 })();
+Object.freeze(IncidentSim);

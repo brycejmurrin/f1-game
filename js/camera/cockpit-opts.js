@@ -164,3 +164,4 @@ return {
   halo, setHalo, turnChase, setTurnChase, turnChaseLead, setTurnChaseLead, parseLead,
 };
 })();
+Object.freeze(CockpitOpts);

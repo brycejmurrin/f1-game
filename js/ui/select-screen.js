@@ -880,3 +880,4 @@ return { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, set
 
 return { create };
 })();
+Object.freeze(Menus);

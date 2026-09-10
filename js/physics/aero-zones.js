@@ -221,3 +221,4 @@ function create(G) {
     ZONE_COUNT, AERO_ZONE_TURNS, turnsBounding, runForTurnPair,
   };
 })();
+Object.freeze(AeroZones);

@@ -124,50 +124,8 @@
     // wipe streaks. A failed canvas leaves the black fallback (knob no-ops).
     function makeDirtTex() {
       try {
-        const S = 256;
-        const cv = document.createElement("canvas");
-        cv.width = cv.height = S;
-        const c2 = cv.getContext("2d");
-        if (!c2) return null;
-        let seed = 0x9e3779b9;
-        const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-        c2.fillStyle = "#000"; c2.fillRect(0, 0, S, S);
-        const N = 16;
-        const nc = document.createElement("canvas");
-        nc.width = nc.height = N;
-        const n2 = nc.getContext("2d");
-        const img = n2.createImageData(N, N);
-        for (let i = 0; i < N * N; i++) {
-          const v = (rnd() * 42) | 0;
-          img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
-          img.data[i * 4 + 3] = 255;
-        }
-        n2.putImageData(img, 0, 0);
-        c2.imageSmoothingEnabled = true;
-        c2.globalCompositeOperation = "lighter";
-        c2.drawImage(nc, 0, 0, N, N, 0, 0, S, S);
-        for (let i = 0; i < 130; i++) {
-          const x = rnd() * S, y = rnd() * S, r = 3 + rnd() * rnd() * 30;
-          const a = 0.03 + rnd() * rnd() * 0.12;
-          const g = c2.createRadialGradient(x, y, 0, x, y, r);
-          g.addColorStop(0, "rgba(255,255,255," + a.toFixed(3) + ")");
-          g.addColorStop(1, "rgba(255,255,255,0)");
-          c2.fillStyle = g;
-          c2.beginPath(); c2.arc(x, y, r, 0, 6.2832); c2.fill();
-        }
-        for (let i = 0; i < 70; i++) {
-          const x = rnd() * S, y = rnd() * S, r = 0.6 + rnd() * 1.7;
-          c2.fillStyle = "rgba(255,255,255," + (0.10 + rnd() * 0.28).toFixed(3) + ")";
-          c2.beginPath(); c2.arc(x, y, r, 0, 6.2832); c2.fill();
-        }
-        for (let i = 0; i < 9; i++) {
-          const x = rnd() * S, y = rnd() * S, len = 30 + rnd() * 100, ang = rnd() * 6.2832;
-          c2.strokeStyle = "rgba(255,255,255," + (0.02 + rnd() * 0.05).toFixed(3) + ")";
-          c2.lineWidth = 1 + rnd() * 3;
-          c2.beginPath(); c2.moveTo(x, y);
-          c2.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
-          c2.stroke();
-        }
+        const cv = PostCommon.makeDirtCanvas();   // shared generator (GLX / WGX / TLX)
+        if (!cv) return null;
         // Plain Texture over the canvas (CanvasTexture isn't exported by the
         // vendored webgpu bundle — same object, needsUpdate set by hand).
         const t = ownTexture(new THREE.Texture(cv));
@@ -311,34 +269,10 @@
 
     // God-ray lamp-selection scratch (present() only) — no per-frame allocs.
     const _grSel = [];
-    // Partial select nearest-K (GLX glx/post.js / WGX) — avoid sorting the
-    // full floodlight list every haveGR + lampVol frame.
-    function _grKeepNearest(total, k) {
-      const n = Math.min(k, total);
-      for (let i = 1; i < n; i++) {
-        const cur = _grSel[i];
-        let j = i - 1;
-        while (j >= 0 && _grSel[j].d > cur.d) { _grSel[j + 1] = _grSel[j]; j--; }
-        _grSel[j + 1] = cur;
-      }
-      for (let i = n; i < total; i++) {
-        const cur = _grSel[i];
-        if (cur.d >= _grSel[n - 1].d) continue;
-        let j = n - 2;
-        while (j >= 0 && _grSel[j].d > cur.d) j--;
-        const insertAt = j + 1;
-        // Swap, not overwrite: the shift orphans the evicted top-k object and
-        // left `cur` aliased at two indices — the next frame's by-index fill
-        // then wrote one lamp's data into both slots (a beam uploaded twice,
-        // another lamp permanently unselectable). Keeping the pool a
-        // permutation is the whole contract.
-        const evicted = _grSel[n - 1];
-        for (let m = n - 1; m > insertAt; m--) _grSel[m] = _grSel[m - 1];
-        _grSel[insertAt] = cur;
-        _grSel[i] = evicted;
-      }
-      return n;
-    }
+    const _sunScr = { visible: false, ndcx: -5, ndcy: -5, flare: 0, shaft: 0 };   // PostCommon.sunScreen scratch
+    // Partial select nearest-K over _grSel — PostCommon.keepNearest (one copy for
+    // GLX / WGX / TLX; swap-not-overwrite eviction).
+    const _grKeepNearest = (total, k) => PostCommon.keepNearest(_grSel, total, k);
 
     // Last-presented-frame block states (__tlx.postState()).
     const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false, sgsr: false };
@@ -379,7 +313,9 @@
       const lampArmed = !!(S && S.lampArmed);
       const o = opts || {};
       const GT = o.tune || null;
-      const gk = (id, def) => (GT && GT[id] != null ? GT[id] : def);
+      // Knob read with the TUNE_DEFS default (PostCommon.knob) — the defaults
+      // used to be restated here as literals.
+      const gk = (id) => PostCommon.knob(GT, id);
       const prevAutoClear = renderer.autoClear;
       renderer.autoClear = false;   // fullscreen passes overwrite; UP accumulates
       let dest = null;
@@ -413,7 +349,7 @@
         U.sunVS.value.set(sv[0], sv[1], sv[2]);
         U.texel.value.set(1 / aoW, 1 / aoH);
         U.strength.value = aoStr;
-        U.radius.value = gk("ssaoRadius", 0.6);          // AO RADIUS knob
+        U.radius.value = gk("ssaoRadius");          // AO RADIUS knob
         const csOn = contactStr > 0 && F.proj && F.sunVS;
         U.contact.value = csOn ? contactStr : 0;
         runPass(P.ssao.mat, ssaoRT);
@@ -478,8 +414,8 @@
         U.mist.value = o.mist || 0;
         U.lampShadowVP.value.fromArray(S.lampLightVP);
         U.lampShadowIdx.value = grLampIdx;
-        U.hgAniso.value = gk("godrayAniso", 0.60);       // GOD-RAY FOCUS knob
-        U.hgFloor.value = gk("godrayFloor", 0.020);      // GOD-RAY HAZE knob
+        U.hgAniso.value = gk("godrayAniso");       // GOD-RAY FOCUS knob
+        U.hgFloor.value = gk("godrayFloor");      // GOD-RAY HAZE knob
         runPass(P.godray.mat, godrayRT);
         // Double separable blur (H+V twice) — soft wide volumes, no stripes.
         for (let bp = 0; bp < 2; bp++) {
@@ -503,7 +439,7 @@
           P.down.U.karis.value = i === 1 ? 1 : 0;   // firefly fix on the first mip only
           runPass(P.down.mat, bloomLv[i].rt);
         }
-        P.spread.value = gk("bloomSpread", 1);           // BLOOM SPREAD knob
+        P.spread.value = gk("bloomSpread");           // BLOOM SPREAD knob
         for (let i = nLv - 1; i >= 1; i--) {
           // Intermediates accumulate (ONE,ONE); the FINAL into level 0
           // OVERWRITES — level 0 still holds the sharp bright pass.
@@ -523,28 +459,12 @@
       C.aoTexel.value.set(haveAO ? 1 / aoW : 0, haveAO ? 1 / aoH : 0);
       P.composite.tex.godray.value = haveGR ? godrayRT.texture : blackTex;
       C.haveGodray.value = haveGR ? 1 : 0;
-      // Sun screen-UV projection + the _sunGate brightness gate + golden-hour
-      // flare curve (js/render/glx/shaders/glsl-post.js verbatim).
-      let sunUVx = -2, sunUVy = -2, flareStr = 0, sunShaft = 0;
-      if (F.sunDir && F.viewProj) {
-        const s = F.sunDir, vp = F.viewProj;
-        const cx = vp[0] * s[0] + vp[4] * s[1] + vp[8] * s[2];
-        const cy = vp[1] * s[0] + vp[5] * s[1] + vp[9] * s[2];
-        const cw = vp[3] * s[0] + vp[7] * s[1] + vp[11] * s[2];
-        if (cw > 0) {
-          sunUVx = cx / cw * 0.5 + 0.5;
-          sunUVy = cy / cw * 0.5 + 0.5;
-          // Gate flare + shafts by the sun's BRIGHTNESS, not just elevation —
-          // the dim night moon-key must never streak lamp heads skyward.
-          const _sl = F.sunColor ? Math.max(F.sunColor[0], F.sunColor[1], F.sunColor[2]) : 1;
-          const _sunGate = Math.min(1, Math.max(0, (_sl - 0.35) / 0.45));
-          if (s[1] > -0.02) {
-            const golden = 1.0 - Math.min(Math.max(s[1], 0) / 0.45, 1.0);
-            flareStr = (0.14 + golden * 0.30) * _sunGate;
-          }
-          if (s[1] > 0.05) sunShaft = s[1] * 0.8 * _sunGate;
-        }
-      }
+      // Sun screen-UV projection + brightness gate + golden-hour flare curve:
+      // PostCommon.sunScreen, shared with GLX / WGX.
+      const sun = PostCommon.sunScreen(F.sunDir, F.viewProj, F.sunColor, _sunScr);
+      const sunUVx = sun.visible ? sun.ndcx * 0.5 + 0.5 : -2;
+      const sunUVy = sun.visible ? sun.ndcy * 0.5 + 0.5 : -2;
+      const flareStr = sun.flare, sunShaft = sun.shaft;
       C.sunUV.value.set(sunUVx, sunUVy);
       C.flareStr.value = flareStr * (o.flareMul != null ? o.flareMul : 1);   // LENS FLARE knob
       C.exposure.value = o.exposure !== undefined ? o.exposure : 1.0;
@@ -552,7 +472,7 @@
       // (COMPOSITE_FS in js/render/glx/shaders/glsl-post.js). When bloom is off we
       // bind blackTex, so the 8 dependent fetches accumulated vec3(0).
       // GLX zeroes the uniform rather than paying the taps; same here.
-      const _shaftMul = gk("sunShaftMul", 1);
+      const _shaftMul = gk("sunShaftMul");
       C.sunShaft.value = haveBloom ? sunShaft * _shaftMul : 0;
       const grade = o.grade;
       const gs = (grade && grade.shadow) || null, gh = (grade && grade.hi) || null;
@@ -560,60 +480,53 @@
       C.gradeHi.value.set(gh ? gh[0] : 1, gh ? gh[1] : 1, gh ? gh[2] : 1);
       C.gradeStr.value = grade && grade.str !== undefined ? grade.str : 0;
       // IMAGE & COLOUR knobs — every default reproduces the shipped grade.
-      C.tone0.value.set(gk("blacks", 0), gk("shadows", 0), gk("midtones", 0), gk("highlights", 0));
-      C.tone1.value.set(gk("whites", 0), gk("toe", 0), gk("shoulder", 0), 0);
-      C.lift.value.set(gk("liftR", 0), gk("liftG", 0), gk("liftB", 0));
-      C.gamma.value.set(gk("gammaR", 1), gk("gammaG", 1), gk("gammaB", 1));
-      C.gain.value.set(gk("gainR", 1), gk("gainG", 1), gk("gainB", 1));
-      C.contrast.value = gk("contrast", 1.12);
-      C.vibrance.value = gk("vibrance", 0.20);
-      C.saturation.value = gk("saturation", 1.0);
+      C.tone0.value.set(gk("blacks"), gk("shadows"), gk("midtones"), gk("highlights"));
+      C.tone1.value.set(gk("whites"), gk("toe"), gk("shoulder"), 0);
+      C.lift.value.set(gk("liftR"), gk("liftG"), gk("liftB"));
+      C.gamma.value.set(gk("gammaR"), gk("gammaG"), gk("gammaB"));
+      C.gain.value.set(gk("gainR"), gk("gainG"), gk("gainB"));
+      C.contrast.value = gk("contrast");
+      C.vibrance.value = gk("vibrance");
+      C.saturation.value = gk("saturation");
       // Skip the whole HDR block when every knob is neutral (js/render/glx/post.js).
-      const _hg = GT && (
-        (GT.blacks || 0) !== 0 || (GT.shadows || 0) !== 0 || (GT.midtones || 0) !== 0 ||
-        (GT.highlights || 0) !== 0 || (GT.whites || 0) !== 0 || (GT.toe || 0) !== 0 ||
-        (GT.shoulder || 0) !== 0 || (GT.liftR || 0) !== 0 || (GT.liftG || 0) !== 0 ||
-        (GT.liftB || 0) !== 0 || (GT.gammaR != null && GT.gammaR !== 1) ||
-        (GT.gammaG != null && GT.gammaG !== 1) || (GT.gammaB != null && GT.gammaB !== 1) ||
-        (GT.gainR != null && GT.gainR !== 1) || (GT.gainG != null && GT.gainG !== 1) ||
-        (GT.gainB != null && GT.gainB !== 1));
+      const _hg = PostCommon.hdrGradeOn(GT);
       C.hdrGradeOn.value = _hg ? 1 : 0;
-      C.tint.value = gk("tint", 0.0);
-      C.vignette.value = gk("vignette", 0.80);
-      C.vigSoft.value = gk("vignetteSoft", 0.35);
-      C.bloomKnee.value = gk("bloomKnee", 0.5);
-      C.carReflect.value = o.carReflect != null ? o.carReflect : gk("carReflect", 0.05);
-      C.carGloss.value = gk("carGloss", 1.0);
-      C.chromAb.value = gk("chromAb", 0.0);
-      C.grain.value = gk("grain", 0.0);
+      C.tint.value = gk("tint");
+      C.vignette.value = gk("vignette");
+      C.vigSoft.value = gk("vignetteSoft");
+      C.bloomKnee.value = gk("bloomKnee");
+      C.carReflect.value = o.carReflect != null ? o.carReflect : gk("carReflect");
+      C.carGloss.value = gk("carGloss");
+      C.chromAb.value = gk("chromAb");
+      C.grain.value = gk("grain");
       C.grainTime.value = F.time || 0;
-      C.sharpen.value = gk("sharpen", 0.0);
-      C.blackLift.value = gk("blackLift", 0.005);
-      C.whitePoint.value = gk("whitePoint", 1.0);
+      C.sharpen.value = gk("sharpen");
+      C.blackLift.value = gk("blackLift");
+      C.whitePoint.value = gk("whitePoint");
       // ACES TONE CURVE knobs (defaults = the shipped Narkowicz coefficients).
-      C.acesA.value = gk("acesA", 2.51);
-      C.acesB.value = gk("acesB", 0.03);
-      C.acesC.value = gk("acesC", 2.43);
-      C.acesD.value = gk("acesD", 0.59);
-      C.acesE.value = gk("acesE", 0.14);
+      C.acesA.value = gk("acesA");
+      C.acesB.value = gk("acesB");
+      C.acesC.value = gk("acesC");
+      C.acesD.value = gk("acesD");
+      C.acesE.value = gk("acesE");
       C.speedBlur.value = o.speedBlur != null ? o.speedBlur : 0.0;
-      C.shaftDecay.value = gk("sunShaftDecay", 0.82);
+      C.shaftDecay.value = gk("sunShaftDecay");
       // Reach scales with SCREEN SUN-SHAFT, sub-linearly so the shipped
       // value (1) keeps the shipped radius (js/render/glx/post.js).
       C.shaftSpread.value = Math.sqrt(Math.max(0.05, _shaftMul));
-      C.flareStreak.value = gk("flareStreak", 7.0);
-      C.flareStreak2.value = gk("flareStreak2", 0.5);
+      C.flareStreak.value = gk("flareStreak");
+      C.flareStreak2.value = gk("flareStreak2");
       // EXHAUST HEAT HAZE plume anchor (opts.haze = {u, v, str} | null).
       const hz = o.haze;
       C.hazeUV.value.set(hz ? hz.u : -9, hz ? hz.v : -9);
       C.hazeStr.value = hz ? hz.str : 0;
       C.hazeTime.value = F.time || 0;
-      C.ssrThick.value = gk("ssrThick", 0.20);
+      C.ssrThick.value = gk("ssrThick");
       // Camera-aware SSR extent (game.js sets these per camera; onboard cams get
       // a raised top cutoff and a pulled-in near fade).
       C.ssrTopUV.value = o.ssrTopUV != null ? o.ssrTopUV : 0.62;
       C.ssrNear.value = o.ssrNear != null ? o.ssrNear : -2.5;
-      C.lensDirt.value = dirtTex ? gk("lensDirt", 0.15) : 0;
+      C.lensDirt.value = dirtTex ? gk("lensDirt") : 0;
       // uReflTexel drives SSR + SHARPEN + the vignette aspect — every frame.
       C.reflTexel.value.set(1 / W, 1 / H);
       // Wet-road/car SSR needs depth + view/proj + world-up-in-view; uSsrOk

@@ -1069,12 +1069,16 @@ const TLX = (function () {
           // draws nothing. Same _liteGpu gate as samples/outputType above.
           lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post,
             envCube: envRT ? envRT.texture : null, matMaps,
-            maxLights: _liteGpu ? 16 : 48 });
+            maxLights: _liteGpu ? LightBudget.LITE : LightBudget.MAX });
         }
       } catch (e) {
         try { Log.warn("gfx", "TLX: lit factory failed, falling back to unlit —", e); } catch (_) {}
         lit = null;
       }
+      // Publish the compiled slot count: frame-lights.js culls against it, so the
+      // tail-lights it appends LAST fit inside the 16-slot lite loop.
+      const _maxLights = () => (lit && lit.MAX_LIGHTS > 0) ? lit.MAX_LIGHTS : (_liteGpu ? LightBudget.LITE : LightBudget.MAX);
+      LightBudget.setSlots(_maxLights());
 
       let sky = null;
       try {
@@ -1302,28 +1306,7 @@ const TLX = (function () {
         };
         if (opts && opts.cellSize > 0 && n) {
           const cell = opts.cellSize;
-          let reach = opts.radius || 0;
-          if (!reach) {
-            const p0 = data.pos;
-            for (let i = 0; i < p0.length; i++) { const a = Math.abs(p0[i]); if (a > reach) reach = a; }
-          }
-          const buckets = new Map();
-          for (let i = 0; i < n; i++) {
-            const b = i * 16, x = matrices[b + 12], y = matrices[b + 13], z = matrices[b + 14];
-            const sx = Math.hypot(matrices[b], matrices[b + 1], matrices[b + 2]);
-            const sy = Math.hypot(matrices[b + 4], matrices[b + 5], matrices[b + 6]);
-            const sz = Math.hypot(matrices[b + 8], matrices[b + 9], matrices[b + 10]);
-            const r = reach * Math.max(sx, sy, sz);
-            const key = (Math.floor(x / cell) + 1024) * 4096 + (Math.floor(z / cell) + 1024);
-            let bk = buckets.get(key);
-            if (!bk) buckets.set(key, (bk = { idx: [], mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity] }));
-            bk.idx.push(i);
-            const mn = bk.mn, mx = bk.mx;
-            if (x - r < mn[0]) mn[0] = x - r; if (x + r > mx[0]) mx[0] = x + r;
-            if (y - r < mn[1]) mn[1] = y - r; if (y + r > mx[1]) mx[1] = y + r;
-            if (z - r < mn[2]) mn[2] = z - r; if (z + r > mx[2]) mx[2] = z + r;
-          }
-          batch.cells = [...buckets.values()];
+          batch.cells = Frustum.bucketInstances(matrices, n, data.pos, cell, opts.radius);   // shared with GLX / WGX
         }
         return batch;
       }
@@ -1358,7 +1341,6 @@ const TLX = (function () {
             n++;
           }
         }
-        batch.visible = n;
         // upload:false — CPU pack only. The sun/lamp shadow path copies
         // packMatrices into a SECOND InstancedMesh (tlx-shadow castInstanced);
         // writing the lit imesh here was a full setMatrixAt walk discarded
@@ -1366,6 +1348,9 @@ const TLX = (function () {
         // Do not touch _cullPlanes: that cache means "this pack is on the
         // GPU", and we did not upload.
         if (opts && opts.upload === false) return n;
+        // visible is the CAMERA count the lit draw reads; a shadow cull's n must
+        // not overwrite it (GLX/WGX: the camera count survives the shadow cull).
+        batch.visible = n;
         if (n && batch.imesh) _writeInstanceMatrices(batch.imesh, dst, dc, n);
         const snap = batch._cullPlanes || (batch._cullPlanes = new Float64Array(24));
         for (let pi = 0, po = 0; pi < 6; pi++) {
@@ -2306,6 +2291,7 @@ const TLX = (function () {
         get height() { return H; },
         get aspect() { return H ? W / H : 1; },
         hdrMode() { return !!(post && post.hdrOk()); },   // M8: float scene target when the chain is up
+        maxLights: _maxLights,   // lit-shader light slots (16 on _liteGpu; LightBudget.slots() mirrors it)
         msaa() { return 1; },
         pcss() { return !!(shadowSys && shadowSys.S.pcssEnabled); },   // WebGPU blocker map live (tlx-shadow.js)
         isMobile,
@@ -3128,8 +3114,13 @@ const TLX = (function () {
               // so without an override the configuration that blanked a
               // player's road and terrain cannot be reproduced at all. Default
               // OFF — this never reaches a player.
+              // `!envRT` is OUT of the gate (2026-09-10): it freed the mirrors on
+              // exactly the devices where the env target failed to allocate,
+              // before any later pass (lamp/car shadow, a re-tried probe) had
+              // compiled against the attribute. Those devices keep their
+              // mirrors — memory, not a blank road.
               if (n > 0 && !rec.chunked._mirrorsFreed && !vizMat
-                && (_chunkRelOptIn || envReady || _envGaveUp || !envRT))
+                && (_chunkRelOptIn || envReady || _envGaveUp))
                 _mirrorRelease.push(rec.chunked);
               continue;
             }

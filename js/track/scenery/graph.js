@@ -327,3 +327,4 @@ const TrackGraph = (function () {
 
   return { create, xform, NODE_COLOR };
 })();
+Object.freeze(TrackGraph);

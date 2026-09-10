@@ -6,12 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["estoril"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
         tree, bush, ridge, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, billboard, gantry, marshalPost, motorhome, waterBand,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const LIME = [0.95, 0.94, 0.90], LIME_D = [0.86, 0.85, 0.80];
       const TILE = [0.68, 0.33, 0.21], TILE_D = [0.54, 0.27, 0.18];
@@ -220,9 +219,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       // The ocean sheet, laid along the outside of the back section.
       waterBand(0.52, 0.72, -1, 210, 640, 20, [0.16, 0.32, 0.44],
         { id: "estoril-atlantic" });

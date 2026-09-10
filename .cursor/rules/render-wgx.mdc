@@ -11,7 +11,8 @@ alwaysApply: false
   `apex26.gfxWgxAllowSoftware=1`, so players get GLX rather than a white canvas.
 - Gate every WGSL or pipeline edit with `node tools/gfx/wgx-validate.mjs`
   (~5 s, real Dawn WGSL + pipeline validation in-container; never ship
-  "read-verified" WGSL) plus the `webgpu-lifecycle` unit suite. Then
+  "read-verified" WGSL) plus `tests/unit/webgpu-lifecycle.test.mjs` and
+  `renderer-soft-lifecycle.test.mjs` (both in `test:tooling-fast`). Then
   `node tools/gfx/gfx-probe.mjs --backend webgpu montreal` with `gpuErrors` 0.
   Pixel truth needs a real GPU: dispatch `gpu-census.yml` on `macos-latest`
   and read its Verdict step.

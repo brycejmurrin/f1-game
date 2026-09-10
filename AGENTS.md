@@ -109,7 +109,7 @@ what exists. Per-directory module tables: `docs/ARCHITECTURE.md`.
   are opt-in alternates with no `<script>` tag, injected by `js/game.js` from
   `ApexRoster.DEFERRED` when `apex26.gfxBackend` names them.
 - `js/track/` — `core/`, `scenery/`, `tracks.js`; only GENERIC tables live
-  here (the 111-member `scenery(api)` contract is test-frozen).
+  here (the 112-member `scenery(api)` contract is test-frozen).
 - `js/car/`, `js/data/`, `js/net/` (2-4 player WebRTC, no backend), `js/ui/`,
   `css/`. `index.html` is the shell — script tags and ALL static DOM; `sw.js`'s
   precache derives from it. `types/game-ctx.d.ts` is the `G` contract.

@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["nurburgring"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
         px, pz, pine, tree, bush, ridge, mountain, building, grandstandEx,
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         bowlSeatWall, cameraTower, sponsorHoarding, seat, forestEdge,
         addBox, addCyl, addCone, addPrism, addFrustum } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       function scaffoldStand(s0, s1, side, gap, rows) {
         const TUBE = [0.62, 0.63, 0.66], DECK = [0.44, 0.45, 0.48];
@@ -268,9 +267,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const rg of [
         { extra: 240, wMin: 150, hMin: 44, hVar: 40, wVar: 70, count: 30, phase: 0.0,
           opts: { seg: 7, rough: 0.30, forest: [0.10, 0.30, 0.14], rock: [0.30, 0.33, 0.30], snowline: 2 } },

@@ -115,16 +115,21 @@ const AiDrive = (function () {
   // follow distance needs 6 m/s^2 of braking NOW — and brakes in proportion to
   // what the gap needs (aReq / BRAKE), so a train brakes smoothly instead of a
   // car tapping the one ahead and then stamping on it.
-  function queueBrake(speed, blockerSpeed, street, gap, follow, brakeRef) {
+  // `vScale` is vTop()/VMAX: the closing-rate bands (m/s) and the gap-demanded
+  // deceleration (m/s^2, which PACE scales exactly as it scales speed) are
+  // written on the pace-5 scale, so a bare literal shrank at every other pace.
+  // (room / excess is a TIME and stays as written.)
+  function queueBrake(speed, blockerSpeed, street, gap, follow, brakeRef, vScale) {
+    const vs = vScale > 0 ? vScale : 1;
     const excess = (speed || 0) - (blockerSpeed || 0);
-    const thresh = street ? 4.5 : 3;
+    const thresh = (street ? 4.5 : 3) * vs;
     let lvl = 0;
     if (excess > thresh && !(gap != null && follow != null && gap > follow + excess * 1.2))
-      lvl = clamp((excess - thresh) / (street ? 4 : 5), 0.2, 1);
-    if (excess > 0.5 && gap != null && follow != null) {
+      lvl = clamp((excess - thresh) / ((street ? 4 : 5) * vs), 0.2, 1);
+    if (excess > 0.5 * vs && gap != null && follow != null) {
       const room = Math.max(gap - follow, 0.5);
       const aReq = excess * excess / (2 * room);
-      if (room / excess < 3 && aReq > 5) lvl = Math.max(lvl, clamp(aReq / (brakeRef || 22), 0.15, 1));
+      if (room / excess < 3 && aReq > 5 * vs) lvl = Math.max(lvl, clamp(aReq / (brakeRef || 22), 0.15, 1));
     }
     return lvl;
   }
@@ -139,11 +144,16 @@ const AiDrive = (function () {
   // ...and ONE defensive move per straight: the first pull fixes the side, a
   // pull the other way is a second change of direction and is refused. The
   // side resets when the braking zone begins — the next straight is new.
-  function defendOnce(defend, side) {
-    if (!defend) return { defend: 0, side };
-    const sgn = defend > 0 ? 1 : -1;
-    if (!side) return { defend, side: sgn };
-    return sgn === side ? { defend, side } : { defend: 0, side };
+  // Writes into `out` (module scratch when omitted — per-AI per-step, so no
+  // allocation) and returns it.
+  const _defOnce = { defend: 0, side: 0 };
+  function defendOnce(defend, side, out) {
+    const o = out || _defOnce;
+    const sgn = defend > 0 ? 1 : (defend < 0 ? -1 : 0);
+    if (!defend) { o.defend = 0; o.side = side; }
+    else if (!side) { o.defend = defend; o.side = sgn; }
+    else { o.defend = sgn === side ? defend : 0; o.side = side; }
+    return o;
   }
 
   // Metres of proactive lateral-sep bias. 2.6 m of yank is a wall on Monaco.
@@ -243,10 +253,11 @@ const AiDrive = (function () {
     const gap = ctx.blockerGap != null ? ctx.blockerGap : ctx.gapAhead;
     const room = Math.max(ctx.roomL || 0, ctx.roomR || 0);
     const closing = (ctx.speed || 0) - (ctx.aheadSpeed != null ? ctx.aheadSpeed : ctx.speed || 0);
+    const ref = ctx.vTop > 0 ? ctx.vTop : 72;   // closing rates ride the pace scale (as otWant)
     // 0..1 pieces
     const gapScore = clamp(1 - (gap || 9) / 9, 0, 1);           // closer = better
     const roomScore = clamp(room / 3.2, 0, 1);
-    const closeScore = clamp(0.45 + closing / 8, 0, 1);
+    const closeScore = clamp(0.45 + closing / (8 * ref / 72), 0, 1);
     const straight = clamp(1 - Math.abs(ctx.kAhead || 0) / 0.012, 0, 1);
     const situ = (0.34 * gapScore + 0.28 * roomScore + 0.22 * closeScore + 0.16 * straight)
       * (ctx.street ? streetOtScale(t) : 1);
@@ -536,7 +547,7 @@ const AiDrive = (function () {
     const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
     const deficit = clamp((((ctx.freeSpeed || 0) - bv) / ref - 0.06) / 0.06, 0, 1);
     if ((ctx.blockerSpeed || 0) < 0.12 * ref) q = 1; else q = Math.max(q, 0.6 * deficit);
-    const closing = clamp(((ctx.speed || 0) - (ctx.blockerSpeed || 0)) / 6, 0.25, 1);
+    const closing = clamp(((ctx.speed || 0) - (ctx.blockerSpeed || 0)) / (6 * ref / 72), 0.25, 1);
     const craft = lerp(0.7, 1.25, ctx.traits ? ctx.traits.craft : 0.75);
     const roll = 0.85 + 0.3 * (ctx.roll != null ? ctx.roll : 0.5);
     return q * Math.max(closing, deficit) * craft * roll >= 0.32;
@@ -721,3 +732,4 @@ const AiDrive = (function () {
     tyreClass, tyrePace,
   };
 })();
+Object.freeze(AiDrive);

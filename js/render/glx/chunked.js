@@ -326,3 +326,4 @@ function _shadowAllIdx(AL, lx, ly, lz) {
 
   return { init };
 })();
+Object.freeze(GLXChunked);

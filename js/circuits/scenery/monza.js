@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monza"] =
   function (api) {
-      const { out, MAT, n, ds, pyMin, place, prop, backdrop, groundYAt, every,
+      const { K, lapBounds, out, MAT, n, ds, pyMin, place, prop, backdrop, groundYAt, every,
         onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, motorhome, tower,
         cypress, stonePine, tieredBowl,
         grandstandEx, spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
@@ -15,7 +15,6 @@
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, groundedSegments,
         terrainYAt,
         bakedModel, px, pz } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       {
         const BRICK = [0.56, 0.40, 0.32];
@@ -401,9 +400,7 @@
           { kind: "spire", wall: [0.62 + i * 0.015, 0.66 + i * 0.015, 0.72 + i * 0.015], window: [0.52, 0.56, 0.62] });
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       // [extraRadius, count, ridgeLen, ridgeW, hMin, hVar, colour]
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [120, 62, 90, 25, 10, 5.5, [0.16, 0.36, 0.20]],   // near treeline, dense

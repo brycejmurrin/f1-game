@@ -172,14 +172,15 @@ const createActionManager = ({ getPeer, getPeerIds, canReceiveFromPeer }) => {
 		};
 		const queueIncomingRequest = (payload, peerId, metadata, requestId) => {
 			if (onRequest) {
-				respondToIncomingRequest({
+				const request = {
 					payload,
 					peerId,
 					...metadata === void 0 ? {} : { metadata },
 					requestId,
 					controller: new AbortController(),
 					timer: null
-				}, onRequest);
+				};
+				respondToIncomingRequest(request, onRequest);
 				return;
 			}
 			const request = {

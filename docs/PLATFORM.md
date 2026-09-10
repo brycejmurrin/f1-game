@@ -17,9 +17,10 @@ one before debugging anything that reproduces on one device and not another.
 The whole game is script-tag IIFE modules, no build step, no server code, so
 GitHub Pages serves it verbatim. The only hard requirement is **HTTPS**, which
 Pages provides — `DeviceOrientationEvent.requestPermission()` (tilt) and the
-Web Audio context both need a secure context. Cache-busting is handled by the
-`?v=NN` query string on every `<script>`/`<link>` in `index.html`; bump it on
-deploy so Safari's aggressive disk cache doesn't serve stale modules.
+Web Audio context both need a secure context. Cache-busting is the deploy's job:
+the committed shell reads `?v=dev` on every `<script>`/`<link>`, and `pages.yml`
+rewrites each to a content hash while staging, so Safari's aggressive disk cache
+never serves a stale module and there is no bump to remember (AGENTS.md).
 
 ## Input on iOS
 
@@ -30,7 +31,7 @@ deploy so Safari's aggressive disk cache doesn't serve stale modules.
 | **Gamepad** | **iOS 14.5+** | PS5 DualSense / Xbox Series / MFi over Bluetooth, "standard" mapping |
 | Keyboard | iPad + HW keyboard | Same bindings as desktop |
 
-Safari still double-tap-zooms a `pan-y` pane even with `touch-action: manipulation` on `*` and `maximum-scale=1` (it ignores the viewport cap for a11y). The shell therefore also ships `user-scalable=no` and an early `touchend`/`gesture*` `preventDefault` in `index.html` that cancels a second tap on the same spot within 350 ms. Rapid taps on *different* controls, and two-thumb driving, are left alone.
+Safari still double-tap-zooms a `pan-y` pane even with `touch-action: manipulation` on `*` and `maximum-scale=1` (it ignores the viewport cap for a11y). The shell therefore ships an early `touchend`/`gesture*` `preventDefault` in `index.html` that cancels a second tap on the same spot within 350 ms. Rapid taps on *different* controls, and two-thumb driving, are left alone. The viewport meta deliberately does **not** carry `user-scalable=no`: Safari ignored it, so it bought nothing on iOS, while Android Chrome honours it and it blocked pinch-zoom for low-vision players (WCAG 1.4.4); the touchend canceller is what does the double-tap work on every platform.
 
 ### Why gamepad support
 

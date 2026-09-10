@@ -98,3 +98,4 @@ const isLevel = (v) => Object.prototype.hasOwnProperty.call(LEVELS, v);
 
 return { TIER_RISK, REASONS, arm, plan, buildQuality, isLevel };
 })();
+Object.freeze(Reliability);

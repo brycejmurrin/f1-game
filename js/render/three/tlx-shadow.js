@@ -311,6 +311,11 @@
     function carShadowBegin(lightVP, boxScale) {
       if (!S.carEnabled) return;      // phone: no-op, casts swallowed via depthPassOn
       beginPass(carRT, lightVP, S.carLightVP);
+      // Chunked / instanced casters cull against castCullVP || lightVP (tlx.js
+      // castShadowChunked, shadowCullVP): without this a chunked caster in the
+      // car pass culled against the SUN's ortho while rendering into the car
+      // map (GLX shadow.js carShadowBegin parity).
+      S.castCullVP = S.carLightVP;
       // GLX parity: SHADOW DISTANCE widens the car box, and the depth bias
       // must scale with the box/texel ratio or the widened map self-shadows
       // (glx/shadow.js carShadowBegin, lit.js uCarBiasScale).
@@ -330,6 +335,11 @@
 
     function lampShadowEnd() {
       S.castCullVP = null;
+      endPass();
+    }
+
+    function carShadowEnd() {
+      S.castCullVP = null;   // before endPass's early return — a latched car VP would cull the SUN pass to the car box
       endPass();
     }
 
@@ -386,7 +396,7 @@
       castInstanced,
       castShadowChunked: cast,
       shadowEnd: endPass,
-      carShadowEnd: endPass,
+      carShadowEnd,
       lampShadowEnd,
       carShadowBegin,
       lampShadowBegin,

@@ -19,7 +19,7 @@
     country: "USA",
     night: false,
     theme: "modern",
-    lengthKm: 4.2,
+    lengthKm: 4.192,  // official F1 (2000-07) road course, 2.605 mi; the trace builds 4.075 km
     baseHW: 8,
     sceneryCoordinates: "racing",
     terrainOuter: 90,

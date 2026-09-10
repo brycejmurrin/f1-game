@@ -165,6 +165,21 @@ cmd_status() {
   echo "MCP config: $ROOT/.mcp.json → $0 run"
 }
 
+# with_timeout <secs> <cmd...> — GNU `timeout`, brew `gtimeout`, else a pure-bash
+# watchdog (background the command, sleep, kill it if still alive; exit 124
+# like coreutils does).
+with_timeout() {
+  local secs="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then timeout "$secs" "$@"; return $?; fi
+  if command -v gtimeout >/dev/null 2>&1; then gtimeout "$secs" "$@"; return $?; fi
+  "$@" & local pid=$!
+  ( sleep "$secs"; kill -0 "$pid" 2>/dev/null && kill -TERM "$pid" 2>/dev/null ) & local wd=$!
+  wait "$pid"; local rc=$?
+  kill "$wd" 2>/dev/null; wait "$wd" 2>/dev/null
+  if [[ $rc -eq 143 ]]; then return 124; fi
+  return $rc
+}
+
 cmd_verify() {
   local chrome
   chrome="$(detect_chrome)"
@@ -176,7 +191,10 @@ cmd_verify() {
   local tools='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
   local out backend="npx"
   if local_ok; then backend="local"; fi
-  out="$( (echo "$init"; sleep 3; echo "$tools") | timeout 45 bash -c 'exec "$0" run' "$0" 2>/dev/null | tail -1 )"
+  # `timeout` is GNU coreutils — absent on a stock Mac (brew's is `gtimeout`).
+  # Prefer whichever exists; otherwise a bash watchdog kills the probe's process
+  # group after the same 45 s so a hung MCP cannot hang `verify`.
+  out="$( (echo "$init"; sleep 3; echo "$tools") | with_timeout 45 bash -c 'exec "$0" run' "$0" 2>/dev/null | tail -1 )"
   local count
   count="$(python3 -c "import json,sys; d=json.loads(sys.argv[1]); print(len(d.get('result',{}).get('tools',[])))" "$out" 2>/dev/null || echo 0)"
   echo "Backend: $backend"

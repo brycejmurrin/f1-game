@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["imola"] =
   function (api) {
-      const { out, MAT, n, px, pz, hw, pyMin, hash, every, place, prop, backdrop,
+      const { K, lapBounds, out, MAT, n, px, pz, hw, pyMin, hash, every, place, prop, backdrop,
               groundPatch, waterSurface, modelGroup,
               groundYAt, onTrack, addBox, addCyl, addPrism, addFrustum, vadd, anchor,
               seat, foundation,
@@ -15,7 +15,6 @@
               grandstand, spectatorHill, building, motorhome, tower, billboard, marshalPost, gantry,
               fence, guardrail, tyreWall, wall, lampPost,
               forestEdge } = api;
-      const K = (s) => Math.round(s * n) % n;
       const terrainPatch = (id, s, side, gap, size, col, opts) =>
         groundPatch(K(s), side, gap, [size[0], 0.18, size[1]], col,
           Object.assign({ id, samples: Math.max(3, Math.ceil(size[0] / 10)) }, opts));
@@ -44,11 +43,7 @@
       const WIN_LIT  = [0.94, 0.82, 0.48];
       const LAMP_COL = [0.88, 0.78, 0.50];
 
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
 
       // Near low wooded hills (12 peaks — was 18)
       for (let i = 0; i < 12; i++) {
@@ -381,7 +376,9 @@
       {
         const at = anchor(K(0.02), -1, 110);
         const r = at.r, u = at.u, t = at.t;
-        const baseY = groundYAt(K(0.02), 110);
+        // at.k, not K(0.02): anchor() is origin-shifted by the api wrapper and
+        // groundYAt() is not, so the raw index read the hillside half a lap away.
+        const baseY = groundYAt(at.k, 110);
         const base = [at.c[0], baseY, at.c[2]];
         const footAt = (alongM, outM, rise) => {
           // Sample the ground at the building's OWN XZ. Walking `alongM` down

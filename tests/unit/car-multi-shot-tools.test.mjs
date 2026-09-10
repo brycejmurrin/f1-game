@@ -64,7 +64,7 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
 });
 
 test("settleGarage batches steps in one evaluate", () => {
-  const src = code("tools/capture/probe-page.mjs");
+  const src = code("tools/shot/probe-page.mjs");
   const fn = src.slice(src.indexOf("export async function settleGarage"),
     src.indexOf("export async function settleGarage") + 900);
   assert.match(fn, /for \(let i = 0; i < count; i\+\+\)/, "N steps in one page.evaluate");
@@ -73,7 +73,7 @@ test("settleGarage batches steps in one evaluate", () => {
 });
 
 test("openGarage pins store.team as a numeric index", () => {
-  const src = code("tools/capture/probe-page.mjs");
+  const src = code("tools/shot/probe-page.mjs");
   const fn = src.slice(src.indexOf("function enterGarage"),
     src.indexOf("function enterGarage") + 1800);
   assert.match(fn, /S\.set\("team",\s*idx\)/, "store.team is the roster INDEX");
@@ -82,7 +82,7 @@ test("openGarage pins store.team as a numeric index", () => {
 });
 
 test("screenshotPresentedCanvas is soft-first then optional timed CDP", () => {
-  const src = code("tools/capture/probe-page.mjs");
+  const src = code("tools/shot/probe-page.mjs");
   assert.match(src, /export async function readSoftCanvasBytes/, "shared soft helper");
   const softFn = src.slice(src.indexOf("export async function readSoftCanvasBytes"),
     src.indexOf("export async function screenshotPresentedCanvas"));
@@ -98,7 +98,7 @@ test("screenshotPresentedCanvas is soft-first then optional timed CDP", () => {
 });
 
 test("screenshotGameCanvas prefers #game-soft before freezing for CDP", () => {
-  const src = code("tools/capture/probe-page.mjs");
+  const src = code("tools/shot/probe-page.mjs");
   const fn = src.slice(src.indexOf("export async function screenshotGameCanvas"),
     src.indexOf("export async function screenshotGameCanvas") + 2200);
   const soft = fn.indexOf("readSoftCanvasBytes");

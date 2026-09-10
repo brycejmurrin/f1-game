@@ -130,6 +130,7 @@
     ]
   ],
     LAZY_NET: [
+    "js/net/bytes.js",
     "js/net/nostr.js",
     "js/net/rendezvous.js",
     "js/net/sdp.js",

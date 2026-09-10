@@ -41,9 +41,10 @@ test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrac
     const mismatch = Object.create(null);
     const calls = Object.create(null);
     const orig = Object.create(null);
+    const wrapped = Object.create(null);
     for (const n of names) {
       orig[n] = A[n];
-      A[n] = function () {
+      A[n] = wrapped[n] = function () {
         const ctx = n === "otShouldFire" ? arguments[2]
           : n === "adaptLane" ? arguments[1]
           : arguments[0];
@@ -55,6 +56,17 @@ test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrac
         return orig[n].apply(this, arguments);
       };
     }
+    // SAME-RUN REFERENCE: 180 UNWRAPPED steps first, timed on this machine,
+    // this load, this build. The wrapped block is then judged as a RATIO of
+    // it rather than against a wall-clock literal — the old `< 15_000 ms`
+    // measured SwiftShader and the runner's load as much as the code, and a
+    // literal that must survive a loaded CI box is too loose to catch a real
+    // per-step regression on an idle one.
+    for (const n of names) A[n] = orig[n];
+    const r0 = performance.now();
+    for (let i = 0; i < 180; i++) window.__apex.step(1 / 60, 1);
+    const refMs = performance.now() - r0;
+    for (const n of names) A[n] = wrapped[n];
     const t0 = performance.now();
     for (let i = 0; i < 180; i++) window.__apex.step(1 / 60, 1);
     const ms = performance.now() - t0;
@@ -72,13 +84,13 @@ test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrac
     const always = ["isBoxed", "brakeDecision", "adaptLane"];
     const reused = always.filter((n) => (calls[n] || 0) >= 2 && !mismatch[n]);
     return {
-      ok: true, calls, mismatch, ms, nCars, finite, reused,
+      ok: true, calls, mismatch, ms, refMs, nCars, finite, reused,
       alwaysFired: always.every((n) => (calls[n] || 0) >= 2),
     };
   });
 
   console.log("[physics-hotpath] result:", JSON.stringify(r));
-  console.log("[physics-hotpath] 180-step wall time:", r.ms?.toFixed(1), "ms");
+  console.log("[physics-hotpath] 180-step wall time:", r.ms?.toFixed(1), "ms  (unwrapped reference:", r.refMs?.toFixed(1), "ms)");
   console.log("[physics-hotpath] nCars:", r.nCars, "  allFinite:", r.finite);
   console.log("[physics-hotpath] calls:", JSON.stringify(r.calls));
   console.log("[physics-hotpath] mismatch:", JSON.stringify(r.mismatch));
@@ -91,7 +103,14 @@ test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrac
   expect(r.reused).toEqual(["isBoxed", "brakeDecision", "adaptLane"]);
   expect(r.mismatch).toEqual({});
   // 180 headless steps of the field — a hang is the failure, not SwiftShader ms.
-  expect(r.ms).toBeLessThan(15_000);
+  // Judged against the unwrapped 180 steps timed in the SAME evaluate: eight
+  // wrapper frames per helper call is a small constant factor over the physics
+  // itself, so 4x is generous headroom for the wrap and still an order of
+  // magnitude under any real stall. The 250 ms term is timer noise, not a
+  // machine budget: when the reference block is a few milliseconds a ratio
+  // alone would fail on scheduling jitter.
+  expect(r.refMs).toBeGreaterThan(0);
+  expect(r.ms).toBeLessThan(4 * r.refMs + 250);
   // Situational helpers must not allocate if they fired more than once.
   for (const n of ["wantBoost", "otShouldFire", "wantX", "otPull", "defendPull"]) {
     if ((r.calls[n] || 0) >= 2) expect(r.mismatch[n], n).toBeUndefined();

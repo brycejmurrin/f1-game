@@ -64,6 +64,10 @@ function postHarness(factoryThrows = false) {
     document: { createElement: () => ({ getContext: () => null }) },
     Log: { info() {} },
   };
+  // PostCommon (js/render/shared/post-common.js) owns the lens-dirt generator
+  // and god-ray select tlx-post calls at init / present.
+  vm.runInNewContext(read("js/render/shared/post-common.js"), sandbox,
+    { filename: "post-common.js" });
   vm.runInNewContext(read("js/render/three/tlx-post.js"), sandbox,
     { filename: "tlx-post.js" });
   return {

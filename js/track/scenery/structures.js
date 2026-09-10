@@ -821,3 +821,4 @@ const SceneryStructures = (function () {
 
   return { create };
 })();
+Object.freeze(SceneryStructures);

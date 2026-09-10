@@ -22,6 +22,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -57,6 +58,7 @@ function load(stored0) {
     Teams: { POINTS },
   });
   seedLog(ctx);
+  seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
   vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx);
   return {
     S: vm.runInContext("SeasonCal", ctx), stored, tracks,

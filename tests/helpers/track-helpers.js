@@ -67,6 +67,19 @@ export function auditTracks() {
 // old 25-frac (×24 = 600-baseline) overkill. Bump if a regression slips through.
 export const LAP_FRACTIONS = [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6];
 
+// N frames RENDERED since now, read off `__apex.renderClock()` — game.js adds
+// each rendered frame's dt to that clock (`_skyT += dt` in render, unless a
+// capture holds it), so it advances exactly when a frame was drawn and stays
+// put when none was. freeze() stops the physics, not the render, so the clock
+// keeps moving while the car is held. A condition wait, not a sleep: under
+// SwiftShader a frame is ~1 s on an idle box and unbounded on a loaded one.
+async function awaitRenderedFrames(page, frames = 1, timeout = 30_000) {
+  for (let i = 0; i < frames; i++) {
+    const t0 = await page.evaluate(() => window.__apex.renderClock());
+    await page.waitForFunction((t) => window.__apex.renderClock() > t, t0, { polling: 100, timeout });
+  }
+}
+
 async function waitForTrack(page, timeout = 10_000) {
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
@@ -113,8 +126,10 @@ async function snapForward(page, frac) {
   // happened to be on screen — often one from BEFORE the teleport, and a
   // different one each run. That is not instability, it is non-determinism: two
   // runs of the same scene differed in 64% of pixels. Wait for the renderer to
-  // actually present the new pose, then stop it.
-  await page.waitForTimeout(2500);
+  // actually present the new pose, then stop it. This was a 2.5 s sleep — two
+  // frames on an idle box, none on a loaded one; now it is two RENDERED frames
+  // observed through the render clock, however long they take.
+  await awaitRenderedFrames(page, 2);
   // Re-snap the camera AFTER those frames, not before. The chase rig eases
   // toward its target every RENDERED frame, so an early snapCam() is undone by
   // however many frames happen to run next — and under SwiftShader that count
@@ -123,7 +138,7 @@ async function snapForward(page, frac) {
   // no matter what preceded it. Pin the render clock at the same moment so sky
   // drift and cloth land at a fixed phase too.
   await page.evaluate(() => { window.__apex.snapCam(); window.__apex.renderClock(0); });
-  await page.waitForTimeout(1800);   // let that pose actually present
+  await awaitRenderedFrames(page, 1);   // let that pose actually present (was a 1.8 s sleep)
   await awaitPresentedFrame(page);
   await page.evaluate(() => window.__apex.headless(true));
   await page.waitForTimeout(120);

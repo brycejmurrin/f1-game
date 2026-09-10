@@ -6,13 +6,12 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["buenos_aires"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
         tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         cameraTower, sponsorHoarding,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
         addBox, addCyl, addCone, addPrism, forestEdge } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const PLANE = [0.30, 0.50, 0.24], PLANE_D = [0.24, 0.42, 0.20];
       const EUC = [0.26, 0.40, 0.26];
@@ -171,9 +170,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 8.5);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [115, 46, 150, 34, 12, 5, [0.22, 0.44, 0.20]],
         [210, 34, 200, 46, 15, 6, [0.19, 0.38, 0.19]],

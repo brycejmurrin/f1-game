@@ -16,8 +16,12 @@ const require = createRequire(import.meta.url);
 const MAN = require(join(ROOT, "tools/manifest.cjs"));
 const SRC_PATH = (MAN.PATHS && MAN.PATHS.LAMP_CHUNKS) || "js/render/shared/lamp-chunks.js";
 
+// LampChunks reads LightBudget.CHUNK at eval and Frustum.aabbDist2 at call time
+// (both manifest FULL entries that load before it).
+const DEPS = ["js/render/shared/light-budget.js", "js/render/shared/frustum.js"]
+  .map((f) => readFileSync(join(ROOT, f), "utf8")).join("\n");
 const LampChunks = new Function(
-  readFileSync(join(ROOT, SRC_PATH), "utf8") + "; return LampChunks;"
+  DEPS + "\n" + readFileSync(join(ROOT, SRC_PATH), "utf8") + "; return LampChunks;"
 )();
 
 // A stride-15 lamp record: [x,y,z, r,g,b, rad, ...8 zeros].
@@ -175,7 +179,7 @@ test("a full drag costs ONE bake, not one per input event", () => {
   // inner binding, so wrap by re-running the source with a counting shim.
   const src = readFileSync(join(ROOT, SRC_PATH), "utf8");
   const Counted = new Function(
-    src.replace("function buildTable(lights, chunks, knob) {",
+    DEPS + "\n" + src.replace("function buildTable(lights, chunks, knob) {",
                 "function buildTable(lights, chunks, knob) { globalThis.__bakes = (globalThis.__bakes || 0) + 1;")
     + "; return LampChunks;")();
   globalThis.__bakes = 0;

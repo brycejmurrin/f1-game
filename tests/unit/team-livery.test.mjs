@@ -215,13 +215,16 @@ test("resolveLivery and the live preview keep every editor tint", () => {
   // stripe||accent (lime) on the crown band. The five formerly-derived tints
   // (sun / crest ink / 2nd band / plate) had the same bug later: editor rows
   // that never reached the atlas. Draft + cached paths must copy every one.
+  // Both paths now go through ONE field list (pickLivery / LIVERY_FIELDS), so
+  // a tint is on the car iff it is in that list and both paths call it.
   const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const fields = GAME.match(/const LIVERY_FIELDS = \[([\s\S]*?)\];/);
+  assert.ok(fields, "LIVERY_FIELDS is gone from js/game.js");
   for (const k of ["spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk"]) {
-    assert.match(GAME, new RegExp(k + ":\\s*l\\." + k + "\\s*\\|\\|\\s*null"),
-      `draft resolveLivery must copy ${k}`);
-    assert.match(GAME, new RegExp(k + ":\\s*liv\\." + k + "\\s*\\|\\|\\s*null"),
-      `cached resolveLivery must copy ${k}`);
+    assert.match(fields[1], new RegExp('"' + k + '"'), `LIVERY_FIELDS must carry ${k}`);
   }
+  assert.match(GAME, /return pickLivery\(livDraftOverride\.liv\)/, "draft resolveLivery must resolve through pickLivery");
+  assert.match(GAME, /liv \? pickLivery\(liv\)/, "cached resolveLivery must resolve through pickLivery");
   assert.match(SHEET, /id:\s*"default"/,
     "livePreviewDraft must set id:\"default\" so brand plates stay on while editing");
 });

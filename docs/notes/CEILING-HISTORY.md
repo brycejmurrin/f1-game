@@ -1687,6 +1687,20 @@ adoption was 54.
   and a HOST's plan for the race about to start is set before `startRace` runs,
   so calling it there threw the plan away. Caught by the game-VM suite.)
 
+### `waitForTimeout` — fixed sleeps in the suite (added 2026-09-10)
+
+```
+Measured 2026-09-10: 157 `waitForTimeout(` sites under tests/specs and
+tests/helpers, none of them linted. A sleep is a guess about the machine:
+tests/helpers/track-helpers.js slept 2.5 s + 1.8 s per lap position to "let
+the pose present", which is two frames on an idle SwiftShader box and none on
+a loaded one — the non-determinism the file's own header documents. Those two
+became condition waits on __apex.renderClock() advancing (a rendered frame,
+however long it takes), so the ceiling is set at the resulting 155 with the
+default slack. LOWER it as sites are converted to `__apex`-state waits with
+{ polling: 100 }; a raise needs a reason at the call site.
+```
+
 ## CSS token adoption (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-04)
 
 Four counts left `tests/unit/css-token-adoption.test.mjs` for the one ratchet
@@ -2732,3 +2746,19 @@ This is the third.
 
 Paid, not avoided: there is no way to add a settings row without shell nodes,
 and folding it into an existing row would make one control mean two things.
+
+## 2026-09-10 — the whole-tree audit pass
+
+`js/game.js` 9915 → 9609 lines (5323 → 5123 code lines): the car-car contact
+resolver moved to `js/physics/collide.js`. `js/render/glx/glx.js` 2609 → 2601
+(post helpers shared through `PostCommon`). `bareCatches` 156 → 145.
+
+Raised, each for a reason that is the change itself: `js/track/tracks.js`
+2401 → 2433 (`api.K` / `api.lapBounds()` replace 37 per-circuit copies, and
+`dressingExcluded` now goes through `TrackSpace.sceneryRange`);
+`js/net/lobby.js` 1712 → 1753 (quali coercion, parts budget check, HELLO rate
+limit, `makeAnswer` re-entry guard, `stopScan` on every exit);
+`js/agent/agentview.js` 2455 → 2456 and `js/car/car3d.js` 4135 → 4136 (one
+`Object.freeze` tail line each — `tests/unit/frozen-globals.test.mjs`).
+New tree ratchet `waitForTimeout` at 155 (fixed sleeps in specs and helpers;
+the two track-helper sleeps became frame waits).

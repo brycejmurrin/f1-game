@@ -11,6 +11,64 @@ const subIdToTopic = {};
 const msgHandlers = {};
 const kindCache = {};
 const maxTopicsPerSubscription = 250;
+const steadyAnnounceIntervalMs = 6e4;
+const maxRelayBackoffMs = 15 * 6e4;
+const relayAckTimeoutMs = 5333;
+const relayBackoffs = /* @__PURE__ */ new WeakMap();
+const retiredRelays = /* @__PURE__ */ new WeakSet();
+const pendingAnnouncementAcks = /* @__PURE__ */ new WeakMap();
+const backoffRelay = (client) => {
+	const previous = relayBackoffs.get(client);
+	const delayMs = Math.min(previous?.delayMs ? Math.max(steadyAnnounceIntervalMs, previous.delayMs * 2) : steadyAnnounceIntervalMs, maxRelayBackoffMs);
+	relayBackoffs.set(client, {
+		delayMs,
+		untilMs: Date.now() + delayMs
+	});
+	return delayMs;
+};
+const getRelayBackoffMs = (client) => {
+	const state = relayBackoffs.get(client);
+	if (!state) return 0;
+	const remainingMs = state.untilMs - Date.now();
+	if (remainingMs > 0) return remainingMs;
+	return 0;
+};
+const nextAnnounce = (nextAnnounceMs) => ({ nextAnnounceMs });
+const stopAnnouncing = { stopAnnouncing: true };
+const retireRelay = (client) => {
+	if (retiredRelays.has(client)) return false;
+	const pending = pendingAnnouncementAcks.get(client);
+	if (pending) {
+		clearTimeout(pending.timer);
+		pendingAnnouncementAcks.delete(client);
+	}
+	retiredRelays.add(client);
+	relayBackoffs.delete(client);
+	client.close?.();
+	return true;
+};
+const trackAnnouncementAck = (client, eventId) => {
+	const pending = pendingAnnouncementAcks.get(client);
+	if (pending) {
+		clearTimeout(pending.timer);
+		pending.eventIds.add(eventId);
+	}
+	const eventIds = pending?.eventIds ?? /* @__PURE__ */ new Set([eventId]);
+	const timer = setTimeout(() => {
+		pendingAnnouncementAcks.delete(client);
+	}, relayAckTimeoutMs);
+	pendingAnnouncementAcks.set(client, {
+		eventIds,
+		timer
+	});
+};
+const acknowledgeEvent = (client, eventId) => {
+	const pending = pendingAnnouncementAcks.get(client);
+	if (!pending?.eventIds.has(eventId)) return false;
+	clearTimeout(pending.timer);
+	pendingAnnouncementAcks.delete(client);
+	return true;
+};
 const now = () => Math.floor(Date.now() / 1e3);
 const topicToKind = (topic) => kindCache[topic] ??= strToNum(topic, 1e4) + 2e4;
 const createEvent = async (topic, content) => {
@@ -48,11 +106,16 @@ const subscribe = (subId, topic) => {
 	]);
 };
 const batchers = {};
+const resolveBatchFlush = (batcher) => {
+	batcher.flushWaiters.forEach((resolve) => resolve());
+	batcher.flushWaiters.clear();
+};
 const batchAdd = (client, topic, handler) => {
 	const batcher = batchers[client.url] ??= {
 		subIds: [],
 		topics: /* @__PURE__ */ new Map(),
-		updateTimer: null
+		updateTimer: null,
+		flushWaiters: /* @__PURE__ */ new Set()
 	};
 	batcher.topics.set(topic, handler);
 	scheduleBatchFlush(client, batcher);
@@ -66,6 +129,7 @@ const batchRemove = (client, topic) => {
 			clearTimeout(batcher.updateTimer);
 			batcher.updateTimer = null;
 		}
+		resolveBatchFlush(batcher);
 		batcher.subIds.forEach((subId) => client.send(toJson(["CLOSE", subId])));
 		delete batchers[client.url];
 	} else scheduleBatchFlush(client, batcher);
@@ -74,8 +138,17 @@ const scheduleBatchFlush = (client, batcher) => {
 	if (batcher.updateTimer !== null) return;
 	batcher.updateTimer = setTimeout(() => {
 		batcher.updateTimer = null;
-		flushBatch(client);
+		try {
+			flushBatch(client);
+		} finally {
+			resolveBatchFlush(batcher);
+		}
 	}, 0);
+};
+const waitForBatchFlush = (client) => {
+	const batcher = batchers[client.url];
+	if (!batcher || batcher.updateTimer === null) return Promise.resolve();
+	return new Promise((resolve) => batcher.flushWaiters.add(resolve));
 };
 const flushBatch = (client) => {
 	const batcher = batchers[client.url];
@@ -111,9 +184,18 @@ const joinRoom = createTopicStrategy({
 			const [msgType, subId, payload, relayMsg] = fromJson(data);
 			if (msgType !== eventMsgType) {
 				const prefix = `${libName}: relay failure from ${client.url} - `;
-				if (config.relayConfig?.warnOnRelayFailure !== false) {
+				const rejectionReason = msgType === "CLOSED" && typeof payload === "string" ? payload : relayMsg;
+				const didRejectEvent = msgType === "OK" && payload === false;
+				const isRateLimited = didRejectEvent && rejectionReason?.startsWith("rate-limited:");
+				const isDuplicate = didRejectEvent && rejectionReason?.startsWith("duplicate:");
+				const isTerminalRejection = msgType === "CLOSED" || didRejectEvent && !isRateLimited && !isDuplicate;
+				const didAcknowledgeAnnouncement = msgType === "OK" && acknowledgeEvent(client, subId);
+				if (isTerminalRejection && !retireRelay(client)) return;
+				if (isRateLimited) backoffRelay(client);
+				else if (didAcknowledgeAnnouncement) relayBackoffs.delete(client);
+				if (!isDuplicate && config.relayConfig?.warnOnRelayFailure !== false) {
 					if (msgType === "NOTICE") console.warn(prefix + subId);
-					else if (msgType === "OK" && !payload) console.warn(prefix + relayMsg);
+					else if (didRejectEvent || msgType === "CLOSED") console.warn(prefix + rejectionReason);
 				}
 				return;
 			}
@@ -133,25 +215,35 @@ const joinRoom = createTopicStrategy({
 		}, () => resubscribeOnReconnect(client)));
 		return client.ready;
 	}),
-	subscribeTopic: (client, topic, onMessage) => {
+	subscribeTopic: (client, topic, onMessage, context) => {
 		const handler = (topic, data) => void onMessage(topic, data);
 		batchAdd(client, topic, handler);
-		return () => {
+		const cleanup = () => {
 			batchRemove(client, topic);
 		};
+		return context.kind === "root" ? waitForBatchFlush(client).then(() => cleanup) : cleanup;
 	},
-	publishTopic: async (client, topic, msg) => client.send(await createEvent(topic, typeof msg === "string" ? msg : toJson(msg)))
+	publishTopic: async (client, topic, msg, context) => {
+		if (retiredRelays.has(client) || client.isClosed) return context.kind === "announce" ? stopAnnouncing : void 0;
+		if (context.kind === "announce") {
+			const remainingBackoffMs = getRelayBackoffMs(client);
+			if (remainingBackoffMs > 0) return nextAnnounce(Math.max(steadyAnnounceIntervalMs, remainingBackoffMs));
+		}
+		const event = await createEvent(topic, typeof msg === "string" ? msg : toJson(msg));
+		const didSend = client.socket.readyState === 1;
+		client.send(event);
+		if (context.kind !== "announce") return;
+		if (!didSend) return nextAnnounce(backoffRelay(client));
+		const eventId = fromJson(event)[1].id;
+		trackAnnouncementAck(client, eventId);
+		return nextAnnounce(steadyAnnounceIntervalMs);
+	}
 });
 const getRelaySockets = relayManager.getSockets;
 const defaultRelayUrls = [
 	"basspistol.org",
 	"bucket.coracle.social",
-	"chorus.almostmachines.dev",
 	"chorus.pjv.me",
-	"communities.nos.social",
-	"ftp.halifax.rwth-aachen.de/nostr",
-	"hol.is",
-	"hornetstorage.net/relay",
 	"koru.bitcointxoko.org",
 	"nos.lol",
 	"nostr-01.uid.ovh",
@@ -160,36 +252,22 @@ const defaultRelayUrls = [
 	"nostr.data.haus",
 	"nostr.islandarea.net",
 	"nostr.sathoarder.com",
-	"nostr.self-determined.de",
 	"nostr.tegila.com.br",
 	"nostr.vulpem.com",
 	"purplerelay.com",
 	"relay-can.zombi.cloudrodion.com",
 	"relay-rpi.edufeed.org",
 	"relay.agorist.space",
-	"relay.angor.io",
 	"relay.artio.inf.unibe.ch",
-	"relay.binaryrobot.com",
-	"relay.damus.io",
-	"relay.froth.zone",
-	"relay.libernet.app",
 	"relay.mostr.pub",
 	"relay.mostro.network",
-	"relay.nostr.place",
-	"relay.nostrdice.com",
-	"relay.notoshi.win",
 	"relay.sigit.io",
 	"relay02.lnfi.network",
-	"relay2.angor.io",
 	"schnorr.me",
-	"slick.mjex.me",
 	"social.amanah.eblessing.co",
 	"staging.yabu.me",
-	"strfry.openhoofd.nl",
 	"strfry.shock.network",
-	"testnet-relay.samt.st",
 	"top.testrelay.top",
-	"x.kojira.io",
 	"yabu.me/v2"
 ].map((url) => "wss://" + url);
 //#endregion

@@ -96,7 +96,11 @@ const QualiNet = (function () {
 
     function onPeerQuali(d) {
       if (d && d.driverId != null) qualiLive.delete(d.driverId);
-      if (d && d.driverId != null && d.t > 0) qualiPeers.set(d.driverId, d.t);
+      // NetPlay.validQuali is the wire's single validation site; this is the
+      // belt to that braces, because a stored t reaches toFixed() in
+      // quali-model.js and a string or boolean there throws mid-sheet.
+      const t = d ? Number(d.t) : NaN;
+      if (d && d.driverId != null && Number.isFinite(t) && t > 0) qualiPeers.set(d.driverId, t);
       if (!isQuali()) return;
       const player = getPlayer();
       const mine = player && player.lastLap > 0 ? player.lastLap
@@ -164,3 +168,4 @@ const QualiNet = (function () {
 
   return { create };
 })();
+Object.freeze(QualiNet);

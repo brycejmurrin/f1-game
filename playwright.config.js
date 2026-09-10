@@ -1,21 +1,23 @@
 // @ts-check
 import { defineConfig, devices } from "@playwright/test";
-import fs from "fs";
 import os from "os";
+import { chromiumPath } from "./tools/lib/chromium-path.mjs";
 
 // npm scripts use tools/ci/run-playwright.mjs to allocate a unique port per run.
-// APEX_PORT remains available for test-shards.sh and direct CLI invocations.
+// APEX_PORT remains available for CI shards and direct CLI invocations.
 // Port-suffixed output prevents concurrent runs from clobbering each other.
 const PORT = Number(process.env.APEX_PORT || 3456);
 const SUF = `-${PORT}`;
 
-// Portable chromium resolution: prefer PW_CHROMIUM, else the Linux sandbox path
-// only if it actually exists on disk, else omit executablePath so Playwright
-// falls back to its own bundled browser (macOS/other dev machines).
-const SANDBOX_CHROMIUM = "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
-const CHROMIUM_PATH =
-  process.env.PW_CHROMIUM ||
-  (fs.existsSync(SANDBOX_CHROMIUM) ? SANDBOX_CHROMIUM : undefined);
+// Portable chromium resolution (tools/lib/chromium-path.mjs): PW_CHROMIUM wins;
+// else `chromium-<rev>` for the revision playwright-core's browsers.json names,
+// under PLAYWRIGHT_BROWSERS_PATH / ~/.cache/ms-playwright /
+// ~/Library/Caches/ms-playwright / /opt/pw-browsers; else the newest installed
+// chromium-* there (this sandbox ships 1194 while playwright 1.63 wants 1243);
+// else undefined, so Playwright falls back to its own bundled browser. The old
+// literal `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` meant every
+// Playwright bump silently changed which browser the suite ran on.
+const CHROMIUM_PATH = chromiumPath();
 
 // Shared Chromium launch (SwiftShader software-GL). Both projects use it — the
 // "headless"/"render" split is about worker concurrency, not GL capability.
@@ -152,7 +154,7 @@ export default defineConfig({
     url: `http://127.0.0.1:${PORT}`,
     // The npm wrapper owns an in-process server, while direct local CLI use may
     // deliberately target a manually started :3456 server. Explicit APEX_PORT
-    // runs (test-shards/CI) must own their server to avoid teardown races.
+    // runs (CI shards) must own their server to avoid teardown races.
     reuseExistingServer:
       process.env.APEX_MANAGED_SERVER === "1" ||
       process.env.APEX_REUSE_SERVER === "1" ||

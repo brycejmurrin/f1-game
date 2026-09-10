@@ -46,7 +46,7 @@ function tuneDefs() {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
-  for (const f of ["js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"])
+  for (const f of ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), sandbox);
   return sandbox.LightTune.TUNE_DEFS;
 }
