@@ -956,28 +956,33 @@ the name does not exist. Proven in the booted page — a strict function reading
 (`typeof LT` does NOT, which is why a typeof probe is no test of this). Every
 sun-map rebuild would have thrown.
 
-**Corrected 2026-09-10 by putting the bug back and measuring, rather than
-reasoning.** The first version of this entry claimed nothing in the browser
-suite would have caught it. That is wrong, and the correction is the useful
-half. Re-broken deliberately: `tests/unit/global-registry.test.mjs` fails (the
-guard, as recorded); `tests/unit/game-vm.test.mjs` PASSES, blind; and
-`tests/specs/menu-baseline.spec.js` FAILS on three of its six golden menu PNGs
-— the shadow pass runs during the menu flyby, so a dead pass changes the
-picture. So the suite does hold a spec that catches this class. What it does
-NOT hold is a route to it: `menu-baseline` is the whole of the `baseline`
-group, and no renderer or lighting path routes there
-(`tools/ci/pick-tests.mjs` sends them to `gfx` alone), while `baseline` is
-deliberately outside the CI gate — ci.yml says why, in the comment that opens
-with "THE ONE GROUP THAT ARGUABLY BELONGS HERE AND IS NOT". CI would not have
-run the one spec that noticed.
+**Corrected 2026-09-10, TWICE — the second correction is the one to read.**
+The first version of this entry claimed nothing in the browser suite would have
+caught the bug. I then re-broke the shadow pass, saw `menu-baseline.spec.js`
+fail on three of its six golden PNGs, and "corrected" the entry to say the
+goldens catch it. That was wrong, and wrong in the most ordinary way: I ran the
+broken case without running the CONTROL. On the fixed tree the same three
+goldens fail, with the same pixel counts to the pixel — 10319, 13520 and 49516
+— so the injected bug changed nothing. Those three were already failing.
 
-**What the bug does at runtime is also not what "would have thrown" suggests.**
-`js/perf/loop-health.js` catches the per-frame throw and pays it back: 8
-consecutive faults, 240 total, then "CAP REACHED, stopping the loop". So the
-page boots, `__apex` keeps answering `info().track`, and a boot-only smoke test
-passes — while the render loop dies within seconds of real driving and the
-console fills with `frame fault N/8 … LT is not defined`. A gate that asserts
-"boots to __apex with no script errors" is not a gate against this.
+The structural reason is in the spec, and it is decisive: before it shoots,
+`menu-baseline` calls `__apex.headless(true)` (stopping the render loop) and
+sets `visibility:hidden` on `#game`. A dead shadow pass cannot appear in a shot
+that stops the loop and hides the canvas. The goldens are a DOM identity gate —
+colour, type, weight, spacing — and they are not, and cannot be made into, a
+renderer gate while they do that.
+
+So the original claim stands: nothing in the browser suite would have caught
+this. `game-vm.test.mjs` passes with the bug in place, and a boot-only smoke
+passes too, because `js/perf/loop-health.js` absorbs the per-frame throw (8
+consecutive / 240 total, then it stops the loop) while `__apex.info().track`
+keeps answering. The guard is the whole net for this class.
+
+**The lesson is not about shadows.** Twice in one session an unverified claim
+about test coverage went into a committed ledger entry, and the fix both times
+was a two-minute control run. A claim that a test WOULD have caught something
+is a claim about a test run that nobody has performed. Perform it, and run the
+clean case in the same breath.
 
 What caught it, before a single test, was
 `tests/unit/global-registry.test.mjs`'s third rule — a call-time read must

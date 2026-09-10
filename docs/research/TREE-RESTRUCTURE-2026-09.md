@@ -216,28 +216,34 @@ tooling-fast 171/171), and dispatched once for the `gfx` group + Metal, which is
 the only way a renderer change gets renderer specs (see item 2). Read that run,
 separate any failure from the six already red on the deploy tip, merge.
 
-**2. The renderer coverage hole — decide, then act.** Measured in
-docs/notes/TESTING-FIELD-NOTES.md (2026-09-10): 51 of 116 specs can never be
-selected by the change-aware gate, and FOUR areas — `js/render/glx/` (the
-shipped path), `js/render/webgpu/`, `js/render/three/`, `js/lighting/` — have
-ZERO eligible routed specs, so a push touching them gets no blocking browser
-spec at all. The one spec that empirically catches a dead render pass
-(`menu-baseline`, the golden menu PNGs) is unrouted AND outside the gate.
-ci.yml already prescribes the way in and the order matters:
-   a. run `test:baseline` on a PR as a NON-BLOCKING step; compare the six
-      goldens rendered on a GitHub runner against the dev-container ones.
-      **DONE 2026-09-10** — ci.yml's `baseline-trial` job: PRs and dispatches
-      only, `continue-on-error`, in no `needs:`, and it uploads what it
-      rendered on a PASS too, because "it matched here once" is the evidence
-      (b) needs. Collect a few PRs' worth before acting on it;
-   b. only if they match, route renderer + lighting paths to `baseline` in
-      `tools/ci/pick-tests.mjs` and add the group to the gate;
-   c. if they do not match, the images are the problem to solve first —
-      routing to a permanently-red gate is the failure ci.yml's comment
-      exists to prevent.
-   Until (b) lands, the interim rule is manual and belongs in every renderer
-   PR: **a renderer or lighting carve needs a dispatched `gfx` run
-   (`renderer_macos: true`), because neither automatic gate provides one.**
+**2. The renderer coverage hole — the first instrument turned out to be the
+wrong one.** Measured in docs/notes/TESTING-FIELD-NOTES.md (2026-09-10): 51 of
+116 specs can never be selected by the change-aware gate, and FOUR areas —
+`js/render/glx/` (the shipped path), `js/render/webgpu/`, `js/render/three/`,
+`js/lighting/` — have ZERO eligible routed specs, so a push touching them gets
+no blocking browser spec at all. That hole is real and unchanged.
+
+The plan's step (b) was to route those paths to `baseline` (the six golden menu
+PNGs). **That is now ruled out on evidence**: the spec calls
+`__apex.headless(true)` and hides `#game` before it shoots, so it is a DOM
+identity gate by construction and cannot see a renderer fault. Re-breaking the
+shadow pass produced byte-identical golden failures — the goldens noticed
+nothing. Whoever picks this up next needs a CANVAS instrument with a per-test
+budget under 180 s; the six `gfx` specs (240-540 s each) are the reason the hole
+exists and cannot themselves be the fix.
+
+The trial job (step (a), landed) still paid for itself by refuting the reason
+`test:baseline` is out of the gate. ci.yml says the goldens are
+environment-sensitive; measured, the GitHub runner and this container agree to
+within 1-17 pixels while BOTH miss the committed PNGs by 10k-49k against a 1%
+tolerance. The images are portable and STALE — three of six have not been
+re-blessed since the UI moved. So: re-bless the six, keep the trial
+non-blocking for a few PRs, then gate `test:baseline` as a DOM identity gate.
+Worth doing, and a different job from covering the renderer.
+
+Until a canvas instrument exists, the interim rule stands for every renderer PR:
+**a renderer or lighting carve needs a dispatched `gfx` run
+(`renderer_macos: true`), because neither automatic gate provides one.**
 
 **3. Remaining Phase 3 carves,** in the order §3 already gives:
 garage-preview → quali-net + race-settings-ui → custom-team-ui → live weather →

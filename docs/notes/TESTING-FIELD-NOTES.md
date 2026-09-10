@@ -1736,18 +1736,33 @@ the per-frame throw — 8 consecutive / 240 total, then it stops the loop — wh
 `__apex.info().track` keeps answering throughout. Smoke passes; the game is
 dead within seconds of driving.
 
-**The spec that DID catch it is one this repo already argued about.**
-`menu-baseline.spec.js`, the six golden menu PNGs, failed on three shapes,
-because the shadow pass runs during the menu flyby. It is 1 declared test and
-declares no long budget, so it is eligible — but it is the whole of the
-`baseline` group and NO renderer or lighting path routes there. ci.yml's own
-comment ("THE ONE GROUP THAT ARGUABLY BELONGS HERE AND IS NOT") already names
-this group as the gate's most defensible omission, keeps it out because golden
-images are environment-sensitive, and prescribes the way in: run it on a PR as a
-NON-BLOCKING step and compare first, never straight into `needs:`. This is new
-evidence for that trial, not a reason to skip it — and the routing half
-(`pick-tests` sending renderer/lighting changes to `baseline`) is worth nothing
-until the images are known to match a GitHub runner.
+**A correction, and a measurement that inverts ci.yml's stated reason.**
+An earlier draft of this note said `menu-baseline.spec.js` catches a dead render
+pass. It does not. The control run says so — the same three goldens fail on the
+fixed tree with identical pixel counts (10319 / 13520 / 49516) — and the spec
+says why: it calls `__apex.headless(true)` and hides `#game` before shooting, so
+it is a DOM identity gate by construction and can never see a renderer fault.
+Routing renderer or lighting changes to `baseline` would therefore NOT close the
+hole above. That idea is dead; the hole needs an instrument that looks at the
+canvas with a per-test budget under 180 s.
+
+The trial job did earn its minutes, though, by killing a different assumption.
+ci.yml keeps `test:baseline` out of the gate because "golden images are
+environment-sensitive… if GitHub's runner renders even slightly differently".
+Measured, that fear is three orders of magnitude too large:
+
+| golden | diff on the GitHub runner | diff in this container | between them |
+|---|---|---|---|
+| title-phone-landscape | 49,499 px | 49,516 px | **17 px** |
+| garage-phone-landscape | 10,318 px | 10,319 px | **1 px** |
+
+The runner and the dev container agree with each other to within 1-17 pixels
+and BOTH disagree with the committed PNGs by 10k-49k, against a 1% tolerance.
+The images are portable. They are STALE — three of the six have not been
+re-blessed since the UI moved, and they were failing here before any of this
+work started. Re-bless them and `test:baseline` becomes gateable on its own
+merits, as a DOM identity gate; that is worth doing, and it is a different job
+from covering the renderer.
 
 Reproduce the table: `maxDeclaredTimeout(f)` from `tools/ci/select-specs.mjs`
 over `tests/specs/*.spec.js`, and `pick(["<dir>/x.js"])` for the routing.

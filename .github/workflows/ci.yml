@@ -1258,22 +1258,24 @@ jobs:
   # It also prescribes the way in — "run it on a PR as a non-blocking step and
   # compare, not by putting it straight into `needs:`". This is that step.
   #
-  # WHY IT IS WORTH THE MINUTES (measured 2026-09-10, docs/notes/TESTING-FIELD-NOTES.md):
-  # 51 of 116 specs can never be selected by the change-aware gate, and four
-  # source areas — js/render/glx (the SHIPPED WebGL2 path), js/render/webgpu,
-  # js/render/three and js/lighting — route ONLY to `gfx`, whose six specs all
-  # declare 240-540 s and are therefore excluded. A push touching the shipped
-  # renderer gets no blocking browser spec at all. When the shadow pass was
-  # deliberately re-broken, `menu-baseline` failed on three shapes (the pass
-  # runs during the menu flyby) while smoke passed — loop-health absorbs the
-  # per-frame throw and __apex keeps answering. These goldens are the cheapest
-  # thing in the tree that notices a dead render pass: 1 declared test.
+  # WHAT THIS JOB ALREADY ESTABLISHED (first run, 2026-09-10, run 3457):
+  # the goldens are PORTABLE and STALE, which is the opposite of the assumption
+  # above. The runner and the dev container agree with each other to within 1-17
+  # pixels and BOTH disagree with the committed PNGs by 10k-49k against a 1%
+  # tolerance (title-phone-landscape 49,499 on the runner vs 49,516 here;
+  # garage-phone-landscape 10,318 vs 10,319). Three of the six have simply not
+  # been re-blessed since the UI moved, and they fail in a fresh container too.
+  # So the way in is: RE-BLESS the six, keep this job non-blocking for a few
+  # more PRs to confirm they hold, then gate on it as a DOM identity gate.
   #
-  # READ IT LIKE THIS: green over several PRs means the images survive a runner
-  # and step (b) is safe — route renderer/lighting to `baseline` in
-  # tools/ci/pick-tests.mjs, then add the group to the gate. Red means compare
-  # the uploaded -actual/-diff PNGs against the committed ones and fix the
-  # IMAGES first; routing into a red gate is the failure this comment prevents.
+  # IT IS NOT A RENDERER GATE AND CANNOT BECOME ONE. The spec calls
+  # __apex.headless(true) and hides #game before it shoots, so a dead render
+  # pass is invisible to it — measured by re-breaking the shadow pass and
+  # getting byte-identical failures (docs/notes/DEFECT-LEDGER.md). The renderer
+  # coverage hole in docs/notes/TESTING-FIELD-NOTES.md (four source areas with
+  # zero eligible specs, the shipped WebGL2 path among them) needs a canvas
+  # instrument with a per-test budget under the gate's 180 s. Do not route
+  # renderer or lighting paths here expecting cover they cannot give.
   baseline-trial:
     name: Golden menus on a runner (trial, non-blocking)
     # PRs and dispatches only: never a push, and never the Pages call, whose
