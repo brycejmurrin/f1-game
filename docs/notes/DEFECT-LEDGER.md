@@ -882,3 +882,28 @@ Deferred with reasoning, none lost:
   on the TLX backend — deciding which needs a TLX render trace, not a
   tolerance change. The other 14 TLX probes pass, including every shadow
   spec.
+
+---
+
+- **The garage double-blip was TWO bugs sharing one symptom, and only fixing
+  both stopped it.** Reported 2026-09-10 as "two sounds when I click a button"
+  in the part selector. The first, fixed in `5b2090177`, was a locked row:
+  `Career.research()` succeeding played `uiSelect`, then the fit below played
+  `uiSelect` again — one click, two blips of the SAME sound. Deleting the first
+  would have been wrong (the unlock can succeed and the fit still refuse on
+  budget, returning early, and that blip is that path's only feedback), so the
+  contract became "at most once" via a `_blipped` latch. The user then reported
+  it was still happening **on parts, not categories**, which is exactly the
+  discriminator that finds the second: `framePreset()` frames the camera on the
+  fitted part with `b.click()` on the view button — a SYNTHETIC click that
+  replays that button's whole handler, `uiTick` included. So the fit sounded
+  `uiSelect` and the camera sounded `uiTick`: two DIFFERENT sounds, which is
+  why it survived a fix aimed at a doubled one. Deleting the handler's `uiTick`
+  would silence a real press of that button, so the mute belongs at the
+  synthetic call site (`G.soundOn = false` across the click, restored in a
+  `finally`; `click()` dispatches synchronously, so the window is one
+  statement). The livery editor's own `hero.click()` was the same shape and now
+  routes through the same silenced helper. **The lesson is the discriminator,
+  not the fix**: "still happening, on X not Y" is a bisect the reporter has
+  already run for you, and the second cause was found by taking it literally
+  rather than re-examining the first.

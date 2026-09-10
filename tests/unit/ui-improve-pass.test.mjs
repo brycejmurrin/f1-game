@@ -1408,3 +1408,22 @@ test("a locked part plays ONE blip, not one for the unlock and one for the fit",
   assert.ok(/G\.soundOn\s*&&\s*!_blipped\s*\)\s*GameAudio\.uiSelect\(\)/.test(body),
     "the fit blip is suppressed when the unlock already sounded");
 });
+
+test("the camera preset a part fit triggers is silent — click() must not replay uiTick", () => {
+  // The OTHER half of the same report: fitting a part also frames the camera on
+  // that part, and framePreset does it by synthesising a click on the view
+  // button — which replays that button's handler, uiTick and all. So the fit
+  // sounded uiSelect and the camera sounded uiTick, on one click. The camera
+  // move is a consequence of the action, not a second action. Deleting the
+  // handler's uiTick would silence a REAL press of the button, so the mute
+  // belongs at the synthetic call site and must be restored even if the handler
+  // throws — hence the finally, which is the part worth pinning.
+  const ss = code("js/garage/setup-sheet.js");
+  const fn = ss.slice(ss.indexOf("function framePreset("));
+  const body = fn.slice(0, fn.indexOf("\n}\n"));
+  assert.ok(/b\.click\(\)/.test(body), "framePreset still drives the real button");
+  assert.ok(/G\.soundOn\s*=\s*false\s*;[^]*b\.click\(\)/.test(body),
+    "…with sound muted across the synthetic click");
+  assert.ok(/finally\s*\{\s*G\.soundOn\s*=/.test(body),
+    "…and restored in a finally, so a throwing handler cannot leave the game mute");
+});

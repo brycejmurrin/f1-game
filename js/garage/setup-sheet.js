@@ -208,8 +208,19 @@ const CAT_VIEW = {
   cockpit: "front",      // halo, screen, mirrors
 };
 function framePreset(name) {
+  // click() rather than a direct camera call: a display:none stack (narrow
+  // landscape) still runs the handler, so the preset works on every layout.
   const b = document.querySelector('#cs-stack [data-cs-view="' + name + '"]');
-  if (b) b.click();   // a display:none stack (narrow landscape) still runs the handler
+  if (!b) return;
+  // But click() replays that button's WHOLE handler, its uiTick included — so
+  // fitting a part sounded twice: uiSelect for the fit, then uiTick for the
+  // camera that followed it (the second half of the double blip reported
+  // 2026-09-10). The camera move is a CONSEQUENCE of the click, not a second
+  // click, so it gets no voice of its own. Muting across the synthetic click
+  // beats deleting the handler's uiTick: a REAL press of that button still has
+  // to sound. click() dispatches synchronously, so the window is one statement.
+  const was = G.soundOn;
+  try { G.soundOn = false; b.click(); } finally { G.soundOn = was; }
 }
 function activateCsCat(id, focus) {
   if (csActiveCat !== id) {
@@ -1069,8 +1080,7 @@ function buildLiveryCreator(container, team) {
   // Spine / logo edits need the crown in the car gap the sheet leaves — the
   // default front az puts the nose toward camera and the cover under the
   // panel. Hero is the rear three-quarter the CAMERA presets already use.
-  const hero = document.querySelector('[data-cs-view="hero"]');
-  if (hero) hero.click();
+  framePreset("hero");   // silent: the editor opening is the action, not the camera
 }
 
 let _livSeq = 0;
