@@ -64,6 +64,7 @@ const SPEC = [
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
   { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/game.js boot (unset = WebGL2 on every device)" },
   { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)" },
+  { k: "tlxEnvProbe", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js CAR REFLECTIONS (null = OFF)" },
   // HUD (js/game.js)
   { k: "hudProfile", lane: "json", group: "hud", def: "standard", src: "js/game.js" },
   { k: "hudMetricsLayout", lane: "json", group: "hud", def: "full", src: "js/game.js" },
