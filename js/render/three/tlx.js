@@ -1643,6 +1643,7 @@ const TLX = (function () {
       // or a void, and only a readback answers it. ONCE per session: six 64px
       // faces is ~200 KB and the answer does not change frame to frame.
       let _envCube = null, _envCubeRead = false;
+      let _warmed = false;   // programs linked once per backend instance
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -2797,6 +2798,31 @@ const TLX = (function () {
         drawInstanced,
         freeInstancedBatch,
         castShadowInstanced,
+        // WARM THE PROGRAMS BEFORE THE LIGHTS GO OUT. three links its programs
+        // SYNCHRONOUSLY on first draw, and tsl-lit records what that costs: a
+        // Monza load once minted 595 programs and spent ~60 s inside
+        // getProgramParameter(LINK_STATUS), "that three only skips on its
+        // compileAsync path". Sharing the node graph cut 595 to THREE, which is
+        // why loads are survivable — but three synchronous links still land on
+        // the main thread at first draw, and census 79 caught exactly that: the
+        // TLX legs missed whole 8 s beats mid-session, sat at 10 fps, and only
+        // recovered by shedding resolution to 0.5, while GLX held 60 at full
+        // scale on the same machine and run. GLX builds its programs at init.
+        //
+        // Called at the COUNTDOWN, not per frame: the mesh pool already holds
+        // the materials by then (acquireMesh leaves them in the scene and only
+        // clears `visible`), and the lights sequence buys seconds of cover for
+        // the async link. Fire-and-forget on purpose — a warm that fails must
+        // cost a slower first lap, never the race.
+        warm() {
+          if (_warmed || typeof renderer.compileAsync !== "function") return;
+          _warmed = true;
+          try {
+            renderer.compileAsync(scene, camera).catch((e) => {
+              try { Log.warn("gfx", "[TLX] program warm failed; first draw will link inline", (e && e.message) || e); } catch (_) { /* logging never costs a frame */ }
+            });
+          } catch (_) { /* a backend without the async path links inline, as before */ }
+        },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
