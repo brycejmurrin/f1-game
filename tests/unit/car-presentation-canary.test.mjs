@@ -125,8 +125,10 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
     /const body = carDraw\.modelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
   );
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
-  assert.match(game, /if \(_hasLivePlayerShadow\) gfx\.castShadow\(teamMesh\(player\.team, player, true\)/);
-  assert.match(game, /gfx\.castShadow\(teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\), _shadowMats\[i\]\)/);
+  // The caster passes live in js/render/shared/shadow-pass.js (teamMesh through deps, the player through G).
+  const sp = read("js/render/shared/shadow-pass.js");
+  assert.match(sp, /if \(_hasLivePlayerShadow\) G\.gfx\.castShadow\(deps\.teamMesh\(G\.player\.team, G\.player, true\)/);
+  assert.match(sp, /G\.gfx\.castShadow\(deps\.teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\), _shadowMats\[i\]\)/);
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
   assert.match(game, /1\.5 \* Math\.max\(PACE, 0\.05\)/,
     "beached gate additive floor must scale with PACE like the grass speed floor");

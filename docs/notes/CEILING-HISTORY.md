@@ -2823,3 +2823,14 @@ wheels, the warm-ups and the optional GLB body. game.js keeps the render
 loop, the shadow batches and the ground/attitude matrices and reaches the
 caches only through the module's surface. No new façade members. Ceilings
 lowered with `ratchets.mjs --update`.
+
+## 2026-09-10 — shadow-pass extraction
+
+`js/game.js` 9041 → 8589 lines (codeLines 4739 → 4559, topLets 146 → 141):
+the three shadow-map passes moved to `js/render/shared/shadow-pass.js`
+(`ShadowPass.create(G, deps)`) — the snap-cached sun map, the per-frame car
+map, the night lamp map, their light-space matrices and snap keys, the
+caster pools and the blob flush. The render loop keeps the live player
+transform (resolved into `shadowPass.livePlayerMat`) and calls beginFrame /
+pushCaster / sunPass / lampPass / flushBlobs; loadTrack calls reset. No new
+façade members. Ceilings lowered with `ratchets.mjs --update`.

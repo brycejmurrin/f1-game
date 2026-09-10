@@ -1156,8 +1156,8 @@ test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", (
   const body = fnBody(tlx, "cullInstances");
   assert.match(body, /opts && opts\.upload === false/,
     "shadow path must be able to skip the lit imesh setMatrixAt walk");
-  console.log("[gfx-canary] checking TLX shadow cull upload:false call site: game.js");
-  const game = read("js/game.js");
+  console.log("[gfx-canary] checking TLX shadow cull upload:false call site: js/render/shared/shadow-pass.js");
+  const game = read("js/render/shared/shadow-pass.js");   // the shadow passes left game.js
   // The call site passes a hoisted constant (the literal was rebuilt per prop
   // batch per shadow rebuild), so pin BOTH halves — the call passes the const,
   // and the const is still {upload:false}. Matching only the name would let the
@@ -2412,7 +2412,7 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
   // The key is now the two things the content actually depends on: WHICH LAMP
   // (world position, exact — static fixtures, copied coordinates) and WHERE THE
   // CARS ARE (quantised). Pin all three so neither half can quietly come back.
-  const gsrc = code("js/game.js");
+  const gsrc = code("js/render/shared/shadow-pass.js");   // the lamp pass lives in the shadow-pass seam
   assert.doesNotMatch(gsrc, /flBest === _lampShBest/,
     "the lamp snap must not compare SLOTS into frame.lights — that array is re-sorted every frame");
   assert.match(gsrc, /_lx === _lampShX && _ly === _lampShY && _lz === _lampShZ/,
@@ -2433,8 +2433,8 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
 
   // And the producer must actually call the car keep, on exactly the branch that
   // skips for cadence rather than for a stop.
-  const g = code("js/game.js");
-  assert.match(g, /_carShadowWanted\s*&&\s*!_carShadowFrame\s*&&\s*gfx\.carShadowKeep/,
+  const g = code("js/render/shared/shadow-pass.js");
+  assert.match(g, /_carShadowWanted\s*&&\s*!_carShadowFrame\s*&&\s*G\.gfx\.carShadowKeep/,
     "the halved car pass must keep the map on the frames it skips");
 });
 
@@ -2494,8 +2494,14 @@ test("WGX's static shadow latch is NOT cleared by envProbeReset", () => {
     "the tier-shed caller cannot re-arm this latch, so it must not clear it");
   // The producer side of the argument still has to hold: loadTrack must keep
   // invalidating the snap keys, which is what makes the reset unnecessary.
-  assert.match(code("js/game.js"), /_shadowSnapX = _shadowSnapZ = _shadowBox = null;/,
+  // The keys live in js/render/shared/shadow-pass.js now: loadTrack calls its
+  // reset(), and reset() is what nulls them.
+  assert.match(code("js/game.js"), /shadowPass\.reset\(\);/,
     "the track change must invalidate the sun snap keys — that is the re-arm path");
+  const sp = code("js/render/shared/shadow-pass.js");
+  const rs = sp.slice(sp.indexOf("function reset()"), sp.indexOf("function beginFrame()"));
+  assert.match(rs, /_shadowSnapX = _shadowSnapZ = _shadowBox = null;/,
+    "ShadowPass.reset() must null the sun snap keys");
 });
 
 // One presented frame is not proof that a backend works.
@@ -2546,10 +2552,10 @@ test("the boot canary re-arms from the bind, never from the saved pick alone", (
 // The producer side of the same class of bug: a cadence gate on a pass that is
 // ALREADY snap-cached does not halve the work, it corrupts half the maps.
 test("the instanced prop shadow cast carries no frame-parity gate", () => {
-  const src = code("js/game.js");
+  const src = code("js/render/shared/shadow-pass.js");   // the caster moved here with the passes
   const at = src.indexOf("function _castPropBatchesShadow");
   assert.ok(at > 0, "the instanced prop shadow caster moved — check this test, not the code");
-  const body = src.slice(at, src.indexOf("\n}", at));
+  const body = src.slice(at, src.indexOf("\n    }", at));   // module-body indent: the function's own closing brace
   // The sun caller sits INSIDE the snap-cached static pass, which runs only when
   // the eye crosses its cell or the sun moves. A `(_frameNo & 1)` skip therefore
   // never fires on a frame the function is called on for saving's sake — it fires

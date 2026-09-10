@@ -592,7 +592,7 @@ test("tier 2 sheds car-paint SSR with the wet-road march, not via po.reflect", (
 });
 
 test("shadow box and shader fade share the same unset shadowRange fallback", () => {
-  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const game = fs.readFileSync(path.join(ROOT, "js/render/shared/shadow-pass.js"), "utf8");   // the sun box is sized in the shadow-pass seam
   const glx = fs.readFileSync(path.join(ROOT, "js/render/glx/glx.js"), "utf8");
   assert.match(game, /LT\.shadowRange != null \? LT\.shadowRange : 80/);
   assert.match(glx, /T && T\.shadowRange != null \? T\.shadowRange : 80\.0/);
