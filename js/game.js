@@ -3465,6 +3465,7 @@ const G = {
   stepSetupAero: (dt) => stepSetupAero(dt),
   setSetupView: (...a) => setSetupView(...a),
   setupPan: (...a) => setupPan(...a),
+  nudgeSetupCam: (...a) => nudgeSetupCam(...a),
   nudgeSetupZoom: (mul) => nudgeSetupCam(0, 0, mul),
   // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
   // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
@@ -6509,6 +6510,9 @@ const SP_EL_MIN = 0, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
 // rather than one nominal distance that crops the nose off two of the five.
 const SP_VIEWS = {
   hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.35 },   // rear three-quarter
+  // Angled bay: slightly left of hero so the flank reads and the back wall stays
+  // in frame — the survey framing garage-angles --preset=bay exists to shoot.
+  bay:   { az: Math.PI * 0.68, el: 0.26, dist: 9.2 },
   front: { az: 0,              el: 0.20, dist: 8.2 },
   side:  { az: Math.PI * 0.5,  el: 0.10, dist: 11.2 },
   rear:  { az: Math.PI,        el: 0.22, dist: 8.4 },

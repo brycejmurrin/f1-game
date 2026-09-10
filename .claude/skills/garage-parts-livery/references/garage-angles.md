@@ -28,14 +28,20 @@ node tools/shot/garage-angles.mjs --preset=list
 node tools/shot/garage-angles.mjs --preset=wall  --team=ferrari --logo=#ffffff --logo2=#0066ff
 node tools/shot/garage-angles.mjs --preset=flank --team=redbull --spineLogo=wrap --spineSide=none
 node tools/shot/garage-angles.mjs --preset=fin   --team=ferrari --finBadge=logo
+node tools/shot/garage-angles.mjs --preset=bay   --team=all --fast
 node tools/shot/garage-angles.mjs --preset=mark  --team=redbull --logo=#00ffcc --logo2=#ff0066 --logo3=#111111
 
 # Fast mode: fewer settle frames, no label/sheet, one gate retry (~40% quicker per shot):
 node tools/shot/garage-angles.mjs --fast --preset=quick --team=redbull --spineLogo=wrap
 
-# Live gallery: auto-refreshing live.html after each shot (pair with --fast for big matrices):
+# Live gallery: auto-refreshing live.html after each shot (pair with --fast for big matrices).
+# --live does NOT open github.io — use --site/--cdn for the deployed build:
 node tools/shot/garage-angles.mjs --fast --live --team=redbull,ferrari --views=front,side \
   --spineLogo=wrap,saddle --spineSide=none,logo --out=artifacts/combo-live
+
+# Orbit framing beyond zoom/pan (UI click counts, or absolute radians):
+node tools/shot/garage-angles.mjs --fast --views=bay --az-nudge=-1 --team=ferrari
+node tools/shot/garage-angles.mjs --fast --views=hero --az=2.0 --el=0.28 --team=mercedes
 
 # Tune settle yourself (defaults: livery 8, view 4; was 12/6):
 node tools/shot/garage-angles.mjs --settle=6 --view-settle=3 --views=side --team=redbull
@@ -48,8 +54,14 @@ Presets:
 | `wall` | front | zoom 4 | — |
 | `fin` | rear | zoom 4 | — |
 | `flank` | side | zoom 8, pan 5,0 | — |
+| `bay` | bay | zoom 1 | angled left + back wall |
 | `mark` | front, side, rear | zoom 6, pan 4,0 | `finBadge=logo` |
 | `quick` | side | zoom 6, pan 4,0 | `--fast` |
+
+Views include `bay` (tool + `__apex.garageFrame` / `setSetupView("bay")`) —
+angled from the left so the car reads three-quarter and the garage back wall
+stays in frame. Default logos: omit `--logo*` / design axes and use
+`--livery=default` (the tool default).
 
 ## Design axes (any `Liveries.FIELDS` key)
 
@@ -99,6 +111,10 @@ for the B pass (one boot, two reloads).
 # Typical Cloud / CI invocation (no manual xvfb once DISPLAY is sane):
 node tools/shot/garage-angles.mjs --fast --preset=flank --team=ferrari \
   --spineSide=logo --out=artifacts/garage-flank
+
+# All teams, default liveries, angled bay (logo colours as shipped):
+node tools/shot/garage-angles.mjs --fast --preset=bay --team=all \
+  --out=artifacts/garage-bay-all
 
 # Plan first — shot count + rough ETA, zero Chromium:
 node tools/shot/garage-angles.mjs --plan --preset=flank --team=ferrari,mercedes

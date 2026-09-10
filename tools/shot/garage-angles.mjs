@@ -2,8 +2,9 @@
 // @doc Garage preset shots, ONE Chromium: walks teams/liveries/any livery field; clears dead DISPLAY for headless WebGL.
 //   node tools/shot/garage-angles.mjs [--team=redbull,mclaren|all] [--views=spine] [--livery=default,rb_white]
 //     [--spineLogo=wrap,saddle] [--finShape=blade] [--cover=#101014] [--against=HEAD~1]
-//     [--preset=wall|fin|flank|mark|quick] [--plan] [--fast] [--settle=8] [--view-settle=4]
-//     [--zoom=8] [--pan=2,0] [--out=dir] [--label=0] [--sheet=0] [--cell=420]
+//     [--preset=wall|fin|flank|mark|quick|bay] [--plan] [--fast] [--settle=8] [--view-settle=4]
+//     [--zoom=8] [--pan=2,0] [--az-nudge=-1] [--el-nudge=0] [--az=] [--el=]
+//     [--out=dir] [--label=0] [--sheet=0] [--cell=420] [--live] [--site]
 //     [--team=all+custom] [--rollup-only|--full-views] [--rollup-view=wingRear]
 //     [--reset] [--resume] [--oracle] [--picker-team] [--slow]
 // @skill playwright-probe
@@ -14,13 +15,15 @@
 // capture each frame. Two shipped defects (wordmarks vs gantry, sunk signs)
 // were only visible from one angle each.
 //
-// Views: hero,front,side,rear,top,wingFront,wingRear — or groups:
+// Views: hero,bay,front,side,rear,top,wingFront,wingRear — or groups:
 //   spine  = hero,top,rear,side   (engine-cover crown / SPINE TOP)
 //   all    = every preset
+//   bay    = angled left three-quarter with garage back wall in frame
 //
 // `--livery` walks paint jobs via a store write (opening the LIVERY tab slams
-// FRONT). `--zoom` / `--pan` are counted clicks on #cs-view-in / #cs-pan-* so a
-// framing that reads here is one a player can reach.
+// FRONT). `--zoom` / `--pan` / `--az-nudge` / `--el-nudge` are counted clicks on
+// #cs-view-* / #cs-pan-* so a framing that reads here is one a player can reach.
+// `--az` / `--el` set absolute orbit radians after the named preset.
 //
 // DESIGN AXES: any field in `Liveries.FIELDS` is a flag, and passing more than
 // one walks their CARTESIAN PRODUCT as custom liveries on the team default
@@ -36,7 +39,8 @@
 // design, view, az/el/dist) and the run gets a contact sheet, because a
 // directory of bare frames is unreadable an hour later and every session was
 // hand-rolling a compositor to find out which car it was looking at. `--label=0`
-// / `--sheet=0` opt out.
+// / `--sheet=0` opt out. `--live` writes an auto-refreshing live.html gallery
+// (does NOT open the CDN). `--site` / `--cdn` boots against github.io instead.
 //
 // `--against=<git ref>` shoots the WHOLE matrix twice — once on the working
 // tree, once with every js/css/index.html blob that differs at that ref served
@@ -96,6 +100,8 @@ const PRESETS = {
   wall:  { views: "front", zoom: 4 },
   fin:   { views: "rear", zoom: 4 },
   flank: { views: "side", zoom: 8, pan: "5,0" },
+  // Angled bay: car from the left three-quarter, garage back wall in frame.
+  bay:   { views: "bay", zoom: 1 },
   // Wall crest + flank mark + fin badge in one pass (mark colour reviews).
   mark:  { views: "front,side,rear", zoom: 6, pan: "4,0", finBadge: "logo" },
   quick: { views: "side", zoom: 6, pan: "4,0", fast: true },
@@ -108,6 +114,8 @@ if (presetRaw === "list") {
     if (p.finBadge) bits.push(`finBadge=${p.finBadge}`);
     if (p.zoom) bits.push(`zoom=${p.zoom}`);
     if (p.pan) bits.push(`pan=${p.pan}`);
+    if (p.azNudge) bits.push(`az-nudge=${p.azNudge}`);
+    if (p.elNudge) bits.push(`el-nudge=${p.elNudge}`);
     if (p.fast) bits.push("fast");
     console.log(`  ${id}: ${bits.join(" ")}`);
   }
@@ -127,6 +135,14 @@ const fast = argvHas("--fast") || !!(preset && preset.fast);
 let zoom = Number(flag("--zoom", preset && !argvHas("--zoom") ? String(preset.zoom || 0) : "0")) || 0;
 const panRaw = flag("--pan", preset && !argvHas("--pan") ? (preset.pan || "0,0") : "0,0");
 let [strafe = 0, dolly = 0] = panRaw.split(",").map(Number);
+const azNudge = Number(flag("--az-nudge",
+  preset && !argvHas("--az-nudge") ? String(preset.azNudge || 0) : "0")) || 0;
+const elNudge = Number(flag("--el-nudge",
+  preset && !argvHas("--el-nudge") ? String(preset.elNudge || 0) : "0")) || 0;
+const azAbsRaw = flag("--az", "");
+const elAbsRaw = flag("--el", "");
+const azAbs = azAbsRaw === "" ? null : Number(azAbsRaw);
+const elAbs = elAbsRaw === "" ? null : Number(elAbsRaw);
 const againstRef = flag("--against", null);
 const doLabel = flag("--label", fast ? "0" : "1") !== "0";
 const doSheet = flag("--sheet", fast ? "0" : "1") !== "0";
@@ -138,13 +154,16 @@ const viewAwait = fast ? 5000 : 8000;
 const gateRetries = fast ? 1 : 3;
 const doPlan = argvHas("--plan");
 const doLive = argvHas("--live");
+const doSite = argvHas("--site") || argvHas("--cdn");
 
 // Everything the tool owns. Anything ELSE of the form --name=value is taken as
 // a livery field and validated in-page — so the flag surface grows with
 // Liveries.FIELDS instead of with this file.
 const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom", "--pan",
+  "--az-nudge", "--el-nudge", "--az", "--el",
   "--views", "--against", "--label", "--sheet", "--cell", "--spine-side", "--spine-logo",
   "--preset", "--plan", "--fast", "--slow", "--settle", "--view-settle", "--live",
+  "--site", "--cdn",
   "--reset", "--resume", "--oracle", "--picker-team", "--rollup-only", "--full-views",
   "--rollup-view", "--rollup-side", "--rollup-logo"]);
 const axes = [];
@@ -216,24 +235,28 @@ const useStoreTeam = !argvHas("--picker-team") && (fast || multiTeam);
 const withOracle = argvHas("--oracle") && rollupOnly
   && axes.some((ax) => ax.field === "spineLogo" && ax.values.length);
 
-const ALL = ["hero", "front", "side", "rear", "top", "wingFront", "wingRear"];
+const ALL = ["hero", "bay", "front", "side", "rear", "top", "wingFront", "wingRear"];
 const GROUPS = {
   spine: ["hero", "top", "rear", "side"],
   wings: ["wingFront", "wingRear"],
   front: ["front"],
   rear: ["rear"],
+  bay: ["bay"],
   aero: ["wingFront", "wingRear", "rear"],
   all: ALL,
 };
-const viewsDefault = rollupOnly && !argvHas("--views")
-  ? (rollupViewFlag || "side")
-  : (preset && !argvHas("--views") ? preset.views : "spine");
+const viewsDefault = (() => {
+  if (preset && !argvHas("--views")) return preset.views;
+  if (rollupOnly && !argvHas("--views")) return rollupViewFlag || "side";
+  return "spine";
+})();
 const rawViews = flag("--views", viewsDefault).split(",").map((s) => s.trim()).filter(Boolean);
 const views = [...new Set(rawViews.flatMap((v) => GROUPS[v] || [v]))];
 const rollupView = rollupViewFlag
   || (views.length === 1 ? views[0]
     : (views.includes("wingRear") ? "wingRear"
-      : (views.includes("side") ? "side" : views[0])));
+      : (views.includes("bay") ? "bay"
+        : (views.includes("side") ? "side" : views[0]))));
 const bad = views.filter((v) => !ALL.includes(v));
 if (bad.length) {
   console.error(`Unknown view(s): ${bad.join(", ")}\nAvailable: ${ALL.join(", ")} + groups ${Object.keys(GROUPS).join(", ")}`);
@@ -473,24 +496,38 @@ async function nudge(page, id, n) {
 async function frame(page, teamId, tag, view, dir, capOpts = {}) {
   const tSettle = Date.now();
   let framed;
+  const frameOpts = {
+    zoom, strafe, dolly,
+    azNudge, elNudge,
+    az: Number.isFinite(azAbs) ? azAbs : undefined,
+    el: Number.isFinite(elAbs) ? elAbs : undefined,
+  };
   if (useStoreTeam) {
-    framed = await page.evaluate(({ v, z, st, dl }) => {
+    framed = await page.evaluate(({ v, o }) => {
       const a = window.__apex;
       if (!a.garageFrame) return { ok: false, error: "no garageFrame hook" };
-      return a.garageFrame(v, { zoom: z, strafe: st, dolly: dl });
-    }, { v: view, z: zoom, st: strafe, dl: dolly });
+      return a.garageFrame(v, o);
+    }, { v: view, o: frameOpts });
     if (!framed.ok) throw new Error(`${teamId}/${tag}/${view}: ${framed.error || "frame failed"}`);
   } else {
-    const clicked = await page.evaluate((v) => {
+    // Prefer garageFrame when present so tool-only views (bay) and az/el nudges
+    // work without a matching #cs-stack button.
+    framed = await page.evaluate(({ v, o }) => {
+      const a = window.__apex;
+      if (a && a.garageFrame) return a.garageFrame(v, o);
       const b = document.querySelector('#cs-stack [data-cs-view="' + v + '"]');
-      if (!b) return false;
+      if (!b) return { ok: false, error: "no_view_button" };
       b.click();
-      return true;
-    }, view);
-    if (!clicked) throw new Error(`no camera preset "${view}" in #cs-stack`);
-    await nudge(page, zoom > 0 ? "cs-view-in" : "cs-view-out", zoom);
-    await nudge(page, strafe > 0 ? "cs-pan-right" : "cs-pan-left", strafe);
-    await nudge(page, dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", dolly);
+      return { ok: true, via: "dom" };
+    }, { v: view, o: frameOpts });
+    if (!framed.ok) throw new Error(`no camera preset "${view}" (garageFrame/stack)`);
+    if (framed.via === "dom") {
+      await nudge(page, zoom > 0 ? "cs-view-in" : "cs-view-out", zoom);
+      await nudge(page, strafe > 0 ? "cs-pan-right" : "cs-pan-left", strafe);
+      await nudge(page, dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", dolly);
+      await nudge(page, azNudge > 0 ? "cs-view-right" : "cs-view-left", azNudge);
+      await nudge(page, elNudge > 0 ? "cs-view-up" : "cs-view-down", elNudge);
+    }
   }
   await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
   const settleMs = ms(tSettle);
@@ -509,7 +546,7 @@ async function frame(page, teamId, tag, view, dir, capOpts = {}) {
     gate = await bayRendered(png, vp[0]);
     gateMs += ms(tGate);
     if (gate.ok) {
-      const cam = framed && framed.ok
+      const cam = framed && framed.ok && framed.az != null
         ? framed
         : await page.evaluate(() => window.__apex.garageCam());
       return {
@@ -749,7 +786,8 @@ async function main() {
       teams, liveries, axes, designs, views, preset: presetRaw || null,
       fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle,
       liverySettle, viewSettle, gateRetries, zoom, pan: [strafe, dolly],
-      shotCount, against: againstRef,
+      azNudge, elNudge, az: azAbs, el: elAbs,
+      shotCount, against: againstRef, live: doLive, site: doSite,
       estSeconds: Math.round(shotCount * (fast ? 12 : 18) + 25),
     }, null, 2));
     return;
@@ -787,14 +825,16 @@ async function main() {
   let liveBuild = null;
   let gameUrl;
   const servers = [];
-  if (doLive && !againstRef) {
+  // --site/--cdn boots against the deployed Pages URL. --live is the gallery only
+  // (live.html after each shot) — it must NOT silently switch the tree under test.
+  if (doSite && !againstRef) {
     liveBuild = await fetch(LIVE_BASE + "version.json")
       .then((r) => r.json()).then((j) => j.build ?? null).catch(() => null);
     gameUrl = LIVE_BASE;
-    console.log(`live github.io — build ${liveBuild ?? "?"}`);
+    console.log(`site github.io — build ${liveBuild ?? "?"}`);
   } else {
-    if (doLive && againstRef) {
-      console.warn("--live ignored with --against (local tree serves both passes)");
+    if (doSite && againstRef) {
+      console.warn("--site ignored with --against (local tree serves both passes)");
     }
     const srv = await startStaticServer(process.cwd());
     servers.push(srv);
@@ -881,9 +921,11 @@ async function main() {
     const meta = metaPath;
     writeFileSync(meta, JSON.stringify({
       teams, liveries, axes, designs, against: againstRef, preset: presetRaw || null,
-      fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle, live: doLive, liveBuild,
+      fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle,
+      live: doLive, site: doSite, liveBuild,
       liverySettle, viewSettle, gateRetries,
-      zoom, pan: [strafe, dolly], sheetHead: A.sheetHead, viewport: vp, views,
+      zoom, pan: [strafe, dolly], azNudge, elNudge, az: azAbs, el: elAbs,
+      sheetHead: A.sheetHead, viewport: vp, views,
       loadavg1: load, phase: { after: A.phase, before: B ? B.phase : null },
       sheets, shots, rollupEntries: mergedRollup, teamRollup,
       resumed: resumeSet.size ? [...resumeSet] : null, seconds,
