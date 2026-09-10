@@ -1121,7 +1121,27 @@ unretrievable exactly when they mattered. The upload is `always()` now,
 and the diag records the capture state at the baseline as well as the
 changed frame. Open: a deterministic-looking hardware-only signature that
 comes and goes per ATTEMPT (a fresh worker each retry) — the pictures from
-the next run are the next step, not another theory. The fog-glow row stayed red WITH `tier [0,0]` —
+the next run are the next step, not another theory.
+The pictures (run 3497, `shadows-baseline.jpg` / `shadows-changed.jpg`
+attached by the test): the BASELINE is crisp and bloomless — hard halo
+edges, no glow on the LEDs — and the CHANGED frame is soft and bloomed. Two
+post chains, not a grade; here both captures are the soft kind. post.js now
+records what each present() actually did (`_lastPath`: fxaa, upscale,
+toLdr, bloom, ao, the readback buffer) and the diag carries it for both
+captures, so the next hardware failure names the pass that differed.
+Run 3500 (17bbf07) never got there: after 12 green TLX tests both workers
+wedged in Playwright's "Create context" — before any spec code ran — and
+sat 25 min each on the 30 min per-test budget (`--timeout=600000` x
+test.slow()); cancelled by hand. A Chromium/GPU-process hang on the macOS
+runner, not the diff. Re-dispatched.
+
+*The Linux Smoke matrix on a `gfx` dispatch (runs 3495 and 3497, shard 4,
+75-78 min each):* the six lighting tests timed out identically both times
+— `applyRaceSettings tod=night` 226 s after page load, `wx=fog` 353 s, the
+45 s boot waits and 420 s budgets long gone — and webgl-probes passed at
+82-135 s a test. No assertion fired in either run; the box is ~10x this
+container and the group's only real signal is the Metal job. Proposed:
+skip the Smoke matrix for renderer groups on dispatch. The fog-glow row stayed red WITH `tier [0,0]` —
 dry 80.1, foggy 72.6, the same −9 % this container reads (65.4 → 60.1) — so
 it was never the tier either: the sampled band is pure sky, the sky shader
 carries no lamp-fog term (`glsl-sky.js`), and what the test measured was the
