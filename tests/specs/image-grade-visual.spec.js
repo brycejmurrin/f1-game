@@ -315,11 +315,17 @@ test.describe("rendered image grade", () => {
     await boot(page);
     await pixels(page);
     const baseline = await pixels(page);
+    const tier0 = await tierAt(page);
     await setTune(page, { gainR: 1.2 });
     const changed = await pixels(page);
+    const tier1 = await tierAt(page);
+    expect(tier1, "governor tier moved between captures — the delta below is a tier shed, not the grade").toBe(tier0);
     const [red, green, blue] = channelChanges(baseline, changed);
-    expect(red).toBeGreaterThan(green * 1.5);
-    expect(red).toBeGreaterThan(blue * 1.5);
+    // Metal run 3477 read red 26.2 vs green*1.5 = 29.6 on a first attempt and
+    // passed the retry with no diag to say why; now it says.
+    const diag = JSON.stringify({ red, green, blue, tier: tier0, gov: await page.evaluate(() => window.__apex.renderScale()) });
+    expect(red, diag).toBeGreaterThan(green * 1.5);
+    expect(red, diag).toBeGreaterThan(blue * 1.5);
   });
 
   test("grade extremes keep the race canvas renderable", async ({ page }) => {

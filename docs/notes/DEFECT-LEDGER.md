@@ -1085,6 +1085,24 @@ mark; rubber appeared only after a camera switch. A GAME defect, on every
 backend and every GPU, that only the TLX spec happened to drive in the default
 camera. Fixed by moving the stamp ahead of the branch (world state, not a
 draw). The Metal "premise holds, marks never record" row above was this.
+Confirmed on Metal by run 3477 (d6d05c7): M6 green in 32.7 s.
+
+*Run 3477 also settled the other two rows.* image-grade shadows/highlights
+green with the tier held. The fog-glow row stayed red WITH `tier [0,0]` —
+dry 80.1, foggy 72.6, the same −9 % this container reads (65.4 → 60.1) — so
+it was never the tier either: the sampled band is pure sky, the sky shader
+carries no lamp-fog term (`glsl-sky.js`), and what the test measured was the
+night-fog exposure floor, cut from the daytime 1.08 to 0.95 on 09-08 ("night
+must stay night", the sibling test in the same file) plus the +0.35 cloud
+cover fog adds. Two tests in one file asserted opposite things about the same
+pixels; the glow one was measuring exposure. Rewritten to A/B the lamp-fog
+knobs on one fogged frame (below). Two more from the same run: M9's env
+probe reached face 2 of 6 in 60 s at tier 0 because the page rendered THREE
+frames in that window (one 93 s frame — three's WebGL2-on-ANGLE program
+compile); the Linux smoke shard died the same way at face 4 (56 s frame).
+The producer runs every 4th frame live and EVERY frame frozen, so the spec
+now freezes the parked car first. image-grade red gain read 26.2 vs a 29.6
+bar once and passed its retry with no diag; it carries one now.
 
 
 ## 8. Backlog

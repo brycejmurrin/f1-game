@@ -424,8 +424,17 @@ test.describe("TLX — boot", () => {
     // is about the probe WORKING when a player turns it on, so turn it on.
     await page.evaluate(() => window.__apex.lightTune({ carEnvCube: 0.6 }));
     await page.evaluate(() => window.__apex.park(0.1));
-    // A full 6-face cube takes ~12 frames (one face every OTHER frame); wait on
-    // the ready flag rather than a fixed sleep (SwiftShader is slow).
+    // FREEZE, so the probe captures a face EVERY frame. Live, js/game.js gates
+    // the producer on `(frozen || (_frameNo & 3) === 0)` — one face per four
+    // frames, 24 frames for the cube. Metal run 3477 (d6d05c7): tier 0, no
+    // shed, and the page rendered THREE frames in the 60 s wait (one frame of
+    // 93 s: three's WebGL2-on-ANGLE program compile, docs/notes/
+    // TESTING-FIELD-NOTES.md), so the cube stood at face 2 when the wait died;
+    // the Linux smoke shard died at face 4 the same way (56 s frame, 7 frames).
+    // Frozen, six frames finish the cube. The probe reads a parked car, so
+    // nothing the freeze holds still is part of what it measures.
+    await page.evaluate(() => window.__apex.freeze(true));
+    // Wait on the ready flag rather than a fixed sleep (SwiftShader is slow).
     try {
       await page.waitForFunction(() => {
         const e = GLX.__tlx.envState();
