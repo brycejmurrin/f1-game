@@ -947,6 +947,41 @@ measured the same 23–29 s per click, gave `__apex.garageParts` a garage-closed
 path (`recomputePlayerMods` on the façade) and re-wrote both tests to boot ONE
 race and refit through the hook: body/cockpit eviction 156 s and green.
 
+**2026-09-10 — an extracted module cannot carry game.js's eval-time destructures.**
+Moving the shadow passes into `js/render/shared/shadow-pass.js` carried ~40
+reads of `LT` with them. `LT` is not a global: game.js binds it at eval with
+`const { TUNE_DEFS, LT, buildTrackLights } = LightTune;`, so in any other file
+the name does not exist. Proven in the booted page — a strict function reading
+`LT.shadowRange` at module scope answers `ReferenceError: LT is not defined`
+(`typeof LT` does NOT, which is why a typeof probe is no test of this). Every
+sun-map rebuild would have thrown. Nothing in the browser suite would have
+caught it either: the renderer specs assert on pixels and probe state, and the
+pass simply would not have run. What caught it, before a single test, was
+`tests/unit/global-registry.test.mjs`'s third rule — a call-time read must
+resolve to some manifest global, a host name, or the `KNOWN_EXTERNAL_READS`
+baseline. Fix: `const LT = LightTune.LT;` at `create()`. Verified live rather
+than by inspection: instrumenting `GLX.shadowBegin` and recovering the sun
+ortho half-width from the light VP, `LightTune.LT.shadowRange = 80` gives a
+half-width of 80 and `= 30` gives 30, so the module reads the object the
+tuner mutates. (`M4` is frozen, so patching `M4.orthoTo` to watch the box
+silently no-ops — instrument the backend seam, not the math island.)
+
+**The class, swept across the tree.** 158 real globals; game.js has 646
+top-level names, of which 119 exist ONLY inside it as eval-time destructures —
+`PhysicsConsts` 58 (`VMAX`, `ACCEL`, `BRAKE`…), `CarMesh` 15, `carDraw` 12,
+`GameStore` 6, `LightTune` 3, `Teams` 2. Every one is a landmine for the next
+extraction and every one fails LOUDLY: not a single game.js local shares a name
+with a real global, so there is no silent-wrong-value variant of this bug, and
+the guard sees all of them. Both shipped modules are clean under the same scan:
+every name they read is a global, a `create()` parameter, or their own
+declaration. The residual risk the guard cannot see is a create-time capture of
+a REBINDABLE value — `const LT = LightTune.LT` is safe only because knobs.js
+declares `const LT = {}` and mutates it in place (nothing in `js/` reassigns
+it), whereas capturing `G.gfx` at create would freeze a null, since game.js
+assigns `gfx` during boot. Rebindable state goes through the `G` getter; a
+mutated-in-place object may be captured once.
+
+
 ## 8. Backlog
 
 Deferred with reasoning, none lost:
