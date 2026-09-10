@@ -119,6 +119,9 @@ const SCAN_FILES = [
   "js/render/glx/glx.js",
   "js/render/glx/post.js",
   "js/render/glx/shadow.js",
+  // The sun / car / lamp passes left game.js on 2026-09-10, and took their
+  // LT reads with them (shadowRange, carShadow, lampShadow, moonShadow).
+  "js/render/shared/shadow-pass.js",
 ];
 const BUILD_FNS = ["buildTrackLights", "floodColor", "applyLampDensity", "lampDensityFactor", "lampStrideNodes", "lampStrideM"];
 const FRAME_FNS = ["setFrameLights", "appendCarTailLights", "lampCap", "capRadius2"];

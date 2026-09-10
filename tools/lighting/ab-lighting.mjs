@@ -171,7 +171,7 @@ const KNOBS = [
     find: "R = mix(1.5, 6.0, pen);", b: "R = mix(24.0, 24.0, pen);",
     expect: { region: "road", metric: "edgeE", dir: "-", minRel: 0.0 },
     note: "contact-hardening range; B is a dramatic uniform blur (4x the old max) for a visible before/after" },
-  { id: "shadow.box", file: "js/game.js", scene: "monzaDay",
+  { id: "shadow.box", file: "js/render/shared/shadow-pass.js", scene: "monzaDay",
     find: "const sBox = LT.shadowRange != null ? LT.shadowRange : 80;", b: "const sBox = (LT.shadowRange != null ? LT.shadowRange : 80) * 2;",
     expect: { region: "road", metric: "edgeE", dir: "-", minRel: 0.0 },
     note: "light-box size; doubling it halves texel density (softer, muddier edges)" },
