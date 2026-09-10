@@ -77,4 +77,4 @@ Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **
 - Fin/spine/cover/draft field catalog + paint-sheet lockstep → [references/livery-fields.md](references/livery-fields.md).
 - ERS ids, ownership gate, edit loop, mistakes → [references/workflow.md](references/workflow.md).
 - Which surface answers a PLACEMENT question, and what each is blind to → [references/placement.md](references/placement.md).
-- Garage multi-angle shots: presets, `--fast`, `--plan`, settle tuning, WebGL/`DISPLAY` setup → [references/garage-angles.md](references/garage-angles.md).
+- Garage multi-angle shots: axes (`--az/--el/--dist`, `--target`, `--lamp`, `--driver`), the orbit clamps (el ≥ 0, so aim the target low for a floor-level eye), `--fast` (+`--sheet=1` for the matrix), `--plan`, settle tuning, WebGL/`DISPLAY` setup → [references/garage-angles.md](references/garage-angles.md).

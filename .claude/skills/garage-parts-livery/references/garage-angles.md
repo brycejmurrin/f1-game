@@ -73,6 +73,21 @@ node tools/shot/garage-angles.mjs --team=mercedes --views=free --az=1.2 --el=0.3
 The absolute flags, targets and lamps go through `__apex.garageFrame`;
 `--picker-team` still clicks the DOM for the counted flags only.
 
+**The game clamps the orbit, not the tool.** Elevation is `0..1.30` rad
+(`SP_EL_MIN/MAX`, `js/game.js`): the eye never goes below the target, so a
+"looking up" shot is not reachable — put the TARGET below the subject instead
+and the subject lands above frame centre from a floor-level eye. Distance is
+`4.6..15` m on every base view except `wingFront` (2.0) and `wingRear` (1.8),
+which exist to sit close to a flap; the sidecar records the clamped value
+that was actually rendered, so compare `dist` there against what you asked.
+
+```sh
+# Floor-level front wing, every team, head-on and 27° three-quarter
+# (measured 2026-09-10: 22 frames in 12 min with --fast; eye 9 cm off the floor):
+node tools/shot/garage-angles.mjs --fast --team=all --views=wingFront \
+  --az=0,0.15pi --el=0.04 --dist=3.5 --target=0,-0.15,2.2 --out=artifacts/wing-ground
+```
+
 ### Designs
 
 Any `Liveries.FIELDS` key is a flag; `--part.<category>` fits a catalog part
@@ -119,8 +134,8 @@ Legacy aliases still work: `--spine-logo`, `--spine-side`.
 |---|---|
 | `--out=dir` | PNGs (default `artifacts/garage-angles`) |
 | `--name='{team}-{tag}-{cam}'` | file-name template; tokens `{team} {tag} {cam} {view} {vp} {dpr} {i} {az} {el} {dist}` |
-| `--label=0` / `--sheet=0` / `--cols=N` / `--cell=px` | caption bars, contact sheets, columns and cell width |
-| `matrix.png` | written automatically when the run has ≥2 cars and ≥2 cameras: rows = car, columns = camera |
+| `--label=0` / `--sheet=0` / `--cols=N` / `--cell=px` | caption bars, contact sheets, columns and cell width. `--fast` defaults both to `0`; pass `--sheet=1` with it to keep the sheets |
+| `matrix.png` | written with the sheets when the run has ≥2 cars and ≥2 cameras: rows = car, columns = camera. A `--team=all` run also writes its per-team rollup (`all-teams-<tag>-<view>-rollup.png`, one camera per team) whatever `--sheet` says |
 | `--live` | auto-refreshing `live.html` after each shot |
 | `--site` / `--cdn` | boot the deployed build instead of the working tree |
 | `--json` | print the run record to stdout as well as the sidecar |
@@ -150,7 +165,7 @@ default) is no preset.
 ## Fast iteration
 
 ```sh
-# Fast mode: fewer settle frames, no label/sheet, one gate retry (~40% quicker per shot):
+# Fast mode: fewer settle frames, no label/sheet (add --sheet=1 for matrix.png), one gate retry (~40% quicker per shot):
 node tools/shot/garage-angles.mjs --fast --preset=quick --team=redbull --spineLogo=wrap
 # Tune settle yourself (defaults: livery 8, view 4; fast 6 / 2):
 node tools/shot/garage-angles.mjs --settle=6 --view-settle=3 --views=side --team=redbull
