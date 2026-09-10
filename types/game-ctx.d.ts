@@ -437,6 +437,8 @@ interface GameCtx {
   readonly armConfirm: (btn: HTMLElement, armedText: string, action: () => void) => boolean;
   readonly getTeamParts: (teamId: string) => PartsSetup;
   readonly saveTeamParts: (teamId: string, parts: PartsSetup) => void;
+  /** Re-resolve the player's fitted parts into mods, aero, ERS and the mesh-cache keys — what the garage's DONE and a race boot run; `__apex.garageParts` runs it mid-race. */
+  readonly recomputePlayerMods: () => void;
   readonly getLiveryId: (teamId: string) => string;
   readonly saveLiveryId: (teamId: string, id: string) => void;
   readonly getCustomLiveries: (teamId: string) => unknown[];
@@ -632,6 +634,7 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
    different contract. */
 declare const AeroZones: GameModuleFactory;
 declare const Collide: GameModuleFactory;
+declare const CarDraw: GameModuleFactory;
 declare const AgentView: GameModuleFactory;
 declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;

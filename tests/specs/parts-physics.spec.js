@@ -1190,11 +1190,13 @@ test.describe("Parts module — visual recipes", () => {
       glsl: GLXShaders.LIT_FS,
       wgsl: WGSLChunks.LIT,
     }));
+    // The visor joined the gate in 06394e7 (its own dielectric surface id);
+    // this pinned the two-term line and went red on every run since.
     expect(sources.glsl).toContain(
-      "bool envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;"
+      "bool envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;"
     );
     expect(sources.wgsl).toContain(
-      "let envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;"
+      "let envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;"
     );
     // BOTH read `if (envSurface) {` now. WGSL used to gate on
     // `envSurface && clearcoat > 0.001` — a tautology, since envSurface

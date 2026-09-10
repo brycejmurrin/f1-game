@@ -47,7 +47,7 @@ export function loadCar3D() {
   };
 }
 
-// PARTS AND LIVERY ARE NOT OPTIONAL. game.js's cockpitBodyMesh passes
+// PARTS AND LIVERY ARE NOT OPTIONAL. js/car/car-draw.js's cockpitBodyMesh passes
 // `parts: Parts.getVisualTiers(getTeamParts(team.id), team)` on every build, and
 // a fitted car carries 612 more vertices than the bare one — engineCover alone
 // gains 504 and lands 0.79 m from the eye. Sweeping without them measured a car

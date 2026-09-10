@@ -29,10 +29,11 @@ SHAPE `none`), `finBadge` (`logo|number|code|none`) and
 painted by `drawSpineTop` into `REGIONS.crest` on BARE paint — the crown carries no
 tail wash; the fin motif stops at the fin — and continued down `REGIONS.tail` by
 `drawTailTop`; the crest and number read top-down, nose up). SPINE SIDE is
-`LiveryTex.SPINE_SIDE_IDS`: `none|number|logo|code|plate|wordmark|duo|ribbon|lockup|title|emblem|band|sash`
+`LiveryTex.SPINE_SIDE_IDS`: `none|number|logo|code|plate|wordmark|duo|ribbon|lockup|title|emblem|band|sash|slash|rake|shoulder|starfield`
 (`wrap` + `duo` is the RB22; `ribbon` is a crease band with the number in it;
-`lockup` the number + mark on the upper third; `band`/`sash` are colour fills
-under the wrap bull. Culled: `slash|bars|split|chevron` — unknown → bare flank).
+`lockup` the number + mark on the upper third; `band`/`sash`/`rake`/`shoulder` are
+colour fills under the wrap bull, `slash`/`starfield` strokes on the bare flank —
+all of them take `sideTint`. Culled: `bars|split|chevron` — unknown → bare flank).
 The two flanks are SEPARATE regions (`spineSide` RIGHT, `spineSideL` LEFT, in the atlas's
 extra rows: `SIZE` × `SIZE_H`); paint them through `eachFlank`/`flankFrame`, never one
 mirrored texture. The car is drawn through an x-reflection, so the mesh's +x quad RENDERS
