@@ -1009,6 +1009,47 @@ it), whereas capturing `G.gfx` at create would freeze a null, since game.js
 assigns `gfx` during boot. Rebindable state goes through the `G` getter; a
 mutated-in-place object may be captured once.
 
+**2026-09-10 — the renderer group on real Metal: 6 red -> 3, and what the 3 are.**
+Three dispatched runs were needed to obtain a GPU verdict at all (the first two
+were cancelled by hand). Run 3464 reported six failures with the adapter census
+GREEN, so they are real-GPU results, not SwiftShader wearing Metal's name.
+Four had causes readable from the run's own diagnostics and are fixed:
+
+- `shadow.box` in `tools/lighting/ab-lighting.mjs` still named `js/game.js` for
+  an expression the shadow-pass carve moved. MINE. Nothing local caught it: the
+  assertion lives in a `gfx`-group browser spec, which the change-aware gate can
+  never select. `tools/lighting/slider-effect.mjs` had the same miss with no
+  test at all behind it.
+- image-grade "blacks" read NaN because the governor's auto-res resized the
+  framebuffer mid-test (scale 1 -> 0.7; captures 186,624 / 147,456 / 112,896 px;
+  worst frame 8.5 s, 98 slow of 264). The suite diffs pixel ARRAYS, so `boot()`
+  now pins the scale. Confirmed by run 3469: both captures 230,400 px.
+- TLX M8 slept 600 ms then read `postState()`, whose block flags are written at
+  the END of a pass and initialised false — so an early read says "every block
+  off", which is what Metal reported WITH the governor at tier 0 and no
+  shedding. That also kills the bloom-shed theory this ledger used to carry.
+  Now a condition wait; green in 3469.
+- lighting-ab pinned `floodEmit` at 0.78, but the code is
+  `min(1, LT.floodEmitMul * 0.78)` and qatar|night|dry carries 0.11 —
+  0.11 x 0.78 = 0.0858 exactly. Red on every runner since that palette moved.
+  Now asserts the contract against the live multiplier.
+
+**The three that remain are all "a real GPU is not SwiftShader", and none is
+bent to pass.** Two were known; the third was hidden behind the first, because
+the image-grade block is `mode: "serial"` and a failure skips the rest of it —
+so fixing blacks REVEALED it rather than caused it:
+
+| failure | on Metal | on this container |
+|---|---|---|
+| TLX M6 skid batch | premise holds (off-road, x=9.21, speed 29) but marks never record: `marks: 0, skidVerts: 0` | passes |
+| lighting-ab night fog glow | foggy region comes back DARKER than dry (67.7 vs an 85.7 bar; 72.0 vs 104.8 on retry) and the dry reading itself moves run to run | passes |
+| image-grade "shadows predominantly change dark pixels" | the knob moves BRIGHT pixels more: dark 35.7, bright 46.7, wanted dark >= 2x bright; darkSigned +34.8, brightSigned -44.1 | passes (verified 2026-09-10) |
+
+Each needs an iteration loop on a Metal runner, which this container cannot
+host. The rule that keeps them honest: never widen one of these tolerances to
+get green — a software-GL pass is not evidence about a player's GPU, and a bent
+bar would erase the only signal that says so.
+
 
 ## 8. Backlog
 
