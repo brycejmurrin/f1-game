@@ -559,33 +559,32 @@ const LiveryTex = (function () {
     const keepPlate = crestKeepsPlate(teamId);
     const slot2 = secondSlot(teamId, bare);
     let plate = null;
-    if (wantsPlate && (!bare || keepPlate) && !(opts && opts.noPlate)) {
-      // An authored LOGO DETAIL colour IS the plate for the two marks that have
-      // one, and it wins OUTRIGHT rather than being layered over a resolved
-      // candidate. Gating it on a candidate having resolved first left the
-      // colour homeless on the `pastel` livery, where nothing clears 1.6
-      // against the paint and `plate` stays null — measured, both plate marks.
-      // Taken as given, like the paint rows: the mark is still floored against
-      // whatever the player chose (`under`, below), so the lockup cannot go
-      // unreadable — only the player's own disc can go quiet.
+    // `noPlate` drops the DERIVED / brand shield on call sites that paint the
+    // mark bare (flank logo/emblem on a saddle field) — Ferrari's yellow plate
+    // was 1.09:1 on a white saddle. It must NOT swallow an authored LOGO DETAIL:
+    // that row is the player's plate colour, and skipping it made TEAM LOGO /
+    // LOGO DETAIL edits update the crown while the side spine mark stayed stuck.
+    if (wantsPlate && (!bare || keepPlate)) {
       if (slot2 === "plate" && liv && liv.logo2) plate = liv.logo2.slice();
-      // A brand DISC wins outright, contrast unscored. The 1.6 floor below asks
-      // a backing to separate from the paint, which is the right question for a
-      // PANEL the mark sits on and the wrong one for a sun: Red Bull's fin
-      // field is the team's own yellow, gold scores 1.10 against it, and the
-      // floor answered by swapping in a navy disc and bleaching the bulls white
-      // to read on it. The disc is identity; legibility is the MARK's floor,
-      // and `under` now holds both the disc and the paint so it is really
-      // asked. Only reachable on the team's own livery — B is null on any other.
-      else if (keepPlate && B && B.plate) plate = B.plate.slice();
-      else {
-        // Bases / brand only — SIDEPOD is its own mesh row.
-        const cands = [B && B.plate, liv && liv.c1, liv && liv.c2];
-        // Against the PRIMARY paint only. A plate is opaque and covers whatever
-        // wash is on top of the panel, so asking it to separate from the wash
-        // colour too rejects the Red Bull gold disc on a gold-accented livery
-        // and leaves the bulls floating with nothing behind them.
-        for (const c of cands) if (c && contrast(c, flds[0]) >= 1.6) { plate = c.slice(); break; }
+      else if (!(opts && opts.noPlate)) {
+        // A brand DISC wins outright, contrast unscored. The 1.6 floor below asks
+        // a backing to separate from the paint, which is the right question for a
+        // PANEL the mark sits on and the wrong one for a sun: Red Bull's fin
+        // field is the team's own yellow, gold scores 1.10 against it, and the
+        // floor answered by swapping in a navy disc and bleaching the bulls white
+        // to read on it. The disc is identity; legibility is the MARK's floor,
+        // and `under` now holds both the disc and the paint so it is really
+        // asked. Only reachable on the team's own livery — B is null on any other.
+        if (keepPlate && B && B.plate) plate = B.plate.slice();
+        else {
+          // Bases / brand only — SIDEPOD is its own mesh row.
+          const cands = [B && B.plate, liv && liv.c1, liv && liv.c2];
+          // Against the PRIMARY paint only. A plate is opaque and covers whatever
+          // wash is on top of the panel, so asking it to separate from the wash
+          // colour too rejects the Red Bull gold disc on a gold-accented livery
+          // and leaves the bulls floating with nothing behind them.
+          for (const c of cands) if (c && contrast(c, flds[0]) >= 1.6) { plate = c.slice(); break; }
+        }
       }
     }
     // An opaque plate REPLACES everything behind it, so it becomes the only
@@ -2179,7 +2178,7 @@ const LiveryTex = (function () {
     // fin keeps its motif (drawTailGraphic on REGIONS.fin below).
     const markHalo = (img, bg, ink) =>
       (img && img._avg && contrast(img._avg, bg) < 2.6 ? ink : null);
-    const emblemRim = colors.logo3 || colors.logo2 || null;
+    const emblemRim = colors.logo3 || null;
     // ONE lockup for the engine cover and the fin badge. Resolving the badge
     // against the fin wash used to drop Ferrari's shield (and recolour the
     // horse) so top-down / the garage wall disagreed with the tail.
@@ -2934,30 +2933,30 @@ const LiveryTex = (function () {
   // plus outline rows, traced crest via markPalette (logo / logo2 / logo3).
   function paintTeamMark(ctx, teamId, liv, R, field, opts) {
     const o = opts || {};
-    let logo = liv && liv.logo;
-    const outline = (liv && (liv.logo3 || liv.logo2)) || null;
-    // Authored LOGO tint that vanishes on the field it was handed (white crest
-    // on a white saddle flank) is not a pick worth keeping — re-pick against
-    // the field so catalog saddle×logo stays legible when factory saddleTint
-    // matches the team's usual logo tint.
+    const logo = liv && liv.logo;
+    // Outline is logo3 only. logo2 is often the PLATE slot (Ferrari shield,
+    // Red Bull disc) — feeding it here as a rim stole the plate colour from
+    // the crest path and outlined uploaded emblems in the shield tint.
+    const outline = (liv && liv.logo3) || null;
     const bgs = field && field.length
       ? (Array.isArray(field[0]) ? field : [field]).filter(Boolean)
       : [];
-    if (logo && bgs.length && !bgs.every((b) => contrast(logo, b) >= 2.0)) {
-      logo = pickOn(
-        [logo, liv.logo2, liv.c2, liv.c1, INK_DARK, INK_LIGHT].filter(Boolean),
-        bgs, 2.0);
-    }
     if (LOGOS[teamId]) {
       // Untinted art can still vanish — Ferrari's white horse on a white saddle
       // flank. When the field is pale and no tint was authored, force an ink.
+      // An authored TEAM LOGO tint is kept even when it fails the field (halo
+      // carries it) — re-picking collapsed every mid-tone to the same ink and
+      // made the garage colour row look dead on the flank.
       let tint = logo || null;
-      if (!tint && bgs.length && bgs.some((b) => lum(b) > 0.55)) {
+      let halo = o.halo || null;
+      if (tint && bgs.length && !bgs.every((b) => contrast(tint, b) >= 2.0)) {
+        if (!halo) halo = haloFor(tint);
+      } else if (!tint && bgs.length && bgs.some((b) => lum(b) > 0.55)) {
         tint = pickOn(
           [liv && liv.c1, liv && liv.c2, INK_DARK, INK_LIGHT].filter(Boolean),
           bgs, 2.0);
       }
-      drawLogoImage(ctx, LOGOS[teamId], R, tint, o.halo || null, outline);
+      drawLogoImage(ctx, LOGOS[teamId], R, tint, halo, outline);
       return;
     }
     const crestR = o.crestScale ? flankEmblemBox(R) : R;

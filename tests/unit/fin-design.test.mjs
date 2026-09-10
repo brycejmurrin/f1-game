@@ -587,6 +587,43 @@ test("spineSide paints the flank band on pick only, and clears the service panel
   assert.equal(inBand(side), 0, "no panel vertex sits under the flank band");
 });
 
+test("authored TEAM LOGO / LOGO DETAIL reach the flank logo and emblem", () => {
+  // Flank logo/emblem paint with noPlate so a brand yellow shield does not sit
+  // 1:1 on a white saddle — that flag used to also drop an authored LOGO DETAIL
+  // plate, so garage colour rows updated the crown and left the side mark stuck.
+  const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+  const carries = (styles, c) => {
+    const want = to255(c).join(",");
+    return [...styles].some((v) => v && v.replace(/^rgba?\(/, "").replace(/[)\s]/g, "").startsWith(want));
+  };
+  const stylesOf = (ops) => new Set(opsIn(ops, R.spineSide).map((op) => op.style).filter(Boolean));
+  const MARK = [0.95, 0.08, 0.1];
+  const PLATE = [0.08, 0.35, 0.95];
+  const base = {
+    ...BASE, spineSide: "logo", spineLogo: "cap",
+    cover: [0.86, 0, 0], saddleTint: [0.95, 0.95, 0.96], coverBind: "saddleWrap",
+    logo: MARK, logo2: PLATE,
+  };
+  const logoOps = A.paint("ferrari", base);
+  assert.ok(carries(stylesOf(logoOps), MARK),
+            `flank logo must carry TEAM LOGO; got ${[...stylesOf(logoOps)].join(", ")}`);
+  assert.ok(carries(stylesOf(logoOps), PLATE),
+            `flank logo must carry authored LOGO DETAIL plate; got ${[...stylesOf(logoOps)].join(", ")}`);
+  // Brand plate stays suppressed when logo2 is unset (the noPlate bargain).
+  const barePlate = stylesOf(A.paint("ferrari", { ...base, logo2: null }));
+  assert.equal(carries(barePlate, [1, 0.85, 0]), false,
+               "unset LOGO DETAIL must not resurrect the brand yellow shield on the flank");
+  const emblem = stylesOf(A.paint("ferrari", { ...base, spineSide: "emblem" }));
+  assert.ok(carries(emblem, MARK) && carries(emblem, PLATE),
+            `emblem must carry logo + logo2; got ${[...emblem].join(", ")}`);
+  // Palette contract: noPlate still drops brand plate, keeps authored plate.
+  const field = [base.saddleTint];
+  const P0 = A.LT.markPalette("ferrari", { ...base, logo2: null }, field, false, { noPlate: true });
+  const P1 = A.LT.markPalette("ferrari", base, field, false, { noPlate: true });
+  assert.equal(P0.plate, null, "noPlate without logo2 has no plate");
+  assert.deepEqual(P1.plate, PLATE, "noPlate with authored logo2 keeps the plate");
+});
+
 // The engine-cover cross-section is ROUNDED: one profile (Car3D.coverProfile)
 // serves the loft, the crest strip and the flank band, so it has to be sane at
 // every station and spine height — monotonic in x and y, a flat crown narrower
