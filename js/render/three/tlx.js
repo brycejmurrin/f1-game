@@ -151,29 +151,6 @@ const TLX = (function () {
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
-      // `!_gpuAdapterOk`, not just `!_hasGpu`. The two differ exactly when
-      // navigator.gpu exists but requestAdapter() resolves null, and on that
-      // path three binds WebGL WITHOUT THROWING — so the catch below never
-      // runs, forceWebGL stays false, and bootRenderer skips the
-      // caller-supplied opaque context because it is keyed on this flag.
-      //
-      // That leaves an ALPHA-COMPOSITED canvas, and the consequence is visible:
-      // WebGLBackend.init() hardcodes `alpha: !0` and IGNORES the `alpha:false`
-      // parameter (see bootRenderer), so anything writing alpha < 1 shows the
-      // page through the car — reported as a see-through car on this backend.
-      // The context's attributes are fixed for the life of the canvas and a
-      // second getContext silently returns the first one, so this CANNOT be
-      // repaired after the fact: the decision has to be right before three
-      // touches the canvas at all, which is here.
-      //
-      // Deciding on the BIND rather than the PICK is the same lesson the boot
-      // canary learned this week ("gfx === GLX on both paths, so only the bind
-      // site can tell them apart"). We cannot read three's bind before it
-      // happens — so we ask the adapter ourselves and stop guessing.
-      //
-      // An explicit WebGPU pin (`_glPin === "0"`) is deliberately still
-      // honoured: the existing clause already excludes it, a pin is a user
-      // override, and the SSR-tag hardening below is what covers it.
       // An adapter is necessary and NOT sufficient. Measured in this repo's own
       // container: `requestAdapter()` resolves fine and the very next step still
       // fails — "Failed to create WebGPU Context Provider" — after which three
@@ -830,7 +807,6 @@ const TLX = (function () {
           function () { try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ } }, false);
       } catch (_) { /* detached/synthetic canvas in a harness: the timer above still covers it */ }
 
-      // lifecycle state
       let renderScale = 1;
       let W = 1, H = 1;
       // Present size (css×dpr) vs render size (×renderScale). With
@@ -2301,7 +2277,6 @@ const TLX = (function () {
         backend: "three",                    // WGX precedent: backend id marker
         get isWebGPU() { return !!(renderer.backend && renderer.backend.isWebGPUBackend); },
 
-        // lifecycle / capability
         init() { return true; },             // already initialised by create()
         resize,
         setRenderScale(s) {
@@ -2355,7 +2330,6 @@ const TLX = (function () {
                    : { enabled: false, arms: 0, idx: -1, armed: false };
         },
 
-        // resources
         chunkedTrackCoords: false, // chunked TSL variant deliberately omits road `trk` / markings
         // MUST be an explicit false, not an absence: game.js installs backends
         // by descriptor-copy onto GLX, so a missing name would inherit GLX's

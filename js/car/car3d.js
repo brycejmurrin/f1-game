@@ -806,7 +806,6 @@ const Car3D = (function () {
     const width = w || 0.34;
     addWheel(rotating, 0, 0, 0, 0.34, width, bandColor, caliperColor, rimColor,
       grooved, tyreStyle, fixed, brakeStyle, wheelStyle);
-    // Upright and hub carrier give the wishbones/caliper a visible termination.
     // The hub carrier the wishbones and caliper terminate in. It was a cube
     // sitting inside the rim, visible through the spokes from every angle.
     addSpan(fixed, { z: 0.06, x: 0, y: 0, w: width * 0.72, h: 0.125, t: 0.60 },
@@ -2119,7 +2118,6 @@ const Car3D = (function () {
     };
   }
 
-
   function applyBodySplit(out, i0, i1, leftC, rightC) {
     for (let i = i0; i < i1; i++) {
       if (out.mat[i] !== SURFACES.paint) continue;
@@ -2569,7 +2567,6 @@ const Car3D = (function () {
       const engLed = engT === 2 ? [0.95, 0.22, 0.10] : engT === 0 ? [0.12, 0.82, 0.38] : [0.90, 0.62, 0.12];
       for (const lx of [-0.06, 0, 0.06])
         addBox(out, lx, 0.868, -0.30, 0.02, 0.014, 0.02, engLed, SURFACES.metal);
-      // FUEL: per-option filler cap colour.
       const fuelColor = fuelStyle ? fuelStyle.cap : (tier("fuel") === 2 ? [0.95, 0.28, 1.5] : [0.55, 0.52, 0.60]);
       const fuelDisplay = fuelColor.map((value) => Math.min(value, 1));
       addBox(out, 0.12, 0.795, -0.50, 0.075, 0.05, 0.12, [0.10, 0.10, 0.12], SURFACES.carbon);   // housing

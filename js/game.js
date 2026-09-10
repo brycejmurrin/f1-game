@@ -5,7 +5,6 @@
 (async function () {
 "use strict";
 
-// ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
 const canvas = $("game");
 const els = {
@@ -361,7 +360,6 @@ if (typeof Assets !== "undefined") {
   Assets.loadModels();
 }
 
-// ---------- rain overlay ----------
 // The 2D falling-streak overlay lives in js/fx/particles.js (Particles.rain*).
 // game.js decides the weather tier and hands booleans/speed in.
 let _lastFloodEmit = 0;   // prop-emissive ramp actually used this frame (debug: lightState)
@@ -370,7 +368,6 @@ function initRainDrops() {
   Particles.rainSeed(isWetRoad() && !isRaining());
 }
 
-// ---------- settings ----------
 // Persistence lives in js/core/store.js (GameStore): the cached localStorage
 // wrapper, the TT leaderboard, season identity/migration, hex<->rgb.
 const { store, ttBoard, ttBoardAdd, hexToRgb, rgbToHex, seasonDriverId } = GameStore;
@@ -482,7 +479,6 @@ function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "t
 let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
 function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
 
-// ---------- physics constants ----------
 // The immutable numbers live in js/physics/consts.js (global PhysicsConsts)
 // together with the rationale that tuned them; game.js destructures them once
 // here. Everything slider- or harness-tunable stays a `let` below.
@@ -838,7 +834,6 @@ function dirtyAirMul(wake, speed) {
   return 1 - DIRTY_AIR * wake * aeroShare * q;
 }
 
-// ---------- state ----------
 let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
 let cars = [], player = null;
@@ -978,7 +973,6 @@ let sectorIdx = 0, sectorValid = true;   // current sector + "entered it FORWARD
 let sectorBests = [Infinity, Infinity, Infinity], fieldSectorBests = [Infinity, Infinity, Infinity];   // player's / the FIELD's (timing-screen purple)  // best S1/S2/S3 times ever
 let sectorLast = [null, null, null];               // last lap's S1/S2/S3 times
 let frameSky = {}, frame = {};
-// ---------- sky / weather animation state ----------
 // Continuously increasing render clock (seconds) fed to the sky shader each
 // frame so clouds drift and stars twinkle even when the physics are frozen.
 let _skyT = 0, _skyHold = false;   // hold: __apex.renderClock(t, true) freezes the sky for a reproducible capture
@@ -1099,7 +1093,6 @@ function carPaintMat(base) {
 const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sample
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 
-// ---------- helpers ----------
 const clamp = M4.clamp, lerp = M4.lerp;   // shared scalar helpers (js/core/mat4.js) — ALIASED, not called through M4, so every hot-path site keeps its old call shape
 // Rotate an RGB grade-tint's HUE around the luminance axis by `deg`. Tints sit
 // near [1,1,1]; we rotate the chroma OFFSET from grey so a neutral tint stays
@@ -1279,7 +1272,6 @@ const _upVS = new Float32Array(3);   // the ROAD PLANE's normal in view space (w
 const _smpRoad = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // its own scratch: smp/smp2 are live elsewhere in the frame
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 
-// ---------- parts / player mods ----------
 // The single funnel every parts consumer goes through (setup-ui, recomputePlayerMods,
 // makeCars, partsVisualKey, renderStatBars). Branching HERE is what keeps a career
 // build fully isolated from the free-play garage: your career car and your Grand
@@ -1309,7 +1301,6 @@ function saveTeamParts(teamId, parts) {
   store.set("parts." + teamId, parts);
 }
 
-// ---------- liveries (custom paint jobs) ----------
 function getLiveryId(teamId) { return store.get("livery." + teamId, "default"); }
 function saveLiveryId(teamId, id) { store.set("livery." + teamId, id); }
 // Player-created liveries, stored per team as [{id,name,c1,c2,stripe?}].
@@ -1489,7 +1480,6 @@ function setCarRole(c, human, local) {
   c.isPlayer = !!local;
 }
 
-// ---- naming a car ACROSS peers ----------------------------------------------
 // cars[] index is not an identity: makeCars() drops the custom team unless the
 // player selected it and walks Career.gridDrivers(), so the grid's length and
 // order differ between two screens in the same race — the id on the wire used
@@ -1562,7 +1552,6 @@ function recomputePlayerMods() {
                              + "|L:" + getLiveryId(team.id));
 }
 
-// ---------- car setup ----------
 // The AI speed multiplier for one driver. Ratings apply in EVERY mode — the
 // grid has personality in a one-off Grand Prix too — and career layers its
 // own development deltas on top.
@@ -1960,7 +1949,6 @@ function currentCarGroundMat(c, out, dt) {
   return basisMat(_groundR, _groundU, _groundF, tmpP, out);
 }
 
-// ---------- track loading ----------
 function loadTrack(idx) {
   // Every loader releases selector ownership before replacing the world.
   _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
@@ -2142,7 +2130,6 @@ function isFloodActiveSession() {
     (raceTimeOfDay === "default" && track && track.def && track.def.night);
 }
 
-// ---------- race flow ----------
 // applyRaceSettings() (session lighting/weather/time-of-day) and the
 // per-track atmosphere bias live in js/lighting/atmosphere.js
 // (Atmosphere.create(G) — wired after the G façade below).
@@ -3206,8 +3193,6 @@ function quitToMenu() {
   refreshCareerButton();
 }
 
-
-// ---------- per-frame update ----------
 // Reusable rank buffer — refilled and sorted each physics step (up to 5x per
 // rendered frame) so we don't allocate a fresh array via cars.slice() each time.
 const ranked = [];
@@ -3566,7 +3551,6 @@ function updateCar(c, dt, ranked) {
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
 
-  // --- speed targets ---
   let vmax = VMAX * PACE * (c.human ? mods.speed : c.tierV * c.skill * dd.ai);
   // asymmetric rubber band — boost only when player is ahead; no artificial slow-down when behind
   // Rubber-band against the LEADING human, not "the" player: with a second
@@ -3681,7 +3665,6 @@ function updateCar(c, dt, ranked) {
     letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);
   }
 
-  // --- electric deploy ---
   let deploy = 0;
   c.otCool = Math.max(0, c.otCool - dt);
   if (c.otT > 0) c.otT -= dt;
@@ -3719,7 +3702,6 @@ function updateCar(c, dt, ranked) {
     c.deploying = deploy > 0.4;
   } else c.deploying = false;
 
-  // --- overtake mode ---
   // The car ahead ON THE ROAD (docs/PHYSICS.md: "within OT_GAP of the car
   // ahead"), not ranked[rank-2]: that is the classification neighbour — a
   // leader has none (a backmarker 0.5 s ahead could not be attacked), it can
@@ -3755,7 +3737,6 @@ function updateCar(c, dt, ranked) {
   if (c.isPlayer && c.otArmed && !c.wasArmed && soundOn) GameAudio.overtakeReady();
   c.wasArmed = c.otArmed;
 
-  // --- braking / target speed ---
   let braking = false;
   // Pedal travel 0..1 (analog on a pad trigger, 1 on any digital source). The
   // brake force and the longitudinal-accel estimate that feeds the friction
@@ -3902,7 +3883,6 @@ function updateCar(c, dt, ranked) {
     if (unstuckActive) { braking = false; brakeLvl = 0; }
   }
 
-  // --- active aero (X-mode / Z-mode) ---
   // Runs AFTER `braking` is known (touching the brake shuts the flaps) and
   // BEFORE vmax is consumed by the gearbox and the speed integration, so the
   // low-drag top speed applies on the same frame the flap opens.
@@ -3954,7 +3934,6 @@ function updateCar(c, dt, ranked) {
   // puts it 30 m into a field, which closes the flaps and measures nothing.
   c._vmaxNow = vmax;
 
-  // --- gearbox (player) ---
   // accelCeil: the speed a car ABOVE it is bled toward (never a teleport) and
   // the one below it accelerates up to — vmax plus the ERS overspeed margin, a
   // speed, so it rides the pace scale.
@@ -3973,7 +3952,6 @@ function updateCar(c, dt, ranked) {
     }
   }
 
-  // --- integrate speed ---
   // AI always drives; the player holds GAS unless auto-throttle is on (then the
   // car accelerates on its own and braking still takes over below).
   // Suppress auto-throttle while wallT > 0 (just bounced off a wall) so the car
@@ -4062,7 +4040,6 @@ function updateCar(c, dt, ranked) {
   // grass/run-off. So detect the kerb first and exclude it from "offroad".
   c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
 
-  // --- offroad ---
   c.offroad = Math.abs(c.x) > hw && !c.onKerb;
   if (c.offroad) {
     const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
@@ -4137,7 +4114,6 @@ function updateCar(c, dt, ranked) {
     if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { void e; } } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
   }
 
-  // --- lateral ---
   let steer;
   if (c.human) {
     steer = inp ? (inp.steer ?? 0) : Input.steer();
@@ -4544,7 +4520,6 @@ function updateCar(c, dt, ranked) {
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
     const loadF = FRONT_WEIGHT + wt, loadR = (1 - FRONT_WEIGHT) - wt;
-    // --- road-surface grip modifiers ---
     // bankMu computed above, shared with AI.
     // Vertical load: crests reduce normal force (car goes light, less grip);
     // valleys increase it (car feels planted). Estimated from slope change over
@@ -4956,7 +4931,6 @@ function updateCar(c, dt, ranked) {
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
-  // --- advance along track ---
   // Player s was advanced by velocity·tangent above; AI advances by speed*dt in Frenet.
   let oldS = c._prevS ?? c.s;
   if (!c.human) c.s = wrapS(c.s + c.speed * dt);
@@ -5110,7 +5084,6 @@ function updateCar(c, dt, ranked) {
   // takeover jumps s/x — recording it would corrupt the ghost trace).
   if (isTimeTrial() && c.isPlayer && !c.incidentInvalidLap) Ghost.record(c.lapTime, c.s, c.x);
 
-  // --- wrong-way + auto-rescue (player only) ---
   if (c.human && state === "race" && !c.finished) {
     // Moving backwards along the track at speed = going the wrong way. (A slow
     // reverse crawl to recover off a wall is fine and does NOT trip this.)
@@ -5419,7 +5392,6 @@ function appendCarTailLights() {
   LightTune.appendCarTailLights(frame, track, cars, player, gfx.mobileTier);
 }
 
-// ---------- cameras ----------
 // (render() itself is further down, after the garage preview — see the
 // `render` banner below it.)
 // Reusable camera-vantage solver — lives in js/camera/vantage.js (GameCams).
@@ -5435,7 +5407,6 @@ function camVantage(mode, s, x, spd, now, extra) {
   return GameCams.vantage(track, mode, s, x, spd, now, extra);
 }
 
-// ---------- car-setup live preview ----------
 // A standalone, non-track, non-player render path for the #carsetup screen:
 // openSetup() has no `player`/`cars` yet (makeCars() only runs at race-start),
 // so the studio() rig (buildStudioRig, above) can't be reused — it hard-depends
@@ -6059,7 +6030,6 @@ const _presentOpts = {};
 const _hazeWorld = [0, 0, 0];
 let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
-// ---------- render ----------
 const _rsEl = $("race-settings");      // the one menu screen that shows the flyby
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
 function render(dt) {
@@ -7446,10 +7416,8 @@ function render(dt) {
   }
 }
 
-// ---------- HUD ----------
 // HUD + minimap live in js/ui/hud.js (GameHud.create(G) below).
 
-// ---------- main loop ----------
 let physAcc = 0;                 // leftover sim time carried between frames
 let renderAlpha = 1;             // leftover-step fraction (0..1) for render interpolation
 // Adaptive-resolution governor + feature-shedding tiers + mobile crash
@@ -7559,11 +7527,9 @@ function tickBody(now) {
   if (state === "race" || state === "count") updateHud(false);
 }
 
-// ---------- car setup panel ----------
 // The CAR SETUP panel UI (stat bars, tabs, options, livery creator) lives in
 // js/garage/setup-sheet.js (SetupUI.create(G) — wired after the G façade).
 
-// ---------- UI wiring ----------
 // Select-screen UI (team/track grids, preview, circuit detail modal) lives in
 // js/ui/select-screen.js (Menus.create(G) — wired after the G façade).
 
@@ -7614,18 +7580,10 @@ document.addEventListener("pointerdown", () => {
   if (gestured) return; gestured = true; firstGesture();
 }, { once: true, capture: true });
 
-
-// UI SIZE / HUD SIZE + RESOLUTION live in js/ui/scale.js (UiScale.create(G)
-// — wired after Menus). Bug-explaining comments moved with the block.
-
-// RENDERER cycle lives in js/perf/quality-preset.js with GRAPHICS — wired at
-// DOMContentLoaded so SETTINGS shows it during (and after) a deferred backend load.
-
 // GRAPHICS presets + RENDERER cycle live in js/perf/quality-preset.js — it owns
 // #pm-gfx and #pm-renderer for EVERY device, and wires the preset's tier floor
 // into PerfGov.
 // It self-inits at DOMContentLoaded, so there is nothing to call from here.
-
 
 $("mb-race").onclick = () => {
   setFlow("gp"); session = "race";
@@ -7819,7 +7777,6 @@ $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings()
 // The LIGHTING TUNER panel UI lives in js/lighting/tuner-panel.js
 // (TunerPanel.create(G) — wired after the G façade).
 
-// ---------- pre-race screens ----------
 // RACE SETTINGS, QUALIFYING, CUSTOM TEAM and the GARAGE wiring. Everything from
 // here to the button wiring below is screen flow, not simulation.
 //
@@ -7918,12 +7875,10 @@ $("q-back").onclick = () => {
 
 // MY TEAM customize dialog — js/career/custom-team.js (CustomTeam.create above).
 
-// ---- garage preview camera ----
 // The chips in #cs-view, plus orbit-by-drag and zoom on the canvas itself. All
 // of it is gated on setupPreviewOn, so none of these listeners can touch the
 // camera during a race — the canvas is shared with the track render and, on
 // touch, with the steering.
-// ---- the CAMERA disclosure ----
 // The panel holds the whole camera set; only CAMERA and ACTIVE AERO show at
 // rest. Closing is driven by INTENT, not by "a click happened": a preset is an
 // aim-and-leave choice so it closes, while MOVE/zoom/SPIN repeat and must not
@@ -8194,7 +8149,6 @@ function setPaused(p) {
 }
 els.pausebtn.onclick = () => setPaused(true);
 
-// ---- Hide-HUD (clean-screen) mode ----
 // HUD: OFF (DISPLAY ▸ HUD fold) strips every overlay via a body class
 // (css/overlays.css) for a cinematic view; the small #hud-restore eye is
 // the only thing left and brings it all back. Session-only — reset on race start.
@@ -8218,7 +8172,6 @@ SettingRow.wire("pm-hidehud", {
 });
 $("hud-restore").onclick = () => setHudUserHidden(false);
 
-// ---- player camera modes (CAM button / C key) ----
 // The CAM button + picker grid + mode-cycle wiring live in js/camera/mode-switch.js
 // (broadcast-only — no physics). game.js keeps `camMode`/`camCutT` as closure
 // state (the render loop reads them); the module mutates them through G. The
@@ -8354,7 +8307,6 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmProbeOnLeave(); });
 
-// ---------- boot ----------
 // (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag
 // that nothing in js/, tests/, tools/ or index.html has ever set. The harness
 // it was written for is window.__apex, in js/agent/apex.js.)
@@ -8441,7 +8393,6 @@ window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
 requestAnimationFrame(tick);
 
-// --- debug / test hook (no effect unless explicitly called) ---
 // Lets a test harness stage the camera anywhere on the track without having to
 // drive there in real time (the software renderer used for screenshots is far
 // too slow to reach distant corners). Examples, from page.evaluate:

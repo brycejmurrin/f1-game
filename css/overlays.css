@@ -3,7 +3,6 @@
    Split from css/style.css (lines 1038-1311 of the original); the <link>
    order in index.html preserves the original source order, so the cascade
    is byte-identical to the pre-split sheet. See tools/manifest.cjs CSS. */
-/* ---------- touch controls ---------- */
 /* Every control button is the same size, with perfectly centred text. */
 /* Size and SPACING are one system, expressed as variables. They used to be a
    dozen hand-written constants (76 wide, stacked at 16/100/184/292/384) which
@@ -223,7 +222,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body.steer-buttons .hud-bottom { bottom: calc(112px + var(--sab) / var(--hud-z)); }
 }
 
-/* ---------- LANDSCAPE: short viewport, lots of width ---------- */
 @media (orientation: landscape) {
   /* HUD becomes a short horizontal strip at the very bottom so the big gear
      no longer floats up over the car */
@@ -722,7 +720,6 @@ body[data-density="compact"] #campicker {
   #save-warning strong, #save-warning-detail { grid-column: 1 / -1; }
 }
 
-/* ---------- how to play ---------- */
 /* Five landmarks turn a very long reference into something browsable. On a
    tall sheet the rail is a horizontal strip under the title; on a wide sheet
    it becomes a left contents rail. The <dl> owns the one vertical scroller
@@ -986,7 +983,6 @@ body[data-density="compact"] #campicker {
   font-size: var(--fs-micro);
   background: rgba(255, 255, 255, 0.14);
 }
-/* ---- the waiting room ---- */
 /* A definition list, because that is what this is: four labelled facts about
    the race. Grid rather than the default dl flow so label and value sit on one
    line and the column stays narrow. */
@@ -1043,7 +1039,6 @@ body[data-density="compact"] #campicker {
 #vsfriend .vs-ready.on { opacity: 1; color: #7CFC7C; }
 #vsfriend #vs-start[disabled] { opacity: 0.4; filter: saturate(0.3); }
 
-/* ---- room codes ---- */
 /* The code is meant to be READ ALOUD across a room, so it is the biggest thing
    on the screen and monospaced — a proportional font makes a run of capitals
    ambiguous at exactly the moment it matters. */

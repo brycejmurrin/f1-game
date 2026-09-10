@@ -285,7 +285,6 @@ const LiveryTex = (function () {
       ctx.strokeStyle = cssA(ink, 0.55);
       ctx.strokeText(text, cx, cy);
     }
-    // main fill
     ctx.fillStyle = css(ink);
     ctx.fillText(text, cx, cy);
     if (recipe.style === "stencil") {

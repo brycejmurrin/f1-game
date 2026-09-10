@@ -4,7 +4,6 @@
    Everything here is either identity (colour, type) or a layout decision keyed
    on how wide the SHEET is (@container sheet), never on the device. */
 
-/* ---------- inline icon glyphs (Lucide, ISC) ---------- */
 /* Sized in `em` so an icon tracks its button's font-size; currentColor makes it
    inherit the button text colour (and thus any team accent applied there). */
 .btn-ico {
@@ -15,7 +14,6 @@
   overflow: visible;
 }
 
-/* ---------- main menu ---------- */
 /* UI SCALE reaches the title screen through its CHILDREN, not through #overlay
    itself: this element carries the safe-area padding (below), and zooming that
    would divide the notch inset by the scale and slide the brand under hardware
@@ -469,7 +467,6 @@ body { --compact-at: 600px; --wide-at: 620px; }
   }
 }
 
-/* ---------- select screen ---------- */
 /* THE CIRCUIT PICKER IS A BROADCAST GRAPHIC. A strip of national flags across
    the top (#sel-shelf: the filter/search toolbar, then #sel-tracks, the one
    sideways scroller), and under it the HERO (#sel-track-section): the in-game
@@ -978,7 +975,6 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 .team-tile { min-height: var(--tap); }
 
-/* ---------- chips ---------- */
 .chip-row { display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.7); }
 .sel-chip {
   /* on the height ladder (css/tokens.css) rather than sized by padding alone */
@@ -1109,7 +1105,6 @@ h3.sel-label {
    read as danger, not as the same primary button. */
 #ss-apply.armed { color: var(--text); border-color: var(--red); background: var(--armed-fill); }
 
-/* ---------- track picker rows ---------- */
 /* The LIST form of .track-row: the season-setup circuit shelf (#ss-pool) and
    any other vertical catalogue. The select screen's strip restyles these same
    classes as flag tiles under #sel-tracks (see the select-screen section). */
@@ -1169,7 +1164,6 @@ h3.sel-label {
   border-bottom: 1px solid var(--card-line);
 }
 
-/* ---------- race settings ---------- */
 /* Eight SETTING ROWS (css/components.css .set-row, js/ui/setting-row.js) —
    the same control as pause > SETTINGS, so the two screens a player sees
    before and during every race share one grammar. One column on a tall
@@ -1207,7 +1201,6 @@ h3.sel-label {
    line (measured 2026-09-05, sheet 369px). The names were shortened to fit
    instead — see the rules list in game.js buildRaceSettings. */
 
-/* ---------- customize my team ---------- */
 #customize .cz-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--gap); margin: 6px 0;

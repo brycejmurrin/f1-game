@@ -420,7 +420,6 @@ const WGX = (function () {
     return out;
   }
 
-
   // IEEE-754 half → float32 (runtime output probe reads rgba16float scene texels).
   function _f16to32(h) {
     const s = (h & 0x8000) >> 15, e = (h & 0x7C00) >> 10, f = h & 0x03FF;
@@ -1022,7 +1021,6 @@ const WGX = (function () {
     const _instDrawOpts = { _instanced: true }; // reused; fields overwritten each draw
     const _dynOff = [0];   // single-element dynamic-offset scratch
 
-    // Culling frame state.
     let frameViewProj = null, frameEye = null, frameCullDist = 0;
     // Per-chunk lamp state: knob + full baked set (frame fields, cleared by
     // day), the trackLightSBO generation, and the chunkIdxSBO segment
@@ -1059,7 +1057,6 @@ const WGX = (function () {
     // "built during boot" and "built while driving".
     let _pipeAtFirstPresent = -1;
 
-    // Shadow-pass objects.
     let shadowTex = null, shadowView = null, shadowSampler = null;
     let envCubeView = null, ssrView = null;   // env-probe cube + SSR placeholders until their passes run
     let _ssrReady = false;   // SSR flips true once its pass runs (env reflection is analytic-sky — no probe gate needed)
@@ -1138,7 +1135,6 @@ const WGX = (function () {
     const _retiredBufs = [];   // buffers replaced MID-FRAME; destroyed after the frame's submit
     let skyPipelineMS = null;
 
-    // Blocker map objects.
     let blockerTex = null, blockerView = null, blockerSampler = null;
     let blockerUBO = null, blockerBG = null, blockerPipeline = null, blockerG0Layout = null;
 
@@ -1156,8 +1152,7 @@ const WGX = (function () {
         depthSampleView = null, blitBindGroup = null, _texW = 0, _texH = 0,
         _targetRetryAt = 0, _targetRetryW = 0, _targetRetryH = 0;
 
-    //    _buildPost; size-dependent targets + bind groups (re)built in
-    //    ensureTargets). _postReady/_fxReady gate a safe fallback to the blit. ──
+    // _postReady/_fxReady gate a safe fallback to the blit.
     let _postReady = false, _fxReady = false, _cfgWarned = false;
     let ssaoTex = null, ssaoView = null, godrayTex = null, godrayView = null,
         ssaoBlurTex = null, ssaoBlurView = null, godrayBlurTex = null, godrayBlurView = null,
@@ -3314,7 +3309,6 @@ const WGX = (function () {
       d.set(_vpGpu, 0);
       frameVPGpu.set(_vpGpu);   // persistent copy for the FX passes (post/fx)
       const eye = f.eye || [0,0,0], sd = f.sunDir || [0.3,0.6,0.5], sc = f.sunColor || [1,0.95,0.9];
-      // Post/FX frame extras.
       frameSunDir = f.sunDir || null;
       frameSunColor = f.sunColor || null;
       frameProjRaw = f.proj || null;
@@ -6216,5 +6210,4 @@ const WGX = (function () {
   };
 })();
 
-// No-build global export.
 if (typeof window !== "undefined") window.WGX = WGX;

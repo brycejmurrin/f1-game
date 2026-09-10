@@ -38,9 +38,19 @@ const shortenHeaders = args.includes("--headers");
 const stripNarrative = args.includes("--narrative");
 const paths = args.filter((a) => !a.startsWith("-"));
 
-const DIVIDER = /^\s*\/\/\s*[-=─═]{3,}/;
+// Same shape as BLOCK_DIVIDER: a banner is dashes alone, or a label FENCED by
+// dash runs. `// --- combined slip (traction circle): grip already spent braking`
+// opens with three dashes and then keeps talking for four more lines — matching
+// on the opening run alone deleted the first line of thirteen such physics
+// blocks in game.js and left the rest orphaned mid-sentence.
+const DIVIDER = /^\s*\/\/\s*[-=─═]{3,}(?:.*[-=─═]{3,})?\s*$/;
 const BOX_DIVIDER = /^\s*\/\/\s*[═]{10,}\s*$/;
-const BLOCK_DIVIDER = /^\s*\/\*[\s=*\-─]{3,}[\s\S]*?\*\/\s*$/;
+// A banner has a dash run on BOTH sides of its label. Requiring the trailing
+// run is what keeps a CSS custom-property comment out of this class: `/* --fs-2
+// (15px): under .sheet zoom 0.9 paints >=13.5px */` opens with " --", which is
+// three divider characters, and the old pattern took the rest on trust — it ate
+// four measured why-comments in css/ before this line was written.
+const BLOCK_DIVIDER = /^\s*\/\*[\s=*\-─═]{3,}(?:[\s\S]*?[\s=*\-─═]{3,})?\*\/\s*$/;
 const CATEGORY = /^\s*\/\/\s*(keyboard|gamepad|tilt|touch)\s*$/i;
 const EDGE_LABEL = /^\s*\/\/\s*edge-triggered:/i;
 const LINE_COMMENT = /^\s*\/\//;

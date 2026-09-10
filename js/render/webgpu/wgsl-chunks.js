@@ -21,7 +21,6 @@ fn hash3(p_in: vec3<f32>) -> f32 {
   return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
 }`;
 
-  //    js/render/glx/shaders/glsl-chunks.js) ──
   // Depends on `hash` (uses hash2). The old GLSL vnoise/vnoise2 duplication is
   // gone — the sky-family GLSL copy lives once there, under this chunk's name.
   const vnoise = `

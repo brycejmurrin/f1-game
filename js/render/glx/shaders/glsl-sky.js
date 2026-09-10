@@ -85,7 +85,6 @@ void main() {
   // Overcast factor: drives grey-shift and corona damping under heavy cloud.
   float overcast = smoothstep(0.5, 1.0, uCloud);
 
-  // --- Sky gradient ---
   vec3 c;
   if (up >= 0.0) {
     // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
@@ -166,7 +165,6 @@ void main() {
     c = mix(uHorizon * 0.85, vec3(0.035, 0.030, 0.022), gnd * gnd);
   }
 
-  // --- Procedural cloud layer ---
   // Cloud plane is drifted slowly by uTime (no drift when time=0 → deterministic).
   // Coverage/thickness seen along this ray, exported for the city-glow cloud
   // pickup below (clouds over a lit city catch the uplight on their bellies).
@@ -278,7 +276,6 @@ void main() {
     c += vec3(0.10, 0.13, 0.20) * uLightning * (1.0 - cityCov * 0.6);
   }
 
-  // --- Mie forward scatter: glow toward the sun, strongest near the horizon ---
   // Damped under overcast (corona hidden behind cloud).
   float upPos = max(up, 0.0);
   float mieDamp = 1.0 - overcast * 0.85;
@@ -286,7 +283,6 @@ void main() {
   // keeps the mix blend valid when the knob pushes the amount past 1.
   c = mix(c, uSunColor, clamp(pow(sd, 5.0) * 0.22 * max(1.0 - upPos * 1.5, 0.0) * mieDamp * uMieScatter, 0.0, 1.0));
 
-  // --- Horizon glow in the sun's compass direction ---
   vec2 sunH = vec2(uSunDir.x, uSunDir.z);
   float sunHLen = length(sunH);
   if (sunHLen > 0.05) {
@@ -297,7 +293,6 @@ void main() {
     c += uSunColor * pow(hdot, 6.0) * hband * hband * 0.22 * sunHLen * mieDamp;
   }
 
-  // --- Sun corona + disc (damped under overcast) ---
   // goldenFactor: 1 when the sun is at the horizon, 0 high up — drives reddening,
   // a broader warm aureole, a vertically flattened disc, and a brighter HDR core.
   // coronaDamp folds in the NIGHT gate: the sun disc + corona + inner ring all
@@ -336,7 +331,6 @@ void main() {
     c += discCore * disc;
   }
 
-  // --- Stars (night tracks) ---
   if (uStars > 0.5 && up > 0.05) {
     // ROUND point stars. The old version lit whole direction-grid CELLS, which
     // project as elongated dashes on screen (they read as "tiny rays"), and its
@@ -369,7 +363,6 @@ void main() {
     }
   }
 
-  // --- Moon disc + halo (night tracks) ---
   if (uMoon > 0.0 && uStars > 0.5) {
     // Fixed moon direction: high in the sky, to the right of the sun's compass direction.
     // Using a stable world-space direction so it doesn't follow the camera.

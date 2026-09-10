@@ -199,7 +199,6 @@ const GLX = (function () {
   // SHD = shadow maps (sun/car/lamp + PCSS blocker), CHK = chunked meshes.
   let core = null, PST = null, SHD = null, CHK = null;
 
-
   // Material uniform cache — skip redundant per-draw scalar uploads.
   let _matEmissive = -1, _matAlpha = -1, _matRough = -1, _matMetal = -1, _matSpec = -1, _matDetail = -1, _matCC = -1, _matCP = -1, _matSpark = -1;
   // uNumLights, last value written to the LIT program. Unlike the _mat* caches
@@ -1898,7 +1897,6 @@ const GLX = (function () {
     return alpha;
   }
 
-  // ---------- instanced draw (the TrackGraph.batches() consumer) ----------
   // One canonical mesh + a per-instance transform, instead of the same geometry
   // fused into the world N times. See js/track/scenery/graph.js and
   // docs/research/SCENE-GRAPH-PLAN.md; the producer is graph.batches().

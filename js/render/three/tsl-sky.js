@@ -196,7 +196,6 @@
       // Overcast factor: grey-shift + corona damping under heavy cloud.
       const overcast = smoothstep(0.5, 1.0, U.cloud).toVar();
 
-      // --- Sky gradient ---
       const c = vec3(0.0).toVar();
       If(up.greaterThanEqual(0.0), () => {
         // Under heavy overcast, flatten zenith/horizon toward a uniform grey.
@@ -251,7 +250,6 @@
         c.assign(mix(U.horizon.mul(0.85), vec3(0.035, 0.030, 0.022), gnd.mul(gnd)));
       });
 
-      // --- Procedural cloud layer ---
       // Coverage/thickness along this ray, hoisted for the city-glow cloud
       // pickup + star occlusion below.
       const cityCov = float(0.0).toVar();
@@ -345,13 +343,11 @@
         c.addAssign(vec3(0.10, 0.13, 0.20).mul(U.lightning).mul(cityCov.mul(0.6).oneMinus()));
       });
 
-      // --- Mie forward scatter: glow toward the sun, strongest near horizon ---
       const upPos = max(up, 0.0).toVar();
       const mieDamp = overcast.mul(0.85).oneMinus().toVar();
       c.assign(mix(c, U.sunColor, clamp(pow(sd, 5.0).mul(0.22)
         .mul(max(upPos.mul(1.5).oneMinus(), 0.0)).mul(mieDamp).mul(U.mieScatter), 0.0, 1.0)));
 
-      // --- Horizon glow in the sun's compass direction ---
       const sunH = vec2(U.sunDir.x, U.sunDir.z).toVar();
       const sunHLen = length(sunH).toVar();
       If(sunHLen.greaterThan(0.05), () => {
@@ -417,7 +413,6 @@
         });
       });
 
-      // --- Moon disc + halo (night tracks; stable world-space direction) ---
       If(U.moon.greaterThan(0.0).and(U.stars.greaterThan(0.5)), () => {
         const moonDir = normalize(vec3(0.42, 0.72, 0.55));
         const md = dot(dir, moonDir).toVar();

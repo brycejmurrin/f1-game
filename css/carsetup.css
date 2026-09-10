@@ -24,7 +24,6 @@
 .sel-edit-row { display: flex; gap: var(--gap); margin-top: 10px; flex-wrap: wrap; }
 .sel-edit-row .sel-edit { margin-top: 0; }
 
-/* ---------- the docked screen ---------- */
 /* No backdrop and no pointer capture: the live car preview behind stays both
    visible and (harmlessly) untouched. `place-items: stretch end` is the whole
    docking trick — the sheet fills the safe box vertically and sits against its
@@ -85,7 +84,6 @@
   /* Never wider than the safe box; the formula above decides the rest. */
   width: var(--cs-sheet-w);
 }
-/* ---------- portrait: split the OTHER way ---------- */
 /* A portrait phone has no width to give the car — `min(100%)` above hands the
    panel the whole 393px and the car is left rendering behind an opaque sheet,
    which is what the gallery shot showed: a sliver of orange behind the category
@@ -133,7 +131,6 @@
 #cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-bar-wrap { display: none; }
 #cs-inner[data-shape="tall"] #cs-stats-inner .cs-stat-val { flex: 0 0 auto; }
 
-/* ---------- header ---------- */
 /* .sheet-head is a space-between row; the setup header is a stack of three
    bands (title / budget / stats) that the container query below folds into two
    rows once there is width for it. */
@@ -148,7 +145,6 @@
   color: var(--steel);
 }
 
-/* ---------- budget ---------- */
 #cs-budget-wrap { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.4); min-width: 0; }
 /* A METER, not a hairline. At 6px on a 10%-white track this was invisible —
    the one number on the screen that constrains every choice you make and it
@@ -187,7 +183,6 @@
   border-color: rgba(0,204,136,0.4);
 }
 
-/* ---------- stat bars ---------- */
 #cs-stats-inner {
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--card-line); border-radius: var(--r-md);
@@ -223,7 +218,6 @@
 .cs-stat-val.up { color: #4df; }
 .cs-stat-val.down { color: var(--spark); }
 
-/* ---------- body: category pane + option pane ---------- */
 /* STACKED: one horizontal category strip + one options scroller.
    A wrapping grid with max-height: 48% plus .pane overflow-y:auto made the
    tabs a second vertical catalogue next to #cs-options — two nested
@@ -334,7 +328,6 @@
 #cs-options > .sel-label:not(:first-child) { margin-top: calc(var(--gap) * 0.6); }
 #cs-options > .sel-edit-row { margin-top: calc(var(--gap) * 0.4); }
 
-/* ---------- category tabs ---------- */
 .cs-tab {
   display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px;
   padding: 6px 10px; border-radius: var(--r-md); min-width: 0; overflow: hidden;
@@ -364,7 +357,6 @@
 .cs-tab.active .cs-tab-lbl { color: var(--text); }
 .cs-tab.active .cs-tab-cur { color: color-mix(in oklab, var(--text) 72%, transparent); }
 
-/* ---------- option rows ---------- */
 .cs-opt {
   display: flex; align-items: flex-start; gap: calc(var(--gap) * 0.8); text-align: left; width: 100%;
   padding: 8px 11px; border-radius: var(--r-md);
@@ -426,7 +418,6 @@
 }
 .cs-opt.exclusive.active .cs-opt-dot { border-color: #e6c02a; background: radial-gradient(circle,#fff 0 3px,#e6c02a 4px); }
 
-/* ---------- R&D-locked rows (career) ---------- */
 /* Not-yet-yours, but still a row you read and press: this is the catalogue of what
    the car could become, so it must stay legible. Hence a RECESSED surface (--surf-1
    under --edge, the same language the pressed buttons use) rather than the flat
@@ -451,7 +442,6 @@
   color: color-mix(in oklab, var(--red) 55%, #fff);
 }
 
-/* ---------- livery rows ---------- */
 /* paint-job swatch (two-tone, optional centre racing stripe) in the LIVERY tab */
 .cs-liv-swatch {
   flex: 0 0 auto; width: 38px; height: 24px; border-radius: var(--r-sm); align-self: center;
@@ -638,7 +628,6 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 .cs-liv-edit:active { background: color-mix(in srgb, var(--edit-fill) 32%, transparent); color: #fff; }
 .cs-liv-custom .cs-opt-tag { background: rgba(80,210,255,0.18); color: #4df; }
 
-/* ---------- inline livery creator ---------- */
 .cs-liv-editor { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.7); padding: 2px; }
 .cs-liv-ed-head {
   font-size: var(--label); font-weight: 800; letter-spacing: var(--ls-5); color: var(--dim);
@@ -741,7 +730,6 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 .cs-liv-ed-cancel { background: var(--plate); color: var(--dim); border: 1px solid var(--card-line); }
 .cs-liv-ed-save { background: var(--red); color: #fff; border: 1px solid var(--red); }
 
-/* ---------- foot ---------- */
 /* BACK and DONE, centred in the pinned bar — and the bar is NARROW here, which
    is the whole reason these two extra declarations exist.
    (The note this rule used to carry said "DONE is the only action". That
@@ -1309,7 +1297,6 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
    having, and it comes straight back. */
 #cs-inner[data-density="compact"] #cs-budget-bar { display: none; }
 
-/* ---------- the SHORT garage head ---------- */
 /* `data-density="compact"` (js/game/sheetshape.js) means the sheet is short in
    its OWN units — which is what UI SIZE 150% does to any screen, since `zoom`
    shrinks the coordinate space the CSS is written in while the viewport stays
@@ -1405,7 +1392,6 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
   min-width: 0; margin: 0;
 }
 
-/* ---------- portrait: the car gets the bottom band ---------- */
 /* Now affordable, and only because the strip above paid for it. The budget on a
    393x852 phone at UI SIZE 115%, panel 828: head 226 + categories 60 + foot 87
    = 373, where the category GRID alone used to be 211 of that. 70% leaves the

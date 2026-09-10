@@ -485,7 +485,6 @@ const GameAudio = (function () {
 
   }
 
-
   function init() {
     // init is only ever called from a user gesture
     if (ctx) {

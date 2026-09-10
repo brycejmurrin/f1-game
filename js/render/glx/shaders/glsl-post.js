@@ -12,7 +12,6 @@
 "use strict";
 
 (function () {
-  // ---- Post-processing (HDR scene target -> bloom -> tonemap + vignette) ----
   // Fullscreen triangle via gl_VertexID; vUV in 0..1.
   const POST_VS = `#version 300 es
 out vec2 vUV;

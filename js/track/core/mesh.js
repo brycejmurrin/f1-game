@@ -865,7 +865,6 @@ const TrackMesh = (function () {
     return { pos, nrm, col, idx };
   }
 
-  // ---- STARTING GRID ----------------------------------------------------
   //
   // gridSlot() is the ONE definition of where slot `i` sits. js/game.js's
   // gridUp() places the cars from it and buildGridBoxes() paints the boxes from

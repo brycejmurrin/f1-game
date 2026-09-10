@@ -28,7 +28,6 @@
         api.backdrop(k, side, dist, sz, col);
       };
 
-
       {
         const BUND   = [0.44, 0.38, 0.28];
         const PADDY  = [0.36, 0.44, 0.34];   // green shoots standing in water

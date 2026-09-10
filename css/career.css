@@ -35,7 +35,6 @@
 #cr-inner { --sheet-w: 1020px; --fit-at: 300px; --compact-at: 480px; }
 #cr-inner:not([data-shape="tall"]) { --fit-at: 220px; }
 
-/* ---------- head ---------- */
 #cr-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
 #cr-titlebar { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 #cr-sub {
@@ -50,7 +49,6 @@
 .cr-meter-lbl { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); }
 .cr-meter-val { font-family: var(--font-hud); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
-/* ---------- body ---------- */
 /* THE STACKED LAYOUT, and it must be gated on `:not([data-pair="on"])` — see the
    `.pane-pair` contract in css/components.css. An ungated `#cr-body` rule is
    (1,0,0) and beats the primitive's (0,3,0), which leaves a flex column laid out
@@ -162,7 +160,6 @@
 #cr-left > .sel-label:first-child, #cr-right > .sel-label:first-child { margin-top: 0; }
 .cr-note { font-size: var(--fs-2); line-height: 1.45; color: var(--dim); margin-bottom: 8px; }
 
-/* ---------- cards ---------- */
 /* THE PRESSABLE-CARD CORE, once. Five card classes wrote the same surface
    trio byte for byte, and the five pressable ones the same button-undo
    quintet; each class below keeps only its own layout. The record card is
@@ -197,7 +194,6 @@
 .cr-nr-name { font-size: 18px; font-weight: 800; font-style: italic; }
 .cr-nr-country { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
 
-/* ---------- new-career setup ---------- */
 .cr-flavours { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
 .sheet[data-shape="wide"] .cr-flavours { grid-template-columns: 1fr 1fr; }
 .cr-flavour {
@@ -252,7 +248,6 @@
 .cr-seat-role { font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); }
 .cr-seat-who { font-size: var(--fs-micro); color: var(--dim); }
 
-/* ---------- foot ---------- */
 /* GO is the primary action and keeps full weight; MAIN MENU and GARAGE are the
    half-height `alt minibtn` pair, so the row reads as one action plus two exits. */
 /* Buttons pack LEFT, like #select's BACK/START. The primary used to be pushed to
@@ -286,7 +281,6 @@
   justify-content: space-around;
 }
 
-/* ---------- end of season (#career-offers) ---------- */
 /* A .dim top-layer <dialog> over #career (z-index 25), the same relationship
    #quali has to the screen that opened it — the hub is still where you are,
    this is the decision on top of it (showModal() stacks it; no z-index needed,
@@ -325,7 +319,6 @@
 }
 .co-offer.staying .co-offer-tag { background: rgba(255, 255, 255, 0.14); color: var(--dim); }
 
-/* ---------- career history (#career-history) ---------- */
 /* Same relationship to the hub as #career-offers: a .dim modal laid over it, at
    the same z-index because only one of the two is ever open. Narrower than the
    offers sheet — a totals card and a column of season rows are both short lines,
@@ -349,7 +342,6 @@
    so a bare figure would read as an index instead of a title finish. */
 #ch-body .res-pos { width: 32px; }
 
-/* ---------- qualifying (#quali) ---------- */
 /* A .dim modal, unlike #career — it lays over whatever screen sent you here and
    the session behind it is still the thing you are in. Rows are the shared
    .res-row vocabulary from css/components.css; the only new part is the time
@@ -385,7 +377,6 @@
    UNLAYERED, and unlayered rules outrank every layer in the project.
    See tests/unit/css-layers.test.mjs. */
 
-/* ---------- the slot picker ---------- */
 /* Three careers can be live at once (Career.SLOTS). Each row is a CARD YOU PRESS
    plus a DELETE beside it, laid out as a grid rather than a flex row so the
    delete button keeps a fixed column and the summaries stay left-aligned with
@@ -458,7 +449,6 @@
   color: #fff; border-color: var(--red); background: var(--armed-fill);
 }
 
-/* ---------- how it works (#career-guide) ---------- */
 /* A reading sheet, so it is narrower than the hub and its prose gets a real
    measure rather than the full 1020px the career page runs at. A top-layer
    <dialog> over #career, like the history sheet — both are read-only modals
@@ -486,7 +476,6 @@
 .cg-p { margin: 0; font-size: var(--fs-micro); line-height: 1.5; color: var(--dim); }
 .cg-card .cr-row + .cg-p { margin-top: 3px; }
 
-/* ---------- the round's earnings, on the results sheet ---------- */
 /* Career only. Sits between the classification and the championship, because it
    is what the classification MEANT — the money is the consequence of the finish,
    and the standings are the longer story either side of it. */
@@ -516,7 +505,6 @@
 .res-settle-row.total .res-settle-v { color: #fff; }
 .res-settle-row.rep { font-size: var(--fs-micro); }
 
-/* ---------- the seats within reach ---------- */
 /* offerBar(tier) is already a visible ladder in the rules — this is it on
    screen. Rows are tiers, best at the top, so the climb reads downward and the
    line between OPEN and "needs N" is where the career currently stands. */
@@ -540,7 +528,6 @@
 .cr-ladder.open .cr-ladder-k { color: #fff; }
 .cr-ladder.open .cr-ladder-v { color: var(--red); }
 
-/* ---------- extra funds ---------- */
 .cr-cheats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .cr-cheats .sel-chip { flex: 1 1 4.5rem; min-width: 0; }
 /* Practice cheats are a native disclosure on the hub. No new class: the

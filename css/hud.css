@@ -5,7 +5,6 @@
    components layer and before overlays, matching its former load position, so
    the responsive/overlay sheets still win their overrides. See
    tools/manifest.cjs CSS. */
-/* ---------- HUD ---------- */
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 
 /* HUD SIZE, on the CLUSTERS rather than on #hud. #hud is the full-screen
@@ -535,7 +534,6 @@ body[data-density="compact"] #announce {
   font-size: clamp(22px, calc(6 * var(--vwzh)), 40px);
 }
 
-/* ---------- start lights ---------- */
 #lights {
   position: fixed;
   top: calc((18svh + var(--sat)) / var(--hud-z));
@@ -591,7 +589,6 @@ body[data-density="compact"] #announce {
   text-shadow: 0 0 22px color-mix(in srgb, var(--slower) 85%, transparent);
 }
 
-/* ---------- in-game metrics overlay (js/perf/metrics-overlay.js) ---------- */
 /* Position is data-pos=left|right (AUTO resolves in JS). Left is the
    phone-landscape default so the panel cannot sit on BRAKE/GAS. Dock
    clearance is the bottom budget — the old 80px floor still overlapped
@@ -749,7 +746,6 @@ body[data-density="compact"] #announce {
   background: color-mix(in srgb, var(--plate-opaque) 80%, transparent);
 }
 
-/* ---------- photo mode (free-fly camera) ---------- */
 /* Full-screen click-through overlay; only the sticks/buttons take pointer input
    so a drag on the empty scene rotates the look (handled in game.js). */
 #photo-controls {

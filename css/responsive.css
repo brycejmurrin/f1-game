@@ -8,12 +8,10 @@
    Anything that reads "on a phone, move THIS control" belongs in one of those
    two places, not here. */
 
-/* ---------- DESKTOP / MOUSE (pointer: fine) ---------- */
 /* Hide phone-only controls that make no sense with a keyboard */
 body.desktop #pm-steer-item,
 body.desktop #pm-calib { display: none !important; }
 
-/* ---------- LARGE SCREENS (iPad, desktop) ---------- */
 /* The height half of this condition now comes from data-density, measured in the
    units the content is actually laid out in (js/game/sheetshape.js). Orientation
    and width stay media queries: zoom does not distort either.
@@ -121,7 +119,6 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #disclaimer { font-size: clamp(11px, calc(0.8 * var(--vwz)), 14px); }
 }
 
-/* ---------- LARGE PORTRAIT (iPad upright, a rotated monitor) ---------- */
 /* Keeps the stacked composition — a tall screen has height to spend, not width —
    but not the phone's SIZES. A 340px button column centred in an 834px iPad left
    the menu as a small island with ~250px of dead space either side, and the type

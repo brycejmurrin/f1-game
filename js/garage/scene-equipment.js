@@ -164,7 +164,6 @@ function buildEquipment(g, liv, ctx) {
   for (const hx of [-0.7, 0.7]) tube(g.mid, [SCREEN[0] + hx, SCREEN[1] + 0.72, SCREEN[2]], [SCREEN[0] + hx, 4.98, SCREEN[2]], 0.02, STEEL, 6, MAT.METAL);
 }
 
-
   return { RUBBER, HOSE, FAN, SCREEN, COMPOUND, build: buildEquipment };
 })();
 if (typeof window !== "undefined") window.GarageEquipment = GarageEquipment;

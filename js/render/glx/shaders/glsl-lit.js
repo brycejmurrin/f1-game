@@ -215,7 +215,6 @@ vec3 F_Schlick(float VoH, vec3 f0, float f90) {
   return f0 + (vec3(f90) - f0) * (v2 * v2 * v);
 }
 
-// --- Procedural surface texture (value noise on world XZ; no UVs needed) ---
 ${GLXChunks.surfaceNoise}
 ${GLXChunks.ignoise}
 // ── Procedural per-material surface texture (triplanar, UV-free) ─────────────
@@ -1114,7 +1113,6 @@ void main() {
   if (uShadowTintAmt > 0.001) {
     color *= mix(vec3(1.0), vec3(0.90, 0.96, 1.12), uShadowTintAmt * clamp(1.0 - litNoL, 0.0, 1.0));
   }
-
 
   // ── Physically-based punctual lights (floodlights / street lamps) ─────────
   // Each lamp is a REAL spotlight: windowed inverse-square falloff (the standard

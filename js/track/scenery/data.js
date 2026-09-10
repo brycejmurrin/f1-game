@@ -59,7 +59,6 @@ const TrackSceneryData = (function () {
     8: ["top", "topL", "topR", "mid", "botL", "botR", "bottom"], 9: ["top", "topL", "topR", "mid", "botR", "bottom"],
   };
 
-
   // Roadside planting + lighting. Every circuit — city, desert AND forest/green
   // — authors its own `furniture` row in js/circuits/<id>.js so no two tracks
   // share trees and lamps: { tree: palm|broad|fir|cypress|stonePine|

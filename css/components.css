@@ -56,7 +56,6 @@ input[type="range"] {
 }
 input[type="range"]:disabled { cursor: default; }
 
-/* ---------- screen: full-viewport overlay ---------- */
 .screen {
   position: fixed; inset: 0;
   display: grid;
@@ -130,7 +129,6 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   .screen.dim { background: rgba(0, 0, 0, 0.92); }
 }
 
-/* ---------- sheet: head / body / foot ---------- */
 .sheet {
   display: grid;
   /* body is the only flexible row, and minmax(0,…) lets it actually shrink —
@@ -278,7 +276,6 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   background: var(--grad-rule);
   pointer-events: none;
 }
-/* ---------- the SHORT sheet ---------- */
 /* `data-density` is written by js/game/sheetshape.js from the sheet's height in
    its OWN units — the header there explains why neither a media query nor the
    `sheet` container can answer this (one is blind to `zoom`, the other to
@@ -425,7 +422,6 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 .pane-pair.pair-foot-full[data-pair="on"] > .sheet-foot { grid-column: 1 / -1; grid-row: 3; }
 .pane-pair.pair-foot-full[data-pair="on"] .pair-main { grid-row: 2; }
 
-/* ---------- pane: a scroll region ---------- */
 .pane {
   overflow-y: auto;
   /* overflow-x is pinned to hidden ON PURPOSE. Setting only overflow-y computes
@@ -634,7 +630,6 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 }
 @keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
 
-/* ---------- section label ---------- */
 .sel-label {
   color: var(--steel);
   font-size: var(--label); font-weight: 700;
@@ -698,7 +693,6 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
 
-/* ---------- buttons ---------- */
 .bigbtn {
   display: block;
   /* --vwz, not bare vw: .bigbtn lives inside .sheet and inside #overlay > *,
@@ -852,7 +846,6 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   min-height: var(--chip-h); min-width: var(--chip-h);
 }
 
-/* ---------- dialog sheets (pause menu, settings, results, …) ---------- */
 /* Every one of these is `.screen > .sheet`. --sheet-w is the width cap;
    --fit-at (where set) inherits onto the inner .sheet so classifyFit can
    shrink the sheet at 200% UI size. Landscape is a viewport fact. */

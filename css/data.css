@@ -408,7 +408,6 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-wx-label { font-size: var(--fs-1); letter-spacing: var(--ls-4); color: var(--dim); }
 .dh-wx-value { font-size: var(--fs-5); font-weight: 700; color: var(--text); margin-top: calc(var(--gap) / 6); }
 
-/* ---------- telemetry tab ---------- */
 .dh-driverpick { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 10px; }
 .dh-dchip {
   font-size: var(--fs-micro); font-weight: 800;
@@ -489,7 +488,6 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
 .dh-leg-line .dh-legend-dot { width: 14px; }
 .dh-legend-dot { width: 10px; height: 3px; border-radius: var(--r-xs); display: inline-block; }
 
-/* ---------- lap-replay transport + gauge dashboard ---------- */
 /* the three live-tab control strips share one flex-centre statement */
 .dh-transport, .dh-livecontrols, .dh-class-head { display: flex; align-items: center; }
 .dh-transport { gap: calc(var(--gap) * 2 / 3); margin: calc(var(--gap) * 0.5) 0; flex-wrap: wrap; row-gap: calc(var(--gap) * 0.5); }
@@ -541,7 +539,6 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-gdelta.dh-pos { color: var(--faster); }
 .dh-gdelta.dh-neg { color: var(--slower); }
 
-/* ---------- live controls + sortable classification ---------- */
 .dh-livecontrols { gap: calc(var(--gap) * 2 / 3); margin-bottom: 10px; }
 .dh-livebtn {
   font-size: var(--fs-2); font-weight: 800; letter-spacing: var(--ls-3);
@@ -557,7 +554,6 @@ body[data-width="narrow"] .dh-thint { display: none; }
    variant of .dh-livebtn, not a new component. */
 .dh-livebtn[data-block] { width: 100%; margin-top: var(--gap); }
 .dh-livebtn[data-block="tight"] { margin-top: calc(var(--gap) / 2); }
-/* ---------- compare lanes (multi-driver + cross-session telemetry) ---------- */
 /* session badge on a lane row / header / legend chip (R, Q, P2, …) */
 .dh-lane-ses {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
@@ -604,7 +600,6 @@ body[data-width="narrow"] .dh-thint { display: none; }
 }
 .dh-sortbtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 
-/* ---------- session picker (LIVE + TELEMETRY) ---------- */
 .dh-picker {
   display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 2 / 3) var(--gap); align-items: flex-end;
   margin-bottom: var(--gap); padding-bottom: var(--gap);
@@ -721,7 +716,6 @@ body[data-density="compact"] .dh-td-driver .dh-name {
   overflow-wrap: break-word;
 }
 
-/* ── Schedule 2-column grid on a short+wide local viewport ──────────────── */
 .dh-race-grid { display: flex; flex-direction: column; }
 body[data-density="compact"][data-width="wide"] .dh-race-grid {
   /* minmax(0, …), not 1fr: a bare 1fr floors each column at its longest race
@@ -730,12 +724,10 @@ body[data-density="compact"][data-width="wide"] .dh-race-grid {
   display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 var(--gap);
 }
 
-/* ── Session picker: GP + session selects side-by-side ── */
 .dh-pick-fields { display: flex; gap: calc(var(--gap) * 2 / 3); }
 .dh-pick-fields .dh-pick-field { flex: 1; min-width: 0; }
 .dh-pick-fields .dh-pick-select { max-width: none; width: 100%; }
 
-/* ── Two-pane split layout (Live + Telemetry) ─────────── */
 .dh-split { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
 .dh-split-L { display: flex; flex-direction: column; gap: 10px; flex: 0 0 auto; }
 .dh-split-R {
@@ -805,7 +797,6 @@ body[data-density="compact"][data-width="wide"] {
   .dh-gval { font-size: 17px; }
 }
 
-/* ── Telemetry player popup ───────────────────────────── */
 /* A runtime <dialog> since round 11 — the SCRIM STAYS ON THE ELEMENT: the
    dialog is stretched full-viewport (the UA sizes a dialog fit-content with
    auto margins, hence the explicit margin/width/height, same lesson as

@@ -19,7 +19,6 @@
         api.backdrop(k, side, dist, sz, col);
       };
 
-
       if (ATM && ATM.alpineGreen) {
         Object.assign(pal, ATM.alpineGreen, { runoff: [0.32, 0.52, 0.24] });
       }

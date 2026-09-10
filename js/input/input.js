@@ -380,7 +380,6 @@ const Input = (function () {
     return !!(window.UiLayers && window.UiLayers.anyOpen());
   }
 
-  // ---- key bindings ------------------------------------------------------
   // Every driving key is a BINDING, not a literal: KEY_ACTIONS is the list the
   // CONTROLS page (js/ui/key-binds.js) renders and HOW TO PLAY reads, keyMap is
   // the live table (two physical-key slots per action, e.code values so WASD
@@ -471,7 +470,6 @@ const Input = (function () {
     return KEY_NAMES[code] || code.toUpperCase();
   }
 
-  // ---- controller bindings -----------------------------------------------
   // The same shape for the pad: PAD_ACTIONS is the list the CONTROLS page
   // renders, padMap the live table (two button-index slots per action, W3C
   // "standard" mapping), the defaults the layout the game always had. Steering
