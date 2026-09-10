@@ -79,6 +79,7 @@ const FULL = [
   "js/render/glx/post.js",
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
+  "js/render/shared/frustum.js",
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",
   // NB: js/render/webgpu/* and js/render/three/* are NOT here — they are
@@ -244,6 +245,7 @@ const CARVIEW = [
   "js/render/glx/post.js",
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
+  "js/render/shared/frustum.js",
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",
   "js/data/teams.js",
@@ -344,6 +346,7 @@ const HARD_EDGES = [
   ["js/render/glx/post.js", "js/render/glx/glx.js"],
   ["js/render/glx/shadow.js", "js/render/glx/glx.js"],
   ["js/render/shared/lamp-chunks.js", "js/render/glx/chunked.js"], // drawChunked resolves LampChunks tables (call-time; keep explicit)
+  ["js/render/shared/frustum.js", "js/render/glx/chunked.js"],     // cull helpers (call-time; keep explicit)
   ["js/render/glx/chunked.js", "js/render/glx/glx.js"],
   ["js/render/glx/glx.js", "js/render/shared/assets.js"],         // Assets feature-detects the backend's createTextureArray
   ["js/track/core/geom.js", "js/garage/scene-prims.js"],    // the bay's primitives read TrackGeom.MAT at eval for their per-vertex material ids
@@ -585,6 +588,7 @@ const PATHS = {
   TRACKS_ENGINE: "js/track/tracks.js",
   GLX_CHUNKS: "js/render/glx/shaders/glsl-chunks.js",
   LAMP_CHUNKS: "js/render/shared/lamp-chunks.js",
+  FRUSTUM: "js/render/shared/frustum.js",
   GLX_SHADERS_LIT: "js/render/glx/shaders/glsl-lit.js",
   GLX_SHADERS_POST: "js/render/glx/shaders/glsl-post.js", // grade/composite GLSL (image-grade-shaders.test.mjs)
   WGSL_CHUNKS: "js/render/webgpu/wgsl-chunks.js",

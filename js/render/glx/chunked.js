@@ -39,38 +39,6 @@ function _shadowAllIdx(AL, lx, ly, lz) {
 
     const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                        new Float32Array(4), new Float32Array(4), new Float32Array(4)];
-    function _setPlane(p, a, b, c, d) {
-      const inv = 1 / (Math.hypot(a, b, c) || 1);
-      p[0] = a * inv; p[1] = b * inv; p[2] = c * inv; p[3] = d * inv;
-    }
-    function _extractPlanes(m, planes) {
-      const m0=m[0],m4=m[4],m8=m[8],m12=m[12], m1=m[1],m5=m[5],m9=m[9],m13=m[13],
-            m2=m[2],m6=m[6],m10=m[10],m14=m[14], m3=m[3],m7=m[7],m11=m[11],m15=m[15];
-      _setPlane(planes[0], m3+m0, m7+m4, m11+m8,  m15+m12); // left
-      _setPlane(planes[1], m3-m0, m7-m4, m11-m8,  m15-m12); // right
-      _setPlane(planes[2], m3+m1, m7+m5, m11+m9,  m15+m13); // bottom
-      _setPlane(planes[3], m3-m1, m7-m5, m11-m9,  m15-m13); // top
-      _setPlane(planes[4], m3+m2, m7+m6, m11+m10, m15+m14); // near
-      _setPlane(planes[5], m3-m2, m7-m6, m11-m10, m15-m14); // far
-    }
-    // AABB vs frustum via the box's most-positive vertex per plane (conservative).
-    function _aabbInFrustum(planes, mn, mx) {
-      for (let i = 0; i < 6; i++) {
-        const p = planes[i];
-        const px = p[0] >= 0 ? mx[0] : mn[0];
-        const py = p[1] >= 0 ? mx[1] : mn[1];
-        const pz = p[2] >= 0 ? mx[2] : mn[2];
-        if (p[0]*px + p[1]*py + p[2]*pz + p[3] < 0) return false;
-      }
-      return true;
-    }
-    // Squared distance from point (ex,ey,ez) to the nearest point on an AABB.
-    function _aabbDist2(mn, mx, ex, ey, ez) {
-      const dx = ex < mn[0] ? mn[0] - ex : ex > mx[0] ? ex - mx[0] : 0;
-      const dy = ey < mn[1] ? mn[1] - ey : ey > mx[1] ? ey - mx[1] : 0;
-      const dz = ez < mn[2] ? mn[2] - ez : ez > mx[2] ? ez - mx[2] : 0;
-      return dx * dx + dy * dy + dz * dz;
-    }
 
     function createChunkedMesh(data, cellSize) {
       const cell = cellSize > 0 ? cellSize : 72;
@@ -199,7 +167,7 @@ function _shadowAllIdx(AL, lx, ly, lz) {
       setBlend(alpha < 1);
       bindVAO(mesh.vao);
       if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }
-      _extractPlanes(F.viewProj, _fcPlanes);
+      Frustum.extractPlanes(F.viewProj, _fcPlanes);
       const chunks = mesh.chunks;
       const eye = F.eye;
       const cd = F.cullDist, cd2 = cd * cd,
@@ -269,8 +237,8 @@ function _shadowAllIdx(AL, lx, ly, lz) {
         };
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
-          if (!_aabbInFrustum(_fcPlanes, ch.min, ch.max) ||
-              (cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2)) { flush(); continue; }
+          if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) ||
+              (cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2)) { flush(); continue; }
           const li = _tbl.lists[i];
           let slot = -1;
           if (shadowAllIdx >= 0) {
@@ -291,8 +259,8 @@ function _shadowAllIdx(AL, lx, ly, lz) {
         let runOff = -1, runCount = 0;
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
-          const vis = _aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
-                      !(cd > 0 && _aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2);
+          const vis = Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
+                      !(cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2);
           if (vis) {
             if (runOff < 0) { runOff = ch.byteOffset; runCount = ch.count; }
             else runCount += ch.count;
@@ -318,13 +286,13 @@ function _shadowAllIdx(AL, lx, ly, lz) {
       bindVAO(mesh.vao);
       gl.uniformMatrix4fv(SH.depthU.uModel, false, model);
       if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }
-      _extractPlanes(SH.castCullVP || SH.lightVP, _fcPlanes);
+      Frustum.extractPlanes(SH.castCullVP || SH.lightVP, _fcPlanes);
       const chunks = mesh.chunks;
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
       let runOff = -1, runCount = 0;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
-        if (_aabbInFrustum(_fcPlanes, ch.min, ch.max)) {
+        if (Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max)) {
           if (runOff < 0) { runOff = ch.byteOffset; runCount = ch.count; }
           else runCount += ch.count;
         } else if (runOff >= 0) {
@@ -350,16 +318,10 @@ function _shadowAllIdx(AL, lx, ly, lz) {
     // free and sharing the scratch with an in-flight draw would be a bug.
     // Optional `out` (array of 6 Float32Array(4)) reuses a caller pool — the
     // race prop-batch path must never call the allocating form every frame.
-    function makeFrustumPlanes(viewProj, out) {
-      const p = out || [new Float32Array(4), new Float32Array(4), new Float32Array(4),
-                        new Float32Array(4), new Float32Array(4), new Float32Array(4)];
-      _extractPlanes(viewProj, p);
-      return p;
-    }
-
     Log.info("gfx", "GLX chunked init");
     return { createChunkedMesh, drawChunked, castShadowChunked, freeChunkedMesh,
-             makeFrustumPlanes, aabbInFrustum: _aabbInFrustum, aabbDist2: _aabbDist2 };
+             makeFrustumPlanes: Frustum.makeFrustumPlanes,
+             aabbInFrustum: Frustum.aabbInFrustum, aabbDist2: Frustum.aabbDist2 };
   }
 
   return { init };

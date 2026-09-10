@@ -6,8 +6,8 @@ no ESM.
 
 **Execution rule:** one carve → one commit → guards → targeted tests → CI.
 
-**Working branch:** `cursor/cleanup-tier-a-df95`  
-**Shipped so far:** PR [#102](https://github.com/brycejmurrin/f1-game/pull/102) (hash32 + dead `racingLineMix`)
+**Working branch:** `cursor/shared-frustum-df95` (Tier A continues)  
+**Shipped so far:** PR [#102](https://github.com/brycejmurrin/f1-game/pull/102) (hash32 + dead `racingLineMix` + quali-net)
 
 ---
 
@@ -44,8 +44,8 @@ Eighteen parallel read-only bloat-auditor runs (see agent IDs in scratch matrix)
 |---|--------|------|--------|
 | ✅ | `js/core/hash32.js` | career, daily-challenge, driver-ratings | **Done** (`03f8dd62`) |
 | ✅ | Remove `AiDrive.racingLineMix` | ai-drive.js | **Done** (`91d23591`) |
-| ✅ | **quali-net** (js/race/quali-net.js) | game.js (~130 ln) | **Done** (stacked on PR #102) |
-| 1 | **shared frustum helper** | 4 render copies | **NEXT** |
+| ✅ | **quali-net** (js/race/quali-net.js) | game.js (~130 ln) | **Done** (PR #102) |
+| 🔄 | **shared frustum helper** (js/render/shared/frustum.js) | 4 render copies | **In progress** |
 | 2 | save-migrate | store.js | Planned |
 | 4 | race-settings + custom-team | game.js | Planned |
 | 5 | res-row UI helper | duplicated row builders | Planned |
