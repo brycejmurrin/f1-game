@@ -75,6 +75,10 @@ Outputs per knob: `a.png`, `b.png`, `filter.png` (changed pixels only),
 `result.json`. Batch runs also write `summary.png` — one row per knob.
 
 Do NOT run `--live` while `cdmcp-cli.py look-survey` holds the box.
+Do NOT launch from an agent session without an explicit ask:
+`lighting-tuner-sweep.mjs`, `ab-lighting.mjs run all`, or
+`lighting/campaign/capture.mjs` — those are human/CI lattices. Agent default
+is classify → `--live <one id>` → bake.
 Full reference: `docs/LIGHTING-TUNER-SLIDERS.md` §Tools.
 
 ## Load on demand

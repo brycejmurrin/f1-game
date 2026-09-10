@@ -1468,7 +1468,9 @@ function resolveLivery(team) {
              spineSide: l.spineSide || null, rearWing: l.rearWing || null, wingCarbon: l.wingCarbon || null, cover: l.cover || null,
              spineTint: l.spineTint || null, sideTint: l.sideTint || null,
              sunTint: l.sunTint || null, crestInk: l.crestInk || null, bandTint2: l.bandTint2 || null,
-             plateTint: l.plateTint || null, plateInk: l.plateInk || null };
+             plateTint: l.plateTint || null, plateInk: l.plateInk || null,
+             saddleTint: l.saddleTint || null, ridgeTint: l.ridgeTint || null, airboxTint: l.airboxTint || null,
+             coverBind: l.coverBind || null, finHandoff: l.finHandoff || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1491,7 +1493,9 @@ function resolveLivery(team) {
                       spineSide: liv.spineSide || null, rearWing: liv.rearWing || null, wingCarbon: liv.wingCarbon || null, cover: liv.cover || null,
                       spineTint: liv.spineTint || null, sideTint: liv.sideTint || null,
                       sunTint: liv.sunTint || null, crestInk: liv.crestInk || null, bandTint2: liv.bandTint2 || null,
-                      plateTint: liv.plateTint || null, plateInk: liv.plateInk || null }
+                      plateTint: liv.plateTint || null, plateInk: liv.plateInk || null,
+                      saddleTint: liv.saddleTint || null, ridgeTint: liv.ridgeTint || null, airboxTint: liv.airboxTint || null,
+                      coverBind: liv.coverBind || null, finHandoff: liv.finHandoff || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -3413,6 +3417,9 @@ const G = {
   aeroZoneAt: (s) => aeroZ.at(s),
   aeroZoneAhead: (s) => aeroZ.ahead(s),
   stepSetupAero: (dt) => stepSetupAero(dt),
+  setSetupView: (...a) => setSetupView(...a),
+  setupPan: (...a) => setupPan(...a),
+  nudgeSetupZoom: (mul) => nudgeSetupCam(0, 0, mul),
   // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
   // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
   // a null style tests a car nobody is driving.

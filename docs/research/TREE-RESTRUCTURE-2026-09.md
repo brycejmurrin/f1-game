@@ -228,12 +228,12 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       `wgx.js` 6037→6060 and `tlx.js` 3132→3144, both from their WebKit fix).
       `node tools/ci/deploy.mjs`: 12 gate suites + verify-track on all 40
       circuits, pushed in 1 attempt, 496 s. `pages.yml` run 1941 stamping.
-      `tools/moves/phase2.json` maps 91 files for 2b.
+      `docs/archive/moves/phase2.json` maps 91 files for 2b.
 - [~] **Phase 2b — move DONE, phase OPEN** (spike-out + deploy still to come) — four batch commits
       (`c78847b` core/physics/race/career 17, `ac2df8c` lighting/camera/audio/
       perf/input 26, `5bd4fa6` ui/garage/agent/fx/data/car 24 — **js/game/ is
       gone**, `f1ee501` render/{shared,glx} + track/{core,scenery} 24). 91
-      files into 16 domain directories; `tools/moves/phase2.json` + the four
+      files into 16 domain directories; `docs/archive/moves/phase2.json` + the four
       batch maps are the record. Verified per batch and at the end:
       tooling-fast 138/138, game-vm 248/248, verify-track --all 40 OK,
       gen-shell --check, check-gctx and ratchets clean; `test-bg tiny` and
@@ -282,7 +282,7 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       espree walker. `render()` / `updateCar()` stay whole. End: `driving` +
       `hooks` groups once.
 - [~] **Phase 4 — tools/ 160 → ~95** IN FLIGHT 2026-09-03 as a worktree agent on
-      `claude/p4-tools` off 9486be6 (writes its own `tools/moves/phase4-tools.json`,
+      `claude/p4-tools` off 9486be6 (writes its own `docs/archive/moves/phase4-tools.json`,
       reads the mover's splitSegmentMentions report per batch, must prove
       no-caller by grep before each deletion). Scope fenced to tools/ +
       package.json + workflows + five named guards so it cannot collide with

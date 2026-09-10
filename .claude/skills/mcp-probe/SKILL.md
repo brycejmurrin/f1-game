@@ -49,7 +49,7 @@ vs playwright-official).
 ## Hard rules (always)
 
 1. **Never render Chrome MCP while Playwright runs** — park to `about:blank`,
-   then `chrome-stop`, then check CPU; see `references/traps.md` §1.
+   then `chrome-stop`, then check CPU; see [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
 2. **github.io is unreachable from any container browser or curl** (egress
    proxy) — `deploy-research` with the host fetch tool is the only path.
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
@@ -57,19 +57,25 @@ vs playwright-official).
    2D blit on `#game` (`gfx-probe.mjs` / `GLX.awaitSoftPresent()`), not from the
    hidden swapchain canvas. HeadlessChrome GLX (and TLX-WebGPU) hide `#game` and
    blit onto `#game-soft` — `awaitSoftPresent()` then capture that overlay, never
-   `locator("#game").screenshot()`. Readback oracle: `node tools/gfx/wgx-capture.mjs <track>`
-   → `frame.png` (optional; never call `getCurrentTexture()` on software
-   adapters — it breaks `mapAsync` device-wide). Lavapipe A/B:
-   `wgx-lavapipe-probe.mjs` (needs `mesa-vulkan-drivers`). TLX:
+   `locator("#game").screenshot()`. Primary probe:
+   `node tools/gfx/gfx-probe.mjs --backend webgpu <track>` (aliases
+   `wgx-capture.mjs` / `wgx-lavapipe-probe.mjs` forward here — prefer the parent).
+   Never call `getCurrentTexture()` on software adapters. TLX:
    `gfx-probe.mjs --backend three` (WebGL2 pin). Cloud env packages:
    `AGENTS.md` §Cursor Cloud; `../../../docs/notes/CI-RENDERING-PERFORMANCE.md`
    §Cursor Cloud.
 5. Long fetch/search → `deploy-research` subagent, not the parent context.
 
+**Chrome-client pick one:** attached `chrome_*` / `probe-mcp.py chrome-start` for
+live canvas; `mcp-cli.mjs probe --backend …` for batched renderer recipes;
+`cdmcp-cli.py` for lighting/shot recipes. Do not start a second Chrome client
+beside an active Playwright run. UI matrix → `layout-audit.mjs` (not the archived
+`ui-readable-survey-mcp.py`).
+
 ## Load on demand
 
 - Shot / lighting / camera comparison failures → read
-  [`references/traps.md`](references/traps.md) (numbered war stories).
+  [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
 - Chrome setup, A/B ports, heap/perf, post-deploy recipes → read
   [`references/recipes.md`](references/recipes.md).
 - Renderer probe flags (`--backend`, secure context, `gfxBound`) →

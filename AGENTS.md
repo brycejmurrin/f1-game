@@ -283,20 +283,57 @@ same surface from a shell.
 
 ## Agent extensions (skills / subagents)
 
-Skills are on-demand workflows in `.claude/skills/` (index
-`.claude/skills/README.md`); subagents are isolated contexts in
-`.claude/agents/`. Which CLIs are wrapped as `apex_*`, and which stay
-CLI-only: `docs/AGENT-SURFACE.md`. Live canvas → `mcp-probe`. Deploy /
-merge → `check-changes` (or just `node tools/ci/deploy.mjs`). Pre-push →
-`check-changes`, which spawns the `verify-agent` subagent (`--base <ref>` is
-the "was it already red on the tip?" check). Live `version.json` goes to the
-`deploy-research` SUBAGENT — never attach `mcp-probe` for that. Fat skill /
-extract / dead code → `slim-bloat` in `check-changes`, or the `bloat-auditor`
-subagent.
+**Always-on vs on-demand.** This file is the short always-on ruleset. Repeatable
+workflows live in skills and load only when matched (progressive disclosure) —
+do not paste long procedures here; point at a skill instead.
 
-**Cursor** loads the same Claude paths; the thin always-on pointer is
-`.cursor/rules/apex-shared.mdc`. Do not duplicate skills under
-`.cursor/skills/` or agents under `.cursor/agents/`.
+**Canonical skill tree:** `.claude/skills/*/SKILL.md` (index
+`.claude/skills/README.md`). Codex reads the same bodies via
+`.agents/skills/<name>` symlinks. Cursor also discovers `.claude/skills` and
+`.agents/skills` — do **not** copy into `.cursor/skills/` or `.cursor/agents/`.
+Subagents: `.claude/agents/*.md`. Wrap map / MCP: `docs/AGENT-SURFACE.md`.
+
+**Available workflows (trigger → skill):**
+
+| When | Skill / agent |
+|---|---|
+| Pre-push / did I break anything / deploy merge | `check-changes` → `verify-agent` |
+| Live working-tree canvas / `__apex` poke | `mcp-probe` |
+| Batch screenshots / car studio | `playwright-probe` |
+| Live `version.json` / Pages | `deploy-research` (not mcp-probe) |
+| One circuit edit / new track | `new-track` + `verify-track.cjs <id>` |
+| Picture-driven track accuracy | `survey-track` |
+| Scenery props | `scenery-dress` |
+| Physics / game feel | `tune-physics` |
+| Fat skill / extract / dead code | `slim-bloat` → `bloat-auditor` |
+| Interactive host browser resize/DOM | `survey-ui-matrix` / `css-play` |
+
+Keep each skill `description` front-loaded with trigger words — hosts match on
+description before loading the body.
+
+
+## Cursor Cloud specific instructions
+
+Committed bootstrap (auto for every Cloud VM that uses this repo):
+
+1. `.cursor/environment.json` — `install: bash tools/env/cloud-agent-install.sh`,
+   Chromium at `/opt/pw-browsers/chromium`, `mcpServerAllowlist` = the three
+   catalog servers only (`apex-tools`, `playwright-official`, `chrome-devtools`).
+2. Dual MCP catalogs (byte-lockstep): root `.mcp.json` + `.cursor/mcp.json`.
+3. Skills / subagents: `.claude/skills/*/SKILL.md`, `.claude/agents/*.md`
+   (canonical). Codex reads the same skill bodies via `.agents/skills/<name>`
+   symlinks — do not fork copies. No `.cursor/skills/` or `.cursor/agents/`.
+4. Codex MCP: `.codex/config.toml` mirrors the three catalog servers (project
+   must be trusted for Codex to load it).
+5. Claude Code MCP approve: `.claude/settings.json` `enabledMcpjsonServers`
+   lists the same three names (applies after workspace trust).
+6. Rules: `AGENTS.md` (canonical); `CLAUDE.md` is `@AGENTS.md` only.
+
+Cloud often does **not** attach project stdio MCP. Then use the CLI fallbacks
+in `docs/AGENT-SURFACE.md` (`tools/mcp/apex-tools-mcp.sh call`, …). Team MCP
+mirrors and secrets live in the Cursor Dashboard (Integrations & MCP / Secrets)
+— they are not inventable from git alone. Full checklist:
+`docs/AGENT-SURFACE.md` §Bootstrap.
 
 WGSL has FIVE rules a mock device cannot enforce, and three of them shipped a
 defect on the owner's iPhone this week: `sampleCount` is 1 or 4 ONLY;

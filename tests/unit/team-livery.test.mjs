@@ -102,10 +102,13 @@ test("every livery field a team names is one the renderer knows", () => {
   //   launch car is a dark band on a body-green cover, and the band's old
   //   colour was stripe||accent — that team's accent is lime, and `stripe`
   //   would have darkened the nose as well.
+  //   saddleTint / ridgeTint / airboxTint / coverBind / finHandoff (2026-09-09):
+  //   optional cover-anatomy tints and coupling enums — painters + mesh consume them.
   //   bodySplit (2026-09-09): Cadillac's black/white L/R body. Car3D.applyBodySplit
   //   recolours paint verts by sign(x); absent means today's single c1 body.
   const KNOWN = new Set(["cover", "finStyle", "finBadge", "finShape", "finArt", "fin",
-    "sideTint", "spineHeight", "spineLogo", "spineSide", "spineTint", "tcam", "coverVents", "stripe",
+    "sideTint", "spineHeight", "spineLogo", "spineSide", "spineTint", "saddleTint", "ridgeTint",
+    "airboxTint", "coverBind", "finHandoff", "tcam", "coverVents", "stripe",
     "noseStripe", "accent", "nose", "pod", "wing", "halo", "logo", "logo2", "logo3",
     "finish", "numFont", "sponsors", "bodySplit"]);
   for (const t of M.Teams.LIST) {
@@ -216,7 +219,8 @@ test("resolveLivery and the live preview keep every editor tint", () => {
   // (sun / crest ink / 2nd band / plate) had the same bug later: editor rows
   // that never reached the atlas. Draft + cached paths must copy every one.
   const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  for (const k of ["spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk"]) {
+  for (const k of ["spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk",
+    "saddleTint", "ridgeTint", "airboxTint", "coverBind", "finHandoff"]) {
     assert.match(GAME, new RegExp(k + ":\\s*l\\." + k + "\\s*\\|\\|\\s*null"),
       `draft resolveLivery must copy ${k}`);
     assert.match(GAME, new RegExp(k + ":\\s*liv\\." + k + "\\s*\\|\\|\\s*null"),

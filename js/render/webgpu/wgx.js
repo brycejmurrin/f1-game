@@ -4076,7 +4076,7 @@ const WGX = (function () {
         //    trkFromWorld(wpos), never matTrkArr[vid]. If no LUT is bound the
         //    authored storage read is live and merging could shift it, so the
         //    merge refuses rather than relying on the argument holding.
-        //    Evidence for the shapes themselves: tools/gfx/wgx-vid-repro.mjs.
+        //    Evidence for the shapes themselves: docs/archive/tools/gfx/wgx-vid-repro.mjs.
         //  - no lamp mask, ROAD ONLY: a run ORs its chunks' masks, so merging
         //    the ribbon at night would hand a long run the UNION and turn
         //    cheap mask-skips back into full lamp evaluations over the road's

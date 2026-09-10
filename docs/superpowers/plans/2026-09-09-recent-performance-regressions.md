@@ -96,7 +96,7 @@ Playwright tooling.
 
 **Files:**
 - Modify: `tests/unit/ci-coverage.test.mjs`
-- Modify: `tools/gfx/soft-present-bench.mjs`
+- Modify: `docs/archive/tools/gfx/soft-present-bench.mjs`
 
 - [ ] Add a contract asserting the benchmark has exactly one `page.goto()` and
   no `page.reload()`.

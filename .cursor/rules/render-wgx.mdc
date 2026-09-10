@@ -17,4 +17,5 @@ alwaysApply: false
   unit guards.
 - Load skill `webgpu-debug` for WGSL / device-loss / `wgx-validate.mjs`.
 - Live probe: `mcp-probe` + `node tools/mcp/mcp-cli.mjs probe --backend webgpu`.
-  Never use github.io from Chrome in this container — tinyfish for deploy.
+  Never use github.io from Chrome in this container — deploy-research
+  (host fetch / WebFetch) for live version.json.

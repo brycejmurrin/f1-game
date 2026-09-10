@@ -14,10 +14,6 @@
     {
       "name": "playwright-official",
       "command": "npx"
-    },
-    {
-      "name": "chrome-devtools-mcp",
-      "command": "npx"
     }
   ]
 }

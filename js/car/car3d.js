@@ -2177,12 +2177,15 @@ const Car3D = (function () {
     const wingCarbon = liv.wingCarbon === "carbon";
     const wingSurf = wingCarbon ? SURFACES.carbon : SURFACES.paint, wingCol = wingCarbon ? CARBON : wingC;
     const rearC = wingCarbon ? CARBON : (_ckAcc(liv.rearWing) || c2);   // REAR WING block (IBM blue, Visa white) — c2 keeps today's look
-    const finC  = _ckAcc(liv.fin) || c2;   // shark-fin plate — c2 keeps today's look
-    // ENGINE COVER (liv.cover): the airbox, roll structure and cover loft in their
-    // own colour — the SF-26's white top over a red chassis, the W17's silver over
-    // black. Absent = c1, today's look. The atlas inks the crest against this too
-    // (liverytex `coverPaint`), or a light cover would swallow a light crest.
     const coverC = _ckAcc(liv.cover) || c1;
+    const bandProxy = liv.spineTint || c2;
+    const finRaw = (typeof LiveryTex !== "undefined" && LiveryTex.resolveFinPaint)
+      ? LiveryTex.resolveFinPaint(teamId, liv, coverC, bandProxy, c1, c2)
+      : (liv.fin || c2);
+    const finC  = _ckAcc(finRaw) || finRaw;   // shark-fin plate — finHandoff + liv.fin
+    // ENGINE COVER (liv.cover): the cover loft in its own colour — the SF-26's
+    // white top over a red chassis, the W17's silver over black. Absent = c1,
+    // today's look. Airbox mesh lips use airboxMeshColour (wrap sun > airboxTint).
     // BODY SPLIT (liv.bodySplit === "lr"): Cadillac-style L/R body. Left (x<0)
     // keeps c1, right (x>=0) takes c2. Applied as a paint-only recolour over the
     // chassis→livery sections so carbon / wings / glass stay untouched.
@@ -2413,13 +2416,12 @@ const Car3D = (function () {
       const engT = tier("engine");
       const inScale = (engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0)) * teamStyle.airbox;
       const engSnork = engStyle ? !!engStyle.snork : engT === 2;
-      // The SPINE TOP "wrap" (LiveryTex) is a sun centred on the airbox: the
-      // whole roll structure wears the sun colour, as the RB22's does, and
-      // the atlas paints the disc's rear half on the cover behind it.
-      const sunC = (liv.spineLogo === "wrap" && typeof LiveryTex !== "undefined" && LiveryTex.sunColour)
-        ? (_ckAcc(LiveryTex.sunColour(teamId, liv)) || coverC) : coverC;
+      // Roll hoop / snorkel / intake lips: airboxMeshColour (wrap sun wins).
+      const airboxC = (typeof LiveryTex !== "undefined" && LiveryTex.airboxMeshColour)
+        ? (_ckAcc(LiveryTex.airboxMeshColour(teamId, liv, coverC)) || coverC)
+        : coverC;
       addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inScale, h: 0.20 * inScale, t: 0.55 },
-                   { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, sunC, INTAKE);
+                   { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, airboxC, INTAKE);
       // PRINCIPAL ROLL STRUCTURE. C12.4.1 requires structure at [XC 55, 0, 968]
       // — y 0.968 here, the tallest mandated point on the car
       // (docs/COCKPIT-DATUMS.md). Nothing occupied it: the airbox crowned at
@@ -2435,7 +2437,7 @@ const Car3D = (function () {
       addSpan(out, { z: -0.33, y: (hoopF + 0.968) / 2, w: 0.15 * inScale,
                      h: Math.max(0.03, 0.968 - hoopF), t: 0.40 },
                    { z: -0.63, y: (hoopR + 0.938) / 2, w: 0.13 * inScale,
-                     h: Math.max(0.03, 0.938 - hoopR), t: 0.38 }, sunC);
+                     h: Math.max(0.03, 0.938 - hoopR), t: 0.38 }, airboxC);
       // A SPINE SIDE mark claims the flank band; culled ids leave panels alone.
       // Under wrap, trim aft tracks FLANK_SEEN so the pinstripe/hatch clear the mid-flank design.
       const sideMark = (liv.spineSide || "none") !== "none" && (!globalThis.LiveryTex || !LiveryTex.SPINE_SIDE_IDS || LiveryTex.SPINE_SIDE_IDS.includes(liv.spineSide));
@@ -2460,8 +2462,8 @@ const Car3D = (function () {
         const mouth = { z: -0.12, y: 0.96, w: 0.15 * sk, h: 0.10 * sk, t: 0.62 };
         const crest = { z: -0.38, y: 1.02, w: 0.12 * sk, h: 0.13 * sk, t: 0.55 };
         const merge = { z: -0.68, y: 0.88, w: 0.10 * sk, h: 0.09 * sk, t: 0.50 };
-        addSpan(out, mouth, crest, coverC, INTAKE);
-        addBeveledSpan(out, crest, merge, 0.010, coverC, null);
+        addSpan(out, mouth, crest, airboxC, INTAKE);
+        addBeveledSpan(out, crest, merge, 0.010, airboxC, null);
         addBox(out, 0, mouth.y + 0.01, mouth.z + 0.01,
                mouth.w * 0.72, mouth.h * 0.55, 0.04, INTAKE);
         if (scoopLip >= 1) {

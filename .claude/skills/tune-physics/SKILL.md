@@ -29,6 +29,12 @@ Boot-effective defaults come from `js/input/steer-tuning.js`
 `applySteerTuning()` — game.js literals (`3.2 m` / `PACE 1.0`) are dead.
 `PACE` is a scale, not a cap; compare speeds via `vTop()`/`vStd()`/`aStd()`.
 
+**The arc must not reach the driver.** With assists off, nothing derived from
+track curvature / racing line may affect the player. New `Tracks.curvature()`
+(or equivalent) reads belong in a legitimate column — AI-only, assist-gated,
+broadcast-only, or surface — see `docs/PHYSICS.md`. Do not "help" the player
+by feeding path curvature into steer/throttle when assists are off.
+
 **`ROAD_FOLLOW` ships at `0` (OFF)** on purpose. The DRIVING HELP slider maps
 notch 1..10 to `0..0.70` (notch 1 = off). Recommending a raised default is a
 design reversal, not a tweak — flag it.
@@ -37,14 +43,14 @@ Fixed in `js/game.js` (not `setPhysics`): `LONG_GRIP`, `CS_FRONT/CS_REAR`,
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
-node tools/ci/test-bg.mjs physics-core # the driving model (~35 tests, mostly fast)
-node tools/ci/test-bg.mjs collisions   # car-to-car + wall contact (~32 tests, the slowest set)
+node tools/ci/test-bg.mjs physics-core # browser-gated — driving model (~35 tests, mostly fast)
+node tools/ci/test-bg.mjs collisions  # browser-gated — car-to-car + wall contact
 node tools/ci/test-bg.mjs aero         # aero-zones, active-aero, drift, understeer (~37 tests)
 node tools/ci/test-bg.mjs input        # steering + camera
 node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>
 ```
 
-If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) before commit. Theory:
+If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md): `?v=dev`, no bump) before commit. Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.
 
 ## Load on demand

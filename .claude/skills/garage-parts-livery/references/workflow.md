@@ -72,7 +72,7 @@ resolution.
    with, so a design can be seen on every paint job, not just the team default.
 7. **Test and ship.** `node tools/ci/test-bg.mjs car` for catalog/physics/visual
    recipes; `node tools/ci/test-bg.mjs modes` when you changed research locks or
-   garage ownership UI (there is no `test:career`). Bump via `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`)
+   garage ownership UI (there is no `test:career`). Bump via `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)
    before commit.
 
 ## Common mistakes
