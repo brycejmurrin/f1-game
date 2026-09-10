@@ -865,8 +865,13 @@ deployment per commit, gates cancelling each other in bursts, and the account's
   node suites, parts census, driving-model, change-aware selection. Five to
   nine minutes, four slots, its own concurrency group so sessions never cancel
   each other's verdict. This run is the answer to "did my push break anything".
-- **The train** (`pages.yml`, cron `7,27,47 * * * *`, plus `workflow_dispatch`
-  = "deploy now"): `verdict` refuses any branch but `DEPLOY_BRANCH`, reads the
+- **The train** (`pages.yml`; started by `ci.yml`'s `poke-train` job when a
+  deploy-branch push's fast tier goes green, by a manual `workflow_dispatch`
+  = "deploy now", and by the cron `7,27,47 * * * *` as a backstop — GitHub's
+  scheduler runs this repository's crons HOURS late: the 03:17 nightly is
+  created between 07:54 and 08:18 on each of its last five days, and the
+  train's first three ticks on 2026-09-10 never arrived at all): `verdict`
+  refuses any branch but `DEPLOY_BRANCH`, reads the
   live shell's `apex-sha` (`tools/ci/pages-live-sha.sh`), stops in one slot when
   the tip is already live, otherwise hands the live commit to `ci.yml` as
   `before_sha` (so the sweeps, smoke and selection filters diff against exactly

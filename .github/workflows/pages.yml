@@ -5,12 +5,14 @@ on:
   # commits a day from several agents; a deploy per push meant a 14-job gate
   # and a Pages deployment per commit, gates cancelling each other in bursts,
   # and the account's 20 job slots spent on re-testing trees that were one
-  # commit apart. The train takes the tip three times an hour, gates it once,
-  # and publishes exactly that commit. A dispatch is "deploy now". Pushes to
-  # the deploy branch still get ci.yml's FAST tier (guards, node suites,
-  # census, change-aware selection) within minutes — that is the verdict an
-  # agent waits for; the full gate is the train's. Off the hour on purpose:
-  # GitHub's cron is slowest at :00.
+  # commit apart. The train takes the tip, gates it once, and publishes
+  # exactly that commit. It is started two ways: ci.yml's `poke-train` job
+  # dispatches it when a deploy-branch push's FAST tier (guards, node suites,
+  # census, change-aware selection — the verdict an agent waits for) goes
+  # green, and the cron below is the BACKSTOP. The cron is not a clock here:
+  # GitHub's scheduler runs this repository's schedules hours late (ci.yml's
+  # 03:17 nightly is created around 08:00 every day), so three ticks an hour
+  # is what we ask for, not what we get. A manual dispatch is "deploy now".
   schedule:
     - cron: "7,27,47 * * * *"
   workflow_dispatch:

@@ -195,6 +195,6 @@ force-push. `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge �
 `test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens a
 PR, `--plan` prints the union); it cures GENERATED-file conflicts, stops on any
 other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in
-minutes (your verdict); `pages.yml` ticks at :07/:27/:47, gates the tip once and
-publishes exactly that commit (dispatch = "deploy now"; push→live ≤ ~35 min).
+minutes (your verdict) and, if green, pokes `pages.yml`, which gates the tip
+once and publishes exactly that commit (dispatch = "deploy now"; ≤ ~25 min).
 "Live?" = ancestor of the live `apex-sha` (deploy-research; `docs/TESTING.md` §Release train).
