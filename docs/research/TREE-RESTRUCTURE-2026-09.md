@@ -162,6 +162,49 @@ regex; and a path built from separate quoted segments, which is now REPORTED
 at plan time rather than guessed at. The last one paid for itself immediately:
 it named all six of batch 4's hazards before that batch ran.
 
+## Where this stands (2026-09-10, two Phase 3 carves)
+
+`js/game.js` **9,273 → 8,589 lines** (codeLines 4,559; topLets 141; gMembers
+239). Two carves landed from the Phase 3 list below, each its own PR into the
+deploy branch, each with its ratchet lowered in the same commit:
+
+| carve | file | game.js | state |
+|---|---|---|---|
+| car-draw | `js/car/car-draw.js` (686) | 9,656 → 9,041 | DEPLOYED (PR #126, Pages run 2228 green incl. verify-live) |
+| shadow-pass | `js/render/shared/shadow-pass.js` (530) | 9,041 → 8,589 | PR #127, awaiting review |
+
+**The shadow-pass carve is a deliberate departure from §3 below, which says
+`render()` stays whole.** That rule was written because both design panels
+fenced `render()` and no VM gate observes it — the risk was carving blind. What
+changed is the evidence available: the three shadow-map passes are reachable
+through instrumentable backend seams, so the carve can be PROVEN rather than
+argued. Booted, with the camera moving: 9 `shadowBegin`/`shadowEnd` with 27
+`castShadowChunked` and 342 `castShadowInstanced`; 5 `carShadowBegin`/`End`
+with 5 `carShadowKeep`; at night 6 `lampShadowBegin`/`End` with the sun pass
+correctly gated off by key luminance. The rest of `render()` still stays whole:
+what left is three self-contained passes with their own caches, not the loop.
+
+**The hazard this exposed, which every remaining carve will meet.** The moved
+code carried ~40 reads of `LT`. `LT` is not a global — game.js binds it at eval
+with `const { TUNE_DEFS, LT, buildTrackLights } = LightTune;` — so in any other
+file the name does not exist, and every sun-map rebuild would have thrown
+`ReferenceError`. No browser spec would have caught it: a pass that never runs
+raises nothing, it just stops drawing. `tests/unit/global-registry.test.mjs`'s
+call-time-reads rule caught it before any test ran.
+
+The sweep behind that: **119 of game.js's top-level names exist only as
+eval-time destructures** — `PhysicsConsts` 58 (`VMAX`, `ACCEL`, `BRAKE`…),
+`CarMesh` 15, `carDraw` 12, `GameStore` 6, `LightTune` 3, `Teams` 2. Any carve
+that moves a read of one of these must rewrite it to the owning global or take
+it through `deps`. Two things make this survivable: not one game.js local
+shares a name with a real global (158 of them), so the failure is always loud
+rather than a silently wrong value; and the guard sees the whole class. The
+residual risk it cannot see is a create-time capture of a REBINDABLE value —
+`const LT = LightTune.LT` is safe only because knobs.js declares `const LT = {}`
+and mutates in place, whereas capturing `G.gfx` at create would freeze a null.
+Rule for the remaining carves: rebindable state through the `G` getter, a
+mutated-in-place object may be captured once. Evidence: docs/notes/DEFECT-LEDGER.md.
+
 ## Status and remaining steps (2026-09-03)
 
 Order of landing: **0 → 1-lite → 2 (splits, then the move window) → 1 → 3
@@ -604,10 +647,14 @@ exact before/after, ratchet lowered in the same commit:
 2. Delete the 10 passthroughs; replace the dead banners with a region table
    at the top of the file, guarded by a cheap banner-order test.
 3. Extract: boot-loaders (8 free refs; mostly gone after roster.js) →
-   collisions (11) → car-draw (~68 refs, owns its 16 lets) → garage-preview
-   (0 new G members once car-draw exists) → quali-net + race-settings-ui →
-   custom-team-ui → live weather → atmosphere. `render()` and `updateCar()`
-   stay whole (both panels fenced them; no VM gate observes render).
+   collisions (11) → ~~car-draw (~68 refs, owns its 16 lets)~~ **done, deployed
+   (PR #126)** → garage-preview (0 new G members once car-draw exists) →
+   quali-net + race-settings-ui → custom-team-ui → live weather → atmosphere.
+   `updateCar()` stays whole. `render()` stays whole EXCEPT the three
+   shadow-map passes, which left in PR #127 with live per-pass counts as
+   evidence (see the 2026-09-10 status section): the bar for carving anything
+   else out of `render()` is the same — an instrumentable seam that proves the
+   moved work still runs, not a code read.
 4. `hooks-documented` moves to the espree walker shared with
    `gen-hooks-table` (retires the "comment must not quote `const api = {`"
    hazard); apex.js stays one file.
