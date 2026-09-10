@@ -179,12 +179,13 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.park(0.1));
     await page.waitForTimeout(600);
     const st = await page.evaluate(() => GLX.__tlx.postState());
-    expect(st.on, await tlxDiag(page)).toBe(true);
-    expect(st.hdr, await tlxDiag(page)).toBe(true);
-    expect(st.blocks.bloom).toBe(true);     // day defaults keep bloomAmt > 0
-    expect(st.blocks.fxaa).toBe(true);      // the unconditional LDR resolve
-    expect(st.targets[0]).toBeGreaterThan(0);
-    expect(st.targets[1]).toBeGreaterThan(0);
+    const diag = await tlxDiag(page);
+    expect(st.on, diag).toBe(true);
+    expect(st.hdr, diag).toBe(true);
+    expect(st.blocks.bloom, diag).toBe(true);     // day defaults keep bloomAmt > 0 (game.js zeroes it at autoTier >= 4)
+    expect(st.blocks.fxaa, diag).toBe(true);      // the unconditional LDR resolve
+    expect(st.targets[0], diag).toBeGreaterThan(0);
+    expect(st.targets[1], diag).toBeGreaterThan(0);
     // The chain must still produce a real image on the canvas.
     await stopRendering(page);
     const shot = await screenshotPresentedCanvas(page, { skipAwait: true });

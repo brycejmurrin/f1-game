@@ -133,6 +133,20 @@ demand" — candidates, not proven: the runner's own frame time is the
 input, and the base run's "FLAKY: 1 passed only on retry" says the same
 box is noisy. Left to the deploy branch's owners.
 
+With the governor attached to the failure messages (run 34462442429):
+the image-grade NaN is auto-res — `scale 0.8, tier 0, autoTier 0, fps
+31.8, floorMs 18.5, open window 558 frames / 134 slow / max 4366 ms` — the
+Metal runner's boot stalls (shader compiles up to 4.4 s a frame) make the
+governor step the render scale down inside the test, so the two captures
+differ in size; no tier is shed. M8 fails on the bloom block with the tier
+at 0, so it is not the autoTier ≥ 4 zeroing; the next Metal run carries
+the diagnostics on that assertion too. M9 passes since 8d805fe. The
+census (run 94, `apex26.tlxEnvProbe=1`, force=env) shows the TLX env
+probe running on hardware — begins 12, ends 12, ready, envFail 0,
+gpuErrors 0 — and the WGX leg rendering 233 frames with gpuErrors 0; the
+census does not expose WGX envState, so the WGX env-face ordering is
+exercised clean on Metal, not seen. "Fixed blind" stands for the pixels.
+
 *Left open, with the approach recorded in the session plan:* the car-draw and
 shadow-pass extractions (eval-order coupling), the `tests/` guards/vm split
 (45 files cited by path from circuits and docs), the lobby/netplay roster fold
