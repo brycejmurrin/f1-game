@@ -117,6 +117,22 @@ failures reproduce on llvmpipe here (60.3 vs > 71.9; 0.0858), so they are
 not GPU-specific. Nobody reads the nightly: the deploy's own gate is
 change-aware and never runs this job.
 
+The same job on the audit commit (run 34459030214, with diagnostics) added
+three more reds — `tlx-probes` M8 (post chain reports off), M9 (env probe
+never begins) and `image-grade-visual` "blacks" (captures of 448×252 then
+512×288, so the render scale climbed mid-test) — and the pre-audit base
+(852764c, run 34460549586) fails the same set: M8, M6, M9, an image-grade
+NaN (there "shadows", the sibling test; the resize lands on whichever test
+is running) and the two lighting-ab tests. So none of the six is the
+audit's: the deploy-branch commits merged at 9cdde03 own them. M9 is
+f9c25e5 (TLX opts out of the env probe unless `apex26.tlxEnvProbe` is
+"1"; the spec now opts in, 8d805fe). M8 and the capture resize are the
+governor shedding on the Metal runner (bloom is zeroed at autoTier ≥ 4,
+auto-res steps the scale) plus `cfdafc6` "initialize renderer extras on
+demand" — candidates, not proven: the runner's own frame time is the
+input, and the base run's "FLAKY: 1 passed only on retry" says the same
+box is noisy. Left to the deploy branch's owners.
+
 *Left open, with the approach recorded in the session plan:* the car-draw and
 shadow-pass extractions (eval-order coupling), the `tests/` guards/vm split
 (45 files cited by path from circuits and docs), the lobby/netplay roster fold
