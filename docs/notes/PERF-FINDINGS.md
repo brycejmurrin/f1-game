@@ -4297,3 +4297,160 @@ No smoking gun in there — the loop is dominated by its own physics update and
 the cost is spread — but that is a conclusion the old output could not support
 either way. Anything hunting a hot spot from a profile taken before this fix
 was reading the rasteriser, not the code.
+
+## 2r. A NEW decay reported on the phone: three-WebGPU 60 → 30 (2026-09-10)
+
+Owner report: on the handset, TLX-WebGPU **starts at 60 and settles at 30**.
+That exact halving is the vsync signature — a frame crossing 16.7 ms lands on
+the next refresh at 33.3 ms — so the question is what GROWS until it crosses,
+not what is statically expensive. §2o's rule applies: **drift, not a snapshot.**
+
+### Ruled out, so the next round does not re-derive them
+
+| candidate | why not |
+|---|---|
+| the §2p `mrt()` leak returning | `_ssrMrtNode()` still memoises, and `gfx-backend-canary` guards both the factory and its call site |
+| TLX soft-blit arming on the phone | `_softAdapter` is `!isMobile && …` — a handset can never be classified software; `_softBlit` then needs `_headless` or an explicit `apex26.tlxCap=1` |
+| `materialFor` key churn | every field the key reads is a LITERAL at every call site (`grep` for non-numeric `roughness:`/`metalness:`/`sparkle:`/`depthBias:` returns only TSL declarations) — the key cannot vary per frame |
+| per-frame geometry construction | the two `new BufferGeometry` sites in the draw path are capacity-doubling (`ensureStream`) and per-mesh-build (`createTexMesh`), neither per frame |
+| the frustum extraction (1ae7a96b) | 1:1 delegation; GLX's cull math is unchanged line for line |
+
+### Fixed here, though it is not on its own a halving
+
+`_geoReg` only ever grew. `_regGeo` pushes a WeakRef per geometry and the
+2 s mirror sweep deref()s **every** entry forever; the compaction that removes
+dead refs lived in `geoCensus()`, a debug hook no player calls. The registry's
+own comment measured the rate: **~150-200 dead refs per circuit build,
+monotonic across a season**. The sweep now compacts as it walks (backwards, so
+a splice cannot skip). Time and memory, both unbounded, both cheap to stop.
+
+### What would actually settle it
+
+The census cannot: it renders **45 rAF frames**, and it is an error/env gate,
+never a benchmark. A decay needs a slope. `__tlx.memState()` already reports
+mats / pool / draws / geoKeys / three's own counts and the mirror stats, which
+is the instrument §2o and §2p were both settled with — it wants a soak on the
+handset (`apex26.tlxMobile=1`), sampling every 15 s while racing, and the
+acceptance criterion is the slope against a GLX control on the same phone.
+
+## 2s. The decay is NOT a JS-heap leak — measured, on Apple hardware and on a soak (2026-09-10)
+
+Following §2r's report (three-WebGPU 60 → 30 on the handset). Two instruments,
+one negative result each, and a negative result here is worth more than another
+hypothesis: it says where NOT to spend the next round.
+
+### Apple hardware: no errors, and the TLX fps row is the trap
+
+`gpu-census` on `macos-latest`, montreal, run 78 (`force=1`) and run 81
+(default). Both Verdicts green, **gpuErrors 0 on every leg**, `anyHardware:
+true`. From run 78:
+
+| leg | ok | gpuErrors | fps | frames | scale | path |
+|---|---|---|---|---|---|---|
+| three-WebGPU | true | 0 | 10.1 | 8 | 1 | `softBlit=YES (headless readback — NOT the path a player takes)` |
+| three-WebGL2 | true | 0 | 8.7 | 4 | 1 | `softBlit=no (direct present)` |
+| GLX | true | 0 | 59.9 | 600 | **0.70** | — |
+| WGX | true | 0 | 58.2 | 600 | 1 | softPresent (expected under a headless UA) |
+
+**Do not read the TLX rows as a backend comparison** — AGENTS.md says why and
+this run is the illustration: the WebGPU leg is a readback path. What IS
+readable: no leg errors on real Metal, and GLX had to shed to **scale 0.70** to
+hold 59.9, so even the default backend is not comfortable at native res there.
+
+### The soak: TLX plateaus, it does not leak
+
+`heap-stages.mjs`, montreal, equal WALL time per leg, drift = settled − built:
+
+| soak | GLX drift | TLX drift | TLX frames |
+|---|---|---|---|
+| 60 s | +0.94 MB | +5.67 MB | 2235 (37 fps) |
+| 180 s | +0.82 MB | **+7.15 MB** | 6251 (35 fps) |
+
+A leak at the 60 s rate would put 180 s near +17 MB. It lands at +7.15, and the
+frame rate is flat across both (37 → 35 fps). **The curve is a working set
+filling, not a slope.** §2p's `mrt()` fix holds; nothing has re-opened it.
+
+### What this rules out, and the blind spot it leaves
+
+Ruled out: a JS-heap leak, a per-frame allocation slope, and any error on real
+Apple hardware. So the handset's 60 → 30 is **not** the §2o/§2p mechanism.
+
+The blind spot is the honest part: `heap-stages` reads the **JS heap** via
+`Runtime.getHeapUsage`. iOS jetsam counts **GPU and IOSurface** allocations,
+which that number cannot see at all — and glx.js's own mobile-tier comment says
+exactly that. A texture/buffer/pipeline growth on the WebGPU device would be
+invisible to every measurement in this entry. `renderer.info.memory`
+(geometries, textures) is the counter that would see it, `memState()` already
+reports it, and no soak here samples it over time yet.
+
+Thermal throttling is the other candidate no code change reaches, and on a
+handset it produces exactly a sustained halving.
+
+### Next round, in order
+
+1. Sample `__tlx.memState()` — specifically `renderer.info.memory` — every 15 s
+   across a soak, not just at the ends. That is the GPU-side slope.
+2. Only then look at code. Two rounds were spent on baselines before anyone
+   measured a slope (§2o's closing lesson); this entry exists so a third is not
+   spent on a slope that is already flat.
+
+## 2t. The GPU-side slope is flat too — and the persisted backend is the likelier answer (2026-09-10)
+
+§2s closed by naming the blind spot: the JS heap cannot see textures, buffers or
+pipelines, and iOS jetsam charges the tab for exactly those. `heap-stages.mjs`
+now samples `GLX.__tlx.memState()` on a Node-side clock through the soak. 90 s,
+montreal, TLX leg:
+
+| t (s) | rGeo | rTex | mats | pool |
+|---|---|---|---|---|
+| 15.5 | 242 | 41 | 12 | 349 |
+| 26.8 | 250 | 41 | 12 | 578 |
+| 38.1 | 366 | 43 | 12 | 251 |
+| 49.3 | 366 | 28 | 12 | 167 |
+| 60.6 | 367 | 28 | 64 | 669 |
+| 71.8 | 394 | 34 | 64 | 951 |
+| 83.1 | 402 | 37 | 64 | 822 |
+| 94.3 | 402 | 37 | 64 | 572 |
+| 105.6 | 402 | 52 | 64 | 223 |
+
+`rGeo` climbs 242 → 402 and then **holds at 402** across the last three samples;
+`mats` steps 12 → 64 at the cache cap and stops; `pool` oscillates 167–951,
+which is §2n's keyed pool tracking the working set exactly as designed; `rTex`
+is non-monotonic (41 → 28 → 52), so textures are being freed and remade rather
+than accumulated. **No unbounded GPU-side growth over 90 s.**
+
+That is the SECOND negative. Neither the JS heap (§2s) nor three's own retained
+counts reproduce a decay on this box.
+
+### Two gaps in the instrument, stated rather than glossed
+
+- `backendData` — three's WebGPU DataMap size, the counter closest to real GPU
+  retention — comes back **undefined**. `memState()` guards on
+  `b.data.size != null` and the DataMap is a WeakMap, which has no `size`. Its
+  absence is NOT evidence of flatness, and the sampler now reports `null`
+  rather than letting it read as a measured zero.
+- The GLX leg has no `__tlx` at all, so its columns are absent by definition.
+  The first cut of this sampler printed both cases as `undefined`, which is a
+  lie that looks like data — it also read `window.__tlx` when the surface hangs
+  off `GLX.__tlx` (gfx-probe.mjs already knew), so the FIRST run reported a
+  tidy column of nothing for every leg. Both fixed.
+
+### The likelier answer, and it is not a leak
+
+`399dbcb2` (deploy branch, this morning) says it outright: **"SAVE ALL SETTINGS
+on a phone with no stored backend reported gfxBackend three and a reload could
+re-persist THREE."** Together with `9a12d061` aligning `renderer-picker`'s
+default back to WebGL2, that closes the 2026-09-08 mobile-default episode for
+FRESH state — but a phone that hit SAVE ALL SETTINGS inside that window now has
+`apex26.gfxBackend = "three"` **persisted**, and no revert of a default reaches
+a stored value.
+
+The boot canary in game.js only retires a backend that never PRESENTS A FRAME
+twice. TLX at 30 fps presents frames perfectly well, so the canary never fires
+and the phone stays on the heavier backend indefinitely — TLX measured ~97–119
+MB against GLX's ~47–49 on a phone profile (§2n, §2q).
+
+**This is not auto-fixable and should not be.** A stored `"three"` from SAVE ALL
+SETTINGS and a stored `"three"` the player chose deliberately are the same three
+bytes; a migration that cleared it would silently override a real choice. The
+answer is the RENDERER row in SETTINGS, and knowing to look at it.

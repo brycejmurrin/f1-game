@@ -6491,6 +6491,11 @@ let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice
 let setupPreviewMinDist = 0;   // 0 = use the global SP_DIST_MIN
 // Last frame's RESOLVED framing, for __apex.garageCam(). Read-only telemetry.
 let _spEffDist = 0, _spEffFit = 0, _spEffPanel = 0;
+// THE GARAGE'S CLOCK. The bay's washer flickers on three sines of whatever
+// clock live() gets, so under performance.now() two captures at different WALL
+// instants light the room differently — a held render clock did not hold the
+// garage. Measurements: tools/shot/garage-angles.mjs header.
+function garageNow() { return _skyHold ? _skyT * 1000 : performance.now(); }
 // PAN — a translation of the whole rig (orbit centre AND look-at) in car-local
 // metres. Orbit and zoom alone can only ever circle the same point, so there is
 // no way to walk along the car and study one end of it up close; you can only
@@ -6800,7 +6805,7 @@ function renderSetupPreview(dt) {
     // present(), and an interior lives or dies on its corner darkening.
     viewProj: _spVP, view: _spView, eye, sunDir: [0, 0.86, 0.51], sunColor: GarageScene.SKYLIGHT,
     ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
-    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.live(_spLiv(), performance.now(), garageCtx()),
+    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.live(_spLiv(), garageNow(), garageCtx()),
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   }) === false) return;
@@ -6833,7 +6838,7 @@ function renderSetupPreview(dt) {
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(GarageScene.live(_spLiv(), performance.now(), garageCtx()), GarageScene.glareStr());
+  gfx.drawGlow(GarageScene.live(_spLiv(), garageNow(), garageCtx()), GarageScene.glareStr());
   gfx.present(SP_PRESENT);
 }
 

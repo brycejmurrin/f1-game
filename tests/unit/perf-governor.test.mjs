@@ -771,3 +771,49 @@ test("a run of slow frames feeds CLAMPED, so a 60 s gap can never enter as 60 00
   assert.ok(PerfGov.fpsEMA() > 900,
     "and it should actually converge on the cap rather than hovering near 16.7");
 });
+
+/* THE BOOT TIER AND THE PRESET MUST AGREE ACROSS A RELOAD.
+ *
+ * `apex26.gfxHigh` is read at BOOT, before GfxQuality.init() runs: glx.js does
+ * `MOBILE_TIER = IS_MOBILE && !_gfxHigh`, and post.js (MSAA) and the audio
+ * engine read it too. It was written ONLY by set() — the player picking a
+ * preset — so any path that lands a `gfxPreset` without going through set()
+ * left the two disagreeing, and a phone whose UI reads MEDIUM booted on the
+ * DESKTOP tier: full-size shadow maps and atlases, the desktop lamp budget,
+ * 4x MSAA. Nothing re-synced it, so the frames never came back on their own.
+ * A settings-file import is the reachable way in (settings-export writes the
+ * allowlisted keys straight to the store). */
+test("init() reconciles the boot tier with the resolved preset", () => {
+  const qsrc = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+  // init() reads the DEVICE CLASS off GLX.isMobile; without it _isMobile is
+  // false and syncBootTier's first line returns, which is not the phone case
+  // this test is about.
+  globalThis.GLX = { isMobile: true };
+  // The RAW lane is localStorage-backed and this harness has none, so without a
+  // shim rawSet is a no-op and the reconciliation cannot be observed at all.
+  const disk = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (disk.has(k) ? disk.get(k) : null),
+    setItem: (k, v) => disk.set(k, String(v)),
+    removeItem: (k) => disk.delete(k),
+  };
+  const GfxQuality = eval(qsrc + ";GfxQuality");
+
+  // The divergent state: UI says MEDIUM, boot tier still says desktop.
+  GameStore.store.set("gfxPreset", "medium");
+  GameStore.store.rawSet("apex26.gfxHigh", "1");
+  GfxQuality.init();
+  assert.equal(GameStore.store.raw("apex26.gfxHigh"), "0",
+    "a MEDIUM preset must not leave a phone booting on the desktop tier");
+
+  // Stable, not circular: defaultId reads gfxHigh only for the legacy ULTRA
+  // opt-in, and ULTRA is the one preset with mobileHigh true, so the value
+  // survives a round trip rather than oscillating.
+  GameStore.store.set("gfxPreset", null);
+  GameStore.store.rawSet("apex26.gfxHigh", "1");
+  GfxQuality.init();
+  assert.equal(GameStore.store.raw("apex26.gfxHigh"), "1",
+    "the legacy ULTRA opt-in must survive its own reconciliation");
+  delete globalThis.GLX;
+  delete globalThis.localStorage;
+});
