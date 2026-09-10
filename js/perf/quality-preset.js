@@ -140,6 +140,18 @@ function init() {
   const st = gstore();
   _cur = (st && st.get("gfxPreset", null)) || defaultId(_isMobile);
   if (!byId(_cur)) _cur = defaultId(_isMobile);
+  // RECONCILE THE BOOT TIER WITH THE PRESET. `apex26.gfxHigh` is read at BOOT,
+  // before any of this runs: glx.js does MOBILE_TIER = IS_MOBILE && !_gfxHigh,
+  // and post.js and the audio engine read it too. It was written ONLY by set(),
+  // the user picking a preset — so any path that lands a gfxPreset without
+  // going through set() (a settings-file import is the reachable one) leaves
+  // the two disagreeing, and a phone whose UI says MEDIUM boots on the DESKTOP
+  // tier: full-size shadow maps, atlases and lamp budget, and nothing ever
+  // re-syncs it. Reconciling here is stable rather than circular — defaultId
+  // reads gfxHigh only to resolve the legacy ULTRA opt-in, and ULTRA is the one
+  // preset with mobileHigh true, so it writes back the value it read.
+  // Takes effect on the next load, which is when those boot reads happen.
+  syncBootTier();
   applyLive();
 
   const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
