@@ -337,7 +337,11 @@ test("the test-suite counts in the agent docs and README.md match the files on d
   const units = ls("tests/unit", /\.test\.mjs$/).length;
 
   let sawSpecCount = false;
-  for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md", ...SKILL_DOCS]) {
+  // docs/TESTING.md joined the list after the same lesson repeated a second
+  // time: it was the ONE doc whose whole subject is the suite, and the only
+  // one not read here, so "the 114 Playwright specs" sat two lines from its
+  // own correct "116 root Playwright spec files" with nothing to notice.
+  for (const doc of ["CLAUDE.md", "AGENTS.md", "README.md", "docs/TESTING.md", ...SKILL_DOCS]) {
     const text = read(doc);
     const claimed = [...text.matchAll(/(\d+)\s+Playwright specs?/gi)].map((m) => Number(m[1]));
     if (claimed.length) sawSpecCount = true;
