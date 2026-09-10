@@ -8,7 +8,7 @@
 // graft, so this tool is the re-runnable primary evidence for keeping or
 // lifting that workaround (docs/research/WEBGPU-PARITY.md §road items).
 //
-//   node tools/gfx/wgx-vid-repro.mjs [--stack swiftshader|lavapipe|both] [--json]
+//   node docs/archive/tools/gfx/wgx-vid-repro.mjs [--stack swiftshader|lavapipe|both] [--json]
 //
 // Shape of the experiment (constraints from WEBGPU-PARITY.md and wgx.js):
 //   - own adapter/device on a page served from http://127.0.0.1 (secure ctx);

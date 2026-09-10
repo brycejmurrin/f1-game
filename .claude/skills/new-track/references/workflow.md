@@ -23,11 +23,13 @@ Load from the SKILL.md index when the task needs this detail.
    for street/modern circuits — `barrier` / `cityStyle`; copy a sibling's rows
    as the starting point.
 
-2. **Register it** (new tracks only): add `<script src="js/circuits/<id>.js?v=N"></script>`
-   to `index.html` in the circuit block (before `js/track/tracks.js`) **and add the
-   matching entry to the `CIRCUITS` array in `tools/manifest.cjs`** — the load-order
-   single source of truth; `tests/unit/load-order.test.mjs` (`npm run test:tooling`) fails
-   if the two diverge. Tag order == `Tracks.LIST` == picker/season order:
+2. **Register it** (new tracks only): add the id to the `CIRCUITS` array in
+   `tools/manifest.cjs` (load-order source of truth), then run
+   `node tools/gen/gen-shell.mjs` so the `@gen-shell` script block in `index.html`
+   picks it up. Never hand-edit a `?v=` tag — committed tags stay `?v=dev`.
+   `tests/unit/load-order.test.mjs` fails if manifest and shell diverge.
+   Tag order == `Tracks.LIST` == picker/season order:
+
    - **Season circuits** (24 rounds): append in calendar order at the end of the
      season block (before the `classic: true` section).
    - **Retired circuits**: set `classic: true` in the def and append after the 24
@@ -58,8 +60,10 @@ Load from the SKILL.md index when the task needs this detail.
    which in the running game would strand the player on the menu. Fix before
    pushing. Common causes: a missing destructure (`out` not pulled from `api`), a
    node index out of range, or bad track data.
-4. **Bump the cache version** (`node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`)) — you edited
-   `index.html` and/or a JS file.
+4. **Shell sync** — `node tools/gen/gen-shell.mjs --check` (or `gen-shell.mjs`
+   after a `tools/manifest.cjs` change). Committed tags stay `?v=dev`; deploy
+   stamps hashes. Do not hand-bump numeric `?v=N`.
+
 5. **Visual check** — load and screenshot it (use the `playwright-probe` skill's `shot.mjs`):
    ```js
    __apex.race("<id>"); __apex.park(0.1);          // stationary at 10% lap
@@ -68,8 +72,8 @@ Load from the SKILL.md index when the task needs this detail.
    ```
 6. **Tests**:
    ```sh
-   node tools/track/verify-track.cjs <id>
-   node tools/ci/test-bg.mjs circuits   # walls + autopilot + elevation (includes tracks-walls.spec.js)
+   node tools/track/verify-track.cjs <id>   # default gate (no browser)
+   # optional parent ship only: node tools/ci/test-bg.mjs circuits
    ```
    The `terrain-over-road.spec.js` audit (part of the full suite) catches terrain
    triangles rendering above the racing line — re-run it if you changed elevation

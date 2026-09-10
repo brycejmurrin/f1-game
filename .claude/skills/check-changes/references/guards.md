@@ -26,15 +26,15 @@ expectation vs real regression.
    prop geometry vertex for vertex. `verify-change` runs this inline when
    `graph.js` is in the plan.
 
-3. **Cache version bumped — BOTH files?** Any `js/*.js` or `css/*.css`
-   change: every `?v=N` in `index.html` AND `version.json`'s `build` must
-   equal the same N (the deploy stamp; the repo carries `?v=dev`):
+3. **Shell / cache bust (no numeric bump).** Committed asset tags stay
+   `?v=dev`; the deploy stamps content hashes. After a `js/`/`css/` edit:
    ```sh
-   node tools/ci/bump-cache.mjs --check
-   grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
+   node tools/ci/bump-cache.mjs --check   # must stay clean (refuses --apply here)
+   node tools/gen/gen-shell.mjs --check   # after tools/manifest.cjs: gen-shell.mjs
    ```
-   Cross-lineage merge: `node tools/gen/gen-shell.mjs` regenerates the union shell
-   (max of both + 1). Never `--apply` while a browser run is in flight.
+   Never hand-grep for `?v=[0-9]` on the repo shell, and never bump
+   `version.json` while a browser run is in flight. Cross-lineage merge:
+   `node tools/gen/gen-shell.mjs` regenerates the union shell.
 
 4. **Smoke + load order** if you touched load order, `index.html`, or a core
    module (`index.html` script tags must match `tools/manifest.cjs`):

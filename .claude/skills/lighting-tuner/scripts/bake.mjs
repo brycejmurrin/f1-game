@@ -98,16 +98,7 @@ try {
 src = src.replace(re, "window.LightPresets = " + JSON.stringify(obj, null, 2) + ";");
 writeFileSync(lpPath, src);
 
-// Bump ?v= across index.html + version.json (the no-build cache-bust convention).
-const idxPath = ROOT + "index.html";
-let idx = readFileSync(idxPath, "utf8");
-const versions = [...idx.matchAll(/\?v=(\d+)/g)].map((m) => +m[1]);
-if (!versions.length) { console.error("No ?v= found in index.html"); process.exit(1); }
-const next = Math.max(...versions) + 1;
-idx = idx.replace(/\?v=\d+/g, "?v=" + next);
-writeFileSync(idxPath, idx);
-writeFileSync(ROOT + "version.json", `{ "build": ${next} }\n`);
-
-console.log(`Baked ${Object.keys(obj).length} profile(s) / ${nKnobs} value(s) into js/lighting/presets.js`);
-console.log(`Cache bumped to ?v=${next} (index.html + version.json).`);
-console.log("Next: review `git diff`, then commit + push (the bake-lighting skill drives this).");
+// Committed shell tags stay ?v=dev; deploy stamps hashes. Do not rewrite
+// index.html / version.json here.
+console.log("Shell tags stay ?v=dev (no numeric bump).");
+console.log("Next: review `git diff`, then commit + push (the lighting-tuner skill drives this).");

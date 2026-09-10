@@ -74,6 +74,20 @@
    plateInk? optional PLATE INK — the number ON that board, and the sponsor text
      on TITLE. Absent = the body colour when it reads there, else the automatic
      ink.
+   saddleTint? optional SADDLE — the shoulder shelf and upper-flank saddle block
+     (atlas: crest shoulders + saddleFlanks). Absent = today's bandC path under
+     saddle or saddleWrap; else derived flank fill.
+   ridgeTint? optional RIDGE — the thin centreline ridge only (crest + tail if
+     continued). Absent = spineTint if set, else derived band colour.
+   airboxTint? optional AIRBOX — roll hoop, snorkel and intake lips on the mesh
+     (Car3D only — no atlas region). Absent = cover; under WRAP the resolved sun
+     still wins over airboxTint.
+   coverBind? optional COVER BIND — how crown and flank zones couple:
+     "independent" (absent), "saddleWrap" (saddle block spans crown shoulders and
+     upper flanks), or "spineOnly" (crown/ridge accent only; shoulders stay cover).
+   finHandoff? optional FIN HANDOFF — how the fin meets the cover block:
+     "match" (absent), "contrast" (fin resolves against crown/saddle block), or
+     "hardCut" (fin ignores crown graphic continuation at the fin root).
    spineLogo? optional SPINE TOP — what the engine-cover crown carries on bare
      body colour (no gradient wash under any design — hard edges only).
      "logo" (absent) draws the crest there as well as on the fin; "none" leaves
@@ -485,6 +499,7 @@ const Liveries = (function () {
     "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge",
     "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover",
     "spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk",
+    "saddleTint", "ridgeTint", "airboxTint", "coverBind", "finHandoff",
     "rearWing", "wingCarbon", "bodySplit"];
 
   function forTeam(team) {

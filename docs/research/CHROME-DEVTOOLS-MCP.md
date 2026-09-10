@@ -1,5 +1,9 @@
 # Chrome DevTools MCP — Apex playbook (2026-08-12)
 
+> **Errata (2026-09):** `probe` is **not** attached in `.mcp.json`. Use the
+> `chrome-devtools` server (or `python3 tools/mcp/probe-mcp.py chrome-start`
+> as a CLI daemon). TinyFish half of probe is dead in-container.
+
 Measured recipes for the **40** tools exposed by
 `tools/mcp/chrome-devtools-mcp.sh` (local `scratch/chrome-devtools-mcp` clone).
 Interactive twin of Playwright — not a CI gate. Skills:
@@ -198,7 +202,7 @@ bridge:
 ```
 python3 tools/mcp/probe-mcp.py list-tools
 python3 tools/mcp/probe-mcp.py call chrome_<tool> '<json>'
-python3 tools/mcp/probe-mcp.py serve   # .mcp.json "probe" entry — every chrome_* + tinyfish_* tool
+python3 tools/mcp/probe-mcp.py serve   # CLI only (not in .mcp.json) — every chrome_* + tinyfish_* tool; prefer chrome-devtools MCP when attached
 ```
 
 A bare `call` spawns a fresh Chromium per invocation and loses all page state
@@ -208,6 +212,6 @@ behind `127.0.0.1:3712` that `call` auto-routes to — and `chrome-stop` before
 any Playwright run. Details in `.claude/skills/mcp-probe`.
 
 Local agents can also drive chrome-devtools via `tools/mcp/chrome-devtools-mcp.sh run`
-over stdio (`tools/mcp/cdmcp-cli.py`, `tools/mcp/ui-readable-survey-mcp.py`,
-`tools/mcp/mcp-cli.mjs`). When writing a custom client, handle **server→client**
+over stdio (`tools/mcp/cdmcp-cli.py`, `tools/mcp/mcp-cli.mjs`)
+(UI matrix → `tools/ui/layout-audit.mjs`; `ui-readable-survey-mcp.py` archived). When writing a custom client, handle **server→client**
 `roots/list` or restrict artifact paths to `/tmp`.

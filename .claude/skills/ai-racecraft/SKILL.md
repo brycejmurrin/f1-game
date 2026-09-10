@@ -32,4 +32,10 @@ for the economy; this skill for how those axes drive the field).
 ```sh
 node --test tests/unit/ai-drive.test.mjs
 node tools/ci/test-bg.mjs collisions   # racecraft lives in the contact specs
+
+# Field instruments (VM, no browser) — one dispatcher, three measurements:
+node tools/check/ai-race.mjs pace  [--track monza] [--diff normal]
+node tools/check/ai-race.mjs field [--track monza] [--seconds 240] [--runs 5]
+node tools/check/ai-race.mjs line  [--track monza]
+# Direct: ai-pace.mjs / ai-field.mjs / ai-line.mjs (same @skill).
 ```

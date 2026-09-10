@@ -208,6 +208,66 @@ test("saddle / crown band ignore BODY STRIPE; SPINE TINT is the override", () =>
             `SPINE TINT must paint the saddle; got ${[...stylesOf(tinted)].join(", ")}`);
 });
 
+test("saddleTint owns the saddle flank fill, not spineTint / bandC", () => {
+  const SPINE = [0.718, 0.882, 0.106], SADDLE = [0.98, 0.28, 0.05], COVER = [0.075, 0.078, 0.085];
+  const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+  const carries = (styles, c) => {
+    const want = to255(c).join(",");
+    return [...styles].some((v) => v && v.replace(/^rgba?\(/, "").replace(/[)\s]/g, "").startsWith(want));
+  };
+  const stylesOf = (ops) => new Set(opsIn(ops, R.spineSide).map((op) => op.style).filter(Boolean));
+  const base = {
+    c1: [0.05, 0.06, 0.07], c2: SADDLE, cover: COVER,
+    spineLogo: "saddle", finShape: "none", spineTint: SPINE, saddleTint: SADDLE,
+  };
+  const ops = A.paint("audi", base);
+  assert.ok(carries(stylesOf(ops), SADDLE),
+            `saddle flank must carry saddleTint ${to255(SADDLE)}; got ${[...stylesOf(ops)].join(", ")}`);
+  assert.equal(carries(stylesOf(ops), SPINE), false,
+               "saddle flank must not inherit spineTint / bandC");
+  // Crown still follows spineTint — the two zones are independent.
+  assert.ok(carries(new Set(opsIn(ops, R.crest).map((op) => op.style).filter(Boolean)), SPINE),
+            "spineTint still paints the crown band");
+});
+
+test("coverBind saddleWrap paints saddle flanks without a saddle crown", () => {
+  const ops = A.paint("ferrari", { ...BASE, spineLogo: "stripe", coverBind: "saddleWrap" });
+  assert.ok(opsIn(ops, R.spineSide).length > 0, "saddleWrap reaches the flank band");
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineLogo: "stripe", coverBind: "spineOnly" }), R.spineSide).length, 0,
+               "spineOnly keeps non-saddle crowns off the flanks");
+});
+
+test("airboxMeshColour: wrap sun wins over airboxTint", () => {
+  const cover = [0.9, 0.9, 0.92], sun = [0.95, 0.75, 0.1], airbox = [0.2, 0.8, 0.3];
+  const liv = { spineLogo: "wrap", sunTint: sun, airboxTint: airbox, cover };
+  assert.deepEqual(A.LT.airboxMeshColour("redbull", liv, cover), sun);
+});
+
+test("airboxMeshColour: non-wrap uses airboxTint, else cover", () => {
+  const cover = [0.9, 0.9, 0.92], airbox = [0.2, 0.8, 0.3];
+  assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", airboxTint: airbox, cover }, cover), airbox);
+  assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", cover }, cover), cover);
+});
+
+test("finHandoff contrast resolves fin against the saddle block, not white-on-white", () => {
+  const WHITE = [0.95, 0.95, 0.96], RED = [0.863, 0, 0], DARK = [0.05, 0.06, 0.07];
+  const liv = {
+    cover: WHITE, c1: DARK, c2: RED, fin: WHITE,
+    spineLogo: "cap", coverBind: "saddleWrap", saddleTint: WHITE, finHandoff: "contrast",
+  };
+  const fin = A.LT.resolveFinPaint("ferrari", liv, WHITE, RED, DARK, RED);
+  assert.ok(A.LT.contrast(fin, WHITE) >= 2.0, `fin ${fin} must clear white block`);
+  assert.ok(fin[0] > 0.5, "contrast must pick red body, not white fin/cover");
+});
+
+test("finHandoff hardCut stops crown continuation on the tail, fin motif stays", () => {
+  const match = A.paint("ferrari", { ...BASE, spineLogo: "stripe", finHandoff: "match" });
+  const cut = A.paint("ferrari", { ...BASE, spineLogo: "stripe", finHandoff: "hardCut" });
+  assert.ok(opsIn(match, R.tail).length > 0, "match continues stripe onto REGIONS.tail");
+  assert.equal(opsIn(cut, R.tail).length, 0, "hardCut breaks crown onto tail");
+  assert.ok(opsIn(cut, R.fin).length > 0, "hardCut keeps fin motif on REGIONS.fin");
+});
+
 test("spineTint colours the crown band alone, and is absent-identical", () => {
   const LIME = [0.718, 0.882, 0.106], DARK = [0.008, 0.086, 0.078];
   const AM = { c1: [0.0, 0.349, 0.31], c2: LIME, spineLogo: "stripe" };
@@ -279,7 +339,7 @@ test("the flank squash table still matches the cover Car3D actually builds", () 
 });
 
 test("every SPINE TOP design paints the crown; wordmark and number carry text", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number", "cap", "ridge", "fade"]);
   // The wrap is ONE shape over crown and flanks: it paints the crest region
   // AND the flank band with no spineSide picked, and leaves the tail bare.
   const wrap = A.paint("redbull", { ...BASE, spineLogo: "wrap" });
@@ -304,7 +364,8 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
     assert.ok(!flankFills(def).includes(cssOf(pick)),
       "without TEAM LOGO the bull should not wear the authored colour");
   }
-  for (const id of ["number", "logo", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash"]) {
+  for (const id of ["number", "logo", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "slash", "rake", "shoulder", "starfield"]) {
+
     const ops = A.paint("ferrari", { ...BASE, spineSide: id });
     assert.ok(opsIn(ops, R.spineSide).length > 0 && opsIn(ops, R.spineSideL).length > 0, `${id} paints both flanks`);
   }
@@ -344,8 +405,8 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   const bare = opsIn(A.paint("ferrari", { ...BASE, spineLogo: "none" }), R.crest).length;
   // The tail strip: bare for the marks and "none", painted by every band design.
   for (const id of ["none", "logo", "number"]) assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.tail).length, 0, `${id}: the tail stays bare`);
-  for (const id of ["saddle", "panel", "stripe", "twin", "carbon", "wordmark"]) assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.tail).length > 0, `${id} runs down the tail`);
-  for (const id of ["saddle", "panel", "stripe", "twin", "wordmark", "carbon", "number"]) {
+  for (const id of ["saddle", "panel", "stripe", "twin", "ridge", "carbon", "wordmark"]) assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.tail).length > 0, `${id} runs down the tail`);
+  for (const id of ["saddle", "panel", "stripe", "twin", "ridge", "wordmark", "carbon", "number", "cap", "fade"]) {
     const ops = opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.crest);
     // The band designs REPLACE the wash (bare paint under them), so they are
     // compared against an empty crown; the text designs sit on the wash.
@@ -354,7 +415,7 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
     if (id === "number") assert.ok(texts.includes("16"), `number: ${texts}`);
     // drawWordmark sets each letter on its own, so the name is the join.
     if (id === "wordmark") assert.ok(texts.join("").length >= 3, `wordmark: ${texts}`);
-    if (id === "saddle" || id === "panel" || id === "stripe" || id === "twin" || id === "carbon") assert.equal(texts.length, 0, `${id} carries no text`);
+    if (id === "saddle" || id === "panel" || id === "stripe" || id === "twin" || id === "ridge" || id === "carbon" || id === "cap" || id === "fade") assert.equal(texts.length, 0, `${id} carries no text`);
   }
 });
 
@@ -457,7 +518,7 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
 // code or the crest on pick. Mesh: the service panels leave the band's z range
 // so a grey hatch never sits through the number — same vertex count, moved.
 test("spineSide paints the flank band on pick only, and clears the service panels from under it", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "slash"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "slash", "rake", "shoulder", "starfield"]);
   assert.ok(A.LT.FLANK_MARK.v < 0.48 && A.LT.FLANK_MARK.v > 0.30,
             "flank marks sit in the upper half (0.56 sat in the sidepod; 0.42 with the old tall box clipped the crease)");
   assert.ok(A.LT.FLANK_MARK.v - A.LT.FLANK_MARK.halfH > 0.08,
@@ -506,6 +567,9 @@ test("spineSide paints the flank band on pick only, and clears the service panel
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "emblem" }), R.spineSide).length > 0, "emblem paints a large crest");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "band" }), R.spineSide).length > 0, "band paints the crease strip");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "sash" }), R.spineSide).length > 0, "sash paints a diagonal");
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "rake" }), R.spineSide).length > 0, "rake paints a single-cut diagonal");
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "shoulder" }), R.spineSide).length > 0, "shoulder paints the upper third");
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "starfield" }), R.spineSide).length > 0, "starfield paints micro dots");
   // Culled band graphics must not paint (unknown id → bare flank).
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "slash" }), R.spineSide).length > 0, "slash paints a single raked stroke");
   assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "bars" }), R.spineSide).length, 0, "bars was culled");

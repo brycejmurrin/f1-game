@@ -1035,7 +1035,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   // non-indexed draw. That is safe because the road binds the magic-12345 LUT,
   // so its WGSL reads trkFromWorld(wpos) and never matTrkArr[vid] — and the
   // merge refuses when no LUT is bound. Evidence for the draw shapes on this
-  // container's stacks: tools/gfx/wgx-vid-repro.mjs (30/30 OK incl. firstVertex
+  // container's stacks: docs/archive/tools/gfx/wgx-vid-repro.mjs (30/30 OK incl. firstVertex
   // and whole draw(N) to 24576, three runs).
   assert.match(WGX_SOURCE, /const PIECE = 4095/);
   assert.match(WGX_SOURCE, /const vidDead = indexed \|\| !!_roadLutBG;/,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * @doc How fast is the AI field, per circuit and per difficulty? Simulated laps in the VM, no browser, no renderer.
- * @skill tune-physics
+ * @skill ai-racecraft
  * ai-pace.mjs — the AI's lap time, measured rather than guessed.
  *
  * `js/physics/consts.js`'s DIFF table scales the field's pace, and every

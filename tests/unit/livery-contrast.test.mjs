@@ -47,7 +47,7 @@ const A = loadAtlas();
 const CROWN = ["logo", "wrap", "saddle", "bigmark"];
 // Colour fills, boards, marks and lettering that own a large flank share — the
 // live SIDE heroes after the 2026-09-09 cull (not the sticker geometry).
-const SIDE = ["none", "band", "sash", "plate", "logo", "ribbon", "lockup", "title", "emblem"];
+const SIDE = ["none", "band", "sash", "rake", "shoulder", "starfield", "plate", "logo", "ribbon", "lockup", "title", "emblem"];
 
 test("no design paints a large area that cannot be seen on what it covers", () => {
   const bad = [];

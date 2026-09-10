@@ -9,7 +9,7 @@ CLIs are pinned as `apex_*` MCP tools; most are not. Full map (three MCP
 servers, wrap table, never-wrap): [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md).
 
 Descriptions say **when** to load the skill; bodies carry the workflow and
-`references/` carry the detail. 25 skills (44 until 2026-09). The folded ones
+`references/` carry the detail. 26 skills (44 until 2026-09). The folded ones
 are named in the rows that absorbed them: `bump-cache`, `deploy-merge`,
 `test-timeout-triage` → check-changes; `motion-capture`, `perf-profile`,
 `car-viewer`, `debug-cameras` → playwright-probe; `bake-lighting` →

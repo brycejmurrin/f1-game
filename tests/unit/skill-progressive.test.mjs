@@ -41,9 +41,19 @@ test("mcp-probe SKILL.md stays a thin index (not the war-story dump)", () => {
 
 test("mcp-probe references keep the measured traps and recipes", () => {
   const traps = fs.readFileSync(path.join(MCP, "references/traps.md"), "utf8");
+  const chrome = fs.readFileSync(path.join(MCP, "references/traps-chrome.md"), "utf8");
+  const camera = fs.readFileSync(path.join(MCP, "references/traps-camera.md"), "utf8");
+  const scene = fs.readFileSync(path.join(MCP, "references/traps-scene.md"), "utf8");
   const recipes = fs.readFileSync(path.join(MCP, "references/recipes.md"), "utf8");
+  // Index stays thin; war stories live in chrome / camera / scene slices.
   assert.match(traps, /never render in the MCP browser while Playwright/);
   assert.match(traps, /snapCam/);
+  assert.match(traps, /traps-chrome\.md/);
+  assert.match(traps, /traps-camera\.md/);
+  assert.match(traps, /traps-scene\.md/);
+  assert.match(chrome, /never render in the MCP browser while Playwright/);
+  assert.match(camera, /snapCam/);
+  assert.ok(scene.split("\n").length > 40, "traps-scene.md lost its measured content");
   assert.match(recipes, /tinyfish|deploy-check/);
   assert.match(recipes, /Probing a specific renderer|secure context|navigator\.gpu/i);
 });
@@ -146,9 +156,9 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
     assert.equal(fs.existsSync(path.join(SKILLS, gone)), false, `${gone} was folded/deleted 2026-09`);
   }
   const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
-  // 26 -> 25 on 2026-09-03: webgpu-debug left with the WGX/TLX spike-out and
-  // lives at spike/backends/skills/webgpu-debug/. It comes back with the backends.
-  assert.equal(dirs.length, 26, `expected 25 skills, got ${dirs.length}`);
+  // Count tracks disk: webgpu-debug returned with the backends; keep the
+  // assertion message honest so a drift failure does not cite a stale 25.
+  assert.equal(dirs.length, 26, `expected 26 skills, got ${dirs.length}`);
   // cross-backend-parity was a 15-line pointer at the renderers doc; that doc
   // was absorbed into docs/ARCHITECTURE.md in Phase 5 and the section moved
   // with it (docs/RENDERERS.md is a redirect stub now).

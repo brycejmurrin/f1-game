@@ -14,10 +14,11 @@ test(".cursor/environment.json exists and bootstraps chrome MCP", () => {
   assert.match(env.install, /cloud-agent-install\.sh/);
   assert.equal(env.chromeExecutablePath, "/opt/pw-browsers/chromium");
   const names = (env.mcpServerAllowlist || []).map((row) => row.name).sort();
+  // Allowlist = the three committed catalog servers only. A stale fourth name
+  // (chrome-devtools-mcp) used to linger after that row left .mcp.json.
   assert.deepEqual(names, [
     "apex-tools",
     "chrome-devtools",
-    "chrome-devtools-mcp",
     "playwright-official",
   ]);
 });
@@ -25,8 +26,15 @@ test(".cursor/environment.json exists and bootstraps chrome MCP", () => {
 test(".cursor/environment.json allowlist covers every stdio MCP command in .mcp.json", () => {
   const env = JSON.parse(fs.readFileSync(ENV_JSON, "utf8"));
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
-  const allowed = new Set((env.mcpServerAllowlist || []).map((row) => row.command));
+  const allowedCmds = new Set((env.mcpServerAllowlist || []).map((row) => row.command));
+  const allowedNames = new Set((env.mcpServerAllowlist || []).map((row) => row.name));
   for (const [name, row] of Object.entries(cfg.mcpServers)) {
-    assert.ok(allowed.has(row.command), `${name} command ${row.command} must be allowlisted`);
+    assert.ok(allowedCmds.has(row.command), `${name} command ${row.command} must be allowlisted`);
+    assert.ok(allowedNames.has(name), `${name} must appear in mcpServerAllowlist by name`);
+  }
+  // No orphans: every allowlist name is a catalog server (dashboard aliases
+  // belong in Cursor Integrations & MCP, not this file).
+  for (const name of allowedNames) {
+    assert.ok(cfg.mcpServers[name], `allowlist name ${name} is not in .mcp.json`);
   }
 });
