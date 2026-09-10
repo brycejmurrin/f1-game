@@ -3786,7 +3786,7 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
 test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
   const THREE = await import("../../vendor/three-0.185.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
-  let _gpuTimerOn = false, _gpuMs = 12;
+  let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0;
   const _gpuSupported = () => true;
   const body = fnBody(code("js/render/three/tlx.js"), "gpuTimer");
   const timer = eval("(function(on){" + body + "})");
@@ -3837,6 +3837,7 @@ test("TLX registry pruning preserves live refs and is independent of mirror rele
 
 test("TLX warm holds renderer state across awaits and restores it on rejection", async () => {
   let _warmRequested = true, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
+  let _gpuLastOperation = "boot";
   const _postF = { proj: [] }, vizMat = null, scene = {}, camera = {};
   let target = "canvas", mrt = "previous", tag = false, postCalls = 0, rejectMain;
   const renderer = {
@@ -3900,4 +3901,58 @@ test("GPU verdict rejects captured compilation errors even with zero uncaptured 
     legs: { webgpu: gpu, webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson() },
   });
   assert.equal(result.code, 1); assert.match(result.out, /shader\/pipeline console errors/);
+});
+
+test("TLX defers resize during compilation and applies the latest requested size afterward", () => {
+  let _warmPending = {}, cssDirty = false, cssVW = 1136, cssVH = 524, cssRecheck = 0;
+  let cssW = 1136, cssH = 524, presentW = 1704, presentH = 786, W = 852, H = 393;
+  let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null;
+  let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
+  const CSS_RECHECK_FRAMES = 3, DPR_CAP = 1.5;
+  const window = { innerWidth: 1100, innerHeight: 500, devicePixelRatio: 3 };
+  const _layoutCanvas = { clientWidth: 1100, clientHeight: 500 }, _displayCanvas = null;
+  const wantSpatialUpscale = () => false, calls = [];
+  const renderer = { domElement: { width: 852, height: 393 }, setSize(w, h) {
+    calls.push(["canvas", w, h]); this.domElement.width = w; this.domElement.height = h;
+  } };
+  const post = { resize(w, h) { calls.push(["post", w, h]); } };
+  const resize = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "resize") + "})");
+  resize();
+  renderScale = 0.75; _layoutCanvas.clientWidth = window.innerWidth = 1000;
+  resize();
+  assert.deepEqual(calls, []);
+  assert.deepEqual([W, H], [852, 393]);
+  _warmPending = null; resize();
+  assert.deepEqual(calls, [["canvas", 1125, 563], ["post", 1125, 563]]);
+  resize(); assert.equal(calls.length, 2, "deferred changes apply once");
+});
+
+test("TLX ignores a timing result after disabling or restarting its measurement session", async () => {
+  let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0;
+  const pending = [], _gpuSupported = () => true;
+  const renderer = { backend: {}, resolveTimestampsAsync: () => new Promise(r => pending.push(r)) };
+  const src = code("js/render/three/tlx.js");
+  const timer = eval("(function(on){" + fnBody(src, "gpuTimer") + "})");
+  const resolve = eval("(function(){" + fnBody(src, "resolveGpuTimer") + "})");
+  timer(true); resolve(); timer(false); pending.shift()(7.25); await Promise.resolve();
+  assert.equal(_gpuMs, -1);
+  timer(true); resolve(); timer(false); timer(true);
+  pending.shift()(8); await Promise.resolve(); assert.equal(_gpuMs, -1);
+  resolve(); pending.shift()(4); await Promise.resolve(); assert.equal(_gpuMs, 4);
+});
+
+test("TLX bounds GPU error history and preserves resize context at receipt", () => {
+  let _gpuFirstError = null, _gpuErrors = 0, _gpuErrLastPresent = -1, _gpuErrFrames = 0, _presentN = 12;
+  let _warmPending = {}, _gpuLastOperation = "compile-post", _gpuLastResize = { width: 852, height: 393 };
+  const _gpuRecentErrors = [], GPU_ERR_LOG_CAP = 8, Log = { warn() {} };
+  const src = code("js/render/three/tlx.js").replace("const onErr = function", "function onErr");
+  const onErr = eval("(function(ev){" + fnBody(src, "onErr") + "})");
+  for (let i = 0; i < 10; i++) onErr({ error: new Error("error " + i) });
+  _gpuLastResize = { width: 1278, height: 590 };
+  assert.equal(_gpuErrors, 10); assert.equal(_gpuFirstError, "error 0");
+  assert.equal(_gpuRecentErrors.length, 8); assert.equal(_gpuRecentErrors[0].message, "error 2");
+  assert.equal(_gpuRecentErrors[0].lastResize.width, 852);
+  assert.equal(_gpuRecentErrors[0].warmingAtReceipt, true);
+  assert.equal(_gpuRecentErrors[0].presentAtReceipt, 12);
+  assert.equal(_gpuErrFrames, 1, "receipt counters retain their existing semantics");
 });
