@@ -13,14 +13,14 @@ textarea or paste into a message. It now exports only the local overrides, as
 `window.LightEdits`, current condition first. That is a DELTA: feeding it to
 `bake.mjs` would write those few keys and delete ~800 others, so `bake.mjs`
 refuses it by name and points here. Either way this skill writes shipped
-`js/lighting/presets.js`, bumps cache, and commits. localStorage still
+`js/lighting/presets.js` and commits (no cache bump). localStorage still
 outranks the file until RESET.
 
 Live knob work without a paste → the lighting-tuner index (`SKILL.md`).
 
 Per-track agent proposals → `artifacts/lighting/proposals/<id>.json`, then
 `node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs` (validates + merges;
-does not bump cache). Never let a subagent write `light-presets.js`.
+does not bump cache). Never let a subagent write `js/lighting/presets.js`.
 
 ## CRITICAL — `bake.mjs` is a FULL REPLACE
 
@@ -82,7 +82,7 @@ have a fresh COPY VALUES export, do **not** feed `bake.mjs` a one-key object:
    `window.LightPresets` object (plain JSON after the assignment).
 2. `Object.assign` just that key's new value — leave every other key.
 3. Write the whole object back as `window.LightPresets = {…};` and
-   `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
+   `node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`).
 
 A silent `--merge` default would make a future partial paste look safe.
 If a merge mode is ever added it must be an explicit opt-in flag.
@@ -106,8 +106,8 @@ through the merge path above.
    BLOB
    ```
 
-2. **Bake + bump** (writes presets, increments `?v=` + `version.json`;
-   validates shape, never commits):
+2. **Bake** (writes presets; validates shape; no cache bump; never
+   commits):
    ```sh
    node .claude/skills/lighting-tuner/scripts/bake.mjs artifacts/tmp/presets.txt
    ```

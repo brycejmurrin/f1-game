@@ -37,7 +37,7 @@ Monza has `night:false` — prefer vegas/singapore for night probes.
 ```sh
 node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
 # edit applyRaceSettings (js/lighting/atmosphere.js) or a TUNE_DEFS default
-# bump-cache last, then:
+# then:
 node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
 diff artifacts/tmp/before.json artifacts/tmp/after.json
 ```

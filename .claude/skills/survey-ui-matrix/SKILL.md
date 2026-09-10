@@ -14,8 +14,8 @@ bash tools/env/cloud-agent-install.sh      # AGENTS.md §Verification 1
 bash tools/mcp/playwright-mcp.sh status 2>/dev/null || true
 ```
 
-Missing browsers / wrapper: AGENTS.md §Verification 1 (`npm install`, then
-`npx playwright install chromium-headless-shell`).
+Missing browsers / wrapper: the SessionStart hook installs them (AGENTS.md
+§Verification 1); fallback `bash tools/env/cloud-agent-install.sh`.
 
 A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
 viewport × scale × pointer. **One CLI:** `tools/ui/layout-audit.mjs`.

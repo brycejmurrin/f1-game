@@ -4,6 +4,7 @@ description: Public-web and post-deploy research via the host fetch tool (WebFet
 model: inherit
 readonly: true
 is_background: true
+background: true
 tools: Bash, Read, Grep, Glob, WebFetch, WebSearch
 ---
 

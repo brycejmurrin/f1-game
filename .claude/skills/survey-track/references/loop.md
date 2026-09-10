@@ -72,7 +72,7 @@ Compare `before-*.png` vs `after-*.png`; confirm the probe is flag-free.
 - Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
   baselines). Do not treat it as a gate. Intentional goldens:
   `npm test -- tests/manual/tracks-visual.spec.js --update-snapshots`.
-- `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) after any `js/*`/`css/*` edit.
+- `node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`) after any `js/*`/`css/*` edit.
 - Pick remaining groups with **check-changes**.
 
 ## Worked example — Montreal floating trees
@@ -90,7 +90,7 @@ Montreal already ships `flatTerrain: true` + `terrainOuter: 70` in
 3. Edit: `flatTerrain` def flag (wide, dead-level shelf out to
    `terrainOuter`), mirrored in `groundYAt`, key added to the `LIST`
    whitelist, slab aligned just under the ribbon.
-4. `verify-track montreal` clean; after-survey flag-free; bumped `?v=`.
+4. `verify-track montreal` clean; after-survey flag-free.
 
 ## Gotchas
 

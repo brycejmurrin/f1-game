@@ -1,7 +1,6 @@
 ---
-description: TLX / three.js backend — ForceGL default, opaque canvas, census legs
-globs: js/render/three/**
-alwaysApply: false
+paths:
+  - "js/render/three/**"
 ---
 
 # TLX (three.js / TSL) — loads with js/render/three/

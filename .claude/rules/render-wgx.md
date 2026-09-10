@@ -1,7 +1,6 @@
 ---
-description: WGX / WebGPU backend — soft-adapter gate, validation vs visual oracle
-globs: js/render/webgpu/**
-alwaysApply: false
+paths:
+  - "js/render/webgpu/**"
 ---
 
 # WGX (WebGPU) — loads with js/render/webgpu/

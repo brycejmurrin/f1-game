@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Bake copied LIGHTING TUNER settings into js/lighting/presets.js and bump the
-// cache version — the "apply" step of the in-game tuner's COPY VALUES export.
+// Bake copied LIGHTING TUNER settings into js/lighting/presets.js (no cache
+// bump) — the "apply" step of the in-game tuner's COPY VALUES export.
 //
 // Usage:
 //   node .claude/skills/lighting-tuner/scripts/bake.mjs <file>    # read the blob from a file
@@ -98,16 +98,8 @@ try {
 src = src.replace(re, "window.LightPresets = " + JSON.stringify(obj, null, 2) + ";");
 writeFileSync(lpPath, src);
 
-// Bump ?v= across index.html + version.json (the no-build cache-bust convention).
-const idxPath = ROOT + "index.html";
-let idx = readFileSync(idxPath, "utf8");
-const versions = [...idx.matchAll(/\?v=(\d+)/g)].map((m) => +m[1]);
-if (!versions.length) { console.error("No ?v= found in index.html"); process.exit(1); }
-const next = Math.max(...versions) + 1;
-idx = idx.replace(/\?v=\d+/g, "?v=" + next);
-writeFileSync(idxPath, idx);
-writeFileSync(ROOT + "version.json", `{ "build": ${next} }\n`);
+// No cache bump: the committed shell reads ?v=dev and pages.yml stamps the
+// content hashes while staging (.claude/skills/check-changes/references/bump.md).
 
 console.log(`Baked ${Object.keys(obj).length} profile(s) / ${nKnobs} value(s) into js/lighting/presets.js`);
-console.log(`Cache bumped to ?v=${next} (index.html + version.json).`);
 console.log("Next: review `git diff`, then commit + push (the bake-lighting skill drives this).");

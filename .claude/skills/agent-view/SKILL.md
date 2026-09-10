@@ -89,7 +89,3 @@ Read both once; do not re-fetch per tick.
   [references/track-geometry.md](references/track-geometry.md); street
   half-width loop, multi-track sweeps and one-off `apex-eval` recipes in
   [references/debug-tracks-sweeps.md](references/debug-tracks-sweeps.md).
-
-Folded in 2026-09-03: `debug-tracks`. It was a hook catalog, which is what this
-skill is; `new-track` (edit a circuit) and `survey-track` (accuracy pass) stay
-separate because they are different acts, not different hooks.

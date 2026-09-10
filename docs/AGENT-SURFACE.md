@@ -15,8 +15,9 @@ need → skill (when / don'ts)
 
 ## MCP servers
 
-**Repo catalog** (root `.mcp.json` + `.cursor/mcp.json`, lockstepped, THREE
-names — trimmed from seven on 2026-09). Stdio wrappers use `command: bash` +
+**Repo catalog** (root `.mcp.json` for Claude Code, `.cursor/mcp.json` for
+Cursor, `.codex/config.toml` for Codex — the same THREE servers, lockstepped by
+`tests/unit/agent-config.test.mjs`; trimmed from seven on 2026-09). Stdio wrappers use `command: bash` +
 `args: ["tools/…", …]` because Cursor looks up `command` on `PATH`. The
 `playwright-official` row pins the same package the shell wrapper audits
 (`@playwright/mcp@0.0.79`) — never `@latest`. Cloud often does **not**

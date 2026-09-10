@@ -274,6 +274,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 |---|---|---|
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
 | **env/install-browsers.sh** | Idempotent Playwright Chromium install into `/opt/pw-browsers`; skips `npm install` when node_modules is usable. | — |
+| **env/mirror-skills.sh** | Mirror `.claude/skills/` into the gitignored `.agents/skills/` Codex scans (`--check` reports drift). | check-changes |
 
 ## Test runner & coverage
 

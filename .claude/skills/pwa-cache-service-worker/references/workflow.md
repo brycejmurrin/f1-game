@@ -1,13 +1,14 @@
 # PWA / service-worker workflow and mistakes
 
 Load this when adding a DEFERRED file, debugging a stale install, or a
-Playwright hang after a mid-run version bump.
+Playwright hang after a mid-run `version.json` change.
 
 ## Workflow
 
 1. **Identify what changed.**
    - New tagged `<script>`/`<link>` in `index.html` → picked up automatically
-     on next install; still bump `?v=N` + `version.json`.
+     on next install (tags read `?v=dev`; the deploy stamps hashes and
+     `version.json`).
    - New file with **no tag** (DEFERRED backend, font, on-demand vendor) →
      update `tools/manifest.cjs` `DEFERRED`, then `node tools/gen/gen-shell.mjs`
      (it writes `js/roster.js` and the `sw.js` optional seed).
@@ -24,7 +25,7 @@ Playwright hang after a mid-run version bump.
    npm run test:tooling-fast
    ```
 
-4. **Bump version last** (`node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`)). Verify one uniform N:
+4. **Bump version last** (`node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`)). Verify one uniform N:
    ```sh
    grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
    ```
@@ -44,8 +45,8 @@ Playwright hang after a mid-run version bump.
 ## Common mistakes
 
 - Hand-maintaining a precache manifest parallel to `index.html`.
-- Bumping only `?v=N` or only `version.json`.
-- **Bumping `version.json` mid Playwright run** — shell guard reloads every
+- Hand-editing `version.json` or a `?v=` tag — both are the deploy's (hook-blocked).
+- **Changing `version.json` mid Playwright run** — shell guard reloads every
   open page → timeouts.
 - **Stale pause menu after deploy** — pause/settings DOM is inline in
   `index.html` (not `?v=` JS). If buttons/layout are old while in-race HUD

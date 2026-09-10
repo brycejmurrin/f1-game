@@ -45,7 +45,7 @@ geometry bug.
    input exist?"
 
 8. **Verify.** `npm run test:tooling-fast`, then `node tools/ci/test-bg.mjs ui`.
-   If JS/CSS changed, `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) before commit.
+   If JS/CSS changed, `node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`) before commit.
 
 ### Pause settings overlay
 
@@ -65,4 +65,3 @@ Escape routes through `data-esc-close="pm-settings-close"` (same ladder in
 - Forgetting that `zoom` changes layout boxes.
 - Using `requestAnimationFrame` for non-visual ARIA/scroll bookkeeping that
   must also run when rendering is suspended.
-- Editing JS/CSS and forgetting the cache bump.

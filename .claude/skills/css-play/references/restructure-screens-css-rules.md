@@ -137,10 +137,10 @@ cannot.
 
 ## While restructuring
 
-**Never edit `js/` or `css/` while a Playwright run is in flight**, and never
-bump `?v=N` / `version.json` mid-run — the shell version guard force-reloads
-every open test page. Use a worktree (`../../../../docs/notes/PARALLEL-WORK.md`). Bump the cache
-as the LAST edit before commit (`node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`); check-changes/references/bump.md).
+**Never edit `js/` or `css/` while a Playwright run is in flight** (the edit
+hook blocks it), and never touch `version.json` mid-run — the shell version
+guard force-reloads every open test page. Use a worktree (`../../../../docs/notes/PARALLEL-WORK.md`). Bump the cache
+as the LAST edit before commit (`node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`); check-changes/references/bump.md).
 
 **Any new class family must be added to `docs/COMPONENTS.md`** or
 `tests/unit/component-inventory.test.mjs` fails. A consolidation must *remove*

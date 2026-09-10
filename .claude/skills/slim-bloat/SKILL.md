@@ -18,7 +18,7 @@ node tools/check/extract-module.mjs js/game.js 100 180   # analyse free refs
 
 Spawn `bloat-auditor` with a **named scope** (one file, one skill, or
 `HEAD` / last-touched). It returns `BLOAT` rows only. The parent edits,
-locksteps, and bumps cache.
+locksteps, and regenerates the shell.
 
 ## Hard don'ts (always)
 

@@ -44,7 +44,7 @@ node tools/ci/test-bg.mjs input        # steering + camera
 node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>
 ```
 
-If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) before commit. Theory:
+If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`) before commit. Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.
 
 ## Load on demand
@@ -59,6 +59,3 @@ If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` (no cache bum
   [references/game-feel-workflow.md](references/game-feel-workflow.md);
   trauma-shake math (inspiration only) in
   [references/game-feel-feedback-recipes.md](references/game-feel-feedback-recipes.md).
-
-Folded in 2026-09-03: `game-feel`. Its trigger words now live in this
-description; the physics/juice boundary is the first line of the reference.

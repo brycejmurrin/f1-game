@@ -6,6 +6,7 @@
 !.claude/workflows/
 !.claude/hooks/
 !.claude/settings.json
+!.claude/rules/
 
 # Node (both the real dir and the self-referential symlink worktree runs create)
 node_modules/
@@ -33,3 +34,6 @@ assets/pack/src/
 # tools/mcp/, the old path-specific rule stopped matching, and the .pyc there
 # became TRACKED — which then blocked two deploys as a dirty tree.
 **/__pycache__/
+
+# Codex skill mirror (bash tools/env/mirror-skills.sh) — a copy, never the source
+.agents/

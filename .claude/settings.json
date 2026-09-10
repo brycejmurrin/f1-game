@@ -1,12 +1,61 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(npm run test:*)",
+      "Bash(npm test *)",
+      "Bash(node --test *)",
+      "Bash(node tools/ci/verify-change.mjs *)",
+      "Bash(node tools/ci/pick-tests.mjs *)",
+      "Bash(node tools/ci/select-specs.mjs *)",
+      "Bash(node tools/ci/test-bg.mjs *)",
+      "Bash(node tools/ci/bump-cache.mjs *)",
+      "Bash(node tools/track/verify-track.cjs *)",
+      "Bash(node tools/track/graph-parity.cjs *)",
+      "Bash(node tools/gen/gen-shell.mjs *)",
+      "Bash(node tools/gen/gen-test-groups.mjs *)",
+      "Bash(node tools/gen/assets.mjs verify)",
+      "Bash(node tools/check/*)",
+      "Bash(node tools/gfx/wgx-validate.mjs *)",
+      "Bash(bash tools/env/cloud-agent-install.sh)",
+      "Bash(bash tools/env/mirror-skills.sh *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(git show *)",
+      "Bash(cat /proc/loadavg)",
+      "Bash(ps *)"
+    ]
+  },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\"",
+            "timeout": 300
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-worktree-files.sh\""
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+            "timeout": 180
           }
         ]
       }

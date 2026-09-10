@@ -23,9 +23,9 @@ Load from the SKILL.md index when the task needs this detail.
    for street/modern circuits — `barrier` / `cityStyle`; copy a sibling's rows
    as the starting point.
 
-2. **Register it** (new tracks only): add `<script src="js/circuits/<id>.js?v=N"></script>`
-   to `index.html` in the circuit block (before `js/track/tracks.js`) **and add the
-   matching entry to the `CIRCUITS` array in `tools/manifest.cjs`** — the load-order
+2. **Register it** (new tracks only): add the id to the `CIRCUITS` array in
+   `tools/manifest.cjs` and run `node tools/gen/gen-shell.mjs`, which writes the
+   `<script src="js/circuits/<id>.js?v=dev">` tag into `index.html` — the load-order
    single source of truth; `tests/unit/load-order.test.mjs` (`npm run test:tooling`) fails
    if the two diverge. Tag order == `Tracks.LIST` == picker/season order:
    - **Season circuits** (24 rounds): append in calendar order at the end of the
@@ -58,7 +58,7 @@ Load from the SKILL.md index when the task needs this detail.
    which in the running game would strand the player on the menu. Fix before
    pushing. Common causes: a missing destructure (`out` not pulled from `api`), a
    node index out of range, or bad track data.
-4. **Bump the cache version** (`node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`)) — you edited
+4. **Bump the cache version** (`node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`)) — you edited
    `index.html` and/or a JS file.
 5. **Visual check** — load and screenshot it (use the `playwright-probe` skill's `shot.mjs`):
    ```js

@@ -7,10 +7,9 @@ description: Use when the user asks did I break anything, run the right tests, v
 
 ## Prerequisites
 
-`--fast` needs only Node modules; browser batches need the headless shell
-(AGENTS.md §Verification 1): `bash tools/env/cloud-agent-install.sh`, or
-`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` then
-`npx playwright install chromium-headless-shell`.
+`--fast` needs only Node modules; browser batches need the headless shell.
+The SessionStart hook installs both (AGENTS.md §Verification 1); the manual
+fallback is `bash tools/env/cloud-agent-install.sh`.
 
 The suite is slow software rendering. **One command composes the rest**
 (`pick-tests` selection, inline `verify-track` / `graph-parity` /
