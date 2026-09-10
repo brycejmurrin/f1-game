@@ -57,19 +57,8 @@ function inCareer() { return engaged && career != null; }
 // consuming from it here would make a career's existence change seeded race
 // results. This is a STATELESS hash instead — there is no cursor to persist, so a
 // save/load round-trip cannot desync it, and the same (seed, key) always agrees.
-function hash32(str) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
-  return h >>> 0;
-}
-function mix32(h) {
-  h ^= h >>> 16; h = Math.imul(h, 0x7feb352d);
-  h ^= h >>> 15; h = Math.imul(h, 0x846ca68b);
-  h ^= h >>> 16;
-  return h >>> 0;
-}
 function hash(seed, ...parts) {
-  return mix32(hash32(seed + ":" + parts.join(":"))) / 4294967296;
+  return Hash32.unit(seed, ...parts);
 }
 function rnd(...parts) {
   return hash(career ? career.seed : 0, ...parts);
@@ -282,7 +271,7 @@ function start(opts) {
     v: GameStore.CAREER_V,
     flavour,
     year: 2026,
-    seed: (o.seed | 0) || (hash32(teamId + ":" + flavour + ":" + Date.now()) % 1000000),
+    seed: (o.seed | 0) || (Hash32.fnv1a(teamId + ":" + flavour + ":" + Date.now()) % 1000000),
     team: teamId,
     // MY TEAM IS ALWAYS SEAT 0. driverOverride() below maps a custom team's
     // seat 0 to career.driver (you) and seat 1 to the hire, and docs/CAREER.md

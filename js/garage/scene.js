@@ -918,39 +918,19 @@ function paintDress(team, liv, info) {
   ctx.strokeStyle = css(c2); ctx.lineWidth = 9;
   ctx.strokeRect(D_CREST.x + 12, D_CREST.y + 12, D_CREST.w - 24, D_CREST.h - 24);
   const inner = { x: D_CREST.x + 40, y: D_CREST.y + 40, w: D_CREST.w - 80, h: D_CREST.h - 80 };
-  if (img && LiveryTex.drawLogoImage) {
-    // Their contrast-derived halo, and the livery's logo colour as the TINT.
-    // tint=null was the defect: every team ships a PNG mark, so the vector
-    // branch below (which does honour the livery) never ran and TEAM LOGO
-    // could not recolour the wall crest at all. null still means "keep the
-    // mark's own colours", so a livery that sets no logo colour is unchanged,
-    // and the halo keeps it legible against the new backing either way.
-    const halo = (img._avg && LiveryTex.contrast && LiveryTex.contrast(img._avg, field) < 2.6 && LiveryTex.inkOn)
+  if (LiveryTex.paintTeamMark) {
+    const halo = (img && img._avg && LiveryTex.contrast && LiveryTex.contrast(img._avg, field) < 2.6 && LiveryTex.inkOn)
       ? LiveryTex.inkOn([img._avg]) : null;
-    // The OUTLINE row rims the emblem here for the same reason it rims a
-    // single-loop crest: an uploaded mark is arbitrary art with no second
-    // element to recolour, so a rim is the only honest place for it. logo2 is
-    // the pre-OUTLINE-row fallback, exactly as in buildAtlas.
-    LiveryTex.drawLogoImage(ctx, img, inner, (liv && liv.logo) || null, halo,
-                            (liv && (liv.logo3 || liv.logo2)) || null);
-  } else {
-    const lockup = LiveryTex.markPalette
-      ? LiveryTex.markPalette(team.id, liv, [liv && liv.c1, liv && liv.c2], false)
-      : null;
-    LiveryTex.drawCrest(ctx, team.id, inner, { liv, field, bare: false, palette: lockup || undefined });
+    // ONE mark path for the lightbox — same logo / logo2 / logo3 routing as the
+    // parts tile and fin badge, scored against the field the crest lands on.
+    LiveryTex.paintTeamMark(ctx, team.id, liv, inner, field, { fullLockup: true, halo });
   }
   // Team wordmark strip — the same lockup as the lightbox, left of the name.
   ctx.fillStyle = css(scale(c1, 0.55)); ctx.fillRect(D_WORD.x, D_WORD.y, D_WORD.w, D_WORD.h);
   ctx.fillStyle = css(c2); ctx.fillRect(D_WORD.x, D_WORD.y + D_WORD.h - 9, D_WORD.w, 9);
   const wordMark = { x: D_WORD.x + 12, y: D_WORD.y + 16, w: 96, h: 96 };
-  if (img && LiveryTex.drawLogoImage) {
-    LiveryTex.drawLogoImage(ctx, img, wordMark, (liv && liv.logo) || null, null,
-                            (liv && (liv.logo3 || liv.logo2)) || null);
-  } else if (LiveryTex.drawCrest) {
-    const wordLockup = LiveryTex.markPalette
-      ? LiveryTex.markPalette(team.id, liv, [liv && liv.c1, liv && liv.c2], false)
-      : null;
-    LiveryTex.drawCrest(ctx, team.id, wordMark, { liv, field, bare: true, palette: wordLockup || undefined });
+  if (LiveryTex.paintTeamMark) {
+    LiveryTex.paintTeamMark(ctx, team.id, liv, wordMark, [c1, c2], {});
   }
   ctx.fillStyle = "#f2f3f5";
   ctx.font = "700 48px system-ui, sans-serif";

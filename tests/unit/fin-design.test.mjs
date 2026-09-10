@@ -339,7 +339,7 @@ test("the flank squash table still matches the cover Car3D actually builds", () 
 });
 
 test("every SPINE TOP design paints the crown; wordmark and number carry text", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number", "cap", "ridge", "fade"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number", "cap", "ridge", "fade"]);
   // The wrap is ONE shape over crown and flanks: it paints the crest region
   // AND the flank band with no spineSide picked, and leaves the tail bare.
   const wrap = A.paint("redbull", { ...BASE, spineLogo: "wrap" });
@@ -349,7 +349,23 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   // is taller than it is wide to hold it.
   assert.ok(A.LT.SIZE_H > A.LT.SIZE && R.spineSideL && R.spineSideL.y + R.spineSideL.h <= A.LT.SIZE_H, "the left flank lives in the atlas's extra rows");
   assert.ok(opsIn(wrap, R.spineSideL).length > 0, "wrap paints the left flank too");
-  for (const id of ["number", "logo", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "rake", "shoulder", "starfield"]) {
+  {
+    const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+    const cssOf = (c) => "rgb(" + to255(c).join(",") + ")";
+    const navy = { c1: [0.05, 0.05, 0.35], c2: [1, 1, 1], spineLogo: "wrap" };
+    const pick = [0, 1, 0.8];
+    const def = A.paint("redbull", navy);
+    const auth = A.paint("redbull", { ...navy, logo: pick });
+    const flankFills = (ops) => opsIn(ops, R.spineSide)
+      .filter((op) => op.kind === "fill")
+      .map((op) => op.style);
+    assert.ok(flankFills(auth).includes(cssOf(pick)),
+      `wrap bull not painted ${cssOf(pick)}; got ${[...new Set(flankFills(auth))].join(", ")}`);
+    assert.ok(!flankFills(def).includes(cssOf(pick)),
+      "without TEAM LOGO the bull should not wear the authored colour");
+  }
+  for (const id of ["number", "logo", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "slash", "rake", "shoulder", "starfield"]) {
+
     const ops = A.paint("ferrari", { ...BASE, spineSide: id });
     assert.ok(opsIn(ops, R.spineSide).length > 0 && opsIn(ops, R.spineSideL).length > 0, `${id} paints both flanks`);
   }
@@ -502,7 +518,7 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
 // code or the crest on pick. Mesh: the service panels leave the band's z range
 // so a grey hatch never sits through the number — same vertex count, moved.
 test("spineSide paints the flank band on pick only, and clears the service panels from under it", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "rake", "shoulder", "starfield"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "slash", "rake", "shoulder", "starfield"]);
   assert.ok(A.LT.FLANK_MARK.v < 0.48 && A.LT.FLANK_MARK.v > 0.30,
             "flank marks sit in the upper half (0.56 sat in the sidepod; 0.42 with the old tall box clipped the crease)");
   assert.ok(A.LT.FLANK_MARK.v - A.LT.FLANK_MARK.halfH > 0.08,
@@ -511,6 +527,20 @@ test("spineSide paints the flank band on pick only, and clears the service panel
             "the mark box stays above the sidepod line");
   assert.ok(A.LT.FLANK_MARK.halfW > A.LT.FLANK_MARK.halfH,
             "the box is wider than tall — flankSquash corrects the along/down anisotropy, it does not reshape the box");
+  assert.equal(typeof A.LT.flankMarkStation, "function", "flankMarkStation is exported");
+  {
+    const saddle = A.LT.flankMarkStation("saddle", false, "logo");
+    assert.equal(saddle.u, A.LT.FLANK_MARK.uOnSaddle, "saddle+logo u centres on the white shoulder");
+    assert.equal(saddle.v, A.LT.FLANK_MARK.vOnSaddle, "saddle+logo v centres on the white shoulder");
+    const wrap = A.LT.flankMarkStation("wrap", true, "none");
+    assert.equal(wrap.u, A.LT.FLANK_MARK.uOnCrown, "wrap flank fill uses the crown u");
+    assert.equal(wrap.v, A.LT.FLANK_MARK.v, "wrap flank fill uses the default v");
+    const plain = A.LT.flankMarkStation("logo", false, "none");
+    assert.equal(plain.u, A.LT.FLANK_MARK.u, "default station u is mid-band");
+    assert.equal(plain.v, A.LT.FLANK_MARK.v, "default station v is mid-band");
+  }
+  assert.ok(A.LT.FLANK_MARK.vOnSaddle < A.LT.FLANK_MARK.v,
+            "saddle station sits higher (closer to crease) than the default");
   // …and the station a crown design pushes it to has to fit BETWEEN the sun and
   // the rear tyre. The box is measured in region HEIGHTS, so its half-width
   // along the flank is halfW scaled by the region's own aspect.
@@ -541,7 +571,7 @@ test("spineSide paints the flank band on pick only, and clears the service panel
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "shoulder" }), R.spineSide).length > 0, "shoulder paints the upper third");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "starfield" }), R.spineSide).length > 0, "starfield paints micro dots");
   // Culled band graphics must not paint (unknown id → bare flank).
-  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "slash" }), R.spineSide).length, 0, "slash was culled");
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "slash" }), R.spineSide).length > 0, "slash paints a single raked stroke");
   assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "bars" }), R.spineSide).length, 0, "bars was culled");
   assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "split" }), R.spineSide).length, 0, "split was culled");
   assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "chevron" }), R.spineSide).length, 0, "chevron was culled");

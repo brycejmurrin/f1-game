@@ -94,7 +94,7 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
                           coverVents: "none", spineHeight: "standard", spineSide: "none",
-                          coverBind: "independent", finHandoff: "match" };
+                          coverBind: "independent", finHandoff: "match", bodySplit: "off" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
 // does this change? Worse, two rows read as a pair and are not one — ACCENT is
@@ -146,7 +146,8 @@ const LIV_ROW_HINT = {
   tcam: "T-CAM — the camera housing colour. AUTO is the real rule: car 1 black, car 2 yellow.",
   coverVents: "COVER VENTS — cooling slits cut into the engine cover. Geometry, not paint.",
   spineHeight: "SPINE HEIGHT — how tall the cover crown runs behind the roll hoop. DORSAL is the fin-less 2026 look every team uses.",
-  spineSide: "SPINE SIDE — what the cover FLANK carries, both sides: number, mark, code, wordmark, title board, emblem, ribbon, lockup, band, or sash.",
+  spineSide: "SPINE SIDE — what the cover FLANK carries, both sides: number, mark, code, wordmark, title board, emblem, ribbon, lockup, band, sash, or slash.",
+  bodySplit: "BODY SPLIT — paint the body LEFT (primary) / RIGHT (secondary). Cadillac's black/white launch car.",
 };
 // `liv` is a saved livery for edit/copy, or a bare {c1,c2} for a new one: an
 // absent colour becomes "" (no paint) and an absent pill its own default.
@@ -1018,6 +1019,7 @@ function buildLiveryCreator(container, team) {
   pillRow("SPINE HEIGHT", "spineHeight", Car3D.SPINE_HEIGHT_IDS || ["standard"], "standard");
   // What the cover's FLANK carries — the number, the mark or the driver code.
   pillRow("SPINE SIDE", "spineSide", LT && LT.SPINE_SIDE_IDS || ["none"], "none");
+  pillRow("BODY SPLIT", "bodySplit", ["off", "lr"], "off");
   // The pills that write a sponsor name: dead under the CLEAN pack.
   for (const k of ["spineLogo:wordmark", "spineSide:wordmark", "spineSide:duo", "spineSide:title"]) {
     const b = wrap.querySelector('[data-cs-pill="' + k + '"]');

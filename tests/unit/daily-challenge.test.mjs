@@ -14,6 +14,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedHash32 } from "../helpers/seed-hash32.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // VM objects carry the VM realm's prototypes: compare plain-data copies.
@@ -27,6 +28,7 @@ function load() {
     Tracks: { LIST: season.concat([{ id: "kyalami", name: "KYALAMI" }]), SEASON: season },
   });
   seedLog(ctx);
+  seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/race/daily-challenge.js"), "utf8"), ctx);
   const D = vm.runInContext("DailyChallenge", ctx);
   const stored = new Map();

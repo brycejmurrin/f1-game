@@ -500,7 +500,7 @@ const Liveries = (function () {
     "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover",
     "spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk",
     "saddleTint", "ridgeTint", "airboxTint", "coverBind", "finHandoff",
-    "rearWing", "wingCarbon"];
+    "rearWing", "wingCarbon", "bodySplit"];
 
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
