@@ -1390,3 +1390,21 @@ test("a lighting DELTA merges and an agent PROPOSAL replaces", () => {
     assert.match(r.stderr, /merge-proposals\.mjs/, "…and point at the tool that does take one");
   } finally { fs.rmSync(tmp, { force: true }); }
 });
+
+test("a locked part plays ONE blip, not one for the unlock and one for the fit", () => {
+  // Reported 2026-09-10: every locked row in the part selector double-blipped.
+  // Researching a part and fitting it are two steps of ONE click, and both
+  // called uiSelect. Deleting the first is the wrong fix — the unlock can
+  // succeed and the fit still refuse on budget, which returns early, and that
+  // blip is the only feedback that path has. So the contract is "at most once",
+  // not "never in the unlock branch".
+  const ss = code("js/garage/setup-sheet.js");
+  const click = ss.slice(ss.indexOf("row.onclick = () => {"));
+  const body = click.slice(0, click.indexOf("\n    };"));
+  assert.ok(/let\s+_blipped\s*=\s*false/.test(body),
+    "the parts row tracks whether it has already sounded");
+  assert.ok(/GameAudio\.uiSelect\(\)\s*;\s*_blipped\s*=\s*true/.test(body),
+    "the unlock blip records itself");
+  assert.ok(/G\.soundOn\s*&&\s*!_blipped\s*\)\s*GameAudio\.uiSelect\(\)/.test(body),
+    "the fit blip is suppressed when the unlock already sounded");
+});
