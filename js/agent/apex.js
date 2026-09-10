@@ -1505,7 +1505,7 @@ const api = {
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes() };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile() };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
   },
@@ -2660,8 +2660,8 @@ const api = {
       }, null),
       perf: safe(() => {
         const p = this.renderScale();
-        return { scale: p.scale, fps: p.fps, auto: p.auto, tier: p.tier,
-                 tierFloor: p.tierFloor, crashStrikes: p.crashStrikes };
+        return { scale: p.scale, fps: p.fps, auto: p.auto, tier: p.tier, tierFloor: p.tierFloor,
+                 crashStrikes: p.crashStrikes, floorMs: p.floorMs, autoShed: p.autoShed, scaleFutile: p.scaleFutile, tierFutile: p.tierFutile };
       }),
       gl: glInfo,
       // Capability probes that decide which render path is even available —
