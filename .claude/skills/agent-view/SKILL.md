@@ -64,12 +64,6 @@ Read both once; do not re-fetch per tick.
 
 ---
 
-## Load on demand
-
-- Tool catalog, starter policy, determinism, staging sharp edges → [references/surface.md](references/surface.md).
-- Telemetry hooks (`probe` / `physState` / `obs` / `fieldState` / `timing` /
-  `lightState`) and the headless `reset`/`act` control loop → [references/state.md](references/state.md).
-
 ## Reference
 
 - `docs/DEBUG-HOOKS.md` → "Agent world view" — the full per-tool reference (every
@@ -77,11 +71,14 @@ Read both once; do not re-fetch per tick.
 - `../../../docs/DEBUG-HOOKS.md` — the design and the research behind each choice.
 - `__apex.agentHelp()` — the live manifest, including the `fields` glossary and
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
-- Tests: `node tools/ci/test-bg.mjs hooks` (`tests/specs/agent-view.spec.js`,
+- Tests (browser-gated): `node tools/ci/test-bg.mjs hooks` (`tests/specs/agent-view.spec.js`,
   `tests/specs/agent-drive-bench.spec.js`, `tests/specs/agent-determinism.spec.js`).
 
 ## Load on demand
 
+- Tool catalog, starter policy, determinism, staging sharp edges → [references/surface.md](references/surface.md).
+- Telemetry hooks (`probe` / `physState` / `obs` / `fieldState` / `timing` /
+  `lightState`) and the headless `reset`/`act` control loop → [references/state.md](references/state.md).
 - **Track geometry hooks** — `trackShape`/`trackProfile`/`trackBounds`/
   `nodeAt`/`groundY`/`scan`/`wallStats`, and the official-turns-vs-curvature-
   peaks distinction (answer "how many corners?" with `info().turns`, never

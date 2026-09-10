@@ -130,9 +130,9 @@ second colour is drawn inside the mark and so answers to the mark alone.
 | `--refl` | Studio dial — **not** in-game chrome finish |
 
 ```sh
-node tools/ci/test-bg.mjs car
-node tools/ci/test-bg.mjs modes              # research locks / ownership UI — no test:career
-node tools/car/audit-parts.mjs [--cats=engine,aero]
+node tools/ci/test-bg.mjs car              # browser-gated
+node tools/ci/test-bg.mjs modes            # browser-gated              # research locks / ownership UI — no test:career
+node tools/car/audit-parts.mjs             # browser-gated (needs :3456) [--cats=engine,aero]
 node tools/car/spine-station.mjs --team=redbull [--logo=wrap] [--png=artifacts/spine]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
 node tools/shot/shot.mjs bahrain 0.06 orbit out.png --team audi --dist 5.5 --el 26 --az 205
@@ -149,9 +149,11 @@ flank design's ink actually falls (`v` 0 = shoulder crease, 1 = sidepod line;
 tyres and bodywork cover from a garage camera, the `(crown)` row measures the
 crown's OWN flank graphic (the wrap's bull) which no side row can see,
 `--team=all` runs one crown across the grid, `--png` rasterises the flat art,
-and only foreshortening / lighting / racing distance need `garage-angles.mjs`
+and only foreshortening / lighting / racing distance need `tools/shot/garage-angles.mjs`
 (pass `--zoom`/`--pan` or a flank mark arrives forty pixels wide) or
-`shot.mjs --team`. Both halves are in CI via `fin-design.test.mjs`.
+`shot.mjs --team`. Placement/fin gates live in `fin-design.test.mjs`; cover-legibility
+and livery-contrast are separate unit suites — a green fin-design is not proof
+those two are green.
 
 Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **career-mode**,
 **tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.

@@ -147,6 +147,8 @@ test("bootstrap contract is documented for Cloud + desktop", () => {
   assert.match(doc, /Integrations & MCP/);
   assert.match(doc, /\.agents\/skills/);
   assert.match(doc, /Codex/);
+  assert.match(doc, /Layout principles/);
+  assert.match(read("AGENTS.md"), /Available workflows/);
   const agents = read("AGENTS.md");
   assert.match(agents, /^## Cursor Cloud specific instructions/m);
   assert.match(agents, /mcpServerAllowlist/);
@@ -159,6 +161,12 @@ test("bootstrap contract is documented for Cloud + desktop", () => {
     ".claude/settings.json must approve the three catalog servers",
   );
   assert.match(doc, /enabledMcpjsonServers/);
+  // Interactive host-browser MCP → survey-ui-matrix / css-play; batch shots stay playwright-probe (CLI).
+  const hostRow = doc.split('\n').find((l) => l.includes('**playwright-official**')) || '';
+  assert.match(hostRow, /survey-ui-matrix/);
+  assert.match(hostRow, /css-play/);
+  assert.doesNotMatch(hostRow, /Skills \*\*playwright-probe\*\*/);
+
 });
 
 test("Codex skill mirror locksteps .claude/skills via symlinks", () => {

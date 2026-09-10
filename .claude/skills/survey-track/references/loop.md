@@ -68,7 +68,7 @@ Compare `before-*.png` vs `after-*.png`; confirm the probe is flag-free.
 
 ### 6 · Test & ship
 
-- Geometry: `node tools/ci/test-bg.mjs circuits`
+- Geometry: `node tools/track/verify-track.cjs <id>` (default). Optional fleet: `node tools/ci/test-bg.mjs circuits`.
 - Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
   baselines). Do not treat it as a gate. Intentional goldens:
   `npm test -- tests/manual/tracks-visual.spec.js --update-snapshots`.
@@ -90,7 +90,7 @@ Montreal already ships `flatTerrain: true` + `terrainOuter: 70` in
 3. Edit: `flatTerrain` def flag (wide, dead-level shelf out to
    `terrainOuter`), mirrored in `groundYAt`, key added to the `LIST`
    whitelist, slab aligned just under the ribbon.
-4. `verify-track montreal` clean; after-survey flag-free; bumped `?v=`.
+4. `verify-track montreal` clean; after-survey flag-free; `gen-shell.mjs --check` (tags stay `?v=dev`).
 
 ## Gotchas
 
