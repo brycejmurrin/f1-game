@@ -74,7 +74,7 @@ const RaceSettings = (function () {
       const after = () => { buildRaceSettings(); if (soundOn()) GameAudio.uiTick(); };
       const wire = (id, read, write) => SettingRow.wire(id, { read, write: (v) => { write(v); after(); } });
       wire("rs-laps", getRaceLaps, (v) => setRaceLaps(+v));
-      wire("rs-weather", getRaceWeather, setRaceWeather);
+      wire("rs-weather", getRaceWeather, (v) => { setRaceWeather(v); scheduleFlybyTrack(); });
       wire("rs-mixed", () => (getRaceChangeable() ? "mixed" : "stable"), (v) => {
         setRaceChangeable(v === "mixed");
         setWxArcPlan(null);

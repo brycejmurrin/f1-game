@@ -3941,6 +3941,51 @@ test("TLX ignores a timing result after disabling or restarting its measurement 
   resolve(); pending.shift()(4); await Promise.resolve(); assert.equal(_gpuMs, 4);
 });
 
+test("all track loaders release selector ownership before building, even on failure", () => {
+  const _menuGate = { track: { old: true }, ready: "0|default|dry", warm: 2 };
+  const Tracks = { LIST: [{}] }, PerfGov = { sentinelArm() {} }, state = "menu";
+  const _loadTrackBody = () => {
+    assert.equal(_menuGate.track, null);
+    assert.equal(_menuGate.ready, "");
+    assert.equal(_menuGate.warm, 0);
+    throw new Error("build failed");
+  };
+  const load = eval("(function(idx){" + fnBody(read("js/game.js"), "loadTrack") + "})");
+  assert.throws(() => load(0), /build failed/);
+  assert.equal(_menuGate.track, null, "failed replacement cannot retain a stale world");
+});
+
+test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {
+  const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
+  let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
+  let state = "menu", setupPreviewOn = false, track = null, compiling = false;
+  const els = { select: { hidden: false } }, settings = { hidden: true }, $ = () => settings;
+  const timers = new Map(), requests = [], builds = [];
+  let timerId = 0;
+  const setTimeout = (fn) => { timers.set(++timerId, fn); return timerId; };
+  const clearTimeout = id => timers.delete(id);
+  const gfx = { warming: () => compiling }, Log = { warn() {} };
+  const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
+  const loadTrack = id => { builds.push(id); track = { id }; };
+  const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");
+  const fire = () => { const [id, fn] = [...timers].pop(); timers.delete(id); return fn(); };
+  schedule(true); const old = fire();
+  trackIdx = 1; schedule(true); trackIdx = 0; schedule(true); const latest = fire();
+  requests.shift().resolve(); await old; assert.deepEqual(builds, [], "A-B-A cannot revive old work");
+  requests.shift().resolve(); await latest; assert.deepEqual(builds, [0]);
+  schedule(); const reuse = fire(); requests.shift().resolve(); await reuse;
+  assert.deepEqual(builds, [0], "NEXT reuses the prepared world");
+  assert.equal(_menuGate.warm, 2, "NEXT resumes hidden warming interrupted by rescheduling");
+  raceTimeOfDay = "night"; compiling = true; schedule(); await fire();
+  assert.equal(requests.length, 0, "no scene replacement during compilation");
+  compiling = false; const night = fire(); requests.shift().resolve(); await night;
+  assert.deepEqual(builds, [0, 0], "time-of-day changes prepare again");
+  trackIdx = 1; schedule(); const leaving = fire(); els.select.hidden = true;
+  requests.shift().resolve(); await leaving; assert.deepEqual(builds, [0, 0]);
+  els.select.hidden = false; schedule(); const changed = fire(); raceWeather = "rain";
+  requests.shift().resolve(); await changed; assert.deepEqual(builds, [0, 0]);
+});
+
 test("TLX bounds GPU error history and preserves resize context at receipt", () => {
   let _gpuFirstError = null, _gpuErrors = 0, _gpuErrLastPresent = -1, _gpuErrFrames = 0, _presentN = 12;
   let _warmPending = {}, _gpuLastOperation = "compile-post", _gpuLastResize = { width: 852, height: 393 };
