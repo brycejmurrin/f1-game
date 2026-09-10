@@ -144,7 +144,18 @@ test("night light budget: lamps on at night, off by day, exposure per table", as
   expect(night.numLights).toBeGreaterThan(0);
   expect(night.numLights).toBeLessThanOrEqual(48);
   expect(night.exposure).toBeCloseTo(0.90, 1);   // desert night
-  expect(night.floodEmit).toBeCloseTo(0.78, 2);  // prop emissive ramp
+  // THE 0.78 IS THE RAMP, NOT THE VALUE. js/game.js computes
+  // `min(1, LT.floodEmitMul * 0.78)` for a full night session, so the palette's
+  // own multiplier scales it per circuit — and this line asserted the bare ramp,
+  // which has therefore been red on every runner since qatar|night|dry was
+  // tuned to 0.11 (0.11 * 0.78 = 0.0858, the byte-exact value run 3464
+  // reported on Metal). Assert the CONTRACT instead: the night session takes
+  // the full ramp, scaled by whatever the palette says. A literal goes stale
+  // the moment a palette moves, which is the same trap this file's own
+  // knob-catalog test exists to catch.
+  const floodMul = await page.evaluate(() => LightTune.LT.floodEmitMul);
+  expect(floodMul, "the palette has no flood multiplier — this assertion would be vacuous").toBeGreaterThan(0);
+  expect(night.floodEmit).toBeCloseTo(Math.min(1, floodMul * 0.78), 4);
   await page.evaluate(() => window.__apex.setTimeOfDay("day"));
   // The night->day flip rebuilds track props; wait on the actual state instead
   // of a fixed sleep (the rebuild time varies under test-worker contention).

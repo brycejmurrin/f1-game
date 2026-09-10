@@ -104,6 +104,18 @@ async function boot(page, {
   // frame, which entered the assertion as "changed pixels" (Metal CI flake,
   // 2026-09-03). Hold it: the only thing allowed to move is the grade.
   await page.evaluate(() => window.__apex.renderClock(100, true));
+  // PIN THE RESOLUTION, for the same reason one line up. This suite diffs pixel
+  // ARRAYS, so every capture in a test has to be the same SIZE — and the
+  // governor's auto-res resizes the framebuffer whenever frames go slow, which
+  // a real-GPU runner does under contention just as readily as a software one.
+  // MEASURED on Metal (run 3464): scale 1 -> 0.7 mid-test, captures 186,624 /
+  // 147,456 / 112,896 px, worst frame 8.5 s with 98 slow of 264 — and the
+  // comparison then read NaN, because the luminance walk ran past the end of
+  // the shorter array. That reads as "the grade did nothing" and is not.
+  // renderScale(v) pins the scale AND calls PerfGov.setAutoRes(false), so the
+  // ladder stops fighting the pin (js/agent/apex.js). 1 = native: this suite is
+  // about the GRADE, not about which tier the runner deserves.
+  await page.evaluate(() => window.__apex.renderScale(1));
 }
 
 async function pixels(page) {

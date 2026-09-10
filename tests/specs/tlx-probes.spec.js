@@ -177,7 +177,19 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForTimeout(600);
+    // WAIT FOR A POST PASS, do not sleep 600 ms and hope. tlx-post.js writes
+    // its `_last` block flags at the END of a completed pass and initialises
+    // them all false, so reading too early reports "every block off" — which is
+    // indistinguishable from a chain that is genuinely dead, and is exactly
+    // what run 3464 reported on Metal (on:true, hdr:true, targets 1280x720,
+    // every block false, governor at tier 0 with no shedding). A condition wait
+    // separates the two: if the chain really never arms, this throws with the
+    // same diag attached instead of asserting on an unwritten default.
+    // AGENTS.md: a waitForFunction on a rendering page needs { polling: 100 }.
+    await page.waitForFunction(
+      () => { const p = GLX.__tlx && GLX.__tlx.postState(); return !!(p && p.on && p.targets[0] > 0 && p.blocks.fxaa); },
+      null, { polling: 100, timeout: 30_000 },
+    ).catch(async () => { throw new Error("TLX post chain never completed a pass: " + await tlxDiag(page)); });
     const st = await page.evaluate(() => GLX.__tlx.postState());
     const diag = await tlxDiag(page);
     expect(st.on, diag).toBe(true);
