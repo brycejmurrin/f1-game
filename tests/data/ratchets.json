@@ -4,7 +4,7 @@
     "js/game.js": {
       "lines": 9925,
       "codeLines": 5341,
-      "gMembers": 238,
+      "gMembers": 239,
       "topLets": 154
     },
     "js/agent/apex.js": {

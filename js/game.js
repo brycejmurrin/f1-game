@@ -3440,7 +3440,7 @@ const G = {
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
   // Stable helpers consumed by js/garage/setup-sheet.js.
-  arrToHex, hexToArr, getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
+  arrToHex, hexToArr, getTeamParts, saveTeamParts, recomputePlayerMods, getLiveryId, saveLiveryId,
   getCustomLiveries, setCustomLiveries, getLiveries, invalidateDecalTextures,
   armConfirm,
   // Mutable state + helpers consumed by js/ui/select-screen.js.
