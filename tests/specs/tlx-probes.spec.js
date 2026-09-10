@@ -372,12 +372,19 @@ test.describe("TLX — boot", () => {
   test("M9 env probe captures a full cube on a parked race (car reflections live)", async ({ page }) => {
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    // TLX reads apex26.tlxEnvProbe ONCE at create (js/render/three/tlx.js
+    // _envOptOut), so the opt-in has to be in storage before the page boots.
+    await page.addInitScript(() => { try { localStorage.setItem("apex26.tlxEnvProbe", "1"); } catch (_) {} });
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
     // The probe only runs when CAR ENV REFLECTION (carEnvCube) > 0 — many
     // shipped profiles default it to 0, so opt the knob on for this test.
+    // Since f9c25e5 TLX also opts OUT of the probe unless the CAR REFLECTIONS
+    // setting (apex26.tlxEnvProbe = "1", js/perf/renderer-picker.js) is on:
+    // it cost a resolution tier and drew a black world on WebGPU. This spec
+    // is about the probe WORKING when a player turns it on, so turn it on.
     await page.evaluate(() => window.__apex.lightTune({ carEnvCube: 0.6 }));
     await page.evaluate(() => window.__apex.park(0.1));
     // A full 6-face cube takes ~12 frames (one face every OTHER frame); wait on
