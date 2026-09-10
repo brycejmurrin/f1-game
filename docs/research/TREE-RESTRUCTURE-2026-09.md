@@ -211,10 +211,18 @@ Not a re-plan: Phase 3's carve list below still stands. This is the queue as it
 actually sits, with the verification each item needs, because two of them are
 not carves at all and one came out of the shadow-pass work.
 
-**1. Land PR #127 (shadow-pass).** Merged, verified locally (guards 170/170,
-tooling-fast 171/171), and dispatched once for the `gfx` group + Metal, which is
-the only way a renderer change gets renderer specs (see item 2). Read that run,
-separate any failure from the six already red on the deploy tip, merge.
+**1. Land PR #127 (shadow-pass).** DONE — merged 2026-09-10 as `7874864`
+after the deploy branch (PR #132's two-job gate) was merged in and the head was
+green on both the PR run and a one-worker Metal dispatch (48/48, no retries).
+What it took to get there is in docs/notes/DEFECT-LEDGER.md §2026-09-10 and is
+mostly not the carve: of the six renderer-group failures on Metal, one was a
+game defect (the default COCKPIT camera skipped the skid stamp), two were
+governor/exposure premises the specs never held, three were first-frame clocks
+sized for this box, and the image-grade intermittent survives every premise so
+far (tier, physics, pack, post path, env probe) with the readback of the
+default framebuffer as the open lead. Landed with it: `__apex.govHold`,
+`softPresentState().post`, headless boots for the state-only lighting tests
+(Linux shard 4: 75 min → 11), and the Metal job on one worker.
 
 **2. The renderer coverage hole — the first instrument turned out to be the
 wrong one.** Measured in docs/notes/TESTING-FIELD-NOTES.md (2026-09-10): 51 of
@@ -246,7 +254,10 @@ identity gate. Worth doing, and a different job from covering the renderer.
 
 Until a canvas instrument exists, the interim rule stands for every renderer PR:
 **a renderer or lighting carve needs a dispatched `gfx` run
-(`renderer_macos: true`), because neither automatic gate provides one.**
+(`renderer_macos: true`), because neither automatic gate provides one.** Read
+the Metal job's log AND its report artifact (uploaded on every run now: the
+image-grade tests attach the frames they compared); a Linux Smoke shard of a
+`gfx` dispatch is 11-30 min of SwiftShader and gates nothing.
 
 **3. Remaining Phase 3 carves,** in the order §3 already gives:
 garage-preview → quali-net + race-settings-ui → custom-team-ui → live weather →
@@ -257,6 +268,8 @@ them through `deps`, and let the call-time-reads guard confirm it.
 **4. Two items that are not carves** and are sequenced last because they carry
 the most risk per line changed:
    - `tests/` guards-VM split — tests only, cheap, `tooling-fast` is the gate.
+     NEXT UP: the session branch now sits on the merged history (`7874864`),
+     so it starts from a clean base.
    - three.js r186 and Rapier 0.20 — vendor bumps. Each its own PR, each with a
      real browser group, and r186 additionally with a dispatched `gfx` +
      Metal run: TLX is one of the four blind areas above.
