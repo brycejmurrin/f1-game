@@ -240,6 +240,79 @@ test("pages-publishable.sh: forward-only, and a CDN hiccup cannot wedge deploys"
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("a Pages run reuses a gate that already passed on the SAME tree, and only then", () => {
+  // Rule 3 (2026-09-10). A GitHub merge is a new commit, so every PR merge
+  // re-ran the ~15-minute gate on files a PR run had just tested. The verdict
+  // job compares TREE hashes and skips the ci call when a tree-identical
+  // parent has a completed successful run; publishable then has to accept a
+  // skipped gate in exactly that one case and no other.
+  const verdict = pagesWorkflow.split("\n  verdict:")[1].split("\n  ci:")[0];
+  const ciJob = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
+  const preflight = pagesWorkflow.split("\n  publishable:")[1].split("\n  deploy:")[0];
+  assert.ok(pagesWorkflow.indexOf("\n  verdict:") < pagesWorkflow.indexOf("\n  ci:"), "verdict is declared before the gate it can skip");
+  assert.match(verdict, /actions: read/, "listing workflow runs needs actions:read on the job token");
+  assert.doesNotMatch(verdict, /^\s+environment:/m, "the verdict must not create a deployment record");
+  assert.doesNotMatch(verdict, /^\s+concurrency:/m, "the verdict must never be cancelled by newest-wins");
+  assert.match(verdict, /fetch-depth: 0/, "the parents' trees are the question; a shallow clone has no parents");
+  assert.match(verdict, /tools\/ci\/pages-reuse-verdict\.sh "\$GITHUB_SHA" >> "\$GITHUB_OUTPUT"/);
+  assert.match(ciJob, /needs: verdict/);
+  assert.match(ciJob, /if: needs\.verdict\.outputs\.reuse != 'true'/, "the gate runs unless the verdict found the same tree already gated");
+  assert.match(preflight, /needs: \[verdict, ci\]/);
+  assert.match(preflight, /needs\.ci\.result == 'success' \|\| \(needs\.ci\.result == 'skipped' && needs\.verdict\.outputs\.reuse == 'true'\)/,
+    "a skipped gate is acceptable only when the verdict reused an earlier pass; failed or cancelled must still stop the run");
+  assert.match(preflight, /!cancelled\(\)/, "a skipped `needs` job skips its dependents unless the condition opts in");
+});
+
+test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", () => {
+  // A throwaway repo: A -> C on the deploy line; B branches from A; D is B with
+  // C merged in. M1 = merge(C, B) has a tree neither parent has (both sides
+  // changed). M2 = merge(C, D) has D's tree exactly. A fake `gh` on PATH serves
+  // whatever runs FAKE_RUNS names for the head_sha in the URL.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-reuse-"));
+  const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  const write = (f, s) => fs.writeFileSync(path.join(dir, f), s);
+  git("init", "-q", "-b", "deploy"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
+  write("f.txt", "A"); write("g.txt", "A"); git("add", "."); git("commit", "-q", "-m", "A"); const A = git("rev-parse", "HEAD");
+  git("checkout", "-q", "-b", "feature");
+  write("f.txt", "B"); git("commit", "-q", "-am", "B"); const B = git("rev-parse", "HEAD");
+  git("checkout", "-q", "deploy");
+  write("g.txt", "C"); git("commit", "-q", "-am", "C"); const C = git("rev-parse", "HEAD");
+  git("checkout", "-q", "-b", "m1", "deploy"); git("merge", "-q", "--no-ff", "-m", "M1", "feature"); const M1 = git("rev-parse", "HEAD");
+  git("checkout", "-q", "feature"); git("merge", "-q", "--no-ff", "-m", "D", "deploy"); const D = git("rev-parse", "HEAD");
+  git("checkout", "-q", "-b", "m2", "deploy"); git("merge", "-q", "--no-ff", "-m", "M2", "feature"); const M2 = git("rev-parse", "HEAD");
+  assert.equal(git("rev-parse", `${M2}^{tree}`), git("rev-parse", `${D}^{tree}`), "fixture: M2 must share D's tree");
+  assert.notEqual(git("rev-parse", `${M1}^{tree}`), git("rev-parse", `${B}^{tree}`), "fixture: M1 must not share B's tree");
+  void A;
+
+  const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "gh"),
+    '#!/usr/bin/env bash\n[ "${FAKE_GH:-}" = fail ] && exit 1\nurl="$2"; sha="${url#*head_sha=}"; sha="${sha%%&*}"\n' +
+    'node -e \'const m=JSON.parse(process.env.FAKE_RUNS||"{}");console.log(JSON.stringify({workflow_runs:m[process.argv[1]]||[]}))\' "$sha"\n');
+  fs.chmodSync(path.join(bin, "gh"), 0o755);
+  const script = new URL("../../tools/ci/pages-reuse-verdict.sh", import.meta.url).pathname;
+  const run = (over) => ({ id: 7, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", event: "pull_request", html_url: "https://example.test/run/7", ...over });
+  const verdict = (sha, runs, env = {}) => Object.fromEntries(cp.execFileSync("bash", [script, sha], {
+    cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", FAKE_RUNS: JSON.stringify(runs), ...env },
+  }).trim().split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2)));
+
+  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7" },
+    "merge with a parent's exact tree + that parent's green PR run: reuse");
+  assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
+  assert.equal(verdict(M2, { [D]: [run({ path: ".github/workflows/pages.yml", event: "push" })] }).reuse, "true", "an earlier deploy of the same tree counts");
+  assert.equal(verdict(M2, { [D]: [run({ conclusion: "failure" })] }).reuse, "false", "a failed run is not a gate");
+  assert.equal(verdict(M2, { [D]: [run({ conclusion: "cancelled" })] }).reuse, "false", "a cancelled run is not a gate");
+  assert.equal(verdict(M2, { [D]: [run({ path: ".github/workflows/gpu-census.yml", event: "workflow_dispatch" })] }).reuse, "false", "another workflow's green is not this gate");
+  assert.equal(verdict(M2, { [D]: [run({ id: 99 })] }, { GITHUB_RUN_ID: "99" }).reuse, "false", "a run never reuses itself");
+  assert.equal(verdict(M1, { [B]: [run()], [C]: [run({ path: ".github/workflows/pages.yml", event: "push" })] }).reuse, "false",
+    "both parents green but the merge tree is new: the gate runs");
+  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7" },
+    "a fast-forwarded commit with its own green push run: reuse");
+  assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
+  assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("every ROOT html page is named in the Stage site whitelist", () => {
   // "Stage site" copies a WHITELIST — `cp index.html bench.html version.json …`
   // plus `cp -r js css icons assets vendor` — because uploading the repo root

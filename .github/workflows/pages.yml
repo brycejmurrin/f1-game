@@ -24,6 +24,14 @@ permissions:
 #      lock, `tools/ci/pages-publishable.sh` reads the live shell's apex-sha
 #      and publishes only if it is an ancestor of this run's commit. An older
 #      run that reaches the lock after a newer one has published stops there.
+#   3. REUSE, NEVER RE-RUN THE SAME TREE. A merge made through GitHub is a
+#      new commit, so every PR merge paid the full gate a second time even
+#      when the PR run had tested the very same files. `verdict` compares
+#      tree hashes: when this commit's tree equals a parent's, and that
+#      parent has a completed successful ci.yml or pages.yml run, the gate is
+#      skipped and the run goes straight to `publishable`. The tree is the
+#      proof — same files means same workflow, same tests, same result. A
+#      merge whose base moved has a different tree and gets its own gate.
 #
 # What this replaces, and why (kept short; the runs are in the history):
 #   - 2026-08-12: workflow-level concurrency. cancel-in-progress: true starved
@@ -37,8 +45,46 @@ permissions:
 #     suites first"; PRs merged through GitHub do not, so the premise expired.
 #     This file's contract closes that path.
 jobs:
+  # Rule 3. Cheap (one checkout, one API call) and never cancelled: it does
+  # not share the gate's concurrency group. Any lookup failure is reuse=false,
+  # which costs exactly the gate run every commit paid before this existed.
+  verdict:
+    name: Was this exact tree already gated?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      reuse: ${{ steps.v.outputs.reuse }}
+      source: ${{ steps.v.outputs.source }}
+      run: ${{ steps.v.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # the parents' trees are the whole question
+      - name: Look for a completed successful gate on this tree
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/pages-reuse-verdict.sh "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - name: Say so in the run summary
+        env:
+          REUSE: ${{ steps.v.outputs.reuse }}
+          SOURCE: ${{ steps.v.outputs.source }}
+          RUN: ${{ steps.v.outputs.run }}
+        run: |
+          if [ "$REUSE" = "true" ]; then
+            echo "**Gate reused**: \`$GITHUB_SHA\` has the same tree as \`$SOURCE\`, which already passed $RUN" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**Gate runs**: no completed successful run found for this tree" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # The deploy gate: every job in ci.yml, aggregated by `needs: ci` below.
+  # Skipped when rule 3 found the same tree already gated.
   ci:
+    needs: verdict
+    if: needs.verdict.outputs.reuse != 'true'
     uses: ./.github/workflows/ci.yml
     with:
       # Forward the push's before SHA so the sweeps filter can skip when this
@@ -61,7 +107,12 @@ jobs:
   # bytes that were never published. The deploy job repeats this check under
   # the Pages lock, because the answer can change while a run waits for it.
   publishable:
-    needs: ci
+    needs: [verdict, ci]
+    # A skipped `needs` job skips its dependents unless the condition says
+    # otherwise, so this spells out the two ways in: the gate passed, or the
+    # gate was skipped BECAUSE the verdict reused an earlier pass. A failed or
+    # cancelled gate matches neither and the run stops here.
+    if: ${{ !cancelled() && needs.verdict.result == 'success' && (needs.ci.result == 'success' || (needs.ci.result == 'skipped' && needs.verdict.outputs.reuse == 'true')) }}
     runs-on: ubuntu-latest
     outputs:
       deploy: ${{ steps.pub.outputs.publish }}

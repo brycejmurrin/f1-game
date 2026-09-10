@@ -627,8 +627,12 @@ Two rules the job encodes, both measured by the census:
   quietly becoming a slower ubuntu job.
 
 **It is NOT in the deploy gate, on purpose.** `pages.yml` calls `ci.yml` as a
-reusable workflow and `publishable: needs: ci` consumes the AGGREGATE of every
-job in it — there is no `needs:` list to leave a job out of. So the filter job
+reusable workflow and `publishable: needs: [verdict, ci]` consumes the AGGREGATE
+of every job in it — there is no `needs:` list to leave a job out of. (The
+`verdict` job in front of the call is not a gate: it skips the call when the
+commit's tree equals a parent's that already passed ci.yml or pages.yml, so a
+PR merge whose base did not move publishes on its PR run's verdict instead of
+paying the gate twice — `tools/ci/pages-reuse-verdict.sh`.) So the filter job
 carries `if: !inputs.concurrency_key && github.event_name != 'workflow_call'`
 (pages.yml always forwards `concurrency_key`; a reusable workflow reports the
 CALLER's `event_name`, so the key is the reliable signal) and both jobs are

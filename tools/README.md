@@ -278,6 +278,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/pages-publishable.sh** | Pages deploy monotonic guard: prints `true` when the live shell's apex-sha is an ancestor of the given commit, else… |
+| **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/run-playwright.mjs** | The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server. |
 | **ci/select-budget.mjs** | Can a change-aware CI job run what it selects? Re-derives the budget from measured per-spec counts (79.7 s/test). |
