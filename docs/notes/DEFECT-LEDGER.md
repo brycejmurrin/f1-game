@@ -954,9 +954,32 @@ reads of `LT` with them. `LT` is not a global: game.js binds it at eval with
 the name does not exist. Proven in the booted page — a strict function reading
 `LT.shadowRange` at module scope answers `ReferenceError: LT is not defined`
 (`typeof LT` does NOT, which is why a typeof probe is no test of this). Every
-sun-map rebuild would have thrown. Nothing in the browser suite would have
-caught it either: the renderer specs assert on pixels and probe state, and the
-pass simply would not have run. What caught it, before a single test, was
+sun-map rebuild would have thrown.
+
+**Corrected 2026-09-10 by putting the bug back and measuring, rather than
+reasoning.** The first version of this entry claimed nothing in the browser
+suite would have caught it. That is wrong, and the correction is the useful
+half. Re-broken deliberately: `tests/unit/global-registry.test.mjs` fails (the
+guard, as recorded); `tests/unit/game-vm.test.mjs` PASSES, blind; and
+`tests/specs/menu-baseline.spec.js` FAILS on three of its six golden menu PNGs
+— the shadow pass runs during the menu flyby, so a dead pass changes the
+picture. So the suite does hold a spec that catches this class. What it does
+NOT hold is a route to it: `menu-baseline` is the whole of the `baseline`
+group, and no renderer or lighting path routes there
+(`tools/ci/pick-tests.mjs` sends them to `gfx` alone), while `baseline` is
+deliberately outside the CI gate — ci.yml says why, in the comment that opens
+with "THE ONE GROUP THAT ARGUABLY BELONGS HERE AND IS NOT". CI would not have
+run the one spec that noticed.
+
+**What the bug does at runtime is also not what "would have thrown" suggests.**
+`js/perf/loop-health.js` catches the per-frame throw and pays it back: 8
+consecutive faults, 240 total, then "CAP REACHED, stopping the loop". So the
+page boots, `__apex` keeps answering `info().track`, and a boot-only smoke test
+passes — while the render loop dies within seconds of real driving and the
+console fills with `frame fault N/8 … LT is not defined`. A gate that asserts
+"boots to __apex with no script errors" is not a gate against this.
+
+What caught it, before a single test, was
 `tests/unit/global-registry.test.mjs`'s third rule — a call-time read must
 resolve to some manifest global, a host name, or the `KNOWN_EXTERNAL_READS`
 baseline. Fix: `const LT = LightTune.LT;` at `create()`. Verified live rather
