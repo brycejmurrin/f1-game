@@ -11,7 +11,7 @@
 //
 // A reset that runs ONCE is a migration. The same reset running a second time is
 // data loss, which is why the guard is a per-version LADDER (STEER_MIGRATIONS,
-// one step per version, the shape of CAREER_MIGRATIONS in js/core/store.js) and
+// one step per version, the shape of CAREER_MIGRATIONS in js/career/save-migrate.js) and
 // not a single "have I run ANY migration?" check. This file pins every half of
 // that: each step runs for a store below its version, no step runs for a store
 // already at or past it, and a step reaches only the keys it owns.

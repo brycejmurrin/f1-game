@@ -45,6 +45,7 @@ function load(options = {}) {
   });
   vm.runInContext(readFileSync(join(ROOT, "js/core/hash32.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/career/save-migrate.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx);
   return {

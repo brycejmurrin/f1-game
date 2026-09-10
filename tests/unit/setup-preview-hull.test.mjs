@@ -24,7 +24,7 @@ import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-// Every optional livery colour the editor exposes (js/game.js CZ_LIV_FIELDS)...
+// Every optional livery colour the editor exposes (js/career/custom-team.js CZ_LIV_FIELDS)...
 const OPTIONAL = ["stripe", "noseStripe", "accent", "nose", "pod", "wing",
                   "fin", "finArt", "logo", "logo2", "logo3", "halo"];
 // ...plus the one non-colour field that shapes the body. Two values so the
