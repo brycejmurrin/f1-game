@@ -29,6 +29,77 @@ const TOOL_SRC = fs.readFileSync(path.join(ROOT, "tools", "gen", "assets.mjs"), 
 const hasPack = fs.existsSync(MANIFEST);
 const manifest = hasPack ? JSON.parse(fs.readFileSync(MANIFEST, "utf8")) : null;
 
+function assetLoader(overrides = {}) {
+  const vm = require("node:vm");
+  const sandbox = { ...overrides };
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  seedLog(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/assets.js"), "utf8"), sandbox);
+  return sandbox.Assets;
+}
+
+test("asset loader shares an in-flight manifest across boot consumers", async () => {
+  let requests = 0, resolveFetch;
+  const assets = assetLoader({ fetch() {
+    requests++;
+    return new Promise(resolve => { resolveFetch = resolve; });
+  } });
+  assets.init({ createTextureArray() {}, setMaterialMaps() {} });
+  const material = assets.load(), models = assets.loadModels(), manifest = assets.manifest();
+  const started = requests;
+  resolveFetch({ ok: true, json: async () => ({ models: {} }) });
+  assert.equal(started, 1, "materials, models and callers share one request");
+  await Promise.all([material, models, manifest]);
+  await assets.manifest();
+  assert.equal(requests, 1, "settled manifest stays cached");
+});
+
+test("asset loader shares manifest failures and retains the no-pack cache", async () => {
+  let requests = 0;
+  const assets = assetLoader({ async fetch() { requests++; throw Error("offline"); } });
+  const results = await Promise.all([assets.manifest(), assets.manifest()]);
+  assert.deepEqual(results, [false, false]);
+  assert.equal(await assets.manifest(), false);
+  assert.equal(requests, 1);
+});
+
+for (const failFallback of [true, false]) {
+  test(`asset loader closes every decoded bitmap when fallback ${failFallback ? "fails" : "succeeds"}`, async () => {
+    const bitmaps = [];
+    function bitmap() { const b = { closed: 0, close() { this.closed++; } }; bitmaps.push(b); return b; }
+    let crops = 0, fallbackCrops = 0, uploads = 0;
+    const assets = assetLoader({
+      async fetch(url) {
+        return url.endsWith("manifest.json")
+          ? { ok: true, json: async () => ({ materials: { size: 8, albedo: "a.png", layers: [{ mat: 1, scale: 1 }, { mat: 2, scale: 1 }] } }) }
+          : { ok: true, blob: async () => ({ size: 100 }) };
+      },
+      async createImageBitmap(source, ...crop) {
+        if (crop.length && ++crops === 2) throw Error("crop unsupported");
+        if (source.canvas && ++fallbackCrops === 2 && failFallback) throw Error("fallback failed");
+        return bitmap();
+      },
+      OffscreenCanvas: class {
+        constructor() { this.canvas = true; }
+        getContext() { return { clearRect() {}, drawImage() {} }; }
+      }
+    });
+    assets.init({
+      createTextureArray(size, images) {
+        uploads++;
+        for (const b of images) if (b) assert.equal(b.closed, 0, "upload happens before release");
+        return {};
+      },
+      setMaterialMaps() {}
+    });
+    assert.equal(await assets.load(), !failFallback);
+    assert.equal(uploads, failFallback ? 0 : 1);
+    assert.ok(bitmaps.length >= 3);
+    for (const b of bitmaps) assert.equal(b.closed, 1, "every bitmap is released exactly once");
+  });
+}
+
 // TrackGeom.MAT, read out of the REAL module rather than a copy. geom.js is
 // documented as loading under a bare VM sandbox (it is stateless and
 // renderer-free), so this is the actual shipping table, not a transcription.

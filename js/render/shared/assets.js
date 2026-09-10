@@ -14,6 +14,7 @@ const Assets = (function () {
 
   let _gfx = null;
   let _manifest = null;
+  let _manifestPromise = null;
   let _loadPromise = null;
   let _uploaded = false;
   let _err = null;                       // last failure reason, for __apex.assets()
@@ -31,8 +32,15 @@ const Assets = (function () {
 
   // ── manifest ───────────────────────────────────────────────────────────────
 
-  async function manifest() {
-    if (_manifest !== null) return _manifest;
+  function manifest() {
+    if (_manifest !== null) return Promise.resolve(_manifest);
+    // Material arrays and model prefetch start together at boot. Cache the
+    // pending request too, so they share both the fetch and its JSON parse.
+    if (!_manifestPromise) _manifestPromise = _fetchManifest();
+    return _manifestPromise;
+  }
+
+  async function _fetchManifest() {
     try {
       const res = await fetch(MANIFEST);
       if (!res.ok) { _manifest = false; _err = "no-pack"; return false; }
@@ -67,13 +75,13 @@ const Assets = (function () {
       // difference between iOS getting baked materials and not.
       _releaseStrip(out);
       const full = await createImageBitmap(blob);
+      const alt = new Array(MAT_LAYERS);
       try {
         const cv = (typeof OffscreenCanvas !== "undefined")
           ? new OffscreenCanvas(size, size)
           : Object.assign(document.createElement("canvas"), { width: size, height: size });
         const c2d = cv.getContext("2d");
         if (!c2d) throw new Error("no-2d-context");
-        const alt = new Array(MAT_LAYERS);
         for (let i = 0; i < MAT_LAYERS; i++) {
           if (!present[i]) continue;
           c2d.clearRect(0, 0, size, size);
@@ -81,6 +89,9 @@ const Assets = (function () {
           alt[i] = await createImageBitmap(cv);
         }
         return alt;
+      } catch (e) {
+        _releaseStrip(alt);
+        throw e;
       } finally {
         if (full.close) { try { full.close(); } catch (__) {} }
       }
