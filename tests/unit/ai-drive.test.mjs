@@ -176,6 +176,24 @@ test("craft late-brake raises the limit when attacking with room", () => {
   assert.ok(attack > plain);
 });
 
+test("compound-corner brake limits exactly match the tightest individual sample", () => {
+  let seed = 8556;
+  const rnd = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
+  for (let run = 0; run < 200; run++) {
+    const samples = Array.from({ length: 40 }, () => ({
+      d: 12 + rnd() * 148, k: (rnd() - 0.5) * 0.16, bank: rnd() * 0.45,
+    }));
+    const ctx = { traits: { ...mid, skill: 0.8 + rnd() * 0.2 }, samples,
+      aeroLoad: rnd(), latMax: 22, brake: 22, grip: 0.4 + rnd(),
+      blocker: run % 2 === 0, blockerGap: 8, blockerSpeed: 50, speed: 55,
+      roomL: 3, roomR: 1, errMul: run % 3 === 0 ? 1.05 : 1 };
+    const expected = Math.min(...samples.map(s => A.brakeTarget({ ...ctx, samples: [s] })));
+    assert.equal(A.brakeTarget(ctx), expected);
+    assert.equal(A.brakeTarget({ ...ctx, samples: samples.slice().reverse() }), expected);
+  }
+  assert.equal(A.brakeTarget({ traits: mid, samples: [] }), 1e6);
+});
+
 test("adaptLane nudges toward the freer side under density", () => {
   const a = A.adaptLane(0, {
     traits: mid, nearby: 3, roomL: 0.5, roomR: 3.5, baseLane: 0,

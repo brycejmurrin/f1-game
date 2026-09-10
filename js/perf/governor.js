@@ -66,8 +66,9 @@ let _upBackoff = UP_BACKOFF_MIN;   // wait before the next restore attempt after
 // "Reverted for buying nothing" is the honest signal that the lever is wrong,
 // and it is already computed; this just stops throwing it away.
 let _scaleFutile = false;
-// Same idea for the FEATURE ladder. A tier step that did not move the EMA is
-// reverted and, without this, retried on the very next evaluation forever —
+// Same idea for the FEATURE ladder, after ALL remaining rungs were tested.
+// A failed rung alone says nothing about later, independent features. Without
+// a latch after exhaustion, the same ineffective ladder is retried forever —
 // on LOW that step is the whole post stack (bloom, SSAO, god-rays, contact,
 // lamp volumetrics), so a CPU-bound device saw them strobe on and off every
 // ~8 s. Latched on a reverted DOWN step; released when headroom returns or the
@@ -420,6 +421,16 @@ function tick(dtMs) {
     const failed = v.up ? (_frameEMA > v.ema + VERIFY_MARGIN)
                         : (_frameEMA > v.ema - VERIFY_MARGIN);
     if (failed) {
+      // Env may already be off while bloom is still expensive. Test the next
+      // rung before declaring the whole ladder futile. Keep the original
+      // baseline and rollback state: small cumulative gains must count, and
+      // a capped clock must get ALL its quality back if no rung helps.
+      // Continue this bounded probe even if the floor adapted during verify;
+      // otherwise a slow steady frame closes the gate before later rungs run.
+      if (v.kind === "tier" && !v.up && _perfTier < 4) {
+        _perfTier++; _autoShed++; _pendingVerify = v; _govCool = 90;
+        return;
+      }
       if (v.kind === "scale") {
         _gfx.setRenderScale(v.prev);
         // A DOWN step that bought nothing means this frame is not fill-bound,
