@@ -57,7 +57,7 @@ window.UiLayers = (function () {
      the hot path: a held arrow key repeats keydown ~30x a second, and the
      version that measured them all first forced a style recalc on every
      repeat. */
-  const sel = (defs) => defs.map((d) => "#" + d.id + ":not([hidden])").join(",");
+  const sel = (defs) => defs.map((d) => `#${d.id}:not([hidden])`).join(",");
   const ALL_SEL = sel(DEFS);
 
   function shown(el) {
@@ -113,7 +113,9 @@ window.UiLayers = (function () {
       for (let i = 0; i < modals.length; i++) if (modals[i] === el) return i + 1;
       return Infinity;                          // matched :modal but absent here
     };
-    let best = null, bestRank = -Infinity, bestModal = false;
+    let best = null;
+    let bestRank = -Infinity;
+    let bestModal = false;
     for (const el of document.querySelectorAll(ALL_SEL)) {
       if (!shownLayer(el)) continue;
       const modal = isModal(el);
@@ -191,7 +193,7 @@ window.UiLayers = (function () {
   let raceGetter = null;
   function setRaceGetter(fn) {
     raceGetter = typeof fn === "function" ? fn : null;
-    try { Log.info("ui", "UiLayers.raceGetter " + (raceGetter ? "on" : "off")); } catch (_) { /* Log absent in isolated VM */ }
+    try { Log.info("ui", `UiLayers.raceGetter ${raceGetter ? "on" : "off"}`); } catch (_) { /* Log absent in isolated VM */ }
   }
   function inRace() { return !!(raceGetter && raceGetter()); }
 

@@ -1,4 +1,12 @@
-/* Apex 26 — LIGHTING PROFILE STORE (LightStore.create(G)) The resolution and persistence half of the lighting tuner. js/lighting/knobs.js owns the REGISTRY (TUNE_D… */
+/* Apex 26 — LIGHTING PROFILE STORE (LightStore.create(G)): the resolution and
+   persistence half of the lighting tuner. js/lighting/knobs.js owns the
+   registry (TUNE_DEFS + the live LT object); this file layers shipped
+   LightPresets (global then per-condition), a quality-gated conditional
+   layer, and the player's own overrides (global then per-condition) over
+   each knob's default into LT, and persists only the deltas from default to
+   localStorage (apex26.lightTune). js/lighting/tuner-panel.js and
+   __apex.lightTune / lightCopy are the only callers of set() /
+   copyToTracks() / restore(). */
 "use strict";
 const LightStore = (() => {
   function create(G) {

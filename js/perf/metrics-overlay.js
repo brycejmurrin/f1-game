@@ -447,7 +447,7 @@ function ensurePanel() {
   const bar = document.createElement("div");
   bar.id = "game-metrics-bar";
   if (typeof bar.setAttribute === "function") bar.setAttribute("role", "toolbar");
-  PAGES.forEach(function (p) {
+  PAGES.forEach((p) => {
     const b = document.createElement("button");
     b.type = "button";
     b.dataset.page = p;
@@ -460,7 +460,7 @@ function ensurePanel() {
   sizeChip.setAttribute("aria-label", "Overlay size");
   sizeChip.textContent = size().toUpperCase();
   bar.appendChild(sizeChip);
-  bar.addEventListener("click", function (e) {
+  bar.addEventListener("click", (e) => {
     const t = e.target;
     if (!t || !t.dataset) return;
     e.preventDefault();
@@ -730,8 +730,8 @@ function paintLogNsBtn(btn) { paintRow(btn, "LOG NS", logNs()); }
 function paintLogLvlBtn(btn) { paintRow(btn, "LOG SHOW", logLvl()); }
 
 function paintSummary() {
-  var det = typeof document !== "undefined" ? document.getElementById("pm-metrics-details") : null;
-  var sum = det && det.querySelector ? det.querySelector("summary") : null;
+  const det = typeof document !== "undefined" ? document.getElementById("pm-metrics-details") : null;
+  const sum = det && det.querySelector ? det.querySelector("summary") : null;
   if (!sum) return;
   sum.innerHTML = '<span data-fold="k">METRICS</span><span data-fold="sep"> · </span>' +
     (on()
@@ -740,7 +740,7 @@ function paintSummary() {
 }
 
 function paintLogVisibility() {
-  var show = page() === "log";
+  const show = page() === "log";
   if (_logNsBtn) _logNsBtn.hidden = !show;
   if (_logLvlBtn) _logLvlBtn.hidden = !show;
 }
@@ -819,7 +819,7 @@ function ensureTelemetry() {
   if (typeof window !== "undefined" && window.__apex) return;
   _telemetryAsked = true;
   try {
-    Promise.resolve(_telemetryLoad()).then(function () { paintOverlay(); }, function () { /* offline: stay degraded */ });
+    Promise.resolve(_telemetryLoad()).then(() => { paintOverlay(); }, () => { /* offline: stay degraded */ });
   } catch (_) { /* loader threw synchronously: stay degraded */ }
 }
 
@@ -1018,7 +1018,7 @@ function initUI() {
 
   if (typeof window !== "undefined" && !_keysBound) {
     _keysBound = true;
-    window.addEventListener("keydown", function (e) {
+    window.addEventListener("keydown", (e) => {
       if (e.repeat || e.altKey || e.ctrlKey || e.metaKey) return;
       if (typingTarget(e.target)) return;
       if (e.key === "`" || e.code === "Backquote" || e.key === "F9") {
@@ -1053,7 +1053,7 @@ function initUI() {
         nextLogLvl(1);
       }
     });
-    window.addEventListener("resize", function () {
+    window.addEventListener("resize", () => {
       if (_panel) { applyPos(_panel); applySize(_panel); }
     });
   }
@@ -1069,49 +1069,47 @@ if (typeof document !== "undefined") {
 
 if (on()) raiseBuffer();
 
-/* ── SETTINGS > DISPLAY — the METRICS submenu ──────────────────────────
- Folds #pm-metrics / PAGE / SIDE / SIZE / LOG NS / LOG SHOW into one
- <details> after the HUD fold. Layout lives in css/components.css. Closed
- summary carries ON/page state so the fold does not have to open to be
- read. LOG filters hide unless PAGE is LOG. Used to be a second IIFE
- in cockpit-opts.js. */
+// SETTINGS > DISPLAY — the METRICS submenu. Folds #pm-metrics / PAGE / SIDE /
+// SIZE / LOG NS / LOG SHOW into one <details> after the HUD fold. Layout
+// lives in css/components.css. Closed summary carries ON/page state so the
+// fold does not have to open to be read. LOG filters hide unless PAGE is LOG.
 function buildSubmenu() {
   if (typeof document === "undefined") return;
-  var onBtn = document.getElementById("pm-metrics");   // the button — a local named like the module's on() shadowed it
-  var pageBtn = document.getElementById("pm-metrics-page");
-  var posBtn = document.getElementById("pm-metrics-pos");
-  var sizeBtn = document.getElementById("pm-metrics-size");
-  var ns = document.getElementById("pm-metrics-logns");
-  var lvl = document.getElementById("pm-metrics-loglvl");
+  const onBtn = document.getElementById("pm-metrics");   // the button — a local named like the module's on() shadowed it
+  const pageBtn = document.getElementById("pm-metrics-page");
+  const posBtn = document.getElementById("pm-metrics-pos");
+  const sizeBtn = document.getElementById("pm-metrics-size");
+  const ns = document.getElementById("pm-metrics-logns");
+  const lvl = document.getElementById("pm-metrics-loglvl");
   if (!onBtn || document.getElementById("pm-metrics-details")) return;
-  var host = onBtn.parentNode;
+  const host = onBtn.parentNode;
   if (!host) return;
 
-  var det = document.createElement("details");
+  const det = document.createElement("details");
   det.id = "pm-metrics-details";
   det.className = "pm-metrics-sub";
 
-  var sum = document.createElement("summary");
+  const sum = document.createElement("summary");
   sum.className = "adv-more-btn";
   sum.innerHTML = '<span data-fold="k">METRICS</span><span data-fold="sep"> · </span><span data-fold="off">OFF</span>';
   sum.title = "Live FPS / car / phys / log overlay controls";
   det.appendChild(sum);
 
-  var body = document.createElement("div");
+  const body = document.createElement("div");
   body.className = "pm-metrics-sub-body";
   body.setAttribute("role", "group");
   body.setAttribute("aria-label", "Metrics controls");
 
-  [onBtn, pageBtn, posBtn, sizeBtn, ns, lvl].forEach(function (btn) {
+  [onBtn, pageBtn, posBtn, sizeBtn, ns, lvl].forEach((btn) => {
     if (!btn) return;
-    btn.addEventListener("click", function (e) { e.stopPropagation(); });
+    btn.addEventListener("click", (e) => { e.stopPropagation(); });
     body.appendChild(btn);
   });
   det.appendChild(body);
 
-  var fold = document.getElementById("pm-hud-details");
-  var hide = document.getElementById("pm-hidehud");
-  var place = (fold && fold.parentNode === host) ? fold
+  const fold = document.getElementById("pm-hud-details");
+  const hide = document.getElementById("pm-hidehud");
+  const place = (fold && fold.parentNode === host) ? fold
     : (hide && hide.parentNode === host) ? hide : null;
   if (place) {
     if (place.nextSibling) host.insertBefore(det, place.nextSibling);
@@ -1127,7 +1125,7 @@ function scheduleSubmenu() {
   // A VM harness may hand this file a document with no timers (the metrics
   // unit test does): the submenu is DOM sugar, so it simply does not build there.
   if (typeof document === "undefined" || typeof setTimeout !== "function") return;
-  var run = function () { setTimeout(buildSubmenu, 0); };
+  const run = () => setTimeout(buildSubmenu, 0);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run, { once: true });
   else run();
   setTimeout(buildSubmenu, 250);

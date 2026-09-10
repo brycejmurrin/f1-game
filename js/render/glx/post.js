@@ -148,13 +148,13 @@ const GLXPost = (function () {
         // memory tier; IS_MOBILE keeps that from coming back.
         msaaSamples = IS_MOBILE ? 0 : Math.min(4, cMax, dMax);
         if (!IS_MOBILE) {
-  // THE SIGNAL WAS MOBILE-ONLY. `apex26.gfxHigh` is written by
-  // GfxQuality.syncBootTier(), whose first line is `if (!_isMobile) return
-  // false` — so on a DESKTOP the key is never written, this read never saw
-  // "0", and the cap below never applied: every desktop preset shipped 4x,
-  // which is exactly what this block exists to stop. The preset itself is
-  // `apex26.gfxPreset` (GfxQuality's store key) on every device; ULTRA keeps
-  // 4x, everything below caps. Unset = the desktop default HIGH, which caps.
+          // THE SIGNAL WAS MOBILE-ONLY. `apex26.gfxHigh` is written by
+          // GfxQuality.syncBootTier(), whose first line is `if (!_isMobile) return
+          // false` — so on a DESKTOP the key is never written, this read never saw
+          // "0", and the cap below never applied: every desktop preset shipped 4x,
+          // which is exactly what this block exists to stop. The preset itself is
+          // `apex26.gfxPreset` (GfxQuality's store key) on every device; ULTRA keeps
+          // 4x, everything below caps. Unset = the desktop default HIGH, which caps.
           // GameStore JSON-encodes every value it stores, so the key holds
           // "\"ultra\"" with the quotes — a bare === "ultra" never matched and
           // (for one deploy, 0a31155) every desktop that had ever touched the

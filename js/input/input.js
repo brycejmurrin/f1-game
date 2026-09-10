@@ -549,7 +549,7 @@ const Input = (function () {
     const pad = activePad();
     const ps = !!pad && /playstation|dualshock|dualsense|054c|sony/i.test(String(pad.id || ""));
     const names = ps ? PAD_NAMES_PS : PAD_NAMES_XBOX;
-    return names[index] || ("BTN " + index);
+    return names[index] || `BTN ${index}`;
   }
   // The largest value across an action's bound buttons (a trigger is analog,
   // a face button reads 0/1) and any rising edge across them.
@@ -853,7 +853,7 @@ const Input = (function () {
     const live = new Map();                     // pointerId -> visible at pointerdown
     holdBtns.push({ ids, apply, level, anchors, el, live });
     el.addEventListener("pointerdown", e => {
-      try { el.setPointerCapture(e.pointerId); } catch (_) {}
+      try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone (cancelled between down and here); the button still works uncaptured */ }
       e.preventDefault();
       ids.add(e.pointerId);
       live.set(e.pointerId, !holdTargetGone(el));
@@ -906,7 +906,7 @@ const Input = (function () {
     try { pads = navigator.getGamepads(); } catch (e) {
       if (!padPollWarned) {
         padPollWarned = true;
-        Log.warn("input", "gamepad poll failed: " + ((e && e.message) || e));
+        Log.warn("input", `gamepad poll failed: ${(e && e.message) || e}`);
       }
       return null;
     }
@@ -996,7 +996,7 @@ const Input = (function () {
     // log it once so a "throttle is on LB" report has its cause on record.
     if (!padMapWarned && pad.mapping !== "standard") {
       padMapWarned = true;
-      Log.warn("input", "gamepad mapping \"" + pad.mapping + "\" is not \"standard\": button/axis indices may not match");
+      Log.warn("input", `gamepad mapping "${pad.mapping}" is not "standard": button/axis indices may not match`);
     }
     let ax = (pad.axes && pad.axes.length) ? pad.axes[0] : 0;
     if (Math.abs(ax) < PAD_DEADZONE) ax = 0;
@@ -1332,7 +1332,7 @@ const Input = (function () {
 
   function setSteerMode(m) {
     steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
-    try { Log.info("input", "steerMode " + steerMode); } catch (_) { /* Log absent in isolated VM */ }
+    try { Log.info("input", `steerMode ${steerMode}`); } catch (_) { /* Log absent in isolated VM */ }
     if (steerMode !== "buttons") {
       btnSteerLeft = btnSteerRight = false;   // drop held buttons
       btnSteerLeftVal = btnSteerRightVal = 0;
@@ -1407,7 +1407,7 @@ const Input = (function () {
       try { _coarseMql = window.matchMedia("(pointer: coarse)"); } catch (_) { _coarseMql = false; }
       if (_coarseMql && _coarseMql.addEventListener) {
         _coarseMql.addEventListener("change", () => {
-          for (const cb of _coarseCbs) { try { cb(touchControlsNeeded()); } catch (_) {} }
+          for (const cb of _coarseCbs) { try { cb(touchControlsNeeded()); } catch (_) { /* one bad subscriber must not stop the rest */ } }
         });
       }
     }
@@ -1522,16 +1522,16 @@ const Input = (function () {
         setInterval(function () {
           const s = debugState();
           d.textContent =
-            "THR " + (s.throttle ? "ON " : "off") +
-            "  key:" + +s.key.throttle + " btn:" + +s.btn.throttle + " pad:" + +s.pad.throttle +
-            "\nBRK " + (s.braking ? "ON " : "off") +
-            "  key:" + +s.key.brake + " btn:" + +s.btn.brake + " pad:" + +s.pad.brake +
-            "\nheld ptrs [" + s.holdPointers.join(",") + "]" +
-            "\nmode:" + s.steerMode +
-            "  auto:" + ((touchControlsNeeded() && s.steerMode === "touch") ? "ON" : "off");
+            `THR ${s.throttle ? "ON " : "off"}` +
+            `  key:${+s.key.throttle} btn:${+s.btn.throttle} pad:${+s.pad.throttle}` +
+            `\nBRK ${s.braking ? "ON " : "off"}` +
+            `  key:${+s.key.brake} btn:${+s.btn.brake} pad:${+s.pad.brake}` +
+            `\nheld ptrs [${s.holdPointers.join(",")}]` +
+            `\nmode:${s.steerMode}` +
+            `  auto:${(touchControlsNeeded() && s.steerMode === "touch") ? "ON" : "off"}`;
         }, 250);
       }
-    } catch (_) {}
+    } catch (_) { /* opt-in dev overlay only; blocked localStorage or a detached document must not break input init */ }
 
     if (typeof screen !== "undefined" && screen.orientation &&
         typeof screen.orientation.addEventListener === "function") {
@@ -1542,7 +1542,7 @@ const Input = (function () {
 
     window.addEventListener("gamepadconnected", function (e) {
       padConnected = true;
-      try { Log.info("input", "gamepad connected " + padLogId(e)); }
+      try { Log.info("input", `gamepad connected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
     });
     window.addEventListener("gamepaddisconnected", function (e) {
@@ -1556,7 +1556,7 @@ const Input = (function () {
       padNavDir = null;
       padNavSeeded = false;
       padNavSeedLayer = null;
-      try { Log.info("input", "gamepad disconnected " + padLogId(e)); }
+      try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
     });
   }

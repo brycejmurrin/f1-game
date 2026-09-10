@@ -16,6 +16,13 @@ const AgentRaster = (function () {
       sky: ".", ground: "_",
     };
 
+    // Unit right-vector at a sampled track point; shared back with agentview.js
+    // (carWorld, survey) through create()'s return so both files use one division.
+    function unitRight(sampled) {
+      const rl = Math.hypot(sampled.r[0], sampled.r[2]) || 1;
+      return [sampled.r[0] / rl, sampled.r[2] / rl];
+    }
+
     function projPoint(vp, x, y, z) {
       const cx = vp[0] * x + vp[4] * y + vp[8] * z + vp[12];
       const cy = vp[1] * x + vp[5] * y + vp[9] * z + vp[13];
@@ -108,8 +115,8 @@ const AgentRaster = (function () {
       const edgeAt = (d) => {
         const ss = wrapS(s0 + d);
         Tracks.sample(G.track, ss, scr);
-        const rl = Math.hypot(scr.r[0], scr.r[2]) || 1;
-        const ex = scr.r[0] / rl, ez = scr.r[2] / rl, y = scr.p[1] + 0.05;
+        const [ex, ez] = unitRight(scr);
+        const y = scr.p[1] + 0.05;
         const L = projPoint(vp, scr.p[0] - ex * scr.hw, y, scr.p[2] - ez * scr.hw);
         const R = projPoint(vp, scr.p[0] + ex * scr.hw, y, scr.p[2] + ez * scr.hw);
         return L && R ? { L, R, w: (L.w + R.w) / 2 } : null;
@@ -512,8 +519,7 @@ const AgentRaster = (function () {
       for (let s = 0; s < total; s += step) {
         Tracks.sample(G.track, s, scr);
         if (Math.hypot(scr.p[0] - ox, scr.p[2] - oz) > radius * 1.6) continue;
-        const rl = Math.hypot(scr.r[0], scr.r[2]) || 1;
-        const ex = scr.r[0] / rl, ez = scr.r[2] / rl;
+        const [ex, ez] = unitRight(scr);
         const half = scr.hw;
         for (let lat = -half; lat <= half; lat += mPerCol * 0.5) {
           const c = toCell(scr.p[0] + ex * lat, scr.p[2] + ez * lat);
@@ -594,7 +600,7 @@ const AgentRaster = (function () {
       }
 
       // A metric ruler so any glyph converts to metres without arithmetic.
-      const tick = (n) => { let s = ""; for (let i = 0; i < cols; i++)
+      const tick = () => { let s = ""; for (let i = 0; i < cols; i++)
         s += (i === cc ? "|" : i % 10 === cc % 10 ? "'" : " "); return s; };
       const ruler = tick();
       const rulerLabel = (() => {
@@ -645,7 +651,7 @@ const AgentRaster = (function () {
       };
     }
 
-    return { frame, plan, carRender };
+    return { frame, plan, carRender, unitRight };
   }
 
   return { create };

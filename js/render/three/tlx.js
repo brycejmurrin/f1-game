@@ -21,7 +21,7 @@ const TLX = (function () {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
 
-      // ── PHONES GET TLX WHEN THEY PICK IT (decision 2026-09-02) ──────────
+      // PHONES GET TLX WHEN THEY PICK IT (decision 2026-09-02)
       // three retains the CPU copy of every geometry attribute (71.5 MB /
       // 5,665 buffers vs GLX 17.8 MB / 253) and that has jetsam-killed an
       // iPhone tab mid-race; releasing the arrays was DISPROVED live
@@ -47,7 +47,7 @@ const TLX = (function () {
       // rationale in vendor/three-0.185.1/PATCHES.md, guarded by
       // gfx-backend-canary. Re-apply both on any vendor bump.
 
-      // ── WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" =
+      // WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" =
       // pin WebGPU, UNSET = AUTO. AUTO may land on three's WebGL2 — that
       // is success, not a silent fall to game GLX. Decision:
       //   pin "1"                         → three WebGL2 (CI / escape hatch)
@@ -742,7 +742,7 @@ const TLX = (function () {
           "(forceWebGL", forceWebGL, "pin", _glPin, "isMobile", isMobile + ")");
       } catch (_) { /* logging must never cost the backend its boot */ }
 
-      // ── CONTEXT / DEVICE LOSS RECOVERY (js/render/glx/glx.js webglcontextlost) ──
+      // CONTEXT / DEVICE LOSS RECOVERY (js/render/glx/glx.js webglcontextlost)
       // three DETECTS a loss on both backends — the WebGL backend
       // preventDefault()s the canvas event, the WebGPU backend resolves
       // device.lost — and funnels both into renderer.onDeviceLost, whose
@@ -830,7 +830,7 @@ const TLX = (function () {
           function () { try { location.reload(); } catch (_) { /* same: nothing to reload, and the loss latches already landed */ } }, false);
       } catch (_) { /* detached/synthetic canvas in a harness: the timer above still covers it */ }
 
-      // ── lifecycle state ───────────────────────────────────────────────────
+      // lifecycle state
       let renderScale = 1;
       let W = 1, H = 1;
       // Present size (css×dpr) vs render size (×renderScale). With
@@ -857,7 +857,7 @@ const TLX = (function () {
       function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
       const DPR_CAP = isMobile ? 1.5 : 2;
 
-      // ── M9 GPU frame timer state ─────────────────────────────────────────
+      // M9 GPU frame timer state
       // supported only where three's timestamp-query feature is present — the
       // WebGPU backend with the adapter feature; never on the WebGL2 fallback
       // (SwiftShader/CI), keeping the GLX {supported:false} shape there.
@@ -1022,7 +1022,7 @@ const TLX = (function () {
         envRT = null; envDummy = null;
       }
 
-      // ── Baked PBR material arrays (js/render/shared/assets.js) ──────────────────
+      // Baked PBR material arrays (js/render/shared/assets.js)
       // Created as 1×1×17 mid-grey PLACEHOLDERS before the lit factory runs,
       // because tsl-lit.js binds its texture nodes once at factory time and the
       // asset pack loads asynchronously long after. setMaterialMaps() below
@@ -1074,7 +1074,7 @@ const TLX = (function () {
         matMaps = { albedo: matPlaceAlbedo, normal: matPlaceNormal };
       } catch (_) { matMaps = null; matPlaceAlbedo = matPlaceNormal = null; }
 
-      // ── M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories) ──────
+      // M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories)
       // Guarded: a missing/broken factory keeps the unlit material — the
       // backend must still boot (Gfx.create's never-throw contract).
       let lit = null;
@@ -1428,7 +1428,7 @@ const TLX = (function () {
           if (!_instAlive.has(im)) im.visible = false;
         }
       }
-      // ── the mesh pool is keyed on (geometry, material), NOT on draw order ──
+      // the mesh pool is keyed on (geometry, material), NOT on draw order
       // MEASURED (docs/PERF-FINDINGS.md 2o): a flat `meshPool[poolUsed]` gave
       // wrapper #0 whatever geometry happened to be first that frame, and the
       // pairing churned as the cull result changed. three's WebGPURenderer
@@ -1442,7 +1442,7 @@ const TLX = (function () {
       // Keyed, a given wrapper always carries the same pair, so the number of
       // cache keys is bounded by the DISTINCT DRAWS the scene has rather than
       // by frames elapsed.
-      // ── the SSR MRT node is built ONCE ────────────────────────────────
+      // the SSR MRT node is built ONCE
       // This was `renderer.setMRT(TSL.mrt({…}))` inline in present(), so a NEW
       // node was constructed every frame. three keys its render-context cache
       // on a STRING containing mrt.id:
@@ -1488,7 +1488,7 @@ const TLX = (function () {
         return out;
       }
 
-      // ── M6 FX plumbing ───────────────────────────────────────────────────
+      // M6 FX plumbing
       // Shared unit quad for blob shadows + per-mark skid stamps: the GLX
       // shadowVAO 1:1 — xz footprint -0.5..0.5, y=0.02 (SHADOW_VS's lift
       // baked into the vertices; the matrix scale below never touches y).
@@ -1840,7 +1840,7 @@ const TLX = (function () {
         for (const ref of _geoReg) if (ref && ref.deref()) _geoReg[w++] = ref;
         _geoReg.length = w;
       }
-      // ── STATIC-GEOMETRY MIRROR RELEASE ──────────────────────────────────
+      // STATIC-GEOMETRY MIRROR RELEASE
       // The non-chunked half of the lever chunkedSys.releaseMirrors() already
       // pulls. A post-GC heap snapshot says why it is worth pulling: on the
       // iPhone profile in race, JSArrayBufferData is 49.43 MB of TLX's 99.41
@@ -2296,7 +2296,7 @@ const TLX = (function () {
         _softReadQueued = null;
       }
 
-      // ── the backend object (the ~40-member seam contract) ────────────────
+      // the backend object (the ~40-member seam contract)
       const backend = {
         backend: "three",                    // WGX precedent: backend id marker
         get isWebGPU() { return !!(renderer.backend && renderer.backend.isWebGPUBackend); },
@@ -2407,7 +2407,7 @@ const TLX = (function () {
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
 
-        // ── Baked material arrays — the GLX.createTextureArray counterpart ──
+        // Baked material arrays — the GLX.createTextureArray counterpart
         // `images` is sparse, indexed by MAT id. three needs RAW pixels for a
         // DataArrayTexture, so each ImageBitmap is read back once through a
         // scratch WebGL2 context; GLX can hand the bitmap straight to
@@ -2761,7 +2761,7 @@ const TLX = (function () {
           _envBadProbes = 0; _envGaveUp = false;
         },
 
-        // ── Cull-test helpers (GLX parity) ──────────────────────────────────
+        // Cull-test helpers (GLX parity)
         // js/agent/agentview.js calls GLX.makeFrustumPlanes/aabbInFrustum
         // directly, so its "what is on screen" answer runs the SAME test the
         // draw path runs. These MUST be own properties of the backend object:
@@ -2984,9 +2984,9 @@ const TLX = (function () {
             drawList.push({ geo: mesh.geo, m: poolModelMat(model), mat: materialFor(opts, true) });
           }
         },
-        // ── M6 FX paths — each appends a draw-list record; blend/offset/mask
+        // M6 FX paths — each appends a draw-list record; blend/offset/mask
         // state lives on the tsl-fx materials (three applies it per material,
-        // nothing leaks into the next pass — the M4 caster-bug lesson). ─────
+        // nothing leaks into the next pass — the M4 caster-bug lesson).
         // Blob shadow under a car: glx.js drawShadow — the record's matrix
         // bakes uSize (model * scale(w,1,l); the quad's y=0.02 lift is in the
         // shared geometry, untouched by the scale).
@@ -3288,7 +3288,7 @@ const TLX = (function () {
             catch (e) { persistFail(e); refuseTab(); }
           }
           _presentN++;
-          // ── AUTO SELF-HEAL: a WebGPU device that rejects work early is a
+          // AUTO SELF-HEAL: a WebGPU device that rejects work early is a
           // device that is drawing part of the scene, and nothing above can
           // see that — a rejected lit pipeline throws nothing on the JS side,
           // present() "succeeds", and the player sees decals floating over a

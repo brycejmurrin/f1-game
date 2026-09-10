@@ -32,13 +32,11 @@ const AudioPanel = (() => {
       els.soundbtn.textContent = b ? "♪ SOUND ON" : "♪ SOUND OFF";
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
-      else {
-        if (G.state === "menu") GameAudio.startMusic(-1);
-        else if (G.state === "race" || G.state === "count") {   // the countdown is the race's first seconds
-          GameAudio.startMusic(G.trackIdx);
-          GameAudio.startEngine();
-          if (G.raceWeather === "rain") GameAudio.startRain();
-        }
+      else if (G.state === "menu") GameAudio.startMusic(-1);
+      else if (G.state === "race" || G.state === "count") {   // the countdown is the race's first seconds
+        GameAudio.startMusic(G.trackIdx);
+        GameAudio.startEngine();
+        if (G.raceWeather === "rain") GameAudio.startRain();
       }
       // SOUND is the master, so the panel's music controls follow it.
       syncAudioPanel();
@@ -101,13 +99,13 @@ const AudioPanel = (() => {
 
     function paintAudioFolds() {
       const SRC_FOLD = { all: "ALL", builtin: "DEFAULT", user: "MY TRACKS", spotify: "SPOTIFY" };
-      const srcOn = (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
+      const activeSrc = (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
         ? "spotify" : ((typeof GameAudio !== "undefined" && GameAudio.musicSource)
           ? GameAudio.musicSource() : musicSrc);
       Dom.paintFold($("as-music-sum"), [
         ["k", "MUSIC"],
         [G.musicEnabled ? "on" : "off", G.musicEnabled ? "ON" : "OFF"],
-        ["val", SRC_FOLD[srcOn] || "ALL"],
+        ["val", SRC_FOLD[activeSrc] || "ALL"],
       ]);
       Dom.paintFold($("as-sound-sum"), [
         ["k", "SOUND"],

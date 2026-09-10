@@ -179,10 +179,9 @@ const GameAudio = (function () {
   // the ERS whine and the deploy whoosh, `boostPitch` the rev lift under
   // deploy (4% stock). `harvest`, `wind`, `screech` and `rivals` are levels
   // for layers that only had a switch.
-  // The SHIPPED voice. These were all 1 (a pure identity trim over the sample
-  // core) until 2026-09-08, when the owner's own ENGINE tune became the
-  // default: pitch down and the rev range widened so the climb to the limiter
-  // is longer, detune off (the chorus that blurred the top end), the sub layer
+  // The SHIPPED voice, no longer a pure identity trim over the sample core:
+  // pitch down and the rev range widened so the climb to the limiter is
+  // longer, detune off (the chorus that blurred the top end), the sub layer
   // well back, a hard fast limiter, and the hybrid whine halved. Every value is
   // inside TUNE_RANGE below; the panel's step table still lands on each one.
   const TUNE_DEF = Object.freeze({
@@ -454,7 +453,7 @@ const GameAudio = (function () {
     // iOS Safari starts contexts suspended; resume inside the gesture.
     // Guard the promise: resume() rejects (NotAllowed/InvalidState) on mobile at
     // the edge of a gesture — an unhandled rejection would surface as a crash.
-    if (ctx.state !== "running") { var _p = ctx.resume(); if (_p && _p.catch) _p.catch(() => {}); }
+    if (ctx.state !== "running") { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
     loadEngineSamples();
     return true;
   }
@@ -1090,7 +1089,7 @@ const GameAudio = (function () {
     lfo = null;
     skidSrc = null;
     // Disconnect the test analyser tap so it doesn't accumulate across restarts.
-    if (dbgAnalyser) { try { dbgAnalyser.disconnect(); } catch (e) {} dbgAnalyser = null; }
+    if (dbgAnalyser) { try { dbgAnalyser.disconnect(); } catch (e) { /* torn down already */ } dbgAnalyser = null; }
     // Tear the whole faded chain out of the graph once the 0.35 s source stops
     // complete: stopped sources GC on their own, but Gain/Biquad nodes routed
     // into sfxBus keep RENDERING until disconnect() (Web Audio contract) — a
@@ -1538,8 +1537,8 @@ const GameAudio = (function () {
     try {
       g.gain.setTargetAtTime(0, now(), 0.4);
       setTimeout(() => {
-        try { s.stop(); } catch (e) {}
-        try { s.disconnect(); g.disconnect(); h.disconnect(); l.disconnect(); } catch (e) {}
+        try { s.stop(); } catch (e) { /* already stopped */ }
+        try { s.disconnect(); g.disconnect(); h.disconnect(); l.disconnect(); } catch (e) { /* already disconnected */ }
         rainStopping = false;
         if (rainPending != null) { const pg = rainPending; rainPending = null; startRain(pg); }
       }, 1200);
@@ -1880,7 +1879,7 @@ const GameAudio = (function () {
     src.connect(f).connect(g).connect(sfxBus);
     src.start(t0, off);
     src.stop(t0 + 0.6);
-    src.onended = () => { try { src.disconnect(); f.disconnect(); g.disconnect(); } catch (e) {} };
+    src.onended = () => { try { src.disconnect(); f.disconnect(); g.disconnect(); } catch (e) { /* already disconnected */ } };
     blip(220, "sawtooth", 0.12 * tune.boost, 0.03, 0.4, 880);
   }
 
@@ -2026,7 +2025,7 @@ const GameAudio = (function () {
   function playMusicBuffer(buf, token) {
     if (!ctx || !musicOn || token !== musicToken) return;  // superseded
     ensureMusicGain();
-    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
+    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) { /* stop-before-start is a documented throw; the source is being replaced regardless */ }
     const src = ctx.createBufferSource();
     src.buffer = buf;
     // A PLAYLIST, so no per-source loop: each track hands over to the next when
@@ -2105,7 +2104,7 @@ const GameAudio = (function () {
     if (!ctx || !musicEnabled || backend || !PLAYLIST.length) return;
     musicIndex = ((i % PLAYLIST.length) + PLAYLIST.length) % PLAYLIST.length;
     const url = PLAYLIST[musicIndex].url;
-    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
+    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) { /* stop-before-start is a documented throw; the source is being replaced regardless */ }
     musicSrc = null;
     musicOn = true;
     currentUrl = url;
@@ -2120,9 +2119,9 @@ const GameAudio = (function () {
     // MUSIC_CACHE eviction that only runs afterwards.
     if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); }, () => {}); return; }
     const _load = fetch(url)
-      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
-      .then(ab => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
-      .then(buf => {
+      .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status + " for " + url); return r.arrayBuffer(); })
+      .then((ab) => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
+      .then((buf) => {
         // Every track, builtin or uploaded, is cached under the same bound
         // (MUSIC_CACHE): builtins used to be held for the life of the context
         // — five decoded songs — and a single uploaded MP3 used to re-fetch
@@ -2163,7 +2162,7 @@ const GameAudio = (function () {
   function setMusicVolume(v) {
     musicVol = clamp01(typeof v === "number" ? v : 0.5);
     if (musicGain) { musicGain.gain.value = musicVol * MUSIC_FULL; musicGain._apexDuckTgt = null; }   // a direct write invalidates the duck cache
-    if (backend) { try { backend.setVolume(musicVol); } catch (e) {} }
+    if (backend) { try { backend.setVolume(musicVol); } catch (e) { /* a broken backend must not take the audio down */ } }
     return musicVol;
   }
   function volumes() { return { sfx: sfxVol, music: musicVol }; }
@@ -2195,7 +2194,7 @@ const GameAudio = (function () {
      the caller — WE NEVER REVOKE IT, because the same blob may be re-added and
      the owner needs to decide when it dies. */
   function tracks() {
-    return PLAYLIST.map(e => ({ id: e.id, name: e.name, builtin: !!e.builtin }));
+    return PLAYLIST.map((e) => ({ id: e.id, name: e.name, builtin: !!e.builtin }));
   }
   function indexOfId(id) {
     for (let i = 0; i < PLAYLIST.length; i++) if (PLAYLIST[i].id === id) return i;
@@ -2265,7 +2264,7 @@ const GameAudio = (function () {
     lastTrackIdx = idx;
     if (!musicEnabled) return;
     // Delegated: the backend owns play/pause, and needs no AudioContext.
-    if (backend) { try { backend.start(); } catch (e) {} return; }
+    if (backend) { try { backend.start(); } catch (e) { /* a broken backend must not take the audio down */ } return; }
     if (!ctx) return;                    // remember the track but stay silent if music is off
     // The menu and the race share one playlist, so a state change must NOT
     // interrupt it — going to the grid used to restart the track from zero.
@@ -2282,7 +2281,7 @@ const GameAudio = (function () {
     // from stop() (stop-before-start is the documented case) skipped the
     // disconnect, stranding a BufferSource that keeps rendering AND pins its
     // 71-83 MB buffer — the same shape as the two stranded GainNodes.
-    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); } } catch (e) {}
+    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); } } catch (e) { /* stop-before-start is the documented case */ }
     try { if (musicSrc) musicSrc.disconnect(); } catch (e) { /* Already detached, or the ctx closed under it: unreachable either way, and musicSrc is nulled below. */ }
     musicSrc = null;
     // THE RESUME BUFFER IS A WHOLE DECODED TRACK — 71-83 MB at a 48 kHz context,
@@ -2296,7 +2295,7 @@ const GameAudio = (function () {
 
   function stopMusic() {
     stopInternal();
-    if (backend) { try { backend.stop(); } catch (e) {} }
+    if (backend) { try { backend.stop(); } catch (e) { /* a broken backend must not take the audio down */ } }
   }
 
   return {

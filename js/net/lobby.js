@@ -166,10 +166,10 @@ const NetLobby = (function () {
         // close-emitter that does not self-release cannot leak past
         // teardown()'s sweep.
         const tGone = transports.get(id);
-        if (tGone) { try { tGone.close(); } catch (e) {} }
+        if (tGone) { try { tGone.close(); } catch (e) { /* already gone */ } }
         transports.delete(id);
         const s = sessions.get(id);
-        if (s) { try { s.close(); } catch (e) {} }
+        if (s) { try { s.close(); } catch (e) { /* already gone */ } }
         sessions.delete(id);
         _peers.delete(id); _ready.delete(id);
         clashDrop(id);
@@ -198,7 +198,7 @@ const NetLobby = (function () {
       // player who would have reported that the button does nothing.
       if (transport) clearInterval(pollTimer);
       if (transport && !transports.has(pendingId)) {
-        try { transport.close(); } catch (e) {}
+        try { transport.close(); } catch (e) { /* already gone */ }
       }
       transport = null;
       pendingId = null;
@@ -215,12 +215,12 @@ const NetLobby = (function () {
       clearInterval(pumpTimer);
       pumpTimer = null;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
-      for (const s of sessions.values()) { try { s.close(); } catch (e) {} }
+      for (const s of sessions.values()) { try { s.close(); } catch (e) { /* already gone */ } }
       sessions.clear();
       session = null;
-      for (const t of transports.values()) { try { t.close(); } catch (e) {} }
+      for (const t of transports.values()) { try { t.close(); } catch (e) { /* already gone */ } }
       transports.clear();
-      if (transport) { try { transport.close(); } catch (e) {} }
+      if (transport) { try { transport.close(); } catch (e) { /* already gone */ } }
       transport = null;
       pendingId = null;
       nextGuestId = 0;
@@ -282,7 +282,7 @@ const NetLobby = (function () {
           relayNote = " [RELAY-ONLY TEST MODE is on — run "
             + "localStorage.removeItem('apex26.iceRelayOnly') and reload unless you are testing TURN]";
         }
-      } catch (e) {}
+      } catch (e) { /* storage blocked (private mode): skip the note */ }
       say("Connecting…" + relayNote);
       // Capture the transport and id being watched: by the time this fires the
       // host may have moved on to inviting somebody else, and polling "the
@@ -348,7 +348,7 @@ const NetLobby = (function () {
       if (transport === t) { transport = null; pendingId = null; }
       const made = NetSession.create({ transport: t });
       sessions.set(id, made);
-      if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) {} }
+      if (codeRoom && codeRoom.rotate) { try { codeRoom.rotate(null); } catch (e) { /* the room is already gone */ } }
       if (codeReopen && transports.size < MAX_GUESTS) {
         const again = codeReopen;
         codeReopen = null;
@@ -418,12 +418,12 @@ const NetLobby = (function () {
           const tagged = Object.assign({}, p, { from: id, rank: joinRank(id) });
           for (const [k, sess] of sessions) {
             if (k === id) continue;                 // not back to the sender
-            try { sess.sendEvent(NetPlay.EV.HELLO, tagged); } catch (e) {}
+            try { sess.sendEvent(NetPlay.EV.HELLO, tagged); } catch (e) { /* a dead session must not stop the relay */ }
           }
           // ...and the new arrival needs everyone who was already here.
           for (const [k, prof] of _peers) {
             if (k === id || !prof) continue;
-            try { made.sendEvent(NetPlay.EV.HELLO, Object.assign({}, prof, { from: k, rank: joinRank(k) })); } catch (e) {}
+            try { made.sendEvent(NetPlay.EV.HELLO, Object.assign({}, prof, { from: k, rank: joinRank(k) })); } catch (e) { /* a dead session must not stop the relay */ }
           }
         } else if (p.from == null && p.rank != null) myRank = p.rank;   // the host told us where we stand
         // Learning what they picked is the moment a clash becomes knowable.
@@ -991,7 +991,7 @@ const NetLobby = (function () {
     const allSessions = () => [...sessions.values()];
     function broadcast(type, data) {
       let ok = false;
-      for (const s of allSessions()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) {} }
+      for (const s of allSessions()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) { /* a dead session must not stop the rest */ } }
       return ok;
     }
     let pumpTimer = null;
@@ -1267,7 +1267,7 @@ const NetLobby = (function () {
     function stopCodeWait() {
       if (codeWait) codeWait.cancelled = true;
       codeWait = null;
-      if (codeRoom && codeRoom.stop) { try { codeRoom.stop(); } catch (e) {} }
+      if (codeRoom && codeRoom.stop) { try { codeRoom.stop(); } catch (e) { /* already gone */ } }
       codeRoom = null;
     }
 
@@ -1533,7 +1533,7 @@ const NetLobby = (function () {
           l.addEventListener("release", () => { if (wake === l) wake = null; });
         }).catch(() => { if (wakeRequest === pending) wakeRequest = null; });
         wakeRequest = pending;
-      } catch (e) {}
+      } catch (e) { /* no wake-lock API: degrade to the sleeping behaviour */ }
     }
     function dropWake() {
       wakeWanted = false;
@@ -1550,7 +1550,7 @@ const NetLobby = (function () {
       invalidateOperations();
       holdWake();
       Log.info("net", "lobby open");
-      try { if (NetTransport.prefetchIce) NetTransport.prefetchIce(); } catch (e) {}
+      try { if (NetTransport.prefetchIce) NetTransport.prefetchIce(); } catch (e) { /* the relay race degrades to STUN-only */ }
       const e = els();
       if (!e.screen) return false;
       _peers.clear(); _ready.clear(); clashClear(); myRank = Infinity;

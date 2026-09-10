@@ -180,7 +180,7 @@ function livDraftTo(d, keepNull) {
   return out;
 }
 
-function csTabId(id) { return "cs-tab-" + String(id).replace(/[^a-z0-9_-]/gi, "-"); }
+function csTabId(id) { return `cs-tab-${String(id).replace(/[^a-z0-9_-]/gi, "-")}`; }
 
 // SHOW THE PART YOU JUST FITTED. Every catalog category changes the mesh
 // (js/car/parts.js: each option carries a `visual` recipe), but the turntable
@@ -208,7 +208,7 @@ const CAT_VIEW = {
 function framePreset(name) {
   // click() rather than a direct camera call: a display:none stack (narrow
   // landscape) still runs the handler, so the preset works on every layout.
-  const b = document.querySelector('#cs-stack [data-cs-view="' + name + '"]');
+  const b = document.querySelector(`#cs-stack [data-cs-view="${name}"]`);
   if (!b) return;
   // But click() replays that button's WHOLE handler, its uiTick included — so
   // fitting a part sounded twice: uiSelect for the fit, then uiTick for the
@@ -297,7 +297,7 @@ function buildTeamOptions(optsEl, team) {
   const body = document.createElement("span"); body.className = "tm-body";
   const name = document.createElement("span"); name.className = "tm-name"; name.textContent = team.name;
   const sub = document.createElement("span"); sub.className = "tm-sub";
-  sub.textContent = team.short + " · " + (team.engine || "") + " engine";
+  sub.textContent = `${team.short} · ${team.engine || ""} engine`;
   body.append(name, sub);
   const chev = document.createElement("span");
   chev.className = "tm-chev"; chev.textContent = "▾"; chev.setAttribute("aria-hidden", "true");
@@ -319,7 +319,7 @@ function buildTeamOptions(optsEl, team) {
     else if (careerLocked) b.title = "Your seat is fixed by your active career contract";
     b.setAttribute("aria-pressed", i === G.driverIdx ? "true" : "false");
     b.dataset.csDriver = String(i);
-    b.textContent = "#" + d.num + " " + d.name + (taken ? "  · TAKEN" : "");
+    b.textContent = `#${d.num} ${d.name}${taken ? "  · TAKEN" : ""}`;
     b.onclick = () => {
       if (i === G.driverIdx) return;
       G.driverIdx = i; store.set("driver", i);
@@ -384,16 +384,16 @@ function buildSetup() {
       budgetEl.textContent = "FREE BUILD — no budget limit";
       budgetEl.className = "unlimited";
     } else if (owned) {
-      budgetEl.textContent = "BALANCE " + Career.data().money.toLocaleString() + " cr · FITTED "
-                           + spent.toLocaleString() + " / " + cap.toLocaleString() + " cr";
+      budgetEl.textContent = `BALANCE ${Career.data().money.toLocaleString()} cr · FITTED `
+                           + `${spent.toLocaleString()} / ${cap.toLocaleString()} cr`;
       budgetEl.className = remaining < 0 ? "over" : remaining < 100 ? "tight" : "";
     } else {
-      budgetEl.textContent = "BUDGET: " + remaining + " / " + cap + " cr remaining";
+      budgetEl.textContent = `BUDGET: ${remaining} / ${cap} cr remaining`;
       budgetEl.className = remaining < 0 ? "over" : remaining < 100 ? "tight" : "";
     }
   }
   if (budgetFill) {
-    budgetFill.style.transform = unlimited ? "scaleX(0)" : "scaleX(" + M4.clamp(spent / cap, 0, 1) + ")";
+    budgetFill.style.transform = unlimited ? "scaleX(0)" : `scaleX(${M4.clamp(spent / cap, 0, 1)})`;
   }
   if (unlimitedBtn) {
     unlimitedBtn.hidden = !!owned;

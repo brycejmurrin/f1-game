@@ -39,7 +39,9 @@ const UiScale = (() => {
     // NOTHING STORED => NO INLINE STYLE, so the `@media (pointer: coarse)` default
     // in the stylesheet stands and a phone is correct on its FIRST paint rather
     // than from whenever this module runs.
-    const SCALE_MIN = 40, SCALE_MAX = 200, SCALE_STEP = 0.25;
+    const SCALE_MIN = 40;
+    const SCALE_MAX = 200;
+    const SCALE_STEP = 0.25;
     // Touch defaults live in the `(pointer: coarse)` block of css/tokens.css and
     // are mirrored here — CSS owns FIRST paint, this owns every write after it,
     // and the two must not disagree. BUTTON SIZE stays a ratio of HUD SIZE so it
@@ -66,7 +68,7 @@ const UiScale = (() => {
     };
     const scaleLabel = (pct) => {
       const t = scaleSnap(pct);
-      return (Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)) + "%";
+      return `${Math.abs(t % 1) < 1e-9 ? String(Math.round(t)) : t.toFixed(1)}%`;
     };
     function applyScale(key, prop, inputId) {
       const stored = store.get(key, null);
@@ -80,14 +82,15 @@ const UiScale = (() => {
       if (typeof stored === "number") document.documentElement.style.setProperty(prop, pct / 100);
       else document.documentElement.style.removeProperty(prop);
       const input = $(inputId); if (input) input.value = String(pct);
-      const out = $(inputId + "-v"); if (out) out.textContent = scaleLabel(pct);
+      const out = $(`${inputId}-v`); if (out) out.textContent = scaleLabel(pct);
     }
     let uiScalePreviewRaf = 0;
     function applyUiScale()  {
       applyScale("uiScale",  "--ui-scale",  "pm-uiscale");
       if (uiScalePreviewRaf) return; // coalesce slider input; hidden select refreshes on open
-      uiScalePreviewRaf = requestAnimationFrame(function () { uiScalePreviewRaf = 0;
-        try { if (els.select && !els.select.hidden) G.updateTrackPreview(); } catch (e) { /* menus not ready */ }
+      uiScalePreviewRaf = requestAnimationFrame(() => {
+        uiScalePreviewRaf = 0;
+        try { if (els.select && !els.select.hidden) G.updateTrackPreview(); } catch { /* menus not ready */ }
       });
     }
     // Moving HUD SIZE moves the dock too while BUTTON SIZE is unset, so its
@@ -137,10 +140,9 @@ const UiScale = (() => {
     ];
     // A phone ships at LOW (half-res buffer) and a pointer device at AUTO — the
     // other half of the HIGH graphics preset above. Same question
-    // Input.touchControlsNeeded() asks, asked directly so this module keeps no
-    // dependency on the input stack.
-    const coarse = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
-    let resMode = store.get("resMode", coarse() ? "low" : "auto");
+    // Input.touchControlsNeeded() asks, asked directly (coarseUi, above) so
+    // this module keeps no dependency on the input stack.
+    let resMode = store.get("resMode", coarseUi() ? "low" : "auto");
     function applyResMode() {
       const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
       SettingRow.paint($("pm-res"), m.id);

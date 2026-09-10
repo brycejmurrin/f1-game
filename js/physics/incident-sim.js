@@ -65,9 +65,9 @@ const IncidentSim = (function () {
   function create(ctx) {
     Log.info("game", "IncidentSim.create");
     G = ctx;
-    try { _r2 = (localStorage.getItem("apex26.r2Airborne") || "1") !== "0"; } catch (e) {}
-    try { _r3 = (localStorage.getItem("apex26.r3Contact") || "1") !== "0"; } catch (e) {}
-    try { _c1 = (localStorage.getItem("apex26.c1Pileup") || "1") !== "0"; } catch (e) {}
+    try { _r2 = (localStorage.getItem("apex26.r2Airborne") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
+    try { _r3 = (localStorage.getItem("apex26.r3Contact") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
+    try { _c1 = (localStorage.getItem("apex26.c1Pileup") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
     return { owns, active, notifyWall, notifyCar, preStep, postStep, status,
              setFlags, reset, forceLaunch, release };
   }
@@ -302,23 +302,17 @@ const IncidentSim = (function () {
           try {
             const w = G.worldFromTrack(tf.s, tf.x);
             if (w && fin(w.x) && fin(w.z)) { wx = w.x; wz = w.z; }
-          } catch (e) {}
+          } catch (e) { /* wx/wz keep the (px, pz) fallback set above */ }
         }
-        if (c.human) {
-          c.px = wx; c.pz = wz; c.head = head;
-          const L = (G.track && G.track.total) || 1;
-          let ds = tf.s - c.s; ds = ((ds + L / 2) % L + L) % L - L / 2;
-          if (fin(ds)) { c.prog += ds; _lapCross(c, ds, tf.s, L); }
-          c.s = tf.s; c.x = tf.x;
-          c.speed = speed; c.vLat = 0;
-        } else {
-          const L = (G.track && G.track.total) || 1;
-          let ds = tf.s - c.s; ds = ((ds + L / 2) % L + L) % L - L / 2;
-          if (fin(ds)) { c.prog += ds; _lapCross(c, ds, tf.s, L); }
-          c.s = tf.s; c.x = tf.x; c.speed = speed; c.head = head;
-          c.px = wx; c.pz = wz;
-          c.vLat = 0;   // same as the human branch — a stale vLat is not Rapier's
-        }
+        // Human and AI used to take separate branches here that wrote the same
+        // seven fields (px/pz/head/s/x/speed/vLat) in a different order — order
+        // that cannot matter, since each write is independent and ds/_lapCross
+        // only ever read c.s before it is reassigned below, in both orderings.
+        const L = (G.track && G.track.total) || 1;
+        let ds = tf.s - c.s; ds = ((ds + L / 2) % L + L) % L - L / 2;
+        if (fin(ds)) { c.prog += ds; _lapCross(c, ds, tf.s, L); }
+        c.s = tf.s; c.x = tf.x; c.speed = speed; c.head = head;
+        c.px = wx; c.pz = wz; c.vLat = 0;   // a stale vLat is not Rapier's
         // Advance the last-good snapshot to this validated pose.
         inc.good.set(i, snapOf(c));
         // Settle detection: sleeping OR both velocities below the settle bands.
@@ -371,7 +365,7 @@ const IncidentSim = (function () {
 
   function handbackCar(inc, i, anomaly, pose) {
     const c = G.cars && G.cars[i];
-    try { DebrisWorld.demoteCarKinematic(i); } catch (e) {}
+    try { DebrisWorld.demoteCarKinematic(i); } catch (e) { /* handback must complete regardless (window bounds contract) */ }
     if (c) {
       if (anomaly) {
         // Degrade to bespoke: restore the last validated (or promote) state so
@@ -392,7 +386,7 @@ const IncidentSim = (function () {
         const inV = snap && fin(snap.speed) ? Math.abs(snap.speed) : 0;
         const inverted = pose ? upYOf(pose) < INVERT_UP_Y : false;
         if (inverted) {
-          if (c.human && G.rescuePlayer) { try { G.rescuePlayer(c); } catch (e) {} }
+          if (c.human && G.rescuePlayer) { try { G.rescuePlayer(c); } catch (e) { /* handback must complete regardless */ } }
           else rescueAI(c);
         } else {
           try {
@@ -400,7 +394,7 @@ const IncidentSim = (function () {
               const w = G.worldFromTrack(c.s, c.x);
               if (w && fin(w.x) && fin(w.z)) { c.px = w.x; c.pz = w.z; }
             }
-          } catch (e) {}
+          } catch (e) { /* c.px/pz keep their prior value */ }
           let outV = fin(c.speed) ? Math.abs(c.speed) : 0;
           if (inV > 0) outV = clamp(outV || inV * RETAIN_FLOOR, inV * RETAIN_FLOOR, inV * RETAIN_MAX);
           c.speed = fin(outV) ? outV : (inV * RETAIN_FLOOR);
@@ -430,7 +424,7 @@ const IncidentSim = (function () {
         if (w) { c.px = w.x; c.pz = w.z; }
       }
       c.vLat = 0; c.yawRateCur = 0; c.offT = 0; c.stuckT = 0; c.rescueT = 0;
-    } catch (e) {}
+    } catch (e) { /* last-resort rescue must never throw back into handbackCar */ }
   }
 
   function finishCar(inc, i) {

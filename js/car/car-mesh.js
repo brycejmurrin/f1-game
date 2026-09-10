@@ -357,17 +357,23 @@ function getBrakeRing() {
   return brakeRingMesh;
 }
 
+// Shared body for a flat billboard quad in the local XY plane (normal -Z,
+// half-extents w/h), wound both ways so it reads from either side — the
+// shape rainLight/exhaustFlame/boostFlame/ersLight/endplateLight all share,
+// differing only in size and colour.
+function _flatQuadData(w, h, col) {
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
+  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(col[0], col[1], col[2]); }
+  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
+  return out;
+}
 // getRainLight / getEndplateLight stay PRIVATE — only drawRearLights reaches
 // them, the same way getAeroLamp / getAeroBar sit behind drawWheelExtras.
 let rainLightMesh = null;
 function getRainLight() {
   if (rainLightMesh) return rainLightMesh;
-  const R = [2.4, 0.10, 0.08], out = { pos: [], nrm: [], col: [], idx: [] };
-  const w = 0.055, h = 0.07;
-  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
-  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
-  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  rainLightMesh = _gfx.createMesh(out);
+  rainLightMesh = _gfx.createMesh(_flatQuadData(0.055, 0.07, [2.4, 0.10, 0.08]));
   return rainLightMesh;
 }
 const _exhaustMeshes = {};
@@ -375,33 +381,18 @@ function getExhaustFlame(color) {
   const R = Array.isArray(color) ? color : [2.6, 1.05, 0.25];
   const key = R.join(",");
   if (_exhaustMeshes[key]) return _exhaustMeshes[key];
-  const out = { pos: [], nrm: [], col: [], idx: [] };
-  const w = 0.035, h = 0.030;
-  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
-  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
-  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  return (_exhaustMeshes[key] = _gfx.createMesh(out));
+  return (_exhaustMeshes[key] = _gfx.createMesh(_flatQuadData(0.035, 0.030, R)));
 }
 let boostMesh = null;
 function getBoostFlame() {
   if (boostMesh) return boostMesh;
-  const R = [0.65, 1.7, 3.0], out = { pos: [], nrm: [], col: [], idx: [] };
-  const w = 0.070, h = 0.055;
-  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
-  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
-  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  boostMesh = _gfx.createMesh(out);
+  boostMesh = _gfx.createMesh(_flatQuadData(0.070, 0.055, [0.65, 1.7, 3.0]));
   return boostMesh;
 }
 let ersMesh = null;
 function getErsLight() {
   if (ersMesh) return ersMesh;
-  const R = [0.25, 2.2, 2.0], out = { pos: [], nrm: [], col: [], idx: [] };
-  const w = 0.075, h = 0.014;
-  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
-  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
-  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  ersMesh = _gfx.createMesh(out);
+  ersMesh = _gfx.createMesh(_flatQuadData(0.075, 0.014, [0.25, 2.2, 2.0]));
   return ersMesh;
 }
 
@@ -666,12 +657,7 @@ function gridStrobe(countT) { return ((countT * 5.0) % 1) < 0.5; }
 let _epLightMesh = null;
 function getEndplateLight() {
   if (_epLightMesh) return _epLightMesh;
-  const R = [2.4, 0.10, 0.08], out = { pos: [], nrm: [], col: [], idx: [] };
-  const w = 0.026, h = 0.034;
-  out.pos.push(-w, -h, 0,  w, -h, 0,  w, h, 0,  -w, h, 0);
-  for (let i = 0; i < 4; i++) { out.nrm.push(0, 0, -1); out.col.push(R[0], R[1], R[2]); }
-  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
-  _epLightMesh = _gfx.createMesh(out);
+  _epLightMesh = _gfx.createMesh(_flatQuadData(0.026, 0.034, [2.4, 0.10, 0.08]));
   return _epLightMesh;
 }
 // Its own scratch and its own opts bag ON PURPOSE. game.js's _ringWorld /

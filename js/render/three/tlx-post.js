@@ -93,7 +93,7 @@
     // The RT the viz branch last wrote — see presentedTarget().
     let _vizDest = null;
 
-    // ── HDR capability. RGBA16F needs a *renderable* half-float colour
+    // HDR capability. RGBA16F needs a *renderable* half-float colour
     // buffer. iOS Safari WebGL2 typically exposes EXT_color_buffer_half_float
     // and NOT EXT_color_buffer_float (the 32-bit one). Checking only the
     // latter forced UnsignedByteType + ACES on an 8-bit scene — the pale
@@ -109,7 +109,7 @@
     } catch (_) { hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend); }
     const hdrType = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
 
-    // ── 1x1 no-op fallbacks (glx/post.js whiteTex/blackTex) ─────────────────
+    // 1x1 no-op fallbacks (glx/post.js whiteTex/blackTex)
     function onePx(v) {
       const t = ownTexture(new THREE.DataTexture(new Uint8Array([v, v, v, 255]), 1, 1));
       t.colorSpace = THREE.NoColorSpace;
@@ -119,7 +119,7 @@
     const whiteTex = onePx(255);
     const blackTex = onePx(0);
 
-    // ── LENS DIRT smudge map: the glx/post.js makeDirtTex canvas port —
+    // LENS DIRT smudge map: the glx/post.js makeDirtTex canvas port —
     // deterministic LCG seed, value-noise base + grime blobs + dust specks +
     // wipe streaks. A failed canvas leaves the black fallback (knob no-ops).
     function makeDirtTex() {
@@ -139,7 +139,7 @@
     }
     const dirtTex = makeDirtTex();
 
-    // ── render-target helpers ────────────────────────────────────────────────
+    // render-target helpers
     function makeRT(w, h, type, format) {
       const rt = ownRT(new THREE.RenderTarget(w, h, {
         type, depthBuffer: false,
@@ -249,7 +249,7 @@
       }
     }
 
-    // ── the TSL pass set (tsl-post.js) — needs the REAL scene textures ─────
+    // the TSL pass set (tsl-post.js) — needs the REAL scene textures
     const P = TLXShaders.post(THREE, TSL, {
       chunks: ctx.chunks, shadow,
       sceneTex: sceneRT.texture, sceneTagTex, sceneDepthTex,
@@ -257,7 +257,7 @@
       trackMaterial,
     });
 
-    // ── fullscreen runner ───────────────────────────────────────────────────
+    // fullscreen runner
     quad = new THREE.QuadMesh();
     let compileJobs = null;
     function runPass(mat, target) {
@@ -338,8 +338,8 @@
       if (viz === "ssao") aoStr = Math.max(aoStr, 0.95);
       if (viz === "shafts" || viz === "godray") grStr = Math.max(grStr, 0.8);
 
-      // ── 0) SSAO + separable blur (js/render/glx/shaders/glsl-post.js). Runs when EITHER
-      // knob is live — contact shadows ride in this pass. ───────────────────
+      // 0) SSAO + separable blur (js/render/glx/shaders/glsl-post.js). Runs when EITHER
+      // knob is live — contact shadows ride in this pass.
       const haveAO = !!((aoStr > 0 || contactStr > 0) && F.invProj) && ensureAO();
       if (haveAO) {
         const U = P.ssao.U;
@@ -362,7 +362,7 @@
         runPass(P.blurAO.mat, ssaoRT);
       }
 
-      // ── 0b) Volumetric sun shafts + lamp beams (js/render/glx/shaders/glsl-post.js) ─────
+      // 0b) Volumetric sun shafts + lamp beams (js/render/glx/shaders/glsl-post.js)
       const sunGR = !!(S && S.enabled) && grStr > 0;
       const haveGR = !!(P.godray && F.invVP && (sunGR || lampVol > 0)) && ensureGR();
       if (haveGR) {
@@ -428,7 +428,7 @@
         }
       }
 
-      // ── 1+2) bright pass + mip-chain bloom (js/render/glx/shaders/glsl-post.js) ──────────
+      // 1+2) bright pass + mip-chain bloom (js/render/glx/shaders/glsl-post.js)
       const haveBloom = bloomAmt > 0 && ensureBloom();
       if (haveBloom) {
         P.bright.U.threshold.value = threshold;
@@ -450,7 +450,7 @@
         }
       }
 
-      // ── 3) composite (js/render/glx/shaders/glsl-post.js) ────────────────────────────────
+      // 3) composite (js/render/glx/shaders/glsl-post.js)
       const C = P.composite.U;
       P.composite.tex.bloom.value = haveBloom ? bloomLv[0].rt.texture : blackTex;
       // Normalise the mip-chain accumulation (nLv-1 summed octaves).
@@ -545,7 +545,7 @@
       C.ssrOk.value = haveRefl ? 1 : 0;
       C.reflect.value = haveRefl ? reflStr : 0;
 
-      // ── 3/4) composite -> LDR, FXAA -> canvas (or the ?viz= bisect blit) ──
+      // 3/4) composite -> LDR, FXAA -> canvas (or the ?viz= bisect blit)
       // softDest: software-WebGPU present target. Never setRenderTarget(null)
       // on that path — three's default framebuffer calls getCurrentTexture(),
       // which breaks mapAsync device-wide (WGX / Dawn software adapters).

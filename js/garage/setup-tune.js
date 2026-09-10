@@ -63,7 +63,11 @@ const SetupTune = (function () {
     return cur;
   }
   function reset(teamId) { store.set(KEY + teamId, null); return get(teamId); }
-  function isDefault(teamId) { const d = defaults(teamId), t = get(teamId); return FIELDS.every((k) => t[k] === d[k]); }
+  function isDefault(teamId) {
+    const d = defaults(teamId);
+    const t = get(teamId);
+    return FIELDS.every((k) => t[k] === d[k]);
+  }
 
   // ANTI-ROLL BARS → the four-channel contract. Deltas are counted from the
   // team's own default so an untouched car is exactly 1.0. Stiffer overall

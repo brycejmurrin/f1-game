@@ -1,6 +1,7 @@
 /* Apex 26 — RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … */
-"use strict";
-const RaceControl = (() => {
+const RaceControl = (function () {
+  "use strict";
+
   // Result countdown policy. A winner crossing the line is not permission to
   // remove a human who is still racing: single-player AI can finish first, and
   // multiplayer humans can be separated by much more than 3.5 seconds. The
@@ -121,6 +122,15 @@ const RaceControl = (() => {
       });
     }
 
+    // Reset the live caution fields to GREEN in place (never `caution = blank()`,
+    // which would also wipe `total`/`sectors` that callers still need to read).
+    function dropToGreen() {
+      const prev = caution.level;
+      caution.level = 0; caution.sector = -1; caution.frac = 0;
+      caution.cause = ""; caution.sinceT = 0; caution.phase = "";
+      logFlag(prev, 0);
+    }
+
     // The hard-cap drop, shared by the live-query path and the debris-inactive
     // freeze path. Returns true when the flag just dropped to GREEN.
     function capDropIfExpired() {
@@ -128,11 +138,8 @@ const RaceControl = (() => {
       const cap = caution.level >= 2 ? SC_MAX : YELLOW_MAX;
       if (caution.sinceT < cap) return false;
       capHoldLevel = caution.level;   // what capped — see the re-raise gate below
-      const prev = caution.level;
-      caution.level = 0; caution.sector = -1; caution.frac = 0;
-      caution.cause = ""; caution.sinceT = 0;
+      dropToGreen();
       capHoldT = CAP_REARM_HOLD;
-      logFlag(prev, 0);
       publish();
       return true;
     }
@@ -157,10 +164,7 @@ const RaceControl = (() => {
         if (caution.sinceT >= RED_STOP + RED_HOLD) {
           restartWanted = true;
           capHoldLevel = 4; capHoldT = CAP_REARM_HOLD;
-          const prev = caution.level;
-          caution.level = 0; caution.sector = -1; caution.frac = 0;
-          caution.cause = ""; caution.sinceT = 0; caution.phase = "";
-          logFlag(prev, 0);
+          dropToGreen();
         }
         publish();
         return;
@@ -224,7 +228,10 @@ const RaceControl = (() => {
         if (caution.sinceT >= MIN_HOLD) {
           const prev = caution.level;
           caution.level = desired;
-          caution.sector = desired === 1 ? (dsector >= 0 ? dsector : (hz.worst && hz.worst.sector >= 0 ? hz.worst.sector : 0)) : -1;
+          if (desired !== 1) caution.sector = -1;
+          else if (dsector >= 0) caution.sector = dsector;
+          else if (hz.worst && hz.worst.sector >= 0) caution.sector = hz.worst.sector;
+          else caution.sector = 0;
           caution.frac = dfrac; caution.cause = dcause; caution.sinceT = 0;
           logFlag(prev, desired);
         }
@@ -276,3 +283,4 @@ const RaceControl = (() => {
   }
   return { create, finishDelay, flagOut, finishOrder };
 })();
+Object.freeze(RaceControl);

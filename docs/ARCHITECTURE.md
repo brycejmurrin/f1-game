@@ -76,7 +76,7 @@ _165 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `log.js` | `Log` | tag | levelled namespaced logging (global Log). |
-| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the three SCALAR helpers every module used to re-declare (M4.clamp / M4.lerp / M4.wrapDelta). |
+| `mat4.js` | `M4` | tag | column-major 4x4 matrix + vec3 helpers, plus the three SCALAR helpers every module used to re-declare (M4.clamp / M4.lerp / M4.wrapDelta). ident() allocates;… |
 | `hash32.js` | `Hash32` | tag | stateless FNV-1a + murmur-style mix for career, daily challenge, and driver ratings. |
 | `store.js` | `GameStore` | tag | persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26.", plus the uncached raw-string lane the settings panels… |
 
@@ -136,7 +136,7 @@ _165 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `schedule.js` | `DataSchedule` | LAZY_DATA | — (no header comment) |
 | `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
 | `results.js` | `DataResults` | LAZY_DATA | the data hub's RESULTS tab: classification for ANY session of any 2023+ weekend (practice, qualifying, sprint, race), not just the latest Grand Prix. |
-| `live.js` | `DataLive` | LAZY_DATA | — (no header comment) |
+| `live.js` | `DataLive` | LAZY_DATA | the data hub's LIVE tab: polls OpenF1 for the running session's positions/gaps/weather. mergePositionBatch/mergeIntervalBatch fold a delta batch onto… |
 | `hub.js` | `DataHub` | LAZY_DATA | DataHub: F1 data overlay (#datahub). |
 
 **`js/career/`**
@@ -154,7 +154,7 @@ _165 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `dom.js` | `Dom` | tag | the three DOM/format helpers every DOM-built screen used to carry its own copy of. |
+| `dom.js` | `Dom` | tag | Dom: the three DOM/format helpers every DOM-built screen shares (el / paintFold / fmtLap). |
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
@@ -170,7 +170,7 @@ _165 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `settings-export.js` | `SettingsExport` | tag | SettingsExport: the FILES section of SETTINGS › DISPLAY › RENDERER, which carries a player's state OUT of the browser and back IN. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
-| `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES. |
+| `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES — LINE COLOUR, LINE OPACITY and BRAKE CUE, the three that persist per player rather than per race. |
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
@@ -242,7 +242,7 @@ _165 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `engine.js` | `GameAudio` | tag | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
 | `music-lib.js` | `MusicLib` | tag | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | tag | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
-| `rivals.js` | `RivalAudio` | tag | RivalAudio — the field around you, reduced to the player's TRACK frame. |
+| `rivals.js` | `RivalAudio` | tag | RivalAudio — the field around you, reduced to the player's TRACK frame for js/audio/engine.js, which owns the sound and deliberately does no track maths. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
 
 **`js/physics/`**
@@ -266,8 +266,8 @@ _165 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `track-lights.js` | `TrackLights` | tag | per-track lamp baking: floodColor / LAMP_KINDS (per-theme and per-fixture light character), the LAMP DENSITY / DARK-GAP FILL walks and buildTrackLights(track)… |
 | `frame-lights.js` | `FrameLights` | tag | per-frame light state: setFrameLights (the nearest-CAP cull with the twilight scale, flicker / warm-up and the per-chunk full-set twin the renderer samples… |
 | `lighting.js` | `LightTune` | tag | LightTune, the lighting façade every consumer addresses. |
-| `profiles.js` | `LightStore` | tag | LIGHTING PROFILE STORE (LightStore.create(G)) The resolution and persistence half of the lighting tuner. js/lighting/knobs.js owns the REGISTRY (TUNE_D… |
-| `atmosphere.js` | `Atmosphere` | tag | session atmosphere for js/game.js: applyRaceSettings(), the lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches for night/dawn/d… |
+| `profiles.js` | `LightStore` | tag | LIGHTING PROFILE STORE (LightStore.create(G)): the resolution and persistence half of the lighting tuner. js/lighting/knobs.js owns the registry (TUNE_DEFS +… |
+| `atmosphere.js` | `Atmosphere` | tag | session atmosphere for js/game.js: applyRaceSettings(), the lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches for night/dawn/dusk/day… |
 | `tuner-panel.js` | `TunerPanel` | tag | the LIGHTING TUNER panel UI for js/game.js: slider rows generated from TUNE_DEFS, group tabs, preview time-of-day/weather chips, COPY TO ALL TRACKS, the help… |
 | `presets.js` | `LightPresets` | LAZY_RACE | — (no header comment) |
 
@@ -316,10 +316,10 @@ _165 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
-| `loop-health.js` | `LoopHealth` | tag | FRAME-LOOP FAULT POLICY + the one heartbeat that outlives the loop. |
+| `loop-health.js` | `LoopHealth` | tag | LoopHealth: the frame-loop fault policy and the one heartbeat that outlives the loop. |
 | `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
 | `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
-| `gfx-debug-overlay.js` | `GfxDebug` | tag | ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1") The renderer's own verdict, rendered as DOM, for the case this project kept losing to: a player… |
+| `gfx-debug-overlay.js` | `GfxDebug` | tag | GfxDebug: ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1"). |
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
 
 **`js/render/webgpu/`**

@@ -3,6 +3,7 @@ const Career = (function () {
   "use strict";
 
 const { store, seasonDriverId, migrateCareer } = GameStore;
+const clamp = M4.clamp;
 
 const START_MONEY = { driver: 1200, myteam: 2000 };
 const START_REP = { driver: 30, myteam: 50 };
@@ -11,19 +12,17 @@ const PRIZE = [900, 700, 560, 460, 380, 320, 270, 230, 200, 170];
 const PRIZE_MID = 120;    // P11..P15
 const PRIZE_TAIL = 80;    // P16+
 
-// Researching a part costs a multiple of its catalog price. The catalog stays the
-// single source of truth for what a part is WORTH; this one number sets the pace of
-// the entire economy, which is why it is a constant and not scattered per option.
+// Research costs a multiple of the catalog price: the catalog says what a part
+// is WORTH, this one number sets the pace of the whole economy.
 const RESEARCH_MULT = 3;
 
 const BUDGET_MULT = [1.0, 1.15, 1.35, 1.6];
 const BUDGET_UPGRADE = [2500, 5000, 9000];   // cost to reach level 1 / 2 / 3
 
-// Team development is stored as stat points and converted to a pace multiplier
-// here. ±8 points is ±2%, which is a little over one TIER_V step (0.988 → 0.973 is
-// 1.5%) — enough for a team to genuinely climb or fall a tier across two or three
-// seasons without ever rewriting `team.tier`, which drives the grid sort, the mesh
-// presets and the colours.
+// Team development is stat points converted to a pace multiplier here: ±8 points
+// is ±2%, a little over one TIER_V step (0.988 → 0.973 is 1.5%), so a team can
+// climb or fall a tier over a few seasons without `team.tier` ever changing
+// (it drives the grid sort, the mesh presets and the colours).
 const TDEV_MAX = 8;
 const TDEV_TO_PACE = 0.0025;
 
@@ -48,15 +47,17 @@ const HISTORY_MAX = 10;
 const DEV_MAX = 12;
 const EXP_MAX = 40;
 
+const teamOf = (id) => Teams.LIST.find((t) => t.id === id);
+const driverRec = (d) => ({ name: d.name, code: d.code, num: d.num });
+
 let career = null;        // the loaded save, or null
 let engaged = false;
 function engage(on) { engaged = !!on; }
 function inCareer() { return engaged && career != null; }
 
-// Career draws never touch simRnd(): that stream belongs to the physics sim, and
-// consuming from it here would make a career's existence change seeded race
-// results. This is a STATELESS hash instead — there is no cursor to persist, so a
-// save/load round-trip cannot desync it, and the same (seed, key) always agrees.
+// Career draws never touch simRnd(): consuming that stream here would make a
+// career's existence change seeded race results. A STATELESS hash has no cursor
+// to persist, so a save/load round-trip cannot desync it.
 function hash(seed, ...parts) {
   return Hash32.unit(seed, ...parts);
 }
@@ -64,25 +65,16 @@ function rnd(...parts) {
   return hash(career ? career.seed : 0, ...parts);
 }
 
-const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
-
-// SIX SAVES: three DRIVER-career slots and three MY TEAM slots, kept in separate
-// sets so the two modes can never compete for room. `apex26.career.<flavour>.<i>`
-// is one key each, and `apex26.careerSlot` names the live one as "flavour:index".
-//
-// Separate keys rather than one array, because localStorage writes the WHOLE
-// value every save(): a single array would rewrite all six careers on every
-// round settled, and a quota failure would lose six saves instead of one.
-//
-// Separate SETS rather than six shared slots, because the two modes are
-// different games. A player twelve rounds into a MY TEAM should not have to
-// weigh that against trying a driver career, and "which of my three careers do I
-// delete to make room" is not a question either mode should be able to ask of
-// the other.
+// SIX SAVES: three DRIVER slots and three MY TEAM slots, `apex26.career.<flavour>.<i>`
+// one key each, `apex26.careerSlot` naming the live one as "flavour:index".
+// Separate keys, not one array: localStorage writes the WHOLE value per save(),
+// and a quota failure would lose six saves instead of one. Separate SETS, not
+// six shared slots: the two modes are different games and must never compete
+// for room.
 const SLOTS = 3;                                  // per flavour
 const FLAVOURS = ["driver", "myteam"];
 const flavourIn = (f) => (f === "myteam" ? "myteam" : "driver");
-const slotKey = (f, i) => "career." + flavourIn(f) + "." + (i | 0);
+const slotKey = (f, i) => `career.${flavourIn(f)}.${i | 0}`;
 const slotIn = (i) => clamp(i | 0, 0, SLOTS - 1);
 let slotIdx = 0;
 let slotFlavour = "driver";
@@ -104,8 +96,8 @@ function migrateSlots() {
   const legacy = store.get("career", null);
   if (legacy) found.push({ source: "career", value: legacy });
   for (let i = 0; i < SLOTS; i++) {
-    const c = store.get("career." + i, null);
-    if (c) found.push({ source: "career." + i, value: c });
+    const c = store.get(`career.${i}`, null);
+    if (c) found.push({ source: `career.${i}`, value: c });
   }
   if (!found.length) return;
   const next = { driver: 0, myteam: 0 };
@@ -154,7 +146,7 @@ function load() {
   save();
   return career;
 }
-function setLive() { store.set("careerSlot", slotFlavour + ":" + slotIdx); }
+function setLive() { store.set("careerSlot", `${slotFlavour}:${slotIdx}`); }
 let lastSave = { ok: true, durable: true, reason: null };
 function writeResult(key, value) {
   if (typeof store.write === "function") return store.write(key, value);
@@ -188,7 +180,7 @@ function clear() {
 
 function slotInfo(c, f, i) {
   if (!c) return { flavour: f, i, used: false };
-  const team = Teams.LIST.find((t) => t.id === c.team);
+  const team = teamOf(c.team);
   const hist = c.history || [];
   return {
     flavour: f, i, used: true, year: c.year,
@@ -222,36 +214,38 @@ function firstFree(flavour) {
 }
 
 function useSlot(flavour, i) {
-  const f = flavourIn(flavour), n = slotIn(i);
+  const f = flavourIn(flavour);
+  const n = slotIn(i);
   if (career && (f !== slotFlavour || n !== slotIdx)) save();
-  slotFlavour = f; slotIdx = n;
+  slotFlavour = f;
+  slotIdx = n;
   setLive();
   career = readSlot(f, n);
   armRevision();
   return career;
 }
 function deleteSlot(flavour, i) {
-  const f = flavourIn(flavour), n = slotIn(i);
+  const f = flavourIn(flavour);
+  const n = slotIn(i);
   store.set(slotKey(f, n), null);
   if (f === slotFlavour && n === slotIdx) { career = null; armRevision(); }
   return true;
 }
 
+function rosterEntry(agent, left) {
+  return { name: agent.name, code: agent.code, num: agent.num,
+           tier: agent.tier, salary: agent.ask, left, pending: null };
+}
+
 function start(opts) {
   const o = opts || {};
   const flavour = flavourIn(o.flavour);
-  // WHICH SET is decided by the career's own flavour, never by the caller: a
-  // driver career belongs in the driver set by definition, and letting an
-  // argument override that is how a MY TEAM ends up filling a driver slot.
-  // WHICH SLOT is `o.slot`, or the first free one, or — when the set is full —
-  // whichever is live there, which is the only remaining meaning of "start one".
+  // WHICH SET is the career's own flavour, never the caller's: a MY TEAM must not
+  // fill a driver slot. WHICH SLOT is `o.slot`, else the first free one, else the
+  // live one in this set. A FULL set with no slot named REFUSES (null): the old
+  // hard-coded 0 silently destroyed that slot's career whenever the live pointer
+  // was in the other flavour, and the caller opens the slot picker instead.
   const free = firstFree(flavour);   // once — each call walks the slot store
-  // A FULL SET WITH NO SLOT NAMED IS NOT A SLOT CHOICE, so it must not become
-  // one. The old fallback here was a hard-coded 0, which silently destroyed
-  // that slot's career whenever the live pointer was in the OTHER flavour —
-  // reachable from the setup form's CAREER TYPE toggle, and the only
-  // destructive path in this module with no arm-then-confirm. Refusing hands
-  // the choice back to the caller, which opens the slot picker.
   const target = o.slot != null ? slotIn(o.slot)
     : free >= 0 ? free
     : (flavour === slotFlavour ? slotIdx : -1);
@@ -264,31 +258,19 @@ function start(opts) {
   setLive();
   armRevision();
   const teamId = o.teamId || (flavour === "myteam" ? "custom" : "haas");
-  const team = Teams.LIST.find((t) => t.id === teamId) || Teams.LIST[Teams.LIST.length - 1];
+  const team = teamOf(teamId) || Teams.LIST[Teams.LIST.length - 1];
   const factory = Parts.getFactorySetup(team);
 
   career = {
     v: GameStore.CAREER_V,
     flavour,
     year: 2026,
-    seed: (o.seed | 0) || (Hash32.fnv1a(teamId + ":" + flavour + ":" + Date.now()) % 1000000),
+    seed: (o.seed | 0) || (Hash32.fnv1a(`${teamId}:${flavour}:${Date.now()}`) % 1000000),
     team: teamId,
-    // MY TEAM IS ALWAYS SEAT 0. driverOverride() below maps a custom team's
-    // seat 0 to career.driver (you) and seat 1 to the hire, and docs/CAREER.md
-    // says the same. But freshDraft() starts every draft at seat 1 ("the junior
-    // seat — you are the newcomer", true for a DRIVER career) and the MY TEAM
-    // path only overrides flavour, slot and teamId; the seat picker renders for
-    // flavour === "driver" alone, so nothing ever put it back. Every MY TEAM
-    // save was therefore created in seat 1: the player's car carried the HIRED
-    // driver's name, code and number in the HUD, the results sheet and the
-    // standings, while the AI ran the driver they had just named — under a hub
-    // card reading "Car 1 — <your name> (you)". rolloverHire also priced the
-    // renewal off the player's own season, and hireDriver deleted the dev
-    // deltas for the seat they were actually driving.
-    //
-    // Fixed HERE rather than in the draft so it covers every caller, including
-    // __apex.career({flavour:"myteam"}) — which omitted seat and landed on 0,
-    // which is exactly why no career spec ever caught this.
+    // MY TEAM IS ALWAYS SEAT 0 (driverOverride maps seat 0 to you, seat 1 to the
+    // hire). Forced HERE, not in the draft: freshDraft() starts at seat 1 and the
+    // MY TEAM form never reset it, so every MY TEAM save raced under the hired
+    // driver's name while the AI drove yours; __apex.career() omits seat too.
     seat: flavour === "myteam" ? 0 : (o.seat | 0),
     driver: {
       name: (o.name || "Your Name").slice(0, 22),
@@ -314,11 +296,10 @@ function start(opts) {
   };
   if (flavour === "myteam") {
     const hired = FREE_AGENTS.find((a) => a.code === o.hire) || FREE_AGENTS[FREE_AGENTS.length - 3];
-    career.roster = [{ name: hired.name, code: hired.code, num: hired.num,
-                       tier: hired.tier, salary: hired.ask, left: 1, pending: null }];
+    career.roster = [rosterEntry(hired, 1)];
   }
   career.deal = newDeal(team, 1);
-  Log.info("game", "Career.start flavour=" + flavour + " team=" + teamId);
+  Log.info("game", `Career.start flavour=${flavour} team=${teamId}`);
   return save();
 }
 
@@ -328,13 +309,14 @@ function salaryFor(team, rep) {
 const GOAL_REP = 5;
 const GOAL_MV = 12;
 
+function bonusPtFor(team) { return 8 + (4 - team.tier) * 4; }
 function newDeal(team, years) {
   return {
     team: team.id,
     seat: career ? career.seat : 0,
     years, left: years,
     salary: salaryFor(team, career ? career.rep : 30),
-    bonusPt: 8 + (4 - team.tier) * 4,
+    bonusPt: bonusPtFor(team),
     goal: { type: "champPos", value: expectedFinish(team) },
   };
 }
@@ -354,7 +336,7 @@ function driverOverride(teamId, seatIdx) {
   if (career.flavour === "myteam" && teamId === career.team) {
     if (seatIdx === 0) return career.driver;
     const hired = career.roster && career.roster[0];
-    return hired ? { name: hired.name, code: hired.code, num: hired.num } : null;
+    return hired ? driverRec(hired) : null;
   }
   return seatDriver(teamId, seatIdx, null);
 }
@@ -364,7 +346,7 @@ function gridDrivers(team) {
   if (career.flavour !== "myteam" || team.id !== career.team) return team.drivers;
   const hired = career.roster && career.roster[0];
   if (!hired) return team.drivers;
-  return [career.driver, { name: hired.name, code: hired.code, num: hired.num }];
+  return [career.driver, driverRec(hired)];
 }
 
 function wageBill() {
@@ -392,10 +374,9 @@ function teamStats(team) {
   return out;
 }
 
-// The set of option ids this team may fit. Every cost-0 option is always owned,
-// which is what keeps the "a save can never produce an illegal car" guarantee:
-// Parts.DEFAULTS are all cost-0, so the fallback in Parts._resolve() always lands
-// on something owned without parts.js needing to know career exists.
+// The option ids this team may fit. Every cost-0 option is always owned: Parts.DEFAULTS
+// are all cost-0, so Parts._resolve()'s fallback always lands on something owned
+// and a save can never produce an illegal car.
 function owned(teamId) {
   if (!inCareer() || teamId !== career.team) return null;
   const s = new Set(career.owned);
@@ -407,40 +388,35 @@ function isOwned(teamId, optId) {
   const s = owned(teamId);
   return s ? s.has(optId) : true;
 }
-// The facility's discount lands HERE rather than at the point of sale, so the
-// garage's RESEARCH price and what the balance is actually charged can never
-// disagree — the row shows the number the player pays.
+// The facility discount lands HERE, not at the point of sale, so the garage's
+// RESEARCH price and the balance charged can never disagree.
 function researchCost(opt) {
   return Math.round((opt.cost || 0) * RESEARCH_MULT * (1 - facilityDiscount()));
 }
 
-// What the team's own works car costs to build — the baseline every career budget
-// is measured against. Memoised per team: Parts.getFactorySetup is already cached,
-// but getCost walks all 12 categories and the garage asks for this on every render.
+// What the team's own works car costs — the baseline every career budget is
+// measured against. Memoised: getCost walks all 12 categories and the garage
+// asks on every render.
 const _worksCost = new Map();
 function worksCost(teamId) {
   if (_worksCost.has(teamId)) return _worksCost.get(teamId);
-  const team = Teams.LIST.find((t) => t.id === teamId);
+  const team = teamOf(teamId);
   const c = !team ? 0
     : team.custom ? MYTEAM_WORKS
     : Parts.getCost(Parts.getFactorySetup(team), team);
   _worksCost.set(teamId, c);
   return c;
 }
-// The dearest build the catalog can express, and the ceiling every career budget
-// obeys. BUDGET_MULT compounds off worksCost, and a front-running works car is
-// already ~86% of the whole top shelf — so McLaren at budgetLvl 1 could buy the
-// dearest option in all twelve categories and the economy stopped constraining
-// anything (measured before the ladder re-space: 2035 * 1.15 = 2340 = the whole
-// top shelf, exactly). The cap keeps at least the dearest SINGLE part out of
-// reach, so a career build is always a choice and RAISE THE CAP always buys
-// something short of everything. It is DERIVED from the catalog, not a number,
-// so adding or repricing a part moves it. Call-time, like worksCost: parts.js
-// loads first, but nothing here reads Parts at eval.
+// The ceiling every career budget obeys: the whole top shelf minus its dearest
+// single part, DERIVED from the catalog so repricing moves it. Without it a
+// front-running works car (~86% of the top shelf) at budgetLvl 1 could fit the
+// dearest option in every category (measured: 2035 * 1.15 = 2340 = the top
+// shelf, exactly) and the economy constrained nothing. Call-time read of Parts.
 let _budgetCap = null;
 function budgetCap() {
   if (_budgetCap == null) {
-    let all = 0, top = 0;
+    let all = 0;
+    let top = 0;
     for (const cat of Parts.CATALOG) {
       let hi = 0;
       for (const o of cat.options) hi = Math.max(hi, o.cost || 0);
@@ -455,18 +431,15 @@ function budgetAt(lvl) {
   const l = Math.max(0, Math.min(lvl | 0, BUDGET_MULT.length - 1));
   const works = worksCost(career.team);
   const raw = Math.round(works * BUDGET_MULT[l]);
-  // A team can always afford to rebuild its own works car, cap or no cap — the
-  // guard test asserts the cap clears the dearest preset, so this only bites if
-  // a future preset outgrows it.
+  // A team can always rebuild its own works car, cap or no cap; parts-ladder.test
+  // asserts the cap clears the dearest preset, so this only bites if one outgrows it.
   return Math.min(raw, Math.max(budgetCap(), works));
 }
 function budget() { return career ? budgetAt(career.budgetLvl) : 0; }
 function budgetUpgradeCost() {
   if (!career || career.budgetLvl >= BUDGET_UPGRADE.length) return null;
-  // The derived ceiling already binds for a front-running works car (Ferrari
-  // 1830 / McLaren 2000 against a 2105 cap on the current catalog): the next
-  // rung would raise nothing, so it is not for sale — the hub card reads
-  // state().budgetCost and disappears with it, and upgradeBudget() refuses.
+  // A rung that raises nothing is not for sale (the cap already binds for a
+  // front-running works car: Ferrari 1830 / McLaren 2000 against a 2105 cap).
   if (budgetAt(career.budgetLvl + 1) <= budgetAt(career.budgetLvl)) return null;
   return BUDGET_UPGRADE[career.budgetLvl];
 }
@@ -495,14 +468,10 @@ function research(opt) {
   save();
   return true;
 }
-// Raise the fitted-cost cap one rung of BUDGET_MULT. Wired to the RAISE THE CAP
-// card in js/career/career-ui.js, beside the FACILITY card it is modelled on.
-//
-// The two sinks are deliberately different in kind, which is why both exist: the
-// factory cuts what every FUTURE part costs (it compounds, and never runs out),
-// while this raises how much of what you already own may be BOLTED ON AT ONCE
-// (it is capped at three rungs, and is the only way a fully-researched garage
-// converts into lap time). Spending on one is genuinely giving up the other.
+// Raise the fitted-cost cap one rung of BUDGET_MULT (the RAISE THE CAP card).
+// Deliberately a different sink from the factory: the factory cuts what FUTURE
+// parts cost and never runs out; this raises what you may BOLT ON AT ONCE and
+// stops at three rungs, so spending on one genuinely gives up the other.
 function upgradeBudget() {
   const cost = charge(budgetUpgradeCost());
   if (!career || careerConflict || budgetUpgradeCost() == null || cost > career.money) return false;
@@ -521,10 +490,10 @@ const SPONSOR_KINDS = [
   { type: "clean", window: 4, value: () => 4, pay: 400 },
 ];
 const SPONSOR_LABELS = {
-  points: (v, w) => "Score " + v + " points across " + w + " rounds",
-  finishes: (v, w) => "Finish " + v + " of the next " + w + " rounds in the points",
-  double: (v, w) => "Get BOTH cars home in the points " + v + " times in " + w + " rounds",
-  clean: (v, w) => "Keep it clean — no retirements, no penalties — for " + w + " rounds",
+  points: (v, w) => `Score ${v} points across ${w} rounds`,
+  finishes: (v, w) => `Finish ${v} of the next ${w} rounds in the points`,
+  double: (v, w) => `Get BOTH cars home in the points ${v} times in ${w} rounds`,
+  clean: (v, w) => `Keep it clean — no retirements, no penalties — for ${w} rounds`,
 };
 function sponsorLabel(sp) {
   const f = sp && SPONSOR_LABELS[sp.type];
@@ -533,9 +502,11 @@ function sponsorLabel(sp) {
 
 function sponsorAt(round) {
   if (!career || career.flavour !== "myteam") return null;
-  const team = Teams.LIST.find((t) => t.id === career.team) || { tier: 2 };
+  const team = teamOf(career.team) || { tier: 2 };
   // Which window that round falls in. Windows tile the season from round 0.
-  let start = 0, idx = 0, kind = null;
+  let start = 0;
+  let idx = 0;
+  let kind = null;
   while (start <= round) {
     const i = Math.floor(rnd(career.year, "spon", idx) * SPONSOR_KINDS.length);
     kind = SPONSOR_KINDS[Math.min(i, SPONSOR_KINDS.length - 1)];
@@ -576,16 +547,10 @@ function settleSponsor() {
   return sp.pay;
 }
 
-// Ownership only ever grows and the budget ladder stops at three, so a
-// successful career converged on owning the whole catalog with nothing left to
-// spend on — the mode had no end game. FACILITY is an open-ended track that
-// keeps buying something real: each level is a permanent slice off what research
-// costs, so late money still converts into progress rather than sitting there.
-//
-// Priced to stay meaningful against a maxed-out career rather than to be
-// finished: the cost grows geometrically while the discount grows linearly and
-// is capped, so it is always affordable-in-principle and never trivialises the
-// catalog.
+// Ownership only grows and the budget ladder stops at three, so a career used to
+// converge on owning everything with no end game. FACILITY is the open-ended
+// sink: each level is a permanent slice off research cost. Geometric price,
+// linear capped discount — always affordable in principle, never trivialising.
 const FACILITY_MAX = 8;
 const FACILITY_BASE = 3000;
 const FACILITY_STEP = 1.6;          // each level costs 1.6x the last
@@ -613,15 +578,10 @@ function upgradeFacility() {
   return true;
 }
 
-// One brief per round, drawn from the career seed rather than rolled, so it is the
-// same brief on every load of the same save and cannot be rerolled by refreshing.
-//
-// The save stores four scalars — {round, type, value, done} — and never the
-// sentence. Prose in a save is prose that can never be reworded, translated or
-// shortened again without a migration; the wording lives in LABELS and is derived
-// at render time. `round` is not decoration: endRace() advances the calendar
-// BEFORE calling settleRound(), so without it there is no way to tell the brief
-// that was live for the race just run from the one for the race to come.
+// One brief per round, drawn from the career seed so a refresh cannot reroll it.
+// The save stores {round, type, value, done}, never the sentence (prose in a save
+// needs a migration to reword); `round` matters because endRace() advances the
+// calendar BEFORE settleRound() runs.
 const OBJ_KINDS = [
   { type: "finish", value: (team) => clamp(expectedFinish(team) - 1, 1, 20) },
   { type: "beatMate", value: () => 0 },
@@ -630,10 +590,10 @@ const OBJ_KINDS = [
   { type: "clean", value: () => 0 },
 ];
 const OBJ_LABELS = {
-  finish: (v) => "Finish P" + v + " or better",
+  finish: (v) => `Finish P${v} or better`,
   beatMate: () => "Finish ahead of your team-mate",
   outQualMate: () => "Out-qualify your team-mate",
-  points: (v) => (v > 1 ? "Score " + v + " points" : "Score championship points"),
+  points: (v) => (v > 1 ? `Score ${v} points` : "Score championship points"),
   clean: () => "Clean race — no track limits, no penalty",
 };
 function objectiveLabel(o) {
@@ -642,7 +602,7 @@ function objectiveLabel(o) {
 }
 
 function objectiveFor(r) {
-  const team = Teams.LIST.find((t) => t.id === career.team);
+  const team = teamOf(career.team);
   const i = Math.min(OBJ_KINDS.length - 1, Math.floor(rnd(career.year, "obj", r) * OBJ_KINDS.length));
   const kind = OBJ_KINDS[i];
   return { round: r, type: kind.type, value: team ? kind.value(team) : 0, done: null };
@@ -681,7 +641,7 @@ function settleRound(order, player) {
   const raced = career.season.round - 1;
   if (career.results.some((row) => row.r === raced)) return null;
   const pos = order.indexOf(player) + 1;
-  const team = Teams.LIST.find((t) => t.id === career.team);
+  const team = teamOf(career.team);
   const pts = player.retired ? 0 : (Teams.POINTS[pos - 1] || 0);
   const prize = prizeFor(pos);
   const salary = career.deal ? career.deal.salary : 0;
@@ -695,20 +655,15 @@ function settleRound(order, player) {
     pos, pts, player, mate, matePos: mate ? order.indexOf(mate) + 1 : 0,
   });
 
-  // Two reputation channels, deliberately different in kind. The result term is
-  // relative to the CAR (expectedFinish already encodes the tier), so beating a
-  // bad car raises reputation and cruising in a good one does not. The objective
-  // term is flat, because a brief is met or it is not.
-  // MY TEAM pays its second driver every round. Real driver salaries sit OUTSIDE
-  // the development cost cap, and so does this: it comes off the balance, never
-  // off the fitted cap, so hiring well costs you upgrades rather than legality.
+  // MY TEAM's wage bill comes off the balance, never off the fitted cap, so
+  // hiring well costs upgrades rather than legality. Wages can exceed a round's
+  // income, so the balance floors at zero.
   const wages = wageBill();
   career.money += prize + salary + bonus + (obj.done ? OBJ_BONUS : 0) - wages;
-  // Wages can exceed the round's income (esp. MY TEAM payroll); never let the
-  // balance go permanently negative — the economy floors at zero.
   career.money = Math.max(0, career.money);
-  // A save whose team id is no longer on Teams.LIST degrades to a mid-grid
-  // expectation rather than throwing inside endRace (objectiveFor already guards).
+  // Two reputation channels: the result term is relative to the CAR (expectedFinish
+  // encodes the tier), the objective term is flat. A team id no longer on
+  // Teams.LIST degrades to a mid-grid expectation rather than throwing in endRace.
   const repDelta = clamp(((team ? expectedFinish(team) : 11) - pos) * 0.6, -4, 6)
                  + (obj.done ? OBJ_REP : -OBJ_REP);
   career.rep = clamp(career.rep + repDelta, 0, 100);
@@ -721,7 +676,7 @@ function settleRound(order, player) {
   career.obj = null;          // the next round draws its own brief on demand
   const sponsorPay = settleSponsor();
   const persisted = saveStatus();
-  Log.info("game", "Career.settleRound pos=" + pos + (dnf ? " dnf=" + dnf : ""));
+  Log.info("game", `Career.settleRound pos=${pos}${dnf ? ` dnf=${dnf}` : ""}`);
   return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay,
            money: career.money, rep: career.rep, save: persisted,
            unsaved: !persisted.durable };
@@ -742,7 +697,6 @@ const isPlayerSeat = (s) => s.team.id === career.team && s.seat === career.seat;
 function ratingOf(s) {
   return DriverRatings.get(s.driver.code, s.team.tier, career.dev[s.id]);
 }
-const driverRec = (d) => ({ name: d.name, code: d.code, num: d.num });
 
 function driverStandings() {
   const rows = gridSeats().map((s) => ({
@@ -851,7 +805,8 @@ function rolloverMarket() {
 function swapSeats(a, b) {
   career.seats[a.id] = driverRec(b.driver);
   career.seats[b.id] = driverRec(a.driver);
-  const da = career.dev[a.id], db = career.dev[b.id];
+  const da = career.dev[a.id];
+  const db = career.dev[b.id];
   if (db) career.dev[a.id] = db; else delete career.dev[a.id];
   if (da) career.dev[b.id] = da; else delete career.dev[b.id];
 }
@@ -869,7 +824,7 @@ function rolloverHire(dStand) {
   const hire = career.roster[0];
   if (hire.left > 0) hire.left--;
   if (hire.left > 0) { hire.pending = null; return; }
-  const team = Teams.LIST.find((t) => t.id === career.team);
+  const team = teamOf(career.team);
   const id = seasonDriverId(career.team, 1);
   const rowOf = dStand.find((r) => r.id === id);
   const pos = rowOf ? rowOf.pos : dStand.length;
@@ -898,10 +853,9 @@ function renewHire(years) {
 }
 function hireDriver(code, years) {
   if (!career || careerConflict || career.flavour !== "myteam") return false;
-  const a = FREE_AGENTS.find((x) => x.code === code);
-  if (!a) return false;
-  career.roster = [{ name: a.name, code: a.code, num: a.num, tier: a.tier,
-                     salary: a.ask, left: clamp(years | 0 || 1, 1, 3), pending: null }];
+  const agent = FREE_AGENTS.find((x) => x.code === code);
+  if (!agent) return false;
+  career.roster = [rosterEntry(agent, clamp(years | 0 || 1, 1, 3))];
   if (career.dev) delete career.dev[seasonDriverId(career.team, 1)];
   save();
   return true;
@@ -932,7 +886,7 @@ function offerFrom(team, years) {
 function makeOffers(mv) {
   if (career.flavour === "myteam") return [];
   const years = clamp(1 + Math.floor(mv / 40), 1, 3);
-  const mine = Teams.LIST.find((t) => t.id === career.team);
+  const mine = teamOf(career.team);
   const out = [];
   if (mine) out.push(offerFrom(mine, years));
   const willing = Teams.LIST
@@ -956,7 +910,7 @@ function weakerSeat(team) {
 function acceptOffer(i) {
   if (!career || careerConflict) return null;
   const o = career.offers ? career.offers[i | 0] : null;
-  const team = o && Teams.LIST.find((t) => t.id === o.teamId);
+  const team = o && teamOf(o.teamId);
   if (!team) return null;
   if (team.id !== career.team) {
     career.team = team.id;
@@ -968,12 +922,12 @@ function acceptOffer(i) {
   career.deal = {
     team: team.id, seat: career.seat,
     years: o.years, left: o.years, salary: o.salary,
-    bonusPt: 8 + (4 - team.tier) * 4,
+    bonusPt: bonusPtFor(team),
     goal: o.goal,
   };
   career.offers = [];
   save();
-  Log.info("game", "Career.acceptOffer team=" + team.id + " years=" + o.years);
+  Log.info("game", `Career.acceptOffer team=${team.id} years=${o.years}`);
   return career.deal;
 }
 
@@ -981,14 +935,15 @@ function acceptOffer(i) {
 // code the save never captured (a season settled entirely through careerSim).
 function codeOf(id) {
   const [teamId, seat] = String(id).split(":");
-  const t = Teams.LIST.find((x) => x.id === teamId);
+  const t = teamOf(teamId);
   const d = t && seatDriver(teamId, seat | 0, t.drivers[seat | 0]);
   return (d && d.code) || id;
 }
 
 function rollover() {
   if (!career || careerConflict) return null;
-  const dStand = driverStandings(), tStand = teamStandings();
+  const dStand = driverStandings();
+  const tStand = teamStandings();
   const me = seasonDriverId(career.team, career.seat);
   const myRow = dStand.find((r) => r.id === me);
   const myTeam = tStand.find((r) => r.id === career.team);
@@ -1011,56 +966,33 @@ function rollover() {
   rolloverMarket();
 
   let mv = marketValue(dStand);
-  // THE CONTRACT'S SEASON GOAL, RESOLVED. `deal.goal` was written by newDeal(),
-  // rendered on the hub and on the offer sheet, and read by nothing at all — the
-  // one promise the contract makes cost exactly nothing to break.
-  //
-  // Met is worth reputation; missed costs reputation AND market value, and the
-  // market-value hit is what makes the next winter's offers come from further
-  // down the grid. That demotion is drawn by the offerBar() ladder that already
-  // exists rather than by a second rule, so a missed goal cannot disagree with
-  // the "WHO WOULD SIGN YOU" ladder the hub shows all season.
-  //
-  // Deliberately NO money in either direction. tools/car/career-economy.mjs measures
-  // this economy against the catalog, and a once-a-season bonus it does not model
-  // would silently invalidate every figure in docs/CAREER.md "The economy,
-  // measured". Reputation is the channel that already carries season-long form.
-  //
-  // MY TEAM is excluded for the same reason its deal has no clock: you are not
-  // signed to anybody, so there is nobody to have promised a finish to.
+  // THE CONTRACT'S SEASON GOAL, RESOLVED. Met is worth reputation; missed costs
+  // reputation AND market value, so next winter's offers come from further down
+  // the offerBar() ladder the hub shows all season. No money either way:
+  // tools/car/career-economy.mjs does not model a per-season bonus and every
+  // figure in docs/CAREER.md would go stale. MY TEAM has nobody to promise to.
   if (career.flavour !== "myteam" && career.deal && career.deal.goal) {
     const met = entry.pos <= career.deal.goal.value;
     career.rep = clamp(career.rep + (met ? GOAL_REP : -GOAL_REP), 0, 100);
     if (!met) mv = Math.max(0, mv - GOAL_MV);
-    // Transient, like career.moves: the end-of-season sheet is the one screen
-    // between two seasons, and a rule the player never sees fire is barely
-    // better than one that does not run. Absent on an older save, and the sheet
-    // simply does not draw the line — so no CAREER_V rung is owed.
+    // Transient, like career.moves: drawn once on the end-of-season sheet, absent
+    // on an older save (the sheet skips the line), so no CAREER_V rung is owed.
     career.goalResult = { value: career.deal.goal.value, pos: entry.pos, met };
   } else {
     career.goalResult = null;
   }
   if (career.flavour !== "myteam" && career.deal && career.deal.left > 0) career.deal.left--;
-  // YOUR HIRE'S contract does run. `left` was written when they were signed and
-  // then read by nothing at all — the driver could never be renewed, replaced or
-  // lost, which made the one relationship MY TEAM is built on a static number.
   rolloverHire(dStand);
-  // A CONTRACT THAT RUNS IS A CONTRACT. `left--` above counted a multi-year deal
-  // down while makeOffers() ran unconditionally right beside it, so every winter
-  // opened the offer sheet and a re-signing reset the term — "3 seasons" on the
-  // CONTRACT card could never become 2. Offers are drawn in the winter the term
-  // actually expires; until then the hub goes straight to NEXT RACE, which is
-  // the empty-list path it has always handled (see makeOffers's own [] for
-  // MY TEAM). Leaving a seat early is a feature, not this fix: it would need a
-  // control that says so, and a silent yearly re-shop is not that control.
+  // A CONTRACT THAT RUNS IS A CONTRACT: offers are drawn only in the winter the
+  // term expires. makeOffers used to run every winter beside `left--`, so a
+  // re-signing reset the term and "3 seasons" could never become 2. Until then
+  // the hub goes straight to NEXT RACE (the empty-list path MY TEAM always took).
   career.offers = career.deal && career.deal.left > 0 ? [] : makeOffers(mv);
 
   career.year++;
-  // MUTATED IN PLACE, never reassigned. game.js holds this exact object as its
-  // `season` (openCareer does `season = c.season`), which is the whole reason
-  // buildResults/buildStandings/the HUD work in career untouched. Swapping in a
-  // fresh object here would silently orphan that alias and the next race would
-  // write its points into a dead one.
+  // MUTATED IN PLACE, never reassigned: game.js aliases this exact object as its
+  // `season` (openCareer does `season = c.season`), and a fresh object would
+  // orphan that alias so the next race wrote its points into a dead one.
   const s = career.season;
   s.round = 0; s.pts = {}; s.teamPts = {}; s.driverCodes = {};
   // SeasonCal.award accumulates the countback histogram here; left alone, a
@@ -1092,7 +1024,7 @@ function trackIndex() {
 // A compact snapshot for the HUD, the hub header and __apex.careerState().
 function state() {
   if (!career) return null;
-  const team = Teams.LIST.find((t) => t.id === career.team);
+  const team = teamOf(career.team);
   return {
     flavour: career.flavour, year: career.year,
     round: career.season.round, rounds: Tracks.SEASON.length,

@@ -3,13 +3,16 @@ const GarageEquipment = (function () {
   "use strict";
   const { Z_BACK, STEEL, DARK, block, cyl, tube, hose, MAT, scale, rgb, tile } = GaragePrims;
 
-const RUBBER = [0.045, 0.045, 0.050], HOSE = [0.12, 0.14, 0.20];
-const FAN = [4.5, 3.32], SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
+const RUBBER = [0.045, 0.045, 0.050];
+const HOSE = [0.12, 0.14, 0.20];
+const FAN = [4.5, 3.32];
+const SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
 const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90],
                   [0.10, 0.60, 0.25], [0.15, 0.35, 0.85]];   // S M H, inter, wet
 function buildEquipment(g, liv, ctx) {
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
-  const team = scale(c1, 0.85), dark = scale(STEEL, 0.55);
+  const team = scale(c1, 0.85);
+  const dark = scale(STEEL, 0.55);
   // REAR JACK: the T-bar quick-lift, parked beside the tail the way the front
   // jack is parked beside the nose — dead astern it stands in the REAR preset.
   block(g.mid, 1.45, 0.13, -3.35, 0.36, 0.05, 0.09, team);              // lifting head
@@ -37,7 +40,9 @@ function buildEquipment(g, liv, ctx) {
     block(g.mid, bx, 3.46, BZ, 0.04, 0.05, 0.04, STEEL);                             // coupling
     block(g.mid, sd * 2.36, 0.08, BZ, 0.10, 0.08, 0.24, dark);                       // floor manifold
     for (const wz of [1.7, -1.6]) {
-      const gx = sd * 1.55, gz = wz + (wz > 0 ? 0.55 : -0.55), cz = wz * 0.55;
+      const gx = sd * 1.55;
+      const gz = wz + (wz > 0 ? 0.55 : -0.55);
+      const cz = wz * 0.55;
       // The coil: six short legs zig-zagging at floor level beside the manifold.
       const pts = [[sd * 2.36, 0.08, BZ + (wz > 0 ? 0.14 : -0.14)]];
       for (let k = 0; k < 6; k++)
@@ -52,7 +57,8 @@ function buildEquipment(g, liv, ctx) {
   // STARTER CART and its umbilical into the gearbox: the one prop that touches
   // the car, and the reason a parked car in a real bay never looks abandoned.
   {
-    const cx = -1.95, cz = -4.75;
+    const cx = -1.95;
+    const cz = -4.75;
     block(g.mid, cx, 0.40, cz, 0.30, 0.24, 0.24, scale(c1, 0.55));               // cabinet
     block(g.mid, cx, 0.66, cz, 0.31, 0.02, 0.25, STEEL);
     block(g.mid, cx + 0.12, 0.72, cz - 0.05, 0.06, 0.04, 0.04, [0.75, 0.15, 0.10]); // start button
@@ -87,9 +93,14 @@ function buildEquipment(g, liv, ctx) {
   trolley(g.back, 3.65, -4.85, wet ? [3, 3, 4, 4] : [0, 0, 1, 1]);
   trolley(g.back, -3.65, -4.85, wet ? [3, 4, 1, 1] : [1, 2, 2, 0]);
   // FLOOR: a painted box at each wheel and the hazard hatch at the threshold.
-  const PAINT = [0.66, 0.67, 0.70], HAZ = [0.80, 0.68, 0.10];
+  const PAINT = [0.66, 0.67, 0.70];
+  const HAZ = [0.80, 0.68, 0.10];
   for (const w of [[0.79, 1.7], [-0.79, 1.7], [0.76, -1.6], [-0.76, -1.6]]) {
-    const x = w[0], z = w[1], hx = 0.30, hz = 0.46, t = 0.035;
+    const x = w[0];
+    const z = w[1];
+    const hx = 0.30;
+    const hz = 0.46;
+    const t = 0.035;
     tile(g.mid, x - hx, x + hx, z - hz, z - hz + t, PAINT, 0.003, MAT.ASPHALT);
     tile(g.mid, x - hx, x + hx, z + hz - t, z + hz, PAINT, 0.003, MAT.ASPHALT);
     tile(g.mid, x - hx, x - hx + t, z - hz, z + hz, PAINT, 0.003, MAT.ASPHALT);
@@ -113,19 +124,24 @@ function buildEquipment(g, liv, ctx) {
   tube(g.back, [FAN[0], FAN[1], Z_BACK + 0.02], [FAN[0], FAN[1], Z_BACK + 0.22], 0.36, scale(STEEL, 0.7), 16, MAT.METAL);
   tube(g.back, [FAN[0], FAN[1], Z_BACK + 0.10], [FAN[0], FAN[1], Z_BACK + 0.24], 0.32, [0.03, 0.032, 0.038], 16);   // the dark throat
   for (let i = 0; i < 3; i++) {                                                  // guard bars
-    const a = i * Math.PI / 3, dx = Math.cos(a) * 0.33, dy = Math.sin(a) * 0.33;
+    const a = i * Math.PI / 3;
+    const dx = Math.cos(a) * 0.33;
+    const dy = Math.sin(a) * 0.33;
     tube(g.back, [FAN[0] - dx, FAN[1] - dy, Z_BACK + 0.27], [FAN[0] + dx, FAN[1] + dy, Z_BACK + 0.27], 0.012, STEEL, 5, MAT.METAL);
   }
   // TROPHY CABINET, counter height under the +X pit board: a glass case the
   // career fills. Empty in free play it still holds the two helmets.
   {
-    const cx = 4.55, cz = Z_BACK + 0.32, wins = Math.min(8, (ctx && ctx.wins) | 0);
+    const cx = 4.55;
+    const cz = Z_BACK + 0.32;
+    const wins = Math.min(8, (ctx && ctx.wins) | 0);
     block(g.back, cx, 0.55, cz, 0.62, 0.55, 0.30, scale(c1, 0.45));               // plinth
     block(g.back, cx, 1.40, cz, 0.64, 0.30, 0.32, DARK);                           // case back
     block(g.back, cx, 1.40, cz + 0.30, 0.64, 0.30, 0.008, [0.22, 0.26, 0.32]);     // glass (dark, reflective look)
     block(g.back, cx, 1.24, cz, 0.60, 0.012, 0.28, scale(STEEL, 0.9));             // shelf
     for (let i = 0; i < wins; i++) {                                               // trophies
-      const tx = cx - 0.50 + (i % 4) * 0.33, ty = i < 4 ? 1.25 : 1.55;
+      const tx = cx - 0.50 + (i % 4) * 0.33;
+      const ty = i < 4 ? 1.25 : 1.55;
       cyl(g.back, tx, ty, cz, 0.05, 0.03, [0.85, 0.70, 0.25], 8, MAT.METAL);
       cyl(g.back, tx, ty + 0.03, cz, 0.018, 0.10, [0.92, 0.78, 0.30], 6, MAT.METAL);
       cyl(g.back, tx, ty + 0.13, cz, 0.045, 0.08, [0.95, 0.82, 0.32], 8, MAT.METAL);

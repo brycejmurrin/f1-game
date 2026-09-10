@@ -280,7 +280,7 @@ const NetSdp = (function () {
     } catch (e) {
       return false;
     } finally {
-      if (probe) { try { probe.close(); } catch (e) {} }
+      if (probe) { try { probe.close(); } catch (e) { /* the probe already served its purpose */ } }
     }
   }
 

@@ -191,6 +191,10 @@ function buildLtSpread() {
     "track's shipped look. Click twice to confirm.";
   host.appendChild(help);
 }
+// Group name -> DOM-safe id fragment, shared by the tab chip and its panel.
+function ltSlug(group) {
+  return group.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
 let _ltActiveGroup = null;   // currently-shown tuner category (tab)
 function setLtTab(group, focus) {
   _ltActiveGroup = group;
@@ -236,7 +240,7 @@ function buildLightTunePanel() {
         section = null;
         wrap = document.createElement("div");
         wrap.className = "lt-group"; wrap.dataset.group = group;
-        const slug = group.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const slug = ltSlug(group);
         wrap.id = "lt-panel-" + slug;
         wrap.setAttribute("role", "tabpanel");
         wrap.setAttribute("aria-labelledby", "lt-tab-" + slug);
@@ -280,7 +284,7 @@ function buildLightTunePanel() {
     if (tabs) {
       tabs.textContent = "";
       groups.forEach((g, index) => {
-        const slug = g.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const slug = ltSlug(g);
         const t = document.createElement("button");
         t.type = "button"; t.className = "lt-tab"; t.dataset.group = g;
         t.id = "lt-tab-" + slug;

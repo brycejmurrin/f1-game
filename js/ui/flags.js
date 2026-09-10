@@ -23,20 +23,22 @@ const Flags = (function () {
     "Austria": "at", "Netherlands": "nl", "Holland": "nl",
   };
 
-  // ---- geometry helpers (viewBox 0 0 60 40) --------------------------------
-  const W = 60, H = 40;
+  // Geometry helpers, viewBox 0 0 60 40.
+  const W = 60;
+  const H = 40;
   const n2 = (v) => Math.round(v * 100) / 100;
   const rect = (x, y, w, h, c, rx) =>
-    '<rect x="' + n2(x) + '" y="' + n2(y) + '" width="' + n2(w) + '" height="' + n2(h) + '" fill="' + c + '"' + (rx ? ' rx="' + rx + '"' : "") + "/>";
-  const circle = (cx, cy, r, c) => '<circle cx="' + n2(cx) + '" cy="' + n2(cy) + '" r="' + n2(r) + '" fill="' + c + '"/>';
-  const poly = (pts, c) => '<polygon points="' + pts.map((p) => n2(p[0]) + "," + n2(p[1])).join(" ") + '" fill="' + c + '"/>';
+    `<rect x="${n2(x)}" y="${n2(y)}" width="${n2(w)}" height="${n2(h)}" fill="${c}"${rx ? ` rx="${rx}"` : ""}/>`;
+  const circle = (cx, cy, r, c) => `<circle cx="${n2(cx)}" cy="${n2(cy)}" r="${n2(r)}" fill="${c}"/>`;
+  const poly = (pts, c) => `<polygon points="${pts.map((p) => `${n2(p[0])},${n2(p[1])}`).join(" ")}" fill="${c}"/>`;
   const line = (x1, y1, x2, y2, c, w) =>
-    '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + c + '" stroke-width="' + w + '"/>';
+    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c}" stroke-width="${w}"/>`;
   // Equal horizontal / vertical bands; `weights` for the 1:2:1 tricolours.
   const bands = (cols, horizontal, weights) => {
     const ws = weights || cols.map(() => 1);
     const total = ws.reduce((a, b) => a + b, 0);
-    let at = 0, out = "";
+    let at = 0;
+    let out = "";
     cols.forEach((c, i) => {
       const span = (horizontal ? H : W) * ws[i] / total;
       out += horizontal ? rect(0, at, W, span, c) : rect(at, 0, span, H, c);
@@ -47,8 +49,9 @@ const Flags = (function () {
   const hbands = (cols, weights) => bands(cols, true, weights);
   const vbands = (cols, weights) => bands(cols, false, weights);
   // A five-point star (the outer radius is r; inner radius is the golden 0.382).
-  const star = (cx, cy, r, c, points) => {
-    const n = points || 5, pts = [];
+  const star = (cx, cy, r, c, points = 5) => {
+    const n = points;
+    const pts = [];
     for (let i = 0; i < n * 2; i++) {
       const rad = i % 2 ? r * 0.382 : r;
       const a = -Math.PI / 2 + i * Math.PI / n;
@@ -82,7 +85,6 @@ const Flags = (function () {
     return out;
   };
 
-  // ---- the recipes ----------------------------------------------------------
   const RECIPES = {
     ae: () => hbands(["#00732f", "#fff", "#000"]) + rect(0, 0, 15, H, "#ff0000"),
     au: () => rect(0, 0, W, H, "#00008b") + union(30, 20)
@@ -131,7 +133,7 @@ const Flags = (function () {
       (i + j) % 2 ? rect(i * 10, j * 10, 10, 10, "#111") : "").join("")).join(""),
   };
 
-  const cache = {};
+  const cache = {};   // code -> rendered inner markup
   function code(country) {
     return CODES[String(country || "").trim()] || null;
   }
@@ -140,11 +142,11 @@ const Flags = (function () {
   // text. Pass `{label}` for a labelled, role=img rendering.
   function svg(codeOrCountry, opts) {
     const c = RECIPES[codeOrCountry] ? codeOrCountry : (code(codeOrCountry) || "xx");
-    const inner = cache[c] || (cache[c] = RECIPES[c]());
+    if (!cache[c]) cache[c] = RECIPES[c]();
     const a11y = opts && opts.label
-      ? ' role="img" aria-label="' + String(opts.label).replace(/"/g, "&quot;") + '"'
+      ? ` role="img" aria-label="${String(opts.label).replace(/"/g, "&quot;")}"`
       : ' aria-hidden="true"';
-    return '<svg data-flag="' + c + '" viewBox="0 0 60 40" preserveAspectRatio="none" focusable="false"' + a11y + ">" + inner + "</svg>";
+    return `<svg data-flag="${c}" viewBox="0 0 60 40" preserveAspectRatio="none" focusable="false"${a11y}>${cache[c]}</svg>`;
   }
   function codes() { return Object.keys(RECIPES).filter((c) => c !== "xx"); }
   function countries() { return Object.keys(CODES); }

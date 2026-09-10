@@ -382,7 +382,6 @@ const GLXShadow = (function () {
       core.post.bindSceneTarget();
     }
 
-
     S.enabled = setup();
     Log.info("gfx", "GLX shadow init on=" + (S.enabled ? 1 : 0));
     return S;

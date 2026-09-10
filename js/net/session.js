@@ -178,7 +178,7 @@ const NetSession = (function () {
     });
 
     function fire(list, arg) {
-      for (const fn of list) { try { fn(arg); } catch (e) {} }
+      for (const fn of list) { try { fn(arg); } catch (e) { /* a listener bug must not stop the rest */ } }
     }
 
     function pump(now) {

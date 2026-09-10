@@ -495,14 +495,10 @@ const Liveries = (function () {
   };
 
   // Every field a team's `livery` block may carry onto the derived default —
-  // i.e. every livery row that is NOT c1/c2/id/name. PUBLISHED as Liveries.FIELDS
-  // because it was being copied by hand and the copies drifted: render-car's
-  // own list had 23 of these 33, so nine fields (bandTint2, plateTint, and the
-  // tint rows) could not be reached from any shot tool at all.
-  // crestInk / plateInk are LEGACY — still read by resolveLivery/buildAtlas when
-  // present on a stored garage file, but no longer on the paint sheet or this
-  // whitelist (a re-save of a custom drops them via livDraftTo).
-  // One list, consumed by forTeam below and by the tools through the global.
+  // every row that is NOT c1/c2/id/name. Published as Liveries.FIELDS because
+  // hand copies drifted (render-car carried 23 of 33, so nine tint rows were
+  // unreachable from the shot tools). crestInk / plateInk are LEGACY: still read
+  // from a stored garage file, no longer on the paint sheet or in this list.
   const FIELDS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt",
     "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge",
     "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover",
@@ -513,7 +509,9 @@ const Liveries = (function () {
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
     const ex = team.livery;
-    if (ex) for (const k of FIELDS) if (ex[k]) def[k] = ex[k];
+    if (ex) {
+      for (const k of FIELDS) if (ex[k]) def[k] = ex[k];
+    }
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 

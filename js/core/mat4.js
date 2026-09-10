@@ -1,4 +1,4 @@
-/* Apex 26 — column-major 4x4 matrix + vec3 helpers, plus the three SCALAR helpers every module used to re-declare (M4.clamp / M4.lerp / M4.wrapDelta). Float32Arra… */
+/* Apex 26 — column-major 4x4 matrix + vec3 helpers, plus the three SCALAR helpers every module used to re-declare (M4.clamp / M4.lerp / M4.wrapDelta). ident() allocates; every *To variant writes into the caller's `out` and returns it. */
 "use strict";
 
 const M4 = (function () {

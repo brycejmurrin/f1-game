@@ -171,9 +171,8 @@ const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 const scale = (c, k) => [c[0] * k, c[1] * k, c[2] * k];
 const rgb = (c, dflt) => (c && c.length === 3 ? c : dflt);
 
-const css = (c) => "rgb(" + Math.round(Math.min(1, Math.max(0, c[0])) * 255) + "," +
-  Math.round(Math.min(1, Math.max(0, c[1])) * 255) + "," +
-  Math.round(Math.min(1, Math.max(0, c[2])) * 255) + ")";
+const to255 = (v) => Math.round(Math.min(1, Math.max(0, v)) * 255);
+const css = (c) => `rgb(${to255(c[0])},${to255(c[1])},${to255(c[2])})`;
 
 const pushMat = (out, n, mid) => {
   if (!out.mat) return;

@@ -1,4 +1,4 @@
-/* Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. This is a pure data layer: ga… */
+/* Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. Pure data layer (no rendering): one apex26.ghost.v1 store keyed by circuit id. */
 "use strict";
 
 const Ghost = (function () {
@@ -18,7 +18,7 @@ const Ghost = (function () {
           localStorage.removeItem(OLD_KEY);
         }
       }
-    } catch (e) { /* storage disabled — nothing to migrate */ }
+    } catch { /* storage disabled — nothing to migrate */ }
   })();
 
   let trackId = null;
@@ -26,36 +26,36 @@ const Ghost = (function () {
   let rec = null;                // in-progress lap: { t:[], s:[], x:[] }
   let lastSampleT = -1;
 
-  function round(v, p) { const m = Math.pow(10, p || 0); return Math.round(v * m) / m; }
+  function round(v, places = 0) {
+    const m = Math.pow(10, places);
+    return Math.round(v * m) / m;
+  }
 
   // Parsed once and kept: setTrack() runs on EVERY loadTrack (each menu-flyby
-  // build), and re-parsing the whole ghost store to read one entry was a
-  // ~40 KB JSON.parse per circuit browse.
-  //
-  // ONLY A PLAIN OBJECT IS ACCEPTED. `JSON.parse(raw) || {}` let "5", "true"
-  // and "[]" through (all truthy), memoised them, and every later
-  // `store[id] = snap` in finishLap threw on the primitive — or silently grew
-  // an array property — for the rest of the session. The fallback `{}` is
-  // memoised too, so a corrupt key costs one parse, not one per circuit browse.
-  let _storeCache = null;
+  // build), and re-parsing the whole store to read one entry was a ~40 KB
+  // JSON.parse per circuit browse. Only a plain object is accepted —
+  // `JSON.parse(raw) || {}` let "5", "true" and "[]" through, and every later
+  // `store[id] = snap` then threw for the rest of the session. The `{}`
+  // fallback is memoised too, so a corrupt key costs one parse.
+  let storeCache = null;
   function loadStore() {
-    if (_storeCache) return _storeCache;
+    if (storeCache) return storeCache;
     let parsed = null;
     try {
       if (typeof localStorage !== "undefined") parsed = JSON.parse(localStorage.getItem(KEY));
-    } catch (e) { parsed = null; /* corrupt or unreadable: start empty (memoised below) */ }
+    } catch { /* corrupt or unreadable: start empty (memoised below) */ }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       if (parsed !== null) Log.warn("car", "ghost store was not an object; starting empty");
       parsed = {};
     }
-    _storeCache = parsed;
-    return _storeCache;
+    storeCache = parsed;
+    return storeCache;
   }
-  function saveStore(o) {
-    _storeCache = o;
+  function saveStore(store) {
+    storeCache = store;
     try {
-      if (typeof localStorage !== "undefined") localStorage.setItem(KEY, JSON.stringify(o));
-    } catch (e) { Log.warn("car", "ghost save fail"); }
+      if (typeof localStorage !== "undefined") localStorage.setItem(KEY, JSON.stringify(store));
+    } catch { Log.warn("car", "ghost save fail"); }
   }
 
   function setTrack(id) {
@@ -64,13 +64,16 @@ const Ghost = (function () {
     best = (g && g.s && g.s.length >= MIN_SAMPLES) ? g : null;
     rec = null;
     lastSampleT = -1;
-    Log.info("car", "ghost load " + id + (best ? " ok" : " none"));
+    Log.info("car", `ghost load ${id}${best ? " ok" : " none"}`);
   }
 
   function hasGhost() { return !!best; }
   function bestTime() { return best ? best.time : Infinity; }
   function meta() { return best && best.meta && typeof best.meta === "object" ? best.meta : null; }
-  function medal() { const m = meta(); return m && typeof m.medal === "string" ? m.medal : null; }
+  function medal() {
+    const m = meta();
+    return m && typeof m.medal === "string" ? m.medal : null;
+  }
 
   // Begin recording a fresh lap (call at each lap start / lights-out).
   function startLap() {
@@ -88,6 +91,23 @@ const Ghost = (function () {
     rec.x.push(round(x, 2));
   }
 
+  // The store write is deferred: loadStore/saveStore parse and stringify EVERY
+  // circuit's ghost (~40 KB each) and finishLap runs inside updateCar on the
+  // lap-line frame of a new record — the one-frame hitch PERF-FINDINGS §2 records.
+  function scheduleSave(id, snap) {
+    const write = () => {
+      try {
+        const store = loadStore();
+        store[id] = snap;
+        saveStore(store);
+        Log.info("car", `ghost save ${id}`);
+      } catch { Log.warn("car", "ghost save fail"); }
+    };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(write, { timeout: 2000 });
+    else if (typeof setTimeout === "function") setTimeout(write, 0);
+    else write();   // bare VM harness: no scheduler, write now
+  }
+
   // `meta` (optional, a plain object — medal, pole, pace, weather) is stored
   // beside the lap it belongs to and only when that lap becomes the ghost, so
   // Ghost.meta() always describes the lap the player is racing against.
@@ -96,22 +116,11 @@ const Ghost = (function () {
     if (!rec || rec.t.length < MIN_SAMPLES) { rec = null; return false; }
     const done = rec;
     rec = null;
-    if (lapTime < bestTime()) {
-      best = { time: round(lapTime, 3), t: done.t, s: done.s, x: done.x };
-      if (meta && typeof meta === "object") best.meta = meta;
-      if (trackId != null) {
-        // Deferred: loadStore/saveStore parse and stringify EVERY circuit's ghost
-        // (~40 KB each) and this runs inside updateCar on the lap-line frame of
-        // a new record — the one-frame hitch shape PERF-FINDINGS §2 records.
-        const id = trackId, snap = best;
-        const write = function () { try { const store = loadStore(); store[id] = snap; saveStore(store); Log.info("car", "ghost save " + id); } catch (_) { Log.warn("car", "ghost save fail"); } };
-        if (typeof requestIdleCallback === "function") requestIdleCallback(write, { timeout: 2000 });
-        else if (typeof setTimeout === "function") setTimeout(write, 0);
-        else write();   // bare VM harness: no scheduler, write now
-      }
-      return true;
-    }
-    return false;
+    if (lapTime >= bestTime()) return false;
+    best = { time: round(lapTime, 3), t: done.t, s: done.s, x: done.x };
+    if (meta && typeof meta === "object") best.meta = meta;
+    if (trackId != null) scheduleSave(trackId, best);
+    return true;
   }
 
   // Binary search: largest index with arr[i] <= val.
@@ -128,19 +137,25 @@ const Ghost = (function () {
 
   // Pooled return — at() runs per HUD tick (minimap dot + gap delta); callers
   // read it synchronously and never retain it.
-  const _atOut = { s: 0, x: 0, done: false };
+  const atOut = { s: 0, x: 0, done: false };
   function at(t) {
     if (!best) return null;
     const ts = best.t, ss = best.s, xs = best.x, n = ts.length;
     if (n === 0) return null;
-    if (t >= ts[n - 1]) { _atOut.s = ss[n - 1]; _atOut.x = xs[n - 1]; _atOut.done = true; return _atOut; }
-    if (t <= ts[0]) { _atOut.s = ss[0]; _atOut.x = xs[0]; _atOut.done = false; return _atOut; }
+    if (t >= ts[n - 1]) {
+      atOut.s = ss[n - 1]; atOut.x = xs[n - 1]; atOut.done = true;
+      return atOut;
+    }
+    if (t <= ts[0]) {
+      atOut.s = ss[0]; atOut.x = xs[0]; atOut.done = false;
+      return atOut;
+    }
     const i = findFloorIndex(ts, t);
     const j = Math.min(i + 1, n - 1);
     const span = ts[j] - ts[i];
     const f = span > 1e-6 ? Math.max(0, Math.min(1, (t - ts[i]) / span)) : 0;
-    _atOut.s = ss[i] + (ss[j] - ss[i]) * f; _atOut.x = xs[i] + (xs[j] - xs[i]) * f; _atOut.done = false;
-    return _atOut;
+    atOut.s = ss[i] + (ss[j] - ss[i]) * f; atOut.x = xs[i] + (xs[j] - xs[i]) * f; atOut.done = false;
+    return atOut;
   }
 
   function timeAt(s) {
@@ -157,10 +172,15 @@ const Ghost = (function () {
   }
 
   function clear(id) {
+    if (id == null) {
+      saveStore({});
+      best = null;
+      return;
+    }
     const store = loadStore();
-    if (id == null) { saveStore({}); }
-    else { delete store[id]; saveStore(store); }
-    if (id == null || id === trackId) { best = null; }
+    delete store[id];
+    saveStore(store);
+    if (id === trackId) best = null;
   }
 
   return {
