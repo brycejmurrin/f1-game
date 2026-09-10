@@ -78,8 +78,10 @@ const Teams = (function () {
     },
     {
       id: "alpine", name: "Alpine", short: "ALP",
+      /* spineTint must clear the blue cover (≥2:1). Launch pink #FF87BC is only
+         ~1.56:1 on #0093CC and made every crown band invisible to cover-legibility. */
       livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "band",
-                spineTint: [1.0, 0.529, 0.737] },
+                spineTint: [1.0, 1.0, 1.0] },
       color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737],       /* blue #0093CC / pink #FF87BC */
       engine: "Mercedes", tier: 3,
       stats: { speed: 83, accel: 80, cornering: 82, braking: 80 },

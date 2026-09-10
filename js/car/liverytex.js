@@ -2521,6 +2521,10 @@ const LiveryTex = (function () {
         paintTeamMark(ctx, teamId, colors, Rm, markBgs, {
           halo: img ? markHalo(img, markBg, inkMark) : null,
           crestScale: !!scaleCrest,
+          // Brand plates (Ferrari yellow shield, Red Bull sun) win unscored in
+          // markPalette — on a white saddle flank that is 1.09:1. The flank
+          // field is already the contrast surface; skip the plate here.
+          noPlate: true,
         });
       };
       if (spineSide === "emblem") {
@@ -2930,15 +2934,36 @@ const LiveryTex = (function () {
   // plus outline rows, traced crest via markPalette (logo / logo2 / logo3).
   function paintTeamMark(ctx, teamId, liv, R, field, opts) {
     const o = opts || {};
-    const logo = liv && liv.logo;
+    let logo = liv && liv.logo;
     const outline = (liv && (liv.logo3 || liv.logo2)) || null;
+    // Authored LOGO tint that vanishes on the field it was handed (white crest
+    // on a white saddle flank) is not a pick worth keeping — re-pick against
+    // the field so catalog saddle×logo stays legible when factory saddleTint
+    // matches the team's usual logo tint.
+    const bgs = field && field.length
+      ? (Array.isArray(field[0]) ? field : [field]).filter(Boolean)
+      : [];
+    if (logo && bgs.length && !bgs.every((b) => contrast(logo, b) >= 2.0)) {
+      logo = pickOn(
+        [logo, liv.logo2, liv.c2, liv.c1, INK_DARK, INK_LIGHT].filter(Boolean),
+        bgs, 2.0);
+    }
     if (LOGOS[teamId]) {
-      drawLogoImage(ctx, LOGOS[teamId], R, logo || null, o.halo || null, outline);
+      // Untinted art can still vanish — Ferrari's white horse on a white saddle
+      // flank. When the field is pale and no tint was authored, force an ink.
+      let tint = logo || null;
+      if (!tint && bgs.length && bgs.some((b) => lum(b) > 0.55)) {
+        tint = pickOn(
+          [liv && liv.c1, liv && liv.c2, INK_DARK, INK_LIGHT].filter(Boolean),
+          bgs, 2.0);
+      }
+      drawLogoImage(ctx, LOGOS[teamId], R, tint, o.halo || null, outline);
       return;
     }
     const crestR = o.crestScale ? flankEmblemBox(R) : R;
     drawCrest(ctx, teamId, crestR, {
-      liv, field, bare: !o.fullLockup, palette: markPalette(teamId, liv, field, false),
+      liv, field, bare: !o.fullLockup,
+      palette: markPalette(teamId, liv, field, false, { noPlate: !!o.noPlate }),
     });
   }
 
