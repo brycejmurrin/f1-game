@@ -301,10 +301,14 @@
 
     // ── fullscreen runner ───────────────────────────────────────────────────
     quad = new THREE.QuadMesh();
+    let compileJobs = null;
     function runPass(mat, target) {
       quad.material = mat;
       renderer.setRenderTarget(target);
-      quad.render(renderer);
+      if (compileJobs) {
+        const snapshot = new THREE.QuadMesh(mat);
+        compileJobs.push(renderer.compileAsync(snapshot, snapshot.camera));
+      } else quad.render(renderer);
     }
 
     // God-ray lamp-selection scratch (present() only) — no per-frame allocs.
@@ -677,6 +681,25 @@
       }
     }
 
+    function warm(opts, frame) {
+      // Reuse the live pass gates, bindings, formats and MRT configuration.
+      // Disabled effects keep their lazy allocation behavior.
+      const jobs = [], target = renderer.getRenderTarget(), mrt = renderer.getMRT();
+      const last = { ..._last }, lastRT = _lastPresentRT, vizDest = _vizDest;
+      compileJobs = jobs;
+      try { present(opts, frame); }
+      catch (e) { jobs.push(Promise.reject(e)); }
+      finally {
+        compileJobs = null;
+        Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest;
+        renderer.setMRT(mrt); renderer.setRenderTarget(target);
+      }
+      return Promise.allSettled(jobs).then((results) => {
+        const failure = results.find((r) => r.status === "rejected");
+        if (failure) throw failure.reason;
+      });
+    }
+
     try { Log.info("gfx", "TLX post init"); } catch (_) { /* harness */ }
     return {
       enabled: () => true,
@@ -692,6 +715,7 @@
       // SGSR linked — tlx.js wantSpatialUpscale() requires this (fail-closed).
       spatialOk: () => !!(P && P.sgsr && P.sgsr.mat),
       resize,
+      warm,
       present,
       dispose,
       viz,

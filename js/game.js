@@ -7087,7 +7087,7 @@ const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
 const _rsEl = $("race-settings");      // the one menu screen that shows the flyby
 function render(dt) {
-  if (headlessMode) return;
+  if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
   // race-settings flyby, or the garage's car preview; under every other menu it is
   // HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat behind the

@@ -1643,7 +1643,7 @@ const TLX = (function () {
       // or a void, and only a readback answers it. ONCE per session: six 64px
       // faces is ~200 KB and the answer does not change frame to frame.
       let _envCube = null, _envCubeRead = false;
-      let _warmed = false;   // programs linked once per backend instance
+      let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
       // TLX OPTS OUT OF THE ENV PROBE (2026-09-10), measured, not assumed.
       // Census 84 ran the WebGL2 three leg with apex26.envProbeOff=1: a flat 60
       // fps at scale 1.0, frame times down to 10.8 ms, no beat gap over 2 s.
@@ -1663,6 +1663,39 @@ const TLX = (function () {
       // work, and this is one early return, not a deletion.
       let _envOptOut = true;
       try { _envOptOut = localStorage.getItem("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no storage: stay opted out */ }
+      function startProgramWarm(opts) {
+        _warmRequested = false;
+        if (typeof renderer.compileAsync !== "function") return;
+        _warmAt = performance.now(); _warmAttempts++;
+        const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
+        const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
+        const jobs = [];
+        try {
+          pinSkyMaterial();
+          if (lit && lit.setSsrMrt) lit.setSsrMrt(usePost);
+          if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
+          renderer.setMRT(usePost ? _ssrMrtNode() : null);
+          renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+          // Compile the prepared objects in place: cloning InstancedMesh would
+          // duplicate its instance buffers. Rendering pauses while this settles
+          // (with a timeout escape); hidden pool entries stay excluded.
+          jobs.push(renderer.compileAsync(scene, camera));
+          renderer.setMRT(null);
+          if (usePost && post.warm) jobs.push(post.warm(opts, _postF));
+        } catch (e) { jobs.push(Promise.reject(e)); }
+        finally { renderer.setMRT(mrt); renderer.setRenderTarget(target); }
+        _warmPending = Promise.allSettled(jobs).then((results) => {
+          const failed = results.find((r) => r.status === "rejected");
+          if (failed) {
+            _warmRequested = _warmAttempts < 2;
+            try { Log.warn("gfx", "TLX program warm failed", String(failed.reason)); } catch (_) { /* logging is optional */ }
+          }
+        }).finally(() => {
+          if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
+          if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+          _warmPending = null;
+        });
+      }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -1798,6 +1831,14 @@ const TLX = (function () {
       // Every geometry this backend creates, held WEAKLY — a census that
       // retains what it measures is a leak, not an instrument.
       const _geoReg = [];
+      let _geoPruneAt = -Infinity;
+      function pruneGeoRegistry(now) {
+        if (now - _geoPruneAt < 2000) return;
+        _geoPruneAt = now;
+        let w = 0;
+        for (const ref of _geoReg) if (ref && ref.deref()) _geoReg[w++] = ref;
+        _geoReg.length = w;
+      }
       // ── STATIC-GEOMETRY MIRROR RELEASE ──────────────────────────────────
       // The non-chunked half of the lever chunkedSys.releaseMirrors() already
       // pulls. A post-GC heap snapshot says why it is worth pulling: on the
@@ -1904,15 +1945,10 @@ const TLX = (function () {
         _mirrorSweepAt = now;
         _mirrorStat.sweeps++;
         let freed = 0;
-        // COMPACT AS WE WALK, backwards so a splice cannot skip an entry. The
-        // registry only ever grew: ~150-200 dead WeakRefs per circuit build,
-        // monotonic across a season, and this sweep deref()s every one of them
-        // every 2 s forever. The compaction existed but lived in geoCensus(),
-        // a debug hook no player calls — so on a real device it never ran.
-        for (let i = _geoReg.length - 1; i >= 0; i--) {
+        for (let i = 0; i < _geoReg.length; i++) {
           const ref = _geoReg[i];
           const g = ref && ref.deref ? ref.deref() : null;
-          if (!g) { _geoReg.splice(i, 1); continue; }
+          if (!g) continue;
           if (g.__tlxFreed) continue;
           if (g.__tlxKind === "chunk" || g.__tlxKind === "chunked") continue;   // chunkedSys owns those
           // Drawn at least once. NOT `__tlxDrawnBatch < _poolBatch`: every
@@ -2288,7 +2324,7 @@ const TLX = (function () {
           const sup = _gpuSupported();
           if (on !== undefined) {
             _gpuTimerOn = !!on && sup;
-            try { renderer.trackTimestamp = _gpuTimerOn; } catch (_) {}
+            try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
             if (!_gpuTimerOn) _gpuMs = -1;
           }
           return { supported: sup, on: _gpuTimerOn };
@@ -2527,7 +2563,7 @@ const TLX = (function () {
           (async () => {
             const faces = [];
             for (let f = 0; f < 6; f++) {
-              const px = await renderer.readRenderTargetPixelsAsync(envRT, 0, 0, ENV_SIZE, ENV_SIZE, f);
+              const px = await renderer.readRenderTargetPixelsAsync(envRT, 0, 0, ENV_SIZE, ENV_SIZE, 0, f);
               const isHalf = !!px && px.BYTES_PER_ELEMENT === 2;
               let sum = 0, mx = 0, n = 0;
               for (let i = 0; i + 3 < px.length; i += 4) {
@@ -2824,31 +2860,12 @@ const TLX = (function () {
         drawInstanced,
         freeInstancedBatch,
         castShadowInstanced,
-        // WARM THE PROGRAMS BEFORE THE LIGHTS GO OUT. three links its programs
-        // SYNCHRONOUSLY on first draw, and tsl-lit records what that costs: a
-        // Monza load once minted 595 programs and spent ~60 s inside
-        // getProgramParameter(LINK_STATUS), "that three only skips on its
-        // compileAsync path". Sharing the node graph cut 595 to THREE, which is
-        // why loads are survivable — but three synchronous links still land on
-        // the main thread at first draw, and census 79 caught exactly that: the
-        // TLX legs missed whole 8 s beats mid-session, sat at 10 fps, and only
-        // recovered by shedding resolution to 0.5, while GLX held 60 at full
-        // scale on the same machine and run. GLX builds its programs at init.
-        //
-        // Called at the COUNTDOWN, not per frame: the mesh pool already holds
-        // the materials by then (acquireMesh leaves them in the scene and only
-        // clears `visible`), and the lights sequence buys seconds of cover for
-        // the async link. Fire-and-forget on purpose — a warm that fails must
-        // cost a slower first lap, never the race.
+        // Request after race setup; present() compiles the prepared race frame,
+        // not the previous menu scene. Each race gets another warm opportunity.
         warm() {
-          if (_warmed || typeof renderer.compileAsync !== "function") return;
-          _warmed = true;
-          try {
-            renderer.compileAsync(scene, camera).catch((e) => {
-              try { Log.warn("gfx", "[TLX] program warm failed; first draw will link inline", (e && e.message) || e); } catch (_) { /* logging never costs a frame */ }
-            });
-          } catch (_) { /* a backend without the async path links inline, as before */ }
+          if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
         },
+        warming() { return !!_warmPending && performance.now() - _warmAt < 3000; },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
@@ -3124,6 +3141,10 @@ const TLX = (function () {
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
           // Hide InstancedMeshes that were not drawn this frame (still in scene).
           _hideUndrawnInstanced();
+          // Defer painting while async programs link, bounded so an unresolved
+          // driver promise cannot freeze the game. Retry a rejection once.
+          if (_warmRequested && !_warmPending) startProgramWarm(opts);
+          if (_warmPending && performance.now() - _warmAt < 3000) return;
           // First renderer.render() is when three compiles TSL → GLSL. A
           // factory that returned is not a compiled program — Safari WebGL2
           // often throws here. tick() reports any escape as the full-screen
@@ -3311,6 +3332,7 @@ const TLX = (function () {
           const _sweepOptIn = (function () {
             try { return localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { return false; }
           })();
+          pruneGeoRegistry(_now);
           _mirrorStat.drains++;
           _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
                            + (envRT ? "T" : "-") + (_sweepOptIn ? "S" : "-");

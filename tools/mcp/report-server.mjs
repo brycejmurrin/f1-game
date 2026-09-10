@@ -216,7 +216,9 @@ export function createReportRoute({ root, out, token, maxTotalBytes = MAX_TOTAL_
 
 function lanURLs(port) {
   const out = [];
-  const ifaces = networkInterfaces();
+  let ifaces;
+  try { ifaces = networkInterfaces(); }
+  catch (_) { return out; } // LAN hints are optional in restricted containers.
   for (const name of Object.keys(ifaces)) {
     for (const a of ifaces[name] || []) {
       if (a.family === "IPv4" && !a.internal) out.push(`http://${a.address}:${port}/`);
