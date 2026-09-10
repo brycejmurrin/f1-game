@@ -32,9 +32,11 @@ return a short summary with citations (URLs + live vs local build numbers).
    git show origin/claude/f1-game-project-26h3ng:version.json
    ```
    Verdict: **OK** when live == tip; **STALE** when live < tip. Pages is a
-   RELEASE TRAIN (ticks at :07/:27/:47, then a ~10-15 min gate), so a tip
-   under ~35 min old being behind is the train, not a miss; past that, read
-   `pages.yml`'s latest run. A behind WORKING TREE is not a Pages miss —
+   RELEASE TRAIN (poked by each green fast-tier `ci.yml` run, ~6 min after
+   the push, then a ~10-15 min gate unless the tree was already gated; the
+   :07/:27/:47 cron is only a backstop and GitHub runs it hours late on this
+   repo), so a tip under ~25 min old being behind is the train, not a miss;
+   past that, read `pages.yml`'s latest run. A behind WORKING TREE is not a Pages miss —
    compare to the tip, not to `version.json` on disk. The exact question "is
    MY commit live?" is answered by the shell, not the build number: fetch
    `index.html`, read `<meta name="apex-sha" content="…">`, and check

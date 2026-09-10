@@ -1361,3 +1361,33 @@ jobs:
             echo "artifact and compare -actual/-diff against the committed PNGs:"
             echo "the IMAGES are the problem to solve before any routing change."
           fi
+
+  # POKE THE TRAIN (2026-09-10). pages.yml's cron is a backstop, not a clock:
+  # GitHub's scheduler on this repository runs HOURS late — ci.yml's own 03:17
+  # nightly was created between 07:54 and 08:18 on each of its last five days
+  # — so a green fast-tier run dispatches the train itself. A workflow_dispatch
+  # made with GITHUB_TOKEN is the documented exception to "events raised by the
+  # token start no runs". The train's own queue coalesces a burst of pokes:
+  # one gate running, one waiting, later pokes replace the waiting one; and
+  # its verdict job answers "nothing new" in one slot when a poke finds the
+  # tip already live.
+  poke-train:
+    name: Poke the release train
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [guards, node-suites, sweeps-parts, driving-model, select, selected]
+    # Fast tier only (a deploy-branch push, never a Pages call), and only when
+    # every fast-tier job passed — `selected` is skipped when the plan was
+    # empty, which counts as a pass. A red fast tier pokes nothing; the cron
+    # backstop still gates the tip later and fails it visibly.
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '' && needs.guards.result == 'success' && needs.node-suites.result == 'success' && needs.sweeps-parts.result == 'success' && needs.driving-model.result == 'success' && needs.select.result == 'success' && (needs.selected.result == 'success' || needs.selected.result == 'skipped') }}
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch pages.yml on this branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"
+          echo "Poked pages.yml on \`$GITHUB_REF_NAME\` for \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"

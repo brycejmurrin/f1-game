@@ -638,6 +638,31 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
   }
 });
 
+test("a green fast-tier run pokes the train; a red or called one never does", () => {
+  // GitHub's scheduler runs this repository's crons hours late (the 03:17
+  // nightly is created around 08:00; the train's first three ticks never
+  // came), so the cron is a backstop and the deploy-branch push's fast tier
+  // dispatches pages.yml itself when every fast-tier job passed.
+  const poke = (ciWorkflow.split("\n  poke-train:\n")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.ok(poke, "poke-train job missing");
+  assert.match(poke, /needs: \[guards, node-suites, sweeps-parts, driving-model, select, selected\]/,
+    "the poke waits for every fast-tier job");
+  const cond = poke.match(/^    if: \$\{\{ (.*) \}\}$/m)?.[1] || "";
+  assert.match(cond, /^!cancelled\(\) && github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng' && inputs\.concurrency_key == ''/,
+    "fast tier only: a deploy-branch push, never a Pages call");
+  for (const j of ["guards", "node-suites", "sweeps-parts", "driving-model", "select"]) {
+    assert.ok(cond.includes(`needs.${j}.result == 'success'`), `${j} must be green before the poke`);
+  }
+  assert.ok(cond.includes("(needs.selected.result == 'success' || needs.selected.result == 'skipped')"),
+    "an empty plan skips `selected`, which is a pass");
+  assert.match(poke, /permissions:\s*\n\s+actions: write/, "workflow_dispatch via the token needs actions:write");
+  assert.match(poke, /gh workflow run pages\.yml --repo "\$GITHUB_REPOSITORY" --ref "\$GITHUB_REF_NAME"/);
+  // The heavy jobs are not in the poke's needs: smoke and sweeps are the train's.
+  const pokeNeeds = (poke.match(/needs: \[([^\]]*)\]/)?.[1] || "").split(",").map((s) => s.trim());
+  assert.ok(!pokeNeeds.includes("smoke") && !pokeNeeds.includes("sweeps"),
+    "the poke must not wait on the browser jobs; on the fast tier they are skipped and the train runs them");
+});
+
 test("pages.yml is a release train: schedule + dispatch, one deploy branch, nothing-new short-circuit", () => {
   // THE TRAIN (2026-09-10). A deploy per push at 140-300 pushes a day meant a
   // 14-job gate per commit and gates cancelling each other in bursts. The

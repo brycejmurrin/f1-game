@@ -91,7 +91,7 @@ export function plan() {
       "verify-track for touched circuits",
       flag("--pr") ? "push the session branch and open/update a PR into the deploy branch"
                    : "git push origin HEAD:" + DEPLOY_BRANCH + " (fast-forward, retry ×3)",
-      "the next pages.yml train tick (:07/:27/:47) gates the tip once, stamps the build and verify-live confirms it",
+      "the push's green FAST ci.yml run pokes pages.yml, which gates the tip once, stamps the build and verify-live confirms it",
     ] };
 }
 
@@ -369,7 +369,7 @@ export function main() {
     verdict.pushAttempts = pushWithRetry();
     verdict.pushed = true;
   }
-  verdict.next = "the push's FAST ci.yml run is your verdict (minutes); the next pages.yml train tick (:07/:27/:47) gates the tip, stamps the build (2000 + commit count) and verify-live confirms the CDN serves it — a commit is live once it is an ancestor of the live shell's apex-sha (deploy-research)";
+  verdict.next = "the push's FAST ci.yml run is your verdict (minutes) and, when green, pokes pages.yml, which gates the tip, stamps the build (2000 + commit count) and verify-live confirms the CDN serves it — a commit is live once it is an ancestor of the live shell's apex-sha (deploy-research)";
   verdict.seconds = Math.round((Date.now() - t0) / 1000);
   if (JSON_OUT) console.log(JSON.stringify(verdict, null, 2));
   else log(JSON.stringify(verdict));
