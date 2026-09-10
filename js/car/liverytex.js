@@ -621,12 +621,12 @@ const LiveryTex = (function () {
     let mark = markBase(teamId, liv);
     const brandPair = !!(B && plate && B.plate &&
       plate.join() === B.plate.join() && mark.join() === B.mark.join());
-    // Mark colour is free when authored (liv.logo) or brand-table. Derived
-    // marks (other-livery c1/c2) still floor so unreadible defaults cannot
-    // ship. Lettering auto-inks elsewhere.
+    // Mark colour is free when authored (liv.logo). Brand-table marks still
+    // floor against the field so stock cars (Mercedes star on silver, etc.)
+    // stay readable; brandPair (mark on its own plate) stays exempt.
     const authoredLogo = !!(liv && liv.logo);
     const brandMark = !!(B && mark.join() === B.mark.join());
-    const freeMark = authoredLogo || brandMark;
+    const freeMark = authoredLogo;
     if (!brandPair && !freeMark && cMin(mark, under) < MARK_FLOOR) {
       const alts = [B && B.mark, liv && liv.c2, liv && liv.c1];
       mark = null;
@@ -676,10 +676,9 @@ const LiveryTex = (function () {
       // and that stopped being the rule the day a backing could be a DISC the
       // mark hangs off the edges of.
       under: under.map((c) => c.slice()),
-      // Free marks (authored TEAM LOGO or brand table): no auto-halo — the
-      // pick is the paint. Authored LOGO DETAIL islands likewise. Only a
-      // DERIVED mark (other-livery c1/c2 with no brand row) still gets an
-      // outline when it sits under INK_TARGET.
+      // Authored TEAM LOGO: no auto-halo — the pick is the paint. Authored
+      // LOGO DETAIL islands likewise. Unauthored brand / derived marks still
+      // get an outline when they sit under INK_TARGET.
       halo: freeMark || part ? null : (() => {
         if (brandPair || cMin(mark, under) >= INK_TARGET) return null;
         return haloFor(mark).slice();

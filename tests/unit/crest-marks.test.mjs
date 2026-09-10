@@ -160,10 +160,10 @@ test("no crest is a blob, and none is a smear", () => {
   });
 });
 
-test("every free mark paints markBase; derived marks still clear MARK_FLOOR", () => {
-  // TEAM LOGO / brand-table colours are picks: they paint as markBase with no
-  // MARK_FLOOR substitute. Derived marks (other-livery c1/c2 fallback) still
-  // clear the floor via mark+halo so unreadible defaults cannot ship.
+test("authored / brandPair marks keep markBase; others clear MARK_FLOOR", () => {
+  // Authored TEAM LOGO and brandPair (mark on its own plate) paint as markBase.
+  // Unauthored brand marks on arbitrary fields still floor so stock cars stay
+  // readable (Mercedes star on silver). Derived other-livery marks floor too.
   const bad = [];
   let scored = 0, freeN = 0, derivedN = 0;
   for (const team of Teams.LIST) {
@@ -185,7 +185,7 @@ test("every free mark paints markBase; derived marks still clear MARK_FLOOR", ()
             bad.push(`${team.id}/${liv.id}/${where} free mark ${P.mark.join()} != base ${base.join()}`);
           if (liv.logo && P.halo)
             bad.push(`${team.id}/${liv.id}/${where} auto-haloed authored logo`);
-        } else if (!P.brandPair) {
+        } else {
           derivedN++;
           for (const f of under) {
             const best = Math.max(LT.contrast(P.mark, f), P.halo ? LT.contrast(P.halo, f) : 0);

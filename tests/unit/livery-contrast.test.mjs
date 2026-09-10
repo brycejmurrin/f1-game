@@ -277,30 +277,38 @@ const markOnItsGround = (teamId, liv, region, key, ground, N = 32) => {
   return { worst, at, n: n / (N * N) };
 };
 
-test("the plate-less crown mark keeps its free colour (brand / authored)", () => {
-  // bigmark is plate-less: mark colour is free (brand table on default, or
-  // liv.logo when set). Contrast against the cover is NOT required — McLaren
-  // papaya on papaya is a valid pick. Assert the painted mark matches markBase.
+test("the plate-less crown mark keeps authored colour; brand floors when needed", () => {
+  // bigmark is plate-less. Authored liv.logo stays exact. Unauthored brand
+  // marks may floor against the cover so stock cars stay readable.
+  const wantAuthored = [0.95, 0.1, 0.55];
   const bad = [];
   for (const t of A.Teams.LIST) {
     const pick3 = A.Liveries.forTeam(t).filter((l) => ["default", "tricolora", "chrome"].includes(l.id));
     for (const liv of pick3) {
       const field = [liv.cover || liv.c1 || t.color].filter(Boolean);
-      const P = A.LT.markPalette(t.id, liv, field, false, { noPlate: true });
-      const base = A.LT.markBase(t.id, liv);
-      if (!P.mark.every((v, i) => Math.abs(v - base[i]) < 1e-6))
-        bad.push(`${t.id}/${liv.id}: mark ${P.mark.join()} != base ${base.join()}`);
+      const authored = Object.assign({}, liv, { logo: wantAuthored.slice() });
+      const P = A.LT.markPalette(t.id, authored, field, false, { noPlate: true });
+      if (!P.mark.every((v, i) => Math.abs(v - wantAuthored[i]) < 1e-6))
+        bad.push(`${t.id}/${liv.id}: authored mark ${P.mark.join()} != [${wantAuthored.join()}]`);
+      const stock = A.LT.markPalette(t.id, liv, field, false, { noPlate: true });
+      const under = stock.under;
+      const best = Math.max(...under.map((f) =>
+        Math.max(A.LT.contrast(stock.mark, f), stock.halo ? A.LT.contrast(stock.halo, f) : 0)));
+      if (best < A.LT.MARK_FLOOR)
+        bad.push(`${t.id}/${liv.id}: stock mark+halo ${best.toFixed(2)} under MARK_FLOOR`);
     }
   }
-  assert.deepEqual(bad, [], `plate-less mark colour overruled —\n  ${bad.join("\n  ")}`);
+  assert.deepEqual(bad, [], `plate-less mark policy failed —\n  ${bad.join("\n  ")}`);
 });
 
-test("a flank lettering side clears the flank; logo/emblem keep free mark colour", () => {
+test("a flank lettering side clears the flank; authored logo/emblem keep free colour", () => {
   // Lettering (number/code/wordmark/duo) still auto-inks and must clear the
-  // flank. logo/emblem are free mark colours — only identity is required.
+  // flank. Authored logo/emblem keep exact colour; stock (unauthored) brand
+  // may floor so the mark stays readable on the cover.
   const bad = [];
   const LETTER_SIDES = ["number", "code", "wordmark", "duo"];
   const MARK_SIDES = ["logo", "emblem"];
+  const wantAuthored = [0.12, 0.88, 0.34];
   for (const t of A.Teams.LIST) {
     const base = A.Liveries.forTeam(t)[0];
     for (const spineLogo of ["saddle", "wrap"]) {
@@ -329,24 +337,35 @@ test("a flank lettering side clears the flank; logo/emblem keep free mark colour
         if (worst < AREA_FLOOR) bad.push(`${t.id} ${spineLogo}/${spineSide}`);
       }
       for (const spineSide of MARK_SIDES) {
-        const liv = Object.assign({}, base, { spineLogo, spineSide });
         const field = [base.cover || base.c1].filter(Boolean);
-        const P = A.LT.markPalette(t.id, liv, field, false, { noPlate: true });
-        const want = A.LT.markBase(t.id, liv);
-        if (!P.mark.every((v, i) => Math.abs(v - want[i]) < 1e-6))
-          bad.push(`${t.id} ${spineLogo}/${spineSide} mark overruled`);
+        const authored = Object.assign({}, base, { spineLogo, spineSide, logo: wantAuthored.slice() });
+        const Pa = A.LT.markPalette(t.id, authored, field, false, { noPlate: true });
+        if (!Pa.mark.every((v, i) => Math.abs(v - wantAuthored[i]) < 1e-6))
+          bad.push(`${t.id} ${spineLogo}/${spineSide} authored mark overruled`);
+        const stock = Object.assign({}, base, { spineLogo, spineSide });
+        const Ps = A.LT.markPalette(t.id, stock, field, false, { noPlate: true });
+        if (Ps.freeMark || Ps.brandPair) {
+          const want = A.LT.markBase(t.id, stock);
+          if (!Ps.mark.every((v, i) => Math.abs(v - want[i]) < 1e-6))
+            bad.push(`${t.id} ${spineLogo}/${spineSide} free/brandPair mark overruled`);
+        } else {
+          const best = Math.max(...Ps.under.map((f) =>
+            Math.max(A.LT.contrast(Ps.mark, f), Ps.halo ? A.LT.contrast(Ps.halo, f) : 0)));
+          if (best < A.LT.MARK_FLOOR)
+            bad.push(`${t.id} ${spineLogo}/${spineSide} stock mark ${best.toFixed(2)} under MARK_FLOOR`);
+        }
       }
     }
   }
   assert.deepEqual(bad, [], `flank mark/lettering failed —\n  ${bad.join("\n  ")}`);
 });
 
-test("the wrap's flank badge keeps the free mark colour on the cover", () => {
-  // Identity over forced contrast: the badge must paint markBase, not a
-  // substituted ink. Low contrast brand-on-cover (Mercedes silver star on
-  // silver) is allowed — that is the colour that was selected.
+test("the wrap's flank badge clears the cover; authored TEAM LOGO stays exact", () => {
+  // Stock wrap badges floor when brand-on-cover is unreadible. An authored
+  // TEAM LOGO pick paints as selected even at low contrast.
   const R = A.LT.REGIONS.spineSide, N = 40;
   const V0 = 0.35;
+  const wantAuthored = [0.91, 0.22, 0.61];
   const bad = [];
   for (const t of A.Teams.LIST) {
     const base = A.Liveries.forTeam(t)[0];
@@ -361,17 +380,24 @@ test("the wrap's flank badge keeps the free mark colour on the cover", () => {
     }
     const top = [...seen.entries()].sort((a, b) => b[1] - a[1])[0];
     assert.ok(top, `${t.id}: wrap painted no badge on the flank below v ${V0}`);
-    const P = A.LT.markPalette(t.id, base, [base.cover || base.c1], false, { noPlate: true });
-    const want = cssOf(P.mark);
-    // Dominant painted colour should be the free mark (or close — AA / halo
-    // bleed can shift a few steps). Allow exact markBase match via palette;
-    // pixel sample must at least be present.
-    const baseMark = A.LT.markBase(t.id, base);
-    if (!P.mark.every((v, i) => Math.abs(v - baseMark[i]) < 1e-6))
-      bad.push(`${t.id}: wrap palette mark ${P.mark.join()} != base ${baseMark.join()} (pixel ${top[0]})`);
-    void want;
+    const field = [base.cover || base.c1];
+    const stock = A.LT.markPalette(t.id, base, field, false, { noPlate: true });
+    if (stock.freeMark || stock.brandPair) {
+      const baseMark = A.LT.markBase(t.id, base);
+      if (!stock.mark.every((v, i) => Math.abs(v - baseMark[i]) < 1e-6))
+        bad.push(`${t.id}: stock free mark ${stock.mark.join()} != base ${baseMark.join()}`);
+    } else {
+      const best = Math.max(...stock.under.map((f) =>
+        Math.max(A.LT.contrast(stock.mark, f), stock.halo ? A.LT.contrast(stock.halo, f) : 0)));
+      if (best < A.LT.MARK_FLOOR)
+        bad.push(`${t.id}: stock wrap mark ${best.toFixed(2)} under MARK_FLOOR (pixel ${top[0]})`);
+    }
+    const authored = Object.assign({}, base, { logo: wantAuthored.slice() });
+    const Pa = A.LT.markPalette(t.id, authored, field, false, { noPlate: true });
+    if (!Pa.mark.every((v, i) => Math.abs(v - wantAuthored[i]) < 1e-6))
+      bad.push(`${t.id}: authored wrap mark ${Pa.mark.join()} != [${wantAuthored.join()}]`);
   }
-  assert.deepEqual(bad, [], `wrap badge mark overruled —\n  ${bad.join("\n  ")}`);
+  assert.deepEqual(bad, [], `wrap badge mark policy failed —\n  ${bad.join("\n  ")}`);
 });
 
 // A flank pick has to land where the flank can be SEEN — measured, and NOT
