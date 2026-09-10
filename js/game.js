@@ -2168,13 +2168,50 @@ function teamDecalState(team, usePlayerSetup) {
 // so the caches simply hit; the cost joins the load stall instead.
 function warmCarAssets() {
   if (carModelBuf) return;   // a GLB body is one piece with no procedural build to warm
+  const at = performance.now();
   for (let i = 0; i < cars.length; i++) {
     const c = cars[i];
     try {
       if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
+      if (c.isPlayer && CAM_MODES[camMode].id === "cockpit") cockpitBodyMesh(c.team, c);
       getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
     } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
   }
+  Log.info("gfx", "race car assets ready", { cars: cars.length, cpuMs: Math.round(performance.now() - at) });
+}
+// Prepare visual descriptors only: do not call makeCars(), advance the seeded
+// simulation, replace the live field, or arm a race from a menu. Existing bounded
+// mesh/atlas caches are shared with the real race; each task warms one driver.
+async function prepareMenuCarAssets(current) {
+  if (carModelBuf || headlessMode) return;
+  const teamPick = teamIdx, driverPick = driverIdx, rev = store.rev, solo = isTimeTrial() || isQuali();
+  const valid = () => current() && !headlessMode && !carModelBuf && teamIdx === teamPick && driverIdx === driverPick && store.rev === rev
+    && solo === (isTimeTrial() || isQuali());
+  const field = [];
+  Teams.LIST.forEach((team, ti) => {
+    if (team.custom && ti !== teamPick) return;
+    Career.gridDrivers(team).forEach((seat, di) => {
+      const d = Career.driverOverride(team.id, di) || seat;
+      const c = { team, num: d.num, isPlayer: ti === teamPick && di === driverPick };
+      if (c.isPlayer) field.unshift(c); else if (!solo) field.push(c);
+    });
+  });
+  const visualKey = Teams.LIST[teamPick] ? partsVisualKey(Teams.LIST[teamPick].id) : "";
+  let cpuMs = 0, maxCpuMs = 0;
+  for (const c of field) {
+    await new Promise(resolve => setTimeout(resolve, 32));
+    if (!valid() || (gfx.warming && gfx.warming())) return;
+    const at = performance.now();
+    try {
+      if (c.isPlayer) {
+        playerBodyMesh(c.team, c, visualKey);
+        if (CAM_MODES[camMode].id === "cockpit") cockpitBodyMesh(c.team, c, visualKey);
+      } else teamBodyMesh(c.team, c);
+      getCarDecalTexture(c.team, carDecalNum(c.team, c), c.isPlayer);
+    } catch (e) { Log.warn("gfx", "selector car asset preparation failed", e); }
+    const elapsed = performance.now() - at; cpuMs += elapsed; maxCpuMs = Math.max(maxCpuMs, elapsed);
+  }
+  Log.info("gfx", "selector car assets ready", { cars: field.length, cpuMs: Math.round(cpuMs), maxCpuMs: Math.round(maxCpuMs) });
 }
 function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
   const state = teamDecalState(team, usePlayerSetup);
@@ -2327,11 +2364,11 @@ function currentCarGroundMat(c, out, dt) {
 // the driver helmet the camera sits inside. Cached per team like playerBodies.
 const cockpitBodies = {};
 const cockpitBodyOrder = [];
-function cockpitBodyMesh(team, car) {
+function cockpitBodyMesh(team, car, visualKey = playerVisualKey) {
   // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
   // is always this team's key — no per-frame partsVisualKey() rebuild.
   const num = carDecalNum(team, car);
-  const key = team.id + ":" + playerVisualKey + (CockpitOpts.halo() ? ":H" : "") + ":" + num;   // halo keys the cache: toggling rebuilds, no reload
+  const key = team.id + ":" + visualKey + (CockpitOpts.halo() ? ":H" : "") + ":" + num;   // halo keys the cache: toggling rebuilds, no reload
   return putBoundedMesh(cockpitBodies, cockpitBodyOrder, key, () => {
     const liv = resolveLivery(team);
     return gfx.createMesh(Car3D.build(liv.c1, liv.c2,
@@ -2425,12 +2462,12 @@ function drawCockpitRig(c, base, dt, paint) {
   _digT[12] = _digT[13] = _digT[14] = 0;
 }
 
-function playerBodyMesh(team, car) {
+function playerBodyMesh(team, car, visualKey = playerVisualKey) {
   if (carModelBuf) return null;   // glb model: single piece, no wheel split
   // Player-only draw path, so the cached playerVisualKey is always this team's
   // key — no per-frame partsVisualKey() rebuild. The number joins it: a player
   // in the second seat wears the second driver's helmet.
-  const key = team.id + ":" + playerVisualKey + ":" + carDecalNum(team, car);
+  const key = team.id + ":" + visualKey + ":" + carDecalNum(team, car);
   const liv = resolveLivery(team);
   return putBoundedMesh(playerBodies, playerBodyOrder, key, () => gfx.createMesh(Car3D.build(liv.c1, liv.c2,
     { livery: liv, teamId: team.id, noWheels: true, num: carDecalNum(team, car),
@@ -2760,9 +2797,12 @@ function scheduleFlybyTrack(settle) {
       await ensureScenery(want);
       if (!current()) return;
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
-      if (_menuGate.ready === key && _menuGate.track === track) { _menuGate.warm = 2; return; }
+      if (_menuGate.ready === key && _menuGate.track === track) {
+        _menuGate.warm = 2; await prepareMenuCarAssets(current); return;
+      }
       loadTrack(want);
       _menuGate.ready = key; _menuGate.track = track; _menuGate.warm = 2;
+      await prepareMenuCarAssets(current);
     } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
   };
   flybyBuildTimer = setTimeout(prepare, settle ? 1500 : 120);

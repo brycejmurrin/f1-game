@@ -3955,6 +3955,105 @@ test("all track loaders release selector ownership before building, even on fail
   assert.equal(_menuGate.track, null, "failed replacement cannot retain a stale world");
 });
 
+test("three warm-up fallback yields tasks without waiting for display frames", async () => {
+  const core = read("vendor/three-0.185.1/three.core.min.js");
+  assert.match(core, /li as yieldToMain/);
+  const body = fnBody(core, "li");
+  const queued = [], channels = [];
+  let frames = 0, timers = 0;
+  const raf = () => { frames++; throw new Error("must not wait for a frame"); };
+  class Channel {
+    constructor() {
+      const rec = { closed: 0 }; channels.push(rec);
+      this.port1 = { close: () => rec.closed++ };
+      this.port2 = { close: () => rec.closed++, postMessage: () => queued.push(() => this.port1.onmessage()) };
+    }
+  }
+  const timer = (fn, delay) => { assert.equal(delay, 0); timers++; queued.push(fn); };
+  const factory = new Function("self", "MessageChannel", "setTimeout", "requestAnimationFrame", "return function(){" + body + "}");
+  const fallback = factory({}, Channel, timer, raf);
+  let completed = 0;
+  const pending = Array.from({ length: 8 }, () => fallback().then(() => completed++));
+  assert.equal(completed, 0); assert.equal(queued.length, 8, "each yield waits for a task");
+  while (queued.length) queued.shift()();
+  await Promise.all(pending);
+  assert.equal(completed, 8); assert.ok(channels.every(c => c.closed === 2));
+  assert.equal(frames, 0); assert.equal(timers, 0);
+  const timed = factory(undefined, undefined, timer, raf)();
+  assert.equal(timers, 1); queued.shift()(); await timed;
+  const nativePromise = Promise.resolve("native");
+  const scheduler = { yield() { assert.equal(this, scheduler); return nativePromise; } };
+  assert.equal(factory({ scheduler }, Channel, timer, raf)(), nativePromise);
+  assert.equal(channels.length, 8, "native scheduler does not allocate fallback channels");
+  const realChannel = (await import("node:worker_threads")).MessageChannel;
+  await Promise.all(Array.from({ length: 3 }, () => factory({}, realChannel, timer, raf)()));
+});
+
+test("menu player and cockpit preparation reuse the real race mesh keys", () => {
+  let playerVisualKey = "previous-setup", carModelBuf = null, builds = 0;
+  const playerBodies = {}, playerBodyOrder = [], PLAYER_BODY_CACHE_MAX = 3;
+  const cockpitBodies = {}, cockpitBodyOrder = [], COCKPIT_BODY_CACHE_MAX = 3;
+  const CockpitOpts = { halo: () => true }, Parts = { getVisualTiers: () => ({}) };
+  const Car3D = { build: () => { builds++; return {}; } }, gfx = { createMesh: x => x };
+  const getTeamParts = () => ({}), resolveLivery = () => ({ c1: [], c2: [] });
+  const carDecalNum = (t, c) => c.num;
+  const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
+  const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/game.js"), "playerBodyMesh") + "})");
+  const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/game.js"), "cockpitBodyMesh") + "})");
+  const team = { id: "mclaren" }, car = { num: 81 };
+  const preparedBody = body(team, car, "selected-setup"), preparedCockpit = cockpit(team, car, "selected-setup");
+  assert.equal(playerVisualKey, "previous-setup", "menu preparation does not mutate race globals");
+  playerVisualKey = "selected-setup";
+  assert.equal(body(team, car), preparedBody); assert.equal(cockpit(team, car), preparedCockpit);
+  assert.equal(builds, 2, "race reuses both prepared meshes instead of rebuilding");
+});
+
+test("selector car assets yield per driver, preserve simulation, and cancel stale settings", async () => {
+  for (const cancel of ["none", "screen", "store", "team", "driver", "compile", "model", "solo", "headless"]) {
+    let carModelBuf = null, headlessMode = false, teamIdx = 0, driverIdx = 1, camMode = 0;
+    let active = true, compiling = false, solo = false, yields = 0;
+    const store = { rev: 1 }, cars = [{ live: true }], player = cars[0];
+    const Teams = { LIST: [
+      { id: "a", drivers: [{ num: 1 }, { num: 2 }] },
+      { id: "b", drivers: [{ num: 3 }] },
+      { id: "custom", custom: true, drivers: [{ num: 4 }] }
+    ] };
+    const Career = { gridDrivers: t => t.drivers, driverOverride: (id, di) => id === "a" && di === 1 ? { num: 99 } : null };
+    const calls = [], gfx = { warming: () => compiling }, CAM_MODES = [{ id: "cockpit" }];
+    const Log = { info() {}, warn() {} }, performance = { now: () => 0 };
+    const isTimeTrial = () => solo, isQuali = () => false, current = () => active;
+    const partsVisualKey = id => "parts:" + id, carDecalNum = (t, c) => c.num;
+    const playerBodyMesh = (t, c, key) => calls.push(["player", c.num, key]);
+    const cockpitBodyMesh = (t, c, key) => calls.push(["cockpit", c.num, key]);
+    const teamBodyMesh = (t, c) => calls.push(["field", c.num]);
+    const getCarDecalTexture = (t, num, p) => calls.push(["atlas", num, p]);
+    const setTimeout = fn => {
+      yields++;
+      if (yields === 2) {
+        if (cancel === "screen") active = false;
+        if (cancel === "store") store.rev++;
+        if (cancel === "team") teamIdx = 1;
+        if (cancel === "driver") driverIdx = 0;
+        if (cancel === "compile") compiling = true;
+        if (cancel === "model") carModelBuf = {};
+        if (cancel === "solo") solo = true;
+        if (cancel === "headless") headlessMode = true;
+      }
+      Promise.resolve().then(fn);
+    };
+    const prepare = eval("(async function(current){" + fnBody(read("js/game.js"), "prepareMenuCarAssets") + "})");
+    await prepare(current);
+    assert.deepEqual(calls.slice(0, 3), [["player", 99, "parts:a"], ["cockpit", 99, "parts:a"], ["atlas", 99, true]]);
+    assert.equal(calls.length, cancel === "none" ? 7 : 3, cancel);
+    assert.equal(yields, cancel === "none" ? 3 : 2, "one driver per yielded task");
+    assert.equal(cars[0], player); assert.deepEqual(cars, [{ live: true }]);
+    calls.length = 0; active = true; compiling = false; carModelBuf = null; headlessMode = false;
+    teamIdx = 0; driverIdx = 1; solo = true; yields = 10;
+    await prepare(current);
+    assert.equal(calls.length, 3, "solo sessions prepare only their player");
+  }
+});
+
 test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {
   const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
   let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
@@ -3965,6 +4064,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const setTimeout = (fn) => { timers.set(++timerId, fn); return timerId; };
   const clearTimeout = id => timers.delete(id);
   const gfx = { warming: () => compiling }, Log = { warn() {} };
+  const prepareMenuCarAssets = async () => {};
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; };
   const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");

@@ -2768,3 +2768,12 @@ reject stale scenery completions, wait for renderer compilation ownership,
 reuse matching preparation, and handle failed optional loads. No new facade
 members or top-level lets; the existing flyby scheduler owns this lifecycle.
 Ceilings remeasured with `ratchets.mjs --update` for this added behavior.
+
+## 2026-09-10 — incremental selector car assets
+
+`js/game.js` gains 37 code lines to prepare car body/cockpit meshes and livery
+atlases one driver per yielded menu task, cancel stale selection/store/model
+work, and log selector versus race-time CPU preparation cost. It uses existing
+bounded caches and visual-only descriptors; no live field or simulation RNG is
+changed. Ceilings remeasured with `ratchets.mjs --update`; no new facade members
+or top-level lets. GPU program compilation remains race-owned and unmeasured.
