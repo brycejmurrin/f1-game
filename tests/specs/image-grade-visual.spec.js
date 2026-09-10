@@ -330,6 +330,7 @@ test.describe("rendered image grade", () => {
     await pixels(page); // discard first composited frame while render caches settle
     const baseline = await pixels(page);
     const baselineJpeg = _lastCapture;
+    const cap0 = await captureState(page);
     const tier0 = await tierAt(page);
     await setTune(page, { shadows: 0.5 });
     const changed = await pixels(page);
@@ -340,7 +341,7 @@ test.describe("rendered image grade", () => {
     expect(tier1, "governor tier moved between captures — the delta below is a tier shed, not the grade").toBe(tier0);
     const delta = tonalChanges(baseline, changed);
     const diag = JSON.stringify({
-      px: [baseline.length / 4, changed.length / 4], delta, tier: tier0, cap: await captureState(page),
+      px: [baseline.length / 4, changed.length / 4], delta, tier: tier0, cap0, cap1: await captureState(page),
       gov: await page.evaluate(() => window.__apex.renderScale()),   // a mid-test resize is the governor's auto-res
     });
     expect(delta.darkCount, diag).toBeGreaterThan(1000);

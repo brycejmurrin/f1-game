@@ -1112,7 +1112,16 @@ outside SwiftShader's. boot() now waits for the pack (uploaded, absent or
 failed; a pack still in flight after 90 s is pinned off with matTex(0)) and
 the diag records the pack state at each capture. Three wrong stories in a
 row for this one test — tier, field, and now pack — each disproved by the
-diag I had added for the previous one, which is the right way round. The fog-glow row stayed red WITH `tier [0,0]` —
+diag I had added for the previous one, which is the right way round.
+Run 3493 (pack wait in): "shadows" red on BOTH attempts, pack uploaded at
+the capture, same signature (+33.4 / −46); run 3495: red on attempt 1
+(+32.4 / −38.6), green on the retry, job green — and the renderer job only
+uploaded its report on failure, so the two JPEGs the test now attaches were
+unretrievable exactly when they mattered. The upload is `always()` now,
+and the diag records the capture state at the baseline as well as the
+changed frame. Open: a deterministic-looking hardware-only signature that
+comes and goes per ATTEMPT (a fresh worker each retry) — the pictures from
+the next run are the next step, not another theory. The fog-glow row stayed red WITH `tier [0,0]` —
 dry 80.1, foggy 72.6, the same −9 % this container reads (65.4 → 60.1) — so
 it was never the tier either: the sampled band is pure sky, the sky shader
 carries no lamp-fog term (`glsl-sky.js`), and what the test measured was the

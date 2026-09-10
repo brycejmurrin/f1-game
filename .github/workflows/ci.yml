@@ -1058,8 +1058,12 @@ jobs:
         env:
           APEX_WORKERS: 2
         run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000
-      - name: Failure artifacts
-        if: failure()
+      # ALWAYS, not failure(): a spec that fails its first attempt and passes
+      # the retry leaves the job green and its report — the attached frames
+      # image-grade "shadows" compares, the retry's diag — unretrievable. Run
+      # 3495 (2026-09-10) was exactly that; the pictures are the whole point.
+      - name: Run artifacts (report, traces, attached frames)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-artifacts-renderer-macos

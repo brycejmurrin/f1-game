@@ -340,11 +340,15 @@ test("the renderer job never passes --use-angle=vulkan (it drops macOS to SwiftS
   assert.match(baseCfg, /"--use-angle=swiftshader",/, "the base config still pins SwiftShader for every other run");
 });
 
-test("the renderer job proves the adapter before trusting the run, and uploads on failure", () => {
+test("the renderer job proves the adapter before trusting the run, and uploads its report on every run", () => {
   assert.match(rendererJob, /node tools\/gfx\/gpu-census\.mjs --json census-macos\.json/);
   assert.match(rendererJob, /r\.anyHardware !== true/, "the tri-state census must be compared with === true, never coerced");
   assert.equal(report.rendererGate.censusGated, true);
-  assert.match(rendererJob, /if: failure\(\)\s*\n\s*uses: actions\/upload-artifact@v4/);
+  // always(), not failure(): a spec that fails its first attempt and passes
+  // the retry leaves the job green, and a green job uploaded nothing — the
+  // frames image-grade "shadows" attaches were unretrievable on run 3495
+  // exactly when they were the next step (docs/notes/DEFECT-LEDGER.md).
+  assert.match(rendererJob, /if: always\(\)\s*\n\s*uses: actions\/upload-artifact@v4/);
   assert.match(rendererJob, /name: playwright-artifacts-renderer-macos/);
   // The full browser, cached at macOS's path; never apt.
   assert.match(rendererJob, /id: pwcache/);
