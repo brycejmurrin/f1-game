@@ -1,6 +1,7 @@
 {
-  "images": "macos-latest,windows-latest",
+  "images": "macos-latest",
   "track": "montreal",
-  "ls": "apex26.resMode=\"med\" apex26.spatialUpscale=1",
-  "leg": "med-upscale-json"
+  "ls": "apex26.tlxEnvProbe=1",
+  "force": "env",
+  "leg": "renderer-diagnostics-env"
 }
