@@ -2812,3 +2812,13 @@ work, and log selector versus race-time CPU preparation cost. It uses existing
 bounded caches and visual-only descriptors; no live field or simulation RNG is
 changed. Ceilings remeasured with `ratchets.mjs --update`; no new facade members
 or top-level lets. GPU program compilation remains race-owned and unmeasured.
+
+2026-09-10 — `js/agent/apex.js` lines 2812 -> **2814**, codeLines 2089 -> **2090**:
+`garageFrame` takes ABSOLUTE `az` / `el` / `dist` and a metre `pan` beside the
+counted clicks, and a `free` view that keeps the current camera. That is what
+lets `tools/shot/garage-angles.mjs` walk cameras as lists (views × az × el ×
+dist × zoom × pan × viewport) instead of five fixed presets; two lines of hook
+for a tool that no longer needs a preset per question.
+Same change, `js/game.js` lines 9656 -> **9657**, codeLines 5175 -> **5176**, gMembers 239 -> **240**:
+`nudgeSetupCam` joins the façade (the same one-line spelling PR #124 adds) so
+`garageFrame` can set an absolute azimuth / elevation instead of only zoom.

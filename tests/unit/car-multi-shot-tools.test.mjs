@@ -11,6 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -207,4 +208,43 @@ test("garage-angles multi-team rollup uses __apex fast path from PR #96 port", (
   assert.match(src, /argvHas\("--reset"\)/, "--reset clears output dir");
   assert.match(src, /argvHas\("--resume"\)/, "--resume skips finished teams");
   assert.match(src, /argvHas\("--oracle"\)/, "--oracle labels flank occlusion on rollup");
+});
+
+test("garage-angles walks CAMERAS as lists — views × az × el × dist × zoom × pan × viewport", () => {
+  // Five presets were the whole camera vocabulary: a question the presets did
+  // not ask (a 60-degree flank, a phone-landscape canvas, a tighter distance)
+  // meant editing the tool. Every camera number is a list now, walked as a
+  // product with the named views, and `--cam` names whole cameras; the hook
+  // takes absolute az/el/dist so the tool is not limited to counted clicks.
+  const src = code("tools/shot/garage-angles.mjs");
+  for (const f of ["--az", "--el", "--dist", "--cam", "--viewport", "--crop", "--name", "--design", "--zip", "--base"]) {
+    assert.ok(src.includes(`"${f}"`), `${f} must be one of the tool's OWN flags`);
+  }
+  assert.match(src, /function camKey/, "a camera's key names only what was set (old file names survive)");
+  assert.match(src, /part\.<category>|startsWith\("part\."\)/, "--part.<category> axes fit catalog parts in-page");
+  const hook = read("js/agent/apex.js");
+  assert.match(hook, /garageFrame\(view, opts\)[\s\S]*?view !== "free"/, "garageFrame's `free` view keeps the current camera");
+  assert.match(hook, /o\.dist \/ G\.setupPreviewDist/, "an absolute dist is applied through the game's own clamp");
+  // BEHAVIOUR, not just text: --plan builds the matrix without a browser.
+  const plan = (args) => JSON.parse(execFileSync("node",
+    ["tools/shot/garage-angles.mjs", "--plan", "--team=ferrari", ...args], { cwd: ROOT, encoding: "utf8" }));
+  const p = plan(["--views=side", "--az=60deg,90deg", "--el=0.2", "--zoom=6,4", "--pan=2,0;4,0", "--viewport=1280x720,844x390"]);
+  assert.equal(p.cams.length, 8, "2 az × 1 el × 2 zoom × 2 pan");
+  assert.equal(p.viewports.length, 2);
+  assert.equal(p.shotCount, 8 * 2, "one livery × 8 cams × 2 viewports");
+  assert.ok(p.cams.every((c) => Math.abs(c.el - 0.2) < 1e-9), "el is applied to every camera");
+  assert.ok(p.cams.some((c) => Math.abs(c.az - Math.PI / 3) < 1e-9), "60deg parses to radians");
+  const q = plan(["--views=side", "--cam=free:1.2,0.3,7;rear:180deg,0.4"]);
+  assert.equal(q.cams.length, 3, "the base view plus two explicit cameras");
+  assert.deepEqual(q.cams.map((c) => c.view), ["side", "free", "rear"]);
+  assert.equal(q.cams[1].dist, 7);
+  const z = plan(["--spineLogo=wrap,saddle", "--part.engine=turbo,stock", "--zip"]);
+  assert.deepEqual(z.designs, [{ spineLogo: "wrap", "part.engine": "turbo" }, { spineLogo: "saddle", "part.engine": "stock" }],
+    "--zip pairs the axes index-wise");
+  const legacy = plan(["--preset=mark", "--logo=#00ffcc"]);
+  assert.deepEqual(legacy.cams.map((c) => c.key), ["front_z6_p4x0", "side_z6_p4x0", "rear_z6_p4x0"],
+    "a preset is a starting point: its views, zoom and pan survive as camera keys");
+  assert.deepEqual(legacy.designs, [{ finBadge: "logo", logo: "#00ffcc" }], "a preset's livery keys stay axes");
+  const plain = plan(["--views=side"]);
+  assert.deepEqual(plain.cams.map((c) => c.key), ["side"], "no camera axes: the old `<team>-<tag>-<view>` name");
 });

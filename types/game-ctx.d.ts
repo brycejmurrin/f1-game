@@ -420,6 +420,7 @@ interface GameCtx {
   readonly setSetupView: (name: string) => void;
   readonly setupPan: (strafe: number, dolly: number) => void;
   readonly nudgeSetupZoom: (mul: number) => void;
+  readonly nudgeSetupCam: (dAz: number, dEl: number, zoom?: number) => void;
   readonly setupFlapArgs: () => FlapArgs;
   readonly setSetupAero: (on: boolean) => void;
   readonly setupPreviewXOn: boolean;

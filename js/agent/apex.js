@@ -415,22 +415,24 @@ const api = {
     G.tickUi();
     return { ok: true, switched: true, label };
   },
-  // One-shot preset + discrete zoom/pan clicks — mirrors #cs-stack / cs-pan-*.
+  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; view "free" keeps the current camera.
   garageFrame(view, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (!view) return { ok: false, error: "no_view" };
-    G.setSetupView(view);
-    const zoom = (opts && opts.zoom) || 0;
-    const strafe = (opts && opts.strafe) || 0;
-    const dolly = (opts && opts.dolly) || 0;
-    const zMul = zoom > 0 ? 1 / 1.12 : 1.12;
-    for (let n = 0; n < Math.abs(zoom); n++) G.nudgeSetupZoom(zMul);
-    for (let n = 0; n < Math.abs(strafe); n++) G.setupPan(strafe > 0 ? 0.15 : -0.15, 0);
-    for (let n = 0; n < Math.abs(dolly); n++) G.setupPan(0, dolly > 0 ? 0.15 : -0.15);
+    if (view !== "free") G.setSetupView(view);   // a preset resets orbit/target/pan; absolutes go on top
+    const o = opts || {}, num = (v) => (Number.isFinite(v) ? v : null);
+    if (num(o.az) != null) G.nudgeSetupCam(o.az - G.setupPreviewAz, 0, 0);
+    if (num(o.el) != null) G.nudgeSetupCam(0, o.el - G.setupPreviewEl, 0);
+    if (num(o.dist) > 0) G.nudgeSetupZoom(o.dist / G.setupPreviewDist);   // clamped by the game
+    const steps = (n, fn) => { for (let i = 0; i < Math.abs(n | 0); i++) fn(n > 0 ? 1 : -1); };
+    steps(o.azNudge, (s) => G.nudgeSetupCam(0.18 * s, 0, 0));
+    steps(o.elNudge, (s) => G.nudgeSetupCam(0, 0.12 * s, 0));
+    steps(o.zoom, (s) => G.nudgeSetupZoom(s > 0 ? 1 / 1.12 : 1.12));
+    steps(o.strafe, (s) => G.setupPan(0.15 * s, 0));
+    steps(o.dolly, (s) => G.setupPan(0, 0.15 * s));
+    if (Array.isArray(o.pan)) G.setupPan(+o.pan[0] || 0, +o.pan[1] || 0);
     const c = this.garageCam();
-    return {
-      ok: true, az: c.az, el: c.el, dist: c.effDist, pan: c.pan,
-    };
+    return { ok: true, view, az: c.az, el: c.el, dist: c.effDist, pan: c.pan };
   },
   // Merge catalog part ids into the current team's garage setup and rebuild.
   garageParts(parts) {
