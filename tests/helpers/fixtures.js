@@ -260,10 +260,34 @@ test.afterEach(async ({ page }, testInfo) => {
 // frame rate — this frees headroom rather than changing any clock.
 //
 // NOT PROVEN: the stall does not reproduce on a quiet box, so only CI can say.
-// It is also best-effort by construction (a closed page, a missing hook, a spec
-// with no __apex at all must never turn a green test red), and it does NOT
-// reach specs that import @playwright/test directly — today telemetry-compare
-// and carview-parts. Those need the import switched before they see this.
+// Best-effort by construction too — a closed page, a missing hook, or a spec
+// with no __apex at all must never turn a green test red.
+//
+// WHAT MATTERS IS THE PREDECESSOR, NOT THE VICTIM, and that is worth writing
+// down because the obvious follow-up is a dead end. Read the worker ordering of
+// the run that motivated this (ci 3341, "Selected specs"):
+//
+//   w0  race-control #1  35.7 s pass  ->  race-control #2      180.0 s FAIL
+//   w1  race-control #3  34.7 s pass  ->  telemetry-compare #1 180.1 s FAIL
+//   w2  telemetry-compare #2  1.7 s   ->  telemetry-compare #3   0.3 s  pass
+//
+// Both failures follow a race-control test, which boots the game. The two
+// telemetry-compare tests that follow each other with no game in front of them
+// are fine. So the hanging test is not the problem — whatever ran BEFORE it is.
+//
+// Which means the two specs that import @playwright/test directly do NOT both
+// want their import switched, and an earlier version of this comment was wrong
+// to say so:
+//   - telemetry-compare never boots the game at all. It goes to /version.json,
+//     sets its own markup and injects log/mat4/js/data only, so it has no
+//     __apex, no GL context and no rAF loop. It is only ever the victim, never
+//     the predecessor; switching its import would buy exactly nothing.
+//   - carview-parts DOES drive a WebGL viewer, so it is a real predecessor —
+//     but tools/carview.html loads neither game.js nor agent/apex.js, so there
+//     is no __apex to quiet and switching its import would not reach it either.
+//     Its exposure is instead cut structurally: its three same-url tests share
+//     one context, leaving a single inter-test transition in that file. Giving
+//     CARVIEW (today: ready/set/angle) a stop is what would close the rest.
 //
 // Safe for sharedTest, which reuses one page: its per-test reset already calls
 // headless(false) before each test, so the page wakes back up. Between tests it
