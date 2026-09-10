@@ -942,7 +942,10 @@ The moved code is byte-identical to the base modulo the façade rewrites
 lines, 0 diff). Verdict: not a regression; the test's budget assumes a
 faster garage than this box has (its header already calls the 5→3 boot
 change "UNVERIFIED IN A BROWSER"). Left as is — never widen a budget to make
-a spec pass; CI's `parts` group on a real runner is the gate for these two.
+a spec pass. Superseded the same hour by 2e09124 on the deploy branch, which
+measured the same 23–29 s per click, gave `__apex.garageParts` a garage-closed
+path (`recomputePlayerMods` on the façade) and re-wrote both tests to boot ONE
+race and refit through the hook: body/cockpit eviction 156 s and green.
 
 ## 8. Backlog
 

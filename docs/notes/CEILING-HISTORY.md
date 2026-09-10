@@ -2798,6 +2798,12 @@ reuse matching preparation, and handle failed optional loads. No new facade
 members or top-level lets; the existing flyby scheduler owns this lifecycle.
 Ceilings remeasured with `ratchets.mjs --update` for this added behavior.
 
+2026-09-10 — `js/game.js` gMembers 238 -> **239**: `recomputePlayerMods` joins
+the façade so `__apex.garageParts` can refit parts on a RUNNING race. The two
+mesh-cache eviction specs walked the garage sheet and booted a race per part
+(23-29 s per click under SwiftShader; 258 s and 391 s alone against 240 s and
+360 s budgets); one boot plus the hook is the whole test now. Lines unchanged
+(the member joins an existing list line).
 ## 2026-09-10 — incremental selector car assets
 
 `js/game.js` gains 37 code lines to prepare car body/cockpit meshes and livery

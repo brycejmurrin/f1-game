@@ -1190,9 +1190,8 @@ test.describe("Parts module — visual recipes", () => {
       glsl: GLXShaders.LIT_FS,
       wgsl: WGSLChunks.LIT,
     }));
-    // visorSurface joined the gate on 2026-09-09 (the visor is a dielectric with
-    // its own surface id, js/render/glx/shaders/glsl-lit.js); both backends
-    // carry the same three-term predicate.
+    // The visor joined the gate in 06394e7 (its own dielectric surface id);
+    // this pinned the two-term line and went red on every run since.
     expect(sources.glsl).toContain(
       "bool envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;"
     );

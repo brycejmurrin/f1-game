@@ -4,12 +4,12 @@
     "js/game.js": {
       "lines": 9041,
       "codeLines": 4739,
-      "gMembers": 238,
+      "gMembers": 239,
       "topLets": 146
     },
     "js/agent/apex.js": {
       "lines": 2812,
-      "codeLines": 2089
+      "codeLines": 2088
     },
     "js/agent/agentview.js": {
       "lines": 2456

@@ -1521,7 +1521,11 @@ of DOM clicks (~15 s per team saved).
 ### `garageParts(parts) → {ok, team?, parts?, error?}`
 Merge catalog part ids into the current team's garage setup (`getTeamParts` /
 `saveTeamParts`) and rebuild. `parts` is `{category: partId}`; empty values are
-skipped. `{ok:false, error:"garage_closed"}` when the preview is off.
+skipped. With the garage open it drops the preview meshes and rebuilds the
+sheet; with it closed (menu, or a race in progress) it runs the same
+`recomputePlayerMods` the garage's DONE runs, so the next frame re-keys the
+player body, cockpit and wheel meshes — `live: true` in the reply. That is how
+`parts-mesh-cache.spec.js` walks nine tyre/brake pairs on ONE race boot.
 
 ### `carEffects() → {exhaustFlame, brakeGlow, ersDeploy, gridLights, gridStrobe, boostFlame, brakeHeat, brakeGlowThreshold} | null`
 The player car's visual-effect flags as the renderer sees them this frame:

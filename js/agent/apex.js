@@ -434,7 +434,6 @@ const api = {
   },
   // Merge catalog part ids into the current team's garage setup and rebuild.
   garageParts(parts) {
-    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     const team = Teams.LIST[G.teamIdx];
     if (!team || !parts || typeof parts !== "object") return { ok: false, error: "bad_parts" };
     const cur = Object.assign({}, G.getTeamParts(team.id));
@@ -442,9 +441,10 @@ const api = {
       if (id != null && id !== "") cur[cat] = id;
     }
     G.saveTeamParts(team.id, cur);
-    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes();
-    G.buildSetup();
-    return { ok: true, team: team.id, parts: cur };
+    // Garage open: drop the preview, rebuild the sheet. Closed (menu / a race): DONE's recompute, so the next frame re-keys the player body, cockpit and wheel meshes.
+    if (!G.setupPreviewOn) G.recomputePlayerMods();
+    else { if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes(); G.buildSetup(); }
+    return { ok: true, team: team.id, parts: cur, live: !G.setupPreviewOn };
   },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { G.hideMeshes = Object.assign({}, G.hideMeshes, o || {}); return G.hideMeshes; },
