@@ -497,8 +497,8 @@ test("AGENTS.md names the deploy branch", () => {
   // branch nobody was on, pages.yml deploys from a third, and nothing said so.
   const agents = read("AGENTS.md");
   const pages = read(".github/workflows/pages.yml");
-  const deploy = pages.match(/branches:\s*\[([^\]]+)\]/);
-  assert.ok(deploy, "pages.yml no longer pins a deploy branch");
+  const deploy = pages.match(/^\s+DEPLOY_BRANCH:\s*(\S+)\s*$/m);
+  assert.ok(deploy, "pages.yml no longer pins a deploy branch (env DEPLOY_BRANCH)");
   const deployBranch = deploy[1].trim();
   assert.ok(agents.includes(deployBranch),
     `AGENTS.md must name the deploy branch (${deployBranch}) so nobody assumes their branch ships`);

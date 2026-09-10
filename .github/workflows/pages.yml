@@ -1,9 +1,25 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [claude/f1-game-project-26h3ng]
+  # THE RELEASE TRAIN (2026-09-10). Not on push. This branch takes 140-300
+  # commits a day from several agents; a deploy per push meant a 14-job gate
+  # and a Pages deployment per commit, gates cancelling each other in bursts,
+  # and the account's 20 job slots spent on re-testing trees that were one
+  # commit apart. The train takes the tip three times an hour, gates it once,
+  # and publishes exactly that commit. A dispatch is "deploy now". Pushes to
+  # the deploy branch still get ci.yml's FAST tier (guards, node suites,
+  # census, change-aware selection) within minutes — that is the verdict an
+  # agent waits for; the full gate is the train's. Off the hour on purpose:
+  # GitHub's cron is slowest at :00.
+  schedule:
+    - cron: "7,27,47 * * * *"
   workflow_dispatch:
+
+env:
+  # The ONE declaration of the deploy branch. A schedule runs on the default
+  # branch, which is this one; the verdict job refuses anything else, so a
+  # dispatch from another branch cannot publish it.
+  DEPLOY_BRANCH: claude/f1-game-project-26h3ng
 
 permissions:
   contents: read
@@ -12,18 +28,27 @@ permissions:
 
 # THE CONTRACT (2026-09-10): a run tests ONE commit, stages THAT commit, and
 # publishes THAT artifact — never the branch tip, never anything its own gate
-# did not see. Two rules make that livable under this branch's push rate
+# did not see. Three rules make that livable under this branch's push rate
 # (ci is ~13 minutes; pushes have landed every ~6):
 #
-#   1. NEWEST WINS. The `ci` job carries a per-branch concurrency group with
-#      cancel-in-progress, so a newer push cancels an older run's gate instead
-#      of leaving it to go green and then either publish stale bytes or skip.
-#      Under a burst the site moves to the newest commit once that commit
-#      alone passes; nothing ever ships untested.
+#   1. ONE TRAIN AT A TIME. The `ci` job carries a per-branch concurrency
+#      group WITHOUT cancel-in-progress: a running gate finishes, the next
+#      tick waits as the one pending run, and a further tick replaces that
+#      pending one. Bounded lag (a tick plus one gate), no starvation, no
+#      gate ever killed a spec from green. `verdict` runs outside the group
+#      and answers first whether there is anything new to publish at all.
 #   2. MONOTONIC. Before entering the environment, and again under the Pages
 #      lock, `tools/ci/pages-publishable.sh` reads the live shell's apex-sha
 #      and publishes only if it is an ancestor of this run's commit. An older
 #      run that reaches the lock after a newer one has published stops there.
+#   3. REUSE, NEVER RE-RUN THE SAME TREE. A merge made through GitHub is a
+#      new commit, so every PR merge paid the full gate a second time even
+#      when the PR run had tested the very same files. `verdict` compares
+#      tree hashes: when this commit's tree equals a parent's, and that
+#      parent has a completed successful ci.yml or pages.yml run, the gate is
+#      skipped and the run goes straight to `publishable`. The tree is the
+#      proof — same files means same workflow, same tests, same result. A
+#      merge whose base moved has a different tree and gets its own gate.
 #
 # What this replaces, and why (kept short; the runs are in the history):
 #   - 2026-08-12: workflow-level concurrency. cancel-in-progress: true starved
@@ -37,23 +62,100 @@ permissions:
 #     suites first"; PRs merged through GitHub do not, so the premise expired.
 #     This file's contract closes that path.
 jobs:
+  # Rule 3. Cheap (one checkout, one API call) and never cancelled: it does
+  # not share the gate's concurrency group. Any lookup failure is reuse=false,
+  # which costs exactly the gate run every commit paid before this existed.
+  verdict:
+    name: Anything new, and was this exact tree already gated?
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      nothing_new: ${{ steps.live.outputs.nothing_new }}
+      since: ${{ steps.live.outputs.since }}
+      reuse: ${{ steps.v.outputs.reuse }}
+      source: ${{ steps.v.outputs.source }}
+      run: ${{ steps.v.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # the parents' trees and the live commit are the whole question
+      - name: Refuse to run off the deploy branch
+        run: |
+          if [ "$GITHUB_REF_NAME" != "$DEPLOY_BRANCH" ]; then
+            echo "::error::pages.yml publishes $DEPLOY_BRANCH only; this run is on $GITHUB_REF_NAME"
+            exit 1
+          fi
+      # A train tick with nothing new stops here: one slot for thirty seconds
+      # instead of a 14-job gate that would end in "already live". `since` is
+      # the live commit when it is an ancestor of this one — the exact base
+      # for the sweeps and selection filters ("what changed since what is
+      # live?") — and empty otherwise, which those filters read as "run all".
+      - name: What is live, and is this tip newer?
+        id: live
+        run: |
+          set -u
+          # Built from the default env, not github.event.repository — the
+          # schedule payload is not a push payload.
+          SITE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          LIVE="$(bash tools/ci/pages-live-sha.sh "$SITE_URL")"
+          if [ -z "$LIVE" ]; then
+            echo "::warning::live apex-sha unreadable; gating the whole tip"
+            echo "nothing_new=false" >> "$GITHUB_OUTPUT"; echo "since=" >> "$GITHUB_OUTPUT"
+          elif [ "$LIVE" = "$GITHUB_SHA" ]; then
+            echo "live is already $GITHUB_SHA — nothing to publish"
+            echo "nothing_new=true" >> "$GITHUB_OUTPUT"; echo "since=$LIVE" >> "$GITHUB_OUTPUT"
+          elif git cat-file -e "${LIVE}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$LIVE" "$GITHUB_SHA"; then
+            echo "live $LIVE is an ancestor; gating the diff since it"
+            echo "nothing_new=false" >> "$GITHUB_OUTPUT"; echo "since=$LIVE" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::live $LIVE is not an ancestor of $GITHUB_SHA; gating the whole tip (publishable decides later)"
+            echo "nothing_new=false" >> "$GITHUB_OUTPUT"; echo "since=" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Look for a completed successful gate on this tree
+        id: v
+        if: steps.live.outputs.nothing_new != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/ci/pages-reuse-verdict.sh "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+      - name: Say so in the run summary
+        env:
+          NOTHING_NEW: ${{ steps.live.outputs.nothing_new }}
+          REUSE: ${{ steps.v.outputs.reuse }}
+          SOURCE: ${{ steps.v.outputs.source }}
+          RUN: ${{ steps.v.outputs.run }}
+        run: |
+          if [ "$NOTHING_NEW" = "true" ]; then
+            echo "**Nothing new**: the live site already serves \`$GITHUB_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$REUSE" = "true" ]; then
+            echo "**Gate reused**: \`$GITHUB_SHA\` has the same tree as \`$SOURCE\`, which already passed $RUN" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**Gate runs**: no completed successful run found for this tree" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # The deploy gate: every job in ci.yml, aggregated by `needs: ci` below.
+  # Skipped when nothing is new, or when rule 3 found the same tree gated.
   ci:
+    needs: verdict
+    if: needs.verdict.outputs.nothing_new != 'true' && needs.verdict.outputs.reuse != 'true'
     uses: ./.github/workflows/ci.yml
     with:
-      # Forward the push's before SHA so the sweeps filter can skip when this
-      # deploy touch cannot move circuit geometry. Without it, workflow_call
-      # always fail-safed into a full 15-minute sweep on every Pages push.
-      before_sha: ${{ github.event.before }}
+      # The live commit, when it is an ancestor of this tip: the sweeps and
+      # selection filters diff against exactly what is live. Empty means
+      # unknown, and every filter in ci.yml reads empty as "run everything".
+      before_sha: ${{ needs.verdict.outputs.since }}
       # A unique key keeps ci.yml's OWN concurrency group out of the way; the
-      # group that matters is the one on this job.
+      # group that matters is the one on this job. It also tells ci.yml this
+      # is the deploy gate (full tier, never the fast one).
       concurrency_key: pages-${{ github.run_id }}
-    # NEWEST WINS (rule 1 above). One group per branch; a newer push cancels
-    # this gate. A dispatched redeploy shares the group on purpose: a push that
-    # lands during it is newer, and newer is what gets published.
+    # ONE TRAIN AT A TIME (rule 1 above). One group per branch, no cancel: a
+    # running gate finishes, the next tick waits, a later tick replaces the
+    # waiting one. A dispatch shares the group and queues the same way.
     concurrency:
       group: pages-gate-${{ github.ref }}
-      cancel-in-progress: true
+      cancel-in-progress: false
 
   # Keep runs that CANNOT publish out of the environment entirely. An
   # environment job is itself a GitHub deployment: letting such a run enter it
@@ -61,7 +163,12 @@ jobs:
   # bytes that were never published. The deploy job repeats this check under
   # the Pages lock, because the answer can change while a run waits for it.
   publishable:
-    needs: ci
+    needs: [verdict, ci]
+    # A skipped `needs` job skips its dependents unless the condition says
+    # otherwise, so this spells out the two ways in: the gate passed, or the
+    # gate was skipped BECAUSE the verdict reused an earlier pass. A failed or
+    # cancelled gate matches neither and the run stops here.
+    if: ${{ !cancelled() && needs.verdict.result == 'success' && needs.verdict.outputs.nothing_new != 'true' && (needs.ci.result == 'success' || (needs.ci.result == 'skipped' && needs.verdict.outputs.reuse == 'true')) }}
     runs-on: ubuntu-latest
     outputs:
       deploy: ${{ steps.pub.outputs.publish }}
@@ -71,9 +178,9 @@ jobs:
           fetch-depth: 0        # merge-base needs the history, not just the tip
       - name: Is this commit still worth publishing?
         id: pub
-        env:
-          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
-        run: echo "publish=$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL")" >> "$GITHUB_OUTPUT"
+        run: |
+          SITE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
+          echo "publish=$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL")" >> "$GITHUB_OUTPUT"
 
   deploy:
     needs: publishable
@@ -105,9 +212,8 @@ jobs:
       # environment job exists it must not report success unless deploy-pages
       # really publishes, and it must never publish an older tree over a newer.
       - name: Confirm this commit may still be published (under the Pages lock)
-        env:
-          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: |
+          SITE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
           if [ "$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL")" != "true" ]; then
             echo "::error::REFUSING DEPLOY: a newer build went live while this run waited for the Pages lock (or history diverged); $GITHUB_SHA is not published"
             exit 1
