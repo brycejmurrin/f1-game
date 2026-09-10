@@ -22,10 +22,8 @@ const NetPlay = (function () {
     LEFT: "left",                         // host -> guests: this wire id went back to AI
   };
 
-  // ---------------------------------------------------------------------------
   // WIRE CLAMPS AND THE QUALI SEAM — module-level, shared with the lobby.
-  // ---------------------------------------------------------------------------
-
+  //
   // CLAMP BEFORE ANYTHING READS IT. Every field here is peer-supplied, and
   // `s`/`lap` feed c.prog — the one number the whole field order sorts on,
   // which the host then RELAYS onward. An out-of-range s (the wire carries up
@@ -119,7 +117,7 @@ const NetPlay = (function () {
     let session = null;
     function broadcast(type, data) {
       let ok = false;
-      for (const s of sessionList()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) {} }
+      for (const s of sessionList()) { try { ok = s.sendEvent(type, data) || ok; } catch (e) { /* a dead session must not stop the rest */ } }
       return ok;
     }
     const peerCar = new Map();            // peerId -> wireId
@@ -378,7 +376,7 @@ const NetPlay = (function () {
             // LOBBY session, which has no handler for it — so it sat on the
             // grid until HOLD_MAX_MS and counted down alone. The moment is kept
             // and told again to whoever arms after it was named.
-            else if (named) { try { s.sendEvent(EV.START, { at: s.localToPeer(named.at), hold: named.hold }); } catch (e) {} }
+            else if (named) { try { s.sendEvent(EV.START, { at: s.localToPeer(named.at), hold: named.hold }); } catch (e) { /* a dead session must not stop naming it for the rest */ } }
           }
           // QUALI / QLIVE: bindQuali below — the one validation site, shared
           // with the lobby phase. (QLIVE never reaches the classification, but
@@ -450,28 +448,22 @@ const NetPlay = (function () {
         || [{ id: PEER_ONE, session: NetSession.create({ transport: opts.transport }) }];
       localCar = (G.cars || []).find((c) => c.local) || G.player || null;
       remotes.clear();
-      // One profile today, an array when the room grows. Written as a list here
-      // so that the only thing Phase C has to change is where the list comes
-      // from, not what start() does with it.
-      // ALWAYS at least one joiner, even with no profile. A session opened
-      // without one is normal — the lobby knows who the peer is, but
-      // __apex.netLoopback and any caller that just wants a rival do not, and
-      // pickRemoteSlot(null) has always answered that with the any-free-car
-      // arm. Gating the list on peerProfile made those sessions fail no_slot,
-      // which is the whole multiplayer-session suite.
-      // AN EMPTY LIST IS NOT "NO PEERS" — it is peers whose profiles have not
-      // arrived. `opts.peers` is built from the lobby's _peers map, which fills
-      // from HELLO; a guest that connects and walks straight into the garage,
-      // or one whose HELLO is simply late, leaves it empty while the SESSION is
-      // wide open. `[] || fallback` keeps the empty array, so joining was empty,
-      // remotes stayed empty, and start() bailed no_slot — the host pressed GO
-      // and got "Could not find a grid slot for both drivers", then the lobby
-      // cancelled everyone back to the menu. Measured on the guest-in-the-garage
-      // path: race built (bahrain, 22 cars), then no_slot and a full teardown.
-      // The connections are the roster; a profile only decides WHICH slot, and
-      // pickRemoteSlot(null) has always had the any-free-car arm for that. Same
-      // trap the peerProfile gating below already carries a note about — this is
-      // it one level up.
+      // One profile today, an array when the room grows; Phase C only changes
+      // where the list comes from.
+      //
+      // `opts.peers` is built from the lobby's _peers map (filled from HELLO),
+      // so it starts empty until a HELLO arrives — a guest that walks straight
+      // into the garage, or whose HELLO is simply late, has a wide-open session
+      // and an empty peers list. `[] || fallback` kept that empty array instead
+      // of falling back, so joining was empty, remotes stayed empty, and
+      // start() bailed no_slot: measured on the guest-in-the-garage path
+      // (bahrain, 22 cars), race built then a full teardown on "Could not find
+      // a grid slot for both drivers".
+      //
+      // A profile only decides WHICH slot, and
+      // pickRemoteSlot(null) has always had the any-free-car arm for that — so
+      // an empty or profile-less join must still fall through to it rather
+      // than being read as "no peers".
       const joining = (opts.peers && opts.peers.length) ? opts.peers
         : (opts.sessions && opts.sessions.length)
           ? opts.sessions.map((e) => ({ profile: null, mods: null, id: e.id != null ? e.id : PEER_ONE }))
@@ -504,8 +496,8 @@ const NetPlay = (function () {
           const s = entry.session || entry;
           if (!s || closed.has(s)) continue;
           closed.add(s);
-          try { s.clearHandlers(); } catch (e) {}
-          try { s.close(); } catch (e) {}
+          try { s.clearHandlers(); } catch (e) { /* a failed adoption must still be discarded */ }
+          try { s.close(); } catch (e) { /* already gone */ }
         }
         localCar = null;
         session = null;
@@ -530,7 +522,7 @@ const NetPlay = (function () {
       holdUntil = 0;
       G.netNow = null;
       active = true;
-      if (role === "guest") { try { broadcast(EV.ARMED, {}); } catch (e) {} }
+      if (role === "guest") { try { broadcast(EV.ARMED, {}); } catch (e) { /* a dead session must not stop start() */ } }
       Log.info("net", "play start " + role + " n=" + remotes.size);
       const ids = remoteList().map((r) => G.cars.indexOf(r.car));
       return { ok: true, role, localId: G.cars.indexOf(localCar), remoteId: ids[0], remoteIds: ids };
@@ -589,7 +581,7 @@ const NetPlay = (function () {
       const hold = 0.2 + Math.random() * 1.8;
       const at = nowMs() + (G.COUNTDOWN_S + hold) * 1000 + SETTLE_MS;
       for (const s of sessionList()) {
-        try { s.sendEvent(EV.START, { at: s.localToPeer(at), hold }); } catch (e) {}
+        try { s.sendEvent(EV.START, { at: s.localToPeer(at), hold }); } catch (e) { /* a dead session must not stop naming it for the rest */ }
       }
       named = { at, hold };
       G.netStart = { at, hold, now: nowMs };
@@ -639,7 +631,7 @@ const NetPlay = (function () {
       handBackToAI(reason && reason !== "local" ? reason : null);
       // Every connection, not just the first — a host leaving must not strand
       // two guests holding open sockets to a race that has ended.
-      for (const s of sessionList()) { try { s.close(); } catch (e) {} }
+      for (const s of sessionList()) { try { s.close(); } catch (e) { /* already gone */ } }
       sessions.clear();
       peerCar.clear();
       session = null;
@@ -731,7 +723,7 @@ const NetPlay = (function () {
         const bytes = NetSnapshot.encodeSnapshot(Math.round(now), entries);
         // Live map is safe here: sendState delivers nothing (Map iterators
         // tolerate a removal, and only pump() can run onClose).
-        for (const s of sessions.values()) { try { s.sendState(bytes); } catch (e) {} }
+        for (const s of sessions.values()) { try { s.sendState(bytes); } catch (e) { /* a dead session must not stop the others' publish */ } }
       }
     }
 

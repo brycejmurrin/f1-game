@@ -39,45 +39,34 @@ const els = {
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
 
-// Renderer selection. TWO opt-in backends behind the Gfx seam: TLX (three.js/
-// TSL) when apex26.gfxBackend="three", WGX (WebGPU, frozen) when ="webgpu" AND
-// the browser exposes WebGPU. Anything else — and ANY opt-in init failure —
-// uses the WebGL2 backend (GLX) exactly as before, so the default path stays
-// byte-for-byte identical (this async IIFE only actually awaits when opted
-// into a deferred backend, or when the lazy __apex surface loads — localhost
-// / tests / ?apex=1). `gfx` is the handle every later
-// renderer call goes through; on the default path gfx===GLX.
+// Renderer selection: TLX (three.js) when apex26.gfxBackend="three", WGX
+// (WebGPU) when ="webgpu" and the browser supports it. Anything else, or any
+// opt-in init failure, uses GLX (WebGL2), keeping the default path
+// byte-for-byte identical — this async IIFE only actually awaits when opted
+// into a deferred backend, or when the lazy __apex surface loads (localhost /
+// tests / ?apex=1). `gfx` is the handle every later renderer call goes
+// through; on the default path gfx===GLX.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch — see PROVE_FRAMES below
-// ONE PRESENTED FRAME IS NOT PROOF THAT A BACKEND WORKS. The canary used to
-// disarm on the first world present, so a backend that bound, drew one frame and
-// then died — the jetsam-mid-race case TLX's own comment cites as the risk — got
-// no protection at all: the probe had already been cleared, and the next boot
-// happily loaded the same backend into the same crash. Hold the probe across a
-// short run of frames instead. 300 is ~5 s at 60 fps and much longer on the slow
-// devices this exists for, which is the right way round.
-//
-// The COUNTER is what runs per frame; storage is touched exactly twice, on the
-// arm and on the clear. Writing the probe every frame until proved (which is
-// what a naive widening does) would put a localStorage write in the render loop.
+// One presented frame is not proof a backend works: disarming on the first
+// world present missed a backend that bound, drew one frame, then died (the
+// jetsam-mid-race case). Hold the probe across a run of frames instead — 300
+// is ~5 s at 60 fps and longer on the slow devices this exists for. The
+// counter runs per frame; storage is touched only on arm and on clear, so a
+// per-frame write never lands in the render loop.
 const PROVE_FRAMES = 300;
 let _provedFrames = 0;
 let _probeArmed = false;      // mirrors the stored probe, so the loop never reads storage
-// Did a DEFERRED backend actually take the canvas this load? The canary re-arm
-// below used to read the saved PICK instead, and the two differ on the paths
-// that deliberately keep a pick while running GLX: a tab that already
-// claimed-and-died (skipClaim) and a create() that refused. Both attach GLX and
-// say in their own comments that the pick must survive — but arming "three"
-// while GLX is bound meant one unrelated failure on the next load reverted the
-// player's renderer choice. gfx === GLX on both paths, so identity cannot tell
-// them apart; only the bind site knows.
+// Did a DEFERRED backend actually take the canvas this load? Re-arming from
+// the saved PICK instead of this flag is wrong on paths that keep a pick while
+// running GLX (a claimed-and-died tab, or a refused create()) — gfx === GLX
+// on both, so identity alone cannot tell them apart; only the bind site knows.
 let _backendBound = false;
 // The rosters below are ApexRoster (js/roster.js), GENERATED from
 // tools/manifest.cjs by tools/gen/gen-shell.mjs — one truth, no hand mirror.
-// The two DEFERRED renderer groups. Array order is the documented toposort;
-// loadBackendScripts starts every file whose BACKEND_EDGES predecessors have
-// evaluated (six TLX IIFEs in the first wave). A load error RESOLVES: a
-// missing global is already the fallback.
+// The two DEFERRED renderer groups, in documented toposort order:
+// loadBackendScripts starts a file once its BACKEND_EDGES predecessors have
+// evaluated. A load error RESOLVES — a missing global is already the fallback.
 const BACKEND_FILES = ApexRoster.DEFERRED;
 const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
 function loadBackendScripts(files, edges) {
@@ -90,13 +79,11 @@ function loadBackendScripts(files, edges) {
     const el = document.createElement("script");
     el.src = src + "?v=" + (window.__APEX_BUILD || 0);
     el.crossOrigin = "anonymous";
-    // MARKED so index.html's broken-install repair leaves it alone. That handler
-    // sweeps every service-worker cache and reloads the page, which is right for
-    // a shell tag the CDN has not published yet and catastrophic for a lazy
-    // inject: a load error here already RESOLVES (see the contract above — a
-    // missing global IS the fallback), so a reload throws away a working
-    // degradation path, and it is unbounded because the one-shot guard is
-    // cleared by the `load` event that fired long before this fetch started.
+    // MARKED so index.html's broken-install repair (sweeps every SW cache and
+    // reloads) leaves it alone: that repair is right for a shell tag the CDN
+    // has not published yet, but a load error here already RESOLVES (a missing
+    // global IS the fallback), so a reload would throw away a working
+    // degradation path — and loop, since the one-shot guard already cleared.
     if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
     el.onload = el.onerror = () => resolve();
     document.head.appendChild(el);
@@ -122,26 +109,23 @@ const AGENT_EDGES = ApexRoster.LAZY_EDGES;
 // LAZY_RACE — the race payload, fetched before the first race.
 const RACE_FILES = ApexRoster.LAZY_RACE;
 // LAZY_SCENERY (tools/manifest.cjs): one file per circuit, ~27 KB each, holding
-// that circuit's bespoke scenery() closure. All 40 were 1,083 KB of the boot
-// script wall for a session that builds ONE of them.
+// that circuit's bespoke scenery() closure — all 40 were 1,083 KB of boot
+// script for a session that builds ONE of them.
 //
-// UNLIKE the presets, this one needs a real GATE. Tracks.build() is synchronous
-// and every loadTrack() caller uses `track` on the very next line (makeCars(),
-// track.def.id, applyRaceSettings()), so loadTrack cannot return early and
-// rebuild later — the closure has to be resident BEFORE it is called. Hence a
-// promise at each of the three entries that can reach a circuit not yet loaded:
-// the menu flyby (which already debounces 120 ms in a setTimeout), startRace(),
-// and openQuali(). Everything else — setTimeOfDay, the quali re-entry, the
-// __apex no-track fallback — only ever re-loads the circuit already on screen.
+// This one needs a real gate, unlike the presets: Tracks.build() is
+// synchronous and every loadTrack() caller uses `track` on the next line, so
+// the closure must be resident BEFORE loadTrack runs. Hence a promise at each
+// of the three entries that can reach a circuit not yet loaded: the menu
+// flyby, startRace(), and openQuali(). Everything else only ever re-loads the
+// circuit already on screen.
 const SCENERY_DIR = ApexRoster.SCENERY_DIR;
 function sceneryResident(id) {
   return !!(window.TrackScenery && window.TrackScenery[id]);
 }
-// Memoised on the in-flight PROMISE (the ensureDataHub idiom below): boot's
-// raceAssets(), the 120 ms flyby timer, startRace() and openQuali() all ask
-// for the same circuit, and until the first inject lands sceneryResident() is
-// still false — each caller used to inject its own copy (28–58 KB fetched and
-// evaluated up to four times). Cleared on settle so a dropped fetch retries.
+// Memoised on the in-flight PROMISE (the ensureDataHub idiom below): several
+// callers ask for the same circuit before sceneryResident() goes true, and
+// used to each inject their own copy (28-58 KB, up to four times). Cleared on
+// settle so a dropped fetch retries.
 const _sceneryLoads = new Map();
 function ensureScenery(idx) {
   const def = Tracks.LIST[idx];
@@ -154,11 +138,9 @@ function ensureScenery(idx) {
   return p;
 }
 // LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
-// menu button, which a session that never opens DATA runs no byte of. Only two
-// names escape js/data/: DataHub.init/.open here, and a `typeof F1API` read in
-// js/agent/apex.js that already guards itself. Unlike the scenery closures —
-// consumed synchronously by Tracks.build() on the next line — nothing outside
-// reads a Data* global, so this needs no gate beyond the button itself.
+// menu button, which a session that never opens DATA runs no byte of. Unlike
+// the scenery closures, nothing outside reads a Data* global, so this needs
+// no gate beyond the button itself.
 const DATA_FILES = ApexRoster.LAZY_DATA;
 // hub.js calls Data*.create() at EVAL time, so every tab module lands first —
 // the manifest derives "everything, then the hub" and the roster carries it.
@@ -239,42 +221,34 @@ let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
-  // Unset means WebGL2 on every device. Alternate backends carry a deferred
-  // script/heap cost and remain explicit player choices; the boot canary below
-  // still protects any stored THREE/WEBGPU pick.
+  // Unset means WebGL2 on every device; the boot canary below still protects
+  // any stored THREE/WEBGPU pick.
   // Last load claimed the canvas then died — skip opt-in THIS tab only
-  // (sessionStorage). Do not wipe the user's THREE/WEBGPU pick: Safari's
-  // navigator.gpu is on, WGX/TLX still refuse, and writing webgl2 made the
-  // RENDERER button bounce back every refresh.
+  // (sessionStorage). Do not wipe the pick: Safari's navigator.gpu can be on
+  // while WGX/TLX still refuse, and writing webgl2 bounced the RENDERER
+  // button back every refresh.
   let skipClaim = false;
   try { _claimSkipped = skipClaim = sessionStorage.getItem("apex26.gfxClaimFail") === "1";
     if (skipClaim) sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { skipClaim = _claimSkipped = true; /* cannot persist a skip: never claim the canvas */ }
-  // THE BOOT CANARY — what lets a PHONE hold a non-default backend. Both were
-  // refused whenever GLX.isMobile, after TLX on iOS rendered a flat pale ground
-  // with the lower half black. But the menu is DOM over the canvas: it survives a
-  // garbage frame, so the RENDERER button undoes that in one tap. An iOS jetsam
-  // kill it can NOT undo (no JS error, no contextlost; the recovery below fires
-  // only when GLX.init FAILS) — hence a probe armed before handing over the canvas
-  // and cleared once the alternate is bound (title SETTINGS never presents a
-  // world frame; leaving it armed until present() reverted every menu refresh).
-  // Re-armed around the first world present() so a jetsam on that frame still
-  // reverts; armed at the NEXT boot = never got through create() or present().
+  // THE BOOT CANARY — lets a phone hold a non-default backend past an iOS
+  // jetsam kill, which leaves no JS error or contextlost to recover from (the
+  // recovery below fires only when GLX.init FAILS). A probe arms before
+  // handing over the canvas and clears once the alternate is bound and has
+  // re-armed around the first world present(), so a jetsam on that frame
+  // still reverts; a probe still armed at the NEXT boot means create() or
+  // present() never completed last time.
   const PROBE_KEY = "apex26.gfxBackendProbe";
   let armed = null;
   try { armed = localStorage.getItem(PROBE_KEY); } catch (_) { /* blocked storage: no probe, so nothing to revert */ }
   // skipClaim = this tab already claimed-and-died; the probe is leftover from
   // that load. Do not persist webgl2 over the pick — attach GLX this boot and
   // retry the alternate on the next cold start.
-  // ONE STRIKE IS A MEMORY KILL, NOT A VERDICT. iOS jetsams a tab for reasons
-  // that have nothing to do with the renderer — another app, a background
-  // eviction, a bad moment — and this used to persist "webgl2" over the pick on
-  // the FIRST armed probe. That silently retires the player's choice forever:
-  // the phone stops using three, nothing ever turns it back on, and it reads as
-  // "three stopped working" (reported 2026-09-08). So the first strike reverts
-  // THIS BOOT ONLY and leaves the pick alone; the pick is written away only on
-  // the SECOND consecutive one, which still bounds a device that genuinely
-  // cannot run the backend to two attempts and no reload loop. The retired pick
-  // is remembered so RESET RENDERER and the picker can offer it back.
+  // ONE STRIKE IS A MEMORY KILL, NOT A VERDICT: an iOS jetsam can be unrelated
+  // to the renderer, so persisting "webgl2" over the pick on the first armed
+  // probe silently retired a working choice forever. The first strike reverts
+  // THIS BOOT ONLY and leaves the pick alone; only a SECOND consecutive strike
+  // retires it (bounding a genuinely broken device to two attempts, no reload
+  // loop). The retired pick is remembered so RESET RENDERER can offer it back.
   const STRIKE_KEY = "apex26.gfxProbeStrikes";
   if (armed && !skipClaim) {
     pref = "webgl2";
@@ -295,13 +269,10 @@ try {
   }
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
-  // A pick can only be honoured while its DEFERRED group still exists. Both
-  // groups are back (2026-09-04 re-attach), but the guard stays: during the
-  // spike-out BACKEND_FILES.three was `undefined`, loadBackendScripts(undefined)
-  // threw on `files.map`, and because the probe had already been armed one line
-  // earlier the NEXT boot warned that a backend "never presented a frame" when
-  // it had never been fetched. No group, no opt-in — that is what keeps a
-  // future detach honest instead of arming a probe over nothing.
+  // A pick can only be honoured while its DEFERRED group still exists: without
+  // this guard, an absent group threw on `files.map` in loadBackendScripts
+  // after the probe had already armed, and the next boot warned about a
+  // backend that had never even been fetched.
   const group = pref === "three" ? BACKEND_FILES.three
               : pref === "webgpu" ? BACKEND_FILES.webgpu : null;
   const optIn = !skipClaim && !!(group && group.length) &&
@@ -309,36 +280,25 @@ try {
   if (optIn && typeof Gfx !== "undefined") {
     // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
     try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
-    // FETCH THE BACKEND ONLY NOW. Neither alternate has a <script> tag any more:
-    // together they are ~550 KB that every visitor downloaded, parsed and
-    // evaluated so that almost none of them could use it. `optIn` above is
-    // resolved synchronously from localStorage, so the default GLX path never
-    // reaches this line and never awaits anything.
-    //
-    // The list is DEFERRED in tools/manifest.cjs (load-order.test.mjs asserts
-    // this loader and that manifest name exactly the same files, and that sw.js
-    // precaches them). Eval-time edges (BACKEND_EDGES === DEFERRED_EDGES) are
-    // the only waits — independent IIFEs fetch and evaluate together.
-    //
-    // No error path is needed beyond this: if a fetch fails, the backend global
-    // is simply absent, and Gfx.create already treats that as "unavailable"
-    // (`typeof TLX === "undefined"`) and returns null, which falls through to
-    // GLX below exactly as an unsupported browser always has.
+    // FETCH THE BACKEND ONLY NOW: neither alternate has a <script> tag, so the
+    // ~550 KB is fetched only by visitors who opted in — `optIn` resolves
+    // synchronously from localStorage, so the default GLX path never awaits
+    // anything. The list is DEFERRED in tools/manifest.cjs (load-order.test.mjs
+    // asserts loader/manifest/sw.js precache agree); eval-time edges
+    // (BACKEND_EDGES === DEFERRED_EDGES) are the only waits. No error path is
+    // needed beyond this: a failed fetch leaves the backend global absent,
+    // which Gfx.create treats as unavailable and falls through to GLX.
     if (pref === "three") preloadThreeVendor();
     await loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu);
     const backend = await Gfx.create(canvas, {});
     if (backend) {
-      // Route EVERY renderer call site onto the selected backend. game.js and
-      // tracks.js already take the backend by injection (game.js via the `gfx`
-      // handle; tracks.js via Tracks.build's opts.gfx), so they need no patch.
-      // The descriptor-copy below exists ONLY for the ~8 spec files that
-      // monkey-patch GLX.* by OBJECT IDENTITY (webgl-probes, parts-mesh-cache,
-      // custom-team, lighting-ab, …) and read the page-scope GLX global
-      // directly — identity IS the compatibility contract. Copy the backend's
-      // methods + live getters (width/height/aspect) onto the GLX object so
-      // `GLX.foo()` anywhere delegates. GLX's own WebGL context is never
-      // initialised here. (liverytex/ghost/car3d do NOT call GLX — they build
-      // raw {pos,nrm,col,idx} geometry that game.js uploads via the gfx handle.)
+      // game.js and tracks.js take the backend by injection (the `gfx` handle
+      // / Tracks.build's opts.gfx) and need no patch. The descriptor-copy
+      // below is only for spec files that monkey-patch GLX.* by object
+      // identity and read the page-scope GLX global directly — identity IS
+      // their compatibility contract. Copy the backend's methods + live
+      // getters (width/height/aspect) onto GLX so `GLX.foo()` delegates.
+      // GLX's own WebGL context is never initialised here.
       try { Object.defineProperties(GLX, Object.getOwnPropertyDescriptors(backend)); gfx = GLX; }
       catch (_) { gfx = null; }
       // Bound and live. Title has no track yet (deferred flyby), so present()
@@ -349,8 +309,8 @@ try {
 } catch (_) { gfx = null; }
 if (!gfx) {
   if (!GLX.init(canvas)) {
-    // A failed backend opt-in (WGX or TLX) may have already CLAIMED the canvas
-    // (getContext "webgpu"/"webgl2" succeeded before init died) — then
+    // A failed backend opt-in (WGX or TLX) may have already claimed the
+    // canvas (getContext "webgpu"/"webgl2" succeeded before init died), so
     // getContext("webgl2") can never attach on this load. Reload once with a
     // session skip so THIS tab attaches GLX; keep the pick and disarm the
     // canary or the next boot writes webgl2 (Safari WebGPU's usual path).
@@ -358,13 +318,12 @@ if (!gfx) {
     try { const p = localStorage.getItem("apex26.gfxBackend"); backendTried = p === "webgpu" || p === "three"; } catch (_) {}
     let skipped = false;
     if (backendTried) {
-      // READ THE SKIP BACK before reloading (with sessionStorage blocked the
+      // Read the skip back before reloading — with sessionStorage blocked the
       // write fails silently and the reload replays this claim-and-die boot
-      // forever; the ARMED probe then lets the next boot revert to webgl2 —
-      // the wgx.js device-lost idiom). And reload ONCE: a latch already set
-      // when THIS boot started means the previous reload's GLX.init failed
-      // too — WebGL2 is gone from this tab, and reloading again loops forever
-      // (measured 236 reloads/64 s, Vulkan-only config). Fall through to #nogl.
+      // forever. And reload ONCE: a latch already set when this boot started
+      // means the previous reload's GLX.init failed too and WebGL2 is gone
+      // from this tab (measured 236 reloads/64 s on a Vulkan-only config
+      // before this cap). Fall through to #nogl instead.
       try { if (!_claimSkipped) {
         sessionStorage.setItem("apex26.gfxClaimFail", "1");
         skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } } catch (_) { /* blocked storage: no skip, no reload */ }
@@ -443,31 +402,25 @@ function restoreFreePlaySelection() {
   clampDriverIdx();
 }
 let difficulty = store.get("difficulty", "normal");
-// RELIABILITY — "off" | "low" | "real" (js/race/reliability.js). A standing
-// preference like difficulty, so it persists. Ships OFF: store.get returns the
-// stored value whenever the key exists, so a new default only ever reaches a
-// fresh install — and this key is new for EVERY save, which means the default is
-// what every existing player gets. OFF is therefore the only choice that does not
-// silently start retiring cars in a game somebody was already halfway through.
+// RELIABILITY — "off" | "low" | "real" (js/race/reliability.js), a standing
+// preference like difficulty. Ships OFF: this key is new for every existing
+// save, so OFF is the only default that does not silently start retiring cars
+// in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
 // ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
-// "auto". Inside an activation zone X-mode has no cost and no downside, so the
-// optimal play is unconditionally "on" — which is exactly what the AI does, in
-// one line. Manual therefore asks the player to keep pace with cars that pay no
-// attention tax, and anyone who forgets concedes X_VMAX_GAIN of top speed on
-// every straight. AUTO hands the player the same deal the AI gets. It stays
-// OPT-IN because pressing the button is the mechanic, and taking that away by
-// default would remove the one thing there is to do with the system.
+// "auto". Inside an activation zone X-mode has no cost or downside, so the
+// optimal play is unconditionally on — which is what the AI does in one line.
+// Manual asks the player to keep pace with cars that pay no attention tax, at
+// the cost of X_VMAX_GAIN top speed if they forget; AUTO hands the player the
+// AI's deal. Stays opt-in because pressing the button is the mechanic.
 let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
 let unlimitedBudget = store.get("unlimitedBudget", false); // removes credit cap in car setup
-// how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
-// BUTTONS, not tilt, since 2026-09-08 — tilt is still one row away, but it is
-// not what a first-time phone player should be handed. The legacy `buttonSteer`
-// migration that used to pick between them is subsumed: both arms said BUTTONS.
+// How the player steers: "tilt" | "buttons" | "touch". Defaults to buttons —
+// not what a first-time phone player should be handed a tilt control for.
 let steerMode = store.get("steerMode", "buttons");
 const HUD_PROFILES = ["minimal", "standard", "broadcast"];
 let hudProfile = store.get("hudProfile", "standard");
@@ -475,13 +428,11 @@ if (HUD_PROFILES.indexOf(hudProfile) < 0) hudProfile = "standard";
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "full");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
-// AUTO IS ALWAYS THE FULL SET: fitHud scales / stacks / drops gaps instead of
-// hiding a cluster, and the label names what AUTO resolved to. A FORCED name
-// strips the half of the metrics the other half is named for (css/hud.css) —
-// TIMING keeps sectors+gaps, DRIVER keeps the car-state chips, COMPACT neither.
-// MAP and GAPS have their own controls and no layout touches them.
-// The help line under the LAYOUT chips names what AUTO resolved to, so the
-// player can see the forced name their screen would pick anyway.
+// AUTO is always the full set: fitHud scales / stacks / drops gaps instead of
+// hiding a cluster. A FORCED name strips the half of the metrics the other
+// half is named for (css/hud.css) — TIMING keeps sectors+gaps, DRIVER keeps
+// the car-state chips, COMPACT neither. MAP and GAPS have their own controls.
+// The help line under the LAYOUT chips names what AUTO resolved to.
 function hudLayoutNote() {
   const base = "AUTO is the full set, scaled to fit. TIMING keeps sectors and gaps, DRIVER the car-state chips, COMPACT neither.";
   if (hudMetricsLayout !== "auto") return base;
@@ -852,8 +803,8 @@ function isRaining() { return raceWeather === "rain"; }
 // "Weather and tyres". No car => the slick column: the old value, untouched.
 function gripMult(c) { const r = WET_GRIP[raceWeather]; return !r ? 1 : r[c ? (c.tread == null ? 2 : c.tread) : 0]; }
 
-// DIRTY AIR. Until 2026-09-08 following was strictly and only BENEFICIAL in
-// this model: the tow gave +4.5 % of top speed and cost nothing at all. With a
+// DIRTY AIR. Before this model, the tow was strictly and only BENEFICIAL:
+// it gave +4.5 % of top speed and cost nothing at all. With a
 // median adjacent-car pace gap of 0.484 % that made a slipstream worth about
 // nine grid positions of pace, unopposed — which is why pairs of AI cars traded
 // places over and over (57 % of order changes at Monza were the same pairs
@@ -893,12 +844,11 @@ let track = null, builtTrackId = null, builtTrackNight = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 // THE LIGHTS-OUT INSTANT ON THE RACE CLOCK. AiDrive.launchMul/launchDone read
-// their time as SECONDS SINCE GREEN, and raceT is that only for a first start:
-// a red-flag restart resumes the clock the flag stopped (see lights-out below),
-// so at raceT 600 launchDone() was instantly true and every AI launched with a
-// flat multiplier of 1 — no reaction, full throttle, while the player reacts to
-// the lights. Re-arming launchOn alone could not have fixed that; the model
-// needed an origin. 0 for a first start, where raceT is zeroed at green anyway.
+// their time as seconds since green, and raceT is that only for a first
+// start — a red-flag restart resumes the clock the flag stopped, so without
+// an origin launchDone() would go instantly true at raceT 600 and every AI
+// would launch at a flat multiplier while the player reacts to the lights.
+// 0 for a first start, where raceT is zeroed at green anyway.
 let launchT0 = 0;
 // B1 — RACE CONTROL (local yellow / VSC / safety car) lives in
 // js/race/race-control.js. A READ-ONLY race-logic layer: it consumes
@@ -964,14 +914,13 @@ function buildStudioRig() {
 let headlessMode = false;  // skip render() when true (headless control loop)
 const { CAM_MODES } = CamModes;  // player camera modes (js/camera/mode-switch.js; eval-time — a HARD_EDGES pair)
 let camMode = Math.min(Math.max(store.get("camMode", 3) | 0, 0), CAM_MODES.length - 1);
-// The game mode, on TWO axes. `flow` is what the run is FOR and survives a whole
-// championship; `session` is what this one visit to the track IS. They are genuinely
-// independent — a career weekend qualifies and then races, so a single flat enum
-// cannot say "career" and "qualifying" at once.
-// `seasonMode` and `timeTrial` are no longer state: they are DERIVED views handed
-// out through the G façade, so every downstream module and the __apex.info()
-// contract keep their exact meaning. CAREER is a championship too — same 24-round
-// calendar, same points, same standings — it just carries a save across seasons.
+// The game mode, on TWO axes. `flow` is what the run is FOR and survives a
+// whole championship; `session` is what this one visit to the track IS. They
+// are genuinely independent — a career weekend qualifies then races, so a
+// single flat enum cannot say "career" and "qualifying" at once. `seasonMode`
+// and `timeTrial` are DERIVED views handed out through the G façade, not
+// state. CAREER is a championship too — same calendar, points and standings —
+// it just carries a save across seasons.
 let flow = "gp";            // "gp" | "season" | "career"
 let session = "race";       // "race" | "tt" (solo against the clock) | "quali"
 const isChampionship = () => flow === "season" || flow === "career";
@@ -1001,16 +950,13 @@ let careerSettlement = null;
 const isCareer = () => flow === "career";
 let lapsTarget = GAME_LAPS; // laps before the session ends (GAME_LAPS or TT_LAPS)
 let raceLaps = GAME_LAPS;      // user-selected lap count
-// Whether a one-off race decides its grid by QUALIFYING rather than dropping the
-// player at P12. A championship always qualifies — that is what a weekend is —
-// so this is the switch for everything that is not one. A standing preference
-// like DIFFICULTY and RELIABILITY, not a per-race reset: someone who wants to
-// qualify wants to qualify next time too.
-// GRID RULE. "tier" is the pace-order grid gridUp() has always built (player
-// P12); "quali" grids off the qualifying session; "rev10" reverses the
-// qualifying top ten — Formula 2's sprint-race rule, never an F1 one; "revchamp"
-// inverts the championship standings; "random" sorts on gridUp's own single
-// jitter draw. The pre-rule boolean key is honoured once as the default.
+// GRID RULE, for a one-off race (a championship always qualifies). A standing
+// preference like DIFFICULTY and RELIABILITY, not a per-race reset. "tier" is
+// the pace-order grid gridUp() has always built (player P12); "quali" grids
+// off the qualifying session; "rev10" reverses the qualifying top ten
+// (Formula 2's sprint-race rule); "revchamp" inverts the championship
+// standings; "random" sorts on gridUp's own jitter draw. The pre-rule boolean
+// key is honoured once as the default.
 const GRID_RULES = ["tier", "quali", "rev10", "revchamp", "random"];
 let raceGrid = store.get("raceGrid", store.get("raceQuali", false) ? "quali" : "tier");
 if (GRID_RULES.indexOf(raceGrid) < 0) raceGrid = "tier";
@@ -1063,16 +1009,12 @@ let paused = false;
 // manual (default), >0 gently pulls toward the racing line through corners,
 // <0 pushes the car wide. Always an added bias the driver can steer against.
 let raceLineAssist = 0;
-// Tilt used to be multiplied by a fixed 0.7 here "so it trims on top of the
-// road-follow assist rather than throwing full lock". That rationale is gone —
-// the assist ships at 0 — and the multiply was worse than it looked: it landed
-// BEFORE the expo curve, so at the default STEER_EXPO 2.389 the real authority
-// was 0.7^2.389 = 0.43. A tilt driver could not reach even half of STEER_MAX_SLIP
-// at any lean, on any slider setting, and no knob exposed it. That is the
-// "I lean the phone to the stop and the car won't turn" feeling.
-// Tilt now gets the same lock range as every other input. Sensitivity (how far
-// you tilt for a given steer) is still MAX_TILT, and jitter is still the
-// One-Euro SMOOTHING slider — two knobs that a player can actually see.
+// Tilt used to be scaled by a fixed 0.7 here, landing BEFORE the expo curve —
+// at default STEER_EXPO that is 0.7^2.389 = 0.43 real authority, so a tilt
+// driver could never reach half of STEER_MAX_SLIP at any lean ("I lean the
+// phone to the stop and the car won't turn"). Tilt now gets the same lock
+// range as every other input; sensitivity is MAX_TILT and jitter is the
+// One-Euro SMOOTHING slider.
 // Debug/screenshot freeze: skip the simulation (physics + AI) but keep rendering,
 // so the camera still settles to a parked view yet nothing moves — giving the
 // visual-regression harness a deterministic frame. Only set by __apex.park().
@@ -1086,13 +1028,11 @@ let _testInput = null;
 // A human car with no controls yet (a networked rival before its first input
 // packet lands): coast, don't inherit whatever the local keyboard is doing.
 const NEUTRAL_INPUT = Object.freeze({ steer: 0, throttle: false, brake: false });
-// Where a human car's controls come from. The LOCAL car reads the real Input —
-// returning null here is the signal to do that, which preserves the existing
-// "_testInput ?? Input" precedence exactly. A non-local human car reads the
-// inputs its owner sent us. Same shape as _testInput throughout, so
-// __apex.setInput()/act() can drive either car and the netcode adds no new
-// vocabulary. Edge-triggered controls (shift, overtake) stay explicit at their
-// call sites because Input.consume*() may only be read once per frame.
+// Where a human car's controls come from. The LOCAL car reads the real Input
+// (null here is that signal); a non-local human car reads the inputs its
+// owner sent us, same shape as _testInput so __apex.setInput()/act() can
+// drive either. Edge-triggered controls (shift, overtake) stay explicit at
+// their call sites because Input.consume*() may only be read once per frame.
 function inputOf(c) {
   if (c.local) return _testInput;              // null => live Input
   return c.netInput || NEUTRAL_INPUT;
@@ -1253,16 +1193,14 @@ function renderPosOf(c, cS, renderX) {
   }
   return _rp;
 }
-// Unified render anchor. Returns the (s, x) the camera, the car body's
+// Unified render anchor: the (s, x) the camera, the car body's
 // height/orientation, and banking should all sample — derived from the SAME
-// interpolated WORLD position the body is drawn at (renderPosOf): project that
-// world point ONCE via trackFrom. World interpolation is smooth, so this s is
-// smooth AND identical across all three consumers. Deriving each consumer
-// independently from the arc read-back lerpS(rPrevS, s) diverged — that
-// read-back is non-monotonic (js/game.js), which showed as a backwards jolt
-// (camera), a speed-dependent fore/aft slide (car vs camera), and residual
-// height/orientation jitter at speed. Cars with no world pose yet fall back to
-// the arc interpolation.
+// interpolated WORLD position renderPosOf draws the body at, projected ONCE
+// via trackFrom, so all three consumers get an identical smooth s. Deriving
+// each independently from the arc read-back lerpS(rPrevS, s) diverged (that
+// read-back is non-monotonic) as a backwards camera jolt, a fore/aft car-vs-
+// camera slide, and height/orientation jitter at speed. Cars with no world
+// pose yet fall back to the arc interpolation.
 const _pa = { world: false, cS: 0, cX: 0 };
 // Per-render player (s,x) + body sample/bank — trackFrom/sample/banking once for cam/shadow/body.
 let _plCS = 0, _plCX = 0, _plOk = false, _plBodyOk = false;
@@ -1281,17 +1219,13 @@ function playerAnchor(c) {
   }
   return _pa;
 }
-// yawVis is produced in the physics step; render it interpolated like position,
-// or the mesh orientation leads the interpolated position by one full physics
-// step (16.7 ms) — a small orientation-vs-position judder during yaw transients.
-// yawVis USED to be a damped residual clamped well inside ±π, which is what made
-// a plain lerp safe. It is not any more: the player branch below assigns the raw
-// psi (`c.yawVis = psi`, normalised to (-π, π]) precisely so a spin renders as a
-// spin instead of a 40 deg crab. So yawVis now crosses the ±π branch cut once per
-// revolution, and a plain lerp across it sweeps the drawn basis through zero —
-// the car snaps to facing straight down the road and back, mid-spin, which is
-// exactly when the player is looking at it. Same wrap-safe delta headInterp uses
-// two functions down, for the same reason.
+// yawVis is produced in the physics step; render it interpolated like position
+// or the mesh orientation leads by one full physics step (16.7 ms) — judder
+// during yaw transients. A plain lerp is not safe here: the player branch
+// assigns the raw psi (normalised to (-π, π]) so a spin renders as a spin, so
+// yawVis crosses the ±π branch cut once per revolution and a plain lerp across
+// it would snap the drawn basis through zero mid-spin. Same wrap-safe delta
+// headInterp uses below, for the same reason.
 function yawVisInterp(c) {
   const y1 = c.yawVis || 0;
   if (c.rPrevYawVis === undefined) return y1;
@@ -1376,19 +1310,15 @@ const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shad
 // build fully isolated from the free-play garage: your career car and your Grand
 // Prix car for the same team are separate objects that can never leak into one
 // another, and career's own build is the only one subject to the R&D gate.
-// inCareer(), NOT Career.data(). data() is "a save exists on disk", and the save
-// is LOADED AT BOOT so the title screen can offer CONTINUE — so this branch used
-// to fire in a Grand Prix and a Time Trial too, for anyone who had ever started a
-// career with that team. That broke the isolation described above in both
-// directions, and the garage UI made it costly: setup-ui gates its rules on
-// G.careerOwned() (Career.owned(), which IS inCareer()-gated), so a GP garage
-// correctly offered FREE BUILD, the flat 780 cr cap and no R&D lock — and then
-// wrote the result straight into career.fitted. Fitting every top option under
-// FREE BUILD therefore maxed out the CAREER car for nothing: no credits spent, no
-// parts researched, the fitted cap bypassed, and nothing ever re-validates a
-// fitted build afterwards (Parts.resolveSetup deliberately trusts this funnel).
-// Merely opening the GP garage was also enough to mutate the save, since
-// buildSetup() deletes unusable categories out of the object it is handed.
+// Gates on inCareer(), NOT Career.data() — data() is only "a save exists on
+// disk" (loaded at boot for the title's CONTINUE), so that gate used to fire
+// in a GP or TT for anyone who had ever started a career with that team: the
+// GP garage correctly offered FREE BUILD with no R&D lock, then wrote the
+// result straight into career.fitted, silently maxing out the career car for
+// no credits and no research, bypassing the fitted cap (Parts.resolveSetup
+// trusts this funnel and never re-validates). Merely opening the GP garage
+// was enough to mutate the save, since buildSetup() deletes unusable
+// categories out of the object it is handed.
 function careerFitted(teamId) {
   const c = Career.inCareer() ? Career.data() : null;
   return c && teamId === c.team ? c : null;
@@ -1585,21 +1515,19 @@ function setCarRole(c, human, local) {
 }
 
 // ---- naming a car ACROSS peers ----------------------------------------------
-// cars[] index is not an identity. makeCars() drops the custom team unless the
-// player selected it (the filter above) and walks Career.gridDrivers(), so the
-// grid's LENGTH and ORDER differ between two screens in the same race. That is
-// why onState used to ignore the id on the wire and take cars[0]: the id was
-// the sender's own index and meant nothing to the receiver.
+// cars[] index is not an identity: makeCars() drops the custom team unless the
+// player selected it and walks Career.gridDrivers(), so the grid's length and
+// order differ between two screens in the same race — the id on the wire used
+// to be ignored (take cars[0]) because a sender's own index meant nothing to
+// the receiver.
 //
-// driverId ("redbull:1") is content-derived and IS stable, but the snapshot's
-// per-car id is one byte, so the string cannot go on the wire. This is the same
-// fact as a number: Teams.LIST is eleven fixed teams plus exactly one appended
-// custom entry (syncCustomTeam), so a team's INDEX is identical on every peer
-// even when the custom team's contents are not. Two seats each puts the whole
-// grid inside 0..23.
-//
-// Only meaningful once no two humans share a seat — which is what the seat
-// exclusivity in js/net/lobby.js guarantees, and why it had to land first.
+// driverId ("redbull:1") is content-derived and stable, but the snapshot's
+// per-car id is one byte, so the string can't go on the wire. A team's INDEX
+// works as that number instead: Teams.LIST is eleven fixed teams plus exactly
+// one appended custom entry, identical on every peer even when the custom
+// team's contents differ. Two seats each puts the whole grid inside 0..23.
+// Only meaningful once no two humans share a seat (js/net/lobby.js's seat
+// exclusivity), which is why that had to land first.
 function wireId(c) {
   if (!c || !c.team) return -1;
   // Per-car cache — team/seat are fixed for a car's life; makeCars rebuilds the objects each race.
@@ -1660,16 +1588,16 @@ function recomputePlayerMods() {
 }
 
 // ---------- car setup ----------
-// The AI speed multiplier for one driver. Ratings apply in EVERY mode — the grid
-// has personality in a one-off Grand Prix too, not only in a career, which is
-// where career layers its own development deltas on top.
+// The AI speed multiplier for one driver. Ratings apply in EVERY mode — the
+// grid has personality in a one-off Grand Prix too — and career layers its
+// own development deltas on top.
 //
-// The simRnd() draw is UNCONDITIONAL and comes FIRST. The stream position after
-// makeCars() must be identical whatever the ratings say: move the draw inside a
-// branch and a career's mere existence shifts every subsequent seeded result,
-// silently breaking tests/specs/agent-determinism.spec.js, tests/specs/autopilot.spec.js and
-// the seeded visual baselines. DriverRatings.skill() takes the sample rather than
-// drawing its own for exactly this reason.
+// The simRnd() draw is UNCONDITIONAL and comes FIRST: the stream position
+// after makeCars() must be identical whatever the ratings say, or a career's
+// mere existence would shift every subsequent seeded result and silently
+// break tests/specs/agent-determinism.spec.js and the seeded visual
+// baselines. DriverRatings.skill() takes the sample rather than drawing its
+// own for exactly this reason.
 function driverSkill(team, d, di) {
   const roll = simRnd();
   const r = DriverRatings.get(d.code, team.tier, Career.devFor(team.id, di));
@@ -1684,17 +1612,16 @@ function driverSkill(team, d, di) {
   };
 }
 
-// The pace an AI car gets from running a DEVELOPED build instead of its team's
-// works car — MY TEAM's hire, and nothing else on the grid (every other AI runs
-// its works car, which is exactly what `tier` already says).
+// The pace an AI car gets from running a DEVELOPED build instead of its
+// team's works car — MY TEAM's hire, and nothing else on the grid.
 //
 // It rides in `tierV`, the number the tier has always contributed, so the
-// per-car update at `c.tierV * c.skill * dd.ai` is unchanged in shape and no AI
-// gains a parts branch on the physics path. The mean of the four axes because a
-// human car spends its mods across four channels (speed, accel, cornering,
-// braking) and an AI has exactly one scalar — one axis alone would rate a
-// cornering upgrade as no upgrade at all. Pure: consumes no RNG, so the
-// stream-position contract makeCars() lives under is untouched.
+// per-car update at `c.tierV * c.skill * dd.ai` is unchanged in shape and no
+// AI gains a parts branch on the physics path. The mean of the four axes
+// because a human car spends its mods across four channels and an AI has
+// exactly one scalar — one axis alone would rate a cornering upgrade as no
+// upgrade at all. Pure: consumes no RNG, so the stream-position contract
+// makeCars() lives under is untouched.
 function buildPace(built, works) {
   const b = built.mods, w = works.mods;
   let sum = 0;
@@ -1793,17 +1720,13 @@ function makeCars() {
 }
 
 // `preOrder` is an explicit grid, fastest first — a qualifying classification.
-// Without one: sort by tier, player dropped into P12 for a climb. GP keeps that
-// on purpose; only a session that held a qualifying hour sets its own grid.
-// The GRID RULE applied to the order the session produced (null = gridUp's own
-// pace-order build). rev10 reverses the qualifying top ten and leaves 11+ as
-// they qualified (Formula 2's sprint rule); revchamp inverts SeasonCal.rank —
-// last in the standings starts first; random sorts on ONE simRnd() per car,
-// the same single draw gridUp() would have spent, so the stream position after
-// the grid is identical whichever rule ran (makeCars' stream contract). A
-// championship weekend that qualifies keeps its qualifying grid, and a sprint
-// result still grids the Grand Prix; a friend race's rule is the host's (lobby
-// SETTINGS `grid`).
+// Without one, GP sorts by tier and drops the player at P12 on purpose. The
+// GRID RULE applies to the order the session produced (null = gridUp's own
+// pace-order build): rev10 reverses the qualifying top ten and leaves 11+ as
+// they qualified (F2's sprint rule); revchamp inverts SeasonCal.rank; random
+// sorts on ONE simRnd() per car — the same draw gridUp() would have spent, so
+// the stream position after the grid is identical whichever rule ran
+// (makeCars' stream contract).
 function gridOrderFor(base) {
   // RANDOM CANNOT BE DECIDED LOCALLY IN A ROOM. netplay's grid is
   // negotiation-free precisely because gridUp() runs identically on every peer
@@ -2317,17 +2240,13 @@ function armReliability(field) {
   return field;
 }
 
-// Put the player on the LINE, AT REST — a standing qualifying lap.
-//
-// This used to launch at racing speed, because the simulated field is modelled
-// on a flying lap and timing a driven lap from a standstill against it would
-// lose you the launch every weekend by construction. The answer to that is not
-// to fake the player's start, though: it is to charge the MODEL the same
-// standing start (see STANDING_LOSS in js/race/quali-model.js), so both sides of the
-// comparison begin from rest and the two remain on one scale.
-//
-// Written in TRACK coordinates and pushed back out through worldFromTrack,
-// exactly as rescuePlayer() and retireCar() do.
+// Put the player on the LINE, AT REST — a standing qualifying lap. This used
+// to launch at racing speed, since the simulated field is modelled on a
+// flying lap and a driven lap from a standstill would lose the launch every
+// weekend by construction. The fix charges the MODEL the same standing start
+// instead (STANDING_LOSS in js/race/quali-model.js), so both sides begin from
+// rest on one scale. Written in TRACK coordinates and pushed back out through
+// worldFromTrack, exactly as rescuePlayer() and retireCar() do.
 function launchFlyingLap() {
   if (!player || !track) return;
   // Just BEHIND the line, not on the P1 box (~14 m back): the timed lap begins
@@ -2541,24 +2460,21 @@ function showTouchControls(show) {
   layoutDocks(steerBtns, manual);
 }
 
-// Fill the two thumb docks. This is the ONE thing the flex bar cannot express
-// on its own: a control genuinely changes SIDE between modes — pedals are
-// left-thumb in tilt AUTO, right-thumb in tilt MANUAL and in buttons (arrows
-// own the left) — and CSS cannot move an element to a different
-// parent. Everything else (spacing, wrapping, centring, never overlapping) is
-// the flex row's job, and there is deliberately not one coordinate here.
+// Fill the two thumb docks. This is the one thing the flex bar cannot express
+// on its own: a control genuinely changes SIDE between modes (pedals are
+// left-thumb in tilt AUTO, right-thumb in tilt MANUAL and in buttons) and CSS
+// cannot move an element to a different parent — everything else (spacing,
+// wrapping, centring) is the flex row's job.
 //
-// It moves GROUPS, never single buttons. A dock is a wrapping flex row, so a
-// dock holding five loose buttons breaks them apart wherever the width runs
-// out — which is how a DN button ended up sitting above its own UP. A group is
-// indivisible and carries its own shape (pedals and shifts are vertical pairs,
-// steer and taps are rows), so wrapping can only ever reorder whole groups and
-// a pair can never come apart or invert.
+// It moves GROUPS, never single buttons: a dock holding loose buttons breaks
+// them apart wherever the width runs out (how a DN button once ended up above
+// its own UP). A group is indivisible and carries its own shape (pedals and
+// shifts are vertical pairs, steer and taps are rows), so wrapping can only
+// reorder whole groups.
 //
-// Lists are in VISUAL left-to-right order, which for a normal flex row is just
-// DOM order. Each thumb's home is the screen edge it sits at, so what is held
-// continuously goes OUTERMOST — leftmost on the left, rightmost on the right —
-// and the discretionary taps sit inboard of it.
+// Lists are in VISUAL left-to-right order (DOM order for a normal flex row).
+// Each thumb's home is the screen edge it sits at, so what is held
+// continuously goes OUTERMOST and the discretionary taps sit inboard of it.
 function layoutDocks(steerBtns, manual) {
   const left = $("dock-left"), right = $("dock-right");
   if (!left || !right) return;
@@ -3235,16 +3151,13 @@ function armConfirm(btn, armedText, action) {
 }
 
 // Every menu layer, gone. Until multiplayer, startRace() could name the three
-// screens a race is reachable FROM (#overlay, #select, #results), because the
-// player pressing GO was standing on one of them. In a VS FRIEND race the HOST
-// owns lights-out, so the guest can be anywhere when it lands — in the garage,
-// in the waiting room, reading the rules — and each of those stayed up over a
-// running race with the HUD and the pedals showing through it.
-//
-// So this asks the DOM which layers exist instead of keeping a list that the
-// next screen silently falls off. `.screen` is what every full-screen menu and
-// modal is marked with; #overlay (the title screen) and the two tuner panels
-// predate the class and are named individually.
+// screens a race is reachable FROM, because the player pressing GO was
+// standing on one of them — but in a VS FRIEND race the HOST owns lights-out,
+// so the guest can be anywhere when it lands, and any fixed list silently
+// falls off the next screen. So this asks the DOM which layers exist: `.screen`
+// is what every full-screen menu and modal is marked with; #overlay (the
+// title screen) and the two tuner panels predate the class and are named
+// individually.
 function clearMenuScreens() {
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
   for (const id of ["overlay", "lighting", "camtune"]) { const el = $(id); if (el) el.hidden = true; }
@@ -3945,9 +3858,9 @@ function updateCar(c, dt, ranked) {
     // EVERY NODE, NODE-ALIGNED — not every 14 m from the car. A 14 m stride
     // anchored on c.s slid across the 4 m curvature nodes as the car moved, so
     // the sample set (and the min over it) changed every frame and the brake
-    // target stepped: throttle/brake chatter at every corner entry (2026-09-08).
-    // Anchored on the nodes, the window gains one node ahead and drops one
-    // behind per node travelled, and the target moves as smoothly as the LUT.
+    // target stepped: throttle/brake chatter at every corner entry. Anchored
+    // on the nodes, the window gains one node ahead and drops one behind per
+    // node travelled, and the target moves as smoothly as the LUT.
     const dsN = track.total / track.n;
     const ss0 = Math.ceil((c.s + 12) / dsN) * dsN;
     for (let ss = ss0, d = ss0 - c.s; d < look; ss += dsN, d += dsN) {
@@ -4279,7 +4192,7 @@ function updateCar(c, dt, ranked) {
     // OUTSIDE all lap. AiDrive.lineFollow says how much of the line a driver
     // takes; the remainder is their lane, which is what makes the field two
     // lines wide into a corner instead of one.
-    // LINE FAMILY (TrackLine.at's third argument, 2026-09-08): defending, or
+    // LINE FAMILY (TrackLine.at's third argument): defending, or
     // passing on the inside of the next corner, reads the INNER line (inside
     // on entry); passing around the outside reads the OUTER one (wide through
     // the long corners). Damped, so a pass or a defence is one coherent line
@@ -4489,7 +4402,7 @@ function updateCar(c, dt, ranked) {
       const vl = steer * STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1);
       c.aiHead = vAbs > 1 ? clamp(Math.asin(clamp(vl / vAbs, -1, 1)), -AI_HEAD_MAX, AI_HEAD_MAX) : 0;
     } else {
-      // HEADING STATE (2026-09-08). The old loop was proportional on POSITION:
+      // HEADING STATE. The old loop was proportional on POSITION:
       // steer = 0.9·err — 13.5 m/s of lateral speed per metre of error, the
       // same frame — so every target change was a lateral-velocity step and
       // the nose twitched (measured on a solo Monza lap: 5.4 steering
@@ -5615,29 +5528,23 @@ const SP_VIEWS = {
   top:   { az: Math.PI * 0.5,  el: 1.20, dist: 11.5 },
   // WING views: framed for watching the active-aero flaps travel. Both are
   // deliberately three-quarter, never head-on — the flaps rotate about the
-  // car's X axis, so the dead-on FRONT and REAR presets look straight down that
-  // axis and hide the one thing these views exist to show. `aim` names the wing
-  // whose flap the camera orbits (see setSetupView), and `minDist` lets them sit
-  // closer than the whole-car floor without letting the other views clip inside
-  // the bodywork.
-  // Distances are set from the frustum, not by eye: the preview runs a 36 deg
-  // VERTICAL fov and the docked sheet leaves ~60% of the canvas, so the usable
-  // width at the target is ~0.62*dist. That frustum floor put the 1.66 m front
-  // wing at ~4.5 m and the narrower 1.0 m rear wing at ~3.6 m; the shipped 3.6
-  // and 2.8 then tightened both by ~20% — the flap travel is the subject here,
-  // and a little wing-tip crop reads better than a flap a few pixels tall.
+  // car's X axis, so a dead-on view looks straight down that axis and hides
+  // the travel. `aim` names the wing the camera orbits (see setSetupView);
+  // `minDist` lets them sit closer than the whole-car floor. Distances come
+  // from the frustum (36 deg vertical fov, ~62% usable canvas width at the
+  // target), tightened ~20% from the frustum floor — the flap travel is the
+  // subject, and a little wing-tip crop reads better than a few-pixel flap.
   wingFront: { az: Math.PI * 0.30, el: 0.34, dist: 3.6, aim: "front", minDist: 2.0 },
   wingRear:  { az: Math.PI * 0.72, el: 0.36, dist: 2.8, aim: "rear",  minDist: 1.8 },
 };
 // The point the preview camera ORBITS and LOOKS AT. The defaults reproduce the
 // previous hard-coded numbers exactly (eye was offset -1.0 in z from a target at
 // z 0), so every existing view is unchanged; only the wing presets move them.
-// ORBIT AND AIM ARE THE SAME POINT, AND IT IS THE CAR'S CENTRE. These were
-// [0, 0.35, -1.0] and [0, 0.35, 0]: the camera circled a point 1 m BEHIND the
-// one it looked at, so the turntable swung the car across the frame instead of
-// rotating it in place — at some angles the nose left the visible region
-// entirely. Both were also behind the car: the drawn body spans z -2.69..3.18
-// (measured), so its centre is z +0.245, not 0 and not -1.
+// ORBIT AND AIM ARE THE SAME POINT, AND IT IS THE CAR'S CENTRE. These used to
+// be [0, 0.35, -1.0] and [0, 0.35, 0] — a camera circling a point 1 m BEHIND
+// the one it looked at, swinging the car across the frame instead of rotating
+// it in place. The drawn body spans z -2.69..3.18 (measured), so its centre
+// is z +0.245, not 0 and not -1.
 const SP_CAR_CTR = [0, 0.45, 0.245];
 const SP_ORBIT_DEF = SP_CAR_CTR.slice(), SP_TGT_DEF = SP_CAR_CTR.slice();
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();
@@ -7021,7 +6928,7 @@ function render(dt) {
     // full lighting path. Cockpit view compounds it: the camera sits against
     // near geometry and now carries reflective mirror surfaces.
     //
-    // MEASURED, by accident, 2026-08-14: every camera mode rendered 20 frames
+    // MEASURED, by accident: every camera mode rendered 20 frames
     // in seconds, then cockpit + night + perChunkLights=1 held 380% CPU for 22
     // MINUTES on 40 frames in the same harness. On real hardware a frame that
     // cannot finish inside the driver's watchdog is a GPU reset — context lost,
@@ -8867,18 +8774,15 @@ SettingRow.wire("pm-aero", { values: SettingRow.labels(["manual", "auto"]), read
   if (soundOn) GameAudio.uiTick();
 } });
 refreshAeroBtn();
-// A HIDDEN OR CLOSING TAB IS NOT A CRASH, and the boot canary must not read one
-// as a backend failure. PerfGov's sentinel already encodes this exact rule three
-// lines below — "a hidden tab that never comes back was killed in the BACKGROUND
-// — normal iOS housekeeping, not our crash" — and the probe needs it for a
-// second reason of its own: holding the arm across PROVE_FRAMES widened the
-// window from one frame to ~5 s, so a player who quits or navigates away inside
-// those 5 s would leave an armed probe and be silently reverted to WebGL2 on
-// their next boot. That is a false positive the one-frame version never had.
-//
-// Disarming here leaves armed exactly the case the canary is for: a FOREGROUND,
-// visible, actively-presenting tab that died. pagehide covers the clean exit
-// that visibilitychange does not always precede.
+// A HIDDEN OR CLOSING TAB IS NOT A CRASH, and the boot canary must not read
+// one as a backend failure — the same rule PerfGov's sentinel encodes below.
+// Holding the arm across PROVE_FRAMES widened the window from one frame to
+// ~5 s, so a player who quits or navigates away inside that window would
+// leave an armed probe and be silently reverted to WebGL2 on their next
+// boot — a false positive the one-frame version never had. Disarming here
+// leaves armed exactly the case the canary is for: a foreground, visible,
+// actively-presenting tab that died. pagehide covers the clean exit that
+// visibilitychange does not always precede.
 function _disarmProbeOnLeave() {
   if (!_probeArmed) return;
   _probeArmed = false;
@@ -9029,19 +8933,18 @@ await bootAgentSurface();
 if (typeof GameMetrics !== "undefined" && GameMetrics.setTelemetryLoader)
   GameMetrics.setTelemetryLoader(loadAgentSurface);
 
-// THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on purpose:
-// awaiting it here would put the 338 KB straight back on the critical path,
-// which is the whole thing this removes. Nothing in a menu resolves lighting —
-// applyRaceSettings() first runs inside startRace() — so the fetch has the
-// entire time a player spends picking a circuit to land.
+// THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on
+// purpose: awaiting it here would put the 338 KB straight back on the
+// critical path. Nothing in a menu resolves lighting — applyRaceSettings()
+// first runs inside startRace() — so the fetch has the entire time a player
+// spends picking a circuit to land.
 //
-// No gate is needed because an ABSENT file is already a legal state: light-store
-// reads window.LightPresets at call time (base()/layers(), both `|| null`), so
-// until it arrives every knob resolves to its TUNE_DEFS default. When it does
-// arrive, applyLightTune() re-walks TUNE_DEFS through layers() and fires
-// liveEffects only for knobs that actually moved — the same path a tuner slider
-// takes. Worst case is a frame of default lighting on a very slow link, not a
-// wrong scene that stays wrong.
+// No gate is needed because an ABSENT file is already a legal state:
+// light-store reads window.LightPresets at call time (`|| null`), so until it
+// arrives every knob resolves to its TUNE_DEFS default, and when it does
+// arrive applyLightTune() re-walks TUNE_DEFS and fires liveEffects only for
+// knobs that moved. Worst case is a frame of default lighting, not a wrong
+// scene that stays wrong.
 raceAssets();
 async function raceAssets() {
   // The circuit already selected (persisted trackIdx, or the default) is the

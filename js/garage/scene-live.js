@@ -74,8 +74,8 @@ function paintLive(cv, team, liv, ctx) {
     ctx2.font = "700 15px system-ui, sans-serif"; ctx2.fillStyle = "#9aa4b2";
     const last = ctx && ctx.last;
     const foot = ctx && ctx.career
-      ? (last ? (last.dnf ? "LAST: DNF · " + String(last.dnf).toUpperCase() : "LAST: P" + last.p + " · " + (last.pts | 0) + " PTS") : "SEASON OPENER")
-      : (track ? String(track.country || "").toUpperCase() + (ctx && ctx.night ? " · NIGHT" : "") : "SELECT A CIRCUIT");
+      ? (last ? (last.dnf ? `LAST: DNF · ${String(last.dnf).toUpperCase()}` : `LAST: P${last.p} · ${last.pts | 0} PTS`) : "SEASON OPENER")
+      : (track ? `${String(track.country || "").toUpperCase()}${ctx && ctx.night ? " · NIGHT" : ""}` : "SELECT A CIRCUIT");
     ctx2.fillText(foot, R.x + 10, R.y + R.h - 20, R.w - 20);
     ctx2.textAlign = "right"; ctx2.fillStyle = css(c2);
     ctx2.fillText(ctx && ctx.weather && ctx.weather !== "dry" ? String(ctx.weather).toUpperCase() : "", R.x + R.w - 10, R.y + R.h - 20);
@@ -100,7 +100,7 @@ function paintLive(cv, team, liv, ctx) {
     ctx2.fillStyle = b ? css(scale(c1, 0.75)) : "#f2f3f5";
     ctx2.font = "800 34px system-ui, sans-serif"; ctx2.textBaseline = "middle";
     ctx2.textAlign = "center";
-    ctx2.fillText((names[b * 2] || "") + "      " + (names[b * 2 + 1] || ""), R.x + R.w / 2, R.y + R.h / 2, R.w - 24);
+    ctx2.fillText(`${names[b * 2] || ""}      ${names[b * 2 + 1] || ""}`, R.x + R.w / 2, R.y + R.h / 2, R.w - 24);
     ctx2.fillStyle = css(c2); ctx2.fillRect(R.x, R.y + R.h - 5, R.w, 5);
   }
   // NEXT RACE sign: the flag and the name.
@@ -119,9 +119,9 @@ function paintLive(cv, team, liv, ctx) {
     ctx2.fillStyle = "#0a0c10"; ctx2.fillRect(T.x, T.y, T.w, T.h);
     ctx2.fillStyle = css(c2); ctx2.fillRect(T.x, T.y, 6, T.h);
     ctx2.fillStyle = "#9aa4b2"; ctx2.font = "700 18px system-ui, sans-serif"; ctx2.textAlign = "left";
-    ctx2.fillText(ctx && ctx.career ? "NEXT · ROUND " + (((ctx.round | 0) + 1)) : "NEXT RACE", T.x + 18, T.y + 18);
+    ctx2.fillText(ctx && ctx.career ? `NEXT · ROUND ${(ctx.round | 0) + 1}` : "NEXT RACE", T.x + 18, T.y + 18);
     ctx2.fillStyle = "#f2f3f5"; ctx2.font = "800 28px system-ui, sans-serif";
-    ctx2.fillText(track ? String(track.name || track.id).toUpperCase() + " GP" : "—", T.x + 18, T.y + 44, T.w - 30);
+    ctx2.fillText(track ? `${String(track.name || track.id).toUpperCase()} GP` : "—", T.x + 18, T.y + 44, T.w - 30);
   }
   return cv;
 }
@@ -130,11 +130,16 @@ const z2z = (q) => q[2];
 // channels that move with time, so the bank reads as monitors rather than a
 // poster of monitors. Painted into L_TRACE and laid over the dress quad.
 function paintTrace(cv, liv, now) {
-  const c = cv.getContext("2d"), R = L_TRACE, t = now / 1000;
+  const c = cv.getContext("2d");
+  const R = L_TRACE;
+  const t = now / 1000;
   const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
   c.fillStyle = "#05070a"; c.fillRect(R.x, R.y, R.w, R.h);
   for (let k = 0; k < 2; k++) {
-    const x0 = R.x + k * (R.w / 2) + 3, w = R.w / 2 - 6, y0 = R.y + 3, h = R.h - 6;
+    const x0 = R.x + k * (R.w / 2) + 3;
+    const w = R.w / 2 - 6;
+    const y0 = R.y + 3;
+    const h = R.h - 6;
     c.fillStyle = "#0b1016"; c.fillRect(x0, y0, w, h);
     c.strokeStyle = "rgba(120,150,175,0.22)"; c.lineWidth = 1;
     for (let g = 1; g < 4; g++) { c.beginPath(); c.moveTo(x0 + 4, y0 + h * g / 4); c.lineTo(x0 + w - 4, y0 + h * g / 4); c.stroke(); }
@@ -149,7 +154,7 @@ function paintTrace(cv, liv, now) {
     c.fillStyle = "#9aa4b2"; c.font = "700 11px system-ui, sans-serif"; c.textAlign = "left"; c.textBaseline = "top";
     c.fillText(k ? "BRAKE TEMP" : "ERS SOC", x0 + 6, y0 + 4);
     c.textAlign = "right"; c.fillStyle = k ? css(c2) : "#e2a33c";
-    c.fillText(k ? (410 + Math.round(Math.sin(t * 0.7) * 35)) + "°C" : Math.round(62 + Math.sin(t * 0.4) * 30) + "%", x0 + w - 6, y0 + 4);
+    c.fillText(k ? `${410 + Math.round(Math.sin(t * 0.7) * 35)}°C` : `${Math.round(62 + Math.sin(t * 0.4) * 30)}%`, x0 + w - 6, y0 + 4);
   }
 }
 // The quads the live atlas lands on. `floor` is its own group: the shadow and

@@ -126,7 +126,7 @@ const TrackMaps = (function () {
   // Build the outline + corner list once from the spline engine, then cache.
   function compute(def) {
     if (Object.prototype.hasOwnProperty.call(cache, def.id)) return cache[def.id];
-    Log.info("track", "maps compute " + def.id);
+    Log.info("track", `maps compute ${def.id}`);
     let out = null;
     try {
       // Centreline-only build: the minimap needs the spline (positions, tangents,
@@ -135,10 +135,10 @@ const TrackMaps = (function () {
       // 3D circuit builds on first open (~16 s stall).
       const tr = Tracks.buildCenterline(def);
       if (tr && tr.map && tr.map.length > 2) {
-        const pts = tr.map.map(function (p) { return [p[0], p[1]]; });
+        const pts = tr.map.map((p) => [p[0], p[1]]);
         let crns;
         if (def.turns && def.turns.length) {
-          crns = def.turns.map(function (frac, i) { return cornerAt(tr, frac, i + 1); });
+          crns = def.turns.map((frac, i) => cornerAt(tr, frac, i + 1));
         } else {
           crns = detectCorners(tr);
         }
@@ -149,7 +149,7 @@ const TrackMaps = (function () {
         const sectors = (def.sectors && def.sectors.length === 2) ? def.sectors.slice() : null;
         out = { pts: pts, py: tr.py, corners: crns, dir: dir, elevRange: elevRange, drsZones: drsZones, sectors: sectors };
       }
-    } catch (e) {
+    } catch {
       out = null;
     }
     cache[def.id] = out;
@@ -209,7 +209,7 @@ const TrackMaps = (function () {
     const sectionH = +m.sectionH > 0 ? +m.sectionH : 0;
     // With no measured column to spend, fall back to the width and let the
     // aspect pick the height — the pre-layout first paint.
-    const ceilFor = function (stacked) {
+    const ceilFor = (stacked) => {
       if (!sectionH) return Math.max(72, Math.round(cardInnerW / a));
       return sectionH - labelH - padY - (stacked ? infoH + gap : 0) - SLACK;
     };
@@ -247,8 +247,8 @@ const TrackMaps = (function () {
     canvas.height = h;
     canvas.style.aspectRatio = String(a);
     if (pinCss) {
-      canvas.style.width = w + "px";
-      canvas.style.height = h + "px";
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
       /* Pin width/height ONLY — never max-*. An inline max-width/max-height
          replaces the stylesheet's own caps, and those caps are the layout's
          last line of defence when this measurement is stale or floored:
@@ -360,7 +360,7 @@ const TrackMaps = (function () {
     // merge peaks within ~2% of the lap, keeping the sharper one
     const gap = Math.max(2, Math.round(0.02 * n));
     const merged = [];
-    peaks.sort(function (p, q) { return p.k - q.k; });
+    peaks.sort((p, q) => p.k - q.k);
     for (let i = 0; i < peaks.length; i++) {
       const last = merged[merged.length - 1];
       if (last && peaks[i].k - last.k < gap) {
@@ -379,7 +379,7 @@ const TrackMaps = (function () {
         merged.pop();
       }
     }
-    return merged.map(function (p, i) {
+    return merged.map((p, i) => {
       const frac = p.k / n;
       return cornerAt(tr, frac, i + 1);
     });
@@ -481,7 +481,7 @@ const TrackMaps = (function () {
       g.beginPath(); g.arc(PX(s[0]), PY(s[1]), width + 1.5, 0, Math.PI * 2); g.fill(); g.stroke();
     }
 
-      if (opts.corners) {
+    if (opts.corners) {
       const cs = data.corners;
       const rDot = opts.cornerR || 7;
       const fontPx = opts.cornerFont || 12;
@@ -545,7 +545,7 @@ const TrackMaps = (function () {
         L.lx = Math.min(W - bubbleR, Math.max(bubbleR, L.lx));
         L.ly = Math.min(H - bubbleR, Math.max(bubbleR, L.ly));
       }
-      g.font = "700 " + fontPx + "px system-ui, sans-serif";
+      g.font = `700 ${fontPx}px system-ui, sans-serif`;
       g.textAlign = "center"; g.textBaseline = "middle";
       for (let i = 0; i < labels.length; i++) {
         const L = labels[i];

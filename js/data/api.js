@@ -5,27 +5,17 @@ const F1API = (function () {
   const JOLPICA = "https://api.jolpi.ca/ergast/f1";
   const OPENF1 = "https://api.openf1.org/v1";
 
-  // THE SEASON IS READ FROM THE CLOCK, NOT BAKED INTO THE URL.
+  // THE SEASON IS READ FROM THE CLOCK, NOT BAKED INTO THE URL. Four Jolpica
+  // URLs hardcoded /2026/ would have kept serving that season forever without
+  // ever erroring — the worst kind of bug, because it looks like it works.
+  // Computed per call, not once at load, so a tab left open across New Year
+  // rolls over instead of pinning the year it booted in. Not Ergast's
+  // `/current` alias: this sandbox's proxy blocks api.jolpi.ca, so it could
+  // not be verified here — a safe swap once someone confirms it responds.
   //
-  // Four Jolpica URLs hardcoded /2026/, so the whole data hub — schedule,
-  // both standings tables, last race — would have quietly kept serving 2026
-  // for the rest of time. Nothing would have errored: the requests stay valid
-  // forever, they just describe a season that is over, which is the worst
-  // shape of bug because it looks like it works.
-  //
-  // Computed per call rather than once at module load, so a tab left open
-  // across New Year rolls over instead of pinning the year it booted in.
-  //
-  // Not Ergast's `/current` alias, which would be the tidier answer: this
-  // sandbox's egress proxy blocks api.jolpi.ca, so it could not be verified
-  // here, and an unverified API dependency is a worse bug than the one being
-  // fixed. `/current` is a safe swap for anyone who can confirm it responds.
-  //
-  // Between Jan 1 and the season opener the standings endpoints return an
-  // empty list. That is CORRECT — there are no standings yet — and every
-  // caller already handles the empty/null case. lastRace() is the exception:
-  // "the last race" has an answer in January (the previous finale), so on an
-  // empty result it asks season()-1 once, through the same queue and cache.
+  // Between Jan 1 and the opener, the standings endpoints return an empty
+  // list — correct, and every caller already handles it. lastRace() is the
+  // exception: it asks season()-1 once so January still shows the last finale.
   const season = () => String(new Date().getFullYear());
   const CACHE_PREFIX = "apex26.api.";
   const MIN_GAP_MS = 400;
@@ -111,7 +101,7 @@ const F1API = (function () {
         const raw = localStorage.getItem(key);
         const t = cacheEntryT(raw);   // null (corrupt) → oldest
         entries.push({
-          key: key, t: t || 0,
+          key, t: t || 0,
           size: typeof raw === "string" ? raw.length : 0,
           telem: /\/(car_data|location)\?/.test(key)
         });
@@ -141,7 +131,7 @@ const F1API = (function () {
 
   function writeCache(url, data) {
     const key = CACHE_PREFIX + url;
-    const payload = JSON.stringify({ t: Date.now(), data: data });
+    const payload = JSON.stringify({ t: Date.now(), data });
     const now = Date.now();
     let swept = false;
     if (now - lastCacheSweepAt >= CACHE_SWEEP_MS) {
@@ -473,8 +463,8 @@ const F1API = (function () {
   function mapSession(s) {
     s = s || {};
     const out = {
-      sessionKey: (s.session_key !== undefined && s.session_key !== null) ? s.session_key : null,
-      meetingKey: (s.meeting_key !== undefined && s.meeting_key !== null) ? s.meeting_key : null,
+      sessionKey: s.session_key != null ? s.session_key : null,
+      meetingKey: s.meeting_key != null ? s.meeting_key : null,
       year: num(s.year),
       name: str(s.session_name),
       type: str(s.session_type),
@@ -502,7 +492,7 @@ const F1API = (function () {
       return arr(list).map(function (m) {
         m = m || {};
         const out = {
-          meetingKey: (m.meeting_key !== undefined && m.meeting_key !== null) ? m.meeting_key : null,
+          meetingKey: m.meeting_key != null ? m.meeting_key : null,
           name: str(m.meeting_name),
           country: str(m.country_name),
           circuit: str(m.circuit_short_name),
@@ -537,18 +527,29 @@ const F1API = (function () {
     });
   }
 
+  // Both /position and /intervals stream one row per sample, not per driver:
+  // this folds a list down to each driver_number's most recent row. Shared by
+  // the plain and delta (live*) variants of both endpoints.
+  function latestByDriver(list) {
+    const latest = {};
+    for (let i = 0; i < list.length; i++) {
+      const row = list[i];
+      if (!row || row.driver_number == null) continue;
+      const prev = latest[row.driver_number];
+      if (!prev || String(row.date || "") >= String(prev.date || "")) latest[row.driver_number] = row;
+    }
+    return latest;
+  }
+  function byPos(x, y) {
+    return (x.pos === null ? 99 : x.pos) - (y.pos === null ? 99 : y.pos);
+  }
+
   function positions(sessionKey, ttl) {
     const url = OPENF1 + "/position?session_key=" + encodeURIComponent(sessionKey);
     return request(url, ttl != null ? ttl : sessionTtl(sessionKey)).then(function (list) {
       const a = arr(list);
       if (!a.length) return null;
-      const latest = {}; // driver_number -> latest sample
-      for (let i = 0; i < a.length; i++) {
-        const p = a[i];
-        if (!p || p.driver_number === undefined || p.driver_number === null) continue;
-        const prev = latest[p.driver_number];
-        if (!prev || String(p.date || "") >= String(prev.date || "")) latest[p.driver_number] = p;
-      }
+      const latest = latestByDriver(a);
       const out = [];
       for (const k in latest) {
         if (Object.prototype.hasOwnProperty.call(latest, k)) {
@@ -556,9 +557,7 @@ const F1API = (function () {
         }
       }
       if (!out.length) return null;
-      out.sort(function (x, y) {
-        return (x.pos === null ? 99 : x.pos) - (y.pos === null ? 99 : y.pos);
-      });
+      out.sort(byPos);
       return out;
     });
   }
@@ -578,19 +577,28 @@ const F1API = (function () {
   }
   function livePositions(sessionKey, sinceISO) {
     return request(deltaUrl("/position", sessionKey, sinceISO), 0, { cache: false }).then(function (list) {
-      const a = arr(list), latest = {}, out = [];
-      for (let i = 0; i < a.length; i++) {
-        const p = a[i];
-        if (!p || p.driver_number === undefined || p.driver_number === null) continue;
-        const prev = latest[p.driver_number];
-        if (!prev || String(p.date || "") >= String(prev.date || "")) latest[p.driver_number] = p;
+      const a = arr(list);
+      const latest = latestByDriver(a);
+      const out = [];
+      for (const k in latest) {
+        if (Object.prototype.hasOwnProperty.call(latest, k)) {
+          out.push({ num: num(latest[k].driver_number), pos: num(latest[k].position) });
+        }
       }
-      for (const k in latest) if (Object.prototype.hasOwnProperty.call(latest, k)) {
-        out.push({ num: num(latest[k].driver_number), pos: num(latest[k].position) });
-      }
-      out.sort(function (x, y) { return (x.pos === null ? 99 : x.pos) - (y.pos === null ? 99 : y.pos); });
+      out.sort(byPos);
       return { values: out, cursor: cursorOf(a) };
     });
+  }
+
+  // gap_to_leader IS NOT ALWAYS A NUMBER. OpenF1 sends the string "+1 LAP"
+  // (and "+2 LAPS", …) for a lapped driver, and parseFloat reads that as the
+  // number 1 — so every lapped car in a race was shown on the LIVE tab as a
+  // one-SECOND gap, with a near-zero gap bar to match. A lap down is not a
+  // time gap and must not be rendered as one: pass the label through as a
+  // STRING (null would be indistinguishable from missing data) and let the
+  // renderer show it without a bar.
+  function gapValue(raw) {
+    return (typeof raw === "string" && /lap/i.test(raw)) ? raw.trim() : num(raw);
   }
 
   function intervals(sessionKey, ttl) {
@@ -598,27 +606,10 @@ const F1API = (function () {
     return request(url, ttl != null ? ttl : sessionTtl(sessionKey)).then(function (list) {
       const a = arr(list);
       if (!a.length) return null;
-      const latest = {}; // driver_number -> latest sample
-      for (let i = 0; i < a.length; i++) {
-        const iv = a[i];
-        if (!iv || iv.driver_number === undefined || iv.driver_number === null) continue;
-        const prev = latest[iv.driver_number];
-        if (!prev || String(iv.date || "") >= String(prev.date || "")) latest[iv.driver_number] = iv;
-      }
+      const latest = latestByDriver(a);
       const out = {};
       for (const k in latest) {
-        if (Object.prototype.hasOwnProperty.call(latest, k)) {
-          // gap_to_leader IS NOT ALWAYS A NUMBER. OpenF1 sends the string
-          // "+1 LAP" (and "+2 LAPS", …) for a lapped driver, and parseFloat
-          // reads that as the number 1 — so every lapped car in a race was
-          // shown on the LIVE tab as a one-SECOND gap, with a near-zero gap
-          // bar to match. A lap down is not a time gap and must not be
-          // rendered as one: pass the label through as a STRING (null would
-          // be indistinguishable from missing data) and let the renderer
-          // show it without a bar.
-          const raw = latest[k].gap_to_leader;
-          out[k] = (typeof raw === "string" && /lap/i.test(raw)) ? raw.trim() : num(raw);
-        }
+        if (Object.prototype.hasOwnProperty.call(latest, k)) out[k] = gapValue(latest[k].gap_to_leader);
       }
       return out;
     });
@@ -626,16 +617,11 @@ const F1API = (function () {
 
   function liveIntervals(sessionKey, sinceISO) {
     return request(deltaUrl("/intervals", sessionKey, sinceISO), 0, { cache: false }).then(function (list) {
-      const a = arr(list), latest = {}, out = {};
-      for (let i = 0; i < a.length; i++) {
-        const iv = a[i];
-        if (!iv || iv.driver_number === undefined || iv.driver_number === null) continue;
-        const prev = latest[iv.driver_number];
-        if (!prev || String(iv.date || "") >= String(prev.date || "")) latest[iv.driver_number] = iv;
-      }
-      for (const k in latest) if (Object.prototype.hasOwnProperty.call(latest, k)) {
-        const raw = latest[k].gap_to_leader;
-        out[k] = (typeof raw === "string" && /lap/i.test(raw)) ? raw.trim() : num(raw);
+      const a = arr(list);
+      const latest = latestByDriver(a);
+      const out = {};
+      for (const k in latest) {
+        if (Object.prototype.hasOwnProperty.call(latest, k)) out[k] = gapValue(latest[k].gap_to_leader);
       }
       return { values: out, cursor: cursorOf(a) };
     });
@@ -779,7 +765,7 @@ const F1API = (function () {
 
   function stints(sessionKey, driverNumber) {
     let url = OPENF1 + "/stints?session_key=" + encodeURIComponent(sessionKey);
-    if (driverNumber !== undefined && driverNumber !== null) url += "&driver_number=" + encodeURIComponent(driverNumber);
+    if (driverNumber != null) url += "&driver_number=" + encodeURIComponent(driverNumber);
     return request(url, sessionTtl(sessionKey)).then(function (list) {
       return arr(list).map(function (s) {
         s = s || {};
@@ -794,7 +780,7 @@ const F1API = (function () {
 
   function pits(sessionKey, driverNumber) {
     let url = OPENF1 + "/pit?session_key=" + encodeURIComponent(sessionKey);
-    if (driverNumber !== undefined && driverNumber !== null) url += "&driver_number=" + encodeURIComponent(driverNumber);
+    if (driverNumber != null) url += "&driver_number=" + encodeURIComponent(driverNumber);
     return request(url, sessionTtl(sessionKey)).then(function (list) {
       return arr(list).map(function (p) {
         p = p || {};
@@ -819,30 +805,30 @@ const F1API = (function () {
   }
 
   return {
-    cancelAll: cancelAll,
+    cancelAll,
     // The raw queued/timed/retried GET, JSON-parsed: `request(url, 0, { cache: false })`
     // is what __apex.openf1/jolpica use so an ad-hoc probe cannot bypass the
     // rate-limit queue or hang without the FETCH_TIMEOUT_MS abort.
-    request: request,
-    schedule: schedule,
-    driverStandings: driverStandings,
-    constructorStandings: constructorStandings,
-    lastRace: lastRace,
-    latestSession: latestSession,
-    meetings: meetings,
-    sessionsForMeeting: sessionsForMeeting,
-    weather: weather,
-    positions: positions,
-    livePositions: livePositions,
-    intervals: intervals,
-    liveIntervals: liveIntervals,
-    sessionDrivers: sessionDrivers,
-    sessionResult: sessionResult,
-    fastestLap: fastestLap,
-    carData: carData,
-    locationData: locationData,
-    stints: stints,
-    pits: pits,
-    cacheEntryT: cacheEntryT
+    request,
+    schedule,
+    driverStandings,
+    constructorStandings,
+    lastRace,
+    latestSession,
+    meetings,
+    sessionsForMeeting,
+    weather,
+    positions,
+    livePositions,
+    intervals,
+    liveIntervals,
+    sessionDrivers,
+    sessionResult,
+    fastestLap,
+    carData,
+    locationData,
+    stints,
+    pits,
+    cacheEntryT
   };
 })();

@@ -92,7 +92,7 @@ const NetScan = (function () {
         stopTracks(stream);
         stream = null;
       }
-      if (video) { try { video.srcObject = null; } catch (e) {} video = null; }
+      if (video) { try { video.srcObject = null; } catch (e) { /* element already detached */ } video = null; }
       onCode = null;
       detector = null;
       if (wasLive) Log.info("net", "scan stop");

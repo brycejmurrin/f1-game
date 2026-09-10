@@ -2,6 +2,15 @@
 const QualiSheet = (function () {
   "use strict";
 
+const PODIUM = ["", " p1", " p2", " p3"];   // indexed by position; 4+ is ""
+
+function span(cls, text) {
+  const s = document.createElement("span");
+  s.className = cls;
+  if (text != null) s.textContent = text;
+  return s;
+}
+
 function create(G) {
   Log.info("ui", "QualiSheet.create");
   const { $ } = G;
@@ -17,40 +26,37 @@ function create(G) {
     for (const r of rows) {
       const team = Teams.LIST.find((t) => t.id === r.team);
       const row = document.createElement("div");
-      const podium = r.pos === 1 ? " p1" : r.pos === 2 ? " p2" : r.pos === 3 ? " p3" : "";
-      // A DRIVEN lap is marked. compute() has always worked out r.human — a
-      // real time substituted for a simulated one — and then this sheet used
-      // to throw it away, so three rivals' actual laps were drawn identically
-      // to the eighteen the model guessed. On a sheet whose whole job is "who
-      // was quick", not saying which times are real is the one thing it must
-      // not leave out. `you` still marks the local player, exactly as before.
+      // A rival's DRIVEN lap (r.human: a real time substituted for a simulated
+      // one) is marked — on a sheet whose whole job is "who was quick", which
+      // times are real is the one thing it must not leave out. `you` still
+      // marks the local player.
       const driven = r.human && !r.isPlayer ? " q-real" : "";
-      row.className = "res-row" + podium + (r.isPlayer ? " you" : "") + driven;
-      const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = r.pos;
-      const sw = document.createElement("span"); sw.className = "res-swatch";
+      row.className = `res-row${PODIUM[r.pos] || ""}${r.isPlayer ? " you" : ""}${driven}`;
+      const sw = span("res-swatch");
       sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
-      const nm = document.createElement("span"); nm.className = "res-name";
-      nm.textContent = r.code + "  " + r.name;
-      if (driven) {
-        const tag = document.createElement("span");
-        tag.className = "q-real-tag";
-        tag.textContent = " DRIVEN";
-        nm.appendChild(tag);
-      }
-      const tm = document.createElement("span"); tm.className = "res-pts q-time";
-      tm.textContent = r.pos === 1 ? G.fmtTime(r.t) : "+" + r.gap.toFixed(3);
-      row.append(pos, sw, nm, tm);
+      const nm = span("res-name", `${r.code}  ${r.name}`);
+      if (driven) nm.appendChild(span("q-real-tag", " DRIVEN"));
+      const tm = span("res-pts q-time", r.pos === 1 ? G.fmtTime(r.t) : `+${r.gap.toFixed(3)}`);
+      row.append(span("res-pos", r.pos), sw, nm, tm);
       body.appendChild(row);
     }
     const title = $("q-title");
     if (title) {
       const you = rows.find((r) => r.isPlayer);
-      title.textContent = you ? "QUALIFYING — P" + you.pos : "QUALIFYING";
+      title.textContent = you ? `QUALIFYING — P${you.pos}` : "QUALIFYING";
     }
   }
 
-  function open(rows) { Log.info("ui", "QualiSheet.open"); build(rows); $("quali").hidden = false; ScrollFade.refresh(); }
-  function close() { Log.info("ui", "QualiSheet.close"); $("quali").hidden = true; }
+  function open(rows) {
+    Log.info("ui", "QualiSheet.open");
+    build(rows);
+    $("quali").hidden = false;
+    ScrollFade.refresh();
+  }
+  function close() {
+    Log.info("ui", "QualiSheet.close");
+    $("quali").hidden = true;
+  }
 
   return { build, open, close };
 }

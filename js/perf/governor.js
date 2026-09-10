@@ -28,7 +28,11 @@ let _gfx = null;
 // headroom (<12.5 ms below the derived budget — see _floorMs). Desktop /
 // STANDARD-tier sit at scale 1 and never enter these branches, so their
 // (already smooth) behaviour is unchanged.
-let _frameEMA = 16.7, _govT = 0, _govCool = 0, _autoRes = true, _downHold = 0;
+let _frameEMA = 16.7;
+let _govT = 0;
+let _govCool = 0;
+let _autoRes = true;
+let _downHold = 0;
 // Consecutive frames over SPIKE_MS. Reset by any in-budget frame and by
 // sentinelArm(), so a fresh race never inherits a previous session's run.
 let _slowRun = 0;
@@ -45,7 +49,9 @@ let _slowRun = 0;
 // (menu-time changes are settled by the race-start reset in sentinelArm
 // anyway), and re-open the window at every race start.
 let _live = false;
-const UP_BACKOFF_MIN = 600, UP_BACKOFF_MAX = 7200;   // frames: 10 s … 2 min
+// frames: 10 s … 2 min
+const UP_BACKOFF_MIN = 600;
+const UP_BACKOFF_MAX = 7200;
 let _upBackoff = UP_BACKOFF_MIN;   // wait before the next restore attempt after a refused climb
 // The scale lever is INEFFECTIVE on this device right now — set when a
 // scale-down step was reverted for buying nothing, cleared once a tier has been
@@ -94,7 +100,8 @@ let _tierFutile = false;
 // only a SUSTAINED absence of fast frames (exactly what a hard rAF cap looks
 // like) moves it.
 let _floorMs = 16.7;
-const FLOOR_DOWN_A = 0.3, FLOOR_UP_A = 0.02;
+const FLOOR_DOWN_A = 0.3;
+const FLOOR_UP_A = 0.02;
 // DEGRADE_OVER sits ABOVE the floor; RESTORE_WITHIN also sits above it, just
 // barely. That asymmetry is the fix for a governor that could only ever go one
 // way. RESTORE_UNDER used to be 4.2 ms BELOW the floor, and `_frameEMA <
@@ -127,8 +134,11 @@ const FLOOR_DOWN_A = 0.3, FLOOR_UP_A = 0.02;
 // and would revert every step it took. 1 s keeps real magnitude across the
 // whole 10-fps-to-1-fps range while still bounding a pathological hitch; a tab
 // resume never reaches it at all, because one frame is not a run.
-const SPIKE_MS = 100, SPIKE_RUN = 3, SLOW_CAP = 1000;
-const DEGRADE_OVER = 2.3, RESTORE_WITHIN = 0.6;   // degrade at floor+2.3; restore once the EMA is back within 0.6 of the floor
+const SPIKE_MS = 100;
+const SPIKE_RUN = 3;
+const SLOW_CAP = 1000;
+const DEGRADE_OVER = 2.3;      // degrade at floor+2.3
+const RESTORE_WITHIN = 0.6;    // restore once the EMA is back within 0.6 of the floor
 
 // MAKE THE DEGRADE CAUSAL. The derived budget above is the right model but
 // takes a couple of seconds to settle; this is the net for while it does, and
@@ -150,9 +160,10 @@ const DEGRADE_OVER = 2.3, RESTORE_WITHIN = 0.6;   // degrade at floor+2.3; resto
 // ~zero improvement — the frame time was never coupled to the render target
 // at all — so even a small margin still tells the two apart.
 let _pendingVerify = null;   // {kind:"scale"|"tier", prev, ema} for the last unverified step
-const VERIFY_MARGIN = 0.5, VERIFY_COOL = 300;
+const VERIFY_MARGIN = 0.5;
+const VERIFY_COOL = 300;
 
-// ── Feature-shedding tiers: the governor's SECOND stage ──────────────────────
+// Feature-shedding tiers: the governor's SECOND stage.
 // Resolution scaling can't rescue costs that don't shrink with the render
 // target: the per-frame car/lamp shadow depth passes, the env-probe world
 // re-render, SSAO's three passes, the god-ray march, the SSR march. When the
@@ -164,7 +175,7 @@ const VERIFY_MARGIN = 0.5, VERIFY_COOL = 300;
 //   3  car sun-shadow map off (the blob contact shadow remains)
 //   4  SSAO + god rays + bloom off
 
-// ── Crash sentinel ───────────────────────────────────────────────────────────
+// Crash sentinel.
 // A jetsam/OOM kill leaves NO signal — no pagehide, no contextlost, no error.
 // The only detectable trace is the in-race flag persisted at race start still
 // being set at the NEXT boot. Mobile tier only: desktop tabs don't get
@@ -174,7 +185,8 @@ const VERIFY_MARGIN = 0.5, VERIFY_COOL = 300;
 // governor at boot so a phone that died mid-race last session starts
 // conservative instead of dying the same way again; each cleanly FINISHED race
 // pays one strike back down, so a recovered device climbs back to full quality.
-const SENT_ACTIVE = "apex26.raceActive", SENT_STRIKES = "apex26.crashStrikes";
+const SENT_ACTIVE = "apex26.raceActive";
+const SENT_STRIKES = "apex26.crashStrikes";
 // The build those strikes were earned against. A strike is evidence that THIS
 // CODE killed this device — and the moment the code is replaced that evidence
 // expires. Without this the safe mode is a one-way door: a build that ran the
@@ -189,7 +201,8 @@ const SENT_BUILD = "apex26.crashStrikesBuild";
 // strike ledger above expires with the code because it drives the quality
 // floor; this one has to outlive a deploy or it cannot answer "is this thing
 // being killed at all", which is the first question any field report asks.
-const SENT_SEEN = "apex26.crashSeen", SENT_SEEN_BUILD = "apex26.crashSeenBuild";
+const SENT_SEEN = "apex26.crashSeen";
+const SENT_SEEN_BUILD = "apex26.crashSeenBuild";
 let _crashStrikes = 0;
 // Safe-mode floor the governor's restore path can't climb below (per session —
 // only strikes paying off across boots lift it): one strike starts with
@@ -231,7 +244,9 @@ let _autoShed = 0;
 // how many ran over twice the derived budget. Two numbers, no allocation, and
 // they survive into `__apex.perf()` for as long as the race does.
 const OPEN_FRAMES = 600;   // ~10 s at 60 fps, ~20 s at 30
-let _openN = 0, _openMax = 0, _openSlow = 0;
+let _openN = 0;
+let _openMax = 0;
+let _openSlow = 0;
 // The USER's floor, from the GRAPHICS preset (js/perf/quality-preset.js). It is a
 // third term in tier()'s max(), and that is the whole interaction rule:
 //

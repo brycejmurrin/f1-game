@@ -1,4 +1,7 @@
-/* Apex 26 — TLXShaders.chunked: the chunked-mesh subsystem for the TLX backend (M7). The three.js sibling of js/render/glx/chunked.js: the heavy city/props geomet… */
+/* Apex 26 — TLXShaders.chunked: the chunked-mesh subsystem for the TLX backend
+ * (M7). The three.js sibling of js/render/glx/chunked.js: buckets the heavy
+ * city/props geometry into culled chunks and packs vertex attributes to cut
+ * three's CPU-side memory. */
 "use strict";
 
 (function () {
@@ -7,7 +10,7 @@
   const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                      new Float32Array(4), new Float32Array(4), new Float32Array(4)];
 
-  // ── vertex-attribute packing ─────────────────────────────────────────
+  // Vertex-attribute packing.
   // three keeps the CPU copy of every attribute array forever (measured: 49.8
   // MB of deduped attribute bytes on montreal, against GLX's 17.8 MB, which is
   // what OOM-kills an iPhone tab mid-race — docs/PERF-FINDINGS.md 2m). Half of
@@ -30,12 +33,6 @@
     // value that pushed it out of range. "29 stayed wide" is not actionable;
     // "unorm, 3.1 M values, max 3.87" says the colours carry emissive above 1.
     half: 0, wideBy: {}, wideMax: {}, wideLen: {} };
-  // One shared all-zero buffer behind every absent attribute. Views into it
-  // carry the right per-mesh count while costing one allocation in total —
-  // absent `trk` alone measured 5.88 MB of zeros across 153 meshes. SAFE only
-  // because nothing ever writes these: they are absent-source placeholders on
-  // static geometry, and three re-reads an array only on a version bump that
-  // never comes. Never hand this to an attribute a caller may mutate.
   // float32 -> float16 bits. three exports Float16BufferAttribute but no
   // converter, so this is ours: truncating mantissa (fine for colour), with
   // the subnormal and overflow cases handled rather than wrapped.
@@ -55,6 +52,12 @@
     }
     return sign | (e << 10) | (man >>> 13);
   }
+  // One shared all-zero buffer behind every absent attribute. Views into it
+  // carry the right per-mesh count while costing one allocation in total —
+  // absent `trk` alone measured 5.88 MB of zeros across 153 meshes. SAFE only
+  // because nothing ever writes these: they are absent-source placeholders on
+  // static geometry, and three re-reads an array only on a version bump that
+  // never comes. Never hand this to an attribute a caller may mutate.
   let _zeroBuf = new Float32Array(0);
   function _zeros(len) {
     if (_zeroBuf.length < len) _zeroBuf = new Float32Array(len);
@@ -85,7 +88,8 @@
       packStats.savedMB += (len * 4) / 1048576;      // the copy we did NOT make
       return new THREE.BufferAttribute(_zeros(len), itemSize);
     }
-    let fits = kind !== null && kind !== undefined, finite = true;
+    let fits = kind != null;
+    let finite = true;
     if (fits) {
       for (let i = 0; i < len; i++) {
         const v = src[i];
@@ -241,7 +245,7 @@
       let count = 0;
       buckets.forEach((bk) => {
         const arr = new IndexArray(bk.idx);
-        bk.idx = null;   // typed copy made — drop the growable JS array now so
+        bk.idx = null;   // typed copy made — the growable JS array can go now
         const geo = new THREE.BufferGeometry();
         geo.setAttribute("position", aPos);
         geo.setAttribute("normal", aNrm);
@@ -263,8 +267,7 @@
                chunks, cellSize: cell, count };
     }
 
-    // ── per-frame culling ────────────────────────────────────────────────
-    // Fills _visList (module scratch — reused, never reallocated) with the
+    // Per-frame culling. Fills _visList (module scratch — reused, never reallocated) with the
     // chunks whose AABB survives the frustum of the column-major `vp`, plus
     // the radial draw-distance cap when cullDist > 0: the frustum's far plane
     // is the only distance cull, so a pushed-out far plane (free camera) at a

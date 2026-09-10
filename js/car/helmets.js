@@ -40,8 +40,7 @@ const Helmets = (function () {
     purple: [0.45, 0.20, 0.70], violet: [0.62, 0.35, 0.85], pink:   [0.95, 0.45, 0.72],
   };
 
-  // ── zones ────────────────────────────────────────────────────────────────
-  // Each returns true where it paints. `az` wraps, so a stripe at 0 spans the
+  // Zones. Each returns true where it paints. `az` wraps, so a stripe at 0 spans the
   // nose and a wedge may cross the front.
   // Shortest angle between two azimuths, 0..180 — the +540 wrap keeps a
   // negative modulus off the result, so a stripe over the nose is the same
@@ -119,8 +118,7 @@ const Helmets = (function () {
     },
   };
 
-  // ── the grid ─────────────────────────────────────────────────────────────
-  // READ OFF THE REFERENCE PHOTOGRAPHS, driver by driver, rather than invented
+  // The grid. READ OFF THE REFERENCE PHOTOGRAPHS, driver by driver, rather than invented
   // in each driver's colours as these were before. Six zones and a base cannot
   // carry a sponsor board or Norris's doodle, so what each design keeps is what
   // survives to the distance the game is played at: the base, where the shell
@@ -421,8 +419,7 @@ const Helmets = (function () {
     };
   }
 
-  /* ── the shape ──────────────────────────────────────────────────
-     TRACED, not judged by eye. Four rounds of eyeballing a reference photo
+  /* The shape. TRACED, not judged by eye. Four rounds of eyeballing a reference photo
      produced four wrong shells, so the numbers below come out of the
      photographs themselves: a grid of twenty side-on team portraits, flooded
      from the white background to a mask, split into blobs, and each helmet's
@@ -583,7 +580,7 @@ const Helmets = (function () {
      twice the whole rest of the car for something ~100 px across, so it buys
      pixels no player is looking at. Past depth 1 the honest fix is not more
      geometry at all — it is per-fragment paint. The lit shader carries
-     vObjPos already (glsl-lit.js:59 sets it for the orange-peel flake), so
+     vObjPos already (glsl-lit.js sets it for the orange-peel flake), so
      the shell's (t, az) IS recoverable in the fragment shader without a new
      vertex attribute.
 
@@ -592,14 +589,15 @@ const Helmets = (function () {
      wrong. Only SIX zone kinds are used across all 22 drivers (band, cap,
      flash, mottle, patch, stripe) and no design carries more than ten zones,
      so the shader needs six smoothstep primitives, not 22 designs. And the
-     design IDENTITY needs no uniform at all: glsl-lit.js:46-53 already reads
-     fract(aMat) as data inside a reserved integer window for track flags, so
-     a helmet id of 32 + designIndex/64 survives int(vMat + 0.5) for all 22
-     and recovers as fract(vMat) * 64. The zone PARAMETERS are static — one
-     small LUT texture bound once a frame, on one of GLX's free texture units,
-     which matters because the lit program's default uniform block is already
-     over the 224-row GLES3 floor (uLight[192] + uMatTexScale[17] + three
-     mat4) and cannot take ~20 more vec4 safely.
+     design IDENTITY needs no uniform at all: the FLAG material block in
+     glsl-lit.js already reads fract(aMat) as data inside a reserved integer
+     window for track flags, so a helmet id of 32 + designIndex/64 survives
+     int(vMat + 0.5) for all 22 and recovers as fract(vMat) * 64. The zone
+     PARAMETERS are static — one small LUT texture bound once a frame, on one
+     of GLX's free texture units, which matters because the lit program's
+     default uniform block is already over the 224-row GLES3 floor
+     (uLight[192] + uMatTexScale[17] + three mat4) and cannot take ~20 more
+     vec4 safely.
 
      Two traps for whoever does it. The visor is a SURFACE CLASS, not a
      colour — shell() returns {c, glass} and build() writes S.glass, which

@@ -11,21 +11,23 @@
 // The measurement lives in tools/car/parts-sweep.mjs (thresholds, optical anchor
 // and calibration deciles documented in its header). This file is the gate.
 //
-// COST: the full catalog is ~4 min of node, so this belongs in
-// `npm run test:sweeps`, never in the edit-loop `test:tooling-fast`.
+// COST: the full catalog is ~70 s of node across four worker threads (~4 min
+// on one), so this belongs in `npm run test:sweeps-parts`, never in the
+// edit-loop `test:tooling-fast`.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  sweep, classify, attribute, loadParts, catalogRows, assertFlapSig, THRESHOLDS,
+  sweepParallel, classify, attribute, loadParts, catalogRows, assertFlapSig, THRESHOLDS,
 } from "../../tools/car/parts-sweep.mjs";
 
 const M = loadParts();
 
-// One sweep for the whole file. node:test runs the tests in this file in
-// order within one process, so a lazy singleton costs 4 min once, not per test.
+// One sweep for the whole file, farmed across worker threads by category.
+// node:test runs the tests in this file in order within one process, so a lazy
+// singleton pays for the census once, not per test.
 let _rows = null;
-const rows = () => (_rows || (_rows = sweep({ M })));
-const of = (cls) => rows().filter((r) => r.cls === cls)
+const rows = () => (_rows || (_rows = sweepParallel({ M })));
+const of = async (cls) => (await rows()).filter((r) => r.cls === cls)
   .map((r) => `${r.cat}/${r.optionId}`);
 
 test("flapSig hashes every recipe field the flap solver reads", () => {
@@ -68,33 +70,33 @@ test("a SIGNATURE is a pure reskin: same cost, same four stat multipliers", () =
   assert.deepEqual(bad, [], "a SIGNATURE option changes physics, not just looks");
 });
 
-test("every option resolves to itself under an eligible team", () => {
+test("every option resolves to itself under an eligible team", async () => {
   // An unknown or gated-out id resolves to the category DEFAULT with no warning
   // (js/car/parts.js:594), which would photograph the default car and report a
   // false "identical". sweep() asserts this per row; BROKEN is how it surfaces.
-  assert.deepEqual(of("BROKEN"), [], "an option does not resolve to itself");
+  assert.deepEqual(await of("BROKEN"), [], "an option does not resolve to itself");
 });
 
-test("no option is INVISIBLE", () => {
+test("no option is INVISIBLE", async () => {
   // Hard gate. Under 5 mm of surface movement, under 0.002 m2 of moved area,
   // and no colour or material change either — at the audit camera's 6 mm per
   // pixel that cannot shift a silhouette edge by one pixel.
-  assert.deepEqual(of("INVISIBLE"), [],
+  assert.deepEqual(await of("INVISIBLE"), [],
     `an option is indistinguishable from the one it replaces ` +
     `(< ${THRESHOLDS.INVISIBLE_MM} mm, < ${THRESHOLDS.INVISIBLE_AREA_M2} m2, no recolour)`);
 });
 
-test("no option only SLIDES its vertices along a surface that does not move", () => {
-  assert.deepEqual(of("SLIDE"), [],
+test("no option only SLIDES its vertices along a surface that does not move", async () => {
+  assert.deepEqual(await of("SLIDE"), [],
     "the recipe reaches the builder but moves nothing outward");
 });
 
-test("no option's only change is INTERNAL", () => {
-  assert.deepEqual(of("INTERNAL"), [],
+test("no option's only change is INTERNAL", async () => {
+  assert.deepEqual(await of("INTERNAL"), [],
     "the change is real but sits where no camera can see it");
 });
 
-test("COLOUR-ONLY is confined to its declared allow-list", () => {
+test("COLOUR-ONLY is confined to its declared allow-list", async () => {
   // Exact in BOTH directions. A fuel grade legitimately reads as a filler-cap
   // and fuel-line recolour — that is what a different fuel looks like on a car
   // whose bodywork is unchanged. Anything else that lands here is an option
@@ -109,12 +111,12 @@ test("COLOUR-ONLY is confined to its declared allow-list", () => {
     "fuel/biofuel",
     "fuel/race_blend",
   ];
-  assert.deepEqual(of("COLOUR-ONLY").sort(), [...ALLOWED].sort(),
+  assert.deepEqual((await of("COLOUR-ONLY")).sort(), [...ALLOWED].sort(),
     "a COLOUR-ONLY option appeared or disappeared — if it is new, its geometry " +
     "recipe is inert; if it is gone, drop it from this list");
 });
 
-test("WEAK is a downward-only ratchet", () => {
+test("WEAK is a downward-only ratchet", async () => {
   // Measured 2026-08-29 on the calibration tree. WEAK means under 20 mm (three
   // pixels) OR under 0.010 m2 of moved area: real but marginal. This number may
   // only ever go DOWN. Raising it to accommodate a new thin option is the
@@ -124,7 +126,7 @@ test("WEAK is a downward-only ratchet", () => {
   // count a recolour, not 25 thin recipes, and it is fixed in classify(). The
   // other 15 were real and were given real shape.
   const CEILING = 0;
-  const weak = of("WEAK");
+  const weak = await of("WEAK");
   assert.ok(weak.length <= CEILING,
     `${weak.length} WEAK options, ceiling ${CEILING}: ${weak.join(", ")}`);
 });
@@ -143,11 +145,11 @@ test("classify is a pure function of the measured row", () => {
   assert.equal(classify({ ...base, dHaus: 0.01, dHausVis: 0.01, movedArea: 0.5 }), "WEAK");
 });
 
-test("attribute names the inert key on a flagged row", () => {
+test("attribute names the inert key on a flagged row", async () => {
   // The triage path has to work on the day it is needed, not the day it is
   // written — and it is the only thing that turns "this option is thin" into
   // "this ONE key is clamped dead". Exercised on a known-flagged row.
-  const row = rows().find((r) => !["OK", "BASELINE"].includes(r.cls) && !r.broken);
+  const row = (await rows()).find((r) => !["OK", "BASELINE"].includes(r.cls) && !r.broken);
   if (!row) return;                       // catalog fully healthy — nothing to triage
   const keys = attribute(M, row);
   for (const k of keys) assert.equal(typeof k.dHaus, "number");

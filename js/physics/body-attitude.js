@@ -49,17 +49,17 @@ const _out = { pitch: 0, roll: 0, heave: 0 };
 function update(c, groundY, dt, ygV, dfFrac) {
   if (!c) return ZERO;
   const s = c._ba || seed(c);
-  ygV = ygV || 0;
+  const ygVSafe = ygV || 0;
   if (!enabled) {
     s.p.x = s.p.v = s.r.x = s.r.v = s.z.x = s.z.v = 0;
-    s.ygV0 = ygV; s.prevYg = groundY;
+    s.ygV0 = ygVSafe; s.prevYg = groundY;
     c.baPitch = 0; c.baRoll = 0; c.baHeave = 0;
     return ZERO;
   }
-  dt = Math.max(0, Math.min(dt || 0, MAX_DT));
+  const dtc = Math.max(0, Math.min(dt || 0, MAX_DT));
 
   const pitchT = clamp(-(c.axEstSm || 0) * PITCH_GAIN, -PITCH_MAX, PITCH_MAX);
-  crit(s.p, pitchT, PITCH_OMEGA, dt);
+  crit(s.p, pitchT, PITCH_OMEGA, dtc);
 
   // roll ← lateral accel. HUMAN cars: real centripetal speed·yawRate (only they
   // run the slip model that produces yawRateCur). AI has no world heading, so
@@ -68,10 +68,10 @@ function update(c, groundY, dt, ygV, dfFrac) {
   const aLat = c.human ? (c.speed || 0) * (c.yawRateCur || 0)
                           : -(c.speed || 0) * (c.speed || 0) * (c.kCur || 0);
   const rollT = clamp(aLat / LAT_MAX, -1, 1) * ROLL_MAX;
-  crit(s.r, rollT, ROLL_OMEGA, dt);
+  crit(s.r, rollT, ROLL_OMEGA, dtc);
 
   if (s.prevYg == null || Math.abs(groundY - s.prevYg) > TELEPORT_DY) {
-    s.z.x = 0; s.z.v = 0; s.ygV0 = ygV;
+    s.z.x = 0; s.z.v = 0; s.ygV0 = ygVSafe;
   }
   // Downforce stiffens the (virtual) suspension: the caller passes the same
   // dimensionless load term the grip model uses, aeroDfMult(c)·(|v|/vTop())²,
@@ -79,9 +79,9 @@ function update(c, groundY, dt, ygV, dfFrac) {
   // reaches this module (tools/check/vstd-lint.mjs). Null/absent ⇒ unscaled, which
   // is the pre-existing behaviour for any caller that has not been updated.
   const df = dfFrac > 0 ? (dfFrac < 1 ? dfFrac : 1) : 0;
-  s.z.v -= (ygV - s.ygV0) * HEAVE_GAIN * (1 - (1 - HEAVE_AERO_FLOOR) * df);
-  s.ygV0 = ygV;
-  crit(s.z, 0, HEAVE_OMEGA, dt);
+  s.z.v -= (ygVSafe - s.ygV0) * HEAVE_GAIN * (1 - (1 - HEAVE_AERO_FLOOR) * df);
+  s.ygV0 = ygVSafe;
+  crit(s.z, 0, HEAVE_OMEGA, dtc);
   s.prevYg = groundY;
   // soft saturation: approaches ±HEAVE_MAX asymptotically instead of flat-topping
   const heave = HEAVE_MAX * Math.tanh(s.z.x / HEAVE_MAX);

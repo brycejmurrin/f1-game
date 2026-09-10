@@ -59,7 +59,7 @@ window.SettingRow = (function () {
      GRAPHICS appends "— RELOADING…" to one). */
   function fill(sel, values) {
     if (!sel || !values) return;
-    const key = values.map((p) => S(p[0]) + "=" + S(p[1]) + (p[2] ? "!" : "")).join("|");
+    const key = values.map((p) => `${S(p[0])}=${S(p[1])}${p[2] ? "!" : ""}`).join("|");
     if (sel._srKey === key) return;
     sel._srKey = key;
     if (typeof sel.replaceChildren === "function") sel.replaceChildren();
@@ -120,7 +120,8 @@ window.SettingRow = (function () {
   function wire(h, opts) {
     const p = parts(h);
     if (!p || !p.sel) return null;
-    const read = opts.read, write = opts.write;
+    const read = opts.read;
+    const write = opts.write;
     if (opts.values) fill(p.sel, opts.values);
     p.sel.addEventListener("change", (e) => {
       if (e && e.stopPropagation) e.stopPropagation();
@@ -160,26 +161,27 @@ window.SettingRow = (function () {
     row.id = id;
     row.className = "set-row";
     row.setAttribute("role", "group");
-    row.setAttribute("aria-labelledby", id + "-label");
+    const labelId = `${id}-label`;
+    row.setAttribute("aria-labelledby", labelId);
     const label = d.createElement("span");
     label.className = "tune-label";
-    label.id = id + "-label";
+    label.id = labelId;
     label.textContent = labelText;
     const ctl = d.createElement("div");
     const prev = d.createElement("button");
-    prev.id = id + "-prev";
+    prev.id = `${id}-prev`;
     prev.type = "button";
     prev.setAttribute("data-step", "-1");
-    prev.setAttribute("aria-label", "Previous " + labelText.toLowerCase());
+    prev.setAttribute("aria-label", `Previous ${labelText.toLowerCase()}`);
     prev.textContent = "‹";
     const sel = d.createElement("select");
-    sel.id = id + "-sel";
-    sel.setAttribute("aria-labelledby", id + "-label");
+    sel.id = `${id}-sel`;
+    sel.setAttribute("aria-labelledby", labelId);
     const next = d.createElement("button");
-    next.id = id + "-next";
+    next.id = `${id}-next`;
     next.type = "button";
     next.setAttribute("data-step", "1");
-    next.setAttribute("aria-label", "Next " + labelText.toLowerCase());
+    next.setAttribute("aria-label", `Next ${labelText.toLowerCase()}`);
     next.textContent = "›";
     ctl.appendChild(prev);
     ctl.appendChild(sel);

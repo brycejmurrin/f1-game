@@ -189,8 +189,8 @@ window.MenuNav = (function () {
     return true;
   }
 
-  /* ---------------- arrow-key navigation ---------------- */
-
+  // Arrow-key navigation.
+  //
   // A control the browser would refuse to focus must not be offered as a
   // target: step() picks the NEAREST candidate, focusItem() fails silently on
   // it, and focus never moves. The contents of a closed <details> are the

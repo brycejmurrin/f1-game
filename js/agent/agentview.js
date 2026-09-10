@@ -929,7 +929,7 @@ const AgentView = (function () {
       G, fail, resolveCamera, model, corners, nextCorner, carWorld, scr,
       clamp, r1, r2, API_VERSION, CONVENTIONS, wrapS,
     });
-    const frame = _raster.frame, plan = _raster.plan, carRender = _raster.carRender;
+    const frame = _raster.frame, plan = _raster.plan, carRender = _raster.carRender, unitRight = _raster.unitRight;
     // carView() — the car, without rendering it
     // Replaces tools/car/render-car.mjs for everything except "does it LOOK right":
     // team identity, livery, the full parts spec and what it does to the car,
@@ -1091,8 +1091,7 @@ const AgentView = (function () {
         const frac = i / nAt;
         const s = frac * total;
         Tracks.sample(track, s, scr);
-        const rl = Math.hypot(scr.r[0], scr.r[2]) || 1;
-        const ex = scr.r[0] / rl, ez = scr.r[2] / rl;
+        const [ex, ez] = unitRight(scr);
         const roadY = scr.p[1];
         const row = [];
         for (let j = 0; j < nLat; j++) {
@@ -1167,8 +1166,7 @@ const AgentView = (function () {
           const pr = judgeable ? Tracks.project(track, p.x, p.z, null, p.y) : null;   // p.y: pick the right deck where the track crosses itself
           if (pr) {
             Tracks.sample(track, pr.s, scr);
-            const rl = Math.hypot(scr.r[0], scr.r[2]) || 1;
-            const ex = scr.r[0] / rl, ez = scr.r[2] / rl;
+            const [ex, ez] = unitRight(scr);
             const latHalf = Math.abs(p.w / 2 * ex) + Math.abs(p.d / 2 * ez);
             const over = scr.hw - (Math.abs(pr.lat) - latHalf);
             if (over > 0 && p.y + p.h / 2 > scr.p[1] + 0.3) {
@@ -2262,8 +2260,8 @@ const AgentView = (function () {
     function carWorld(c) {
       if (c.px != null) return [c.px, c.pz];
       Tracks.sample(G.track, c.s, scr);
-      const rl = Math.hypot(scr.r[0], scr.r[2]) || 1;
-      return [scr.p[0] + scr.r[0] / rl * c.x, scr.p[2] + scr.r[2] / rl * c.x];
+      const [ex, ez] = unitRight(scr);
+      return [scr.p[0] + ex * c.x, scr.p[2] + ez * c.x];
     }
 
     function visible(opts) {

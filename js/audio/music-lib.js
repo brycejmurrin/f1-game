@@ -142,7 +142,7 @@ window.MusicLib = (function () {
     const url = urls.get(id);
     if (!url) return;
     // A session of add/remove cycles leaks the whole blob per orphaned handle.
-    try { URL.revokeObjectURL(url); } catch (e) {}
+    try { URL.revokeObjectURL(url); } catch (e) { /* already revoked, or never a real object URL */ }
     urls.delete(id);
   }
 
@@ -181,6 +181,12 @@ window.MusicLib = (function () {
     return el;
   }
 
+  function libraryMsg() {
+    if (!usable) return DEAD_MSG;
+    if (!cache.length) return NO_TRACKS_MSG;
+    return cache.length + (cache.length === 1 ? " track" : " tracks") + " in your library.";
+  }
+
   function render(msg) {
     const box = $("as-tracks");
     const line = $("as-lib-msg");
@@ -189,7 +195,7 @@ window.MusicLib = (function () {
       box.textContent = "";
       for (const m of cache) box.appendChild(row(m, playingId));
     }
-    if (line) line.textContent = msg || (!usable ? DEAD_MSG : (cache.length ? cache.length + (cache.length === 1 ? " track" : " tracks") + " in your library." : NO_TRACKS_MSG));
+    if (line) line.textContent = msg || libraryMsg();
   }
 
   function refresh() {

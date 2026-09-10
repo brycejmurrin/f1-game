@@ -1,27 +1,21 @@
-/* Apex 26 — TLXShaders.chunks: shared TSL leaves for the three.js backend. The TSL sibling of js/render/glx/shaders/glsl-chunks.js (GLXChunks) — the SURFACE- family noise … */
+/* Apex 26 — TLXShaders.chunks: shared TSL leaves for the three.js backend.
+ * The TSL sibling of js/render/glx/shaders/glsl-chunks.js (GLXChunks):
+ * hash21/vnoise/ignoise, each with a setLayout (load-bearing — see below). */
 "use strict";
 
 (function () {
   function chunks(THREE, TSL) {
     const { Fn, float, vec2, fract, floor, dot, mix } = TSL;
 
-    // LAYOUTS ARE LOAD-BEARING, NOT STYLE. A TSL Fn without setLayout is
-    // INLINED at every call: the lit graph calls vnoise ~50 times across its
-    // material families and each copy brings its own temporaries, so three's
-    // WGSL builder declared 1,597 node variables for one fragment shader —
-    // 1,256 of them the vec2 floor/fract pairs below (12.4 KB by natural
-    // size). r185 emits node variables as module-scope var<private>, and
-    // WebKit caps the private address space at 8,192 bytes per module:
-    // "Render pipeline creation failed (…MeshBasicNodeMaterial_41): The
-    // combined byte size of all variables in the private address space
-    // exceeds 8192 bytes" — every lit pipeline refused on the iPhone, the
-    // small sky pipeline survived, and only the sky drew (2026-09-03, the
-    // owner's phone, first evidence after the uncapturederror listener fix).
-    // Dawn never checks the sum, so no Chromium run could see it. With a
-    // layout each helper compiles ONCE as a real WGSL/GLSL function and a
-    // call is a call. vendor PATCHES.md §4 moves the remaining variables
-    // to function scope; this keeps the shader small enough to compile
-    // fast on ANGLE-Metal as well (the 16 s first frame in the census).
+    // LAYOUTS ARE LOAD-BEARING, NOT STYLE. An unlayouted TSL Fn is inlined at
+    // every call: the lit graph calls vnoise ~50 times, so three declared 1,597
+    // node variables for one fragment (1,256 of them the floor/fract pairs
+    // below). r185 emits those as module-scope var<private> and WebKit caps
+    // that space at 8,192 bytes per module — every lit pipeline was refused on
+    // the owner's iPhone and only the sky drew (2026-09-03). Dawn never checks
+    // the sum, so no Chromium run can see it. With a layout each helper
+    // compiles once as a real function (vendor PATCHES.md §4 moves the rest to
+    // function scope), which also keeps the ANGLE-Metal first-frame compile short.
     const hash21 = Fn(([p2]) => {
       const p = fract(p2.mul(vec2(123.34, 456.21))).toVar();
       p.addAssign(dot(p, p.add(45.32)));

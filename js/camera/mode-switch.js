@@ -1,16 +1,9 @@
+/* CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. BROADCAST-ONLY: it changes which CAM_MODES rig you look through and never touches car state; game.js owns `camMode` / `camCutT` and this module writes them through G. */
 "use strict";
-// CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle,
-// hold/right-click for the picker grid) and the C-key cycle. Extracted from
-// game.js. BROADCAST-ONLY: it changes which of the 13 CAM_MODES you look
-// through and never touches physics or car state, so it is safe to own its
-// own wiring. Created once with the G façade at boot; game.js keeps `camMode`
-// and `camCutT` as its own closure state and this module mutates them through
-// G (the render loop reads them directly).
-//
-// CAM_MODES is the player camera list — index IS `camMode` (persisted as
-// apex26.camMode, so the order is a save-format contract; append, never
-// reorder). js/camera/vantage.js resolves each id to a rig; cam-tuner.js,
-// apex.js, agentview.js and game.js read it through CamModes.CAM_MODES.
+// CAM_MODES index IS `camMode` (persisted as apex26.camMode), so the order is a
+// save-format contract: append, never reorder. js/camera/vantage.js resolves
+// each id to a rig; cam-tuner, apex.js, agentview.js and game.js read the list
+// through CamModes.CAM_MODES.
 window.CamModes = (function () {
   const CAM_MODES = [
     { id: "chase",     label: "CHASE",     cut: 0.35 },
@@ -27,6 +20,7 @@ window.CamModes = (function () {
     { id: "tcam",      label: "T-CAM",     cut: 0 },
     { id: "rear",      label: "REAR CAM",  cut: 0.15 },
   ];
+  const HOLD_MS = 340;   // CAM button hold before the picker opens
 
   function create(G) {
     Log.info("game", "CamModes.create");
@@ -43,13 +37,12 @@ window.CamModes = (function () {
       G.store.set("camMode", G.camMode);
       if (G.camMode !== prev) {
         G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut || 0.35;
-        Log.info("game", "CamModes.setCamMode " + CAM_MODES[prev].id + " -> " + CAM_MODES[G.camMode].id);
+        Log.info("game", `CamModes.setCamMode ${CAM_MODES[prev].id} -> ${CAM_MODES[G.camMode].id}`);
       }
       refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
-      // The CAMERA TUNER edits whichever mode you are looking through, so a mode
-      // change from anywhere (C key, CAM picker, __apex.camera) must re-point its
-      // sliders. Reached through the global, not a create() const — this also
-      // runs at boot, before any such const is initialised.
+      // The CAMERA TUNER edits whichever mode you are looking through, so every
+      // mode change re-points its sliders. Reached through the global, not a
+      // create() const: this also runs at boot, before any such const exists.
       CamTunerPanel.refresh();
       return CAM_MODES[G.camMode].id;
     }
@@ -120,21 +113,18 @@ window.CamModes = (function () {
       if (!b) return;
       b.setAttribute("aria-haspopup", "menu");
       b.setAttribute("aria-expanded", "false");
-      let holdT = 0, held = false;
-      const HOLD_MS = 340;
+      let holdT = 0;
+      let held = false;
       b.addEventListener("pointerdown", () => {
         held = false;
         holdT = setTimeout(() => { held = true; camPicker.show(); }, HOLD_MS);
       });
       b.addEventListener("pointerup", () => clearTimeout(holdT));
       b.addEventListener("pointerleave", () => clearTimeout(holdT));
-      /* A CANCELLED TOUCH IS NOT A LONG PRESS. iOS cancels touches routinely — an
-         edge swipe, a notification, its own gesture arbitration — and a touch
-         pointer holds implicit capture, so `pointerleave` does not fire for one
-         either: neither line above ran, the 340 ms timer went off, and the
-         thirteen-mode camera picker opened mid-corner. `held` then stayed true and
-         ate the NEXT genuine tap as the hold's trailing click, so the camera button
-         appeared to do nothing at all until it was pressed twice. */
+      // A cancelled touch is not a long press. iOS cancels touches routinely
+      // (edge swipe, notification, gesture arbitration) and a touch pointer
+      // holds implicit capture, so pointerleave never fires either: the timer
+      // opened the picker mid-corner and `held` then ate the next genuine tap.
       const cancelHold = () => { clearTimeout(holdT); held = false; };
       b.addEventListener("pointercancel", cancelHold);
       b.addEventListener("lostpointercapture", cancelHold);

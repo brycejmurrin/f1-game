@@ -37,7 +37,8 @@ window.SheetShape = (function () {
   // Declared in css/tokens.css as --tall-at so the pre-paint inline script in
   // index.html reads the SAME number; these are the fallbacks for a context
   // where the property is missing. TALL_OFF keeps the 0.10 hysteresis band.
-  const TALL_FALLBACK = 1.05, TALL_HYST = 0.10;
+  const TALL_FALLBACK = 1.05;
+  const TALL_HYST = 0.10;
   function tallOn() {
     const b = document.body;
     const raw = b ? getComputedStyle(b).getPropertyValue("--tall-at") : "";
@@ -56,11 +57,11 @@ window.SheetShape = (function () {
    * Hysteresis again, and for a sharper reason than the shape: a sheet sitting
    * exactly on its threshold would otherwise toggle between one and two columns
    * on every observer callback. */
-  const PAIR_HYST = 8, RAIL_HYST = 12, WIDE_HYST = 16;
+  const PAIR_HYST = 8;
+  const RAIL_HYST = 12;
+  const WIDE_HYST = 16;
 
-  function classifyFlag(el, w, cssVar, attr, hyst, onVal, offVal) {
-    onVal = onVal || "on";
-    offVal = offVal || "off";
+  function classifyFlag(el, w, cssVar, attr, hyst, onVal = "on", offVal = "off") {
     const raw = getComputedStyle(el).getPropertyValue(cssVar);
     const at = parseFloat(raw);
     if (!at) { if (el.dataset[attr]) delete el.dataset[attr]; return; }
@@ -136,7 +137,8 @@ window.SheetShape = (function () {
    * sat at y=842 — below a 659px viewport, reachable only by scrolling the whole
    * panel past 178 sliders, which is the exact failure that file's header says
    * the fixed footer fixed. */
-  const SHORT_DEFAULT = 380, SHORT_HYST = 40;   // hysteresis, same reason as the others
+  const SHORT_DEFAULT = 380;
+  const SHORT_HYST = 40;   // hysteresis, same reason as the others
 
   /* THE FOURTH ANSWER: can this sheet afford the requested UI zoom and still
    * have a functional content row? Most sheets can simply scroll, but dense
@@ -482,7 +484,8 @@ window.SheetShape = (function () {
   function watchKeyboard() {
     const vv = window.visualViewport;
     if (!vv) return;
-    let last = -1, raf = 0;
+    let last = -1;
+    let raf = 0;
     const apply = () => {
       raf = 0;
       let kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
@@ -491,7 +494,7 @@ window.SheetShape = (function () {
       if (kb === last) return;
       last = kb;
       const st = document.documentElement.style;
-      if (kb) st.setProperty("--kb", kb + "px");
+      if (kb) st.setProperty("--kb", `${kb}px`);
       else st.removeProperty("--kb");
       // Fit caps read the host's padding, so --fit-at sheets re-derive their
       // --sheet-scale under the keyboard; watchScale() ignores this write
@@ -547,7 +550,7 @@ window.SheetShape = (function () {
       ro = new ResizeObserver((entries) => {
         for (const e of entries) {
           const r = e.target.getBoundingClientRect();
-          const key = Math.round(r.width) + "x" + Math.round(r.height);
+          const key = `${Math.round(r.width)}x${Math.round(r.height)}`;
           if (e.target._apexBox === key) continue;
           e.target._apexBox = key;
           classify(e.target, r.width, r.height);

@@ -202,7 +202,7 @@ const NetTransport = (function () {
   function prefetchIce() {
     const jobs = [derivedRelays()];
     let url = null;
-    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) {}
+    try { url = localStorage.getItem("apex26.turnApi"); } catch (e) { /* storage blocked (private mode): use the shipped URL */ }
     // Yours first, ours as the default — so a player who configured one is
     // never quietly moved onto somebody else's quota.
     if (!url) url = TURN_API;
@@ -218,7 +218,7 @@ const NetTransport = (function () {
       // building a connection. Abort rather than merely ignore, or the socket
       // lingers.
       const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-      const bail = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, FETCH_TIMEOUT_MS);
+      const bail = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) { /* already settled */ } }, FETCH_TIMEOUT_MS);
       fetchingIce = fetch(url, ctl ? { signal: ctl.signal } : undefined).then((r) => r.json()).then((body) => {
         const raw = Array.isArray(body) ? body : (body && (body.iceServers || body.ice_servers)) || null;
         // PER-ENTRY validation, not just "is an array". This list is
@@ -443,8 +443,8 @@ const NetTransport = (function () {
       ep.status = "closed";
       inbox.length = 0;
       queuedState = queuedEvents = queuedBytes = 0;
-      for (const k of CHANNELS) { try { chans[k] && chans[k].close(); } catch (e) {} }
-      try { pc.close(); } catch (e) {}
+      for (const k of CHANNELS) { try { chans[k] && chans[k].close(); } catch (e) { /* already closing */ } }
+      try { pc.close(); } catch (e) { /* already closing */ }
       ep._emit("close", reason);
     }
 

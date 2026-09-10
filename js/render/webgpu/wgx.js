@@ -457,7 +457,7 @@ const WGX = (function () {
       return null;
     }
 
-    let adapter, device, ctx, format, _softAdapter = false;
+    let adapter, device, ctx, format, _softAdapter = false, _timestampOk = false;
     try {
       // Phones: low-power first. MDN: high-performance on a portable GPU
       // increases device.lost (iOS will shed the device under thermal). Desktop
@@ -538,7 +538,7 @@ const WGX = (function () {
       const _devHas = function (name) {
         return !!(device.features && device.features.has && device.features.has(name));
       };
-      var _timestampOk = _canTimestamp && _devHas("timestamp-query");
+      _timestampOk = _canTimestamp && _devHas("timestamp-query");
       // Re-derived from the DEVICE, not the adapter, and assigned on every
       // create — an adapter that advertises a feature can still hand back a
       // device without it, and a later create must not inherit an earlier
@@ -1116,7 +1116,6 @@ const WGX = (function () {
     let lampShadowTex = null, lampShadowView = null, lampShadowUBO = null, lampShadowG0BindGroup = null;
     let _lampShadowArmed = false, _lampArms = 0, _lampIdx = -1;
     const lampShadowLVPData = new Float32Array(16);
-    let matAlbedoTex = null, matNormalTex = null;
     let matPlaceTex = null, matPlaceView = null;
     let matAlbedoView = null, matNormalView = null, matArraySamp = null;
     // Placeholder views stay alive for the device lifetime; pack tokens in
@@ -1138,7 +1137,6 @@ const WGX = (function () {
     let _particleBG = [null, null], _particleFlip = 0;
     const _retiredBufs = [];   // buffers replaced MID-FRAME; destroyed after the frame's submit
     let skyPipelineMS = null;
-    let _fxPipes = { 1: {}, 2: {} };
 
     // Blocker map objects.
     let blockerTex = null, blockerView = null, blockerSampler = null;

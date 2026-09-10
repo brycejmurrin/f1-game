@@ -832,7 +832,7 @@ function boardInfo(team, getParts, driverIdx) {
     return { stats, spec, driver: drv, budget: cap,
              left: Math.max(0, cap - (r.cost || 0)) };
   } catch (e) {
-    Log.warn("game", "GarageScene boardInfo failed: " + (e && e.message));
+    Log.warn("game", `GarageScene boardInfo failed: ${e && e.message}`);
     return null;
   }
 }
@@ -841,9 +841,9 @@ function boardInfo(team, getParts, driverIdx) {
 // — the texture would never be repainted.
 function boardKey(info) {
   if (!info) return "-";
-  let k = info.left + "|" + (info.driver.num == null ? "-" : info.driver.num);
-  for (let i = 0; i < info.stats.length; i++) k += "|" + info.stats[i].value;
-  for (let i = 0; i < info.spec.length; i++) k += "|" + info.spec[i].label;
+  let k = `${info.left}|${info.driver.num == null ? "-" : info.driver.num}`;
+  for (let i = 0; i < info.stats.length; i++) k += `|${info.stats[i].value}`;
+  for (let i = 0; i < info.spec.length; i++) k += `|${info.spec[i].label}`;
   return k;
 }
 
@@ -1004,9 +1004,9 @@ function paintDress(team, liv, info) {
       ctx.fillStyle = c[1]; ctx.beginPath(); ctx.arc(R.x + 28, y, 8, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = "#c8d4de"; ctx.font = "600 15px system-ui, sans-serif";
       ctx.textAlign = "left";
-      ctx.fillText("STINT " + (r + 1) + "   " + c[0], R.x + 46, y);
+      ctx.fillText(`STINT ${r + 1}   ${c[0]}`, R.x + 46, y);
       ctx.textAlign = "right"; ctx.fillStyle = css(c2);
-      ctx.fillText(String(12 + ((h >> (r * 3)) & 7) * 3) + " LAPS", R.x + R.w - 18, y);
+      ctx.fillText(`${12 + ((h >> (r * 3)) & 7) * 3} LAPS`, R.x + R.w - 18, y);
     }
   }
   // SIGN — the team wordmark on its own, for the floor mark and the lit sign
@@ -1066,9 +1066,9 @@ function paintBoards(cv, team, liv, info) {
   // BUDGET — spent against the cap, with a bar that empties as you spend.
   panel(D_BUDGET, "BUDGET");
   ctx.textAlign = "left"; ctx.fillStyle = "#f2f3f5"; ctx.font = "700 40px system-ui, sans-serif";
-  ctx.fillText(info.left + " cr", D_BUDGET.x + 18, D_BUDGET.y + 84);
+  ctx.fillText(`${info.left} cr`, D_BUDGET.x + 18, D_BUDGET.y + 84);
   ctx.fillStyle = "#8f98a6"; ctx.font = "700 20px system-ui, sans-serif";
-  ctx.fillText("OF " + info.budget + " REMAINING", D_BUDGET.x + 190, D_BUDGET.y + 88);
+  ctx.fillText(`OF ${info.budget} REMAINING`, D_BUDGET.x + 190, D_BUDGET.y + 88);
   const rw = D_BUDGET.w - 36;
   ctx.fillStyle = "#191d24"; ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw, 12);
   ctx.fillStyle = css(c2);
@@ -1296,13 +1296,13 @@ function rebuild(team, liv, info, ctx) {
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
   const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
-  const livKey = kc(liv && liv.c1) + "/" + kc(liv && (liv.accent || liv.stripe || liv.c2)) +
-                 "/" + kc(liv && liv.c2) + "/" + kc(liv && liv.logo) +
-                 "/" + kc(liv && liv.logo2) + "/" + kc(liv && liv.logo3);
-  const gKey = (team && team.id) + "|" + livKey +
-               "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num)) +
-               "|" + ctxKey(ctx);
-  const key = gKey + "|" + boardKey(info);
+  const livKey = `${kc(liv && liv.c1)}/${kc(liv && (liv.accent || liv.stripe || liv.c2))}`
+                 + `/${kc(liv && liv.c2)}/${kc(liv && liv.logo)}`
+                 + `/${kc(liv && liv.logo2)}/${kc(liv && liv.logo3)}`;
+  const gKey = `${team && team.id}|${livKey}`
+               + `|${logoGen}|${drv[0] && drv[0].num}-${drv[1] && drv[1].num}`
+               + `|${ctxKey(ctx)}`;
+  const key = `${gKey}|${boardKey(info)}`;
   if (key === cacheKey && shellMesh) return;
   if (gKey !== geomKey || !shellMesh) {
     if (shellMesh) _gfx.freeMesh(shellMesh);
@@ -1349,7 +1349,7 @@ function rebuild(team, liv, info, ctx) {
           const lg = GarageLive.build(FIXTURES);
           for (const k in lg) if (lg[k].idx.length) liveMesh[k] = _gfx.createTexMesh(lg[k]);
         }
-      } catch (e) { liveTex = null; Log.warn("game", "GarageScene live atlas failed: " + (e && e.message)); }
+      } catch (e) { liveTex = null; Log.warn("game", `GarageScene live atlas failed: ${e && e.message}`); }
     }
   }
   // Team dress. Three strikes then stop trying: an unbranded bay is far better
@@ -1368,7 +1368,7 @@ function rebuild(team, liv, info, ctx) {
       }
     } catch (e) {
       dressFail++; dressTex = null; dressCanvas = null;
-      Log.warn("game", "GarageScene dress failed: " + (e && e.message));
+      Log.warn("game", `GarageScene dress failed: ${e && e.message}`);
     }
   }
   cacheKey = key;
@@ -1387,8 +1387,8 @@ const MAT_I = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
 // draws without a career and without a track selection.
 function ctxKey(ctx) {
   if (!ctx) return "-";
-  return (ctx.track ? ctx.track.id : "-") + "|" + (ctx.weather || "-") + "|" + (ctx.tod || "-") +
-         "|" + ((ctx.wins | 0)) + "|" + (ctx.night ? 1 : 0);
+  return `${ctx.track ? ctx.track.id : "-"}|${ctx.weather || "-"}|${ctx.tod || "-"}`
+         + `|${ctx.wins | 0}|${ctx.night ? 1 : 0}`;
 }
 let lastTrace = -1e9;
 function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
