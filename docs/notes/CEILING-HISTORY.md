@@ -2752,3 +2752,11 @@ and folding it into an existing row would make one control mean two things.
 `js/game.js` lines -> **9916** / codeLines -> **5324**;
 `js/car/car3d.js` lines -> **4137**. Third deploy merge into
 spine-zones-bind after CI green; `ratchets.mjs --update` after ceiling conflict.
+
+## 2026-09-10 — re-merge deploy (garage-angles port)
+
+`js/game.js` lines -> **9919** / codeLines -> **5327** / gMembers -> **238**;
+`js/agent/apex.js` lines -> **2812** / codeLines -> **2092**. Fourth deploy
+merge into spine-zones-bind (PR #96 garage-angles rollup on deploy tip
+`9cdde031`). `ratchets.mjs --update` after ceiling conflict — union carries
+spine-zones bind fields plus garage-angles G members.

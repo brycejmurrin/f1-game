@@ -417,6 +417,9 @@ interface GameCtx {
   /** Metres to the next zone; 0 inside one, Infinity on a circuit with none. */
   readonly aeroZoneAhead: (s: number) => number;
   readonly stepSetupAero: (dt: number) => void;
+  readonly setSetupView: (name: string) => void;
+  readonly setupPan: (strafe: number, dolly: number) => void;
+  readonly nudgeSetupZoom: (mul: number) => void;
   readonly setupFlapArgs: () => FlapArgs;
   readonly setSetupAero: (on: boolean) => void;
   readonly setupPreviewXOn: boolean;

@@ -3417,6 +3417,9 @@ const G = {
   aeroZoneAt: (s) => aeroZ.at(s),
   aeroZoneAhead: (s) => aeroZ.ahead(s),
   stepSetupAero: (dt) => stepSetupAero(dt),
+  setSetupView: (...a) => setSetupView(...a),
+  setupPan: (...a) => setupPan(...a),
+  nudgeSetupZoom: (mul) => nudgeSetupCam(0, 0, mul),
   // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
   // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
   // a null style tests a car nobody is driving.
