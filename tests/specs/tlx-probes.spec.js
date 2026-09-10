@@ -407,6 +407,7 @@ test.describe("TLX — boot", () => {
   });
 
   test("M9 env probe captures a full cube on a parked race (car reflections live)", async ({ page }) => {
+    const t0 = Date.now();   // the presents wait below spends what is LEFT of this test's budget
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     // TLX reads apex26.tlxEnvProbe ONCE at create (js/render/three/tlx.js
@@ -434,14 +435,29 @@ test.describe("TLX — boot", () => {
     // Frozen, six frames finish the cube. The probe reads a parked car, so
     // nothing the freeze holds still is part of what it measures.
     await page.evaluate(() => window.__apex.freeze(true));
-    // Wait on the ready flag rather than a fixed sleep (SwiftShader is slow).
+    // WAIT IN PRESENTS, NOT SECONDS. Frozen, the cube needs six presents; this
+    // container rendered SEVEN frames in a 100 s wait (one 73 s frame) and
+    // stood at face 5 when a 60 s clock ran out, the Metal runner three frames
+    // (93 s frame, face 2). A clock measures the box. Ten presents past the
+    // park either finish the cube or prove the probe is not capturing — and
+    // the assertion below says which, with the env counters in the message.
+    // The clock on the wait is whatever the test has LEFT (test.slow() gives
+    // this file 360 s), so a slow boot and a slow wait share one budget and
+    // the failure names the frame count, not "Test timeout of 360000ms".
+    const p0 = await page.evaluate(() => GLX.__tlx.backendState().presents);
+    const left = Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000);
     try {
-      await page.waitForFunction(() => {
+      await page.waitForFunction((p0) => {
         const e = GLX.__tlx.envState();
-        return e && e.on && e.ready;
-      }, null, { polling: 100, timeout: 60_000 });
+        if (e && e.on && e.ready) return true;
+        return GLX.__tlx.backendState().presents - p0 >= 10;
+      }, p0, { polling: 100, timeout: left });
     } catch (e) {
-      throw new Error("env probe never became ready: " + await tlxDiag(page) + "\n" + (e && e.message));
+      throw new Error("fewer than ten presents in " + Math.round(left / 1000) + " s — the box, not the probe: " + await tlxDiag(page) + "\n" + (e && e.message));
+    }
+    {
+      const e = await page.evaluate(() => GLX.__tlx.envState());
+      if (!(e && e.on && e.ready)) throw new Error("env probe not ready after ten presents (faces " + (e && e.begins) + "/6): " + await tlxDiag(page));
     }
     const st = await page.evaluate(() => ({
       env: GLX.__tlx.envState(),
