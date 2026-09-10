@@ -1507,13 +1507,13 @@ const LiveryTex = (function () {
     if (logo === "saddle" || bind === "saddleWrap") return bandC;
     return null;
   }
-  // RIDGE zone fill: ridgeTint when set; else the crown band colour. Always
-  // re-picked against the cover so a dark ridgeTint on a dark cover cannot
-  // vanish (catalog sweeps every team × ridge).
+  // RIDGE zone fill: an explicit ridgeTint is a pick (never re-derived). When
+  // omitted, fall back to bandC re-picked against the cover so catalog
+  // team×ridge cannot vanish into a dark cover.
   function ridgeFill(liv, bandC, coverPaint) {
-    const pref = (liv && liv.ridgeTint) || bandC;
+    if (liv && liv.ridgeTint) return liv.ridgeTint;
     return pickOn(
-      [pref, bandC, INK_LIGHT, INK_DARK].filter(Boolean),
+      [bandC, INK_LIGHT, INK_DARK].filter(Boolean),
       coverPaint || bandC, SUN_FLOOR);
   }
   const FIN_ON_BLOCK = 2.0;
@@ -1545,19 +1545,17 @@ const LiveryTex = (function () {
   // mid-cover, then a raked edge down to the sidepod line just behind the
   // number (the SF-26's white cover top), on each flank in its own frame.
   // Called OUTSIDE the crown clip — see the saddle branch below.
-  function saddleFlanks(ctx, acc, coverPaint) {
+  function saddleFlanks(ctx, acc) {
     // Crease runs farther aft (0.64) then drops on a sharper rake so the white
     // panel reads as a cut vinyl, not a soft blob into the sidepod. A thin ink
-    // keyline on the rake is what sells the edge at garage distance. Re-pick
-    // the fill against the cover so a same-tint wrap cannot paint 1:1.
-    const fill = pickOn(
-      [acc, INK_LIGHT, INK_DARK].filter(Boolean),
-      coverPaint || acc, SUN_FLOOR);
+    // keyline on the rake is what sells the edge at garage distance. `acc` is
+    // the resolved saddle fill (pick or derived) — never re-pick here; a pick
+    // must reach the atlas as chosen.
     eachFlank((F) => {
       const Sf = F.R;
       ctx.save();
       ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
-      ctx.fillStyle = cssA(fill, 0.97);
+      ctx.fillStyle = cssA(acc, 0.97);
       ctx.beginPath();
       ctx.moveTo(F.fx(0), Sf.y); ctx.lineTo(F.fx(0.64), Sf.y);                 // along the crease
       ctx.lineTo(F.fx(0.38), Sf.y + Sf.h); ctx.lineTo(F.fx(0), Sf.y + Sf.h);  // raked rear edge
@@ -1740,9 +1738,9 @@ const LiveryTex = (function () {
       // band colour alone. Flank spill is saddleFlanks at the call site.
       const liv = colors || {};
       const bind = coverBindOf(liv);
-      const fillPref = bind === "saddleWrap" ? (saddleFill(liv, acc, c1) || acc) : acc;
-      const fill = pickOn(
-        [fillPref, acc, ink, INK_DARK, INK_LIGHT].filter(Boolean), c1, SUN_FLOOR);
+      // Explicit saddleTint under wrap is a pick — paint it. Otherwise the
+      // band colour (already cover-safe via bandC).
+      const fill = bind === "saddleWrap" ? (saddleFill(liv, acc, c1) || acc) : acc;
       const cutY = Y + H * 0.38;
       const bh = Y + H - cutY;
       if (bind === "spineOnly") {
@@ -2296,7 +2294,7 @@ const LiveryTex = (function () {
       const bandC2 = colors.bandTint2 || pickOn([inkCrest].concat(BAND_ORDER), [coverPaint, bandC], BAND_ON_COVER);
       drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont, bandC2, colors);
       if (spineLogo === "saddle" || coverBind === "saddleWrap") {
-        saddleFlanks(ctx, saddleFill(colors, bandC, coverPaint) || bandC, coverPaint);
+        saddleFlanks(ctx, saddleFill(colors, bandC, coverPaint) || bandC);
       }
     }
     if (REGIONS.tail && finHandoffOf(colors) !== "hardCut") {
@@ -2711,13 +2709,21 @@ const LiveryTex = (function () {
         ctx.restore();
       });
     } else if (spineSide === "rake") {
-      // One hard diagonal colour cut — not the parallel-edge sash. Prefer
-      // sideTint, or saddleFill under saddleWrap, but ALWAYS clear flankBgs
-      // (saddle flanks can already be that tint — painting it again is 1:1).
-      const rakePref = coverBind === "saddleWrap" ? (saddleFlankC || flankBandC) : flankBandC;
-      const rakeC = pickOn(
-        [rakePref, flankBandC, inkCrest, c1, c2, INK_DARK, INK_LIGHT].filter(Boolean),
-        flankBgs, BAND_ON_COVER);
+      // One hard diagonal colour cut — not the parallel-edge sash. An explicit
+      // sideTint is a pick and is never re-derived. Under saddleWrap without a
+      // sideTint, prefer saddleFill when it clears flankBgs; otherwise derive.
+      let rakeC;
+      if (colors.sideTint) {
+        rakeC = colors.sideTint;
+      } else {
+        const rakePref = coverBind === "saddleWrap" ? (saddleFlankC || flankBandC) : flankBandC;
+        // flankBgs is a LIST — contrast() is pairwise; score the worst pair.
+        const bgs = (Array.isArray(flankBgs) && Array.isArray(flankBgs[0])) ? flankBgs : [flankBgs];
+        const keep = rakePref && bgs.every((b) => b && contrast(rakePref, b) >= BAND_ON_COVER);
+        rakeC = keep ? rakePref : pickOn(
+          [flankBandC, inkCrest, c1, c2, INK_DARK, INK_LIGHT].filter(Boolean),
+          flankBgs, BAND_ON_COVER);
+      }
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
@@ -2737,12 +2743,23 @@ const LiveryTex = (function () {
         ctx.restore();
       });
     } else if (spineSide === "shoulder") {
-      // Upper-third shelf only; lower flank stays cover/body. Prefer saddleTint
-      // then sideTint, re-picked against flankBgs so a white saddleWrap block
-      // does not get a same-tint shelf.
-      const shoulderC = pickOn(
-        [colors.saddleTint, flankBandC, inkCrest, c1, c2, INK_DARK, INK_LIGHT].filter(Boolean),
-        flankBgs, BAND_ON_COVER);
+      // Upper-third shelf only; lower flank stays cover/body. Explicit sideTint
+      // is a pick. Explicit saddleTint is used only when it clears flankBgs
+      // (otherwise a wrap shelf would paint 1:1 on the saddle block).
+      let shoulderC;
+      if (colors.sideTint) {
+        shoulderC = colors.sideTint;
+      } else if (colors.saddleTint) {
+        const bgs = (Array.isArray(flankBgs) && Array.isArray(flankBgs[0])) ? flankBgs : [flankBgs];
+        shoulderC = bgs.every((b) => b && contrast(colors.saddleTint, b) >= BAND_ON_COVER)
+          ? colors.saddleTint
+          : pickOn([flankBandC, inkCrest, c1, c2, INK_DARK, INK_LIGHT].filter(Boolean),
+                   flankBgs, BAND_ON_COVER);
+      } else {
+        shoulderC = pickOn(
+          [flankBandC, inkCrest, c1, c2, INK_DARK, INK_LIGHT].filter(Boolean),
+          flankBgs, BAND_ON_COVER);
+      }
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();

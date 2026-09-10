@@ -19,11 +19,17 @@ and `docs/superpowers/plans/2026-09-09-spine-zones-bind.md`.
 | team | spineLogo | spineSide | coverBind | finHandoff | notes |
 |---|---|---|---|---|---|
 | mercedes | fade | starfield | spineOnly | (match) | keeps `finStyle: stars` |
-| ferrari | cap | shoulder | saddleWrap | contrast | white `saddleTint`, red `fin` |
+| ferrari | cap | shoulder | saddleWrap | contrast | red `cover`, white `saddleTint`, red `fin` |
 | williams | ridge | rake | independent | (match) | cyan `ridgeTint` |
-| audi | cap | rake | independent | (match) | red saddle/spine, dark ridge |
+| audi | cap | rake | independent | (match) | red saddle/spine tints (no dark `ridgeTint`) |
 
 Other factories unchanged.
+
+## Contrast fixes (cover-legibility)
+
+- Ferrari white-on-white: white cover + white `saddleTint` + `saddleWrap` painted ~60% with ~2% readable. Cover is now body red; the white block is the saddle zone.
+- Audi dark `ridgeTint` on dark cover: removed (factory uses `cap`); `ridgeFill` also `pickOn`s against the cover so catalog team×`ridge` cannot vanish.
+- Cap fill / `saddleFlanks` / rake / shoulder re-pick against their backgrounds so same-tint shelf/wrap is not 1:1.
 
 ## Gates
 
@@ -32,7 +38,7 @@ node --test tests/unit/fin-design.test.mjs \
   tests/unit/cover-legibility.test.mjs \
   tests/unit/team-livery.test.mjs \
   tests/unit/livery-contrast.test.mjs
-# pass (incl. rake/shoulder re-picked against flankBgs so saddle×shelf is not 1:1)
+# pass
 
 node tools/car/spine-station.mjs --team=all --occlude
 # rake / shoulder / starfield clear on surveyed crowns
