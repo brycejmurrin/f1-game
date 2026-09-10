@@ -106,6 +106,17 @@ made the corrected `dressingExclusions` transform land Singapore's side-1
 Helix Bridge had been standing on (5 floating clusters); the bridge now has
 four piers to the rendered ground.
 
+*Already red on the deploy tip's nightly, not this branch's:* `ci.yml`'s
+renderer-macos job (real Metal) failed on 2026-09-09 (run 34327512922, tip
+0c0c4d9) with `tlx-probes` M6 (skid batch never records — 60 s timeout),
+`lighting-ab` "night light budget" (`floodEmit` 0.0858 against the 0.78 the
+spec pins for a desert night) and `lighting-ab` "night fog GLOWS" (fog band
+63.6 against a > 84 floor); the 09-06 and 09-07 nightlies were green, so a
+deploy-branch change between them owns all three. The two lighting-ab
+failures reproduce on llvmpipe here (60.3 vs > 71.9; 0.0858), so they are
+not GPU-specific. Nobody reads the nightly: the deploy's own gate is
+change-aware and never runs this job.
+
 *Left open, with the approach recorded in the session plan:* the car-draw and
 shadow-pass extractions (eval-order coupling), the `tests/` guards/vm split
 (45 files cited by path from circuits and docs), the lobby/netplay roster fold
