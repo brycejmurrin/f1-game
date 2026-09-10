@@ -24,7 +24,7 @@
       "lines": 17318
     },
     "js/render/glx/glx.js": {
-      "lines": 2601
+      "lines": 2602
     },
     "js/net/lobby.js": {
       "lines": 1753
@@ -50,7 +50,7 @@
       "ceiling": 55,
       "slack": 39
     },
-    "waitForTimeout": 154,
+    "waitForTimeout": 153,
     "dynamicIdReads": {
       "ceiling": 53,
       "slack": 5

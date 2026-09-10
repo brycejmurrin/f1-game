@@ -174,7 +174,8 @@ async function tierAt(page) {
 async function captureState(page) {
   return page.evaluate(() => {
     const a = window.__apex.assets();
-    return { gen: GLX.softPresentState().gen, frozen: window.__apex.freeze(), state: window.__apex.info().state,
+    const sp = GLX.softPresentState();
+    return { gen: sp.gen, post: sp.post, frozen: window.__apex.freeze(), state: window.__apex.info().state,
       pack: { uploaded: a.uploaded, layers: a.layers, error: a.error, matTexMix: window.__apex.lightTune().matTexMix } };
   });
 }

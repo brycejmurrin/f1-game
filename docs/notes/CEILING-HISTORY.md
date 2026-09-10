@@ -2851,3 +2851,12 @@ widened to do it without changing what the tuner's pinned modes mean.
 `continue`, with four comment lines saying why — in cockpit view (the shipped
 default camera) the stamp was never reached, found by tlx-probes M6's timeout
 diag. Raised deliberately for the comment.
+
+## 2026-09-10 — `softPresentState().post` (the post chain's per-present path)
+
+`js/render/glx/glx.js` 2601 → 2602 lines: one field on an existing accessor,
+so a two-capture spec can prove both captures came off the same post chain
+(image-grade "shadows" on Metal attached a crisp, bloomless baseline and a
+soft, bloomed changed frame — run 3497 — with nothing in the diag to say
+which passes ran for which capture). Raised deliberately by one line; the
+record itself lives in `js/render/glx/post.js` (`_lastPath`), not ratcheted.
