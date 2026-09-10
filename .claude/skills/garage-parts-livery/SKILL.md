@@ -62,7 +62,9 @@ tyres and bodywork cover from a garage camera, the `(crown)` row measures the
 crown's OWN flank graphic (the wrap's bull) which no side row can see,
 `--team=all` runs one crown across the grid, `--png` rasterises the flat art,
 and only foreshortening / lighting / racing distance need `tools/shot/garage-angles.mjs`
-(pass `--zoom`/`--pan` or a flank mark arrives forty pixels wide) or
+(every camera number is a LIST with ranges — `--az=50deg..130deg:9 --target=crown
+--lamp=off,side` — and `--oracle` records per shot how much of the flank mark the
+car hides at that camera; `--plan` warns when a design flag cannot paint) or
 `shot.mjs --team`. Placement/fin gates live in `fin-design.test.mjs`; cover-legibility
 and livery-contrast are separate unit suites — a green fin-design is not proof
 those two are green.

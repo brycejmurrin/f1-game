@@ -13,20 +13,22 @@ answered placement and you need **lit, foreshortened** proof.
 | wall crest / fin badge / wrap bull **in the room** | `garage-angles.mjs` | ~25 s boot + ~24 s per shot (~12 s with `--fast`) |
 | car-only, no garage shell | `render-car.mjs --preset=spine` | ~15 s boot + ~3 s per angle |
 
-**One Chromium** for the whole matrix: teams × designs × cameras × viewports.
-Never spawn one browser per team, per angle or per viewport.
+**One Chromium** for the whole matrix: teams × designs × cameras × viewports
+(one browser *context* per DPR). Never spawn one browser per team or per angle.
 
 ## Everything is an axis
 
-The run is a product: **teams × (liveries | designs) × cameras × viewports**.
-Every number is a list; `--plan` prints the whole matrix and a shot count
-without booting, so size the run before paying for it.
+The run is a product: **teams × (liveries | designs × bases) × cameras ×
+viewports × DPRs**. Every number is a list, every list takes a range, and
+`--plan` prints the whole matrix, the shot count, an estimate and any flag
+that cannot paint anything, without booting. Size the run before paying for it:
 
 ```sh
-# Print the matrix (shot count + rough ETA), run nothing:
 node tools/shot/garage-angles.mjs --plan --team=redbull \
-  --spineLogo=wrap --views=side --az=60deg,90deg,120deg --viewport=1280x720,844x390
+  --spineLogo=wrap --views=side --az=50deg..130deg:5 --viewport=1280x720,844x390 --budget=10m
 ```
+
+`--budget=600s|10m` refuses a run the estimate says will not fit (exit 2).
 
 ### Cameras
 
@@ -35,80 +37,105 @@ of it, in this order:
 
 | flag | meaning | form |
 |---|---|---|
-| `--views` | preset base(s): `hero,front,side,rear,top,wingFront,wingRear`, groups `spine,wings,front,rear,aero,all`, or `free` (keep the last camera) | list |
-| `--az`, `--el` | **absolute** orbit azimuth / elevation | radians, `45deg`, or `0.5pi`; list |
-| `--dist` | **absolute** orbit distance, metres (clamped by the game) | list |
+| `--views` | preset base(s): `hero,front,side,rear,top,wingFront,wingRear`, groups `spine,wings,front,rear,aero,all`, or `free` (keep the last camera); a named camera (`bay`) is accepted here too | list |
+| `--cam` | named cameras `bay,bayFront` (combinable bases) or whole cameras `[view:]az,el[,dist[,strafe,dolly]]` (stand alone) | `;`-separated list |
+| `--target` | what the orbit LOOKS at: `car` (default), `nose`, `crown`, `fin`, `flank`, `wall`, or `x,y,z` car-space metres (+z nose) | list; `;` between triples |
+| `--az`, `--el` | **absolute** orbit azimuth / elevation | radians, `45deg`, `0.5pi`, or a range `50deg..130deg:9`; list |
+| `--dist` | **absolute** orbit distance, metres (clamped by the game) | list or range |
+| `--lamp` | aim the inspection lamp by preset name, `off` parks it, `all` walks them | list |
 | `--zoom` | counted clicks on `#cs-view-in` / `-out` | list of counts |
 | `--pan` | counted clicks on `#cs-pan-*`: `strafe,dolly` | `;`-separated list of pairs |
 | `--az-nudge`, `--el-nudge` | counted clicks on `#cs-view-left/right/up/down` | list |
-| `--cam` | whole cameras: `[view:]az,el[,dist[,strafe,dolly]]` | `;`-separated list |
 | `--viewport` | canvas size(s) — the docked sheet takes a different share of a phone-landscape canvas | `WxH` list |
+| `--dpr` | device scale factor(s) — one browser context each, so each value re-boots the garage once. **Needs a real GPU**: on SwiftShader a 2x garage measured a 60 s team switch and starved the capture poll (2026-09-10); use the macOS census runner | list |
 | `--crop` | cut every frame to a region, fractions `x,y,w,h` | one |
 
-```sh
-# Three azimuths across the flank at flank zoom, two viewports — 6 shots:
-node tools/shot/garage-angles.mjs --team=ferrari --spineSide=logo \
-  --views=side --az=60deg,90deg,120deg --zoom=6 --pan=4,0 \
-  --viewport=1280x720,844x390 --out=artifacts/flank-sweep
-
-# Two named cameras on top of the side preset; the free one starts from the last frame:
-node tools/shot/garage-angles.mjs --team=redbull --spineLogo=wrap \
-  --views=side --cam='free:1.2,0.3,7;rear:180deg,0.4'
-
-# Tight crop on the crown from above, absolute elevation and distance:
-node tools/shot/garage-angles.mjs --team=mercedes --spineLogo=saddle \
-  --views=top --el=1.1 --dist=6.5 --crop=0.25,0.15,0.5,0.6
-```
-
-The absolute flags need the `__apex.garageFrame` hook (every run uses it;
-`--picker-team` still clicks the DOM for the counted flags only). A camera's
-KEY names only what was set — `side`, `side_az60_z6_p4x0`,
+A named camera is a **parameter bundle**, not a game preset: `bay` is
+`hero:0.68pi,0.26,9.2`, so `--views=bay --az=100deg,140deg` sweeps azimuth from
+the bay framing and keeps its elevation and distance. A camera's KEY names
+only what was set — `side`, `bay`, `bay_az100`, `side_atCrown_lampOff`,
 `free_az69_el17_d7` — so a run with no camera axes keeps the historic
 `<team>-<tag>-<view>.png` names.
+
+```sh
+# Nine azimuths across the flank, looking at the crown, two viewports:
+node tools/shot/garage-angles.mjs --team=ferrari --spineSide=logo \
+  --views=side --az=50deg..130deg:9 --target=crown --viewport=1280x720,844x390
+
+# The same corner with the lamp parked vs aimed at the flank:
+node tools/shot/garage-angles.mjs --team=redbull --cam=bay --lamp=off,side
+
+# Look at the back-wall lightbox from the bay framing, then a free camera:
+node tools/shot/garage-angles.mjs --team=mercedes --cam=bay --target=wall
+node tools/shot/garage-angles.mjs --team=mercedes --views=free --az=1.2 --el=0.3 --dist=7
+```
+
+The absolute flags, targets and lamps go through `__apex.garageFrame`;
+`--picker-team` still clicks the DOM for the counted flags only.
 
 ### Designs
 
 Any `Liveries.FIELDS` key is a flag; `--part.<category>` fits a catalog part
-through `__apex.garageParts` (wing, fin, floor geometry walk like paint does).
-Colours are `#rrggbb`; enums are validated in-page against the real lists.
+through `__apex.garageParts`; `--driver=0,1` walks the seat (race number,
+helmet, T-cam) through `__apex.garageTeam`; `--light.<knob>=` walks a
+lighting-tuner knob (`__apex.lightTune()` lists them: `keyMul`, `ambientMul`,
+`shadowStr`, `lampLevel`, …). Colours are `#rrggbb`; enums are validated
+in-page against the real lists, and `all` expands any enum axis to that list
+(`--spineSide=all`, `--part.aero=all`, `--driver=all`).
 
 | flag | meaning |
 |---|---|
 | `--spineLogo=wrap,saddle --finShape=blade` | cartesian product (four cars) |
 | `--zip` | pair the axes index-wise instead (the shorter lists cycle) |
-| `--design='[{…},{…}]'` / `--design=@cars.json` | an explicit list — inline JSON, or a file of JSON / one object per line; each object may carry `part.<category>` keys and a `name` |
-| `--base=<liveryId>` | paint the designs over that catalog livery instead of the team default |
+| `--design='[{…},{…}]'` / `--design=@cars.json` | an explicit list — inline JSON, or a file of JSON / one object per line; each object may carry `part.<category>`, `driver`, `light.<knob>` keys and a `name` |
+| `--base=default,rb_white` | paint every design over each named catalog livery (an axis) |
 | `--livery=default,rb_white` | walk catalog paint jobs instead of designs |
+| `--logos=default` | strip the authored mark rows so wall and flank use the team's default mark colours |
+
+A design flag that cannot paint anything on the car it was given is reported
+by `--plan` and warned at run time (`sunTint: Needs SPINE TOP WRAP`) — the
+same table the paint sheet greys a row with (`LiveryTex.FILL_SURFACES`).
 
 ```sh
 node tools/shot/garage-angles.mjs --team=mclaren --views=side --zoom=6 --pan=4,0 \
   --spineSide=logo,lockup --part.aero=minimal,le_mans --zip
-node tools/shot/garage-angles.mjs --team=all --views=side \
+node tools/shot/garage-angles.mjs --team=all --views=side --driver=0,1 \
   --design='[{"name":"wrapRed","spineLogo":"wrap","sunTint":"#c00000"},{"spineSide":"band","sideTint":"#ffffff"}]'
 ```
 
 Legacy aliases still work: `--spine-logo`, `--spine-side`.
+
+### Measurements, not only pictures
+
+| flag | records |
+|---|---|
+| `--oracle` | per shot, how much of the flank mark the car's own tyres and bodywork hide at that camera (`occl 54%` on the caption and in the sidecar); an azimuth sweep then says which angle shows the most |
+| `--baseline=dir` | per shot, the changed-pixel fraction against the same-named PNG in a saved run (`Δbase 3.1%`) — an A/B with no git ref |
+| `--against=<ref>` | shoot the matrix twice, serving that ref's js/css from memory; each pair gets its changed-pixel fraction (`pair …: 4.2% of pixels changed`) plus the pair sheet |
 
 ### Output
 
 | flag | meaning |
 |---|---|
 | `--out=dir` | PNGs (default `artifacts/garage-angles`) |
-| `--name='{team}-{tag}-{cam}'` | file-name template; tokens `{team} {tag} {cam} {view} {vp} {i} {az} {el} {dist}` |
-| `--label=0` / `--sheet=0` / `--cols=N` / `--cell=px` | caption bars, contact sheet, its columns and cell width |
+| `--name='{team}-{tag}-{cam}'` | file-name template; tokens `{team} {tag} {cam} {view} {vp} {dpr} {i} {az} {el} {dist}` |
+| `--label=0` / `--sheet=0` / `--cols=N` / `--cell=px` | caption bars, contact sheets, columns and cell width |
+| `matrix.png` | written automatically when the run has ≥2 cars and ≥2 cameras: rows = car, columns = camera |
 | `--live` | auto-refreshing `live.html` after each shot |
+| `--site` / `--cdn` | boot the deployed build instead of the working tree |
 | `--json` | print the run record to stdout as well as the sidecar |
-| `--against=<ref>` | shoot the matrix twice, serving that ref's js/css from memory (before/after pairs + pair sheet, one boot) |
 
 The JSON sidecar (`<team>-angles.json` / `all-teams-angles.json`) records every
-axis, every camera (as sent and as measured back from `garageCam()`), per-shot
-settle/capture/gate ms, and the loadavg.
+axis, every camera (as sent and as read back from `garageCam()` after the
+settle — the value the framing call returns is one frame stale), per-shot
+settle/capture/gate ms, occlusion and diffs when asked, and the loadavg.
 
 ## Presets are starting points
 
 `--preset=list` prints them. Every key in a preset is a plain flag (views,
-zoom, pan, az, a livery field), so `--preset=flank --az=80deg` is the flank
-framing swung to a new azimuth, and `--preset=none` (the default) is no preset.
+zoom, pan, az, lamp, target, a livery field), so `--preset=flank --az=80deg`
+is the flank framing swung to a new azimuth, and `--preset=none` (the
+default) is no preset.
 
 | preset | sets |
 |---|---|
@@ -118,6 +145,7 @@ framing swung to a new azimuth, and `--preset=none` (the default) is no preset.
 | `mark` | views=front,side,rear zoom=6 pan=4,0 finBadge=logo |
 | `quick` | views=side zoom=6 pan=4,0 fast |
 | `sweep` | views=side zoom=6 pan=4,0 az=50deg,70deg,90deg,110deg,130deg |
+| `saddleWall` | views=bayFront spineLogo=saddle spineSide=logo logos=default |
 
 ## Fast iteration
 

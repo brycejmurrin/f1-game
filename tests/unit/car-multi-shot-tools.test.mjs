@@ -314,3 +314,44 @@ test("garage-angles walks CAMERAS as lists — views × az × el × dist × zoom
   const plain = plan(["--views=side"]);
   assert.deepEqual(plain.cams.map((c) => c.key), ["side"], "no camera axes: the old `<team>-<tag>-<view>` name");
 });
+
+test("garage-angles: ranges, targets, lamps, seats, DPR, `all`, base lists and a budget are all axes", () => {
+  // The camera vocabulary stopped being presets: every number is a list, a
+  // list takes a range, the orbit can LOOK at a named point, the inspection
+  // lamp and the driver seat walk like any other axis, and the plan refuses a
+  // matrix that will not fit a budget — before a browser boots.
+  const src = code("tools/shot/garage-angles.mjs");
+  for (const f of ["--target", "--lamp", "--dpr", "--budget", "--baseline", "--oracle"]) {
+    assert.ok(src.includes(`"${f}"`) || src.includes(`argvHas("${f}")`), `${f} must be a flag the tool owns`);
+  }
+  assert.match(src, /function expandRange/, "a..b:n ranges on every numeric list");
+  assert.match(src, /const TARGETS = \{/, "named look-at points are a table in the TOOL");
+  assert.match(src, /function pixelDiff/, "an A/B is a changed-pixel fraction, not only a pair sheet");
+  assert.match(src, /function writeMatrixSheet/, "rows × cameras contact sheet");
+  assert.match(src, /oracleHiddenPct\(teamId,/, "occlusion is recorded per SHOT, not only on rollups");
+  assert.match(src, /deviceScaleFactor: dpr/, "a DPR is its own browser context");
+  const hook = read("js/agent/apex.js");
+  assert.match(hook, /G\.setSetupAim\(o\.target\.map\(Number\)\)/, "garageFrame aims the orbit at a car-space point");
+  assert.match(hook, /GarageScene\.spot\(o\.lamp \|\| null\)/, "garageFrame aims the lamp");
+  assert.match(hook, /garageTeam\(id, seatWanted\)/, "garageTeam takes a seat");
+  const plan = (args) => JSON.parse(execFileSync("node",
+    ["tools/shot/garage-angles.mjs", "--plan", "--team=ferrari", ...args], { cwd: ROOT, encoding: "utf8" }));
+  const r = plan(["--views=side", "--az=50deg..130deg:5"]);
+  assert.deepEqual(r.cams.map((c) => c.key), ["side_az50", "side_az70", "side_az90", "side_az110", "side_az130"],
+    "a range expands to evenly spaced values, inclusive");
+  const t = plan(["--views=side", "--target=crown,wall", "--lamp=side,off"]);
+  assert.deepEqual(t.cams.map((c) => c.key),
+    ["side_atCrown_lampSide", "side_atCrown_lampOff", "side_atWall_lampSide", "side_atWall_lampOff"],
+    "targets × lamps multiply into the camera matrix with readable keys");
+  assert.deepEqual(t.cams[0].target.at, [0, 0.95, -0.55], "a named target resolves to car-space metres");
+  const all = plan(["--views=side", "--spineSide=all"]);
+  assert.ok(all.designs.length >= 12 && all.designs.every((d) => d.spineSide), "`all` expands an enum axis to its real list");
+  const seats = plan(["--views=side", "--driver=all", "--base=default,rb_white", "--spineLogo=wrap"]);
+  assert.deepEqual(seats.designs, [{ driver: "0", spineLogo: "wrap" }, { driver: "1", spineLogo: "wrap" }]);
+  assert.equal(seats.shotCount, 4, "2 seats × 2 base liveries × 1 camera");
+  const dpr = plan(["--views=side", "--dpr=1,2", "--viewport=1280x720,844x390"]);
+  assert.equal(dpr.shotCount, 4, "DPR and viewport are both axes");
+  const big = plan(["--team=all", "--views=all", "--az=0..2pi:12", "--budget=10m"]);
+  assert.equal(big.overBudget, true, "the plan flags a matrix the budget cannot hold");
+  assert.equal(plan(["--views=side", "--budget=10m"]).overBudget, false);
+});

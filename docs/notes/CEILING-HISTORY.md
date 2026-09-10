@@ -2822,3 +2822,11 @@ for a tool that no longer needs a preset per question.
 Same change, `js/game.js` lines 9656 -> **9657**, codeLines 5175 -> **5176**, gMembers 239 -> **240**:
 `nudgeSetupCam` joins the façade (the same one-line spelling PR #124 adds) so
 `garageFrame` can set an absolute azimuth / elevation instead of only zoom.
+
+2026-09-10 — `js/game.js` lines 9678 -> **9679**, codeLines 5183 -> **5184**,
+gMembers 240 -> **241**; `js/agent/apex.js` lines 2814 -> **2819**, codeLines
+2090 -> **2093**: `setSetupAim` joins the façade and `garageFrame` takes a
+car-space `target` and a `lamp`, `garageTeam` a `seat`. That is the whole
+production cost of letting `garage-angles` aim at the crown / fin / wall from
+any orbit, walk the inspection lamp and the driver seat as axes, instead of a
+preset for each — the tool owns every name; the game owns three numbers.

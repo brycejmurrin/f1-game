@@ -3493,6 +3493,7 @@ const G = {
   aeroZoneAhead: (s) => aeroZ.ahead(s),
   stepSetupAero: (dt) => stepSetupAero(dt),
   setSetupView: (...a) => setSetupView(...a),
+  setSetupAim: (p) => { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },   // garageFrame target: orbit about and look at a car-space point
   setupPan: (...a) => setupPan(...a),
   nudgeSetupCam: (...a) => nudgeSetupCam(...a),
   nudgeSetupZoom: (mul) => nudgeSetupCam(0, 0, mul),
