@@ -119,11 +119,11 @@ test("music and SFX enable clicks also unlock a saved-off master synchronously",
 });
 
 test("a stopped QR attempt disposes a camera stream that arrives late", async () => {
-  const media = deferred();
+  const media = deferred(), requested = deferred();
   let intervals = 0;
   const track = { stops: 0, stop() { this.stops++; } };
   const context = vm.createContext({
-    navigator: { mediaDevices: { getUserMedia: () => media.promise } },
+    navigator: { mediaDevices: { getUserMedia: () => { requested.resolve(); return media.promise; } } },
     document: {
       createElement: () => ({ width: 0, height: 0, getContext: () => ({}) }),
       head: { appendChild() {} },
@@ -137,7 +137,7 @@ test("a stopped QR attempt disposes a camera stream that arrives late", async ()
   const scanner = context.__scan.create();
   const video = { srcObject: null, setAttribute() {}, play: () => Promise.resolve() };
   const started = scanner.start(video, () => {});
-  await Promise.resolve();
+  await requested.promise;
   scanner.stop();
   media.resolve({ getTracks: () => [track] });
 
@@ -149,7 +149,7 @@ test("a stopped QR attempt disposes a camera stream that arrives late", async ()
 });
 
 test("a canceled QR attempt cannot arm an interval after video.play settles", async () => {
-  const playing = deferred();
+  const playing = deferred(), playEntered = deferred();
   let intervals = 0;
   const track = { stops: 0, stop() { this.stops++; } };
   const context = vm.createContext({
@@ -163,8 +163,8 @@ test("a canceled QR attempt cannot arm an interval after video.play settles", as
   seedLog(context);
   vm.runInContext(scanSource + ";globalThis.__scan=NetScan", context);
   const scanner = context.__scan.create();
-  const started = scanner.start({ srcObject: null, setAttribute() {}, play: () => playing.promise }, () => {});
-  for (let i = 0; i < 4; i++) await Promise.resolve();
+  const started = scanner.start({ srcObject: null, setAttribute() {}, play: () => { playEntered.resolve(); return playing.promise; } }, () => {});
+  await playEntered.promise;
   scanner.stop();
   playing.resolve();
 
@@ -174,12 +174,12 @@ test("a canceled QR attempt cannot arm an interval after video.play settles", as
 });
 
 test("a decoder that loads without registering is retried", async () => {
-  const scripts = [];
+  const scripts = [], appended = [deferred(), deferred()];
   const context = vm.createContext({
     navigator: { mediaDevices: { getUserMedia: () => Promise.reject(new Error("unused")) } },
     document: {
       createElement(tag) { const out = {}; if (tag === "script") scripts.push(out); return out; },
-      head: { appendChild() {} },
+      head: { appendChild() { appended[scripts.length - 1].resolve(); } },
     },
     setInterval, clearInterval,
   });
@@ -187,9 +187,11 @@ test("a decoder that loads without registering is retried", async () => {
   vm.runInContext(scanSource + ";globalThis.__scan=NetScan", context);
   const scanner = context.__scan.create();
   const first = scanner.start({}, () => {});
+  await appended[0].promise;
   scripts[0].onload();
   assert.equal((await first).error, "no_decoder");
   const second = scanner.start({}, () => {});
+  await appended[1].promise;
   assert.equal(scripts.length, 2);
   scripts[1].onload();
   assert.equal((await second).error, "no_decoder");
