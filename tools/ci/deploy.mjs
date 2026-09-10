@@ -10,7 +10,8 @@
 //   node tools/ci/deploy.mjs --json        # machine verdict on stdout, log on stderr
 //
 // What it replaces: the prose protocol in the deploy-merge skill — fetch, look,
-// merge, re-bump the union, tooling-fast, sweeps, push, tinyfish live check.
+// merge, re-bump the union, tooling-fast, sweeps, push; pages.yml verify-live
+// (and deploy-research) own the public Pages check — this box cannot reach github.io.
 // What changed underneath it (see pages.yml "Stamp the shell generation"): the
 // build number is stamped by the deploy from the commit count, so there is no
 // union re-bump; version.json/index.html conflicts resolve to EITHER side plus a

@@ -75,7 +75,7 @@ Load from the SKILL.md index when the task needs this detail.
    - Run `node tools/ci/test-bg.mjs physics-core` for debris and caution browser coverage
      (`debris.spec.js` and `race-control.spec.js` both ride there).
    - Use `test:tooling-fast` for docs/hooks/unit inventory checks.
-   - If JS changed, run `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
+   - If JS changed, run `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 ## Common Mistakes
 

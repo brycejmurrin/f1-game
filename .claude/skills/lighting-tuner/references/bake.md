@@ -82,7 +82,7 @@ have a fresh COPY VALUES export, do **not** feed `bake.mjs` a one-key object:
    `window.LightPresets` object (plain JSON after the assignment).
 2. `Object.assign` just that key's new value — leave every other key.
 3. Write the whole object back as `window.LightPresets = {…};` and
-   `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
+   `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 A silent `--merge` default would make a future partial paste look safe.
 If a merge mode is ever added it must be an explicit opt-in flag.
@@ -106,7 +106,7 @@ through the merge path above.
    BLOB
    ```
 
-2. **Bake + bump** (writes presets, increments `?v=` + `version.json`;
+2. **Bake** (writes presets only; shell tags stay `?v=dev` —
    validates shape, never commits):
    ```sh
    node .claude/skills/lighting-tuner/scripts/bake.mjs artifacts/tmp/presets.txt

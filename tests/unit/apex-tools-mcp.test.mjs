@@ -224,7 +224,8 @@ test("target=deploy on a tree tool → tree_only", () => {
   const body = JSON.parse(r.stdout);
   assert.equal(body.ok, false);
   assert.equal(body.error, "tree_only");
-  assert.ok(body.fix);
+  assert.match(body.fix || "", /deploy-research/i);
+  assert.doesNotMatch(body.fix || "", /tinyfish/i, "tree_only must not route to TinyFish");
 });
 
 test("url with github.io → github_io_blocked (no fetch)", () => {

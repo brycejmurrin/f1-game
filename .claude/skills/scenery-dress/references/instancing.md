@@ -90,7 +90,7 @@ judging a `graph-parity` mismatch.
    node tools/ci/test-bg.mjs gfx    # instanced-draw.spec.js — background
    ```
 
-6. **Ship** — `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) if you edited `js/`. Visual spot-check:
+6. **Ship** — `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) if you edited `js/`. Visual spot-check:
    **playwright-probe** on a dense track (Spa, Vegas).
 
 `batches()` routing: instanced when `node.full` and no radial op under

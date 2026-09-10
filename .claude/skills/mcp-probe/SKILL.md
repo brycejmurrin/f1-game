@@ -49,7 +49,7 @@ vs playwright-official).
 ## Hard rules (always)
 
 1. **Never render Chrome MCP while Playwright runs** — park to `about:blank`,
-   then `chrome-stop`, then check CPU; see `references/traps.md` §1.
+   then `chrome-stop`, then check CPU; see [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
 2. **github.io is unreachable from any container browser or curl** (egress
    proxy) — `deploy-research` with the host fetch tool is the only path.
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
@@ -69,7 +69,7 @@ vs playwright-official).
 ## Load on demand
 
 - Shot / lighting / camera comparison failures → read
-  [`references/traps.md`](references/traps.md) (numbered war stories).
+  [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
 - Chrome setup, A/B ports, heap/perf, post-deploy recipes → read
   [`references/recipes.md`](references/recipes.md).
 - Renderer probe flags (`--backend`, secure context, `gfxBound`) →
