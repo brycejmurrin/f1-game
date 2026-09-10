@@ -3026,6 +3026,7 @@ async function startRace() {
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
   state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
+  try { if (gfx.warm) gfx.warm(); } catch (_) { /* TLX links programs synchronously on first draw — warm them during the LIGHTS. Optimisation only; GLX/WGX have no warm and no-op. */ }
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   clearMenuScreens();
@@ -6494,6 +6495,11 @@ let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice
 let setupPreviewMinDist = 0;   // 0 = use the global SP_DIST_MIN
 // Last frame's RESOLVED framing, for __apex.garageCam(). Read-only telemetry.
 let _spEffDist = 0, _spEffFit = 0, _spEffPanel = 0;
+// THE GARAGE'S CLOCK. The bay's washer flickers on three sines of whatever
+// clock live() gets, so under performance.now() two captures at different WALL
+// instants light the room differently — a held render clock did not hold the
+// garage. Measurements: tools/shot/garage-angles.mjs header.
+function garageNow() { return _skyHold ? _skyT * 1000 : performance.now(); }
 // PAN — a translation of the whole rig (orbit centre AND look-at) in car-local
 // metres. Orbit and zoom alone can only ever circle the same point, so there is
 // no way to walk along the car and study one end of it up close; you can only
@@ -6803,7 +6809,7 @@ function renderSetupPreview(dt) {
     // present(), and an interior lives or dies on its corner darkening.
     viewProj: _spVP, view: _spView, eye, sunDir: [0, 0.86, 0.51], sunColor: GarageScene.SKYLIGHT,
     ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
-    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.live(_spLiv(), performance.now(), garageCtx()),
+    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.live(_spLiv(), garageNow(), garageCtx()),
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   }) === false) return;
@@ -6836,7 +6842,7 @@ function renderSetupPreview(dt) {
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(GarageScene.live(_spLiv(), performance.now(), garageCtx()), GarageScene.glareStr());
+  gfx.drawGlow(GarageScene.live(_spLiv(), garageNow(), garageCtx()), GarageScene.glareStr());
   gfx.present(SP_PRESENT);
 }
 
@@ -7085,7 +7091,7 @@ const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
 const _rsEl = $("race-settings");      // the one menu screen that shows the flyby
 function render(dt) {
-  if (headlessMode) return;
+  if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
   // race-settings flyby, or the garage's car preview; under every other menu it is
   // HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat behind the
@@ -8864,13 +8870,13 @@ function tickBody(now) {
   const _dtMs = now - lastFrame;
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race.
-  if (!paused && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
+  if (!paused && !(gfx.warming && gfx.warming()) && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick();   // pad + brake-cue; before pause so Start can un-pause
   onboard.tick(dt);                // first-run coach marks — reads reports only, never the car
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
-  netPlay.tick(now);
+  netPlay.tick(now); if (gfx.warming && gfx.warming()) { Input.clearEdges(); return; }
   if (paused && !netPlay.active()) {
     // Nothing downstream reads the pad's edge latches while we are parked here,
     // so drop them rather than let a pause-menu button-mash queue up and fire

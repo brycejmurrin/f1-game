@@ -34,6 +34,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **lib/cli-args.mjs** | Shared CLI flag reader: both `--name=v` and `--name v`, and an unknown flag is an ERROR not a shrug. | — |
 | **lib/game-vm.cjs** | Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser. | — |
 | **lib/harness.mjs** | Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown. | playwright-probe |
 | **lib/output-paths.mjs** | Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`. | — |

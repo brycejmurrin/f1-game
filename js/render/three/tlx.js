@@ -1635,6 +1635,64 @@ const TLX = (function () {
       // answers whether the guard fires, instead of a code read of a minified
       // bundle guessing where generateMipmaps is defined.
       let _envMipFn = "?", _envMipRan = 0, _envMipErr = "", _envMipWhere = "?";
+      // WHAT IS ACTUALLY IN THE CUBE. envState().blank is NOT this: _envBlank is a
+      // BRANCH MARKER set only on the software clear path, so on real hardware it
+      // reads false after every latch by construction and has never been evidence
+      // about content. Run 75 cleared the mip chain (mipRan 90, cube latched,
+      // world still 2.9), so the open question is whether the faces hold a world
+      // or a void, and only a readback answers it. ONCE per session: six 64px
+      // faces is ~200 KB and the answer does not change frame to frame.
+      let _envCube = null, _envCubeRead = false;
+      let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
+      // TLX OPTS OUT OF THE ENV PROBE (2026-09-10), measured, not assumed.
+      // Census 84 ran the WebGL2 three leg with apex26.envProbeOff=1: a flat 60
+      // fps at scale 1.0, frame times down to 10.8 ms, no beat gap over 2 s.
+      // With the probe on, the SAME leg dips to 10-13 fps and sheds resolution
+      // to 0.9 (run 82) or 0.5 (run 79), and the WebGPU leg loses a whole 8 s
+      // beat. It is NOT a warm-up cost — the probe re-renders the world SIX
+      // times per cycle every 4th frame for the whole race, so it is a sustained
+      // multiplier that this backend cannot afford.
+      // It also does not WORK here: on the WebGPU path the latched cube renders
+      // the world near-black, meanLuma 2.9 against 64 on WebGL2, with the mip
+      // chain and a capture artefact both excluded (PERF-FINDINGS 2t). So the
+      // feature currently costs a resolution tier and buys a defect.
+      // GLX runs the same probe through the same game.js gate and holds 60
+      // either way — this is specific to three, and the cost is car reflections
+      // falling back to the analytic mirror until the probe is fixed.
+      // The path below is INTACT: apex26.tlxEnvProbe=1 re-enables it for that
+      // work, and this is one early return, not a deletion.
+      // Read through GameStore like every other setting, so CAR REFLECTIONS
+      // exports, imports and resets with the rest of DISPLAY.
+      let _envOptOut = true;
+      try { _envOptOut = GameStore.store.raw("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no store: stay opted out */ }
+      function startProgramWarm(opts) {
+        _warmRequested = false;
+        if (typeof renderer.compileAsync !== "function") return;
+        _warmAt = performance.now(); _warmAttempts++;
+        const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
+        const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
+        // r185 reads renderer target/MRT again AFTER awaits while building nodes.
+        // Keep all render state owned by this task until compilation settles.
+        _warmPending = (async () => {
+          try {
+            pinSkyMaterial();
+            if (lit && lit.setSsrMrt) lit.setSsrMrt(usePost);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
+            renderer.setMRT(usePost ? _ssrMrtNode() : null);
+            renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+            await renderer.compileAsync(scene, camera);
+            renderer.setMRT(null);
+            if (usePost && post.warm && performance.now() - _warmAt < 3000) await post.warm(opts, _postF);
+          } catch (e) {
+            _warmRequested = _warmAttempts < 2;
+            try { Log.warn("gfx", "TLX program warm failed", String(e)); } catch (_) { /* logging is optional */ }
+          } finally {
+            if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+            renderer.setMRT(mrt); renderer.setRenderTarget(target);
+          }
+        })().finally(() => { _warmPending = null; });
+      }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -1770,6 +1828,14 @@ const TLX = (function () {
       // Every geometry this backend creates, held WEAKLY — a census that
       // retains what it measures is a leak, not an instrument.
       const _geoReg = [];
+      let _geoPruneAt = -Infinity;
+      function pruneGeoRegistry(now) {
+        if (now - _geoPruneAt < 2000) return;
+        _geoPruneAt = now;
+        let w = 0;
+        for (const ref of _geoReg) if (ref && ref.deref()) _geoReg[w++] = ref;
+        _geoReg.length = w;
+      }
       // ── STATIC-GEOMETRY MIRROR RELEASE ──────────────────────────────────
       // The non-chunked half of the lever chunkedSys.releaseMirrors() already
       // pulls. A post-GC heap snapshot says why it is worth pulling: on the
@@ -1879,7 +1945,8 @@ const TLX = (function () {
         for (let i = 0; i < _geoReg.length; i++) {
           const ref = _geoReg[i];
           const g = ref && ref.deref ? ref.deref() : null;
-          if (!g || g.__tlxFreed) continue;
+          if (!g) continue;
+          if (g.__tlxFreed) continue;
           if (g.__tlxKind === "chunk" || g.__tlxKind === "chunked") continue;   // chunkedSys owns those
           // Drawn at least once. NOT `__tlxDrawnBatch < _poolBatch`: every
           // visible geometry is re-acquired EVERY frame, so the stamp is
@@ -2254,7 +2321,7 @@ const TLX = (function () {
           const sup = _gpuSupported();
           if (on !== undefined) {
             _gpuTimerOn = !!on && sup;
-            try { renderer.trackTimestamp = _gpuTimerOn; } catch (_) {}
+            try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
             if (!_gpuTimerOn) _gpuMs = -1;
           }
           return { supported: sup, on: _gpuTimerOn };
@@ -2451,6 +2518,7 @@ const TLX = (function () {
         // GLX/WGX so drawWorldMeshes culls props to THIS face, push lighting
         // via lit.updateFrame, and envFaceEnd owns the face render.
         envFaceBegin(face, eye, frame) {
+          if (_envOptOut) return null;   // see _envOptOut: measured cost, and a black world on WebGPU
           if (!envRT || !lit || !eye || !frame || !frame.viewProj) return null;
           // "A probe that cannot succeed must stop being retried" — the
           // producer half. After the give-up latch flipped, game.js kept
@@ -2479,6 +2547,37 @@ const TLX = (function () {
           if (lit.updateFrame) lit.updateFrame(frame);
           _envBegins++;
           return _envInvArr;
+        },
+        readEnvCube() {
+          if (_envCubeRead || !envRT || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
+          _envCubeRead = true;
+          const half = (h) => {            // IEEE 754 binary16 -> Number
+            const sg = (h & 0x8000) ? -1 : 1, ex = (h >> 10) & 0x1f, fr = h & 0x3ff;
+            if (ex === 0) return sg * Math.pow(2, -14) * (fr / 1024);
+            if (ex === 31) return fr ? NaN : sg * Infinity;
+            return sg * Math.pow(2, ex - 15) * (1 + fr / 1024);
+          };
+          (async () => {
+            const faces = [];
+            for (let f = 0; f < 6; f++) {
+              const px = await renderer.readRenderTargetPixelsAsync(envRT, 0, 0, ENV_SIZE, ENV_SIZE, 0, f);
+              const isHalf = !!px && px.BYTES_PER_ELEMENT === 2;
+              let sum = 0, mx = 0, n = 0;
+              for (let i = 0; i + 3 < px.length; i += 4) {
+                const r = isHalf ? half(px[i]) : px[i] / 255;
+                const g = isHalf ? half(px[i + 1]) : px[i + 1] / 255;
+                const b = isHalf ? half(px[i + 2]) : px[i + 2] / 255;
+                const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                sum += y; if (y > mx) mx = y; n++;
+              }
+              faces.push({ m: +(sum / Math.max(1, n)).toFixed(4), x: +mx.toFixed(4) });
+            }
+            _envCube = {
+              faces, hdr: !!(post && post.hdrOk()),
+              mean: +(faces.reduce((a, v) => a + v.m, 0) / 6).toFixed(4),
+              max: +Math.max.apply(null, faces.map((v) => v.x)).toFixed(4),
+            };
+          })().catch((e) => { _envCube = { error: String((e && e.message) || e).slice(0, 80) }; });
         },
         envFaceEnd(face) {
           if (!envRT || !envCubeCam || !_envActive) {
@@ -2632,6 +2731,9 @@ const TLX = (function () {
               try { _mipVia.generateMipmaps(envRT.texture); _envMipRan++; }
               catch (e) { _envMipErr = (e && e.message) || String(e); }   // lod 0 still works
             }
+            // Measure the cube ONCE, right after it is complete and mipped —
+            // this is the state the lit pass will actually sample.
+            try { this.readEnvCube(); } catch (_) { /* diagnostics never cost a frame */ }
           }
           _restoreEnvFrame();
         },
@@ -2755,6 +2857,12 @@ const TLX = (function () {
         drawInstanced,
         freeInstancedBatch,
         castShadowInstanced,
+        // Request after race setup; present() compiles the prepared race frame,
+        // not the previous menu scene. Each race gets another warm opportunity.
+        warm() {
+          if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
+        },
+        warming() { return !!_warmPending; },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
@@ -3030,6 +3138,10 @@ const TLX = (function () {
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
           // Hide InstancedMeshes that were not drawn this frame (still in scene).
           _hideUndrawnInstanced();
+          // Do not render over an in-flight node build. A time budget may skip
+          // later warm passes, but cannot cancel a compile already in flight.
+          if (_warmRequested && !_warmPending) startProgramWarm(opts);
+          if (_warmPending) return;
           // First renderer.render() is when three compiles TSL → GLSL. A
           // factory that returned is not a compiled program — Safari WebGL2
           // often throws here. tick() reports any escape as the full-screen
@@ -3217,6 +3329,7 @@ const TLX = (function () {
           const _sweepOptIn = (function () {
             try { return localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { return false; }
           })();
+          pruneGeoRegistry(_now);
           _mirrorStat.drains++;
           _mirrorStat.gate = (envReady ? "R" : "-") + (_envGaveUp ? "G" : "-")
                            + (envRT ? "T" : "-") + (_sweepOptIn ? "S" : "-");
@@ -3400,6 +3513,7 @@ const TLX = (function () {
               mask: envFacesMask, begins: _envBegins, ends: _envEnds,
               fail: _envFailN, failMsg: _envFailMsg,
               mipFn: _envMipFn, mipRan: _envMipRan, mipErr: _envMipErr, mipWhere: _envMipWhere,
+              cube: _envCube,
               badProbes: _envBadProbes, gaveUp: _envGaveUp,
             };
           },

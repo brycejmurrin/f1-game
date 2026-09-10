@@ -180,6 +180,7 @@ const FULL = [
   "js/ui/scale.js",
   "js/camera/cockpit-opts.js",
   "js/ui/driving-line-opts.js",
+  "js/ui/debris-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
@@ -301,6 +302,7 @@ const HARD_EDGES = [
   // frame cannot draw a default the player did not choose.
   ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
   ["js/core/store.js", "js/ui/driving-line-opts.js"],
+  ["js/core/store.js", "js/ui/debris-opts.js"],   // binds GameStore.store at eval
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
   // the 2nd tag so the order is never in doubt, but these are real eval-time

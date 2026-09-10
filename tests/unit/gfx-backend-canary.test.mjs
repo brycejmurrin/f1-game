@@ -3317,7 +3317,7 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
   assert.doesNotMatch(tsl.replace(/\/\*[\s\S]*?\*\//g, ""), /carPx = smoothstep\([^)]*scn\.a/,
     "carPx must not still key off scn.a");
   const tlx = TLX.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
-  const hdr = tlx.indexOf("post.sceneTarget()");
+  const hdr = tlx.indexOf("post.sceneTarget()", tlx.indexOf("present(opts) {"));
   assert.notEqual(hdr, -1, "HDR present path moved");
   const window = tlx.slice(Math.max(0, hdr - 800), hdr + 400);
   assert.match(window, /setSsrMrt\(true\)/,
@@ -3780,4 +3780,124 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   assert.match(wgx, /SGSR_GATHER/, "WGX must try the gather pipeline first");
   assert.match(wgx, /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0");
   assert.match(wgx, /getSpatialUpscaleGather/, "WGX must export gather active state");
+});
+
+// Execute the bundled API: mocks alone cannot catch a renamed/wrong owner API.
+test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
+  const THREE = await import("../../vendor/three-0.185.1/three.webgpu.min.js");
+  const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
+  let _gpuTimerOn = false, _gpuMs = 12;
+  const _gpuSupported = () => true;
+  const body = fnBody(code("js/render/three/tlx.js"), "gpuTimer");
+  const timer = eval("(function(on){" + body + "})");
+  assert.equal(timer(true).on, true);
+  assert.equal(renderer.backend.trackTimestamp, true);
+  timer(false);
+  assert.equal(renderer.backend.trackTimestamp, false);
+  assert.equal(_gpuMs, -1);
+});
+
+test("TLX cube readback selects all six faces of attachment zero", async () => {
+  const THREE = await import("../../vendor/three-0.185.1/three.webgpu.min.js");
+  const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
+  const envRT = new THREE.CubeRenderTarget(1), ENV_SIZE = 1;
+  let _envCubeRead = false, _envCube = null;
+  const post = { hdrOk: () => false }, seen = [];
+  renderer.backend.copyTextureToBuffer = async (texture, x, y, w, h, face) => {
+    assert.equal(texture, envRT.texture);
+    seen.push(face);
+    return new Uint8Array([face * 20, face * 20, face * 20, 255]);
+  };
+  const body = fnBody(code("js/render/three/tlx.js"), "readEnvCube");
+  const readCube = eval("(function(){" + body + "})");
+  readCube();
+  for (let i = 0; i < 20 && !_envCube; i++) await Promise.resolve();
+  assert.deepEqual(seen, [0, 1, 2, 3, 4, 5]);
+  assert.equal(_envCube.faces.length, 6);
+  assert.ok(_envCube.faces[5].m > _envCube.faces[0].m);
+  readCube();
+  assert.equal(seen.length, 6, "readback remains once per session");
+});
+
+test("TLX registry pruning preserves live refs and is independent of mirror release", () => {
+  const live = {}, keep = { deref: () => live };
+  const _geoReg = [{ deref: () => undefined }, keep, { deref: () => undefined }];
+  let _geoPruneAt = -Infinity;
+  const body = fnBody(code("js/render/three/tlx.js"), "pruneGeoRegistry");
+  const prune = eval("(function(now){" + body + "})");
+  prune(0);
+  assert.deepEqual(_geoReg, [keep]);
+  _geoReg.push({ deref: () => undefined });
+  prune(1000); assert.equal(_geoReg.length, 2, "throttled");
+  prune(2000); assert.deepEqual(_geoReg, [keep]);
+  const present = fnBody(code("js/render/three/tlx.js"), "present");
+  assert.match(present, /pruneGeoRegistry\(_now\)/);
+  assert.doesNotMatch(body, /isMobile|releaseGeoMirrors|_sweepOptIn/);
+});
+
+test("TLX warm holds renderer state across awaits and restores it on rejection", async () => {
+  let _warmRequested = true, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
+  const _postF = { proj: [] }, vizMat = null, scene = {}, camera = {};
+  let target = "canvas", mrt = "previous", tag = false, postCalls = 0, rejectMain;
+  const renderer = {
+    getRenderTarget: () => target, getMRT: () => mrt,
+    setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
+    compileAsync: async () => {
+      await Promise.resolve(); // r185 builds later objects after yielding
+      assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(tag, true);
+      if (_warmAttempts === 1) await new Promise((_, reject) => { rejectMain = reject; });
+    },
+  };
+  const post = { enabled: () => true, sceneTarget: () => "HDR", warm: async () => {
+    postCalls++; await Promise.resolve(); assert.equal(mrt, null); assert.equal(target, "HDR");
+  } };
+  const lit = { setSsrMrt: v => { tag = v; } }, fx = null;
+  const pinSkyMaterial = () => {}, _ssrMrtNode = () => "tag", softOutRT = () => null, Log = { warn() {} };
+  const body = fnBody(code("js/render/three/tlx.js"), "startProgramWarm");
+  const warm = eval("(function(opts){" + body + "})");
+  warm({}); await Promise.resolve();
+  assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(postCalls, 0);
+  rejectMain(new Error("transient")); await _warmPending;
+  assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
+  assert.equal(_warmRequested, true); assert.equal(_warmPending, null);
+  warm({}); await _warmPending;
+  assert.equal(_warmRequested, false); assert.equal(postCalls, 1);
+  assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
+});
+
+test("TLX post warm compiles serially and holds each target across awaits", async () => {
+  let compileJobs = null, target = "scene", mrt = "tag", active = 0, calls = 0;
+  const _last = { pass: "live" }; let _lastPresentRT = "liveRT", _vizDest = "viz";
+  const THREE = { QuadMesh: class { constructor(mat) { this.material = mat; this.camera = {}; } } };
+  const renderer = {
+    getRenderTarget: () => target, getMRT: () => mrt,
+    setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
+    compileAsync: async q => {
+      assert.equal(++active, 1); calls++;
+      await Promise.resolve();
+      assert.equal(target, q.material); assert.equal(mrt, null);
+      active--;
+      if (q.material === "blur") throw new Error("compile failed");
+    },
+  };
+  const present = () => {
+    compileJobs.push({ mat: "AO", target: "AO" }, { mat: "blur", target: "blur" });
+    _last.pass = "warm"; _lastPresentRT = "warmRT"; _vizDest = null;
+  };
+  const body = fnBody(code("js/render/three/tlx-post.js"), "warm");
+  const warm = eval("(async function(opts, frame){" + body + "})");
+  await assert.rejects(warm({}, {}), /compile failed/);
+  assert.equal(calls, 2); assert.equal(compileJobs, null);
+  assert.equal(target, "scene"); assert.equal(mrt, "tag");
+  assert.deepEqual(_last, { pass: "live" }); assert.equal(_lastPresentRT, "liveRT"); assert.equal(_vizDest, "viz");
+});
+
+test("GPU verdict rejects captured compilation errors even with zero uncaptured errors", () => {
+  const gpu = tlxLegJson();
+  gpu.console = ["error: THREE.WebGPURenderer: Async render pipeline creation failed: Color target has no corresponding fragment stage output"];
+  const result = runVerdict(verdictScript(), {
+    census: { anyHardware: true, runs: [] },
+    legs: { webgpu: gpu, webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson() },
+  });
+  assert.equal(result.code, 1); assert.match(result.out, /shader\/pipeline console errors/);
 });

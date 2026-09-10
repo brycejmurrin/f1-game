@@ -1374,17 +1374,17 @@ const api = {
       lampCull: LT.lampCull,        // the nearest-lamp budget lampReach competes for
     };
   },
-  // GPU frame-time probe (Chrome/Android only; iOS Safari lacks the timer
-  // extension). gpuTimer(true) starts timing, gpuTimer(false) stops, gpuTimer()
+  // GPU frame-time probe: availability follows the bound backend.
+  // gpuTimer(true) starts timing, gpuTimer(false) stops, gpuTimer()
   // reads the latest sample: { supported, on, ms, software }. ms is the GPU
-  // cost of a recent frame (-1 until a result lands). software is `ms < 0`:
-  // no sample yet, no extension, or a software rasterizer (SwiftShader).
+  // cost of a recent frame (-1 until a result lands). software comes from
+  // backend detection; a missing timing sample says nothing about hardware.
   // Do not treat a negative ms as a GPU millisecond.
   gpuTimer: (on) => {
-    if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1, software: true };
+    if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1, software: null };
     const st = gfx.gpuTimer(on);
-    const ms = gfx.gpuMs ? gfx.gpuMs() : -1;
-    return { supported: st.supported, on: st.on, ms, software: ms < 0 };
+    const ms = gfx.gpuMs ? gfx.gpuMs() : -1, b = gfx.backendState ? gfx.backendState() : null;
+    return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null };
   },
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
@@ -1505,7 +1505,7 @@ const api = {
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes() };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile() };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
   },
@@ -2660,8 +2660,8 @@ const api = {
       }, null),
       perf: safe(() => {
         const p = this.renderScale();
-        return { scale: p.scale, fps: p.fps, auto: p.auto, tier: p.tier,
-                 tierFloor: p.tierFloor, crashStrikes: p.crashStrikes };
+        return { scale: p.scale, fps: p.fps, auto: p.auto, tier: p.tier, tierFloor: p.tierFloor,
+                 crashStrikes: p.crashStrikes, floorMs: p.floorMs, autoShed: p.autoShed, scaleFutile: p.scaleFutile, tierFutile: p.tierFutile };
       }),
       gl: glInfo,
       // Capability probes that decide which render path is even available —

@@ -2686,6 +2686,26 @@ already set from `noWheels` factory bodies) pass `Helmets.build({ maxSplit: 0 })
 
 `js/render/glx/glx.js` lines 2610 -> **2615** (+5). Soft-blit sizes from `drawingBufferWidth/Height` so spatial-upscale presents fill `#game-soft`.
 
+## 2026-09-09 — js/game.js +5 lines / +1 code line: garageNow()
+
+`GarageScene.live()` was handed `performance.now()` at both call sites (the lit
+pass and drawGlow). The bay's door-end washer flickers on three incommensurate
+sines of that clock — `on` lands on 0.30, 0.72 or 1 for that fixture, a 3.3x
+swing on one wall — so a HELD render clock did not hold the garage, which is the
+one thing `__apex.renderClock(t, true)` exists to promise. Two captures taken at
+different wall instants lit the room differently, and that is half of why
+`tools/shot/garage-angles.mjs` could not reproduce a shot across runs.
+
+`garageNow()` returns the frame clock while held and `performance.now()`
+otherwise, so a live UI still flickers and a pinned capture does not. Verified
+as a run pair on identical config: side 42.9% -> 0.15% and rear -> 0.31% of
+bytes differing.
+
+Paid rather than extracted: it is one ternary that both call sites must agree
+on, and a duplicated expression at two sites is what the named function exists
+to prevent. The remaining nondeterminism (a global lighting state that flips
+once per run) is NOT fixed by this and is written up in the tool's header and
+`.claude/skills/garage-parts-livery/references/placement.md`.
 ## 2026-09-09 — czPreview / WGX claim order / foreign logo
 
 `js/game.js` lines 10385 -> **10422** (+37) / codeLines 5618 -> **5644** (+26). `czLivFromDialog` shared by save+preview; foreign `customLogo` subscribe; stripe/finish refresh the live draft.
@@ -2708,3 +2728,27 @@ sides' lines. `node tools/check/ratchets.mjs --update` re-measured the union
 `js/game.js` lines -> **9910** / codeLines -> **5322**;
 `js/car/car3d.js` lines -> **4137**. Second deploy merge into
 spine-zones-bind; `ratchets.mjs --update` after conflict in ceilings.
+## 2026-09-10 — shellNodes +6: the DEBRIS set-row
+
+`(tree) shellNodes` 1353 -> **1359** (+6). One `SettingRow` in the DISPLAY
+panel's renderer block costs exactly six shell nodes — the `set-row` div, its
+`tune-label` span, the wrapper div, two chevron buttons and the select — and
+that is the shape every other row in the sheet already pays.
+
+The switch itself is not new: `js/physics/debris-world.js` has read
+`apex26.debris` since it landed, and `__apex.debris(false)` has always turned
+the Rapier side-world off. What was missing is that it is a PERF LEVER on a
+handset (a WASM physics world stepping every frame for spall, marbles and
+trackside furniture) reachable only from a console. The iPhone measurements on
+2026-09-09 put the phone at 26 ms/frame against the 16.7 it needs, and the two
+levers that moved it — renderer and driving line — were both already rows.
+This is the third.
+
+Paid, not avoided: there is no way to add a settings row without shell nodes,
+and folding it into an existing row would make one control mean two things.
+
+## 2026-09-10 — re-merge deploy (renderer / garage-angles)
+
+`js/game.js` lines -> **9916** / codeLines -> **5324**;
+`js/car/car3d.js` lines -> **4137**. Third deploy merge into
+spine-zones-bind after CI green; `ratchets.mjs --update` after ceiling conflict.

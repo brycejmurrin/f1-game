@@ -355,6 +355,18 @@ jobs:
                 // was not a gap). The path row below says when a FED value is
                 // still incomparable; this says when there is no value.
                 + (Math.abs((gov.floorMs || 0) - 16.6) < 0.2 ? "   <- fps UNFED (floorMs is the init value); not a measurement" : ""));
+            // A LEG THAT RENDERED ALMOST NOTHING MEASURED NOTHING. Run 72s
+            // webgpu leg drew SIX frames at 4.9 fps, never completed a probe
+            // cycle, and reported meanLuma 43.2 where run 71 read 2.9 — which
+            // looks exactly like the black-world fix landing, and is not: it is
+            // the ordinary probe-never-latched number that runs 25, 54 and 70
+            // also read. Runs 54 and 72 both fell into this mode. Say so on the
+            // row instead of leaving the next reader to divide frames by fps
+            // and hope they notice. NOT a gate: a slow runner is not a defect
+            // in the build, it is a run that answered no question.
+              if (tlxLeg && (gov.open && gov.open.frames) != null && gov.open.frames < 60) {
+                rows.push(`${" ".repeat(8)}run:   ONLY ${gov.open.frames} frames rendered — INCONCLUSIVE: this leg measured the runner, not the build, and its appearance and env numbers are not comparable with any other run`);
+              }
             // THE PRESENT PATH, and it is the difference between a comparison
             // and a mistake. tlx.js soft-blits (GPU readback + putImageData
             // EVERY FRAME) whenever `!forceWebGL && (_softAdapter || _headless
@@ -390,6 +402,18 @@ jobs:
             // which is the state its own code comment predicts reads black.
             // REPORTED, NOT GATED: the structural gate goes in once a run says
             // which, and a brightness floor never does (see the header).
+            // WHAT THE CUBE HOLDS, read back from envRT rather than asserted.
+            // envBlank above is a BRANCH MARKER (set only on the software clear
+            // path), so on hardware it says false after every latch and proves
+            // nothing. Run 75 cleared the mip chain and left the world at 2.9,
+            // so this row is the next question: a world, or a void.
+              if (env.cube && env.cube.faces) {
+                const f = env.cube.faces.map((c) => c.m).join("/");
+                rows.push(`${" ".repeat(8)}cube:  mean=${env.cube.mean} max=${env.cube.max} hdr=${env.cube.hdr} faces=${f}`
+                  + (env.cube.max <= 0.002 ? "   <- the cube is BLACK: the probe captured nothing" : ""));
+              } else if (env.cube && env.cube.error) {
+                rows.push(`${" ".repeat(8)}cube:  readback FAILED: ${String(env.cube.error).slice(0, 90)}`);
+              }
               if (env.mipFn != null) {
                 rows.push(`${" ".repeat(8)}mip:   fn=${env.mipFn} via=${env.mipWhere} ran=${env.mipRan}`
                   + (env.mipErr ? ` err=${String(env.mipErr).slice(0, 120)}` : "")
@@ -416,6 +440,8 @@ jobs:
             // flaky and then gets widened, which AGENTS.md forbids); it now
             // either carries a number or says why it does not.
               if (g.frameReadFailed) rows.push(`${" ".repeat(8)}luma:  ${g.frameReadFailed}`);
+              const compileErrors = (g.console || []).filter((line) => /(?:Async render pipeline creation failed|Render pipeline creation failed|ShaderModule|fragment error|vertex error)/i.test(String(line)));
+              if (compileErrors.length) bad.push(`${path3}: ${compileErrors.length} shader/pipeline console errors — ${String(compileErrors[0]).slice(0, 200)}`);
               if (g.ok !== true || g.phase !== "done") bad.push(`${path3}: did not finish (phase=${g.phase}, ok=${g.ok})${g.error ? " — " + String(g.error).slice(0, 200) : ""}`);
             // An ABSENT count must not read as clean. gpuErrors was defined only
             // on WGX, so this clause was vacuous on the GLX leg from the day that

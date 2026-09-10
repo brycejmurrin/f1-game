@@ -152,6 +152,75 @@ test("floorMs is exposed for live inspection (__apex.renderScale())", () => {
   assert.equal(PerfGov.floorMs(), 16.7, "starts at the same 60 fps default fpsEMA does");
 });
 
+test("the two futility latches are inspectable, and start clear", () => {
+  // They can each park a lever for the rest of the session, and until
+  // 2026-09-10 neither had an accessor — so answering "why did this device shed
+  // nothing?" from a live diagnostic payload meant re-deriving governor state
+  // from source by hand. __apex.renderScale() carries them now.
+  const { PerfGov } = makeGov();
+  assert.equal(typeof PerfGov.scaleFutile, "function");
+  assert.equal(typeof PerfGov.tierFutile, "function");
+  assert.equal(PerfGov.scaleFutile(), false);
+  assert.equal(PerfGov.tierFutile(), false);
+});
+
+test("a sustained-slow device gets ONE rung of the ladder, however much shedding buys", () => {
+  // docs/notes/PERF-FINDINGS.md §2u, from a live iPhone capture: Suzuka,
+  // 32.2 fps, scale already at the 0.5 mobile floor, tier 0 — nothing optional
+  // shed on a device missing half its frames.
+  //
+  // The mechanism is _floorMs doing exactly what it was built to do: it creeps
+  // toward the observed interval at FLOOR_UP_A, so degradeAt climbs past the
+  // EMA within ~2.7 s and the ONLY branch that steps the ladder down stops
+  // firing. Whatever was shed in that window is all this device ever gets.
+  //
+  // SWEPT OVER HOW MUCH A RUNG IS WORTH, because the first version of this
+  // measurement held dt constant against tier — which makes every shed "buy
+  // nothing" BY CONSTRUCTION, so the governor reverts it and latches
+  // _tierFutile. That is the governor being right, and reading it as the defect
+  // is the trap. Whether the rung STICKS varies sensibly with its worth; that
+  // the ladder never takes a SECOND step does not vary at all, which is why
+  // that is what this pins.
+  //
+  // IT PINS THE BEHAVIOUR, IT DOES NOT BLESS IT. The day someone teaches the
+  // governor to tell a capped clock from a slow one, this fails loudly and is
+  // rewritten deliberately, rather than a fix landing with nothing to show it
+  // worked. The discriminator is already computed: an external cap is
+  // indifferent to render scale and a fill-bound frame is not, which is exactly
+  // what _pendingVerify measures on every scale step.
+  const AT_HALF = 1000 / 32.2;   // 31.06 ms, the captured frame time
+  for (const gain of [0, 0.04, 0.08, 0.15, 0.25]) {
+    const { PerfGov, scale } = makeGov();
+    // Start where the phone starts — the 0.5 mobile scale — through the same
+    // fake renderer, so the 0.02 dead zone and the 0.5 clamp both still apply.
+    PerfGov.setUserTier(0);
+    let peak = 0;
+    for (let i = 0; i < 4000; i++) {
+      const cost = AT_HALF * Math.pow(scale() / 0.5, 2) * Math.pow(1 - gain, PerfGov.autoShed());
+      PerfGov.tick(cost);
+      peak = Math.max(peak, PerfGov.autoShed());
+    }
+    assert.ok(peak <= 1,
+      `a rung worth ${(gain * 100).toFixed(0)}% still must not buy a second ladder step, got ${peak}`);
+  }
+});
+
+test("the adapted floor is what closes the ladder, not a latched-off lever", () => {
+  // The distinction that the first diagnosis of §2u got wrong. _tierFutile does
+  // latch on a shed that buys nothing, but it is CLEARED again by the restore
+  // branch — so a latch is never the durable reason a device stops shedding.
+  // The durable reason is floorMs having become the device's own frame time,
+  // which makes degradeAt unreachable.
+  const { PerfGov } = makeGov();
+  const dt = 1000 / 32.2;
+  for (let i = 0; i < 400; i++) PerfGov.tick(dt);
+  assert.ok(Math.abs(PerfGov.floorMs() - dt) < 1,
+    `floorMs should converge on the observed cost, got ${PerfGov.floorMs()}`);
+  // floor + DEGRADE_OVER is now above the EMA, which is the whole finding.
+  assert.ok(PerfGov.fpsEMA() < PerfGov.floorMs() + 2.3,
+    "the EMA sits inside the degrade threshold, so the ladder can never step again");
+});
+
 // ── the restore path, which had no test and therefore had no floor under it ──
 
 test("RESTORE IS REACHABLE AT ALL: the predicate is satisfiable for some input", () => {
@@ -770,4 +839,50 @@ test("a run of slow frames feeds CLAMPED, so a 60 s gap can never enter as 60 00
     `the clamp caps what a slow run can contribute, got ${PerfGov.fpsEMA()}`);
   assert.ok(PerfGov.fpsEMA() > 900,
     "and it should actually converge on the cap rather than hovering near 16.7");
+});
+
+/* THE BOOT TIER AND THE PRESET MUST AGREE ACROSS A RELOAD.
+ *
+ * `apex26.gfxHigh` is read at BOOT, before GfxQuality.init() runs: glx.js does
+ * `MOBILE_TIER = IS_MOBILE && !_gfxHigh`, and post.js (MSAA) and the audio
+ * engine read it too. It was written ONLY by set() — the player picking a
+ * preset — so any path that lands a `gfxPreset` without going through set()
+ * left the two disagreeing, and a phone whose UI reads MEDIUM booted on the
+ * DESKTOP tier: full-size shadow maps and atlases, the desktop lamp budget,
+ * 4x MSAA. Nothing re-synced it, so the frames never came back on their own.
+ * A settings-file import is the reachable way in (settings-export writes the
+ * allowlisted keys straight to the store). */
+test("init() reconciles the boot tier with the resolved preset", () => {
+  const qsrc = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+  // init() reads the DEVICE CLASS off GLX.isMobile; without it _isMobile is
+  // false and syncBootTier's first line returns, which is not the phone case
+  // this test is about.
+  globalThis.GLX = { isMobile: true };
+  // The RAW lane is localStorage-backed and this harness has none, so without a
+  // shim rawSet is a no-op and the reconciliation cannot be observed at all.
+  const disk = new Map();
+  globalThis.localStorage = {
+    getItem: (k) => (disk.has(k) ? disk.get(k) : null),
+    setItem: (k, v) => disk.set(k, String(v)),
+    removeItem: (k) => disk.delete(k),
+  };
+  const GfxQuality = eval(qsrc + ";GfxQuality");
+
+  // The divergent state: UI says MEDIUM, boot tier still says desktop.
+  GameStore.store.set("gfxPreset", "medium");
+  GameStore.store.rawSet("apex26.gfxHigh", "1");
+  GfxQuality.init();
+  assert.equal(GameStore.store.raw("apex26.gfxHigh"), "0",
+    "a MEDIUM preset must not leave a phone booting on the desktop tier");
+
+  // Stable, not circular: defaultId reads gfxHigh only for the legacy ULTRA
+  // opt-in, and ULTRA is the one preset with mobileHigh true, so the value
+  // survives a round trip rather than oscillating.
+  GameStore.store.set("gfxPreset", null);
+  GameStore.store.rawSet("apex26.gfxHigh", "1");
+  GfxQuality.init();
+  assert.equal(GameStore.store.raw("apex26.gfxHigh"), "1",
+    "the legacy ULTRA opt-in must survive its own reconciliation");
+  delete globalThis.GLX;
+  delete globalThis.localStorage;
 });

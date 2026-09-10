@@ -53,6 +53,23 @@ resolution.
    ```
    `--preset=` overrides `--views=` — do not combine them. Or
    `tools/carview.html?team=mclaren&aero=extreme`.
+
+   **`garage-angles` is a MATRIX, and the boot is what costs.** Measured
+   2026-09-09: ~120 s to reach a rendered bay, then ~10-20 s per extra shot. So
+   compare inside ONE run rather than across runs — every axis takes a comma
+   list and the walk nests team → paint → parts → view → framing, cheapest
+   innermost:
+   ```sh
+   node tools/shot/garage-angles.mjs --team=ferrari,mclaren --parts=factory,stock \
+     --livery=default --spine-side=logo,duo --views=hero,side --zoom=0,8 --dry-run
+   ```
+   `--dry-run` prints the matrix and exits before Chromium — do that first, the
+   product multiplies fast. `--parts` takes `current` / `stock` / `factory` /
+   `cat:opt+cat:opt`; ids are checked against `isOptionAvailable` for the team
+   being shot, because a part locked to another team resolves to the DEFAULT
+   silently (the trap that made an early audit report 100+ dead options).
+   A `--spine-side` design is applied on top of the `--livery` it is crossed
+   with, so a design can be seen on every paint job, not just the team default.
 7. **Test and ship.** `node tools/ci/test-bg.mjs car` for catalog/physics/visual
    recipes; `node tools/ci/test-bg.mjs modes` when you changed research locks or
    garage ownership UI (there is no `test:career`). Bump via `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`)

@@ -690,6 +690,18 @@
                   <button id="pm-upscale-next" type="button" data-step="1" aria-label="Next upscale">&rsaquo;</button>
                 </div>
               </div>
+              <!-- DEBRIS sits with the renderer levers because that is what it is
+                   on a handset: a Rapier side-world stepping every frame for
+                   spall, marbles and trackside furniture. OFF costs no lap
+                   time, no penalty and nothing on the car. -->
+              <div id="pm-debris" class="set-row" role="group" aria-labelledby="pm-debris-label">
+                <span class="tune-label" id="pm-debris-label">DEBRIS</span>
+                <div>
+                  <button id="pm-debris-prev" type="button" data-step="-1" aria-label="Previous debris setting">&lsaquo;</button>
+                  <select id="pm-debris-sel" aria-labelledby="pm-debris-label"></select>
+                  <button id="pm-debris-next" type="button" data-step="1" aria-label="Next debris setting">&rsaquo;</button>
+                </div>
+              </div>
               <button id="pm-renderer">RENDERER: WEBGL2</button>
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
             </div>
@@ -2312,6 +2324,7 @@
 <script defer crossorigin="anonymous" src="js/ui/scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/debris-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/perf/metrics-overlay.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/mode-switch.js?v=dev"></script>

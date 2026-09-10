@@ -28,7 +28,7 @@
 // against itself.
 import { chromium } from "playwright";
 import { createServer } from "http";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join, extname } from "path";
 import { fileURLToPath } from "url";
 
@@ -118,6 +118,49 @@ async function leg(browser, port, backend) {
   // hypothetical — it hung here for eight minutes with no output and had to be
   // killed, which is a measurement lost to the harness rather than to the game.
   // The frame count is REPORTED, not targeted — it is a rate observation.
+  // GPU-SIDE SAMPLES, because the JS heap is the wrong number for a handset.
+  // Runtime.getHeapUsage cannot see textures, buffers or pipelines, and iOS
+  // jetsam counts exactly those (glx.js mobile-tier note). three tracks them in
+  // renderer.info.memory/render, which TLX already surfaces on GLX.__tlx.memState().
+  // Sampled ON A CLOCK through the soak: an end-to-end delta cannot tell a
+  // filling working set from a slope, which is the distinction this whole file
+  // exists for.
+  const series = [];
+  const sample = () => page.evaluate(() => {
+    // The surface hangs off GLX, NOT window: `GLX.__tlx` (gfx-probe.mjs already
+    // reaches it that way). Reading window.__tlx returns undefined on every
+    // sample and the series prints a tidy column of nothing, which is a lie
+    // that looks like data.
+    const g = typeof GLX !== "undefined" ? GLX : null;
+    const tl = (g && g.__tlx) || (typeof window !== "undefined" ? window.__tlx : null);
+    const t = tl && tl.memState ? tl.memState() : null;
+    // ABSENT is not the same as ZERO or as undefined-looking data. The GLX leg
+    // has no __tlx at all, and printing its columns as `undefined` reads as a
+    // measurement that failed rather than one that does not apply.
+    const out = { t: Math.round(performance.now()), tlx: !!t };
+    if (!t) return out;
+    {
+      // memState()'s shape is FLAT — rGeo/rTex/progs/calls, not info.memory.*.
+      // backendData is three's WebGPU DataMap size: the per-object GPU state
+      // the renderer retains, and the counter closest to what iOS jetsam
+      // actually charges the tab for.
+      out.mats = t.mats; out.pool = t.pool; out.geoKeys = t.geoKeys;
+      out.rGeo = t.rGeo; out.rTex = t.rTex; out.progs = t.progs; out.calls = t.calls;
+      // backendData is three's WebGPU DataMap size and it comes back UNDEFINED
+      // here: memState guards on `b.data.size != null`, and the DataMap is a
+      // WeakMap, which has no size. So the counter closest to GPU retention is
+      // NOT available from this surface — do not read its absence as "flat".
+      out.backendData = t.backendData === undefined ? null : t.backendData;
+      if (t.mirror) out.sweeps = t.mirror.sweeps;
+    }
+    return out;
+  }).catch(() => null);
+
+  // Node-side clock, running CONCURRENTLY with the soak's evaluate below.
+  const every = Math.max(5000, Math.round(seconds * 1000 / 8));
+  series.push(await sample());
+  const ticker = setInterval(() => { sample().then((r) => r && series.push(r)); }, every);
+
   const framesRun = await page.evaluate(async ({ budgetMs, frameMs }) => {
     const t0 = performance.now();
     let i = 0;
@@ -133,15 +176,24 @@ async function leg(browser, port, backend) {
     }
     return i;
   }, { budgetMs: seconds * 1000, frameMs: 3000 });
+  clearInterval(ticker);
   const settled = await heap(cdp);
+  series.push(await sample());
 
   await page.close();
-  return { backend, gfx: got.gfx, track: got.track, boot, built, settled, framesRun };
+  return { backend, gfx: got.gfx, track: got.track, boot, built, settled, framesRun, series };
 }
 
 const { srv, port } = await serve();
+// The container ships a chromium build the pinned Playwright does not name
+// (1194 vs the 1228 it looks for), so the default resolve throws "Executable
+// doesn't exist" and reads as a broken tool rather than a missing browser.
+// Honour PW_CHROMIUM, else fall back to the unversioned /opt/pw-browsers path.
+const PW_CHROMIUM = process.env.PW_CHROMIUM
+  || (existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : null);
 const browser = await chromium.launch({
   headless: true,
+  ...(PW_CHROMIUM ? { executablePath: PW_CHROMIUM } : {}),
   args: ["--enable-unsafe-webgpu", "--use-angle=swiftshader", "--enable-features=Vulkan",
          "--use-gl=angle", "--enable-unsafe-swiftshader", "--no-sandbox"],
 });

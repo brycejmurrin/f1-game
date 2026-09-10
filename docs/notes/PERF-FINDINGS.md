@@ -2673,6 +2673,152 @@ run where the webgpu leg gets past ~600 frames. Whatever answers it, note that
 this 4.9 fps mode is itself recurring and undiagnosed, and a census that lands
 in it cannot answer any question about env-probe content.
 
+### 2026-09-09 — the cube readback does not work as called, and envBlank never answered the question (run 76)
+
+Two things, one useful and one a dead end.
+
+**envState().blank is a BRANCH MARKER, not a content check.** `_envBlank` is set
+true only on the software clear path and false on every hardware latch, so on a
+real GPU it reads false BY CONSTRUCTION. Five Verdicts have now printed
+`envBlank=false` next to a black world and not one of them was evidence about
+what the cube holds. Do not read that column as content.
+
+**The readback added to answer it FAILS.**
+`renderer.readRenderTargetPixelsAsync(envRT, 0, 0, 64, 64, face)` on a
+`CubeRenderTarget` throws `Invalid value used as weak map key` inside three r185
+— identically on BOTH legs, so it is the call that is wrong, not anything about
+WebGPU. A different route is needed: copy a face into a plain RenderTarget and
+read that, or render one probe face into a 2D target alongside the cube. Not
+attempted, because the path runs only on hardware, so every iteration is a
+4-minute dispatch against library internals — the same shape as the resolution
+theory that cost four runs, and not worth repeating blind.
+
+The instrument does fail safe: it reports `cube.error` rather than throwing into
+a probe face, latches `_envCubeRead` so it never retries, and costs one call per
+session. It stays in place so whoever has a local hardware repro can fix the
+call rather than rebuild the scaffolding.
+
+Run 76 also confirms the black world a THIRD time on a leg that fully worked:
+`envReady=true`, `mipRan=87`, 528 frames, `meanLuma 2.9`, against webgl2 at
+`mipRan=89` and 64.6.
+
+**STATE OF THIS DEFECT.** Cause confirmed (the env cube, by within-leg A/B across
+runs 69/70). Two mechanisms excluded by measurement: the mip chain (75, 76) and
+the readback path (the 2.9 is not a capture artefact — maxLuma 247). Not yet
+distinguished: whether the cube CONTENTS are void, or the lit pass APPLIES a
+valid cube destructively. The lit-pass side is the cheaper of the two to test
+next and needs no readback: `envCC` absorbs via
+`color.mulAssign(envW.mul(0.94).oneMinus())`, so a knob that zeroes env strength
+WHILE the cube stays latched separates "nothing in it" from "applied wrong" —
+`carEnvCube` is that knob, and gfx-probe already takes `--tune`.
+
+### 2026-09-09 — the mip pass was NOT the black world (run 75, the first leg that actually tested it)
+
+The beat fix bought the measurement: the webgpu leg went from 6 frames to **547**
+at 51.1 fps, latched the probe (`envReady=true`, `begins=545 ends=545`,
+`badProbes=0`) and ran the repaired cube-mip pass **90 times** via the backend.
+
+`meanLuma 2.9`. Black, exactly as before.
+
+So the missing mip pass is REFUTED as the mechanism. It was a genuine defect —
+`renderer.generateMipmaps` does not exist in r185, so that pass had never once
+executed — and fixing it costs nothing and is worth keeping, but it does not
+explain the near-black world. The suspicion recorded above was wrong, and it was
+wrong in the way the code read predicted it might be: a minified-bundle argument
+that survived until something measured it.
+
+What run 75 settles that nothing before it could. BOTH TLX legs now hold
+`envReady=true` with `mipRan >= 90`, and they read 2.9 and 64.6. Together with
+the 69/70 A/B — the SAME webgpu leg, same present path, 39.2 probe-off against
+2.9 probe-on — the env cube as applied on the WebGPU path is the cause, and the
+mip chain is not the reason it hurts.
+
+Note the present-path caveat still forbids reading 2.9 against 64.6 as the
+measurement. It is not needed: the load-bearing comparison is within one leg,
+across the probe, and it has held across four runs.
+
+Where to look next, in order of what the evidence supports:
+1. **What is IN the cube on the WebGPU path.** `envBlank=false` is the code
+   checking itself, and that check has never been independently confirmed. A
+   readback of `envRT` (the `__tlx.lumaDbg()` half-float decoder already does
+   this for the post targets) says whether the faces hold a world or a void.
+2. **How the lit pass applies it.** `envStr` and the clearcoat `envCC` path —
+   `color.mulAssign(envW.mul(0.94).oneMinus())` ABSORBS under the mirror, so a
+   cube that reads near-zero darkens rather than merely failing to brighten.
+3. Colour space or format on the cube (`NoColorSpace` is set on the target).
+
+### 2026-09-09 — the slow leg was never slow: TLX stalls the main thread and the census calls it dead
+
+The evidence was already in the job logs, in checkpoints the tool has printed
+all along. Run 74, the four legs side by side:
+
+| leg | racing | next checkpoint | live beats |
+|---|---|---|---|
+| webgpu | +15.7s | **page-stopped-answering +25.6s** | 1, then `beat timeout` |
+| webgl2 | +29.3s | **page-stopped-answering +37.3s** | **0** — the FIRST beat missed |
+| glx | +8.6s | settled +24.1s | 15, one per second |
+| wgx | +8.9s | settled +25.7s | 15, one per second |
+
+The settle phase is a 15-beat heartbeat, each `page.evaluate` raced against an
+8 s timeout, and ONE miss broke the loop. So a TLX leg that blocks its main
+thread past a single beat ends the settle immediately — and the run then reports
+5-7 frames at 4.9-9 fps with `envReady=false`, which reads as a slow renderer
+and is nothing of the kind. The frame counter stopped because the harness gave
+up, not because the GPU was struggling. GLX and WGX answered every beat on the
+same runs, on the same machine, at the same pinned resolution.
+
+That also explains run 74 exactly: pinning `resMode` forced a TSL graph rebuild,
+so BOTH three legs stalled where only webgpu had before — the control was not
+destroyed by resolution, it was destroyed by a recompile.
+
+`gpu-game-check.mjs` now requires TWO CONSECUTIVE misses before declaring the
+page stopped. The 8 s per-beat timeout is unchanged: this is not a widened
+tolerance, it is refusing to call one slow beat a corpse — the same reasoning
+`tlx.js` already uses for `HEAL_MIN_FRAMES = 2`, where healing on a single
+transient reloaded a healthy tab.
+
+The lesson is where the evidence was. Four dispatches went into a resolution
+theory while the checkpoint timeline that refutes it was printed in every one of
+those job logs, unread — and the code comment beside the beat loop already said
+"on Apple Metal both three paths went silent here and the run learned nothing
+for twenty minutes". READ THE PHASE TIMELINE FIRST on any census leg that
+reports few frames; the `run:` INCONCLUSIVE row says the leg measured nothing,
+and the checkpoints say why.
+
+### 2026-09-09 — the slow-leg mode is NOT resolution, and pinning it made things worse (run 74)
+
+Runs 54, 72 and 73 all showed the webgpu leg crawling (4.9-9 fps, 6-7 frames,
+probe never latching) and all three sat at `scale=1`, while the one good run (71,
+600 frames at 53.1 fps) sat at `scale=0.8`. That correlation is WRONG. Run 74
+pinned `apex26.resMode="low"` (scale 0.5) to buy the frames, and:
+
+| leg | scale | fps | frames |
+|---|---|---|---|
+| webgpu | 0.5 | 5 | 6 |
+| webgl2 | 0.5 | 9.4 | **5** (600 in runs 72/73) |
+| glx | 0.5 | 51.9 | 600 |
+| wgx | 0.5 | 58.3 | 600 |
+
+The webgpu leg was not rescued, and the HEALTHY CONTROL was destroyed: webgl2
+had rendered 600 frames at 59.9 fps in the two runs before this one. GLX and WGX
+at the same pinned scale were untouched, so the harm is specific to the two
+three.js legs — which is what a TSL graph rebuild on a knob change costs, paid
+at boot on both of them. **Do not pin resMode on a TLX census leg.** It removes
+the control and answers nothing.
+
+So the slow mode is still undiagnosed, and it is not about resolution: three
+points sharing a value is not a mechanism, which is the same error the fps
+column and the two-TLX-leg comparison each produced earlier in this file. What
+it is NOT: the governor shedding (tier=0 autoTier=0 on every slow leg), GPU
+errors (0 throughout), or pixel count (run 74). A diagnosis needs the boot
+timeline of a three.js leg that crawls against one that does not — where the
+first six frames go — not another dispatch with a knob moved.
+
+What DID work is the INCONCLUSIVE row added the same day: it fired correctly on
+every affected leg in runs 73 and 74, including both TLX legs here, so none of
+these numbers can be mined as a result. That is the whole of the win from this
+stretch, and it is worth more than the four dispatches it took to get it.
+
 ### 2026-09-09 — the TLX heap gap is opened by the TRACK BUILD, not boot
 
 `scratch/heap-stages.mjs`, montreal, CDP `Runtime.getHeapUsage` after three
@@ -4151,3 +4297,263 @@ No smoking gun in there — the loop is dominated by its own physics update and
 the cost is spread — but that is a conclusion the old output could not support
 either way. Anything hunting a hot spot from a profile taken before this fix
 was reading the rasteriser, not the code.
+
+## 2r. A NEW decay reported on the phone: three-WebGPU 60 → 30 (2026-09-10)
+
+Owner report: on the handset, TLX-WebGPU **starts at 60 and settles at 30**.
+That exact halving is the vsync signature — a frame crossing 16.7 ms lands on
+the next refresh at 33.3 ms — so the question is what GROWS until it crosses,
+not what is statically expensive. §2o's rule applies: **drift, not a snapshot.**
+
+### Ruled out, so the next round does not re-derive them
+
+| candidate | why not |
+|---|---|
+| the §2p `mrt()` leak returning | `_ssrMrtNode()` still memoises, and `gfx-backend-canary` guards both the factory and its call site |
+| TLX soft-blit arming on the phone | `_softAdapter` is `!isMobile && …` — a handset can never be classified software; `_softBlit` then needs `_headless` or an explicit `apex26.tlxCap=1` |
+| `materialFor` key churn | every field the key reads is a LITERAL at every call site (`grep` for non-numeric `roughness:`/`metalness:`/`sparkle:`/`depthBias:` returns only TSL declarations) — the key cannot vary per frame |
+| per-frame geometry construction | the two `new BufferGeometry` sites in the draw path are capacity-doubling (`ensureStream`) and per-mesh-build (`createTexMesh`), neither per frame |
+| the frustum extraction (1ae7a96b) | 1:1 delegation; GLX's cull math is unchanged line for line |
+
+### Fixed here, though it is not on its own a halving
+
+`_geoReg` only ever grew. `_regGeo` pushes a WeakRef per geometry and the
+2 s mirror sweep deref()s **every** entry forever; the compaction that removes
+dead refs lived in `geoCensus()`, a debug hook no player calls. The registry's
+own comment measured the rate: **~150-200 dead refs per circuit build,
+monotonic across a season**. The sweep now compacts as it walks (backwards, so
+a splice cannot skip). Time and memory, both unbounded, both cheap to stop.
+
+### What would actually settle it
+
+The census cannot: it renders **45 rAF frames**, and it is an error/env gate,
+never a benchmark. A decay needs a slope. `__tlx.memState()` already reports
+mats / pool / draws / geoKeys / three's own counts and the mirror stats, which
+is the instrument §2o and §2p were both settled with — it wants a soak on the
+handset (`apex26.tlxMobile=1`), sampling every 15 s while racing, and the
+acceptance criterion is the slope against a GLX control on the same phone.
+
+## 2s. The decay is NOT a JS-heap leak — measured, on Apple hardware and on a soak (2026-09-10)
+
+Following §2r's report (three-WebGPU 60 → 30 on the handset). Two instruments,
+one negative result each, and a negative result here is worth more than another
+hypothesis: it says where NOT to spend the next round.
+
+### Apple hardware: no errors, and the TLX fps row is the trap
+
+`gpu-census` on `macos-latest`, montreal, run 78 (`force=1`) and run 81
+(default). Both Verdicts green, **gpuErrors 0 on every leg**, `anyHardware:
+true`. From run 78:
+
+| leg | ok | gpuErrors | fps | frames | scale | path |
+|---|---|---|---|---|---|---|
+| three-WebGPU | true | 0 | 10.1 | 8 | 1 | `softBlit=YES (headless readback — NOT the path a player takes)` |
+| three-WebGL2 | true | 0 | 8.7 | 4 | 1 | `softBlit=no (direct present)` |
+| GLX | true | 0 | 59.9 | 600 | **0.70** | — |
+| WGX | true | 0 | 58.2 | 600 | 1 | softPresent (expected under a headless UA) |
+
+**Do not read the TLX rows as a backend comparison** — AGENTS.md says why and
+this run is the illustration: the WebGPU leg is a readback path. What IS
+readable: no leg errors on real Metal, and GLX had to shed to **scale 0.70** to
+hold 59.9, so even the default backend is not comfortable at native res there.
+
+### The soak: TLX plateaus, it does not leak
+
+`heap-stages.mjs`, montreal, equal WALL time per leg, drift = settled − built:
+
+| soak | GLX drift | TLX drift | TLX frames |
+|---|---|---|---|
+| 60 s | +0.94 MB | +5.67 MB | 2235 (37 fps) |
+| 180 s | +0.82 MB | **+7.15 MB** | 6251 (35 fps) |
+
+A leak at the 60 s rate would put 180 s near +17 MB. It lands at +7.15, and the
+frame rate is flat across both (37 → 35 fps). **The curve is a working set
+filling, not a slope.** §2p's `mrt()` fix holds; nothing has re-opened it.
+
+### What this rules out, and the blind spot it leaves
+
+Ruled out: a JS-heap leak, a per-frame allocation slope, and any error on real
+Apple hardware. So the handset's 60 → 30 is **not** the §2o/§2p mechanism.
+
+The blind spot is the honest part: `heap-stages` reads the **JS heap** via
+`Runtime.getHeapUsage`. iOS jetsam counts **GPU and IOSurface** allocations,
+which that number cannot see at all — and glx.js's own mobile-tier comment says
+exactly that. A texture/buffer/pipeline growth on the WebGPU device would be
+invisible to every measurement in this entry. `renderer.info.memory`
+(geometries, textures) is the counter that would see it, `memState()` already
+reports it, and no soak here samples it over time yet.
+
+Thermal throttling is the other candidate no code change reaches, and on a
+handset it produces exactly a sustained halving.
+
+### Next round, in order
+
+1. Sample `__tlx.memState()` — specifically `renderer.info.memory` — every 15 s
+   across a soak, not just at the ends. That is the GPU-side slope.
+2. Only then look at code. Two rounds were spent on baselines before anyone
+   measured a slope (§2o's closing lesson); this entry exists so a third is not
+   spent on a slope that is already flat.
+
+## 2t. The GPU-side slope is flat too — and the persisted backend is the likelier answer (2026-09-10)
+
+§2s closed by naming the blind spot: the JS heap cannot see textures, buffers or
+pipelines, and iOS jetsam charges the tab for exactly those. `heap-stages.mjs`
+now samples `GLX.__tlx.memState()` on a Node-side clock through the soak. 90 s,
+montreal, TLX leg:
+
+| t (s) | rGeo | rTex | mats | pool |
+|---|---|---|---|---|
+| 15.5 | 242 | 41 | 12 | 349 |
+| 26.8 | 250 | 41 | 12 | 578 |
+| 38.1 | 366 | 43 | 12 | 251 |
+| 49.3 | 366 | 28 | 12 | 167 |
+| 60.6 | 367 | 28 | 64 | 669 |
+| 71.8 | 394 | 34 | 64 | 951 |
+| 83.1 | 402 | 37 | 64 | 822 |
+| 94.3 | 402 | 37 | 64 | 572 |
+| 105.6 | 402 | 52 | 64 | 223 |
+
+`rGeo` climbs 242 → 402 and then **holds at 402** across the last three samples;
+`mats` steps 12 → 64 at the cache cap and stops; `pool` oscillates 167–951,
+which is §2n's keyed pool tracking the working set exactly as designed; `rTex`
+is non-monotonic (41 → 28 → 52), so textures are being freed and remade rather
+than accumulated. **No unbounded GPU-side growth over 90 s.**
+
+That is the SECOND negative. Neither the JS heap (§2s) nor three's own retained
+counts reproduce a decay on this box.
+
+### Two gaps in the instrument, stated rather than glossed
+
+- `backendData` — three's WebGPU DataMap size, the counter closest to real GPU
+  retention — comes back **undefined**. `memState()` guards on
+  `b.data.size != null` and the DataMap is a WeakMap, which has no `size`. Its
+  absence is NOT evidence of flatness, and the sampler now reports `null`
+  rather than letting it read as a measured zero.
+- The GLX leg has no `__tlx` at all, so its columns are absent by definition.
+  The first cut of this sampler printed both cases as `undefined`, which is a
+  lie that looks like data — it also read `window.__tlx` when the surface hangs
+  off `GLX.__tlx` (gfx-probe.mjs already knew), so the FIRST run reported a
+  tidy column of nothing for every leg. Both fixed.
+
+### The likelier answer, and it is not a leak
+
+`399dbcb2` (deploy branch, this morning) says it outright: **"SAVE ALL SETTINGS
+on a phone with no stored backend reported gfxBackend three and a reload could
+re-persist THREE."** Together with `9a12d061` aligning `renderer-picker`'s
+default back to WebGL2, that closes the 2026-09-08 mobile-default episode for
+FRESH state — but a phone that hit SAVE ALL SETTINGS inside that window now has
+`apex26.gfxBackend = "three"` **persisted**, and no revert of a default reaches
+a stored value.
+
+The boot canary in game.js only retires a backend that never PRESENTS A FRAME
+twice. TLX at 30 fps presents frames perfectly well, so the canary never fires
+and the phone stays on the heavier backend indefinitely — TLX measured ~97–119
+MB against GLX's ~47–49 on a phone profile (§2n, §2q).
+
+**This is not auto-fixable and should not be.** A stored `"three"` from SAVE ALL
+SETTINGS and a stored `"three"` the player chose deliberately are the same three
+bytes; a migration that cleared it would silently override a real choice. The
+answer is the RENDERER row in SETTINGS, and knowing to look at it.
+
+## 2u. Only ONE of the ladder's four rungs is reachable on a slow phone (2026-09-10)
+
+A fourth live iPhone capture, this one on **Suzuka** — which answers the
+question three earlier notes asked and could not: the circuit the owner
+remembers at 60 fps is the circuit measuring **32.2 fps**. GLX, `mobileTier`,
+MSAA 0, 22 cars, cockpit, dry, day.
+
+The line worth stopping on is not the fps:
+
+```
+perf: { scale: 0.5, fps: 32.2, auto: true, tier: 0, tierFloor: 0 }
+```
+
+`tier: 0` with the scale lever already at its 0.5 floor. **Nothing optional has
+been shed** — bloom, god-rays, SSR and per-chunk lamps all still on, on a device
+at half resolution missing half its frames.
+
+### Reproduced, then re-reproduced after the first model was found biased
+
+`tests/unit/perf-governor.test.mjs` already has the makeGov/feed rig. Boot it at
+the phone's 0.5 scale and feed the phone's frame cost (31.06 ms).
+
+The FIRST model held `dt` constant against tier, and showed the shed rung being
+reverted. That result was an artefact and is recorded here because it is the
+trap: a model where shedding cannot help makes every shed "buy nothing" **by
+construction**, so `_pendingVerify` reverts it and latches `_tierFutile`. That
+is the governor being right, not wrong.
+
+Re-run with shedding actually worth something (`cost ∝ scale²`, and each shed
+rung `gain` cheaper), 6000 frames:
+
+```
+a shed rung buys nothing    peakShed=1 endShed=0 tier=0 scale=0.56 floor=38.9 fps=25.7
+each rung is  4% cheaper    peakShed=1 endShed=1 tier=1 scale=0.56 floor=37.3 fps=26.7
+each rung is  8% cheaper    peakShed=1 endShed=1 tier=1 scale=0.56 floor=35.8 fps=27.9
+each rung is 15% cheaper    peakShed=1 endShed=1 tier=1 scale=0.56 floor=33.1 fps=30.2
+each rung is 25% cheaper    peakShed=1 endShed=1 tier=1 scale=0.56 floor=29.2 fps=34.2
+```
+
+**`peakShed=1` in every row.** That is the finding, and it is the one thing that
+does not depend on the model: whether the rung sticks varies sensibly with how
+much it buys, but the ladder never takes a SECOND step — not at 4% and not at
+25%, not at 26 fps and not at 34.
+
+### Why the other three rungs are unreachable
+
+`_floorMs` creeps toward the observed frame interval at `FLOOR_UP_A` (0.02) —
+about 130 frames, ~4 s at 32 fps. Simulated against a sustained 31.06 ms from
+the 16.7 ms cold start, `_frameEMA > degradeAt` is true for frames **3..90 only**
+(~2.7 s) and false forever after. The degrade branch is the ONLY caller that
+steps the ladder down, so whatever it managed inside that 2.7 s window is all
+the shedding this device will ever get. One evaluation happens per 45 frames
+with a 30–90 frame cooldown after a step, which is why the answer is exactly one
+rung and not two.
+
+After the window closes the EMA sits BELOW `restoreAt` (floor + 0.6), so the
+governor spends the session in the RESTORE branch instead: it climbs 0.50 ->
+0.56, the player pays **32.2 -> 25.7 fps for ~285 frames (~9 s)**, and
+`_pendingVerify` correctly reverts it. `_upBackoff` doubles each refusal (10 s,
+20 s, 40 s … 2 min cap) so the attempts thin out — traced gaps of 900, 1485 and
+2700 frames — but they never stop. On the phone this should be visible as frames
+dropping for ~9 s every minute or two and then recovering. That is a testable
+prediction, not a measurement.
+
+The phone reading `tier: 0` rather than 1 is consistent with its one available
+rung buying nothing measurable — `lightTune` in the same capture has
+`shadowStr`, `aoStr`, `contactStr`, `carShadow` and `lampShadow` ALL already 0,
+so the first rung may have little left to switch off.
+
+### Why this is a design question and not a bug
+
+`_floorMs` exists for a real defect: an iOS device throttled to a hard 30 fps
+rAF cap used to be downscaled to the floor and stripped of every optional
+feature within ~27 s, and none of it could help, because the clock was capped
+externally and had nothing to do with draw cost. `perf-governor.test.mjs`'s
+first test pins that fix.
+
+But a capped device and a genuinely expensive one are **identical to that
+instrument**: neither ever produces a fast frame. The same mechanism that
+correctly stops chasing a 30 Hz cap also caps a genuinely slow phone at one
+shed rung.
+
+The discriminator exists and is already computed: **an external cap is
+indifferent to render scale; a fill-bound frame is not.** `_pendingVerify`
+measures exactly that delta on every scale step — a step that moves the EMA by
+nothing is the signature of a cap; a step that moves it a lot (31.06 -> 38.9 ms,
+traced) is proof the device is compute-bound and the ladder should be shedding
+rather than restoring. Nothing reads it that way yet.
+
+Not changed here. Any fix trades directly against the defect `_floorMs` was
+built to prevent, and that is the owner's call.
+
+### What this note DID change
+
+`_scaleFutile` and `_tierFutile` — the two latches that can park a lever — were
+module-private with no accessor, and `floorMs`/`autoShed` were on
+`__apex.renderScale()` but dropped from the diagnostic payload. So none of the
+above was answerable from the capture; it took re-deriving governor state from
+source, and the first attempt at that got the cause wrong. All four now reach
+the payload. `tier` alone was never enough: it folds in the crash floor and the
+player's GRAPHICS preset, so only `autoShed` says what the governor shed on its
+own evidence.

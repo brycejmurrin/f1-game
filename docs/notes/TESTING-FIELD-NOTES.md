@@ -1617,3 +1617,26 @@ before forming any theory about the run.
 Cost of not doing that here: two deploys silently not published, and a session
 spent hypothesising about concurrency groups and billing for a one-line stale
 key in a unit test.
+
+## 2026-09-09 — `assets-api › stats() overlay` is timing-flaky, and how that was settled
+
+The test does `stats(true)`, waits 700 ms of WALL time for "at least two 250 ms
+ticks", then reads `#__apexStats`. On a starved main thread the node mounts but
+the interval callbacks have not run, so `textContent` is `""` — not
+`"stats error"`, which is what the spec's own guard would catch. Seen failing at
+loadavg 3.85 and again at 1.35, then passing on the same tree at 1.74.
+
+Worth writing down for the METHOD, not the flake. It first looked like a
+regression from a `js/game.js` change in the same tree, and the comparison that
+"proved" it was invalid: the change was tested by running the WHOLE spec file
+(stats last, after nine tests of accumulated page state) and the base by running
+`-g "stats() overlay"` ALONE. Same box, same tree otherwise, different
+invocation — so the pass and the fail were not comparable and the conclusion
+"it is mine" was unfounded.
+
+What settled it cost nothing: the change was `garageNow()`, which returns
+`performance.now()` unless `_skyHold` is true, and `assets-api.spec.js` never
+calls `renderClock`. So the new code path is provably byte-identical here. A
+re-run then confirmed 10/10. **Read the code path before buying a bisect** — the
+cheapest disproof is often that the change cannot reach the failure at all, and
+an A/B is only evidence when both sides are invoked identically.

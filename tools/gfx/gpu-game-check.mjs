@@ -186,22 +186,51 @@ try {
   // wait from a wedged renderer — on Apple Metal both three paths went silent
   // here and the run learned nothing for twenty minutes. Each poll carries its
   // own short timeout, so the last successful beat is recorded either way.
+  // TWO consecutive misses, not one. MEASURED (census 72/73/74, macos-latest):
+  // a TLX leg stalls its main thread past a whole 8 s beat — webgpu answered
+  // once at 16.6 s then went silent, webgl2 missed the very FIRST beat — while
+  // GLX and WGX answered all fifteen 1 s apart on the same runs. Bailing on the
+  // first miss ended the settle at 5-7 frames, which then reported as a slow
+  // renderer (fps 4.9-9) and an env probe that never latched, and cost four
+  // dispatches chasing a resolution theory that was never the cause. A stall is
+  // not a death: the long pole is the TSL graph rebuild, which is why pinning
+  // resMode made BOTH three legs miss (run 74) when only webgpu had before.
+  // The 8 s per-beat timeout is UNCHANGED — this is not a widened tolerance,
+  // it is refusing to call one slow beat a corpse, the same reason tlx.js
+  // heals on HEAL_MIN_FRAMES = 2 rather than on a single transient.
   out.beats = [];
+  let missed = 0;
   for (let i = 0; i < 15; i++) {
     if (out.crashed || out.browserGone) break;
     try {
       const beat = await Promise.race([
-        page.evaluate(() => ({
-          t: (window.__apex && window.__apex.info && window.__apex.info().track) || null,
-          f: (window.__apex && window.__apex.info && Math.round(window.__apex.info().fps || 0)) || 0,
-        })),
+        // `f` READ info().fps, WHICH DOES NOT EXIST — so every beat of every leg
+        // of every census has logged f: 0, and the one per-second time series on
+        // real hardware has always been blank. The governor snapshot is where fps
+        // lives (renderScale()/perf()); tier and scale come with it for free, so a
+        // leg that starts at 60 and decays now shows the CURVE instead of one
+        // settled number. A settled number cannot see a decay, which is exactly
+        // the shape a player reports as "fine for a few seconds, then not".
+        page.evaluate(() => {
+          const A = window.__apex; let g = null;
+          try { g = A && A.renderScale && A.renderScale(); } catch (_) { /* pre-boot */ }
+          return {
+            t: (A && A.info && A.info().track) || null,
+            f: g && g.fps != null ? Math.round(g.fps) : 0,
+            ms: g && g.floorMs != null ? +(+g.floorMs).toFixed(1) : null,
+            ti: g ? g.tier : null,
+            sc: g && g.scale != null ? +(+g.scale).toFixed(2) : null,
+          };
+        }),
         new Promise((_, rj) => setTimeout(() => rj(new Error("beat timeout")), 8000)),
       ]);
       out.beats.push({ s: +((Date.now() - t0) / 1000).toFixed(1), ...beat });
+      missed = 0;
     } catch (e) {
-      out.beats.push({ s: +((Date.now() - t0) / 1000).toFixed(1), dead: String((e && e.message) || e).slice(0, 80) });
-      checkpoint("page-stopped-answering");
-      break;
+      missed++;
+      out.beats.push({ s: +((Date.now() - t0) / 1000).toFixed(1), missed,
+                       dead: String((e && e.message) || e).slice(0, 80) });
+      if (missed >= 2) { checkpoint("page-stopped-answering"); break; }
     }
     await new Promise((r) => setTimeout(r, 1000));
   }

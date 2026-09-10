@@ -636,6 +636,20 @@ return {
   openWindow: () => ({ frames: _openN, maxMs: +_openMax.toFixed(1), slow: _openSlow }),
   fpsEMA: () => _frameEMA,
   floorMs: () => _floorMs,
+  // THE TWO LATCHES THAT CAN DISABLE A LEVER FOR THE REST OF THE SESSION, and
+  // the reason they are exported rather than left private: neither was
+  // observable from any hook, so "why did this device shed nothing?" could only
+  // be answered by re-deriving this file's state by hand against a diagnostic
+  // payload — which is exactly what a 2026-09-10 iPhone capture cost
+  // (docs/notes/PERF-FINDINGS.md §2u). A latch is not a fault on its own: the
+  // restore branch clears both the moment headroom returns, so reading them
+  // TRUE means a lever is currently parked, not that it is broken. Read them
+  // beside floorMs and autoShed — floorMs says what budget the device is being
+  // judged against, and autoShed (not tier, which folds in the crash floor and
+  // the player's GRAPHICS preset) says what the governor shed on its own
+  // evidence.
+  scaleFutile: () => _scaleFutile,
+  tierFutile: () => _tierFutile,
   autoRes: () => _autoRes,
   // Drop any unverified SCALE step on the way in or out of manual resolution.
   // _pendingVerify holds {kind:"scale", prev} and the next evaluation would
