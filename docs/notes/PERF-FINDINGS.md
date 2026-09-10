@@ -4247,3 +4247,64 @@ handset it produces exactly a sustained halving.
 2. Only then look at code. Two rounds were spent on baselines before anyone
    measured a slope (§2o's closing lesson); this entry exists so a third is not
    spent on a slope that is already flat.
+
+## 2t. The GPU-side slope is flat too — and the persisted backend is the likelier answer (2026-09-10)
+
+§2s closed by naming the blind spot: the JS heap cannot see textures, buffers or
+pipelines, and iOS jetsam charges the tab for exactly those. `heap-stages.mjs`
+now samples `GLX.__tlx.memState()` on a Node-side clock through the soak. 90 s,
+montreal, TLX leg:
+
+| t (s) | rGeo | rTex | mats | pool |
+|---|---|---|---|---|
+| 15.5 | 242 | 41 | 12 | 349 |
+| 26.8 | 250 | 41 | 12 | 578 |
+| 38.1 | 366 | 43 | 12 | 251 |
+| 49.3 | 366 | 28 | 12 | 167 |
+| 60.6 | 367 | 28 | 64 | 669 |
+| 71.8 | 394 | 34 | 64 | 951 |
+| 83.1 | 402 | 37 | 64 | 822 |
+| 94.3 | 402 | 37 | 64 | 572 |
+| 105.6 | 402 | 52 | 64 | 223 |
+
+`rGeo` climbs 242 → 402 and then **holds at 402** across the last three samples;
+`mats` steps 12 → 64 at the cache cap and stops; `pool` oscillates 167–951,
+which is §2n's keyed pool tracking the working set exactly as designed; `rTex`
+is non-monotonic (41 → 28 → 52), so textures are being freed and remade rather
+than accumulated. **No unbounded GPU-side growth over 90 s.**
+
+That is the SECOND negative. Neither the JS heap (§2s) nor three's own retained
+counts reproduce a decay on this box.
+
+### Two gaps in the instrument, stated rather than glossed
+
+- `backendData` — three's WebGPU DataMap size, the counter closest to real GPU
+  retention — comes back **undefined**. `memState()` guards on
+  `b.data.size != null` and the DataMap is a WeakMap, which has no `size`. Its
+  absence is NOT evidence of flatness, and the sampler now reports `null`
+  rather than letting it read as a measured zero.
+- The GLX leg has no `__tlx` at all, so its columns are absent by definition.
+  The first cut of this sampler printed both cases as `undefined`, which is a
+  lie that looks like data — it also read `window.__tlx` when the surface hangs
+  off `GLX.__tlx` (gfx-probe.mjs already knew), so the FIRST run reported a
+  tidy column of nothing for every leg. Both fixed.
+
+### The likelier answer, and it is not a leak
+
+`399dbcb2` (deploy branch, this morning) says it outright: **"SAVE ALL SETTINGS
+on a phone with no stored backend reported gfxBackend three and a reload could
+re-persist THREE."** Together with `9a12d061` aligning `renderer-picker`'s
+default back to WebGL2, that closes the 2026-09-08 mobile-default episode for
+FRESH state — but a phone that hit SAVE ALL SETTINGS inside that window now has
+`apex26.gfxBackend = "three"` **persisted**, and no revert of a default reaches
+a stored value.
+
+The boot canary in game.js only retires a backend that never PRESENTS A FRAME
+twice. TLX at 30 fps presents frames perfectly well, so the canary never fires
+and the phone stays on the heavier backend indefinitely — TLX measured ~97–119
+MB against GLX's ~47–49 on a phone profile (§2n, §2q).
+
+**This is not auto-fixable and should not be.** A stored `"three"` from SAVE ALL
+SETTINGS and a stored `"three"` the player chose deliberately are the same three
+bytes; a migration that cleared it would silently override a real choice. The
+answer is the RENDERER row in SETTINGS, and knowing to look at it.
