@@ -1099,7 +1099,20 @@ runner it drives back through the frame in the ~20 s between captures —
 the bright-pixel set is 2 % of the frame and it is the cars. SwiftShader
 at 1 fps advances the dt-clamped sim a few metres, so nothing enters and
 the suite passes here. boot() now freezes physics (rendering and the grade
-stay live) and the diag records the present generation and the freeze. The fog-glow row stayed red WITH `tier [0,0]` —
+stay live) and the diag records the present generation and the freeze.
+Run 3488 (496357e) then failed "shadows" FROZEN — `frozen: true`, gen 6 —
+with the same numbers to a decimal (+34.87 / −43.34), and "blacks" read
++15.1 for blacks +1 and +10.8 for blacks −1: the changed captures are
+brighter in the darks whichever way the knob goes. Knob-independent means
+the two captures are of two SCENES, and the one thing that changes a parked,
+frozen, clock-held scene by itself is the baked asset pack landing: its
+texture-array upload replaces every procedural material, and the Metal logs
+put it at 9-14 s after boot — inside a 30 fps box's boot-to-baseline window,
+outside SwiftShader's. boot() now waits for the pack (uploaded, absent or
+failed; a pack still in flight after 90 s is pinned off with matTex(0)) and
+the diag records the pack state at each capture. Three wrong stories in a
+row for this one test — tier, field, and now pack — each disproved by the
+diag I had added for the previous one, which is the right way round. The fog-glow row stayed red WITH `tier [0,0]` —
 dry 80.1, foggy 72.6, the same −9 % this container reads (65.4 → 60.1) — so
 it was never the tier either: the sampled band is pure sky, the sky shader
 carries no lamp-fog term (`glsl-sky.js`), and what the test measured was the

@@ -116,6 +116,23 @@ async function boot(page, {
   // physics and leaves rendering (and so the grade) live; the sky clock is
   // held one line down.
   await page.evaluate(() => window.__apex.freeze(true));
+  // WAIT FOR THE BAKED ASSET PACK. It uploads 9-14 s after page boot on the
+  // Metal runner (the run logs: "[assets] pack loaded layers=14" at 9078 ms /
+  // 14215 ms), and a texture-array upload REPLACES the procedural materials
+  // (albedo * tex.rgb * 2.0, AGENTS.md §Baked asset pack) — a different tonal
+  // distribution on every surface. A 30 fps box reaches a test's baseline
+  // capture inside that window; SwiftShader never does (boot alone is longer).
+  // Metal runs 3469/3477/3484/3488 read "shadows +0.5" as darkSigned +34.9,
+  // brightSigned −43.3 — the same to a decimal each time, with the tier held,
+  // the scale pinned AND physics frozen — and "blacks −1" as +10.8 BRIGHTER:
+  // knob-independent, i.e. the two captures were of two material sets. A pack
+  // that never arrives (no manifest, unsupported renderer) or fails is a
+  // legitimate end state; a pack still in flight after 90 s is pinned OFF so it
+  // cannot land between two captures (the diag says which happened).
+  await page.waitForFunction(() => {
+    const a = window.__apex.assets();
+    return !a.supported || a.uploaded || !!a.error;
+  }, null, { polling: 100, timeout: 90_000 }).catch(() => page.evaluate(() => window.__apex.matTex(0)));
   await page.evaluate(() => window.__apex.renderClock(100, true));
   // PIN THE RESOLUTION, for the same reason one line up. This suite diffs pixel
   // ARRAYS, so every capture in a test has to be the same SIZE — and the
@@ -150,11 +167,16 @@ async function tierAt(page) {
   return page.evaluate(() => window.__apex.govHold().tier);
 }
 
-// The soft-present generation and the physics freeze at a capture, for the
-// diag: a capture whose gen did not advance is a stale frame, and an unfrozen
-// field is the moving-cars failure described in boot().
+// The soft-present generation, the physics freeze and the asset-pack state at
+// a capture, for the diag: a gen that did not advance is a stale frame, an
+// unfrozen field is moving cars, and a pack that changed between two captures
+// is two material sets (both described in boot()).
 async function captureState(page) {
-  return page.evaluate(() => ({ gen: GLX.softPresentState().gen, frozen: window.__apex.freeze(), state: window.__apex.info().state }));
+  return page.evaluate(() => {
+    const a = window.__apex.assets();
+    return { gen: GLX.softPresentState().gen, frozen: window.__apex.freeze(), state: window.__apex.info().state,
+      pack: { uploaded: a.uploaded, layers: a.layers, error: a.error, matTexMix: window.__apex.lightTune().matTexMix } };
+  });
 }
 
 async function pixels(page) {
