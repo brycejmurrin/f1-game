@@ -381,6 +381,61 @@ const api = {
     for (let i = 0; i < (n == null ? 1 : n); i++) G.stepSetupAero(step);
     return this.garageAero();
   },
+  // Switch garage car without opening #teampicker — same store writes as the tile
+  // click in select-screen.js (G.teamIdx, buildSetup, tickUi). Multi-team
+  // garage-angles surveys use this instead of the picker UI (~15 s per team).
+  garageTeam(id) {
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
+    const i = Teams.LIST.findIndex((t) => t.id === id);
+    if (i < 0) return { ok: false, error: "unknown_team", id };
+    const t = Teams.LIST[i];
+    const label = t.name.toUpperCase();
+    if (G.teamIdx === i) return { ok: true, switched: false, label };
+    const taken = G.peerSeats ? G.peerSeats() : [];
+    const isTaken = (si) => taken.some((s) => s.team === t.id && s.driver === si);
+    let seat = 0;
+    while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
+    G.teamIdx = i;
+    G.driverIdx = seat;
+    G.store.set("team", i);
+    G.store.set("driver", seat);
+    try { document.documentElement.dataset.team = t.id; } catch (_) { /* no DOM */ }
+    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes();
+    G.buildSetup();
+    G.tickUi();
+    return { ok: true, switched: true, label };
+  },
+  // One-shot preset + discrete zoom/pan clicks — mirrors #cs-stack / cs-pan-*.
+  garageFrame(view, opts) {
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
+    if (!view) return { ok: false, error: "no_view" };
+    G.setSetupView(view);
+    const zoom = (opts && opts.zoom) || 0;
+    const strafe = (opts && opts.strafe) || 0;
+    const dolly = (opts && opts.dolly) || 0;
+    const zMul = zoom > 0 ? 1 / 1.12 : 1.12;
+    for (let n = 0; n < Math.abs(zoom); n++) G.nudgeSetupZoom(zMul);
+    for (let n = 0; n < Math.abs(strafe); n++) G.setupPan(strafe > 0 ? 0.15 : -0.15, 0);
+    for (let n = 0; n < Math.abs(dolly); n++) G.setupPan(0, dolly > 0 ? 0.15 : -0.15);
+    const c = this.garageCam();
+    return {
+      ok: true, az: c.az, el: c.el, dist: c.effDist, pan: c.pan,
+    };
+  },
+  // Merge catalog part ids into the current team's garage setup and rebuild.
+  garageParts(parts) {
+    if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
+    const team = Teams.LIST[G.teamIdx];
+    if (!team || !parts || typeof parts !== "object") return { ok: false, error: "bad_parts" };
+    const cur = Object.assign({}, G.getTeamParts(team.id));
+    for (const [cat, id] of Object.entries(parts)) {
+      if (id != null && id !== "") cur[cat] = id;
+    }
+    G.saveTeamParts(team.id, cur);
+    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes();
+    G.buildSetup();
+    return { ok: true, team: team.id, parts: cur };
+  },
   // Debug: hide/show individual track meshes. e.g. meshToggle({props:true}) hides props.
   meshToggle(o) { G.hideMeshes = Object.assign({}, G.hideMeshes, o || {}); return G.hideMeshes; },
   nodesNear(wx, wz, r) {

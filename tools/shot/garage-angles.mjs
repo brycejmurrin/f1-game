@@ -4,6 +4,8 @@
 //     [--spineLogo=wrap,saddle] [--finShape=blade] [--cover=#101014] [--against=HEAD~1]
 //     [--preset=wall|fin|flank|mark|quick] [--plan] [--fast] [--settle=8] [--view-settle=4]
 //     [--zoom=8] [--pan=2,0] [--out=dir] [--label=0] [--sheet=0] [--cell=420]
+//     [--team=all+custom] [--rollup-only|--full-views] [--rollup-view=wingRear]
+//     [--reset] [--resume] [--oracle] [--picker-team] [--slow]
 // @skill playwright-probe
 // @skill garage-parts-livery
 //
@@ -52,7 +54,7 @@
 // 286.4 s on consecutive teams. The loadavg is read once and warned about for
 // the same reason — see AGENTS.md §Verification.
 import vm from "node:vm";
-import { mkdirSync, writeFileSync, readFileSync, renameSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,7 +64,12 @@ import {
   chromiumArgsForBackend, installProbeInit, gotoGame, openGarage, settleGarage,
   screenshotGameCanvas,
 } from "../capture/probe-page.mjs";
+import { loadParts } from "../car/parts-sweep.mjs";
+import { loadAtlas } from "../car/livery-contrast.mjs";
+import { occlusionMap, hiddenIn } from "../car/flank-occlusion.mjs";
+import { sweep as spineSweep } from "../car/spine-station.mjs";
 
+const LIVE_BASE = "https://brycejmurrin.github.io/f1-game/";
 const argv = process.argv.slice(2);
 /** Accept `--name=value` and `--name value` (render-car style). */
 const flag = (name, dflt) => {
@@ -106,7 +113,6 @@ if (presetRaw && !preset) {
 }
 
 const teamArg = flag("--team", "mclaren").trim();
-const teamsArg = teamArg === "all" ? null : teamArg.split(",").map((s) => s.trim()).filter(Boolean);
 const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).filter(Boolean);
 const vp = flag("--viewport", "1280x720").split("x").map(Number);
 const outDir = flag("--out", "artifacts/garage-angles");
@@ -131,7 +137,9 @@ const doLive = argvHas("--live");
 // Liveries.FIELDS instead of with this file.
 const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom", "--pan",
   "--views", "--against", "--label", "--sheet", "--cell", "--spine-side", "--spine-logo",
-  "--preset", "--plan", "--fast", "--settle", "--view-settle", "--live"]);
+  "--preset", "--plan", "--fast", "--slow", "--settle", "--view-settle", "--live",
+  "--reset", "--resume", "--oracle", "--picker-team", "--rollup-only", "--full-views",
+  "--rollup-view", "--rollup-side", "--rollup-logo"]);
 const axes = [];
 const addAxis = (field, raw) => {
   const values = String(raw).split(",").map((s) => s.trim()).filter(Boolean);
@@ -168,30 +176,57 @@ const ROSTER = (() => {
                   sb, { filename: "teams.js" });
   return vm.runInContext("Teams", sb).LIST.map((t) => t.id);
 })();
+function parseTeams(arg) {
+  if (arg === "all") return ROSTER.slice();
+  if (arg === "*" || arg === "all+custom" || arg === "all,*") return [...ROSTER, "custom"];
+  const picked = [];
+  for (const raw of arg.split(",").map((s) => s.trim()).filter(Boolean)) {
+    if (raw === "all") picked.push(...ROSTER);
+    else if (raw === "all+custom" || raw === "*") picked.push(...ROSTER, "custom");
+    else if (raw === "custom" || ROSTER.includes(raw)) picked.push(raw);
+    else {
+      console.error(`no team "${raw}" — grid: ${ROSTER.join(", ")}, custom, or all/all+custom`);
+      process.exit(1);
+    }
+  }
+  return [...new Set(picked)];
+}
 function teamIndex(id) {
+  if (id === "custom") return ROSTER.length;
   const i = ROSTER.indexOf(id);
   if (i < 0) {
-    console.error(`no team "${id}" — available: ${ROSTER.join(", ")}`);
+    console.error(`no team "${id}" — available: ${ROSTER.join(", ")}, custom`);
     process.exit(1);
   }
   return i;
 }
-const teams = teamsArg || ROSTER.slice();
-for (const t of teams) {
-  if (!ROSTER.includes(t)) {
-    console.error(`no team "${t}" — available: ${ROSTER.join(", ")}, or "all"`);
-    process.exit(1);
-  }
-}
+const teams = teamArg === "all" ? ROSTER.slice() : parseTeams(teamArg);
+const multiTeam = teams.length > 1;
+const rollupOnly = argvHas("--rollup-only")
+  || (multiTeam && !argvHas("--full-views") && !designs);
+const rollupViewFlag = argvHas("--rollup-view") ? flag("--rollup-view", "side") : null;
+const useStoreTeam = !argvHas("--picker-team") && (fast || multiTeam);
+const withOracle = argvHas("--oracle") && rollupOnly
+  && axes.some((ax) => ax.field === "spineLogo" && ax.values.length);
 
 const ALL = ["hero", "front", "side", "rear", "top", "wingFront", "wingRear"];
 const GROUPS = {
   spine: ["hero", "top", "rear", "side"],
+  wings: ["wingFront", "wingRear"],
+  front: ["front"],
+  rear: ["rear"],
+  aero: ["wingFront", "wingRear", "rear"],
   all: ALL,
 };
-const viewsDefault = preset && !argvHas("--views") ? preset.views : "spine";
+const viewsDefault = rollupOnly && !argvHas("--views")
+  ? (rollupViewFlag || "side")
+  : (preset && !argvHas("--views") ? preset.views : "spine");
 const rawViews = flag("--views", viewsDefault).split(",").map((s) => s.trim()).filter(Boolean);
 const views = [...new Set(rawViews.flatMap((v) => GROUPS[v] || [v]))];
+const rollupView = rollupViewFlag
+  || (views.length === 1 ? views[0]
+    : (views.includes("wingRear") ? "wingRear"
+      : (views.includes("side") ? "side" : views[0])));
 const bad = views.filter((v) => !ALL.includes(v));
 if (bad.length) {
   console.error(`Unknown view(s): ${bad.join(", ")}\nAvailable: ${ALL.join(", ")} + groups ${Object.keys(GROUPS).join(", ")}`);
@@ -271,6 +306,101 @@ async function writeSheet(items, file, heading, cols) {
   return file;
 }
 
+function escSvg(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+}
+function labelSvg(title, sub, w, h) {
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">`
+    + `<rect width="${w}" height="${h}" fill="#14161a"/>`
+    + `<text x="${w / 2}" y="${h * 0.46}" font-family="DejaVu Sans, sans-serif" font-size="${Math.round(h * 0.40)}"`
+    + ` font-weight="700" fill="#f0f0f2" text-anchor="middle">${escSvg(title)}</text>`
+    + `<text x="${w / 2}" y="${h * 0.86}" font-family="DejaVu Sans, sans-serif" font-size="${Math.round(h * 0.30)}"`
+    + ` fill="#9a9ca3" text-anchor="middle">${escSvg(sub)}</text></svg>`);
+}
+
+/** One cell per team — multi-team rollup grid. */
+async function buildTeamRollup(entries, { surveyName, liveBuild, view }) {
+  if (!entries.length) return null;
+  const cols = Math.min(4, entries.length);
+  const rows = Math.ceil(entries.length / cols);
+  const cellW = 480, cellH = 270, labH = 40, pad = 6;
+  const tileW = cellW + pad * 2, tileH = cellH + labH + pad;
+  const W = cols * tileW, H = rows * tileH;
+  const buildNote = liveBuild != null ? `build ${liveBuild}` : "local";
+  const tiles = await Promise.all(entries.map(async (e, i) => {
+    const gx = (i % cols) * tileW, gy = Math.floor(i / cols) * tileH;
+    const img = await sharp(e.png).resize(cellW, cellH, { fit: "cover" }).png().toBuffer();
+    const oracleNote = e.oracleHidden != null ? ` · occl ${Math.round(e.oracleHidden * 100)}%` : "";
+    const sub = `${view} · ${e.design}${oracleNote} · ${buildNote}`;
+    return [
+      { input: img, left: gx + pad, top: gy + pad },
+      { input: labelSvg(e.teamLabel || e.teamId.toUpperCase(), sub, cellW, labH), left: gx + pad, top: gy + pad + cellH },
+    ];
+  }));
+  const tag = surveyName || "survey";
+  const sheet = join(outDir, `all-teams-${tag}-${view}-rollup.png`);
+  await sharp({ create: { width: W, height: H, channels: 3, background: { r: 16, g: 17, b: 20 } } })
+    .composite(tiles.flat()).png().toFile(sheet);
+  return sheet;
+}
+
+let _oracleParts = null, _oracleAtlas = null;
+const _oracleCache = new Map();
+function oracleHiddenPct(teamId, spineLogo, cam) {
+  if (!_oracleParts) _oracleParts = loadParts();
+  if (!_oracleAtlas) _oracleAtlas = loadAtlas();
+  const key = teamId + "|" + spineLogo + "|" + cam.az + "|" + cam.el + "|" + cam.dist;
+  if (_oracleCache.has(key)) return _oracleCache.get(key);
+  const om = occlusionMap(_oracleParts, {
+    team: teamId,
+    cam: { az: cam.az, el: cam.el, dist: cam.dist, ctr: [0, 0.45, 0.245], fov: 36 },
+    grid: 32,
+  });
+  const sw = spineSweep(_oracleAtlas, { team: teamId, logo: spineLogo, sides: ["none"] });
+  const crown = sw.crown;
+  let hidden = hiddenIn(om, 0, 1);
+  if (crown && crown.u0 != null) hidden = hiddenIn(om, crown.u0, crown.u1, crown.v0, crown.v1);
+  _oracleCache.set(key, hidden);
+  return hidden;
+}
+
+function surveyTag() {
+  const bits = [];
+  if (views.length === 1) bits.push(views[0]);
+  else if (views.length) bits.push(views.length + "views");
+  if (rollupOnly) bits.push("rollup");
+  return bits.join("_") || "survey";
+}
+
+function resumeTeamSet() {
+  if (!argvHas("--resume")) return new Set();
+  const done = new Set();
+  const metaPath = join(outDir, multiTeam ? "all-teams-angles.json" : `${teams[0]}-angles.json`);
+  if (existsSync(metaPath)) {
+    try {
+      const meta = JSON.parse(readFileSync(metaPath, "utf8"));
+      for (const e of meta.rollupEntries || []) done.add(e.teamId);
+      for (const s of meta.shots || []) done.add(s.team);
+    } catch (_) { /* stale meta */ }
+  }
+  for (const tid of teams) {
+    const tag = designs ? "def" : liveries[0];
+    const png = join(outDir, `${tid}-${tag}-${rollupOnly ? rollupView : views[0]}.png`);
+    if (existsSync(png)) done.add(tid);
+  }
+  return done;
+}
+
+function pushRollupEntry(rollupEntries, teamId, teamLabel, name, pick, designFields) {
+  if (!rollupEntries || !views.includes(rollupView) || !pick) return;
+  const entry = { teamId, teamLabel, design: name, png: pick.png, view: rollupView };
+  if (withOracle && designFields && designFields.spineLogo) {
+    entry.oracleHidden = oracleHiddenPct(teamId, designFields.spineLogo, pick);
+  }
+  rollupEntries.push(entry);
+}
+
 // ── --against: the ref's tree, served from memory ───────────────────────────
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
   ".json": "application/json", ".png": "image/png", ".svg": "image/svg+xml",
@@ -334,18 +464,27 @@ async function nudge(page, id, n) {
 }
 
 async function frame(page, teamId, tag, view, dir, capOpts = {}) {
-  const clicked = await page.evaluate((v) => {
-    const b = document.querySelector('#cs-stack [data-cs-view="' + v + '"]');
-    if (!b) return false;
-    b.click();
-    return true;
-  }, view);
-  if (!clicked) throw new Error(`no camera preset "${view}" in #cs-stack`);
-  // AFTER the preset: setSetupView is absolute and drops stored distance/pan.
-  await nudge(page, zoom > 0 ? "cs-view-in" : "cs-view-out", zoom);
-  await nudge(page, strafe > 0 ? "cs-pan-right" : "cs-pan-left", strafe);
-  await nudge(page, dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", dolly);
   const tSettle = Date.now();
+  let framed;
+  if (useStoreTeam) {
+    framed = await page.evaluate(({ v, z, st, dl }) => {
+      const a = window.__apex;
+      if (!a.garageFrame) return { ok: false, error: "no garageFrame hook" };
+      return a.garageFrame(v, { zoom: z, strafe: st, dolly: dl });
+    }, { v: view, z: zoom, st: strafe, dl: dolly });
+    if (!framed.ok) throw new Error(`${teamId}/${tag}/${view}: ${framed.error || "frame failed"}`);
+  } else {
+    const clicked = await page.evaluate((v) => {
+      const b = document.querySelector('#cs-stack [data-cs-view="' + v + '"]');
+      if (!b) return false;
+      b.click();
+      return true;
+    }, view);
+    if (!clicked) throw new Error(`no camera preset "${view}" in #cs-stack`);
+    await nudge(page, zoom > 0 ? "cs-view-in" : "cs-view-out", zoom);
+    await nudge(page, strafe > 0 ? "cs-pan-right" : "cs-pan-left", strafe);
+    await nudge(page, dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", dolly);
+  }
   await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
   const settleMs = ms(tSettle);
   const png = join(dir, `${teamId}-${tag}-${view}.png`);
@@ -363,10 +502,12 @@ async function frame(page, teamId, tag, view, dir, capOpts = {}) {
     gate = await bayRendered(png, vp[0]);
     gateMs += ms(tGate);
     if (gate.ok) {
-      const cam = await page.evaluate(() => window.__apex.garageCam());
+      const cam = framed && framed.ok
+        ? framed
+        : await page.evaluate(() => window.__apex.garageCam());
       return {
         view, tag, png, spread: gate.spread, via: shot.via || "page-clip",
-        az: +cam.az.toFixed(3), el: +cam.el.toFixed(3), dist: +cam.effDist.toFixed(3),
+        az: +cam.az.toFixed(3), el: +cam.el.toFixed(3), dist: +(cam.dist ?? cam.effDist).toFixed(3),
         pan: cam.pan ? cam.pan.map((n) => +n.toFixed(3)) : null,
         ms: { settle: settleMs, capture: capMs, gate: gateMs, tries },
       };
@@ -465,6 +606,13 @@ async function applyDesign(page, teamId, fields) {
 /** Team tiles — the store index only binds before first paint, so after the
  *  first team the picker is the way in. Returns whether it had to switch. */
 async function switchTeam(page, teamId) {
+  if (useStoreTeam) {
+    const got = await page.evaluate((id) => window.__apex.garageTeam(id), teamId);
+    if (!got.ok) throw new Error(`garageTeam(${teamId}): ${got.error || "failed"}`);
+    if (got.switched) await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
+    if (!got.label) throw new Error(`garage opened but label empty after switch to ${teamId}`);
+    return { switched: got.switched, label: got.label };
+  }
   const switched = await page.evaluate((id) => {
     const t = Teams.LIST.find((x) => x.id === id);
     if (!t) throw new Error("unknown team " + id);
@@ -484,12 +632,9 @@ async function switchTeam(page, teamId) {
       return !tp || tp.hidden || getComputedStyle(tp).display === "none";
     }, null, { polling: 100, timeout: 15000 }).catch(() => {});
   }
-  // Only settle if the bay actually changed. The unconditional settle cost 31.3 s
-  // and 32.3 s on the two `switched=false` teams of the runs that added this
-  // timing — 12 frames at ~2.6 s each under SwiftShader, spent re-settling a car
-  // that had not moved. The design/livery apply below settles again anyway.
   if (switched) await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
-  return switched;
+  const label = await page.evaluate(() => document.getElementById("cs-team")?.textContent || "");
+  return { switched, label };
 }
 
 /** One full matrix — every team × (design | livery) × view — into `dir`. */
@@ -498,48 +643,55 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
   const ownPage = !opts.page;
   const page = opts.page || await browser.newPage();
   const phase = {};
+  const rollupEntries = opts.rollupEntries || null;
+  const resumeSet = opts.resumeSet || new Set();
+  const workTeams = opts.workTeams || teams;
   try {
     await page.setViewportSize({ width: vp[0], height: vp[1] });
     if (ownPage) {
-      // Pin the INDEX before first paint — #mb-garage never re-reads the store.
-      await installProbeInit(page, { backend: "webgl2", team: teamIndex(teams[0]) });
+      await installProbeInit(page, { backend: "webgl2", team: teamIndex(workTeams[0]) });
     }
     const tBoot = Date.now();
     await gotoGame(page, srvUrl, 120000);
     phase.boot = ms(tBoot);
-    // First paint already on the first --livery (or default).
     await page.evaluate(({ t, liv }) => {
       GameStore.store.set("livery." + t, liv);
-    }, { t: teams[0], liv: liveries[0] });
+    }, { t: workTeams[0], liv: liveries[0] });
     const tOpen = Date.now();
-    await openGarage(page, { team: teams[0] });
+    await openGarage(page, { team: workTeams[0] });
     phase.open = ms(tOpen);
 
     const shots = [];
     let heads = null;
     let gameVisible = false;
-    for (const teamId of teams) {
+    for (const teamId of workTeams) {
+      if (resumeSet.has(teamId)) {
+        console.log(`resume: skip ${teamId}`);
+        continue;
+      }
       const tSwitch = Date.now();
-      const switched = await switchTeam(page, teamId);
+      const sw = await switchTeam(page, teamId);
       const switchMs = ms(tSwitch);
-      const label = await page.evaluate(() => document.getElementById("cs-team")?.textContent || "");
+      const label = sw.label || "";
       if (!label) throw new Error(`garage opened but #cs-team empty for ${teamId}`);
       const shown = await page.evaluate(() => {
         const h = document.querySelector("#carsetup .sheet-head, #cs-inner .sheet-head");
         return h ? h.textContent.trim().slice(0, 80) : null;
       });
       if (!heads) heads = shown;
-      console.log(`team sheet: ${label}  [switched=${switched} ${switchMs}ms]`);
+      console.log(`team sheet: ${label}  [switched=${sw.switched} ${switchMs}ms]`);
 
       const items = designs
         ? designs.map((d) => ({ design: d }))
         : liveries.map((l) => ({ livery: l }));
       for (const it of items) {
-        let tag, name;
+        let tag, name, designFields = null;
+        const tagShots = [];
         if (it.design) {
           const got = await applyDesign(page, teamId, it.design);
           tag = got.tag;
           name = got.name;
+          designFields = it.design;
         } else {
           name = await applyLivery(page, teamId, it.livery);
           tag = it.livery;
@@ -551,6 +703,7 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
           s.name = name;
           if (it.design) s.design = it.design; else s.livery = it.livery;
           if (side) s.side = side;
+          tagShots.push(s);
           shots.push(s);
           console.log(`shot ${teamId}/${tag}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist}`
             + ` spread ${s.spread} [settle ${s.ms.settle} cap ${s.ms.capture} gate ${s.ms.gate}`
@@ -560,9 +713,11 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
               `garage — ${teams.join(",")} · ${views.join(",")}`);
           }
         }
+        pushRollupEntry(rollupEntries, teamId, label, name,
+          tagShots.find((s) => s.view === rollupView), designFields);
       }
     }
-    return { shots, phase, sheetHead: heads, page };
+    return { shots, phase, sheetHead: heads, page, rollupEntries };
   } finally {
     if (ownPage && !opts.keepPage) await page.close().catch(() => {});
   }
@@ -573,6 +728,10 @@ const titleOf = (s) => `${s.team} · ${s.name} · ${s.view}`;
 const subOf = (s) => `az ${s.az} el ${s.el} dist ${s.dist} · spread ${s.spread} · ${(capMs(s) / 1000).toFixed(1)}s`;
 
 async function main() {
+  if (argvHas("--reset") && existsSync(outDir)) {
+    rmSync(outDir, { recursive: true, force: true });
+    console.log(`reset: cleared ${outDir}`);
+  }
   mkdirSync(outDir, { recursive: true });
   const items = designs
     ? designs.map((d) => ({ design: d }))
@@ -581,31 +740,70 @@ async function main() {
   if (doPlan) {
     console.log(JSON.stringify({
       teams, liveries, axes, designs, views, preset: presetRaw || null,
-      fast, liverySettle, viewSettle, gateRetries, zoom, pan: [strafe, dolly],
+      fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle,
+      liverySettle, viewSettle, gateRetries, zoom, pan: [strafe, dolly],
       shotCount, against: againstRef,
       estSeconds: Math.round(shotCount * (fast ? 12 : 18) + 25),
     }, null, 2));
     return;
+  }
+  const resumeSet = argvHas("--reset") ? new Set() : resumeTeamSet();
+  const workTeams = resumeSet.size ? teams.filter((t) => !resumeSet.has(t)) : teams;
+  const metaPath = join(outDir, multiTeam ? "all-teams-angles.json" : `${teams[0]}-angles.json`);
+  if (!workTeams.length) {
+    console.log("nothing to shoot — all teams done (--resume)");
+    if (existsSync(metaPath)) {
+      try {
+        const prior = JSON.parse(readFileSync(metaPath, "utf8"));
+        if (prior.rollupEntries?.length) {
+          const sheet = await buildTeamRollup(prior.rollupEntries, {
+            surveyName: surveyTag(), liveBuild: prior.liveBuild, view: prior.rollupView || rollupView,
+          });
+          console.log(`rollup (${prior.rollupEntries.length} teams) -> ${sheet}`);
+        }
+      } catch (_) { /* no rollup */ }
+    }
+    return;
+  }
+  if (multiTeam) {
+    console.log(`teams (${teams.length}): ${teams.join(", ")}`);
+    if (resumeSet.size) console.log(`resume: skip ${resumeSet.size}, shoot ${workTeams.length}`);
+    if (rollupOnly) console.log(`rollup-only (${rollupView}) — --full-views for every preset`);
+    if (useStoreTeam) console.log("fast path: __apex.garageTeam + garageFrame");
+    if (withOracle) console.log("oracle: flank-occlusion % on rollup labels");
   }
   const load = loadavg1();
   if (load != null && load >= 3) {
     console.warn(`WARNING loadavg ${load} >= 3 — every duration below measures the BOX, `
       + `not the tool. Reap orphans first (AGENTS.md §Verification, rule 7).`);
   }
+  let liveBuild = null;
+  let gameUrl;
+  const servers = [];
+  if (doLive && !againstRef) {
+    liveBuild = await fetch(LIVE_BASE + "version.json")
+      .then((r) => r.json()).then((j) => j.build ?? null).catch(() => null);
+    gameUrl = LIVE_BASE;
+    console.log(`live github.io — build ${liveBuild ?? "?"}`);
+  } else {
+    if (doLive && againstRef) {
+      console.warn("--live ignored with --against (local tree serves both passes)");
+    }
+    const srv = await startStaticServer(process.cwd());
+    servers.push(srv);
+    gameUrl = srv.url;
+  }
   const t0 = Date.now();
-  // APEX_HEADED=1: headed Chromium (use under xvfb-run when headless WebGL2 is
-  // null — measured on this box after X/VNC loss: GLX.init fails, #nogl stays).
   const browser = await launchChromium({
     headless: process.env.APEX_HEADED !== "1",
     args: chromiumArgsForBackend("webgl2"),
   });
-  const servers = [];
+  const rollupEntries = multiTeam && rollupOnly ? [] : null;
   try {
-    const srvA = await startStaticServer(process.cwd());
-    servers.push(srvA);
     const afterDir = againstRef ? join(outDir, "after") : outDir;
-    const A = await walk(browser, srvA.url, afterDir, againstRef ? "after" : null,
-      { keepPage: !!againstRef });
+    const A = await walk(browser, gameUrl, afterDir, againstRef ? "after" : null, {
+      keepPage: !!againstRef, rollupEntries, resumeSet, workTeams,
+    });
     let B = null;
     if (againstRef) {
       const blobs = refBlobs(againstRef);
@@ -618,12 +816,32 @@ async function main() {
           + `(${[...blobs.keys()].map((k) => k.slice(1)).join(", ")})`);
         const srvB = await startStaticServer(process.cwd(), { route: blobRoute(blobs) });
         servers.push(srvB);
-        B = await walk(browser, srvB.url, join(outDir, "before"), "before", { page: A.page });
+        B = await walk(browser, srvB.url, join(outDir, "before"), "before", {
+          page: A.page, rollupEntries: null, resumeSet: new Set(), workTeams,
+        });
         await A.page?.close().catch(() => {});
       }
     }
 
     const shots = A.shots.concat(B ? B.shots : []);
+    let mergedRollup = rollupEntries;
+    if (rollupEntries) {
+      let priorRollup = [];
+      if (resumeSet.size && existsSync(metaPath)) {
+        try { priorRollup = JSON.parse(readFileSync(metaPath, "utf8")).rollupEntries || []; } catch (_) {}
+      }
+      mergedRollup = [
+        ...priorRollup.filter((e) => !rollupEntries.some((n) => n.teamId === e.teamId)),
+        ...rollupEntries,
+      ];
+    }
+    let teamRollup = null;
+    if (mergedRollup && mergedRollup.length) {
+      teamRollup = await buildTeamRollup(mergedRollup, {
+        surveyName: surveyTag(), liveBuild, view: rollupView,
+      });
+      console.log(`rollup (${mergedRollup.length} teams, ${rollupView}) -> ${teamRollup}`);
+    }
     if (doLabel) {
       await Promise.all(shots.map((s) =>
         labelPng(s.png, `${titleOf(s)}${s.side ? `  [${s.side === "before" ? againstRef : "working tree"}]` : ""}`, subOf(s))));
@@ -653,13 +871,15 @@ async function main() {
     }
 
     const seconds = +((Date.now() - t0) / 1000).toFixed(1);
-    const meta = join(outDir, `${teams.join("-")}-angles.json`);
+    const meta = metaPath;
     writeFileSync(meta, JSON.stringify({
       teams, liveries, axes, designs, against: againstRef, preset: presetRaw || null,
-      fast, liverySettle, viewSettle, gateRetries,
+      fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle, live: doLive, liveBuild,
+      liverySettle, viewSettle, gateRetries,
       zoom, pan: [strafe, dolly], sheetHead: A.sheetHead, viewport: vp, views,
       loadavg1: load, phase: { after: A.phase, before: B ? B.phase : null },
-      sheets, shots, seconds,
+      sheets, shots, rollupEntries: mergedRollup, teamRollup,
+      resumed: resumeSet.size ? [...resumeSet] : null, seconds,
     }, null, 2));
     const shotMs = shots.reduce((n, s) => n + capMs(s), 0);
     console.log(`wrote ${shots.length} angle(s) in ${seconds}s`
