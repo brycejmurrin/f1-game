@@ -1101,8 +1101,21 @@ probe reached face 2 of 6 in 60 s at tier 0 because the page rendered THREE
 frames in that window (one 93 s frame — three's WebGL2-on-ANGLE program
 compile); the Linux smoke shard died the same way at face 4 (56 s frame).
 The producer runs every 4th frame live and EVERY frame frozen, so the spec
-now freezes the parked car first. image-grade red gain read 26.2 vs a 29.6
-bar once and passed its retry with no diag; it carries one now.
+now freezes the parked car first — and the wait counts PRESENTS (ten past
+the park, on what is left of the test's budget), not seconds: frozen, this
+container still stood at face 5 with seven presents in a 60 s clock (one
+73 s frame) while a parallel worker ran. image-grade red gain read 26.2 vs
+a 29.6 bar once and passed its retry with no diag; it carries one now.
+
+The fog-glow rewrite: one Singapore night-fog frame, clock held, tier held,
+physics frozen; `lampFogBase`/`lampFogHaze` A/B'd OFF/ON/OFF/ON on the mid
+band (distant facades and the fog wall, where the fog factor is largest);
+the glow must add ≥ 3 % both times. Green here on the first run; the A/B
+numbers attach to the report as `fog-glow-ab` on a pass too. What the
+throwaway measurement before it showed, for the record: with raw
+`page.screenshot` (no wait for a fresh present) three captures of one scene
+read 60 → 78 → 82 with only time between them — a capture that lags the
+knob write is a measurement of nothing.
 
 
 ## 8. Backlog

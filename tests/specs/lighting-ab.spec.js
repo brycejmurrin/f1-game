@@ -112,38 +112,53 @@ test("weather() applies lighting live (fog mutes sun + lifts exposure)", async (
   expect(after.exposure).toBeGreaterThanOrEqual(1.08);
 });
 
-test("night fog GLOWS around lamps (fog wall brighter than dry-night sky band)", async ({ page }) => {
-  // Small viewport: the assertion is a region MEAN (resolution-independent),
-  // and Singapore night at 720p renders too slowly on software-GL runners for
-  // any screenshot to complete — 360p keeps each capture inside its timeout.
+test("night fog GLOWS around lamps (the lamp-fog knobs add luminance to one fogged frame)", async ({ page }) => {
+  // WHAT THIS MEASURES, AND WHAT IT USED TO. The lamp-fog glow is the lit
+  // shader's `lampFogC` term (js/render/glx/shaders/glsl-lit.js, gated on
+  // uLampFog > 0 = LT.lampFogBase / lampFogHaze via frame.lampFog in
+  // js/game.js). It lives on SURFACES; the sky shader has no lamp-fog term at
+  // all. The previous version of this test sampled the dark SKY band and
+  // asserted foggy > dry * 1.1 — which held only while the night-fog exposure
+  // floor was the daytime 1.08, and went red on 2026-09-08 when that floor was
+  // cut to 0.95 ("night must stay night", the sibling test below). It was
+  // measuring exposure and cloud cover, and the +10 % bar it failed on Metal
+  // (run 3469, 3477: dry 80 -> foggy 72.6, tier 0 both) and on this container
+  // (65.4 -> 60.1) was the same −9 % on both. So: ONE fogged night frame, the
+  // glow knobs A/B'd on it, everything else pinned — the clock (cloud drift),
+  // the governor's tier and physics; regionMean's pageScreenshot waits for a
+  // present newer than the knob write, so each capture is of the knob state
+  // it follows. Passes here on SwiftShader (2026-09-10).
   await page.setViewportSize({ width: 640, height: 360 });
-  await boot(page, "singapore", "night", "dry", 0.35);
-  await page.evaluate(() => window.__apex.hud(false));
-  // Sample the DARK sky band between the towers, not the mid-frame wall/facade
-  // band: those pixels sit near tonemap saturation (~185/255) where fog is
-  // luminance-neutral (haze dims the bright facades as much as glow adds), so
-  // the old region measured ~0% delta even with the glow plainly visible.
-  // The dark sky shows the lamp-tinted in-scatter directly (~+35% measured).
-  // HOLD THE GOVERNOR'S TIER FIRST. The glow this test measures is the part of
-  // the picture the ladder sheds: frame.lampFog needs frame.lights, whose
-  // budget tierShed() cuts at tier >= 1 (js/lighting/frame-lights.js), and the
-  // halo around each lamp is bloom, zeroed at autoTier 4 (js/game.js po.bloom).
-  // The dry capture lands right after boot; the foggy one 3 s later — and on
-  // the Metal runner (26-38 fps, still shedding) that read as fog DARKENING
-  // the sky (run 3469: dry 76-86, foggy 68-73), with "dry" itself moving 10
-  // points between attempts. Same tier at both captures, asserted, or the
-  // comparison is of two tiers and says nothing about fog.
-  await page.evaluate(() => window.__apex.govHold(true));
-  const tier0 = await page.evaluate(() => window.__apex.govHold().tier);
-  const dry = await regionMean(page, 0.30, 0.02, 0.40, 0.12);
-  await page.evaluate(() => window.__apex.weather("fog"));
-  await page.waitForTimeout(3000);   // let the fog exposure ramp settle
-  const foggy = await regionMean(page, 0.30, 0.02, 0.40, 0.12);
-  const tier1 = await page.evaluate(() => window.__apex.govHold().tier);
-  const diag = JSON.stringify({ dry, foggy, tier: [tier0, tier1], gov: await page.evaluate(() => window.__apex.renderScale()) });
-  expect(tier1, "governor tier moved between captures: " + diag).toBe(tier0);
-  // The lamp-tinted fog glow must add real luminance to the night sky.
-  expect(foggy, diag).toBeGreaterThan(dry * 1.1);
+  await boot(page, "singapore", "night", "fog", 0.35);
+  await page.evaluate(() => {
+    window.__apex.hud(false);
+    window.__apex.govHold(true);
+    window.__apex.renderClock(100, true);
+    window.__apex.freeze(true);
+  });
+  const base = await page.evaluate(() => window.__apex.lightTune());
+  expect(base.lampFogBase, "the glow knob ships ON").toBeGreaterThan(0);
+  const knobs = (on) => page.evaluate(({ on, b }) => window.__apex.lightTune(on
+    ? { lampFogBase: b.lampFogBase, lampFogHaze: b.lampFogHaze }
+    : { lampFogBase: 0, lampFogHaze: 0 }), { on, b: base });
+  // The mid band: distant facades and the fog wall, where the fog factor —
+  // and so the glow's share of the pixel — is largest. Alternated OFF/ON/OFF/ON
+  // so a drift that survived the pins above would move both pairs the same way
+  // instead of masquerading as the knob.
+  const band = [0.0, 0.20, 1.0, 0.30];
+  await knobs(false); const off1 = await regionMean(page, ...band);
+  await knobs(true);  const on1  = await regionMean(page, ...band);
+  await knobs(false); const off2 = await regionMean(page, ...band);
+  await knobs(true);  const on2  = await regionMean(page, ...band);
+  const tier = await page.evaluate(() => window.__apex.govHold().tier);
+  const diag = JSON.stringify({ off1, on1, off2, on2, tier, knobs: { base: base.lampFogBase, haze: base.lampFogHaze }, gov: await page.evaluate(() => window.__apex.renderScale()) });
+  // The glow must ADD luminance, both times. A 3 % floor on a band whose mean
+  // sits around 70/255 is ~2 grey levels — real, and well under the knob's
+  // effect where it renders at all; a scene where the knob does nothing
+  // visible is the defect this test exists to catch.
+  test.info().attach("fog-glow-ab", { body: diag, contentType: "application/json" });   // the margin, on a pass too
+  expect(on1, diag).toBeGreaterThan(off1 * 1.03);
+  expect(on2, diag).toBeGreaterThan(off2 * 1.03);
 });
 
 test("night light budget: lamps on at night, off by day, exposure per table", async ({ page }) => {
