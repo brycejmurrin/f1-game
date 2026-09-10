@@ -24,7 +24,9 @@ import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.describe("race control in a page", () => {
   test("the layer is ON by default and reports a coherent GREEN", async ({ loadTrack, page }) => {
-    await loadTrack("monza");
+    // These assertions inspect state, never pixels. Stop software rendering
+    // before building the race and before this worker creates its next context.
+    await loadTrack("monza", "day", "dry", { headless: true });
     const c = await page.evaluate(() => window.__apex.caution());
     expect(c.enabled).toBe(true);
     expect(c.level).toBe(0);
@@ -56,6 +58,7 @@ test.describe("race control in a page", () => {
     // read: GameStore JSON-encodes, so the falsy triple has to be looking at
     // the string "false" and not at "0" or "".
     expect(await page.evaluate(() => {
+      window.__apex.headless(true);
       window.__apex.caution(false);
       return localStorage.getItem("apex26.caution");
     })).toBe("false");
@@ -65,7 +68,10 @@ test.describe("race control in a page", () => {
     // the unit suite.
     await page.reload();
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    expect(await page.evaluate(() => window.__apex.caution().enabled)).toBe(false);
+    expect(await page.evaluate(() => {
+      window.__apex.headless(true);
+      return window.__apex.caution().enabled;
+    })).toBe(false);
 
     // …and back, so the spec leaves no state behind for whatever runs next in
     // this worker's storage origin. Asserted at the store, not through a boot.
@@ -76,7 +82,9 @@ test.describe("race control in a page", () => {
   });
 
   test("hazards are reported alongside the state on request", async ({ loadTrack, page }) => {
-    await loadTrack("monza");
+    // These assertions inspect state, never pixels. Stop software rendering
+    // before building the race and before this worker creates its next context.
+    await loadTrack("monza", "day", "dry", { headless: true });
     const h = await page.evaluate(() => window.__apex.caution({ hazards: true }));
     expect(h).toHaveProperty("hazards");
     expect(h.hazards).toHaveProperty("total");
