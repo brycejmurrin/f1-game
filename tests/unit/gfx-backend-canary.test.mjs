@@ -81,6 +81,29 @@ test("no stored renderer means WebGL2 on touch and desktop alike", () => {
     "a coarse pointer must not silently opt every fresh phone into the larger deferred THREE stack");
   assert.doesNotMatch(select, /if\s*\(\s*!pref\s*\)[^]*?pref\s*=\s*"three"/,
     "absence of a preference must remain the WebGL2 default");
+  const picker = code("js/perf/renderer-picker.js");
+  const def = picker.slice(picker.indexOf("function defaultBackend()"), picker.indexOf("function readBackend()"));
+  assert.doesNotMatch(def, /matchMedia\s*\([^)]*pointer:\s*coarse/,
+    "renderer-picker defaultBackend must agree with game.js — no touch THREE default");
+  assert.match(def, /return\s+"webgl2"/, "unset picker read falls back to WebGL2");
+});
+
+test("renderer-picker readBackend is WebGL2 on coarse pointer when unset", () => {
+  const src = read("js/perf/renderer-picker.js");
+  const ls = makeStorage({});
+  const ctx = vm.createContext({
+    window: { matchMedia: () => ({ matches: true }) },
+    document: { readyState: "loading", addEventListener() {} },
+    localStorage: ls,
+    sessionStorage: makeStorage({}),
+    navigator: { gpu: {} },
+    ApexRoster: { DEFERRED: { webgpu: ["js/render/webgpu/wgx.js"], three: ["js/render/three/tlx.js"] } },
+  });
+  seedLog(ctx);
+  seedStore(ctx);
+  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
+  const G = vm.runInContext("RendererPicker", ctx);
+  assert.equal(G.readBackend(), "webgl2");
 });
 
 test("boot canary disarms after a successful bind, not only after present()", () => {

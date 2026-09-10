@@ -21,14 +21,9 @@ const hasBackendFiles = (b) => b === "webgl2" ||
   !!(typeof ApexRoster !== "undefined" && ApexRoster.DEFERRED &&
      (ApexRoster.DEFERRED[b] || []).length);
 const available = (b) => hasBackendFiles(b) && (b !== "webgpu" || hasWebGPU());
-// The stored pick, or the DEFAULT for this device when nothing is stored: a
-// touch device defaults to three.js (js/game.js's boot read does the same, and
-// the two must agree or SETTINGS shows a backend that is not the one bound).
+// The stored pick, or WebGL2 when nothing is stored — must match js/game.js's
+// boot read or SETTINGS shows a backend that is not the one bound.
 function defaultBackend() {
-  try {
-    if (typeof window !== "undefined" && window.matchMedia &&
-        window.matchMedia("(pointer: coarse)").matches) return "three";
-  } catch (_) { /* no matchMedia */ }
   return "webgl2";
 }
 function readBackend() {
