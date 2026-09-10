@@ -424,4 +424,3 @@ const GLTF = (function () {
 
   return { parseGLB, toMesh };
 })();
-Object.freeze(GLTF);

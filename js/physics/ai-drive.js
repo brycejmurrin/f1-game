@@ -732,4 +732,3 @@ const AiDrive = (function () {
     tyreClass, tyrePace,
   };
 })();
-Object.freeze(AiDrive);

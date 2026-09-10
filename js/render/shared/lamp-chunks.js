@@ -119,4 +119,3 @@ const LampChunks = (function () {
 
   return { CAP, capFor, buildTable, resolve };
 })();
-Object.freeze(LampChunks);

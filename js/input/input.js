@@ -1696,4 +1696,3 @@ const Input = (function () {
     get minCutoff() { return OE_MIN_CUTOFF; },
   };
 })();
-Object.freeze(Input);

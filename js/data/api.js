@@ -846,4 +846,3 @@ const F1API = (function () {
     cacheEntryT: cacheEntryT
   };
 })();
-Object.freeze(F1API);

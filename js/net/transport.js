@@ -602,4 +602,3 @@ const NetTransport = (function () {
     STUN, prefetchIce, iceServers, hasRelay,
   };
 })();
-Object.freeze(NetTransport);

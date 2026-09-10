@@ -94,7 +94,17 @@ write is atomic and its sweep regex knows the current layouts; ci.yml's inert
 `smoke` input, over-wide sweep trigger and stale caps are fixed; nine dead
 tools, `test-shards.sh`, four redundant groups and eight scripts are gone.
 Every freezable module surface now ends with `Object.freeze`
-(`tests/unit/frozen-globals.test.mjs`).
+(`tests/unit/frozen-globals.test.mjs`). The first push froze eight TEST
+SEAMS with it — `NetTransport` (net-authority injects `prefetchIce`),
+`AiDrive`, `Car3D`, `F1API`, `GLTF`, `GameAudio`, `Input`, `LampChunks` — and
+each monkeypatch became a silent sloppy-mode no-op: CI's net-unit lost eight
+LOBBY subtests and `physics-hotpath` measured 180 unwrapped steps. Those eight
+are back in `mutable` with the seam named; the registry's `_doc` carries the
+alias-aware scan to run before freezing anything else. The same push also
+made the corrected `dressingExclusions` transform land Singapore's side-1
+0.78–0.90 window for the first time, which removed the generic buildings the
+Helix Bridge had been standing on (5 floating clusters); the bridge now has
+four piers to the rendered ground.
 
 *Left open, with the approach recorded in the session plan:* the car-draw and
 shadow-pass extractions (eval-order coupling), the `tests/` guards/vm split
