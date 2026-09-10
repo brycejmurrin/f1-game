@@ -12,10 +12,15 @@
 #
 # Candidates, in order: the commit itself, then each parent whose tree hash
 # equals this commit's. A candidate counts when GitHub holds a COMPLETED,
-# SUCCESSFUL run for its exact head_sha of either ci.yml (a branch push or a
-# pull_request run — both run every gate job) or pages.yml (an earlier deploy
-# of the same tree). Anything else — a failed run, a cancelled run, a run of
-# another workflow, a run that never happened — means "run the gate".
+# SUCCESSFUL run for its exact head_sha of either ci.yml (a pull_request run,
+# or a push run on any branch EXCEPT the deploy branch — a deploy-branch push
+# is the FAST tier, guards and node suites only, and never a gate) or
+# pages.yml (an earlier deploy of the same tree). Anything else — a failed
+# run, a cancelled run, a run of another workflow, a fast-tier run, a run that
+# never happened — means "run the gate". Run 2237 (2026-09-10) reused the
+# merge commit's own fast-tier run before this exclusion existed.
+# DEPLOY_BRANCH must be set (pages.yml's workflow env); without it no push run
+# counts at all, which fails safe into the gate.
 #
 # A pull_request run tests GitHub's merge ref, not the PR head. That is still
 # sound here: this only reuses such a run when merging the base into the head
@@ -56,9 +61,12 @@ for c in $candidates; do
     let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
       let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}
       const self = process.env.GITHUB_RUN_ID || "";
+      const deployBranch = process.env.DEPLOY_BRANCH || "";
+      // A push run is a full gate only OFF the deploy branch (there it is the fast tier).
+      const fullPush = (r) => r.event === "push" && deployBranch !== "" && r.head_branch !== deployBranch;
       const gate = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self && (
-        (r.path === ".github/workflows/ci.yml" && (r.event === "push" || r.event === "pull_request")) ||
-        (r.path === ".github/workflows/pages.yml" && (r.event === "push" || r.event === "workflow_dispatch")));
+        (r.path === ".github/workflows/ci.yml" && (fullPush(r) || r.event === "pull_request")) ||
+        (r.path === ".github/workflows/pages.yml" && (r.event === "push" || r.event === "workflow_dispatch" || r.event === "schedule")));
       const r = runs.find(gate);
       if (r) process.stdout.write(`${r.path} ${r.event} ${r.html_url || r.id}`);
     });')"
