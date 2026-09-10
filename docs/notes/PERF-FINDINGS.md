@@ -4151,3 +4151,38 @@ No smoking gun in there — the loop is dominated by its own physics update and
 the cost is spread — but that is a conclusion the old output could not support
 either way. Anything hunting a hot spot from a profile taken before this fix
 was reading the rasteriser, not the code.
+
+## 2r. A NEW decay reported on the phone: three-WebGPU 60 → 30 (2026-09-10)
+
+Owner report: on the handset, TLX-WebGPU **starts at 60 and settles at 30**.
+That exact halving is the vsync signature — a frame crossing 16.7 ms lands on
+the next refresh at 33.3 ms — so the question is what GROWS until it crosses,
+not what is statically expensive. §2o's rule applies: **drift, not a snapshot.**
+
+### Ruled out, so the next round does not re-derive them
+
+| candidate | why not |
+|---|---|
+| the §2p `mrt()` leak returning | `_ssrMrtNode()` still memoises, and `gfx-backend-canary` guards both the factory and its call site |
+| TLX soft-blit arming on the phone | `_softAdapter` is `!isMobile && …` — a handset can never be classified software; `_softBlit` then needs `_headless` or an explicit `apex26.tlxCap=1` |
+| `materialFor` key churn | every field the key reads is a LITERAL at every call site (`grep` for non-numeric `roughness:`/`metalness:`/`sparkle:`/`depthBias:` returns only TSL declarations) — the key cannot vary per frame |
+| per-frame geometry construction | the two `new BufferGeometry` sites in the draw path are capacity-doubling (`ensureStream`) and per-mesh-build (`createTexMesh`), neither per frame |
+| the frustum extraction (1ae7a96b) | 1:1 delegation; GLX's cull math is unchanged line for line |
+
+### Fixed here, though it is not on its own a halving
+
+`_geoReg` only ever grew. `_regGeo` pushes a WeakRef per geometry and the
+2 s mirror sweep deref()s **every** entry forever; the compaction that removes
+dead refs lived in `geoCensus()`, a debug hook no player calls. The registry's
+own comment measured the rate: **~150-200 dead refs per circuit build,
+monotonic across a season**. The sweep now compacts as it walks (backwards, so
+a splice cannot skip). Time and memory, both unbounded, both cheap to stop.
+
+### What would actually settle it
+
+The census cannot: it renders **45 rAF frames**, and it is an error/env gate,
+never a benchmark. A decay needs a slope. `__tlx.memState()` already reports
+mats / pool / draws / geoKeys / three's own counts and the mirror stats, which
+is the instrument §2o and §2p were both settled with — it wants a soak on the
+handset (`apex26.tlxMobile=1`), sampling every 15 s while racing, and the
+acceptance criterion is the slope against a GLX control on the same phone.

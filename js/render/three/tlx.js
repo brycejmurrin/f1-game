@@ -1876,10 +1876,16 @@ const TLX = (function () {
         _mirrorSweepAt = now;
         _mirrorStat.sweeps++;
         let freed = 0;
-        for (let i = 0; i < _geoReg.length; i++) {
+        // COMPACT AS WE WALK, backwards so a splice cannot skip an entry. The
+        // registry only ever grew: ~150-200 dead WeakRefs per circuit build,
+        // monotonic across a season, and this sweep deref()s every one of them
+        // every 2 s forever. The compaction existed but lived in geoCensus(),
+        // a debug hook no player calls — so on a real device it never ran.
+        for (let i = _geoReg.length - 1; i >= 0; i--) {
           const ref = _geoReg[i];
           const g = ref && ref.deref ? ref.deref() : null;
-          if (!g || g.__tlxFreed) continue;
+          if (!g) { _geoReg.splice(i, 1); continue; }
+          if (g.__tlxFreed) continue;
           if (g.__tlxKind === "chunk" || g.__tlxKind === "chunked") continue;   // chunkedSys owns those
           // Drawn at least once. NOT `__tlxDrawnBatch < _poolBatch`: every
           // visible geometry is re-acquired EVERY frame, so the stamp is
