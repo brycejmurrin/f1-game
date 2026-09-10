@@ -1190,11 +1190,14 @@ test.describe("Parts module — visual recipes", () => {
       glsl: GLXShaders.LIT_FS,
       wgsl: WGSLChunks.LIT,
     }));
+    // visorSurface joined the gate on 2026-09-09 (the visor is a dielectric with
+    // its own surface id, js/render/glx/shaders/glsl-lit.js); both backends
+    // carry the same three-term predicate.
     expect(sources.glsl).toContain(
-      "bool envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;"
+      "bool envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;"
     );
     expect(sources.wgsl).toContain(
-      "let envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;"
+      "let envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;"
     );
     // BOTH read `if (envSurface) {` now. WGSL used to gate on
     // `envSurface && clearcoat > 0.001` — a tautology, since envSurface

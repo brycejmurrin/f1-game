@@ -2806,3 +2806,14 @@ work, and log selector versus race-time CPU preparation cost. It uses existing
 bounded caches and visual-only descriptors; no live field or simulation RNG is
 changed. Ceilings remeasured with `ratchets.mjs --update`; no new facade members
 or top-level lets. GPU program compilation remains race-owned and unmeasured.
+
+## 2026-09-10 — car-draw extraction
+
+`js/game.js` 9656 → 9041 lines (codeLines 5175 → 4739, topLets 153 → 146):
+the car-drawing seam moved to `js/car/car-draw.js` (`CarDraw.create(G, deps)`)
+— the bounded mesh / livery-atlas caches, the player's resolved wheel spec and
+cosmetic key, the decal queue and its flush, the cockpit rig, the planted
+wheels, the warm-ups and the optional GLB body. game.js keeps the render
+loop, the shadow batches and the ground/attitude matrices and reaches the
+caches only through the module's surface. No new façade members. Ceilings
+lowered with `ratchets.mjs --update`.
