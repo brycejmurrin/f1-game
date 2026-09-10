@@ -505,12 +505,17 @@ test.describe("TLX — boot", () => {
   });
 
   test("M4 shadow-state hooks report through the TLX surface (car + lamp)", async ({ page }) => {
+    const t0 = Date.now();   // the arm wait below spends what is LEFT of this test's budget
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.carShadowState().arms > 0, null, { polling: 100, timeout: 30_000 });
+    // On what is LEFT of the budget, not 30 s — the first TLX frame on the
+    // Metal runner is a program compile of up to 93 s (see M8/M9), and run
+    // 3493 burned a retry here at 46 s with no frame yet presented.
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.carShadowState().arms > 0, null,
+      { polling: 100, timeout: Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000) });
     const st = await page.evaluate(() => ({ car: GLX.carShadowState(), lamp: GLX.lampShadowState() }));
     expect(st.car.enabled).toBe(true);
     expect(st.car.arms).toBeGreaterThan(0);

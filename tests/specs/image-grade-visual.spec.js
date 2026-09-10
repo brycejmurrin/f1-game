@@ -179,6 +179,11 @@ async function captureState(page) {
   });
 }
 
+// The JPEG behind the most recent pixels() call, so a failing comparison can
+// ATTACH the two frames it compared (a runner's failure artifact then carries
+// the pictures, not just the numbers — Metal runs 3469-3493 gave four
+// diagnoses' worth of numbers for "shadows" and no frame to look at).
+let _lastCapture = null;
 async function pixels(page) {
   // 60_000 -> 150_000. The capture waits on a frame, and a software-GL runner
   // renders singapore-night at under 1 FPS — that test timed out here at
@@ -186,6 +191,7 @@ async function pixels(page) {
   // shows the car parked on track). Same budget as lighting-ab's capture, for
   // the same reason.
   const buf = await pageScreenshot(page, { type: "jpeg", quality: 90, timeout: 150_000, softTimeout: 60_000 });
+  _lastCapture = buf;
   return page.evaluate(async (b64) => {
     const img = new Image();
     img.src = "data:image/jpeg;base64," + b64;
@@ -323,9 +329,13 @@ test.describe("rendered image grade", () => {
     await boot(page);
     await pixels(page); // discard first composited frame while render caches settle
     const baseline = await pixels(page);
+    const baselineJpeg = _lastCapture;
     const tier0 = await tierAt(page);
     await setTune(page, { shadows: 0.5 });
     const changed = await pixels(page);
+    const changedJpeg = _lastCapture;
+    await test.info().attach("shadows-baseline.jpg", { body: baselineJpeg, contentType: "image/jpeg" });
+    await test.info().attach("shadows-changed.jpg", { body: changedJpeg, contentType: "image/jpeg" });
     const tier1 = await tierAt(page);
     expect(tier1, "governor tier moved between captures — the delta below is a tier shed, not the grade").toBe(tier0);
     const delta = tonalChanges(baseline, changed);
