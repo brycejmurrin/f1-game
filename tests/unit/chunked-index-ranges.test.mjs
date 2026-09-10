@@ -32,6 +32,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedFrustum } from "../helpers/seed-frustum.mjs";
 
 const SRC = new URL("../../js/render/glx/chunked.js", import.meta.url);
 
@@ -81,6 +82,7 @@ function loadChunked(gl) {
   const ctx = { console };
   vm.createContext(ctx);
   seedLog(ctx);
+  seedFrustum(ctx);
   vm.runInContext(code + "\n;globalThis.__GLXChunked = GLXChunked;", ctx);
   return ctx.__GLXChunked.init({
     gl,
@@ -339,7 +341,7 @@ test("the per-chunk merge only extends a run under all four guards", () => {
   assert.match(loop, /runOff \+ runCount \* stride === ch\.byteOffset/,
     "a run must stay contiguous in the index buffer");
   // The cull path must flush, not `continue` past an invisible chunk.
-  assert.match(loop, /_aabbDist2\([^)]*\) > cd2\)\) \{ flush\(\); continue; \}/,
+  assert.match(loop, /Frustum\.aabbDist2\([^)]*\) > cd2\)\) \{ flush\(\); continue; \}/,
     "an invisible chunk must FLUSH the open run — a bare continue would merge across it");
   // And _sameList must compare contents, not just identity: LampChunks is free
   // to hand back equal-but-distinct arrays, and an identity-only check would
