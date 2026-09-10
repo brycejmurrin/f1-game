@@ -2111,11 +2111,10 @@ const LiveryTex = (function () {
     // which is what the fin badge already uses; every shipped car now sets
     // finShape "none", so a fin that is not there was choosing the ink for a
     // mark that is.
-    // CREST INK (liv.crestInk) — what the crown's LETTERING wears: the wordmark,
-    // the number, `carbon`'s keylines, the trim on `panel` and `stripe`, and the
-    // flank marks that take this same ink. Authored wins outright, like every
-    // tint row: an explicit pick is a decision about one surface, and the
-    // contrast derivation below owns only the DEFAULT.
+    // CREST INK (liv.crestInk) — legacy lettering override. The paint sheet no
+    // longer offers this row (logo/logo2/logo3 own the mark; glyphs auto-ink).
+    // Still honoured when present on a stored garage file so a re-open does not
+    // jump the lettering until the player re-saves.
     const inkCrest = colors.crestInk || inkOn([coverPaint]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks (titleA only)
     const inkNose = inkOn([c1, c2]);          // titleB — the monocoque top
@@ -2400,8 +2399,8 @@ const LiveryTex = (function () {
     // cover, so an ink picked for the cover is picked to sit close to the band.
     // Measured on the shipped defaults with SPINE TOP saddle: Mercedes' number
     // 1.02:1 on its own saddle, McLaren's crest 1.01, Cadillac's number 1.09.
-    // An authored CREST INK still wins — it is documented as covering the flank
-    // marks too, and a pick is a pick.
+    // A leftover CREST INK on a stored liv still wins for flank glyphs (legacy);
+    // the sheet no longer authors it — new paint jobs auto-ink here.
     // …and under a WRAP that surface is not the sun: the mark never touches
     // it, and naming it would be the same phantom-surface mistake as the fin
     // (with a near-white sun over a near-black cover NO ink clears both, and
@@ -2552,10 +2551,9 @@ const LiveryTex = (function () {
       // The plate has to separate from the FLANK, and the saddle paints that
       // flank in stripe||accent — the plate's own first choice. Ferrari shipped
       // a number board the exact colour of the panel it sits on.
-      // PLATE PANEL (liv.plateTint) and PLATE NUMBER (liv.plateInk) are picked
-      // rows now. An authored panel skips the re-pick below entirely — it is a
-      // choice about one surface, and re-deriving it is exactly the "my colour
-      // was thrown away" the tint rows exist to stop.
+      // PLATE PANEL (liv.plateTint) is the board colour. PLATE INK is legacy —
+      // the sheet no longer offers it; board lettering auto-inks unless a
+      // stored liv still carries plateInk.
       // PLATE PANEL is its own row. Unset = bases against the mark/flank field —
       // not BODY STRIPE or DETAIL (those are other rows). Contrast vs markBg
       // (wrap may put the plate on the bull colour, not bare cover).
@@ -2829,8 +2827,10 @@ const LiveryTex = (function () {
     } else if (spineSide === "starfield") {
       // Micro dot field on the flank panel — not finStyle "stars". Density
       // floor keeps cover-legibility's 1.5 % flank area readable.
-      const dotInk = colors.sideTint || colors.crestInk
-        || pickOn([inkCrest].concat(BAND_ORDER), flankBgs, BAND_ON_COVER);
+      // sideTint owns starfield ink; never crestInk (that row is gone from the
+      // sheet and was never a flank graphic colour).
+      const dotInk = colors.sideTint
+        || pickOn(BAND_ORDER, flankBgs, BAND_ON_COVER);
       const density = 0.28;
       eachFlank((F) => {
         const Sf = F.R;

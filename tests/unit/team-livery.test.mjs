@@ -215,9 +215,9 @@ test("resolveLivery falls back through the team's own list", () => {
 
 test("resolveLivery and the live preview keep every editor tint", () => {
   // Aston's launch car authors spineTint; dropping it in resolveLivery painted
-  // stripe||accent (lime) on the crown band. The five formerly-derived tints
-  // (sun / crest ink / 2nd band / plate) had the same bug later: editor rows
-  // that never reached the atlas. Draft + cached paths must copy every one.
+  // stripe||accent (lime) on the crown band. Editor tints must reach the atlas.
+  // crestInk / plateInk are legacy (no longer on the sheet) but resolveLivery
+  // still copies them so a stored garage file does not jump until re-saved.
   const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   for (const k of ["spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk",
     "saddleTint", "ridgeTint", "airboxTint", "coverBind", "finHandoff"]) {
@@ -228,6 +228,11 @@ test("resolveLivery and the live preview keep every editor tint", () => {
   }
   assert.match(SHEET, /id:\s*"default"/,
     "livePreviewDraft must set id:\"default\" so brand plates stay on while editing");
+  // Sheet no longer offers crestInk / plateInk — only logo/logo2/logo3 for marks.
+  assert.equal(/colorRow\("CREST INK"/.test(SHEET), false, "CREST INK row must be gone");
+  assert.equal(/colorRow\("PLATE NUMBER"/.test(SHEET), false, "PLATE NUMBER row must be gone");
+  assert.equal(listFrom(SHEET, /const LIV_DRAFT_COLORS = \[([\s\S]*?)\];/).has("crestInk"), false);
+  assert.equal(listFrom(SHEET, /const LIV_DRAFT_COLORS = \[([\s\S]*?)\];/).has("plateInk"), false);
 });
 
 /* ── The reverse conversion, and the sheet that has to explain itself ────────

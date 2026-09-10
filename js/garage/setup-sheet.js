@@ -88,7 +88,7 @@ const PSEUDO_CATS = ["team", "tune", "livery"];
 const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo",
                           "rearWing", "cover", "spineTint", "saddleTint", "ridgeTint", "airboxTint",
                           "sideTint", "sunTint",
-                          "crestInk", "bandTint2", "plateTint", "plateInk",
+                          "bandTint2", "plateTint",
                           "fin", "finArt", "logo", "logo2", "logo3"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
@@ -121,18 +121,16 @@ const LIV_ROW_HINT = {
   airboxTint: "AIRBOX — roll hoop, snorkel and intake lips on the mesh only (not the atlas). Unset = ENGINE COVER. Under WRAP, SUN wins over this row.",
   sideTint: "SIDE TINT — the SPINE SIDE colour graphics (BAND, SASH) on the cover flank, ALONE. A separate zone from SPINE TINT: with SPINE TOP on SADDLE the tint paints the flank these sit on, so one colour cannot serve both. Unset = derived from the livery and checked against the flank.",
   sunTint: "SUN — the WRAP design's sun disc, over the crown, both cover flanks and the airbox. Its own row because SPINE TINT used to paint this too: one field meant a band on most SPINE TOP designs and the sun on WRAP, so choosing WRAP repurposed a colour picked for a band. Unset = the mark's plate / SECONDARY against ENGINE COVER (never BODY STRIPE, never SPINE TINT).",
-  crestInk: "CREST INK — lettering ink for the crown AND the cover-flank marks (number, code, logo, wordmark, duo). It is one ink for every surface those marks stand on: under SADDLE that includes the saddle panel; under WRAP the cover (the sun is a separate disc). Unset = picked to contrast with ENGINE COVER (or the flank the crown left).",
   bandTint2: "2ND BAND — the TRICOLOUR design's second band. Only one of its two bands was ever choosable and the other was derived, which is how a tricolour could come out one colour repeated. Unset = derived against both the cover and the first band.",
-  plateTint: "PLATE PANEL — the board SPINE SIDE's PLATE / TITLE designs paint on. Unset = SECONDARY or DETAIL, re-picked to separate from the flank — never BODY STRIPE.",
-  plateInk: "PLATE INK — the number on PLATE, and the sponsor text on TITLE. Unset = PRIMARY where it reads on the board, else the automatic ink.",
+  plateTint: "PLATE PANEL — the board SPINE SIDE's PLATE / TITLE designs paint on. Unset = SECONDARY or DETAIL, re-picked to separate from the flank — never BODY STRIPE. Board lettering auto-contrasts (no separate ink row).",
   wing: "WINGS — the front and rear FLAPS. Unset = ACCENT.",
   rearWing: "REAR WING — the rear mainplane block. Unset = ACCENT.",
   fin: "TAIL FIN — the shark-fin plate. Unset = ACCENT. Needs a FIN SHAPE other than NONE.",
   finArt: "TAIL GRAPHIC — fin motif / badge ink. Unset = first base colour that clears the fin plate.",
   halo: "HALO — the cockpit halo loop.",
-  logo: "The dominant shape of the team mark, wherever it is drawn: fin badge, cover crown, SPINE SIDE logo/emblem/lockup, garage wall.",
-  logo2: "The mark's SECOND shape — a backing plate, a traced layer or an inner island, named per team. Marks built from one loop have no such row. On plated marks this is the shield/disc on the crown AND the flank logo/emblem.",
-  logo3: "OUTLINE — a rim around the mark. Offered on every mark, off by default.",
+  logo: "TEAM LOGO — the dominant shape of the team mark everywhere it is drawn: crown, fin badge, SPINE SIDE logo/emblem/lockup, garage wall. Lettering (numbers, wordmarks) auto-contrasts; it is not this row.",
+  logo2: "LOGO DETAIL — the mark's second shape (shield, disc, traced layer, or island), named per team. One-loop marks have no such row. Authored plates reach the flank logo/emblem too.",
+  logo3: "OUTLINE — a rim around the mark only. Off by default.",
   finish: "FINISH — the paint surface: gloss, satin or chrome.",
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
@@ -954,10 +952,8 @@ function buildLiveryCreator(container, team) {
   // and each falls back to exactly what it computed before when left unset, so
   // a livery that never touches these renders identically.
   wrap.appendChild(colorRow("SUN", "sunTint", true));          // the WRAP design's disc
-  wrap.appendChild(colorRow("CREST INK", "crestInk", true));   // wordmark / number / keylines
   wrap.appendChild(colorRow("2ND BAND", "bandTint2", true));   // the TRICOLOUR's other band
   wrap.appendChild(colorRow("PLATE PANEL", "plateTint", true));
-  wrap.appendChild(colorRow("PLATE NUMBER", "plateInk", true));
   // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
   // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
   wrap.appendChild(section("WINGS & TAIL"));
