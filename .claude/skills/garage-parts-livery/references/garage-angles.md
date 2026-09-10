@@ -88,6 +88,35 @@ node tools/shot/garage-angles.mjs --fast --team=all --views=wingFront \
   --az=0,0.15pi --el=0.04 --dist=3.5 --target=0,-0.15,2.2 --out=artifacts/wing-ground
 ```
 
+### Stations — cameras keyed to a PART
+
+A station is a camera bundle that frames one thing a livery field paints:
+base view + orbit + look-at + lamp, and `clamp: false` where it sits inside
+the player's 4.6 m floor (a survey framing, not a preset). Every component is
+a default the axes override, so `--station=spineTop --az=150deg,170deg` is
+the crown station swung round. `--crop=none` shows the whole frame while
+tuning one.
+
+| station | frames | bundle |
+|---|---|---|
+| `spineTop` | crown / SPINE TOP, top-down nose-up (the chase camera's read) | rear · az 0.92π · el 0.72 · 3.2 m · at [0, 0.9, -0.85] (the cover's middle) · lamp off |
+| `spineSide` | flank / SPINE SIDE at shoulder height | side · az 0.50π · el 0.15 · 3.4 m · at flank · lamp side |
+| `finBadge` | fin badge + handoff | rear · az 0.78π · el 0.30 · 3.0 m · at fin · lamp wingRear |
+| `sidepod` | sidepod flash, stripe, finish | side · az 0.56π · el 0.12 · 3.6 m · at [0.7, 0.45, 0.2] |
+| `noseFlash` | nose flash, DETAIL keyline | wingFront · az 0.18π · el 0.14 · 4.0 m · at nose · lamp front |
+| `endplate` | front-wing endplate | wingFront · az 0.35π · el 0.10 · 2.6 m · at [0.9, 0.2, 2.3] |
+| `rearWing` | rear wing / wingCarbon | wingRear · az 0.72π · el 0.30 · 2.8 m · at [0, 1.0, -2.4] |
+| `wallCrest` | the wall lightbox mark | front · az 0.32π · el 0.28 · 9.4 m · at wall · lamp off |
+| `floorNose` | the floor-level nose recipe above | wingFront · az 0 · el 0.04 · 3.5 m · at [0, -0.15, 2.2] |
+
+**A design walk with no camera flag shoots its own stations.** `FIELD_STATIONS`
+maps every `Liveries.FIELDS` key to the station(s) that show it (`spineLogo →
+spineTop`, `spineSide → spineSide`, `finBadge → finBadge`, `sunTint → spineTop
++ spineSide`, `logo → wallCrest + spineTop`, …), so `--spineSide=logo,lockup`
+frames the flank instead of the historic `side` default, and `--plan` prints
+`stationsFrom`. Any `--views`, `--cam`, `--station`, `--path`, `--eye` or a
+preset with views wins — you said where to look.
+
 ### Designs
 
 Any `Liveries.FIELDS` key is a flag; `--part.<category>` fits a catalog part
@@ -120,13 +149,80 @@ node tools/shot/garage-angles.mjs --team=all --views=side --driver=0,1 \
 
 Legacy aliases still work: `--spine-logo`, `--spine-side`.
 
-### Measurements, not only pictures
+### Free camera
+
+The game clamps the player's orbit (el ≥ 0, a per-view `minDist`); a survey
+does not have to live inside it. `__apex.garageFrame({clamp: false})` lifts
+both floors for one framing (`G.setSetupFree`; the next preset restores them).
+
+| flag | meaning |
+|---|---|
+| `--clamp=0` | every camera in the run may go below el 0 (under the target, looking up) and closer than the view's floor (down to 0.3 m) |
+| `--eye=x,y,z[;…]` + `--look=x,y,z` | place the EYE itself in car-space metres and look at a point; the hook turns the pair into az / el / dist / target (implies the clamp lift); both are lists |
+| `--path=@keyframes.json` + `--path-steps=N` | a dolly: keyframes `{view?, az, el, dist, target?, eye?, look?, lamp?}` (angles as numbers, `45deg` or `0.5pi`), N frames interpolated per segment plus the last keyframe, keys `path01…`, and a one-row `path-strip.png` |
+
+```sh
+# Under the front wing looking up (eye 9 cm below the nose target):
+node tools/shot/garage-angles.mjs --team=mercedes --views=wingFront --az=0 --el=-0.12 --dist=2.4 --target=nose --clamp=0
+# A swing from the flank up over the crown, 6 frames a segment:
+node tools/shot/garage-angles.mjs --team=redbull --path='[{"view":"side","az":"60deg","el":0.2,"dist":6,"target":"crown"},{"az":"150deg","el":0.9,"dist":5,"target":"crown"}]'
+```
+
+### Comparisons
 
 | flag | records |
 |---|---|
+| `--pair=field:a\|b[\|c]` | an axis AND a comparison: every value after the first is paired with the first, same car and camera, everything else equal — `design-pairs.png` (A · B · changed-pixel overlay) and `Δ 4.2% px` per pair |
+| `diff/*.diff.png` | every pair's overlay: the B frame with changed pixels pulled toward magenta, so a Δ% has a WHERE |
+| `--flat` | the flat atlas art (spine-station's replay of the real painter, flank region, ×3) beside every lit frame — `flat-sheet.png`; how the wrap foreshortened is the difference between the two columns |
 | `--oracle` | per shot, how much of the flank mark the car's own tyres and bodywork hide at that camera (`occl 54%` on the caption and in the sidecar); an azimuth sweep then says which angle shows the most |
 | `--baseline=dir` | per shot, the changed-pixel fraction against the same-named PNG in a saved run (`Δbase 3.1%`) — an A/B with no git ref |
-| `--against=<ref>` | shoot the matrix twice, serving that ref's js/css from memory; each pair gets its changed-pixel fraction (`pair …: 4.2% of pixels changed`) plus the pair sheet |
+| `--against=<ref>` | shoot the matrix twice, serving that ref's js/css from memory; each pair gets its changed-pixel fraction, overlay and the pair sheet |
+
+Pairs are scored BEFORE the caption bars go on (a bar that says BEFORE on one
+frame is not a change to the car), and a `--crop` — yours or a station's —
+is applied first, so Δ% scores the part and not the pit wall.
+
+```sh
+node tools/shot/garage-angles.mjs --team=ferrari --pair='spineLogo:wrap|saddle' --flat
+```
+
+### Session — hot-swapping designs
+
+`--serve` boots once and keeps the garage open; commands are JSON lines on
+stdin, one JSON line back each (`id` echoed). A look at a design costs a
+settle (~3–20 s on SwiftShader), not a boot. Keys given together apply in
+order: team (+seat) → livery | design (+base) → frame → shot → diff → sheet →
+reload → status → quit.
+
+| command | does |
+|---|---|
+| `{"team":"ferrari","seat":1}` | switch team / seat |
+| `{"livery":"stealth"}` / `{"design":{"spineLogo":"wrap","sunTint":"#c00000"},"base":"default"}` | paint |
+| `{"frame":"spineTop"}` / `{"frame":{"station":"spineSide","az":"100deg"}}` / `{"frame":{"view":"free","eye":[0.8,0.25,4.2],"look":[0,0.35,2]}}` | move the camera (a name, or any of view/station/cam/az/el/dist/target/lamp/zoom/pan/eye/look/clamp/crop) |
+| `{"shot":"a"}` | capture as `a.png` (`true` = the tool's own name) |
+| `{"diff":["a","b"]}` | Δ fraction + `diff/a__b.diff.png` |
+| `{"sheet":"look1"}` | contact sheet of the session's shots |
+| `{"reload":true}` | reload the page (the tree as it is now), reopen, re-apply team + paint |
+| `{"status":true}` / `{"quit":true}` | state · end |
+
+`--watch[=paths]` (default: `js/car/liverytex.js, liveries.js, car3d.js,
+js/data/teams.js, js/garage`) reloads on a source change: in a session it
+re-shoots the last camera and emits `{"event":"watch",…}`; in a batch run it
+re-walks the matrix and re-runs the sheets and pairs. That is the tightest
+loop for painter work: edit → ~10 s → a new frame.
+
+```sh
+printf '%s\n' '{"design":{"spineLogo":"wrap"},"frame":"spineTop","shot":"wrap"}' \
+  '{"design":{"spineLogo":"saddle"},"shot":"saddle"}' '{"diff":["wrap","saddle"]}' '{"quit":true}' \
+  | node tools/shot/garage-angles.mjs --serve --team=ferrari --out=artifacts/session
+```
+
+**`apex_garage` (apex-tools MCP)** is the same session as a tool: `op open`
+(team, out, fast) once, then `team / livery / design / frame / shot / diff /
+sheet / reload / status / close`, every key riding along in order. It holds
+the browser lock while open and needs the MCP *server* (`serve` /
+`serve-http`); a one-shot `call` ends the session with the process.
 
 ### Output
 
@@ -135,6 +231,7 @@ Legacy aliases still work: `--spine-logo`, `--spine-side`.
 | `--out=dir` | PNGs (default `artifacts/garage-angles`) |
 | `--name='{team}-{tag}-{cam}'` | file-name template; tokens `{team} {tag} {cam} {view} {vp} {dpr} {i} {az} {el} {dist}` |
 | `--label=0` / `--sheet=0` / `--cols=N` / `--cell=px` | caption bars, contact sheets, columns and cell width. `--fast` defaults both to `0`; pass `--sheet=1` with it to keep the sheets |
+| `design-pairs.png` / `diff/` / `flat-sheet.png` / `path-strip.png` | the comparison and dolly outputs above |
 | `matrix.png` | written with the sheets when the run has ≥2 cars and ≥2 cameras: rows = car, columns = camera. A `--team=all` run also writes its per-team rollup (`all-teams-<tag>-<view>-rollup.png`, one camera per team) whatever `--sheet` says |
 | `--live` | auto-refreshing `live.html` after each shot |
 | `--site` / `--cdn` | boot the deployed build instead of the working tree |

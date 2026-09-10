@@ -17,7 +17,7 @@
  *
  * APEX_MCP_MOCK=1 freezes the catalog and returns fake results (no spawn).
  */
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
@@ -423,6 +423,32 @@ const CATALOG = [
     },
   },
   {
+    name: "apex_garage",
+    week: 4,
+    kind: "browser",
+    description: "Browser (lock first) — a PERSISTENT garage session over garage-angles --serve: op open once, then team / livery / design / frame / shot / diff / sheet / reload / status / close, each a few seconds instead of a boot. Keys given together apply in order (design → frame → shot). Needs the MCP server (serve / serve-http); a one-shot `call` ends the session with the process. Skill: garage-parts-livery.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        op: { type: "string", enum: ["open", "status", "team", "livery", "design", "frame", "shot", "diff", "sheet", "reload", "close"] },
+        team: { type: "string", description: "Team id (open: the team to boot with; team: switch to it)." },
+        seat: { type: "number", description: "Driver seat 0/1 with op team." },
+        livery: { type: "string", description: "Catalog livery id." },
+        design: { type: "object", description: "Liveries.FIELDS values (+ part.<cat>, driver, light.<knob>)." },
+        base: { type: "string", description: "Catalog livery the design paints over." },
+        frame: { description: "Station / alias / view name, or {view|station|cam, az, el, dist, target, lamp, zoom, pan, eye, look, clamp, crop}." },
+        name: { type: "string", description: "Output name for op shot (default: the tool's own name)." },
+        diff: { type: "array", items: { type: "string" }, description: "Two shot names or PNG paths → Δ fraction + overlay." },
+        sheet: { type: "string", description: "Contact-sheet name for op sheet." },
+        out: { type: "string", description: "Output dir under artifacts/ or scratch/ (open)." },
+        fast: { type: "boolean" },
+        dryRun: { type: "boolean" },
+        target: { type: "string", enum: ["local", "deploy"] },
+        url: { type: "string" },
+      },
+    },
+  },
+  {
     name: "apex_select_specs",
     week: 3,
     description: "Tree — which SPECS fit the budget since a git ref (--json). Requires since. Never starts tests. Skill: check-changes.",
@@ -776,6 +802,144 @@ function dryRunBody(name, argv, env = {}) {
   });
 }
 
+// ── apex_garage: a persistent garage-angles --serve child ─────────────────
+// One child per server process, one lock while it lives. Every op is one JSON
+// line to its stdin and one JSON line back; the browser stays open between
+// tool calls, which is the whole point — a look at a design costs a settle,
+// not a boot. `open` is the only op that spawns; everything else refuses until
+// it has. The child's `event` lines (watch re-shoots) ride along on the next
+// reply as `events`.
+const GARAGE_TOOL = "tools/shot/garage-angles.mjs";
+let garage = null;
+function garageArgv(args) {
+  const argv = [process.execPath, path.join(ROOT, GARAGE_TOOL), "--serve",
+    "--team", String(args.team || "mclaren"),
+    "--out", assertSafeOut(args.out || "artifacts/garage-session")];
+  if (args.fast) argv.push("--fast");
+  if (args.livery) argv.push("--livery", String(args.livery));
+  return argv;
+}
+function garageClose(reason) {
+  if (!garage) return null;
+  const g = garage;
+  garage = null;
+  for (const p of g.pending.values()) { clearTimeout(p.timer); p.reject(new Error(`garage closed: ${reason}`)); }
+  if (g.readyTimer) clearTimeout(g.readyTimer);
+  try { g.child.stdin.end(); } catch { /* gone */ }
+  const kill = setTimeout(() => { try { g.child.kill("SIGTERM"); } catch { /* gone */ } }, 8000);
+  kill.unref();
+  releaseLock();
+  return { closed: true, reason, uptimeMs: Date.now() - g.started, shots: g.shots };
+}
+function garageOnLine(line) {
+  let msg;
+  try { msg = JSON.parse(line); } catch { return; }
+  if (!garage) return;
+  if (msg.ready) { if (garage.readyResolve) garage.readyResolve(msg); return; }
+  if (msg.event) { garage.events.push(msg); return; }
+  const p = garage.pending.get(msg.id);
+  if (!p) return;
+  garage.pending.delete(msg.id);
+  clearTimeout(p.timer);
+  if (msg.shot) garage.shots++;
+  p.resolve(msg);
+}
+function garageSend(cmd, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const id = ++garage.seq;
+    const timer = setTimeout(() => {
+      if (garage) garage.pending.delete(id);
+      reject(new Error(`garage: no reply to ${Object.keys(cmd).join("+")} within ${timeoutMs}ms`));
+    }, timeoutMs);
+    garage.pending.set(id, { resolve, reject, timer });
+    garage.child.stdin.write(JSON.stringify({ id, ...cmd }) + "\n");
+  });
+}
+async function garageOpen(args) {
+  if (garage) {
+    const st = await garageSend({ status: true }, 30000).catch((e) => ({ ok: false, error: e.message }));
+    return toolResult({ ok: true, op: "open", alreadyOpen: true, argv: garage.argv, ...st });
+  }
+  const busy = occupancyRefuse();
+  if (busy) return busy;
+  const took = acquireLock("apex_garage");
+  if (took) return took;
+  const argv = garageArgv(args);
+  const child = spawn(argv[0], argv.slice(1), { cwd: ROOT, stdio: ["pipe", "pipe", "pipe"], env: process.env });
+  garage = { child, argv, pending: new Map(), seq: 0, buf: "", events: [], started: Date.now(), shots: 0,
+             readyResolve: null, readyTimer: null };
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (d) => {
+    if (!garage || garage.child !== child) return;
+    garage.buf += d;
+    let i;
+    while (garage && (i = garage.buf.indexOf("\n")) >= 0) {
+      const line = garage.buf.slice(0, i);
+      garage.buf = garage.buf.slice(i + 1);
+      if (line.trim()) garageOnLine(line);
+    }
+  });
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (d) => log(`[garage] ${String(d).trim().slice(0, 400)}`));
+  child.on("exit", (code, sig) => { if (garage && garage.child === child) garageClose(`exit ${code ?? sig}`); });
+  child.on("error", (e) => { if (garage && garage.child === child) garageClose(`spawn: ${e.message}`); });
+  const ready = await new Promise((resolve) => {
+    garage.readyResolve = resolve;
+    garage.readyTimer = setTimeout(() => resolve(null), 180000);
+  });
+  if (!ready) {
+    const why = garageClose("not ready within 180s");
+    return refuse("garage_boot_failed", "garage-angles --serve never reported ready", "Check loadavg and orphan Chromium (apex_status); see the server log.", why);
+  }
+  return toolResult({ ok: true, op: "open", argv, ...ready });
+}
+async function handleGarage(args = {}) {
+  const op = String(args.op || "status");
+  const gated = gateBrowserArgs(args);
+  if (gated) return gated;
+  try {
+    if (args.dryRun) {
+      const argv = op === "open" ? garageArgv(args) : garage ? garage.argv : null;
+      return toolResult({ ok: true, dryRun: true, op, argv, command: op === "open" ? null : garageCommand(op, args), open: !!garage });
+    }
+    if (mockMode()) return mockSuccess("apex_garage", op === "open" ? garageArgv(args) : ["apex_garage", op]);
+    if (op === "open") return await garageOpen(args);
+  } catch (e) {
+    if (e.refuse) return e.refuse;   // assertSafeOut: the out dir escaped artifacts/ or scratch/
+    return refuse("bad_args", String(e.message || e), "See the apex_garage inputSchema.");
+  }
+  if (op === "close") {
+    const why = garageClose("close");
+    return toolResult({ ok: true, op, ...(why || { closed: false, reason: "not open" }) });
+  }
+  if (!garage) return refuse("garage_not_open", "no garage session", 'Call apex_garage with {"op":"open","team":"ferrari"} first.');
+  const cmd = garageCommand(op, args);
+  try {
+    const reply = await garageSend(cmd, 180000);
+    const events = garage ? garage.events.splice(0) : [];
+    return toolResult({ op, ...reply, events: events.length ? events : undefined }, { isError: reply.ok === false });
+  } catch (e) {
+    return refuse("garage_failed", String(e.message || e), "Retry; if the child died, op open again (apex_status shows the lock).");
+  }
+}
+/** The JSON-line command for an op — every key the caller gave rides along, so
+ *  {op:"shot", design:{…}, frame:"spineTop", name:"a"} is design → frame → shot. */
+function garageCommand(op, args) {
+  const cmd = {};
+  if (args.team && op !== "open") cmd.team = String(args.team);
+  if (args.seat != null) cmd.seat = Number(args.seat);
+  if (args.livery && op !== "open") cmd.livery = String(args.livery);
+  if (args.design && typeof args.design === "object") { cmd.design = args.design; if (args.base) cmd.base = String(args.base); }
+  if (args.frame != null) cmd.frame = args.frame;
+  if (op === "shot" || args.name) cmd.shot = args.name ? String(args.name) : true;
+  if (Array.isArray(args.diff) && args.diff.length === 2) cmd.diff = args.diff.map(String);
+  if (op === "sheet" || args.sheet) cmd.sheet = args.sheet ? String(args.sheet) : true;
+  if (op === "reload") cmd.reload = true;
+  if (op === "status") cmd.status = true;
+  return cmd;
+}
+process.on("exit", () => { if (garage) garageClose("server exit"); });
+
 function dispatch(name, args = {}) {
   if (!name.startsWith(PREFIX)) {
     return refuse(
@@ -794,6 +958,7 @@ function dispatch(name, args = {}) {
   }
 
   if (name === "apex_status") return handleStatus(args);
+  if (name === "apex_garage") return handleGarage(args);   // async: a persistent child, not a spawnSync
 
   const kind = toolKind(known);
   const gated = kind === "tree" ? gateTreeArgs(args) : gateBrowserArgs(args);
@@ -893,7 +1058,7 @@ function cmdListTools() {
   return 0;
 }
 
-function cmdCall(name, argsJson) {
+async function cmdCall(name, argsJson) {
   let args = {};
   try {
     args = argsJson ? JSON.parse(argsJson) : {};
@@ -901,13 +1066,14 @@ function cmdCall(name, argsJson) {
     log(`args must be JSON: ${e.message}`);
     return 2;
   }
-  const result = dispatch(name, args);
+  const result = await dispatch(name, args);
   const body = JSON.parse(result.content[0].text);
   process.stdout.write(JSON.stringify(body, null, 2) + "\n");
+  if (garage) garageClose("call ended");   // a one-shot call cannot keep a session
   return result.isError ? 1 : 0;
 }
 
-function handleRpc(msg) {
+async function handleRpc(msg) {
   const mid = msg.id;
   const method = msg.method;
   if (method == null || mid == null) return null;
@@ -935,7 +1101,7 @@ function handleRpc(msg) {
   if (method === "tools/call") {
     const params = msg.params || {};
     try {
-      return { jsonrpc: "2.0", id: mid, result: dispatch(params.name || "", params.arguments || {}) };
+      return { jsonrpc: "2.0", id: mid, result: await dispatch(params.name || "", params.arguments || {}) };
     } catch (e) {
       return {
         jsonrpc: "2.0",
@@ -964,8 +1130,7 @@ function cmdServe() {
     } catch {
       return;
     }
-    const out = handleRpc(msg);
-    if (out) writeRpc(out);
+    handleRpc(msg).then((out) => { if (out) writeRpc(out); });
   });
   rl.on("close", () => process.exit(0));
   return 0;
@@ -1011,13 +1176,14 @@ function cmdServeHttp() {
           sendHttpJson(res, 400, { error: "body must be JSON-RPC" });
           return;
         }
-        const out = handleRpc(msg);
-        if (!out) {
-          res.writeHead(204);
-          res.end();
-          return;
-        }
-        sendHttpJson(res, 200, out);
+        handleRpc(msg).then((out) => {
+          if (!out) {
+            res.writeHead(204);
+            res.end();
+            return;
+          }
+          sendHttpJson(res, 200, out);
+        });
       });
       return;
     }
@@ -1051,5 +1217,6 @@ function main(argv) {
   return 2;
 }
 
-const code = main(process.argv.slice(2));
-if (process.argv[2] !== "serve" && process.argv[2] !== "serve-http") process.exitCode = code;
+Promise.resolve(main(process.argv.slice(2))).then((code) => {
+  if (process.argv[2] !== "serve" && process.argv[2] !== "serve-http") process.exitCode = code;
+});

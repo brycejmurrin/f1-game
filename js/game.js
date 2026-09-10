@@ -2875,6 +2875,7 @@ const G = {
   stepSetupAero: (dt) => stepSetupAero(dt),
   setSetupView: (...a) => setSetupView(...a),
   setSetupAim: (p) => { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },   // garageFrame target: orbit about and look at a car-space point
+  setSetupFree: (on) => { setupPreviewFree = !!on; },   // garageFrame clamp:false — lift the player's el/dist floors for a dev shot (until the next preset)
   setupPan: (...a) => setupPan(...a),
   nudgeSetupCam: (...a) => nudgeSetupCam(...a),
   nudgeSetupZoom: (mul) => nudgeSetupCam(0, 0, mul),
@@ -5595,7 +5596,7 @@ let setupPreviewSpin = true;
 let setupPreviewXOn = false, setupPreviewAeroX = 0;
 // Orbit limits: never underneath the floor plane, never past straight down, and
 // close enough to read a decal without clipping into the nose.
-const SP_EL_MIN = 0, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
+const SP_EL_MIN = 0, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15, SP_DIST_FREE_MIN = 0.3;
 // az 0 = ahead of the nose (+Z), PI = behind the wing; see the eye vector below.
 // Distances are per-view because the car is 5.4 m long and 1.9 m wide, and the
 // sheet takes the right ~40% of the canvas: head-on it fits close, broadside it
@@ -5640,7 +5641,12 @@ const SP_VIEWS = {
 const SP_CAR_CTR = [0, 0.45, 0.245];
 const SP_ORBIT_DEF = SP_CAR_CTR.slice(), SP_TGT_DEF = SP_CAR_CTR.slice();
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();
-let setupPreviewMinDist = 0;   // 0 = use the global SP_DIST_MIN
+let setupPreviewMinDist = 0, setupPreviewFree = false;   // 0 = use the global SP_DIST_MIN; free = a dev shot may leave the player's range
+// The player's orbit floor is 0 (never under the car) and a view's minDist; a
+// survey tool asking to look UP at a wing from the floor needs neither, and
+// setSetupFree lifts both until the next preset. Nothing the player can reach.
+const spElMin = () => (setupPreviewFree ? -SP_EL_MAX : SP_EL_MIN);
+const spDistMin = () => (setupPreviewFree ? SP_DIST_FREE_MIN : (setupPreviewMinDist || SP_DIST_MIN));
 // Last frame's RESOLVED framing, for __apex.garageCam(). Read-only telemetry.
 let _spEffDist = 0, _spEffFit = 0, _spEffPanel = 0;
 // THE GARAGE'S CLOCK. The bay's washer flickers on three sines of whatever
@@ -5669,6 +5675,7 @@ function setSetupView(name) {
   const v = SP_VIEWS[name];
   if (!v) return;
   GarageScene.spot(name);   // the work lamp wheels over to what the preset frames
+  setupPreviewFree = false;   // a preset is the player's range again
   setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
   // A preset is an absolute framing, so it also drops any pan the player had
   // walked in — otherwise "show me the rear wing" shows them the rear wing plus
@@ -5742,8 +5749,7 @@ function setSetupAero(on) {
   }
 }
 function setupZoom(mul) {
-  setupPreviewDist = clamp(setupPreviewDist * mul,
-    setupPreviewMinDist || SP_DIST_MIN, SP_DIST_MAX);
+  setupPreviewDist = clamp(setupPreviewDist * mul, spDistMin(), SP_DIST_MAX);
 }
 // Move the rig sideways / along the car, in the SCREEN's frame rather than the
 // car's: "left" has to mean left as seen, or the control inverts itself as soon
@@ -5762,7 +5768,7 @@ function setupPan(strafe, dolly) {
 // One discrete step of the on-screen orbit controls (keyboard activation).
 function nudgeSetupCam(dAz, dEl, zoom) {
   if (dAz) { setupPreviewAz += dAz; setSetupSpin(false); }
-  if (dEl) { setupPreviewEl = clamp(setupPreviewEl + dEl, SP_EL_MIN, SP_EL_MAX); setSetupSpin(false); }
+  if (dEl) { setupPreviewEl = clamp(setupPreviewEl + dEl, spElMin(), SP_EL_MAX); setSetupSpin(false); }
   if (zoom) setupZoom(zoom);
 }
 // A HELD control, as per-second rates applied by the frame loop. This started as

@@ -418,12 +418,24 @@ const api = {
     G.tickUi();
     return { ok: true, switched: true, label, seat };
   },
-  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.target [x,y,z] car-space look-at, lamp (preset name | null), az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; view "free" keeps the current camera.
+  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.target [x,y,z] car-space look-at, lamp (preset name | null), az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; eye+look [x,y,z] place the eye itself (implies clamp:false); clamp:false lifts the player's el ≥ 0 / minDist floors for this framing; view "free" keeps the current camera.
   garageFrame(view, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (!view) return { ok: false, error: "no_view" };
     if (view !== "free") G.setSetupView(view);   // a preset resets orbit/target/pan; absolutes go on top
-    const o = opts || {}, num = (v) => (Number.isFinite(v) ? v : null);
+    let o = opts || {};
+    const num = (v) => (Number.isFinite(v) ? v : null);
+    const xyz = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(+n));
+    if (xyz(o.eye) && xyz(o.look)) {
+      // An explicit EYE is an orbit about the look-at point from where the eye
+      // stands: the same spherical terms the garage camera composes (game.js
+      // eye = orbit + [sin az · d · cos el, d · sin el, cos az · d · cos el]).
+      const dx = +o.eye[0] - +o.look[0], dy = +o.eye[1] - +o.look[1], dz = +o.eye[2] - +o.look[2];
+      const d = Math.hypot(dx, dy, dz) || 1e-6;
+      o = Object.assign({}, o, { target: o.look.map(Number), az: Math.atan2(dx, dz),
+        el: Math.asin(Math.max(-1, Math.min(1, dy / d))), dist: d, clamp: false });
+    }
+    G.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
     if (Array.isArray(o.target) && o.target.length === 3) G.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
     if (o.lamp !== undefined && typeof GarageScene !== "undefined" && GarageScene.spot) GarageScene.spot(o.lamp || null);
     if (num(o.az) != null) G.nudgeSetupCam(o.az - G.setupPreviewAz, 0, 0);

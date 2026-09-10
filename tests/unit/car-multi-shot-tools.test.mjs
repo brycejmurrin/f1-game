@@ -61,7 +61,11 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
     "capture must not await soft-present twice after settleGarage");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
   assert.match(src, /settleGarage/, "settle soft-present between presets");
-  assert.doesNotMatch(src, /page\.reload\(/, "no second boot — openGarage pins the team live");
+  // The WALK never reloads (openGarage pins the team live); only the --serve /
+  // --watch session does, on purpose, to pick up an edited painter.
+  const walkBody = src.slice(src.indexOf("async function walk("), src.indexOf("async function serveSession"));
+  assert.doesNotMatch(walkBody, /page\.reload\(/, "no second boot — openGarage pins the team live");
+  assert.match(src.slice(src.indexOf("async function serveSession")), /page\.reload\(/, "the session reloads to serve the edited tree");
   assert.doesNotMatch(src, /page\.screenshot\(\s*\{\s*path:\s*png/,
     "no raw page.screenshot — that hung under SwiftShader");
 });
@@ -227,7 +231,7 @@ test("garageFrame takes an absolute camera, not only counted clicks", () => {
   const src = code("js/agent/apex.js");
   const at = src.indexOf("garageFrame(view, opts)");
   assert.ok(at > 0, "garageFrame hook must exist");
-  const body = src.slice(at, at + 1600);
+  const body = src.slice(at, at + 2800);
   assert.match(body, /azNudge/, "UI left/right click counts");
   assert.match(body, /elNudge/, "UI up/down click counts");
   assert.match(body, /nudgeAz/, "their nudgeAz / nudgeEl aliases keep working");
@@ -354,4 +358,52 @@ test("garage-angles: ranges, targets, lamps, seats, DPR, `all`, base lists and a
   const big = plan(["--team=all", "--views=all", "--az=0..2pi:12", "--budget=10m"]);
   assert.equal(big.overBudget, true, "the plan flags a matrix the budget cannot hold");
   assert.equal(plan(["--views=side", "--budget=10m"]).overBudget, false);
+});
+
+test("garage-angles: stations, field→station picking, pairs, flat art, a free camera and a session", () => {
+  // A camera bundle keyed to a PART composes with every axis; a design walk
+  // with no camera shoots where its fields are visible; a pair is scored in
+  // one run with an overlay; the player's orbit floors can be lifted for a
+  // dev shot; and the browser can stay open for a design loop.
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /const STATIONS = \{/, "stations are a table in the TOOL");
+  assert.match(src, /const FIELD_STATIONS = \{/, "fields know which station shows them");
+  for (const f of ["--station", "--pair", "--flat", "--eye", "--look", "--path", "--clamp", "--serve", "--watch"]) {
+    assert.ok(src.includes(`"${f}"`) || src.includes(`argvHas("${f}")`), `${f} must be a flag the tool owns`);
+  }
+  assert.match(src, /async function serveSession/, "--serve is a JSON-lines session on ONE browser");
+  assert.match(src, /async function writePairs/, "pairs get a Δ% AND a diff overlay");
+  assert.match(src, /async function finishRun/, "the run tail is re-runnable for --watch");
+  const hook = read("js/agent/apex.js");
+  assert.match(hook, /G\.setSetupFree\(o\.clamp === false\)/, "clamp:false lifts the player's floors for a dev shot");
+  assert.match(hook, /el: Math\.asin\(/, "an explicit eye becomes the orbit's own terms");
+  const game = read("js/game.js");
+  assert.match(game, /setSetupFree: \(on\)/, "the façade exposes the free range");
+  assert.match(game, /setupPreviewFree = false;   \/\/ a preset is the player's range again/, "a preset restores the player's clamps");
+  assert.match(game, /clamp\(setupPreviewEl \+ dEl, spElMin\(\), SP_EL_MAX\)/, "the nudge path clamps through the free-aware floor");
+  assert.match(read("types/game-ctx.d.ts"), /setSetupFree: \(on: boolean\) => void/);
+  const plan = (args) => JSON.parse(execFileSync("node",
+    ["tools/shot/garage-angles.mjs", "--plan", "--team=ferrari", ...args], { cwd: ROOT, encoding: "utf8" }));
+  const st = plan(["--station=spineTop", "--az=150deg,170deg"]);
+  assert.deepEqual(st.cams.map((c) => c.key), ["spineTop_az150", "spineTop_az170"], "a station is a base the axes override");
+  assert.deepEqual(st.cams[0].target.at, [0, 0.9, -0.85], "the crown station looks at the middle of the cover");
+  assert.equal(st.cams[0].lamp, "off");
+  assert.equal(st.cams[0].clamp, false, "a station inside the player's 4.6 m floor lifts the clamp for itself");
+  const auto = plan(["--spineLogo=wrap,saddle"]);
+  assert.deepEqual(auto.cams.map((c) => c.key), ["spineTop"], "a crown design with no camera shoots the crown station, not `side`");
+  assert.deepEqual(auto.stationsFrom, [{ station: "spineTop", fields: ["spineLogo"] }]);
+  assert.equal(plan(["--views=side", "--spineLogo=wrap"]).stationsFrom, null, "an explicit view wins");
+  const pair = plan(["--pair=spineLogo:wrap|saddle|cap"]);
+  assert.deepEqual(pair.pair, { field: "spineLogo", values: ["wrap", "saddle", "cap"] });
+  assert.equal(pair.designs.length, 3, "a pair is an axis too");
+  const eye = plan(["--eye=0,0.3,4.5;1.5,0.6,3", "--look=0,0.35,2", "--clamp=0"]);
+  assert.deepEqual(eye.cams.map((c) => c.key), ["eye0x0_3x4_5", "eye1_5x0_6x3"]);
+  assert.equal(eye.clamp, false);
+  const kf = JSON.stringify([{ view: "side", az: "60deg", el: 0.2, dist: 6, target: "crown" }, { az: "150deg", el: 0.9, dist: 5, target: "crown" }]);
+  const pathPlan = plan([`--path=${kf}`, "--path-steps=3"]);
+  assert.deepEqual(pathPlan.cams.map((c) => c.key), ["path01", "path02", "path03", "path04"], "n steps per segment plus the last keyframe");
+  assert.equal(pathPlan.cams[0].view, "side");
+  assert.equal(pathPlan.cams[1].view, "free", "interpolated frames keep the camera and move it");
+  assert.ok(Math.abs(pathPlan.cams[2].az - (60 + 60) * Math.PI / 180) < 1e-9, "azimuth interpolates linearly");
+  assert.equal(pathPlan.cams[3].clamp, false, "a dolly may leave the player's range");
 });

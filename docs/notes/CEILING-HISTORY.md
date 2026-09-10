@@ -2848,3 +2848,14 @@ merged tree (the extraction's 9054 / 4748 / 240 plus `setSetupAim` and the
 `migrateLivery` fold from the livery branch); `js/agent/apex.js` 2819 / 2093
 (the deploy side's 2827 / 2101 were the pre-merge PR 124 values, superseded).
 Set with `ratchets.mjs --update` after the conflict resolution; nothing raised.
+
+## 2026-09-10 — free garage orbit for survey shots
+
+`js/game.js` +6 lines / gMembers 241 → 242 (`setSetupFree`): a dev-only flag
+lifts the player's el ≥ 0 and per-view `minDist` floors for one framing
+(`__apex.garageFrame({clamp:false})`, an explicit `eye`/`look`, the
+garage-angles stations inside 4.6 m and `--path` dollies); the next preset
+restores them. `js/agent/apex.js` +12 lines for the eye → orbit terms.
+Ceilings snapped to the new values with `ratchets.mjs --update` (game.js
+lines 9062 → 9068, codeLines 4745 → 4748; apex.js 2819 → 2831, codeLines
+2093 → 2102).

@@ -1,7 +1,8 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Only ten CLIs are wrapped as `apex_*`.
+do the work. Only ten CLIs are wrapped as `apex_*` (eleven tools: `apex_garage` is a
+session over one of them).
 
 ```
 need → skill (when / don'ts)
@@ -172,6 +173,7 @@ and verify-track are plain CLIs now — `tools/README.md`).
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
+| `apex_garage` | `shot/garage-angles.mjs` | browser | garage-parts-livery |
 
 Pins the wrap always applies (you cannot override them):
 

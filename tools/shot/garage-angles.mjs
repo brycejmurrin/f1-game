@@ -8,6 +8,9 @@
 //     [--az-nudge=-1] [--el-nudge=1] [--viewport=1280x720,844x390] [--dpr=1,2] [--crop=0.3,0.2,0.4,0.5]
 //     [--driver=0,1] [--light.keyMul=0.8,1.2] [--spineSide=all] [--part.aero=all] [--base=default,rb_white]
 //     [--oracle] [--baseline=dir] [--budget=10m]
+//     [--station=spineTop,spineSide,finBadge,…] [--pair=spineLogo:wrap|saddle] [--flat]
+//     [--eye=x,y,z;…] [--look=x,y,z] [--clamp=0] [--path=@keyframes.json] [--path-steps=6]
+//     [--serve] [--watch[=js/car/liverytex.js,…]]
 //     [--preset=wall|fin|flank|mark|quick|sweep|none] [--plan] [--fast] [--settle=8] [--view-settle=4]
 //     [--name='{team}-{tag}-{cam}'] [--out=dir] [--label=0] [--sheet=0] [--cols=3] [--cell=420] [--json]
 //     [--team=all+custom] [--rollup-only|--full-views] [--rollup-view=wingRear]
@@ -44,6 +47,19 @@
 //
 // `--livery` walks paint jobs via a store write (opening the LIVERY tab slams
 // FRONT); `--base` names the catalog livery a DESIGN walk paints on top of.
+//
+// STATIONS: `--station=spineTop,finBadge` names camera bundles keyed to a PART
+// (view + orbit + look-at + lamp + crop), and a design walk with no camera flag
+// shoots the stations its fields need (FIELD_STATIONS) instead of `side`.
+// COMPARISONS: `--pair=field:a|b` pairs designs in one run (Δ% + a diff
+// overlay each), `--flat` puts the flat atlas art beside every lit frame.
+// FREE CAMERA: `--clamp=0` lifts the player's orbit floors (el ≥ 0, minDist),
+// `--eye=x,y,z --look=x,y,z` places the eye itself, `--path=@keyframes.json`
+// shoots an interpolated dolly into `path-strip.png`.
+// SESSION: `--serve` keeps the garage open and takes JSON-line commands on
+// stdin (team / livery / design / frame / shot / diff / sheet / reload / quit);
+// `--watch` reloads on a source change and re-shoots. apex_garage (MCP) wraps
+// the session.
 //
 // DESIGN AXES: any field in `Liveries.FIELDS` is a flag, and passing more than
 // one walks their CARTESIAN PRODUCT as custom liveries on the team default
@@ -93,7 +109,8 @@
 // 286.4 s on consecutive teams. The loadavg is read once and warned about for
 // the same reason — see AGENTS.md §Verification.
 import vm from "node:vm";
-import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, renameSync, existsSync, rmSync, statSync, watch as fsWatch } from "node:fs";
+import readline from "node:readline";
 import { execFileSync } from "node:child_process";
 import { join, extname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -106,7 +123,7 @@ import {
 import { loadParts } from "../car/parts-sweep.mjs";
 import { loadAtlas } from "../car/livery-contrast.mjs";
 import { occlusionMap, hiddenIn } from "../car/flank-occlusion.mjs";
-import { sweep as spineSweep } from "../car/spine-station.mjs";
+import { sweep as spineSweep, writePng as writeFlatPng } from "../car/spine-station.mjs";
 
 const LIVE_BASE = "https://brycejmurrin.github.io/f1-game/";
 const argv = process.argv.slice(2);
@@ -228,17 +245,21 @@ const TARGETS = {
   flank: [0.6, 0.65, -0.35],
   wall:  [0, 1.8, -6.0],
 };
+function parseTarget(t, strict = true) {
+  if (Array.isArray(t)) t = t.join(",");
+  if (t in TARGETS) return { name: t, at: TARGETS[t] };
+  const xyz = String(t).split(",").map(Number);
+  if (xyz.length === 3 && xyz.every(Number.isFinite)) return { name: xyz.map((n) => +n.toFixed(2)).join("x").replace(/-/g, "m"), at: xyz };
+  const msg = `--target "${t}" is not one of ${Object.keys(TARGETS).join(", ")} or x,y,z`;
+  if (!strict) throw new Error(msg);
+  console.error(msg);
+  process.exit(1);
+}
 const targetList = listOf(pflag("--target", "target", ""), ";").flatMap((part) => {
   // `;` separates x,y,z triples; a list of NAMES has no commas of its own.
   const names = listOf(part);
   return (names.length > 1 && names.every((n) => n in TARGETS)) ? names : [part];
-}).map((t) => {
-  if (t in TARGETS) return { name: t, at: TARGETS[t] };
-  const xyz = t.split(",").map(Number);
-  if (xyz.length === 3 && xyz.every(Number.isFinite)) return { name: xyz.map((n) => +n.toFixed(2)).join("x").replace(/-/g, "m"), at: xyz };
-  console.error(`--target "${t}" is not one of ${Object.keys(TARGETS).join(", ")} or x,y,z`);
-  process.exit(1);
-});
+}).map(parseTarget);
 const azNudgeList = nums(pflag("--az-nudge", "azNudge", ""));
 const elNudgeList = nums(pflag("--el-nudge", "elNudge", ""));
 // NAMED CAMERAS ARE PARAMETER BUNDLES, not presets in the game. Each is the
@@ -251,8 +272,56 @@ const CAM_ALIAS = {
   bay:      "hero:0.68pi,0.26,9.2",    // rear-left three-quarter, back wall in frame
   bayFront: "front:0.32pi,0.28,9.4",   // opposite diagonal, same left flank
 };
-/** `--cam=[view:]az,el[,dist[,strafe,dolly]];…`, or an alias name. */
+// STATIONS are camera bundles keyed to a PART, not to a preset. Each frames
+// one thing a livery field paints — the crown, the flank, the fin badge, the
+// endplate — with a base view, an orbit, a look-at, the lamp, and (where the
+// part is small in frame) a CROP, so a pair's Δ% scores the part and not the
+// pit wall behind it. Every component is a default the axes override
+// (`--station=spineTop --az=150deg` is the crown station swung round), and
+// FIELD_STATIONS below says which station shows which field, so a design walk
+// with no camera flags shoots where the change is visible instead of `side`.
+// A station closer than the player's 4.6 m floor carries `clamp: false` — it
+// is a survey framing, and the part is the subject, not the car.
+const STATIONS = {
+  // crown / SPINE TOP, read top-down nose-up the way the chase camera does
+  spineTop:  { view: "rear",      az: 0.92 * Math.PI, el: 0.72, dist: 3.2, target: [0, 0.9, -0.85], lamp: "off", clamp: false },
+  // flank / SPINE SIDE at shoulder height, the sidepod line in frame
+  spineSide: { view: "side",      az: 0.50 * Math.PI, el: 0.15, dist: 3.4, target: "flank", lamp: "side",     clamp: false },
+  finBadge:  { view: "rear",      az: 0.78 * Math.PI, el: 0.30, dist: 3.0, target: "fin",   lamp: "wingRear", clamp: false },
+  sidepod:   { view: "side",      az: 0.56 * Math.PI, el: 0.12, dist: 3.6, target: [0.7, 0.45, 0.2], lamp: "side", clamp: false },
+  noseFlash: { view: "wingFront", az: 0.18 * Math.PI, el: 0.14, dist: 4.0, target: "nose",  lamp: "front" },
+  endplate:  { view: "wingFront", az: 0.35 * Math.PI, el: 0.10, dist: 2.6, target: [0.9, 0.2, 2.3], lamp: "wingFront" },
+  rearWing:  { view: "wingRear",  az: 0.72 * Math.PI, el: 0.30, dist: 2.8, target: [0, 1.0, -2.4], lamp: "wingRear" },
+  wallCrest: { view: "front",     az: 0.32 * Math.PI, el: 0.28, dist: 9.4, target: "wall",  lamp: "off" },
+  // the floor-level nose framing measured 2026-09-10 (eye 9 cm off the floor)
+  floorNose: { view: "wingFront", az: 0,              el: 0.04, dist: 3.5, target: [0, -0.15, 2.2] },
+};
+// Which station SHOWS a field. A crown design is invisible from `side` and a
+// flank fill from `rear`; a run that names a design and no camera used to
+// shoot `side` regardless, and the change was as often out of frame as in it.
+const FIELD_STATIONS = {
+  spineLogo: ["spineTop"], spineTint: ["spineTop"], bandTint2: ["spineTop"], sunTint: ["spineTop", "spineSide"],
+  spineHeight: ["spineTop", "spineSide"], cover: ["spineTop", "spineSide"], coverVents: ["spineTop"],
+  coverBind: ["spineTop", "spineSide"], halo: ["spineTop"], tcam: ["spineTop"],
+  spineSide: ["spineSide"], sideTint: ["spineSide"], plateTint: ["spineSide"], saddleTint: ["spineSide"],
+  numFont: ["spineSide"], sponsors: ["spineSide", "sidepod"],
+  fin: ["finBadge"], finArt: ["finBadge"], finStyle: ["finBadge"], finBadge: ["finBadge"],
+  finShape: ["finBadge"], finHandoff: ["finBadge"],
+  nose: ["noseFlash"], noseStripe: ["noseFlash"], pod: ["sidepod"], stripe: ["sidepod"],
+  accent: ["sidepod", "noseFlash"], finish: ["sidepod"], bodySplit: ["sidepod"],
+  wing: ["endplate"], wingCarbon: ["endplate"], rearWing: ["rearWing"],
+  logo: ["wallCrest", "spineTop"], logo2: ["wallCrest", "spineTop"], logo3: ["wallCrest", "spineTop"],
+};
+const isAlias = (n) => !!(CAM_ALIAS[n] || STATIONS[n]);
+/** `--cam=[view:]az,el[,dist[,strafe,dolly]]`, an alias name, or a station. */
 function parseCam(raw) {
+  const st = STATIONS[raw];
+  if (st) {
+    return { view: st.view, alias: raw, station: raw, az: st.az, el: st.el, dist: st.dist,
+             target: st.target != null ? parseTarget(st.target) : null, lamp: st.lamp || null,
+             crop: st.crop || null, clamp: st.clamp === false ? false : undefined,
+             strafe: 0, dolly: 0, zoom: 0, azNudge: 0, elNudge: 0, explicit: true };
+  }
   const spec = CAM_ALIAS[raw] || raw;
   const m = /^(?:([A-Za-z]+):)?(.+)$/.exec(spec);
   const [az, el, dist, strafe, dolly] = m[2].split(",").map((v, i) => (i < 2 ? angle(v.trim()) : Number(v)));
@@ -260,8 +329,8 @@ function parseCam(raw) {
     console.error(`--cam entry "${spec}" needs at least az,el`);
     process.exit(1);
   }
-  return { view: m[1] || null, alias: CAM_ALIAS[raw] ? raw : null,
-           az, el, dist: Number.isFinite(dist) ? dist : null,
+  return { view: m[1] || null, alias: CAM_ALIAS[raw] ? raw : null, station: null,
+           az, el, dist: Number.isFinite(dist) ? dist : null, target: null, lamp: null, crop: null,
            strafe: strafe || 0, dolly: dolly || 0, zoom: 0, azNudge: 0, elNudge: 0, explicit: true };
 }
 // `;` separates cameras because az,el,dist are commas — but a list of NAMES
@@ -272,12 +341,19 @@ function parseCam(raw) {
 // out in numbers already names everything, so it stands alone.
 const camParts = listOf(flag("--cam", ""), ";").flatMap((part) => {
   const names = listOf(part);
-  return (names.length > 1 && names.every((n) => CAM_ALIAS[n])) ? names : [part];
+  return (names.length > 1 && names.every(isAlias)) ? names : [part];
 });
-const camAliasNames = camParts.filter((c) => CAM_ALIAS[c]);
-const camSpecs = camParts.filter((c) => !CAM_ALIAS[c]).map(parseCam);
+// `--station=spineTop,finBadge` is the same list by another name; a name that
+// is not a station is an error here, where `--cam` would try to parse numbers.
+const stationNames = listOf(flag("--station", ""));
+for (const n of stationNames) if (!STATIONS[n]) { console.error(`--station "${n}" is not one of ${Object.keys(STATIONS).join(", ")}`); process.exit(1); }
+const camAliasNames = [...camParts.filter(isAlias), ...stationNames];
+const camSpecs = camParts.filter((c) => !isAlias(c)).map(parseCam);
+// `--crop=none` switches a station's own crop OFF (to see the whole framing
+// while tuning one); `--crop=x,y,w,h` replaces it.
 const cropRaw = flag("--crop", "");
-const crop = cropRaw ? cropRaw.split(",").map(Number) : null;
+const cropOff = cropRaw === "none" || cropRaw === "0";
+const crop = cropRaw && !cropOff ? cropRaw.split(",").map(Number) : null;
 if (crop && (crop.length !== 4 || crop.some((n) => !(n >= 0 && n <= 1)) || crop[2] <= 0 || crop[3] <= 0)) {
   console.error("--crop wants x,y,w,h as fractions of the frame (0..1)");
   process.exit(1);
@@ -302,6 +378,13 @@ const liveryAwait = fast ? 8000 : 12000;
 const viewAwait = fast ? 5000 : 8000;
 const gateRetries = fast ? 1 : 3;
 const doPlan = argvHas("--plan");
+// `--serve` keeps the browser open and takes JSON-line commands on stdin;
+// `--watch[=paths]` reloads the page when a source file changes and re-shoots.
+// Both exist because a design loop is many looks at one car, and a boot per
+// look (~25 s) plus a settle per shot (~20 s) is the whole cost of iterating.
+const doServe = argvHas("--serve");
+const WATCH_DEFAULT = ["js/car/liverytex.js", "js/car/liveries.js", "js/car/car3d.js", "js/data/teams.js", "js/garage"];
+const watchList = argvHas("--watch") ? (listOf(flag("--watch", "")).length ? listOf(flag("--watch", "")) : WATCH_DEFAULT) : [];
 const doLive = argvHas("--live");
 const doJson = argvHas("--json");
 
@@ -316,7 +399,9 @@ const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom"
   "--rollup-view", "--rollup-side", "--rollup-logo",
   "--az", "--el", "--dist", "--az-nudge", "--el-nudge", "--cam", "--crop", "--name",
   "--cols", "--json", "--base", "--design", "--zip", "--logos", "--site", "--cdn",
-  "--lamp", "--target", "--dpr", "--budget", "--baseline"]);
+  "--lamp", "--target", "--dpr", "--budget", "--baseline",
+  "--station", "--pair", "--flat", "--eye", "--look", "--path", "--path-steps", "--clamp",
+  "--serve", "--watch", "--overlay"]);
 const axes = [];
 const addAxis = (field, raw) => {
   const values = String(raw).split(",").map((s) => s.trim()).filter(Boolean);
@@ -325,9 +410,22 @@ const addAxis = (field, raw) => {
 // The two legacy names first, so their order in the product is unchanged.
 if (flag("--spine-logo", "")) addAxis("spineLogo", flag("--spine-logo", ""));
 if (flag("--spine-side", "")) addAxis("spineSide", flag("--spine-side", ""));
+// `--pair=spineLogo:wrap|saddle[|cap]` is an axis AND a comparison: every value
+// after the first is paired with the first, same car and camera, and each pair
+// gets a Δ% plus a diff overlay — the A/B you actually want while choosing
+// between two designs, with no git ref and no saved run.
+const pairRaw = flag("--pair", "").trim();
+const pairAxis = (() => {
+  if (!pairRaw) return null;
+  const m = /^([A-Za-z0-9_.]+):(.+)$/.exec(pairRaw);
+  const values = m ? m[2].split("|").map((v) => v.trim()).filter(Boolean) : [];
+  if (!m || values.length < 2) { console.error("--pair wants field:a|b[|c…]"); process.exit(1); }
+  return { field: m[1], values };
+})();
+if (pairAxis) addAxis(pairAxis.field, pairAxis.values.join(","));
 // Every livery-field key a preset carries becomes an axis unless the CLI names it.
 const CAM_KEYS = new Set(["views", "zoom", "pan", "az", "el", "dist", "azNudge", "elNudge",
-  "fast", "cam", "logos", "lamp", "target"]);
+  "fast", "cam", "logos", "lamp", "target", "station"]);
 for (const [k, v] of Object.entries(preset || {})) {
   if (CAM_KEYS.has(k) || argv.some((a) => a.startsWith(`--${k}=`))) continue;
   addAxis(k, v);
@@ -391,6 +489,25 @@ const designs = explicitDesigns(flag("--design", ""))
         Object.fromEntries(axes.map((ax) => [ax.field, ax.values[i % ax.values.length]])))
       : axes.reduce((acc, ax) => acc.flatMap((d) => ax.values.map((v) => ({ ...d, [ax.field]: v }))), [{}]))
     : null);
+
+// The stations the DESIGN asks for: every field named by an axis or an
+// explicit design, through FIELD_STATIONS, in first-seen order. They become the
+// cameras only when nothing else names one — a `--views`, `--cam`, `--station`
+// or a preset with views wins, because the user said where to look.
+const fieldStations = (() => {
+  const fields = [];
+  for (const ax of axes) if (!fields.includes(ax.field)) fields.push(ax.field);
+  for (const d of designs || []) for (const k of Object.keys(d)) if (!fields.includes(k)) fields.push(k);
+  const out = [];
+  for (const f of fields) for (const st of FIELD_STATIONS[f] || []) {
+    if (!out.some((o) => o.station === st)) out.push({ station: st, fields: [] });
+    out.find((o) => o.station === st).fields.push(f);
+  }
+  return out;
+})();
+const autoStations = (fieldStations.length && !argvHas("--views") && !argvHas("--cam") && !argvHas("--station")
+  && !argvHas("--path") && !argvHas("--eye") && !(preset && preset.views)) ? fieldStations.map((o) => o.station) : [];
+camAliasNames.push(...autoStations);
 
 // Roster order == store.team index (game.js boot). EVALUATED, not regexed: a
 // regex over teams.js also matched `id: "custom"` on DEFAULT_CUSTOM, the MY TEAM
@@ -463,16 +580,17 @@ const viewsDefault = (() => {
 const rawViews = flag("--views", viewsDefault).split(",").map((s) => s.trim()).filter(Boolean);
 // A named camera given as a view is lifted into --cam, so `--views=bay` and
 // `--cam=bay` mean the same thing and neither needs a game preset.
-const viewAliases = rawViews.filter((v) => CAM_ALIAS[v]);
+const viewAliases = rawViews.filter(isAlias);
 // Naming cameras and NOT naming views means the cameras are the run: the
 // default view group would otherwise silently double every such matrix.
-const camsNamed = argvHas("--cam") || viewAliases.length > 0;
+const camsNamed = argvHas("--cam") || argvHas("--station") || viewAliases.length > 0 || autoStations.length > 0
+  || argvHas("--path") || argvHas("--eye");
 // `plainViews` drive the camera PRODUCT; an alias contributes exactly one
 // camera (its own bundle), so naming one does not also shoot its base view.
 const plainViews = (camsNamed && !argvHas("--views"))
   ? []
-  : [...new Set(rawViews.filter((v) => !CAM_ALIAS[v]).flatMap((v) => GROUPS[v] || [v]))];
-const aliasViews = [...new Set(viewAliases.map((v) => parseCam(v).view).filter(Boolean))];
+  : [...new Set(rawViews.filter((v) => !isAlias(v)).flatMap((v) => GROUPS[v] || [v]))];
+const aliasViews = [...new Set([...viewAliases, ...camAliasNames].map((v) => parseCam(v).view).filter(Boolean))];
 const views = [...new Set([...plainViews, ...aliasViews])];
 const rollupView = rollupViewFlag
   || (views.length === 1 ? views[0]
@@ -489,9 +607,11 @@ if (bad.length) {
 // no camera axes keeps the old `<team>-<tag>-<view>.png` names exactly.
 const degs = (r) => Math.round(r * 180 / Math.PI);
 const orNull = (list) => (list.length ? list : [null]);
+function xyzKey(v) { return v.map((n) => +n.toFixed(2)).join("x").replace(/-/g, "m").replace(/\./g, "_"); }
 function camKey(c) {
   const b = [c.view];
-  if (c.target) b.push(`at${cap(c.target.name)}`);
+  if (c.eye) b.push(`eye${xyzKey(c.eye)}`);
+  if (c.target && !c.eye) b.push(`at${cap(c.target.name)}`);
   if (c.lamp) b.push(`lamp${cap(c.lamp)}`);
   if (c.az != null) b.push(`az${degs(c.az)}`);
   if (c.el != null) b.push(`el${degs(c.el)}`);
@@ -505,8 +625,8 @@ function camKey(c) {
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 function aliasKey(b, c) {
   const bits = [b.alias];
-  if (c.target) bits.push(`at${cap(c.target.name)}`);
-  if (c.lamp) bits.push(`lamp${cap(c.lamp)}`);
+  if (c.target && !(b.target && c.target.name === b.target.name)) bits.push(`at${cap(c.target.name)}`);
+  if (c.lamp && c.lamp !== b.lamp) bits.push(`lamp${cap(c.lamp)}`);
   if (c.az !== b.az) bits.push(`az${degs(c.az)}`);
   if (c.el !== b.el) bits.push(`el${degs(c.el)}`);
   if (c.dist !== b.dist) bits.push(`d${c.dist}`);
@@ -525,21 +645,22 @@ const bases = [
   ...plainViews.map((view) => ({ view })),
   ...[...new Set([...viewAliases, ...camAliasNames])].map((name) => {
     const c = parseCam(name);
-    return { view: c.view || "free", alias: name, az: c.az, el: c.el, dist: c.dist,
-             strafe: c.strafe, dolly: c.dolly };
+    return { view: c.view || "free", alias: name, station: c.station, az: c.az, el: c.el, dist: c.dist,
+             strafe: c.strafe, dolly: c.dolly, target: c.target, lamp: c.lamp, crop: c.crop, clamp: c.clamp };
   }),
 ];
 const pick = (list, dflt) => (list.length ? list : [dflt ?? null]);
 for (const b of bases) {
-  for (const target of orNull(targetList)) for (const lamp of orNull(lampList)) {
+  for (const target of pick(targetList, b.target)) for (const lamp of pick(lampList, b.lamp)) {
   for (const az of pick(azList, b.az)) for (const el of pick(elList, b.el)) {
     for (const dist of pick(distList, b.dist)) for (const zoom of zoomList) {
       for (const [ps, pd] of panList) for (const azNudge of orNull(azNudgeList)) {
         for (const elNudge of orNull(elNudgeList)) {
-          const c = { view: b.view, alias: b.alias || null, az, el, dist, zoom,
+          const c = { view: b.view, alias: b.alias || null, station: b.station || null, az, el, dist, zoom,
                       strafe: (b.strafe || 0) + ps, dolly: (b.dolly || 0) + pd,
                       azNudge: azNudge || 0, elNudge: elNudge || 0,
-                      target: target && target.at ? target : null, lamp: lamp || null };
+                      target: target && target.at ? target : null, lamp: lamp || null,
+                      crop: b.crop || null, clamp: b.clamp === false ? false : undefined };
           // A named base keeps its NAME, and appends only what was changed on
           // top of it, so `bay`, `bay_az100` and `bay_z6` are distinct files.
           c.key = b.alias ? aliasKey(b, c) : camKey(c);
@@ -556,7 +677,58 @@ for (const c of camSpecs) {
   c.key = camKey(c);
   cams.push(c);
 }
-if (!cams.length) { console.error("no camera to shoot — give --views, or a --cam"); process.exit(1); }
+// FREE CAMERAS. `--eye=x,y,z --look=x,y,z` places the eye itself (car space,
+// metres) and looks at a point — the hook turns the pair into an orbit and
+// lifts the player's clamps for it. `--path=@keyframes.json` shoots a dolly:
+// every keyframe is {az, el, dist, target?, eye?, look?, lamp?, view?} and
+// `--path-steps` frames are interpolated per segment, so "how does the wrap
+// read as the camera swings" is one strip instead of a hand-typed list.
+const triples = (raw) => listOf(raw, ";").map((t) => t.split(",").map(Number))
+  .filter((v) => v.length === 3 && v.every(Number.isFinite));
+const eyeList = triples(flag("--eye", "")), lookList = triples(flag("--look", ""));
+if ((argvHas("--eye") && !eyeList.length) || (argvHas("--look") && !lookList.length)) {
+  console.error("--eye / --look want x,y,z[;x,y,z…] in car-space metres"); process.exit(1);
+}
+const noClamp = flag("--clamp", "1") === "0";
+eyeList.forEach((eye, i) => {
+  for (const look of (lookList.length ? lookList : [[0, 0.45, 0.2]])) {
+    const c = { view: "free", alias: null, station: null, az: null, el: null, dist: null, zoom: 0, strafe: 0, dolly: 0,
+                azNudge: 0, elNudge: 0, target: null, lamp: lampList[0] || null, crop: null, eye, look, clamp: false,
+                key: `eye${xyzKey(eye)}${lookList.length > 1 ? `_look${xyzKey(look)}` : ""}` };
+    cams.push(c);
+  }
+});
+const pathSteps = Math.max(1, Number(flag("--path-steps", "6")) || 6);
+const pathFrames = (() => {
+  const raw = flag("--path", "");
+  if (!raw) return [];
+  const text = raw.startsWith("@") ? readFileSync(raw.slice(1), "utf8") : raw;
+  const kfs = JSON.parse(text);
+  if (!Array.isArray(kfs) || kfs.length < 2) { console.error("--path wants a JSON array of ≥2 keyframes"); process.exit(1); }
+  const num = (v) => (typeof v === "string" ? angle(v) : v);
+  const at = (t) => (t == null ? null : parseTarget(t).at);
+  const lerp = (a, b, u) => (a == null || b == null ? (u < 1 ? a : b) : a + (b - a) * u);
+  const lerp3 = (a, b, u) => (a && b ? a.map((v, i) => v + (b[i] - v) * u) : (u < 1 ? a : b));
+  const out = [];
+  for (let k = 0; k < kfs.length - 1; k++) {
+    const A = kfs[k], B = kfs[k + 1];
+    const last = k === kfs.length - 2;
+    for (let i = 0; i < pathSteps + (last ? 1 : 0); i++) {
+      const u = i / pathSteps;
+      const tgt = lerp3(at(A.target), at(B.target), u);
+      out.push({
+        view: (i === 0 && A.view) || "free", alias: null, station: null, zoom: 0, strafe: 0, dolly: 0, azNudge: 0, elNudge: 0,
+        az: lerp(num(A.az), num(B.az), u), el: lerp(num(A.el), num(B.el), u), dist: lerp(A.dist, B.dist, u),
+        target: tgt ? { name: xyzKey(tgt), at: tgt } : null, lamp: A.lamp || null, crop: null,
+        eye: lerp3(A.eye, B.eye, u), look: lerp3(A.look, B.look, u), clamp: false, path: true,
+        key: `path${String(out.length + 1).padStart(2, "0")}`,
+      });
+    }
+  }
+  return out;
+})();
+cams.push(...pathFrames);
+if (!cams.length) { console.error("no camera to shoot — give --views, a --cam, a --station, --eye or --path"); process.exit(1); }
 const camsOf = (view) => cams.filter((c) => c.view === view);
 
 // ── timing ──────────────────────────────────────────────────────────────────
@@ -729,16 +901,69 @@ function teamCrown(teamId) {
 
 /** Fraction of pixels that changed between two PNGs (any channel off by more
  *  than 24/255), on the smaller of the two sizes. `null` when `a` is absent. */
-async function pixelDiff(a, b) {
+async function pixelDiff(a, b, overlayOut = null) {
   if (!existsSync(a) || !existsSync(b)) return null;
   const [ma, mb] = await Promise.all([sharp(a).metadata(), sharp(b).metadata()]);
   const w = Math.min(ma.width, mb.width), h = Math.min(ma.height, mb.height);
   const [ra, rb] = await Promise.all([a, b].map((f) => sharp(f).resize(w, h, { fit: "fill" }).removeAlpha().raw().toBuffer()));
   let changed = 0;
+  // The OVERLAY is `b` with every changed pixel pulled toward magenta, so a
+  // "4.2 % changed" has a WHERE: a number cannot say whether the change was
+  // the crown or the wall reflection behind it.
+  const out = overlayOut ? Buffer.from(rb) : null;
   for (let i = 0; i < ra.length; i += 3) {
-    if (Math.abs(ra[i] - rb[i]) > 24 || Math.abs(ra[i + 1] - rb[i + 1]) > 24 || Math.abs(ra[i + 2] - rb[i + 2]) > 24) changed++;
+    if (Math.abs(ra[i] - rb[i]) > 24 || Math.abs(ra[i + 1] - rb[i + 1]) > 24 || Math.abs(ra[i + 2] - rb[i + 2]) > 24) {
+      changed++;
+      if (out) { out[i] = (255 * 0.7 + rb[i] * 0.3) | 0; out[i + 1] = (rb[i + 1] * 0.3) | 0; out[i + 2] = (190 * 0.7 + rb[i + 2] * 0.3) | 0; }
+    }
   }
+  if (out) await sharp(out, { raw: { width: w, height: h, channels: 3 } }).png().toFile(overlayOut);
   return +(changed / (ra.length / 3)).toFixed(4);
+}
+
+/** A list of {a, b, labelA, labelB, key} shot pairs → Δ% + overlay each, a
+ *  three-column pair sheet (A · B · overlay), and the pairs as a record. */
+async function writePairs(pairs, file, heading) {
+  if (!pairs.length) return { sheet: null, pairs: [] };
+  const dir = join(outDir, "diff");
+  mkdirSync(dir, { recursive: true });
+  const items = [], out = [];
+  for (const p of pairs) {
+    const overlay = join(dir, `${safe(p.key)}.diff.png`);
+    const diff = await pixelDiff(p.a.png, p.b.png, overlay);
+    out.push({ key: p.key, a: p.a.png, b: p.b.png, diff, overlay });
+    items.push({ png: p.a.png, title: titleOf(p.a), sub: p.labelA });
+    items.push({ png: p.b.png, title: titleOf(p.b), sub: `${p.labelB} · Δ ${(diff * 100).toFixed(1)}% px` });
+    items.push({ png: overlay, title: "changed pixels", sub: `${p.key}` });
+    console.log(`pair ${p.key}: ${(diff * 100).toFixed(1)}% of pixels changed -> ${overlay}`);
+  }
+  const sheet = await writeSheet(items, file, heading, 3);
+  return { sheet, pairs: out };
+}
+
+/** The flat atlas art beside the lit frame. spine-station replays the real
+ *  buildAtlas into a recording context, so the flank region is exactly what
+ *  the painter drew, before the cover curved it and the tyre got in the way.
+ *  `--flat` writes one per shot (spineSide region; the crown's flank graphic
+ *  when the design names no side) and a two-column sheet. */
+let _flatAtlas = null;
+async function flatArtFor(shot, dir) {
+  if (!_flatAtlas) _flatAtlas = loadAtlas();
+  const d = shot.design || {};
+  const fields = {};
+  for (const [k, v] of Object.entries(d)) {
+    if (k === "name" || k === "driver" || k.startsWith("part.") || k.startsWith("light.")) continue;
+    fields[k] = /^#[0-9a-fA-F]{6}$/.test(String(v))
+      ? [parseInt(v.slice(1, 3), 16) / 255, parseInt(v.slice(3, 5), 16) / 255, parseInt(v.slice(5, 7), 16) / 255]
+      : v;
+  }
+  const side = d.spineSide || "none";
+  const sw = spineSweep(_flatAtlas, { team: shot.team, logo: d.spineLogo || null, sides: [side], fields, livery: shot.livery || null });
+  const sample = side === "none" ? sw.base : (sw.rows[0] && sw.rows[0].sample);
+  if (!sample) return null;
+  const file = join(dir, `${safe(basename(shot.png, ".png"))}.flat.png`);
+  await writeFlatPng(sample, file, 3);
+  return file;
 }
 
 /** Rows = car (team · design · viewport), columns = camera. A product of axes
@@ -880,29 +1105,86 @@ function shotName(fields) {
 
 /** Cut a frame to `--crop` (fractions) in place — after the render gate, which
  *  scores the whole canvas, and before the label bar. */
-async function cropPng(png) {
-  if (!crop) return;
+async function cropPng(png, box = crop) {
+  if (!box) return;
   const meta = await sharp(png).metadata();
-  const left = Math.round(crop[0] * meta.width), top = Math.round(crop[1] * meta.height);
-  const width = Math.max(8, Math.min(meta.width - left, Math.round(crop[2] * meta.width)));
-  const height = Math.max(8, Math.min(meta.height - top, Math.round(crop[3] * meta.height)));
+  const left = Math.round(box[0] * meta.width), top = Math.round(box[1] * meta.height);
+  const width = Math.max(8, Math.min(meta.width - left, Math.round(box[2] * meta.width)));
+  const height = Math.max(8, Math.min(meta.height - top, Math.round(box[3] * meta.height)));
   const tmp = join(outDir, `.crop-${basename(png)}`);
   await sharp(png).extract({ left, top, width, height }).png().toFile(tmp);
   renameSync(tmp, png);
+}
+
+/** The `__apex.garageFrame` options for a camera record. */
+function hookOptsFor(cam) {
+  return {
+    zoom: cam.zoom, strafe: cam.strafe, dolly: cam.dolly, azNudge: cam.azNudge, elNudge: cam.elNudge,
+    az: cam.az ?? undefined, el: cam.el ?? undefined, dist: cam.dist ?? undefined,
+    target: cam.target ? cam.target.at : undefined,
+    lamp: cam.lamp === "off" ? null : (cam.lamp || undefined),
+    eye: cam.eye || undefined, look: cam.look || undefined,
+    // `--clamp=0`, an eye, or a path frame may leave the player's orbit range.
+    clamp: (noClamp || cam.clamp === false) ? false : undefined,
+  };
+}
+
+/** A camera from a SESSION command: a station / alias / view name, or an
+ *  object with any of view, cam, station, az, el, dist, target, lamp, zoom,
+ *  pan, eye, look, clamp, crop. Throws instead of exiting — the browser is up. */
+function camFromSpec(spec) {
+  const o = typeof spec === "string" ? (isAlias(spec) ? { cam: spec } : { view: spec }) : (spec || {});
+  let c;
+  if (o.cam || o.station) {
+    const name = o.cam || o.station;
+    if (!isAlias(name) && !/[,:]/.test(name)) throw new Error(`no camera "${name}" — stations: ${Object.keys(STATIONS).join(", ")}; aliases: ${Object.keys(CAM_ALIAS).join(", ")}`);
+    c = parseCam(name);
+    if (!c.view) c.view = "free";
+  } else {
+    c = { view: o.view || "free", alias: null, station: null, az: null, el: null, dist: null, target: null, lamp: null,
+          crop: null, strafe: 0, dolly: 0, zoom: 0, azNudge: 0, elNudge: 0 };
+    if (!ALL.includes(c.view)) throw new Error(`no view "${c.view}" — one of ${ALL.join(", ")}`);
+  }
+  const ang = (v) => (typeof v === "string" ? angle(v) : Number(v));
+  if (o.az != null) c.az = ang(o.az);
+  if (o.el != null) c.el = ang(o.el);
+  if (o.dist != null) c.dist = Number(o.dist);
+  if (o.target != null) c.target = parseTarget(o.target, false);
+  if (o.lamp !== undefined) c.lamp = o.lamp || "off";
+  if (Array.isArray(o.eye) && Array.isArray(o.look)) { c.eye = o.eye.map(Number); c.look = o.look.map(Number); c.clamp = false; }
+  if (o.clamp === false) c.clamp = false;
+  if (o.zoom) c.zoom = Number(o.zoom) | 0;
+  if (Array.isArray(o.pan)) { c.strafe = Number(o.pan[0]) || 0; c.dolly = Number(o.pan[1]) || 0; }
+  if (Array.isArray(o.crop) && o.crop.length === 4) c.crop = o.crop.map(Number);
+  c.key = o.key ? safe(o.key) : (c.alias ? aliasKey(parseCam(c.alias), c) : camKey(c));
+  return c;
+}
+
+/** Debounced file watching over files and directories (recursive). */
+function watchPaths(paths, onChange) {
+  let timer = null;
+  const changed = new Set();
+  for (const p of paths) {
+    try {
+      const st = statSync(p);
+      fsWatch(p, { recursive: st.isDirectory() }, (_ev, name) => {
+        changed.add(name ? join(p, String(name)) : p);
+        clearTimeout(timer);
+        timer = setTimeout(() => { const list = [...changed]; changed.clear(); onChange(list); }, 400);
+      });
+    } catch (e) {
+      console.warn(`watch: cannot watch ${p}: ${e.message}`);
+    }
+  }
 }
 
 async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
   const tSettle = Date.now();
   const view = cam.view;
   const vpCur = capOpts.vp || vp;
-  const hookOpts = {
-    zoom: cam.zoom, strafe: cam.strafe, dolly: cam.dolly, azNudge: cam.azNudge, elNudge: cam.elNudge,
-    az: cam.az ?? undefined, el: cam.el ?? undefined, dist: cam.dist ?? undefined,
-    target: cam.target ? cam.target.at : undefined,
-    lamp: cam.lamp === "off" ? null : (cam.lamp || undefined),
-  };
+  const hookOpts = hookOptsFor(cam);
   const absolute = cam.az != null || cam.el != null || cam.dist != null || view === "free"
-    || !!cam.target || !!cam.lamp;
+    || !!cam.target || !!cam.lamp || !!cam.eye;
   let framed;
   // The hook path frames in one call; the DOM path is what a player can click
   // and cannot express an absolute orbit, so any absolute camera takes the hook.
@@ -930,8 +1212,9 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
   await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
   const settleMs = ms(tSettle);
   const vpTag = `${vpCur[0]}x${vpCur[1]}`;
-  const png = join(dir, shotName({ team: teamId, tag, cam: cam.key, view, vp: vpTag, i: capOpts.index ?? 0, dpr: capOpts.dpr || 1,
-    az: cam.az != null ? degs(cam.az) : "", el: cam.el != null ? degs(cam.el) : "", dist: cam.dist ?? "" }));
+  const png = join(dir, capOpts.name ? `${safe(capOpts.name)}.png`
+    : shotName({ team: teamId, tag, cam: cam.key, view, vp: vpTag, i: capOpts.index ?? 0, dpr: capOpts.dpr || 1,
+      az: cam.az != null ? degs(cam.az) : "", el: cam.el != null ? degs(cam.el) : "", dist: cam.dist ?? "" }));
   let gate = null, capMs = 0, gateMs = 0, tries = 0;
   for (let attempt = 0; attempt < gateRetries; attempt++) {
     tries++;
@@ -946,7 +1229,8 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
     gate = await bayRendered(png, vpCur[0]);
     gateMs += ms(tGate);
     if (gate.ok) {
-      await cropPng(png);
+      // `--crop` beats a station's own crop: the user named the region.
+      await cropPng(png, cropOff ? null : (crop || cam.crop || null));
       // READ THE CAMERA BACK AFTER THE SETTLE, never the value garageFrame
       // returned. `garageCam().effDist` is published by the LAST RENDERED
       // FRAME, so a read taken inside the framing call reports the previous
@@ -1247,10 +1531,262 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
   }
 }
 
+/** `--serve`: one browser, one garage, commands on stdin as JSON lines, one
+ *  JSON line back per command. A command is an object and may combine steps,
+ *  applied in this order: team (+seat) → livery | design (+base) → frame →
+ *  shot → diff → sheet → reload → status → quit. Each result echoes `id`. */
+async function serveSession(browser, gameUrl) {
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: vp[0], height: vp[1] });
+  await installProbeInit(page, { backend: "webgl2", team: teamIndex(teams[0]) });
+  const tBoot = Date.now();
+  await gotoGame(page, gameUrl, 120000);
+  await page.evaluate(({ t, liv }) => { GameStore.store.set("livery." + t, liv); }, { t: teams[0], liv: liveries[0] });
+  await openGarage(page, { team: teams[0] });
+  const st = { team: teams[0], tag: liveries[0], name: liveries[0], livery: liveries[0], design: null, base: null,
+               cam: cams[0] || null, shots: [], n: 0 };
+  const out = (o) => process.stdout.write(JSON.stringify(o) + "\n");
+  const cameraNow = () => page.evaluate(() => window.__apex.garageCam());
+  const reapply = async () => {
+    await switchTeam(page, st.team);
+    if (st.design) await applyDesign(page, st.team, st.design, st.base);
+    else await applyLivery(page, st.team, st.livery);
+  };
+  const reload = async () => {
+    // The static server serves js/ from the working tree, so a reload IS the
+    // edited painter; the garage, team, paint and camera are put back after.
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 120000 });
+    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 200, timeout: 120000 });
+    await openGarage(page, { team: st.team });
+    await reapply();
+  };
+  const pngOf = (name) => {
+    if (existsSync(String(name))) return String(name);
+    const hit = st.shots.find((s) => basename(s.png, ".png") === name);
+    return hit ? hit.png : join(outDir, `${safe(name)}.png`);
+  };
+  const run = async (cmd) => {
+    const r = {};
+    if (cmd.team) {
+      const sw = await switchTeam(page, cmd.team);
+      st.team = cmd.team; r.team = cmd.team; r.switched = sw.switched;
+      if (cmd.seat != null) {
+        const got = await page.evaluate(({ t, seat }) => window.__apex.garageTeam(t, seat), { t: cmd.team, seat: Number(cmd.seat) });
+        if (!got.ok) throw new Error(`seat ${cmd.seat}: ${got.error || "refused"}`);
+        if (got.switched) await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
+        r.seat = got.seat;
+      }
+    }
+    if (cmd.livery) {
+      st.name = await applyLivery(page, st.team, String(cmd.livery));
+      st.tag = st.livery = String(cmd.livery); st.design = null; st.base = null;
+      r.livery = st.livery;
+    }
+    if (cmd.design && typeof cmd.design === "object") {
+      const got = await applyDesign(page, st.team, cmd.design, cmd.base || null);
+      st.tag = got.tag; st.name = got.name; st.design = cmd.design; st.base = cmd.base || null;
+      r.design = got.name;
+    }
+    if (cmd.frame) {
+      st.cam = camFromSpec(cmd.frame);
+      const framed = await page.evaluate(({ v, o }) => window.__apex.garageFrame(v, o), { v: st.cam.view, o: hookOptsFor(st.cam) });
+      if (!framed.ok) throw new Error(`frame: ${framed.error || "failed"}`);
+      await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
+      r.cam = st.cam.key; r.camera = await cameraNow();
+    }
+    if (cmd.shot) {
+      if (!st.cam) throw new Error("no camera — send a frame first");
+      const s = await frame(page, st.team, st.tag, st.cam, outDir, {
+        gameVisible: st.n > 0, index: st.n++, design: st.design,
+        name: typeof cmd.shot === "string" ? cmd.shot : null,
+      });
+      s.team = st.team; s.name = st.name;
+      if (st.design) s.design = st.design; else s.livery = st.livery;
+      if (doLabel) await labelPng(s.png, titleOf(s), subOf(s));
+      st.shots.push(s);
+      r.shot = s;
+    }
+    if (Array.isArray(cmd.diff) && cmd.diff.length === 2) {
+      const [a, b] = cmd.diff.map(pngOf);
+      mkdirSync(join(outDir, "diff"), { recursive: true });
+      const overlay = join(outDir, "diff", `${safe(basename(a, ".png"))}__${safe(basename(b, ".png"))}.diff.png`);
+      r.diff = await pixelDiff(a, b, overlay);
+      if (r.diff == null) throw new Error(`diff: missing ${existsSync(a) ? b : a}`);
+      r.overlay = overlay;
+    }
+    if (cmd.sheet) {
+      const file = join(outDir, typeof cmd.sheet === "string" ? `${safe(cmd.sheet)}.png` : "sheet.png");
+      r.sheet = await writeSheet(st.shots.map((s) => ({ png: s.png, title: titleOf(s), sub: subOf(s) })), file,
+        `garage session — ${st.shots.length} shot(s)`, sheetCols || undefined);
+    }
+    if (cmd.reload) { await reload(); r.reloaded = true; }
+    if (cmd.status || Object.keys(cmd).every((k) => k === "id")) {
+      r.status = { team: st.team, tag: st.tag, livery: st.livery, design: st.design, base: st.base,
+                   cam: st.cam ? st.cam.key : null, shots: st.shots.length, out: outDir, camera: await cameraNow() };
+    }
+    return r;
+  };
+  // One thing at a time: stdin commands and watch events share a queue so a
+  // reload never lands mid-shot.
+  let chain = Promise.resolve();
+  const enqueue = (fn) => { chain = chain.then(fn, fn); return chain; };
+  if (watchList.length) {
+    watchPaths(watchList, (files) => enqueue(async () => {
+      const t = Date.now();
+      try {
+        await reload();
+        const r = st.cam && st.shots.length ? await run({ shot: true }) : {};
+        out({ event: "watch", files, ms: ms(t), ...r, ok: true });
+      } catch (e) { out({ event: "watch", files, ok: false, error: String((e && e.message) || e) }); }
+    }));
+  }
+  out({ ok: true, ready: true, team: st.team, livery: st.livery, cams: cams.map((c) => c.key), cam: st.cam ? st.cam.key : null,
+        stations: Object.keys(STATIONS), out: outDir, bootMs: ms(tBoot), watch: watchList });
+  await new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+    rl.on("line", (line) => {
+      if (!line.trim()) return;
+      enqueue(async () => {
+        let cmd;
+        try { cmd = JSON.parse(line); } catch { out({ ok: false, error: "bad_json", line: line.slice(0, 120) }); return; }
+        if (!cmd || typeof cmd !== "object") { out({ ok: false, error: "bad_command" }); return; }
+        if (cmd.quit) { out({ id: cmd.id, ok: true, quit: true, shots: st.shots.length }); rl.close(); return; }
+        const t = Date.now();
+        try { const r = await run(cmd); out({ id: cmd.id, ok: true, ms: ms(t), ...r }); }
+        catch (e) { out({ id: cmd.id, ok: false, error: String((e && e.message) || e) }); }
+      });
+    });
+    rl.on("close", () => enqueue(async () => resolve()));
+  });
+  await page.close().catch(() => {});
+  return st.shots;
+}
+
 const capMs = (s) => s.ms.settle + s.ms.capture + s.ms.gate;
 const titleOf = (s) => `${s.team} · ${s.name} · ${s.cam || s.view}${vps.length > 1 ? ` · ${s.vp}` : ""}`;
 const subOf = (s) => `az ${s.az} el ${s.el} dist ${s.dist}${s.occl != null ? ` · occl ${s.occl}%` : ""}`
   + `${s.baselineDiff != null ? ` · Δbase ${(s.baselineDiff * 100).toFixed(1)}%` : ""} · spread ${s.spread} · ${(capMs(s) / 1000).toFixed(1)}s`;
+
+/** Everything after the frames land: rollup, pairs, flat art, labels, sheets,
+ *  the JSON sidecar and the summary — factored so `--watch` can run it again
+ *  after every re-shoot. */
+async function finishRun(A, B, ctx) {
+  const { rollupEntries, resumeSet, metaPath, liveBuild, load, t0, inert = [] } = ctx;
+  const shots = A.shots.concat(B ? B.shots : []);
+  let mergedRollup = rollupEntries;
+  if (rollupEntries) {
+    let priorRollup = [];
+    if (resumeSet.size && existsSync(metaPath)) {
+      try { priorRollup = JSON.parse(readFileSync(metaPath, "utf8")).rollupEntries || []; } catch (_) {}
+    }
+    mergedRollup = [
+      ...priorRollup.filter((e) => !rollupEntries.some((n) => n.teamId === e.teamId)),
+      ...rollupEntries,
+    ];
+  }
+  let teamRollup = null;
+  if (mergedRollup && mergedRollup.length) {
+    teamRollup = await buildTeamRollup(mergedRollup, {
+      surveyName: surveyTag(), liveBuild, view: rollupView,
+    });
+    console.log(`rollup (${mergedRollup.length} teams, ${rollupView}) -> ${teamRollup}`);
+  }
+  // PAIRS are scored before the caption bars go on: a bar that says
+  // "BEFORE" on one frame and "AFTER" on the other is not a change to the car.
+  const sheets = [], pairRecords = [];
+  if (B) {
+    // Pair sheet: the same cell twice, ref on the left, tree on the right,
+    // so the eye compares neighbours instead of scrolling between folders.
+    const key = (s) => `${s.team}|${s.tag}|${s.cam || s.view}`;
+    const byKey = new Map(B.shots.map((s) => [key(s), s]));
+    const pairs = [];
+    for (const a of A.shots) {
+      const b = byKey.get(key(a));
+      if (b) pairs.push({ a: b, b: a, key: key(a), labelA: `BEFORE — ${againstRef}`, labelB: "AFTER — working tree" });
+    }
+    const r = await writePairs(pairs, join(outDir, "pairs-sheet.png"),
+      `garage A/B — ${againstRef} (left) vs the working tree (right) · changed pixels`);
+    for (const p of r.pairs) { const a = A.shots.find((s) => s.png === p.b); if (a) a.diff = p.diff; }
+    if (r.sheet) sheets.push(r.sheet);
+    pairRecords.push(...r.pairs);
+  }
+  if (pairAxis) {
+    // Design pairs: the same car and camera, the pair field's first value on
+    // the left and each other value on the right, everything else equal.
+    const rest = (s) => JSON.stringify(Object.entries(s.design || {}).filter(([k]) => k !== pairAxis.field).sort());
+    const cell = (s) => `${s.team}|${s.cam}|${s.vp}|${s.dpr}|${rest(s)}`;
+    const base = new Map(A.shots.filter((s) => s.design && String(s.design[pairAxis.field]) === pairAxis.values[0]).map((s) => [cell(s), s]));
+    const pairs = [];
+    for (const b of A.shots) {
+      if (!b.design || String(b.design[pairAxis.field]) === pairAxis.values[0]) continue;
+      const a = base.get(cell(b));
+      if (a) pairs.push({ a, b, key: `${b.team}_${b.cam}_${pairAxis.field}-${pairAxis.values[0]}-vs-${b.design[pairAxis.field]}`,
+                          labelA: `${pairAxis.field}=${pairAxis.values[0]}`, labelB: `${pairAxis.field}=${b.design[pairAxis.field]}` });
+    }
+    const r = await writePairs(pairs, join(outDir, "design-pairs.png"),
+      `garage — ${pairAxis.field}: ${pairAxis.values[0]} (left) vs ${pairAxis.values.slice(1).join(" / ")} (right) · changed pixels`);
+    if (r.sheet) sheets.push(r.sheet);
+    pairRecords.push(...r.pairs);
+  }
+  if (argvHas("--flat")) {
+    const dir = join(outDir, "flat");
+    mkdirSync(dir, { recursive: true });
+    const items = [];
+    for (const s of A.shots) {
+      const f = await flatArtFor(s, dir).catch((e) => { console.warn(`flat ${s.team}/${s.name}: ${e.message}`); return null; });
+      if (!f) continue;
+      s.flat = f;
+      items.push({ png: f, title: `${s.team} · ${s.name} · flat atlas (flank region)`, sub: "spine-station replay, ×3" });
+      items.push({ png: s.png, title: titleOf(s), sub: subOf(s) });
+    }
+    const f = await writeSheet(items, join(outDir, "flat-sheet.png"), "flat art (left) vs the lit garage frame (right)", 2);
+    if (f) sheets.push(f);
+  }
+  if (doLabel) {
+    await Promise.all(shots.map((s) =>
+      labelPng(s.png, `${titleOf(s)}${s.side ? `  [${s.side === "before" ? againstRef : "working tree"}]` : ""}`, subOf(s))));
+  }
+  if (doSheet) {
+    const f = await writeSheet(A.shots.map((s) => ({ png: s.png, title: titleOf(s), sub: subOf(s) })),
+      join(outDir, "sheet.png"),
+      `garage — ${teams.join(",")} · ${views.join(",")}${againstRef ? " (working tree)" : ""}`,
+      sheetCols || undefined);
+    if (f) sheets.push(f);
+    const mx = await writeMatrixSheet(A.shots, join(outDir, "matrix.png"));
+    if (mx) sheets.push(mx);
+    if (pathFrames.length) {
+      // The dolly as ONE ROW, in shot order — the strip is the deliverable.
+      const strip = A.shots.filter((s) => cams.find((c) => c.key === s.cam && c.path));
+      const p = await writeSheet(strip.map((s) => ({ png: s.png, title: `${s.team} · ${s.cam}`, sub: subOf(s) })),
+        join(outDir, "path-strip.png"), `garage dolly — ${pathFrames.length} frame(s)`, Math.min(strip.length, 8));
+      if (p) sheets.push(p);
+    }
+  }
+
+  const seconds = +((Date.now() - t0) / 1000).toFixed(1);
+  const meta = metaPath;
+  const record = {
+    teams, liveries, base: baseLivery, axes, designs, against: againstRef, preset: presetRaw || null,
+    fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle, live: doLive, liveBuild,
+    liverySettle, viewSettle, gateRetries,
+    zoom: zoomList, pan: panList, cams, crop, name: nameTpl || null,
+    logos: logosMode || null, site: doSite, inert, dprs, bases: baseList,
+    lamps: lampList, targets: targetList.map((t) => t.name), baseline: baselineDir, budget: budgetSec || null,
+    sheetHead: A.sheetHead, viewport: vp, viewports: vps, views,
+    loadavg1: load, phase: { after: A.phase, before: B ? B.phase : null },
+    sheets, shots, rollupEntries: mergedRollup, teamRollup,
+    pairs: pairRecords, pairAxis, path: pathFrames.length || null, eyes: eyeList.length || null, clamp: !noClamp,
+    resumed: resumeSet.size ? [...resumeSet] : null, seconds,
+  };
+  writeFileSync(meta, JSON.stringify(record, null, 2));
+  if (doJson) console.log(JSON.stringify(record));
+  const shotMs = shots.reduce((n, s) => n + capMs(s), 0);
+  console.log(`wrote ${shots.length} angle(s) in ${seconds}s`
+    + `  [boot ${A.phase.boot}ms open ${A.phase.open}ms · shots ${(shotMs / 1000).toFixed(1)}s`
+    + ` = ${(shotMs / 1000 / Math.max(1, shots.length)).toFixed(1)}s each · loadavg ${load ?? "?"}]`);
+  for (const s of sheets) console.log(`sheet: ${s}`);
+  console.log(`${meta}  [sheet: ${A.sheetHead}]`);
+}
 
 async function main() {
   if (argvHas("--reset") && existsSync(outDir)) {
@@ -1273,10 +1809,14 @@ async function main() {
     console.log(JSON.stringify({
       teams, liveries, base: baseLivery, axes, designs, views, cams, viewports: vps,
       preset: presetRaw || null, crop, name: nameTpl || null, logos: logosMode || null,
+      stations: [...new Set(cams.map((c) => c.station).filter(Boolean))],
+      stationsFrom: autoStations.length ? fieldStations : null,
       inert: inert.map((i) => ({ field: i.field, design: i.design, why: i.why })),
       fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle,
       liverySettle, viewSettle, gateRetries, zoom: zoomList, pan: panList,
       shotCount, against: againstRef, dprs, bases: baseList, lamps: lampList, targets: targetList.map((t) => t.name),
+      pair: pairAxis, path: pathFrames.length || null, pathSteps: pathFrames.length ? pathSteps : null,
+      eyes: eyeList, looks: lookList, clamp: !noClamp,
       baseline: baselineDir, budget: budgetSec || null,
       estSeconds, overBudget: !!(budgetSec && estSeconds > budgetSec),
     }, null, 2));
@@ -1284,6 +1824,10 @@ async function main() {
   }
   for (const i of inert) {
     console.warn(`WARNING ${i.field} paints NOTHING on ${JSON.stringify(i.design)} — ${i.why}`);
+  }
+  if (autoStations.length) {
+    console.log(`stations: ${fieldStations.map((o) => `${o.station} (${o.fields.join(", ")})`).join(", ")}`
+      + " — from the design fields; --views / --cam / --station override");
   }
   if (dprs.some((d) => d > 1)) {
     // Measured 2026-09-10 on SwiftShader: at DPR 2 a team switch took 59.7 s
@@ -1345,11 +1889,16 @@ async function main() {
   });
   const rollupEntries = multiTeam && rollupOnly ? [] : null;
   try {
+    if (doServe) {
+      console.error(`serve: garage open for ${teams[0]} — JSON lines on stdin ({"frame":"spineTop","shot":"a"}), {"quit":true} to end`);
+      await serveSession(browser, gameUrl);
+      return;
+    }
     const afterDir = againstRef ? join(outDir, "after") : outDir;
     // One browser, one context per DPR: a scale factor is fixed at context
     // creation, so each value re-boots the garage once and reuses everything else.
     const A = await walk(browser, gameUrl, afterDir, againstRef ? "after" : null, {
-      keepPage: !!againstRef, rollupEntries, resumeSet, workTeams, dpr: dprs[0],
+      keepPage: !!againstRef || watchList.length > 0, rollupEntries, resumeSet, workTeams, dpr: dprs[0],
       context: dprs[0] !== 1 ? await browser.newContext({ deviceScaleFactor: dprs[0] }) : null,
     });
     for (const dpr of dprs.slice(1)) {
@@ -1377,82 +1926,27 @@ async function main() {
       }
     }
 
-    const shots = A.shots.concat(B ? B.shots : []);
-    let mergedRollup = rollupEntries;
-    if (rollupEntries) {
-      let priorRollup = [];
-      if (resumeSet.size && existsSync(metaPath)) {
-        try { priorRollup = JSON.parse(readFileSync(metaPath, "utf8")).rollupEntries || []; } catch (_) {}
-      }
-      mergedRollup = [
-        ...priorRollup.filter((e) => !rollupEntries.some((n) => n.teamId === e.teamId)),
-        ...rollupEntries,
-      ];
-    }
-    let teamRollup = null;
-    if (mergedRollup && mergedRollup.length) {
-      teamRollup = await buildTeamRollup(mergedRollup, {
-        surveyName: surveyTag(), liveBuild, view: rollupView,
+    await finishRun(A, B, { rollupEntries, resumeSet, metaPath, liveBuild, load, t0, inert });
+    if (watchList.length) {
+      // Batch watch: keep the page, re-walk the matrix on every change, and
+      // re-run the finish so the sheets and pairs are always of the current tree.
+      if (againstRef) console.warn("--watch ignores --against after the first pass (the tree is what changes)");
+      console.log(`watch: ${watchList.join(", ")} — re-shoots ${A.shots.length} frame(s) on change; Ctrl-C to stop`);
+      let chain = Promise.resolve();
+      await new Promise((resolve) => {
+        process.once("SIGINT", () => chain.then(resolve, resolve));
+        watchPaths(watchList, (files) => { chain = chain.then(async () => {
+          const t = Date.now();
+          console.log(`watch: ${files.join(", ")} changed — re-shooting`);
+          try {
+            const R = await walk(browser, gameUrl, afterDir, null, { page: A.page, keepPage: true, rollupEntries: rollupEntries ? [] : null, resumeSet: new Set(), workTeams, dpr: dprs[0] });
+            A.shots = R.shots; A.phase = R.phase; A.page = R.page;
+            await finishRun(A, null, { rollupEntries: R.rollupEntries, resumeSet: new Set(), metaPath, liveBuild, load, t0: t, inert });
+          } catch (e) { console.error(`watch: re-shoot failed: ${e.message}`); }
+        }, () => {}); });
       });
-      console.log(`rollup (${mergedRollup.length} teams, ${rollupView}) -> ${teamRollup}`);
+      await A.page?.close().catch(() => {});
     }
-    if (doLabel) {
-      await Promise.all(shots.map((s) =>
-        labelPng(s.png, `${titleOf(s)}${s.side ? `  [${s.side === "before" ? againstRef : "working tree"}]` : ""}`, subOf(s))));
-    }
-    const sheets = [];
-    if (doSheet) {
-      if (B) {
-        // Pair sheet: the same cell twice, ref on the left, tree on the right,
-        // so the eye compares neighbours instead of scrolling between folders.
-        const key = (s) => `${s.team}|${s.tag}|${s.view}`;
-        const byKey = new Map(B.shots.map((s) => [key(s), s]));
-        const items = [];
-        for (const a of A.shots) {
-          const b = byKey.get(key(a));
-          if (!b) continue;
-          // The pair as a NUMBER too: the changed-pixel fraction between the ref
-          // and the tree, so "did this change the car" is not only eyeballed.
-          a.diff = await pixelDiff(b.png, a.png);
-          items.push({ png: b.png, title: `${titleOf(b)}`, sub: `BEFORE — ${againstRef}` });
-          items.push({ png: a.png, title: `${titleOf(a)}`, sub: `AFTER — working tree · Δ ${(a.diff * 100).toFixed(1)}% px` });
-          console.log(`pair ${key(a)}: ${(a.diff * 100).toFixed(1)}% of pixels changed`);
-        }
-        const f = await writeSheet(items, join(outDir, "pairs-sheet.png"),
-          `garage A/B — ${againstRef} (left) vs the working tree (right)`, 2);
-        if (f) sheets.push(f);
-      }
-      const f = await writeSheet(A.shots.map((s) => ({ png: s.png, title: titleOf(s), sub: subOf(s) })),
-        join(outDir, "sheet.png"),
-        `garage — ${teams.join(",")} · ${views.join(",")}${againstRef ? " (working tree)" : ""}`,
-        sheetCols || undefined);
-      if (f) sheets.push(f);
-      const mx = await writeMatrixSheet(A.shots, join(outDir, "matrix.png"));
-      if (mx) sheets.push(mx);
-    }
-
-    const seconds = +((Date.now() - t0) / 1000).toFixed(1);
-    const meta = metaPath;
-    const record = {
-      teams, liveries, base: baseLivery, axes, designs, against: againstRef, preset: presetRaw || null,
-      fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle, live: doLive, liveBuild,
-      liverySettle, viewSettle, gateRetries,
-      zoom: zoomList, pan: panList, cams, crop, name: nameTpl || null,
-      logos: logosMode || null, site: doSite, inert, dprs, bases: baseList,
-      lamps: lampList, targets: targetList.map((t) => t.name), baseline: baselineDir, budget: budgetSec || null,
-      sheetHead: A.sheetHead, viewport: vp, viewports: vps, views,
-      loadavg1: load, phase: { after: A.phase, before: B ? B.phase : null },
-      sheets, shots, rollupEntries: mergedRollup, teamRollup,
-      resumed: resumeSet.size ? [...resumeSet] : null, seconds,
-    };
-    writeFileSync(meta, JSON.stringify(record, null, 2));
-    if (doJson) console.log(JSON.stringify(record));
-    const shotMs = shots.reduce((n, s) => n + capMs(s), 0);
-    console.log(`wrote ${shots.length} angle(s) in ${seconds}s`
-      + `  [boot ${A.phase.boot}ms open ${A.phase.open}ms · shots ${(shotMs / 1000).toFixed(1)}s`
-      + ` = ${(shotMs / 1000 / Math.max(1, shots.length)).toFixed(1)}s each · loadavg ${load ?? "?"}]`);
-    for (const s of sheets) console.log(`sheet: ${s}`);
-    console.log(`${meta}  [sheet: ${A.sheetHead}]`);
   } finally {
     await browser.close();
     for (const s of servers) await s.close().catch(() => {});

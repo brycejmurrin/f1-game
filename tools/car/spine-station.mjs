@@ -137,7 +137,7 @@ export function station(base, design, frontLeft, hiddenAt) {
 }
 
 /** Region sample → PNG, upscaled nearest so a 300 px band is readable. */
-async function writePng(s, file, scale) {
+export async function writePng(s, file, scale) {
   const buf = Buffer.alloc(s.w * s.h * 3);
   for (let i = 0; i < s.w * s.h * 3; i++) buf[i] = Math.round(Math.max(0, Math.min(1, s.rgb[i])) * 255);
   await sharp(buf, { raw: { width: s.w, height: s.h, channels: 3 } })
@@ -155,10 +155,14 @@ async function writePng(s, file, scale) {
 const alphaOf = (s) => { const m = /rgba\([^)]*,\s*([\d.]+)\)/.exec(s || ""); return m ? +m[1] : 1; };
 const markOps = (ops) => ops.filter((o) => alphaOf(o.style) >= 1);
 
-export function sweep(A, { team, logo, sides, grid = GRID, hiddenAt = null }) {
+export function sweep(A, { team, logo, sides, grid = GRID, hiddenAt = null, fields = null, livery = null }) {
   const t = A.Teams.LIST.find((x) => x.id === team);
   if (!t) throw new Error(`no team "${team}" (have ${A.Teams.LIST.map((x) => x.id).join(",")})`);
-  const liv = A.Liveries.forTeam(t)[0];
+  // `livery` names a catalog paint job to sweep instead of the team default;
+  // `fields` are extra livery fields (a garage-angles design) painted on top —
+  // the flat art then matches the lit frame the tool shot, tint rows included.
+  const list = A.Liveries.forTeam(t);
+  const liv = Object.assign({}, (livery && list.find((l) => l.id === livery)) || list[0], fields || {});
   const spineLogo = logo || liv.spineLogo;
   const R = A.LT.REGIONS.spineSide;
   const cover = liv.cover || liv.c1 || [0.1, 0.1, 0.12];

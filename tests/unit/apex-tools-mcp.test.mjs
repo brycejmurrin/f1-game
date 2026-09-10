@@ -157,6 +157,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_agent",
     "apex_bump_cache_check",
     "apex_eval",
+    "apex_garage",
     "apex_graph_parity",
     "apex_pick_tests",
     "apex_rotate_markings_check",
@@ -359,6 +360,30 @@ test("apex_select_specs without since → bad_args", () => {
   assert.equal(r.status, 1, r.stderr);
   const body = JSON.parse(r.stdout);
   assert.equal(body.error, "bad_args");
+});
+
+test("apex_garage: open spawns garage-angles --serve; ops refuse until open; call ends the session", () => {
+  // The one wrap that is a SESSION: open boots one browser and every later op
+  // is a JSON line to it. dryRun shows the argv (open) or the command (an op);
+  // an op with no session is a refusal, not a boot; mock mode never spawns.
+  const open = callCli("apex_garage", { op: "open", team: "ferrari", out: "artifacts/gs", dryRun: true });
+  assert.equal(open.status, 0, open.stderr);
+  const body = JSON.parse(open.stdout);
+  assert.ok(body.argv.some((a) => a.endsWith("garage-angles.mjs")), body.argv);
+  assert.ok(body.argv.includes("--serve") && body.argv.includes("ferrari"), body.argv);
+  assert.ok(!body.argv.includes("--url"));
+  const shot = callCli("apex_garage", { op: "shot", frame: "spineTop", design: { spineLogo: "wrap" }, name: "a", dryRun: true });
+  assert.equal(shot.status, 0, shot.stderr);
+  const cmd = JSON.parse(shot.stdout).command;
+  assert.deepEqual(cmd, { design: { spineLogo: "wrap" }, frame: "spineTop", shot: "a" }, "keys ride along, applied design → frame → shot");
+  const cold = callCli("apex_garage", { op: "shot" }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
+  assert.equal(cold.status, 1);
+  assert.equal(JSON.parse(cold.stdout).error, "garage_not_open");
+  const esc = callCli("apex_garage", { op: "open", out: "/tmp/gs", dryRun: true });
+  assert.equal(JSON.parse(esc.stdout).error, "path_escaped");
+  const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
+  assert.match(src, /garageClose\("call ended"\)/, "a one-shot call cannot keep the child alive");
+  assert.match(src, /acquireLock\("apex_garage"\)/, "the session holds the browser lock while open");
 });
 
 test("apex_shot out outside artifacts/scratch → path_escaped", () => {

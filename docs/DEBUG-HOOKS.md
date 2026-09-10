@@ -1529,6 +1529,8 @@ order, so a survey framing is a set of PARAMETERS rather than a named preset:
 | `azNudge` / `elNudge` | UI orbit clicks (`±0.18` / `±0.12` rad; aliases `nudgeAz` / `nudgeEl`) |
 | `zoom` / `strafe` / `dolly` | click counts (positive zoom = in, strafe = right, dolly = forward) |
 | `pan` | `[strafe, dolly]` in metres of the screen frame |
+| `eye` + `look` | `[x, y, z]` each, car space: place the EYE itself and look at a point — turned into the same orbit terms (az = atan2(dx, dz), el = asin(dy / d), dist = d, target = look), and implies `clamp: false` |
+| `clamp` | `false` lifts the player's floors for this framing — el may go below 0 (under the target, looking up) and dist below the view's `minDist` (down to 0.3 m); the next preset restores the player's range (`setSetupFree`) |
 
 Returns `garageCam()` after framing — but `effDist` is published by the last
 RENDERED frame, so a caller that wants the camera it just set must step or
