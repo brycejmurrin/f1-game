@@ -46,8 +46,8 @@ Eighteen parallel read-only bloat-auditor runs (see agent IDs in scratch matrix)
 | ✅ | Remove `AiDrive.racingLineMix` | ai-drive.js | **Done** (`91d23591`) |
 | ✅ | **quali-net** (js/race/quali-net.js) | game.js (~130 ln) | **Done** (PR #102) |
 | ✅ | **shared frustum helper** (js/render/shared/frustum.js) | 4 render copies | **Done** (this PR) |
-| 1 | save-migrate | store.js | **NEXT** |
-| 4 | race-settings + custom-team | game.js | Planned |
+| ✅ | save-migrate | store.js | **Done** (PR #108) |
+| ✅ | race-settings + custom-team | game.js | **Done** (this PR) |
 | 5 | res-row UI helper | duplicated row builders | Planned |
 | 6 | lobby-codes | lobby.js (~230 ln) | Planned |
 | 7 | car-aero | car3d.js (~520 ln) | Planned |
