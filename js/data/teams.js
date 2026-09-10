@@ -41,9 +41,10 @@ const Teams = (function () {
     {
       id: "ferrari", name: "Scuderia Ferrari HP", short: "FER",
       color: [0.863, 0.0, 0.0], color2: [1.0, 1.0, 1.0],           /* red #DC0000 / white */
-      /* The SF-26 runs a WHITE engine cover over the red car — the strongest
-         zone split on the 2026 grid, and the reason the cover colour exists. */
-      livery: { cover: [0.95, 0.95, 0.96], finShape: "none", spineHeight: "dorsal",
+      /* The SF-26's white engine-cover TOP is a SADDLE ZONE on the red body —
+         cover stays body red; saddleTint + saddleWrap paint the white block
+         (crown + flanks). Same split as the launch photos, expressed as zones. */
+      livery: { cover: [0.863, 0.0, 0.0], finShape: "none", spineHeight: "dorsal",
                 spineLogo: "cap", spineSide: "shoulder", coverBind: "saddleWrap", finHandoff: "contrast",
                 saddleTint: [0.95, 0.95, 0.96], fin: [0.863, 0.0, 0.0] },
       engine: "Ferrari", tier: 1,
@@ -142,8 +143,7 @@ const Teams = (function () {
          Spine zones bind: cap + rake, independent bind, red saddle/spine tints. */
       livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "cap", spineSide: "rake",
                 coverBind: "independent", cover: [0.075, 0.078, 0.085],
-                saddleTint: [0.98, 0.28, 0.05], spineTint: [0.98, 0.28, 0.05],
-                ridgeTint: [0.04, 0.04, 0.05] },
+                saddleTint: [0.98, 0.28, 0.05], spineTint: [0.98, 0.28, 0.05] },
       engine: "Audi", tier: 4,
       stats: { speed: 76, accel: 74, cornering: 75, braking: 73 },
       drivers: [
