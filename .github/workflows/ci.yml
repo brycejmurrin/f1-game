@@ -209,38 +209,38 @@ on:
 permissions:
   contents: read
 
-# CANCEL ONLY PULL-REQUEST RUNS. This said `cancel-in-progress: true` for every
-# event, and the result was that FIFTEEN CONSECUTIVE RUNS ENDED "cancelled" and
-# the gate never once completed — a branch under active work gets a push every
-# few minutes, and each one killed the run before it could report.
+# ONE GATE PER BRANCH HEAD, NEWEST WINS (2026-09-10). A push to a branch with an
+# open PR used to start TWO full runs of identical work — the `push` event on
+# refs/heads/<branch> and the `pull_request` event on refs/pull/N/merge landed
+# in different groups, so neither cancelled the other. Measured on the last
+# assets change: 58.5 + 47.4 job-minutes for one commit. The group is keyed on
+# the BRANCH NAME for both events (pull_request.head.ref is the same string
+# github.ref_name is on the push), so the PR run, which arrives seconds later
+# and tests the merge commit, cancels the push run; a later push cancels both.
 #
-# It also broke the deploy, which is the part that matters. pages.yml calls this
-# workflow and has `needs: ci`, so when a push cancelled the in-flight ci job the
-# whole Pages run went down with it: the first gated deploy came back
-# "cancelled" where the previous ungated one had been "success". A gate that
-# blocks the thing it is meant to protect is worse than no gate.
-#
-# On a pull request, superseding an obsolete run is right — the new commit is
-# what matters and the minutes are wasted. Direct pushes retain the branch group.
-# A Pages caller supplies its run id, giving every deploy gate a unique group;
-# otherwise GitHub's one-pending-job concurrency rule silently cancels an older
-# queued deployment when the next push arrives.
+# cancel-in-progress on pushes is the newest-wins rule pages.yml now runs on
+# too. The 2026-08 objection to it — "fifteen consecutive runs ended cancelled
+# and the gate never once completed" — describes a branch pushed every few
+# minutes for an hour, where the LAST push's run does complete once the pushes
+# pause; what it never did was report on a commit nobody still cared about.
+# The deploy path is unaffected: a Pages caller supplies its run id, so every
+# deploy gate has its own group and is cancelled only by pages.yml's own
+# per-branch rule.
 concurrency:
   # A dispatched run gets its own group: it shares the ref with every push,
-  # and the cancel-in-progress below killed the first dispatched `ui` group
-  # 30 s in when the next docs commit landed (run 2211, 2026-09-02).
+  # and cancellation killed the first dispatched `ui` group 30 s in when the
+  # next docs commit landed (run 2211, 2026-09-02).
   #
   # THE NIGHTLY NEEDED THE SAME AND DID NOT HAVE IT. `schedule` fell through to
   # `github.ref`, so it shared a group with every push to the deploy branch —
   # and cancel-in-progress being false does not save it: GitHub keeps only ONE
   # pending run per group and silently cancels the older one when the next
-  # arrives, which is the hazard the pages.yml `concurrency_key` comment
-  # already describes for deploys. On a branch that takes a push every few
-  # minutes the 08:00 nightly is queued behind exactly that. Run 2758
-  # (2026-09-08) ended `cancelled` at 20 min with no job over its cap and
-  # nothing failing, which is the shape this produces.
-  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # arrives. On a branch that takes a push every few minutes the 08:00 nightly
+  # is queued behind exactly that. Run 2758 (2026-09-08) ended `cancelled` at
+  # 20 min with no job over its cap and nothing failing, which is the shape
+  # this produces.
+  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
   guards:
@@ -348,8 +348,10 @@ jobs:
     # One subtest of parts-visual-distinctness ("every option resolves to
     # itself") measured 559 s of the 999 s sweeps run on 2026-09-01. Its own
     # runner, unconditional and in parallel, so the geometry sweeps finish in
-    # ~7 min and this never blocks them. 20 = 2x the measured 9.5 min.
-    timeout-minutes: 20
+    # ~7 min and this never blocks them. The census now runs its categories
+    # across worker threads over an integer-keyed grid: 71 s on four cores
+    # (2026-09-10, byte-identical rows). 10 = well over 2x that, plus setup.
+    timeout-minutes: 10
     env:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
@@ -912,7 +914,7 @@ jobs:
     timeout-minutes: 5
     # NOT IN THE DEPLOY GATE — a decision, not an omission. pages.yml reaches
     # this file through `ci: uses: ./.github/workflows/ci.yml` and then
-    # `current-tip: needs: ci`, so the called workflow's conclusion is the
+    # `publishable: needs: ci`, so the called workflow's conclusion is the
     # AGGREGATE of every job in it: there is no `needs:` list to leave a job
     # out of, and any new job that RUNS on a Pages call joins the gate by
     # itself. The gate's whole recorded history in this header is a job that
@@ -1074,71 +1076,37 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  selected:
-    name: Selected specs (change-aware gate)
+  # THE CHANGE-AWARE GATE, in two jobs (2026-09-10): `select` plans, `selected`
+  # runs the plan as a matrix. It used to be one job that ran on branch pushes
+  # and PRs only. Three things about it were wrong, all fixed here:
+  #
+  #   1. It could drop the spec you edited. The cut was smallest-first with the
+  #      priority applied AFTER it, so a changed 10-test spec lost to smaller
+  #      routed ones. tools/ci/select-specs.mjs now fills the budget affected-
+  #      first, and an affected spec that still does not fit runs in its own
+  #      matrix shard (bounded at MAX_OVERSIZE_SHARDS; the rest named as skipped).
+  #   2. A tracked-path change (the shell, package.json, a fixture every spec
+  #      imports) EMPTIED the selection. It now narrows it to the edited and
+  #      imported specs and says so; the fixed gates own the rest.
+  #   3. It was skipped on the deploy gate (`inputs.concurrency_key == ''`).
+  #      pages.yml now publishes exactly the commit it tested, which makes
+  #      "did we test what this commit changed?" a deploy question too, so the
+  #      job runs on the Pages call as well. Pages run 2215 (2026-09-10) once
+  #      went red on this job's newContext() hang while deploying an unrelated
+  #      change; if that shape recurs the answer is a fix or an exclusion by
+  #      name in the selector, never skipping the gate again.
+  #
+  # A PR's event.before is not its comparison base, so the selector uses
+  # pull_request.base.sha; pushes (direct or via the Pages call, whose github
+  # context is the caller's push) use event.before, with HEAD~1 as the fallback.
+  select:
+    name: Select specs for this change
     runs-on: ubuntu-latest
-    # BLOCKING ON BRANCH PUSHES AND PULL REQUESTS. A PR's event.before is not its
-    # comparison base, so the selector uses pull_request.base.sha explicitly;
-    # pushes use event.before. workflow_call stays disabled: the Pages workflow
-    # already gates deploys with guards / sweeps / smoke / driving-model, and its
-    # event payload does not carry a PR base.
-    #
-    # THE EVENT NAME CANNOT SAY THAT, and for three weeks this condition did not
-    # do what the paragraph above claims. In a REUSABLE workflow the github
-    # context is the CALLER's, so `github.event_name` here reads `push` on a
-    # Pages call exactly as it does on a direct push -- it never reads
-    # "workflow_call" and there is no value of it that excludes one. So this job
-    # ran inside the deploy gate and blocked it: Pages run 2215 (2026-09-10)
-    # ended `failure` with `ci / Selected specs` as its ONLY failed job, on a
-    # newContext() hang that has nothing to do with what was being deployed. A
-    # skipped job would have reported `skipped`; `failure` is the proof it ran.
-    #
-    # `inputs` IS caller-specific, so gate on that instead. pages.yml passes
-    # concurrency_key: pages-<run_id>; a direct push or PR leaves it "" (the
-    # declared default, and `inputs` is empty for non-workflow_call events --
-    # the concurrency group below already leans on that same falsiness).
-    if: ${{ inputs.concurrency_key == '' && (github.event_name == 'push' || github.event_name == 'pull_request') }}
-    #
-    # The budget maths is tools/ci/select-budget.mjs (measured: 79.7 s/test at one
-    # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).
-    # Hence retries 0 and --timeout=180000 here — the selector's settings, not
-    # smoke's gate settings (420 s, one retry): a retry only doubles the cost
-    # of the news this job exists to deliver. The fixed smoke and driving-model
-    # specs are excluded here because their independent blocking jobs own their
-    # measured timeout policies; duplicating smoke here caused run 32103664606
-    # to turn four green 420 s shards into a false red at exactly 120 s.
-    # tools/ci/select-specs.mjs decomposes
-    # pick-tests' groups into specs, fits them to the budget surviving one
-    # timeout, and NAMES every spec it skips — silent truncation would read as
-    # "covered".
-    # 36, DERIVED, not guessed — and both 20 and 26 were wrong, for different
-    # reasons. The budget models the EXPECTED cost (one failure + nine passes at
-    # 79.7 s = ~15 min), but the TRUE worst case is every selected test hitting
-    # the per-test timeout: 10 x 180 s = 30 min, plus ~4 min of setup (npm ci +
-    # chromium) = ~34 min. At 20 the job would have been CANCELLED in that case
-    # — and this workflow's own header records that a cancelled job reads as "0
-    # failures" and once hid a dead deploy. A selected gate that dies of its own
-    # cap teaches nothing; 36 covers the worst case with margin, and the budget
-    # (not the cap) stays the thing that bounds the selection.
-    #
-    # The CAP is a ceiling for a case that essentially never happens, not the
-    # spend: a run whose tests PASS costs the same at 180 s as at 120 s, because
-    # a passing test never reaches its timeout. That is why the fix for the
-    # measurement below was the timeout and not a smaller selection — shrinking
-    # the selection would have cost coverage on every single run to save minutes
-    # only the pathological run ever spends.
-    #
-    # 120 was too tight to be a timeout at all. It bounded the MEAN test (79.7 s)
-    # but not the slowest: physics-fixes' Monaco test measures 124.2 s and
-    # albert-park-foundation 110.1 s on an IDLE box (2026-09-04), so the first
-    # failed every time the selector picked it and the second failed on any
-    # contention. The carry-forward cache below then hoisted both to the front of
-    # every later run, which made a budget defect look like a spreading
-    # regression. See tools/ci/select-specs.mjs SELECTED_GATE for the numbers.
-    #
-    # Re-derive this if the budget, the per-test timeout, or the retry count
-    # changes: cap >= (tests x per-test timeout) + setup + margin.
-    timeout-minutes: 36
+    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+    timeout-minutes: 10
+    outputs:
+      shards: ${{ steps.sel.outputs.shards }}
+      any: ${{ steps.sel.outputs.any }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1161,47 +1129,64 @@ jobs:
           key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
             selected-failed-${{ github.ref_name }}-
+      # tools/ci/ci-select-specs-step.sh: base via ci-resolve-before.sh, then
+      # select-specs.mjs --json; it fails closed on "unmatched" and writes the
+      # `shards` matrix (one budgeted shard plus one per oversize affected spec,
+      # each with its derived cap) and `any` to $GITHUB_OUTPUT.
       - name: Select specs for this change
         id: sel
         env:
           EVENT: ${{ github.event_name }}
           PUSH_BEFORE: ${{ github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -eu
-          fail() { echo "::error::SELECTED GATE FAILED CLOSED: $1"; exit 1; }
-          # Resolve comparison base with HEAD~1 fallback for force-push/first-branch.
-          BEFORE="$(EVENT="$EVENT" PUSH_BEFORE="$PUSH_BEFORE" PR_BASE="${PR_BASE:-}" \
-            bash tools/ci/ci-resolve-before.sh)" || fail "could not resolve comparison base"
-          case "${BEFORE:-}" in
-            ""|0000000000000000000000000000000000000000) fail "no valid comparison base for $EVENT" ;;
-          esac
-          git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || fail "comparison base $BEFORE is unreachable"
-          node tools/ci/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt --json > sel.json \
-            || fail "selector failed"
-          node -e '
-            const r = require("./sel.json");
-            if (r.reason === "unmatched") {
-              console.error("SELECTED GATE FAILED CLOSED: changed files matched no selection rule");
-              process.exit(1);
-            }
-            const specs = r.selected.map((s) => s.file).join(" ");
-            console.log(`reason=${r.reason}; groups: ${r.groups.join(", ") || "(none)"}`);
-            console.log(`fits ${r.testsFit} tests; selected ${r.testsSelected} across ${r.selected.length} specs`);
-            for (const s of r.overBudgetSpecs)
-              console.log(`EXCLUDED (declares ${s.ownTimeoutSec}s timeout): ${s.file} (${s.tests} tests)`);
-            for (const s of r.coveredByFixedGates)
-              console.log(`COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
-            for (const s of r.skipped) console.log(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
-            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `specs=${specs}\n`);
-          '
+        run: bash tools/ci/ci-select-specs-step.sh
+
+  selected:
+    name: Selected specs (change-aware gate)
+    needs: select
+    if: ${{ needs.select.outputs.any == 'true' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.select.outputs.shards) }}
+    # The budget maths is tools/ci/select-budget.mjs (measured: 79.7 s/test at one
+    # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).
+    # Hence retries 0 and --timeout=180000 here — the selector's settings, not
+    # smoke's gate settings (420 s, one retry): a retry only doubles the cost
+    # of the news this job exists to deliver. The fixed smoke and driving-model
+    # specs are excluded here because their independent blocking jobs own their
+    # measured timeout policies; duplicating smoke here caused run 32103664606
+    # to turn four green 420 s shards into a false red at exactly 120 s.
+    #
+    # THE CAP IS DERIVED PER SHARD by select-specs' shardTimeoutMin: every test
+    # in the shard at the per-test timeout, plus ~4 min of setup (npm ci +
+    # chromium) and margin — 36 min for the 10-test budgeted shard, more for an
+    # oversize spec billed at its own count. Both 20 and 26 were once wrong
+    # here, and this workflow's header records that a job killed by its cap
+    # reads as "0 failures" and hid a dead deploy; a gate that dies of its own
+    # cap teaches nothing. The cap is a ceiling for a case that essentially
+    # never happens, not the spend: a passing test never reaches its timeout.
+    #
+    # 120 was too tight to be a timeout at all. It bounded the MEAN test (79.7 s)
+    # but not the slowest: physics-fixes' Monaco test measures 124.2 s and
+    # albert-park-foundation 110.1 s on an IDLE box (2026-09-04), so the first
+    # failed every time the selector picked it and the second failed on any
+    # contention. See tools/ci/select-specs.mjs SELECTED_GATE for the numbers.
+    timeout-minutes: ${{ matrix.timeout }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
       - name: Install browser
-        if: steps.sel.outputs.specs != ''
         run: npx playwright install --with-deps chromium
       # STOP AT THREE, don't grind to the cap. Pages #1967 selected 32 tests,
       # failed 6 of the first 7 at the per-test timeout, and kept going until
-      # the job's cap (then 26 minutes, 36 now) killed it — so the run was CANCELLED, the whole
-      # cap was spent re-learning news it had after the first failure, and
+      # the job's cap killed it — so the run was CANCELLED, the whole cap was
+      # spent re-learning news it had after the first failure, and
       # `junit-failed.mjs` logged "no failures to carry" because a killed job
       # writes no junit. The fail-fast memory two steps below was blind to
       # exactly the failures that killed the job it lives in.
@@ -1213,20 +1198,21 @@ jobs:
       # cannot do at any timeout value.
       #
       # Three, not one: one failure cannot distinguish "this spec is broken"
-      # from "this change broke everything", and the budget below is already
-      # modelled on surviving a timeout. Three bounds the failure cost at
-      # 3 x 180 s = 9 min (the --timeout below) inside the 36-minute cap above
-      # while still showing a pattern.
-      - name: Run the selection
-        if: steps.sel.outputs.specs != ''
+      # from "this change broke everything", and the budget is already modelled
+      # on surviving a timeout. Three bounds the failure cost at 3 x 180 s =
+      # 9 min (the --timeout below) inside the shard's cap while still showing
+      # a pattern.
+      - name: Run the selection (${{ matrix.name }}, ${{ matrix.tests }} tests)
         env:
           APEX_WORKERS: 1
-        run: npm test -- ${{ steps.sel.outputs.specs }} --retries=0 --timeout=180000 --max-failures=3
+        run: npm test -- ${{ matrix.specs }} --retries=0 --timeout=180000 --max-failures=3
       # Record what failed so the NEXT run hoists it to the front. junit.xml is
       # the machine-readable half of the reporter set playwright.config already
       # writes; parsing it here keeps the tool free of CI-specific formats.
+      # The budgeted shard owns the carry-forward; an oversize shard's failure is
+      # already the loudest line in the plan.
       - name: Record failing specs for the next run
-        if: always() && steps.sel.outputs.specs != ''
+        if: always() && matrix.name == 'selected'
         # tools/ci/junit-failed.mjs, not an inline regex: Playwright writes
         # <system-out> BEFORE <failure>/<error> inside a testcase, so the
         # "testcase immediately followed by failure" regex this replaced never
@@ -1234,7 +1220,7 @@ jobs:
         # and its classname lacks the tests/ prefix the selector filters on.
         run: node tools/ci/junit-failed.mjs artifacts > .selected-failed.txt || true
       - name: Save failing specs
-        if: always() && steps.sel.outputs.specs != ''
+        if: always() && matrix.name == 'selected'
         uses: actions/cache/save@v4
         with:
           path: .selected-failed.txt
@@ -1243,7 +1229,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts-selected
+          name: playwright-artifacts-selected-${{ matrix.name }}
           path: |
             artifacts/test-results-*/
             artifacts/report-*/

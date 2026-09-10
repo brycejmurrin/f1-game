@@ -1,4 +1,3 @@
-"use strict";
 /* Apex 26 — TrackLine: the baked RACING LINE, a lateral offset per centreline
  * node, computed once at track build beside track.curv.
  *
@@ -63,6 +62,8 @@
  * agent hooks and every AI car read the same table: `TrackLine.at(track, s)`.
  */
 const TrackLine = (function () {
+  "use strict";
+
   const clamp = M4.clamp, lerp = M4.lerp;
   const K_ON = 0.006;       // rad/m (R < ~170 m) — gentler bends are flat-out kinks, not corners to apex
   const K_OFF = 0.0036;     // a corner that has begun ENDS only once the road is this straight (hysteresis:

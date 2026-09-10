@@ -171,7 +171,10 @@ describe("the interior gate on a cleared-buffer frame", () => {
       "crown/flank pills are walked as custom ids so a design pass does not reload per shot");
     assert.match(angles, /--zoom/,
       "counted #cs-view-in clicks so a flank mark can be judged, not just seen");
-    assert.doesNotMatch(angles, /page\.reload\(/,
+    // The WALK never reloads; the --serve / --watch session does, on purpose,
+    // to pick up an edited painter (car-multi-shot-tools pins the split).
+    const walkOnly = angles.slice(angles.indexOf("async function walk("), angles.indexOf("async function serveSession"));
+    assert.doesNotMatch(walkOnly, /page\.reload\(/,
       "no second boot — openGarage + store writes keep ONE Chromium");
   });
 });

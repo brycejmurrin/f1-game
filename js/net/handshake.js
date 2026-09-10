@@ -176,7 +176,7 @@ const NetHandshake = (function () {
       try {
         Log.warn("net", "version.json unreadable (" + ((e && e.message) || e) +
                         ") — build identity unknown, refusing to pair");
-      } catch (_) {}
+      } catch (_) { /* logging must not mask the fetch failure above */ }
       return null;
     }
     return _buildCache;

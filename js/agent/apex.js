@@ -133,6 +133,21 @@ function lazyTrackEnsure(o) {
   return o;
 }
 
+// Clear the starting-lights DOM; callers reset the lit-counter themselves right after.
+function resetStartLights(hidden) {
+  els.lights.hidden = hidden;
+  for (const l of els.lights.children) l.classList.remove("on");
+}
+
+// (px, pz, head) from a sampled track point and the car's (s, x) — the
+// world-space anchor jump()/reset()/aiPlace() need. See worldFromTrack in game.js.
+function placeFromTrack(car, sampled) {
+  const rl = Math.hypot(sampled.r[0], sampled.r[2]) || 1;
+  car.px = sampled.p[0] + sampled.r[0] / rl * car.x;
+  car.pz = sampled.p[2] + sampled.r[2] / rl * car.x;
+  car.head = Math.atan2(sampled.t[0], sampled.t[2]);
+}
+
 const api = {
   // place the player at fraction [0,1) of the lap; optional speed (m/s), x (m)
   jump(frac, speed, lateral) {
@@ -148,10 +163,7 @@ const api = {
     if (lateral !== undefined) G.player.x = lateral;
     if (speed !== undefined) G.player.speed = speed;
     Tracks.sample(G.track, G.player.s, smp);
-    { const rl = Math.hypot(smp.r[0], smp.r[2]) || 1;   // see worldFromTrack in game.js
-      G.player.px = smp.p[0] + smp.r[0] / rl * G.player.x;
-      G.player.pz = smp.p[2] + smp.r[2] / rl * G.player.x; }
-    G.player.head = Math.atan2(smp.t[0], smp.t[2]);
+    placeFromTrack(G.player, smp);
     G.player.vLat = 0; G.player.yawRateCur = 0;
     // Teleport hygiene: the wall/rescue accumulators describe the OLD location.
     // Left alone, a wedge-then-jump sequence carried ~3 s of rescueT into the
@@ -169,8 +181,7 @@ const api = {
     if (!G.player || !G.track) return false;
     G.skyViewOverride = null;   // clear any sky override so normal chase cam resumes
     G.state = "race"; G.raceT = Math.max(G.raceT, 1);
-    els.lights.hidden = true;
-    for (const l of els.lights.children) l.classList.remove("on");
+    resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     G.cars.forEach((c) => { if (!c.isPlayer) { c.prog -= 600; c.s = wrapS(c.s - 600); c.speed = 0; } });
     const r = this.jump(frac, 0, lateral !== undefined ? lateral : 0);
@@ -269,7 +280,7 @@ const api = {
   },
   camera(m) {
     if (m == null) return { mode: CAM_MODES[G.camMode].id, index: G.camMode, modes: CAM_MODES.map((c) => c.id) };
-    let i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
+    const i = typeof m === "number" ? m : CAM_MODES.findIndex((c) => c.id === String(m).toLowerCase());
     if (i < 0 || i >= CAM_MODES.length) return false;
     G.dbgCam = null;   // switching to a game camera mode leaves any view() free-cam
     setCamMode(i);
@@ -394,17 +405,20 @@ const api = {
   // Switch garage car without opening #teampicker — same store writes as the tile
   // click in select-screen.js (G.teamIdx, buildSetup, tickUi). Multi-team
   // garage-angles surveys use this instead of the picker UI (~15 s per team).
-  garageTeam(id) {
+  garageTeam(id, seatWanted) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     const i = Teams.LIST.findIndex((t) => t.id === id);
     if (i < 0) return { ok: false, error: "unknown_team", id };
     const t = Teams.LIST[i];
     const label = t.name.toUpperCase();
-    if (G.teamIdx === i) return { ok: true, switched: false, label };
+    // An explicit SEAT (0 / 1) switches the driver — number, helmet, T-cam —
+    // on the same team too; without one the first free seat is taken.
+    const wantSeat = Number.isInteger(seatWanted) && seatWanted >= 0 && seatWanted < t.drivers.length ? seatWanted : null;
+    if (G.teamIdx === i && (wantSeat == null || wantSeat === G.driverIdx)) return { ok: true, switched: false, label, seat: G.driverIdx };
     const taken = G.peerSeats ? G.peerSeats() : [];
     const isTaken = (si) => taken.some((s) => s.team === t.id && s.driver === si);
-    let seat = 0;
-    while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
+    let seat = wantSeat != null ? wantSeat : 0;
+    if (wantSeat == null) while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
     G.teamIdx = i;
     G.driverIdx = seat;
     G.store.set("team", i);
@@ -413,24 +427,40 @@ const api = {
     if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes();
     G.buildSetup();
     G.tickUi();
-    return { ok: true, switched: true, label };
+    return { ok: true, switched: true, label, seat };
   },
-  // One-shot preset + discrete zoom/pan clicks — mirrors #cs-stack / cs-pan-*.
+  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.target [x,y,z] car-space look-at, lamp (preset name | null), az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; eye+look [x,y,z] place the eye itself (implies clamp:false); clamp:false lifts the player's el ≥ 0 / minDist floors for this framing; view "free" keeps the current camera.
   garageFrame(view, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (!view) return { ok: false, error: "no_view" };
-    G.setSetupView(view);
-    const zoom = (opts && opts.zoom) || 0;
-    const strafe = (opts && opts.strafe) || 0;
-    const dolly = (opts && opts.dolly) || 0;
-    const zMul = zoom > 0 ? 1 / 1.12 : 1.12;
-    for (let n = 0; n < Math.abs(zoom); n++) G.nudgeSetupZoom(zMul);
-    for (let n = 0; n < Math.abs(strafe); n++) G.setupPan(strafe > 0 ? 0.15 : -0.15, 0);
-    for (let n = 0; n < Math.abs(dolly); n++) G.setupPan(0, dolly > 0 ? 0.15 : -0.15);
+    if (view !== "free") G.setSetupView(view);   // a preset resets orbit/target/pan; absolutes go on top
+    let o = opts || {};
+    const num = (v) => (Number.isFinite(v) ? v : null);
+    const xyz = (v) => Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(+n));
+    if (xyz(o.eye) && xyz(o.look)) {
+      // An explicit EYE is an orbit about the look-at point from where the eye
+      // stands: the same spherical terms the garage camera composes (game.js
+      // eye = orbit + [sin az · d · cos el, d · sin el, cos az · d · cos el]).
+      const dx = +o.eye[0] - +o.look[0], dy = +o.eye[1] - +o.look[1], dz = +o.eye[2] - +o.look[2];
+      const d = Math.hypot(dx, dy, dz) || 1e-6;
+      o = Object.assign({}, o, { target: o.look.map(Number), az: Math.atan2(dx, dz),
+        el: Math.asin(Math.max(-1, Math.min(1, dy / d))), dist: d, clamp: false });
+    }
+    G.setSetupFree(o.clamp === false);   // a dev shot may leave the player's range; the next preset restores it
+    if (Array.isArray(o.target) && o.target.length === 3) G.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
+    if (o.lamp !== undefined && typeof GarageScene !== "undefined" && GarageScene.spot) GarageScene.spot(o.lamp || null);
+    if (num(o.az) != null) G.nudgeSetupCam(o.az - G.setupPreviewAz, 0, 0);
+    if (num(o.el) != null) G.nudgeSetupCam(0, o.el - G.setupPreviewEl, 0);
+    if (num(o.dist) > 0) G.nudgeSetupZoom(o.dist / G.setupPreviewDist);   // clamped by the game
+    const steps = (n, fn) => { for (let i = 0; i < Math.abs(n | 0); i++) fn(n > 0 ? 1 : -1); };
+    steps(o.azNudge != null ? o.azNudge : o.nudgeAz, (s) => G.nudgeSetupCam(0.18 * s, 0, 0));
+    steps(o.elNudge != null ? o.elNudge : o.nudgeEl, (s) => G.nudgeSetupCam(0, 0.12 * s, 0));
+    steps(o.zoom, (s) => G.nudgeSetupZoom(s > 0 ? 1 / 1.12 : 1.12));
+    steps(o.strafe, (s) => G.setupPan(0.15 * s, 0));
+    steps(o.dolly, (s) => G.setupPan(0, 0.15 * s));
+    if (Array.isArray(o.pan)) G.setupPan(+o.pan[0] || 0, +o.pan[1] || 0);
     const c = this.garageCam();
-    return {
-      ok: true, az: c.az, el: c.el, dist: c.effDist, pan: c.pan,
-    };
+    return { ok: true, view, az: c.az, el: c.el, dist: c.effDist, pan: c.pan };
   },
   // Merge catalog part ids into the current team's garage setup and rebuild.
   garageParts(parts) {
@@ -913,8 +943,7 @@ const api = {
   pair(frac, speed) {
     if (!G.track) return false;
     G.state = "race"; G.raceT = Math.max(G.raceT, 1);
-    els.lights.hidden = true;
-    for (const l of els.lights.children) l.classList.remove("on");
+    resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const f = frac == null ? 0.3 : frac, v = speed == null ? 55 : speed;
     const prog = f * G.track.total, s = wrapS(prog);
@@ -932,8 +961,7 @@ const api = {
   jam(n) {
     if (!G.track) return false;
     G.state = "race"; G.raceT = Math.max(G.raceT, 1);
-    els.lights.hidden = true;
-    for (const l of els.lights.children) l.classList.remove("on");
+    resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const ai = G.cars.filter((c) => !c.isPlayer), m = Math.min(n || 5, ai.length);
     const prog = 0.5 * G.track.total;
@@ -987,8 +1015,7 @@ const api = {
   },
   go() {
     G.state = "race"; G.raceT = Math.max(G.raceT, 0.5);
-    els.lights.hidden = true;
-    for (const l of els.lights.children) l.classList.remove("on");
+    resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     return G.state;
   },
@@ -1731,8 +1758,7 @@ const api = {
     // auto-enter race state so physics advances even if called during countdown
     if (G.state === "count") {
       G.state = "race"; G.raceT = 0;
-      els.lights.hidden = true;
-      for (const l of els.lights.children) l.classList.remove("on");
+      resetStartLights(true);
     }
     if (input !== undefined) G._testInput = input || null;
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
@@ -2187,8 +2213,7 @@ const api = {
     G.state = "count";
     G.countT = 0;
     G.lightsLit = 0;
-    els.lights.hidden = false;
-    for (const l of els.lights.children) l.classList.remove("on");
+    resetStartLights(false);
     return {
       ok: true,
       at: atMs != null ? atMs : null,
@@ -2246,10 +2271,7 @@ const api = {
     if (speed !== undefined) c.speed = speed;
     c.vLat = 0; c.yawRateCur = 0;
     Tracks.sample(G.track, c.s, smp2);
-    c.head = Math.atan2(smp2.t[0], smp2.t[2]);
-    { const rl = Math.hypot(smp2.r[0], smp2.r[2]) || 1;   // see worldFromTrack in game.js
-      c.px = smp2.p[0] + smp2.r[0] / rl * c.x;
-      c.pz = smp2.p[2] + smp2.r[2] / rl * c.x; }
+    placeFromTrack(c, smp2);
     c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
     return { id: idx, frac: +(c.s / G.track.total).toFixed(4), speed: +c.speed.toFixed(2), x: +c.x.toFixed(3) };
   },
@@ -2396,8 +2418,7 @@ const api = {
     if (seed !== undefined) G.seed = seed;
     gridUp();
     G.state = "race"; G.raceT = 0;
-    els.lights.hidden = true;
-    for (const l of els.lights.children) l.classList.remove("on");
+    resetStartLights(true);
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     const f01 = ((((frac != null ? frac : 0)) % 1) + 1) % 1;   // keep s and prog coupled
     G.player.s     = wrapS(f01 * G.track.total);
@@ -2409,10 +2430,7 @@ const api = {
     G.player.lap   = 0; G.player.axEstSm = 0;
     // seed world-space position + heading from (s, x) immediately, same as jump()
     Tracks.sample(G.track, G.player.s, smp);
-    { const rl = Math.hypot(smp.r[0], smp.r[2]) || 1;   // see worldFromTrack in game.js
-      G.player.px   = smp.p[0] + smp.r[0] / rl * G.player.x;
-      G.player.pz   = smp.p[2] + smp.r[2] / rl * G.player.x; }
-    G.player.head = Math.atan2(smp.t[0], smp.t[2]);
+    placeFromTrack(G.player, smp);
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;   // sync render anchors (see jump)
     // Per-episode DRIVETRAIN + smoothing state. gridUp() clears the race-level
     // fields (energy, cuts, penalty, wallT, vLat…) but not these, so without

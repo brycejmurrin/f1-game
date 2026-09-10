@@ -122,8 +122,8 @@ window.ScrollFade = (function () {
     // mutation of every menu.
     const prev = last.get(el);
     if (prev && prev.h === m.thumb && prev.y === y) return;
-    el.style.setProperty("--sf-h", m.thumb + "px");
-    el.style.setProperty("--sf-y", y + "px");
+    el.style.setProperty("--sf-h", `${m.thumb}px`);
+    el.style.setProperty("--sf-y", `${y}px`);
     last.set(el, { h: m.thumb, y });
   }
 
@@ -172,14 +172,15 @@ window.ScrollFade = (function () {
       for (const el of watched) contentMo.observe(el, { childList: true, subtree: true });
     }
   }
-  let settleSoon = 0, settleLate = 0;
+  let settleSoon = 0;
+  let settleLate = 0;
   function settle() {
     pruneWatched();
     schedule();
     if (settleSoon) clearTimeout(settleSoon);
     if (settleLate) clearTimeout(settleLate);
-    settleSoon = setTimeout(function () { settleSoon = 0; paintAll(); }, 120);
-    settleLate = setTimeout(function () { settleLate = 0; paintAll(); }, 400);
+    settleSoon = setTimeout(() => { settleSoon = 0; paintAll(); }, 120);
+    settleLate = setTimeout(() => { settleLate = 0; paintAll(); }, 400);
   }
 
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;

@@ -418,7 +418,11 @@ interface GameCtx {
   readonly aeroZoneAhead: (s: number) => number;
   readonly stepSetupAero: (dt: number) => void;
   readonly setSetupView: (name: string) => void;
+  /** Orbit about and look at a car-space point (garageFrame's `target`); a preset resets it. */
+  readonly setSetupAim: (p: number[]) => void;
+  readonly setSetupFree: (on: boolean) => void;
   readonly setupPan: (strafe: number, dolly: number) => void;
+  readonly nudgeSetupCam: (dAz: number, dEl: number, zoom?: number) => void;
   readonly nudgeSetupZoom: (mul: number) => void;
   readonly setupFlapArgs: () => FlapArgs;
   readonly setSetupAero: (on: boolean) => void;

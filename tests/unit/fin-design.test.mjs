@@ -237,27 +237,77 @@ test("coverBind saddleWrap paints saddle flanks without a saddle crown", () => {
                "spineOnly keeps non-saddle crowns off the flanks");
 });
 
-test("airboxMeshColour: wrap sun wins over airboxTint", () => {
-  const cover = [0.9, 0.9, 0.92], sun = [0.95, 0.75, 0.1], airbox = [0.2, 0.8, 0.3];
-  const liv = { spineLogo: "wrap", sunTint: sun, airboxTint: airbox, cover };
+test("airboxMeshColour: wrap sun wins over cover", () => {
+  const cover = [0.9, 0.9, 0.92], sun = [0.95, 0.75, 0.1];
+  const liv = { spineLogo: "wrap", sunTint: sun, cover };
   assert.deepEqual(A.LT.airboxMeshColour("redbull", liv, cover), sun);
 });
 
-test("airboxMeshColour: non-wrap uses airboxTint, else cover", () => {
+test("airboxMeshColour: non-wrap uses cover (airboxTint folded away)", () => {
   const cover = [0.9, 0.9, 0.92], airbox = [0.2, 0.8, 0.3];
-  assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", airboxTint: airbox, cover }, cover), airbox);
+  // airboxTint is ignored — migrate folds it into cover when cover empty.
+  assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", airboxTint: airbox, cover }, cover), cover);
   assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", cover }, cover), cover);
 });
 
-test("finHandoff contrast resolves fin against the saddle block, not white-on-white", () => {
+test("migratePaint folds RIDGE, drops AIRBOX and the lettering overrides", () => {
+  const M = A.Liveries || globalThis.Liveries;
+  assert.ok(M && M.migratePaint, "Liveries.migratePaint must exist");
+  const ridge = [0, 0.82, 0.95], air = [0.2, 0.3, 0.4];
+  const a = M.migratePaint({ ridgeTint: ridge, c1: [0.1, 0.1, 0.1] });
+  assert.deepEqual(a.spineTint, ridge);
+  assert.equal(a.ridgeTint, undefined);
+  // AIRBOX is DROPPED, not folded onto `cover`. It painted the roll hoop,
+  // snorkel and intake lips ALONE — a strict subset of `cover`, which paints
+  // the whole loft AND is the surface the atlas inks the crown crest and every
+  // spine design against. Promoting it would repaint the cover and flip the
+  // crest ink on any stored file that set it, which is not a migration.
+  const b = M.migratePaint({ airboxTint: air, c1: [0.1, 0.1, 0.1] });
+  assert.equal(b.airboxTint, undefined, "the retired key must go");
+  assert.equal(b.cover, undefined, "and must NOT be promoted onto ENGINE COVER");
+  const c = M.migratePaint({ crestInk: [1, 1, 1], plateInk: [0, 0, 0], spineTint: ridge });
+  assert.equal(c.crestInk, undefined);
+  assert.equal(c.plateInk, undefined);
+  assert.deepEqual(c.spineTint, ridge);
+});
+
+test("finHandoff contrast derives when fin unset; authored fin always wins", () => {
   const WHITE = [0.95, 0.95, 0.96], RED = [0.863, 0, 0], DARK = [0.05, 0.06, 0.07];
-  const liv = {
-    cover: WHITE, c1: DARK, c2: RED, fin: WHITE,
+  const base = {
+    cover: WHITE, c1: DARK, c2: RED,
     spineLogo: "cap", coverBind: "saddleWrap", saddleTint: WHITE, finHandoff: "contrast",
   };
-  const fin = A.LT.resolveFinPaint("ferrari", liv, WHITE, RED, DARK, RED);
-  assert.ok(A.LT.contrast(fin, WHITE) >= 2.0, `fin ${fin} must clear white block`);
-  assert.ok(fin[0] > 0.5, "contrast must pick red body, not white fin/cover");
+  // Unset fin under contrast: derive a colour that clears the white saddle block.
+  const derived = A.LT.resolveFinPaint("ferrari", base, WHITE, RED, DARK, RED);
+  assert.ok(A.LT.contrast(derived, WHITE) >= 2.0, `derived fin ${derived} must clear white block`);
+  assert.ok(derived[0] > 0.5, "contrast must pick red body, not white cover");
+  // Authored TAIL FIN is the pick — even white-on-white under contrast handoff.
+  const authored = A.LT.resolveFinPaint("ferrari", { ...base, fin: WHITE }, WHITE, RED, DARK, RED);
+  assert.deepEqual(authored, WHITE, "authored fin must not be contrast-re-picked");
+});
+
+test("authored DETAIL accent and saddleTint shoulder are used as-is", () => {
+  const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+  const carries = (styles, c) => {
+    const want = to255(c).join(",");
+    return [...styles].some((v) => v && v.replace(/^rgba?\(/, "").replace(/[)\s]/g, "").startsWith(want));
+  };
+  const stylesOf = (ops, region) => new Set(opsIn(ops, region).map((op) => op.style).filter(Boolean));
+  // Pale DETAIL on pale body — old guard re-picked dark ink because accent≈c1.
+  const PALE = [0.92, 0.92, 0.94], BODY = [0.88, 0.88, 0.9];
+  const withAccent = A.paint("ferrari", {
+    ...BASE, c1: BODY, c2: BODY, accent: PALE, spineLogo: "number",
+  });
+  assert.ok(carries(stylesOf(withAccent, R.num), PALE),
+            `number trim must carry authored DETAIL ${to255(PALE)}; got ${[...stylesOf(withAccent, R.num)].join(", ")}`);
+  // Shoulder shelf: white saddleTint on white flank must keep white (no re-pick).
+  const SADDLE = [0.95, 0.95, 0.96];
+  const shoulder = A.paint("ferrari", {
+    ...BASE, cover: SADDLE, c1: SADDLE, c2: [0.86, 0, 0],
+    spineSide: "shoulder", saddleTint: SADDLE, finShape: "none",
+  });
+  assert.ok(carries(stylesOf(shoulder, R.spineSide), SADDLE),
+            `shoulder must carry authored saddleTint ${to255(SADDLE)}; got ${[...stylesOf(shoulder, R.spineSide)].join(", ")}`);
 });
 
 test("finHandoff hardCut stops crown continuation on the tail, fin motif stays", () => {

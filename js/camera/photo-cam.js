@@ -156,7 +156,7 @@ function wirePhotoStick(id, vec) {
        handler before set() AND before preventDefault(), so the stick reads zero
        and the page keeps the gesture. Every other capture in this repo is
        wrapped (js/input/input.js, js/game.js); this was the one that was not. */
-    try { el.setPointerCapture(pid); } catch (_) {}
+    try { el.setPointerCapture(pid); } catch (_) { /* the spec'd throw above — the stick still works uncaptured */ }
     _r = el.getBoundingClientRect();
     _zoom = el.currentCSSZoom || 1;
     set(e.clientX, e.clientY);
@@ -181,7 +181,7 @@ function wirePhotoHold(id, on, off) {
   const release = (e) => { if (pid === null || !e || e.pointerId === pid) { pid = null; off(); } };
   el.addEventListener("pointerdown", (e) => {
     pid = e.pointerId;
-    try { el.setPointerCapture(pid); } catch (_) {}
+    try { el.setPointerCapture(pid); } catch (_) { /* see wirePhotoStick: a pointer already gone can throw here too */ }
     on();
     e.preventDefault();
   });

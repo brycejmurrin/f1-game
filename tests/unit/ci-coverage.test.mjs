@@ -6,6 +6,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import cp from "node:child_process";
+import path from "node:path";
 import vm from "node:vm";
 import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
 // DERIVED, never re-typed. This file was the FIFTH place the selected gate's
@@ -78,118 +81,168 @@ test("it does not claim to cover what it cannot", () => {
   }
 });
 
-test("the selected gate blocks pushes and PRs, but not workflow calls", () => {
-  // Bounded at the next job head — the same defect the parser had: an
-  // unbounded slice reads every job appended after `selected` as part of it,
-  // so a later job's `continue-on-error` fails the assertion below against a
-  // gate nobody touched.
-  const selected = (ciWorkflow.split("\n  selected:")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
-  assert.ok(selected, "selected job missing");
+// The change-aware gate (2026-09-10): `select` plans, `selected` runs the plan
+// as a matrix. The plan job is the trigger; the step script it delegates to
+// carries the fail-closed strings.
+// Both bounded at the next job head. An unbounded `split("\n  selected:")[1]`
+// reads every job appended after it as part of it, so a later job's
+// `continue-on-error: true` (the golden-menu trial) fails the gate assertion
+// below against a gate nobody touched — the parser defect first fixed on
+// 2026-09-10 for the single `selected` job, re-introduced with the two-job gate.
+const selectJob = ciWorkflow.split("\n  select:")[1]?.split("\n  selected:")[0];
+const selectedJob = (ciWorkflow.split("\n  selected:")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+const selectStep = fs.readFileSync(new URL("../../tools/ci/ci-select-specs-step.sh", import.meta.url), "utf8");
+
+test("the change-aware gate blocks pushes, pull requests AND the deploy gate", () => {
+  assert.ok(selectJob && selectedJob, "select / selected jobs missing");
   assert.deepEqual(report.selectionGate, {
     present: true,
     blocking: true,
     onPush: true,
     onPullRequest: true,
-    onWorkflowCall: false,
+    onWorkflowCall: true,
     usesPullRequestBase: true,
     failsClosedOnInvalidBase: true,
     surfacesBudgetSkips: true,
   });
-  // The event_name half alone is NOT the gate and never was: github.event_name
-  // is the caller's inside a reusable workflow, so it reads 'push' on a Pages
-  // call too. The inputs.concurrency_key half is what excludes the deploy, and
-  // it is the half worth pinning -- dropping it silently puts a browser gate
-  // back in front of every deploy (Pages run 2215).
-  assert.match(selected, /if: \$\{\{ inputs\.concurrency_key == '' &&/);
-  assert.match(selected,
-    /github\.event_name == 'push' \|\| github\.event_name == 'pull_request'/);
-  assert.doesNotMatch(selected, /^    continue-on-error:/m);
+  // It used to skip itself on the Pages call (`inputs.concurrency_key == ''`).
+  // pages.yml now publishes exactly the commit it tested, which makes "did we
+  // test what this commit changed?" a deploy question too — so the one clause
+  // that excluded the deploy must stay gone.
+  assert.match(selectJob, /if: \$\{\{ github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \}\}/);
+  assert.doesNotMatch(selectJob, /inputs\.concurrency_key/);
+  assert.doesNotMatch(selectJob + selectedJob, /^    continue-on-error:/m);
+  // The runner consumes the plan as a matrix and takes its cap per shard.
+  assert.match(selectedJob, /needs: select/);
+  assert.match(selectedJob, /include: \$\{\{ fromJSON\(needs\.select\.outputs\.shards\) \}\}/);
+  assert.match(selectedJob, /timeout-minutes: \$\{\{ matrix\.timeout \}\}/);
+  assert.match(selectedJob, /if: \$\{\{ needs\.select\.outputs\.any == 'true' \}\}/,
+    "a plan with nothing to run must skip the runner, not fail it");
 });
 
 test("selection resolves the event-specific base and fails closed when it cannot", () => {
-  const selected = ciWorkflow.split("\n  selected:")[1];
-  assert.match(selected, /PUSH_BEFORE: \$\{\{ github\.event\.before \}\}/);
-  assert.match(selected, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
-  // Base resolution may be inline OR delegated to ci-resolve-before.sh (HEAD~1 fallback).
-  const hasInline = /push\) BEFORE="\$PUSH_BEFORE"/.test(selected);
-  const hasDelegate = /ci-resolve-before\.sh/.test(selected);
-  assert.ok(hasInline || hasDelegate, "selected must resolve push/PR base inline or via ci-resolve-before.sh");
-  if (!hasDelegate) {
-    assert.match(selected, /pull_request\) BEFORE="\$PR_BASE"/);
-  }
-  assert.match(selected, /no valid comparison base/);
-  assert.match(selected, /comparison base .* is unreachable/);
-  assert.match(selected, /r\.reason === "unmatched"/);
-  assert.doesNotMatch(selected, /skip\(\).*exit 0/);
+  assert.match(selectJob, /PUSH_BEFORE: \$\{\{ github\.event\.before \}\}/);
+  assert.match(selectJob, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
+  // Base resolution is delegated to ci-select-specs-step.sh -> ci-resolve-before.sh (HEAD~1 fallback).
+  assert.match(selectJob, /ci-select-specs-step\.sh/);
+  assert.match(selectStep, /ci-resolve-before\.sh/);
+  assert.match(selectStep, /no valid comparison base/);
+  assert.match(selectStep, /comparison base .* is unreachable/);
+  assert.match(selectStep, /r\.reason === "unmatched"/);
+  assert.doesNotMatch(selectStep, /skip\(\).*exit 0/);
+  // The plan is what the runner reads: a JSON matrix plus a run/skip flag.
+  assert.match(selectStep, /shards=\$\{JSON\.stringify\(shards\)\}/);
+  assert.match(selectStep, /any=\$\{shards\.length \? "true" : "false"\}/);
 });
 
-test("Pages workflow calls leave the selected gate disabled", () => {
+test("no workflow demotes the change-aware gate to advisory", () => {
   assert.doesNotMatch(pagesWorkflow, /^\s+advisory:/m);
+  assert.doesNotMatch(ciWorkflow, /^\s+advisory:/m);
 });
 
-test("Pages workflow calls use a unique CI concurrency key", () => {
-  // BOTH manual events, not just dispatch. `schedule` used to fall through to
-  // github.ref, which put the nightly in the same group as every push to the
-  // deploy branch — and GitHub keeps only ONE pending run per group, so the
-  // next push silently discarded the queued nightly (run 2758, 2026-09-08:
-  // cancelled at 20 min with nothing failing and no job near its cap).
-  // cancel-in-progress being false does not save a run from that rule.
-  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| github\.ref \}\}/,
-    "a dispatched OR scheduled run keeps its own concurrency group so a push to the same ref cannot cancel it");
+test("one CI run per branch head: push and pull_request share a group, manual runs keep their own", () => {
+  // A push to a branch with an open PR used to start TWO full runs (push on
+  // refs/heads/<b>, pull_request on refs/pull/N/merge) that never cancelled
+  // each other — 58.5 + 47.4 job-minutes for one commit, measured 2026-09-10.
+  // Keying on the branch NAME for both events collapses the pair; the PR run
+  // (seconds later, on the merge commit) cancels the push run.
+  //
+  // BOTH manual events keep their own group. `schedule` used to fall through
+  // to github.ref, which put the nightly in the same group as every push to
+  // the deploy branch — and GitHub keeps only ONE pending run per group, so
+  // the next push silently discarded the queued nightly (run 2758).
+  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
+    "push and PR runs of one branch must share a group; dispatched/scheduled runs must not");
+  assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \|\| github\.event_name == 'push' \}\}/,
+    "newest wins on both events");
+  // The deploy gate is unaffected: its caller supplies a unique key, and the
+  // newest-wins rule for deploys lives on pages.yml's own ci job.
   assert.match(pagesWorkflow, /concurrency_key: pages-\$\{\{ github\.run_id \}\}/);
-  assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
+  const pagesCi = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
+  assert.match(pagesCi, /group: pages-gate-\$\{\{ github\.ref \}\}/);
+  assert.match(pagesCi, /cancel-in-progress: true/,
+    "a newer push must cancel an older deploy GATE, never leave it to publish stale bytes or skip");
 });
 
-test("a Pages run publishes the branch tip, and a rewritten history cannot deploy", () => {
-  // The gate used to demand TIP == GITHUB_SHA and drop every superseded run,
-  // which starved the site: ci is ~13 min, pushes land every ~6, so runs 1892,
-  // 1893, 1894 and 1896 all went green and all skipped deploy while the live
-  // build sat an hour behind. Superseded is EARLY, not stale — the tip contains
-  // what the run gated plus more — so the run now publishes the TIP. The hazard
-  // the old check really guarded (moving the site BACKWARDS) is still refused,
-  // but on the honest condition: not an ancestor at all.
-  const preflight = pagesWorkflow.split("\n  current-tip:")[1].split("\n  deploy:")[0];
+test("a Pages run publishes EXACTLY the commit it tested, and never moves the site backwards", () => {
+  // THE CONTRACT (2026-09-10). The previous design gated GITHUB_SHA and then
+  // published the branch TIP from any green ancestor run, which let a commit
+  // ship while its own gate was unfinished or failing (justified by "every push
+  // goes through deploy.mjs" — PRs merged through GitHub do not). Now: test one
+  // commit, stage it, publish that artifact. Starvation is handled by
+  // newest-wins cancellation on the gate (asserted in the concurrency test),
+  // and the hazard the old tip check guarded — moving the site backwards — by
+  // an ancestry check against the LIVE shell's apex-sha, before the environment
+  // and again under the Pages lock.
+  const preflight = pagesWorkflow.split("\n  publishable:")[1].split("\n  deploy:")[0];
   const deploy = pagesWorkflow.split("\n  deploy:")[1];
   assert.doesNotMatch(preflight, /^\s+environment:/m,
-    "the cheap tip check must not create a github-pages deployment record");
-  assert.match(preflight, /deploy: \$\{\{ steps\.tip\.outputs\.deploy \}\}/);
+    "the cheap publishability check must not create a github-pages deployment record");
+  assert.match(preflight, /deploy: \$\{\{ steps\.pub\.outputs\.publish \}\}/);
   assert.match(preflight, /fetch-depth: 0/,
     "merge-base needs history — a shallow checkout makes every ancestor test a false negative");
-  assert.match(preflight, /git merge-base --is-ancestor "\$GITHUB_SHA" "\$TIP"/,
-    "a superseded-but-ancestor run must still be allowed to publish");
-  assert.match(preflight, /echo "deploy=false"[\s\S]*?history was rewritten/,
-    "and only a non-ancestor may be dropped");
+  assert.match(preflight, /tools\/ci\/pages-publishable\.sh "\$GITHUB_SHA"/,
+    "the pre-environment check asks the one question that matters: may THIS commit still be published?");
 
-  assert.match(deploy, /needs: current-tip/);
-  assert.match(deploy, /if: needs\.current-tip\.outputs\.deploy == 'true'/,
+  assert.match(deploy, /needs: publishable/);
+  assert.match(deploy, /if: needs\.publishable\.outputs\.deploy == 'true'/,
     "a run that cannot publish must skip the environment job entirely");
   assert.match(deploy, /environment:\s*\n\s+name: github-pages/);
-  assert.match(deploy, /git fetch --no-tags origin/);
-  assert.match(deploy, /TIP=\$\(git rev-parse/);
-  assert.match(deploy, /if ! git merge-base --is-ancestor "\$GITHUB_SHA" "\$TIP"/,
-    "the in-lock recheck must test ancestry, not equality");
-  assert.match(deploy, /REFUSING DEPLOY:[\s\S]*?exit 1/,
-    "a run that cannot publish while queued must fail, never become a successful no-op deployment");
-  assert.match(deploy, /git checkout --detach "\$TIP"/,
-    "the bytes published must be the TIP's, or the site can still go backwards");
+  assert.match(deploy, /tools\/ci\/pages-publishable\.sh "\$GITHUB_SHA"[\s\S]*?REFUSING DEPLOY:[\s\S]*?exit 1/,
+    "the in-lock recheck must fail the run, never become a successful no-op deployment");
+  // No branch-tip substitution anywhere in the deploy job.
+  assert.doesNotMatch(deploy, /git checkout --detach/);
+  assert.doesNotMatch(deploy, /TIP=\$\(git rev-parse/);
+  assert.doesNotMatch(deploy, /refs\/remotes\/origin/);
 
-  // Order matters three ways: resolve the tip, then stage from it, then publish.
-  // Anchor on the STEP DECLARATIONS, not the bare phrases: the comment above
-  // the tip checkout names "Stage site" in prose, so a loose indexOf finds the
-  // comment and reports the steps in the wrong order (it did).
-  const recheck = deploy.indexOf("- name: Resolve and check out the branch tip inside the Pages lock");
+  // Order: confirm publishable under the lock, then stage, then publish.
+  // Anchor on the STEP DECLARATIONS, not bare phrases (a comment names "Stage
+  // site" in prose, and a loose indexOf once reported the steps out of order).
+  const recheck = deploy.indexOf("- name: Confirm this commit may still be published (under the Pages lock)");
   const stage = deploy.indexOf("- name: Stage site");
   const publish = deploy.indexOf("uses: actions/deploy-pages@v4");
-  assert.ok(recheck >= 0 && stage > recheck, "the tip must be checked out BEFORE the site is staged");
-  assert.ok(publish > stage, "the final tip check must precede publication");
+  assert.ok(recheck >= 0 && stage > recheck, "the in-lock check must precede staging");
+  assert.ok(publish > stage, "staging must precede publication");
 
-  // apex-sha is the provenance record. Stamping GITHUB_SHA while publishing the
-  // tip would make the deployed shell name a commit that is not what shipped.
-  assert.match(deploy, /PUBLISH_SHA="\$\{\{ steps\.tipsha\.outputs\.sha \}\}"/);
+  // apex-sha is the provenance record AND the input to the next run's
+  // monotonic check, so it must name the commit actually published: GITHUB_SHA.
+  assert.match(deploy, /PUBLISH_SHA="\$GITHUB_SHA"/);
   assert.match(deploy, /name=\\"apex-sha\\" content=\\"\$PUBLISH_SHA\\"/,
     "apex-sha must name the commit actually published");
   assert.doesNotMatch(deploy, /echo "deploy=false"/,
     "once the environment job starts, unpublishable must fail rather than report success");
+});
+
+test("pages-publishable.sh: forward-only, and a CDN hiccup cannot wedge deploys", () => {
+  // Drive the script against a throwaway repo (A -> B -> C) and a fake `curl`
+  // on PATH that serves whatever apex-sha the case names. The verdict is the
+  // ONLY thing on stdout, by design: the workflow writes it straight into
+  // $GITHUB_OUTPUT.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-pub-"));
+  const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  git("init", "-q"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
+  const shas = [];
+  for (const n of ["A", "B", "C"]) {
+    fs.writeFileSync(path.join(dir, "f.txt"), n);
+    git("add", "f.txt"); git("commit", "-q", "-m", n); shas.push(git("rev-parse", "HEAD"));
+  }
+  const [A, B, C] = shas;
+  const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "curl"),
+    '#!/usr/bin/env bash\ncase "${FAKE_LIVE_SHA:-}" in\n  fail) exit 22 ;;\n  "") echo "<html></html>" ;;\n  *) echo "<meta name=\\"apex-build\\" content=\\"1\\">\n<meta name=\\"apex-sha\\" content=\\"${FAKE_LIVE_SHA}\\">" ;;\nesac\n');
+  fs.chmodSync(path.join(bin, "curl"), 0o755);
+  const script = new URL("../../tools/ci/pages-publishable.sh", import.meta.url).pathname;
+  const verdict = (sha, live) => cp.execFileSync("bash", [script, sha, "https://example.test/site/"], {
+    cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_LIVE_SHA: live },
+  }).trim();
+  assert.equal(verdict(C, B), "true", "live is an ancestor: publishing moves the site forward");
+  assert.equal(verdict(B, B), "false", "already live");
+  assert.equal(verdict(A, B), "false", "a NEWER build is live: publishing would move the site backwards");
+  assert.equal(verdict(C, "0123456789abcdef0123456789abcdef01234567"), "false", "an unrelated live sha means diverged history: refuse");
+  assert.equal(verdict(C, "fail"), "true", "the live site unreadable: publish (warned), the lock recheck runs again");
+  assert.equal(verdict(C, ""), "true", "no apex-sha in the live shell yet: publish");
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("every ROOT html page is named in the Stage site whitelist", () => {
@@ -282,16 +335,15 @@ test("smoke's command-line timeout is not tripled inside the spec", () => {
 
 test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
-  const selected = ciWorkflow.split("\n  selected:")[1];
   assert.match(smoke, new RegExp("test:smoke -- --timeout=" + SMOKE_TIMEOUT_MS));
   assert.match(smoke, /tests\/specs\/smoke\.spec\.js/,
     "test-only smoke edits must force the fixed shards even though they do not ship");
-  assert.match(selected, new RegExp(`--timeout=${SELECTED_TIMEOUT_MS}`),
+  assert.match(selectedJob, new RegExp(`--timeout=${SELECTED_TIMEOUT_MS}`),
     `ci.yml's selected step must run the timeout select-specs.mjs models ` +
     `(${SELECTED_GATE.perTestTimeoutSec} s)`);
-  assert.doesNotMatch(selected, new RegExp(`npm test -- .*smoke\\.spec\\.js.*--timeout=${SELECTED_TIMEOUT_MS}`));
-  assert.match(selected, /COVERED BY FIXED BLOCKING GATE/,
-    "the selected report must make its delegated coverage visible");
+  assert.doesNotMatch(selectedJob, new RegExp(`npm test -- .*smoke\\.spec\\.js.*--timeout=${SELECTED_TIMEOUT_MS}`));
+  assert.match(selectStep, /COVERED BY FIXED BLOCKING GATE/,
+    "the selection report must make its delegated coverage visible");
 });
 
 // THE RENDERER JOB (2026-09-01): the gfx group on macos-latest, the one runner
@@ -302,7 +354,7 @@ test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
 // consumes the aggregate of every job in ci.yml, so "out" means "skipped on the
 // Pages call", which the tool derives from the `!inputs.concurrency_key` if).
 const gpuWorkflow = fs.readFileSync(new URL("../../.github/workflows/gpu-census.yml", import.meta.url), "utf8");
-const rendererJob = ciWorkflow.split("\n  renderer-macos:")[1]?.split("\n  selected:")[0];
+const rendererJob = ciWorkflow.split("\n  renderer-macos:")[1]?.split("\n  select:")[0];
 const rendererFilter = ciWorkflow.split("\n  renderer-filter:")[1]?.split("\n  renderer-macos:")[0];
 
 test("the renderer specs have their own macOS job that runs test:gfx", () => {

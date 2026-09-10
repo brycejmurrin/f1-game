@@ -36,7 +36,9 @@ node -e '
   }
   const specs = r.selected.map((s) => s.file).join(" ");
   console.log(`reason=${r.reason}; groups: ${r.groups.join(", ") || "(none)"}`);
-  console.log(`fits ${r.testsFit} tests; selected ${r.testsSelected} across ${r.selected.length} specs`);
+  if (r.reason === "infra")
+    console.log(`::warning::SELECTION NARROWER THAN THE CHANGE: ${r.tracked.length} tracked/infra path(s) changed (${r.tracked.slice(0, 4).join(", ")}); the edited/imported specs still run, the fixed gates own the rest`);
+  console.log(`fits ${r.testsFit} tests; selected ${r.testsSelected} across ${r.selected.length} specs; ${(r.oversize || []).length} oversize shard(s)`);
   for (const s of r.overBudgetSpecs)
     console.log(`EXCLUDED (declares ${s.ownTimeoutSec}s timeout): ${s.file} (${s.tests} tests)`);
   for (const s of r.coveredByFixedGates)
@@ -44,5 +46,9 @@ node -e '
   for (const s of (r.unreachable || []))
     console.log(`::warning::UNREACHABLE by this gate (declares ${s.tests} tests > the whole ${r.testsFit}-test cap): ${s.file}`);
   for (const s of r.skipped) console.log(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
-  require("fs").appendFileSync(process.env.GITHUB_OUTPUT, `specs=${specs}\n`);
+  for (const s of (r.oversize || []))
+    console.log(`OVERSIZE (affected by this change; its own shard): ${s.file} (${s.tests} tests)`);
+  const shards = r.shards || [];
+  require("fs").appendFileSync(process.env.GITHUB_OUTPUT,
+    `specs=${specs}\nshards=${JSON.stringify(shards)}\nany=${shards.length ? "true" : "false"}\n`);
 '

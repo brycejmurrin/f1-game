@@ -41,7 +41,7 @@ function create(G) {
   function buildCalendar() {
     const pane = $("ss-cal");
     pane.textContent = "";
-    pane.appendChild(head("CALENDAR — " + draft.trackIds.length
+    pane.appendChild(head(`CALENDAR — ${draft.trackIds.length}`
       + (draft.trackIds.length === 1 ? " ROUND" : " ROUNDS")));
     const byId = new Map(Tracks.LIST.map((t) => [t.id, t]));
     calBtns = [];
@@ -49,7 +49,7 @@ function create(G) {
       const t = byId.get(id);
       if (!t) return;
       const row = el("div", "season-upcoming-row");
-      row.append(el("span", "sur-rnd", "R" + (i + 1)), el("span", "sur-name", t.name));
+      row.append(el("span", "sur-rnd", `R${i + 1}`), el("span", "sur-name", t.name));
       // Each action returns the row the SAME circuit sits on after it — or,
       // after a remove, the neighbour that took its place — for the refocus.
       const ctl = [
@@ -63,7 +63,7 @@ function create(G) {
         const b = el("button", "sel-chip", glyph);
         b.type = "button";
         b.disabled = !on;
-        b.setAttribute("aria-label", label + " — " + t.name);
+        b.setAttribute("aria-label", `${label} — ${t.name}`);
         b.onclick = () => { const row = act(); tick(); build(); focusCal(row, k); };
         row.appendChild(b);
         btns.push(b);
@@ -82,7 +82,9 @@ function create(G) {
   }
   function swap(a, b) {
     const ids = draft.trackIds;
-    const t = ids[a]; ids[a] = ids[b]; ids[b] = t;
+    const t = ids[a];
+    ids[a] = ids[b];
+    ids[b] = t;
   }
 
   function buildPool() {
@@ -140,12 +142,12 @@ function create(G) {
     const note = el("div", "sur-country");
     note.id = "ss-note";
     note.textContent = (draft.sprint
-      ? "A sprint runs a third of the distance before the Grand Prix and pays "
-        + SeasonCal.SPRINT_POINTS.join(" · ") + " pts. Both legs score."
+      ? `A sprint runs a third of the distance before the Grand Prix and pays `
+        + `${SeasonCal.SPRINT_POINTS.join(" · ")} pts. Both legs score.`
       : "One race per round.")
       + (draft.flPoint ? " The fastest Grand Prix lap pays one point to a top-ten finisher." : "")
-      + (draft.drop ? " Only a driver's best " + Math.max(1, draft.trackIds.length - draft.drop)
-        + " of " + draft.trackIds.length + " rounds count, as until 1990." : "");
+      + (draft.drop ? ` Only a driver's best ${Math.max(1, draft.trackIds.length - draft.drop)}`
+        + ` of ${draft.trackIds.length} rounds count, as until 1990.` : "");
     pane.appendChild(note);
 
     // The shelf. Every circuit NOT already on the calendar, classics included —
@@ -157,7 +159,7 @@ function create(G) {
     for (const t of rest) {
       const row = el("button", "track-row");
       row.type = "button";
-      row.setAttribute("aria-label", "Add " + t.name + " to the calendar");
+      row.setAttribute("aria-label", `Add ${t.name} to the calendar`);
       const nm = el("span", "track-row-name", t.name);
       if (t.classic) nm.appendChild(el("span", "trb trb-classic", "CLASSIC"));
       row.append(nm, el("span", "track-row-meta", t.country || ""));
@@ -175,7 +177,9 @@ function create(G) {
     // buttons, node replacement never disarms it, so an armed RESTART could
     // survive close/reopen and fire without its warning. Every path repaints
     // through build(), so this is the one true disarm point.
-    const ab = $("ss-apply"); delete ab.dataset.armed; ab.classList.remove("armed");
+    const ab = $("ss-apply");
+    delete ab.dataset.armed;
+    ab.classList.remove("armed");
     ab.textContent = live ? "APPLY — RESTART SEASON" : "APPLY";
     if (window.ScrollFade) ScrollFade.refresh();
   }
@@ -190,7 +194,8 @@ function create(G) {
     if (G.soundOn) GameAudio.uiSelect();
   }
   function close() {
-    $("season-setup").hidden = true; draft = null;
+    $("season-setup").hidden = true;
+    draft = null;
     Log.info("ui", "SeasonUI.close");
   }
 
@@ -206,7 +211,7 @@ function create(G) {
     const season = G.season;
     const n = SeasonCal.rounds();
     textNode.nodeValue = (SeasonCal.hasProgress(season) && n)
-      ? ("SEASON · R" + Math.min((season.round || 0) + 1, n) + " OF " + n)
+      ? `SEASON · R${Math.min((season.round || 0) + 1, n)} OF ${n}`
       : "SEASON";
   }
 

@@ -91,7 +91,9 @@
   "TrackSpace",
   "TrackSpline",
   "TrackSurface",
-  "TunerPanel"
+  "TunerPanel",
+  "Particles",
+  "RaceControl"
  ],
  "mutable": [
   "GLX",

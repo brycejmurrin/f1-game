@@ -10,38 +10,34 @@ permissions:
   pages: write
   id-token: write
 
-# GitHub Pages serves ONE deployment at a time per environment — that is a
-# constraint on the DEPLOY step, not on CI. This workflow used to put
-# `concurrency:` at the WORKFLOW level, which serialized the entire ci+deploy
-# pipeline behind one lock and produced two failure modes, tried and reverted
-# in turn on 2026-08-12 under the heavy multi-agent push volume this branch
-# sees:
+# THE CONTRACT (2026-09-10): a run tests ONE commit, stages THAT commit, and
+# publishes THAT artifact — never the branch tip, never anything its own gate
+# did not see. Two rules make that livable under this branch's push rate
+# (ci is ~13 minutes; pushes have landed every ~6):
 #
-#   cancel-in-progress: true  — a burst of pushes cancels each other's deploys
-#     before any of them reaches deploy-pages, so the live site can go a long
-#     way (build 971 vs a 1145+ tip, measured) without ever landing a build.
-#   cancel-in-progress: false — a push's WHOLE pipeline (five ci.yml reusable
-#     jobs, easily 10+ minutes) blocks every later push's CI from even
-#     STARTING, so a slow or runner-starved run wedges the queue just as
-#     badly (live stuck at 1126 while the tip was already 1141+).
+#   1. NEWEST WINS. The `ci` job carries a per-branch concurrency group with
+#      cancel-in-progress, so a newer push cancels an older run's gate instead
+#      of leaving it to go green and then either publish stale bytes or skip.
+#      Under a burst the site moves to the newest commit once that commit
+#      alone passes; nothing ever ships untested.
+#   2. MONOTONIC. Before entering the environment, and again under the Pages
+#      lock, `tools/ci/pages-publishable.sh` reads the live shell's apex-sha
+#      and publishes only if it is an ancestor of this run's commit. An older
+#      run that reaches the lock after a newer one has published stops there.
 #
-# Both symptoms trace to the same mistake: locking CI, which needs no
-# serialization at all (GitHub happily runs many CI jobs in parallel), for a
-# constraint that only actually applies to the Pages upload. Moving
-# `concurrency` onto the `deploy` job alone fixes it structurally rather than
-# picking a lesser evil: every push's `ci` job now runs immediately and in
-# parallel with no queue, so CI feedback stays fast regardless of push volume,
-# and only the short deploy-pages step at the tail end waits its turn — a
-# wait measured in the tens of seconds a Pages upload takes, not the whole CI
-# pipeline. cancel-in-progress: false there is now safe (it is what the
-# official Pages starter workflow ships) because there is nothing left
-# upstream of it to wedge.
+# What this replaces, and why (kept short; the runs are in the history):
+#   - 2026-08-12: workflow-level concurrency. cancel-in-progress: true starved
+#     the site (build 971 vs a 1145+ tip); false wedged every later push behind
+#     one slow pipeline. Fix: lock only the deploy job.
+#   - 2026-09-02: an exact-SHA gate ("TIP == GITHUB_SHA or skip") left the site
+#     on build 7320 for an hour while four green runs each skipped. Fix at the
+#     time: publish the branch TIP from any green ancestor run — which meant a
+#     commit could ship while its own gate was unfinished or failing. That was
+#     justified by "every push goes through deploy.mjs, which runs the node
+#     suites first"; PRs merged through GitHub do not, so the premise expired.
+#     This file's contract closes that path.
 jobs:
-  # The deploy gate. This workflow used to ship whatever was pushed, without
-  # running a single test — so a red suite reached the live site silently. The
-  # deploy job now `needs:` this, which means a failing guard blocks the deploy
-  # instead of merely being available to a human who might run it. Unlocked
-  # (no concurrency group) on purpose — see the comment above.
+  # The deploy gate: every job in ci.yml, aggregated by `needs: ci` below.
   ci:
     uses: ./.github/workflows/ci.yml
     with:
@@ -49,68 +45,42 @@ jobs:
       # deploy touch cannot move circuit geometry. Without it, workflow_call
       # always fail-safed into a full 15-minute sweep on every Pages push.
       before_sha: ${{ github.event.before }}
-      # Reusable-workflow concurrency otherwise groups every Pages call by this
-      # branch and GitHub cancels the older pending gate when another push lands.
+      # A unique key keeps ci.yml's OWN concurrency group out of the way; the
+      # group that matters is the one on this job.
       concurrency_key: pages-${{ github.run_id }}
+    # NEWEST WINS (rule 1 above). One group per branch; a newer push cancels
+    # this gate. A dispatched redeploy shares the group on purpose: a push that
+    # lands during it is newer, and newer is what gets published.
+    concurrency:
+      group: pages-gate-${{ github.ref }}
+      cancel-in-progress: true
 
-  # Keep runs that CANNOT truthfully publish out of the environment entirely. An
+  # Keep runs that CANNOT publish out of the environment entirely. An
   # environment job is itself a GitHub deployment: letting such a run enter it
   # and then skip deploy-pages records a misleading successful deployment for
-  # bytes that were never published. This early check is an
-  # optimisation/truthfulness guard; deploy repeats it under the Pages lock.
-  #
-  # SUPERSEDED IS NOT OBSOLETE (2026-09-02). This gate used to demand
-  # `TIP == GITHUB_SHA` and drop everything else, which STARVED the site under
-  # this branch's real push rate: ci is ~13 minutes and pushes land every ~6, so
-  # almost every run was superseded halfway through its own gate. Measured: runs
-  # 1892, 1893, 1894 and 1896 all went GREEN and all skipped deploy, and the live
-  # site sat on build 7320 (a8d5afed, run 1891) for over an hour while four
-  # gated commits waited behind it. The guard was not wrong about the hazard —
-  # publishing an older tree over a newer one is a real regression — it was
-  # wrong that discarding the run is the only way to avoid it.
-  #
-  # A run whose commit is an ANCESTOR of the tip is not stale, it is early: the
-  # tip contains everything this run gated plus more. So publish the TIP rather
-  # than this SHA and the hazard cannot arise — every deploy moves the site
-  # forward, whichever run reaches the Pages slot first. What still fails hard is
-  # a SHA that is not an ancestor at all (a force-push or a rewritten history),
-  # because publishing then really could move the site backwards.
-  #
-  # The cost, stated plainly: the published tip can include a commit whose own ci
-  # run has not finished. That is acceptable HERE and only here — every push to
-  # this branch goes through `tools/ci/deploy.mjs`, which runs the Pages gate's node
-  # suites before it pushes — and it is strictly better than the status quo,
-  # which published nothing at all.
-  current-tip:
+  # bytes that were never published. The deploy job repeats this check under
+  # the Pages lock, because the answer can change while a run waits for it.
+  publishable:
     needs: ci
     runs-on: ubuntu-latest
     outputs:
-      deploy: ${{ steps.tip.outputs.deploy }}
+      deploy: ${{ steps.pub.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0        # merge-base needs the history, not just the tip
-      - name: Can this run still publish?
-        id: tip
-        run: |
-          git fetch --no-tags origin "refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
-          TIP=$(git rev-parse "refs/remotes/origin/${GITHUB_REF_NAME}")
-          if [ "$TIP" = "$GITHUB_SHA" ]; then
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "this run IS the tip; publishing $GITHUB_SHA"
-          elif git merge-base --is-ancestor "$GITHUB_SHA" "$TIP"; then
-            echo "deploy=true" >> "$GITHUB_OUTPUT"
-            echo "SUPERSEDED but publishable: $GITHUB_SHA is an ancestor of $TIP — deploy will publish the TIP"
-          else
-            echo "deploy=false" >> "$GITHUB_OUTPUT"
-            echo "SKIPPING DEPLOY: $GITHUB_SHA is not an ancestor of the branch tip $TIP (history was rewritten)"
-          fi
+      - name: Is this commit still worth publishing?
+        id: pub
+        env:
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: echo "publish=$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL")" >> "$GITHUB_OUTPUT"
 
   deploy:
-    needs: current-tip
-    if: needs.current-tip.outputs.deploy == 'true'
+    needs: publishable
+    if: needs.publishable.outputs.deploy == 'true'
     # The ONLY step that actually touches GitHub's single-slot Pages queue.
-    # See the top-of-file comment for why this moved off the workflow level.
+    # cancel-in-progress stays false: a publish in flight is never interrupted,
+    # and a newer run simply queues behind it and publishes next.
     concurrency:
       group: pages
       cancel-in-progress: false
@@ -122,32 +92,26 @@ jobs:
       build: ${{ steps.stamp.outputs.build }}
     runs-on: ubuntu-latest
     steps:
+      # GITHUB_SHA, checked out as-is: the commit the gate above tested is the
+      # commit that gets staged, stamped and published. Nothing here re-reads
+      # the branch tip.
       - uses: actions/checkout@v4
         with:
           # The generation is 2000 + the commit count (see "Stamp the shell
           # generation"); a depth-1 checkout would count 1.
           fetch-depth: 0
-      # A newer push can land after current-tip passes or while this job waits
-      # for the serialized Pages slot, so the tip is re-read HERE, inside the
-      # lock, and it is the tip — not GITHUB_SHA — that gets published (see the
-      # current-tip comment: superseded is early, not stale). Checking out the
-      # tip here also means every later step — Stage site, the commit-count
-      # generation, apex-sha — describes the bytes actually going out.
-      # Failure is deliberate and still absolute: once an environment job exists
-      # it must not report success unless deploy-pages really publishes.
-      - name: Resolve and check out the branch tip inside the Pages lock
-        id: tipsha
+      # Rule 2, repeated inside the lock: a newer commit may have published
+      # while this run waited. Failure is deliberate and absolute — once an
+      # environment job exists it must not report success unless deploy-pages
+      # really publishes, and it must never publish an older tree over a newer.
+      - name: Confirm this commit may still be published (under the Pages lock)
+        env:
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: |
-          git fetch --no-tags origin "refs/heads/${GITHUB_REF_NAME}:refs/remotes/origin/${GITHUB_REF_NAME}"
-          TIP=$(git rev-parse "refs/remotes/origin/${GITHUB_REF_NAME}")
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$TIP"; then
-            echo "::error::REFUSING DEPLOY: $GITHUB_SHA is not an ancestor of the branch tip $TIP — history was rewritten and publishing could move the site backwards"
+          if [ "$(bash tools/ci/pages-publishable.sh "$GITHUB_SHA" "$SITE_URL")" != "true" ]; then
+            echo "::error::REFUSING DEPLOY: a newer build went live while this run waited for the Pages lock (or history diverged); $GITHUB_SHA is not published"
             exit 1
           fi
-          git checkout --detach "$TIP"
-          echo "sha=$TIP" >> "$GITHUB_OUTPUT"
-          if [ "$TIP" = "$GITHUB_SHA" ]; then echo "publishing this run's own commit $TIP";
-          else echo "publishing the TIP $TIP (this run gated the ancestor $GITHUB_SHA)"; fi
       - uses: actions/configure-pages@v5
       # Stage ONLY the runtime files. Uploading the repo root shipped a ~174 MB
       # artifact (142 MB of tests/ visual-regression snapshots + node_modules)
@@ -188,16 +152,15 @@ jobs:
       # (1689) so no client is told a lower number and refuses to reload
       # (index.html: `v.build <= loaded` -> stay). `--root _site` rehashes the
       # staged tags too, so the committed placeholder only has to be
-      # consistent, never current. <meta name="apex-sha"> records provenance,
-      # because the deployed shell no longer equals the committed bytes.
+      # consistent, never current. <meta name="apex-sha"> records provenance —
+      # and is what pages-publishable.sh reads back to keep deploys monotonic.
       - name: Stamp the shell generation
         id: stamp
         run: |
           set -eu
-          # HEAD is the TIP (checked out above), not GITHUB_SHA — so the count,
-          # the staged bytes and apex-sha all describe one commit: the one being
-          # published. Still monotonic: the tip's count only ever grows.
-          PUBLISH_SHA="${{ steps.tipsha.outputs.sha }}"
+          # HEAD is GITHUB_SHA: the count, the staged bytes and apex-sha all
+          # describe the one commit this run tested and is publishing.
+          PUBLISH_SHA="$GITHUB_SHA"
           BUILD=$(( 2000 + $(git rev-list --count HEAD) ))
           node tools/ci/bump-cache.mjs --apply --at "$BUILD" --root _site
           sed -i "s|<meta name=\"apex-build\" content=\"$BUILD\">|<meta name=\"apex-build\" content=\"$BUILD\">\n<meta name=\"apex-sha\" content=\"$PUBLISH_SHA\">|" _site/index.html

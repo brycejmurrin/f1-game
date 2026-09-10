@@ -1,4 +1,6 @@
-/* Apex 26 — TLXShaders.shadowSys: the three-map shadow subsystem for the TLX backend (M4). The three.js sibling of js/render/glx/shadow.js: - STATIC SUN map 2048²… */
+/* Apex 26 — TLXShaders.shadowSys: the three-map shadow subsystem for the TLX
+ * backend (M4). The three.js sibling of js/render/glx/shadow.js: a static SUN
+ * map, a dynamic CAR map and a nearest-lamp map, sized off device tier. */
 "use strict";
 
 (function () {
@@ -89,7 +91,7 @@
     S.carEnabled = !!carRT;
     S.lampEnabled = !!lampRT;
 
-    // ── PCSS blocker map (header note): 512² R16F min-of-4 downsample.
+    // PCSS blocker map (header note): 512² R16F min-of-4 downsample.
     // WebGPU: textureLoad the compare-mode depth texture (no sampler).
     // Desktop WebGL2: textureLoad the R16F color attachment the sun pass
     // writes TSL.depth into. Guarded: any construction failure leaves the
@@ -130,7 +132,7 @@
       }
     }
 
-    // ── depth camera: matrices set verbatim from the game's column-major
+    // Depth camera: matrices set verbatim from the game's column-major
     // lightVP (proj×view combined), identity view — same manual-matrix trick
     // as tlx.js's no-track begin() path. coordinateSystem pinned so the
     // renderer's first-render sync never calls updateProjectionMatrix() and
@@ -142,7 +144,7 @@
     shadowCam.matrixWorld.identity();
     shadowCam.matrixWorldInverse.identity();
 
-    // ── depth-only caster material: constant-black fragment, depth is the
+    // Depth-only caster material: constant-black fragment, depth is the
     // payload. DoubleSide == GLX's gl.disable(CULL_FACE) in every shadow pass
     // — back faces land in the map so contact shadows don't peter-pan.
     // NOTE: colorWrite must stay TRUE — the WebGL backend applies the next
@@ -157,7 +159,7 @@
     depthMat.lights = false;
     depthMat.customProgramCacheKey = () => "tlx-depth";
 
-    // ── caster scene + pooled mesh wrappers (the tlx.js draw-list pattern) ──
+    // caster scene + pooled mesh wrappers (the tlx.js draw-list pattern)
     const castScene = new THREE.Scene();
     castScene.matrixWorldAutoUpdate = false;
     const pool = [];
@@ -302,7 +304,7 @@
       renderer.setRenderTarget(prev);
     })();
 
-    // ── the seam members (game.js call order: Begin → cast* → End) ──────────
+    // The seam members (game.js call order: Begin -> cast* -> End).
     function shadowBegin(lightVP) {
       if (!S.enabled) return;
       beginPass(sunRT, lightVP, S.lightVP);

@@ -364,6 +364,7 @@
         "tests/unit/setup-tune.test.mjs",
         "tests/unit/body-split.test.mjs",
         "tests/unit/cover-legibility.test.mjs",
+        "tests/unit/fill-gating.test.mjs",
         "tests/unit/parts-distinct-mesh.test.mjs",
         "tests/unit/helmets.test.mjs"
       ]

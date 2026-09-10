@@ -252,7 +252,7 @@ const NetNostr = (function () {
     return new Promise((resolve) => {
       let done = false, settled = false;
       const shut = () => {
-        for (const w of sockets) { try { w.close(); } catch (e) {} }
+        for (const w of sockets) { try { w.close(); } catch (e) { /* already closing */ } }
         sockets.length = 0;
       };
       // Every deadline goes through later() so finish() can reclaim it — an
@@ -269,7 +269,7 @@ const NetNostr = (function () {
         shut();
         nostrLog(r);
         if (!settled) { settled = true; resolve(r); return; }
-        if (onFail) { try { onFail(r); } catch (e) {} }
+        if (onFail) { try { onFail(r); } catch (e) { /* a caller bug must not re-throw into finish() */ } }
       };
 
       const publish = async (text) => {
@@ -286,7 +286,7 @@ const NetNostr = (function () {
             }
           } catch (e) { /* non-fatal — OK tracking just won't fire */ }
         } catch (e) { return; }
-        for (const w of sockets) { if (w.readyState === 1) { try { w.send(frame); } catch (e) {} } }
+        for (const w of sockets) { if (w.readyState === 1) { try { w.send(frame); } catch (e) { /* socket died between the readyState check and send */ } } }
       };
 
       const heard = async (b64) => {
@@ -328,7 +328,7 @@ const NetNostr = (function () {
 
       const tick = setInterval(() => {
         if (token && token.cancelled) finish({ ok: false, error: "cancelled", message: "" });
-        else if (onTick) { try { onTick(); } catch (e) {} }
+        else if (onTick) { try { onTick(); } catch (e) { /* a caller bug must not stop the exchange */ } }
       }, 1000);
 
       const repost = setInterval(() => { if (!done && current) publish(current); }, REPOST_MS);
@@ -346,12 +346,12 @@ const NetNostr = (function () {
         w.onopen = () => {
           opened++;
           if (!subId) subId = "s" + Math.floor(Date.now() % 1e6);
-          try { w.send(mod.subscribe(subId, theirTopic)); } catch (e) {}
+          try { w.send(mod.subscribe(subId, theirTopic)); } catch (e) { /* socket died between open and send */ }
           if (current) publish(current);
         };
         w.onmessage = (ev) => {
           const frame = readRelayFrame(ev.data);
-          if (frame.close) { try { w.close(); } catch (e) {} return; }
+          if (frame.close) { try { w.close(); } catch (e) { /* already closing */ } return; }
           const m = frame.message;
           // Array.isArray, not a bare index: JSON.parse("null") succeeds INSIDE
           // the try and `null[0]` then threw out of the handler — past the
@@ -372,7 +372,7 @@ const NetNostr = (function () {
           }
           if (m[0] === "EVENT" && m[2] && typeof m[2].content === "string" &&
               inbox.accept(m[2].content) === false) {
-            try { w.close(); } catch (e) {}
+            try { w.close(); } catch (e) { /* already closing */ }
           }
         };
         w.onerror = () => {};
@@ -392,7 +392,7 @@ const NetNostr = (function () {
             message: "Every room relay is refusing this code. It may still connect —"
                    + " if it does not, use the invite link or QR, which need no"
                    + " third party." });
-        } catch (e) {}
+        } catch (e) { /* a caller bug must not re-enter this advisory path */ }
       };
       later(maybeAdviseRejected, RELAY_CHECK_MS);
 

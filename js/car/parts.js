@@ -1,39 +1,17 @@
 "use strict";
 /* Apex 26 — Parts catalog and stat helpers. Twelve upgrade categories; supplier-locked options fall back via getMods/getCost; statMult() maps 0–100 team stats to 0.85–1.00; visualTier drives Car3D geometry only; SIGNATURE options clone `equivalent` for mesh identity — see FACTORY_PRESETS. */
 const Parts = (function () {
-  // 600 held while the catalog was 285 options; the thin categories have since
-  // been filled out (floor, cockpit, exhaust and wheels gained three each), and
-  // more chips competing for the same spend just crowds the existing ones out.
-  // 780 is ~30% more room, which is NOT enough to fit a good part everywhere —
-  // one top option per category still totals ~2340 — so the choice stays a real
-  // trade-off rather than becoming a shopping list.
+  // 780 is NOT enough to fit a good part everywhere (one top option per
+  // category totals ~2340), so the spend stays a real trade-off.
   const BUDGET = 780;
 
   const CATALOG = [
     {
       id: "engine", label: "ENGINE",
-      // THE CORE POWER LADDER WAS ONE BODY AT THIRTEEN SCALES. Measured
-      // 2026-08-30 over the resolved recipes: `servicePanel` (0-4 cover-flank
-      // panels) and `heatShield` (a tail plate whose width scales with it) were
-      // set by `stock` and by NOTHING else, and `chimney` (0-3 pod-shoulder
-      // cooling stacks a side — the loudest silhouette element this category
-      // owns) was reached only by the three options named for it further down,
-      // never by stock/lean_burn/performance/v_power/turbo/highrev/evo_kit/
-      // sprint/race/split_turbo/torque_curve/hybrid_max/quali_engine. What was
-      // left to tell those thirteen apart was a MONOTONE BODY SCALE — podWidth
-      // and shoulderHeight up together, undercut and coke down together — which
-      // is why `performance` and `evo_kit` scored 0.332 on a range-normalised
-      // key distance whose category median was 1.6: the same car, 4% bigger,
-      // for 45 more credits.
-      //
-      // Each of those rungs now carries its own COOLING PACKAGE, and the
-      // packages do not track the price: `lean_burn` is the bare cover (no
-      // chimneys, no shield, no panels — an efficiency unit that does not need
-      // them), `highrev` runs three chimneys a side and zero panels,
-      // `performance` is the opposite (four panels, no chimneys, a double-width
-      // shield). The (chimney, servicePanel, heatShield) tuple is unique across
-      // every universal option. Costs and stats are untouched, so the ladder is
-      // bit-identical and no SIGNATURE needed propagating.
+      // Every universal rung owns a distinct (chimney, servicePanel, heatShield)
+      // cooling package that does not track price — the ladder used to be one
+      // body at thirteen scales (`performance` vs `evo_kit` scored 0.332 on a
+      // key distance whose category median was 1.6). Costs and stats untouched.
       options: [
         { id: "stock",        label: "Stock",          cost:   0, desc: "Factory spec power unit",                                           visual: { in: 0.85, inlet: 1, outlet: 1, podWidth: 1, shoulderHeight: 1, undercut: 1, coke: 1, tailWidth: 1, coverHeight: 1, servicePanel: 1, heatShield: 1 }, visualTier: 1 },
         { id: "lean_burn",    label: "Lean Burn",      cost:  35, desc: "Efficiency-tuned mapping — fuel saving with surprising torque",     accel: 1.05, braking: 1.02, visual: {"in": 0.72, "inlet": 0, "outlet": 0, podWidth: 0.88, shoulderHeight: 0.92, undercut: 1.18, coke: 1.15, tailWidth: 0.88, coverHeight: 0.90, chimney: 0, servicePanel: 0, heatShield: 0}, visualTier: 1 },
@@ -173,27 +151,11 @@ const Parts = (function () {
     },
     {
       id: "brakes", label: "BRAKES",
-      // EVERY PAID RUNG USED TO BE THE SAME WHEEL WITH A BIGGER DUCT. Measured
-      // 2026-08-30 (scratch pairwise over the resolved recipes): of the eight
-      // geometry keys this category registers, the universal ladder left FOUR —
-      // `caliperPos`, `coverOpen`, `rotor` and `rotorScale` — at the tier
-      // default on every single option and varied `duct` (0.55 -> 1.75)
-      // monotonically with price, so all twelve tier-2 brakes rendered an
-      // IDENTICAL wheel face — caliper at 12 o'clock, cover open one-in-three,
-      // rotor 2 at scale 1.12, on every one of them. The closest
-      // pairs scored 0.083 on a range-normalised key distance where the
-      // category median was 0.9. `six_piston` — the 180 cr option whose entire
-      // identity is its caliper — did not set `caliper` at all and drew the
-      // stock three-box peek, while `brembo_evo` got the six-piston radial.
-      //
-      // So each rung now owns a HARDWARE SIGNATURE instead of a duct size: the
-      // caliper sits at its own clock position (the arc radius is r*0.78, so
-      // 0.5 rad moves it ~130 mm — six times the 20 mm WEAK floor and the
-      // loudest single knob here), the cover is solid / one-in-three / one-in-two,
-      // and the disc's diameter, bobbin count and face pattern move with the
-      // story the option tells. `duct` and the caliper colour are unchanged.
-      // Costs and all four stats are untouched — this is a look pass, so no
-      // SIGNATURE needed propagating and the ladder is bit-identical.
+      // Each rung owns a HARDWARE SIGNATURE (caliper clock position, cover
+      // solid / one-in-three / one-in-two, disc diameter and face) rather than
+      // just a duct size — all twelve tier-2 brakes used to render an identical
+      // wheel face. 0.5 rad of caliperPos is ~130 mm at r*0.78, the loudest
+      // single knob here. Costs and stats untouched.
       options: [
         { id: "standard",    label: "Standard",         cost:   0, desc: "Factory steel brake discs",                                                 visual: { cal: null, duct: 0.55, caliperPos: 0, coverOpen: 0, rotor: 1, rotorScale: 1 }, visualTier: 1 },
         // Cross-drilled: the drill pattern IS the option, so it opens the cover
@@ -260,12 +222,9 @@ const Parts = (function () {
         { id: "slick_track",  label: "Slick Track",   cost:  40, desc: "Pure dry-weather slick — optimised compound structure",                       speed: 1.01, accel: 1.01, cornering: 1.04, braking: 1.04, visual: {band: [0.8, 0.82, 0.88], grooves: 0, bandWidth: 0.045, coverVanes: 10}, visualTier: 1 },
         { id: "compound_c4",  label: "Compound C4",   cost:  55, desc: "Pirelli's track-ready soft — reliable grip upgrade over Hard/Medium",         speed: 0.98, accel: 1.02, cornering: 1.08, braking: 1.06, visual: {band: [0.95, 0.42, 0.1], grooves: 0, bandWidth: 0.085, coverVanes: 7}, visualTier: 2 },
         { id: "soft",         label: "Soft",          cost:  80, desc: "+12% cornering, +4% accel — some top speed drag",                            speed: 0.97, accel: 1.04, cornering: 1.12, braking: 1.06, visual: {band: [0.92, 0.12, 0.1], grooves: 0, bandWidth: 0.1, coverVanes: 6, shoulder: 1}, visualTier: 2 },
-        // Was a 20 cr reskin of `soft`: the same red band ([0.97,0.16,0.12] against
-        // [0.92,0.12,0.10] — 5% apart, under the sweep's 0.06 colour floor), the
-        // same shoulder, and one wheel-cover vane and 15 mm of band width between
-        // them. It is the SOFTEST dry compound in the catalog, so it now wears the
-        // widest band, the squared shoulder and a magenta wall nobody else has.
-        // Stats and cost untouched; compound_c5 carries no SIGNATURE.
+        // The softest dry compound wears the widest band, the squared shoulder
+        // and a magenta wall nobody else has — it used to be a 20 cr reskin of
+        // `soft` (band colours 5 % apart, under the sweep's 0.06 floor).
         { id: "compound_c5",  label: "Compound C5",   cost: 100, desc: "High-spec soft — aggressive grip over one stint, strong accel",               speed: 0.96, accel: 1.05, cornering: 1.15, braking: 1.08, visual: {band: [1.00, 0.34, 0.62], grooves: 0, bandWidth: 0.132, coverVanes: 4, shoulder: 2}, visualTier: 2 },
         { id: "supersoft",    label: "Super Soft",    cost: 125, desc: "High grip compound — aggressive tyre load",                                   speed: 0.94, accel: 1.06, cornering: 1.20, braking: 1.10, visual: {band: [0.88, 0.1, 0.3], grooves: 0, bandWidth: 0.12, coverVanes: 8, shoulder: 2}, visualTier: 2 },
         { id: "p_zero_red",   label: "P Zero Red",    cost: 145, desc: "Custom Pirelli high-performance compound — between Super Soft and Quali",     speed: 0.92, accel: 1.07, cornering: 1.24, braking: 1.13, visual: {sidewall: 1, band: [0.97, 0.07, 0.07], grooves: 0, bandWidth: 0.13, coverVanes: 9}, visualTier: 2 },
@@ -302,22 +261,11 @@ const Parts = (function () {
     },
     {
       id: "ers", label: "ERS",
-      // THE TOP OF THE LADDER HAD NO CELL STRIP OF ITS OWN. `cells` is the count
-      // of glowing energy-cell boxes along each pod flank (car3d clamps it to
-      // 1-8), and it was set by the CHEAP half only: eight options — deploy,
-      // overtake_focus, race_mode, torque_fill, supercapacitor, full_attack,
-      // overcharge and thermal_max — omitted it and inherited the same tier
-      // default, so the six dearest packages in the game all rendered the same
-      // six-cell strip. Worse, `overtake_focus` and `race_mode` (both 115 cr)
-      // resolved to a BYTE-IDENTICAL recipe — pack 1.2, cells 6, blister 2,
-      // no conduit, no intake — and differed only in LED colour. Two same-price
-      // options that are one recolour apart is the definition of a reskin.
-      //
-      // Every universal option now owns a distinct (pack, cells, blister,
-      // conduit, coolerIntake) tuple, and the count follows the STORY: a
-      // supercapacitor is a couple of big cans (2), an overtake map lights the
-      // whole flank (8), harvest runs cool and small (2). Costs and stats are
-      // untouched, so no SIGNATURE needed propagating.
+      // Every universal option owns a distinct (pack, cells, blister, conduit,
+      // coolerIntake) tuple and `cells` (1-8 glowing boxes per pod flank) follows
+      // the story — the dear half used to inherit one six-cell default and
+      // `overtake_focus` / `race_mode` resolved byte-identical. Costs and stats
+      // untouched.
       options: [
         { id: "standard",       label: "Standard",      cost:   0, desc: "Balanced energy recovery and deployment",                                    visual: { led: [0.15, 0.55, 1.6], pack: 1.0, cells: 3 }, visualTier: 1 },
         { id: "regen_plus",     label: "Regen+",        cost:  90, desc: "Enhanced braking recovery — harvests extra energy under braking",            accel: 1.05, braking: 1.05, visual: {led: [0.12, 1.5, 0.55], pack: 1.05, blister: 1, cells: 4}, visualTier: 1 },
@@ -400,23 +348,11 @@ const Parts = (function () {
     },
     {
       id: "fuel", label: "FUEL",
-      // FUEL WAS THE ONE CATEGORY WITH NO TRADE AT ALL. Measured 2026-08-30:
-      // every one of the ten distinct rows sat at or above 1.00 on all four
-      // stats, and the cornering column spanned 1.00-1.02 while braking spanned
-      // 1.00-1.04. A column no option can lose on is not a choice — it is a
-      // shopping list, and the only question the garage asked was how many
-      // credits you had left.
-      //
-      // Fuel is MASS, and mass is the trade the four stats can express: energy
-      // density buys speed and accel, the charge you carry to get it costs
-      // cornering and braking. So the three SIGNATURE-FREE rows now sit at the
-      // ends of that axis — quali_mix is the heavy one-lap weapon (0.95 on both
-      // grip stats, the deepest penalty in the catalog), quick_fill and
-      // hydro_synth are the light ones that give up top end — and cold_blend
-      // takes one point of cornering to hold its rung between them. The six
-      // rows that carry SIGNATUREs (standard, high_octane, biofuel, race_blend,
-      // efuel_dense, custom_formula) are untouched, so NOTHING needed
-      // propagating. Ladder re-checked after: 10 of 10 live, 0 traps.
+      // Fuel is MASS: energy density buys speed and accel, the charge carried
+      // costs cornering and braking. The SIGNATURE-free rows sit at the ends of
+      // that axis (quali_mix heavy, quick_fill / hydro_synth light) so the
+      // category has a trade — every row used to sit at or above 1.00 on all
+      // four stats. The six rows with SIGNATUREs are untouched.
       options: [
         { id: "standard",      label: "Standard",       cost:   0, desc: "Baseline pump-spec fuel — meets FIA minimum grade",                          visual: { cap: [0.55, 0.52, 0.6], flame: [1.15, 0.42, 0.14], fxFlame: [2.6, 1.05, 0.25], line: 1 }, visualTier: 1 },
         { id: "high_octane",   label: "High Octane",    cost:  45, desc: "Higher octane blend — cleaner combustion and accel improvement",             accel: 1.05, visual: {"cap": [1.5, 1.15, 0.18], "flame": [1.75, 1.4, 0.45], "fxFlame": [2.7, 2.1, 0.7]}, visualTier: 1 },
@@ -455,19 +391,11 @@ const Parts = (function () {
     },
     {
       id: "exhaust", label: "EXHAUST",
-      // THE BLOWN FLOOR IS THE CORNERING COLUMN. Measured 2026-08-30: exhaust
-      // moved cornering across a span of 0.01 — a single option at 1.01 and ten
-      // at exactly 1.00 — so the category was one ladder (power) with a
-      // decoration on the side, and every rung above 90 cr was the same shape
-      // of purchase. Exhaust gas over the diffuser edge is the one real thing an
-      // exhaust does to grip, and it is a TRADE: the plume you spend on
-      // downforce is not going out of the pipe. So the flared exits now buy
-      // cornering with top end (megaphone 1.02, flared_gate 1.05 and 1.00 speed
-      // apiece) and the SHIELDED exit is the opposite rung — heat kept off the
-      // floor, no blowing, the highest speed in the category at 1.06.
-      // `sig_williams_exh` clones megaphone and was propagated with it;
-      // flared_gate and shielded_tri carry no SIGNATURE. Ladder re-checked
-      // after: 11 of 11 live, 0 traps.
+      // The blown floor is the cornering column: flared exits buy cornering
+      // with top end (megaphone 1.02, flared_gate 1.05) and the shielded exit is
+      // the opposite rung (no blowing, 1.06 speed). Exhaust used to move
+      // cornering by 0.01 across the whole ladder. `sig_williams_exh` clones
+      // megaphone and was propagated with it.
       options: [
         { id: "stock",      label: "Stock",          cost:   0, desc: "Factory tailpipe, sized to the power unit's own plumbing",                    visual: { pipes: null, bore: 1, flare: 0, wastegate: 0, wrap: 0 , shield: 1}, visualTier: 1 },
         { id: "sport_cat",  label: "Sport Cat",      cost:  30, desc: "Freer catalyst section — a little less back-pressure everywhere",             accel: 1.03, visual: {pipes: null, bore: 1.12, flare: 0.5, wastegate: 0, wrap: 0, shield: 1}, visualTier: 1 },
@@ -589,13 +517,10 @@ const Parts = (function () {
         { id: "aero_disc", label: "Aero Disc",    cost: 130, desc: "Fully dished aero disc — top speed at the cost of brake cooling",           speed: 1.07, cornering: 1.02, braking: 0.95, visual: { deflector: 1, spokes: 0, tape: 1, dish: 2, nut: [0.15, 0.60, 0.95] , gunNut: 1}, visualTier: 2 },
         { id: "works_rim", label: "Works Rim",    cost: 170, desc: "Works-spec rim package — the complete wheel, and it looks it",              speed: 1.04, accel: 1.06, cornering: 1.06, braking: 1.05, visual: { deflector: 2, spokes: 6, tape: 1, dish: 2, nut: [0.98, 0.62, 0.05] , gunNut: 1}, visualTier: 2 },
         { id: "open_spoke",    label: "Open Spoke",      cost:  35, desc: "Eight open spokes — brake cooling at the price of a little wake", speed: 0.98, braking: 1.06, visual: { spokes: 8, tape: 0, dish: 0, gunNut: 1, deflector: 0 }, visualTier: 1 },
-        // EXACT geometry clone of aero_disc until 2026-08-30 (spokes 0 / tape 1 /
-        // dish 2 / gunNut 1 / deflector 1 on both), 45 cr apart, and its `tape`
-        // rendered INVISIBLE: car3d paints the rim tape in `nut` and falls back to
-        // the tyre-band colour, so a taped rim with no nut colour is a black band
-        // on black rubber. It is now the SPOKED half of that pair — eight blades
-        // under a shallow dish with the tape actually coloured — leaving aero_disc
-        // as the solid deep-dish face the two names always promised.
+        // The SPOKED half of the aero_disc pair (it was an exact geometry clone
+        // 45 cr apart). car3d paints rim tape in `nut` and falls back to the
+        // tyre-band colour, so a taped rim needs a nut colour or it is a black
+        // band on black rubber.
         { id: "taped_dish",    label: "Taped Dish",      cost:  85, desc: "Taped spokes over a dished face — clean outwash, runs the brakes hotter", speed: 1.05, cornering: 1.04, braking: 0.96, visual: { spokes: 8, tape: 1, dish: 1, gunNut: 1, deflector: 0, nut: [0.90, 0.86, 0.30] }, visualTier: 2 },
         { id: "deflector_max", label: "Deflector Max",   cost: 155, desc: "Full deflector set over a taped rim — the most aero wheel available", speed: 1.05, cornering: 1.10, braking: 0.98, visual: { spokes: 0, tape: 1, dish: 1, gunNut: 1, deflector: 2, nut: [0.55, 0.58, 0.66] }, visualTier: 2 },
         { id: "deflector_kit", label: "Deflector Kit", cost: 100, desc: "Biplane over-wheel deflectors with endplates — tames the front tyre wake", speed: 0.98, cornering: 1.08, braking: 1.03, visual: { deflector: 2, spokes: 3, tape: 0, dish: 0, nut: [0.30, 0.85, 0.45], gunNut: 1 }, visualTier: 2 },
@@ -668,15 +593,11 @@ const Parts = (function () {
     }),
   });
 
-  // Fixed visual identity for the 2026 grid. These are never read from player
-  // saves and never alter AI physics; they only select deterministic car meshes.
-  // Every team fields its own SIGNATURE part in EVERY category — each one cloned
-  // from the universal option that team already ran, so cost and all four stat
-  // multipliers are unchanged and this shapes the meshes, not the pecking order.
-  // The four teams on a manufacturer-exclusive FACTORY power unit keep it: that
-  // unit is already a team-unique model, so a signature engine would be
-  // redundant. Cadillac is the exception — it is Ferrari-powered and would
-  // otherwise render the exact same power unit as Ferrari.
+  // Fixed visual identity for the 2026 grid: never read from player saves,
+  // never alters AI physics. Every SIGNATURE part clones the universal option
+  // the team already ran (same cost and stats), so this shapes meshes, not the
+  // pecking order. Teams on a manufacturer-exclusive FACTORY unit keep it —
+  // except Ferrari-powered Cadillac, which would otherwise render Ferrari's.
   const FACTORY_PRESETS = {
     mercedes:    { engine: "sig_mercedes_zero", aero: "sig_mercedes_wing", suspension: "sig_mercedes_susp", brakes: "sig_mercedes_discs", tyres: "sig_mercedes_tyre", ers: "sig_mercedes_ers", gearbox: "sig_mercedes_gbox", fuel: "sig_mercedes_fuel", exhaust: "sig_mercedes_exh", floor: "sig_mercedes_floor", cockpit: "sig_mercedes_cpit", wheels: "sig_mercedes_rim" },
     ferrari:     { engine: "manu_ferrari", aero: "sig_ferrari_wing", suspension: "sig_ferrari_susp", brakes: "sig_ferrari_brembo", tyres: "sig_ferrari_tyre", ers: "sig_ferrari_ers", gearbox: "sig_ferrari_seamless", fuel: "sig_ferrari_fuel", exhaust: "sig_ferrari_exh", floor: "sig_ferrari_floor", cockpit: "sig_ferrari_cpit", wheels: "sig_ferrari_rim" },
@@ -703,8 +624,8 @@ const Parts = (function () {
     const ctx = teamContext(team);
     const suppliers = opt.suppliers || (opt.supplier ? [opt.supplier] : null);
     const teams = opt.teams || (opt.team ? [opt.team] : null);
-    if (suppliers && suppliers.indexOf(ctx.engine) < 0) return false;
-    if (teams && teams.indexOf(ctx.id) < 0) return false;
+    if (suppliers && !suppliers.includes(ctx.engine)) return false;
+    if (teams && !teams.includes(ctx.id)) return false;
     if (owned && !owned.has(opt.id)) return false;
     return true;
   }
@@ -715,6 +636,8 @@ const Parts = (function () {
     if (opt && !isOptionAvailable(opt, team)) opt = null;
     return opt || cat.options.find((o) => o.id === DEFAULTS[cat.id]) || cat.options[0];
   }
+
+  const STAT_ORDER = ["speed", "accel", "cornering", "braking"];
 
   // `tune` (optional) is the SETUP SHEET's four-channel contribution
   // (SetupTune.mods) — multiplied in after the parts. factoryResolved never
@@ -740,7 +663,9 @@ const Parts = (function () {
       if (opt.cornering !== undefined) mods.cornering *= opt.cornering;
       if (opt.braking   !== undefined) mods.braking   *= opt.braking;
     }
-    if (tune) for (const k of ["speed", "accel", "cornering", "braking"]) if (Number.isFinite(tune[k])) mods[k] *= tune[k];
+    if (tune) {
+      for (const k of STAT_ORDER) if (Number.isFinite(tune[k])) mods[k] *= tune[k];
+    }
     return { setup: resolvedSetup, mods, cost, ids: resolvedSetup, tiers, visual, options };
   }
 
@@ -754,7 +679,7 @@ const Parts = (function () {
   const factoryCache = new Map();
   function factoryResolved(team) {
     const id = team && team.id || "";
-    const key = id + "|" + (team && team.engine || "");
+    const key = `${id}|${team && team.engine || ""}`;
     let resolved = factoryCache.get(key);
     if (!resolved) {
       resolved = resolveSetup(FACTORY_PRESETS[id] || DEFAULTS, team);
@@ -795,41 +720,34 @@ const Parts = (function () {
     Object.freeze({ key: "cornering", label: "CORNERING" }),
     Object.freeze({ key: "braking", label: "BRAKING" }),
   ]);
-  const STAT_KNEE = 100, STAT_CAP = 120, STAT_KNEE_SCALE = 26;
+  const STAT_KNEE = 100;
+  const STAT_CAP = 120;
+  const STAT_KNEE_SCALE = 26;
   function displayStat(raw) {
     if (raw <= STAT_KNEE) return raw;
     return STAT_KNEE + (STAT_CAP - STAT_KNEE) * (1 - Math.exp(-(raw - STAT_KNEE) / STAT_KNEE_SCALE));
   }
 
-  const AERO_SPAN = (function () {
-    const cat = CATALOG.find((c) => c.id === "aero");
+  // The { lo, hi } range one stat multiplier spans across a category's options
+  // (an absent multiplier is 1), and where a value sits in it, 0..1.
+  function statSpan(catId, key) {
+    const cat = CATALOG.find((c) => c.id === catId);
     let lo = Infinity, hi = -Infinity;
     for (const o of cat.options) {
-      const w = o.cornering !== undefined ? o.cornering : 1;
-      if (w < lo) lo = w;
-      if (w > hi) hi = w;
+      const v = o[key] !== undefined ? o[key] : 1;
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
     }
     return { lo, hi };
-  })();
-  const ERS_SPAN = (function () {
-    const cat = CATALOG.find((c) => c.id === "ers");
-    const span = (k) => {
-      let lo = Infinity, hi = -Infinity;
-      for (const o of cat.options) {
-        const v = o[k] !== undefined ? o[k] : 1;
-        if (v < lo) lo = v;
-        if (v > hi) hi = v;
-      }
-      return { lo, hi };
-    };
-    return { deploy: span("accel"), regen: span("speed") };
-  })();
+  }
+  function spanFraction(v, span) {
+    return span.hi > span.lo ? Math.max(0, Math.min(1, (v - span.lo) / (span.hi - span.lo))) : 0.5;
+  }
+  const AERO_SPAN = statSpan("aero", "cornering");
+  const ERS_SPAN = { deploy: statSpan("ers", "accel"), regen: statSpan("ers", "speed") };
   function ersProfile(setup, team) {
     const opt = resolveSetup(setup, team).options.ers;
-    const at = (k, span) => {
-      const v = opt && opt[k] !== undefined ? opt[k] : 1;
-      return span.hi > span.lo ? Math.max(0, Math.min(1, (v - span.lo) / (span.hi - span.lo))) : 0.5;
-    };
+    const at = (k, span) => spanFraction(opt && opt[k] !== undefined ? opt[k] : 1, span);
     return { deploy: at("accel", ERS_SPAN.deploy), regen: at("speed", ERS_SPAN.regen) };
   }
 
@@ -840,20 +758,15 @@ const Parts = (function () {
   function aeroLoad(setup, team, tune) {
     const opt = resolveSetup(setup, team).options.aero;
     const w = opt && opt.cornering !== undefined ? opt.cornering : 1;
-    const { lo, hi } = AERO_SPAN;
-    const base = hi > lo ? Math.max(0, Math.min(1, (w - lo) / (hi - lo))) : 0.5;
+    const base = spanFraction(w, AERO_SPAN);
     const rake = tune && Number.isFinite(tune.rake) ? Math.max(-1, Math.min(1, tune.rake)) : 0;
     return rake ? Math.max(0, Math.min(1, base + RH_GAIN * rake)) : base;
   }
 
-  // getVisualTiers(setup, teamEngine) -> { engine:0|1|2, aero:0|1|2, ... } —
-  // the resolved cosmetic tier per category, consumed by Car3D.build(opts.parts)
-  // to drive the parts-driven visual redesign. Mirrors getMods()'s resolution
-  // loop exactly (same _resolve(), same supplier-lock fallback) so an option
-  // that's invisible in the setup UI (locked out by engine supplier) can never
-  // resolve to a visual tier either. Untagged options (shouldn't happen — every
-  // CATALOG option above carries visualTier) fall back to 1, the neutral/default
-  // tier, so a missing tag can never produce an unexpected geometry change.
+  // { engine: 0|1|2, aero: 0|1|2, ... } — the resolved cosmetic tier per
+  // category for Car3D.build(opts.parts). Shares resolveSetup's supplier-lock
+  // fallback, so an option locked out of the setup UI can never resolve to a
+  // visual tier either; an untagged option falls back to tier 1.
   function getVisualTiers(setup, team) {
     const resolved = resolveSetup(setup, team);
     const out = Object.assign({}, resolved.tiers);
@@ -862,7 +775,7 @@ const Parts = (function () {
     return out;
   }
 
-  Log.info("car", "parts catalog n=" + CATALOG.length);
+  Log.info("car", `parts catalog n=${CATALOG.length}`);
   return {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable,

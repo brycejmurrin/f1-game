@@ -15,7 +15,7 @@ const NetRendezvous = (function () {
 
   function baseUrl() {
     let raw = DEFAULT_URL;
-    try { raw = (localStorage.getItem(STORE_KEY) || "").trim() || DEFAULT_URL; } catch (e) {}
+    try { raw = (localStorage.getItem(STORE_KEY) || "").trim() || DEFAULT_URL; } catch (e) { /* storage blocked (private mode): use the default */ }
     if (!raw) return null;
     // Trailing slash normalised here so callers never have to think about it.
     return String(raw).replace(/\/+$/, "");
@@ -311,7 +311,7 @@ const NetRendezvous = (function () {
       if (Date.now() - started > POLL_TIMEOUT_MS) {
         return ERR("expired", "Nobody joined that code. Codes only last a couple of minutes.");
       }
-      if (onTick) { try { onTick(Math.round((Date.now() - started) / 1000)); } catch (e) {} }
+      if (onTick) { try { onTick(Math.round((Date.now() - started) / 1000)); } catch (e) { /* a caller bug must not stop the poll */ } }
       await new Promise((r) => setTimeout(r, POLL_MS));
     }
   }

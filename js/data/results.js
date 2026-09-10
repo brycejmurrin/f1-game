@@ -113,7 +113,7 @@ const DataResults = (function () {
       const myGen = ++bodyGen;
       round = "all";           // a new session starts on its own overall order
       clear(body);
-      if (!meta || meta.sessionKey === null || meta.sessionKey === undefined) {
+      if (!meta || meta.sessionKey == null) {
         body.appendChild(emptyMsg(NO_RESULT_MSG));
         return;
       }
@@ -195,12 +195,20 @@ const DataResults = (function () {
       return box;
     }
 
-    function head(cols) {
+    function tableHead(cols) {
       const thead = el("thead");
       const hr = el("tr");
       cols.forEach(function (h) { hr.appendChild(el("th", h[1], h[0])); });
       thead.appendChild(hr);
       return thead;
+    }
+
+    // Every table renders as one bare <div> wrapper around its <table> — the
+    // wrapper is what the caller (paint) clears and swaps on a re-sort.
+    function tableWrap(t) {
+      const wrap = el("div");
+      wrap.appendChild(t);
+      return wrap;
     }
 
     // A full-width band between two groups of rows: "eliminated in Q1".
@@ -253,7 +261,7 @@ const DataResults = (function () {
       if (kind === "race") cols.push(["PTS", null]);
 
       const t = el("table", "dh-table");
-      t.appendChild(head(cols));
+      t.appendChild(tableHead(cols));
       const tbody = el("tbody");
       byPos(rows).forEach(function (r) {
         const tr = el("tr");
@@ -271,15 +279,13 @@ const DataResults = (function () {
         tbody.appendChild(tr);
       });
       t.appendChild(tbody);
-      const wrap = el("div");
-      wrap.appendChild(t);
-      return wrap;
+      return tableWrap(t);
     }
 
     // OVERALL: the classification, with a band wherever the field thinned.
     function qualiTable(meta, rows, byNum) {
       const t = el("table", "dh-table");
-      t.appendChild(head([["POS", null], ["DRIVER", null], ["TEAM", "dh-th-team"],
+      t.appendChild(tableHead([["POS", null], ["DRIVER", null], ["TEAM", "dh-th-team"],
                           [qLabel(meta, 0), null], [qLabel(meta, 1), null], [qLabel(meta, 2), null]]));
       const tbody = el("tbody");
       let prev = null;
@@ -306,9 +312,7 @@ const DataResults = (function () {
         tbody.appendChild(tr);
       });
       t.appendChild(tbody);
-      const wrap = el("div");
-      wrap.appendChild(t);
-      return wrap;
+      return tableWrap(t);
     }
 
     // ONE ROUND, on its own terms. This is the view the overall table cannot
@@ -328,7 +332,7 @@ const DataResults = (function () {
       }
 
       const t = el("table", "dh-table");
-      t.appendChild(head([["POS", null], ["DRIVER", null], ["TEAM", "dh-th-team"],
+      t.appendChild(tableHead([["POS", null], ["DRIVER", null], ["TEAM", "dh-th-team"],
                           [qLabel(meta, i), null], ["GAP", null]]));
       const tbody = el("tbody");
       ran.forEach(function (r, n) {
@@ -342,9 +346,7 @@ const DataResults = (function () {
         if (n === lastThrough) tbody.appendChild(cutRow(5, "ELIMINATED IN " + qLabel(meta, i)));
       });
       t.appendChild(tbody);
-      const wrap = el("div");
-      wrap.appendChild(t);
-      return wrap;
+      return tableWrap(t);
     }
 
     return { loadResults };

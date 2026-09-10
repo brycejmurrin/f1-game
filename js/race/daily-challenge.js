@@ -1,7 +1,7 @@
 /* Apex 26 — DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a shareable result line. No server: every player who opens the game on the same day gets the same plan. */
-"use strict";
-
 const DailyChallenge = (function () {
+  "use strict";
+
   const KEY = "daily.v1";   // store adds the apex26. prefix
   // Weighted toward dry so most days are a clean lap; the rest are the game's
   // real conditions (game.js WEATHER chips). Time of day includes night, which
@@ -22,8 +22,7 @@ const DailyChallenge = (function () {
 
   // The plan is a pure function of the day. Circuits are drawn from the
   // championship calendar BY ID (Tracks.SEASON), never by list index.
-  function plan(day) {
-    day = day || dayKey();
+  function plan(day = dayKey()) {
     const pool = Tracks.SEASON;
     const track = pool[pick(day, "track", pool.length)];
     return {

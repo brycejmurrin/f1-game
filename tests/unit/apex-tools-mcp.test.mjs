@@ -157,6 +157,7 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_agent",
     "apex_bump_cache_check",
     "apex_eval",
+    "apex_garage",
     "apex_graph_parity",
     "apex_pick_tests",
     "apex_rotate_markings_check",
@@ -361,6 +362,30 @@ test("apex_select_specs without since → bad_args", () => {
   assert.equal(body.error, "bad_args");
 });
 
+test("apex_garage: open spawns garage-angles --serve; ops refuse until open; call ends the session", () => {
+  // The one wrap that is a SESSION: open boots one browser and every later op
+  // is a JSON line to it. dryRun shows the argv (open) or the command (an op);
+  // an op with no session is a refusal, not a boot; mock mode never spawns.
+  const open = callCli("apex_garage", { op: "open", team: "ferrari", out: "artifacts/gs", dryRun: true });
+  assert.equal(open.status, 0, open.stderr);
+  const body = JSON.parse(open.stdout);
+  assert.ok(body.argv.some((a) => a.endsWith("garage-angles.mjs")), body.argv);
+  assert.ok(body.argv.includes("--serve") && body.argv.includes("ferrari"), body.argv);
+  assert.ok(!body.argv.includes("--url"));
+  const shot = callCli("apex_garage", { op: "shot", frame: "spineTop", design: { spineLogo: "wrap" }, name: "a", dryRun: true });
+  assert.equal(shot.status, 0, shot.stderr);
+  const cmd = JSON.parse(shot.stdout).command;
+  assert.deepEqual(cmd, { design: { spineLogo: "wrap" }, frame: "spineTop", shot: "a" }, "keys ride along, applied design → frame → shot");
+  const cold = callCli("apex_garage", { op: "shot" }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: "" });
+  assert.equal(cold.status, 1);
+  assert.equal(JSON.parse(cold.stdout).error, "garage_not_open");
+  const esc = callCli("apex_garage", { op: "open", out: "/tmp/gs", dryRun: true });
+  assert.equal(JSON.parse(esc.stdout).error, "path_escaped");
+  const src = fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs"), "utf8");
+  assert.match(src, /garageClose\("call ended"\)/, "a one-shot call cannot keep the child alive");
+  assert.match(src, /acquireLock\("apex_garage"\)/, "the session holds the browser lock while open");
+});
+
 test("apex_shot out outside artifacts/scratch → path_escaped", () => {
   const r = callCli("apex_shot", { dryRun: true, track: "monza", out: "/tmp/apex-shot.png" });
   assert.equal(r.status, 1, r.stderr);
@@ -545,16 +570,24 @@ test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", ()
   }
 });
 
-test("week-2 dryRun refuses host Playwright MCP from APEX_MCP_PS", () => {
-  const r = callCli(
-    "apex_eval",
-    { track: "monza", expr: "1", dryRun: true },
-    { APEX_MCP_MOCK: "0", APEX_MCP_PS: "88 node /opt/cursor/node_modules/@playwright/mcp/cli.js --headless\n" },
-  );
-  assert.equal(r.status, 1, r.stderr + r.stdout);
-  const body = JSON.parse(r.stdout);
+test("an IDLE host Playwright MCP server is reported, not occupancy; its launched browser is", () => {
+  // The @playwright/mcp server is a stdio process waiting for its first
+  // browser_* call — attached for a whole Cloud session, 0 % CPU, no canvas.
+  // Refusing on it refused every apex_* browser tool, always (2026-09-10).
+  const idle = "88 node /opt/cursor/node_modules/@playwright/mcp/cli.js --headless\n";
+  const r = callCli("apex_eval", { track: "monza", expr: "1", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: idle });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(JSON.parse(r.stdout).ok, true, "an idle server must not refuse");
+  const st = callCli("apex_status", {}, { APEX_MCP_MOCK: "0", APEX_MCP_PS: idle });
+  const pw = JSON.parse(st.stdout).playwright;
+  assert.equal(pw.hostMcp, true, "…but it is still reported");
+  assert.equal(pw.busy, false);
+  const launched = idle + "91 /opt/pw-browsers/chromium --user-data-dir=/tmp/playwright-mcp-abc --headless\n";
+  const b = callCli("apex_eval", { track: "monza", expr: "1", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: launched });
+  assert.equal(b.status, 1, b.stderr + b.stdout);
+  const body = JSON.parse(b.stdout);
   assert.equal(body.error, "playwright_live");
-  assert.match(body.message, /Playwright MCP/);
+  assert.match(body.message, /Playwright MCP browser/);
 });
 
 test("a live Node-only test-bg group does not impersonate Playwright", () => {

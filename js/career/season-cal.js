@@ -86,14 +86,19 @@ function setConfig(next) {
   cfg = normalize(next);
   resolved = null;
   store.set(CFG_KEY, cfg);
-  Log.info("game", "SeasonCal.setConfig rounds=" + cfg.trackIds.length);
+  Log.info("game", `SeasonCal.setConfig rounds=${cfg.trackIds.length}`);
   return cfg;
 }
 function resetConfig() { return setConfig(null); }
 
 // setFlow() in js/game.js is the only writer, alongside its Career.engage() call.
 let flow = "gp";
-function engage(v) { flow = v || "gp"; resolved = null; lastScored = "race"; Log.info("game", "SeasonCal.engage " + flow); }
+function engage(v) {
+  flow = v || "gp";
+  resolved = null;
+  lastScored = "race";
+  Log.info("game", `SeasonCal.engage ${flow}`);
+}
 // See the header: two gates, deliberately different.
 const calCustom = () => flow !== "career";
 const fmtActive = () => flow === "season";
@@ -242,7 +247,7 @@ function award(season, order, fastestId) {
     sprintOrder = null;
   }
   lastScored = scoring;
-  Log.info("game", "SeasonCal.award " + scoring + " round=" + season.round);
+  Log.info("game", `SeasonCal.award ${scoring} round=${season.round}`);
   return scoring;
 }
 function scored() { return lastScored; }
@@ -279,7 +284,11 @@ function rank(season, a, b) {
     const e = (fb[i] || 0) - (fa[i] || 0);
     if (e) return e;
   }
-  return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
+  const sa = String(a);
+  const sb = String(b);
+  if (sa < sb) return -1;
+  if (sa > sb) return 1;
+  return 0;
 }
 
 function grid(cars, season) {
@@ -326,7 +335,9 @@ function shuffled(ids, seed) {
       r = Math.random();
     }
     const j = Math.floor(r * (i + 1));
-    const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    const tmp = a[i];
+    a[i] = a[j];
+    a[j] = tmp;
   }
   return a;
 }

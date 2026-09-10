@@ -223,7 +223,7 @@ const GLX = (function () {
   // re-uploading the same 16-float matrix. Track which program last received the
   // frame's matrix so the upload happens at most once per program per frame.
   let _frameToken = 0;
-  let _shadowVPToken = -1, _markVPToken = -1;
+  const _vpTok = { shadow: -1, mark: -1 };
   // Tuner-knob upload cache (PERF-FINDINGS §3). envFaceBegin() calls begin()
   // and the main camera calls begin() again in the same game frame with the
   // same LIGHTING TUNER scalars; WebGL uniforms persist on the program, so
@@ -2256,9 +2256,9 @@ const GLX = (function () {
   function drawShadow(modelMat, w, l) {
     if (ctxGone()) return;
     useProg(shadowProg);
-    if (_shadowVPToken !== _frameToken) {
+    if (_vpTok.shadow !== _frameToken) {
       gl.uniformMatrix4fv(shadowU.uViewProj, false, frameViewProj);
-      _shadowVPToken = _frameToken;
+      _vpTok.shadow = _frameToken;
     }
     gl.uniformMatrix4fv(shadowU.uModel, false, modelMat);
     gl.uniform2f(shadowU.uSize, w, l);
@@ -2274,9 +2274,9 @@ const GLX = (function () {
   function drawMark(modelMat, w, l) {
     if (ctxGone()) return;
     useProg(markProg);
-    if (_markVPToken !== _frameToken) {
+    if (_vpTok.mark !== _frameToken) {
       gl.uniformMatrix4fv(markU.uViewProj, false, frameViewProj);
-      _markVPToken = _frameToken;
+      _vpTok.mark = _frameToken;
     }
     gl.uniformMatrix4fv(markU.uModel, false, modelMat);
     gl.uniform2f(markU.uSize, w, l);

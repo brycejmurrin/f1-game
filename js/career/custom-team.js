@@ -28,9 +28,10 @@ const CustomTeam = (function () {
     let czFinish = "gloss";
 
     function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
+    function customTeamIndex() { return Teams.LIST.findIndex((t) => t.id === "custom"); }
 
     function syncCustomTeam() {
-      const i = Teams.LIST.findIndex((t) => t.id === "custom");
+      const i = customTeamIndex();
       if (i >= 0) Teams.LIST.splice(i, 1);
       Teams.LIST.push(loadCustomTeam());
       invalidateDecalTextures("custom");
@@ -53,7 +54,8 @@ const CustomTeam = (function () {
           const w = Math.max(1, Math.round(img.width * sc));
           const h = Math.max(1, Math.round(img.height * sc));
           const c = document.createElement("canvas");
-          c.width = w; c.height = h;
+          c.width = w;
+          c.height = h;
           c.getContext("2d").drawImage(img, 0, 0, w, h);
           try { done(c.toDataURL("image/png")); } catch (_) { done(null); }
         };
@@ -127,7 +129,8 @@ const CustomTeam = (function () {
       $("cz-swatch1").style.background = $("cz-color").value;
       $("cz-swatch2").style.background = $("cz-color2").value;
       const code = ($("cz-code").value || "YOU").toUpperCase();
-      $("cz-pvtext").textContent = "#" + ($("cz-num").value || "99") + " " + code + " · " + ($("cz-short").value || "YOU").toUpperCase();
+      const short = ($("cz-short").value || "YOU").toUpperCase();
+      $("cz-pvtext").textContent = `#${$("cz-num").value || "99"} ${code} · ${short}`;
       $("cz-pvtext").style.color = $("cz-color").value;
       const liv = Object.assign(
         { id: "default", c1: hexToArr($("cz-color").value), c2: hexToArr($("cz-color2").value) },
@@ -195,7 +198,7 @@ const CustomTeam = (function () {
         ct.livery = czLivFromDialog();
         store.set("customTeam", ct);
         syncCustomTeam();
-        setTeamIdx(Teams.LIST.findIndex((t) => t.id === "custom"));
+        setTeamIdx(customTeamIndex());
         setDriverIdx(0);
         store.set("team", getTeamIdx());
         store.set("driver", 0);

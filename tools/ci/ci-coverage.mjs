@@ -111,35 +111,41 @@ const rendererGate = {
 };
 
 const outsideFixedGates = ALL_SPECS.filter((s) => !executed.has(s));
-// BOUNDED AT THE NEXT JOB, via the same splitter every other reader uses.
-// This used to be `ci.slice(indexOf("\n  selected:\n"))` — to the END OF FILE —
-// so every job appended after `selected` was read as part of it. Adding one
-// with `continue-on-error: true` (the golden-menu trial, 2026-09-10) flipped
-// this gate's reported `blocking` to false while the gate itself was untouched:
-// a parser defect that reads as a CI regression, in the one report that says
-// whether the deploy is gated.
-const selectedJob = jobs.find((j) => j.name === "selected")?.body || "";
-const selectedIf = selectedJob.match(/^    if:\s*(.+)$/m)?.[1] || "";
+// The change-aware gate is two jobs since 2026-09-10: `select` plans (base
+// resolution + the selector, delegated to tools/ci/ci-select-specs-step.sh)
+// and `selected` runs the plan as a matrix. The plan job's `if:` is the gate's
+// trigger; the step script carries the fail-closed strings, so it is read too
+// when the job delegates to it.
+// BOUNDED AT THE NEXT JOB, via the same job table every other reader uses.
+// An unbounded `ci.slice(selectAt)` reads every job appended after `select`
+// as part of it, so a later job's `continue-on-error: true` (the golden-menu
+// trial) flips this gate's reported `blocking` to false while the gate itself
+// is untouched — a parser defect that reads as a CI regression, in the one
+// report that says whether the deploy is gated (first fixed 2026-09-10 on the
+// single `selected` job; the two-job gate re-introduced it).
+const selectAt = ci.indexOf("\n  select:\n");
+const selectJob = (jobs.find((j) => j.name === "select")?.body || "") + "\n" + (jobs.find((j) => j.name === "selected")?.body || "");
+const selectIf = selectJob.match(/^    if:\s*(.+)$/m)?.[1] || "";
+const selectStep = /ci-select-specs-step\.sh/.test(selectJob)
+  ? fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8") : "";
+const selectAll = selectJob + "\n" + selectStep;
 const selectionGate = {
-  present: Boolean(selectedJob),
-  blocking: Boolean(selectedJob) && !/^    continue-on-error:\s*true\s*$/m.test(selectedJob),
-  onPush: selectedIf.includes("github.event_name == 'push'"),
-  onPullRequest: selectedIf.includes("github.event_name == 'pull_request'"),
+  present: Boolean(selectJob) && ci.includes("\n  selected:\n"),
+  blocking: Boolean(selectJob) && !/^    continue-on-error:\s*true\s*$/m.test(selectJob),
+  onPush: selectIf.includes("github.event_name == 'push'"),
+  onPullRequest: selectIf.includes("github.event_name == 'pull_request'"),
   // NOT an event_name test. Inside a REUSABLE workflow the github context is
-  // the CALLER's, so this if: reads `push` on a Pages call exactly as on a
-  // direct push -- "github.event_name == 'workflow_call'" is a string that
-  // never appears and never could, so looking for it reported false for a job
-  // that DID run in the deploy gate (Pages run 2215, 2026-09-10). `inputs` is
-  // the only caller-specific context, and pages.yml is the only caller: it
-  // passes a non-empty concurrency_key, so a guard on that empty-string
-  // default is what actually keeps this job out of a deploy.
-  onWorkflowCall: !/inputs\.concurrency_key\s*==\s*''/.test(selectedIf),
-  usesPullRequestBase: /PR_BASE:\s*\$\{\{ github\.event\.pull_request\.base\.sha \}\}/.test(selectedJob),
-  failsClosedOnInvalidBase: /fail\(\).*SELECTED GATE FAILED CLOSED/.test(selectedJob)
-    && /no valid comparison base/.test(selectedJob)
-    && /comparison base .* is unreachable/.test(selectedJob),
-  surfacesBudgetSkips: /EXCLUDED \(declares/.test(selectedJob)
-    && /SKIPPED \(over budget\)/.test(selectedJob),
+  // the CALLER's, so `github.event_name` reads `push` on a Pages call exactly
+  // as on a direct push. `inputs` is the only caller-specific context, and
+  // pages.yml is the only caller (it passes a non-empty concurrency_key), so
+  // the gate runs in the deploy exactly when its `if:` does NOT test that key.
+  onWorkflowCall: !/inputs\.concurrency_key\s*==\s*''/.test(selectIf),
+  usesPullRequestBase: /PR_BASE:\s*\$\{\{ github\.event\.pull_request\.base\.sha \}\}/.test(selectJob),
+  failsClosedOnInvalidBase: /fail\(\).*SELECTED GATE FAILED CLOSED/.test(selectAll)
+    && /no valid comparison base/.test(selectAll)
+    && /comparison base .* is unreachable/.test(selectAll),
+  surfacesBudgetSkips: /EXCLUDED \(declares/.test(selectAll)
+    && /SKIPPED \(over budget\)/.test(selectAll),
 };
 const report = {
   specsOnDisk: ALL_SPECS.length,

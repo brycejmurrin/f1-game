@@ -30,6 +30,7 @@
     "apex_eval",
     "apex_shot",
     "apex_agent",
+    "apex_garage",
     "apex_select_specs",
     "apex_rotate_markings_check",
     "apex_graph_parity"

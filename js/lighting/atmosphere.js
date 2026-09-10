@@ -1,4 +1,12 @@
-/* Apex 26 — session atmosphere for js/game.js: applyRaceSettings(), the lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches for night/dawn/d… */
+/* Apex 26 — session atmosphere for js/game.js: applyRaceSettings(), the
+   lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches
+   for night/dawn/dusk/day and the palette-driven "default" mode, then
+   weather overlays and live LightTune knob overrides on top). Everything is
+   re-derived from its base on every call — never accumulated — because this
+   re-runs on every tuner drag tick (see APPLY_RACE_IDS in
+   js/lighting/profiles.js); accumulating would compound per tick instead of
+   settling. One function by design (a continuous branch, not steps to
+   split). */
 const Atmosphere = (function () {
   "use strict";
 

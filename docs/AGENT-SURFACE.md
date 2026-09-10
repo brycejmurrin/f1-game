@@ -1,7 +1,8 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Only ten CLIs are wrapped as `apex_*`.
+do the work. Only ten CLIs are wrapped as `apex_*` (eleven tools: `apex_garage` is a
+session over one of them).
 
 ```
 need → skill (when / don'ts)
@@ -123,11 +124,14 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | Start Playwright **groups** | `tools/ci/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
 | Agent bloat / extract / dead code | skill **slim-bloat** → `bloat-auditor` + `bloat-scan.mjs` | a browser group; raising a ratchet to hide growth |
 
-Call `apex_status` before any `apex_*` browser tool. Occupancy treats host
-Playwright MCP (`@playwright/mcp` / `.playwright-mcp` Chromium) as live —
-close `browser_*` (`browser_close`) before a browser wrap. Cursor's
-`--mcp-config {"playwright":...}` line is ignored. Never run Chrome MCP
-while Playwright is running.
+Call `apex_status` before any `apex_*` browser tool. Occupancy treats a
+`playwright test` suite and the host Playwright MCP's LAUNCHED Chromium
+(`.playwright-mcp` user-data-dir) as busy — close `browser_*`
+(`browser_close`) before a browser wrap. The idle `@playwright/mcp` server
+Cloud attaches for a whole session is reported (`playwright.hostMcp`) and
+does not block (it did until 2026-09-10, which refused every browser wrap
+here, always). Cursor's `--mcp-config {"playwright":...}` line is ignored.
+Never run Chrome MCP while Playwright is running.
 
 One command that pokes the repo shell wrappers (no Chromium; missing
 TinyFish key / chrome clone = warn; playwright `status` only):
@@ -172,6 +176,7 @@ and verify-track are plain CLIs now — `tools/README.md`).
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
+| `apex_garage` | `shot/garage-angles.mjs` | browser | garage-parts-livery |
 
 Pins the wrap always applies (you cannot override them):
 

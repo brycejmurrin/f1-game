@@ -3,6 +3,7 @@ const CareerUI = (function () {
   "use strict";
 
 const STARTER_TIER_MIN = 3;
+const teamById = (id) => Teams.LIST.find((t) => t.id === id);
 
 function create(G) {
   Log.info("ui", "CareerUI.create");
@@ -35,7 +36,7 @@ function create(G) {
     nav.textContent = "";
     root.querySelectorAll(".sel-label[id]").forEach((h) => {
       const a = el("a", "", h.textContent);
-      a.href = "#" + h.id;
+      a.href = `#${h.id}`;
       nav.appendChild(a);
     });
   }
@@ -62,19 +63,20 @@ function create(G) {
 
   function slotCard(s) {
     const live = s.used && s.live;
-    const card = el("div", "cr-slot" + (s.used ? " used" : " empty") + (live ? " active" : ""));
+    const card = el("div", `cr-slot${s.used ? " used" : " empty"}${live ? " active" : ""}`);
     const open = el("button", "cr-slot-main");
-    open.append(el("span", "cr-slot-n", "SLOT " + (s.i + 1) + (live ? " · PLAYING" : "")));
+    open.append(el("span", "cr-slot-n", `SLOT ${s.i + 1}${live ? " · PLAYING" : ""}`));
     if (s.used) {
+      const who = s.flavour === "myteam" ? s.teamName : `${s.code} · ${s.teamName}`;
       open.append(
-        el("span", "cr-slot-who", (s.flavour === "myteam" ? s.teamName : s.code + " · " + s.teamName).toUpperCase()),
+        el("span", "cr-slot-who", who.toUpperCase()),
         el("span", "cr-slot-meta",
-          s.year + " · round " + Math.min(s.round + 1, s.rounds) + " of " + s.rounds
-          + " · " + s.money.toLocaleString() + " cr"),
+          `${s.year} · round ${Math.min(s.round + 1, s.rounds)} of ${s.rounds}`
+          + ` · ${s.money.toLocaleString()} cr`),
         el("span", "cr-slot-meta",
-          s.seasons + (s.seasons === 1 ? " season" : " seasons")
-          + " · " + s.wins + (s.wins === 1 ? " win" : " wins")
-          + (s.titles ? " · " + s.titles + (s.titles === 1 ? " title" : " titles") : "")));
+          `${s.seasons}${s.seasons === 1 ? " season" : " seasons"}`
+          + ` · ${s.wins}${s.wins === 1 ? " win" : " wins"}`
+          + (s.titles ? ` · ${s.titles}${s.titles === 1 ? " title" : " titles"}` : "")));
     } else {
       open.append(el("span", "cr-slot-who", "EMPTY"),
         el("span", "cr-slot-meta", s.flavour === "myteam"
@@ -98,11 +100,11 @@ function create(G) {
     };
     card.appendChild(open);
     if (s.used) {
-      const id = s.flavour + ":" + s.i;
+      const id = `${s.flavour}:${s.i}`;
       const armed = armedDelete === id;
-      const del = el("button", "cr-slot-del" + (armed ? " armed" : ""), armed ? "DELETE?" : "DELETE");
-      del.setAttribute("aria-label", "Delete the "
-        + (s.flavour === "myteam" ? "team" : "career") + " in slot " + (s.i + 1));
+      const del = el("button", `cr-slot-del${armed ? " armed" : ""}`, armed ? "DELETE?" : "DELETE");
+      del.setAttribute("aria-label",
+        `Delete the ${s.flavour === "myteam" ? "team" : "career"} in slot ${s.i + 1}`);
       del.onclick = (ev) => {
         ev.stopPropagation();
         if (G.soundOn) GameAudio.uiTick();
@@ -178,7 +180,7 @@ function create(G) {
     return frag;
   }
 
-  const cr = (n) => n.toLocaleString() + " cr";
+  const cr = (n) => `${n.toLocaleString()} cr`;
 
   function sharedSections(my) {
     const out = [];
@@ -197,7 +199,7 @@ function create(G) {
     ]));
     out.push(guideSection("THE GRID YOU RACE", [
       "The twenty-one other drivers are not interchangeable. Each has five "
-      + "ratings — " + DriverRatings.AXES.join(", ") + " — and they decide who is "
+      + `ratings — ${DriverRatings.AXES.join(", ")} — and they decide who is `
       + "quick, who defends well, who keeps it clean, and who is repeatable.",
       "CONSISTENCY is a spread, not a speed. A rookie is not slower than a "
       + "veteran of the same pace, just harder to predict.",
@@ -210,7 +212,7 @@ function create(G) {
     ]));
     out.push(guideSection("POINTS AND THE SEASON", [
       ["Rounds in a season", String(Tracks.SEASON.length)],
-      ["Points, P1 down to P" + Teams.POINTS.length, Teams.POINTS.join(" · ")],
+      [`Points, P1 down to P${Teams.POINTS.length}`, Teams.POINTS.join(" · ")],
       "Two championships run at once: the DRIVERS', which is you, and the "
       + "CONSTRUCTORS', which is both of your team's cars added together.",
       "When the calendar runs out the year is closed off, the grid develops over "
@@ -222,8 +224,8 @@ function create(G) {
       + (Reliability.REASONS.filter((r, i, a2) => a2.indexOf(r) === i)
           .map((r) => (/^[aeiou]/i.test(r) ? "an " : "a ") + r).join(", ")) + ".",
       ["Risk per race, best car to worst",
-        Math.round(Reliability.TIER_RISK[0] * 100) + "% – "
-        + Math.round(Reliability.TIER_RISK[Reliability.TIER_RISK.length - 1] * 100) + "%"],
+        `${Math.round(Reliability.TIER_RISK[0] * 100)}% – `
+        + `${Math.round(Reliability.TIER_RISK[Reliability.TIER_RISK.length - 1] * 100)}%`],
       ["LOW", "half those odds"],
       "Two things buy the risk down: developing the team, and what you have spent "
       + "on the ENGINE and GEARBOX. So money buys finishes as well as lap time.",
@@ -235,7 +237,7 @@ function create(G) {
     ]));
     out.push(guideSection("RACE SETTINGS", [
       "Reachable on the way to every weekend. Race length, weather, time of day, "
-      + "AI difficulty (" + Object.keys(PhysicsConsts.DIFF).join(" / ") + ") and "
+      + `AI difficulty (${Object.keys(PhysicsConsts.DIFF).join(" / ")}) and `
       + "reliability.",
       "They change the weekend, never the economy: prize money is paid on where "
       + "you finished, whatever length or weather you chose to finish in.",
@@ -266,9 +268,9 @@ function create(G) {
       "Credits are the same units the garage prices parts in, so a result "
       + "converts straight into most of a new front wing.",
       ["Win a race", cr(Career.PRIZE[0])],
-      ["Podium", cr(Career.PRIZE[2]) + " – " + cr(Career.PRIZE[1])],
+      ["Podium", `${cr(Career.PRIZE[2])} – ${cr(Career.PRIZE[1])}`],
       ["Last place", cr(Career.prizeFor(22))],
-      ["Meet the round's brief", "+" + cr(Career.OBJ_BONUS)],
+      ["Meet the round's brief", `+${cr(Career.OBJ_BONUS)}`],
       ["Salary, per round", "your contract"],
       "Finishing last still pays. A career that can go bankrupt in one bad "
       + "weekend stops being worth playing.",
@@ -280,7 +282,7 @@ function create(G) {
       "The garage is the R&D tree. Every part you do not own yet shows a RESEARCH "
       + "price; buy it once and it is yours for good, free to fit and unfit from "
       + "then on.",
-      ["Research costs", Career.RESEARCH_MULT + "x the part's price"],
+      ["Research costs", `${Career.RESEARCH_MULT}x the part's price`],
       ["You may FIT", "your team's own works car, at level 0"],
       ["Cap upgrades", "three, from the hub"],
       "Two limits, on purpose. Your BALANCE is what you can spend; the FITTED CAP "
@@ -294,7 +296,7 @@ function create(G) {
       + "every future part costs to research, so money still buys progress long "
       + "after you own the parts you actually wanted.",
       ["Levels", String(Career.FACILITY_MAX)],
-      ["At the top", "−" + Math.round(Career.FACILITY_DISCOUNT_MAX * 100) + "% on all research"],
+      ["At the top", `−${Math.round(Career.FACILITY_DISCOUNT_MAX * 100)}% on all research`],
     ]));
     out.push(guideSection("YOUR SEAT AND YOUR TEAM-MATE", [
       "You replace one of your team's two real drivers. The other one stays, and "
@@ -411,7 +413,7 @@ function create(G) {
       + "every future part costs to research, so a well-run team keeps converting "
       + "money into progress long after the obvious parts are bought.",
       ["Levels", String(Career.FACILITY_MAX)],
-      ["At the top", "−" + Math.round(Career.FACILITY_DISCOUNT_MAX * 100) + "% on all research"],
+      ["At the top", `−${Math.round(Career.FACILITY_DISCOUNT_MAX * 100)}% on all research`],
     ]));
     out.push(guideSection("DEVELOPING THE TEAM", [
       "The team itself has a level, separate from the car you bolt together. It "
@@ -474,7 +476,7 @@ function create(G) {
       ["driver", "DRIVER", "Sign for a team, hit your targets, earn a better seat."],
       ["myteam", "MY TEAM", "Own the twelfth team. Run the money, run the drivers."],
     ]) {
-      const b = el("button", "cr-flavour" + (draft.flavour === id ? " active" : ""));
+      const b = el("button", `cr-flavour${draft.flavour === id ? " active" : ""}`);
       b.setAttribute("aria-pressed", draft.flavour === id ? "true" : "false");
       b.append(el("span", "cr-flavour-name", label), el("span", "cr-flavour-blurb", blurb));
       b.onclick = () => {
@@ -504,7 +506,7 @@ function create(G) {
         "Nobody at the front signs a rookie. Beat the car you are given and the offers improve."));
       const grid = el("div", "cr-teamgrid");
       for (const t of starterTeams()) {
-        const b = el("button", "cr-teamtile" + (draft.teamId === t.id ? " active" : ""));
+        const b = el("button", `cr-teamtile${draft.teamId === t.id ? " active" : ""}`);
         b.setAttribute("aria-pressed", draft.teamId === t.id ? "true" : "false");
         const sw = el("span", "cr-teamtile-sw");
         sw.style.background = G.cssCol(t.color);
@@ -515,7 +517,7 @@ function create(G) {
         const car = Math.round((t.stats.speed + t.stats.accel + t.stats.cornering + t.stats.braking) / 4);
         b.append(sw, el("span", "cr-teamtile-name", t.name),
           el("span", "cr-teamtile-meta",
-            t.engine + " · CAR " + car + " · " + Career.salaryFor(t, 30) + " cr / round"));
+            `${t.engine} · CAR ${car} · ${Career.salaryFor(t, 30)} cr / round`));
         b.onclick = () => { draft.teamId = t.id; buildSetupPanes(); if (G.soundOn) GameAudio.uiTick(); };
         grid.appendChild(b);
       }
@@ -530,7 +532,7 @@ function create(G) {
         + "develops the car — a quick team-mate costs you upgrades."));
       const list = el("div", "cr-teamgrid");
       for (const a of Career.freeAgents()) {
-        const b = el("button", "cr-teamtile" + (draft.hire === a.code ? " active" : ""));
+        const b = el("button", `cr-teamtile${draft.hire === a.code ? " active" : ""}`);
         b.setAttribute("aria-pressed", draft.hire === a.code ? "true" : "false");
         const sw = el("span", "cr-teamtile-sw");
         // Their pace, from the same deterministic tier fallback the grid will use,
@@ -539,7 +541,7 @@ function create(G) {
         sw.style.background = G.cssCol([0.2 + r.pace / 200, 0.5, 0.9 - r.pace / 300]);
         b.append(sw, el("span", "cr-teamtile-name", a.name),
           el("span", "cr-teamtile-meta",
-            "PACE " + r.pace + " · CRAFT " + r.craft + " · " + a.ask + " cr / round"));
+            `PACE ${r.pace} · CRAFT ${r.craft} · ${a.ask} cr / round`));
         b.onclick = () => { draft.hire = a.code; buildSetupPanes(); if (G.soundOn) GameAudio.uiTick(); };
         list.appendChild(b);
       }
@@ -568,22 +570,22 @@ function create(G) {
     right.appendChild(form);
 
     if (draft.flavour === "driver") {
-      const team = Teams.LIST.find((t) => t.id === draft.teamId);
+      const team = teamById(draft.teamId);
       if (team) {
         right.appendChild(head("THE SEAT"));
         const seats = el("div", "cr-seats");
         team.drivers.forEach((d, i) => {
-          const b = el("button", "cr-seat" + (draft.seat === i ? " active" : ""));
+          const b = el("button", `cr-seat${draft.seat === i ? " active" : ""}`);
           b.setAttribute("aria-pressed", draft.seat === i ? "true" : "false");
           b.append(el("span", "cr-seat-role", i === 0 ? "LEAD SEAT" : "SECOND SEAT"),
-            el("span", "cr-seat-who", "replaces " + d.name));
+            el("span", "cr-seat-who", `replaces ${d.name}`));
           b.onclick = () => { draft.seat = i; buildSetupPanes(); if (G.soundOn) GameAudio.uiTick(); };
           seats.appendChild(b);
         });
         right.appendChild(seats);
         const mate = team.drivers[draft.seat === 0 ? 1 : 0];
-        if (mate) right.appendChild(el("div", "cr-note", "Your team-mate will be " + mate.name +
-          ". Most of your race objectives are measured against them."));
+        if (mate) right.appendChild(el("div", "cr-note",
+          `Your team-mate will be ${mate.name}. Most of your race objectives are measured against them.`));
       }
     }
 
@@ -608,7 +610,7 @@ function create(G) {
   }
 
   function meter(label, value, cls) {
-    const m = el("div", "cr-meter" + (cls ? " " + cls : ""));
+    const m = el("div", `cr-meter${cls ? ` ${cls}` : ""}`);
     m.append(el("span", "cr-meter-lbl", label), el("span", "cr-meter-val", value));
     return m;
   }
@@ -619,10 +621,10 @@ function create(G) {
     const left = $("cr-left"), right = $("cr-right");
     left.textContent = ""; right.textContent = "";
 
-    const team = Teams.LIST.find((t) => t.id === c.team);
-    $("cr-title").textContent = "CAREER " + c.year;
-    $("cr-sub").textContent = (c.flavour === "myteam" ? "TEAM PRINCIPAL" : c.driver.code) +
-      " · " + (team ? team.name.toUpperCase() : c.team.toUpperCase());
+    const team = teamById(c.team);
+    $("cr-title").textContent = `CAREER ${c.year}`;
+    $("cr-sub").textContent = `${c.flavour === "myteam" ? "TEAM PRINCIPAL" : c.driver.code}`
+      + ` · ${team ? team.name.toUpperCase() : c.team.toUpperCase()}`;
     if (team) $("cr-sub").style.color = G.cssCol(team.color2 || team.color);
 
     if (Career.conflicted()) {
@@ -636,9 +638,9 @@ function create(G) {
     const meters = $("cr-meters");
     meters.textContent = "";
     meters.append(
-      meter("BALANCE", Career.freeMoney() ? "UNLIMITED" : st.money.toLocaleString() + " cr"),
-      meter("REPUTATION", Math.round(st.rep) + " / 100"),
-      meter("ROUND", (Math.min(st.round + 1, st.rounds)) + " / " + st.rounds));
+      meter("BALANCE", Career.freeMoney() ? "UNLIMITED" : `${st.money.toLocaleString()} cr`),
+      meter("REPUTATION", `${Math.round(st.rep)} / 100`),
+      meter("ROUND", `${Math.min(st.round + 1, st.rounds)} / ${st.rounds}`));
 
     // NEXT RACE lives on the LEFT. The foot is under this column, so the
     // UPCOMING list has to stay on the right or GO RACING clips it — but the
@@ -651,7 +653,7 @@ function create(G) {
       const nr = el("div", "cr-card cr-nextrace");
       nr.id = "cr-nextrace";
       nr.append(
-        el("div", "cr-nr-round", "ROUND " + (c.season.round + 1)),
+        el("div", "cr-nr-round", `ROUND ${c.season.round + 1}`),
         el("div", "cr-nr-name", t ? t.name : "—"),
         el("div", "cr-nr-country", t && t.country ? t.country : ""));
       left.appendChild(nr);
@@ -662,8 +664,8 @@ function create(G) {
       left.appendChild(head("THIS ROUND"));
       const objCard = el("div", "cr-card cr-objective");
       objCard.append(el("div", "cr-obj-line", Career.objectiveLabel(obj)));
-      if (c.deal) objCard.append(row("Season goal", "P" + c.deal.goal.value + " in the championship"));
-      objCard.append(row("If you hit it", "+" + Career.OBJ_BONUS + " cr · +" + Career.OBJ_REP + " REP"));
+      if (c.deal) objCard.append(row("Season goal", `P${c.deal.goal.value} in the championship`));
+      objCard.append(row("If you hit it", `+${Career.OBJ_BONUS} cr · +${Career.OBJ_REP} REP`));
       left.appendChild(objCard);
     }
 
@@ -672,10 +674,9 @@ function create(G) {
       left.appendChild(head("SPONSOR"));
       const card = el("div", "cr-card");
       card.appendChild(el("div", "cr-obj-line", sp.label));
-      card.appendChild(row("Progress", sp.done + " / " + sp.need
-        + (sp.met ? "  ·  MET" : "")));
+      card.appendChild(row("Progress", `${sp.done} / ${sp.need}${sp.met ? "  ·  MET" : ""}`));
       card.appendChild(row("Rounds left", sp.roundsLeft === 0 ? "this one" : String(sp.roundsLeft)));
-      card.appendChild(row("Pays", sp.pay.toLocaleString() + " cr"));
+      card.appendChild(row("Pays", `${sp.pay.toLocaleString()} cr`));
       left.appendChild(card);
     }
 
@@ -685,8 +686,8 @@ function create(G) {
       card.append(
         row("Team", team ? team.name : c.deal.team),
         row("Seasons left", String(c.deal.left)),
-        row("Salary", c.deal.salary + " cr / round"),
-        row("Points bonus", c.deal.bonusPt + " cr / point"));
+        row("Salary", `${c.deal.salary} cr / round`),
+        row("Points bonus", `${c.deal.bonusPt} cr / point`));
       left.appendChild(card);
     }
 
@@ -694,14 +695,14 @@ function create(G) {
     const carCard = el("div", "cr-card");
     const fittedCost = Parts.getCost(c.fitted, team);
     carCard.append(
-      row("Parts owned", c.owned.length + " of " + totalOptions()),
-      row("Fitted", fittedCost.toLocaleString() + " / " + Career.budget().toLocaleString() + " cr"),
+      row("Parts owned", `${c.owned.length} of ${totalOptions()}`),
+      row("Fitted", `${fittedCost.toLocaleString()} / ${Career.budget().toLocaleString()} cr`),
       row("Development", devLabel(c.tdev[c.team] || 0)),
       // The facility is the one upgrade that never runs out, so it belongs with
       // the car rather than in the economy: it is what late money buys.
-      row("Facility", st.facility + " / " + Career.FACILITY_MAX
-        + (st.facilityDiscount ? "  (−" + Math.round(st.facilityDiscount * 100) + "% research)" : "")),
-      row("Retirements", st.dnfs + " this season"));
+      row("Facility", `${st.facility} / ${Career.FACILITY_MAX}`
+        + (st.facilityDiscount ? `  (−${Math.round(st.facilityDiscount * 100)}% research)` : "")),
+      row("Retirements", `${st.dnfs} this season`));
     left.appendChild(carCard);
 
     // MY TEAM runs a wage bill on top of the car. Shown as its own card because it
@@ -899,7 +900,7 @@ function create(G) {
       right.appendChild(head("CHAMPIONSHIP"));
       entries.forEach(([driverId, pts], i) => {
         const teamId = driverId.split(":")[0];
-        const dTeam = Teams.LIST.find((x) => x.id === teamId);
+        const dTeam = teamById(teamId);
         const isYou = teamId === c.team && (driverId.split(":")[1] | 0) === c.seat;
         const r = el("div", "res-row" + (isYou ? " you" : ""));
         const sw = el("span", "res-swatch");
@@ -1001,7 +1002,7 @@ function create(G) {
       "that team's works build — you do not take your parts with you."));
 
     (c.offers || []).forEach((o, i) => {
-      const t = Teams.LIST.find((x) => x.id === o.teamId);
+      const t = teamById(o.teamId);
       const staying = o.teamId === c.team;
       const b = el("button", "co-offer" + (staying ? " staying" : ""));
       const sw = el("span", "co-offer-sw");
@@ -1061,7 +1062,7 @@ function create(G) {
   }
 
   function teamName(id) {
-    const t = Teams.LIST.find((x) => x.id === id);
+    const t = teamById(id);
     return t ? t.name : String(id).toUpperCase();
   }
 
@@ -1097,7 +1098,7 @@ function create(G) {
           " seasons — anything older has rolled off."));
       // Newest first: the year you just closed out is the one you came to read.
       for (const h of c.history.slice().reverse()) {
-        const team = Teams.LIST.find((x) => x.id === h.team);
+        const team = teamById(h.team);
         const r = el("div", "res-row" + (h.pos >= 1 && h.pos <= 3 ? " p" + h.pos : ""));
         const sw = el("span", "res-swatch");
         sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);

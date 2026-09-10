@@ -2,32 +2,24 @@
 // AriaState — mirror the visual "selected" class of every option group onto the
 // aria-pressed state a screen reader can actually hear.
 //
-// WHY THIS EXISTS. A DOM audit of all 17 menu screens found 24 buttons whose
-// only signal of being chosen was a CSS class: the LAPS / WEATHER / TIME OF DAY
-// / DIFFICULTY chips, the car-setup category tabs and part options, the MUSIC &
-// SOUND toggles, the steering presets, the data-hub season and sort pills, and
-// the seven NONE buttons on MY TEAM. Sighted players see a red ring. Everyone
-// else hears "button, NORMAL" — identical whether it is the current difficulty
-// or not. (The team tiles were the one group already doing this properly, with
-// role=option + aria-selected; that is the pattern this generalises.)
+// A DOM audit found 24 buttons whose only "chosen" signal was a CSS class (the
+// LAPS / WEATHER / DIFFICULTY chips, car-setup tabs, sound toggles, steering
+// presets, data-hub pills, the MY TEAM NONE buttons): sighted players see a
+// red ring, everyone else hears "button, NORMAL" either way. The team tiles
+// (role=option + aria-selected) were the one group doing it properly; this
+// generalises that.
 //
-// WHY AN OBSERVER RATHER THAN 15 CALL SITES. Those classes are toggled from
-// nine different files and half the groups are built at runtime (car-setup
-// options, data-hub pills, driver chips), so per-site edits would both scatter
-// the rule and miss the dynamic ones the moment a new group is added. Watching
-// the class attribute keeps the ARIA correct by construction: whatever paints
-// the ring announces the ring.
+// An OBSERVER rather than 15 call sites: those classes are toggled from nine
+// files and half the groups are built at runtime, so per-site edits would miss
+// the dynamic ones. Whatever paints the ring announces the ring.
 //
-// SCOPE IS DELIBERATE. Menu overlays only — never #hud. The HUD rewrites
-// classes on a live element every frame, and a subtree observer over it would
-// be a per-frame cost for a surface that has no option groups at all.
+// Menu overlays only — never #hud: the HUD rewrites classes on a live element
+// every frame, and a subtree observer over it would be a per-frame cost for a
+// surface with no option groups.
 //
-// COLOUR WORDS ARE READOUTS, NOT CONTROLS. Gold/red is enablement (ON/OFF) on
-// a button whose whole text is a status — the title-screen "♪ SOUND ON" — and
-// on the closed fold summaries, which paint themselves. An `.opt-btn` CHIP is
-// never painted: its ring is the selection, and a gold word inside a red ring
-// said two things at once. (GEARS / ACTIVE AERO used to be `KEY: AUTO` rows
-// with a green/cyan word; they are setting rows now — js/ui/setting-row.js.)
+// Colour words are READOUTS, not controls: gold/red is enablement (ON/OFF) on
+// a button whose whole text is a status ("♪ SOUND ON") and on the closed fold
+// summaries. An `.opt-btn` chip is never painted — its ring is the selection.
 // Settings rows are inline-flex, so a wrap after ":" uses NBSP or the space
 // collapses.
 //
@@ -55,14 +47,15 @@ window.AriaState = (function () {
 
   const labelled = new WeakSet();
 
-  /* Label every button in `parent` — but only once one of them has actually
-     been selected. Without that guard a plain stack of actions (RESUME,
-     RESTART, QUIT) would be announced as three unpressed toggles, which is
-     worse than saying nothing: none of them has an on/off state to report. */
+  // Label every button in `parent` — but only once one of them has actually
+  // been selected. Without that guard a plain stack of actions (RESUME,
+  // RESTART, QUIT) would be announced as three unpressed toggles, which is
+  // worse than saying nothing: none of them has an on/off state to report.
   function syncGroup(parent) {
     if (!parent) return;
     const btns = [];
-    let anyOn = false, known = false;
+    let anyOn = false;
+    let known = false;
     for (const c of parent.children) {
       if (c.tagName !== "BUTTON" || claimed(c)) continue;
       btns.push(c);
@@ -91,8 +84,7 @@ window.AriaState = (function () {
   function wrapOnOff(text) {
     const t = String(text || "").replace(/\s+/g, " ").trim();
     if (!/\b(ON|OFF)\b/.test(t)) return null;
-    return t.replace(/\b(ON|OFF)\b/g, (w) =>
-      '<span data-fold="' + w.toLowerCase() + '">' + w + "</span>")
+    return t.replace(/\b(ON|OFF)\b/g, (w) => `<span data-fold="${w.toLowerCase()}">${w}</span>`)
       .replace(/:\s+<span/g, ":\u00a0<span")
       .replace(/·\s+<span/g, "·\u00a0<span");
   }
@@ -138,12 +130,11 @@ window.AriaState = (function () {
   // whole batch is the same single pass.
   //
   // setTimeout, NOT requestAnimationFrame. rAF is dropped when the page is not
-  // compositing — the same hazard js/ui/select-screen.js documents for
-  // startViewTransition — and because the flag is only cleared inside the
-  // callback, one dropped frame LATCHED this module off permanently: every
-  // later mutation saw `pending` still set and returned. That is exactly how it
-  // behaved, syncing the data hub and never the car-setup tabs. Nothing here is
-  // visual, so there is no reason to wait for a frame in the first place. */
+  // compositing (the same hazard js/ui/select-screen.js documents for
+  // startViewTransition), and because the flag is only cleared inside the
+  // callback one dropped frame LATCHED this module off permanently — it synced
+  // the data hub and never the car-setup tabs. Nothing here is visual, so there
+  // is no reason to wait for a frame.
   let pending = 0;
   const schedule = () => {
     if (pending) return;

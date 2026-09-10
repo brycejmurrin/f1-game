@@ -8,22 +8,21 @@ const Onboard = (function () {
   const ALL = 7;
   const GAP = 8;                // s between marks — never two at once
   const RACES_MAX = 2;          // after two races the player has seen enough
-
-  // WHAT TO PRESS. The prompt has to name the control this player actually has,
-  // or it is worse than silence: the touch build has no keys and the pad's
-  // face buttons are not the keyboard's. js/input/input.js is the authority
-  // (KeyX overtake, pad button 3, #btn-ot).
-  function verb(G, key) {
-    const touch = !!(typeof Input !== "undefined" && Input.touchControlsNeeded && Input.touchControlsNeeded());
-    if (key === "brake") return touch ? "TAP AND HOLD BRAKE" : "BRAKE — S OR DOWN";
-    if (key === "ot") return touch ? "TAP OVERTAKE" : "OVERTAKE — X";
-    return touch ? "TAP AERO" : "ACTIVE AERO — A";
-  }
   const TAIL = {
     brake: "into the corner",
     ot: "you are close enough to use it",
     aero: "you can open it now",
   };
+
+  // The prompt has to name the control this player actually has: the touch
+  // build has no keys and the pad's face buttons are not the keyboard's.
+  // js/input/input.js is the authority (KeyX overtake, pad button 3, #btn-ot).
+  function verb(key) {
+    const touch = !!(typeof Input !== "undefined" && Input.touchControlsNeeded && Input.touchControlsNeeded());
+    if (key === "brake") return touch ? "TAP AND HOLD BRAKE" : "BRAKE — S OR DOWN";
+    if (key === "ot") return touch ? "TAP OVERTAKE" : "OVERTAKE — X";
+    return touch ? "TAP AERO" : "ACTIVE AERO — A";
+  }
 
   function create(G) {
     Log.info("ui", "Onboard.create");
@@ -41,7 +40,10 @@ const Onboard = (function () {
       shown = Number.isInteger(v) ? v : 0;
       races = 0;
     }
-    function done() { load(); return shown >= ALL || races > RACES_MAX; }
+    function done() {
+      load();
+      return shown >= ALL || races > RACES_MAX;
+    }
 
     function fire(key) {
       load();
@@ -49,8 +51,8 @@ const Onboard = (function () {
       shown |= BIT[key];
       store.set(KEY, shown);
       cool = GAP;
-      G.announce(verb(G, key) + " — " + TAIL[key], 2.5, "coach");
-      Log.info("ui", "Onboard " + key);
+      G.announce(`${verb(key)} — ${TAIL[key]}`, 2.5, "coach");
+      Log.info("ui", `Onboard ${key}`);
       return true;
     }
 
@@ -78,22 +80,30 @@ const Onboard = (function () {
         if (bc && bc.on && bc.urgency > 0.35) return fire("brake");
       }
       if (!(shown & BIT.ot) && p.otArmed && !(p.otT > 0)) return fire("ot");
-      // Two defects, one site. The DISTANCE trigger fired up to 250 m before
-      // the zone, where xArmed is still false and game.js's `if (!c.xArmed)
-      // c.xOn = false` discards the toggle in the same frame — the one-shot
-      // mark taught a press that does nothing. Wait for the ARM instead. And
-      // read aeroX, the flap's travel, never the xOn switch (the flat rule in
-      // docs/PHYSICS.md), so a prompt cannot land while the flaps are opening.
-      // In auto mode the game opens the wing itself and the button is hidden,
-      // so naming a control there is worse than silence.
+      // Wait for the ARM, not the distance: up to 250 m before the zone xArmed
+      // is still false and game.js discards the toggle in the same frame (`if
+      // (!c.xArmed) c.xOn = false`), so a distance trigger taught a press that
+      // does nothing. Read aeroX, the flap's travel, never the xOn switch (the
+      // flat rule in docs/PHYSICS.md), so a prompt cannot land while the flaps
+      // are opening. In auto mode the game opens the wing itself and the
+      // button is hidden, so naming a control there is worse than silence.
       if (!(shown & BIT.aero) && G.raceAeroMode !== "auto") {
         if (p.xArmed && !(p.aeroX > 0.02)) return fire("aero");
       }
       return false;
     }
 
-    function reset() { shown = 0; races = 0; cool = 0; loaded = true; store.set(KEY, 0); }
-    function state() { load(); return { shown, races, done: done() }; }
+    function reset() {
+      shown = 0;
+      races = 0;
+      cool = 0;
+      loaded = true;
+      store.set(KEY, 0);
+    }
+    function state() {
+      load();
+      return { shown, races, done: done() };
+    }
     return { tick, reset, state, MARKS };
   }
 

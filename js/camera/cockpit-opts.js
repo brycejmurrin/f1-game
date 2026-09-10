@@ -1,28 +1,21 @@
-/* Apex 26 — CockpitOpts: player-facing options for the first-person view.
-   HALO is a switch. TURN CHASING is how far the cockpit aim leaves the car's
-   nose for a point 30 m down the road (0 = locked, 1 = full look-ahead).
-   These live here, not in graphics quality or steer-tuning.
-
-   WHY ITS OWN FILE. Same reason as GameMetrics: inject SETTINGS controls without
-   growing index.html or inventing CSS classes. */
+/* Apex 26 — CockpitOpts: player-facing options for the first-person view. HALO is a switch; TURN CHASING is how far the cockpit aim leaves the nose for a point 30 m down the road (0..1). Its own file, like GameMetrics, so the SETTINGS controls inject without growing index.html. */
 const CockpitOpts = (function () {
   "use strict";
 
 const KEY = "apex26.cockpitHalo";
 const KEY_TC = "apex26.cockpitTurnChase";         // legacy "1" / "0"
 const KEY_LEAD = "apex26.cockpitTurnChaseLead";   // 0..1, the live value
-// The SHIPPED amount (the owner's own setting, 2026-09-08). It was 0.35, which
-// was also what the old ON switch blended — the two were one number until they
-// parted here, so the legacy meaning gets its own constant below rather than
-// following this one and quietly rewriting history for a saved "1".
+// The shipped amount and the legacy ON amount parted on 2026-09-08: a stored
+// "1" from the old switch keeps the 0.35 it meant, an untouched install gets 0.4.
 const LEAD_DEFAULT = 0.4;
-const LEGACY_ON_LEAD = 0.35;   // what the old ON switch blended (js/camera/vantage.js)
+const LEGACY_ON_LEAD = 0.35;
 const LEAD_MAX = 1;
 
-let _halo = null, _lead = null;
+let haloOn = null;
+let lead = null;
 
-function clampLead(n) {
-  n = +n;
+function clampLead(raw) {
+  let n = +raw;
   if (!isFinite(n)) return LEAD_DEFAULT;
   if (n > LEAD_MAX) n = n / 100;
   return Math.max(0, Math.min(LEAD_MAX, n));
@@ -45,7 +38,7 @@ function urlTurnChase() {
   try {
     const q = /[?&]turnchase=([^&]*)/i.exec(location.search);
     return q ? decodeURIComponent(q[1]) : null;
-  } catch (_) { return null; }
+  } catch (_) { return null; /* no location, or a malformed escape */ }
 }
 
 function readLead() {
@@ -55,7 +48,7 @@ function readLead() {
   if (stored != null) return stored;
   const legacy = GameStore.store.raw(KEY_TC);
   if (legacy === "0") return 0;
-  if (legacy === "1") return LEGACY_ON_LEAD;   // a stored ON keeps the amount it meant
+  if (legacy === "1") return LEGACY_ON_LEAD;
   return LEAD_DEFAULT;
 }
 
@@ -64,25 +57,31 @@ function read(key, urlName, defaultOn) {
   try {
     const q = new RegExp("[?&]" + urlName + "=(1|0|on|off|true|false)", "i").exec(location.search);
     if (q) v = /^(1|on|true)$/i.test(q[1]) ? "1" : "0";
-  } catch (_) { }
+  } catch (_) { /* no location in a headless VM: the stored value stands */ }
   if (v == null || v === "") return !!defaultOn;
   return v === "1";
 }
 
-function halo() { if (_halo === null) _halo = read(KEY, "halo", true); return _halo; }
-
-function setHalo(on) {
-  _halo = !!on;
-  GameStore.store.rawSet(KEY, _halo ? "1" : "0");
-  return _halo;
+function halo() {
+  if (haloOn === null) haloOn = read(KEY, "halo", true);
+  return haloOn;
 }
 
-function turnChaseLead() { if (_lead === null) _lead = readLead(); return _lead; }
+function setHalo(on) {
+  haloOn = !!on;
+  GameStore.store.rawSet(KEY, haloOn ? "1" : "0");
+  return haloOn;
+}
+
+function turnChaseLead() {
+  if (lead === null) lead = readLead();
+  return lead;
+}
 
 function setTurnChaseLead(v) {
-  _lead = clampLead(v);
-  GameStore.store.rawSet(KEY_LEAD, String(Math.round(_lead * 100) / 100));
-  return _lead;
+  lead = clampLead(v);
+  GameStore.store.rawSet(KEY_LEAD, String(Math.round(lead * 100) / 100));
+  return lead;
 }
 
 function turnChase() { return turnChaseLead() > 0; }
@@ -94,7 +93,7 @@ function setTurnChase(on) {
 function paintLead(inp, out) {
   const pct = Math.round(turnChaseLead() * 100);
   if (inp) inp.value = String(pct);
-  if (out) out.textContent = pct + "%";
+  if (out) out.textContent = `${pct}%`;
 }
 
 function initUI() {
@@ -109,22 +108,23 @@ function initUI() {
   head.textContent = "COCKPIT";
   // Player cockpit controls sit after the RENDERER fold, not inside it.
   const adv = document.getElementById("pm-display-adv");
-  let ins = (adv && adv.parentNode === host) ? adv : null;
+  let insertAfter = (adv && adv.parentNode === host) ? adv : null;
   function place(el) {
-    if (ins && ins.parentNode === host && typeof host.insertBefore === "function") {
-      host.insertBefore(el, ins.nextSibling);
-      ins = el;
-    } else host.appendChild(el);
+    if (insertAfter && insertAfter.parentNode === host && typeof host.insertBefore === "function") {
+      host.insertBefore(el, insertAfter.nextSibling);
+      insertAfter = el;
+    } else {
+      host.appendChild(el);
+    }
   }
   place(head);
 
-  // HALO is a setting row like every other Settings pick (js/ui/setting-row.js)
-  // — it was a `HALO: ON` cycle button.
   const haloRow = SettingRow.build("pm-halo", "HALO", [["on", "ON"], ["off", "OFF"]]);
   haloRow.row.title = "Draw the halo (secondary roll structure) in the cockpit view.";
   SettingRow.wire(haloRow.row, { read: () => (halo() ? "on" : "off"), write: (v) => {
     setHalo(v === "on");
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { }
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
+    catch (_) { /* audio is optional here */ }
   } });
   place(haloRow.row);
 

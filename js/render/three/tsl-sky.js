@@ -59,7 +59,7 @@
       abs, max, min, normalize, length, sin, atan, step,
     } = TSL;
 
-    /* ── SKY-family noise (GLXChunks.hash + GLXChunks.vnoise, verbatim) ────── */
+    /* SKY-family noise (GLXChunks.hash + GLXChunks.vnoise, verbatim) */
     const hash3 = Fn(([pIn]) => {
       const p = fract(vec3(pIn).mul(0.3183099).add(vec3(0.1, 0.2, 0.3))).mul(17.0).toVar();
       return fract(p.x.mul(p.y).mul(p.z).mul(p.x.add(p.y).add(p.z)));
@@ -98,7 +98,7 @@
       return fract(float(52.9829189).mul(fract(dot(p, vec2(0.06711056, 0.00583715)))));
     });
 
-    /* ── the 28 uniforms (drawSky upload in js/render/glx/glx.js) ─────────────── */
+    /* the 28 uniforms (drawSky upload in js/render/glx/glx.js) */
     const U = {
       invViewProj:   uniform(new THREE.Matrix4()),
       zenith:        uniform(new THREE.Vector3(0.18, 0.40, 0.78)),
@@ -168,9 +168,9 @@
       s1(U.lightning, sky.lightning, 0);
     }
 
-    /* ── the fragment (SKY_VS ray math + SKY_FS in js/render/glx/shaders/glsl-sky.js) ─ */
+    /* the fragment (SKY_VS ray math + SKY_FS in js/render/glx/shaders/glsl-sky.js) */
     const node = Fn(() => {
-      // ── ANCHORS: screenUV + the whole ray chain, unconditional ────────────
+      // ANCHORS: screenUV + the whole ray chain, unconditional
       const suv = vec2(screenUV).toVar();
       // NDC: screenUV is top-left origin -> flip y (SKY_VS's p covers -1..1).
       const p = vec2(suv.x.mul(2.0).sub(1.0), float(1.0).sub(suv.y).mul(2.0).sub(1.0)).toVar();

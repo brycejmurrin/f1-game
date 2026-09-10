@@ -1,9 +1,9 @@
 /* Apex 26 — RACE SETTINGS sheet: lap ladder, weather, grid rule, GO/cancel.
  * RaceSettings.create(hooks) — game.js passes mutable session state and the
  * select-screen plumbing; netRoom changes what GO means in a VS FRIEND room. */
-"use strict";
-
 const RaceSettings = (function () {
+  "use strict";
+
   const RS_WEATHER = [["dry", "☀ DRY"], ["wet", "💧 WET"], ["rain", "🌧 RAIN"], ["overcast", "☁ CLOUDY"], ["fog", "🌫 FOG"]];
   const RS_CONDITIONS = [["stable", "STABLE"], ["mixed", "MIXED"]];
   const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]];

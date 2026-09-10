@@ -14,8 +14,13 @@ clone of `equivalent` — mesh only. **`FACTORY_PRESETS`** drives **AI meshes
 only**. ERS/aero axes derive from the catalog (`ersProfile` / `aeroLoad`); a
 car with no parts (every AI) sits at the midpoint. Livery finish is
 `finish: "gloss" | "satin" | "chrome"` via `Car3D.FINISH_SURFACE`. Shark fin:
-`fin` (plate, defaults to `c2`) and `finArt` (must contrast or it vanishes);
-the tail DESIGN is four enum fields with defaults that reproduce the shipped car —
+`fin` (plate; authored as-is; unset = `c2` or contrast-derived under
+`finHandoff: "contrast"`) and `finArt` (authored as-is; unset clears the plate).
+Design colour fills on the sheet are gated: BAND (`spineTint`), SADDLE, FLANK
+FILL (`sideTint`), SUN, 2ND BAND, PLATE — only when the current TOP/SIDE/BIND
+paints that surface. `ridgeTint` / `airboxTint` / `crestInk` / `plateInk` are
+migrated away (`Liveries.migratePaint`).
+The tail DESIGN is four enum fields with defaults that reproduce the shipped car —
 `finShape` (`Car3D.FIN_SHAPES` + `none`; the ONE non-colour livery field that moves
 a vertex, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,
 drives the fin panel ONLY — the crown's gradient wash was removed, so every
@@ -85,6 +90,23 @@ before writing (js/ui/settings-export.js): a custom livery needs an id and two
 rgb triples, and a partly-corrupt array keeps the sound paint jobs. Without it
 one entry lacking `c1` took the LIVERY tab down — `cssCol` reads `c[0]` on
 whatever it is handed.
+
+**COLOUR AND LEGIBILITY ARE TWO DIFFERENT PARAMETERS.** A mark's colour is
+AUTHORED — by the player's TEAM LOGO row or by the team's `livery` block in
+`js/data/teams.js` — and `markPalette` never substitutes an authored colour.
+Legibility is its own parameter: the OUTLINE row (`logo3`), a plate, or (for a
+DERIVED mark only, nobody authored it) an automatic halo. A shipped car whose
+brand mark matches its own cover (the W17's silver star, the MCL's papaya
+speedmark, Alpine's A, the RB letters) authors its `logo3` in team data, the
+same row a player uses for the same job; the paint sheet ADVISES a player
+whose pick will not read (ratio and fix under TEAM MARK) and never overrides
+it. Two instruments, one model each: `cover-legibility.test.mjs` scores
+contrasting AREA and owns the bands, saddles, suns and sashes;
+`crest-marks.test.mjs` scores mark + outline + halo per background and owns
+every mark. A design fill row is live only while a design spends it —
+`LiveryTex.FILL_SURFACES` / `liveFills()` is declared beside the painters,
+consumed by the sheet's greying and by `garage-angles --plan`'s inert-flag
+warning, and proven against the rasterised atlas by `fill-gating.test.mjs`.
 
 The mark takes up to THREE livery colours and the editor asks
 `LiveryTex.markSlots(teamId)` how many and what to call them — never assume a
