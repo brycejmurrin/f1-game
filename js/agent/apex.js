@@ -1682,7 +1682,6 @@ const api = {
       (G.player.rescueLastT != null && (G.raceT - G.player.rescueLastT) < 0.5);
 
     return {
-      // position & progress
       s:       +G.player.s.toFixed(3),
       x:       +G.player.x.toFixed(3),
       prog:    +(G.player.prog || 0).toFixed(4),

@@ -62,8 +62,6 @@ function buildShell(out, liv) {
   // stood outside the bay you would see a row of dark bars hanging in front of
   // the room whose wall had already culled away. Shading them into the wall
   // means they are the wall, and they come and go exactly when it does.
-  // Battens are BAKED INTO THE WALL's vertex colour rather than modelled as
-  // solid posts, so they come and go exactly when the wall does.
   //
   // This never worked. It was keyed on `u * n` where n was the grid's OWN
   // column count, and panelGrid samples u at i/nu — so `u * n` was always an

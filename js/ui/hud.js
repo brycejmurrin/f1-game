@@ -590,7 +590,6 @@ function updateHud(force) {
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
   hText(els.speed, "" + Math.round(G.dashKph(player.speed)));
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
-  // gear + tachometer
   hText(els.gear, "" + player.gear);
   const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
   hStyle(els.rpmFill, "width", (rpmFrac * 100).toFixed(0) + "%");
@@ -599,7 +598,6 @@ function updateHud(force) {
   // exactly where a driver holding a gear sits. Enter at 92%, leave at 89%.
   _redline = player.rpm > MAX_RPM * (_redline ? 0.89 : 0.92);
   hToggle(els.tach, "redline", _redline);
-  // toggle-button states
   hToggle(els.btnBoost, "on", player.boostOn);
   hStyle(els.btnBoost, "--e", (Math.round((player.energy || 0) * 20) / 20).toFixed(2));
   hToggle(els.btnOT, "on", player.otT > 0);

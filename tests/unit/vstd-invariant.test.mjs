@@ -15,7 +15,7 @@
 //         Overtake armed at 42 % of top speed at pace 0.5 and 16 % at pace 1.3,
 //         against active aero's constant 35 %.
 //
-// So this is the guard, in the shape docs/notes/DEFECT-LEDGER.md records for
+// So this is the guard, in the shape docs/archive/2026-08-architecture-review-journal.md records for
 // A10 ("plus tests/unit/circuit-def-fields.test.mjs — the guard is the real fix").
 // tools/check/vstd-lint.mjs finds every `.speed` compared against a numeric literal
 // without vStd(); ALLOWED below is the set that is legitimately ABSOLUTE, each
@@ -217,7 +217,7 @@ const ALLOWED = [
 // EMPTY, and that is the point: the one finding this list ever held — the rain
 // spray's `wet && c.speed > 15` with its `clamp((c.speed - 15) / 45, 0, 1)` ramp,
 // which capped spray strength at 0.47 at pace 0.5 — was repaired as A16 in
-// docs/notes/DEFECT-LEDGER.md and both halves now read vStd(c.speed). A row here
+// the 2026-08 journal and both halves now read vStd(c.speed). A row here
 // is a debt, not a licence; deleting one is what closing it looks like.
 const SUSPECT = [];
 
