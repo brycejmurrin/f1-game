@@ -1671,32 +1671,27 @@ const TLX = (function () {
         _warmAt = performance.now(); _warmAttempts++;
         const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
         const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
-        const jobs = [];
-        try {
-          pinSkyMaterial();
-          if (lit && lit.setSsrMrt) lit.setSsrMrt(usePost);
-          if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
-          renderer.setMRT(usePost ? _ssrMrtNode() : null);
-          renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
-          // Compile the prepared objects in place: cloning InstancedMesh would
-          // duplicate its instance buffers. Rendering pauses while this settles
-          // (with a timeout escape); hidden pool entries stay excluded.
-          jobs.push(renderer.compileAsync(scene, camera));
-          renderer.setMRT(null);
-          if (usePost && post.warm) jobs.push(post.warm(opts, _postF));
-        } catch (e) { jobs.push(Promise.reject(e)); }
-        finally { renderer.setMRT(mrt); renderer.setRenderTarget(target); }
-        _warmPending = Promise.allSettled(jobs).then((results) => {
-          const failed = results.find((r) => r.status === "rejected");
-          if (failed) {
+        // r185 reads renderer target/MRT again AFTER awaits while building nodes.
+        // Keep all render state owned by this task until compilation settles.
+        _warmPending = (async () => {
+          try {
+            pinSkyMaterial();
+            if (lit && lit.setSsrMrt) lit.setSsrMrt(usePost);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
+            renderer.setMRT(usePost ? _ssrMrtNode() : null);
+            renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+            await renderer.compileAsync(scene, camera);
+            renderer.setMRT(null);
+            if (usePost && post.warm && performance.now() - _warmAt < 3000) await post.warm(opts, _postF);
+          } catch (e) {
             _warmRequested = _warmAttempts < 2;
-            try { Log.warn("gfx", "TLX program warm failed", String(failed.reason)); } catch (_) { /* logging is optional */ }
+            try { Log.warn("gfx", "TLX program warm failed", String(e)); } catch (_) { /* logging is optional */ }
+          } finally {
+            if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
+            if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
+            renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        }).finally(() => {
-          if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
-          if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
-          _warmPending = null;
-        });
+        })().finally(() => { _warmPending = null; });
       }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
@@ -2867,7 +2862,7 @@ const TLX = (function () {
         warm() {
           if (!_warmPending) { _warmRequested = true; _warmAttempts = 0; }
         },
-        warming() { return !!_warmPending && performance.now() - _warmAt < 3000; },
+        warming() { return !!_warmPending; },
         begin(frame) {
           _matFrame++;   // new frame: last frame's materials are evictable again
           resize();
@@ -3143,10 +3138,10 @@ const TLX = (function () {
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
           // Hide InstancedMeshes that were not drawn this frame (still in scene).
           _hideUndrawnInstanced();
-          // Defer painting while async programs link, bounded so an unresolved
-          // driver promise cannot freeze the game. Retry a rejection once.
+          // Do not render over an in-flight node build. A time budget may skip
+          // later warm passes, but cannot cancel a compile already in flight.
           if (_warmRequested && !_warmPending) startProgramWarm(opts);
-          if (_warmPending && performance.now() - _warmAt < 3000) return;
+          if (_warmPending) return;
           // First renderer.render() is when three compiles TSL → GLSL. A
           // factory that returned is not a compiled program — Safari WebGL2
           // often throws here. tick() reports any escape as the full-screen

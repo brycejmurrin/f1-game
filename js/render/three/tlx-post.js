@@ -303,12 +303,10 @@
     quad = new THREE.QuadMesh();
     let compileJobs = null;
     function runPass(mat, target) {
+      if (compileJobs) { compileJobs.push({ mat, target }); return; }
       quad.material = mat;
       renderer.setRenderTarget(target);
-      if (compileJobs) {
-        const snapshot = new THREE.QuadMesh(mat);
-        compileJobs.push(renderer.compileAsync(snapshot, snapshot.camera));
-      } else quad.render(renderer);
+      quad.render(renderer);
     }
 
     // God-ray lamp-selection scratch (present() only) — no per-frame allocs.
@@ -681,23 +679,25 @@
       }
     }
 
-    function warm(opts, frame) {
-      // Reuse the live pass gates, bindings, formats and MRT configuration.
-      // Disabled effects keep their lazy allocation behavior.
+    async function warm(opts, frame) {
+      // Collect enabled passes first, then compile serially with stable targets.
       const jobs = [], target = renderer.getRenderTarget(), mrt = renderer.getMRT();
       const last = { ..._last }, lastRT = _lastPresentRT, vizDest = _vizDest;
-      compileJobs = jobs;
-      try { present(opts, frame); }
-      catch (e) { jobs.push(Promise.reject(e)); }
-      finally {
-        compileJobs = null;
+      try {
+        compileJobs = jobs;
+        try { present(opts, frame); } finally { compileJobs = null; }
+        renderer.setMRT(null);
+        const deadline = performance.now() + 3000;
+        for (const job of jobs) {
+          renderer.setRenderTarget(job.target);
+          const snapshot = new THREE.QuadMesh(job.mat);
+          await renderer.compileAsync(snapshot, snapshot.camera);
+          if (performance.now() >= deadline) break;
+        }
+      } finally {
         Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest;
         renderer.setMRT(mrt); renderer.setRenderTarget(target);
       }
-      return Promise.allSettled(jobs).then((results) => {
-        const failure = results.find((r) => r.status === "rejected");
-        if (failure) throw failure.reason;
-      });
     }
 
     try { Log.info("gfx", "TLX post init"); } catch (_) { /* harness */ }

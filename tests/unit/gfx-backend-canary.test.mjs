@@ -3835,26 +3835,69 @@ test("TLX registry pruning preserves live refs and is independent of mirror rele
   assert.doesNotMatch(body, /isMobile|releaseGeoMirrors|_sweepOptIn/);
 });
 
-test("TLX warm retries rejection, restores bindings, and warms post on the scene target", async () => {
+test("TLX warm holds renderer state across awaits and restores it on rejection", async () => {
   let _warmRequested = true, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
-  const _postF = { proj: [] }, vizMat = null, scene = { prepared: true }, camera = {};
-  let target = "canvas", mrt = "previous", calls = 0, postCalls = 0;
+  const _postF = { proj: [] }, vizMat = null, scene = {}, camera = {};
+  let target = "canvas", mrt = "previous", tag = false, postCalls = 0, rejectMain;
   const renderer = {
     getRenderTarget: () => target, getMRT: () => mrt,
     setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
-    compileAsync: (s) => {
-      assert.equal(s.prepared, true); assert.equal(target, "HDR"); assert.equal(mrt, "tag");
-      return ++calls === 1 ? Promise.reject(new Error("transient")) : Promise.resolve();
+    compileAsync: async () => {
+      await Promise.resolve(); // r185 builds later objects after yielding
+      assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(tag, true);
+      if (_warmAttempts === 1) await new Promise((_, reject) => { rejectMain = reject; });
     },
   };
-  const post = { enabled: () => true, sceneTarget: () => "HDR", warm: () => { postCalls++; assert.equal(mrt, null); return Promise.resolve(); } };
-  const lit = null, fx = null, pinSkyMaterial = () => {}, _ssrMrtNode = () => "tag", softOutRT = () => null;
-  const Log = { warn() {} };
+  const post = { enabled: () => true, sceneTarget: () => "HDR", warm: async () => {
+    postCalls++; await Promise.resolve(); assert.equal(mrt, null); assert.equal(target, "HDR");
+  } };
+  const lit = { setSsrMrt: v => { tag = v; } }, fx = null;
+  const pinSkyMaterial = () => {}, _ssrMrtNode = () => "tag", softOutRT = () => null, Log = { warn() {} };
   const body = fnBody(code("js/render/three/tlx.js"), "startProgramWarm");
   const warm = eval("(function(opts){" + body + "})");
-  warm({}); assert.equal(target, "canvas"); assert.equal(mrt, "previous");
-  await _warmPending;
+  warm({}); await Promise.resolve();
+  assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(postCalls, 0);
+  rejectMain(new Error("transient")); await _warmPending;
+  assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
   assert.equal(_warmRequested, true); assert.equal(_warmPending, null);
   warm({}); await _warmPending;
-  assert.equal(_warmRequested, false); assert.equal(postCalls, 2);
+  assert.equal(_warmRequested, false); assert.equal(postCalls, 1);
+  assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
+});
+
+test("TLX post warm compiles serially and holds each target across awaits", async () => {
+  let compileJobs = null, target = "scene", mrt = "tag", active = 0, calls = 0;
+  const _last = { pass: "live" }; let _lastPresentRT = "liveRT", _vizDest = "viz";
+  const THREE = { QuadMesh: class { constructor(mat) { this.material = mat; this.camera = {}; } } };
+  const renderer = {
+    getRenderTarget: () => target, getMRT: () => mrt,
+    setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
+    compileAsync: async q => {
+      assert.equal(++active, 1); calls++;
+      await Promise.resolve();
+      assert.equal(target, q.material); assert.equal(mrt, null);
+      active--;
+      if (q.material === "blur") throw new Error("compile failed");
+    },
+  };
+  const present = () => {
+    compileJobs.push({ mat: "AO", target: "AO" }, { mat: "blur", target: "blur" });
+    _last.pass = "warm"; _lastPresentRT = "warmRT"; _vizDest = null;
+  };
+  const body = fnBody(code("js/render/three/tlx-post.js"), "warm");
+  const warm = eval("(async function(opts, frame){" + body + "})");
+  await assert.rejects(warm({}, {}), /compile failed/);
+  assert.equal(calls, 2); assert.equal(compileJobs, null);
+  assert.equal(target, "scene"); assert.equal(mrt, "tag");
+  assert.deepEqual(_last, { pass: "live" }); assert.equal(_lastPresentRT, "liveRT"); assert.equal(_vizDest, "viz");
+});
+
+test("GPU verdict rejects captured compilation errors even with zero uncaptured errors", () => {
+  const gpu = tlxLegJson();
+  gpu.console = ["error: THREE.WebGPURenderer: Async render pipeline creation failed: Color target has no corresponding fragment stage output"];
+  const result = runVerdict(verdictScript(), {
+    census: { anyHardware: true, runs: [] },
+    legs: { webgpu: gpu, webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson() },
+  });
+  assert.equal(result.code, 1); assert.match(result.out, /shader\/pipeline console errors/);
 });

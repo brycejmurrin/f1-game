@@ -440,6 +440,8 @@ jobs:
             // flaky and then gets widened, which AGENTS.md forbids); it now
             // either carries a number or says why it does not.
               if (g.frameReadFailed) rows.push(`${" ".repeat(8)}luma:  ${g.frameReadFailed}`);
+              const compileErrors = (g.console || []).filter((line) => /(?:Async render pipeline creation failed|Render pipeline creation failed|ShaderModule|fragment error|vertex error)/i.test(String(line)));
+              if (compileErrors.length) bad.push(`${path3}: ${compileErrors.length} shader/pipeline console errors — ${String(compileErrors[0]).slice(0, 200)}`);
               if (g.ok !== true || g.phase !== "done") bad.push(`${path3}: did not finish (phase=${g.phase}, ok=${g.ok})${g.error ? " — " + String(g.error).slice(0, 200) : ""}`);
             // An ABSENT count must not read as clean. gpuErrors was defined only
             // on WGX, so this clause was vacuous on the GLX leg from the day that
