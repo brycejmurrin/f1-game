@@ -2693,3 +2693,13 @@ already set from `noWheels` factory bodies) pass `Helmets.build({ maxSplit: 0 })
 ## 2026-09-09 — resolveLivery copies every editor tint
 
 `js/game.js` lines 10422 -> **10428** (+6) / codeLines 5644 -> **5648** (+4). `sunTint` / `crestInk` / `bandTint2` / `plateTint` / `plateInk` pass through both resolveLivery branches so those garage rows reach the atlas.
+
+## 2026-09-10 — merge deploy into spine-zones-bind
+
+`js/game.js` lines 10303 -> **10307** (+4) / codeLines 5586 -> **5590** (+4);
+`js/car/car3d.js` lines 4135 -> **4137** (+2). Union of spine-zones
+`resolveFinPaint` / airbox mesh wiring with deploy's `bodySplit` path — the
+merge left ratchets.json at deploy's ceilings while the sources held both
+sides' lines. `node tools/check/ratchets.mjs --update` re-measured the union
+(bounded well under the pre-merge spine-zones tip of 10428/5648).
+
