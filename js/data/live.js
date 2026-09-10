@@ -1,3 +1,6 @@
+/* Apex 26 — the data hub's LIVE tab: polls OpenF1 for the running session's
+   positions/gaps/weather. mergePositionBatch/mergeIntervalBatch fold a delta
+   batch onto per-driver state so a live/liveIntervals cursor never replays. */
 const DataLive = (function () {
   "use strict";
 
@@ -193,7 +196,7 @@ const DataLive = (function () {
           const gaps = mergeIntervalBatch(liveState, res[3]);
           if (positions && gaps) {
             positions.forEach(p => {
-              if (p.num !== null && p.num !== undefined && Object.prototype.hasOwnProperty.call(gaps, p.num)) {
+              if (p.num != null && Object.prototype.hasOwnProperty.call(gaps, p.num)) {
                 p.timeDiff = gaps[p.num];
               }
             });
@@ -267,7 +270,7 @@ const DataLive = (function () {
       }
       const byNum = {};
       (drivers || []).forEach(d => {
-        if (d && d.num !== null && d.num !== undefined) byNum[d.num] = d;
+        if (d && d.num != null) byNum[d.num] = d;
       });
 
       const sec = el("div", "dh-livecard");
@@ -316,10 +319,10 @@ const DataLive = (function () {
         list.forEach(p => {
           const d = byNum[p.num] || {};
           const row = el("div", "dh-row");
-          
+
           const mainInfo = el("div", "dh-cons-main");
-          mainInfo.appendChild(el("span", "dh-pos", p.pos !== null && p.pos !== undefined ? p.pos : "—"));
-          const chip = el("span", "dh-codechip", d.code || (p.num !== null && p.num !== undefined ? "#" + p.num : "—"));
+          mainInfo.appendChild(el("span", "dh-pos", p.pos != null ? p.pos : "—"));
+          const chip = el("span", "dh-codechip", d.code || (p.num != null ? "#" + p.num : "—"));
           let col = null;
           if (d.color && /^[0-9a-fA-F]{6}$/.test(d.color)) {
             col = [parseInt(d.color.slice(0, 2), 16) / 255,

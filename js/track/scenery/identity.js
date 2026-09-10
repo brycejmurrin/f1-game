@@ -14,6 +14,13 @@ const SceneryIdentity = (function () {
     // pass under (gantry beam, underpass slab, sail/gridshell spanning the
     // track) emit via RAW.addBox so the guarded wrappers do not cull them.
 
+    // A lattice member that MAY legitimately overhang the track (a sail
+    // canopy's underside, a gridshell strut) draws via RAW there instead of
+    // being dropped outright; clear of the tarmac it goes through the normal
+    // guarded path so an off-track mis-placement still gets culled.
+    const overheadBox = (c, sz, col, b) =>
+      rejBox(c, sz, b) ? RAW.addBox(out, c, sz, col, b) : addBox(out, c, sz, col, b);
+
     const underpassPortal = (s, opts) => {
       opts = opts || {};
       const k = Math.round(s * n) % n;
@@ -190,13 +197,8 @@ const SceneryIdentity = (function () {
       // Sail disc as a flat wide box (ellipse approximated by axis sizes).
       const rx = opts.rx != null ? opts.rx : rad;
       const rz = opts.rz != null ? opts.rz : rad * 0.72;
-      // If the sail itself covers tarmac, still draw it via RAW (overhead veil).
       const sailC = vadd(crown, u, thick / 2);
-      if (rejBox(sailC, [rx * 2, thick, rz * 2], b)) {
-        RAW.addBox(out, sailC, [rx * 2, thick, rz * 2], col, b);
-      } else {
-        addBox(out, sailC, [rx * 2, thick, rz * 2], col, b);
-      }
+      overheadBox(sailC, [rx * 2, thick, rz * 2], col, b);
       for (let i = 0; i < ribs; i++) {
         const a = (i / ribs) * Math.PI * 2;
         const ox = Math.cos(a) * rx * 0.85, oz = Math.sin(a) * rz * 0.85;
@@ -235,14 +237,11 @@ const SceneryIdentity = (function () {
           const lift = peakH * arch * (0.75 + 0.25 * Math.cos(zt * Math.PI));
           const node = vadd(vadd(vadd(c, u, lift), r, xt * w), f, zt * depth);
           const col = ledCols[(i + j) % ledCols.length];
-          // Lattice nodes may overhang the track — RAW when footprint hits tarmac.
-          if (rejBox(node, [2.2, 1.2, 2.0], b)) RAW.addBox(out, node, [2.2, 1.2, 2.0], col, b);
-          else addBox(out, node, [2.2, 1.2, 2.0], col, b);
+          overheadBox(node, [2.2, 1.2, 2.0], col, b);
           if (prev) {
             const mid = [(prev[0] + node[0]) / 2, (prev[1] + node[1]) / 2, (prev[2] + node[2]) / 2];
             const span = Math.hypot(node[0] - prev[0], node[1] - prev[1], node[2] - prev[2]) || 1;
-            if (rejBox(mid, [0.35, 0.35, span], b)) RAW.addBox(out, mid, [0.35, 0.35, span], strutCol, b);
-            else addBox(out, mid, [0.35, 0.35, span], strutCol, b);
+            overheadBox(mid, [0.35, 0.35, span], strutCol, b);
           }
           prev = node;
         }

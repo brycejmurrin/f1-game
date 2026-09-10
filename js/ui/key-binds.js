@@ -34,7 +34,8 @@ function create(G) {
       const { id, slot } = armed;
       const r = dev.set(id, slot, v);
       if (!r.ok) {
-        setNote((r.reason === "reserved" ? dev.label(v) + " is reserved by the menus — " : "") + "press another, or Esc.");
+        const prefix = r.reason === "reserved" ? `${dev.label(v)} is reserved by the menus — ` : "";
+        setNote(`${prefix}press another, or Esc.`);
         return;
       }
       disarm(true);
@@ -42,7 +43,7 @@ function create(G) {
       tick();
       render();
       const from = r.conflict && dev.list().find((a) => a.id === r.conflict);
-      setNote(from ? dev.label(v) + " moved here from " + from.label + "." : dev.idle);
+      setNote(from ? `${dev.label(v)} moved here from ${from.label}.` : dev.idle);
     }
     // The keyboard capture is on WINDOW in the CAPTURE phase, ahead of every
     // document listener (the menu walker, the Escape handler, Input itself),
@@ -89,7 +90,9 @@ function create(G) {
       b.dataset.slot = String(i);
       const code = a.codes[i];
       b.textContent = code != null ? dev.label(code) : "—";
-      b.setAttribute("aria-label", a.label + (i ? " second " : " ") + dev.noun + (code != null ? ": " + dev.label(code) : ": unset") + " — press to change");
+      const slotWord = i ? " second " : " ";
+      const valueText = code != null ? `: ${dev.label(code)}` : ": unset";
+      b.setAttribute("aria-label", `${a.label}${slotWord}${dev.noun}${valueText} — press to change`);
       b.onclick = () => arm(a.id, i, b);
       return b;
     }
@@ -126,7 +129,7 @@ function create(G) {
       for (const a of dev.list()) byId[a.id] = a;
       dev.groups.forEach(([name, ids, tail], gi) => {
         if (gi) help.append("  ·  ");
-        help.append(name + " ");
+        help.append(`${name} `);
         if (typeof ids === "string") {
           help.append(ids);
         } else {
@@ -137,7 +140,7 @@ function create(G) {
           if (primary.length && secondary.length) help.append(" / ");
           secondary.forEach((c) => help.append(chip(c)));
         }
-        if (tail) help.append(" " + tail);
+        if (tail) help.append(` ${tail}`);
       });
     }
     if (resetBtn) resetBtn.onclick = () => { disarm(true); dev.resetAll(); save(); tick(); render(); setNote(dev.resetNote); };
@@ -151,10 +154,13 @@ function create(G) {
   // The one line a phone sees while both tables are hidden: what to press to
   // make them appear. Gone the moment either table shows, and on a desktop.
   const hint = $("pm-ctl-hint");
-  let keys = null, pad = null;   // assigned below; section() renders (and hints) before both exist
+  // Assigned below; section() renders (and hints) before both exist.
+  let keys = null;
+  let pad = null;
   function renderHint() {
     if (!hint) return;
-    const keysOff = keys ? keys.hidden() : true, padOff = pad ? pad.hidden() : true;
+    const keysOff = keys ? keys.hidden() : true;
+    const padOff = pad ? pad.hidden() : true;
     hint.hidden = desktop() || !(keysOff && padOff);
   }
   keys = section({

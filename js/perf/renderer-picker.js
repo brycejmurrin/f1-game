@@ -155,6 +155,18 @@ function raceGuard(btn, armedText, repaint) {
   return true;
 }
 
+function uiSelect() {
+  try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
+}
+
+// Shared by every control that reloads after writing a renderer/backend
+// preference: disarm the crash sentinel (a settings reload must not count as
+// a crash strike) and reload once the new pref has painted.
+function reloadSoon() {
+  try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in a harness */ }
+  setTimeout(() => { try { location.reload(); } catch (_) { /* file:// / test host */ } }, 350);
+}
+
 const RENDERER_LS_KEYS = [
   "apex26.gfxBackend", "apex26.gfxBackendProbe",
   "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
@@ -188,7 +200,7 @@ function clearRendererStorage() {
 function applyBackend(next, rb) {
   if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?", () => paintRenderer(rb))) return false;
   Log.info("game", "RendererPicker.applyBackend " + next);
-  try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
+  uiSelect();
   if (!available(next)) {
     if (isSelect(rb) && rb.options) {
       const opts = rb.options;
@@ -211,8 +223,7 @@ function applyBackend(next, rb) {
     for (const k of ["apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail"]) GameStore.store.rawDel(k);
   }
   markReloading(rb, next);
-  try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
-  setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
+  reloadSoon();
   return true;
 }
 
@@ -277,8 +288,7 @@ function applyThreePath(next, opts) {
   if (readBackend() === "three" && !(opts && opts.noReload)) {
     const btn = typeof document !== "undefined" ? document.getElementById("pm-three-path") : null;
     if (btn) btn.textContent = "THREE PATH: " + threePathLabel(next) + " — RELOADING…";
-    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in unit harness */ }
-    setTimeout(() => { try { location.reload(); } catch (_) { /* file:// / test host */ } }, 350);
+    reloadSoon();
     return true;
   }
   return false;
@@ -307,8 +317,7 @@ function applyEnvProbe(next, opts) {
   if (readBackend() === "three" && !(opts && opts.noReload)) {
     const btn = typeof document !== "undefined" ? document.getElementById("pm-car-reflect") : null;
     if (btn) btn.textContent = "CAR REFLECTIONS: " + envProbeLabel(next) + " — RELOADING…";
-    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in a harness */ }
-    setTimeout(() => { try { location.reload(); } catch (_) { /* file:// / test host */ } }, 350);
+    reloadSoon();
     return true;
   }
   return false;
@@ -353,8 +362,7 @@ function applyShotMode(next, opts) {
   if (shotReloadLive() && !(opts && opts.noReload)) {
     const btn = typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null;
     if (btn) btn.textContent = "SCREENSHOTS: " + shotModeLabel(next) + " — RELOADING…";
-    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) { /* no governor in unit harness */ }
-    setTimeout(() => { try { location.reload(); } catch (_) { /* file:// / test host */ } }, 350);
+    reloadSoon();
     return true;
   }
   return false;
@@ -570,23 +578,23 @@ function initPresentControls() {
   paintPresent();
   try { window.addEventListener("apex-gfx-live", paintPresent); } catch (_) { /* no window */ }
   if (pathBtn) pathBtn.onclick = function () {
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
+    uiSelect();
     applyThreePath(cycleOf(THREE_PATHS, readThreePath()));
   };
   if (envBtn) envBtn.onclick = function () {
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
+    uiSelect();
     applyEnvProbe(cycleOf(ENV_PROBES, readEnvProbe()));
   };
   if (shotBtn) shotBtn.onclick = function () {
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
+    uiSelect();
     applyShotMode(cycleOf(SHOT_MODES, readShotMode()));
   };
   saveBtn.onclick = function () {
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
+    uiSelect();
     saveScreenshot();
   };
   diagBtn.onclick = function () {
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
+    uiSelect();
     copyDiag(diagBtn);
   };
 }
@@ -640,12 +648,11 @@ function initReset() {
   btn.title = "Forget the saved renderer pick, THREE PATH, SCREENSHOTS, and the crash/fallback flags, then reload on WebGL2. Use this if THREE.JS or WEBGPU crashed or will not load, especially on iPhone.";
   if (typeof host.appendChild === "function") host.appendChild(btn);
   btn.onclick = () => {
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
+    uiSelect();
     if (!raceGuard(btn, "RESET RENDERER: END THIS RACE & RELOAD?", () => { btn.textContent = "RESET RENDERER"; })) return;
     clearRendererStorage();
     btn.textContent = "RESET RENDERER — RELOADING…";
-    try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
-    setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
+    reloadSoon();
   };
 }
 

@@ -2,9 +2,9 @@
  * Peer times arrive on NetPlay EV.QUALI / EV.QLIVE; the q-go button shows why the
  * grid is still locked. QualiNet.create(hooks) — game.js passes openQuali and the
  * quali sheet rebuild; netPlay/netLobby are read at call time like the old inline code. */
-"use strict";
-
 const QualiNet = (function () {
+  "use strict";
+
   function create(hooks) {
     const { $, fmtTime, isQuali, getPlayer, getCars, openQuali, applyPeerQuali,
       getNetPlay, getNetLobby } = hooks;
@@ -157,7 +157,7 @@ const QualiNet = (function () {
       netLobby.abortQuali();
     }
 
-    try { Log.info("game", "QualiNet ready"); } catch (_) { /* Log absent in isolated VM */ }
+    try { Log.info("game", "QualiNet ready"); } catch { /* Log absent in isolated VM */ }
 
     return {
       onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,

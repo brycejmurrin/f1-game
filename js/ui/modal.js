@@ -9,10 +9,10 @@ window.TopModal = (function () {
     const wantOpen = !el.hidden;
     if (wantOpen && !el.open) {
       try { el.showModal(); } catch (_) { /* already in the top layer */ }
-      try { Log.info("ui", "TopModal open #" + (el.id || "?")); } catch (_) { /* Log absent */ }
+      try { Log.info("ui", `TopModal open #${el.id || "?"}`); } catch (_) { /* Log absent */ }
     } else if (!wantOpen && el.open) {
       try { el.close(); } catch (_) {}
-      try { Log.info("ui", "TopModal close #" + (el.id || "?")); } catch (_) { /* Log absent */ }
+      try { Log.info("ui", `TopModal close #${el.id || "?"}`); } catch (_) { /* Log absent */ }
     }
   }
 

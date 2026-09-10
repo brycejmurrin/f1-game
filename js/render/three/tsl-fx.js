@@ -1,8 +1,11 @@
-/* Apex 26 — TLXShaders.fx: the FX materials for the TLX backend (M6). TSL ports of the five tiny GLSL programs in js/render/glx/shaders/glsl-fx.js (the GLSL source of trut… */
+/* Apex 26 — TLXShaders.fx: the FX materials for the TLX backend (M6). TSL
+ * ports of the five tiny GLSL programs in js/render/glx/shaders/glsl-fx.js
+ * (the GLSL source of truth): blob shadow, skid trail, driving line,
+ * billboard glow/particle, car decal. */
 "use strict";
 
 (function () {
-  function fx(THREE, TSL /*, ctx */) {
+  function fx(THREE, TSL) {
     const {
       Fn, uniform, attribute, texture, materialReference, mrt,
       float, vec2, vec3, vec4,
@@ -10,10 +13,9 @@
       normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
     } = TSL;
 
-    /* ── shared FX render state ─────────────────────────────────────────────
-     * transparent + no depth write + depth test, and the blend-stage alpha
-     * mask (dst alpha preserved — see header). additive -> ONE/ONE like the
-     * GLX glow/spark groups; else classic SRC_ALPHA/ONE_MINUS_SRC_ALPHA. */
+    // Shared FX render state: transparent, no depth write, depth test, and the
+    // blend-stage alpha mask (dst alpha preserved — see header). additive ->
+    // ONE/ONE like the GLX glow/spark groups; else SRC_ALPHA/ONE_MINUS_SRC_ALPHA.
     function fxMaterial(o) {
       const m = new THREE.MeshBasicNodeMaterial();
       m.transparent = true;
@@ -63,9 +65,8 @@
       for (let i = 0; i < _fxMats.length; i++) _fxMats[i].mrtNode = node;
     }
 
-    /* ── blob shadow (SHADOW_FS) ────────────────────────────────────────────
-     * The shared quad geometry holds the unit xz footprint at y=0.02; vUV =
-     * aPos*2 (SHADOW_VS) == positionGeometry.xz*2 here. */
+    // Blob shadow (SHADOW_FS). The shared quad holds the unit xz footprint at
+    // y=0.02; vUV = aPos*2 (SHADOW_VS) == positionGeometry.xz*2 here.
     const shadowMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-blob" }));
     shadowMat.colorNode = vec3(0.0);
     shadowMat.opacityNode = Fn(() => {
@@ -85,9 +86,8 @@
       return markFalloff(uvv);
     })();
 
-    /* ── batched skid trail (MARK_BATCH_VS + MARK_FS) ───────────────────────
-     * World-space positions (identity model matrix in tlx.js) + a -1..1 "uv"
-     * attribute across each stamp. */
+    // Batched skid trail (MARK_BATCH_VS + MARK_FS): world-space positions
+    // (identity model matrix in tlx.js) + a -1..1 "uv" attribute per stamp.
     const skidMat = trackFx(fxMaterial({ offset: true, key: "tlx-fx-skid" }));
     skidMat.colorNode = vec3(0.0);
     skidMat.opacityNode = Fn(() => {
@@ -95,11 +95,10 @@
       return markFalloff(uvv);
     })();
 
-    /* ── DRIVING LINE ribbon (LINE_VS + LINE_FS) ────────────────────────────
-     * World-space strip from js/render/shared/driving-line.js (tlx.js indexes
-     * the strip into triangles); per-vertex across / speed / zone attributes.
-     * F1's dynamic grammar against the player's speed, emissive ×lineStr so
-     * bloom lifts it; CORNERS mode fades the straights through the zone. */
+    // DRIVING LINE ribbon (LINE_VS + LINE_FS): world-space strip from
+    // js/render/shared/driving-line.js (tlx.js indexes it into triangles) with
+    // per-vertex across / speed / zone attributes. Emissive ×lineStr so bloom
+    // lifts it; CORNERS mode fades the straights through the zone.
     const lineSpeed = uniform(0.0);     // the player's speed (m/s), set per draw
     const lineCorners = uniform(0.0);   // 1 = fade the straights out
     const lineStr = uniform(1.6);       // emissive strength (bloom feed)
@@ -141,12 +140,10 @@
     // alpha over 1 over-blends (GLX LINE_FS, WGX LINE carry the same clamp).
     lineMat.opacityNode = Fn(() => min(lineAlpha().mul(0.85).mul(lineOpacity), float(1.0)))();
 
-    /* ── billboard corner expansion (GLOW_VS / PARTICLE_VS, identical math) ──
-     * The record's center rides in the "position" attribute (so three's draw
-     * count derives naturally); corner is -1..1 (tlx.js writes the glow
-     * corners pre-remapped — GLX's y 0..1 -> y*2-1 is baked at fill time).
-     * uEye == cameraPosition (tlx.js begin() sets camera.position from
-     * frame.eye). */
+    // Billboard corner expansion (GLOW_VS / PARTICLE_VS, identical math). The
+    // record's centre rides in "position" so three's draw count derives
+    // naturally; corner is -1..1 (tlx.js pre-bakes GLX's y*2-1 remap at fill
+    // time). uEye == cameraPosition (tlx.js begin() sets it from frame.eye).
     function billboardPosition(sizeNode) {
       return Fn(() => {
         const ctr = vec3(positionGeometry).toVar();             // anchor
@@ -193,12 +190,11 @@
     }
     const particleMats = [trackFx(particleMaterial(false)), trackFx(particleMaterial(true))];
 
-    /* ── car decals (DECAL_VS/FS) ───────────────────────────────────────────
-     * Sun + hemisphere lit so marks sit INTO the paint's shading; uGlow lifts
-     * them at night. Frame uniforms are fx-local (the decal pass reads the
-     * keyMul-scaled sun + ambientMul-scaled ambient — js/render/glx/glx.js — and
-     * must keep working when the lit factory is absent). One material per
-     * (texture, glow) pair, cached: ~2 textures/car x 2 glow states. */
+    // Car decals (DECAL_VS/FS): sun + hemisphere lit so marks sit INTO the
+    // paint's shading; uGlow lifts them at night. Frame uniforms are fx-local
+    // (keyMul-scaled sun + ambientMul-scaled ambient, as glx.js) so the pass
+    // keeps working without the lit factory. One material per (texture, glow)
+    // pair, cached: ~2 textures/car x 2 glow states.
     const U = {
       sunDir:   uniform(new THREE.Vector3(0.4, 0.8, 0.4)),
       sunColor: uniform(new THREE.Vector3(1.0, 0.98, 0.9)),   // keyMul-scaled
@@ -274,8 +270,10 @@
       const T = (frame && frame.tune) || null;
       const k = (id, def) => (T && T[id] != null ? T[id] : def);
       const kM = k("keyMul", 1), aM = k("ambientMul", 1);
-      const d = frame.sunDir; if (d) U.sunDir.value.set(d[0], d[1], d[2]);
-      const s = frame.sunColor; if (s) U.sunColor.value.set(s[0] * kM, s[1] * kM, s[2] * kM);
+      const d = frame.sunDir;
+      if (d) U.sunDir.value.set(d[0], d[1], d[2]);
+      const s = frame.sunColor;
+      if (s) U.sunColor.value.set(s[0] * kM, s[1] * kM, s[2] * kM);
       const as = frame.ambientSky || [0.3, 0.32, 0.36];
       const ag = frame.ambientGround || [0.2, 0.19, 0.18];
       U.ambSky.value.set(as[0] * aM, as[1] * aM, as[2] * aM);

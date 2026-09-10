@@ -13,15 +13,15 @@ const GLXChunked = (function () {
   // exactly once.
   let _saAL = null, _saX = 0, _saY = 0, _saZ = 0, _saIdx = -1;
   // Two chunks share a light set when the baked lists are the same object (the
-// common case — LampChunks reuses a list across neighbours) or element-wise
-// equal. Lists are perChunkLights long, i.e. single digits.
-function _sameList(a, b) {
-  if (a === b) return true;
-  if (!a || !b || a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
-function _shadowAllIdx(AL, lx, ly, lz) {
+  // common case — LampChunks reuses a list across neighbours) or element-wise
+  // equal. Lists are perChunkLights long, i.e. single digits.
+  function _sameList(a, b) {
+    if (a === b) return true;
+    if (!a || !b || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+    return true;
+  }
+  function _shadowAllIdx(AL, lx, ly, lz) {
     if (AL === _saAL && lx === _saX && ly === _saY && lz === _saZ) return _saIdx;
     let r = -1;
     for (let p = 0; p < AL.length; p += 15) {
@@ -30,7 +30,6 @@ function _shadowAllIdx(AL, lx, ly, lz) {
     _saAL = AL; _saX = lx; _saY = ly; _saZ = lz; _saIdx = r;
     return r;
   }
-
 
   function init(core) {
     const gl = core.gl;
@@ -279,7 +278,6 @@ function _shadowAllIdx(AL, lx, ly, lz) {
       }
     }
 
-
     function castShadowChunked(mesh, model) {
       const SH = core.shadow;
       if ((core.ctxGone && core.ctxGone()) || !SH.depthPassOn || !mesh) return;
@@ -311,14 +309,16 @@ function _shadowAllIdx(AL, lx, ly, lz) {
       if (mesh.vao) gl.deleteVertexArray(mesh.vao);
     }
 
-    // Allocate a fresh plane set from a column-major view-proj. The draw path
-    // uses the module-static _fcPlanes scratch and must keep doing so (it runs
-    // per frame); this is for occasional callers — the agent world view asking
-    // "which scenery chunks are actually on screen" — where one allocation is
-    // free and sharing the scratch with an in-flight draw would be a bug.
-    // Optional `out` (array of 6 Float32Array(4)) reuses a caller pool — the
-    // race prop-batch path must never call the allocating form every frame.
     Log.info("gfx", "GLX chunked init");
+    // makeFrustumPlanes: allocates a fresh plane set from a column-major
+    // view-proj (Frustum.makeFrustumPlanes). The draw path above uses the
+    // module-static _fcPlanes scratch and must keep doing so (it runs per
+    // frame); this export is for occasional callers — the agent world view
+    // asking "which scenery chunks are actually on screen" — where one
+    // allocation is free and sharing the scratch with an in-flight draw would
+    // be a bug. Optional `out` (array of 6 Float32Array(4)) reuses a caller
+    // pool — the race prop-batch path must never call the allocating form
+    // every frame.
     return { createChunkedMesh, drawChunked, castShadowChunked, freeChunkedMesh,
              makeFrustumPlanes: Frustum.makeFrustumPlanes,
              aabbInFrustum: Frustum.aabbInFrustum, aabbDist2: Frustum.aabbDist2 };

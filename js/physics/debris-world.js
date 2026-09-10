@@ -199,10 +199,10 @@ function create(ctx) {
   // phone, so the escape hatch stays one call wide: apex26.debris = "0", or
   // __apex.debris(false).
   let opt = "1";
-  try { opt = localStorage.getItem("apex26.debris") || opt; } catch (e) {}
+  try { opt = localStorage.getItem("apex26.debris") || opt; } catch (e) { /* storage blocked (private mode) — keep the default */ }
   // Group B disable flags — default ON, read once at boot (any value but "0" is on).
-  try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) {}
-  try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) {}
+  try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
+  try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
   // The 2.2 MB Rapier import + WASM compile used to start HERE, inside the
   // boot burst (shader compiles, the asset pack, the first track build), for a
   // side-world nothing needs before a race is primed. It now waits for the
@@ -241,7 +241,7 @@ function promoteCarDynamic(i, lin, ang) {
     _dynCars.add(i);
     return true;
   } catch (e) {
-    try { b.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true); } catch (_e) {}
+    try { b.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true); } catch (_e) { /* best-effort revert; the caller already returns false */ }
     _dynCars.delete(i);
     return false;
   }
@@ -310,8 +310,8 @@ function prime() {
 
 // ── world lifecycle ─────────────────────────────────────────────────────────
 function destroyWorld() {
-  if (_events) { try { _events.free(); } catch (e) {} }
-  if (world) { try { world.free(); } catch (e) {} }
+  if (_events) { try { _events.free(); } catch (e) { /* already freed / wasm torn down */ } }
+  if (world) { try { world.free(); } catch (e) { /* already freed / wasm torn down */ } }
   world = null; _worldTrack = null; _mirrors = []; _slots = []; _queue.length = 0;
   _dynCars.clear();   // any in-flight takeover's bodies die with the world — IncidentSim aborts via worldGen()
   _events = null; _colliderCar = null; _furnHandles = null;
@@ -322,7 +322,7 @@ function destroyWorld() {
 
 function capFor() {
   let o = 0;
-  try { o = parseInt(localStorage.getItem("apex26.debrisCap") || "", 10); } catch (e) {}
+  try { o = parseInt(localStorage.getItem("apex26.debrisCap") || "", 10); } catch (e) { /* storage blocked — fall through to the tier default */ }
   if (Number.isFinite(o) && o > 0) return Math.min(o, 256);
   return (G.gfx && G.gfx.mobileTier) ? CAP_MOBILE : CAP_DESKTOP;
 }
@@ -553,18 +553,9 @@ function tyreMarble(c, m) {
 }
 
 // ── spawn ───────────────────────────────────────────────────────────────────
-function acquireSlot() {
+function acquirePoolSlot(pool) {
   let oldest = null;
-  for (const s of _slots) {
-    if (!s.live) return s;
-    if (!oldest || s.spawnTick < oldest.spawnTick) oldest = s;   // recycle oldest
-  }
-  return oldest;
-}
-
-function acquireMarble() {
-  let oldest = null;
-  for (const s of _marbles) {
+  for (const s of pool) {
     if (!s.live) return s;
     if (!oldest || s.spawnTick < oldest.spawnTick) oldest = s;   // recycle oldest
   }
@@ -582,7 +573,7 @@ function spawnMarble(c, m, r) {
   const side = (r() < 0.5) ? 1 : -1;
   const lat = c.x + side * (0.5 + r() * 0.4);                   // just off the tyre
   const back = -(1.0 + r() * 2.0);                             // shed behind the car
-  const slot = acquireMarble();
+  const slot = acquirePoolSlot(_marbles);
   if (!slot) return;
   const b = slot.body;
   b.setEnabled(true);
@@ -620,7 +611,7 @@ function spawnImpact(imp, track) {
   // car index — never wall clock, never Math.random.
   const r = rng32((Math.imul(_tick, 0x9E3779B1) ^ Math.imul(_seq + 1, 0x85EBCA6B) ^ Math.imul(imp.carIdx + 1, 0xC2B2AE35)) | 0);
   for (let i = 0; i < n; i++) {
-    const slot = acquireSlot();
+    const slot = acquirePoolSlot(_slots);
     if (!slot) break;
     const b = slot.body;
     b.setEnabled(true);
@@ -797,9 +788,9 @@ function step(dt) {
   try {
     world.step(_events);
   } catch (e) {
-    try { Log.warn("game", "[debris] rapier step trapped — debris disabled", e); } catch (_e) {}
+    try { Log.warn("game", "[debris] rapier step trapped — debris disabled", e); } catch (_e) { /* Log absent in isolated VM */ }
     _active = false;
-    try { destroyWorld(); } catch (_e) {}
+    try { destroyWorld(); } catch (_e) { /* already tearing down after the trapped step */ }
     return;
   }
 
@@ -831,7 +822,7 @@ function updatePanels(dt, px, pz) {
   for (const p of _panels) {
     if (!p.live) continue;
     if (!p.broken && p.joint && p.force > PANEL_BREAK) {
-      try { world.removeImpulseJoint(p.joint, true); } catch (e) {}
+      try { world.removeImpulseJoint(p.joint, true); } catch (e) { /* p.joint is nulled below regardless */ }
       p.joint = null; p.broken = true; p.restT = 0; _panelsBroken++;
       // Seeded scatter kick (game state only, no wall clock / Math.random).
       const r = rng32((Math.imul(_tick + 1, 0x27D4EB2F) ^ Math.imul((p.s | 0) + 1, 0x9E3779B1)
@@ -863,8 +854,8 @@ function updatePanels(dt, px, pz) {
           state the call is trying to reach. */ }
         p.joint = null;
       }
-      try { world.removeRigidBody(p.body); } catch (e) {}
-      try { world.removeRigidBody(p.anchor); } catch (e) {}
+      try { world.removeRigidBody(p.body); } catch (e) { /* p.body is nulled below regardless */ }
+      try { world.removeRigidBody(p.anchor); } catch (e) { /* p.anchor is nulled below regardless */ }
       p.live = false; p.body = null; p.anchor = null; changed = true;
     }
   }

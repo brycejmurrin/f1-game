@@ -4,6 +4,7 @@ const Log = (function () {
 
   const LEVELS = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
   const NAMES = ["silent", "error", "warn", "info", "debug", "trace"];
+  const CONSOLE_FN = [null, "error", "warn", "info", "log", "debug"];
 
   const NAMESPACES = [
     "scenery",
@@ -21,6 +22,7 @@ const Log = (function () {
   ];
 
   const RING = 500;
+  const STORE_KEY = "apex26.logLevel";
 
   let consoleDefault = LEVELS.warn;
   let bufferDefault = LEVELS.info;
@@ -31,72 +33,80 @@ const Log = (function () {
   let seq = 0;
 
   function parseLevel(name) {
-    const l = LEVELS[String(name).trim().toLowerCase()];
-    return l === undefined ? null : l;
+    const level = LEVELS[String(name).trim().toLowerCase()];
+    return level === undefined ? null : level;
   }
 
-  /* Apply one spec string. Terms are `level`, `ns:level`, `buffer:level` or
-     `buffer:ns:level`. An unparseable term is ignored rather than thrown — a
-     typo in a URL must not take the game down. */
+  function wipe(table) { for (const k in table) delete table[k]; }
+
+  function mapNames(table) {
+    const out = {};
+    for (const k in table) out[k] = NAMES[table[k]];
+    return out;
+  }
+
+  function now() {
+    try { return Math.round(performance.now()); } catch { return 0; }
+  }
+
+  // Apply one spec string. Terms are `level`, `ns:level`, `buffer:level` or
+  // `buffer:ns:level`. An unparseable term is ignored rather than thrown — a
+  // typo in a URL must not take the game down.
   function applySpec(spec) {
     if (!spec) return;
-    for (let term of String(spec).split(",")) {
-      term = term.trim();
+    for (const rawTerm of String(spec).split(",")) {
+      let term = rawTerm.trim();
       if (!term) continue;
-      let toBuffer = false;
-      if (/^buffer:/i.test(term)) { toBuffer = true; term = term.slice(7); }
+      const toBuffer = /^buffer:/i.test(term);
+      if (toBuffer) term = term.slice(7);
       const colon = term.lastIndexOf(":");
       const ns = colon < 0 ? null : term.slice(0, colon).trim();
-      const lvl = parseLevel(colon < 0 ? term : term.slice(colon + 1));
-      if (lvl === null) continue;
-      if (!ns || ns === "*") {
-        if (toBuffer) { bufferDefault = lvl; wipe(bufferNs); }
-        else { consoleDefault = lvl; wipe(consoleNs); }
-      } else if (toBuffer) bufferNs[ns] = lvl;
-      else consoleNs[ns] = lvl;
+      const level = parseLevel(colon < 0 ? term : term.slice(colon + 1));
+      if (level === null) continue;
+      const table = toBuffer ? bufferNs : consoleNs;
+      if (ns && ns !== "*") { table[ns] = level; continue; }
+      if (toBuffer) bufferDefault = level;
+      else consoleDefault = level;
+      wipe(table);
     }
   }
 
-  function wipe(o) { for (const k in o) delete o[k]; }
-
-  /* Read the sticky sources once at load. Query wins over localStorage so a
-     link can override a stored setting without the player having to clear it;
-     repeated ?log= terms all apply, left to right. */
+  // Read the sticky sources once at load. Query wins over localStorage so a
+  // link can override a stored setting without the player having to clear it;
+  // repeated ?log= terms all apply, left to right.
   (function boot() {
     try {
-      const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.logLevel");
-      if (ls) applySpec(ls);
-    } catch (_) { /* privacy mode / no storage — the defaults stand */ }
+      const stored = typeof localStorage !== "undefined" && localStorage.getItem(STORE_KEY);
+      if (stored) applySpec(stored);
+    } catch { /* privacy mode / no storage — the defaults stand */ }
     try {
       if (typeof location !== "undefined" && location.search) {
-        const q = new URLSearchParams(location.search).getAll("log");
-        for (const term of q) applySpec(term);
+        for (const term of new URLSearchParams(location.search).getAll("log")) applySpec(term);
       }
-    } catch (_) { /* no URL host (Node VM) */ }
+    } catch { /* no URL host (Node VM) */ }
   })();
 
-  function threshold(table, def, ns) {
-    const v = table[ns];
-    return v === undefined ? def : v;
+  function threshold(table, fallback, ns) {
+    const level = table[ns];
+    return level === undefined ? fallback : level;
   }
 
   const consoleAt = (ns) => threshold(consoleNs, consoleDefault, ns);
 
-  /* The buffer NEVER retains less than the console prints. You can retain more
-     than you print (that is what `buffer:debug` is for), but the reverse is a
-     trap: `logLevel("scenery:debug")` reads as "I want scenery debug", and if
-     that only moved the console then the very next __apex.logs() would come
-     back empty — the ring being the thing you read AFTER the fact is the whole
-     reason it exists. Measured on a real page before this was a max(). */
+  // The buffer NEVER retains less than the console prints. Retaining more than
+  // you print is what `buffer:debug` is for, but the reverse is a trap:
+  // `logLevel("scenery:debug")` that only moved the console left the very next
+  // __apex.logs() empty — and the ring is the thing read AFTER the fact.
+  // Measured on a real page before this was a max().
   const bufferAt = (ns) => Math.max(threshold(bufferNs, bufferDefault, ns), consoleAt(ns));
 
   function enabled(ns, level) {
     return level <= bufferAt(ns);
   }
 
-  /* Records are flattened to a string HERE, not at read time: a record that
-     holds a live mesh or car object would keep it alive for the length of the
-     ring and turn a diagnostic into a leak. */
+  // Records are flattened to a string HERE, not at read time: a record that
+  // holds a live mesh or car object would keep it alive for the length of the
+  // ring and turn a diagnostic into a leak.
   function flatten(args) {
     const out = [];
     for (const a of args) {
@@ -104,13 +114,11 @@ const Log = (function () {
       else if (a instanceof Error) out.push(a.message + (a.stack ? "\n" + a.stack : ""));
       else {
         try { out.push(JSON.stringify(a)); }
-        catch (_) { out.push(String(a)); }
+        catch { out.push(String(a)); }
       }
     }
     return out.join(" ");
   }
-
-  const CONSOLE_FN = [null, "error", "warn", "info", "log", "debug"];
 
   function emit(level, ns, args) {
     const toConsole = level <= consoleAt(ns);
@@ -118,35 +126,30 @@ const Log = (function () {
     if (!toConsole && !toBuffer) return;
 
     const msg = flatten(args);
-    const rec = { id: ++seq, t: now(), ns: ns, level: NAMES[level], msg: msg };
     if (toBuffer) {
-      buf.push(rec);
+      buf.push({ id: ++seq, t: now(), ns, level: NAMES[level], msg });
       if (buf.length > RING) buf.shift();
     }
     if (toConsole) {
-      try { console[CONSOLE_FN[level]]("[" + ns + "] " + msg); } catch (_) {}
+      try { console[CONSOLE_FN[level]](`[${ns}] ${msg}`); } catch { /* console absent or stubbed */ }
     }
   }
 
-  function now() {
-    try { return Math.round(performance.now()); } catch (_) { return 0; }
-  }
-
-  const api = {
+  return {
     SILENT: 0, ERROR: 1, WARN: 2, INFO: 3, DEBUG: 4, TRACE: 5,
-    LEVELS: LEVELS,
-    NAMESPACES: NAMESPACES,
+    LEVELS,
+    NAMESPACES,
 
-    error: function (ns) { emit(1, ns, [].slice.call(arguments, 1)); },
-    warn:  function (ns) { emit(2, ns, [].slice.call(arguments, 1)); },
-    info:  function (ns) { emit(3, ns, [].slice.call(arguments, 1)); },
-    debug: function (ns) { emit(4, ns, [].slice.call(arguments, 1)); },
+    error(ns, ...args) { emit(LEVELS.error, ns, args); },
+    warn(ns, ...args) { emit(LEVELS.warn, ns, args); },
+    info(ns, ...args) { emit(LEVELS.info, ns, args); },
+    debug(ns, ...args) { emit(LEVELS.debug, ns, args); },
 
-    enabled: enabled,
+    enabled,
 
-    /* No arg reads the resolved thresholds; a string applies a spec and returns
-       the new state, so __apex.logLevel("scenery:debug") is one round trip. */
-    level: function (spec) {
+    // No arg reads the resolved thresholds; a string applies a spec and returns
+    // the new state, so __apex.logLevel("scenery:debug") is one round trip.
+    level(spec) {
       if (spec !== undefined && spec !== null) applySpec(spec);
       return {
         console: NAMES[consoleDefault],
@@ -156,22 +159,22 @@ const Log = (function () {
       };
     },
 
-    /* Persist a spec so it survives a reload — the shape a player follows when
-       asked to reproduce a bug with diagnostics on. null clears it. */
-    persist: function (spec) {
+    // Persist a spec so it survives a reload — the shape a player follows when
+    // asked to reproduce a bug with diagnostics on. null clears it.
+    persist(spec) {
       try {
-        if (spec === null) localStorage.removeItem("apex26.logLevel");
-        else localStorage.setItem("apex26.logLevel", String(spec));
-      } catch (_) { return false; }
+        if (spec === null) localStorage.removeItem(STORE_KEY);
+        else localStorage.setItem(STORE_KEY, String(spec));
+      } catch { return false; }
       if (spec !== null) applySpec(spec);
       return true;
     },
 
-    /* The retained records, newest last. `since` is a record id (see the `id`
-       field), so a poller can ask only for what it has not seen. */
-    records: function (filter) {
+    // The retained records, newest last. `since` is a record id (see the `id`
+    // field), so a poller can ask only for what it has not seen.
+    records(filter) {
       const f = filter || {};
-      const min = f.level === undefined ? 5 : (parseLevel(f.level) ?? 5);
+      const min = f.level === undefined ? LEVELS.trace : (parseLevel(f.level) ?? LEVELS.trace);
       let out = buf;
       if (f.ns) out = out.filter((r) => r.ns === f.ns);
       if (f.since) out = out.filter((r) => r.id > f.since);
@@ -180,26 +183,18 @@ const Log = (function () {
       return out.slice();
     },
 
-    clear: function () { buf.length = 0; return true; },
+    clear() { buf.length = 0; return true; },
 
-    /* Duration timing that costs nothing when the namespace is quiet:
-         const done = Log.time("track", "build monza"); …; done();  */
-    time: function (ns, label) {
-      if (!enabled(ns, 3)) return function () {};
+    // Duration timing that costs nothing when the namespace is quiet:
+    //   const done = Log.time("track", "build monza"); …; done();
+    time(ns, label) {
+      if (!enabled(ns, LEVELS.info)) return () => {};
       const t0 = now();
-      return function (extra) {
-        emit(3, ns, [label + " " + (now() - t0) + "ms" + (extra ? " " + extra : "")]);
+      return (extra) => {
+        emit(LEVELS.info, ns, [`${label} ${now() - t0}ms${extra ? ` ${extra}` : ""}`]);
       };
     },
   };
-
-  function mapNames(o) {
-    const out = {};
-    for (const k in o) out[k] = NAMES[o[k]];
-    return out;
-  }
-
-  return api;
 })();
 
 if (typeof window !== "undefined") window.Log = Log;

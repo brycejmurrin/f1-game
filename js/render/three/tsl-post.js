@@ -1,4 +1,7 @@
-/* Apex 26 — TLXShaders.post: the TSL post-chain shaders for the TLX backend (M8). A 1:1 port of js/render/glx/shaders/glsl-post.js (the GLSL source of truth): BRIGHT (soft… */
+/* Apex 26 — TLXShaders.post: the TSL post-chain shaders for the TLX backend
+ * (M8). A 1:1 port of js/render/glx/shaders/glsl-post.js (the GLSL source of
+ * truth): bright pass, bloom up-sample, SSAO, godray, composite (+ SSR),
+ * FXAA, SGSR1 upscale, debug blit. */
 "use strict";
 
 (function () {
@@ -116,10 +119,10 @@
       })(), "tlx-post-down"),
     };
 
-    /* ── UP (UP_FS in js/render/glx/shaders/glsl-post.js): 9-tap tent. Two materials: additive
+    /* UP (UP_FS in js/render/glx/shaders/glsl-post.js): 9-tap tent. Two materials: additive
      *    (ONE,ONE) for the intermediate octaves, overwrite for the final into
      *    level 0 (js/render/glx/shaders/glsl-post.js — adding onto the sharp bright-pass
-     *    would re-inject it at full sharpness). Shared BLOOM SPREAD knob. ── */
+     *    would re-inject it at full sharpness). Shared BLOOM SPREAD knob. */
     const spread = uniform(1.0);
     function makeUp(additive) {
       const tex = texture(ctx.blackTex);
@@ -151,11 +154,11 @@
     const upAdd = makeUp(true);
     const upFinal = makeUp(false);
 
-    /* ── SSAO (SSAO_FS in js/render/glx/shaders/glsl-post.js): view-space horizon AO + contact
+    /* SSAO (SSAO_FS in js/render/glx/shaders/glsl-post.js): view-space horizon AO + contact
      *    shadows, half-res. Depth reconstruction through the game's
      *    GL-convention invProj (window depth d -> NDC z = d*2-1, exactly the
      *    GLSL — the shadow family already treats every manual matrix as GL
-     *    convention on both backends, see tsl-lit sampleShadow). ──────────── */
+     *    convention on both backends, see tsl-lit sampleShadow). */
     const ssaoU = {
       invProj: uniform(new THREE.Matrix4()),
       proj: uniform(new THREE.Matrix4()),
@@ -241,10 +244,10 @@
       })(), "tlx-post-ssao"),
     };
 
-    /* ── GODRAY (GODRAY_FS in js/render/glx/shaders/glsl-post.js): world-space 16-step march of
+    /* GODRAY (GODRAY_FS in js/render/glx/shaders/glsl-post.js): world-space 16-step march of
      *    the SUN SHADOW MAP + nearest-12 lamp beam in-scatter with the mapped
      *    lamp's spot-shadow carve. Built only when the shadow subsystem is
-     *    live — its depth textures are the samplers. ───────────────────────── */
+     *    live — its depth textures are the samplers. */
     let godray = null;
     if (SHD && SHD.sunTex) {
       const grU = {
@@ -466,7 +469,7 @@
     const composite = {
       U: C, tex: { bloom: bloomTexN, ssao: ssaoTexN, godray: godrayTexN },
       mat: passMaterial(Fn(() => {
-        // ── anchors ─────────────────────────────────────────────────────────
+        // anchors
         const suv = vec2(screenUV).toVar();
         const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
         const fragXY = vec2(screenCoordinate.xy).toVar();
@@ -545,7 +548,7 @@
           c.addAssign(godrayTexN.sample(TL(vUV)).rgb);
         });
 
-        // ── Wet-road + car-paint screen-space reflection js/render/glx/shaders/glsl-post.js ──
+        // Wet-road + car-paint screen-space reflection js/render/glx/shaders/glsl-post.js
         const carPx = smoothstep(0.42, 0.55, tagA).oneMinus().toVar();
         // Gate ported exactly from COMPOSITE_FS (js/render/glx/shaders/glsl-post.js):
         // car-paint pixels only march when the CAR reflection knob is live,
@@ -848,9 +851,9 @@
       })(), "tlx-post-comp"),
     };
 
-    /* ── FXAA (FXAA_FS in js/render/glx/shaders/glsl-post.js): Lottes compact, LDR resolve.
+    /* FXAA (FXAA_FS in js/render/glx/shaders/glsl-post.js): Lottes compact, LDR resolve.
      *    The flat-area early-out (lMax-lMin < max(0.04, lMax*0.125)) keeps
-     *    flat regions pixel-exact — constants verbatim. ─────────────────────── */
+     *    flat regions pixel-exact — constants verbatim. */
     const fxaaTex = texture(ctx.blackTex);
     const fxaaU = { texel: uniform(new THREE.Vector2()) };
     const fxLuma = (cc) => dot(cc, vec3(0.299, 0.587, 0.114));
@@ -889,9 +892,9 @@
       })(), "tlx-post-fxaa"),
     };
 
-    /* ── SGSR1 spatial upscale (SGSR_FS in glsl-post.js) — present-size
+    /* SGSR1 spatial upscale (SGSR_FS in glsl-post.js) — present-size
      *    reconstruct from render-size LDR/FXAA. 4-tap gatherComp (no
-     *    textureGather) for GLX/WGX parity. Flag-gated in tlx-post.js. ── */
+     *    textureGather) for GLX/WGX parity. Flag-gated in tlx-post.js. */
     const sgsrTex = texture(ctx.blackTex);
     const sgsrU = { viewport: uniform(new THREE.Vector4(1, 1, 1, 1)) }; // (1/w,1/h,w,h)
     const sgsr = {
@@ -975,8 +978,8 @@
       })(), "tlx-post-sgsr"),
     };
 
-    /* ── BLIT (debug ?viz= bisect): paint any chain texture to the canvas.
-     *    mono=1 spreads .r to rgb (SSAO); gain rescales HDR sources. ───────── */
+    /* BLIT (debug ?viz= bisect): paint any chain texture to the canvas.
+     *    mono=1 spreads .r to rgb (SSAO); gain rescales HDR sources. */
     const blitTex = texture(ctx.blackTex);
     const blitU = { mono: uniform(0), gain: uniform(1) };
     const blit = {

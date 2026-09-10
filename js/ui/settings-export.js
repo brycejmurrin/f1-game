@@ -156,7 +156,10 @@ function defaultOf(row, G) { return typeof row.def === "function" ? row.def(G) :
 // the keys that differ, and for those the default replaced and its source.
 function collect(mode, G) {
   const all = mode === "all";
-  const settings = {}, defaults = {}, where = {}, changed = [];
+  const settings = {};
+  const defaults = {};
+  const where = {};
+  const changed = [];
   for (const row of SPEC) {
     const stored = readStored(row);
     const def = defaultOf(row, G);
@@ -170,7 +173,7 @@ function collect(mode, G) {
     if (!diff && !all) continue;
     (settings[row.group] ||= {})[row.k] = value;
     if (diff) {
-      const name = row.group + "." + row.k;
+      const name = `${row.group}.${row.k}`;
       changed.push(name);
       (defaults[row.group] ||= {})[row.k] = def;
       where[name] = row.src;
@@ -189,8 +192,7 @@ function collect(mode, G) {
   };
 }
 
-// ── THE GARAGE FILE ─────────────────────────────────────────────────────────
-// A SECOND file, deliberately not part of the settings one: the garage is what
+// THE GARAGE FILE: a SECOND file, deliberately not part of the settings one: the garage is what
 // a player BUILT (parts bought, liveries painted, setups dialled in, a team
 // invented) rather than how they like the game to behave, and the two are worth
 // carrying separately — a new phone wants the settings, a friend wants the
@@ -234,8 +236,7 @@ function collectGarage() {
            excluded: GARAGE_EXCLUDED, count: n, garage: out };
 }
 
-// ── READING A FILE BACK IN ──────────────────────────────────────────────────
-// Both loaders answer {ok, applied, skipped, reason}. They are deliberately
+// Reading a file back in. Both loaders answer {ok, applied, skipped, reason}. They are deliberately
 // strict and SILENT about anything they do not recognise: a file is player
 // input, and the failure that matters is not a malformed number but a key the
 // allowlist never named being written into the namespace. Nothing outside SPEC
@@ -246,9 +247,10 @@ function typeOk(v, def) {
   return typeof v === typeof def;
 }
 function applySettings(file, G) {
-  if (!file || file.format !== FORMAT) return { ok: false, reason: "not an " + FORMAT + " file", applied: 0, skipped: 0 };
+  if (!file || file.format !== FORMAT) return { ok: false, reason: `not an ${FORMAT} file`, applied: 0, skipped: 0 };
   const groups = file.settings || {};
-  let applied = 0, skipped = 0;
+  let applied = 0;
+  let skipped = 0;
   for (const row of SPEC) {
     // A migration VERSION is context in the file and must never be written
     // back: an older number would re-run migrations that have already run.
@@ -259,8 +261,8 @@ function applySettings(file, G) {
     if (!typeOk(v, defaultOf(row, G))) { skipped++; continue; }
     try {
       if (row.lane === "raw") {
-        if (v === null) GameStore.store.rawDel("apex26." + row.k);
-        else GameStore.store.rawSet("apex26." + row.k, String(v));
+        if (v === null) GameStore.store.rawDel(`apex26.${row.k}`);
+        else GameStore.store.rawSet(`apex26.${row.k}`, String(v));
       } else {
         GameStore.store.set(row.k, v);
       }
@@ -323,9 +325,10 @@ function garageValue(k, v) {
   return v;   // the four singles keep whatever shape they already had
 }
 function applyGarage(file) {
-  if (!file || file.format !== GARAGE_FORMAT) return { ok: false, reason: "not an " + GARAGE_FORMAT + " file", applied: 0, skipped: 0 };
+  if (!file || file.format !== GARAGE_FORMAT) return { ok: false, reason: `not an ${GARAGE_FORMAT} file`, applied: 0, skipped: 0 };
   const g = file.garage || {};
-  let applied = 0, skipped = 0;
+  let applied = 0;
+  let skipped = 0;
   for (const k of Object.keys(g)) {
     if (!isGarageKey(k)) { skipped++; continue; }
     const v = garageValue(k, g[k]);
@@ -336,7 +339,6 @@ function applyGarage(file) {
 }
 
 function download(obj, name) {
-
   const blob = new Blob([JSON.stringify(obj, null, 1)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -347,8 +349,9 @@ function download(obj, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 function stamp() {
-  const d = new Date(), p = (n) => String(n).padStart(2, "0");
-  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "-" + p(d.getHours()) + p(d.getMinutes());
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
 // The buttons join the RENDERER fold (#pm-display-adv-body), after the controls
@@ -368,7 +371,9 @@ const ARM_MS = 4000;
 let _ui = null;
 function create(G) {
   const tick = () => { if (G.soundOn && typeof GameAudio !== "undefined" && GameAudio.uiTick) GameAudio.uiTick(); };
-  let picker = null, armed = null, armT = 0;
+  let picker = null;
+  let armed = null;
+  let armT = 0;
 
   // ONE hidden <input type="file">, retargeted per use: iOS re-uses the sheet
   // and a second input would open a second one. `value = ""` before every click so
@@ -396,7 +401,7 @@ function create(G) {
     picker.click();
   }
 
-  const flash = (b, label, msg, ms) => { b.textContent = label + " — " + msg; setTimeout(() => { b.textContent = label; }, ms || 1800); };
+  const flash = (b, label, msg, ms) => { b.textContent = `${label} — ${msg}`; setTimeout(() => { b.textContent = label; }, ms || 1800); };
   const disarm = () => { if (armed) { armed.el.textContent = armed.label; armed = null; } clearTimeout(armT); };
 
   const saveBtn = (id, label, title, make, name) => {
@@ -407,8 +412,8 @@ function create(G) {
       try {
         const file = make();
         download(file, name(file));
-        const n = file.changed ? file.changed.length + " changed" : file.count + " keys";
-        flash(b, label, "SAVED (" + n + ")");
+        const n = file.changed ? `${file.changed.length} changed` : `${file.count} keys`;
+        flash(b, label, `SAVED (${n})`);
         Log.info("ui", "file saved", { id, n });
       } catch (e) {
         flash(b, label, "FAILED");
@@ -425,7 +430,7 @@ function create(G) {
       if (!armed || armed.el !== b) {
         disarm();
         armed = { el: b, label };
-        b.textContent = label + " — OVERWRITE " + what + "?";
+        b.textContent = `${label} — OVERWRITE ${what}?`;
         armT = setTimeout(disarm, ARM_MS);
         tick();
         return;
@@ -440,7 +445,7 @@ function create(G) {
         // once at boot (the backend pick, the grid, every tuner's first
         // paint), so re-reading them without one would leave the page showing
         // a mix of old and new.
-        b.textContent = label + " — " + r.applied + " APPLIED, RELOADING…";
+        b.textContent = `${label} — ${r.applied} APPLIED, RELOADING…`;
         setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
       });
       tick();
@@ -462,10 +467,10 @@ function create(G) {
     host.append(h,
       saveBtn("pm-settings-changed", "SAVE CHANGED SETTINGS",
         "Only the settings that differ from the defaults, each with the default it replaced and where that default lives.",
-        () => collect("changes", G), () => "apex26-settings-changes-" + stamp() + ".json"),
+        () => collect("changes", G), () => `apex26-settings-changes-${stamp()}.json`),
       saveBtn("pm-settings-all", "SAVE ALL SETTINGS",
         "Every setting with its current value.",
-        () => collect("all", G), () => "apex26-settings-all-" + stamp() + ".json"),
+        () => collect("all", G), () => `apex26-settings-all-${stamp()}.json`),
       loadBtn("pm-settings-load", "LOAD SETTINGS FILE",
         "Read an apex26-settings file back in. Only allowlisted keys are written; the garage, career and accounts are never touched.",
         (obj) => applySettings(obj, G), "SETTINGS"),
@@ -486,7 +491,7 @@ function create(G) {
     wrap.append(
       saveBtn("cs-garage-save", "SAVE GARAGE FILE",
         "Parts, liveries, setup sheets and your own team, for every team. Career money, results and lap records are never in it.",
-        collectGarage, () => "apex26-garage-" + stamp() + ".json"),
+        collectGarage, () => `apex26-garage-${stamp()}.json`),
       loadBtn("cs-garage-load", "LOAD GARAGE FILE",
         "Read an apex26-garage file back in. Career money, results and lap records are never touched.",
         applyGarage, "THE GARAGE"));

@@ -11,7 +11,7 @@ const SaveMigrate = (function () {
     (c) => { c.season = c.season || { round: 0, pts: {}, teamPts: {}, driverCodes: {} }; },
   ];
 
-  function seasonDriverId(teamId, driverIndex) { return teamId + ":" + driverIndex; }
+  function seasonDriverId(teamId, driverIndex) { return `${teamId}:${driverIndex}`; }
 
   // The two per-driver sparse arrays a championship carries beside `pts`:
   // finishes: driverId -> per-position counts (SeasonCal.award()).

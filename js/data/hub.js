@@ -108,13 +108,6 @@ const DataHub = (function () {
     return chip;
   }
 
-  function teamSwatch(teamName) {
-    const t = findTeam(teamName);
-    const sw = el("span", "dh-swatch");
-    sw.style.background = cssColor(t ? t.color : null);
-    return sw;
-  }
-
   function init(rootEl) {
     if (root || !rootEl) return;
     root = rootEl;
@@ -379,7 +372,7 @@ const DataHub = (function () {
     if (have && sel.pinned) return Promise.resolve(sel.meta);
     if (have && !force && fresh) return Promise.resolve(sel.meta);
     return F1API.latestSession(0).then(function (ses) {
-      if (ses && ses.sessionKey !== null && ses.sessionKey !== undefined) {
+      if (ses && ses.sessionKey != null) {
         sel.meta = ses;
         sel.sessionKey = ses.sessionKey;
         sel.meetingKey = ses.meetingKey;
@@ -541,12 +534,11 @@ const DataHub = (function () {
 
   // Implementation: js/data/telemetry.js.
   const { loadTelemetry, closeTelemPopup } = DataTelemetry.create({
-    el: el, clear: clear, emptyMsg: emptyMsg, spinner: spinner, sel: sel,
-    ensureSession: ensureSession, buildPicker: buildPicker,
-    invalidateOther: invalidateOther, COMPOUND: COMPOUND, findTeam: findTeam,
-    cssColor: cssColor, textColorOn: textColorOn, NO_TELEM_MSG: NO_TELEM_MSG });
+    el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
+    invalidateOther, COMPOUND, findTeam, cssColor, textColorOn, NO_TELEM_MSG
+  });
   // Implementation: js/data/export.js.
-  const { loadExport } = DataExport.create({ el: el, clear: clear, isOpen: isOpen });
-  return { init: init, open: open, close: close, isOpen: isOpen };
+  const { loadExport } = DataExport.create({ el, clear, isOpen });
+  return { init, open, close, isOpen };
 })();
 Object.freeze(DataHub);

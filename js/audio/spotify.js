@@ -91,8 +91,8 @@ window.SpotifyMusic = (function () {
   function lsSet(k, v) { GameStore.store.rawSet(k, v); }
   function lsDel(k) { GameStore.store.rawDel(k); }
   function ss(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
-  function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
-  function ssDel(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
+  function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) { /* Safari private mode throws on write */ } }
+  function ssDel(k) { try { sessionStorage.removeItem(k); } catch (e) { /* Safari private mode throws on write */ } }
 
   function clientId() { return (ls(K_ID) || "").trim(); }
   // TWO WAYS TO PLAY, and remote is the default because it works everywhere.
@@ -132,7 +132,7 @@ window.SpotifyMusic = (function () {
   function status() { return { state, message, deviceId, track }; }
   function setStatus(s, msg) { state = s; message = msg || ""; emit(); }
   function emit() {
-    for (const fn of subs) { try { fn(status()); } catch (e) {} }
+    for (const fn of subs) { try { fn(status()); } catch (e) { /* one subscriber's bug must not break the others */ } }
     render();
   }
   function onChange(fn) {
@@ -358,7 +358,7 @@ window.SpotifyMusic = (function () {
         s.onerror = null;
       };
       window.onSpotifyWebPlaybackSDKReady = function () {
-        if (typeof prev === "function") { try { prev(); } catch (e) {} }
+        if (typeof prev === "function") { try { prev(); } catch (e) { /* a foreign SDK-ready handler must not block ours */ } }
         cleanup();
         res();
       };
@@ -381,7 +381,7 @@ window.SpotifyMusic = (function () {
     setStatus("connecting", "Loading the Spotify player…");
     return loadSdk().then(() => {
       if (typeof GameAudio !== "undefined" && GameAudio.volumes) {
-        try { vol = GameAudio.volumes().music; } catch (e) {}
+        try { vol = GameAudio.volumes().music; } catch (e) { /* keep the default volume if GameAudio is not ready yet */ }
       }
       player = new Spotify.Player({
         name: "Apex 26",
@@ -461,7 +461,7 @@ window.SpotifyMusic = (function () {
     ready = false;
     deviceId = null;
     track = null;
-    if (player) { try { player.disconnect(); } catch (e) {} }
+    if (player) { try { player.disconnect(); } catch (e) { /* already disconnected, or never fully connected */ } }
     player = null;
     removeBackend();
   }
@@ -679,7 +679,7 @@ window.SpotifyMusic = (function () {
   function prev() {
     if (!BACKEND.active()) return;
     if (mode() === "remote") { api("/me/player/previous" + remoteQuery(), { method: "POST" }).then(afterCommand); return; }
-    if (player) { try { player.previousTrack(); } catch (e) {} }
+    if (player) { try { player.previousTrack(); } catch (e) { /* a broken SDK call must not take the transport down */ } }
   }
   function toggle() {
     if (!BACKEND.active()) return;
@@ -731,7 +731,7 @@ window.SpotifyMusic = (function () {
      resuming the built-in MP3 playlist is GameAudio's job, not ours. */
   function activate() {
     if (player && typeof player.activateElement === "function") {
-      try { const p = player.activateElement(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+      try { const p = player.activateElement(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* activateElement is optional; an unsupported browser must not break the click */ }
     }
   }
 
@@ -745,7 +745,7 @@ window.SpotifyMusic = (function () {
         return;
       }
       // Something is already loaded on this device — just un-pause it.
-      if (track) { try { player.resume(); } catch (e) {} return; }
+      if (track) { try { player.resume(); } catch (e) { /* a broken SDK call must not take the transport down */ } return; }
       // Otherwise there is nothing to resume, so play what the player picked.
       playChosen();
     },
@@ -754,7 +754,7 @@ window.SpotifyMusic = (function () {
         if (BACKEND.active()) api("/me/player/pause" + remoteQuery(), { method: "PUT" }).then(pollNowPlaying);
         return;
       }
-      if (player) { try { player.pause(); } catch (e) {} }
+      if (player) { try { player.pause(); } catch (e) { /* a broken SDK call must not take the transport down */ } }
     },
     skip() {
       if (!BACKEND.active()) return null;
@@ -763,7 +763,7 @@ window.SpotifyMusic = (function () {
           .then(() => setTimeout(pollNowPlaying, 600));   // Spotify needs a beat to settle
         return track;
       }
-      try { player.nextTrack(); } catch (e) {}
+      try { player.nextTrack(); } catch (e) { /* a broken SDK call must not take the transport down */ }
       return track;
     },
     setVolume(v01) {
@@ -775,7 +775,7 @@ window.SpotifyMusic = (function () {
         }
         return vol;
       }
-      if (player) { try { player.setVolume(vol); } catch (e) {} }
+      if (player) { try { player.setVolume(vol); } catch (e) { /* a broken SDK call must not take the transport down */ } }
       return vol;
     },
     name() { return track; },
@@ -790,7 +790,7 @@ window.SpotifyMusic = (function () {
   // next to an older audio.js that has no backend hook at all.
   function setBackend(b) {
     if (typeof GameAudio === "undefined" || !GameAudio.setMusicBackend) return;
-    try { GameAudio.setMusicBackend(b); } catch (e) {}
+    try { GameAudio.setMusicBackend(b); } catch (e) { /* a broken GameAudio must not take Spotify down */ }
   }
   // While ANOTHER app owns the music, the game's own audio has to mix rather
   // than interrupt — on iOS the default "playback" session is exclusive, so the
@@ -799,7 +799,7 @@ window.SpotifyMusic = (function () {
   function syncSession() {
     if (typeof GameAudio === "undefined" || !GameAudio.setSessionType) return;
     try { GameAudio.setSessionType(mode() === "remote" && GameAudio.musicBackend() ? "ambient" : "playback"); }
-    catch (e) {}
+    catch (e) { /* a broken GameAudio must not take Spotify down */ }
   }
   function installBackend() { setBackend(BACKEND); syncSession(); }
   function useAsMusic(on) {
@@ -976,6 +976,11 @@ window.SpotifyMusic = (function () {
     return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
   }
 
+  function transportLabel() {
+    if (!devName) return "";
+    return paused ? "Paused on " + devName : "Playing on " + devName;
+  }
+
   function renderPlayer() {
     if (!el("spotifypanel")) return;
     const live = BACKEND.active();
@@ -986,7 +991,7 @@ window.SpotifyMusic = (function () {
     }
     txt("sp-title", title || (live ? "Nothing playing" : "Not connected"));
     txt("sp-artist", artist || "");
-    txt("sp-on", devName ? (paused ? "Paused on " + devName : "Playing on " + devName) : "");
+    txt("sp-on", transportLabel());
     const fill = el("sp-bar-fill");
     if (fill) fill.style.width = (durationMs ? Math.max(0, Math.min(100, (progressMs / durationMs) * 100)) : 0) + "%";
     const tog = el("sp-toggle");
@@ -1037,6 +1042,12 @@ window.SpotifyMusic = (function () {
     if (pm) pm.disabled = !available() || state !== "connected";
   }
 
+  function pauseMenuNowText() {
+    if (state !== "connected") return "—";
+    if (!track) return "Nothing playing yet.";
+    return paused ? "Paused — " + track : track;
+  }
+
   function render() {
     renderPlayer();
     const wrap = el("as-sp-wrap");
@@ -1059,9 +1070,7 @@ window.SpotifyMusic = (function () {
         "game from http://127.0.0.1:<port>/ instead and re-copy the URI above.";
     }
     txt("as-sp-status", msg);
-    txt("as-sp-now", state === "connected"
-      ? (track ? (paused ? "Paused — " + track : track) : "Nothing playing yet.")
-      : "—");
+    txt("as-sp-now", pauseMenuNowText());
 
     fillSelect("as-sp-playlist", playlistOpts(), contextUri(), state !== "connected");
     // MODE + DEVICE. The device row only means anything in remote mode, so it

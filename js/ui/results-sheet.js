@@ -2,18 +2,38 @@
 const GameResults = (function () {
   "use strict";
 
+const PODIUM = [" p1", " p2", " p3"];   // indexed 0-based; 4th place on has none
+
+// One POS / SWATCH / NAME / PTS row, the shape every ranking list on this
+// screen shares (results top-10, constructors, standings, the champion
+// panel). `extraClass` appends to "res-row" (e.g. " you").
+function rankRow(container, i, color, name, ptsText, extraClass) {
+  const row = document.createElement("div");
+  row.className = `res-row${extraClass || ""}`;
+  const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+  const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = color;
+  const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = name;
+  const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = ptsText;
+  row.append(pos, sw, nm, pt);
+  container.appendChild(row);
+  return row;
+}
+
 function create(G) {
 Log.info("ui", "GameResults.create");
 
 function buildResults(order) {
-  Log.info("ui", "GameResults.buildResults n=" + (order && order.length));
-  const els = G.els, season = G.season, track = G.track, cars = G.cars;
+  Log.info("ui", `GameResults.buildResults n=${order && order.length}`);
+  const els = G.els;
+  const season = G.season;
+  const track = G.track;
+  const cars = G.cars;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";   // buildChampion tints it; #res-menu never reset it
   const sprint = G.seasonMode && SeasonCal.scored() === "sprint";
-  els.resultsTitle.textContent = sprint ? "SPRINT — " + track.def.name
-    : G.seasonMode ? "ROUND " + season.round + " — " + track.def.name
-    : track.def.name + " RESULT";
+  els.resultsTitle.textContent = sprint ? `SPRINT — ${track.def.name}`
+    : G.seasonMode ? `ROUND ${season.round} — ${track.def.name}`
+    : `${track.def.name} RESULT`;
   // On a GUEST the order is the host's (game.js netOrder) but `retired`/`dnf`
   // were still this peer's own: each peer arms reliability off its OWN seed
   // and race counter (game.js armReliability), so the guest parked different
@@ -36,9 +56,9 @@ function buildResults(order) {
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
     const row = document.createElement("div");
-    const podium = i === 0 ? " p1" : i === 1 ? " p2" : i === 2 ? " p3" : "";
+    const podium = PODIUM[i] || "";
     const other = c.human && !c.local ? " q-real" : "";
-    row.className = "res-row" + podium + (c.isPlayer ? " you" : "") + other;
+    row.className = `res-row${podium}${c.isPlayer ? " you" : ""}${other}`;
     row.style.setProperty("--i", i);   // settle stagger, css/components.css
     const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
     const sw = document.createElement("span"); sw.className = "res-swatch";
@@ -51,9 +71,9 @@ function buildResults(order) {
     // A lapped finisher is flagged at its next crossing (RaceControl.flagOut),
     // so its lap count is what separates it from the winner — say so.
     const down = !dnf && order[0] ? Math.max(0, (order[0].lap | 0) - (c.lap | 0)) : 0;
-    nm.textContent = c.code + "  " + c.name
-      + (dnf ? "  (" + dnf + ")" : c.penalty ? "  (+" + c.penalty + "s)" : "")
-      + (down ? "  (+" + down + (down > 1 ? " LAPS)" : " LAP)") : "");
+    const suffix = dnf ? `  (${dnf})` : c.penalty ? `  (+${c.penalty}s)` : "";
+    const downSuffix = down ? `  (+${down}${down > 1 ? " LAPS)" : " LAP)"}` : "";
+    nm.textContent = `${c.code}  ${c.name}${suffix}${downSuffix}`;
     if (other) {
       // Text as well as colour, for the same reason the quali sheet does it.
       const tag = document.createElement("span");
@@ -66,7 +86,7 @@ function buildResults(order) {
     // "+FL": this round's fastest-lap point (SeasonCal.award sets lastFl only
     // when the format pays it, and only to a top-ten finisher).
     const fl = !sprint && G.seasonMode && season && season.lastFl === c.driverId && !dnf ? 1 : 0;
-    pt.textContent = dnf ? "DNF" : ((table[i] || 0) + fl) + " pts" + (fl ? " +FL" : "");
+    pt.textContent = dnf ? "DNF" : `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}`;
     row.append(pos, sw, nm, pt);
     els.resultsTable.appendChild(row);
   });
@@ -82,52 +102,34 @@ function buildResults(order) {
     box.setAttribute("role", "status");
     const h = document.createElement("div");
     h.className = "res-settle-head";
-    h.textContent = st.dnf ? "ROUND SETTLED — DNF (" + st.dnf + ")" : "ROUND SETTLED";
+    h.textContent = st.dnf ? `ROUND SETTLED — DNF (${st.dnf})` : "ROUND SETTLED";
     box.appendChild(h);
+    // One label/value settlement row, appended straight to `box`.
+    const addRow = (cls, label, valueText) => {
+      const r = document.createElement("div");
+      r.className = cls;
+      const a = document.createElement("span"); a.textContent = label;
+      const b = document.createElement("span"); b.className = "res-settle-v"; b.textContent = valueText;
+      r.append(a, b);
+      box.appendChild(r);
+    };
     // Signed, and only when non-zero: a driver career has no wage bill and a
     // missed brief pays nothing, and a column of zeroes reads as a bug.
     const line = (k, v, cls) => {
       if (!v) return;
-      const r = document.createElement("div");
-      r.className = "res-settle-row" + (cls ? " " + cls : "");
-      const a2 = document.createElement("span"); a2.textContent = k;
-      const b2 = document.createElement("span");
-      b2.className = "res-settle-v";
-      b2.textContent = (v > 0 ? "+" : "\u2212") + Math.abs(v).toLocaleString() + " cr";
-      r.append(a2, b2);
-      box.appendChild(r);
+      addRow(`res-settle-row${cls ? ` ${cls}` : ""}`, k, `${v > 0 ? "+" : "\u2212"}${Math.abs(v).toLocaleString()} cr`);
     };
-    line("Prize money — P" + st.pos, st.prize);
+    line(`Prize money — P${st.pos}`, st.prize);
     line("Salary", st.salary);
-    line("Points bonus — " + st.pts + " pts", st.bonus);
+    line(`Points bonus — ${st.pts} pts`, st.bonus);
     if (st.obj) {
       line(Career.objectiveLabel(st.obj), st.obj.done ? Career.OBJ_BONUS : 0);
-      if (!st.obj.done) {
-        const miss = document.createElement("div");
-        miss.className = "res-settle-row missed";
-        const a3 = document.createElement("span"); a3.textContent = Career.objectiveLabel(st.obj);
-        const b3 = document.createElement("span");
-        b3.className = "res-settle-v"; b3.textContent = "MISSED";
-        miss.append(a3, b3);
-        box.appendChild(miss);
-      }
+      if (!st.obj.done) addRow("res-settle-row missed", Career.objectiveLabel(st.obj), "MISSED");
     }
     line("Sponsor bonus", st.sponsorPay);
     line("Driver wages", -st.wages);
-    const tot = document.createElement("div");
-    tot.className = "res-settle-row total";
-    const ta = document.createElement("span"); ta.textContent = "BALANCE";
-    const tb = document.createElement("span");
-    tb.className = "res-settle-v"; tb.textContent = st.money.toLocaleString() + " cr";
-    tot.append(ta, tb);
-    box.appendChild(tot);
-    const rep = document.createElement("div");
-    rep.className = "res-settle-row rep";
-    const ra = document.createElement("span"); ra.textContent = "Reputation";
-    const rb = document.createElement("span");
-    rb.className = "res-settle-v"; rb.textContent = Math.round(st.rep) + " / 100";
-    rep.append(ra, rb);
-    box.appendChild(rep);
+    addRow("res-settle-row total", "BALANCE", `${st.money.toLocaleString()} cr`);
+    addRow("res-settle-row rep", "Reputation", `${Math.round(st.rep)} / 100`);
     if (st.unsaved) {
       const unsaved = document.createElement("div");
       unsaved.id = "res-settle-unsaved";
@@ -141,21 +143,15 @@ function buildResults(order) {
     // Driver championship (top 10)
     const head = document.createElement("div");
     head.className = "sel-label";
-    head.textContent = sprint ? "DRIVERS — AFTER THE SPRINT" : "DRIVERS — AFTER ROUND " + season.round;
+    head.textContent = sprint ? "DRIVERS — AFTER THE SPRINT" : `DRIVERS — AFTER ROUND ${season.round}`;
     els.resultsTable.appendChild(head);
     // SeasonCal.rank, not a bare points sort: equal points fall to countback
     // there and the STANDINGS sheet already used it — this list put whoever
     // was earlier in the field order first and the two screens disagreed.
     const all = cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId)).slice(0, 10);
     all.forEach((c, i) => {
-      const row = document.createElement("div");
-      row.className = "res-row" + (c.isPlayer ? " you" : "");
-      const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
-      const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = G.cssCol(c.team.color);
-      const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code + "  " + c.name;
-      const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.driverId] || 0) + " pts";
-      row.append(pos, sw, nm, pt);
-      els.resultsTable.appendChild(row);
+      rankRow(els.resultsTable, i, G.cssCol(c.team.color), `${c.code}  ${c.name}`,
+        `${season.pts[c.driverId] || 0} pts`, c.isPlayer ? " you" : "");
     });
     // Team championship (top 5)
     const tmHead = document.createElement("div");
@@ -165,14 +161,7 @@ function buildResults(order) {
     const tmList = Object.entries(season.teamPts).sort((a, b) => b[1] - a[1]).slice(0, 5);
     tmList.forEach(([teamId, pts], i) => {
       const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
-      const row = document.createElement("div");
-      row.className = "res-row";
-      const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
-      const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = G.cssCol(team.color);
-      const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = team.name || teamId;
-      const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = pts + " pts";
-      row.append(pos, sw, nm, pt);
-      els.resultsTable.appendChild(row);
+      rankRow(els.resultsTable, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
     });
     // Never "MAIN MENU" for a sprint: the champion panel at the end of a season
     // uses that exact string as its first-click sentinel (js/game.js resNext).
@@ -184,10 +173,11 @@ function buildResults(order) {
 }
 
 function buildTTResults() {
-  const els = G.els, track = G.track;
+  const els = G.els;
+  const track = G.track;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";
-  els.resultsTitle.textContent = track.def.name + " — TIME TRIAL";
+  els.resultsTitle.textContent = `${track.def.name} — TIME TRIAL`;
   const best = G.player.best;
 
   // headline: your best lap this session (green if it set a new track record)
@@ -211,7 +201,7 @@ function buildTTResults() {
       const gl = document.createElement("span"); gl.className = "res-name"; gl.textContent = "vs Ghost";
       const gv = document.createElement("span"); gv.className = "res-pts"; gv.style.width = "auto";
       gv.style.color = delta <= 0 ? "var(--faster)" : "var(--slower)";
-      gv.textContent = (delta >= 0 ? "+" : "") + delta.toFixed(3) + "s";
+      gv.textContent = `${delta >= 0 ? "+" : ""}${delta.toFixed(3)}s`;
       gr.append(gl, gv);
       els.resultsTable.appendChild(gr);
     }
@@ -227,11 +217,11 @@ function buildTTResults() {
     const mr = document.createElement("div");
     mr.className = "res-row";
     const ml = document.createElement("span"); ml.className = "res-name";
-    ml.textContent = "MEDAL — " + (held ? held.toUpperCase() : "NONE YET");
-    if (held) ml.style.color = "var(--" + held + ")";
+    ml.textContent = `MEDAL — ${held ? held.toUpperCase() : "NONE YET"}`;
+    if (held) ml.style.color = `var(--${held})`;
     const mv = document.createElement("span"); mv.className = "res-pts"; mv.style.width = "auto";
     const next = Quali.MEDALS.slice().reverse().find(([m]) => !held || Quali.MEDAL_RANK[m] > Quali.MEDAL_RANK[held]);
-    mv.textContent = next ? "NEXT " + next[0].toUpperCase() + " ≤ " + G.fmtTime(pole * next[1]) : "POLE " + G.fmtTime(pole);
+    mv.textContent = next ? `NEXT ${next[0].toUpperCase()} ≤ ${G.fmtTime(pole * next[1])}` : `POLE ${G.fmtTime(pole)}`;
     mr.append(ml, mv);
     els.resultsTable.appendChild(mr);
   }
@@ -240,23 +230,16 @@ function buildTTResults() {
   const lbHead = document.createElement("div");
   lbHead.className = "sel-label";
   lbHead.id = "res-tt-board";
-  lbHead.textContent = "LEADERBOARD — " + track.def.name;
+  lbHead.textContent = `LEADERBOARD — ${track.def.name}`;
   els.resultsTable.appendChild(lbHead);
 
   const board = G.ttBoard(track.def.id);
   board.forEach((e, i) => {
     const team = G.teamById(e.teamId);
-    const row = document.createElement("div");
-    row.className = "res-row" + (e.ts >= G.ttSessionTs ? " you" : "");
-    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
-    const sw = document.createElement("span"); sw.className = "res-swatch";
-    sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
-    const nm = document.createElement("span"); nm.className = "res-name";
-    nm.textContent = e.code + "  " + e.name + (team ? "  · " + team.short : "");
-    const pt = document.createElement("span"); pt.className = "res-pts"; pt.style.width = "auto";
-    pt.textContent = G.fmtTime(e.t);
-    row.append(pos, sw, nm, pt);
-    els.resultsTable.appendChild(row);
+    const name = `${e.code}  ${e.name}${team ? `  · ${team.short}` : ""}`;
+    const row = rankRow(els.resultsTable, i, G.cssCol(team ? team.color : [0.5, 0.5, 0.5]), name,
+      G.fmtTime(e.t), e.ts >= G.ttSessionTs ? " you" : "");
+    row.querySelector(".res-pts").style.width = "auto";
   });
 
   // DAILY: the shareable line, copied on tap (clipboard needs a secure
@@ -296,7 +279,8 @@ function buildTTResults() {
 }
 
 function buildStandings() {
-  const season = G.season, cars = G.cars;
+  const season = G.season;
+  const cars = G.cars;
   const body = G.$("standings-body");
   body.textContent = "";
   if (!season) return;
@@ -305,10 +289,11 @@ function buildStandings() {
   // "AFTER ROUND r" would name the previous round while showing this one's
   // sprint points. Say which half of the weekend the table is standing on.
   const midWeekend = SeasonCal.midWeekend(season);
-  G.$("standings-title").textContent = round >= SeasonCal.rounds()
+  const rounds = SeasonCal.rounds();
+  G.$("standings-title").textContent = round >= rounds
     ? "FINAL CHAMPIONSHIP"
-    : midWeekend ? "CHAMPIONSHIP — AFTER THE SPRINT, ROUND " + (round + 1) + " / " + SeasonCal.rounds()
-    : "CHAMPIONSHIP — AFTER ROUND " + round + " / " + SeasonCal.rounds();
+    : midWeekend ? `CHAMPIONSHIP — AFTER THE SPRINT, ROUND ${round + 1} / ${rounds}`
+    : `CHAMPIONSHIP — AFTER ROUND ${round} / ${rounds}`;
 
   // Driver standings — all cars sorted by pts
   const drHead = document.createElement("div");
@@ -321,19 +306,11 @@ function buildStandings() {
   drList.forEach(([driverId, pts], i) => {
     const c = cars.find((x) => x.driverId === driverId);
     const code = c ? c.code : ((season.driverCodes && season.driverCodes[driverId]) || driverId);
-    const row = document.createElement("div");
-    row.className = "res-row" + (c && c.isPlayer ? " you" : "");
-    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
-    const sw = document.createElement("span"); sw.className = "res-swatch";
-    sw.style.background = c ? G.cssCol(c.team.color) : "#555";
-    const nm = document.createElement("span"); nm.className = "res-name";
-    nm.textContent = code + (c ? "  " + c.name : "");
-    const pt = document.createElement("span"); pt.className = "res-pts";
     // Dropped scores: the COUNTING total, with the gross beside it.
     const net = SeasonCal.netPts(season, driverId);
-    pt.textContent = net === pts ? pts + " pts" : net + " (" + pts + ") pts";
-    row.append(pos, sw, nm, pt);
-    body.appendChild(row);
+    const ptsText = net === pts ? `${pts} pts` : `${net} (${pts}) pts`;
+    rankRow(body, i, c ? G.cssCol(c.team.color) : "#555", `${code}${c ? `  ${c.name}` : ""}`,
+      ptsText, c && c.isPlayer ? " you" : "");
   });
 
   // Team standings
@@ -346,32 +323,25 @@ function buildStandings() {
     .sort((a, b) => b[1] - a[1]);
   tmList.forEach(([teamId, pts], i) => {
     const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
-    const row = document.createElement("div");
-    row.className = "res-row";
-    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
-    const sw = document.createElement("span"); sw.className = "res-swatch";
-    sw.style.background = G.cssCol(team.color);
-    const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = team.name || teamId;
-    const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = pts + " pts";
-    row.append(pos, sw, nm, pt);
-    body.appendChild(row);
+    rankRow(body, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
   });
 
   // Next round info
-  if (round < SeasonCal.rounds()) {
+  if (round < rounds) {
     const nextTrack = SeasonCal.track(round);
     const info = document.createElement("div");
     info.style.cssText = "margin-top:12px;font-size:12px;color:#9a9aa5;text-align:center";
     // From the pause menu this round is the one being driven, not the next.
     const live = G.state === "race" || G.state === "count";
-    info.textContent = (live ? "IN PROGRESS: ROUND " : midWeekend ? "NEXT: GRAND PRIX, ROUND " : "NEXT: ROUND ")
-      + (round + 1) + " — " + nextTrack.name + " (" + nextTrack.gp + ")";
+    const lead = live ? "IN PROGRESS: ROUND " : midWeekend ? "NEXT: GRAND PRIX, ROUND " : "NEXT: ROUND ";
+    info.textContent = `${lead}${round + 1} — ${nextTrack.name} (${nextTrack.gp})`;
     body.appendChild(info);
   }
 }
 
 function buildChampion() {
-  const els = G.els, season = G.season;
+  const els = G.els;
+  const season = G.season;
   // Countback decides a tie for the title (SeasonCal.rank); a points-only sort
   // crowned whichever tied driver came first in the field order.
   const sorted = G.cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId));
@@ -381,8 +351,8 @@ function buildChampion() {
   els.resultsTitle.style.color = champColor;
   els.resultsTable.textContent = "";
   const banner = document.createElement("div");
-  banner.style.cssText = "text-align:center;padding:18px 0 10px;font-weight:900;font-style:italic;font-size:1.4em;color:" + champColor;
-  banner.textContent = champ.code + "  " + champ.name;
+  banner.style.cssText = `text-align:center;padding:18px 0 10px;font-weight:900;font-style:italic;font-size:1.4em;color:${champColor}`;
+  banner.textContent = `${champ.code}  ${champ.name}`;
   const teamBanner = document.createElement("div");
   teamBanner.style.cssText = "text-align:center;font-size:0.8em;color:#aaa;margin-bottom:14px;letter-spacing:2px";
   teamBanner.textContent = champ.team.name.toUpperCase();
@@ -392,16 +362,10 @@ function buildChampion() {
   head.textContent = "FINAL STANDINGS";
   els.resultsTable.appendChild(head);
   sorted.forEach((c, i) => {
-    const row = document.createElement("div"); row.className = "res-row";
-    const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
-    const sw = document.createElement("span"); sw.className = "res-swatch"; sw.style.background = G.cssCol(c.team.color);
-    const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = c.code;
-    const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = (season.pts[c.driverId] || 0) + " pts";
-    row.append(pos, sw, nm, pt);
-    els.resultsTable.appendChild(row);
+    rankRow(els.resultsTable, i, G.cssCol(c.team.color), c.code, `${season.pts[c.driverId] || 0} pts`);
   });
   els.resNext.textContent = "MAIN MENU";
-  G.announce(champ.code + " IS WORLD CHAMPION!", 4);
+  G.announce(`${champ.code} IS WORLD CHAMPION!`, 4);
   if (G.soundOn) GameAudio.finish();
 }
 

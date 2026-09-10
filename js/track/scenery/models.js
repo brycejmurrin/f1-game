@@ -376,16 +376,8 @@ const TrackModels = (function () {
         if (!Number.isFinite(y)) return null;
         return ctx.groundPoint ? ctx.groundPoint(k, side || 1, dist || 0, y) : [(dist || 0), y, k];
       };
-      // Densify the caller's polyline before extruding. The caller's points can
-      // be 50-100 m apart in s; a single straight box between two of them chords
-      // ACROSS the track's curvature, so on a bend the terrain-tilted slab bows
-      // OVER the racing line (monza banking, catalunya La Caixa, istanbul T8
-      // revetment all read 1.9-4.4 m over the tarmac from exactly this). k is a
-      // node index and groundPoint(k,...) rounds it, so interpolating k between
-      // two caller points and re-grounding at each intermediate node walks the
-      // real track arc. A ~10 m sub-chord keeps the arc-vs-chord bow under the
-      // 0.2 m props-over-road tolerance on a typical corner radius.
-      // One box between two grounded points, extruded up from grade.
+      // One box between two grounded points, extruded up from grade. Densified
+      // per pair below, never as one global polyline — see the note there.
       const emitBox = (pa, pb) => {
         const dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2];
         const length = Math.hypot(dx, dy, dz) || 0.1;
@@ -406,17 +398,19 @@ const TrackModels = (function () {
         return box(out, center, [width, height, length], spec.color,
           spec.basis || [right, up, forward]);
       };
-      // Extrude EACH caller pair independently — never a single global polyline.
-      // A widely-spaced pair (50-100 m in s) chords across the track's curvature,
+      // Densify and extrude EACH caller pair independently — never a single
+      // global polyline. The caller's points can be 50-100 m apart in s, and a
+      // straight box between two of them chords across the track's curvature,
       // so the terrain-tilted slab bows OVER the racing line (monza banking,
-      // catalunya La Caixa, istanbul T8 revetment read 1.9-4.4 m over the tarmac
-      // from exactly this). k is a node index groundPoint() rounds, so
-      // interpolating k between the pair's endpoints and re-grounding at each
-      // intermediate node walks the real arc; ~10 m sub-chords keep the bow under
-      // the 0.2 m props-over-road tolerance. Per-PAIR is load-bearing: a global
-      // polyline bridged across any pair that grounded to null — e.g. a wall that
-      // wraps the start line — drawing one box the full width of the circuit
-      // (hungaroring's pit trim read 5 m over the racing line 1 km away).
+      // catalunya La Caixa, istanbul T8 revetment all read 1.9-4.4 m over the
+      // tarmac from exactly this). k is a node index groundPoint() rounds, so
+      // interpolating k between a pair's endpoints and re-grounding at each
+      // intermediate node walks the real arc; ~10 m sub-chords keep the bow
+      // under the 0.2 m props-over-road tolerance on a typical corner radius.
+      // Per-PAIR is load-bearing on top of that: a global polyline bridged
+      // across any pair that grounded to null — e.g. a wall that wraps the
+      // start line — drew one box the full width of the circuit (hungaroring's
+      // pit trim read 5 m over the racing line 1 km away).
       const TARGET = 10, MAXSUB = 16;
       let emitted = 0;
       for (let i = 0; i < spec.points.length - 1; i++) {

@@ -108,10 +108,10 @@ const vt = (fn) => {
   setTimeout(run, 60);
 };
 
-// ---- full-screen team picker ----------------------------------------------
-// The twelve-way team choice, opened from the garage's TEAM & DRIVER tab. It
-// used to be reachable from a summary card on the select screen too; that card
-// is gone, and the garage is the one place a team is chosen.
+// Full-screen team picker: the twelve-way team choice, opened from the
+// garage's TEAM & DRIVER tab. It used to be reachable from a summary card on
+// the select screen too; that card is gone, and the garage is the one place a
+// team is chosen.
 const teamPicker = () => $("teampicker");
 // The picker's ONE host is the garage's TEAM tab (the select screen's card
 // door was removed with the screen split). A pickerHost variable and a
@@ -753,9 +753,9 @@ function openTrackDetail() {
   document.getElementById("track-detail-meta").textContent = meta;
 
   // Circuit type flags
-  var nightEl = document.getElementById("tdf-night");
-  var streetEl = document.getElementById("tdf-street");
-  var bankedEl = document.getElementById("tdf-banked");
+  const nightEl = document.getElementById("tdf-night");
+  const streetEl = document.getElementById("tdf-street");
+  const bankedEl = document.getElementById("tdf-banked");
   if (nightEl) nightEl.hidden = !t.night;
   if (streetEl) streetEl.hidden = !t.street;
   if (bankedEl) bankedEl.hidden = !t.banked;
@@ -767,8 +767,8 @@ function openTrackDetail() {
                   document.getElementById("track-detail-elev-wrap"));
 
   // DRS zones with metre positions
-  var drsWrap = document.getElementById("track-detail-drs-wrap");
-  var drsList = document.getElementById("track-detail-drs-list");
+  const drsWrap = document.getElementById("track-detail-drs-wrap");
+  const drsList = document.getElementById("track-detail-drs-list");
   if (drsWrap && drsList) {
     if (dz && dz.length) {
       const trackLen = (t.lengthKm || 5) * 1000;
