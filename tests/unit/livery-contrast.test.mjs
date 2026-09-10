@@ -50,11 +50,17 @@ const CROWN = ["logo", "wrap", "saddle", "bigmark"];
 const SIDE = ["none", "band", "sash", "rake", "shoulder", "starfield", "plate", "logo", "ribbon", "lockup", "title", "emblem"];
 
 test("no design paints a large area that cannot be seen on what it covers", () => {
+  // Authored zone paints (saddleTint, sideTint, …) are free picks — the player
+  // may choose same-on-same. This sweep scores DERIVED defaults only; pick
+  // survival is asserted in "a colour you PICK…" below.
+  const STRIP = ["saddleTint", "sideTint", "spineTint", "sunTint", "plateTint",
+                 "bandTint2", "accent", "fin"];
   const bad = [];
   for (const t of A.Teams.LIST) {
     const base = A.Liveries.forTeam(t)[0];
     for (const spineLogo of CROWN) for (const spineSide of SIDE) {
       const liv = Object.assign({}, base, { spineLogo, spineSide });
+      for (const k of STRIP) delete liv[k];
       for (const hit of sweepAtlas(A, t.id, liv, ["crest", "spineSide"], 14))
         bad.push(`${t.id} ${spineLogo}/${spineSide} ${hit.region}: ${hit.paint} over ${hit.over} at ${hit.contrast}:1 (${(hit.share * 100).toFixed(0)}% of the panel)`);
     }
@@ -135,10 +141,23 @@ test("a colour you PICK is the colour that gets painted, contrast or not", () =>
     ["the wrap's sun",       { spineLogo: "wrap",   sunTint: PICK }, "crest"],
     ["the flank band",       { spineLogo: "saddle", spineSide: "band", sideTint: PICK }, "spineSide"],
     ["the flank band, wrap", { spineLogo: "wrap",   spineSide: "band", sideTint: PICK }, "spineSide"],
+    ["the saddle shelf",     { spineLogo: "logo", spineSide: "shoulder", saddleTint: PICK }, "spineSide"],
   ];
   for (const [what, liv, region] of cases)
     assert.ok(dominant(liv, region).startsWith(css),
       `${what}: picked ${css}..) and got ${dominant(liv, region)}`);
+  // DETAIL trim + TAIL FIN under contrast handoff — same free-pick bargain.
+  const pale = [0.92, 0.92, 0.94];
+  const paleHit = /rgba?\(235,235,240[,)]/;
+  const numDom = dominant({ c1: pale, c2: pale, accent: pale, spineLogo: "number" }, "num");
+  assert.ok(paleHit.test(numDom), `DETAIL accent must survive on the number; got ${numDom}`);
+  const white = [0.95, 0.95, 0.96];
+  assert.deepEqual(
+    A.LT.resolveFinPaint("mclaren", {
+      cover: white, c1: pale, c2: [0.98, 0.5, 0.05], fin: white,
+      coverBind: "saddleWrap", saddleTint: white, finHandoff: "contrast",
+    }, white, [0.98, 0.5, 0.05], pale, [0.98, 0.5, 0.05]),
+    white, "authored fin under contrast handoff must not be re-picked");
 });
 
 test("pickOn guards Array.isArray(bg) before reading bg[0]", () => {
@@ -170,7 +189,7 @@ test("SPINE TOP wrap survives a partial livery (no c1/c2)", () => {
 // asks whether the picked colour REACHES the region, and — the half that makes
 // it a real test — that it is absent when the field is unset. Without the
 // negative, a colour that happened to be in the livery already would pass.
-test("the five formerly-derived surfaces are picks, and only when picked", () => {
+test("design fills are picks, and only when picked", () => {
   const PICK = [1, 0, 1];                       // magenta: in no shipped livery
   const hit = /^rgba?\(255,0,255[,)]/;          // css()/cssA() emit no spaces
   const reaches = (teamId, liv, region) => {
@@ -182,12 +201,11 @@ test("the five formerly-derived surfaces are picks, and only when picked", () =>
     }
     return false;
   };
+  // crestInk / plateInk dropped — lettering auto-inks. Remaining design fills:
   const cases = [
-    ["crestInk  the crown's lettering", "mercedes", { spineLogo: "wordmark" }, "crest"],
     ["bandTint2 the tricolour's 2nd band", "alpine", { spineLogo: "tricolour" }, "crest"],
     ["sunTint   the wrap's sun", "redbull", { spineLogo: "wrap" }, "crest"],
     ["plateTint the flank number board", "ferrari", { spineSide: "plate" }, "spineSide"],
-    ["plateInk  the number on that board", "ferrari", { spineSide: "plate" }, "spineSide"],
   ];
   const bad = [];
   for (const [what, teamId, design, region] of cases) {
@@ -259,36 +277,43 @@ const markOnItsGround = (teamId, liv, region, key, ground, N = 32) => {
   return { worst, at, n: n / (N * N) };
 };
 
-test("the plate-less crown mark clears the cover it is actually drawn on", () => {
+test("the plate-less crown mark keeps authored colour; brand floors when needed", () => {
+  // bigmark is plate-less. Authored liv.logo stays exact. Unauthored brand
+  // marks may floor against the cover so stock cars stay readable.
+  const wantAuthored = [0.95, 0.1, 0.55];
   const bad = [];
   for (const t of A.Teams.LIST) {
-    // The default plus the two pale showcases that measured 1.00:1 before the
-    // fix — sweeping all ~69 liveries doubles the atlas builds for no new class.
     const pick3 = A.Liveries.forTeam(t).filter((l) => ["default", "tricolora", "chrome"].includes(l.id));
     for (const liv of pick3) {
-      const l = Object.assign({}, liv, { spineLogo: "bigmark" });
-      const r = markOnItsGround(t.id, l, "crest", "spineLogo", cssOf(liv.cover || liv.c1 || t.color));
-      if (r.worst == null || r.n < 0.004) continue;
-      if (r.worst < AREA_FLOOR) bad.push(`${t.id}/${liv.id}: bigmark ${r.at} at ${r.worst}:1`);
+      const field = [liv.cover || liv.c1 || t.color].filter(Boolean);
+      const authored = Object.assign({}, liv, { logo: wantAuthored.slice() });
+      const P = A.LT.markPalette(t.id, authored, field, false, { noPlate: true });
+      if (!P.mark.every((v, i) => Math.abs(v - wantAuthored[i]) < 1e-6))
+        bad.push(`${t.id}/${liv.id}: authored mark ${P.mark.join()} != [${wantAuthored.join()}]`);
+      const stock = A.LT.markPalette(t.id, liv, field, false, { noPlate: true });
+      const under = stock.under;
+      const best = Math.max(...under.map((f) =>
+        Math.max(A.LT.contrast(stock.mark, f), stock.halo ? A.LT.contrast(stock.halo, f) : 0)));
+      if (best < A.LT.MARK_FLOOR)
+        bad.push(`${t.id}/${liv.id}: stock mark+halo ${best.toFixed(2)} under MARK_FLOOR`);
     }
   }
-  assert.deepEqual(bad, [], `plate-less marks below ${AREA_FLOOR}:1 —\n  ${bad.join("\n  ")}`);
+  assert.deepEqual(bad, [], `plate-less mark policy failed —\n  ${bad.join("\n  ")}`);
 });
 
-test("a flank mark clears the flank the crown design actually left it", () => {
+test("a flank lettering side clears the flank; authored logo/emblem keep free colour", () => {
+  // Lettering (number/code/wordmark/duo) still auto-inks and must clear the
+  // flank. Authored logo/emblem keep exact colour; stock (unauthored) brand
+  // may floor so the mark stays readable on the cover.
   const bad = [];
-  // Marks and lettering. plate/ribbon/title boards are in the area SIDE sweep;
-  // this probe is glyph-vs-flank (lockup/emblem included). Wrap empty-flank
-  // lockup filler is skipped via `_bareWrapFlank` so Aston wrap/code is real.
-  const MARK_SIDES = ["number", "code", "logo", "wordmark", "duo", "emblem"];
+  const LETTER_SIDES = ["number", "code", "wordmark", "duo"];
+  const MARK_SIDES = ["logo", "emblem"];
+  const wantAuthored = [0.12, 0.88, 0.34];
   for (const t of A.Teams.LIST) {
     const base = A.Liveries.forTeam(t)[0];
     for (const spineLogo of ["saddle", "wrap"]) {
-      for (const spineSide of MARK_SIDES) {
+      for (const spineSide of LETTER_SIDES) {
         const liv = Object.assign({}, base, { spineLogo, spineSide });
-        // Under WRAP with no traced bull, spineSide "none" paints a lockup
-        // filler — differencing against that crest is a false invisible.
-        // Probe with `_bareWrapFlank` so the ground is the sun/cover only.
         const withoutLiv = Object.assign({}, liv, {
           spineSide: "none",
           ...(spineLogo === "wrap" && !A.LT.hasFlankBull(t.id) ? { _bareWrapFlank: true } : {}),
@@ -311,53 +336,37 @@ test("a flank mark clears the flank the crown design actually left it", () => {
         if (worst == null || n / (N * N) < 0.004) continue;
         if (worst < AREA_FLOOR) bad.push(`${t.id} ${spineLogo}/${spineSide}`);
       }
+      for (const spineSide of MARK_SIDES) {
+        const field = [base.cover || base.c1].filter(Boolean);
+        const authored = Object.assign({}, base, { spineLogo, spineSide, logo: wantAuthored.slice() });
+        const Pa = A.LT.markPalette(t.id, authored, field, false, { noPlate: true });
+        if (!Pa.mark.every((v, i) => Math.abs(v - wantAuthored[i]) < 1e-6))
+          bad.push(`${t.id} ${spineLogo}/${spineSide} authored mark overruled`);
+        const stock = Object.assign({}, base, { spineLogo, spineSide });
+        const Ps = A.LT.markPalette(t.id, stock, field, false, { noPlate: true });
+        if (Ps.freeMark || Ps.brandPair) {
+          const want = A.LT.markBase(t.id, stock);
+          if (!Ps.mark.every((v, i) => Math.abs(v - want[i]) < 1e-6))
+            bad.push(`${t.id} ${spineLogo}/${spineSide} free/brandPair mark overruled`);
+        } else {
+          const best = Math.max(...Ps.under.map((f) =>
+            Math.max(A.LT.contrast(Ps.mark, f), Ps.halo ? A.LT.contrast(Ps.halo, f) : 0)));
+          if (best < A.LT.MARK_FLOOR)
+            bad.push(`${t.id} ${spineLogo}/${spineSide} stock mark ${best.toFixed(2)} under MARK_FLOOR`);
+        }
+      }
     }
   }
-  // `_bareWrapFlank` grounds wrap/no-bull differencing on the sun/cover, so
-  // Aston wrap/code is a real mark-vs-ground read (no lockup-filler false fail).
-  assert.deepEqual(bad, [], `flank mark below ${AREA_FLOOR}:1 —\n  ${bad.join("\n  ")}`);
+  assert.deepEqual(bad, [], `flank mark/lettering failed —\n  ${bad.join("\n  ")}`);
 });
 
-test("the wrap's flank badge is inked against the cover it lands on", () => {
-  // A CLASS the area sweep above cannot see. That sweep needs AREA_SHARE (15 %)
-  // of a panel before it will call a colour a problem, and this badge is a mark
-  // — a few per cent of the flank — so it was invisible to every guard here
-  // while being one of the two things `wrap` paints.
-  //
-  // The bug it pins: the fallback lockup (every team whose crest has no single
-  // forward-facing traced path, i.e. all but Red Bull) was scored against the
-  // pair [sun, cover] that the traced BULL gets, because the bull straddles the
-  // sun disc. This badge does not: it spans v BULL.top .. BULL.top + BULL.h and
-  // the sun's flank ellipse bottoms out at v 0.277, so it never reaches the
-  // disc at any u. Asking one ink to clear a light sun AND a
-  // dark cover is unsatisfiable, so the mark FAILED MARK_FLOOR on every one of
-  // those teams and markPalette fell back on the thing it falls back on: a
-  // HALO. Cadillac's crest went out near-black (1.04:1 on its own black cover)
-  // inside a white glow, Mercedes' star white (1.59:1) inside a dark one.
-  //
-  // WHICH IS WHY THE GARAGE HAD TO BE SHOT AND THE ATLAS WAS NOT ENOUGH. Scored
-  // as ink-against-cover this reads as "invisible", and it is not: the halo is
-  // load-bearing and the badge is legible, as a soft glow around a mark whose
-  // own colour has been thrown away. What is actually lost is identity —
-  // Cadillac's gold (#c9a45a) became #0f0f14, Racing Bulls' blue and Haas's red
-  // ring the same — plus the crispness, a halo being a blurred shadow pass.
-  // Scored on the cover alone the floor is satisfiable, the brand colour
-  // survives (Cadillac 8.43:1) and NO halo is drawn. Nine teams kept a readable
-  // badge throughout; the split only opens when a team's sun and cover sit at
-  // opposite ends of the luminance range.
-  //
-  // So this test asks for the mark to clear the cover ON ITS OWN, which is the
-  // stronger property: a halo is the rescue, not the goal.
-  //
-  // DOMINANT ink, not every colour: a lockup is layered (Cadillac's gold crest
-  // carries a near-black INNER DETAIL, Haas's red ring a white H) and the inner
-  // layers sit ON the mark, not on the cover. What has to clear the cover is
-  // the mark the badge reads as.
+test("the wrap's flank badge clears the cover; authored TEAM LOGO stays exact", () => {
+  // Stock wrap badges floor when brand-on-cover is unreadible. An authored
+  // TEAM LOGO pick paints as selected even at low contrast.
   const R = A.LT.REGIONS.spineSide, N = 40;
-  // Below the sun with room to spare — its flank ellipse reaches v 0.28 on the
-  // centreline and less either side, so 0.35 is bare cover on every team.
   const V0 = 0.35;
-  const MARK_ON_BODY = 2.0;                    // the floor this branch declares
+  const wantAuthored = [0.91, 0.22, 0.61];
+  const bad = [];
   for (const t of A.Teams.LIST) {
     const base = A.Liveries.forTeam(t)[0];
     const bare = A.paint(t.id, Object.assign({}, base, { spineLogo: "none", spineSide: "none" }));
@@ -366,19 +375,29 @@ test("the wrap's flank badge is inked against the cover it lands on", () => {
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
       const x = R.x + R.w * (i + 0.5) / N, y = R.y + R.h * (V0 + (1 - V0) * (j + 0.5) / N);
       const b = paintAt(bare, x, y), w = paintAt(wrap, x, y);
-      if (!w || w === b) continue;             // untouched cover
+      if (!w || w === b) continue;
       seen.set(w, (seen.get(w) || 0) + 1);
     }
     const top = [...seen.entries()].sort((a, b) => b[1] - a[1])[0];
     assert.ok(top, `${t.id}: wrap painted no badge on the flank below v ${V0}`);
-    // buildAtlas leaves the cover BARE — the mesh supplies its colour — so a
-    // sample there is null, not a paint. The livery's own field is the ground.
-    const cov = base.cover || base.c1;
-    const coverCss = `rgb(${cov.map((v) => Math.round(v * 255)).join(",")})`;
-    const c = contrastCss(top[0], coverCss);
-    assert.ok(c >= MARK_ON_BODY,
-      `${t.id}: the wrap badge reads ${c}:1 on its cover (${top[0]} over ${coverCss})`);
+    const field = [base.cover || base.c1];
+    const stock = A.LT.markPalette(t.id, base, field, false, { noPlate: true });
+    if (stock.freeMark || stock.brandPair) {
+      const baseMark = A.LT.markBase(t.id, base);
+      if (!stock.mark.every((v, i) => Math.abs(v - baseMark[i]) < 1e-6))
+        bad.push(`${t.id}: stock free mark ${stock.mark.join()} != base ${baseMark.join()}`);
+    } else {
+      const best = Math.max(...stock.under.map((f) =>
+        Math.max(A.LT.contrast(stock.mark, f), stock.halo ? A.LT.contrast(stock.halo, f) : 0)));
+      if (best < A.LT.MARK_FLOOR)
+        bad.push(`${t.id}: stock wrap mark ${best.toFixed(2)} under MARK_FLOOR (pixel ${top[0]})`);
+    }
+    const authored = Object.assign({}, base, { logo: wantAuthored.slice() });
+    const Pa = A.LT.markPalette(t.id, authored, field, false, { noPlate: true });
+    if (!Pa.mark.every((v, i) => Math.abs(v - wantAuthored[i]) < 1e-6))
+      bad.push(`${t.id}: authored wrap mark ${Pa.mark.join()} != [${wantAuthored.join()}]`);
   }
+  assert.deepEqual(bad, [], `wrap badge mark policy failed —\n  ${bad.join("\n  ")}`);
 });
 
 // A flank pick has to land where the flank can be SEEN — measured, and NOT

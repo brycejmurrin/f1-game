@@ -14,8 +14,13 @@ clone of `equivalent` — mesh only. **`FACTORY_PRESETS`** drives **AI meshes
 only**. ERS/aero axes derive from the catalog (`ersProfile` / `aeroLoad`); a
 car with no parts (every AI) sits at the midpoint. Livery finish is
 `finish: "gloss" | "satin" | "chrome"` via `Car3D.FINISH_SURFACE`. Shark fin:
-`fin` (plate, defaults to `c2`) and `finArt` (must contrast or it vanishes);
-the tail DESIGN is four enum fields with defaults that reproduce the shipped car —
+`fin` (plate; authored as-is; unset = `c2` or contrast-derived under
+`finHandoff: "contrast"`) and `finArt` (authored as-is; unset clears the plate).
+Design colour fills on the sheet are gated: BAND (`spineTint`), SADDLE, FLANK
+FILL (`sideTint`), SUN, 2ND BAND, PLATE — only when the current TOP/SIDE/BIND
+paints that surface. `ridgeTint` / `airboxTint` / `crestInk` / `plateInk` are
+migrated away (`Liveries.migratePaint`).
+The tail DESIGN is four enum fields with defaults that reproduce the shipped car —
 `finShape` (`Car3D.FIN_SHAPES` + `none`; the ONE non-colour livery field that moves
 a vertex, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,
 drives the fin panel ONLY — the crown's gradient wash was removed, so every

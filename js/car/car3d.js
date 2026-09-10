@@ -2185,7 +2185,7 @@ const Car3D = (function () {
     const finC  = _ckAcc(finRaw) || finRaw;   // shark-fin plate — finHandoff + liv.fin
     // ENGINE COVER (liv.cover): the cover loft in its own colour — the SF-26's
     // white top over a red chassis, the W17's silver over black. Absent = c1,
-    // today's look. Airbox mesh lips use airboxMeshColour (wrap sun > airboxTint).
+    // today's look. Airbox mesh lips use airboxMeshColour (wrap sun > cover).
     // BODY SPLIT (liv.bodySplit === "lr"): Cadillac-style L/R body. Left (x<0)
     // keeps c1, right (x>=0) takes c2. Applied as a paint-only recolour over the
     // chassis→livery sections so carbon / wings / glass stay untouched.

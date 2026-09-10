@@ -419,6 +419,7 @@ interface GameCtx {
   readonly stepSetupAero: (dt: number) => void;
   readonly setSetupView: (name: string) => void;
   readonly setupPan: (strafe: number, dolly: number) => void;
+  readonly nudgeSetupCam: (dAz: number, dEl: number, zoom?: number) => void;
   readonly nudgeSetupZoom: (mul: number) => void;
   readonly setupFlapArgs: () => FlapArgs;
   readonly setSetupAero: (on: boolean) => void;
@@ -634,6 +635,7 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
    different contract. */
 declare const AeroZones: GameModuleFactory;
 declare const Collide: GameModuleFactory;
+declare const CarDraw: GameModuleFactory;
 declare const AgentView: GameModuleFactory;
 declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;

@@ -563,11 +563,16 @@ function tick(dtMs) {
       }
     }
     // Features come back only at full res under the same sustained headroom,
-    // one per ~4 s — and never below the crash-sentinel floor OR the user's
-    // GRAPHICS preset floor (_floorTier folds both).
-    if (!stepped && _perfTier > _floorTier()) {
+    // one per ~4 s. tier() retains both floors even when a measured post cut
+    // taken AT the user's floor is released; the crash floor is never lifted.
+    if (!stepped && (_perfTier > _floorTier() || (_autoShed > 0 && _perfTier > _perfTierFloor))) {
       _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA, up: true };
-      _perfTier--; if (_autoShed > 0) _autoShed--; _govCool = 240;
+      // LOW starts at its preset floor: its measured post/lamp cut still
+      // needs recovery. tier() keeps the preset and crash floors intact.
+      if (_perfTier > _floorTier()) {
+        _perfTier--; if (_autoShed > 0) _autoShed--;
+      } else { _perfTier = _perfTierFloor; _autoShed = 0; }
+      _govCool = 240;
     }
   }
 }

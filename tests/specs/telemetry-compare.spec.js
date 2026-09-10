@@ -5,6 +5,9 @@
 import { test, expect } from "@playwright/test";
 
 async function dataReady(page) {
+  const scriptErrors = [];
+  const onPageError = error => scriptErrors.push(error.message);
+  page.on("pageerror", onPageError);
   await page.goto("/version.json");
   await page.setContent('<div id="datahub" hidden></div>');
   await page.evaluate(() => { window.Teams = { LIST: [] }; });
@@ -23,9 +26,13 @@ async function dataReady(page) {
   // the logging landed, whenever the suite actually ran.
   await page.addScriptTag({ url: "/js/core/log.js" });
   await page.addScriptTag({ url: "/js/core/mat4.js" });
+  // hub.js binds Dom.el at evaluation time, just as the app does.
+  await page.addScriptTag({ url: "/js/ui/dom.js" });
   for (const u of ["api", "telemetry", "export", "schedule", "standings", "results", "live", "hub"])
     await page.addScriptTag({ url: "/js/data/" + u + ".js" });
-  await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
+  page.off("pageerror", onPageError);
+  expect(scriptErrors, "standalone data scripts initialize without errors").toEqual([]);
+  expect(await page.evaluate(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined")).toBe(true);
 }
 
 // A circular lap: N drivers each get GPS + car data so map dots and delta draw.

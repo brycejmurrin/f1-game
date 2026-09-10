@@ -512,7 +512,9 @@ function spot(name) { spotName = name || null; }
 // SIDE lamp at x 2.9, z 0.4, which is a tripod planted in front of the car
 // in the one view that exists to show its flank.
 const SPOTS = {
-  hero: [-2.6, -3.6, 0, 0.7, -1.4], wingRear: [-2.2, -4.2, 0, 0.9, -2.7], rear: [-3.4, -4.6, 0, 0.6, -2.6],
+  hero: [-2.6, -3.6, 0, 0.7, -1.4], bay: [-2.5, -3.8, 0, 0.7, -1.2],
+  bayFront: [2.8, 4.2, 0.4, 0.6, 1.2],
+  wingRear: [-2.2, -4.2, 0, 0.9, -2.7], rear: [-3.4, -4.6, 0, 0.6, -2.6],
   side: [2.6, 4.3, 0.8, 0.4, 0.6], front: [-3.4, 4.6, 0, 0.5, 2.4], wingFront: [-2.6, 4.4, 0, 0.5, 2.9],
 };
 const PARK = [-4.0, 2.2];

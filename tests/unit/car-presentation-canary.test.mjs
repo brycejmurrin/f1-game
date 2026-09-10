@@ -64,15 +64,18 @@ test("AI world pose is mirrored after this step's (s, x) writes", () => {
 
 test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   const game = read("js/game.js");
-  assert.match(game, /function teamBodyMesh\(team, car\)/);
-  assert.match(game, /buildCarData\(team, \{ noWheels: true, num: carDecalNum\(team, car\) \}\)/);
+  // The mesh caches, wheel meshes and the GLB loader live in the car-draw seam
+  // (js/car/car-draw.js); game.js keeps the draw loop that consumes them.
+  const cd = read("js/car/car-draw.js");
+  assert.match(cd, /function teamBodyMesh\(team, car\)/);
+  assert.match(cd, /buildCarData\(team, \{ noWheels: true, num: carDecalNum\(team, car\) \}\)/);
   // THE CAR, NOT JUST THE TEAM. The helmet js/car/helmets.js paints into the
   // body is the design for opts.num; keyed on the team alone, both of a team's
   // cars got drivers[0] and 22 cars on track showed 11 helmets, each pair
   // identical. The number belongs in the key as well as the build, or the
   // second driver draws whichever mesh the first one cached.
-  const teamMeshSrc = game.slice(game.indexOf("function teamMesh(team, car, silhouette)"), game.indexOf("function teamBodyMesh(team, car)"));
-  const teamBodySrc = game.slice(game.indexOf("function teamBodyMesh(team, car)"), game.indexOf("function teamBodyMesh(team, car)") + 400);
+  const teamMeshSrc = cd.slice(cd.indexOf("function teamMesh(team, car, silhouette)"), cd.indexOf("function teamBodyMesh(team, car)"));
+  const teamBodySrc = cd.slice(cd.indexOf("function teamBodyMesh(team, car)"), cd.indexOf("function teamBodyMesh(team, car)") + 400);
   // Painted path: driver number in the key (two seats → two helmets).
   assert.match(teamMeshSrc, /carDecalNum\(team, car\)/, "teamMesh must resolve the driver number");
   assert.match(teamMeshSrc, /teamMeshKey\(team\) \+ ":" \+ num/, "painted teamMesh must key on the driver number");
@@ -83,25 +86,25 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.match(teamMeshSrc, /silhouette === true \|\| \(car == null && silhouette !== false\)/);
   assert.doesNotMatch(teamMeshSrc, /num \+ \(sil \? ":sh"/,
     "silhouette key must not include the seat number");
-  const cap = game.match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/);
+  const cap = cd.match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/);
   assert.ok(cap, "TEAM_MESH_CACHE_MAX is a named ceiling");
   assert.ok(Number(cap[1]) >= 36,
     "cache must hold 12 teams × (2 painted + 1 :sh) = 36 or LRU frees a live caster (was 24)");
   assert.match(teamBodySrc, /carDecalNum\(team, car\)/, "teamBodyMesh must resolve the driver number");
   assert.match(teamBodySrc, /teamMeshKey\(team\) \+ ":" \+ carDecalNum\(team, car\)/, "teamBodyMesh must key on the driver number");
   assert.match(teamBodySrc, /num: carDecalNum\(team, car\)/, "teamBodyMesh must build with the driver number");
-  assert.match(game, /function playerBodyMesh\(team, car, visualKey = playerVisualKey\)/);
-  assert.match(game, /visualKey \+ ":" \+ carDecalNum\(team, car\)/, "the player's own body is keyed on the seat too");
-  assert.match(game, /function getFieldWheelMeshes\(team\)/);
+  assert.match(cd, /function playerBodyMesh\(team, car, visualKey = playerVisualKey\)/);
+  assert.match(cd, /visualKey \+ ":" \+ carDecalNum\(team, car\)/, "the player's own body is keyed on the seat too");
+  assert.match(cd, /function getFieldWheelMeshes\(team\)/);
   // Field wheels resolve from the FACTORY setup, via the permanently cached
   // teamDecalState(team, false) — whose builder still derives from
   // Parts.getFactorySetup, pinned below.
-  assert.match(game, /const vt = teamDecalState\(team, false\)\.parts/);
-  assert.match(game, /const parts = Parts\.getVisualTiers\(setup, team\);/);
-  assert.match(game, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(\) : getFieldWheelMeshes\(c\.team\);/);
-  assert.match(game, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
+  assert.match(cd, /const vt = teamDecalState\(team, false\)\.parts/);
+  assert.match(cd, /const parts = Parts\.getVisualTiers\(setup, team\);/);
+  assert.match(cd, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(\) : getFieldWheelMeshes\(c\.team\);/);
+  assert.match(cd, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
     "field wheels must promote hits like every other mesh LRU");
-  assert.match(game, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
+  assert.match(cd, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
     "loadCarModel must clear fieldWheelOrder with the cache (putBoundedMesh desync frees a live mesh)");
   const custom = gameAndCustom();
   assert.match(custom, /change\.key === "customTeam"\)[\s\S]{0,80}?syncCustomTeam\(\)/,
@@ -116,10 +119,10 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
     "czPreview must push the full structural draft, not bare {c1,c2}");
   assert.doesNotMatch(custom, /setLivDraftOverride\(\{ teamId: "custom", liv: \{ c1:/,
     "bare {c1,c2} override regrows the shark fin while customize is open");
-  assert.match(game, /function cockpitBodyMesh\(team, car, visualKey = playerVisualKey\)/);
+  assert.match(cd, /function cockpitBodyMesh\(team, car, visualKey = playerVisualKey\)/);
   assert.match(game, /function garageSeat\(\)/);
   const draw = game.match(
-    /const body = carModelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
+    /const body = carDraw\.modelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
   );
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
   assert.match(game, /if \(_hasLivePlayerShadow\) gfx\.castShadow\(teamMesh\(player\.team, player, true\)/);

@@ -102,13 +102,14 @@ test("every livery field a team names is one the renderer knows", () => {
   //   launch car is a dark band on a body-green cover, and the band's old
   //   colour was stripe||accent — that team's accent is lime, and `stripe`
   //   would have darkened the nose as well.
-  //   saddleTint / ridgeTint / airboxTint / coverBind / finHandoff (2026-09-09):
-  //   optional cover-anatomy tints and coupling enums — painters + mesh consume them.
+  //   saddleTint / coverBind / finHandoff (2026-09-09): optional cover-anatomy
+  //   tints and coupling enums — painters + mesh consume them.
   //   bodySplit (2026-09-09): Cadillac's black/white L/R body. Car3D.applyBodySplit
   //   recolours paint verts by sign(x); absent means today's single c1 body.
+  //   ridgeTint / airboxTint folded into spineTint / cover (2026-09-10).
   const KNOWN = new Set(["cover", "finStyle", "finBadge", "finShape", "finArt", "fin",
-    "sideTint", "spineHeight", "spineLogo", "spineSide", "spineTint", "saddleTint", "ridgeTint",
-    "airboxTint", "coverBind", "finHandoff", "tcam", "coverVents", "stripe",
+    "sideTint", "spineHeight", "spineLogo", "spineSide", "spineTint", "saddleTint",
+    "coverBind", "finHandoff", "tcam", "coverVents", "stripe",
     "noseStripe", "accent", "nose", "pod", "wing", "halo", "logo", "logo2", "logo3",
     "finish", "numFont", "sponsors", "bodySplit"]);
   for (const t of M.Teams.LIST) {
@@ -208,34 +209,40 @@ test("forTeam's default entry carries the team's whole livery block", () => {
 
 test("resolveLivery falls back through the team's own list", () => {
   const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(GAME, /const list = getLiveries\(team\);\s*\n\s*const liv = list\.find\(\(l\) => l\.id === getLiveryId\(team\.id\)\) \|\| list\[0\];/,
+  assert.match(GAME, /const list = getLiveries\(team\);/,
+    "resolveLivery must load the team's livery list");
+  assert.match(GAME, /list\.find\(\(l\) => l\.id === getLiveryId\(team\.id\)\) \|\| list\[0\]/,
     "resolveLivery must fall back to the team's default entry — a bare " +
     "{ c1, c2 } literal drops finShape/spineHeight/spineSide and regrows the fin");
 });
 
 test("resolveLivery and the live preview keep every editor tint", () => {
   // Aston's launch car authors spineTint; dropping it in resolveLivery painted
-  // stripe||accent (lime) on the crown band. The five formerly-derived tints
-  // (sun / crest ink / 2nd band / plate) had the same bug later: editor rows
-  // that never reached the atlas. Draft + cached paths must copy every one.
-  // Both paths now go through ONE field list (pickLivery / LIVERY_FIELDS), so
-  // a tint is on the car iff it is in that list and both paths call it.
+  // stripe||accent (lime) on the crown band. Both paths go through pickLivery /
+  // LIVERY_FIELDS; migratePaint strips dead keys before pick.
   const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const fields = GAME.match(/const LIVERY_FIELDS = \[([\s\S]*?)\];/);
   assert.ok(fields, "LIVERY_FIELDS is gone from js/game.js");
-  for (const k of ["spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk",
-    "saddleTint", "ridgeTint", "airboxTint", "coverBind", "finHandoff"]) {
+  for (const k of ["spineTint", "sideTint", "sunTint", "bandTint2", "plateTint",
+    "saddleTint", "coverBind", "finHandoff"]) {
     assert.match(fields[1], new RegExp('"' + k + '"'), `LIVERY_FIELDS must carry ${k}`);
   }
-  assert.match(GAME, /return pickLivery\(livDraftOverride\.liv\)/, "draft resolveLivery must resolve through pickLivery");
+  for (const k of ["crestInk", "plateInk", "ridgeTint", "airboxTint"]) {
+    assert.equal(new RegExp('"' + k + '"').test(fields[1]), false,
+      `LIVERY_FIELDS must not carry dead key ${k}`);
+  }
+  assert.match(GAME, /return pickLivery\(l\)/, "draft resolveLivery must resolve through pickLivery");
   assert.match(GAME, /liv \? pickLivery\(liv\)/, "cached resolveLivery must resolve through pickLivery");
+  assert.match(GAME, /Liveries\.migratePaint/, "resolveLivery must migrate before pick");
   assert.match(SHEET, /id:\s*"default"/,
     "livePreviewDraft must set id:\"default\" so brand plates stay on while editing");
-  // Sheet no longer offers crestInk / plateInk — only logo/logo2/logo3 for marks.
   assert.equal(/colorRow\("CREST INK"/.test(SHEET), false, "CREST INK row must be gone");
   assert.equal(/colorRow\("PLATE NUMBER"/.test(SHEET), false, "PLATE NUMBER row must be gone");
-  assert.equal(listFrom(SHEET, /const LIV_DRAFT_COLORS = \[([\s\S]*?)\];/).has("crestInk"), false);
-  assert.equal(listFrom(SHEET, /const LIV_DRAFT_COLORS = \[([\s\S]*?)\];/).has("plateInk"), false);
+  assert.equal(/colorRow\("RIDGE"/.test(SHEET), false, "RIDGE row must be gone");
+  assert.equal(/colorRow\("AIRBOX"/.test(SHEET), false, "AIRBOX row must be gone");
+  const draft = listFrom(SHEET, /const LIV_DRAFT_COLORS = \[([\s\S]*?)\];/);
+  for (const k of ["crestInk", "plateInk", "ridgeTint", "airboxTint"])
+    assert.equal(draft.has(k), false, `LIV_DRAFT_COLORS must not list ${k}`);
 });
 
 /* ── The reverse conversion, and the sheet that has to explain itself ────────
