@@ -298,6 +298,23 @@ subagent.
 `.cursor/rules/apex-shared.mdc`. Do not duplicate skills under
 `.cursor/skills/` or agents under `.cursor/agents/`.
 
+## Cursor Cloud specific instructions
+
+Committed bootstrap (auto for every Cloud VM that uses this repo):
+
+1. `.cursor/environment.json` — `install: bash tools/env/cloud-agent-install.sh`,
+   Chromium at `/opt/pw-browsers/chromium`, `mcpServerAllowlist` = the three
+   catalog servers only (`apex-tools`, `playwright-official`, `chrome-devtools`).
+2. Dual MCP catalogs (byte-lockstep): root `.mcp.json` + `.cursor/mcp.json`.
+3. Skills / subagents: `.claude/skills/*/SKILL.md`, `.claude/agents/*.md` only.
+4. Rules: `AGENTS.md` (canonical); `CLAUDE.md` is `@AGENTS.md` only.
+
+Cloud often does **not** attach project stdio MCP. Then use the CLI fallbacks
+in `docs/AGENT-SURFACE.md` (`tools/mcp/apex-tools-mcp.sh call`, …). Team MCP
+mirrors and secrets live in the Cursor Dashboard (Integrations & MCP / Secrets)
+— they are not inventable from git alone. Full checklist:
+`docs/AGENT-SURFACE.md` §Bootstrap.
+
 WGSL has FIVE rules a mock device cannot enforce, and three of them shipped a
 defect on the owner's iPhone this week: `sampleCount` is 1 or 4 ONLY;
 `dpdx`/`dpdy`/`fwidth` only under uniform control flow (WebKit ERRORS where

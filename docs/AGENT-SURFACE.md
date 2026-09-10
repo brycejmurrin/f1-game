@@ -13,6 +13,33 @@ need → skill (when / don'ts)
              no wrap       → run the tools/ CLI
 ```
 
+## Bootstrap (auto-setup)
+
+So every new Cursor / Claude Code / Cloud session gets the same surface
+without hand-wiring:
+
+| Piece | Path | Auto? |
+|---|---|---|
+| Rules | `AGENTS.md` | Yes (Cursor + Cloud). Claude Code via `CLAUDE.md` → `@AGENTS.md`. |
+| Claude stub | `CLAUDE.md` | Must stay a one-line import; never duplicate rules. |
+| Skills | `.claude/skills/*/SKILL.md` | Yes. Cursor also loads `.claude/skills` for compat — do **not** copy into `.cursor/skills/`. |
+| Subagents | `.claude/agents/*.md` | Yes (same rule). |
+| MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop loads them; Cloud often does not. |
+| Cloud VM | `.cursor/environment.json` | `install` + Chromium path + allowlist of the three catalog commands. |
+| Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
+
+**One-time Dashboard (not inventable from git):**
+
+1. Save / Build the environment from this repo’s `.cursor/environment.json`.
+2. Mirror the three servers under **Integrations & MCP** (same names/commands;
+   prefer HTTP when a server can be remote; stdio needs the install script).
+3. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
+4. Per-user OAuth for any remote MCP that needs it.
+
+When the host catalog is empty, use the Fallback column below (and
+`./tools/mcp/apex-tools-mcp.sh call …`). Do not invent a fourth allowlist
+name for a server that left `.mcp.json`.
+
 ## MCP servers
 
 **Repo catalog** (root `.mcp.json` + `.cursor/mcp.json`, lockstepped, THREE

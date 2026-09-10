@@ -140,6 +140,17 @@ test("indexes point at AGENT-SURFACE.md", () => {
   assert.deepEqual(missing, [], "an index lost the AGENT-SURFACE.md pointer");
 });
 
+test("bootstrap contract is documented for Cloud + desktop", () => {
+  const doc = read("docs/AGENT-SURFACE.md");
+  assert.match(doc, /^## Bootstrap \(auto-setup\)/m);
+  assert.match(doc, /\.cursor\/environment\.json/);
+  assert.match(doc, /Integrations & MCP/);
+  const agents = read("AGENTS.md");
+  assert.match(agents, /^## Cursor Cloud specific instructions/m);
+  assert.match(agents, /mcpServerAllowlist/);
+  assert.match(read("CLAUDE.md"), /@AGENTS\.md/);
+});
+
 test("MCP descriptions state tree vs browser", () => {
   const src = read("tools/mcp/apex-tools-mcp.mjs");
   assert.match(src, /docs\/AGENT-SURFACE\.md/);
