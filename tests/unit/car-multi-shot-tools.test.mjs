@@ -49,8 +49,10 @@ test("render-car walks a team LIST in one browser, and grids the sheet by team",
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
-  assert.match(src, /viewsDefault = preset && !argvHas\("--views"\) \? preset\.views : "spine"/,
-    "default views=spine unless a preset overrides");
+  assert.match(src, /viewsDefault = rollupOnly && !argvHas\("--views"\)/,
+    "multi-team rollup defaults to one view unless --full-views");
+  assert.match(src, /preset && !argvHas\("--views"\) \? preset\.views : "spine"/,
+    "single-team default views=spine unless a preset overrides");
   assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
   assert.match(src, /screenshotGameCanvas\(page, png, \{[\s\S]*skipAwait: true/,
     "capture must not await soft-present twice after settleGarage");
@@ -177,7 +179,7 @@ test("garage-angles reports per-phase timing and reads the loadavg", () => {
   assert.match(src, /ms: \{ settle: settleMs, capture: capMs, gate: gateMs, tries \}/,
     "each shot records settle/capture/gate separately");
   assert.match(src, /loadavg/, "the run must read and report the loadavg");
-  assert.match(src, /for \(const teamId of teams\)/,
+  assert.match(src, /for \(const teamId of workTeams\)/,
     "teams walk inside ONE browser — boot was being paid per team");
 });
 
@@ -190,4 +192,17 @@ test("garage-angles has presets, --plan, --fast, and tunable settle", () => {
   assert.match(src, /viewSettle/, "camera-only moves use --view-settle");
   assert.match(src, /keepPage: !!againstRef/, "--against reuses the page for pass B");
   assert.match(src, /argvHas\("--live"\)/, "--live writes auto-refresh live.html after each shot");
+});
+
+test("garage-angles multi-team rollup uses __apex fast path from PR #96 port", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /all\+custom/, "--team=all+custom includes My Team");
+  assert.match(src, /function parseTeams/, "team list parsing supports all/all+custom");
+  assert.match(src, /rollupOnly/, "multi-team runs default to rollup-only");
+  assert.match(src, /buildTeamRollup/, "writes all-teams rollup contact sheet");
+  assert.match(src, /garageTeam/, "fast path switches teams via store hook");
+  assert.match(src, /garageFrame/, "fast path frames via store hook");
+  assert.match(src, /argvHas\("--reset"\)/, "--reset clears output dir");
+  assert.match(src, /argvHas\("--resume"\)/, "--resume skips finished teams");
+  assert.match(src, /argvHas\("--oracle"\)/, "--oracle labels flank occlusion on rollup");
 });
