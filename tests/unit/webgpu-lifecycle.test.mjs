@@ -6,10 +6,11 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = new URL("../..", import.meta.url);
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
-const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, WGX_SOURCE] = await Promise.all([
+const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, FRUSTUM_SOURCE, WGX_SOURCE] = await Promise.all([
   readFile(new URL(P.WGSL_CHUNKS, ROOT), "utf8"),
   readFile(new URL(P.WGSL_POST, ROOT), "utf8"),
   readFile(new URL("js/render/webgpu/wgsl-fx.js", ROOT), "utf8"),
+  readFile(new URL(P.FRUSTUM, ROOT), "utf8"),
   readFile(new URL(P.WGX, ROOT), "utf8"),
 ]);
 
@@ -289,6 +290,7 @@ function makeGpuHarness(opts = {}) {
   vm.runInContext(`${CHUNKS_SOURCE}\nwindow.WGSLChunks = WGSLChunks;`, context);
   vm.runInContext(`${POST_SOURCE}\nwindow.WGSLPost = WGSLPost;`, context);
   vm.runInContext(`${FX_SOURCE}\nwindow.WGSLFx = WGSLFx;`, context);
+  vm.runInContext(`${FRUSTUM_SOURCE.replace(/^const\b/gm, "var")}\nwindow.Frustum = Frustum;`, context);
   vm.runInContext(`${WGX_SOURCE}\nwindow.WGX = WGX;`, context);
 
   return {
@@ -1088,7 +1090,8 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.doesNotMatch(CHUNKS_SOURCE, /let slab = max\(fwWpos/);
   assert.match(WGX_SOURCE, /data\.trk && data\.trk\.length >= vCount \* 3/);
   assert.match(WGX_SOURCE, /d\[base \+ 27\] = o\.buryRibbon \? 1 : 0;/);
-  assert.match(WGX_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near \(GL clip w\+z >= 0\)/);
+  assert.match(FRUSTUM_SOURCE, /m3\+m2, m7\+m6, m11\+m10, m15\+m14\); \/\/ near  \(GL clip w\+z >= 0\)/);
+  assert.match(WGX_SOURCE, /Frustum\.extractPlanes/);
   assert.doesNotMatch(CHUNKS_SOURCE, /1\.0, 0\.0, 1\.0/);
   assert.doesNotMatch(WGX_SOURCE, /__wgxDbg/);
   assert.match(CHUNKS_SOURCE, /trkFromWorld\(wp\.xyz\)/);

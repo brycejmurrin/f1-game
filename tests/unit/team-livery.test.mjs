@@ -102,10 +102,12 @@ test("every livery field a team names is one the renderer knows", () => {
   //   launch car is a dark band on a body-green cover, and the band's old
   //   colour was stripe||accent — that team's accent is lime, and `stripe`
   //   would have darkened the nose as well.
+  //   bodySplit (2026-09-09): Cadillac's black/white L/R body. Car3D.applyBodySplit
+  //   recolours paint verts by sign(x); absent means today's single c1 body.
   const KNOWN = new Set(["cover", "finStyle", "finBadge", "finShape", "finArt", "fin",
     "sideTint", "spineHeight", "spineLogo", "spineSide", "spineTint", "tcam", "coverVents", "stripe",
     "noseStripe", "accent", "nose", "pod", "wing", "halo", "logo", "logo2", "logo3",
-    "finish", "numFont", "sponsors"]);
+    "finish", "numFont", "sponsors", "bodySplit"]);
   for (const t of M.Teams.LIST) {
     if (!t.livery) continue;
     for (const k of Object.keys(t.livery)) {

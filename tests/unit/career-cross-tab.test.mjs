@@ -43,6 +43,7 @@ function load(options = {}) {
     Parts: { getFactorySetup: () => ({}) },
     DriverRatings: { get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }) },
   });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/hash32.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8"), ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx);

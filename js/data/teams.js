@@ -74,7 +74,8 @@ const Teams = (function () {
     },
     {
       id: "alpine", name: "Alpine", short: "ALP",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "tricolour", spineSide: "band" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "band",
+                spineTint: [1.0, 0.529, 0.737] },
       color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737],       /* blue #0093CC / pink #FF87BC */
       engine: "Mercedes", tier: 3,
       stats: { speed: 83, accel: 80, cornering: 82, braking: 80 },
@@ -85,7 +86,8 @@ const Teams = (function () {
     },
     {
       id: "racingbulls", name: "Racing Bulls", short: "RB",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "chevron", spineSide: "sash" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "streaks", spineSide: "sash",
+                spineTint: [0.086, 0.204, 0.796] },
       color: [0.957, 0.941, 0.925], color2: [0.086, 0.204, 0.796], /* white #F4F0EC / blue #1634CB */
       engine: "Red Bull Ford", tier: 3,
       stats: { speed: 82, accel: 82, cornering: 81, braking: 80 },
@@ -163,7 +165,8 @@ const Teams = (function () {
     },
     {
       id: "cadillac", name: "Cadillac", short: "CAD",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate",
+                bodySplit: "lr" },
       color: [0.039, 0.039, 0.039], color2: [0.961, 0.961, 0.961], /* black #0A0A0A / white #F5F5F5 */
       engine: "Ferrari", tier: 4,
       stats: { speed: 73, accel: 73, cornering: 73, braking: 72 },

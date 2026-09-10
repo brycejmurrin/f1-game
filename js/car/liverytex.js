@@ -1222,7 +1222,7 @@ const LiveryTex = (function () {
   // the title sponsor running along the spine, an exposed-carbon panel, or the
   // race number. All paint into REGIONS.crest, so the strip in car-mesh drapes
   // them over the rounded crown like the crest.
-  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number"];
+  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number"];
   // WRAP: one shape in CAR space painted into every region it crosses, so the
   // paint job goes over the spine and down both flanks as a single graphic —
   // the RB22's sun and bull. The car-space → region maps are car-mesh's:
@@ -1567,6 +1567,22 @@ const LiveryTex = (function () {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.41, Y, W * 0.18, H);
       ctx.fillStyle = cssA(ink, 0.62);
       ctx.fillRect(X + W * 0.41, Y, W * 0.014, H); ctx.fillRect(X + W * 0.576, Y, W * 0.014, H);
+    } else if (id === "streaks") {
+      // Parallel raked streaks down the crown — Racing Bulls blue speed lines
+      // on a white cover. Four strokes, not a solid stripe; ink edges keep them
+      // readable when acc is close to the cover.
+      for (let i = 0; i < 4; i++) {
+        const t = (i + 0.85) / 5;
+        const x0 = X + W * (t - 0.028), x1 = X + W * (t + 0.028);
+        ctx.fillStyle = cssA(acc, 0.96);
+        ctx.beginPath();
+        ctx.moveTo(x0 + W * 0.012, Y);
+        ctx.lineTo(x1 + W * 0.012, Y);
+        ctx.lineTo(x1 - W * 0.012, Y + H);
+        ctx.lineTo(x0 - W * 0.012, Y + H);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = cssA(ink, 0.45); ctx.lineWidth = Math.max(1.2, W * 0.008); ctx.stroke();
+      }
     } else if (id === "twin") {
       // Two pinstripes ON the shoulder creases — the W17's teal lines along
       // the cover's edges — not down the middle of the crown. Inner ink
@@ -1701,6 +1717,16 @@ const LiveryTex = (function () {
     else if (id === "stripe") {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.41, Y, W * 0.18, H);
       ctx.fillStyle = cssA(ink, 0.62); ctx.fillRect(X + W * 0.41, Y, W * 0.014, H); ctx.fillRect(X + W * 0.576, Y, W * 0.014, H);
+    } else if (id === "streaks") {
+      for (let i = 0; i < 4; i++) {
+        const t = (i + 0.85) / 5;
+        const x0 = X + W * (t - 0.028), x1 = X + W * (t + 0.028);
+        ctx.fillStyle = cssA(acc, 0.96);
+        ctx.beginPath();
+        ctx.moveTo(x0 + W * 0.008, Y); ctx.lineTo(x1 + W * 0.008, Y);
+        ctx.lineTo(x1 - W * 0.008, Y + H); ctx.lineTo(x0 - W * 0.008, Y + H);
+        ctx.closePath(); ctx.fill();
+      }
     } else if (id === "twin") {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.035, Y, W * 0.052, H); ctx.fillRect(X + W * 0.913, Y, W * 0.052, H);
       ctx.fillStyle = cssA(ink, 0.55); ctx.fillRect(X + W * 0.078, Y, W * 0.010, H); ctx.fillRect(X + W * 0.912, Y, W * 0.010, H);
@@ -1735,12 +1761,14 @@ const LiveryTex = (function () {
   // leaves REGIONS.spineSide unpainted, so the shipped atlas is pixel-identical.
   // From the 2026 launch photos: "wordmark" is the title sponsor on the flank
   // (Red Bull's ORACLE, Mercedes' PETRONAS), "plate" the SF-26's number on a
-  // contrasting panel, "duo" the RB22 (title aft, partner forward). The W17's
-  // raked bars were `"slash"` — culled 2026-09-09 with bars/split/chevron as
-  // SIDE+zoom sticker graphics; Mercedes ships `"sash"` instead.
-  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash"];
+  // contrasting panel, "duo" the RB22 (title aft, partner forward). `"slash"`
+  // is ONE raked stroke (W17 language as a single band) — restored as a real
+  // SIDE design, not the culled multi-bar sticker sheet. Mercedes still ships
+  // `"sash"`. `bars`/`split`/`chevron` stay culled.
+  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "slash"];
   // FILLS sit under the wrap's bull; lettering/numbers/badges sit over it.
   // `ribbon` is content (strip + number). `band`/`sash` are colour panels.
+  // `slash` is a stroke on bare flank — not SIDE_FILL.
   const SIDE_FILL = { band: 1, sash: 1 };
   // Where a MARK (logo / number / code / plate) sits on the flank canvas.
   // v is the centre, 0 at the shoulder crease and 1 at the sidepod line.
@@ -2603,6 +2631,27 @@ const LiveryTex = (function () {
         ctx.beginPath();
         ctx.moveTo(su(F, 0.14), bot); ctx.lineTo(su(F, uEnd), bot);
         ctx.stroke();
+        ctx.restore();
+      });
+    } else if (spineSide === "slash") {
+      // ONE bold diagonal band from the crease — W17 rake as a single stroke,
+      // not three pasted pinstripes. Not SIDE_FILL (wrap bull sits under sash/
+      // band panels only).
+      eachFlank((F) => {
+        const Sf = F.R;
+        const crease = Sf.y + Sf.h * 0.08;
+        const skew = Sf.h * 0.28 * F.dir;
+        const hh = Sf.h * 0.58;
+        const bw = Sf.w * (1 - sideFrom) * 0.14 * F.dir;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(flankBandC, 0.97);
+        const x0 = su(F, 0.12);
+        ctx.beginPath();
+        ctx.moveTo(x0 + skew, crease);
+        ctx.lineTo(x0 + skew + bw, crease);
+        ctx.lineTo(x0 + skew * (1 - hh / Sf.h) + bw, crease + hh);
+        ctx.lineTo(x0 + skew * (1 - hh / Sf.h), crease + hh);
+        ctx.closePath(); ctx.fill();
         ctx.restore();
       });
     }

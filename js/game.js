@@ -1081,141 +1081,8 @@ const qualiGrid = () => raceGrid === "quali" || raceGrid === "rev10";
 // are real. The rival's arrives over the wire (NetPlay EV.QUALI) as
 // driverId -> seconds; quali.simulate() takes the map and stops caring which of
 // them is "the player". Cleared with the classification.
-// driverId -> seconds, one entry per rival who has driven. A map rather than a
-// single record because three rivals report three laps and the second arrival
-// must not erase the first — qualiDriven() already built a driverId map, so
-// this is the shape the model always wanted.
-let qualiPeers = new Map();
-// Everything anyone actually drove, in the one shape the model wants.
-// The rival's driven lap has arrived. Store it, and redraw whatever is showing:
-// if the sheet is up it must now list their real time instead of the model's
-// guess, and if the classification was already built it has to be rebuilt or the
-// grid would be assembled from a lap that has been superseded.
-// Whoever currently holds the connection carries it. NetPlay owns the session
-// once the race is built; before that — which is exactly when qualifying runs —
-// the lobby still does.
-// Publish our own lap as we drive it, a couple of times a second. Rate-limited
-// here rather than at the call site so every caller cannot forget: the reliable
-// channel would happily carry sixty of these a second and none of them would be
-// worth the bytes.
-let qualiLiveAt = 0;
-function netReportQualiLive(driverId, t, frac) {
-  const now = performance.now();
-  if (now - qualiLiveAt < 400) return false;
-  qualiLiveAt = now;
-  if (netPlay && netPlay.active && netPlay.active() && netPlay.reportQualiLive) {
-    return netPlay.reportQualiLive(driverId, t, frac);
-  }
-  if (netLobby && netLobby.reportQualiLive) return netLobby.reportQualiLive(driverId, t, frac);
-  return false;
-}
-
-function netReportQuali(driverId, t) {
-  if (netPlay && netPlay.active && netPlay.active() && netPlay.reportQuali) return netPlay.reportQuali(driverId, t);
-  if (netLobby && netLobby.reportQuali) return netLobby.reportQuali(driverId, t);
-  return false;
-}
-
-// A friend race waits for BOTH laps before it will grid up. Racing someone
-// whose qualifying time never arrived would put them wherever the model
-// guessed, which is the one thing a qualifying session is supposed to stop.
-let qualiNetDone = null, qualiHadRivals = false; // lobby finish-start + rival-ever-existed
-function qualiRivalDriverIds() {
-  const fromNet = netPlay.rivalDriverIds();
-  if (fromNet.length) return fromNet;
-  // Before NetPlay hands off, remotes is empty even though the lobby already
-  // knows who is in the room — read the peer profiles instead of opening the
-  // grid after the first lap while two rivals are still out.
-  if (!netLobby || !netLobby.roomState) return [];
-  const peers = netLobby.roomState().peers || [];
-  return peers.map((p) => p.team + ":" + (p.driver || 0)).filter((id) => id !== ":");
-}
-function qualiNetWaiting() {
-  if (!qualiNetDone) return false;
-  // EVERY rival, not "a rival". With one peer this is the boolean it always
-  // was; with three it stops the grid forming off one arrived lap and two
-  // guesses. rivalDriverIds() is the roster NetPlay actually holds slots for,
-  // so somebody who dropped during qualifying stops being waited on.
-  const rivals = qualiRivalDriverIds();
-  if (rivals.length) qualiHadRivals = true; if (!rivals.length) return false;
-  return rivals.some((id) => !(qualiPeers.get(id) > 0));
-}
-
-// Say WHY the grid is not available yet, on the button itself.
-//
-// This used to be an announce() banner. That is the wrong instrument twice
-// over: the banner is a full-width overlay across the middle of the screen, so
-// it physically covers the sheet foot — the very button it is talking about —
-// and it fades, so a player who looks away has no way to find out why nothing
-// happened. A disabled button with its reason written on it cannot cover
-// itself, cannot expire, and cannot be clicked by mistake.
-function refreshQualiGate() {
-  const b = $("q-go");
-  if (!b) return;
-  const waiting = qualiNetWaiting();
-  b.disabled = waiting;
-  // "THEIR LAP" is wrong the moment there are three rivals, and it never said
-  // how many were outstanding — so a room of four sat on an unexplained
-  // disabled button. The count is already knowable from the same two things
-  // the gate itself reads.
-  if (!waiting) { b.textContent = (qualiNetDone && qualiHadRivals && !qualiRivalDriverIds().length) ? "RIVAL LEFT — TO THE GRID" : "TO THE GRID"; return; }
-  const rivals = qualiRivalDriverIds();
-  const outstanding = rivals.filter((id) => !(qualiPeers.get(id) > 0));
-  const left = outstanding.length;
-  // SHOW THE LAP AS IT HAPPENS. "Waiting" with no clock is the same screen
-  // whether somebody is two corners in or has walked away, and it is the one
-  // moment in a friend race where everyone else has nothing to do. A live time
-  // is only ever drawn for a lap still running, and goes stale-safe: if the
-  // last packet is more than three seconds old we stop pretending to know.
-  const live = [];
-  for (const id of outstanding) {
-    const l = qualiLive.get(id);
-    if (l && performance.now() - l.at < 3000) {
-      const c = cars.find((x) => x.driverId === id);
-      live.push((c ? c.code : "") + " " + fmtTime(l.t));
-    }
-  }
-  if (live.length) { b.textContent = live.join("   ") + "…"; return; }
-  b.textContent = left > 1 ? "WAITING FOR " + left + " LAPS…" : "WAITING FOR THEIR LAP…";
-}
-
-// Stage a qualifying session for a FRIEND race. Same session the solo path
-// runs; the difference is only what happens when it ends — the lobby has to
-// build the race and hand its connection to NetPlay, and it cannot do that
-// until the players leave the sheet.
-function openQualiForNet(done) {
-  // Armed INSIDE openQuali: it is async, so a qualiNetDone set out here was
-  // wiped by its continuation and netPlay.start() was unreachable.
-  openQuali(true, done || null);  // fresh sim — do not restore a career grid
-}
-
-// A rival's lap IN PROGRESS, so the wait has a clock on it. Deliberately
-// separate from qualiPeers: that map is what the classification is built from
-// and must only ever hold COMPLETED laps, or a grid could be assembled from a
-// time somebody was still driving.
-let qualiLive = new Map();        // driverId -> {t, frac, at}
-function onPeerQualiLive(d) {
-  if (!d || d.driverId == null) return;
-  qualiLive.set(d.driverId, { t: +d.t || 0, frac: +d.frac || 0, at: performance.now() });
-  refreshQualiGate();
-}
-
-function onPeerQuali(d) {
-  // The lap is done; the live clock for it is now noise.
-  if (d && d.driverId != null) qualiLive.delete(d.driverId);
-  if (d && d.driverId != null && d.t > 0) qualiPeers.set(d.driverId, d.t);
-  if (!isQuali()) return;
-  const mine = player && player.lastLap > 0 ? player.lastLap : (player && player.best < Infinity ? player.best : 0);
-  quali.simulate(qualiDriven(mine));
-  if (!$("quali").hidden) qualiSheet.build(quali.rows());
-  refreshQualiGate();
-}
-function qualiDriven(myTime) {
-  const m = new Map();
-  if (myTime > 0 && player) m.set(player.driverId, myTime);
-  for (const [id, t] of qualiPeers) if (t > 0) m.set(id, t);
-  return m.size ? m : 0;
-}
+// Friend-race qualifying sync (peer laps, q-go gate) lives in js/race/quali-net.js.
+let qualiNet = null;
 let raceWeather = "dry";       // "dry" | "wet" | "rain" | "overcast" | "fog"
 let raceTimeOfDay = "default"; // "default" | "dawn" | "day" | "dusk" | "night"
 let ttRecord = Infinity;    // best lap on the current TT track's leaderboard (seconds)
@@ -3366,11 +3233,11 @@ function endRace(forcedOrder) {
     const myLap = player.lastLap > 0 ? player.lastLap : (player.best < Infinity ? player.best : 0);
     // Tell the other player what we set BEFORE building the sheet: their side
     // needs it to draw the same classification ours will.
-    if (myLap > 0) netReportQuali(player.driverId, myLap);
-    quali.simulate(qualiDriven(myLap));
+    if (myLap > 0) qualiNet.reportQuali(player.driverId, myLap);
+    quali.simulate(qualiNet.driven(myLap));
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
     qualiSheet.open(quali.rows());
-    refreshQualiGate();
+    qualiNet.refreshQualiGate();
     return;
   }
   if (isTimeTrial()) { buildTTResults(); els.results.hidden = false; return; }
@@ -3702,7 +3569,10 @@ const G = {
   // room grows past two. Empty off-line, which is what keeps every solo mode
   // exactly as it was.
   peerSeats: () => (netLobby && netLobby.peerSeats ? netLobby.peerSeats() : []),
-  onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,
+  onPeerQuali: (...a) => qualiNet.onPeerQuali(...a),
+  onPeerQualiLive: (...a) => qualiNet.onPeerQualiLive(...a),
+  openQualiForNet: (...a) => qualiNet.openQualiForNet(...a),
+  refreshQualiGate: (...a) => qualiNet.refreshQualiGate(...a),
   // raceQuali is a VIEW of the grid rule (quali | rev10). The setter keeps an
   // older peer's boolean meaningful: it only moves the rule across the
   // qualifying line, never off a finer rule that already agrees with it.
@@ -3753,6 +3623,18 @@ const seasonUi = SeasonUI.create(G);
 // QUALIFYING — the model (js/race/quali-model.js: the flying lap plus the simulated field,
 // holding the classification between session and grid) and its sheet (quali-sheet.js).
 const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
+qualiNet = QualiNet.create({
+  $, fmtTime, isQuali,
+  getPlayer: () => player,
+  getCars: () => cars,
+  getNetPlay: () => netPlay,
+  getNetLobby: () => netLobby,
+  openQuali,
+  applyPeerQuali(mine) {
+    quali.simulate(qualiNet.driven(mine));
+    if (!$("quali").hidden) qualiSheet.build(quali.rows());
+  },
+});
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
@@ -3937,9 +3819,9 @@ function quitToMenu() {
   // makes the CONTINUE buttons appear is `season`/`career`, not the mode.
   setFlow("gp"); session = "race";
   quali.clear();   // memory only — persist stays until award/abort so CONTINUE keeps the grid
-  qualiPeers.clear();
+  qualiNet.clearPeers();
   // Title QUIT leaves the session: cancel() tears RTC down; q-back keeps abortQuali().
-  qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiLive.clear(), netLobby.cancel()) : (qualiNetDone = null, qualiLive.clear(), qualiHadRivals = false);
+  qualiNet.hasArmed() ? qualiNet.resetOnQuitWithCancel() : qualiNet.resetSoft();
   try { IncidentSim.reset(); } catch (_) { /* module absent */ }
   try { DebrisWorld.reset(); } catch (_) { /* module absent */ }
   try { delete document.documentElement.dataset.team; } catch (_) { /* no DOM */ }
@@ -6068,7 +5950,7 @@ function updateCar(c, dt, ranked) {
   // purely cosmetic — nothing downstream reads it, so a dropped packet costs a
   // flicker rather than a grid slot.
   if (c.isPlayer && isQuali() && state === "race" && c.lapTime > 0) {
-    netReportQualiLive(c.driverId, c.lapTime, track && track.total ? (c.s || 0) / track.total : 0);
+    qualiNet.reportLive(c.driverId, c.lapTime, track && track.total ? (c.s || 0) / track.total : 0);
   }
 
   // The FIELD's sector bests — the timing screen's purple is the session best
@@ -9502,14 +9384,14 @@ async function openQuali(fresh, netDone) {
   // up, so both paths say the same thing.
   state = "menu";
   quali.clear();
-  qualiPeers.clear();
-  qualiNetDone = netDone || null; qualiLive.clear(); qualiHadRivals = false;   // armed from the ARG: a caller's write lands before this line
+  qualiNet.clearPeers();
+  qualiNet.arm(netDone);   // armed from the ARG: a caller's write lands before this line
   loadTrack(trackIdx);
   makeCars();
   if (fresh) quali.simulate(0); else quali.begin();
   $("quali").classList.remove("q-done");
   qualiSheet.open(quali.rows());
-  refreshQualiGate();   // the gate's state is only knowable once netDone is armed
+  qualiNet.refreshQualiGate();   // the gate's state is only knowable once netDone is armed
 }
 function closeQualiToGrid() {
   qualiSheet.close();
@@ -9526,21 +9408,20 @@ $("q-sim").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
   // Keep the model's time for us — but a rival who has already driven theirs
   // does not lose it because we could not be bothered to drive ours.
-  quali.simulate(qualiDriven(0));
+  quali.simulate(qualiNet.driven(0));
   $("quali").classList.add("q-done");
   qualiSheet.build(quali.rows());
-  refreshQualiGate();
+  qualiNet.refreshQualiGate();
 };
 $("q-go").onclick = () => {
   // Guarded as well as disabled: the button is the only way out of this sheet,
   // and a stale enabled state would grid up without the rival's lap.
-  if (qualiNetWaiting()) { refreshQualiGate(); return; }
+  if (qualiNet.waiting()) { qualiNet.refreshQualiGate(); return; }
   if (soundOn) GameAudio.uiSelect();
   // In a friend race the lobby, not this handler, builds the race: it still
   // holds the connection and has to hand it to NetPlay once the grid exists.
-  if (qualiNetDone) {
-    const go = qualiNetDone;
-    qualiNetDone = null;
+  const go = qualiNet.takeGoCallback();
+  if (go) {
     qualiSheet.close();
     go();
     return;
@@ -9573,7 +9454,7 @@ $("q-back").onclick = () => {
   qualiSheet.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
   session = "race";
-  qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiPeers.clear(), qualiLive.clear(), netLobby.abortQuali()) : ($("race-settings").hidden = false);
+  qualiNet.hasArmed() ? qualiNet.resetOnBackWithAbort() : ($("race-settings").hidden = false);
 };
 
 // ---- customize my team ----
@@ -9979,7 +9860,7 @@ function setPaused(p) {
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
   // never leave an overlay up after resume
   if (!p) { $("advanced").hidden = true; els.howtoplay.hidden = true; $("audioset").hidden = true; $("standings").hidden = true; $("track-detail").hidden = true; $("quali").hidden = true; els.results.hidden = true; }
-  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNetDone); }
+  if (p) { GameAudio.stopEngine(); GameAudio.setSkid(0); $("pm-restart").disabled = !!(netPlay.active() || qualiNet.hasArmed()); }
   else if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); }
   lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }
@@ -10018,7 +9899,7 @@ $("hud-restore").onclick = () => setHudUserHidden(false);
 const { setCamMode, cycleCam, hideCamPicker } = CamModes.create(G);
 
 $("pm-resume").onclick = () => setPaused(false);
-$("pm-restart").onclick = () => { if (netPlay.active() || qualiNetDone) return; els.pausemenu.hidden = false; setPaused(false); startRace(); };
+$("pm-restart").onclick = () => { if (netPlay.active() || qualiNet.hasArmed()) return; els.pausemenu.hidden = false; setPaused(false); startRace(); };
 $("pm-quit").onclick = () => quitToMenu();
 els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("standings").hidden = false; });
 
