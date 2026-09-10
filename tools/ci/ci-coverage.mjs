@@ -116,8 +116,15 @@ const outsideFixedGates = ALL_SPECS.filter((s) => !executed.has(s));
 // and `selected` runs the plan as a matrix. The plan job's `if:` is the gate's
 // trigger; the step script carries the fail-closed strings, so it is read too
 // when the job delegates to it.
+// BOUNDED AT THE NEXT JOB, via the same job table every other reader uses.
+// An unbounded `ci.slice(selectAt)` reads every job appended after `select`
+// as part of it, so a later job's `continue-on-error: true` (the golden-menu
+// trial) flips this gate's reported `blocking` to false while the gate itself
+// is untouched — a parser defect that reads as a CI regression, in the one
+// report that says whether the deploy is gated (first fixed 2026-09-10 on the
+// single `selected` job; the two-job gate re-introduced it).
 const selectAt = ci.indexOf("\n  select:\n");
-const selectJob = selectAt >= 0 ? ci.slice(selectAt) : "";
+const selectJob = (jobs.find((j) => j.name === "select")?.body || "") + "\n" + (jobs.find((j) => j.name === "selected")?.body || "");
 const selectIf = selectJob.match(/^    if:\s*(.+)$/m)?.[1] || "";
 const selectStep = /ci-select-specs-step\.sh/.test(selectJob)
   ? fs.readFileSync(path.join(ROOT, "tools/ci/ci-select-specs-step.sh"), "utf8") : "";

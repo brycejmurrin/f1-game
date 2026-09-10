@@ -375,9 +375,12 @@ test("game keeps the sole prebuilt ribbon usable across envCull and tier changes
   // told to spend less: the crash-strike floor, GRAPHICS: LOW, or the
   // governor's own shed all raise tier(). Without the gate the fused/chunked
   // split above buys nothing on the tier that needs it most.
-  assert.match(source, /const tierOk = typeof PerfGov === "undefined" \|\| PerfGov\.tier\(\) < 3;/);
-  assert.match(source, /if \(allow && tierOk && geo && gfx\.createChunkedMesh\)/);
-  assert.match(source, /"roadChunked", track\.meshes\.road, gfx\.chunkedTrackCoords !== false/);
+  // The lazy build itself lives in the shadow-pass seam (js/render/shared/shadow-pass.js,
+  // _castRibbonSh) — it is what casts the ribbons into the sun map.
+  const shadow = fs.readFileSync(path.join(ROOT, "js/render/shared/shadow-pass.js"), "utf8");
+  assert.match(shadow, /const tierOk = typeof PerfGov === "undefined" \|\| PerfGov\.tier\(\) < 3;/);
+  assert.match(shadow, /if \(allow && tierOk && geo && G\.gfx\.createChunkedMesh\)/);
+  assert.match(shadow, /"roadChunked", G\.track\.meshes\.road, G\.gfx\.chunkedTrackCoords !== false/);
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
   assert.match(tlx, /chunkedTrackCoords:\s*false/);
 });

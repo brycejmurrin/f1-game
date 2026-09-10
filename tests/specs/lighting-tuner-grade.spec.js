@@ -100,10 +100,22 @@ const walkToImageTuner = async (page) => {
     null, { polling: 100, timeout: BOOT_MS });
 };
 
+// HEADLESS before race(): every test in this file reads the tuner's DOM and
+// __apex.lightTune() state — not one samples a pixel — and __apex.headless(true)
+// skips render() (js/game.js). Rendering was the whole cost: on the Linux
+// Smoke runner of a gfx dispatch (runs 3495/3497, shard 4) each of these five
+// tests spent 7-12 min drawing Bahrain frames nobody read, the boot's 45 s
+// waits died at `applyRaceSettings` +226 s, and all five failed twice over
+// on timeouts alone (docs/notes/DEFECT-LEDGER.md). headlessMode persists
+// across race() calls, so the monza re-race below stays headless too.
+async function bootHeadless(page, track) {
+  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate((t) => { window.__apex.headless(true); window.__apex.race(t); }, track);
+}
+
 async function openImageTuner(page) {
   await page.goto("/");
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => window.__apex.race("bahrain"));
+  await bootHeadless(page, "bahrain");
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
   await walkToImageTuner(page);
 }
@@ -285,8 +297,7 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   // The same declared budgets as openImageTuner — these two were the only bare
   // waitForFunction calls in the file, so they inherited the config default
   // while every other boot/track wait had already been measured.
-  await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => window.__apex.race("bahrain"));
+  await bootHeadless(page, "bahrain");
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
   expect(await page.evaluate(() => window.__apex.lightTune().gainB)).toBeCloseTo(1.25);
 

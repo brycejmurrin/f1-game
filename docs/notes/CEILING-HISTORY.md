@@ -2841,6 +2841,42 @@ loop, the shadow batches and the ground/attitude matrices and reaches the
 caches only through the module's surface. No new façade members. Ceilings
 lowered with `ratchets.mjs --update`.
 
+## 2026-09-10 — shadow-pass extraction
+
+`js/game.js` 9041 → 8589 lines (codeLines 4739 → 4559, topLets 146 → 141):
+the three shadow-map passes moved to `js/render/shared/shadow-pass.js`
+(`ShadowPass.create(G, deps)`) — the snap-cached sun map, the per-frame car
+map, the night lamp map, their light-space matrices and snap keys, the
+caster pools and the blob flush. The render loop keeps the live player
+transform (resolved into `shadowPass.livePlayerMat`) and calls beginFrame /
+pushCaster / sunPass / lampPass / flushBlobs; loadTrack calls reset. No new
+façade members. Ceilings lowered with `ratchets.mjs --update`.
+
+## 2026-09-10 — `__apex.govHold` (governor tier pin for two-capture specs)
+
+`js/agent/apex.js` 2812 → 2824 lines (codeLines 2088 → 2092): one hook,
+`govHold(on?)`, over `PerfGov.setTierHold`. Raised deliberately: the hook is
+the only way a spec that diffs two captures of one scene can hold the feature
+ladder at one tier (image-grade tonal tests, lighting-ab fog glow — Metal run
+3469 read a tier shed as a grade curve), and `renderScale(v)` cannot be
+widened to do it without changing what the tuner's pinned modes mean.
+
+## 2026-09-10 — skid stamp moved ahead of the cockpit branch
+
+`js/game.js` 8589 → 8593 lines (codeLines unchanged): the player's
+`skids.stamp` moved from after the body draw to before the cockpit rig's
+`continue`, with four comment lines saying why — in cockpit view (the shipped
+default camera) the stamp was never reached, found by tlx-probes M6's timeout
+diag. Raised deliberately for the comment.
+
+## 2026-09-10 — `softPresentState().post` (the post chain's per-present path)
+
+`js/render/glx/glx.js` 2601 → 2602 lines: one field on an existing accessor,
+so a two-capture spec can prove both captures came off the same post chain
+(image-grade "shadows" on Metal attached a crisp, bloomless baseline and a
+soft, bloomed changed frame — run 3497 — with nothing in the diag to say
+which passes ran for which capture). Raised deliberately by one line; the
+record itself lives in `js/render/glx/post.js` (`_lastPath`), not ratcheted.
 ## 2026-09-10 — merge: car-draw extraction × garage-angles axes
 
 `js/game.js` lines 9062 / codeLines 4745 / gMembers 241 / topLets 146 on the

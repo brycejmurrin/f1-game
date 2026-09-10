@@ -947,6 +947,281 @@ measured the same 23–29 s per click, gave `__apex.garageParts` a garage-closed
 path (`recomputePlayerMods` on the façade) and re-wrote both tests to boot ONE
 race and refit through the hook: body/cockpit eviction 156 s and green.
 
+**2026-09-10 — an extracted module cannot carry game.js's eval-time destructures.**
+Moving the shadow passes into `js/render/shared/shadow-pass.js` carried ~40
+reads of `LT` with them. `LT` is not a global: game.js binds it at eval with
+`const { TUNE_DEFS, LT, buildTrackLights } = LightTune;`, so in any other file
+the name does not exist. Proven in the booted page — a strict function reading
+`LT.shadowRange` at module scope answers `ReferenceError: LT is not defined`
+(`typeof LT` does NOT, which is why a typeof probe is no test of this). Every
+sun-map rebuild would have thrown.
+
+**Corrected 2026-09-10, TWICE — the second correction is the one to read.**
+The first version of this entry claimed nothing in the browser suite would have
+caught the bug. I then re-broke the shadow pass, saw `menu-baseline.spec.js`
+fail on three of its six golden PNGs, and "corrected" the entry to say the
+goldens catch it. That was wrong, and wrong in the most ordinary way: I ran the
+broken case without running the CONTROL. On the fixed tree the same three
+goldens fail, with the same pixel counts to the pixel — 10319, 13520 and 49516
+— so the injected bug changed nothing. Those three were already failing.
+
+The structural reason is in the spec, and it is decisive: before it shoots,
+`menu-baseline` calls `__apex.headless(true)` (stopping the render loop) and
+sets `visibility:hidden` on `#game`. A dead shadow pass cannot appear in a shot
+that stops the loop and hides the canvas. The goldens are a DOM identity gate —
+colour, type, weight, spacing — and they are not, and cannot be made into, a
+renderer gate while they do that.
+
+So the original claim stands: nothing in the browser suite would have caught
+this. `game-vm.test.mjs` passes with the bug in place, and a boot-only smoke
+passes too, because `js/perf/loop-health.js` absorbs the per-frame throw (8
+consecutive / 240 total, then it stops the loop) while `__apex.info().track`
+keeps answering. The guard is the whole net for this class.
+
+**The lesson is not about shadows.** Twice in one session an unverified claim
+about test coverage went into a committed ledger entry, and the fix both times
+was a two-minute control run. A claim that a test WOULD have caught something
+is a claim about a test run that nobody has performed. Perform it, and run the
+clean case in the same breath.
+
+What caught it, before a single test, was
+`tests/unit/global-registry.test.mjs`'s third rule — a call-time read must
+resolve to some manifest global, a host name, or the `KNOWN_EXTERNAL_READS`
+baseline. Fix: `const LT = LightTune.LT;` at `create()`. Verified live rather
+than by inspection: instrumenting `GLX.shadowBegin` and recovering the sun
+ortho half-width from the light VP, `LightTune.LT.shadowRange = 80` gives a
+half-width of 80 and `= 30` gives 30, so the module reads the object the
+tuner mutates. (`M4` is frozen, so patching `M4.orthoTo` to watch the box
+silently no-ops — instrument the backend seam, not the math island.)
+
+**The class, swept across the tree.** 158 real globals; game.js has 646
+top-level names, of which 119 exist ONLY inside it as eval-time destructures —
+`PhysicsConsts` 58 (`VMAX`, `ACCEL`, `BRAKE`…), `CarMesh` 15, `carDraw` 12,
+`GameStore` 6, `LightTune` 3, `Teams` 2. Every one is a landmine for the next
+extraction and every one fails LOUDLY: not a single game.js local shares a name
+with a real global, so there is no silent-wrong-value variant of this bug, and
+the guard sees all of them. Both shipped modules are clean under the same scan:
+every name they read is a global, a `create()` parameter, or their own
+declaration. The residual risk the guard cannot see is a create-time capture of
+a REBINDABLE value — `const LT = LightTune.LT` is safe only because knobs.js
+declares `const LT = {}` and mutates it in place (nothing in `js/` reassigns
+it), whereas capturing `G.gfx` at create would freeze a null, since game.js
+assigns `gfx` during boot. Rebindable state goes through the `G` getter; a
+mutated-in-place object may be captured once.
+
+**2026-09-10 — the renderer group on real Metal: 6 red -> 3, and what the 3 are.**
+Three dispatched runs were needed to obtain a GPU verdict at all (the first two
+were cancelled by hand). Run 3464 reported six failures with the adapter census
+GREEN, so they are real-GPU results, not SwiftShader wearing Metal's name.
+Four had causes readable from the run's own diagnostics and are fixed:
+
+- `shadow.box` in `tools/lighting/ab-lighting.mjs` still named `js/game.js` for
+  an expression the shadow-pass carve moved. MINE. Nothing local caught it: the
+  assertion lives in a `gfx`-group browser spec, which the change-aware gate can
+  never select. `tools/lighting/slider-effect.mjs` had the same miss with no
+  test at all behind it.
+- image-grade "blacks" read NaN because the governor's auto-res resized the
+  framebuffer mid-test (scale 1 -> 0.7; captures 186,624 / 147,456 / 112,896 px;
+  worst frame 8.5 s, 98 slow of 264). The suite diffs pixel ARRAYS, so `boot()`
+  now pins the scale. Confirmed by run 3469: both captures 230,400 px.
+- TLX M8 slept 600 ms then read `postState()`, whose block flags are written at
+  the END of a pass and initialised false — so an early read says "every block
+  off", which is what Metal reported WITH the governor at tier 0 and no
+  shedding. That also kills the bloom-shed theory this ledger used to carry.
+  Now a condition wait; green in 3469.
+- lighting-ab pinned `floodEmit` at 0.78, but the code is
+  `min(1, LT.floodEmitMul * 0.78)` and qatar|night|dry carries 0.11 —
+  0.11 x 0.78 = 0.0858 exactly. Red on every runner since that palette moved.
+  Now asserts the contract against the live multiplier.
+
+**The three that remain are all "a real GPU is not SwiftShader", and none is
+bent to pass.** Two were known; the third was hidden behind the first, because
+the image-grade block is `mode: "serial"` and a failure skips the rest of it —
+so fixing blacks REVEALED it rather than caused it:
+
+| failure | on Metal | on this container |
+|---|---|---|
+| TLX M6 skid batch | premise holds (off-road, x=9.21, speed 29) but marks never record: `marks: 0, skidVerts: 0` | passes |
+| lighting-ab night fog glow | foggy region comes back DARKER than dry (67.7 vs an 85.7 bar; 72.0 vs 104.8 on retry) and the dry reading itself moves run to run | passes |
+| image-grade "shadows predominantly change dark pixels" | the knob moves BRIGHT pixels more: dark 35.7, bright 46.7, wanted dark >= 2x bright; darkSigned +34.8, brightSigned -44.1 | passes (verified 2026-09-10) |
+
+Each needs an iteration loop on a Metal runner, which this container cannot
+host. The rule that keeps them honest: never widen one of these tolerances to
+get green — a software-GL pass is not evidence about a player's GPU, and a bent
+bar would erase the only signal that says so.
+
+**Re-read against the code (same day): two of the three were test defects,
+and "a real GPU is not SwiftShader" was the wrong frame.** The image-grade diag
+in 3469 carried the answer — `gov.tier 2, autoShed 2` on the first attempt,
+`tier 4, autoShed 4` on the retry. A shadows-lift curve cannot darken
+highlights by 44/255; `autoTier() >= 4` zeroing bloom/SSAO/godray
+(`js/game.js` `po.*`) and `tier() >= 2` dropping SSR can. The test compared a
+baseline at one tier with a "changed" frame at another. The fog test is the
+same shape: `frame.lampFog` needs `frame.lights`, whose budget `tierShed()`
+cuts at tier >= 1 (`js/lighting/frame-lights.js`), and the lamp halos are
+bloom — the dry capture lands right after boot and the foggy one 3 s later on a
+runner still shedding, which reads as fog darkening the sky and as "dry"
+moving 10 points between attempts. Both pass here only because SwiftShader has
+bottomed out at one tier before the first capture — a coincidence, not
+evidence. And the scale pin from the previous entry made both WORSE:
+`governor.js` falls straight through to the ladder once the scale lever is
+gone ("the ladder is the only lever left"). No pin existed — `setUserTier` is a
+floor. Added `PerfGov.setTierHold` / `__apex.govHold(true)` (no shed, no
+restore), both specs hold the tier and assert it EQUAL at the two captures
+before comparing pixels, so the next such failure names the governor.
+M6 is not explained by this: `skids.draw` has no tier gate, the stamp lands on
+the first laying frame (`js/fx/skidmarks.js`), and the premise numbers were
+byte-identical to this container's — the timeout now dumps `state`, `offroad`,
+`onKerb`, `skidIntensity`, `fxState()` and the governor so the next Metal run
+says which link broke. Lesson for the table above: read the diag the failure
+already printed before calling a failure hardware.
+
+*M6, same day, from that diag run solo here:* `cam: "cockpit"` with every
+gate term true (state race, offroad true, onKerb false, skidIntensity 0.5,
+speed 29) and `marks: 0`. The stamp sat after the body draw, past the cockpit
+rig's `continue` (`cockpitRigOnly`), and the shipped default camera is
+`CAM_MODES[3]` = COCKPIT — so with the default camera the player never laid a
+mark; rubber appeared only after a camera switch. A GAME defect, on every
+backend and every GPU, that only the TLX spec happened to drive in the default
+camera. Fixed by moving the stamp ahead of the branch (world state, not a
+draw). The Metal "premise holds, marks never record" row above was this.
+Confirmed on Metal by run 3477 (d6d05c7): M6 green in 32.7 s.
+
+*Run 3477 also settled the other two rows — except that it did not settle
+image-grade.* Run 3484 (faf182d) failed "shadows" again with `tier 0,
+tierHold true`, scale 1, equal px, and the SAME numbers as 3469 (darkSigned
++34.8, brightSigned −43.4), and "blacks" read crushed blacks as +9.7
+BRIGHTER on a retry after passing its first attempt. The tier was never the
+image-grade cause (the fog and M6 stories above stand on their own
+evidence). What moves between the two captures is the AI FIELD: boot()
+parks the player and park() shoves the field 600 m back, and on a 30 fps
+runner it drives back through the frame in the ~20 s between captures —
+the bright-pixel set is 2 % of the frame and it is the cars. SwiftShader
+at 1 fps advances the dt-clamped sim a few metres, so nothing enters and
+the suite passes here. boot() now freezes physics (rendering and the grade
+stay live) and the diag records the present generation and the freeze.
+Run 3488 (496357e) then failed "shadows" FROZEN — `frozen: true`, gen 6 —
+with the same numbers to a decimal (+34.87 / −43.34), and "blacks" read
++15.1 for blacks +1 and +10.8 for blacks −1: the changed captures are
+brighter in the darks whichever way the knob goes. Knob-independent means
+the two captures are of two SCENES, and the one thing that changes a parked,
+frozen, clock-held scene by itself is the baked asset pack landing: its
+texture-array upload replaces every procedural material, and the Metal logs
+put it at 9-14 s after boot — inside a 30 fps box's boot-to-baseline window,
+outside SwiftShader's. boot() now waits for the pack (uploaded, absent or
+failed; a pack still in flight after 90 s is pinned off with matTex(0)) and
+the diag records the pack state at each capture. Three wrong stories in a
+row for this one test — tier, field, and now pack — each disproved by the
+diag I had added for the previous one, which is the right way round.
+Run 3493 (pack wait in): "shadows" red on BOTH attempts, pack uploaded at
+the capture, same signature (+33.4 / −46); run 3495: red on attempt 1
+(+32.4 / −38.6), green on the retry, job green — and the renderer job only
+uploaded its report on failure, so the two JPEGs the test now attaches were
+unretrievable exactly when they mattered. The upload is `always()` now,
+and the diag records the capture state at the baseline as well as the
+changed frame. Open: a deterministic-looking hardware-only signature that
+comes and goes per ATTEMPT (a fresh worker each retry) — the pictures from
+the next run are the next step, not another theory.
+The pictures (run 3497, `shadows-baseline.jpg` / `shadows-changed.jpg`
+attached by the test): the BASELINE is crisp and bloomless — hard halo
+edges, no glow on the LEDs — and the CHANGED frame is soft and bloomed. Two
+post chains, not a grade; here both captures are the soft kind. post.js now
+records what each present() actually did (`_lastPath`: fxaa, upscale,
+toLdr, bloom, ao, the readback buffer) and the diag carries it for both
+captures, so the next hardware failure names the pass that differed.
+Run 3500 (17bbf07) never got there: after 12 green TLX tests both workers
+wedged in Playwright's "Create context" — before any spec code ran — and
+sat 25 min each on the 30 min per-test budget (`--timeout=600000` x
+test.slow()); cancelled by hand. A Chromium/GPU-process hang on the macOS
+runner, not the diff. Re-dispatched as 3504: 48/48 green, no retries —
+the first clean Metal run; "shadows" passed first time, so it is an
+intermittent, and the post-path diag prints when it next fails.
+
+*The Linux Smoke matrix on a `gfx` dispatch (runs 3495 and 3497, shard 4,
+75-78 min each):* the six lighting tests timed out identically both times
+— `applyRaceSettings tod=night` 226 s after page load, `wx=fog` 353 s, the
+45 s boot waits and 420 s budgets long gone — and webgl-probes passed at
+82-135 s a test. No assertion fired in either run; the box is ~10x this
+container and the group's only real signal is the Metal job.
+The fix was in the tests, not the matrix: not one of those six reads a
+pixel — five assert the tuner's DOM and lightTune() state, the sixth
+lightState().exposure — and `__apex.headless(true)` skips render()
+outright. Booting them headless took the seven state-only tests (the
+"weather() applies lighting live" one included) from ~3 min each here to
+61 s for all seven; the fog-floor test alone went 726 s → 20 s. The M4/M8/
+M9 budget-aware waits are capped at 300 s so the gpu config's 600 s x
+test.slow() cannot let a dead probe burn 30 min per attempt. Skipping the
+Smoke matrix for renderer groups stays on the table for the pixel specs,
+no longer urgent. Measured on run 3505 (ef46b9e): all four Linux shards
+green, shard 4 in 11 min (was 75-78).
+
+*Run 3505's Metal job* moved the image-grade intermittent again: "blacks"
+attempt 1 (crushed +9.7, the same brighter-either-way number as 3484/3488)
+and "red gain" on its retry (green and blue moved 19.5 alongside red: a
+whole-frame change, not a channel gain) — neither carried the post-path
+diag, only "shadows" did. And the PASSING shadows pair the run attached is
+crisp in BOTH frames — no bloom, hard halo edges, the lift visible in the
+cockpit — so on Metal the ordinary capture is the crisp kind and a failing
+pair is one where a capture came out soft and bloomed; here both are
+always soft. All four two-capture tests now share one helper: frames
+attached, capture state (gen, freeze, pack, post path) at each, and the
+premise — same tier, same post path, a newer present — asserted before
+any tonal maths, so the next failure names the pass that flipped.
+Run 3509 (87720ea, the merged head) answered: "blacks" failed on both
+attempts WITH THE PREMISE INTACT — `cap0.post` and `cap1.post` identical
+(fxaa true, upscale false, toLdr true, bloom 0.6, ao 0.95, readFb
+"default"), gen 4 → 6, frozen, pack uploaded — and crushed blacks read
++10.9 brighter, then +5.9. Not two post chains. The tell is
+`readFb: "default"`: with FXAA on, the soft-present readback reads the
+DEFAULT framebuffer after the draw. SwiftShader keeps that buffer; on
+ANGLE-Metal with preserveDrawingBuffer false it is a swap-chain surface
+whose contents after the draw are not guaranteed — hardware-only,
+attempt-dependent, knob-independent, and a "changed" frame that looks like
+a differently composed buffer (3497), all of it. The readback must read an
+FBO the chain wrote, never the default framebuffer.
+The "Create context" wedge recurred on the same run (2 of the last 4
+Metal runs), both times while the other worker was inside M9's env probe;
+the job sat 27 min on the 30 min per-test budget before a hand cancel.
+The Metal job runs ONE worker now (two Chromium instances on one shared
+GPU is the common factor of both wedges). And one more premise on the
+image-grade pair, the last thing that can change a frozen, clock-held,
+pack-loaded frame by itself: the env probe's ready state — on hardware
+the cube is real and its reflections brighten the dark cockpit interior,
+exactly the range "blacks" reads; SwiftShader clears the faces.
+Run 3515 (8fbbdf3), the first with one worker: 48/48, no retries,
+10.0 min — no slower than the two-worker runs (10-15 min), and no wedge. The fog-glow row stayed red WITH `tier [0,0]` —
+dry 80.1, foggy 72.6, the same −9 % this container reads (65.4 → 60.1) — so
+it was never the tier either: the sampled band is pure sky, the sky shader
+carries no lamp-fog term (`glsl-sky.js`), and what the test measured was the
+night-fog exposure floor, cut from the daytime 1.08 to 0.95 on 09-08 ("night
+must stay night", the sibling test in the same file) plus the +0.35 cloud
+cover fog adds. Two tests in one file asserted opposite things about the same
+pixels; the glow one was measuring exposure. Rewritten to A/B the lamp-fog
+knobs on one fogged frame (below). Two more from the same run: M9's env
+probe reached face 2 of 6 in 60 s at tier 0 because the page rendered THREE
+frames in that window (one 93 s frame — three's WebGL2-on-ANGLE program
+compile); the Linux smoke shard died the same way at face 4 (56 s frame).
+The producer runs every 4th frame live and EVERY frame frozen, so the spec
+now freezes the parked car first — and the wait counts PRESENTS (ten past
+the park, on what is left of the test's budget), not seconds: frozen, this
+container still stood at face 5 with seven presents in a 60 s clock (one
+73 s frame) while a parallel worker ran. image-grade red gain read 26.2 vs
+a 29.6 bar once and passed its retry with no diag; it carries one now.
+M8's 30 s post-chain wait burned a retry on both Metal runs (3477, 3484) at
+42 s with the chain not yet presented once — the same first-frame compile —
+and now spends the test's remaining budget like M9.
+
+The fog-glow rewrite: one Singapore night-fog frame, clock held, tier held,
+physics frozen; `lampFogBase`/`lampFogHaze` A/B'd OFF/ON/OFF/ON on the mid
+band (distant facades and the fog wall, where the fog factor is largest);
+the glow must add ≥ 3 % both times. Green here on the first run; the A/B
+numbers attach to the report as `fog-glow-ab` on a pass too. What the
+throwaway measurement before it showed, for the record: with raw
+`page.screenshot` (no wait for a fresh present) three captures of one scene
+read 60 → 78 → 82 with only time between them — a capture that lags the
+knob write is a measurement of nothing.
+
+
 ## 8. Backlog
 
 Deferred with reasoning, none lost:

@@ -1697,3 +1697,87 @@ the five WGSL rules shipped a defect on the owner's iPhone in one week. Four
 hours went into a WebGPU-vs-WebGL2 "gap" in the census on 2026-09-08 before
 the harness was re-read: the two TLX legs run DIFFERENT present paths (a
 readback against a direct present), and `headless=true` printed on both.
+
+## 2026-09-10 — what the change-aware gate can never run, measured by source area
+
+The 180 s per-test rule above is a per-SPEC opt-out. Nobody had aggregated it by
+SOURCE AREA, and the aggregate is the thing worth knowing:
+
+| | |
+|---|---|
+| specs in `tests/specs/` | 116 |
+| can ever be SELECTED by the change-aware gate | 65 |
+| never — declares a per-test budget above the gate's 180 s | **51 (44%)** |
+| the gate's whole capacity, at 15 min surviving one failure | 10 tests |
+
+Routing each source directory through `pick()` and classifying its specs, FOUR
+areas come back with ZERO eligible specs — every spec they route to is excluded
+by its own declared budget:
+
+| source area | browser groups | routed specs | eligible |
+|---|---|---|---|
+| `js/render/glx/` (the SHIPPED WebGL2 path) | `gfx` | 6 | **0** |
+| `js/render/webgpu/` | `gfx` | 6 | **0** |
+| `js/render/three/` | `gfx` | 6 | **0** |
+| `js/lighting/` | `gfx` | 6 | **0** |
+
+The `gfx` group is exactly six specs — instanced-draw 420 s, webgl-probes 240 s,
+lighting-ab 420 s, image-grade-visual 480 s, lighting-tuner-grade 300 s,
+tlx-probes 540 s — and all six sit above the gate. So a push that changes the
+shipped renderer or the lighting knobs receives NO blocking browser spec: the
+change-aware gate selects nothing (measured on the shadow-pass PR: 69 specs
+routed, 0 selected), and `renderer-macos` is gated to `schedule` or an explicit
+`renderer_macos: true` dispatch. What remains is the four Smoke shards, which
+assert the page boots and `__apex` answers.
+
+That residue is weaker than it sounds. Re-breaking the shadow pass on purpose
+(see the LT entry in DEFECT-LEDGER) showed `js/perf/loop-health.js` absorbing
+the per-frame throw — 8 consecutive / 240 total, then it stops the loop — while
+`__apex.info().track` keeps answering throughout. Smoke passes; the game is
+dead within seconds of driving.
+
+**A correction, and a measurement that inverts ci.yml's stated reason.**
+An earlier draft of this note said `menu-baseline.spec.js` catches a dead render
+pass. It does not. The control run says so — the same three goldens fail on the
+fixed tree with identical pixel counts (10319 / 13520 / 49516) — and the spec
+says why: it calls `__apex.headless(true)` and hides `#game` before shooting, so
+it is a DOM identity gate by construction and can never see a renderer fault.
+Routing renderer or lighting changes to `baseline` would therefore NOT close the
+hole above. That idea is dead; the hole needs an instrument that looks at the
+canvas with a per-test budget under 180 s.
+
+The trial job did earn its minutes, though, by killing a different assumption.
+ci.yml keeps `test:baseline` out of the gate because "golden images are
+environment-sensitive… if GitHub's runner renders even slightly differently".
+Measured, that fear is three orders of magnitude too large:
+
+| golden | diff on the GitHub runner | diff in this container | between them |
+|---|---|---|---|
+| title-phone-landscape | 49,499 px | 49,516 px | **17 px** |
+| garage-phone-landscape | 10,318 px | 10,319 px | **1 px** |
+
+The runner and the dev container agree with each other to within 1-17 pixels
+and BOTH disagree with the committed PNGs by 10k-49k, against a 1% tolerance.
+The images are portable. They were STALE — three of the six had not been
+re-blessed since the UI moved, and they were failing here before any of this
+work started.
+
+**RESOLVED the same day.** What had actually moved was garage CONTENT, not
+rendering: budget 600 -> 780 cr, a new `Torque Curve` catalog entry displacing
+`Performance`, prices 30 -> 35 cr, stat chips gaining percentages, and Stock's
+description suppressed by `#cs-inner[data-density="compact"]` (which trades
+descriptions for rows on a short landscape sheet — that one had to be checked
+rather than assumed, since a missing description is what a regression would
+look like too). The three were re-blessed, and the trial job's NEXT run (3464)
+passed all six on a GitHub runner — portability confirmed by experiment, not
+just by arithmetic. The spec also now waits on `document.fonts.ready` before
+shooting: precautionary, since `font-display: swap` is a timing variable a
+screenshot suite should not carry, and NOT the diagnosis here.
+
+`test:baseline` is therefore gateable on its own merits as a DOM identity gate.
+Follow ci.yml's own prescription before wiring it in: leave the trial
+non-blocking for a few more PRs to confirm the six hold, then add the group to
+the gate. It remains a different job from covering the renderer.
+
+Reproduce the table: `maxDeclaredTimeout(f)` from `tools/ci/select-specs.mjs`
+over `tests/specs/*.spec.js`, and `pick(["<dir>/x.js"])` for the routing.

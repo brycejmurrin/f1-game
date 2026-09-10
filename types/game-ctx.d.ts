@@ -639,6 +639,7 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
 declare const AeroZones: GameModuleFactory;
 declare const Collide: GameModuleFactory;
 declare const CarDraw: GameModuleFactory;
+declare const ShadowPass: GameModuleFactory;
 declare const AgentView: GameModuleFactory;
 declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;

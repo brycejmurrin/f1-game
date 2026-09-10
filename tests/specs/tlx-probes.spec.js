@@ -170,6 +170,7 @@ test.describe("TLX — boot", () => {
   });
 
   test("M8 post chain resolves a day race (HDR target, bloom live)", async ({ page }) => {
+    const t0 = Date.now();   // the post-chain wait below spends what is LEFT of this test's budget
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
@@ -177,7 +178,24 @@ test.describe("TLX — boot", () => {
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForTimeout(600);
+    // WAIT FOR A POST PASS, do not sleep 600 ms and hope. tlx-post.js writes
+    // its `_last` block flags at the END of a completed pass and initialises
+    // them all false, so reading too early reports "every block off" — which is
+    // indistinguishable from a chain that is genuinely dead, and is exactly
+    // what run 3464 reported on Metal (on:true, hdr:true, targets 1280x720,
+    // every block false, governor at tier 0 with no shedding). A condition wait
+    // separates the two: if the chain really never arms, this throws with the
+    // same diag attached instead of asserting on an unwritten default.
+    // AGENTS.md: a waitForFunction on a rendering page needs { polling: 100 }.
+    // On what is LEFT of the budget, not 30 s: the first TLX frame on the Metal
+    // runner is a program compile of up to 93 s (three's WebGL2-on-ANGLE path,
+    // docs/notes/TESTING-FIELD-NOTES.md), and runs 3477 and 3484 both burned
+    // a retry here at 42 s with the chain simply not yet presented once.
+    const left = Math.min(300_000, Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000));
+    await page.waitForFunction(
+      () => { const p = GLX.__tlx && GLX.__tlx.postState(); return !!(p && p.on && p.targets[0] > 0 && p.blocks.fxaa); },
+      null, { polling: 100, timeout: left },
+    ).catch(async () => { throw new Error("TLX post chain never completed a pass in " + Math.round(left / 1000) + " s: " + await tlxDiag(page)); });
     const st = await page.evaluate(() => GLX.__tlx.postState());
     const diag = await tlxDiag(page);
     expect(st.on, diag).toBe(true);
@@ -337,7 +355,28 @@ test.describe("TLX — boot", () => {
     expect(Math.abs(drive.x)).toBeGreaterThan(8);
     // Two presented frames, and a TLX frame on a built Monza under SwiftShader
     // is seconds, not milliseconds — so this bound is generous on purpose.
-    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().skidVerts > 0, null, { polling: 100, timeout: 60_000 });
+    // ON TIMEOUT, SAY WHICH LINK BROKE. Metal run 3469: the premise above held
+    // with numbers byte-identical to SwiftShader (x 9.2077, speed 29.277) and
+    // skidVerts stayed 0 for 60 s on both attempts, and the timeout's apex-state
+    // dump is cut before any field that could tell (a) the stamp gate in
+    // js/game.js — `state === "race"`, `(skid > 0.25 || c.offroad) && speed > 10`,
+    // where offroad is |x| > hw && !onKerb (js/game.js:4136) — from (b) a
+    // stamped ring buffer the TLX batch never drew (drawSkidBatch returns
+    // early on a null fx). `cam` is there because the cockpit rig `continue`s
+    // past the stamp (js/game.js, cockpitRigOnly) — a persisted camera choice
+    // is the one term of (a) that lives outside the physics. This diag reads
+    // every term of (a) and the fx counters of (b) so the next hardware run
+    // names the link, not the backend. Read here on a loaded box (load 9,
+    // 6 frames rendered in the whole 60 s window): every term true, batch
+    // empty — that is the machine, not the defect; rule 8 in AGENTS.md.
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().skidVerts > 0, null, { polling: 100, timeout: 60_000 }).catch(async (e) => {
+      const d = await page.evaluate(() => {
+        const a = window.__apex, p = a.physState() || {};
+        const c = a.carState().find((k) => k.isPlayer) || {};
+        return { state: a.info().state, frozen: a.freeze(), cam: (a.camera() || {}).mode, speed: p.speed, x: p.x, offroad: c.offroad, onKerb: c.onKerb, skidIntensity: c.skidIntensity, fx: GLX.__tlx.fxState(), gov: a.renderScale() };
+      }).catch((err) => ({ diagFailed: String(err) }));
+      throw new Error("no skid mark reached the TLX batch in 60 s: " + JSON.stringify(d) + " — " + e.message);
+    });
     const st = await page.evaluate(() => GLX.__tlx.fxState());
     expect(st.skidVerts).toBeGreaterThan(0);
     expect(st.skidVerts % 6).toBe(0);          // 6 verts per mark
@@ -374,6 +413,7 @@ test.describe("TLX — boot", () => {
   });
 
   test("M9 env probe captures a full cube on a parked race (car reflections live)", async ({ page }) => {
+    const t0 = Date.now();   // the presents wait below spends what is LEFT of this test's budget
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     // TLX reads apex26.tlxEnvProbe ONCE at create (js/render/three/tlx.js
@@ -391,15 +431,41 @@ test.describe("TLX — boot", () => {
     // is about the probe WORKING when a player turns it on, so turn it on.
     await page.evaluate(() => window.__apex.lightTune({ carEnvCube: 0.6 }));
     await page.evaluate(() => window.__apex.park(0.1));
-    // A full 6-face cube takes ~12 frames (one face every OTHER frame); wait on
-    // the ready flag rather than a fixed sleep (SwiftShader is slow).
+    // FREEZE, so the probe captures a face EVERY frame. Live, js/game.js gates
+    // the producer on `(frozen || (_frameNo & 3) === 0)` — one face per four
+    // frames, 24 frames for the cube. Metal run 3477 (d6d05c7): tier 0, no
+    // shed, and the page rendered THREE frames in the 60 s wait (one frame of
+    // 93 s: three's WebGL2-on-ANGLE program compile, docs/notes/
+    // TESTING-FIELD-NOTES.md), so the cube stood at face 2 when the wait died;
+    // the Linux smoke shard died at face 4 the same way (56 s frame, 7 frames).
+    // Frozen, six frames finish the cube. The probe reads a parked car, so
+    // nothing the freeze holds still is part of what it measures.
+    await page.evaluate(() => window.__apex.freeze(true));
+    // WAIT IN PRESENTS, NOT SECONDS. Frozen, the cube needs six presents; this
+    // container rendered SEVEN frames in a 100 s wait (one 73 s frame) and
+    // stood at face 5 when a 60 s clock ran out, the Metal runner three frames
+    // (93 s frame, face 2). A clock measures the box. Ten presents past the
+    // park either finish the cube or prove the probe is not capturing — and
+    // the assertion below says which, with the env counters in the message.
+    // The clock on the wait is whatever the test has LEFT (test.slow() gives
+    // this file 360 s), so a slow boot and a slow wait share one budget and
+    // the failure names the frame count, not "Test timeout of 360000ms" —
+    // capped at 300 s: the gpu config's 600 s x test.slow() would otherwise
+    // let a probe that never captures burn 30 min per attempt on Metal.
+    const p0 = await page.evaluate(() => GLX.__tlx.backendState().presents);
+    const left = Math.min(300_000, Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000));
     try {
-      await page.waitForFunction(() => {
+      await page.waitForFunction((p0) => {
         const e = GLX.__tlx.envState();
-        return e && e.on && e.ready;
-      }, null, { polling: 100, timeout: 60_000 });
+        if (e && e.on && e.ready) return true;
+        return GLX.__tlx.backendState().presents - p0 >= 10;
+      }, p0, { polling: 100, timeout: left });
     } catch (e) {
-      throw new Error("env probe never became ready: " + await tlxDiag(page) + "\n" + (e && e.message));
+      throw new Error("fewer than ten presents in " + Math.round(left / 1000) + " s — the box, not the probe: " + await tlxDiag(page) + "\n" + (e && e.message));
+    }
+    {
+      const e = await page.evaluate(() => GLX.__tlx.envState());
+      if (!(e && e.on && e.ready)) throw new Error("env probe not ready after ten presents (faces " + (e && e.begins) + "/6): " + await tlxDiag(page));
     }
     const st = await page.evaluate(() => ({
       env: GLX.__tlx.envState(),
@@ -441,12 +507,17 @@ test.describe("TLX — boot", () => {
   });
 
   test("M4 shadow-state hooks report through the TLX surface (car + lamp)", async ({ page }) => {
+    const t0 = Date.now();   // the arm wait below spends what is LEFT of this test's budget
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("monza"));
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
     await page.evaluate(() => window.__apex.park(0.1));
-    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.carShadowState().arms > 0, null, { polling: 100, timeout: 30_000 });
+    // On what is LEFT of the budget, not 30 s — the first TLX frame on the
+    // Metal runner is a program compile of up to 93 s (see M8/M9), and run
+    // 3493 burned a retry here at 46 s with no frame yet presented.
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.carShadowState().arms > 0, null,
+      { polling: 100, timeout: Math.min(300_000, Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000)) });
     const st = await page.evaluate(() => ({ car: GLX.carShadowState(), lamp: GLX.lampShadowState() }));
     expect(st.car.enabled).toBe(true);
     expect(st.car.arms).toBeGreaterThan(0);

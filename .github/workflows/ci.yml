@@ -1088,11 +1088,20 @@ jobs:
       # --timeout=600000 is a CEILING for the first runs, not a tolerance: the
       # specs keep their own budgets, and the job cap is the real backstop.
       - name: Renderer specs (test:gfx)
+        # ONE worker on the Metal box. Two Chromium instances on one shared GPU
+        # wedged Playwright's "Create context" twice in four runs (3500, 3509),
+        # both times while the other worker was inside M9's env probe, and each
+        # sat 27 min on the 30 min per-test budget until a hand cancel. One
+        # worker costs ~8 min of wall time; a wedge costs the run.
         env:
-          APEX_WORKERS: 2
+          APEX_WORKERS: 1
         run: npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000
-      - name: Failure artifacts
-        if: failure()
+      # ALWAYS, not failure(): a spec that fails its first attempt and passes
+      # the retry leaves the job green and its report — the attached frames
+      # image-grade "shadows" compares, the retry's diag — unretrievable. Run
+      # 3495 (2026-09-10) was exactly that; the pictures are the whole point.
+      - name: Run artifacts (report, traces, attached frames)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-artifacts-renderer-macos
@@ -1269,3 +1278,86 @@ jobs:
             artifacts/report-*/
           retention-days: 7
           if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # THE GOLDEN-MENU TRIAL. NON-BLOCKING BY CONSTRUCTION — do not add it to any
+  # `needs:`, and do not remove `continue-on-error` without the comparison this
+  # job exists to produce.
+  #
+  # The header above already names `test:baseline` as the group that arguably
+  # belongs in the gate and is not in it, and gives the reason: the six goldens
+  # were rendered in a dev container, so a font fallback or a different
+  # SwiftShader build on GitHub's runner would make the gate permanently red.
+  # It also prescribes the way in — "run it on a PR as a non-blocking step and
+  # compare, not by putting it straight into `needs:`". This is that step.
+  #
+  # WHAT THIS JOB ALREADY ESTABLISHED (first run, 2026-09-10, run 3457):
+  # the goldens are PORTABLE and STALE, which is the opposite of the assumption
+  # above. The runner and the dev container agree with each other to within 1-17
+  # pixels and BOTH disagree with the committed PNGs by 10k-49k against a 1%
+  # tolerance (title-phone-landscape 49,499 on the runner vs 49,516 here;
+  # garage-phone-landscape 10,318 vs 10,319). Three of the six have simply not
+  # been re-blessed since the UI moved, and they fail in a fresh container too.
+  # So the way in is: RE-BLESS the six, keep this job non-blocking for a few
+  # more PRs to confirm they hold, then gate on it as a DOM identity gate.
+  #
+  # IT IS NOT A RENDERER GATE AND CANNOT BECOME ONE. The spec calls
+  # __apex.headless(true) and hides #game before it shoots, so a dead render
+  # pass is invisible to it — measured by re-breaking the shadow pass and
+  # getting byte-identical failures (docs/notes/DEFECT-LEDGER.md). The renderer
+  # coverage hole in docs/notes/TESTING-FIELD-NOTES.md (four source areas with
+  # zero eligible specs, the shipped WebGL2 path among them) needs a canvas
+  # instrument with a per-test budget under the gate's 180 s. Do not route
+  # renderer or lighting paths here expecting cover they cannot give.
+  baseline-trial:
+    name: Golden menus on a runner (trial, non-blocking)
+    # PRs and dispatches only: never a push, and never the Pages call, whose
+    # conclusion gates the deploy.
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Cache Chromium
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Chromium on cache miss
+        if: steps.pwcache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Golden menus (test:baseline)
+        id: goldens
+        run: npm run test:baseline
+      # ALWAYS, not `if: failure()`: a green run still has to hand over what it
+      # rendered, because "it passed here once" is the evidence step (b) needs.
+      - name: The rendered goldens, and any diff
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-menus-runner
+          path: |
+            tests/specs/menu-baseline.spec.js-snapshots/
+            artifacts/test-results-*/
+            artifacts/report-*/
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Verdict
+        if: always()
+        run: |
+          if [ "${{ steps.goldens.outcome }}" = "success" ]; then
+            echo "GOLDENS MATCH on ubuntu-latest. One data point for step (b);"
+            echo "collect a few across PRs before routing renderer/lighting here."
+          else
+            echo "GOLDENS DIFFER on ubuntu-latest. This job is non-blocking and"
+            echo "the workflow stays green. Download the golden-menus-runner"
+            echo "artifact and compare -actual/-diff against the committed PNGs:"
+            echo "the IMAGES are the problem to solve before any routing change."
+          fi

@@ -41,9 +41,17 @@ const at = (rel) => join(ROOT, rel);
 // and these captures cost up to 150 s each under contention.
 test.describe.configure({ timeout: 420_000 });
 
-async function boot(page, track, tod, wx, frac) {
+// `headless: true` for a test that reads lightState()/lightTune() and never
+// a pixel: __apex.headless(true) skips render() (js/game.js), and rendering
+// was the whole cost on the Linux Smoke runner of a gfx dispatch — the fog
+// floor test below spent 726 s drawing Vegas-night frames nobody sampled and
+// died on its budget twice over (runs 3495/3497, shard 4). applyRaceSettings
+// writes frame.exposure/sunColor with or without a render; frame.lights is
+// built on the render path, so the lamp-budget test keeps rendering.
+async function boot(page, track, tod, wx, frac, { headless = false } = {}) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  if (headless) await page.evaluate(() => window.__apex.headless(true));
   await page.evaluate((t) => window.__apex.race(t), track);
   await page.waitForFunction(() => window.__apex.info && window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
   if (tod) await page.evaluate((t) => window.__apex.setTimeOfDay(t), tod);
@@ -102,7 +110,7 @@ test("A/B knob catalog matches the source exactly (1 hit per knob)", () => {
 });
 
 test("weather() applies lighting live (fog mutes sun + lifts exposure)", async ({ page }) => {
-  await boot(page, "monza", "day", "dry");
+  await boot(page, "monza", "day", "dry", undefined, { headless: true });
   const before = await page.evaluate(() => window.__apex.lightState());
   await page.evaluate(() => window.__apex.weather("fog"));
   await page.waitForTimeout(300);
@@ -112,24 +120,53 @@ test("weather() applies lighting live (fog mutes sun + lifts exposure)", async (
   expect(after.exposure).toBeGreaterThanOrEqual(1.08);
 });
 
-test("night fog GLOWS around lamps (fog wall brighter than dry-night sky band)", async ({ page }) => {
-  // Small viewport: the assertion is a region MEAN (resolution-independent),
-  // and Singapore night at 720p renders too slowly on software-GL runners for
-  // any screenshot to complete — 360p keeps each capture inside its timeout.
+test("night fog GLOWS around lamps (the lamp-fog knobs add luminance to one fogged frame)", async ({ page }) => {
+  // WHAT THIS MEASURES, AND WHAT IT USED TO. The lamp-fog glow is the lit
+  // shader's `lampFogC` term (js/render/glx/shaders/glsl-lit.js, gated on
+  // uLampFog > 0 = LT.lampFogBase / lampFogHaze via frame.lampFog in
+  // js/game.js). It lives on SURFACES; the sky shader has no lamp-fog term at
+  // all. The previous version of this test sampled the dark SKY band and
+  // asserted foggy > dry * 1.1 — which held only while the night-fog exposure
+  // floor was the daytime 1.08, and went red on 2026-09-08 when that floor was
+  // cut to 0.95 ("night must stay night", the sibling test below). It was
+  // measuring exposure and cloud cover, and the +10 % bar it failed on Metal
+  // (run 3469, 3477: dry 80 -> foggy 72.6, tier 0 both) and on this container
+  // (65.4 -> 60.1) was the same −9 % on both. So: ONE fogged night frame, the
+  // glow knobs A/B'd on it, everything else pinned — the clock (cloud drift),
+  // the governor's tier and physics; regionMean's pageScreenshot waits for a
+  // present newer than the knob write, so each capture is of the knob state
+  // it follows. Passes here on SwiftShader (2026-09-10).
   await page.setViewportSize({ width: 640, height: 360 });
-  await boot(page, "singapore", "night", "dry", 0.35);
-  await page.evaluate(() => window.__apex.hud(false));
-  // Sample the DARK sky band between the towers, not the mid-frame wall/facade
-  // band: those pixels sit near tonemap saturation (~185/255) where fog is
-  // luminance-neutral (haze dims the bright facades as much as glow adds), so
-  // the old region measured ~0% delta even with the glow plainly visible.
-  // The dark sky shows the lamp-tinted in-scatter directly (~+35% measured).
-  const dry = await regionMean(page, 0.30, 0.02, 0.40, 0.12);
-  await page.evaluate(() => window.__apex.weather("fog"));
-  await page.waitForTimeout(3000);   // let the fog exposure ramp settle
-  const foggy = await regionMean(page, 0.30, 0.02, 0.40, 0.12);
-  // The lamp-tinted fog glow must add real luminance to the night sky.
-  expect(foggy).toBeGreaterThan(dry * 1.1);
+  await boot(page, "singapore", "night", "fog", 0.35);
+  await page.evaluate(() => {
+    window.__apex.hud(false);
+    window.__apex.govHold(true);
+    window.__apex.renderClock(100, true);
+    window.__apex.freeze(true);
+  });
+  const base = await page.evaluate(() => window.__apex.lightTune());
+  expect(base.lampFogBase, "the glow knob ships ON").toBeGreaterThan(0);
+  const knobs = (on) => page.evaluate(({ on, b }) => window.__apex.lightTune(on
+    ? { lampFogBase: b.lampFogBase, lampFogHaze: b.lampFogHaze }
+    : { lampFogBase: 0, lampFogHaze: 0 }), { on, b: base });
+  // The mid band: distant facades and the fog wall, where the fog factor —
+  // and so the glow's share of the pixel — is largest. Alternated OFF/ON/OFF/ON
+  // so a drift that survived the pins above would move both pairs the same way
+  // instead of masquerading as the knob.
+  const band = [0.0, 0.20, 1.0, 0.30];
+  await knobs(false); const off1 = await regionMean(page, ...band);
+  await knobs(true);  const on1  = await regionMean(page, ...band);
+  await knobs(false); const off2 = await regionMean(page, ...band);
+  await knobs(true);  const on2  = await regionMean(page, ...band);
+  const tier = await page.evaluate(() => window.__apex.govHold().tier);
+  const diag = JSON.stringify({ off1, on1, off2, on2, tier, knobs: { base: base.lampFogBase, haze: base.lampFogHaze }, gov: await page.evaluate(() => window.__apex.renderScale()) });
+  // The glow must ADD luminance, both times. A 3 % floor on a band whose mean
+  // sits around 70/255 is ~2 grey levels — real, and well under the knob's
+  // effect where it renders at all; a scene where the knob does nothing
+  // visible is the defect this test exists to catch.
+  test.info().attach("fog-glow-ab", { body: diag, contentType: "application/json" });   // the margin, on a pass too
+  expect(on1, diag).toBeGreaterThan(off1 * 1.03);
+  expect(on2, diag).toBeGreaterThan(off2 * 1.03);
 });
 
 test("night light budget: lamps on at night, off by day, exposure per table", async ({ page }) => {
@@ -144,7 +181,18 @@ test("night light budget: lamps on at night, off by day, exposure per table", as
   expect(night.numLights).toBeGreaterThan(0);
   expect(night.numLights).toBeLessThanOrEqual(48);
   expect(night.exposure).toBeCloseTo(0.90, 1);   // desert night
-  expect(night.floodEmit).toBeCloseTo(0.78, 2);  // prop emissive ramp
+  // THE 0.78 IS THE RAMP, NOT THE VALUE. js/game.js computes
+  // `min(1, LT.floodEmitMul * 0.78)` for a full night session, so the palette's
+  // own multiplier scales it per circuit — and this line asserted the bare ramp,
+  // which has therefore been red on every runner since qatar|night|dry was
+  // tuned to 0.11 (0.11 * 0.78 = 0.0858, the byte-exact value run 3464
+  // reported on Metal). Assert the CONTRACT instead: the night session takes
+  // the full ramp, scaled by whatever the palette says. A literal goes stale
+  // the moment a palette moves, which is the same trap this file's own
+  // knob-catalog test exists to catch.
+  const floodMul = await page.evaluate(() => LightTune.LT.floodEmitMul);
+  expect(floodMul, "the palette has no flood multiplier — this assertion would be vacuous").toBeGreaterThan(0);
+  expect(night.floodEmit).toBeCloseTo(Math.min(1, floodMul * 0.78), 4);
   await page.evaluate(() => window.__apex.setTimeOfDay("day"));
   // The night->day flip rebuilds track props; wait on the actual state instead
   // of a fixed sleep (the rebuild time varies under test-worker contention).
@@ -160,7 +208,7 @@ test("PCSS contact-hardening rig is alive", async ({ page }) => {
 });
 
 test("dark sessions keep their exposure floors in fog (night must stay night)", async ({ page }) => {
-  await boot(page, "vegas", "night", "fog");
+  await boot(page, "vegas", "night", "fog", undefined, { headless: true });
   const ls = await page.evaluate(() => window.__apex.lightState());
   // Night fog floor is 0.95 — NOT the daytime 1.08 (that grey-washed the dark).
   expect(ls.exposure).toBeGreaterThanOrEqual(0.94);
