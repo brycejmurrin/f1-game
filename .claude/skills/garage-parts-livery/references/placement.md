@@ -31,7 +31,7 @@ Three surfaces can answer it and the first is ~2000x cheaper than the last:
 | where on the flank does this land? | `node tools/car/spine-station.mjs --team=redbull` | 0.2 s |
 | does the CAR hide it? | the same, `--occlude` (or `flank-occlusion.mjs` for the map) | 1 s |
 | what does the flat art look like? | the same, `--png=artifacts/spine` | 0.3 s |
-| does it read at racing distance, lit? | `node tools/shot/garage-angles.mjs --team redbull --spine-side logo --views side --zoom 8 --pan 5,0` | ~50 s boot + ~35 s a shot |
+| does it read at racing distance, lit? | `node tools/shot/garage-angles.mjs --preset=flank --team=redbull --spineSide=logo` (or `--fast --preset=quick`) | ~25 s boot + ~12–18 s a shot (~8 s with `--fast`) |
 
 `spine-station.mjs` replays the real `buildAtlas` into crest-sweep's recording
 context and diffs the flank against the same livery wearing `spineSide: "none"`,

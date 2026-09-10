@@ -289,6 +289,21 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   // is taller than it is wide to hold it.
   assert.ok(A.LT.SIZE_H > A.LT.SIZE && R.spineSideL && R.spineSideL.y + R.spineSideL.h <= A.LT.SIZE_H, "the left flank lives in the atlas's extra rows");
   assert.ok(opsIn(wrap, R.spineSideL).length > 0, "wrap paints the left flank too");
+  {
+    const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+    const cssOf = (c) => "rgb(" + to255(c).join(",") + ")";
+    const navy = { c1: [0.05, 0.05, 0.35], c2: [1, 1, 1], spineLogo: "wrap" };
+    const pick = [0, 1, 0.8];
+    const def = A.paint("redbull", navy);
+    const auth = A.paint("redbull", { ...navy, logo: pick });
+    const flankFills = (ops) => opsIn(ops, R.spineSide)
+      .filter((op) => op.kind === "fill")
+      .map((op) => op.style);
+    assert.ok(flankFills(auth).includes(cssOf(pick)),
+      `wrap bull not painted ${cssOf(pick)}; got ${[...new Set(flankFills(auth))].join(", ")}`);
+    assert.ok(!flankFills(def).includes(cssOf(pick)),
+      "without TEAM LOGO the bull should not wear the authored colour");
+  }
   for (const id of ["number", "logo", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash"]) {
     const ops = A.paint("ferrari", { ...BASE, spineSide: id });
     assert.ok(opsIn(ops, R.spineSide).length > 0 && opsIn(ops, R.spineSideL).length > 0, `${id} paints both flanks`);

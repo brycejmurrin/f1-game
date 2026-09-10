@@ -160,3 +160,4 @@ Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **
 
 - ERS ids, ownership gate, edit loop, mistakes → [references/workflow.md](references/workflow.md).
 - Which surface answers a PLACEMENT question, and what each is blind to → [references/placement.md](references/placement.md).
+- Garage multi-angle shots: presets, `--fast`, `--plan`, settle tuning → [references/garage-angles.md](references/garage-angles.md).

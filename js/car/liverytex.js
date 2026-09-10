@@ -327,6 +327,7 @@ const LiveryTex = (function () {
   //   engine cover / garage lightbox 361-363 | cover mobile player 181
   //   fin desktop 134 | cover mobile AI 90 | fin mobile player 67 | fin AI 34
   const CREST_MARGIN = 0.08;   // ONE margin for all twelve (was 0.04 .. 0.10)
+  const FLANK_CREST_SCALE = (1 - 0.015 * 2) / (1 - CREST_MARGIN * 2);
   const STROKE_MIN = 0.055;    // 1.9 px at 34: below this a limb does not get
                                // thinner, it disappears
   const GAP_MIN = 0.07;        // 2.4 px at 34, survives one mip level. This is
@@ -1334,12 +1335,15 @@ const LiveryTex = (function () {
   // mark against a colour the bull is not wearing.
   const MARK_ON_BODY = 2.0;   // a metre-long silhouette, not lettering
   function flankBullColour(teamId, liv, sunC, cover, c1, lockup) {
+    const L = lockup || markPalette(teamId, liv, [sunC, cover], false, { noPlate: true });
+    // TEAM LOGO owns the bull whenever the player set one — the same markBase
+    // row every other surface reads (parts tile, flank, fin, garage wall).
+    if (liv && liv.logo) return L.mark.slice();
     // The BRAND colour whenever it reads at all on the body — the RB22's red
     // across gold and navy alike. Picking this design in the editor already
     // makes a custom livery, so it cannot key on "own".
     const brand = MARK_BRAND[teamId] && MARK_BRAND[teamId].mark;
     if (brand && contrast(brand, c1) >= MARK_ON_BODY) return brand.slice();
-    const L = lockup || markPalette(teamId, liv, [sunC, cover], false, { noPlate: true });
     return (L.mark || inkOn([sunC, c1])).slice();
   }
   // ONE answer to "will this colour be seen where it lands". It was written out
@@ -1794,6 +1798,10 @@ const LiveryTex = (function () {
     }
     return { u: FLANK_MARK.u, v: FLANK_MARK.v };
   }
+  function flankEmblemBox(R) {
+    const f = FLANK_CREST_SCALE;
+    return { x: R.x + R.w * (1 - f) / 2, y: R.y + R.h * (1 - f) / 2, w: R.w * f, h: R.h * f };
+  }
   const TAIL_STYLE = {
     redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
     racingbulls: { kind: "diag",    a: 0.70 },   // youthful bold slash
@@ -2230,10 +2238,10 @@ const LiveryTex = (function () {
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
     drawTailGraphic(ctx, teamId, REGIONS.fin, c1, finPaint, finWash, tailStyle);
     if (finBadge === "logo") {
-      if (LOGOS[teamId]) {
-        drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
-                      markHalo(LOGOS[teamId], finPaint, inkFin), emblemRim);
-      } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true, palette: lockup });
+      paintTeamMark(ctx, teamId, colors, REGIONS.finBadge,
+        finReal ? [coverPaint, finPaint] : [coverPaint], {
+          halo: LOGOS[teamId] ? markHalo(LOGOS[teamId], finPaint, inkFin) : null,
+        });
     } else if (finBadge === "number" || finBadge === "code") {
       // The race number (or the driver's code) on the fin, inked for the FIN
       // paint — the badge box is wholly on the plate — with no board patch and
@@ -2382,17 +2390,13 @@ const LiveryTex = (function () {
     // note where paintFlankBull is declared).
     if (paintFlankBull && !SIDE_FILL[spineSide]) { paintFlankBull(); paintFlankBull = null; }
     if (spineSide === "logo" || spineSide === "emblem") {
-      // logo: full lockup at FLANK_MARK. emblem: LARGE bare crest (garage hero).
-      // Under saddle/wrap, drop a brand plate that cannot clear the flank paint
-      // (Red Bull's gold disc on a gold saddle measured 1.10:1; Ferrari's wrap
-      // plate on the sun was the same class).
-      const bareFlank = spineLogo === "saddle" || spineLogo === "wrap" || spineSide === "emblem";
-      const paintFlankLogo = (Rm, bare) => {
-        if (LOGOS[teamId]) {
-          drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], markBg, inkMark), emblemRim);
-        } else drawCrest(ctx, teamId, Rm, {
-          liv: colors, field: markBgs, bare,
-          palette: markPalette(teamId, colors, markBgs, false, bare ? { noPlate: true } : undefined),
+      // logo / emblem: paintTeamMark — same logo / logo2 / logo3 routing as the
+      // parts livery tiles (paintSwatch), not a separate flank palette.
+      const paintFlankLogo = (Rm, scaleCrest) => {
+        const img = LOGOS[teamId];
+        paintTeamMark(ctx, teamId, colors, Rm, markBgs, {
+          halo: img ? markHalo(img, markBg, inkMark) : null,
+          crestScale: !!scaleCrest,
         });
       };
       if (spineSide === "emblem") {
@@ -2406,11 +2410,11 @@ const LiveryTex = (function () {
           paintFlankLogo({
             x: -F.R.h * 0.52, y: -F.R.h * 0.36,
             w: F.R.h * 1.04, h: F.R.h * 0.72,
-          }, true);
+          }, false);
           ctx.restore();
         });
       } else {
-        flankMark((Rm) => paintFlankLogo(Rm, bareFlank));
+        flankMark((Rm) => paintFlankLogo(Rm, true));
       }
     } else if (spineSide === "number" || spineSide === "code") {
       flankMark((Rm) => drawNumber(ctx, spineSide === "code" ? driverCode(teamId, raceNum) : raceNum,
@@ -2704,6 +2708,22 @@ const LiveryTex = (function () {
     return canvas;
   }
 
+  // ONE mark draw for every picker tile and every flank emblem — uploaded tint
+  // plus outline rows, traced crest via markPalette (logo / logo2 / logo3).
+  function paintTeamMark(ctx, teamId, liv, R, field, opts) {
+    const o = opts || {};
+    const logo = liv && liv.logo;
+    const outline = (liv && (liv.logo3 || liv.logo2)) || null;
+    if (LOGOS[teamId]) {
+      drawLogoImage(ctx, LOGOS[teamId], R, logo || null, o.halo || null, outline);
+      return;
+    }
+    const crestR = o.crestScale ? flankEmblemBox(R) : R;
+    drawCrest(ctx, teamId, crestR, {
+      liv, field, bare: !o.fullLockup, palette: markPalette(teamId, liv, field, false),
+    });
+  }
+
   // Mini lockup for the LIVERY cards and TEAM picker tiles: paint + stripe +
   // the same crest buildAtlas puts on the car. One function so the two pickers
   // cannot drift from each other or from the atlas.
@@ -2721,15 +2741,7 @@ const LiveryTex = (function () {
     }
     const pad = Math.round(Math.min(w, h) * 0.08);
     const R = { x: pad, y: pad, w: w - pad * 2, h: Math.round(h * 0.78) };
-    const field = [c1, c2];
-    if (LOGOS[teamId]) {
-      drawLogoImage(ctx, LOGOS[teamId], R, (liv && liv.logo) || null, null,
-                    (liv && (liv.logo3 || liv.logo2)) || null);
-    } else {
-      drawCrest(ctx, teamId, R, {
-        liv, field, bare: true, palette: markPalette(teamId, liv, field, false),
-      });
-    }
+    paintTeamMark(ctx, teamId, liv, R, [c1, c2], {});
   }
 
   // drawLogoImage is exported for the GARAGE back-wall crest (js/garage/scene.js):
@@ -2739,7 +2751,7 @@ const LiveryTex = (function () {
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
   return { SIZE, SIZE_H, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
-           MARK_FLOOR, INK_FLOOR, numCrestBox, paintSwatch,
+           MARK_FLOOR, INK_FLOOR, numCrestBox, paintTeamMark, paintSwatch,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
