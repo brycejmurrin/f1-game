@@ -28,7 +28,7 @@
 // against itself.
 import { chromium } from "playwright";
 import { createServer } from "http";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join, extname } from "path";
 import { fileURLToPath } from "url";
 
@@ -140,8 +140,15 @@ async function leg(browser, port, backend) {
 }
 
 const { srv, port } = await serve();
+// The container ships a chromium build the pinned Playwright does not name
+// (1194 vs the 1228 it looks for), so the default resolve throws "Executable
+// doesn't exist" and reads as a broken tool rather than a missing browser.
+// Honour PW_CHROMIUM, else fall back to the unversioned /opt/pw-browsers path.
+const PW_CHROMIUM = process.env.PW_CHROMIUM
+  || (existsSync("/opt/pw-browsers/chromium") ? "/opt/pw-browsers/chromium" : null);
 const browser = await chromium.launch({
   headless: true,
+  ...(PW_CHROMIUM ? { executablePath: PW_CHROMIUM } : {}),
   args: ["--enable-unsafe-webgpu", "--use-angle=swiftshader", "--enable-features=Vulkan",
          "--use-gl=angle", "--enable-unsafe-swiftshader", "--no-sandbox"],
 });

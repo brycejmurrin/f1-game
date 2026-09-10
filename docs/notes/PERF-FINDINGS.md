@@ -4186,3 +4186,64 @@ mats / pool / draws / geoKeys / three's own counts and the mirror stats, which
 is the instrument §2o and §2p were both settled with — it wants a soak on the
 handset (`apex26.tlxMobile=1`), sampling every 15 s while racing, and the
 acceptance criterion is the slope against a GLX control on the same phone.
+
+## 2s. The decay is NOT a JS-heap leak — measured, on Apple hardware and on a soak (2026-09-10)
+
+Following §2r's report (three-WebGPU 60 → 30 on the handset). Two instruments,
+one negative result each, and a negative result here is worth more than another
+hypothesis: it says where NOT to spend the next round.
+
+### Apple hardware: no errors, and the TLX fps row is the trap
+
+`gpu-census` on `macos-latest`, montreal, run 78 (`force=1`) and run 81
+(default). Both Verdicts green, **gpuErrors 0 on every leg**, `anyHardware:
+true`. From run 78:
+
+| leg | ok | gpuErrors | fps | frames | scale | path |
+|---|---|---|---|---|---|---|
+| three-WebGPU | true | 0 | 10.1 | 8 | 1 | `softBlit=YES (headless readback — NOT the path a player takes)` |
+| three-WebGL2 | true | 0 | 8.7 | 4 | 1 | `softBlit=no (direct present)` |
+| GLX | true | 0 | 59.9 | 600 | **0.70** | — |
+| WGX | true | 0 | 58.2 | 600 | 1 | softPresent (expected under a headless UA) |
+
+**Do not read the TLX rows as a backend comparison** — AGENTS.md says why and
+this run is the illustration: the WebGPU leg is a readback path. What IS
+readable: no leg errors on real Metal, and GLX had to shed to **scale 0.70** to
+hold 59.9, so even the default backend is not comfortable at native res there.
+
+### The soak: TLX plateaus, it does not leak
+
+`heap-stages.mjs`, montreal, equal WALL time per leg, drift = settled − built:
+
+| soak | GLX drift | TLX drift | TLX frames |
+|---|---|---|---|
+| 60 s | +0.94 MB | +5.67 MB | 2235 (37 fps) |
+| 180 s | +0.82 MB | **+7.15 MB** | 6251 (35 fps) |
+
+A leak at the 60 s rate would put 180 s near +17 MB. It lands at +7.15, and the
+frame rate is flat across both (37 → 35 fps). **The curve is a working set
+filling, not a slope.** §2p's `mrt()` fix holds; nothing has re-opened it.
+
+### What this rules out, and the blind spot it leaves
+
+Ruled out: a JS-heap leak, a per-frame allocation slope, and any error on real
+Apple hardware. So the handset's 60 → 30 is **not** the §2o/§2p mechanism.
+
+The blind spot is the honest part: `heap-stages` reads the **JS heap** via
+`Runtime.getHeapUsage`. iOS jetsam counts **GPU and IOSurface** allocations,
+which that number cannot see at all — and glx.js's own mobile-tier comment says
+exactly that. A texture/buffer/pipeline growth on the WebGPU device would be
+invisible to every measurement in this entry. `renderer.info.memory`
+(geometries, textures) is the counter that would see it, `memState()` already
+reports it, and no soak here samples it over time yet.
+
+Thermal throttling is the other candidate no code change reaches, and on a
+handset it produces exactly a sustained halving.
+
+### Next round, in order
+
+1. Sample `__tlx.memState()` — specifically `renderer.info.memory` — every 15 s
+   across a soak, not just at the ends. That is the GPU-side slope.
+2. Only then look at code. Two rounds were spent on baselines before anyone
+   measured a slope (§2o's closing lesson); this entry exists so a third is not
+   spent on a slope that is already flat.
