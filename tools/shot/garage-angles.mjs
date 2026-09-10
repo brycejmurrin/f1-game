@@ -2,8 +2,8 @@
 // @doc Garage preset shots, ONE Chromium: walks teams/liveries/any livery field; clears dead DISPLAY for headless WebGL.
 //   node tools/shot/garage-angles.mjs [--team=redbull,mclaren|all] [--views=spine] [--livery=default,rb_white]
 //     [--spineLogo=wrap,saddle] [--finShape=blade] [--cover=#101014] [--against=HEAD~1]
-//     [--preset=wall|fin|flank|mark|quick|bay] [--plan] [--fast] [--settle=8] [--view-settle=4]
-//     [--zoom=8] [--pan=2,0] [--az-nudge=-1] [--el-nudge=0] [--az=] [--el=]
+//     [--preset=wall|fin|flank|mark|quick|bay|bayFront|saddleWall] [--plan] [--fast]
+//     [--zoom=8] [--pan=2,0] [--az-nudge=-1] [--el-nudge=0] [--az=] [--el=] [--logos=default]
 //     [--out=dir] [--label=0] [--sheet=0] [--cell=420] [--live] [--site]
 //     [--team=all+custom] [--rollup-only|--full-views] [--rollup-view=wingRear]
 //     [--reset] [--resume] [--oracle] [--picker-team] [--slow]
@@ -15,15 +15,18 @@
 // capture each frame. Two shipped defects (wordmarks vs gantry, sunk signs)
 // were only visible from one angle each.
 //
-// Views: hero,bay,front,side,rear,top,wingFront,wingRear — or groups:
-//   spine  = hero,top,rear,side   (engine-cover crown / SPINE TOP)
-//   all    = every preset
-//   bay    = angled left three-quarter with garage back wall in frame
+// Views: hero,bay,bayFront,front,side,rear,top,wingFront,wingRear — or groups:
+//   spine     = hero,top,rear,side
+//   all       = every preset
+//   bay       = rear-left three-quarter, back wall in frame
+//   bayFront  = opposite diagonal — front-left, left flank + back wall (not head-on)
 //
 // `--livery` walks paint jobs via a store write (opening the LIVERY tab slams
 // FRONT). `--zoom` / `--pan` / `--az-nudge` / `--el-nudge` are counted clicks on
 // #cs-view-* / #cs-pan-* so a framing that reads here is one a player can reach.
 // `--az` / `--el` set absolute orbit radians after the named preset.
+// `--logos=default` strips logo/logo2/logo3 so wall crest + saddle flank marks
+// use team default paintTeamMark colours (same path as the lightbox).
 //
 // DESIGN AXES: any field in `Liveries.FIELDS` is a flag, and passing more than
 // one walks their CARTESIAN PRODUCT as custom liveries on the team default
@@ -100,8 +103,15 @@ const PRESETS = {
   wall:  { views: "front", zoom: 4 },
   fin:   { views: "rear", zoom: 4 },
   flank: { views: "side", zoom: 8, pan: "5,0" },
-  // Angled bay: car from the left three-quarter, garage back wall in frame.
+  // Rear-left three-quarter, garage back wall in frame.
   bay:   { views: "bay", zoom: 1 },
+  // Opposite diagonal of bay: front-left — left flank + back-wall crest.
+  bayFront: { views: "bayFront", zoom: 1 },
+  // Survey: bayFront + saddle crown + flank crest, default logo colours.
+  saddleWall: {
+    views: "bayFront", zoom: 1,
+    spineLogo: "saddle", spineSide: "logo", logos: "default",
+  },
   // Wall crest + flank mark + fin badge in one pass (mark colour reviews).
   mark:  { views: "front,side,rear", zoom: 6, pan: "4,0", finBadge: "logo" },
   quick: { views: "side", zoom: 6, pan: "4,0", fast: true },
@@ -111,7 +121,10 @@ if (presetRaw === "list") {
   console.log("Presets (CLI flags override preset defaults):");
   for (const [id, p] of Object.entries(PRESETS)) {
     const bits = [`views=${p.views}`];
+    if (p.spineLogo) bits.push(`spineLogo=${p.spineLogo}`);
+    if (p.spineSide) bits.push(`spineSide=${p.spineSide}`);
     if (p.finBadge) bits.push(`finBadge=${p.finBadge}`);
+    if (p.logos) bits.push(`logos=${p.logos}`);
     if (p.zoom) bits.push(`zoom=${p.zoom}`);
     if (p.pan) bits.push(`pan=${p.pan}`);
     if (p.azNudge) bits.push(`az-nudge=${p.azNudge}`);
@@ -155,12 +168,15 @@ const gateRetries = fast ? 1 : 3;
 const doPlan = argvHas("--plan");
 const doLive = argvHas("--live");
 const doSite = argvHas("--site") || argvHas("--cdn");
+const logosMode = flag("--logos",
+  preset && !argvHas("--logos") ? (preset.logos || "") : "").trim();
+const clearLogos = logosMode === "default" || logosMode === "clear";
 
 // Everything the tool owns. Anything ELSE of the form --name=value is taken as
 // a livery field and validated in-page — so the flag surface grows with
 // Liveries.FIELDS instead of with this file.
 const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom", "--pan",
-  "--az-nudge", "--el-nudge", "--az", "--el",
+  "--az-nudge", "--el-nudge", "--az", "--el", "--logos",
   "--views", "--against", "--label", "--sheet", "--cell", "--spine-side", "--spine-logo",
   "--preset", "--plan", "--fast", "--slow", "--settle", "--view-settle", "--live",
   "--site", "--cdn",
@@ -174,6 +190,10 @@ const addAxis = (field, raw) => {
 // The two legacy names first, so their order in the product is unchanged.
 if (flag("--spine-logo", "")) addAxis("spineLogo", flag("--spine-logo", ""));
 if (flag("--spine-side", "")) addAxis("spineSide", flag("--spine-side", ""));
+if (preset && preset.spineLogo && !argv.some((a) => a.startsWith("--spineLogo=") || a.startsWith("--spine-logo=")))
+  addAxis("spineLogo", preset.spineLogo);
+if (preset && preset.spineSide && !argv.some((a) => a.startsWith("--spineSide=") || a.startsWith("--spine-side=")))
+  addAxis("spineSide", preset.spineSide);
 if (preset && preset.finBadge && !argv.some((a) => a.startsWith("--finBadge=")))
   addAxis("finBadge", preset.finBadge);
 for (const a of argv) {
@@ -235,13 +255,14 @@ const useStoreTeam = !argvHas("--picker-team") && (fast || multiTeam);
 const withOracle = argvHas("--oracle") && rollupOnly
   && axes.some((ax) => ax.field === "spineLogo" && ax.values.length);
 
-const ALL = ["hero", "bay", "front", "side", "rear", "top", "wingFront", "wingRear"];
+const ALL = ["hero", "bay", "bayFront", "front", "side", "rear", "top", "wingFront", "wingRear"];
 const GROUPS = {
   spine: ["hero", "top", "rear", "side"],
   wings: ["wingFront", "wingRear"],
   front: ["front"],
   rear: ["rear"],
   bay: ["bay"],
+  bayFront: ["bayFront"],
   aero: ["wingFront", "wingRear", "rear"],
   all: ALL,
 };
@@ -255,8 +276,9 @@ const views = [...new Set(rawViews.flatMap((v) => GROUPS[v] || [v]))];
 const rollupView = rollupViewFlag
   || (views.length === 1 ? views[0]
     : (views.includes("wingRear") ? "wingRear"
-      : (views.includes("bay") ? "bay"
-        : (views.includes("side") ? "side" : views[0]))));
+      : (views.includes("bayFront") ? "bayFront"
+        : (views.includes("bay") ? "bay"
+          : (views.includes("side") ? "side" : views[0])))));
 const bad = views.filter((v) => !ALL.includes(v));
 if (bad.length) {
   console.error(`Unknown view(s): ${bad.join(", ")}\nAvailable: ${ALL.join(", ")} + groups ${Object.keys(GROUPS).join(", ")}`);
@@ -581,7 +603,7 @@ async function applyLivery(page, teamId, livId) {
 
 /** Custom id so mesh/atlas caches (keyed on getLiveryId) miss — design walk, not catalog. */
 async function applyDesign(page, teamId, fields) {
-  const got = await page.evaluate(({ team, fields }) => {
+  const got = await page.evaluate(({ team, fields, clearLogos }) => {
     const t = Teams.LIST.find((x) => x.id === team);
     if (!t) return { ok: false, error: `no team "${team}"` };
     const def = Liveries.forTeam(t)[0];
@@ -629,6 +651,14 @@ async function applyDesign(page, teamId, fields) {
         : raw;
       parts.push(k + "-" + raw.replace(/^#/, ""));
     }
+    // Default mark colours: wall lightbox + saddle flank share paintTeamMark.
+    // Strip authored logo/logo2/logo3 so the mark path uses team defaults.
+    if (clearLogos) {
+      delete liv.logo;
+      delete liv.logo2;
+      delete liv.logo3;
+      parts.push("logos-default");
+    }
     const id = "_shot_" + (parts.join("_") || "def");
     liv.id = id;
     liv.name = id;
@@ -638,7 +668,7 @@ async function applyDesign(page, teamId, fields) {
     GameStore.store.set("livery." + team, id);
     if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes();
     return { ok: true, name: parts.join(" ") || "default", tag: parts.join("_") || "def" };
-  }, { team: teamId, fields });
+  }, { team: teamId, fields, clearLogos });
   if (!got.ok) {
     const extra = got.have ? ` (have ${got.have.join(",")})` : "";
     throw new Error(`${got.error}${extra}`);
@@ -787,7 +817,7 @@ async function main() {
       fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle,
       liverySettle, viewSettle, gateRetries, zoom, pan: [strafe, dolly],
       azNudge, elNudge, az: azAbs, el: elAbs,
-      shotCount, against: againstRef, live: doLive, site: doSite,
+      shotCount, against: againstRef, live: doLive, site: doSite, logos: logosMode || null,
       estSeconds: Math.round(shotCount * (fast ? 12 : 18) + 25),
     }, null, 2));
     return;
@@ -925,6 +955,7 @@ async function main() {
       live: doLive, site: doSite, liveBuild,
       liverySettle, viewSettle, gateRetries,
       zoom, pan: [strafe, dolly], azNudge, elNudge, az: azAbs, el: elAbs,
+      logos: logosMode || null, clearLogos,
       sheetHead: A.sheetHead, viewport: vp, views,
       loadavg1: load, phase: { after: A.phase, before: B ? B.phase : null },
       sheets, shots, rollupEntries: mergedRollup, teamRollup,

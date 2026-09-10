@@ -191,9 +191,13 @@ test("garage-angles has presets, --plan, --fast, and tunable settle", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /const PRESETS = \{/, "purpose presets like render-car");
   assert.match(src, /bay:\s*\{\s*views:\s*"bay"/, "bay preset = angled room framing");
-  assert.match(src, /"bay"/, "bay is a named view in ALL");
+  assert.match(src, /bayFront:\s*\{\s*views:\s*"bayFront"/, "bayFront = opposite diagonal");
+  assert.match(src, /saddleWall:/, "saddleWall = bayFront + saddle + default logos");
+  assert.match(src, /"bayFront"/, "bayFront is a named view in ALL");
   assert.match(src, /--az-nudge/, "orbit framing via az-nudge click counts");
   assert.match(src, /--el-nudge/, "orbit framing via el-nudge click counts");
+  assert.match(src, /--logos/, "logos=default strips authored mark colours");
+  assert.match(src, /clearLogos/, "applyDesign honours logos=default");
   assert.match(src, /argvHas\("--site"\) \|\| argvHas\("--cdn"\)/,
     "--site/--cdn opens github.io; --live is gallery-only");
   assert.match(src, /if \(preset && !argvHas\("--views"\)\) return preset\.views/,
@@ -219,10 +223,12 @@ test("garageFrame accepts az/el nudges and absolute orbit", () => {
   assert.match(body, /nudgeSetupCam/, "orbit goes through G.nudgeSetupCam");
 });
 
-test("SP_VIEWS includes bay angled garage framing", () => {
+test("SP_VIEWS includes bay and bayFront angled garage framings", () => {
   const src = code("js/game.js");
   assert.match(src, /bay:\s*\{\s*az:\s*Math\.PI\s*\*\s*0\.68/,
-    "bay sits between side and hero for left-angled room shot");
+    "bay sits between side and hero for rear-left room shot");
+  assert.match(src, /bayFront:\s*\{\s*az:\s*Math\.PI\s*\*\s*0\.32/,
+    "bayFront is the front-left opposite diagonal (left flank + back wall)");
 });
 
 test("garage-angles multi-team rollup uses __apex fast path from PR #96 port", () => {

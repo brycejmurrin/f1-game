@@ -6513,6 +6513,9 @@ const SP_VIEWS = {
   // Angled bay: slightly left of hero so the flank reads and the back wall stays
   // in frame — the survey framing garage-angles --preset=bay exists to shoot.
   bay:   { az: Math.PI * 0.68, el: 0.26, dist: 9.2 },
+  // Opposite diagonal of bay: front three-quarter on the SAME left flank
+  // (door-side corner) — left side of the car + back-wall crest, not head-on.
+  bayFront: { az: Math.PI * 0.32, el: 0.28, dist: 9.4 },
   front: { az: 0,              el: 0.20, dist: 8.2 },
   side:  { az: Math.PI * 0.5,  el: 0.10, dist: 11.2 },
   rear:  { az: Math.PI,        el: 0.22, dist: 8.4 },
