@@ -188,13 +188,13 @@ repairs them). Checklist: `docs/AGENT-SURFACE.md` §Bootstrap.
 ## Git branch & deploy
 
 Work happens on a `claude/<topic>` branch. The deploy branch is
-`claude/f1-game-project-26h3ng`: never push there without review; `pages.yml`
-fires only there and ships to https://brycejmurrin.github.io/f1-game/. Other
-sessions develop directly on the deploy branch, so a deploy is a merge of THEIR
-work — re-measure baselines on the merged tree, never force-push.
-
-`node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
+`claude/f1-game-project-26h3ng`: never push there without review; only it ships
+(https://brycejmurrin.github.io/f1-game/). Other sessions develop directly on
+it, so a deploy is a merge of THEIR work — re-measure on the merged tree, never
+force-push. `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
 `test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens a
-reviewable PR, `--plan` prints the union first); it auto-cures a conflict in a
-GENERATED file and stops on anything else. The live check is `pages.yml`'s
-`verify-live` job; this container cannot reach `github.io` (read the Actions run).
+PR, `--plan` prints the union); it cures GENERATED-file conflicts, stops on any
+other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in
+minutes (your verdict); `pages.yml` ticks at :07/:27/:47, gates the tip once and
+publishes exactly that commit (dispatch = "deploy now"; push→live ≤ ~35 min).
+"Live?" = ancestor of the live `apex-sha` (deploy-research; `docs/TESTING.md` §Release train).

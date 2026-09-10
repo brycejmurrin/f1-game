@@ -84,8 +84,10 @@ test("the default diff base is the DEPLOY branch, which pages.yml names", () => 
   // the tool giving up silently, dressed as an answer. Asserting the constant
   // against pages.yml is what keeps the two from drifting apart.
   const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/pages.yml"), "utf8");
-  const m = yml.match(/branches:\s*\[\s*([^\]\s]+)\s*\]/);
-  assert.ok(m, "pages.yml no longer declares a deploy branch in the expected form");
+  // pages.yml is a release train (schedule + dispatch, no push trigger), so
+  // the branch lives in its ONE declaration: the workflow-level DEPLOY_BRANCH.
+  const m = yml.match(/^\s+DEPLOY_BRANCH:\s*(\S+)\s*$/m);
+  assert.ok(m, "pages.yml no longer declares a deploy branch in the expected form (env DEPLOY_BRANCH)");
   assert.equal(DEPLOY_BRANCH, m[1],
     "tools/ci/pick-tests.mjs DEPLOY_BRANCH disagrees with .github/workflows/pages.yml");
 });

@@ -854,6 +854,37 @@ the line.
 
 ---
 
+### Release train (2026-09-10)
+
+`pages.yml` no longer runs on push. The deploy branch takes 140-300 commits a
+day from several agents, and a deploy per push meant a 14-job gate and a Pages
+deployment per commit, gates cancelling each other in bursts, and the account's
+20 job slots spent re-testing trees one commit apart. Two tiers replace it:
+
+- **Fast tier, per push to the deploy branch** (`ci.yml`, `on: push`): guards,
+  node suites, parts census, driving-model, change-aware selection. Five to
+  nine minutes, four slots, its own concurrency group so sessions never cancel
+  each other's verdict. This run is the answer to "did my push break anything".
+- **The train** (`pages.yml`, cron `7,27,47 * * * *`, plus `workflow_dispatch`
+  = "deploy now"): `verdict` refuses any branch but `DEPLOY_BRANCH`, reads the
+  live shell's `apex-sha` (`tools/ci/pages-live-sha.sh`), stops in one slot when
+  the tip is already live, otherwise hands the live commit to `ci.yml` as
+  `before_sha` (so the sweeps, smoke and selection filters diff against exactly
+  what is live) and skips the gate when the tip's tree already has a green run
+  (`tools/ci/pages-reuse-verdict.sh`). The gate group never cancels: a running
+  gate finishes, the next tick waits, a later tick replaces the waiting one.
+  Then `publishable`, `deploy` (exact artifact, monotonic) and `verify-live` as
+  before. Push→live is bounded by a tick plus one gate, ~35 min worst case.
+
+Inside `ci.yml` a Pages call is recognised by its `concurrency_key` (the
+caller's event is `schedule` or `workflow_dispatch` there, never `push`): the
+sweeps and smoke ship filters accept it as a gate with a base, the smoke job
+takes the 50-minute cap and runs `smoke.spec.js` rather than the nightly's wide
+group, and `select` plans against the live commit. `tests/unit/ci-coverage.test.mjs`
+pins all of it. "Is my commit live?" is `git merge-base --is-ancestor <sha>
+<apex-sha>` against `<meta name="apex-sha">` in the live `index.html`
+(deploy-research); `version.json`'s build number says how far behind, not which commit.
+
 ## 4. Philosophy — debug-hooks first
 
 Prefer assertions driven by the `window.__apex` API and geometric/mesh probes

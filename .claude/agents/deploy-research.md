@@ -31,10 +31,14 @@ return a short summary with citations (URLs + live vs local build numbers).
    git fetch origin claude/f1-game-project-26h3ng
    git show origin/claude/f1-game-project-26h3ng:version.json
    ```
-   Verdict: **OK** when live == tip; **STALE** when live < tip (Pages lag —
-   `gh run list --workflow pages.yml` if it persists past ~10 min; a newer
-   push cancels the pending run). A behind WORKING TREE is not a Pages miss —
-   compare to the tip, not to `version.json` on disk.
+   Verdict: **OK** when live == tip; **STALE** when live < tip. Pages is a
+   RELEASE TRAIN (ticks at :07/:27/:47, then a ~10-15 min gate), so a tip
+   under ~35 min old being behind is the train, not a miss; past that, read
+   `pages.yml`'s latest run. A behind WORKING TREE is not a Pages miss —
+   compare to the tip, not to `version.json` on disk. The exact question "is
+   MY commit live?" is answered by the shell, not the build number: fetch
+   `index.html`, read `<meta name="apex-sha" content="…">`, and check
+   `git merge-base --is-ancestor <my sha> <apex-sha>`.
 2. **Did my edit ship?** Matching `version.json` alone is not proof. Fetch
    the changed file at the live hash — read the `?v=<12 hex>` from the live
    `index.html` script tag for that path, then fetch

@@ -104,8 +104,10 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
   // pages.yml now publishes exactly the commit it tested, which makes "did we
   // test what this commit changed?" a deploy question too — so the one clause
   // that excluded the deploy must stay gone.
-  assert.match(selectJob, /if: \$\{\{ github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \}\}/);
-  assert.doesNotMatch(selectJob, /inputs\.concurrency_key/);
+  // The third clause is the Pages call: the train's caller event is `schedule`,
+  // so an event test alone would skip the plan on every deploy.
+  assert.match(selectJob, /if: \$\{\{ github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \|\| inputs\.concurrency_key != '' \}\}/);
+  assert.doesNotMatch(selectJob, /inputs\.concurrency_key == ''/, "the plan must never exclude the deploy gate");
   assert.doesNotMatch(selectJob + selectedJob, /^    continue-on-error:/m);
   // The runner consumes the plan as a matrix and takes its cap per shard.
   assert.match(selectedJob, /needs: select/);
@@ -116,7 +118,9 @@ test("the change-aware gate blocks pushes, pull requests AND the deploy gate", (
 });
 
 test("selection resolves the event-specific base and fails closed when it cannot", () => {
-  assert.match(selectJob, /PUSH_BEFORE: \$\{\{ github\.event\.before \}\}/);
+  // A direct push still resolves against the push's before; a Pages call
+  // substitutes the train's live commit (asserted in the Pages-call test).
+  assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/);
   assert.match(selectJob, /PR_BASE: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
   // Base resolution is delegated to ci-select-specs-step.sh -> ci-resolve-before.sh (HEAD~1 fallback).
   assert.match(selectJob, /ci-select-specs-step\.sh/);
@@ -146,17 +150,22 @@ test("one CI run per branch head: push and pull_request share a group, manual ru
   // to github.ref, which put the nightly in the same group as every push to
   // the deploy branch — and GitHub keeps only ONE pending run per group, so
   // the next push silently discarded the queued nightly (run 2758).
-  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
-    "push and PR runs of one branch must share a group; dispatched/scheduled runs must not");
+  // A push to the DEPLOY branch is the fast tier and gets its own group too:
+  // sessions push there minutes apart, and a cancelled fast run would hand a
+  // session `cancelled` for someone else's commit.
+  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule' \|\| \(github\.event_name == 'push' && github\.ref_name == 'claude\/f1-game-project-26h3ng'\)\) && github\.run_id\) \|\| github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
+    "push and PR runs of one branch must share a group; dispatched/scheduled runs and deploy-branch pushes must not");
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \|\| github\.event_name == 'push' \}\}/,
     "newest wins on both events");
-  // The deploy gate is unaffected: its caller supplies a unique key, and the
-  // newest-wins rule for deploys lives on pages.yml's own ci job.
+  // The deploy gate is unaffected: its caller supplies a unique key. The train
+  // rule lives on pages.yml's own ci job: one gate at a time, never cancelled
+  // (a tick waits, a later tick replaces the waiting one), so lag is bounded
+  // and no gate is ever killed a spec from green.
   assert.match(pagesWorkflow, /concurrency_key: pages-\$\{\{ github\.run_id \}\}/);
   const pagesCi = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
   assert.match(pagesCi, /group: pages-gate-\$\{\{ github\.ref \}\}/);
-  assert.match(pagesCi, /cancel-in-progress: true/,
-    "a newer push must cancel an older deploy GATE, never leave it to publish stale bytes or skip");
+  assert.match(pagesCi, /cancel-in-progress: false/,
+    "the train never cancels a running gate; the next tick queues behind it");
 });
 
 test("a Pages run publishes EXACTLY the commit it tested, and never moves the site backwards", () => {
@@ -256,7 +265,7 @@ test("a Pages run reuses a gate that already passed on the SAME tree, and only t
   assert.match(verdict, /fetch-depth: 0/, "the parents' trees are the question; a shallow clone has no parents");
   assert.match(verdict, /tools\/ci\/pages-reuse-verdict\.sh "\$GITHUB_SHA" >> "\$GITHUB_OUTPUT"/);
   assert.match(ciJob, /needs: verdict/);
-  assert.match(ciJob, /if: needs\.verdict\.outputs\.reuse != 'true'/, "the gate runs unless the verdict found the same tree already gated");
+  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && needs\.verdict\.outputs\.reuse != 'true'/, "the gate runs unless nothing is new or the verdict found the same tree already gated");
   assert.match(preflight, /needs: \[verdict, ci\]/);
   assert.match(preflight, /needs\.ci\.result == 'success' \|\| \(needs\.ci\.result == 'skipped' && needs\.verdict\.outputs\.reuse == 'true'\)/,
     "a skipped gate is acceptable only when the verdict reused an earlier pass; failed or cancelled must still stop the run");
@@ -580,7 +589,95 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
     assert.match(b, /paths-ignore:\n(?:\s+- "[^"]+"\n)+/, "push and pull_request must carry a paths-ignore list");
     for (const p of ['"docs/**"', '"**/*.md"', '".claude/**"', '".cursor/**"']) assert.ok(b.includes(`- ${p}`), `${p} missing from paths-ignore`);
   }
-  assert.match(pushBlock, /branches-ignore: \[claude\/f1-game-project-26h3ng\]/, "the deploy branch stays routed through pages.yml");
+  // The deploy branch is NOT ignored any more: a push there gets the FAST tier
+  // (pages.yml is a train and no longer runs on push), so the push must reach
+  // this workflow, and the two heavy browser jobs must opt out of that tier by
+  // the one shared expression.
+  assert.doesNotMatch(pushBlock, /branches-ignore/, "deploy-branch pushes must reach ci.yml for the fast tier");
+  const fastTier = "!(github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && inputs.concurrency_key == '')";
+  const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
+  const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  smoke:\n"));
+  for (const [name, job] of [["smoke", smokeJob], ["sweeps", sweepsJob]]) {
+    assert.ok(job.includes(`    if: \${{ ${fastTier} }}`), `${name} must sit out the deploy branch's fast tier with the shared expression`);
+  }
+  for (const name of ["guards", "node-suites", "sweeps-parts", "driving-model", "select"]) {
+    const job = ciWorkflow.slice(ciWorkflow.indexOf(`\n  ${name}:\n`));
+    const head = job.slice(0, job.indexOf("\n    steps:"));
+    assert.ok(!head.includes(fastTier), `${name} is part of the fast tier and must not opt out`);
+  }
+});
+
+test("pages.yml is a release train: schedule + dispatch, one deploy branch, nothing-new short-circuit", () => {
+  // THE TRAIN (2026-09-10). A deploy per push at 140-300 pushes a day meant a
+  // 14-job gate per commit and gates cancelling each other in bursts. The
+  // train ticks three times an hour off the hour, refuses any other branch,
+  // stops in one slot when the live site already serves the tip, and hands
+  // the gate the live commit as its diff base.
+  const onBlock = pagesWorkflow.slice(pagesWorkflow.indexOf("\non:\n"), pagesWorkflow.indexOf("\npermissions:"));
+  assert.doesNotMatch(onBlock, /^\s+push:/m, "the train must not run on push");
+  assert.match(onBlock, /schedule:\s*\n\s+- cron: "7,27,47 \* \* \* \*"/, "three ticks an hour, off the hour");
+  assert.match(onBlock, /workflow_dispatch:/, "a dispatch is 'deploy now'");
+  assert.match(onBlock, /^\s+DEPLOY_BRANCH: claude\/f1-game-project-26h3ng\s*$/m, "the one declaration of the deploy branch");
+
+  const verdict = pagesWorkflow.split("\n  verdict:")[1].split("\n  ci:")[0];
+  assert.match(verdict, /"\$GITHUB_REF_NAME" != "\$DEPLOY_BRANCH"[\s\S]*?exit 1/, "a run off the deploy branch must fail before anything else");
+  assert.match(verdict, /tools\/ci\/pages-live-sha\.sh "\$SITE_URL"/);
+  assert.match(verdict, /nothing_new: \$\{\{ steps\.live\.outputs\.nothing_new \}\}/);
+  assert.match(verdict, /since: \$\{\{ steps\.live\.outputs\.since \}\}/);
+  assert.match(verdict, /git merge-base --is-ancestor "\$LIVE" "\$GITHUB_SHA"/, "the live commit is the diff base only when it is an ancestor");
+  // The refusal to run off-branch must come BEFORE the network and the reuse lookup.
+  assert.ok(verdict.indexOf("Refuse to run off the deploy branch") < verdict.indexOf("What is live"));
+
+  const ciJob = pagesWorkflow.split("\n  ci:")[1].split("\n  publishable:")[0];
+  assert.match(ciJob, /if: needs\.verdict\.outputs\.nothing_new != 'true' && needs\.verdict\.outputs\.reuse != 'true'/);
+  assert.match(ciJob, /before_sha: \$\{\{ needs\.verdict\.outputs\.since \}\}/, "the gate diffs against what is live, never against a push's before");
+  assert.doesNotMatch(pagesWorkflow, /github\.event\.before/, "there is no push event to read a before from");
+  const preflight = pagesWorkflow.split("\n  publishable:")[1].split("\n  deploy:")[0];
+  assert.match(preflight, /needs\.verdict\.outputs\.nothing_new != 'true'/, "nothing new must never reach the environment");
+});
+
+test("ci.yml treats a Pages call as the gate it is, whatever the caller's event", () => {
+  // A called workflow sees the CALLER's event: `schedule` for a train tick,
+  // `workflow_dispatch` for "deploy now". Before the train, every filter keyed
+  // on `push` and every wide-run switch keyed on schedule/dispatch — so the
+  // train would have fail-safed into full sweeps AND run the 120-minute boot
+  // group instead of smoke. concurrency_key is the one signal a Pages call
+  // always carries, and it must decide all four places.
+  const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
+  const sweepsJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  sweeps:\n"), ciWorkflow.indexOf("\n  smoke:\n"));
+  assert.match(smokeJob, /timeout-minutes: \$\{\{ \(inputs\.concurrency_key == '' && \(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\)\) && 120 \|\| 50 \}\}/,
+    "a Pages call takes the smoke cap, never the wide run's 120");
+  assert.match(smokeJob, /- name: Smoke\n(?:\s+#.*\n)*\s+if: steps\.shipfilter\.outputs\.ships != 'false' && \(inputs\.concurrency_key != '' \|\| \(github\.event_name != 'schedule' && github\.event_name != 'workflow_dispatch'\)\)/,
+    "a Pages call always runs smoke.spec.js");
+  assert.match(smokeJob, /- name: Boot group \(nightly\) \/ dispatched group\n\s+if: steps\.shipfilter\.outputs\.ships != 'false' && inputs\.concurrency_key == '' && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\)/,
+    "a Pages call never runs the wide group");
+  for (const [name, job] of [["smoke ship filter", smokeJob], ["sweeps filter", sweepsJob]]) {
+    assert.match(job, /CALLED: \$\{\{ inputs\.concurrency_key != '' \}\}/, `${name} must know it is a Pages call`);
+    assert.match(job, /\*\) \[ "\$CALLED" = "true" \] \|\| run_all "event is '\$EVENT', not a push or a Pages call" ;;/,
+      `${name} must accept a Pages call and still fail safe on every other non-push event`);
+  }
+  assert.match(selectJob, /EVENT: \$\{\{ inputs\.concurrency_key != '' && 'push' \|\| github\.event_name \}\}/);
+  assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/,
+    "on a Pages call the plan's base is the train's live commit");
+});
+
+test("pages-live-sha.sh: the live apex-sha or nothing, and never a failure", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-live-"));
+  const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "curl"),
+    '#!/usr/bin/env bash\ncase "${FAKE_LIVE_SHA:-}" in\n  fail) exit 22 ;;\n  "") echo "<html></html>" ;;\n  *) echo "<meta name=\\"apex-build\\" content=\\"1\\">\n<meta name=\\"apex-sha\\" content=\\"${FAKE_LIVE_SHA}\\">" ;;\nesac\n');
+  fs.chmodSync(path.join(bin, "curl"), 0o755);
+  const script = new URL("../../tools/ci/pages-live-sha.sh", import.meta.url).pathname;
+  const live = (fake) => cp.spawnSync("bash", [script, "https://example.test/site/"], {
+    cwd: dir, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FAKE_LIVE_SHA: fake },
+  });
+  const sha = "0123456789abcdef0123456789abcdef01234567";
+  assert.equal(live(sha).stdout.trim(), sha);
+  assert.equal(live(sha).status, 0);
+  assert.equal(live("").stdout.trim(), "", "no apex-sha in the shell: nothing");
+  assert.equal(live("fail").stdout.trim(), "", "site unreadable: nothing");
+  assert.equal(live("fail").status, 0, "unreadable must not fail the verdict job; the caller treats empty as unknown");
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("every inline `node -e '…'` script in the workflows is syntactically complete (no apostrophe can close the quote early)", () => {
