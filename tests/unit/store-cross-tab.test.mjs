@@ -25,6 +25,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/core/store.js"), "utf8");
@@ -45,14 +46,14 @@ function load(writeError = null) {
       },
       removeItem: (k) => { disk.delete(k); },
     },
-    // store.js logs through Log and reads Teams for the season roster; neither
-    // is exercised here, but both are referenced, so they have to exist.
+    // store.js logs through Log; SaveMigrate reads Teams only when migration runs.
     Log: { warn() {}, info() {} },
     Teams: { LIST: [] },
   };
   sandbox.window = sandbox;
   sandbox.addEventListener = (type, fn) => { listeners.set(type, fn); };
   const ctx = vm.createContext(sandbox);
+  seedSaveMigrate(ctx);
   vm.runInContext(SRC, ctx, { filename: "js/core/store.js" });
   const GameStore = vm.runInContext("GameStore", ctx);
   return { store: GameStore.store, disk, onStorage: listeners.get("storage") || null };

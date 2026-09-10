@@ -2703,3 +2703,8 @@ merge left ratchets.json at deploy's ceilings while the sources held both
 sides' lines. `node tools/check/ratchets.mjs --update` re-measured the union
 (bounded well under the pre-merge spine-zones tip of 10428/5648).
 
+## 2026-09-10 — re-merge deploy (save-migrate / race-settings)
+
+`js/game.js` lines -> **9910** / codeLines -> **5322**;
+`js/car/car3d.js` lines -> **4137**. Second deploy merge into
+spine-zones-bind; `ratchets.mjs --update` after conflict in ceilings.
