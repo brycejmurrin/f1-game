@@ -15,16 +15,18 @@ need → skill (when / don'ts)
 
 ## Bootstrap (auto-setup)
 
-So every new Cursor / Claude Code / Cloud session gets the same surface
-without hand-wiring:
+So every new Cursor / Claude Code / Codex / Cloud session gets the same
+surface without hand-wiring:
 
 | Piece | Path | Auto? |
 |---|---|---|
-| Rules | `AGENTS.md` | Yes (Cursor + Cloud). Claude Code via `CLAUDE.md` → `@AGENTS.md`. |
+| Rules | `AGENTS.md` | Yes (Cursor + Cloud + Codex). Claude Code via `CLAUDE.md` → `@AGENTS.md`. |
 | Claude stub | `CLAUDE.md` | Must stay a one-line import; never duplicate rules. |
-| Skills | `.claude/skills/*/SKILL.md` | Yes. Cursor also loads `.claude/skills` for compat — do **not** copy into `.cursor/skills/`. |
-| Subagents | `.claude/agents/*.md` | Yes (same rule). |
-| MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop loads them; Cloud often does not. |
+| Skills (canonical) | `.claude/skills/*/SKILL.md` | Yes for Claude Code + Cursor (compat). Do **not** copy into `.cursor/skills/`. |
+| Skills (Codex mirror) | `.agents/skills/<name>` → `../../.claude/skills/<name>` | Yes. Codex scans `.agents/skills` (symlinks OK — OpenAI docs). Keep lockstep; never fork bodies. |
+| Subagents | `.claude/agents/*.md` | Yes for Claude / Cursor. Codex has no parallel path — use AGENTS.md routes. |
+| MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop Cursor loads them; Cloud often does not. |
+| Codex MCP | `.codex/config.toml` | Project `[mcp_servers.*]` lockstepped to `.mcp.json`. Loads only when the project is **trusted**; user overrides may live in `~/.codex/config.toml`. |
 | Cloud VM | `.cursor/environment.json` | `install` + Chromium path + allowlist of the three catalog commands. |
 | Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
 

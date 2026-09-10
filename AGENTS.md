@@ -306,8 +306,12 @@ Committed bootstrap (auto for every Cloud VM that uses this repo):
    Chromium at `/opt/pw-browsers/chromium`, `mcpServerAllowlist` = the three
    catalog servers only (`apex-tools`, `playwright-official`, `chrome-devtools`).
 2. Dual MCP catalogs (byte-lockstep): root `.mcp.json` + `.cursor/mcp.json`.
-3. Skills / subagents: `.claude/skills/*/SKILL.md`, `.claude/agents/*.md` only.
-4. Rules: `AGENTS.md` (canonical); `CLAUDE.md` is `@AGENTS.md` only.
+3. Skills / subagents: `.claude/skills/*/SKILL.md`, `.claude/agents/*.md`
+   (canonical). Codex reads the same skill bodies via `.agents/skills/<name>`
+   symlinks — do not fork copies. No `.cursor/skills/` or `.cursor/agents/`.
+4. Codex MCP: `.codex/config.toml` mirrors the three catalog servers (project
+   must be trusted for Codex to load it).
+5. Rules: `AGENTS.md` (canonical); `CLAUDE.md` is `@AGENTS.md` only.
 
 Cloud often does **not** attach project stdio MCP. Then use the CLI fallbacks
 in `docs/AGENT-SURFACE.md` (`tools/mcp/apex-tools-mcp.sh call`, …). Team MCP

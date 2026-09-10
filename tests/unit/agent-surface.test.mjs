@@ -145,10 +145,63 @@ test("bootstrap contract is documented for Cloud + desktop", () => {
   assert.match(doc, /^## Bootstrap \(auto-setup\)/m);
   assert.match(doc, /\.cursor\/environment\.json/);
   assert.match(doc, /Integrations & MCP/);
+  assert.match(doc, /\.agents\/skills/);
+  assert.match(doc, /Codex/);
   const agents = read("AGENTS.md");
   assert.match(agents, /^## Cursor Cloud specific instructions/m);
   assert.match(agents, /mcpServerAllowlist/);
+  assert.match(agents, /\.agents\/skills/);
   assert.match(read("CLAUDE.md"), /@AGENTS\.md/);
+});
+
+test("Codex skill mirror locksteps .claude/skills via symlinks", () => {
+  const claude = path.join(ROOT, ".claude/skills");
+  const codex = path.join(ROOT, ".agents/skills");
+  assert.ok(fs.existsSync(codex), ".agents/skills missing — Codex will not see project skills");
+  const names = fs.readdirSync(claude).filter((n) => {
+    try { return fs.statSync(path.join(claude, n)).isDirectory(); }
+    catch { return false; }
+  }).sort();
+  const mirrored = fs.readdirSync(codex).sort();
+  assert.deepEqual(mirrored, names, ".agents/skills must mirror every .claude/skills dir");
+  const broken = [];
+  for (const name of names) {
+    const link = path.join(codex, name);
+    const st = fs.lstatSync(link);
+    if (!st.isSymbolicLink()) {
+      broken.push(`${name} is not a symlink`);
+      continue;
+    }
+    const target = fs.readlinkSync(link);
+    if (target !== `../../.claude/skills/${name}`) {
+      broken.push(`${name} → ${target} (want ../../.claude/skills/${name})`);
+    }
+    if (!fs.existsSync(path.join(link, "SKILL.md"))) {
+      broken.push(`${name} does not resolve to SKILL.md`);
+    }
+  }
+  assert.deepEqual(broken, [], "Codex skill mirror broken");
+});
+
+test("Codex .codex/config.toml MCP servers lockstep .mcp.json", () => {
+  const cfg = JSON.parse(read(".mcp.json"));
+  const toml = read(".codex/config.toml");
+  assert.match(toml, /trusted/i);
+  const names = Object.keys(cfg.mcpServers).sort();
+  assert.deepEqual(names, ["apex-tools", "chrome-devtools", "playwright-official"]);
+  for (const name of names) {
+    assert.match(toml, new RegExp(`\\[mcp_servers\\.${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\]`),
+      `.codex/config.toml missing [mcp_servers.${name}]`);
+    const srv = cfg.mcpServers[name];
+    assert.match(toml, new RegExp(`command\\s*=\\s*"${srv.command}"`),
+      `${name} command must match .mcp.json`);
+    for (const arg of srv.args) {
+      assert.match(toml, new RegExp(`"${arg.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}"`),
+        `${name} args must include ${arg}`);
+    }
+  }
+  assert.match(read("docs/AGENT-SURFACE.md"), /\.codex\/config\.toml/);
+  assert.match(read("AGENTS.md"), /\.codex\/config\.toml/);
 });
 
 test("MCP descriptions state tree vs browser", () => {
