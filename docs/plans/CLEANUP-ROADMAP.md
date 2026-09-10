@@ -6,8 +6,8 @@ no ESM.
 
 **Execution rule:** one carve → one commit → guards → targeted tests → CI.
 
-**Working branch:** `cursor/shared-frustum-df95` (Tier A continues)  
-**Shipped so far:** PR [#102](https://github.com/brycejmurrin/f1-game/pull/102) (hash32 + dead `racingLineMix` + quali-net)
+**Working branch:** deploy `claude/f1-game-project-26h3ng` (Tier A continues)  
+**Shipped so far:** PRs [#102](https://github.com/brycejmurrin/f1-game/pull/102), [#107](https://github.com/brycejmurrin/f1-game/pull/107), [#108](https://github.com/brycejmurrin/f1-game/pull/108), [#110](https://github.com/brycejmurrin/f1-game/pull/110)
 
 ---
 
@@ -45,10 +45,10 @@ Eighteen parallel read-only bloat-auditor runs (see agent IDs in scratch matrix)
 | ✅ | `js/core/hash32.js` | career, daily-challenge, driver-ratings | **Done** (`03f8dd62`) |
 | ✅ | Remove `AiDrive.racingLineMix` | ai-drive.js | **Done** (`91d23591`) |
 | ✅ | **quali-net** (js/race/quali-net.js) | game.js (~130 ln) | **Done** (PR #102) |
-| ✅ | **shared frustum helper** (js/render/shared/frustum.js) | 4 render copies | **Done** (this PR) |
-| 1 | save-migrate | store.js | **NEXT** |
-| 4 | race-settings + custom-team | game.js | Planned |
-| 5 | res-row UI helper | duplicated row builders | Planned |
+| ✅ | **shared frustum helper** (js/render/shared/frustum.js) | 4 render copies | **Done** (PR #107) |
+| ✅ | **save-migrate** (js/career/save-migrate.js) | store.js (~100 ln) | **Done** (PR #108) |
+| ✅ | **race-settings + custom-team** | game.js (~690 ln) | **Done** (PR #110) |
+| 5 | res-row UI helper | duplicated row builders | **NEXT** |
 | 6 | lobby-codes | lobby.js (~230 ln) | Planned |
 | 7 | car-aero | car3d.js (~520 ln) | Planned |
 | 8 | copy-text clipboard helper | perf + elsewhere | Planned |
@@ -126,8 +126,8 @@ npm run test:guards
 
 | Batch | Contents | Status |
 |-------|----------|--------|
-| PR #102 | hash32 + racingLineMix + ARCHITECTURE regen | CI green, draft |
-| Next PR(s) | quali-net, then 1–3 Tier A carves each | Planned |
+| PR #102–#110 | hash32, quali-net, frustum, save-migrate, race-settings | Deployed |
+| Next PR(s) | res-row, lobby-codes, car-aero (Tier A) | Planned |
 
 Review size is flexible: one carve per PR (safest) or batched Tier A slices (faster).
 
@@ -135,7 +135,7 @@ Review size is flexible: one carve per PR (safest) or batched Tier A slices (fas
 
 ## Next action
 
-1. **Carve save-migrate** from store.js — versioned localStorage migration helper.
-2. Continue Tier A queue: race-settings + custom-team, res-row, lobby-codes.
+1. Tier A next: **res-row UI helper** (`js/ui/`).
+2. Then lobby-codes, car-aero, copy-text, music-playback.
 
 Scratch working matrix (agent IDs, line-level BLOAT rows): `scratch/cleanup-roadmap-draft.md` (gitignored).

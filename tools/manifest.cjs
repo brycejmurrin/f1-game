@@ -90,6 +90,7 @@ const FULL = [
   "js/render/shared/driving-line.js",
   "js/data/teams.js",
   "js/data/driver-ratings.js",
+  "js/career/save-migrate.js",
   // Persistence sits ahead of every js/game module: the settings panels, the
   // perf sentinel and the Spotify client go through GameStore.store's raw lane,
   // and spotify.js's init() runs at EVAL when the document is already complete
@@ -187,6 +188,8 @@ const FULL = [
   "js/race/quali-model.js",
   "js/race/daily-challenge.js",
   "js/race/quali-net.js",
+  "js/race/race-settings.js",
+  "js/career/custom-team.js",
   "js/ui/quali-sheet.js",
   "js/ui/onboard.js",
   "js/physics/debris-world.js",
@@ -376,7 +379,9 @@ const HARD_EDGES = [
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
-  ["js/data/teams.js", "js/core/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
+  ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
+  ["js/career/save-migrate.js", "js/core/store.js"],
+  ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
   // carry its own copy of the roster (a SHORT table that had drifted), and
   // reading the real one makes the order load-bearing rather than tidy.
@@ -401,6 +406,9 @@ const HARD_EDGES = [
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
   ["js/race/quali-net.js", "js/game.js"],         // game.js calls QualiNet.create(hooks) after quali wiring
+  ["js/race/race-settings.js", "js/game.js"],      // game.js calls RaceSettings.create(hooks) after quali wiring
+  ["js/data/teams.js", "js/career/custom-team.js"], // DEFAULT_CUSTOM + Teams.LIST
+  ["js/career/custom-team.js", "js/game.js"],      // game.js calls CustomTeam.create(hooks) after Menus
   ["js/lighting/knobs.js", "js/lighting/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/lighting.js"],      // the LightTune façade re-exports TUNE_DEFS/LT at eval

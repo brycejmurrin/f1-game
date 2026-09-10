@@ -417,7 +417,6 @@ function initRainDrops() {
 const { store, ttBoard, ttBoardAdd, hexToRgb, rgbToHex, seasonDriverId } = GameStore;
 
 const { DEFAULT_CUSTOM, TIER_V } = Teams;   // the custom-team seed + the tier pace ladder (js/data/teams.js)
-function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
 function invalidateCustomMeshCache(cache, order) {
   Object.keys(cache).forEach((key) => {
     if (key.indexOf("custom:") !== 0) return;
@@ -452,37 +451,6 @@ function putBoundedMesh(cache, order, key, create, max, freeOne) {
     free(victim);
   }
   return mesh;
-}
-function syncCustomTeam() {
-  const i = Teams.LIST.findIndex((t) => t.id === "custom");
-  if (i >= 0) Teams.LIST.splice(i, 1);
-  Teams.LIST.push(loadCustomTeam());
-  invalidateDecalTextures("custom");
-  invalidateCustomMeshCache(teamMeshes, teamMeshOrder);   // without the order array the key stays queued, gets pushed twice, and the NEXT eviction frees a live mesh
-  invalidateCustomMeshCache(teamBodies, teamBodyOrder);
-  invalidateCustomMeshCache(playerBodies, playerBodyOrder);
-  invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
-}
-// Another tab's customTeam write bumps store.rev (store.onForeignWrite) but
-// would leave Teams.LIST + mesh caches on the previous paint until the next
-// local cz-save. Re-inject whenever the foreign key (or a full clear) lands.
-// customLogo is a separate key — without this, LiveryTex keeps the previous
-// emblem and decal atlases stay wrong until a local picker/clear runs.
-if (store.subscribe) {
-  store.subscribe((change) => {
-    if (!change || !change.foreign) return;
-    if (change.clear || change.key === "customTeam") {
-      syncCustomTeam();
-      try { spMeshBust(); } catch (_) { /* garage scene may not be up yet */ }
-    }
-    if (change.clear || change.key === "customLogo") {
-      const url = change.clear ? null : loadCustomLogo();
-      applyCustomLogo(url);
-      try { invalidateDecalTextures("custom"); } catch (_) { /* decal cache later */ }
-      try { spMeshBust(); } catch (_) { /* garage scene may not be up yet */ }
-      try { refreshCustomLogoUi(url); } catch (_) { /* customize DOM later */ }
-    }
-  });
 }
 let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
@@ -3286,6 +3254,9 @@ let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
 // getters/setters + stable helpers. Getters read the current value at call
 // time; setters write back into the closure. Grown as extractions need it —
 // add a getter here rather than passing state ad hoc.
+let raceSettings = null;
+let customTeam = null;
+
 const G = {
   $, els,
   fmtTime: (t) => fmtTime(t),
@@ -3469,9 +3440,9 @@ const G = {
   setTeamPicker: (...a) => setTeamPicker(...a),
   teamSwatch: (...a) => teamSwatch(...a),
   openGarage: (...a) => openGarage(...a),
-  openCustomize: (...a) => openCustomize(...a),
+  openCustomize: (...a) => customTeam.openCustomize(...a),
   // Career plumbing — same deferred-arrow reason as the block above.
-  openRaceSettings: (...a) => openRaceSettings(...a),
+  openRaceSettings: (...a) => raceSettings.openRaceSettings(...a),
   // SEASON SETUP: menus.js draws the button, season-ui.js owns the screen, and
   // both need the OTHER one's entry point — hence the pair.
   openSeasonSetup: () => seasonUi.open(),
@@ -3563,7 +3534,9 @@ const G = {
   // Let apex.js synchronise its observable HUD state without waiting for rAF.
   refreshHud: (...a) => updateHud(...a),   // const initialised below — defer
   // The waiting room reuses the real menus rather than reimplementing them.
-  setNetRoom, openRaceSetup, get netRoom() { return netRoom; },
+  setNetRoom: (...a) => raceSettings.setNetRoom(...a),
+  openRaceSetup: (...a) => raceSettings.openRaceSetup(...a),
+  get netRoom() { return raceSettings.netRoom; },
   // Seats held by the OTHER players, so the garage can refuse to hand out one
   // that is taken. An array today of at most one entry; up to three when the
   // room grows past two. Empty off-line, which is what keeps every solo mode
@@ -3611,6 +3584,29 @@ const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 const { buildSetup, openSetup } = SetupUI.create(G);
 // Select-screen UI (js/ui/select-screen.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt } = Menus.create(G);
+// MY TEAM load/sync + customize dialog (js/career/custom-team.js).
+customTeam = CustomTeam.create({
+  $, store, Teams, DEFAULT_CUSTOM, hexToRgb, rgbToHex, hexToArr, clamp,
+  invalidateDecalTextures,
+  invalidateCustomMeshCaches() {
+    invalidateCustomMeshCache(teamMeshes, teamMeshOrder);
+    invalidateCustomMeshCache(teamBodies, teamBodyOrder);
+    invalidateCustomMeshCache(playerBodies, playerBodyOrder);
+    invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
+  },
+  spMeshBust,
+  getLivDraftOverride: () => livDraftOverride,
+  setLivDraftOverride: (v) => { livDraftOverride = v; },
+  getSoundOn: () => soundOn,
+  GameAudio,
+  getEls: () => els,
+  getTeamIdx: () => teamIdx,
+  setTeamIdx: (v) => { teamIdx = v; },
+  setDriverIdx: (v) => { driverIdx = v; },
+  buildSelect,
+  buildSetup,
+  isCarsetupVisible: () => !$("carsetup").hidden,
+});
 // UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
 const { setScale, applyResMode } = UiScale.create(G);
@@ -3634,6 +3630,25 @@ qualiNet = QualiNet.create({
     quali.simulate(qualiNet.driven(mine));
     if (!$("quali").hidden) qualiSheet.build(quali.rows());
   },
+});
+// RACE SETTINGS sheet (js/race/race-settings.js).
+raceSettings = RaceSettings.create({
+  $, store, GameAudio, getSoundOn: () => soundOn, Tracks, SettingRow, DrivingLine,
+  GAME_LAPS, TT_LAPS, scheduleFlybyTrack,
+  isTimeTrial, isChampionship, SeasonCal, setCautionEnabled,
+  getTrackIdx: () => trackIdx,
+  getRaceLaps: () => raceLaps, setRaceLaps: (v) => { raceLaps = v; },
+  getRaceWeather: () => raceWeather, setRaceWeather: (v) => { raceWeather = v; },
+  getRaceTimeOfDay: () => raceTimeOfDay, setRaceTimeOfDay: (v) => { raceTimeOfDay = v; },
+  getRaceChangeable: () => raceChangeable, setRaceChangeable: (v) => { raceChangeable = v; },
+  setWxArcPlan: (v) => { wxArcPlan = v; },
+  getDifficulty: () => difficulty, setDifficulty: (v) => { difficulty = v; },
+  getRaceGrid: () => raceGrid, setRaceGrid: (v) => { raceGrid = v; },
+  getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
+  getRaceCtl: () => raceCtl,
+  gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
+  openQuali, startRace, enableTilt, getSteerMode: () => steerMode,
+  getNetLobby: () => netLobby, buildSelect, els, openGarage, buildStandings,
 });
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
@@ -3761,7 +3776,7 @@ function clearMenuScreens() {
   // starting under it must stop that, or the preview draws over the track.
   setupPreviewOn = false;
   // Nothing to go back TO any more — the room this came from is now a race.
-  netRoom = false;
+  raceSettings.setNetRoom(false);
   garageReturn = "select";
 }
 
@@ -9134,7 +9149,7 @@ $("tp-close").onclick = () => { $("teampicker").hidden = true; };
 els.selBack.onclick = () => {
   vt(() => {
     els.select.hidden = true;
-    if (netRoom) $("vsfriend").hidden = false; else els.overlay.hidden = false;
+    if (raceSettings.netRoom) $("vsfriend").hidden = false; else els.overlay.hidden = false;
   });
   if (soundOn) GameAudio.uiSelect();
 };
@@ -9193,184 +9208,7 @@ $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings()
 // it. A section banner is the only navigation this file has; one that lies is
 // worse than none.
 
-function buildRaceSettings() {
-  // In the room this screen confirms the host's choice and hands it to the
-  // other player — it does not drop the lights. A button saying RACE! there is
-  // a lie about what the next tap does.
-  $("rs-go").textContent = netRoom ? "CONFIRM" : "RACE!";
-  wireRaceSettings();
-  const tt = isTimeTrial();
-  // TT list includes 4 because TT_LAPS = 4 is the openRaceSettings default —
-  // without it the screen opened with no LAPS option selected.
-  // FULL is this CIRCUIT's grand prix distance (def.gpLaps — the real
-  // regulation, derived in js/track/tracks.js), not a flat 57 offered on all
-  // forty. Monaco is 78 laps and Spa is 44; one number could only ever be right
-  // for one of them, and 57 was not right for either. Filtered so the ladder
-  // stays strictly increasing on a short circuit-free layout.
-  const full = (Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps) || 57;
-  const lapOpts = tt ? [3, 4, 5, 8] : [3, 5, 10, 25].filter((n) => n < full).concat(full);
-  // FULL now MOVES with the circuit, so a selection made at Monaco (78) is off
-  // the ladder at Spa (44) — and a 57 (FULL) picked at Silverstone is off it at
-  // Monaco (78) too, BELOW full, so a > full clamp still left nothing selected.
-  if (!tt && !lapOpts.includes(raceLaps)) raceLaps = full;   // a full race stays a full race
-  SettingRow.paint("rs-laps", raceLaps, lapOpts.map((n) => [n, !tt && n === full ? full + " (FULL)" : String(n)]));
-  SettingRow.paint("rs-weather", raceWeather, RS_WEATHER);
-  // CONDITIONS — changeable weather: the race STARTS in the weather picked
-  // above and walks to a target the host decides. Its own row, not a sixth
-  // weather: it is a second question about the same sky.
-  $("rs-mixed").hidden = tt;
-  SettingRow.paint("rs-mixed", raceChangeable ? "mixed" : "stable", RS_CONDITIONS);
-  SettingRow.paint("rs-time", raceTimeOfDay, RS_TIME);
-  // DIFFICULTY — a race setting like the rest, so it is built here rather than
-  // on the select screen. Unlike laps/weather/time it PERSISTS (store), because
-  // it is a standing preference rather than a per-race choice.
-  $("rs-diff").hidden = tt;  // no AI to rate in a time trial
-  SettingRow.paint("rs-diff", difficulty, RS_DIFF);
-  // GRID — hidden in a time trial (no grid). A championship weekend that
-  // qualifies decides the grid itself, so the row is DISABLED showing
-  // QUALIFYING LAP rather than hidden: "why did this race qualify" is a
-  // question the screen should answer, and a dead control that still says
-  // what it is set to answers it. Option 0 is always the pace-order grid and
-  // option 1 the qualifying lap — the values quali.spec.js selects. Labels say
-  // what the rule IS (REVERSE TOP 10 is Formula 2's sprint rule, not an F1
-  // one; REVERSED is the standings upside down) in TEN characters, the most
-  // the row's 8rem value holds at --fs-3 bold: measured 2026-09-05 the select's
-  // inner width is 112px on a 393px phone, "QUALIFYING LAP" needed 125 and
-  // "REVERSE TOP 10 · F2" 159. Qualifying IS offered in a friend race.
-  // (RELIABILITY and CAUTIONS below hide in a time trial for the same reason
-  // DIFFICULTY does: alone on an empty track there is nothing to act on.
-  // ACTIVE AERO used to sit here; it is a CONTROL preference, so it lives in
-  // pause > SETTINGS > DRIVING next to GEARS — see refreshAeroBtn.)
-  const champ = isChampionship();
-  $("rs-quali").hidden = tt;
-  const qForced = champ ? SeasonCal.quali() : null;
-  const rules = qForced ? [["quali", "QUALIFYING"]]
-    : champ ? [["tier", "PACE ORDER"], ["revchamp", "REVERSED"], ["random", "RANDOM"]]
-    : [["tier", "PACE ORDER"], ["quali", "QUALIFYING"], ["rev10", "REVERSE 10"], ["random", "RANDOM"]];
-  // A rule this flow has no option for gridOrderFor() ignores.
-  const cur = qForced ? "quali" : rules.some(([r]) => r === raceGrid) ? raceGrid : "tier";
-  SettingRow.paint("rs-quali", cur, rules);
-  SettingRow.disable("rs-quali", !!qForced);
-  $("rs-caution").hidden = tt;
-  SettingRow.paint("rs-caution", raceCtl.enabled ? "on" : "off", RS_ONOFF);
-  $("rs-reliab").hidden = tt;
-  SettingRow.paint("rs-reliab", raceReliability, RS_RELIAB);
-  // DRIVING LINE — the glowing suggested line on the road (js/render/shared/
-  // driving-line.js). Offered in every flow, a time trial included: it is a
-  // teaching aid, and alone on track is where one learns a circuit.
-  SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
-}
-// The option lists are data; the rows in index.html hold no options of their
-// own, so the list the store validates against and the list the player sees
-// cannot drift. Icons ride inside the label (a <select> option is text-only).
-const RS_WEATHER = [["dry", "☀ DRY"], ["wet", "💧 WET"], ["rain", "🌧 RAIN"], ["overcast", "☁ CLOUDY"], ["fog", "🌫 FOG"]];
-const RS_CONDITIONS = [["stable", "STABLE"], ["mixed", "MIXED"]];
-const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]];
-const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
-const RS_ONOFF = [["off", "OFF"], ["on", "ON"]];
-const RS_RELIAB = [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]];
-const RS_LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
-// Persisted like DIFFICULTY; the module holds the live mode so the render loop
-// never reads the store. FULL by default — every racing game ships its line on
-// for a new player, and Forza's default is the whole lap; CORNERS (F1's
-// "corners only") is the reduced form for a player who knows the circuit.
-function setDrivingLine(v) { store.set("drivingLine", DrivingLine.setMode(v)); }
-// Wire the eight rows ONCE (a listener per build would stack); every build
-// after that is a paint. Each write repaints the whole screen, because LAPS
-// and GRID depend on state a neighbour can change. The mark lives on the body
-// so the DOM says whether it is wired (no top-level let).
-function wireRaceSettings() {
-  const body = $("rs-body");
-  if (body.dataset.wired) return;
-  body.dataset.wired = "1";
-  const after = () => { buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
-  const wire = (id, read, write) => SettingRow.wire(id, { read, write: (v) => { write(v); after(); } });
-  wire("rs-laps", () => raceLaps, (v) => { raceLaps = +v; });
-  wire("rs-weather", () => raceWeather, (v) => { raceWeather = v; });
-  wire("rs-mixed", () => (raceChangeable ? "mixed" : "stable"), (v) => { raceChangeable = v === "mixed"; wxArcPlan = null; });
-  // scheduleFlybyTrack: loadTrack is memoised on (circuit, sessionDark), and a
-  // TIME pick that flips sessionDark used to leave the flyby's build stale so
-  // GO paid a second full Tracks.build (0.9–3.3 s measured) on top of the
-  // first. Rebuilding on the pick lands it in menu idle instead.
-  wire("rs-time", () => raceTimeOfDay, (v) => { raceTimeOfDay = v; scheduleFlybyTrack(); });
-  wire("rs-diff", () => difficulty, (v) => { difficulty = v; store.set("difficulty", v); });
-  wire("rs-quali", () => raceGrid, (v) => { raceGrid = v; store.set("raceGrid", v); });
-  wire("rs-caution", () => (raceCtl.enabled ? "on" : "off"), (v) => { setCautionEnabled(v === "on"); });
-  wire("rs-reliab", () => raceReliability, (v) => { raceReliability = v; store.set("reliability", v); });
-  wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
-}
-
-// RACE SETTINGS is reachable from #select and (in career) from #career, so it
-// records which screen to restore on cancel — the same return-path pattern
-// openGarage(from)/garageReturn uses, and for the same reason: unhiding #select
-// unconditionally used to drop the player on the wrong screen.
-let rsReturn = "select";
-// True while two connected players are sitting in the VS FRIEND waiting room.
-// It changes what the TERMINAL action of #select / #race-settings / #carsetup
-// means: normally those screens end in a race, but in the room they end by
-// returning to the lobby with a choice made. Reusing the real screens is what
-// gives the room custom teams, liveries and the parts budget for nothing.
-let netRoom = false;
-function setNetRoom(on) { netRoom = !!on; }
-// The host picking the race: the ordinary #select screen (circuit + team),
-// which chains to #race-settings on START and lands back in the lobby.
-function openRaceSetup() {
-  $("vsfriend").hidden = true;
-  buildSelect();
-  els.select.hidden = false;
-  if (soundOn) GameAudio.uiSelect();
-}
-function openRaceSettings(from) {
-  rsReturn = from || "select";
-  // Defaults on every visit is right when this screen is the last step before
-  // a race. In the VS FRIEND room the host may come back to change one thing,
-  // and resetting the other three would silently undo choices the guest has
-  // already been shown.
-  if (!netRoom) {
-    // A season's DISTANCE PRESELECTS the chip rather than overriding it: the
-    // player can still change this weekend's race from here.
-    raceLaps = isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS);
-    raceWeather = "dry";
-    raceTimeOfDay = "default";
-  }
-  buildRaceSettings();
-  $(rsReturn).hidden = true;
-  $("race-settings").hidden = false;
-  // The ONE menu flyby: the circuit you just chose, behind the last screen before
-  // the lights. It also pre-warms the build GO would otherwise pay (memoised).
-  scheduleFlybyTrack();
-}
-els.selGo.onclick = () => {
-  if (soundOn) GameAudio.uiSelect();
-  if (els.selGo.dataset.seasonComplete === "1") {
-    buildStandings(); $("standings").hidden = false; return;
-  }
-  // Circuit first, then race settings. YOUR CAR (#sel-car) is the garage door.
-  openRaceSettings("select");
-};
-$("sel-car").onclick = () => openGarage("select");
-$("rs-cancel").onclick = () => {
-  $("race-settings").hidden = true;
-  $(rsReturn).hidden = false;
-};
-$("rs-go").onclick = () => {
-  if (soundOn) GameAudio.uiSelect();
-  $("race-settings").hidden = true;
-  // In a VS FRIEND waiting room this screen is the host CHOOSING the race, not
-  // starting it — the other player is still picking a car, and lights-out is
-  // the room's START button. So confirm here and go back, publishing the choice
-  // so the guest sees it immediately.
-  if (netRoom) {
-    $("vsfriend").hidden = false;
-    netLobby.roomChanged("race");
-    return;
-  }
-  if (steerMode === "tilt") enableTilt();
-  // Championship GO follows qualiNext (sprint GP legs skip a second quali).
-  // One-off GO still follows gridFromQuali / the QUALIFYING chip.
-  if ((isChampionship() && SeasonCal.qualiNext(season) && !quali.results()) || (!isChampionship() && gridFromQuali() && !quali.results())) openQuali();
-  else startRace();
-};
+// RACE SETTINGS — js/race/race-settings.js (RaceSettings.create above).
 
 // ── qualifying ───────────────────────────────────────────────────────────────
 // The sheet opens BEFORE the session with the field already simulated, so the
@@ -9457,104 +9295,7 @@ $("q-back").onclick = () => {
   qualiNet.hasArmed() ? qualiNet.resetOnBackWithAbort() : ($("race-settings").hidden = false);
 };
 
-// ---- customize my team ----
-// Optional extra-paint rows: DOM colour-input id -> livery key. Saved onto the
-// custom team as ct.livery, which Liveries.forTeam folds into its default paint.
-const CZ_LIV_FIELDS = [
-  ["cz-stripe", "stripe"], ["cz-nosestripe", "noseStripe"], ["cz-detail", "accent"],
-  ["cz-nose", "nose"], ["cz-pod", "pod"], ["cz-wing", "wing"],
-  ["cz-fin", "fin"], ["cz-finart", "finArt"], ["cz-logo", "logo"],
-  ["cz-logo2", "logo2"], ["cz-logo3", "logo3"],
-  ["cz-halo", "halo"],
-];
-// The custom team's paint FINISH ("gloss" = the default clearcoat car paint, so
-// it is never written to ct.livery). Held here rather than read off the DOM so
-// the three buttons behave as one radio group.
-let czFinish = "gloss";
-function czSetFinish(value) {
-  czFinish = value || "gloss";
-  for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
-    btn.classList.toggle("active", btn.dataset.czFinish === czFinish);
-  }
-}
-// A field is "NONE" when its colour input carries the cz-off class.
-function czSetLivField(domId, arr) {
-  const inp = $(domId), none = $(domId + "-none");
-  if (arr) { inp.value = rgbToHex(arr); inp.classList.remove("cz-off"); none.classList.remove("active"); }
-  else { inp.value = inp.value && /^#[0-9a-fA-F]{6}$/.test(inp.value) ? inp.value : "#ffffff"; inp.classList.add("cz-off"); none.classList.add("active"); }
-}
-// Shared by cz-save and czPreview: structural MY TEAM livery (finShape / spine*)
-// from the previous save (or DEFAULT_CUSTOM), plus the dialog's colour slots +
-// finish. A bare colour-only object wiped finShape "none" and regrew the shark
-// fin — both on persist and on the live turntable override.
-function czLivFromDialog() {
-  const prev = loadCustomTeam();
-  const liv = Object.assign({}, DEFAULT_CUSTOM.livery || {}, (prev && prev.livery) || {});
-  for (const [, key] of CZ_LIV_FIELDS) delete liv[key];
-  delete liv.finish;
-  CZ_LIV_FIELDS.forEach(([domId, key]) => {
-    if (!$(domId).classList.contains("cz-off")) liv[key] = hexToRgb($(domId).value);
-  });
-  if (czFinish && czFinish !== "gloss") liv.finish = czFinish;
-  return liv;
-}
-function czPreview() {
-  $("cz-swatch1").style.background = $("cz-color").value;
-  $("cz-swatch2").style.background = $("cz-color2").value;
-  const code = ($("cz-code").value || "YOU").toUpperCase();
-  $("cz-pvtext").textContent = "#" + ($("cz-num").value || "99") + " " + code + " · " + ($("cz-short").value || "YOU").toUpperCase();
-  $("cz-pvtext").style.color = $("cz-color").value;
-  // Live 3D parity with the garage's livery creator, one tab over: that
-  // editor repaints the real car per colour-input event via livDraftOverride;
-  // this one committed blind against two 22px swatches. Same override, keyed
-  // "custom" — it shows on the turntable behind the dialog whenever MY TEAM
-  // is the selected team, exactly like the sibling editor.
-  // MUST carry structural finShape/spine* (czLivFromDialog) — a bare {c1,c2}
-  // left finShape null and Car3D fell back to "standard" (shark fin) for the
-  // whole time the dialog was open, undoing the cz-save structural fix.
-  const liv = Object.assign(
-    { id: "default", c1: hexToArr($("cz-color").value), c2: hexToArr($("cz-color2").value) },
-    czLivFromDialog());
-  livDraftOverride = { teamId: "custom", liv };
-  spMeshBust();
-}
-function czClearPreview() { livDraftOverride = null; spMeshBust(); }
-function openCustomize() {
-  const ct = loadCustomTeam();
-  $("cz-name").value = ct.name;
-  $("cz-short").value = ct.short;
-  $("cz-color").value = rgbToHex(ct.color);
-  $("cz-color2").value = rgbToHex(ct.color2);
-  $("cz-driver").value = ct.drivers[0].name;
-  $("cz-code").value = ct.drivers[0].code;
-  $("cz-num").value = ct.drivers[0].num;
-  const liv = ct.livery || {};
-  CZ_LIV_FIELDS.forEach(([domId, key]) => czSetLivField(domId, liv[key] || null));
-  czSetFinish(liv.finish);
-  refreshCustomLogoUi(loadCustomLogo());
-  czPreview();
-  els.customize.hidden = false;
-}
-["cz-name", "cz-short", "cz-color", "cz-color2", "cz-code", "cz-num"].forEach((id) => {
-  $(id).addEventListener("input", czPreview);
-});
-// Extra-paint rows: editing the swatch re-enables the field; NONE clears it.
-// Both must refresh the live draft — colour slots used to leave finShape/spine
-// on the override but never re-ran czPreview after stripe/finish edits.
-CZ_LIV_FIELDS.forEach(([domId]) => {
-  $(domId).addEventListener("input", () => {
-    $(domId).classList.remove("cz-off"); $(domId + "-none").classList.remove("active");
-    czPreview();
-  });
-  $(domId + "-none").onclick = () => {
-    $(domId).classList.add("cz-off"); $(domId + "-none").classList.add("active");
-    czPreview();
-    if (soundOn) GameAudio.uiTick();
-  };
-});
-for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
-  btn.onclick = () => { czSetFinish(btn.dataset.czFinish); czPreview(); if (soundOn) GameAudio.uiTick(); };
-}
+// MY TEAM customize dialog — js/career/custom-team.js (CustomTeam.create above).
 
 // ---- garage preview camera ----
 // The chips in #cs-view, plus orbit-by-drag and zoom on the canvas itself. All
@@ -9769,7 +9510,7 @@ $("cs-done").onclick = () => {
   // settings, not back to a screen whose question is already answered. Race
   // settings' own BACK still returns to #select, so the circuit stays two taps
   // away if you change your mind.
-  if (garageReturn === "select") { openRaceSettings("select"); return; }
+  if (garageReturn === "select") { raceSettings.openRaceSettings("select"); return; }
   buildSelect();
   els.overlay.hidden = false;   // only the title screen's GARAGE button gets here
 };
@@ -9777,40 +9518,6 @@ $("cs-unlimited").onclick = () => {
   unlimitedBudget = !unlimitedBudget;
   store.set("unlimitedBudget", unlimitedBudget);
   buildSetup();
-};
-$("cz-cancel").onclick = () => { czClearPreview(); els.customize.hidden = true; };
-$("cz-save").onclick = () => {
-  const clean = (v, fb, n) => { v = (v || "").trim(); return v ? v.slice(0, n) : fb; };
-  const prev = loadCustomTeam();
-  const ct = {
-    id: "custom", engine: "Custom", tier: 2, custom: true,
-    name: clean($("cz-name").value, "My Team", 22),
-    short: clean($("cz-short").value, "YOU", 4).toUpperCase(),
-    color: hexToRgb($("cz-color").value),
-    color2: hexToRgb($("cz-color2").value),
-    stats: prev.stats || DEFAULT_CUSTOM.stats,
-    drivers: [{
-      name: clean($("cz-driver").value, "Your Name", 22),
-      code: clean($("cz-code").value, "YOU", 3).toUpperCase(),
-      num: clamp(parseInt($("cz-num").value, 10) || 99, 0, 99),
-    }],
-  };
-  // Keep structural MY TEAM livery (finShape / spine*) from the previous save
-  // (or DEFAULT_CUSTOM) — this dialog only edits colour slots + finish. A bare
-  // colour-only object used to wipe finShape "none" and regrow the shark fin.
-  ct.livery = czLivFromDialog();
-  store.set("customTeam", ct);
-  syncCustomTeam();
-  teamIdx = Teams.LIST.findIndex((t) => t.id === "custom");
-  driverIdx = 0;
-  store.set("team", teamIdx); store.set("driver", 0);
-  els.customize.hidden = true;
-  // MY TEAM is reachable from the garage now, so refresh that too — saving a
-  // team switches you to it, and the garage is showing its car in 3D.
-  czClearPreview();   // the saved team supersedes the live draft
-  buildSelect();
-  if (!$("carsetup").hidden) buildSetup();
-  if (soundOn) GameAudio.uiSelect();
 };
 els.resMenu.onclick = () => quitToMenu();
 els.resNext.onclick = () => {
@@ -10034,113 +9741,9 @@ window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmP
 // that nothing in js/, tests/, tools/ or index.html has ever set. The harness
 // it was written for is window.__apex, in js/agent/apex.js.)
 
-// MY TEAM's own emblem. Stored as a downscaled data URL under apex26.customLogo
-// so it survives a reload without touching the asset pipeline — LiveryTex takes
-// it through exactly the same slot as the shipped marks.
-const CUSTOM_LOGO_KEY = "customLogo";
-const CUSTOM_LOGO_MAX = 384;      // matches the shipped marks
-function loadCustomLogo() { try { return store.get(CUSTOM_LOGO_KEY, null); } catch (_) { return null; } }
-function applyCustomLogo(dataUrl) {
-  if (typeof LiveryTex === "undefined" || !LiveryTex.setTeamLogo) return;
-  LiveryTex.setTeamLogo("custom", dataUrl || null);
-}
-// Downscale to at most CUSTOM_LOGO_MAX on the long edge before storing: a phone
-// photo is several MB and localStorage would simply throw.
-function readLogoFile(file, done) {
-  const fr = new FileReader();
-  fr.onload = () => {
-    const img = new Image();
-    img.onload = () => {
-      const sc = Math.min(1, CUSTOM_LOGO_MAX / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * sc));
-      const h = Math.max(1, Math.round(img.height * sc));
-      const c = document.createElement("canvas");
-      c.width = w; c.height = h;
-      c.getContext("2d").drawImage(img, 0, 0, w, h);
-      try { done(c.toDataURL("image/png")); } catch (_) { done(null); }
-    };
-    img.onerror = () => done(null);
-    img.src = fr.result;
-  };
-  fr.onerror = () => done(null);
-  fr.readAsDataURL(file);
-}
-function refreshCustomLogoUi(dataUrl) {
-  const prev = $("cz-logo-prev");
-  if (!prev) return;
-  prev.hidden = !dataUrl;
-  if (dataUrl) prev.src = dataUrl;
-  czSyncMarkRows();
-}
-// The mark rows describe whichever mark is ACTUALLY drawn — markSlots in
-// js/car/liverytex.js decides and says why. The GARAGE editor builds its rows
-// from it and gets this for free; this dialog is static markup, so it asks the
-// same function and follows the answer. A hidden row keeps its stored colour,
-// so clearing an emblem brings the monogram and its box colour straight back.
-function czSyncMarkRows() {
-  const slots = (typeof LiveryTex !== "undefined" && LiveryTex.markSlots)
-    ? LiveryTex.markSlots("custom") : null;
-  if (!slots) return;
-  const shown = new Map(slots.map((s) => [s.key, s.label]));
-  for (const [domId, key] of CZ_LIV_FIELDS) {
-    if (key !== "logo" && key !== "logo2" && key !== "logo3") continue;
-    const input = $(domId), row = input && input.closest(".cz-row");
-    if (!row) continue;
-    row.hidden = !shown.has(key);
-    const label = row.querySelector("label");
-    if (label && shown.has(key)) label.textContent = shown.get(key);
-  }
-  // buildAtlas rims an uploaded emblem with `logo3 || logo2`, logo2 being the
-  // pre-OUTLINE-row fallback. Hiding that row without this would turn the
-  // fallback into a rim the player can neither see nor change — the dead-picker
-  // bug wearing the other face. Move it to the row that IS shown; saving
-  // migrates it.
-  const box = $("cz-logo2"), out = $("cz-logo3"), none = $("cz-logo3-none");
-  if (box && out && !shown.has("logo2") && !box.classList.contains("cz-off") &&
-      out.classList.contains("cz-off")) {
-    out.value = box.value;
-    out.classList.remove("cz-off");
-    if (none) none.classList.remove("active");
-  }
-}
-$("cz-logofile").addEventListener("change", (e) => {
-  const f = e.target.files && e.target.files[0];
-  if (!f) return;
-  readLogoFile(f, (dataUrl) => {
-    if (!dataUrl) return;
-    try { store.set(CUSTOM_LOGO_KEY, dataUrl); } catch (_) {}
-    applyCustomLogo(dataUrl);
-    refreshCustomLogoUi(dataUrl);
-    invalidateDecalTextures("custom");
-    spMeshBust();
-    if (soundOn) GameAudio.uiSelect();
-  });
-  e.target.value = "";       // let the same file be re-picked after a CLEAR
-});
-$("cz-logo-clear").onclick = () => {
-  try { store.set(CUSTOM_LOGO_KEY, null); } catch (_) {}
-  applyCustomLogo(null);
-  refreshCustomLogoUi(null);
-  invalidateDecalTextures("custom");
-  spMeshBust();
-  if (soundOn) GameAudio.uiTick();
-};
-
-// The MY TEAM emblem is the only mark that arrives asynchronously now — the
-// eleven shipped teams draw vector crests, which are ready at eval. So this
-// drops ONE team's cached textures, not the whole roster's, when a player picks
-// a file or clears one.
-if (typeof LiveryTex !== "undefined" && LiveryTex.onMarkChange) {
-  LiveryTex.onMarkChange(() => {
-    invalidateDecalTextures("custom");
-    spMeshBust();   // force the garage turntable to repaint too
-    // setTeamLogo decodes ASYNCHRONOUSLY, so LOGOS is still empty in the file
-    // picker's own handler — this is the moment the answer actually changes.
-    czSyncMarkRows();
-  });
-  applyCustomLogo(loadCustomLogo());
-}
-syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
+customTeam.init();
+raceSettings.wireButtons();
+customTeam.syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 migrateSeasonPoints();
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
 clampDriverIdx();
