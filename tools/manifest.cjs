@@ -90,6 +90,7 @@ const FULL = [
   "js/render/shared/driving-line.js",
   "js/data/teams.js",
   "js/data/driver-ratings.js",
+  "js/career/save-migrate.js",
   // Persistence sits ahead of every js/game module: the settings panels, the
   // perf sentinel and the Spotify client go through GameStore.store's raw lane,
   // and spotify.js's init() runs at EVAL when the document is already complete
@@ -376,7 +377,9 @@ const HARD_EDGES = [
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
-  ["js/data/teams.js", "js/core/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
+  ["js/data/teams.js", "js/career/save-migrate.js"], // remapPoints reads Teams (call time; keep ordered)
+  ["js/career/save-migrate.js", "js/core/store.js"],
+  ["js/data/teams.js", "js/core/store.js"],      // seasonDriverId callers (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
   // carry its own copy of the roster (a SHORT table that had drifted), and
   // reading the real one makes the order load-bearing rather than tidy.

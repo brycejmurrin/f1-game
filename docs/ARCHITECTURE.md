@@ -137,6 +137,16 @@ _156 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `live.js` | `DataLive` | LAZY_DATA | — (no header comment) |
 | `hub.js` | `DataHub` | LAZY_DATA | DataHub: F1 data overlay (#datahub). |
 
+**`js/career/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `save-migrate.js` | `SaveMigrate` | tag | versioned save migration (SaveMigrate). |
+| `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
+| `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
+| `career-ui.js` | `CareerUI` | tag | the CAREER screen (#career). |
+| `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
+
 **`js/track/core/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
@@ -272,15 +282,6 @@ _156 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
-
-**`js/career/`**
-
-| File | Global | Loaded | Purpose (header, first sentence) |
-|---|---|---|---|
-| `career.js` | `Career` | tag | CAREER core: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots, one live at a time), the credits economy, driver an… |
-| `season-cal.js` | `SeasonCal` | tag | the SEASON CALENDAR and the WEEKEND FORMAT: which circuits a standalone championship visits and in what order, whether the weekend qualifies, whether … |
-| `career-ui.js` | `CareerUI` | tag | the CAREER screen (#career). |
-| `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
 
 **`js/race/`**
 
