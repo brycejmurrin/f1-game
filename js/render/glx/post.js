@@ -32,6 +32,7 @@ const GLXPost = (function () {
     // to present size; otherwise FXAA writes the default framebuffer.
     let sgsrProg = null, sgsrU = null, aaFBO = null, aaTex = null;
     let sgsrTried = false;
+    let targetW = 0, targetH = 0, aaW = 0, aaH = 0;
 
     // Post-processing state. postEnabled stays false (and rendering goes straight
     // to the default framebuffer, exactly as before) if any target/program setup
@@ -247,6 +248,11 @@ const GLXPost = (function () {
     function createTargets() {
       if (!postEnabled) return;
       const { width, height } = core.getSize();
+      // A present-size change (UPSCALE toggle) leaves the scene size intact.
+      // Preserve its textures/MSAA storage; only the AA intermediate changes.
+      if (sceneTex && width === targetW && height === targetH) {
+        syncSpatialTarget(width, height); return;
+      }
       const internal = colorType === gl.HALF_FLOAT ? gl.RGBA16F : gl.RGBA8;
       // Slimmer formats where full RGBA16F is waste (bandwidth is the tiled-GPU
       // frame cost): SSAO stores one scalar (sampled .r) -> R8; bloom + godray
@@ -400,11 +406,17 @@ const GLXPost = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, ldrFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ldrTex, 0);
       }
+      targetW = width; targetH = height;
+      syncSpatialTarget(width, height);
+    }
+
+    function syncSpatialTarget(width, height) {
       // SGSR intermediate (render res): FXAA writes here when upscaling so the
       // present-size pass samples the AA'd LDR. Without FXAA, SGSR samples
       // ldrTex directly — no aa target. Freed when the flag is off / scale≈1.
       const wantUp = !!(sgsrProg && fxaaProg && core.wantSpatialUpscale && core.wantSpatialUpscale());
       if (wantUp) {
+        if (aaTex && aaW === width && aaH === height) { gl.bindFramebuffer(gl.FRAMEBUFFER, null); return; }
         if (!aaFBO) aaFBO = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
         if (aaTex) gl.deleteTexture(aaTex);
@@ -417,6 +429,7 @@ const GLXPost = (function () {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, aaTex, 0);
+        aaW = width; aaH = height;
       } else if (aaFBO || aaTex) {
         if (aaFBO) gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
         if (aaTex) gl.deleteTexture(aaTex);
