@@ -1187,7 +1187,9 @@ GPU is the common factor of both wedges). And one more premise on the
 image-grade pair, the last thing that can change a frozen, clock-held,
 pack-loaded frame by itself: the env probe's ready state — on hardware
 the cube is real and its reflections brighten the dark cockpit interior,
-exactly the range "blacks" reads; SwiftShader clears the faces. The fog-glow row stayed red WITH `tier [0,0]` —
+exactly the range "blacks" reads; SwiftShader clears the faces.
+Run 3515 (8fbbdf3), the first with one worker: 48/48, no retries,
+10.0 min — no slower than the two-worker runs (10-15 min), and no wedge. The fog-glow row stayed red WITH `tier [0,0]` —
 dry 80.1, foggy 72.6, the same −9 % this container reads (65.4 → 60.1) — so
 it was never the tier either: the sampled band is pure sky, the sky shader
 carries no lamp-fog term (`glsl-sky.js`), and what the test measured was the
