@@ -220,7 +220,7 @@ body.desktop #pm-calib { display: none !important; }
 /* RACE IN PORTRAIT shares the pill so the three read as one stack. It sits
    first because it is the primary action now; a distinct fill would have cost
    a raw colour literal the token ratchet rightly refuses, and stack order is
-   enough hierarchy for three buttons. docs/PERF-FINDINGS.md 5a. */
+   enough hierarchy for three buttons. docs/notes/PERF-FINDINGS.md 5a. */
 #rotate-race, #rotate-controls, #rotate-exit {
   /* --tap, not --tap-min: this layer is gated to coarse-pointer phones (the
      media query below), and --tap-min is the 24px WCAG floor — with `padding:

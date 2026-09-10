@@ -1611,7 +1611,7 @@ the page renders, and counting them made every new js file a ratchet edit.
 
 ```
 Silent failure is this codebase's most-repeated defect shape, and the register
-in docs/ARCHITECTURE-REVIEW.md says so in several places. The 2026-08 cleanup
+in docs/notes/ARCHITECTURE-REVIEW.md says so in several places. The 2026-08 cleanup
 hit a live one: js/core/store.js swallowed a localStorage write failure while
 its cache went on answering reads, so on iOS Safari Private Browsing (quota
 ZERO) a whole career saved perfectly, read back correctly all session, and was

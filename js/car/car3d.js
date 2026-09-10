@@ -1731,7 +1731,7 @@ const Car3D = (function () {
   // driver's eye (car-local z -0.18) looks straight into. BOTH its z and its
   // top edge are depth-raster measurements, not styling — the shared z 0.05 ate
   // the steering wheel, and a too-tall cap at z 0.45 then ate the nose. Numbers
-  // and method: docs/OCCLUSION-PROBE.md §4. The cockpit span (z 0.05..-0.55) is
+  // and method: docs/notes/OCCLUSION-PROBE.md §4. The cockpit span (z 0.05..-0.55) is
   // dropped: the tub around/behind the seat, already modelled by the bolsters.
   const CKPT_MONO_REAR = Object.freeze({ z: 0.45, y: 0.32, w: 0.552, h: 0.16, t: 0.752 });
   function buildSharedChassis(out, c1, rideDY, noseStations, ckpt) {
@@ -2228,7 +2228,7 @@ const Car3D = (function () {
     // rise ABOVE the chassis deck (monocoque tops out at 0.545 at z 1.05) or it
     // is dead geometry: at top 0.48 it rasterised 2631 px and lost every one,
     // sandwiched between coaming and nose — ZERO visible pixels
-    // (docs/OCCLUSION-PROBE.md §4). Narrow (w 0.36): a spine, not a wall.
+    // (docs/notes/OCCLUSION-PROBE.md §4). Narrow (w 0.36): a spine, not a wall.
     const hF = ckpt ? { z: 1.10, y: 0.50, w: 0.50, h: 0.10, t: 0.66 }
                     : { z: 1.15, y: 0.435, w: 0.30, h: 0.09, t: 0.64 };
     // Cockpit: the REAR station stops AHEAD of the wheel (game.js _rigT z 0.26)
@@ -2284,7 +2284,7 @@ const Car3D = (function () {
         // visible span is the dash side that wraps the wheel.
         // Crown heights beside the driver are REGULATION: the survival cell's
         // upper edge runs Z 610 (headrest fixing, C12.6) to Z 695 (halo rear
-        // faces, C12.4.2) — docs/COCKPIT-DATUMS.md. 0.56/0.58 sat below that
+        // faces, C12.4.2) — docs/notes/COCKPIT-DATUMS.md. 0.56/0.58 sat below that
         // band entirely; 0.66/0.68 sat high in it and swallowed the front wing
         // (0.62% -> 0.01% of frame). 0.62/0.64 is the band's lower end: still
         // compliant, still enclosing, wing tips back. Above ~0.70 eats mirrors.
@@ -2424,7 +2424,7 @@ const Car3D = (function () {
                    { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, airboxC, INTAKE);
       // PRINCIPAL ROLL STRUCTURE. C12.4.1 requires structure at [XC 55, 0, 968]
       // — y 0.968 here, the tallest mandated point on the car
-      // (docs/COCKPIT-DATUMS.md). Nothing occupied it: the airbox crowned at
+      // (docs/notes/COCKPIT-DATUMS.md). Nothing occupied it: the airbox crowned at
       // 0.76 + 0.10*inScale (0.86 at the default tier), the rear wing peaked
       // ~0.97, and the car's silhouette therefore had its highest point at the
       // BACK — inverted from every real car, where the hoop leads and the wing
@@ -3113,7 +3113,7 @@ const Car3D = (function () {
 
     part("mirrors");
     const mSty = ckpt ? 0 : teamStyle.mirror;
-    // Placement is REGULATION (docs/COCKPIT-DATUMS.md): the body must lie inside
+    // Placement is REGULATION (docs/notes/COCKPIT-DATUMS.md): the body must lie inside
     // RV-MIRROR-BODY, Y 470..680 x Z 640..720. At x 0.44 / y 0.735 ours sat
     // inboard of that volume AND above its ceiling — reported as "floating".
     const mz = ckpt ? 0.92 : 0.24;

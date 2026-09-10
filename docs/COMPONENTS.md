@@ -258,7 +258,7 @@ being held to.
 - **Before editing a class, check whether it appears above under "more than one
   file".** If it does, you are editing more than one screen.
 - **Before adding a family**, ask whether an existing one already covers it. The
-  audit grid (`docs/LAYOUT-AUDIT.md`) measures 38 screens; a new family usually
+  audit grid (*Layout axes* below) measures 38 screens; a new family usually
   means a new one-off, and one-offs are what `.pane-pair` was built to retire.
 - **Regenerate with the same method** the test uses if the numbers here drift:
   `node --test tests/unit/component-inventory.test.mjs` will say so first.

@@ -440,7 +440,7 @@ const SceneryNature = (function () {
       ctx.note("ridge", [x, baseY + h / 2, z], [w, h, len]);
       const f = [Math.cos(ang), 0, Math.sin(ang)], r = [-f[2], 0, f[0]];
       // BURY the base. addPrism anchors at the BASE (Trap A in
-      // docs/SCENERY-GROUNDING.md), so a prism placed at baseY has its underside
+      // docs/SCENERY-API.md), so a prism placed at baseY has its underside
       // exactly there — and every one of the 28 ridge() calls across 24 circuits
       // passes `pyMin`, the lap's LOWEST NODE. The ground these backdrop ridges
       // actually stand on out there is the floor slab, and that sits at

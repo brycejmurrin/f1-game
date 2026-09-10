@@ -739,7 +739,7 @@ const WGX = (function () {
       // Same settle window as GLX cssSize(), for the same measured reason: the
       // dirty flag is edge-triggered and consumed unconditionally, so a single
       // read that lands before the box has reflowed latches the PREVIOUS
-      // viewport's size for good (docs/PERF-FINDINGS.md §2u). innerWidth /
+      // viewport's size for good (docs/notes/PERF-FINDINGS.md §2u). innerWidth /
       // innerHeight are viewport metrics, not element layout, so this costs no
       // reflow; a change opens a window during which the box is re-read every
       // frame. Runs BEFORE resize()'s `_cssApplying = true` bracket, so it
@@ -3900,7 +3900,7 @@ const WGX = (function () {
       // (tools/gfx/chunk-share-census.mjs). Empty chunks DO share constantly and
       // still do not merge — they are outfield the frustum never draws, ~2
       // visible a frame. Two audits have proposed this merge; both numbers and
-      // the trap are in docs/PERF-FINDINGS.md §2b. Do not re-open it.
+      // the trap are in docs/notes/PERF-FINDINGS.md §2b. Do not re-open it.
       // Table segments append per chunks-array;
       // a bake-generation move (_writeFrame) resets the allocator.
       // This branch sits ABOVE the !cull fast path: a frame without a
@@ -6124,7 +6124,7 @@ const WGX = (function () {
       // so this is a perf gap, never a correctness one. Porting it means
       // expanding the caller's stride-16 matrices into WGX's stride-20 instance
       // layout (16 matrix + 3 colour + pad) and deciding what the colour lanes
-      // mean for a batch created without srcColors. docs/PERF-FINDINGS.md 2h.
+      // mean for a batch created without srcColors. docs/notes/PERF-FINDINGS.md 2h.
       updateInstances,
       drawInstanced,
       freeInstancedBatch,
@@ -6180,7 +6180,7 @@ const WGX = (function () {
       // Lazy pipeline compilation is excluded as the cause — this hook is what
       // excluded it, and it stays so the hypothesis cannot be re-proposed
       // without re-running it. The three other candidates and their numbers:
-      // docs/PERF-FINDINGS.md §2x.
+      // docs/notes/PERF-FINDINGS.md §2x.
       litPipelineStats: () => ({
         count: _litPipelines.size,
         keys: [..._litPipelines.keys()],

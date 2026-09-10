@@ -229,7 +229,7 @@ test("GLX create* / draw* fail closed when the context is lost", () => {
 });
 
 test("GLX re-reads the canvas box after a viewport change, even when a frame read it too early", () => {
-  // THE DEFECT (docs/PERF-FINDINGS.md §2u). cssDirty is edge-triggered and
+  // THE DEFECT (docs/notes/PERF-FINDINGS.md §2u). cssDirty is edge-triggered and
   // consumed unconditionally, so ONE resize() landing before the canvas box has
   // reflowed caches the OLD box, clears the flag, and nothing ever sets it
   // again: GLX.aspect then reports the PREVIOUS viewport's ratio for the rest
@@ -716,7 +716,7 @@ test("the GPU-census gate scopes hardware expectations, and only those", () => {
   // must stay unconditional — a real GPU error, a run that did not finish, or a
   // missing artifact is a defect on ANY image. Driven by EXECUTING the Verdict
   // script against fixtures (verdictScript / runVerdict below), so the split
-  // cannot quietly spread. docs/PERF-FINDINGS.md 2f.
+  // cannot quietly spread. docs/notes/PERF-FINDINGS.md 2f.
   const script = verdictScript();
   const hw = { anyHardware: true, runs: [] }, sw = { anyHardware: false, runs: [] };
   const legs = (over = {}) => ({ webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson(), ...over });
@@ -844,7 +844,7 @@ test("gpu-game-check reports appearance, and can say when it could not measure i
   // flaky and then gets widened, which AGENTS.md forbids), but "reported for a
   // human" was untrue: there was nothing to report. Both halves are pinned,
   // because writing the field WITHOUT the absence path just recreates a
-  // silently-empty column. docs/PERF-FINDINGS.md 2l.
+  // silently-empty column. docs/notes/PERF-FINDINGS.md 2l.
   const ggc = read("tools/gfx/gpu-game-check.mjs");
   assert.match(ggc, /out\.frame = n\s*\?/, "the tool must write out.frame");
   assert.match(ggc, /meanLuma: \+\(sum \/ n\)\.toFixed\(1\)/);
@@ -901,7 +901,7 @@ test("the GPU gate fails a census that measured nothing instead of calling it so
   // anyHardware was `runs.some(...)`, so four failed launches produced false —
   // and false is what switches OFF the hardware-only clauses. A census that
   // measured nothing therefore DOWNGRADED this gate to a software gate and
-  // reported success. Tri-state; null must fail. docs/PERF-FINDINGS.md 2j.
+  // reported success. Tri-state; null must fail. docs/notes/PERF-FINDINGS.md 2j.
   const script = verdictScript();
   const legs = { webgpu: tlxLegJson(), webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson() };
 
@@ -3471,7 +3471,7 @@ test("GLX's uf3 cache keeps float64 precision, and owns every lit/sky vec3", () 
     "the lit/sky uniform caches must still be cleared together on relink");
 });
 
-// ── The phone route (docs/PERF-FINDINGS.md §2m) ───────────────────────────
+// ── The phone route (docs/notes/PERF-FINDINGS.md §2m) ───────────────────────────
 // three retains the CPU copy of every geometry attribute after upload —
 // measured 71.5 MB across 5,665 buffers against GLX's 17.8 MB / 253 — and an
 // iPhone tab has been OOM-killed mid-race for it. Releasing those arrays was
@@ -3532,7 +3532,7 @@ test("three still re-reads attribute.array after upload (why the release fix is 
     "three.webgpu now has onUploadCallback — the CPU-array release may finally be viable");
 });
 
-// ── TLX vertex-attribute packing (docs/PERF-FINDINGS.md §2n) ──────────────
+// ── TLX vertex-attribute packing (docs/notes/PERF-FINDINGS.md §2n) ──────────────
 // three retains the CPU copy of every attribute array forever. Packing them
 // down (Int16 normals, half-float colours and MAT ids, one shared zero buffer
 // behind absent sources, Uint16 indices) took montreal's deduped attribute
@@ -3607,7 +3607,7 @@ test("the packing round-trip check is wired to the shader's own decisions", () =
   assert.match(tool, /if \(layerChanges \|\| flips \|\| intInexact\) \{/, "the check no longer FAILS on a changed decision");
 });
 
-// ── the mesh pool is keyed, not indexed (docs/PERF-FINDINGS.md §2o) ───────
+// ── the mesh pool is keyed, not indexed (docs/notes/PERF-FINDINGS.md §2o) ───────
 // A flat `meshPool[poolUsed]` gave wrapper #0 whatever geometry was first that
 // frame, and three's WebGPURenderer caches a render object and its bind groups
 // keyed on the object TOGETHER WITH its material and geometry — so the churn
@@ -3650,7 +3650,7 @@ test("TLX pools meshes by (geometry, material), and prunes on a clock", () => {
     "prunePool disposes something — geometry and material belong to the caller, not the pool");
 });
 
-// ── the MRT node is built ONCE (docs/PERF-FINDINGS.md §2p) ────────────────
+// ── the MRT node is built ONCE (docs/notes/PERF-FINDINGS.md §2p) ────────────────
 // `renderer.setMRT(TSL.mrt({…}))` sat inline in present(), minting a NEW node
 // every frame. three keys its render-context cache on a STRING containing
 // mrt.id and stores the result in a plain object that never evicts, so each

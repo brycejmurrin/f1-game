@@ -4,7 +4,7 @@
  * chunk-reach — how much chunked scenery a pass actually reaches, counted
  * headlessly, with no GPU and no timing.
  *
- * WHY THIS EXISTS. docs/PERF-FINDINGS.md §0 records that on this box every
+ * WHY THIS EXISTS. docs/notes/PERF-FINDINGS.md §0 records that on this box every
  * frame-timing instrument lies (SwiftShader software rasterisation, gpuTimer()
  * returns -1), and §"COUNT THE WORK AVOIDED, DO NOT TIME IT" records the way
  * out: counts transfer between machines, milliseconds do not. But the env-probe

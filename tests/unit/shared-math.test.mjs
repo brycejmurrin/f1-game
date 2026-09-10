@@ -2,7 +2,7 @@
  * them shared.
  *
  * clamp was hand-copied into 15 files, lerp into 8, and the shortest-way arc
- * wrap into 7 (docs/ARCHITECTURE-REVIEW.md §8). One of the clamps had already
+ * wrap into 7 (docs/notes/DEFECT-LEDGER.md §8). One of the clamps had already
  * diverged (js/track/scenery/structures.js used `Math.max(lo, Math.min(hi, v))`
  * where everyone else used a comparison ladder — output-identical on the finite,
  * lo < hi arguments it was actually given, but nothing said so). The wrap is the

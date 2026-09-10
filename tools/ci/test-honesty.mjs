@@ -4,7 +4,7 @@
 // @section runner
 //
 // A skipped suite that reports green is worse than a red one
-// (docs/PERF-FINDINGS.md: test:visual reported "passed 40/40" while
+// (docs/notes/PERF-FINDINGS.md: test:visual reported "passed 40/40" while
 // self-skipping on missing golden PNGs; test:api sat failing for weeks outside
 // CI; two mcp-wrap guards skipped on every deploy until 547d665a/c642c322).
 // This is the static half of the defence: it scans every spec and unit suite

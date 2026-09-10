@@ -14,7 +14,7 @@
  * conditions nobody checks after an unrelated rename.
  *
  * This is the same shape as the stale golden baseline found in the 2026-08 pass
- * (A18 in docs/ARCHITECTURE-REVIEW.md): a committed ARTIFACT that encodes the
+ * (A18 in docs/notes/DEFECT-LEDGER.md): a committed ARTIFACT that encodes the
  * state of another file, where the two can diverge without anything being
  * syntactically wrong. Those are exactly the ones worth a guard, because the
  * failure mode is silence rather than an error.

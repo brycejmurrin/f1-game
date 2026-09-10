@@ -1,6 +1,6 @@
 // Regression ratchet: floating scenery must not grow.
 //
-// docs/SCENERY-GROUNDING.md §1 is the reason this file exists. The engine has
+// docs/SCENERY-API.md §1 is the reason this file exists. The engine has
 // strong HORIZONTAL guards on scenery — onTrack, rejBox, blockAt, recordBarrier
 // all answer "is this thing on the racing line?" — and had no vertical one at
 // all, so "is this thing standing on anything?" was left to each caller's
@@ -46,7 +46,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // it. `elevated` is therefore the wrong number to gate on; `floating` is the
 // defect list.
 //
-// Known-legitimate flags that the caps still carry (docs/SCENERY-GROUNDING.md
+// Known-legitimate flags that the caps still carry (docs/SCENERY-API.md
 // §4): suspended rides (Abu Dhabi's coasterLoop, Ferris wheel rims) and
 // AIRCRAFT IN FLIGHT — madrid's Barajas airliner on final approach (alt 90 m,
 // 632 m off-track) and mexico's equivalent. The gap the audit reports for

@@ -106,7 +106,7 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
     // what it measures and below what it shipped at when the number was
     // written, and is still the tightest per-circuit cap in the suite by 2x.
     // The real answer is a repo-wide vertex-budget gate — recorded as an open
-    // structural defect in docs/ARCHITECTURE-REVIEW.md.
+    // structural defect in docs/notes/DEFECT-LEDGER.md.
     expect(session.geometry.find((entry) => entry.name === "props").vertices).toBeLessThan(310_000);
     const hard = [
       ...session.models.invalid,

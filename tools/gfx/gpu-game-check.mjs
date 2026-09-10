@@ -30,7 +30,7 @@ import { fileURLToPath } from "node:url";
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
 // path that cannot exist — the server then 404s every file, the game never
 // boots, and the boot wait below burns its whole timeout saying nothing.
-// That is exactly what happened on windows-latest; docs/PERF-FINDINGS.md 2f.
+// That is exactly what happened on windows-latest; docs/notes/PERF-FINDINGS.md 2f.
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "application/javascript; charset=utf-8",
@@ -112,7 +112,7 @@ checkpoint("browser-launched");
 // real run), the bounded browser/server teardown, and the final process.exit,
 // so the tool always exited non-zero even when ok:true. `continue-on-error:
 // true` on all four census steps swallowed it, and checkpoint() had already
-// written the JSON, so nothing ever looked wrong. docs/PERF-FINDINGS.md 2l.
+// written the JSON, so nothing ever looked wrong. docs/notes/PERF-FINDINGS.md 2l.
 const console_ = [];
 try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
@@ -269,7 +269,7 @@ try {
     // (consecutive baked faces) separates those — face > 0 is progress, face
     // === 0 after parked frames is the gate — and only the tier says which
     // rung closed it. Recording neither is what left the 30 % luma gap between
-    // three's two backends an open lead after run 25 (docs/PERF-FINDINGS.md 2t).
+    // three's two backends an open lead after run 25 (docs/notes/PERF-FINDINGS.md 2t).
     try { const a = window.__apex; if (a && a.renderScale) r.gov = a.renderScale(); } catch (e) { r.govError = String(e && e.message); }
     try { r.engine = document.getElementById("game").getAttribute("data-engine"); } catch (_) { /* no canvas */ }
     return r;
@@ -294,7 +294,7 @@ try {
   // run since it was added. The gate deliberately does not BLOCK on appearance
   // (a brightness floor is the kind of threshold that goes flaky and then gets
   // widened, which AGENTS.md forbids), but "reported for a human" was not true
-  // either: there was nothing to report. docs/PERF-FINDINGS.md 2l.
+  // either: there was nothing to report. docs/notes/PERF-FINDINGS.md 2l.
   //
   // Read it from the SCREENSHOT, not from the page. The in-page reads used
   // elsewhere do not generalise: gfx-probe's getContext("2d") works only where

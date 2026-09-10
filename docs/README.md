@@ -118,24 +118,5 @@ ledger lists.
 | [archive/2026-08-architecture-review-journal.md](archive/2026-08-architecture-review-journal.md) | The session journal behind the architecture review: the full defect register with fix narratives, verbatim. |
 | [archive/SCENERY-UPGRADE-PLAN.md](archive/SCENERY-UPGRADE-PLAN.md) | The scenery upgrade roadmap; its helpers are all in the frozen contract now. |
 
-## Redirect stubs
-
-These paths are cited from `js/`, `css/`, `tests/` or `tools/` comments, so they
-survive as one-line pointers rather than breaking those citations. Nothing to
-read here — follow the link.
-
-| Stub | Content now lives in |
-|---|---|
-| [RENDERERS.md](RENDERERS.md) | [ARCHITECTURE.md](ARCHITECTURE.md) §Renderers |
-| [SCENERY-GROUNDING.md](SCENERY-GROUNDING.md) | [SCENERY-API.md](SCENERY-API.md) §Grounding |
-| [LAYOUT-AUDIT.md](LAYOUT-AUDIT.md) | [COMPONENTS.md](COMPONENTS.md) §Layout axes |
-| [AGENT-WORLD-API.md](AGENT-WORLD-API.md) | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) §Agent world API |
-| [CONSOLE-RECIPES.md](CONSOLE-RECIPES.md) | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) §Console recipes |
-| [PERF-FINDINGS.md](PERF-FINDINGS.md) | [notes/PERF-FINDINGS.md](notes/PERF-FINDINGS.md) |
-| [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md) | [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md) + [notes/DEFECT-LEDGER.md](notes/DEFECT-LEDGER.md) |
-| [OCCLUSION-PROBE.md](OCCLUSION-PROBE.md) | [notes/OCCLUSION-PROBE.md](notes/OCCLUSION-PROBE.md) |
-| [COCKPIT-DATUMS.md](COCKPIT-DATUMS.md) | [notes/COCKPIT-DATUMS.md](notes/COCKPIT-DATUMS.md) |
-| [PARALLEL-WORK.md](PARALLEL-WORK.md) | [notes/PARALLEL-WORK.md](notes/PARALLEL-WORK.md) |
-
 For day-to-day workflows, see the **skills** in `.claude/skills/`
 (`.claude/skills/README.md`) and the **tools** in `tools/` (`tools/README.md`).

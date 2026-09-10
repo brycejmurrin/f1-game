@@ -590,7 +590,7 @@ window.MenuNav = (function () {
     window.addEventListener("keydown", onKeyDown, true);
   }
 
-  // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
+  // docs/notes/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 

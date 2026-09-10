@@ -1220,7 +1220,7 @@ body:not(.desktop) .cs-tab-cur { font-size: var(--fs-micro); }
    single-column rail sized by --pair-split, not by its own grid. Measured on an
    iPad portrait (834x1194): the label column comes out 86px, "SUSPENSION" needs
    83px plus 20px of .cs-tab padding and 2px of border = 105 — so it renders
-   "SUSPENSI…", the exact case docs/LAYOUT-AUDIT.md names.
+   "SUSPENSI…", the exact case docs/COMPONENTS.md names.
    Widen the rail's FLOOR, not its share: 27% already gives a wide sheet plenty,
    and the defect is only at the minimum. The cost is ~28px off the option list
    on the narrowest sheet that still splits. A category you cannot read is worse
@@ -1242,7 +1242,7 @@ body:not(.desktop) #cs-inner { --pair-split: minmax(140px, 28%); }
    canvas is the thing the screen exists to show, so they take the documented
    rung one step below the primary floor rather than the floor itself. Width
    still decides their PADDING and type above; only the target floor moves here.
-   docs/LAYOUT-AUDIT.md states the rule this restores: "Input modality is not
+   docs/COMPONENTS.md states the rule this restores: "Input modality is not
    size. A 1024px iPad is not a desktop." */
 /* .cs-view-btn ALONE covers the zoom pair and the eight arrows: every one of
    them carries that class in the markup, so the two extra selectors this list

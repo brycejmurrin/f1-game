@@ -1380,7 +1380,7 @@ const Tracks = (function () {
       // billboards in scenery-city.js. The correction is NOT a swap: measured,
       // an oriented footprint test suppresses MORE (618 vs 539) — it recovers
       // 11 and drops 90 that currently render. Numbers and the decision:
-      // docs/PERF-FINDINGS.md 2u.
+      // docs/notes/PERF-FINDINGS.md 2u.
       if (onTrack(cx, cz, sz[0] / 2 + 6)) {
         noteSuppressed("backdrop", `backdrop SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]}`);
         return;
@@ -1875,7 +1875,7 @@ const Tracks = (function () {
         ATM, COL,
         place, prop, backdrop, groundPlane, groundYAt,
         // World-XZ ground query, exposed to circuits because its ABSENCE is
-        // what makes Trap B (docs/SCENERY-GROUNDING.md §2) so easy to write:
+        // what makes Trap B (docs/SCENERY-API.md §2) so easy to write:
         // groundYAt is a NODE query, so a circuit walking a tangent away from
         // the centreline had nothing to ask and reused one anchor's height
         // across tens of metres of slope. Returns null off the rendered

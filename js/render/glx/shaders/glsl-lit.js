@@ -189,7 +189,7 @@ uniform int uNumLights;
 //   +0 xyz pos, w radius      +1 xyz colour*intensity, w out-of-beam bleed
 //   +2 xyz beam aim, w cosInner   +3 x cosOuter
 // Same 192 default-block rows as the four separate arrays this replaces, but
-// ONE uniform4fv per chunk instead of four. docs/PERF-FINDINGS.md 2d.
+// ONE uniform4fv per chunk instead of four. docs/notes/PERF-FINDINGS.md 2d.
 uniform vec4 uLight[MAX_LIGHTS * 4];
 out vec4 outColor;
 
@@ -629,7 +629,7 @@ float sampleShadow(vec3 wpos) {
   // origin — eye XZ, look-target Y (uShadowCtr.y). The BOX stays forward-biased
   // (game.js: camEye + look-dir, texel allocation only). Fading from that same
   // biased point swept the fade front around a 40 m circle on a pinned-eye yaw
-  // (docs/PERF-FINDINGS.md 2026-08-15: 58% strength swing at 70 m). Height still
+  // (docs/notes/PERF-FINDINGS.md 2026-08-15: 58% strength swing at 70 m). Height still
   // comes from the look target so aerial cameras do not erase ground shadows.
   // The box covers 0.875·range from its own anchor; at the default 80 m / 20 m
   // bias, 0.84·range from the eye lands on the 90° box edge (sqrt(70²-20²)≈67).

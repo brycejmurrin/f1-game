@@ -214,7 +214,7 @@ test("WGX soft present permits one staging read and drops pre-resize pixels", ()
 });
 
 test("WGX and TLX distrust the CSS-size cache after a viewport change", () => {
-  // The defect GLX was fixed for (docs/PERF-FINDINGS.md §2u) is in all three
+  // The defect GLX was fixed for (docs/notes/PERF-FINDINGS.md §2u) is in all three
   // backends: cssDirty is edge-triggered and consumed unconditionally, so one
   // read landing before the canvas box reflows latches the PREVIOUS viewport's
   // size for the session. GLX's fix is guarded BEHAVIOURALLY on the WebGL2 mock

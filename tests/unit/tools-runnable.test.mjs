@@ -90,7 +90,7 @@ test("no tool derives a path from import.meta.url.pathname (Windows-broken)", ()
     `Use fileURLToPath instead:\n` +
     `  import { fileURLToPath } from "node:url";\n` +
     `  const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\\\/]$/, "");\n` +
-    `Reason: docs/PERF-FINDINGS.md 2f.`);
+    `Reason: docs/notes/PERF-FINDINGS.md 2f.`);
 });
 
 // Comments must NOT be scanned. Every ban below has to be explainable in prose
@@ -126,7 +126,7 @@ test("the comment stripper actually strips (or every ban below is vacuous)", () 
 // exactly this shape: `(gfx.gpuErrors || 0) > 0` passed vacuously on the GLX
 // leg from the day that leg was added, and `(env.fail || 0) > 0` sat twelve
 // lines below the comment explaining the first one, on the same object.
-// docs/PERF-FINDINGS.md 2e, 2j.
+// docs/notes/PERF-FINDINGS.md 2e, 2j.
 //
 // Deliberately NOT applied to js/: `(ctx.speed || 0) > 0` in js/physics/ai-drive.js
 // is a gameplay predicate on a state object that genuinely defaults to zero, not
@@ -159,7 +159,7 @@ test("no tool decides a verdict by comparing a coerced measurement to zero", () 
     `An absent reading is not a zero reading. Test for absence first:\n` +
     `  if (x == null) fail("NO count reported — this check would pass vacuously");\n` +
     `  else if (x > 0) fail(...);\n` +
-    `Reason: docs/PERF-FINDINGS.md 2e, 2j.`);
+    `Reason: docs/notes/PERF-FINDINGS.md 2e, 2j.`);
 });
 
 test("no workflow decides a gate by comparing a coerced measurement to zero", () => {
@@ -178,7 +178,7 @@ test("no workflow decides a gate by comparing a coerced measurement to zero", ()
   }
   assert.deepEqual(bad, [],
     `these workflow gates coerce a measurement and then compare it to zero:\n  ${bad.join("\n  ")}\n\n` +
-    `Absence must fail, not read as clean. Reason: docs/PERF-FINDINGS.md 2e, 2j.`);
+    `Absence must fail, not read as clean. Reason: docs/notes/PERF-FINDINGS.md 2e, 2j.`);
 });
 
 test("the coerced-verdict ceiling has not been left far above the real count", () => {

@@ -161,7 +161,7 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
   assert.equal(dirs.length, 26, `expected 26 skills, got ${dirs.length}`);
   // cross-backend-parity was a 15-line pointer at the renderers doc; that doc
   // was absorbed into docs/ARCHITECTURE.md in Phase 5 and the section moved
-  // with it (docs/RENDERERS.md is a redirect stub now).
+  // with it.
   const renderers = fs.readFileSync(path.join(ROOT, "docs/ARCHITECTURE.md"), "utf8");
   assert.match(renderers, /^### Cross-backend parity/m, "docs/ARCHITECTURE.md lost the Cross-backend parity section");
   assert.match(renderers, /backend-surface-parity\.test\.mjs/);

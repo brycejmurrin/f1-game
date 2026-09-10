@@ -806,7 +806,7 @@ const GLXPost = (function () {
       // while sunShaft needs the sun up and bright — i.e. the frame that has
       // already shed god-rays, SSAO and SSR still paid for this one.
       // Bit-identical: 0.0 * finite == 0.0. Same shape as the po.contact/lampVol
-      // sheds in docs/PERF-FINDINGS.md §2 — another operand of an armed producer.
+      // sheds in docs/notes/PERF-FINDINGS.md §2 — another operand of an armed producer.
       gl.uniform1f(compU.uSunShaft, doBloom ? sunShaft * (PostCommon.knob(opts && opts.tune, "sunShaftMul")) : 0);
       // Cinematic split-tone grade (neutral by default → existing look unchanged).
       const grade = opts && opts.grade;

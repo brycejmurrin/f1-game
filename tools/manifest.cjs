@@ -518,7 +518,7 @@ const LAZY_EDGES = [
 
 // RACE PAYLOAD. Data a session needs only once a race resolves, never to paint
 // a menu — so it must not sit in the boot script wall, which is the one perf
-// number this box can measure honestly (docs/PERF-FINDINGS.md §0).
+// number this box can measure honestly (docs/notes/PERF-FINDINGS.md §0).
 // light-presets.js is 338 KB of baked per-condition lighting whose ONLY reader
 // is js/lighting/profiles.js, and that reads window.LightPresets at CALL time
 // (base()/layers()), not at eval — so an absent file resolves to TUNE_DEFS

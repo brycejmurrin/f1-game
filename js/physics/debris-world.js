@@ -289,7 +289,7 @@ function active() { return _active; }
 // createCollider is 410 —
 // almost all of it ColliderDesc.trimesh copying the road mesh and building its
 // BVH in wasm. That is ~13 dropped frames at 60 fps, at the one instant the
-// player is reacting to. (docs/PERF-FINDINGS.md recorded buildWorld at 0.6%
+// player is reacting to. (docs/notes/PERF-FINDINGS.md recorded buildWorld at 0.6%
 // and called it "traced, not a defect" — that was its SELF time; the inclusive
 // cost is 30x larger.)
 // SIM-IDENTICAL, not merely equivalent-looking: construction order is the
@@ -1119,7 +1119,7 @@ function drawBody(body, sc, mesh, opts, gfx) {
 // mat4s is exactly the shape drawInstanced exists for, and this side-world was
 // four per-body loops: at desktop caps a pileup reaches 48+16+24+10 = 98 draws.
 //
-// MEASURED on vegas night with NO incident debris at all (docs/PERF-FINDINGS.md
+// MEASURED on vegas night with NO incident debris at all (docs/notes/PERF-FINDINGS.md
 // 2h): 17 draws a frame, every one a CONE. registerFurniture places a cone at
 // every corner of every circuit and the cone loop has no liveness test, so this
 // is a cost on every frame of every lap, not a pileup-only one — which is
@@ -1130,7 +1130,7 @@ function drawBody(body, sc, mesh, opts, gfx) {
 // updateInstances since 2026-09-02 (glx.js, wgx.js, tlx.js), so the per-body
 // fallback below is now dead on the shipped backends and stays only for a
 // backend that honestly lacks the name. Same shape as gfx.hasPerChunkLights
-// (docs/RENDERERS.md), which is still GLX + WGX only.
+// (docs/ARCHITECTURE.md), which is still GLX + WGX only.
 // null = not tried yet, false = unavailable on this backend.
 const _batch = { shard: null, marble: null, cone: null, panel: null };
 const _bMat = { shard: null, marble: null, cone: null, panel: null };

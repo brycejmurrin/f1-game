@@ -207,6 +207,6 @@ test("test-honesty finds no unexplained skips (the silent-skip ratchet)", () => 
   assert.ok(v.scanned > 150, "scanner must actually walk tests/");
   // New skips need a `// SKIP-OK: <reason>` comment or a reason argument —
   // a skipped suite that reports green is how test:visual shipped 40/40
-  // while testing nothing (docs/PERF-FINDINGS.md).
+  // while testing nothing (docs/notes/PERF-FINDINGS.md).
   assert.deepEqual(v.detail, [], "unexplained skip/fixme/empty-body sites — annotate or fix them");
 });

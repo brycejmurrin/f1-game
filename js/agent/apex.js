@@ -45,7 +45,7 @@ const { TUNE_DEFS, LT } = LightTune;
 
 // The agent-facing view (js/agent/agentview.js). Composed here rather than
 // bolted onto this file: __apex stays a flat dev console, world()/trackInfo()
-// are the layer an LLM agent reads. See docs/AGENT-WORLD-API.md.
+// are the layer an LLM agent reads. See docs/DEBUG-HOOKS.md.
 const agentView = AgentView.create(G);
 
 let _netPeer = null;
@@ -2788,7 +2788,7 @@ const api = {
       physState: safe(() => this.physState()),
       timing: safe(() => this.timing()),
       gpuTimer: safe(() => this.gpuTimer()),
-      // Console errors are not captured retroactively — see docs/CONSOLE-RECIPES.md
+      // Console errors are not captured retroactively — see docs/DEBUG-HOOKS.md
       // for the one-liner that installs a collector BEFORE reproducing a bug.
       errors: safe(() => (window.__apexErrors || []).slice(-40), []),
       // Counted rather than swallowed by index.html's handler. A non-zero count

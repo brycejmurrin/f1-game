@@ -524,7 +524,7 @@ function buildSelect() {
 // screen's preview card and the TRACK DETAIL modal's sparkline. Both were
 // hand-written canvas blocks that agreed line for line except for which element
 // carries the hidden state and what the x variable was called — the shape where
-// a fix lands in one copy and not the other (docs/ARCHITECTURE-REVIEW.md §8).
+// a fix lands in one copy and not the other (docs/notes/DEFECT-LEDGER.md §8).
 // LOCAL, not a new global: it is one screen's drawing, and Menus already owns it.
 //   cv      the <canvas> to paint
 //   t       the circuit def

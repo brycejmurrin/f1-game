@@ -249,7 +249,7 @@ let _tierHold = false;
 // anyone can read `perf()`, and every EMA in this file is designed to forget
 // them — `_frameEMA` at alpha 0.1 has lost a 400 ms frame within a second.
 // R23 measured four candidate causes on SwiftShader and excluded all four
-// (docs/PERF-FINDINGS.md §2x); what was missing was not another hypothesis but
+// (docs/notes/PERF-FINDINGS.md §2x); what was missing was not another hypothesis but
 // the ability to see the stall on the hardware that has it. So: over the first
 // OPEN_FRAMES after a race starts, keep the single worst frame and a count of
 // how many ran over twice the derived budget. Two numbers, no allocation, and

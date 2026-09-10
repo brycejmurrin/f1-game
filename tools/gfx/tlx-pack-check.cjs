@@ -4,7 +4,7 @@
  *
  * tlx-chunked's packAttr quantises normals to Int16, and colours / MAT ids to
  * half-float, to cut the CPU copies three retains forever (measured 50 -> 28.6
- * MB on montreal; docs/PERF-FINDINGS.md 2m/2n). A screenshot is a poor gate for
+ * MB on montreal; docs/notes/PERF-FINDINGS.md 2m/2n). A screenshot is a poor gate for
  * that: cameras drift, countdowns advance, and two frames differ for a dozen
  * reasons that are not the change under test.
  *

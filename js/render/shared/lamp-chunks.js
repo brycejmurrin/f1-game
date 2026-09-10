@@ -100,7 +100,7 @@ const LampChunks = (function () {
   // O(chunks x lamps) bake — object literal per hit, Array.sort per chunk — to
   // produce a byte-identical table, once per input event, on the render thread
   // with the pass open. Measured first-on bake: 37.3 ms vegas / 25.9 ms
-  // singapore (docs/PERF-FINDINGS.md); a drag paid that per frame. The
+  // singapore (docs/notes/PERF-FINDINGS.md); a drag paid that per frame. The
   // slider's own help text already promises the table is "baked once per
   // track", which is now true again.
   const _cache = new WeakMap();

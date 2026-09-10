@@ -809,7 +809,7 @@ test.describe("world() nextCorner", () => {
 // ── frame() ─────────────────────────────────────────────────────────────────
 // The screenshot replacement. Validated against a real render at the same pose:
 // road filling the lower half, pines flanking, structures right — see
-// docs/AGENT-WORLD-API.md for what that comparison caught.
+// docs/DEBUG-HOOKS.md for what that comparison caught.
 
 test.describe("frame() cameras and edges", () => {
   test.use({ viewport: LANDSCAPE });

@@ -87,7 +87,7 @@ const groups = [...groupSel.keys()].filter((g) => pkg.scripts[`test:${g}`]).sort
 // rule claimed them, so the selection is NOT trustworthy and the caller must
 // fall back to a full run. Calling the raw pick() Map API drops it, and then
 // `!batches.length` cannot tell "nothing needs testing" from "I do not know
-// what to test". docs/PERF-FINDINGS.md 2j.
+// what to test". docs/notes/PERF-FINDINGS.md 2j.
 const selReason = !files.length ? "none" : (groups.length ? "matched" : "unmatched");
 const isBrowser = (g) => /run-playwright/.test(pkg.scripts[`test:${g}`]);
 const browserGroups = groups.filter(isBrowser);
@@ -115,7 +115,7 @@ const plan = {
   // Carried into the plan too, not just the verdict: `--plan` printing
   // `"batches": []` with no reason is the same vacuous answer the run path
   // used to give — "nothing to test" and "no rule claimed these files" look
-  // identical without it. docs/PERF-FINDINGS.md 2j.
+  // identical without it. docs/notes/PERF-FINDINGS.md 2j.
   selection: selReason,
   fast: {
     toolingFast: wantsToolingFast,

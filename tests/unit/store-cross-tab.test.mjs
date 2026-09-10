@@ -1,7 +1,7 @@
 /* store-cross-tab.test.mjs — GameStore must not answer from a cache the disk
  * has moved on from.
  *
- * THE BUG THIS GUARDS (docs/ARCHITECTURE-REVIEW.md §8). `store._cache` exists so
+ * THE BUG THIS GUARDS (docs/notes/DEFECT-LEDGER.md §8). `store._cache` exists so
  * the render loop never calls getItem/JSON.parse; it is filled on first read and
  * never invalidated. So with two tabs open: tab A reads `career`, tab B plays and
  * saves, tab A still answers every get("career") from memory, and tab A's next

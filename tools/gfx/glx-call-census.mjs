@@ -2,7 +2,7 @@
 // @skill webgl-debug
 /* glx-call-census.mjs — what does ONE GLX frame actually cost in GL calls?
  *
- * docs/PERF-FINDINGS.md §"COUNT THE WORK AVOIDED, DO NOT TIME IT": a
+ * docs/notes/PERF-FINDINGS.md §"COUNT THE WORK AVOIDED, DO NOT TIME IT": a
  * SwiftShader frame time is not evidence, but a call count is exact and
  * transfers to real hardware. This wraps the live WebGL2 context during a
  * RUNNING race with a full field — not a parked camera — and reports per-frame
@@ -56,7 +56,7 @@ try {
     if (!gl) return { err: "not GLX — no webgl2 context on #game" };
     // The ORIGINAL fifteen. Kept as their own list and reported under `per` with
     // the same shape they always had, so a new run compares directly against
-    // every number already written into docs/PERF-FINDINGS.md.
+    // every number already written into docs/notes/PERF-FINDINGS.md.
     const METHODS = ["drawElements", "drawArrays", "drawElementsInstanced",
                      "bindVertexArray", "useProgram", "bindTexture", "bindBuffer",
                      "bufferSubData", "uniform4fv", "uniformMatrix4fv", "uniform1i",

@@ -343,7 +343,7 @@
      to ≥14px CSS keeps painted type ≥12px visual at the 90% UI SIZE floor
      without redesigning every screen.
      Migrate ONE FILE PER COMMIT with a before/after font-size dump, per
-     docs/PARALLEL-WORK.md's B1 stage — a commit that changes rendering here
+     docs/notes/PARALLEL-WORK.md's B1 stage — a commit that changes rendering here
      is only acceptable when that dump says so on purpose.
      ONLY THE STEPS WITH A REAL CONSUMER ARE DECLARED BELOW.
      tests/unit/css-tokens.test.mjs fails a defined-but-unread custom property, on

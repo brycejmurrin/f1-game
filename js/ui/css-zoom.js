@@ -5,7 +5,7 @@
  * `.dh-card`). Inside a zoomed subtree CSS lengths are LOCAL; getBoundingClientRect
  * on Chromium / modern Safari returns VISUAL (zoomed) pixels; pre-26.4 WebKit
  * returned LOCAL. Mixing a visual rect with `clientWidth`, `--pair-at` or
- * `scrollTop` is the A13 class of bug (docs/ARCHITECTURE-REVIEW.md).
+ * `scrollTop` is the A13 class of bug (docs/notes/DEFECT-LEDGER.md).
  *
  * Prefer `clientWidth` / `clientHeight` for the element's own box in local
  * units — they never need a probe. `viewportRect` mixes with `clientX`/`clientY`

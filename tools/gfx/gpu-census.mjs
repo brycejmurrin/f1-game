@@ -160,7 +160,7 @@ for (const [name, args] of Object.entries(FLAG_SETS)) {
 // census that failed to launch four times silently DOWNGRADED the real-GPU gate
 // to a software gate and let it report success. That is the same
 // absence-reads-as-normal shape as the vacuous gpuErrors check the gate was
-// hardened against in the first place. docs/PERF-FINDINGS.md 2j.
+// hardened against in the first place. docs/notes/PERF-FINDINGS.md 2j.
 const measured = report.runs.filter((r) => r.verdict !== "launch-failed");
 report.anyHardware = measured.length ? measured.some((r) => r.verdict === "hardware?") : null;
 report.measuredRuns = measured.length;

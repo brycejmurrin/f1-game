@@ -35,7 +35,7 @@ const CEIL = 5.0;
 // footprint Minkowski test, not a single inner-face point) plus per-circuit
 // scenery passes, most of the original 15-circuit "max=0" set still hugs the
 // 0.20 m TOL. Do not treat that list as current: COTA and Indianapolis have
-// since measured over TOL (see docs/ARCHITECTURE-REVIEW.md §7). Miami is a
+// since measured over TOL (see docs/notes/DEFECT-LEDGER.md §7). Miami is a
 // verified design-intent overhead (beach-club parasol canopy ~7.5 m up, car
 // passes safely under). Mexico's Foro Sol stands are segmented around the
 // route. Other residuals are edge-proximity readings from props hugging the

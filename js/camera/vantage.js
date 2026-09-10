@@ -71,7 +71,7 @@ function _vAheadPt(d, h, lat) {
 // sightline, so the car's own nose occupied 0.7% of the frame and an onboard
 // looked like a floating dash. A real F1 eye sits ~0.30 m over the chassis top.
 // 0.82 gives 0.27 m and the nose reads as a nose. Anything moved here must be
-// re-checked with docs/OCCLUSION-PROBE.md — the wheel rig (game.js _rigT), the
+// re-checked with docs/notes/OCCLUSION-PROBE.md — the wheel rig (game.js _rigT), the
 // ckpt monocoque cap and the coaming are all positioned against this number.
 const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
 

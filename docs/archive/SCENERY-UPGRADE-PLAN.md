@@ -5,7 +5,7 @@ engine audit of `js/track/*` plus 24 per-circuit research reviews (one per
 circuit, real-world reference vs. what `scenery(api)` currently emits).
 
 Read alongside [SCENERY-API.md](../SCENERY-API.md) (the toolkit) and
-[SCENERY-GROUNDING.md](../SCENERY-GROUNDING.md) (anchoring rules).
+[SCENERY-API.md](../SCENERY-API.md) §Grounding (anchoring rules).
 
 ---
 

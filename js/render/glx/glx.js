@@ -36,7 +36,7 @@ const GLX = (function () {
   // THIS IS THE ONE COPY. The sniff was reimplemented in four files and the
   // copies had already drifted — js/game.js's omitted `_forceMobile` entirely,
   // so the override that exists to make the phone tier testable did not reach
-  // the backend gate it most needed to (docs/ARCHITECTURE-REVIEW.md §8).
+  // the backend gate it most needed to (docs/notes/DEFECT-LEDGER.md §8).
   // Everything else reads GLX.isMobile / GLX.mobileTier (exported below):
   // glx.js is the 11th <script> tag, ahead of every consumer, and the deferred
   // backends load last, so the value is always there to read. Any new consumer
@@ -56,7 +56,7 @@ const GLX = (function () {
   // hatch, the shape __apex.matTex(0) gives the baked-material path. Keys the
   // resident pack on the surviving CELL SET instead of the frustum, which the
   // plane cache below cannot do while driving. -48% instance upload bytes in a
-  // pack; numbers, soundness and the real-GPU gate: docs/PERF-FINDINGS.md 2c.
+  // pack; numbers, soundness and the real-GPU gate: docs/notes/PERF-FINDINGS.md 2c.
   try { if (localStorage.getItem("apex26.instCellCache") === "0") _instCellCache = false; } catch (_) {}
   // MOBILE TIER = a phone NOT opted into high quality. All the memory downgrades
   // key off this, so HIGH restores full quality (a reload re-runs init with it).
@@ -64,7 +64,7 @@ const GLX = (function () {
   let _ctxLost = false;   // true between webglcontextlost and the reload on restore
   // GPU error counter — WebGL has no onuncapturederror, so drain getError() once
   // per present. Exists because the real-GPU gate read null here and passed
-  // vacuously: docs/PERF-FINDINGS.md 2e.
+  // vacuously: docs/notes/PERF-FINDINGS.md 2e.
   let _glErrors = 0, _glFirstError = "";
   const GL_ERR_NAMES = { 1280: "INVALID_ENUM", 1281: "INVALID_VALUE", 1282: "INVALID_OPERATION",
                          1285: "OUT_OF_MEMORY", 1286: "INVALID_FRAMEBUFFER_OPERATION", 37442: "CONTEXT_LOST" };
@@ -135,7 +135,7 @@ const GLX = (function () {
   // reflections of the surrounding world. 64px RGBA8 faces + mips: reflections
   // are blurred by paint roughness anyway, so tiny faces read perfectly.
   const ENV_SIZE = 64;
-  // Probe draw-distance cull, metres. Counted reach in docs/PERF-FINDINGS.md /
+  // Probe draw-distance cull, metres. Counted reach in docs/notes/PERF-FINDINGS.md /
   // tools/gfx/chunk-reach.cjs. A face is 90 deg across ENV_SIZE pixels = 1.41 deg/px,
   // so a 20 m building subtends ~2.7 px here and 0.9 px at the 900 m far plane.
   const ENV_CULL_M = 300;
@@ -254,7 +254,7 @@ const GLX = (function () {
     if (cache[key] !== v) { gl.uniform1i(loc, v); cache[key] = v; }
   }
   // mat4 twin of uf1, for uModel: 103.2 uploads a frame against 50.3 distinct
-  // values (docs/PERF-FINDINGS.md 2h),
+  // values (docs/notes/PERF-FINDINGS.md 2h),
   // because drawChunked calls litMaterial once per chunk RUN and every run of
   // one mesh shares that mesh's model matrix.
   //
@@ -976,7 +976,7 @@ const GLX = (function () {
     // landscape 1.7778 through a whole portrait session and a hand-called
     // resize() could not shift it, while dispatching one synthetic "resize"
     // corrected it on the very next call (artifacts/aspect-verdict.log,
-    // artifacts/aspect-why.log; docs/PERF-FINDINGS.md §2u). A stale aspect is
+    // artifacts/aspect-why.log; docs/notes/PERF-FINDINGS.md §2u). A stale aspect is
     // not cosmetic — it feeds the main projection matrix, the FOV cap
     // and the FRUSTUM CULL RADIUS (6310), so geometry pops out of the world.
     // window.innerWidth/innerHeight are VIEWPORT metrics, not element layout:
@@ -1436,7 +1436,7 @@ const GLX = (function () {
     _envFrame = frame;
     _envSvVP = frame.viewProj; _envSvEye = frame.eye; _envSvCull = frame.cullDist;
     frame.viewProj = _envVP; frame.eye = eye;
-    // Env-probe radial cull (counted reach in docs/PERF-FINDINGS.md): the
+    // Env-probe radial cull (counted reach in docs/notes/PERF-FINDINGS.md): the
     // probe inherits the MAIN camera's cullDist, which game.js sets to 0 —
     // no radial cull at all — below PerfGov tier 3. A 64x64 reflection
     // target would otherwise re-draw the city through the 900 m frustum.
@@ -1825,7 +1825,7 @@ const GLX = (function () {
     const nTail = (L2 && n2 > 0) ? Math.min(n2 | 0, MAX_LIGHTS) : 0;
     const nStatic = L ? Math.max(0, Math.min(MAX_LIGHTS - nTail, n | 0)) : 0;
     const nL = nStatic + nTail;
-    // MEASURED BEFORE WRITING (docs/PERF-FINDINGS.md §2e's rule): vegas night,
+    // MEASURED BEFORE WRITING (docs/notes/PERF-FINDINGS.md §2e's rule): vegas night,
     // full field in a pack, 111 uploads a frame against 53.7 distinct VALUES —
     // 52 % redundant, and not the 1,0,1,0 alternation that made a cache
     // worthless at `setCull` and `uInstanced`. It is chunk lamp counts in
@@ -1867,10 +1867,10 @@ const GLX = (function () {
     useProg(litProg);
     // litU.uModel is written ONLY here — decal/shadow/mark/depth each own a
     // separate program and therefore a separate location, so this cache cannot
-    // be staled by them. docs/PERF-FINDINGS.md 2h.
+    // be staled by them. docs/notes/PERF-FINDINGS.md 2h.
     ufM4(litU.uModel, _litUf, "model", modelMat);
     // The instancing gate rides the redundancy cache: 54.8 uniform1f/frame for a
-    // value that changes 3.1 times. docs/PERF-FINDINGS.md 2e. It is declared
+    // value that changes 3.1 times. docs/notes/PERF-FINDINGS.md 2e. It is declared
     // here, for every lit draw, rather than bracketed 1/0 around each instanced
     // draw — that alternation is what a cache collapses none of.
     uf1(litU.uInstanced, _litUf, "instanced", instanced ? 1 : 0);
@@ -2113,7 +2113,7 @@ const GLX = (function () {
   // Hand a batch a caller-packed instance set. cullInstances() is for a STATIC
   // batch narrowed by a frustum; this is for one whose transforms are new every
   // frame — DebrisWorld's four Rapier pools, where the bodies move and the only
-  // question is how many are live (docs/PERF-FINDINGS.md 2h). The caller packs
+  // question is how many are live (docs/notes/PERF-FINDINGS.md 2h). The caller packs
   // to the front because WebGL2 has no baseInstance (see createInstancedBatch).
   //
   // CLEARING THE CULL SNAPSHOTS IS LOAD-BEARING, not tidiness. cullInstances
@@ -2156,7 +2156,7 @@ const GLX = (function () {
     const n = batch.visible === undefined ? batch.instances : batch.visible;
     // The gate is declared by litMaterial above, NOT bracketed here: 1,0,1,0
     // alternates and a cache collapses none of it. Why, and why a zero-instance
-    // batch claiming the gate is harmless: docs/PERF-FINDINGS.md 2e.
+    // batch claiming the gate is harmless: docs/notes/PERF-FINDINGS.md 2e.
     if (n > 0) gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
     if (dbl) setCull(true);
   }

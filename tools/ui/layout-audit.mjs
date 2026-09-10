@@ -695,7 +695,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
     // recorded as "boot failed" and read at a glance as a broken app. They are
     // the three biggest WebGL surfaces in the matrix and `--jobs=3` had them
     // competing against each other on a 4-core SwiftShader box: the failure is a
-    // measurement of the machine, not of the page. docs/LAYOUT-AUDIT.md already
+    // measurement of the machine, not of the page. docs/COMPONENTS.md already
     // records the same trap costing 98 cells once before.
     await page.goto(base, { waitUntil: "domcontentloaded", timeout: 90000 });
     await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: 60000 });

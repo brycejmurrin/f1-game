@@ -3465,7 +3465,7 @@ function update(dt) {
   // makeCars has run. A throw here is not a dropped frame: it escapes tick()
   // before the requestAnimationFrame re-schedule, so the render loop dies for
   // the rest of the session. Measured: __apex.race() + go() left the canvas at
-  // ZERO draws a frame, permanently. docs/PERF-FINDINGS.md 2i.
+  // ZERO draws a frame, permanently. docs/notes/PERF-FINDINGS.md 2i.
   if (soundOn && player) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0;
@@ -6591,7 +6591,7 @@ function render(dt) {
     // WITHOUT the GRAPHICS user floor (perf.js `_autoShed`), so LOW no longer
     // disables this while a device missing frames still sheds it. The old
     // tier()>=1 rested on one un-reproduced scare at knob 1 — the shipped 0.3
-    // measured 18.6%/23.5% FASTER (docs/PERF-FINDINGS.md §R5) and locked out
+    // measured 18.6%/23.5% FASTER (docs/notes/PERF-FINDINGS.md §R5) and locked out
     // MEDIUM. autoTier() was the first fix and leaked the preset back in.
     frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.autoShed() >= 1) ? 0 : (+LT.perChunkLights || 0);
     frame.roadChunkLamps = (frame.perChunkLights > 0 && LT.roadChunkLamps) ? 1 : 0;
@@ -7715,7 +7715,7 @@ function refreshCareerButton() {
   // "CONTINUE" on its own does not answer the only question that matters. The
   // shell ships the no-save text so this only ever REWRITES a line that is
   // already laid out — it used to ship empty and grow on boot, which was the
-  // menu's whole layout shift. docs/PERF-FINDINGS.md 4a.
+  // menu's whole layout shift. docs/notes/PERF-FINDINGS.md 4a.
   const sub = $("mb-career-sub");
   if (!sub) return;
   if (!c) { sub.textContent = "DRIVER CAREER  ·  MY TEAM"; return; }
@@ -7750,7 +7750,7 @@ $("rotate-controls").onclick = () => {
 };
 $("rotate-exit").onclick = () => quitToMenu();
 // RACE IN PORTRAIT — opt in, once. The blocker stays the default: it is the
-// rotation-locked recovery path. docs/PERF-FINDINGS.md 5a.
+// rotation-locked recovery path. docs/notes/PERF-FINDINGS.md 5a.
 $("rotate-race").onclick = () => {
   document.body.classList.add("rotate-ok");
   try { localStorage.setItem("apex26.portraitOk", "1"); } catch (_) { /* private: this session only */ }

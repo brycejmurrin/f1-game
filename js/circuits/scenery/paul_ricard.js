@@ -273,7 +273,7 @@
           addCyl(stage, vadd(a.c, a.u, 20), 0.10, 7, [0.86, 0.86, 0.88], 5, b);
           // Windsock on its own mast beside the tower — 16 m along the
           // tangent and 6 m across from the anchor's single ground sample.
-          // TRAP B (docs/SCENERY-GROUNDING.md §2): resample the ground
+          // TRAP B (docs/SCENERY-API.md §2): resample the ground
           // actually under the mast rather than reusing a.c's height.
           const w = vadd(vadd(a.c, a.t, 16), a.r, -6);
           const wy = terrainYAt(w[0], w[2]);
@@ -414,7 +414,7 @@
             if (kind === 0) {
               addBox(out, vadd(a.c, a.u, 0.95), [0.85, 1.5, 112],
                 alt ? VINE : VINE_D, b);
-              // TRAP B (docs/SCENERY-GROUNDING.md §2): the posts walk up to
+              // TRAP B (docs/SCENERY-API.md §2): the posts walk up to
               // 54 m along the tangent from a.c's single ground sample —
               // reusing that height stranded them up to ~2 m in the air on
               // this rolling plateau. Re-seat each post on the ground

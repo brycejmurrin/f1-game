@@ -13,7 +13,7 @@
   // Vertex-attribute packing.
   // three keeps the CPU copy of every attribute array forever (measured: 49.8
   // MB of deduped attribute bytes on montreal, against GLX's 17.8 MB, which is
-  // what OOM-kills an iPhone tab mid-race — docs/PERF-FINDINGS.md 2m). Half of
+  // what OOM-kills an iPhone tab mid-race — docs/notes/PERF-FINDINGS.md 2m). Half of
   // those bytes are Float32 holding values that do not need 32 bits: a colour
   // channel is 8-bit, a unit normal survives 16, a MAT id is 0..16.
   //

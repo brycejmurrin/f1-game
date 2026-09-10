@@ -393,7 +393,7 @@
         const a0 = anchor(K(0.170), 1, 16);
         const dir = a0.t, rgt = a0.r, up = a0.u;
         const b = [rgt, up, dir];
-        // TRAP B (docs/SCENERY-GROUNDING.md §2): everything below is placed by
+        // TRAP B (docs/SCENERY-API.md §2): everything below is placed by
         // walking `dir` from ONE anchor — up to 248 m out and 46 m lateral — and
         // this is Spa, which climbs. Reusing a0's height that far left the
         // treeline hanging up to 17 m in the air and the village huts 10-12 m.

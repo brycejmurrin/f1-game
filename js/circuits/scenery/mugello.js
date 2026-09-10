@@ -421,7 +421,7 @@
           const b = [a.r, a.u, a.t];
           for (let r = 0; r < rows; r++) {
             const back = r * pitch;
-            // TRAP B (docs/SCENERY-GROUNDING.md §2): anchor() samples the ground
+            // TRAP B (docs/SCENERY-API.md §2): anchor() samples the ground
             // at the ROAD EDGE, and these rows march up to 37 m back from it —
             // across a Tuscan hillside. Reusing a.c's height that far put the
             // back rows metres into the air. Re-seat each row on the ground

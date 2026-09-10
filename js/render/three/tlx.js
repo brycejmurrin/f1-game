@@ -25,7 +25,7 @@ const TLX = (function () {
       // three retains the CPU copy of every geometry attribute (71.5 MB /
       // 5,665 buffers vs GLX 17.8 MB / 253) and that has jetsam-killed an
       // iPhone tab mid-race; releasing the arrays was DISPROVED live
-      // (docs/PERF-FINDINGS.md 2m). The gate declined phones by default until
+      // (docs/notes/PERF-FINDINGS.md 2m). The gate declined phones by default until
       // the owner chose three on phones despite the risk: now an OPT-OUT
       // (apex26.tlxMobile="0"), with the boot canary (gfxBackendProbe reverts
       // a load that never presented) and the RENDERER button as the way back.
@@ -1429,7 +1429,7 @@ const TLX = (function () {
         }
       }
       // the mesh pool is keyed on (geometry, material), NOT on draw order
-      // MEASURED (docs/PERF-FINDINGS.md 2o): a flat `meshPool[poolUsed]` gave
+      // MEASURED (docs/notes/PERF-FINDINGS.md 2o): a flat `meshPool[poolUsed]` gave
       // wrapper #0 whatever geometry happened to be first that frame, and the
       // pairing churned as the cull result changed. three's WebGPURenderer
       // caches a render object AND its bind groups keyed on the object
@@ -1450,7 +1450,7 @@ const TLX = (function () {
       //     if (this._renderContexts[i] === undefined) … = new RenderContext();
       // — a plain object that never evicts. So each frame minted a permanent
       // context, and every object/material had to be re-created against it.
-      // MEASURED (docs/PERF-FINDINGS.md 2p): distinct renderContexts climbed
+      // MEASURED (docs/notes/PERF-FINDINGS.md 2p): distinct renderContexts climbed
       // 40 → 76 → 112 → 148 across four 15 s samples, dead linear, while the
       // object count stayed at ~217 and material at ~40; ~2,150
       // createRenderObject calls per interval, forever, and the heap with them.
@@ -2094,7 +2094,7 @@ const TLX = (function () {
         // Same settle window as GLX cssSize(): the dirty flag is edge-triggered
         // and consumed unconditionally, so one read that lands before the box
         // has reflowed latches the PREVIOUS viewport's size for the rest of the
-        // session (docs/PERF-FINDINGS.md §2u). innerWidth/innerHeight are
+        // session (docs/notes/PERF-FINDINGS.md §2u). innerWidth/innerHeight are
         // viewport metrics, not element layout, so this costs no reflow.
         if (typeof window !== "undefined") {
           const vw = window.innerWidth | 0, vh = window.innerHeight | 0;
@@ -2866,7 +2866,7 @@ const TLX = (function () {
         cullInstances,
         // NOT IMPLEMENTED, declared rather than omitted — same reason as the
         // members above. DebrisWorld feature-tests it and keeps the per-body
-        // loop here, which is what TLX ships today. docs/PERF-FINDINGS.md 2h.
+        // loop here, which is what TLX ships today. docs/notes/PERF-FINDINGS.md 2h.
         updateInstances,
         drawInstanced,
         freeInstancedBatch,
@@ -3591,7 +3591,7 @@ const TLX = (function () {
           materialCacheSize() { return matCache.size; },
           // What is growing when the GEOMETRY is not? A 4-minute race soak
           // measured the heap climbing 88-138 MB while geoCensus's registry
-          // and attribute bytes both stayed flat (docs/PERF-FINDINGS.md 2o),
+          // and attribute bytes both stayed flat (docs/notes/PERF-FINDINGS.md 2o),
           // so the leak is in the bookkeeping around the meshes, not in them.
           // Everything here is a COUNT or a size the renderer already tracks —
           // reporting it costs nothing and guessing costs an afternoon.

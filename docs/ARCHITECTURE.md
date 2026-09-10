@@ -558,7 +558,7 @@ its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 (GLX is the only renderer in the shipped tree. WGX and TLX live in
 `spike/backends/`; the subsections below describe them for re-attach work.)
 
-Boot / pipeline / parity map: **[RENDERERS.md](RENDERERS.md)**. This section
+Boot / pipeline / parity map: **[§Renderers](#renderers--glx--wgx--tlx-behind-one-seam)**. This section
 is the module contract and GLX API sketch.
 
 ### Three backends behind one seam

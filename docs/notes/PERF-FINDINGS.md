@@ -717,7 +717,7 @@ honestly as a side effect.
 
 ### A latent bug found while costing the ribbon cull — DO NOT flip these knobs
 
-`docs/PERF-FINDINGS.md` §3 (and an audit pass) described
+§3 below (and an audit pass) described
 `track.meshes.roadChunked` as "a fix that exists in the tree and is unreachable".
 That is wrong and the correction matters, because the suggested action was to
 reach it. `createChunkedMesh` (`js/render/glx/chunked.js`) **never carried

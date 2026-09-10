@@ -672,7 +672,7 @@ test("shadow box and shader fade share the same unset shadowRange fallback", () 
 });
 
 test("sun-shadow fade origin is yaw-invariant (eye XZ, look-target Y)", () => {
-  // docs/PERF-FINDINGS.md 2026-08-15: fading from the look-biased box anchor
+  // docs/notes/PERF-FINDINGS.md 2026-08-15: fading from the look-biased box anchor
   // swept a 58% strength swing at 70 m on a pinned-eye yaw. The box stays
   // forward-biased (texel allocation); the fade must not.
   const lit = fs.readFileSync(path.join(ROOT, "js/render/glx/shaders/glsl-lit.js"), "utf8");
