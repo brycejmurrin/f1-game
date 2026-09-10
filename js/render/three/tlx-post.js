@@ -301,7 +301,9 @@
 
     // ── fullscreen runner ───────────────────────────────────────────────────
     quad = new THREE.QuadMesh();
+    let compileJobs = null;
     function runPass(mat, target) {
+      if (compileJobs) { compileJobs.push({ mat, target }); return; }
       quad.material = mat;
       renderer.setRenderTarget(target);
       quad.render(renderer);
@@ -677,6 +679,27 @@
       }
     }
 
+    async function warm(opts, frame) {
+      // Collect enabled passes first, then compile serially with stable targets.
+      const jobs = [], target = renderer.getRenderTarget(), mrt = renderer.getMRT();
+      const last = { ..._last }, lastRT = _lastPresentRT, vizDest = _vizDest;
+      try {
+        compileJobs = jobs;
+        try { present(opts, frame); } finally { compileJobs = null; }
+        renderer.setMRT(null);
+        const deadline = performance.now() + 3000;
+        for (const job of jobs) {
+          renderer.setRenderTarget(job.target);
+          const snapshot = new THREE.QuadMesh(job.mat);
+          await renderer.compileAsync(snapshot, snapshot.camera);
+          if (performance.now() >= deadline) break;
+        }
+      } finally {
+        Object.assign(_last, last); _lastPresentRT = lastRT; _vizDest = vizDest;
+        renderer.setMRT(mrt); renderer.setRenderTarget(target);
+      }
+    }
+
     try { Log.info("gfx", "TLX post init"); } catch (_) { /* harness */ }
     return {
       enabled: () => true,
@@ -692,6 +715,7 @@
       // SGSR linked — tlx.js wantSpatialUpscale() requires this (fail-closed).
       spatialOk: () => !!(P && P.sgsr && P.sgsr.mat),
       resize,
+      warm,
       present,
       dispose,
       viz,

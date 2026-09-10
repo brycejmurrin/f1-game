@@ -1374,17 +1374,17 @@ const api = {
       lampCull: LT.lampCull,        // the nearest-lamp budget lampReach competes for
     };
   },
-  // GPU frame-time probe (Chrome/Android only; iOS Safari lacks the timer
-  // extension). gpuTimer(true) starts timing, gpuTimer(false) stops, gpuTimer()
+  // GPU frame-time probe: availability follows the bound backend.
+  // gpuTimer(true) starts timing, gpuTimer(false) stops, gpuTimer()
   // reads the latest sample: { supported, on, ms, software }. ms is the GPU
-  // cost of a recent frame (-1 until a result lands). software is `ms < 0`:
-  // no sample yet, no extension, or a software rasterizer (SwiftShader).
+  // cost of a recent frame (-1 until a result lands). software comes from
+  // backend detection; a missing timing sample says nothing about hardware.
   // Do not treat a negative ms as a GPU millisecond.
   gpuTimer: (on) => {
-    if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1, software: true };
+    if (!gfx || !gfx.gpuTimer) return { supported: false, on: false, ms: -1, software: null };
     const st = gfx.gpuTimer(on);
-    const ms = gfx.gpuMs ? gfx.gpuMs() : -1;
-    return { supported: st.supported, on: st.on, ms, software: ms < 0 };
+    const ms = gfx.gpuMs ? gfx.gpuMs() : -1, b = gfx.backendState ? gfx.backendState() : null;
+    return { supported: st.supported, on: st.on, ms, software: b ? !!(b.softAdapter || b.softwareGL) : null };
   },
   // lightTune(o?) — get or set the live lighting-tuner values (same registry as
   // the pause-menu LIGHTING TUNER panel). No args: returns {id: value} for every
