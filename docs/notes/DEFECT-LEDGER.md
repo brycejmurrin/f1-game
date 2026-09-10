@@ -1087,8 +1087,19 @@ camera. Fixed by moving the stamp ahead of the branch (world state, not a
 draw). The Metal "premise holds, marks never record" row above was this.
 Confirmed on Metal by run 3477 (d6d05c7): M6 green in 32.7 s.
 
-*Run 3477 also settled the other two rows.* image-grade shadows/highlights
-green with the tier held. The fog-glow row stayed red WITH `tier [0,0]` —
+*Run 3477 also settled the other two rows — except that it did not settle
+image-grade.* Run 3484 (faf182d) failed "shadows" again with `tier 0,
+tierHold true`, scale 1, equal px, and the SAME numbers as 3469 (darkSigned
++34.8, brightSigned −43.4), and "blacks" read crushed blacks as +9.7
+BRIGHTER on a retry after passing its first attempt. The tier was never the
+image-grade cause (the fog and M6 stories above stand on their own
+evidence). What moves between the two captures is the AI FIELD: boot()
+parks the player and park() shoves the field 600 m back, and on a 30 fps
+runner it drives back through the frame in the ~20 s between captures —
+the bright-pixel set is 2 % of the frame and it is the cars. SwiftShader
+at 1 fps advances the dt-clamped sim a few metres, so nothing enters and
+the suite passes here. boot() now freezes physics (rendering and the grade
+stay live) and the diag records the present generation and the freeze. The fog-glow row stayed red WITH `tier [0,0]` —
 dry 80.1, foggy 72.6, the same −9 % this container reads (65.4 → 60.1) — so
 it was never the tier either: the sampled band is pure sky, the sky shader
 carries no lamp-fog term (`glsl-sky.js`), and what the test measured was the
@@ -1106,6 +1117,9 @@ the park, on what is left of the test's budget), not seconds: frozen, this
 container still stood at face 5 with seven presents in a 60 s clock (one
 73 s frame) while a parallel worker ran. image-grade red gain read 26.2 vs
 a 29.6 bar once and passed its retry with no diag; it carries one now.
+M8's 30 s post-chain wait burned a retry on both Metal runs (3477, 3484) at
+42 s with the chain not yet presented once — the same first-frame compile —
+and now spends the test's remaining budget like M9.
 
 The fog-glow rewrite: one Singapore night-fog frame, clock held, tier held,
 physics frozen; `lampFogBase`/`lampFogHaze` A/B'd OFF/ON/OFF/ON on the mid

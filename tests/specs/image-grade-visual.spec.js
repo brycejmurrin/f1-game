@@ -103,6 +103,19 @@ async function boot(page, {
   // on a software-GL runner at <1 FPS that is a second of cloud motion per
   // frame, which entered the assertion as "changed pixels" (Metal CI flake,
   // 2026-09-03). Hold it: the only thing allowed to move is the grade.
+  // FREEZE PHYSICS. park() stops the player and shoves the AI field 600 m
+  // back — and then the field RACES BACK THROUGH THE FRAME. On a 30 fps runner
+  // the ~20 s between a test's two captures is ~20 s of sim time, so the
+  // liveries and reflections that make up the bright-pixel set (Y 160-247,
+  // ~2 % of the frame) are different cars in different places; on SwiftShader
+  // at 1 fps the dt-clamped sim moves the field a few metres and nothing
+  // enters. Metal runs 3469/3477/3484 read "shadows +0.5" as brightSigned
+  // −43 with the tier HELD at 0 and the scale pinned — byte-similar across
+  // runs, attempt-dependent within one (blacks: pass, then crushed +9.7 on
+  // the retry) — which is a moving field, not a grade. freeze() pauses the
+  // physics and leaves rendering (and so the grade) live; the sky clock is
+  // held one line down.
+  await page.evaluate(() => window.__apex.freeze(true));
   await page.evaluate(() => window.__apex.renderClock(100, true));
   // PIN THE RESOLUTION, for the same reason one line up. This suite diffs pixel
   // ARRAYS, so every capture in a test has to be the same SIZE — and the
@@ -135,6 +148,13 @@ async function boot(page, {
 // picture, and the tonal delta of a different picture is not the grade.
 async function tierAt(page) {
   return page.evaluate(() => window.__apex.govHold().tier);
+}
+
+// The soft-present generation and the physics freeze at a capture, for the
+// diag: a capture whose gen did not advance is a stale frame, and an unfrozen
+// field is the moving-cars failure described in boot().
+async function captureState(page) {
+  return page.evaluate(() => ({ gen: GLX.softPresentState().gen, frozen: window.__apex.freeze(), state: window.__apex.info().state }));
 }
 
 async function pixels(page) {
@@ -288,7 +308,7 @@ test.describe("rendered image grade", () => {
     expect(tier1, "governor tier moved between captures — the delta below is a tier shed, not the grade").toBe(tier0);
     const delta = tonalChanges(baseline, changed);
     const diag = JSON.stringify({
-      px: [baseline.length / 4, changed.length / 4], delta, tier: tier0,
+      px: [baseline.length / 4, changed.length / 4], delta, tier: tier0, cap: await captureState(page),
       gov: await page.evaluate(() => window.__apex.renderScale()),   // a mid-test resize is the governor's auto-res
     });
     expect(delta.darkCount, diag).toBeGreaterThan(1000);

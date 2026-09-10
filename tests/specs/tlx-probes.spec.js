@@ -170,6 +170,7 @@ test.describe("TLX — boot", () => {
   });
 
   test("M8 post chain resolves a day race (HDR target, bloom live)", async ({ page }) => {
+    const t0 = Date.now();   // the post-chain wait below spends what is LEFT of this test's budget
     const errors = [];
     page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
     await page.goto("/");
@@ -186,10 +187,15 @@ test.describe("TLX — boot", () => {
     // separates the two: if the chain really never arms, this throws with the
     // same diag attached instead of asserting on an unwritten default.
     // AGENTS.md: a waitForFunction on a rendering page needs { polling: 100 }.
+    // On what is LEFT of the budget, not 30 s: the first TLX frame on the Metal
+    // runner is a program compile of up to 93 s (three's WebGL2-on-ANGLE path,
+    // docs/notes/TESTING-FIELD-NOTES.md), and runs 3477 and 3484 both burned
+    // a retry here at 42 s with the chain simply not yet presented once.
+    const left = Math.max(60_000, test.info().timeout - (Date.now() - t0) - 20_000);
     await page.waitForFunction(
       () => { const p = GLX.__tlx && GLX.__tlx.postState(); return !!(p && p.on && p.targets[0] > 0 && p.blocks.fxaa); },
-      null, { polling: 100, timeout: 30_000 },
-    ).catch(async () => { throw new Error("TLX post chain never completed a pass: " + await tlxDiag(page)); });
+      null, { polling: 100, timeout: left },
+    ).catch(async () => { throw new Error("TLX post chain never completed a pass in " + Math.round(left / 1000) + " s: " + await tlxDiag(page)); });
     const st = await page.evaluate(() => GLX.__tlx.postState());
     const diag = await tlxDiag(page);
     expect(st.on, diag).toBe(true);
