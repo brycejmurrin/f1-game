@@ -1473,12 +1473,16 @@ const Input = (function () {
     // pointer stream cannot contradict: zero touches on the glass means
     // nothing is held, whatever the pointer bookkeeping believes. A finger
     // still down keeps touches.length > 0, so a legitimate hold survives.
+    // Passive: these only READ touches.length and never preventDefault, so
+    // declaring so lets the compositor skip waiting on them for every touch
+    // release on the page (a non-passive window touch listener is a scroll
+    // and tap-latency cost on Android Chrome). Capture stays.
     window.addEventListener("touchend", function (e) {
       if (e.touches.length === 0) holdReleaseAll();
-    }, true);
+    }, { capture: true, passive: true });
     window.addEventListener("touchcancel", function (e) {
       if (e.touches.length === 0) holdReleaseAll();
-    }, true);
+    }, { capture: true, passive: true });
 
     canvas.addEventListener("touchstart", onTouchStart, { passive: false });
     canvas.addEventListener("touchmove", onTouchMove, { passive: false });

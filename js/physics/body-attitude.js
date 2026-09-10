@@ -122,3 +122,4 @@ function create(ctx) {
 
 return { create, update, reset, offsets, setEnabled, active, status };
 })();
+Object.freeze(BodyAttitude);

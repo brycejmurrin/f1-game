@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_160 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_165 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -97,6 +97,18 @@ _160 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `glsl-fx.js` | `GLXShaders` | tag | GLSL sources for the WebGL2 renderer (js/render/glx/glx.js): the small effect programs — blob shadow (SHADOW_*), skid-mark stamps (MARK_*), racing-line de… |
 | `glsl-post.js` | `GLXShaders` | tag | GLSL sources for the WebGL2 renderer (js/render/glx/glx.js): the post chain — POST_VS fullscreen triangle, bloom (BRIGHT/BLUR/DOWN/UP), SSAO, volumetric sun… |
 
+**`js/render/shared/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `light-budget.js` | `LightBudget` | tag | LightBudget: the ONE source for point-light slot counts. |
+| `post-common.js` | `PostCommon` | tag | PostCommon: backend-neutral post-chain helpers that were cloned verbatim into glx/post.js, wgx.js and tlx-post.js. |
+| `lamp-chunks.js` | `LampChunks` | tag | shared per-chunk lamp table bake (LampChunks). |
+| `frustum.js` | `Frustum` | tag | shared frustum cull math (Frustum). |
+| `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
+| `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
+| `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
+
 **`js/render/glx/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
@@ -105,16 +117,6 @@ _160 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `shadow.js` | `GLXShadow` | tag | GLX shadow subsystem (split out of js/render/glx/glx.js). |
 | `chunked.js` | `GLXChunked` | tag | GLX chunked-mesh subsystem (split out of js/render/glx/glx.js). |
 | `glx.js` | `GLX` | tag | WebGL2 renderer core: the PBR GGX lit pass (sun + 32 spot lamps, shadow maps, procedural materials, wet road, fog), the procedural sky and the FX passes — ~13… |
-
-**`js/render/shared/`**
-
-| File | Global | Loaded | Purpose (header, first sentence) |
-|---|---|---|---|
-| `lamp-chunks.js` | `LampChunks` | tag | shared per-chunk lamp table bake (LampChunks). |
-| `frustum.js` | `Frustum` | tag | shared frustum cull math (Frustum). |
-| `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
-| `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
-| `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
 
 **`js/render/`**
 
@@ -147,6 +149,33 @@ _160 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `career-ui.js` | `CareerUI` | tag | the CAREER screen (#career). |
 | `season-ui.js` | `SeasonUI` | tag | the SEASON SETUP screen (#season-setup): the calendar the player races and the format they race it under. |
 | `custom-team.js` | `CustomTeam` | tag | MY TEAM: load/sync, customize dialog, emblem upload. |
+
+**`js/ui/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `dom.js` | `Dom` | tag | the three DOM/format helpers every DOM-built screen used to carry its own copy of. |
+| `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
+| `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
+| `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
+| `scroll-fade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
+| `css-zoom.js` | `CssZoom` | tag | CssZoom — one place for zoom ↔ viewport ↔ local conversions. |
+| `sheet-shape.js` | `SheetShape` | tag | SHEET SHAPE — one place decides whether a panel is TALL or WIDE. |
+| `layers.js` | `UiLayers` | tag | UI LAYERS — which screen is on top, and are we racing? |
+| `modal.js` | `TopModal` | tag | TOP MODAL — mirrors each dialog.screen's `hidden` onto showModal()/close(). |
+| `menu-nav.js` | `MenuNav` | tag | MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls the panel you are looking at, and arrow keys that move through it. |
+| `aria-state.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
+| `setting-row.js` | `SettingRow` | tag | SettingRow — the ONE control for an enumerated preference on a settings sheet: LABEL ‹ VALUE › One line at every UI SIZE and orientation. |
+| `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
+| `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
+| `settings-export.js` | `SettingsExport` | tag | SettingsExport: the FILES section of SETTINGS › DISPLAY › RENDERER, which carries a player's state OUT of the browser and back IN. |
+| `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
+| `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES. |
+| `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
+| `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
+| `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
+| `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
+| `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
 
 **`js/track/core/`**
 
@@ -185,32 +214,6 @@ _160 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `tracks.js` | `Tracks` | tag | track engine: circuit defs (js/circuits/) → splines, meshes, scenery(api). |
-
-**`js/ui/`**
-
-| File | Global | Loaded | Purpose (header, first sentence) |
-|---|---|---|---|
-| `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
-| `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
-| `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
-| `scroll-fade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
-| `css-zoom.js` | `CssZoom` | tag | CssZoom — one place for zoom ↔ viewport ↔ local conversions. |
-| `sheet-shape.js` | `SheetShape` | tag | SHEET SHAPE — one place decides whether a panel is TALL or WIDE. |
-| `layers.js` | `UiLayers` | tag | UI LAYERS — which screen is on top, and are we racing? |
-| `modal.js` | `TopModal` | tag | TOP MODAL — mirrors each dialog.screen's `hidden` onto showModal()/close(). |
-| `menu-nav.js` | `MenuNav` | tag | MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls the panel you are looking at, and arrow keys that move through it. |
-| `aria-state.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
-| `setting-row.js` | `SettingRow` | tag | SettingRow — the ONE control for an enumerated preference on a settings sheet: LABEL ‹ VALUE › One line at every UI SIZE and orientation. |
-| `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
-| `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
-| `settings-export.js` | `SettingsExport` | tag | SettingsExport: the FILES section of SETTINGS › DISPLAY › RENDERER, which carries a player's state OUT of the browser and back IN. |
-| `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
-| `driving-line-opts.js` | `DrivingLineOpts` | tag | DrivingLineOpts: the DRIVING LINE's player PREFERENCES. |
-| `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
-| `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
-| `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
-| `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
-| `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
 
 **`js/car/`**
 
@@ -253,6 +256,7 @@ _160 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
 | `debris-world.js` | `DebrisWorld` | tag | Rapier side-world for render-only debris (adoption phases R0+R1, see spike/ADOPTION-PLAN.md Part 2). |
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
+| `collide.js` | `Collide` | tag | Collide — car-to-car contact in the Frenet (prog, x) plane: the arc-bucket broadphase, the mass-weighted relaxation passes, the hard separation pass, the… |
 
 **`js/lighting/`**
 
@@ -359,6 +363,7 @@ _160 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
+| `bytes.js` | `NetBytes` | LAZY_NET | NetBytes — the byte<->text codecs every js/net module needs, in ONE place. |
 | `nostr.js` | `NetNostr` | LAZY_NET | NetNostr — the room-code rendezvous, over public Nostr relays. |
 | `rendezvous.js` | `NetRendezvous` | LAZY_NET | NetRendezvous — a short room code instead of a pasted invite. |
 | `sdp.js` | `NetSdp` | LAZY_NET | NetSdp — the invite code's payload, as bytes instead of prose. |
@@ -761,9 +766,9 @@ modules — nature (trees/terrain furniture), city (the `cityStyle` building
 generator, neon, glass), structures (grandstands, gantries, barriers,
 floodmasts), identity (per-circuit landmark passes) — each instantiated with a
 ctx of the placement helpers and accumulators. Together they serve the
-**111-member `scenery(api)` contract**, frozen by
+**112-member `scenery(api)` contract**, frozen by
 `tests/unit/scenery-api-contract.test.mjs`: a circuit's `scenery(api)` callback can
-destructure any of those 111 names, so removing/renaming one is a breaking
+destructure any of those 112 names, so removing/renaming one is a breaking
 change the test catches. See [SCENERY-API.md](SCENERY-API.md).
 
 ## js/circuits/<id>.js — `TrackDefs` (circuit data)
@@ -1370,6 +1375,24 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   the transparent list after the whole opaque one regardless of renderOrder —
   left transparent, the mirror paints last and ghosts over the props it should
   be hidden behind.
+- **LIGHT BUDGET + POST HELPERS (2026-09-10):** one slot-count source,
+  `js/render/shared/light-budget.js` (`LightBudget`), consumed by glx.js
+  `MAX_LIGHTS`, WGX, tsl-lit.js, LampChunks and `frame-lights.js`; each
+  backend exposes `gfx.maxLights()` and publishes its compiled count with
+  `LightBudget.setSlots()` so the tail-light cull fits TLX-lite's 16 slots
+  (`docs/LIGHTING.md`). `js/render/shared/post-common.js` (`PostCommon`) owns
+  the lens-dirt canvas, the god-ray nearest-K select, the neutral-HDR-grade
+  test, the sun screen projection / flare gate and the tune-knob default read
+  (`knob(T, id)` → `LightKnobs.TUNE_DEFS`, so no backend restates a default
+  literal); `Frustum.bucketInstances` is the one instance-cell binner. GLX now
+  copies `frame.roadChunkLamps` (PER-CHUNK ROAD works on the default renderer),
+  and TLX's car shadow pass sets `castCullVP` like GLX.
+- **WGX ENV PROBE ORIENTATION (2026-09-10, UNVERIFIED on a real GPU):** WebGPU
+  render-to-texture is y-down, so GLX's GL up-vectors stored every probe face
+  mirrored vertically (paint reflected the sky below the horizon). Fixed on the
+  SAMPLE side like the shadow lookup: `wgsl-chunks.js` samples `envCube` with
+  `-y` and `ENV_FACES` swaps the two Y cameras. A software probe cannot see
+  this — read the `gpu-census.yml` macOS verdict before trusting it.
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost (env probe off on LITE since 2026-09-03 — a cube cycle is six world passes + 36 mip passes on the jetsam rung); honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
   history resolve is sub-pixel shimmer). The sky's cloud deck shades like GLX

@@ -42,7 +42,8 @@ const PRESETS = [
 // device. The legacy ULTRA opt-in remains authoritative.
 function defaultId(isMobile) {
   if (!isMobile) return "high";
-  const legacy = GameStore.store.raw("apex26.gfxHigh") === "1";
+  const s = gstore();
+  const legacy = !!s && s.raw("apex26.gfxHigh") === "1";
   return legacy ? "ultra" : "medium";
 }
 
@@ -68,10 +69,12 @@ function applyLive() {
    a page load. */
 function syncBootTier() {
   if (!_isMobile) return false;
+  const s = gstore();
+  if (!s) return false;
   const want = current().mobileHigh;
-  const have = GameStore.store.raw("apex26.gfxHigh") === "1";
+  const have = s.raw("apex26.gfxHigh") === "1";
   if (want === have) return false;
-  GameStore.store.rawSet("apex26.gfxHigh", want ? "1" : "0");
+  s.rawSet("apex26.gfxHigh", want ? "1" : "0");
   return true;
 }
 
@@ -179,3 +182,4 @@ if (typeof document !== "undefined") {
 
 return { PRESETS, init, set, cycle, current: () => current().id, label, defaultId };
 })();
+Object.freeze(GfxQuality);

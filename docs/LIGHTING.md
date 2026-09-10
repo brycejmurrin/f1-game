@@ -115,7 +115,15 @@ exactly 15 values.
 
 `setFrameLights()` re-uploads every frame: it sorts active lamps by
 distance to camera (with behind-camera bias) and keeps the nearest CAP —
-`LT.lampCull` (def 40) when there is traffic, otherwise 48 (`MAX_LIGHTS`).
+`LT.lampCull` (def 40) when there is traffic, otherwise 48 (`MAX_LIGHTS`),
+and never above the BOUND backend's slot count. Every slot number lives in
+`js/render/shared/light-budget.js` (`LightBudget`: MAX 48, MOBILE 24, LITE 16,
+CHUNK 24, TAIL_RESERVE 5); the backend that wins the canvas publishes its
+compiled count with `LightBudget.setSlots()` (`gfx.maxLights()` reads the
+same value) and `frame-lights.js` culls against `LightBudget.slots()`, so the
+tail-lights `appendCarTailLights` appends LAST always fit. TLX on `_liteGpu`
+compiles a 16-slot loop (the WebGL2 fragment-uniform floor); before this the
+cull budgeted 48 there and no tail-light ever reached the shader.
 
 **48 is an engine cap, not a WebGL one.** WebGL has no lights API and no
 `MAX_LIGHTS`. The real constraint is `MAX_FRAGMENT_UNIFORM_VECTORS` (WebGL2

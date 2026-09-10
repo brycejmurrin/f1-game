@@ -71,7 +71,7 @@ on:
         required: false
         default: ""
   push:
-    branches: ["cursor/**"]
+    branches: ["cursor/**", "claude/**"]
     paths: [".github/gpu-census-request.json"]
 
 permissions:

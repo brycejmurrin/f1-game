@@ -16,7 +16,30 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+// sdp.js reads NetBytes (hex/ascii) at call time; it loads first in LAZY_NET.
+globalThis.NetBytes = eval(fs.readFileSync(path.join(ROOT, "js/net/bytes.js"), "utf8") + ";NetBytes");
+const NetBytes = globalThis.NetBytes;
 const NetSdp = eval(fs.readFileSync(path.join(ROOT, "js/net/sdp.js"), "utf8") + ";NetSdp");
+
+// ---------------------------------------------------------------------------
+// NetBytes — the ONE codec module (was five private copies across js/net)
+// ---------------------------------------------------------------------------
+test("NetBytes round-trips base64, base64url, hex and ascii", () => {
+  const bytes = new Uint8Array(70000);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 31 + 7) & 0xff;   // past the apply() chunk size
+  assert.deepEqual([...NetBytes.b64ToBytes(NetBytes.bytesToB64(bytes))], [...bytes]);
+  const url = NetBytes.bytesToB64url(bytes);
+  assert.doesNotMatch(url, /[+/=]/, "url-safe and unpadded");
+  assert.deepEqual([...NetBytes.b64urlToBytes(url)], [...bytes]);
+  assert.equal(NetBytes.bytesToB64(new Uint8Array([0xfb, 0xff])), "+/8=");
+  assert.equal(NetBytes.bytesToB64url(new Uint8Array([0xfb, 0xff])), "-_8");
+  assert.equal(NetBytes.bytesToHex(new Uint8Array([0xab, 1]), ":"), "AB:01");
+  assert.deepEqual([...NetBytes.hexToBytes("ab:01")], [0xab, 1]);
+  assert.equal(NetBytes.hexToBytes("abc"), null, "an odd digit count is refused, not truncated");
+  assert.equal(NetBytes.ascii(new Uint8Array([65, 66, 67, 68]), 1, 2), "BC");
+  assert.equal(NetBytes.ascii(new Uint8Array([65, 66])), "AB");
+  assert.deepEqual([...NetBytes.b64urlToBytes("")], [], "empty in, empty out");
+});
 
 // Captured verbatim from Chromium after ICE gathering completed, with the two
 // data channels this game actually opens. The mDNS `.local` host candidate is

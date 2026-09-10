@@ -72,20 +72,28 @@ const makeSocket = (url, onMessage, onReconnect) => {
 	const client = {};
 	let didOpen = false;
 	let isReconnectPending = false;
+	let retryTimer;
 	let resolveReady = noOp;
+	client.isClosed = false;
 	client.ready = new Promise((res) => resolveReady = res);
 	const init = () => {
+		if (client.isClosed) return;
+		retryTimer = void 0;
 		isReconnectPending = false;
 		const socket = new WebSocket(url);
 		socket.onclose = () => {
-			if (isReconnectPending) return;
+			if (client.isClosed || isReconnectPending) return;
 			isReconnectPending = true;
 			if (reconnectionLockingPromise) {
 				reconnectionLockingPromise.then(init);
 				return;
 			}
 			const period = socketRetryPeriods[url] ??= defaultRetryMs;
-			setTimeout(init, Math.random() * period);
+			if (period >= maxRetryMs) {
+				client.isClosed = true;
+				return;
+			}
+			retryTimer = setTimeout(init, Math.random() * period);
 			socketRetryPeriods[url] = min(period * 2, maxRetryMs);
 		};
 		socket.onmessage = (e) => onMessage(String(e.data));
@@ -101,6 +109,14 @@ const makeSocket = (url, onMessage, onReconnect) => {
 		client.send = (data) => {
 			if (socket.readyState === 1) socket.send(data);
 		};
+	};
+	client.close = () => {
+		client.isClosed = true;
+		if (retryTimer !== void 0) {
+			clearTimeout(retryTimer);
+			retryTimer = void 0;
+		}
+		client.socket.close();
 	};
 	init();
 	return client;
@@ -151,6 +167,6 @@ const watchOnline = () => {
 	return noOp;
 };
 //#endregion
-export { all, alloc, candidateType, createRelayManager, decodeBytes, encodeBytes, entries, fromEntries, fromJson, genId, getRelays, isBrowser, keys, libName, makeSocket, mkErr, noOp, pauseRelayReconnection, resetTimer, resumeRelayReconnection, selfId, socketGetter, strToNum, toError, toErrorMessage, toHex, toJson, topicPath, values, watchOnline };
+export { all, alloc, candidateType, createRelayManager, decodeBytes, encodeBytes, entries, fromEntries, fromJson, genId, getRelays, isBrowser, keys, libName, makeSocket, mkErr, noOp, pauseRelayReconnection, resetTimer, resumeRelayReconnection, selfId, shuffle, socketGetter, strToNum, toError, toErrorMessage, toHex, toJson, topicPath, values, watchOnline };
 
 //# sourceMappingURL=utils.mjs.map

@@ -13,6 +13,32 @@ const SaveMigrate = (function () {
 
   function seasonDriverId(teamId, driverIndex) { return teamId + ":" + driverIndex; }
 
+  // The two per-driver sparse arrays a championship carries beside `pts`:
+  // finishes: driverId -> per-position counts (SeasonCal.award()).
+  // roundPts: driverId -> points per ROUND (both legs of a sprint weekend land
+  // in the same index); SeasonCal.netPts() reads it when scores are dropped,
+  // so a string or a negative in a row used to reach the arithmetic raw.
+  // Owned here so migrateCareer's remapPoints and SeasonCal.resume() sanitise
+  // the same way; season-cal.js delegates to these.
+  function roundMap(o) {
+    const out = {};
+    if (!o || typeof o !== "object") return out;
+    for (const k of Object.keys(o)) {
+      if (!Array.isArray(o[k])) continue;
+      out[k] = o[k].map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
+    }
+    return out;
+  }
+  function finishMap(o) {
+    const out = {};
+    if (!o || typeof o !== "object") return out;
+    for (const k of Object.keys(o)) {
+      if (!Array.isArray(o[k])) continue;
+      out[k] = o[k].map((v) => (Number.isInteger(v) && v > 0 ? v : 0));
+    }
+    return out;
+  }
+
   function seasonRoster() {
     const roster = [];
     Teams.LIST.forEach((team) => team.drivers.forEach((driver, driverIndex) => {
@@ -56,7 +82,20 @@ const SaveMigrate = (function () {
       const n = Number(value);
       if (id && isFinite(n)) season.teamPts[id] = Math.max(0, n);
     });
+    season.finishes = finishMap(season.finishes);
+    season.roundPts = roundMap(season.roundPts);
     return season;
+  }
+
+  // The contract's four numbers. A hand-edited or truncated save could carry
+  // `salary: "x"`; Number()||0 keeps every later `+=` finite.
+  function cleanDeal(deal) {
+    if (!deal || typeof deal !== "object" || Array.isArray(deal)) return null;
+    deal.salary = Number(deal.salary) || 0;
+    deal.bonusPt = Number(deal.bonusPt) || 0;
+    deal.left = Number(deal.left) || 0;
+    deal.years = Number(deal.years) || 0;
+    return deal;
   }
 
   // Fill in every optional key so the rest of the code never guards for undefined,
@@ -76,18 +115,23 @@ const SaveMigrate = (function () {
     career.seat = career.seat | 0;
     career.driver = career.driver && typeof career.driver === "object"
       ? career.driver : { name: "Your Name", code: "YOU", num: 99 };
+    career.team = typeof career.team === "string" && career.team ? career.team : null;
+    career.deal = cleanDeal(career.deal);
     career.seed = career.seed | 0;
     career.season = remapPoints(career.season || { round: 0, pts: {}, teamPts: {}, driverCodes: {} });
     career.owned = Array.isArray(career.owned) ? career.owned : [];
     career.fitted = career.fitted && typeof career.fitted === "object" ? career.fitted : {};
-    career.results = Array.isArray(career.results) ? career.results : [];
+    // Only object rows: a null or a number in the ledger threw on the first
+    // `r.round` read in the history screen.
+    career.results = Array.isArray(career.results)
+      ? career.results.filter((r) => r && typeof r === "object" && !Array.isArray(r)) : [];
     career.history = Array.isArray(career.history) ? career.history : [];
     career.dev = career.dev && typeof career.dev === "object" ? career.dev : {};
     career.tdev = career.tdev && typeof career.tdev === "object" ? career.tdev : {};
     career.seats = career.seats && typeof career.seats === "object" ? career.seats : {};
     career.offers = Array.isArray(career.offers) ? career.offers : [];
     career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
-    career.budgetLvl = career.budgetLvl | 0;
+    career.budgetLvl = Math.max(0, career.budgetLvl | 0);
     career.facility = career.facility | 0;
     career.moves = Array.isArray(career.moves) ? career.moves : [];
     career.paidSponsors = Array.isArray(career.paidSponsors) ? career.paidSponsors : [];
@@ -101,5 +145,6 @@ const SaveMigrate = (function () {
     return season;
   }
 
-  return { migrateCareer, migrateSeasonPoints, remapPoints, CAREER_V };
+  return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V };
 })();
+Object.freeze(SaveMigrate);

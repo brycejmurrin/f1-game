@@ -11,6 +11,149 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-10 — whole-tree audit, six slices, FIXED in one pass.** Seven
+read-only agents audited the tree (game/physics, renderers, track engine and
+all 80 circuit files, UI/data/PWA, multiplayer and the worker, tooling/CI, and
+outside research on the vendored packages); six implementation agents then
+fixed their slice under file ownership, and the integrator registered the new
+modules, ran the guards and the no-browser suite, and named the unverified
+groups. Everything below is code-read confirmed and unit-tested where a Node
+harness exists; the browser groups and every real-GPU claim are listed as
+unverified in the commit.
+
+*Game loop / physics (`js/game.js`, `js/physics/*`, `js/race/*`).* Red-flag
+restart kept `c.lap` while re-gridding 14 m before the line, so a car on its
+last lap finished on the restart; it also zeroed every heading including the
+player's (`seedPlayerPose()` now derives it from the grid tangent, shared with
+`gridUp`). `player.px[0]` on a scalar made the lamp-shadow key always 0 and
+froze the player's floodlight shadow. A caution only lowered `vmax`, so the
+field was still rolling at a red-flag restart (real brake fraction under
+level ≥ 2). AI `towing` never cleared and the human never paid dirty air in a
+corner: the positions-only `wake` grip penalty is now separate from the
+driver-gated tow benefit. The standing quali lap started at the P1 slot with
+~1.7 s of untimed run-up. Closing-speed literals in the AI bands are pace-
+scaled. Lapped cars are flagged at their next crossing once the leader has
+finished (`RaceControl.flagOut/finishOrder`; the results sheet says `+N LAP`).
+`gridUp` with a null player spliced the last car out. The collision resolver
+is `js/physics/collide.js` (`Collide.create(G, collideFx)`); game.js is 305
+lines lighter. `tests/unit/red-flag-vm.test.mjs` pins the restart.
+
+*Renderers (`js/render/**`, `js/lighting/*`, `js/perf/*`).* One light budget
+(`LightBudget`) replaces four restated constants, so TLX-lite's 16-slot cap
+no longer drops the tail-lights the cull appended last; GLX now copies
+`frame.roadChunkLamps` so per-chunk road lamps work on the default renderer;
+WGX env-probe faces were vertically mirrored (fixed blind — needs the real-GPU
+census); WGX alpha-write masking, env-face/shadow encoder ordering, retired
+textures, the TLX mirror-release gate and car-pass cull VP, instanced VAO
+cache invalidation, the pipeline-key bias packing, `hdrMode` on lite rungs,
+and `quality-preset`'s unguarded store read. `PostCommon` holds the lens-dirt
+canvas, keep-nearest, HDR-grade test, sun-screen gate and knob defaults for
+all three post chains; `Frustum.bucketInstances` replaces three instance
+bucketers.
+
+*Track engine and circuits.* `verify-track.cjs` printed OK while stubbing
+every console method; it now reports suppressed/invalid/unsafe counts and the
+unique warnings (`--quiet` restores silence). `dressingExcluded` windows
+skipped the `_sceneryShift`/side transform (Monaco's data converted, Singapore
+now transformed). Qatar's verges were two-thirds footprint-rejected, Baku's
+kit fired the swapped-dimensions warning 13× per boot, Imola's ground read was
+half a lap away, four circuits emitted-then-culled up to 295 backdrops per
+build. `api.K` and `api.lapBounds()` replace 37 local `K` helpers and 30
+centroid loops; `bakedModels` left the contract (112 members). Madrid, Estoril
+and Indianapolis carried wrong `lengthKm` (Madrid raced 56 laps instead of 57).
+
+*UI / PWA / data / storage.* The service worker returned a browser error page
+for any navigation that lost a 3 s race while online; a primitive ghost blob
+made every later ghost save throw; Spotify's token refresh had no timeout;
+save-migrate never coerced `deal`, `budgetLvl`, result rows or per-round
+scores; `lastRace()` was empty until the season opener; asset fetches never
+checked `r.ok`; non-passive touch listeners; `user-scalable=no`; HUD flag and
+canvases without ARIA. `Dom.el/paintFold/fmtLap` replace five copies.
+`navigator.storage.persist()` is requested, and `GameStore` mirrors career and
+season keys into IndexedDB with a boot restore (`persistState().mirror`).
+
+*Multiplayer.* A peer's quali time was never coerced (a string reached
+`toFixed`); peer parts skipped the budget check; the handshake reported the
+server's build, not the running shell's; a sub-step X left the camera live;
+the worker allocated a Durable Object before its 405; a malformed ICE entry
+bricked WebRTC for 55 min; `makeAnswer` had no re-entry guard; the room-code
+envelope is v2 (random salt, slot AAD), plaintext relay envelopes are refused,
+HELLO/READY are rate-limited, `predict()` shares `poseRemote`'s clamp, PONGs
+match a sent id, code generation has no modulo bias, `BarcodeDetector` is
+preferred over jsQR when present. The legacy Trystero room branch (340 lines)
+is gone and the vendor is 0.25.4 (relay backoff, pruned relays). `NetBytes` is
+the one byte-codec home.
+
+*Tooling / tests / CI.* Eight unit suites (five garage, three steering) ran in
+no gate; two of them were red at HEAD (Alpine cover designs at 0–3 %
+visibility, Aston's flank crest, and the `noPlate` class on Ferrari/Red Bull
+flanks) and are fixed in the paint code, thresholds untouched. Playwright is
+one exact version with the browser path derived from `browsers.json`; sharp
+carries the libheif fix; a `waitForTimeout` ratchet exists; test-bg's registry
+write is atomic and its sweep regex knows the current layouts; ci.yml's inert
+`smoke` input, over-wide sweep trigger and stale caps are fixed; nine dead
+tools, `test-shards.sh`, four redundant groups and eight scripts are gone.
+Every freezable module surface now ends with `Object.freeze`
+(`tests/unit/frozen-globals.test.mjs`). The first push froze eight TEST
+SEAMS with it — `NetTransport` (net-authority injects `prefetchIce`),
+`AiDrive`, `Car3D`, `F1API`, `GLTF`, `GameAudio`, `Input`, `LampChunks` — and
+each monkeypatch became a silent sloppy-mode no-op: CI's net-unit lost eight
+LOBBY subtests and `physics-hotpath` measured 180 unwrapped steps. Those eight
+are back in `mutable` with the seam named; the registry's `_doc` carries the
+alias-aware scan to run before freezing anything else. The same push also
+made the corrected `dressingExclusions` transform land Singapore's side-1
+0.78–0.90 window for the first time, which removed the generic buildings the
+Helix Bridge had been standing on (5 floating clusters); the bridge now has
+four piers to the rendered ground.
+
+*Already red on the deploy tip's nightly, not this branch's:* `ci.yml`'s
+renderer-macos job (real Metal) failed on 2026-09-09 (run 34327512922, tip
+0c0c4d9) with `tlx-probes` M6 (skid batch never records — 60 s timeout),
+`lighting-ab` "night light budget" (`floodEmit` 0.0858 against the 0.78 the
+spec pins for a desert night) and `lighting-ab` "night fog GLOWS" (fog band
+63.6 against a > 84 floor); the 09-06 and 09-07 nightlies were green, so a
+deploy-branch change between them owns all three. The two lighting-ab
+failures reproduce on llvmpipe here (60.3 vs > 71.9; 0.0858), so they are
+not GPU-specific. Nobody reads the nightly: the deploy's own gate is
+change-aware and never runs this job.
+
+The same job on the audit commit (run 34459030214, with diagnostics) added
+three more reds — `tlx-probes` M8 (post chain reports off), M9 (env probe
+never begins) and `image-grade-visual` "blacks" (captures of 448×252 then
+512×288, so the render scale climbed mid-test) — and the pre-audit base
+(852764c, run 34460549586) fails the same set: M8, M6, M9, an image-grade
+NaN (there "shadows", the sibling test; the resize lands on whichever test
+is running) and the two lighting-ab tests. So none of the six is the
+audit's: the deploy-branch commits merged at 9cdde03 own them. M9 is
+f9c25e5 (TLX opts out of the env probe unless `apex26.tlxEnvProbe` is
+"1"; the spec now opts in, 8d805fe). M8 and the capture resize are the
+governor shedding on the Metal runner (bloom is zeroed at autoTier ≥ 4,
+auto-res steps the scale) plus `cfdafc6` "initialize renderer extras on
+demand" — candidates, not proven: the runner's own frame time is the
+input, and the base run's "FLAKY: 1 passed only on retry" says the same
+box is noisy. Left to the deploy branch's owners.
+
+With the governor attached to the failure messages (run 34462442429):
+the image-grade NaN is auto-res — `scale 0.8, tier 0, autoTier 0, fps
+31.8, floorMs 18.5, open window 558 frames / 134 slow / max 4366 ms` — the
+Metal runner's boot stalls (shader compiles up to 4.4 s a frame) make the
+governor step the render scale down inside the test, so the two captures
+differ in size; no tier is shed. M8 fails on the bloom block with the tier
+at 0, so it is not the autoTier ≥ 4 zeroing; the next Metal run carries
+the diagnostics on that assertion too. M9 passes since 8d805fe. The
+census (run 94, `apex26.tlxEnvProbe=1`, force=env) shows the TLX env
+probe running on hardware — begins 12, ends 12, ready, envFail 0,
+gpuErrors 0 — and the WGX leg rendering 233 frames with gpuErrors 0; the
+census does not expose WGX envState, so the WGX env-face ordering is
+exercised clean on Metal, not seen. "Fixed blind" stands for the pixels.
+
+*Left open, with the approach recorded in the session plan:* the car-draw and
+shadow-pass extractions (eval-order coupling), the `tests/` guards/vm split
+(45 files cited by path from circuits and docs), the lobby/netplay roster fold
+(two different ownership predicates), three.js r186 and Rapier 0.20 (real-GPU
+census and debris re-tuning), the WGX env-probe confirmation, the physics
+re-baseline, and Singapore's night prop budget spec.
+
 **2026-09-09 — a mark painted in the colour it stands on, on 59 of 69
 liveries. FIXED** — and the fourth case of two sessions on one defect.
 `markPalette()` resolved a mark against the plate it would sit on, but two call

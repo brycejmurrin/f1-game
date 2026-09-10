@@ -58,7 +58,7 @@ async function openGarage(page) {
   // evaluate click, not locator.click: a Playwright click on the title flyby
   // costs 80-113 s (docs/TESTING.md) and was the 120 s Selected-specs timeout
   // on 1e94cdf0 (garage-aero "MOVES the wing" 146 s / "WHOLE-CAR preset" 125 s).
-  // Retry the enter (same shape as tools/capture/probe-page.mjs openGarage):
+  // Retry the enter (same shape as tools/shot/probe-page.mjs openGarage):
   // a click that never landed cannot be fixed by waiting longer. After a wait
   // timeout, if #carsetup is showing anyway, accept it — ReadPixels stalls can
   // block the poll while the bay is already up (Selected specs 2026-09-09).

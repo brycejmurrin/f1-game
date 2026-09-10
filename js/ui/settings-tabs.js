@@ -85,3 +85,4 @@ const SettingsNav = (function () {
     show: (id, focus) => { if (live) live.show(id, focus); },
   };
 })();
+Object.freeze(SettingsNav);

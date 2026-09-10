@@ -98,7 +98,7 @@ const FLOOR = 2.0;        // contrast a band must clear to count as visible
 // bar rather than a chosen one.
 const AREA = {
   crown: 0.03,            // thinnest shipped: mercedes `twin`, 5.0 %
-  flank: 0.015,           // thinnest shipped: astonmartin `logo`, 2.6 %
+  flank: 0.015,           // thinnest shipped: astonmartin `logo`, 3.3 % since the crest-extent fit (was 2.6 %)
 };
 const GRID = 40;
 

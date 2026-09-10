@@ -30,7 +30,7 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sharp from "sharp";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
-import { awaitPresentedFrame, screenshotPresentedCanvas } from "../capture/probe-page.mjs";
+import { awaitPresentedFrame, screenshotPresentedCanvas } from "../shot/probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const OUT_DIR = resolve(ROOT, "assets", "stills");

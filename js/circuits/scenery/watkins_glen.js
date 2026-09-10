@@ -6,12 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["watkins_glen"] =
   function (api) {
-      const { out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
         pine, tree, bush, ridge, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, gantry, marshalPost, motorhome, waterBand,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       // Autumn hardwood palette — maple/oak turning, with dark conifer behind.
       const MAPLE = [0.62, 0.24, 0.12], SCARLET = [0.70, 0.31, 0.10];
@@ -230,9 +229,7 @@
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 9);
       }
 
-      const cx = px.reduce((a, b) => a + b, 0) / n, cz = pz.reduce((a, b) => a + b, 0) / n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       waterBand(0.30, 0.46, -1, 250, 560, 20, [0.15, 0.28, 0.38], { id: "glen-seneca-lake" });
       const lakeC = anchor(K(0.38), -1, 380).c;
       const lakeAng = Math.atan2(lakeC[2] - cz, lakeC[0] - cx);

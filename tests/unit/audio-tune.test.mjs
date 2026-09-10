@@ -101,7 +101,7 @@ function boot(opts) {
     setTimeout: (fn) => { pendingTimers.push(fn); return pendingTimers.length; },
     clearTimeout() {}, navigator: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     AudioContext: function () { return ctx; },
-    fetch: () => new Promise((res) => held.push(() => res({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
+    fetch: () => new Promise((res) => held.push(() => res({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),   // ok: engine.js now rejects a !ok response before decoding
   };
   sb.window = sb;
   const vctx = vm.createContext(sb);

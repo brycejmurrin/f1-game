@@ -327,7 +327,10 @@ const LiveryTex = (function () {
   //   engine cover / garage lightbox 361-363 | cover mobile player 181
   //   fin desktop 134 | cover mobile AI 90 | fin mobile player 67 | fin AI 34
   const CREST_MARGIN = 0.08;   // ONE margin for all twelve (was 0.04 .. 0.10)
-  const FLANK_CREST_SCALE = (1 - 0.015 * 2) / (1 - CREST_MARGIN * 2);
+  // The flank mark's crest fills its box the way the parts tile's crest fills
+  // its tile — to 1.5 % of the edge — measured on the crest's OWN extent
+  // (flankEmblemBox), not on fit()'s square.
+  const FLANK_CREST_FILL = 1 - 0.015 * 2;
   const STROKE_MIN = 0.055;    // 1.9 px at 34: below this a limb does not get
                                // thinner, it disappears
   const GAP_MIN = 0.07;        // 2.4 px at 34, survives one mip level. This is
@@ -409,6 +412,16 @@ const LiveryTex = (function () {
   // It is always reachable: the worst field for inkOn() is luminance 0.182,
   // where black and white tie at 4.25.
   const MARK_FLOOR = 4.2;
+  // The floor a metre-long BAND clears against the cover it lands on — 2.0,
+  // not INK_FLOOR: these are bands, not lettering, and Red Bull's bull
+  // measures 2.26 against its navy and reads clearly on track
+  // (tools/shot/shot.mjs --team, 2026-09-08). Module-scoped because
+  // drawSpineTop asks it too: a band UNDER it is carried by its trim.
+  const BAND_ON_COVER = 2.0;
+  // What a PLATE (a shield, a disc, a panel) must clear against the paint it
+  // sits on — markPalette's floor for a derived backing, and the flank's test
+  // for whether the brand plate comes along at all.
+  const PLATE_ON_PAINT = 1.6;
   // 25 rungs, not 9. The windows this has to hit are narrow: a teal mark on a
   // near-black field leaves only luminance 0.143..0.199 for a neutral that
   // separates from both, and a coarse ramp steps straight over it.
@@ -583,7 +596,7 @@ const LiveryTex = (function () {
           // wash is on top of the panel, so asking it to separate from the wash
           // colour too rejects the Red Bull gold disc on a gold-accented livery
           // and leaves the bulls floating with nothing behind them.
-          for (const c of cands) if (c && contrast(c, flds[0]) >= 1.6) { plate = c.slice(); break; }
+          for (const c of cands) if (c && contrast(c, flds[0]) >= PLATE_ON_PAINT) { plate = c.slice(); break; }
         }
       }
     }
@@ -1571,8 +1584,31 @@ const LiveryTex = (function () {
       ctx.restore();
     });
   }
-  function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont, acc2, colors) {
+  // A band that cannot clear the cover it lands on is carried by its TRIM.
+  // Only an AUTHORED tint gets there — the derived pick is floored at
+  // BAND_ON_COVER — and Alpine's is one: BWT pink on the body-blue cover
+  // (both photographed, LIVERY-2026-REFERENCE.md) reads 1.56:1, and every
+  // band design below wore hairline trim at 0.3–0.6 alpha and ~1 % of the
+  // crown, the width carbon's keylines were found too thin at. Measured on
+  // Alpine: saddle, panel and rungs 0 % of the crown readable, wedge 1.1 %,
+  // streaks 2.9 % (cover-legibility.test.mjs, floor 3 %). So under a weak
+  // band the trim is drawn at KEYLINE weight — full ink, 3 % of the crown,
+  // carbon's own recipe — and where the band clears nothing changes: every
+  // other team's atlas is byte-identical (the edges are written as
+  // `edge - width` so the derived path reproduces the old literals exactly). `weak` is decided ONCE at the call
+  // site, from the same pair the band was picked against.
+  const TRIM_KEY = 0.03;       // a keyline, of the crown width (carbon: 0.035)
+  const TRIM_STROKE = 0.02;    // a stroked edge straddles the outline: half in
+  function bandTrim(weak) {
+    return {
+      a: (a) => (weak ? 0.9 : a),                          // ink alpha
+      w: (w) => (weak ? Math.max(w, TRIM_KEY) : w),        // keyline, of W
+      lw: (px, W) => (weak ? Math.max(px, W * TRIM_STROKE) : px),   // stroke px
+    };
+  }
+  function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont, acc2, colors, weak) {
     const X = R.x, Y = R.y, W = R.w, H = R.h;
+    const T = bandTrim(weak);
     ctx.save();
     ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip();
     if (id === "bigmark") {
@@ -1597,8 +1633,9 @@ const LiveryTex = (function () {
       // Shoulder hairlines keep the saddle reading as a panel on pale covers
       // (Ferrari / Cadillac) where a pure fill vanishes into the cover paint.
       ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, Y, W, H);
-      ctx.fillStyle = cssA(ink, 0.28);
-      ctx.fillRect(X, Y, W * 0.012, H); ctx.fillRect(X + W * 0.988, Y, W * 0.012, H);
+      const kw = W * T.w(0.012);
+      ctx.fillStyle = cssA(ink, T.a(0.28));
+      ctx.fillRect(X, Y, kw, H); ctx.fillRect(X + W * (1 - T.w(0.012)), Y, kw, H);
     } else if (id === "panel") {
       // Vinyl block: parallel sides, hard rake at the airbox, square at the
       // tail. Slightly narrower than before so papaya / Haas panels leave a
@@ -1610,16 +1647,18 @@ const LiveryTex = (function () {
       ctx.lineTo(X + W * 0.70, Y + H * 0.78);
       ctx.lineTo(X + W * 0.30, Y + H * 0.94);      // raked front edge
       ctx.closePath(); ctx.fill();
-      ctx.fillStyle = cssA(ink, 0.65);
-      ctx.fillRect(X + W * 0.30, Y, W * 0.012, H * 0.94); ctx.fillRect(X + W * 0.688, Y, W * 0.012, H * 0.78);
+      const kw = W * T.w(0.012);
+      ctx.fillStyle = cssA(ink, T.a(0.65));
+      ctx.fillRect(X + W * 0.30, Y, kw, H * 0.94); ctx.fillRect(X + W * (0.70 - T.w(0.012)), Y, kw, H * 0.78);
       ctx.fillStyle = cssA(ink, 0.22);
       ctx.fillRect(X + W * 0.312, Y, W * 0.008, H * 0.92); ctx.fillRect(X + W * 0.680, Y, W * 0.008, H * 0.76);
     } else if (id === "stripe") {
       // One centreline band with firm ink edges — trim, not a smear. A hair
       // narrower (18 %) so Williams / Aston leave crown paint either side.
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.41, Y, W * 0.18, H);
-      ctx.fillStyle = cssA(ink, 0.62);
-      ctx.fillRect(X + W * 0.41, Y, W * 0.014, H); ctx.fillRect(X + W * 0.576, Y, W * 0.014, H);
+      const kw = W * T.w(0.014);
+      ctx.fillStyle = cssA(ink, T.a(0.62));
+      ctx.fillRect(X + W * 0.41, Y, kw, H); ctx.fillRect(X + W * (0.59 - T.w(0.014)), Y, kw, H);
     } else if (id === "streaks") {
       // Parallel raked streaks down the crown — Racing Bulls blue speed lines
       // on a white cover. Four strokes, not a solid stripe; ink edges keep them
@@ -1634,7 +1673,7 @@ const LiveryTex = (function () {
         ctx.lineTo(x1 - W * 0.012, Y + H);
         ctx.lineTo(x0 - W * 0.012, Y + H);
         ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = cssA(ink, 0.45); ctx.lineWidth = Math.max(1.2, W * 0.008); ctx.stroke();
+        ctx.strokeStyle = cssA(ink, T.a(0.45)); ctx.lineWidth = T.lw(Math.max(1.2, W * 0.008), W); ctx.stroke();
       }
     } else if (id === "twin") {
       // Two pinstripes ON the shoulder creases — the W17's teal lines along
@@ -1642,8 +1681,9 @@ const LiveryTex = (function () {
       // keylines keep them readable on silver when the stripe colour is close.
       ctx.fillStyle = cssA(acc, 0.96);
       ctx.fillRect(X + W * 0.035, Y, W * 0.052, H); ctx.fillRect(X + W * 0.913, Y, W * 0.052, H);
-      ctx.fillStyle = cssA(ink, 0.55);
-      ctx.fillRect(X + W * 0.078, Y, W * 0.010, H); ctx.fillRect(X + W * 0.912, Y, W * 0.010, H);
+      const kw = W * T.w(0.010);
+      ctx.fillStyle = cssA(ink, T.a(0.55));
+      ctx.fillRect(X + W * (0.088 - T.w(0.010)), Y, kw, H); ctx.fillRect(X + W * 0.912, Y, kw, H);
     } else if (id === "carbon") {
       // An exposed-carbon crown panel: near-black with a faint diagonal weave
       // and an accent keyline where the paint stops.
@@ -1679,7 +1719,7 @@ const LiveryTex = (function () {
         ctx.moveTo(X, y0); ctx.lineTo(X + W / 2, tip); ctx.lineTo(X + W, y0);
         ctx.lineTo(X + W, y0 + th); ctx.lineTo(X + W / 2, tip + th); ctx.lineTo(X, y0 + th);
         ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = cssA(ink, 0.45); ctx.lineWidth = Math.max(1.5, H * 0.012);
+        ctx.strokeStyle = cssA(ink, T.a(0.45)); ctx.lineWidth = T.lw(Math.max(1.5, H * 0.012), W);
         ctx.stroke();
       }
     } else if (id === "tricolour") {
@@ -1698,7 +1738,7 @@ const LiveryTex = (function () {
       const bandH = H * 0.095, top = Y + H * 0.60, gap = H * 0.018;
       ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, top, W, bandH);
       ctx.fillStyle = cssA(acc2 || ink, 0.97); ctx.fillRect(X, top + bandH + gap * 2, W, bandH);
-      ctx.fillStyle = cssA(ink, 0.35);
+      ctx.fillStyle = cssA(ink, T.a(0.35));
       ctx.fillRect(X, top + bandH, W, gap); ctx.fillRect(X, top + bandH + gap, W, gap);
     } else if (id === "wedge") {
       // A band WIDE at the airbox tapering to a point at the tail — the shape a
@@ -1715,7 +1755,7 @@ const LiveryTex = (function () {
       ctx.lineTo(X + W * 0.88, Y + H);               // airbox: nearly the full crown
       ctx.lineTo(X + W * 0.12, Y + H);
       ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = cssA(ink, 0.5); ctx.lineWidth = Math.max(2, W * 0.012); ctx.stroke();
+      ctx.strokeStyle = cssA(ink, T.a(0.5)); ctx.lineWidth = T.lw(Math.max(2, W * 0.012), W); ctx.stroke();
     } else if (id === "rungs") {
       // Bars ACROSS the crown, repeated down it — the one direction nothing
       // else in this set runs. `twin` and `stripe` run along the car, `chevron`
@@ -1727,8 +1767,8 @@ const LiveryTex = (function () {
         const inset = W * (0.05 + i * 0.038);        // narrowing toward the tail
         const y = Y + H * (0.07 + i * 0.185), h = H * 0.072;
         ctx.fillRect(X + inset, y, W - inset * 2, h);
-        ctx.fillStyle = cssA(ink, 0.4);
-        ctx.fillRect(X + inset, y, W - inset * 2, Math.max(1.5, h * 0.14));
+        ctx.fillStyle = cssA(ink, T.a(0.4));
+        ctx.fillRect(X + inset, y, W - inset * 2, weak ? W * TRIM_KEY : Math.max(1.5, h * 0.14));
         ctx.fillStyle = cssA(acc, 0.96);
       }
     } else if (id === "wordmark") {
@@ -1812,19 +1852,22 @@ const LiveryTex = (function () {
   // band designs continue down it so a stripe or a saddle runs to the wing,
   // and "wordmark" puts the SECOND sponsor there reading from behind. The
   // marks (logo, number) and "none" leave it bare.
-  function drawTailTop(ctx, id, R, acc, ink, name2, colors, coverPaint) {
+  function drawTailTop(ctx, id, R, acc, ink, name2, colors, coverPaint, weak) {
     const X = R.x, Y = R.y, W = R.w, H = R.h;
+    const T = bandTrim(weak);      // the crown's trim rule, continued down the tail
     ctx.save();
     ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip();
     if (id === "saddle") { ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, Y, W, H); }
     else if (id === "panel") {
       ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X + W * 0.30, Y, W * 0.40, H);
-      ctx.fillStyle = cssA(ink, 0.55);
-      ctx.fillRect(X + W * 0.30, Y, W * 0.012, H); ctx.fillRect(X + W * 0.688, Y, W * 0.012, H);
+      const kw = W * T.w(0.012);
+      ctx.fillStyle = cssA(ink, T.a(0.55));
+      ctx.fillRect(X + W * 0.30, Y, kw, H); ctx.fillRect(X + W * (0.70 - T.w(0.012)), Y, kw, H);
     }
     else if (id === "stripe") {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.41, Y, W * 0.18, H);
-      ctx.fillStyle = cssA(ink, 0.62); ctx.fillRect(X + W * 0.41, Y, W * 0.014, H); ctx.fillRect(X + W * 0.576, Y, W * 0.014, H);
+      const kw = W * T.w(0.014);
+      ctx.fillStyle = cssA(ink, T.a(0.62)); ctx.fillRect(X + W * 0.41, Y, kw, H); ctx.fillRect(X + W * (0.59 - T.w(0.014)), Y, kw, H);
     } else if (id === "ridge") {
       const ridgeC = ridgeFill(colors || {}, acc, coverPaint);
       const rw = W * 0.07;
@@ -1846,7 +1889,8 @@ const LiveryTex = (function () {
 
     } else if (id === "twin") {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.035, Y, W * 0.052, H); ctx.fillRect(X + W * 0.913, Y, W * 0.052, H);
-      ctx.fillStyle = cssA(ink, 0.55); ctx.fillRect(X + W * 0.078, Y, W * 0.010, H); ctx.fillRect(X + W * 0.912, Y, W * 0.010, H);
+      const kw = W * T.w(0.010);
+      ctx.fillStyle = cssA(ink, T.a(0.55)); ctx.fillRect(X + W * (0.088 - T.w(0.010)), Y, kw, H); ctx.fillRect(X + W * 0.912, Y, kw, H);
     } else if (id === "wedge") {
       // The point runs OUT along the tail rather than stopping at the crown's
       // edge: the crown hands over a stub ~12 % wide, and it closes to nothing.
@@ -1916,9 +1960,48 @@ const LiveryTex = (function () {
     }
     return { u: FLANK_MARK.u, v: FLANK_MARK.v };
   }
-  function flankEmblemBox(R) {
-    const f = FLANK_CREST_SCALE;
-    return { x: R.x + R.w * (1 - f) / 2, y: R.y + R.h * (1 - f) / 2, w: R.w * f, h: R.h * f };
+  // Unit-space extent of a traced crest — M/L/Z only, so a scan of its
+  // numbers — with the authored disc. A hand-drawn crest (Mercedes, Haas,
+  // Audi) reports the whole fit box, which sizes it exactly as before.
+  const _crestExtent = {};
+  function crestExtent(teamId) {
+    if (_crestExtent[teamId]) return _crestExtent[teamId];
+    const spec = typeof CrestPaths !== "undefined" && CrestPaths[teamId];
+    let u0 = 1, v0 = 1, u1 = 0, v1 = 0;
+    if (spec) for (const d of spec.d) {
+      const nums = d.match(/-?\d*\.?\d+/g) || [];
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        const u = +nums[i], v = +nums[i + 1];
+        if (u < u0) u0 = u; if (u > u1) u1 = u;
+        if (v < v0) v0 = v; if (v > v1) v1 = v;
+      }
+    }
+    const disc = CREST_DISC[teamId];
+    if (disc) {
+      u0 = Math.min(u0, disc.cx - disc.r); u1 = Math.max(u1, disc.cx + disc.r);
+      v0 = Math.min(v0, disc.cy - disc.r); v1 = Math.max(v1, disc.cy + disc.r);
+    }
+    if (!(u1 > u0 && v1 > v0)) { u0 = 0; v0 = 0; u1 = 1; v1 = 1; }
+    return (_crestExtent[teamId] = { u0, v0, u1, v1 });
+  }
+  // The box handed to drawCrest so that the crest's EXTENT fills the flank
+  // mark box R. fit() sizes every crest by a SQUARE on the box's SHORT side,
+  // so a wide mark in the wide mark box was sized by the box's HEIGHT and got
+  // a third of the width it was given: Aston's wings (4:1) measured 2.6 % of
+  // the flank when cover-legibility.test.mjs set its floor on them, 1.5 % after
+  // the box was lowered (0f1ff58), 1.1 % after it was shrunk (43013ce), 1.4 %
+  // with a flat 1.155x on the box (34837c1) — and the floor is 1.5 %. This
+  // scales the fit square so the extent, not the square, meets the box: a
+  // square crest is sized exactly as the 1.155x sized it, a wide one takes the
+  // width it was always given. Everything stays INSIDE R, which fin-design's
+  // sun / rear-tyre bounds already vet.
+  function flankEmblemBox(R, teamId) {
+    const e = crestExtent(teamId);
+    const s = Math.min(R.w / (e.u1 - e.u0), R.h / (e.v1 - e.v0)) * FLANK_CREST_FILL;
+    const side = s / (1 - CREST_MARGIN * 2);
+    const cx = R.x + R.w / 2 - ((e.u0 + e.u1) / 2 - 0.5) * s;
+    const cy = R.y + R.h / 2 - ((e.v0 + e.v1) / 2 - 0.5) * s;
+    return { x: cx - side / 2, y: cy - side / 2, w: side, h: side };
   }
   const TAIL_STYLE = {
     redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
@@ -2146,10 +2229,7 @@ const LiveryTex = (function () {
     // when the natural choice fails — where the cover equals the body, which is
     // nine teams, the atlas is byte-identical to before for stock cars (none of
     // which author a BODY STRIPE).
-    // The floor is 2.0, not INK_FLOOR: these are metre-long bands, not
-    // lettering, and Red Bull's bull measures 2.26 against its navy and reads
-    // clearly on track (tools/shot/shot.mjs --team, 2026-09-08).
-    const BAND_ON_COVER = 2.0;
+    // The floor is BAND_ON_COVER (module scope), not INK_FLOOR.
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     // The three DESIGN picks. Absent = today's atlas, pixel for pixel.
     const tailStyle = colors.finStyle || "team";
@@ -2165,6 +2245,10 @@ const LiveryTex = (function () {
     // SPINE TINT. See pickOn for why FIRST that clears, not highest-scoring.
     const BAND_ORDER = [c2, c1, INK_LIGHT, INK_DARK];
     const bandC = colors.spineTint || pickOn(BAND_ORDER, coverPaint, BAND_ON_COVER);
+    // …and whether that band can be SEEN on the cover. False for every derived
+    // pick by construction; true only for an authored SPINE TINT that sits
+    // under the floor, which is what the band designs' trim answers to.
+    const bandWeak = contrast(bandC, coverPaint) < BAND_ON_COVER;
     const finPaint = resolveFinPaint(teamId, colors, coverPaint, bandC, c1, c2);
     const inkFin = inkOn([finPaint]);
     // The cover's HEIGHT decides how tall the flank band is in metres, and so
@@ -2343,13 +2427,13 @@ const LiveryTex = (function () {
       // and the other was derived, which is how four teams ended up wearing a
       // "tricolour" of one colour repeated (1.01:1 on Mercedes).
       const bandC2 = colors.bandTint2 || pickOn([inkCrest].concat(BAND_ORDER), [coverPaint, bandC], BAND_ON_COVER);
-      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont, bandC2, colors);
+      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont, bandC2, colors, bandWeak);
       if (spineLogo === "saddle" || coverBind === "saddleWrap") {
         saddleFlanks(ctx, saddleFill(colors, bandC, coverPaint) || bandC);
       }
     }
     if (REGIONS.tail && finHandoffOf(colors) !== "hardCut") {
-      drawTailTop(ctx, spineLogo, REGIONS.tail, bandC, inkCrest, names[1] || "", colors, coverPaint);
+      drawTailTop(ctx, spineLogo, REGIONS.tail, bandC, inkCrest, names[1] || "", colors, coverPaint, bandWeak);
     }
     // TAIL GRAPHIC wash: finArt if set, else the first BASE that clears the
     // fin plate. BODY STRIPE / DETAIL used to sit ahead of c1 here and steal
@@ -2514,6 +2598,16 @@ const LiveryTex = (function () {
     if (spineSide === "logo" || spineSide === "emblem") {
       // logo / emblem: paintTeamMark — same logo / logo2 / logo3 routing as the
       // parts livery tiles (paintSwatch), not a separate flank palette.
+      // …and the brand PLATE comes along only where it clears the flank it
+      // lands on. Resolved WITH the plate, the mark is inked to read on a
+      // backing that is then painted onto whatever the crown left there —
+      // Ferrari's yellow shield on its white cover under the wrap, 1.09:1;
+      // Red Bull's gold disc on its gold saddle, 1.10:1 — the ledger's noPlate
+      // class (DEFECT-LEDGER 2026-09-09), back the day the flank went through
+      // paintTeamMark without the flag. Under a plain crown the plate reads
+      // (shield on red, disc on navy) and stays; an authored LOGO DETAIL plate
+      // is a pick and stays regardless. Measured against every paint the mark
+      // spans (markBgs), the same list the mark itself is floored on.
       const paintFlankLogo = (Rm, scaleCrest) => {
         const img = LOGOS[teamId];
         paintTeamMark(ctx, teamId, colors, Rm, markBgs, {
@@ -2959,7 +3053,9 @@ const LiveryTex = (function () {
       drawLogoImage(ctx, LOGOS[teamId], R, tint, halo, outline);
       return;
     }
-    const crestR = o.crestScale ? flankEmblemBox(R) : R;
+    const crestR = o.crestScale ? flankEmblemBox(R, teamId) : R;
+    // `noPlate` resolves the mark for a plate-less draw (see markPalette): the
+    // flank passes it where the brand plate cannot clear the flank paint.
     drawCrest(ctx, teamId, crestR, {
       liv, field, bare: !o.fullLockup,
       palette: markPalette(teamId, liv, field, false, { noPlate: !!o.noPlate }),

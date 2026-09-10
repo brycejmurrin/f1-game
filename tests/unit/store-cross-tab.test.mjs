@@ -174,3 +174,128 @@ test("a write this tab made still wins its own cache — no self-invalidation lo
   assert.equal(store.get("track", -1), 7);
 });
 
+
+/* ── the durable mirror (IndexedDB) ──────────────────────────────────────────
+ * Same module, second store: every apex26.career* / apex26.season* write is
+ * also queued into an IndexedDB object store, and at boot a key localStorage
+ * LACKS that the mirror holds comes back. The fake below is the smallest IDB
+ * that answers open / transaction / put / delete / getAll with the async
+ * callback shape the module drives; requests settle on a microtask and the
+ * transaction's oncomplete on a macrotask, like the real thing. */
+function fakeIndexedDb(seed = []) {
+  const rows = new Map(seed);
+  const request = (result) => {
+    const r = { result, error: null, onsuccess: null, onerror: null };
+    queueMicrotask(() => { if (r.onsuccess) r.onsuccess(); });
+    return r;
+  };
+  const db = {
+    objectStoreNames: { contains: () => true },
+    close() {},
+    transaction(_name, _mode) {
+      const t = { error: null, oncomplete: null, onerror: null, onabort: null };
+      t.objectStore = () => ({
+        put(row) { rows.set(row.k, row.v); return request(row.k); },
+        delete(k) { rows.delete(k); return request(undefined); },
+        getAll() { return request(Array.from(rows, ([k, v]) => ({ k, v }))); },
+      });
+      setTimeout(() => { if (t.oncomplete) t.oncomplete(); }, 0);
+      return t;
+    },
+  };
+  return {
+    rows,
+    open() {
+      const r = { result: db, onupgradeneeded: null, onsuccess: null, onerror: null, onblocked: null };
+      queueMicrotask(() => { if (r.onupgradeneeded) r.onupgradeneeded(); if (r.onsuccess) r.onsuccess(); });
+      return r;
+    },
+  };
+}
+
+function loadMirrored({ seed = [], disk = new Map(), writeError = null } = {}) {
+  const idb = fakeIndexedDb(seed);
+  const sandbox = {
+    Math, JSON, Object, Array, String, Number, Map, isNaN, isFinite, console, Promise,
+    setTimeout, clearTimeout, queueMicrotask,
+    indexedDB: idb,
+    localStorage: {
+      getItem: (k) => (disk.has(k) ? disk.get(k) : null),
+      setItem: (k, v) => {
+        if (writeError) { const e = new Error("blocked"); e.name = writeError; throw e; }
+        disk.set(k, String(v));
+      },
+      removeItem: (k) => { disk.delete(k); },
+    },
+    Log: { warn() {}, info() {} },
+    window: { addEventListener() {} },
+    Teams: { LIST: [] },
+  };
+  const ctx = vm.createContext(sandbox);
+  seedSaveMigrate(ctx);
+  vm.runInContext(SRC, ctx, { filename: "js/core/store.js" });
+  return { store: vm.runInContext("GameStore", ctx).store, disk, idb };
+}
+
+test("career and season writes are mirrored into IndexedDB; other keys are not", async () => {
+  const { store, idb } = loadMirrored();
+  await store.mirror.ready;
+  store.set("career.driver.0", { money: 100 });
+  store.set("season", { round: 3 });
+  store.set("seasonCfg", { drop: 2 });
+  store.set("careerSlot", "driver:0");
+  store.set("musicSource", "all");           // a preference: localStorage only
+  assert.equal(store.mirror.pending, 4, "the burst is queued, not written per call");
+  await store.mirrorFlush();
+  assert.deepEqual(Array.from(idb.rows.keys()).sort(),
+    ["apex26.career.driver.0", "apex26.careerSlot", "apex26.season", "apex26.seasonCfg"]);
+  assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 100);
+  assert.equal(store.mirror.flushed, 4);
+  store.set("career.driver.0", null);        // deleteSlot() writes null
+  await store.mirrorFlush();
+  assert.equal(idb.rows.has("apex26.career.driver.0"), false, "a deleted slot leaves the mirror too");
+});
+
+test("a quota-refused save still reaches the mirror", async () => {
+  const { store, idb } = loadMirrored({ writeError: "QuotaExceededError" });
+  await store.mirror.ready;
+  const r = store.write("career.myteam.1", { money: 7 });
+  assert.equal(r.durable, false);
+  await store.mirrorFlush();
+  assert.equal(JSON.parse(idb.rows.get("apex26.career.myteam.1")).money, 7,
+    "the write localStorage refused is exactly the one the mirror exists for");
+});
+
+test("at boot the mirror restores only what localStorage lacks, and announces it", async () => {
+  const disk = new Map([["apex26.career.driver.0", JSON.stringify({ money: 999 })]]);
+  const { store } = loadMirrored({
+    disk,
+    seed: [
+      ["apex26.career.driver.0", JSON.stringify({ money: 1 })],     // disk has a newer one: left alone
+      ["apex26.career.myteam.0", JSON.stringify({ money: 55 })],    // evicted from localStorage: restored
+      ["apex26.season", JSON.stringify({ round: 9 })],
+      ["apex26.musicSource", JSON.stringify("all")],                // not a mirrored key: ignored
+    ],
+  });
+  assert.equal(store.get("career.myteam.0", null), null, "the synchronous first read predates the restore");
+  const changes = [];
+  store.subscribe((c) => changes.push(c));
+  const n = await store.mirror.ready;
+  assert.equal(n, 2);
+  assert.equal(store.get("career.driver.0").money, 999, "the disk's copy wins over the mirror's");
+  assert.equal(store.get("career.myteam.0").money, 55, "the cached miss was dropped so the restore is read");
+  assert.equal(store.get("season").round, 9);
+  assert.equal(disk.has("apex26.musicSource"), false);
+  assert.deepEqual(changes.map((c) => c.key).sort(), ["career.myteam.0", "season"]);
+  assert.ok(changes.every((c) => c.foreign && c.restored), "announced like a second tab's write, flagged restored");
+  assert.equal(store.mirror.restored, 2);
+});
+
+test("without indexedDB the mirror is inert and the store is unchanged", async () => {
+  const { store } = load();
+  assert.equal(store.mirror.supported, false);
+  assert.equal(await store.mirror.ready, 0);
+  store.set("career.driver.0", { money: 1 });
+  assert.equal(store.mirror.pending, 0);
+  assert.equal(await store.mirrorFlush(), false);
+});

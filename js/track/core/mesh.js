@@ -72,8 +72,11 @@ const TrackMesh = (function () {
   //     exact centreline it was measured on.
   //   • `bankZones: [{ frac, angleDeg, widthM }]` — an explicit fraction window
   //     in the pre-rotation authoring space (Madrid's La Monumental), OR
-  //   • `banked: true` — auto-pick the two highest-curvature corners and bank
-  //     them at ~18° (legacy fallback for any track without bankZones).
+  //   • `banked: true` — WITHOUT bankZones, auto-pick the two highest-curvature
+  //     corners and bank them at ~18° (legacy fallback). Beside bankZones it
+  //     builds nothing extra — the zones win outright below — and only lights
+  //     the picker's BANKED badge (js/ui/select-screen.js), which is how
+  //     madrid and zandvoort carry both.
   // Returns null when neither is present; otherwise per-node arrays describing how
   // much the OUTER road edge rises (metres) and which side that outer edge is on.
   // The lift is cosine-ramped to zero over the corner span, exactly like the
@@ -958,3 +961,4 @@ const TrackMesh = (function () {
            nodeGrid, buildRoad, buildTerrain, buildFloor, gridSlot, buildGridBoxes,
            GRID_SLOTS };
 })();
+Object.freeze(TrackMesh);

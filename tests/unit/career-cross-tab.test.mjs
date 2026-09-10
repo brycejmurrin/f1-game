@@ -50,9 +50,52 @@ function load(options = {}) {
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx);
   return {
     Career: vm.runInContext("Career", ctx), disk,
+    SaveMigrate: vm.runInContext("SaveMigrate", ctx),
     foreign: (key) => listeners.get("storage")({ key, newValue: disk.get(key) }),
   };
 }
+
+test("migrateCareer coerces a corrupt deal, budget level and results ledger", () => {
+  // A hand-edited or truncated save: `salary: "x"` reached settleRound's
+  // arithmetic as NaN, a negative budgetLvl indexed below the table, and a
+  // null row in `results` threw on the history screen's first `r.round`.
+  const { SaveMigrate } = load();
+  const c = SaveMigrate.migrateCareer({
+    v: 1, flavour: "driver", team: "haas",
+    deal: { salary: "x", bonusPt: "12", left: null, years: "2" },
+    budgetLvl: -3,
+    results: [null, 4, { round: 1, pos: 3 }, [1, 2], "row"],
+  });
+  assert.equal(c.deal.salary, 0);
+  assert.equal(c.deal.bonusPt, 12);
+  assert.equal(c.deal.left, 0);
+  assert.equal(c.deal.years, 2);
+  assert.equal(c.budgetLvl, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.results)), [{ round: 1, pos: 3 }]);
+  assert.equal(c.team, "haas");
+  assert.equal(SaveMigrate.migrateCareer({ v: 1, deal: "gold", team: 7 }).deal, null,
+    "a non-object deal is dropped rather than coerced field by field");
+  assert.equal(SaveMigrate.migrateCareer({ v: 1, team: 7 }).team, null);
+});
+
+test("remapPoints sanitises the per-round and finish records, not only pts", () => {
+  // netPts() summed season.roundPts[id] raw — a string round score became
+  // "25" + 0 concatenation and a NaN standing. roundMap/finishMap already
+  // guarded the standalone save's resume(); the nested career championship
+  // went through remapPoints, which never applied them.
+  const { SaveMigrate } = load();
+  const c = SaveMigrate.migrateCareer({
+    v: 1,
+    season: { round: 2, pts: { "haas:0": 43 }, teamPts: {}, driverCodes: {},
+      roundPts: { "haas:0": [25, "18", -4, null], bogus: "x" },
+      finishes: { "haas:0": [1, "2", 0.5, -1] } },
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.season.roundPts)), { "haas:0": [25, 0, 0, 0] });
+  assert.deepEqual(JSON.parse(JSON.stringify(c.season.finishes)), { "haas:0": [1, 0, 0, 0] });
+  const bare = SaveMigrate.migrateCareer({ v: 1, season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} } });
+  assert.deepEqual(JSON.parse(JSON.stringify(bare.season.roundPts)), {});
+  assert.deepEqual(JSON.parse(JSON.stringify(bare.season.finishes)), {});
+});
 
 test("legacy migration preserves its source when the destination write hits quota", () => {
   const legacy = save(3, 500);

@@ -44,6 +44,8 @@ import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, join, normalize, relative, resolve, sep } from "node:path";
 
+import { chromiumPath } from "./chromium-path.mjs";
+
 const require = createRequire(import.meta.url);
 const _wgpuArgs = require("./webgpu-chrome-args.cjs");
 export const WEBGPU_CHROMIUM_ARGS = _wgpuArgs.WEBGPU_CHROMIUM_ARGS;
@@ -67,38 +69,19 @@ const MIME = {
   ".txt": "text/plain",
 };
 
-const CHROMIUM_PATHS = [
-  "/opt/pw-browsers/chromium",
-  "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
-  "/home/ubuntu/.cache/ms-playwright/chromium-1234/chrome-linux64/chrome",
+// System browsers, tried only after Playwright's own build: a tool that needs
+// GL on a box with no ms-playwright install can still run on the vendor Chrome.
+const SYSTEM_CHROME = [
   "/opt/google/chrome/chrome",
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 ];
 
-/** Preinstalled sandbox Chromium; undefined → playwright's bundled build. */
-function fromPlaywrightBrowsersPath() {
-  const root = process.env.PLAYWRIGHT_BROWSERS_PATH;
-  if (!root || !existsSync(root)) return undefined;
-  let dirs;
-  try { dirs = readdirSync(root).filter((d) => d.startsWith("chromium-")).sort().reverse(); }
-  catch { return undefined; }
-  for (const d of dirs) {
-    for (const rel of [
-      "chrome-linux/chrome",
-      "chrome-linux64/chrome",
-      "chrome-mac/Chromium.app/Contents/MacOS/Chromium",
-      "chrome-mac-arm64/Chromium.app/Contents/MacOS/Chromium",
-    ]) {
-      const exe = join(root, d, rel);
-      if (existsSync(exe)) return exe;
-    }
-  }
-}
-
+/** CHROME / PW_CHROMIUM, else the Playwright build chromium-path.mjs derives
+ *  from playwright-core's browsers.json revision (newest installed as the
+ *  fallback), else a system Chrome; undefined → Playwright's bundled default. */
 export function pickChromium() {
-  return process.env.CHROME || process.env.PW_CHROMIUM
-    || CHROMIUM_PATHS.find(existsSync)
-    || fromPlaywrightBrowsersPath();
+  return chromiumPath()
+    || SYSTEM_CHROME.find(existsSync);
 }
 
 /**

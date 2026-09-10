@@ -98,3 +98,4 @@ function skill(r, roll) {
 return { AXES, BASE, get, overall, fromTier, hash32: Hash32.fnv1a, skill,
          SKILL_BASE, SKILL_SPAN, SKILL_JITTER };
 })();
+Object.freeze(DriverRatings);

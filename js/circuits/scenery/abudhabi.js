@@ -6,14 +6,13 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["abudhabi"] =
   function (api) {
-      const { out, MAT, n, px, py, pz, pyMin, place, prop, groundPlane, addBox, seat,
+      const { K, lapBounds, out, MAT, n, px, py, pz, pyMin, place, prop, groundPlane, addBox, seat,
         anchor, onTrack, hash, vadd, building, motorhome, tower, grandstand, grandstandEx, billboard,
         gantry, palm, bush, hedge, addCyl, addCone, addFrustum, addPrism,
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
         cityFront, forestEdge, backdrop, mountain, ferrisWheel, landmarkKit,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, circuitKit,
         bleacher, sailCanopy } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       const LED_TEAL  = [0.20, 0.85, 0.95];
       const LED_MAG   = [0.95, 0.18, 0.72];
@@ -93,11 +92,7 @@
           [col[0] * 0.34, col[1] * 0.34, col[2] * 0.34], b);
       };
 
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let trad = 0;
-      for (let i = 0; i < n; i++) trad = Math.max(trad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: trad } = lapBounds();
       {
         const ring = trad + 360;
         for (let i = 0; i < 36; i++) {

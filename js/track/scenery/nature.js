@@ -80,7 +80,10 @@ const SceneryNature = (function () {
         ? py[k] + bankOffsetAt(track, k, o)
         : (() => { const ty = terrainYAt(cx, cz);
                    return ty != null ? ty : groundYAt(k, dist) + bankOffsetAt(track, k, o); })();
-      return { c: [cx, base - 0.3, cz], r, u, t };
+      // `k` is the RESOLVED node — on a shifted/reversed circuit the wrapper
+      // remapped the caller's index, so a circuit pairing this anchor with an
+      // unwrapped node query (groundYAt) must read the node from here.
+      return { c: [cx, base - 0.3, cz], r, u, t, k };
     };
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
@@ -873,3 +876,4 @@ const SceneryNature = (function () {
 
   return { create };
 })();
+Object.freeze(SceneryNature);

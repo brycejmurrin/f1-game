@@ -2,7 +2,7 @@
 // probe mode (dry-run call plans), the Chrome wrapper's flags and release pin,
 // gfx-probe's backend flags, and the Playwright MCP pin. Nothing here launches
 // a browser or needs network. The tinyfish proxy and the probe bridge have
-// their own suites in `npm run test:mcp` (tinyfish-mcp / probe-mcp).
+// their own suites in tests/manual/ (tinyfish-mcp / probe-mcp), run by path.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -97,7 +97,7 @@ test("gfx-probe --tlx-webgpu unpins TLX ForceGL and --lavapipe uses the Lavapipe
     "GLX HeadlessChrome canvas.png must not screenshot opacity-0 #game");
   assert.match(src, /getElementById\("game-soft"\) \|\| document\.getElementById\("game"\)/,
     "both present paths dump the overlay when it exists");
-  const probe = fs.readFileSync(path.join(ROOT, "tools/capture/probe-page.mjs"), "utf8");
+  const probe = fs.readFileSync(path.join(ROOT, "tools/shot/probe-page.mjs"), "utf8");
   assert.match(probe, /export async function presentedCanvasClip/);
   assert.match(probe, /getElementById\("game-soft"\)/,
     "probe-page clip prefers the overlay the compositor shows");

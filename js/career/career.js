@@ -1135,3 +1135,4 @@ return {
   round, roundsTotal, seasonDone, trackIndex,
 };
 })();
+Object.freeze(Career);

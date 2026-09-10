@@ -48,8 +48,12 @@ function buildResults(order) {
     // never co-occur (a car that stopped was not given time back).
     // Set textContent FIRST — it replaces ALL children, so the PLAYER tag must
     // append after it (appending first silently destroyed the tag every race).
+    // A lapped finisher is flagged at its next crossing (RaceControl.flagOut),
+    // so its lap count is what separates it from the winner — say so.
+    const down = !dnf && order[0] ? Math.max(0, (order[0].lap | 0) - (c.lap | 0)) : 0;
     nm.textContent = c.code + "  " + c.name
-      + (dnf ? "  (" + dnf + ")" : c.penalty ? "  (+" + c.penalty + "s)" : "");
+      + (dnf ? "  (" + dnf + ")" : c.penalty ? "  (+" + c.penalty + "s)" : "")
+      + (down ? "  (+" + down + (down > 1 ? " LAPS)" : " LAP)") : "");
     if (other) {
       // Text as well as colour, for the same reason the quali sheet does it.
       const tag = document.createElement("span");
@@ -74,6 +78,8 @@ function buildResults(order) {
   if (st) {
     const box = document.createElement("div");
     box.className = "res-settle";
+    // The balance moved: say so to a screen reader too (polite live region).
+    box.setAttribute("role", "status");
     const h = document.createElement("div");
     h.className = "res-settle-head";
     h.textContent = st.dnf ? "ROUND SETTLED — DNF (" + st.dnf + ")" : "ROUND SETTLED";

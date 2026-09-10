@@ -16,6 +16,8 @@ The regression suite lives one directory up in `tests/specs/*.spec.js` and
 | `galleries/track-trace.spec.js` | a driven-lap frame trace for one circuit |
 | `galleries/track-lap-audit.spec.js` | per-lap audit sheet |
 | `galleries/all-tracks-buildings.spec.js` | building survey across every circuit |
+| `tinyfish-mcp.test.mjs` | `node --test` suite for the CLI-only TinyFish proxy wrapper (`tools/mcp/tinyfish-mcp.sh`): spawn-heavy, egress-blocked in-container, not MCP-attached — moved out of `test:mcp` on 2026-09-10; its fast-gate half is `tests/unit/mcp-cli.test.mjs` |
+| `probe-mcp.test.mjs` | `node --test` suite for the unified Chrome DevTools + TinyFish probe bridge (`tools/mcp/probe-mcp.py`), CLI only since 2026-09 — same move, same reason |
 | `timeout-probe.spec.js` | **Does `{ timeout: N }` actually bound a Playwright wait?** Not an M6 detail — a property of how the whole suite fails. `tlx-probes`' M6 skid declares `waitForFunction(..., { timeout: 30_000 })` and a probe measured that call running **344.4 s** before dying on the test budget instead. Reasoning of the form "this test's explicit waits total 120 s, so the time must be elsewhere" is only sound if declared timeouts fire — and that deduction sent two probes chasing `act()`, which turned out to take 309 ms. Three cases with unsatisfiable predicates and a short declared bound: a quiet page, a THROWING predicate (M6's shape when TLX is absent), and a busy rendering page (raf polling starved). Elapsed time measured Node-side, because Playwright's own bound is the thing in question |
 
 Four resolved single-incident probes (banking, throttle-rescue, skid, act)
@@ -30,6 +32,7 @@ npm test -- tests/manual/blank-scan.spec.js                  # all 40 circuits (
 npm test -- tests/manual/blank-scan.spec.js --grep monza     # one circuit
 CIRCUITS=monza,spa npm test -- tests/manual/inspect.spec.js  # a named subset
 TRACK=suzuka FRAMES=60 npm test -- tests/manual/galleries/track-trace.spec.js
+node --test tests/manual/tinyfish-mcp.test.mjs tests/manual/probe-mcp.test.mjs   # the two node suites
 ```
 
 Images land in `artifacts/galleries-<port>/`.

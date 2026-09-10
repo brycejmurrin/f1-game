@@ -650,3 +650,4 @@ const AgentRaster = (function () {
 
   return { create };
 })();
+Object.freeze(AgentRaster);

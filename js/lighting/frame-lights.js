@@ -3,7 +3,8 @@
    renderer samples every lit frame) and appendCarTailLights (the nearest cars'
    tail-lights as real point lights). Reads the live knob values through
    LightKnobs.LT (eval-time destructure — tools/manifest.cjs HARD_EDGES); the
-   baked records it culls come from js/lighting/track-lights.js. */
+   baked records it culls come from js/lighting/track-lights.js. Slot counts
+   come from LightBudget (js/render/shared/light-budget.js), read at call time. */
 const FrameLights = (function () {
   "use strict";
   const { LT } = LightKnobs;
@@ -74,7 +75,11 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   // appended on top — 29 lights through the per-fragment loop on a machine
   // PerfGov had just judged too slow for 24. Same shape as the bug above, one
   // level up: a budget read from the device where its sibling reads the tier.
-  const SLOTS = tierShed(mobileTier ? 24 : 48);   // js/render/glx/glx.js MAX_LIGHTS
+  // The slot count is the BOUND backend's (LightBudget.slots(), published by
+  // GLX.init / WGX.create / TLX.create): TLX-lite compiles a 16-slot loop, and
+  // measuring room against 48 there meant the tail-lights appended below never
+  // reached the shader at all.
+  const SLOTS = tierShed(Math.min(mobileTier ? LightBudget.MOBILE : LightBudget.MAX, LightBudget.slots()));
   const room = SLOTS - ((L.length / 15) | 0);
   if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
@@ -191,9 +196,13 @@ function lampCap(carCount, mobileTier) {
   // paths to 24: the per-fragment lamp loop (GGX + clearcoat per lamp) is the
   // dominant night fill cost on phones, and clamping HERE (not the knob's def)
   // means a per-track preset can't push a phone back up to 48.
+  // ...and never above the bound backend's slot count (LightBudget.slots()):
+  // appendCarTailLights evicts against SLOTS, so a cap above it would only
+  // be trimmed again there.
   let cap = Math.min(
-    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : 48,
-    mobileTier ? 24 : 48);
+    carCount > 1 ? Math.round(LT.lampCull != null ? LT.lampCull : 40) : LightBudget.MAX,
+    mobileTier ? LightBudget.MOBILE : LightBudget.MAX,
+    LightBudget.slots());
   // Shed the nearest-lamp budget under PerfGov load before the fragment loop
   // pays for distant slots (tier 1 drops env probe; tier 2 drops lamp shadow).
   return tierShed(cap);
@@ -207,7 +216,7 @@ function lampCap(carCount, mobileTier) {
 function tierShed(cap) {
   if (typeof PerfGov === "undefined") return cap;
   const tier = PerfGov.tier();
-  if (tier >= 2) return Math.min(cap, 24);
+  if (tier >= 2) return Math.min(cap, LightBudget.MOBILE);
   if (tier >= 1) return Math.min(cap, 32);
   return cap;
 }
@@ -294,7 +303,7 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
   // assumption the set is sorted farthest-last (it wasn't — on a 29-32-lamp track
   // it could snap off the nearest floods instead), and the CAP reservation was
   // silently ignored. 24+-lamp tracks now take the sorted heap path below.
-  if (count + 5 <= CAP) {
+  if (count + LightBudget.TAIL_RESERVE <= CAP) {
     _rankSrc = null;   // dense path doesn't use the ranked cache
     // Copy + scale rgb (time-of-day scale × flicker); geometry params pass through.
     out.length = 0;
@@ -477,3 +486,4 @@ function setFrameLights(frame, track, cars, eye, scale, fwd, mobileTier, srcSet)
 
   return { setFrameLights, appendCarTailLights };
 })();
+Object.freeze(FrameLights);

@@ -13,3 +13,4 @@ const LightTune = (function () {
   return { TUNE_DEFS, LT, buildTrackLights, lampStrideNodes,
            setFrameLights, appendCarTailLights };
 })();
+Object.freeze(LightTune);

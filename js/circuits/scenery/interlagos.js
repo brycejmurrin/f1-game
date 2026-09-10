@@ -6,14 +6,13 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["interlagos"] =
   function (api) {
-      const { out, MAT, seat, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
+      const { K, out, MAT, seat, n, px, pz, pyMin, place, prop, backdrop, groundPlane, groundYAt,
               addBox, every, onTrack, hash, vadd, anchor, along, building, motorhome, tower,
               grandstand, grandstandEx, billboard, gantry, marshalPost, fence, guardrail, wall,
               tyreWall, pine, tree, palm, bush, hedge, peak, ridge, mountain,
               addCyl, addCone, addPrism, addPyramid, forestEdge, cityFront,
               modelGroup, waterSurface, groundPatch, broadcastCompound, cameraTower,
               sponsorHoarding } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       // Vivid favela palette (terracotta, sunflower, teal, coral, sage, ochre…)
       const FAV = [

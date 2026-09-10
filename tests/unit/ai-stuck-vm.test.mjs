@@ -106,9 +106,9 @@ test("a correction of numerical dust does not count as contact", async () => {
   // cars" — which the dust defeated. Both scrub and flag now compare against a
   // real distance. Structural because the scenario above cannot reach it: a
   // pair held at the slop distance is in genuine repeating micro-contact.
-  const src = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
-  const eps = src.match(/^const CORR_EPS = ([\d.e-]+);/m);
-  assert.ok(eps, "CORR_EPS is gone from js/game.js");
+  const src = readFileSync(new URL("../../js/physics/collide.js", import.meta.url), "utf8");
+  const eps = src.match(/^\s*const CORR_EPS = ([\d.e-]+);/m);
+  assert.ok(eps, "CORR_EPS is gone from js/physics/collide.js");
   assert.ok(Number(eps[1]) > 0, `CORR_EPS must be a real distance, got ${eps[1]}`);
   assert.ok(Number(eps[1]) < 0.01, `CORR_EPS must stay under a centimetre, got ${eps[1]}`);
   // Every arm of contactT in the resolver sits behind that comparison. The

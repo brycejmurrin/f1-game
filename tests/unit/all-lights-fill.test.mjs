@@ -37,7 +37,9 @@ function loadFill() {
   sb.window = sb;
   sb.Log = { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false };
   vm.createContext(sb);
-  // FrameLights destructures LightKnobs.LT at eval — the registry loads first.
+  // FrameLights destructures LightKnobs.LT at eval — the registry loads first;
+  // the slot budget (LightBudget) is read at call time.
+  vm.runInContext(readFileSync(path.join(ROOT, "js/render/shared/light-budget.js"), "utf8"), sb);
   vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"), sb);
   vm.runInContext(patched, sb);
   const LT = vm.runInContext("FrameLights", sb);

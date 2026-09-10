@@ -27,6 +27,24 @@ const _vantEyeW = [0, 0, 0], _vantTgtW = [0, 0, 0];
 const _aheadOut = [0, 0, 0];
 const _straightScr = [0, 0, 0];
 const _dirScr = [0, 0, 0];
+// The per-call inputs the hoisted helpers below read (set at vantage() entry),
+// so no closure is built per frame.
+let _vTrack = null, _vS = 0, _vOnboard = false;
+function _vWrapS(v) { const L = _vTrack.total; v %= L; return v < 0 ? v + L : v; }
+function _vElevY(at) { return _vOnboard ? null : centreY(_vTrack, at); }
+// Pooled return: safe because every branch of vantage() calls aheadPt() at
+// most once per invocation (the mode branches are mutually exclusive, and no
+// branch calls it twice with both results needed live at once).
+function _vAheadPt(d, h, lat) {
+  Tracks.sample(_vTrack, _vWrapS(_vS + d), cvB);
+  const lx = lat || 0;
+  const ey = _vElevY(_vS + d);
+  const o = _aheadOut;
+  o[0] = cvB.p[0] + cvB.r[0] * lx;
+  o[1] = (ey === null ? cvB.p[1] : ey) + (h || 0);
+  o[2] = cvB.p[2] + cvB.r[2] * lx;
+  return o;
+}
 
 // Cockpit eye offsets from the car origin (fwd along tangent, up in metres).
 // Shared by vantage() and the camera-anchored cockpit-rig draw in render() —
@@ -231,7 +249,8 @@ const _vantOut = { eye: _vantEye, tgt: _vantTgt, fov: 60 };
 
 function vantage(track, mode, s, x, spd, now, extra) {
   extra = extra || {};
-  const wrapS = (v) => { const L = track.total; v %= L; return v < 0 ? v + L : v; };
+  _vTrack = track; _vS = s;
+  const wrapS = _vWrapS;
   const bankDy = extra.bankDy || 0;
   const dep = extra.deploy ? 1 : 0;
   const spN = clamp(spd / VMAX, 0, 1);
@@ -250,26 +269,13 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // with the chassis by even a centimetre would float in the cockpit — matching
   // the car matters more there than smoothness, and riding the car's own bumps
   // is what an onboard camera is FOR.
-  const onboard = mode === "cockpit" || mode === "hood";
-  const elevY = (at) => (onboard ? null : centreY(track, at));
+  const onboard = _vOnboard = mode === "cockpit" || mode === "hood";
   const p = _vantP;
   p[0] = cvA.p[0] + cvA.r[0] * x;
   p[1] = (onboard ? cvA.p[1] : centreY(track, s)) + bankDy;
   p[2] = cvA.p[2] + cvA.r[2] * x;
   const t = cvA.t, r = cvA.r;
-  // Pooled return: safe because every branch below calls aheadPt() at most
-  // once per vantage() invocation (the mode branches are mutually exclusive,
-  // and no branch calls it twice with both results needed live at once).
-  const aheadPt = (d, h, lat) => {
-    Tracks.sample(track, wrapS(s + d), cvB);
-    const lx = lat || 0;
-    const ey = elevY(s + d);
-    const o = _aheadOut;
-    o[0] = cvB.p[0] + cvB.r[0] * lx;
-    o[1] = (ey === null ? cvB.p[1] : ey) + (h || 0);
-    o[2] = cvB.p[2] + cvB.r[2] * lx;
-    return o;
-  };
+  const aheadPt = _vAheadPt;   // hoisted, see _vAheadPt
   // Curvature of the bend we're approaching (speed-scaled look-ahead) — drives the
   // broadcast cams to the OUTSIDE of the corner so they shoot across the apex.
   // ONLY those three read it, and Tracks.curvature is a real sample-and-difference,

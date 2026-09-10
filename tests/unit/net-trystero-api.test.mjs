@@ -1,18 +1,16 @@
 /* net-trystero-api.test.mjs — the vendored Trystero surface we actually use.
  *
- * WHY THIS EXISTS. js/net/nostr.js wraps its room setup in try/catch, because
- * a relay being unreachable must degrade to "use the invite link" rather than
- * throw inside a click handler. That is right, and it has a nasty consequence:
- * a WRONG API CALL also lands in that catch and comes back as "could not reach
- * the room service". A bug is then indistinguishable from a bad network.
+ * WHY THIS EXISTS. js/net/nostr.js guards its relay setup with try/catch,
+ * because a relay being unreachable must degrade to "use the invite link"
+ * rather than throw inside a click handler. That is right, and it has a nasty
+ * consequence: a WRONG API CALL also lands in that catch and comes back as a
+ * relay failure. A bug is then indistinguishable from a bad network — it
+ * happened once, when Trystero 0.25 turned onPeerJoin into a setter.
  *
- * It already happened. Trystero 0.25 turned `onPeerJoin` from a method into a
- * SETTER; calling it threw, the catch swallowed it, and the room-code path
- * reported a relay failure while every relay was fine.
- *
- * So the shape of the vendored API is asserted directly against the vendored
- * source. This runs in node with no browser and no network — it is about what
- * the library exposes, not about whether Nostr is up.
+ * The direct exchange (the ONLY path since the full-room legacy branch was
+ * deleted 2026-09-10) reaches exactly two vendored exports — createEvent and
+ * subscribe, the NIP-01 framing — so those are what is pinned here, against
+ * the vendored source. This runs in node with no browser and no network.
  *
  * Run: node --test tests/unit/net-trystero-api.test.mjs   (npm run test:net-unit)
  */
@@ -23,64 +21,53 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const VENDOR = path.join(ROOT, "vendor/trystero-0.25.3");
-const room = fs.readFileSync(path.join(VENDOR, "core/room.js"), "utf8");
-const actions = fs.readFileSync(path.join(VENDOR, "core/actions.js"), "utf8");
+const VENDOR = path.join(ROOT, "vendor/trystero-0.25.4");
+const nostrSrc = fs.readFileSync(path.join(VENDOR, "nostr/index.js"), "utf8");
 const ours = fs.readFileSync(path.join(ROOT, "js/net/nostr.js"), "utf8");
+// CODE, not prose: the file's comments record why the room join was removed,
+// so the "must not creep back" pins below run against a comment-stripped copy.
+const oursCode = ours.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'])\/\/[^\n]*/g, "$1");
 
-test("onPeerJoin is a SETTER, and we assign to it rather than calling it", () => {
-  // The regression. If a future Trystero makes it a method again, this fails
-  // here instead of in a lobby that blames the network.
-  assert.match(room, /set onPeerJoin\(/, "vendored Trystero exposes onPeerJoin as a setter");
-  assert.match(ours, /room\.onPeerJoin\s*=/, "we must ASSIGN the handler");
-  assert.doesNotMatch(ours, /room\.onPeerJoin\(/, "calling it would throw into the relay catch");
+test("the direct exchange reaches createEvent and subscribe, and both are exported", () => {
+  // The two framing helpers are the whole of what we take from the vendor:
+  // a signed NIP-01 EVENT frame and a REQ frame. If a bump renames or drops
+  // either, this fails here instead of in a lobby that blames the network.
+  const exported = nostrSrc.match(/export \{([^}]+)\}/);
+  assert.ok(exported, "the vendored nostr module has a named export list");
+  const names = exported[1].split(",").map((x) => x.trim().split(/\s+as\s+/).pop());
+  assert.ok(names.includes("createEvent"), "createEvent must be exported");
+  assert.ok(names.includes("subscribe"), "subscribe must be exported");
+  assert.match(nostrSrc, /const createEvent = async \(topic, content\)/, "createEvent(topic, content) -> frame text");
+  assert.match(nostrSrc, /const subscribe = \(subId, topic\)/, "subscribe(subId, topic) -> REQ frame text");
+  assert.match(ours, /mod\.createEvent\(mineTopic,/, "we frame our sealed payload with it");
+  assert.match(ours, /mod\.subscribe\(subId, theirTopic\)/, "and subscribe to the other slot's topic");
+  assert.doesNotMatch(oursCode, /joinRoom|makeAction|onPeerJoin|getRelaySockets/,
+    "the full Trystero room is gone; nothing may creep back through the catch");
+  assert.doesNotMatch(oursCode, /nostrTrystero/, "and so is its opt-in switch");
 });
 
-test("makeAction returns an OBJECT with send + an onMessage setter", () => {
-  // The second shape change to bite. Trystero used to return a [send, receive]
-  // tuple; 0.25 returns an object whose onMessage is a setter. Destructuring
-  // the old tuple threw `pair[1] is not a function` straight into the relay
-  // catch, so the lobby blamed the network for a wrong API call.
-  //
-  // Asserted against the VENDORED LIBRARY, not against our own text — the
-  // first version of this test only checked that our source matched a pattern,
-  // which is why it passed while the code was broken.
-  assert.match(actions, /send:\s*async/, "actions expose send()");
-  assert.match(actions, /set onMessage\(/, "onMessage is a setter, not a callback arg");
-
-  assert.match(ours, /room\.makeAction\(/, "we still make the action");
-  assert.match(ours, /\.onMessage\s*=/, "we must ASSIGN the handler");
-  assert.doesNotMatch(ours, /const \[[^\]]+\]\s*=\s*room\.makeAction/,
-    "destructuring a tuple would throw into the relay catch");
+test("the direct exchange owns its sockets and reads NIP-01 refusals itself", () => {
+  // The legacy branch learned of a refusal only by intercepting console.warn.
+  // The direct path opens the WebSockets, so it sees ["OK", id, false, why]
+  // and ["CLOSED", subId, why] first-hand — and must never touch console.
+  assert.match(ours, /new WebSocket\(url\)/);
+  assert.match(ours, /m\[0\] === "OK" && pubIds\.has\(m\[1\]\) && m\[2\] === false/, "an OK=false on OUR event id is a refusal");
+  assert.match(ours, /m\[0\] === "CLOSED" && subId && m\[1\] === subId/, "a CLOSED for our REQ is a refusal");
+  assert.match(ours, /all_rejected/, "surfaced as a typed, advisory outcome");
+  assert.match(ours, /rejectedBy\.size < live\) return/, "one fussy relay out of six must not scare a player off");
+  assert.doesNotMatch(oursCode, /console\.warn\s*=/, "no console.warn interception survives");
 });
 
-test("send TARGETS with an options object, and onMessage reports the sender", () => {
-  // The third and fourth shapes, pinned before they bite rather than after.
-  // Multi-joiner needs BOTH: a fresh offer per arrival has to reach that
-  // arrival alone (an untargeted post is exactly what makes two joiners answer
-  // the same connection and one of them lose), and answering a joiner needs to
-  // know WHICH joiner sent it.
-  //
-  // Neither is send(data, id) nor onMessage(data, id). Trystero 0.25 takes
-  // send(data, options) with options.target, and hands the handler a metadata
-  // object carrying peerId. Both wrong guesses fail SILENTLY into nostr.js's
-  // relay catch and surface as "could not reach the room service" — a bug
-  // wearing a network failure's clothes, which is this file's whole reason to
-  // exist.
-  assert.match(actions, /send:\s*async\s*\(\s*data\s*,\s*options/,
-    "send takes (data, options), not (data, peerId)");
-  assert.match(actions, /options\.target/, "targeting is options.target");
-  assert.match(actions, /peerId/, "the receive path carries peerId in its metadata");
-
-  assert.match(ours, /swap\.send\(data,\s*\{\s*target:/,
-    "our targeted post must pass { target: id }");
-  assert.match(ours, /ctx\s*&&\s*ctx\.peerId/,
-    "we read the sender off the metadata object, not a bare second argument");
-});
-
-test("leave() exists, because a room we never leave keeps sockets open", () => {
-  assert.match(room, /leave\s*[(:]/, "vendored Trystero must expose leave");
-  assert.match(ours, /room\.leave\(\)/, "every exit path has to close the room");
+test("the vendored version is 0.25.4 and carries the relay backoff this bump was for", () => {
+  // 0.25.4's nostr adapter retires a relay that refuses terminally, backs off
+  // one that rate-limits, and closes a client whose reconnects are exhausted
+  // (utils.js client.close/isClosed). We do not run its room, but the
+  // importmap and sw.js precache name the directory, so the pin is the dir.
+  assert.match(nostrSrc, /retireRelay/, "0.25.4 relay retirement");
+  assert.match(nostrSrc, /backoffRelay/, "0.25.4 rate-limit backoff");
+  const utils = fs.readFileSync(path.join(VENDOR, "core/utils.js"), "utf8");
+  assert.match(utils, /client\.isClosed = true/, "0.25.4 exhausted-reconnect close");
+  assert.ok(!fs.existsSync(path.join(ROOT, "vendor/trystero-0.25.3")), "the old tree is gone");
 });
 
 test("the vendored tree ships as .js, not .mjs", () => {
@@ -112,7 +99,12 @@ test("a .nojekyll file exists, so Pages publishes the tree verbatim", () => {
 test("the vendored tree is complete and self-contained", () => {
   // A missing file here is a dynamic import that fails at the exact moment a
   // player taps a button, which is the worst possible time to discover it.
-  for (const f of ["core/index.js", "core/room.js", "nostr/index.js", "noble-secp256k1.js"]) {
+  // nostr/index.js imports the core barrel, and the barrel re-exports the
+  // strategy -> room -> peer graph, so EVERY core file is loaded by the
+  // browser even though the direct exchange calls two functions. Trimming
+  // was measured (scratch, 2026-09-10): all fourteen are reachable.
+  for (const f of ["core/index.js", "core/room.js", "core/utils.js", "core/crypto.js", "core/strategy.js",
+                   "core/topic-strategy.js", "nostr/index.js", "noble-secp256k1.js"]) {
     assert.ok(fs.existsSync(path.join(VENDOR, f)), `missing vendored file: ${f}`);
   }
   // Licences travel with the code — both packages are MIT.
@@ -157,49 +149,6 @@ test("Trystero is dynamic-imported, never in the boot path", () => {
   assert.match(ours, /import\("@trystero-p2p\/nostr"\)/, "reached by dynamic import");
   const manifest = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
   assert.ok(!manifest.includes("trystero"), "not part of the IIFE load order");
-});
-
-// ---------------------------------------------------------------------------
-// A relay that refuses us must be distinguishable from a relay that is down
-// ---------------------------------------------------------------------------
-
-test("a rejection is console.warn and NOTHING else, which is why we intercept it", () => {
-  // This pins the vendor behaviour our diagnosis depends on. NIP-01 says a
-  // relay refuses with ["OK", <id>, false, "<reason>"], and the whole of
-  // Trystero's response to that is one console.warn: no retry, no backoff,
-  // the relay is not dropped from the pool, and nothing is handed back to the
-  // caller. If a future vendor bump gives us a real callback, this test fails
-  // and the console.warn interception in js/net/nostr.js should be replaced
-  // by it rather than kept out of habit.
-  const nostr = fs.readFileSync(path.join(VENDOR, "nostr/index.js"), "utf8");
-  assert.match(nostr, /relay failure from/,
-    "the warning text our matcher keys on must still exist");
-  assert.match(nostr, /msgType === "OK" && !payload/,
-    "an OK with payload=false is how a rejection arrives");
-  // The warning is the ONLY reaction: no throw, no callback, no removal.
-  const around = nostr.slice(Math.max(0, nostr.indexOf("relay failure from") - 400),
-                             nostr.indexOf("relay failure from") + 400);
-  assert.ok(!/throw |reject\(|onRelayReject|removeRelay/.test(around),
-    "if the vendor gains a real error channel, use it instead of the warn hook");
-});
-
-test("our exchange reports 'connected but refused' as its own outcome", () => {
-  // getRelaySockets() only ever reports TRANSPORT state, so a relay that
-  // completes the WebSocket handshake and then throws away every event we
-  // publish counts as live. Without a separate signal the host waits the full
-  // JOIN_TIMEOUT_MS and blames the other player for not joining — which is
-  // precisely what a real phone reported while wellorder was answering
-  // "blocked: spam not permitted".
-  assert.match(ours, /rejectedBy/,
-    "rejections must be tracked, not merely printed");
-  assert.match(ours, /all_rejected/,
-    "and surfaced as a typed outcome distinct from no_relay and expired");
-  // Only when EVERY live relay refuses — one fussy relay out of six must not
-  // scare a player off a room that is working.
-  assert.match(ours, /rejectedBy\.size >= live/,
-    "a single rejecting relay is survivable and must not be reported");
-  assert.match(ours, /restoreWarn/,
-    "console.warn must be restored, or the patch outlives the lobby");
 });
 
 test("a bad relay override is dropped, never handed to WebSocket", () => {

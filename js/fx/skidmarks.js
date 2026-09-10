@@ -76,3 +76,4 @@ function create(_G) {
 
   return { create, MAX_SKID };
 })();
+Object.freeze(SkidMarks);

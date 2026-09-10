@@ -15,8 +15,18 @@ function create(G) {
 const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0",
   "_lapTimeAtLine", "incidentInvalidLap", "passSide", "passBest", "offroad",
-  "towing", "axFrac", "slipFactor", "flatSpot", "_aeroGrip", "skidIntensity",
+  "towing", "wake", "axFrac", "slipFactor", "flatSpot", "_aeroGrip", "skidIntensity",
   "kerbSndT", "kerbHapT"];
+// openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
+// off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
+function apiHook(base, path, fix) {
+  if (typeof path !== "string" || path.charAt(0) !== "/")
+    return Promise.resolve({ ok: false, error: "missing_path", message: "needs a path starting with /", fix });
+  if (typeof F1API === "undefined")
+    return Promise.resolve({ ok: false, error: "no_api", message: "js/data/api.js is not loaded yet (open the DATA HUB once)", fix });
+  return F1API.request(base + path, 0, { cache: false });
+}
+
 const noAudio = () => (typeof GameAudio === "undefined"
   ? { ok: false, error: "no_audio", message: "GameAudio is not loaded", fix: "reload the page" }
   : null);
@@ -546,6 +556,7 @@ const api = {
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
       vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
       towing: +(G.player.towing || 0).toFixed(3),   // player slipstream 0..1 — folded into vmaxNow
+      wake: +(G.player.wake || 0).toFixed(3),       // dirty air 0..1 — the grip penalty, positions-only
       aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
       aeroDf: +G.aeroDfMult(G.player).toFixed(3),
       aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
@@ -2498,21 +2509,9 @@ const api = {
 
   f1api: typeof F1API !== "undefined" ? F1API : null,
 
-  openf1(path) {
-    if (typeof path !== "string" || path.charAt(0) !== "/")
-      return Promise.resolve({ ok: false, error: "missing_path",
-        message: "openf1(path) needs a path starting with /",
-        fix: 'await __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")' });
-    return fetch("https://api.openf1.org/v1" + path).then(r => r.json());
-  },
+  openf1(path) { return apiHook("https://api.openf1.org/v1", path, 'await __apex.openf1("/sessions?circuit_short_name=Monaco&year=2024")'); },
 
-  jolpica(path) {
-    if (typeof path !== "string" || path.charAt(0) !== "/")
-      return Promise.resolve({ ok: false, error: "missing_path",
-        message: "jolpica(path) needs a path starting with /",
-        fix: 'await __apex.jolpica("/circuits/monaco.json")' });
-    return fetch("https://api.jolpi.ca/ergast/f1" + path).then(r => r.json());
-  },
+  jolpica(path) { return apiHook("https://api.jolpi.ca/ergast/f1", path, 'await __apex.jolpica("/circuits/monaco.json")'); },
 
   logs(filter) {
     if (typeof Log === "undefined") return [];
@@ -2564,8 +2563,8 @@ const api = {
 
   // persistState() — is localStorage actually storing anything?
   //
-  //   { ok, broken, keys, rev, foreign }
-  //
+  //   { ok, broken, keys, rev, foreign, mirror: { supported, restored, flushed, failed, pending } }
+  //      (`mirror` = the IndexedDB durable copy of the career/season keys, js/core/store.js)
   // `ok:false` means a read or write has thrown, and `broken` names it
   // ("QuotaExceededError", "SecurityError"). This is worth a hook of its own
   // because the failure is otherwise INVISIBLE from inside the session: the
@@ -2576,7 +2575,8 @@ const api = {
   persistState() {
     const s = GameStore.store;
     // `foreign` = cross-tab invalidations applied (store.js onForeignWrite): non-zero means a second tab is in play.
-    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0 };
+    const m = s.mirror || {};
+    return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0, mirror: { supported: !!m.supported, restored: m.restored | 0, flushed: m.flushed | 0, failed: m.failed | 0, pending: m.pending | 0 } };
   },
 
   // settingsFile(mode) — the SETTINGS FILE object (js/ui/settings-export.js):

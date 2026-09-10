@@ -39,6 +39,11 @@ window.SpotifyMusic = (function () {
   const K_CTX = "apex26.spotify.context";       // chosen playlist uri, or "liked"
   const K_MODE = "apex26.spotify.mode";         // "remote" (Connect) | "browser" (SDK)
   const K_DEV = "apex26.spotify.device";        // remote mode: which device to play on
+  // Every Spotify fetch (token exchange AND Web API) is abandoned after this.
+  // A hung request otherwise wedges whatever awaits it — the poll's in-flight
+  // guard, or a CONNECT press — until the tab dies. Same value as
+  // F1API's FETCH_TIMEOUT_MS (js/data/api.js), which is not reachable from here.
+  const FETCH_TIMEOUT_MS = 15000;
 
   // playlist-read-private / user-library-read are what let the panel OFFER
   // something to play. Without a chosen context, "play" on a freshly
@@ -219,12 +224,18 @@ window.SpotifyMusic = (function () {
   }
 
   function postToken(body) {
-    return fetch(TOKEN_URL, {
+    const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
+    const opts = {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body,
-    }).then((r) => r.json().catch(() => ({ error: "bad_response" })))
-      .catch(() => ({ error: "network" }));
+    };
+    if (ac) opts.signal = ac.signal;
+    return fetch(TOKEN_URL, opts)
+      .then((r) => r.json().catch(() => ({ error: "bad_response" })))
+      .catch((e) => ({ error: e && e.name === "AbortError" ? "timeout" : "network" }))
+      .then((j) => { if (timer) clearTimeout(timer); return j; });
   }
 
   function beginAuth() {
@@ -462,11 +473,11 @@ window.SpotifyMusic = (function () {
       o.headers = Object.assign(
         { Authorization: "Bearer " + t, "Content-Type": "application/json" },
         o.headers || {});
-      // 15 s cap — a hung /me/player request otherwise wedges the poll's
-      // in-flight guard until the tab dies. Offline stays a quiet null.
+      // FETCH_TIMEOUT_MS cap — a hung /me/player request otherwise wedges the
+      // poll's in-flight guard until the tab dies. Offline stays a quiet null.
       const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
       if (ac) o.signal = ac.signal;
-      const timer = ac ? setTimeout(() => ac.abort(), 15000) : null;
+      const timer = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
       return fetch(API + path, o).catch(() => null)
         .then((r) => { if (timer) clearTimeout(timer); return r; });
     });

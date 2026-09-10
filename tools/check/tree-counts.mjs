@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, unpolled waits. `--offenders`.
+// @doc Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, waits, sleeps. `--offenders`.
 /**
  * tree-counts.mjs — the measurements behind `tree` entries in
  * tests/data/ratchets.json.
@@ -83,6 +83,26 @@ export async function waitNoPolling() {
   const { count } = await import("./wait-polling-lint.mjs");
   return count();
 }
+
+/** Fixed sleeps in the suite: `waitForTimeout(` under tests/specs and
+ *  tests/helpers. A sleep is a guess about the machine — under SwiftShader a
+ *  150 ms settle is one frame on an idle box and none on a loaded one — so the
+ *  population is ratcheted and each site is converted to a condition wait on
+ *  `__apex` state (`{ polling: 100 }`) as it is touched. Same shape as
+ *  waitNoPolling: a tree count with a per-file breakdown for --offenders. */
+export function waitForTimeoutReport() {
+  const rows = [];
+  for (const dir of ["tests/specs", "tests/helpers"]) {
+    const abs = path.join(ROOT, dir);
+    if (!fs.existsSync(abs)) continue;
+    for (const f of fs.readdirSync(abs).filter((x) => /\.(js|mjs|cjs)$/.test(x)).sort()) {
+      const n = (fs.readFileSync(path.join(abs, f), "utf8").match(/\bwaitForTimeout\(/g) || []).length;
+      if (n) rows.push({ file: `${dir}/${f}`, count: n });
+    }
+  }
+  return rows.sort((a, b) => b.count - a.count);
+}
+export const waitForTimeout = () => waitForTimeoutReport().reduce((n, r) => n + r.count, 0);
 
 /* ---- the CSS token-adoption counters -------------------------------------
  * Moved here from tests/unit/css-token-adoption.test.mjs so the counts feed
@@ -224,6 +244,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     // this says which one and what it wrote.
     const forks = [...colorForks().entries()].filter(([, s]) => s.size > 1).sort((a, b) => b[1].size - a[1].size);
     console.log(JSON.stringify({
+      waitForTimeout: Object.fromEntries(waitForTimeoutReport().map((r) => [r.file, r.count])),
       subFloorFontSize: byFile(subFloorFontSizeReport()),
       rawSpacing: byFile(rawSpacingReport()),
       rawColor: byFile(colorLiterals()),
@@ -237,6 +258,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     shellNodes: shellNodes(),
     bareCatches: bareCatches(),
     waitNoPolling: await waitNoPolling(),
+    waitForTimeout: waitForTimeout(),
     subFloorFontSize: subFloorFontSize(),
     rawSpacing: rawSpacing(),
     rawColor: rawColor(),

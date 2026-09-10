@@ -13,7 +13,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
 // The LightTune façade composes three siblings — same order as tools/manifest.cjs.
-const LIGHTING_FILES = ["js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"];
+const LIGHTING_FILES = ["js/render/shared/light-budget.js", "js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"];
 
 function loadLightTune() {
   const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };

@@ -245,8 +245,9 @@ test("WGX god-ray knobs read TUNE_DEFS ids, not stale aliases", () => {
   // GOD-RAY FOCUS and GOD-RAY HAZE were stuck at the 0.60 / 0.020 fallbacks
   // on WebGPU no matter where the sliders sat.
   const wgx = read("js/render/webgpu/wgx.js");
-  assert.match(wgx, /T\.godrayAniso/, "WGX must read T.godrayAniso");
-  assert.match(wgx, /T\.godrayFloor/, "WGX must read T.godrayFloor");
+  // The composite reads go through PostCommon.knob(T, id) (TUNE_DEFS default).
+  assert.match(wgx, /T\.godrayAniso|PostCommon\.knob\(T, "godrayAniso"\)/, "WGX must read T.godrayAniso");
+  assert.match(wgx, /T\.godrayFloor|PostCommon\.knob\(T, "godrayFloor"\)/, "WGX must read T.godrayFloor");
   assert.doesNotMatch(wgx, /T\.hgAniso/, "stale T.hgAniso alias is dead — the slider id is godrayAniso");
   assert.doesNotMatch(wgx, /T\.hgFloor/, "stale T.hgFloor alias is dead — the slider id is godrayFloor");
 });
@@ -254,7 +255,9 @@ test("WGX god-ray knobs read TUNE_DEFS ids, not stale aliases", () => {
 test("WGX T.* reads are TUNE_DEFS ids (no silent fallbacks)", () => {
   const ids = new Set(defs().map((d) => d.id));
   const wgx = read("js/render/webgpu/wgx.js");
-  const keys = [...wgx.matchAll(/\bT\.(\w+)/g)].map((m) => m[1]);
+  // Both read forms: the frame-UBO `T.foo` reads and the composite's
+  // PostCommon.knob(T, "foo") reads (defaults from the registry).
+  const keys = [...wgx.matchAll(/\bT\.(\w+)/g), ...wgx.matchAll(/PostCommon\.knob\(T, "(\w+)"\)/g)].map((m) => m[1]);
   const unknown = [...new Set(keys)].filter((k) => !ids.has(k));
   assert.deepEqual(unknown, [],
     "WGX reads a T.foo that is not a TUNE_DEFS id — the slider is a no-op on WebGPU " +

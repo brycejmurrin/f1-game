@@ -93,6 +93,7 @@ var strategy_default = ({ init, subscribe, announce, deactivate }) => {
 		const toCipher = withKey(encrypt);
 		const sharedPeerMap = sharedPeers.getMap(appId);
 		const makeOffer = () => peer_default(true, config);
+		let reannounceOnDisconnect = false;
 		offerPool ||= new OfferPool(makeOffer);
 		const pool = offerPool;
 		const encryptOffer = async (peer) => {
@@ -151,6 +152,7 @@ var strategy_default = ({ init, subscribe, announce, deactivate }) => {
 			if (state?.connectedPeer === peer) {
 				clearConnectedPeer(state, peerId, "close-event");
 				checkDeactivate();
+				if (!isPassive && reannounceOnDisconnect) ctx.requeueAnnounce?.();
 			}
 		};
 		const isPassive = Boolean(config.passive);
@@ -213,6 +215,7 @@ var strategy_default = ({ init, subscribe, announce, deactivate }) => {
 		}
 		if (!isPassive && !pool.isActive) pool.warmup();
 		ctx.announceIntervals = initPromises.map(() => announceIntervalMs);
+		const announceScheduleIntervals = initPromises.map(() => announceIntervalMs);
 		const announceAttemptCounts = initPromises.map(() => 0);
 		const announceErrorStreaks = initPromises.map(() => 0);
 		const announceTimeouts = [];
@@ -223,9 +226,9 @@ var strategy_default = ({ init, subscribe, announce, deactivate }) => {
 				if (didLeaveRoom) return;
 				if (isPassive && !ctx.isActive) return;
 				const extra = isPassive ? { passive: true } : void 0;
-				let ms = void 0;
+				let announceResult = void 0;
 				try {
-					ms = await announce(relay, rootTopic, selfTopic, extra, strategyContext);
+					announceResult = await announce(relay, rootTopic, selfTopic, extra, strategyContext);
 					announceErrorStreaks[i] = 0;
 				} catch (error) {
 					const errorStreak = announceErrorStreaks[i] ?? 0;
@@ -233,10 +236,17 @@ var strategy_default = ({ init, subscribe, announce, deactivate }) => {
 					announceErrorStreaks[i] = errorStreak + 1;
 				}
 				if (didLeaveRoom || isPassive && !ctx.isActive) return;
-				if (typeof ms === "number") ctx.announceIntervals[i] = ms;
+				if (announceResult && typeof announceResult !== "number" && "stopAnnouncing" in announceResult) return;
+				if (typeof announceResult === "number") {
+					ctx.announceIntervals[i] = announceResult;
+					announceScheduleIntervals[i] = announceResult;
+				} else if (announceResult) {
+					announceScheduleIntervals[i] = announceResult.nextAnnounceMs;
+					reannounceOnDisconnect ||= announceResult.reannounceOnDisconnect === true;
+				}
 				const announceAttempt = announceAttemptCounts[i] ?? 0;
 				announceAttemptCounts[i] = announceAttempt + 1;
-				const currentInterval = ctx.announceIntervals[i] ?? announceIntervalMs;
+				const currentInterval = announceScheduleIntervals[i] ?? announceIntervalMs;
 				const warmupDelay = announceWarmupIntervalsMs[announceAttempt];
 				announceTimeouts[i] = setTimeout(() => {
 					queueAnnounce(relay, i);

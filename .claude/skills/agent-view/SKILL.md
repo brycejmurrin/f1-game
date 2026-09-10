@@ -27,10 +27,6 @@ under headless — stage first).
 
 ## Reference
 
-<<<<<<< HEAD
-- `__apex.agentHelp()` — live manifest + fields glossary
-- Tests (browser-gated): `node tools/ci/test-bg.mjs hooks`
-=======
 - `docs/DEBUG-HOOKS.md` → "Agent world view" — the full per-tool reference (every
   field, every option, the typed errors).
 - `../../../docs/DEBUG-HOOKS.md` — the design and the research behind each choice.
@@ -39,7 +35,6 @@ under headless — stage first).
 - Tests: `node tools/ci/test-bg.mjs hooks` (`tests/specs/agent-view.spec.js`,
   `tests/specs/agent-drive-bench.spec.js`, `tests/specs/agent-determinism.spec.js`).
 - Seeded replay field diff (VM): `node tools/check/episode-diff.mjs`
->>>>>>> 50e26922 (chore(tools): archive applied moves and closed gfx/orphan CLIs)
 
 ## Load on demand
 

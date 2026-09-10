@@ -30,6 +30,20 @@ const RaceControl = (() => {
     return 0;
   }
 
+  // THE CHEQUERED FLAG IS OUT once any classified car has taken it: every
+  // other car finishes at its NEXT line crossing (a lapped car does not drive
+  // the leader's distance), and classification is laps completed, then time.
+  function flagOut(cars) {
+    for (const c of cars || []) if (c && c.finished && !c.retired) return true;
+    return false;
+  }
+  // Classification comparator for finishers: more laps first, then the clock
+  // (finishT + penalty). `lap` counts crossings, so it is the same metric for
+  // the winner (lapsTarget + 1) and a car flagged a lap down.
+  function finishOrder(a, b) {
+    return (b.lap - a.lap) || ((a.finishT + a.penalty) - (b.finishT + b.penalty));
+  }
+
   const LABEL = ["GREEN", "YELLOW", "VSC", "SAFETY CAR", "RED FLAG"];
   const YELLOW_MIN = 3;    // settled hazards in ONE sector -> local yellow
   const VSC_MIN = 6;       // total settled hazards on the surface -> VSC
@@ -260,5 +274,5 @@ const RaceControl = (() => {
       get enabled() { return enabled; },
     };
   }
-  return { create, finishDelay };
+  return { create, finishDelay, flagOut, finishOrder };
 })();

@@ -301,6 +301,6 @@ var peer_default = (initiator, { trickleIce, rtcConfig, rtcPolyfill, turnConfig,
 };
 const defaultIceServers = [...alloc(3, (_, i) => `stun:stun${i || ""}.l.google.com:19302`), "stun:stun.cloudflare.com:3478"].map((url) => ({ urls: url }));
 //#endregion
-export { peer_default as default };
+export { peer_default as default, defaultIceServers };
 
 //# sourceMappingURL=peer.mjs.map

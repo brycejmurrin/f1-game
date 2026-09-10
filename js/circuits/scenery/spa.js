@@ -6,25 +6,20 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["spa"] =
   function (api) {
-      const { out, MAT, seat, n, px, pz, pyMin, hash, every, place, backdrop, pal,
+      const { K, lapBounds, out, MAT, seat, n, px, pz, pyMin, hash, every, place, backdrop, pal,
               addBox, addCyl, addCone, addPrism, addFrustum, addPyramid, vadd, anchor,
               mountain, pine, tree, forestEdge, building, motorhome,
               marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
               modelGroup, overheadSpan, groundPatch, circuitKit, ATM, onTrack,
               grandstandEx, spectatorHill, broadcastCompound, sponsorHoarding,
               waterSurface, terrainYAt, bakedModel, along } = api;
-      const K = (s) => Math.round(s * n) % n;
 
       // 1. Cool Ardennes atmosphere — grey zenith/horizon/fog; kill alpine sun.
       if (ATM && ATM.dampArdennes) Object.assign(pal, ATM.dampArdennes);
 
       gantry(0.0, 7.5, [0.26, 0.28, 0.32]);
 
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
       const ranges = [
         // near forested wall — wMin/wVar sized so max(w)*0.62 < extra-8 (guard won't fire)
         { extra: 280, wMin: 160, hMin: 56, hVar: 54, wVar: 80, count: 32, phase: 0.0,

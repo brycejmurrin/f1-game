@@ -512,3 +512,4 @@ const Liveries = (function () {
 
   return { UNIVERSAL, BY_TEAM, FIELDS, forTeam };
 })();
+Object.freeze(Liveries);

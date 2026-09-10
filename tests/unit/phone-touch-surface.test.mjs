@@ -216,7 +216,10 @@ test("double-tap zoom is refused on every layer, and driving owns its gestures",
   const html = read("index.html");
   const meta = /<meta name="viewport" content="([^"]+)">/.exec(html);
   assert.ok(meta, "index.html has a viewport meta");
-  for (const part of ["maximum-scale=1", "user-scalable=no", "viewport-fit=cover"]) assert.ok(meta[1].includes(part), `viewport meta carries ${part}`);
+  for (const part of ["maximum-scale=1", "viewport-fit=cover"]) assert.ok(meta[1].includes(part), `viewport meta carries ${part}`);
+  // Safari ignored it; Android Chrome honoured it and blocked pinch-zoom for
+  // low-vision players (WCAG 1.4.4). The touchend canceller does the work.
+  assert.ok(!meta[1].includes("user-scalable=no"), "viewport meta must not disable user scaling (docs/PLATFORM.md)");
   assert.match(html, /addEventListener\("gesturestart"/, "iOS pinch GestureEvents are cancelled");
   assert.match(html, /addEventListener\("touchend", function/, "the same-spot second tap is cancelled");
   const tk = css("css/tokens.css");

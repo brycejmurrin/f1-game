@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["mexico"] =
   function (api) {
-      const { out, n, px, pz, pyMin, place, backdrop, groundPlane,
+      const { K, lapBounds, out, n, px, pz, pyMin, place, backdrop, groundPlane,
               addBox, addCyl, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
               building, motorhome, grandstandEx, billboard, tree, hedge, fence,
               guardrail, tyreWall, marshalPost, tower, gantry, mountain, wall,
@@ -14,15 +14,10 @@
               cityFront, forestEdge, bush,
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
               cameraTower, sponsorHoarding, broadcastCompound, circuitKit } = api;
-      const K = (s) => Math.round(s * n) % n;
       const cityBand = (s) => (s > 0.14 && s < 0.60) || s > 0.94 || s < 0.02;
 
       // Track centre + radius for far horizon rings
-      let cx = 0, cz = 0;
-      for (let i = 0; i < n; i++) { cx += px[i]; cz += pz[i]; }
-      cx /= n; cz /= n;
-      let rad = 0;
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(px[i] - cx, pz[i] - cz));
+      const { cx, cz, radius: rad } = lapBounds();
 
       // ── Festive Mexican palette ───────────────────────────────────────────────
       const PINK     = [0.92, 0.28, 0.55];

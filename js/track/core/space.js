@@ -119,15 +119,11 @@ const TrackSpace = (function () {
     // tightening) built at ONE node per side — tightFrac 0.225 where the spec
     // wants > 0.99 — because 0→1 arrived here as 0.295→0.295.
     if (Math.abs(s1 - s0) >= 1 - 1e-9) return { s0: 0, s1: 1 };
+    // range() wraps both ends into [0, 1), so its span is always < 1 here — the
+    // whole-lap case is fully handled by the short-circuit above.
     const r = range(def, s0, s1, scenerySpace(def));
     const shift = sceneryOriginDelta(def);
     if (!shift) return r;
-    // A WHOLE LAP ROTATES ONTO ITSELF. `recordBarrier(0, 1, ...)` means "the
-    // entire lap", and scanBarrier recovers that intent from `|s1 - s0| >= 1`.
-    // Rotating both ends and wrapping collapses 0→1 to shift→shift, i.e. a
-    // ONE-NODE barrier: measured, it took a full-lap wall down to a single
-    // node and the characterization test read 1 where it wanted 471.
-    if (Math.abs(r.s1 - r.s0) >= 1 - 1e-9) return r;
     return { s0: wrap01(r.s0 + shift), s1: wrap01(r.s1 + shift) };
   }
 
@@ -149,3 +145,4 @@ const TrackSpace = (function () {
     scenerySpace, sceneryFrac, sceneryNode, sceneryRange, sceneryOriginDelta, range,
   };
 })();
+Object.freeze(TrackSpace);

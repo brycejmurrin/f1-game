@@ -12,7 +12,7 @@
     street: false,
     reverse: false,
     sceneryCoordinates: "racing",
-    lengthKm: 5.5,
+    lengthKm: 5.47,   // official Madring length; the OSM trace builds 5.343 km
     baseHW: 7,
     terrainOuter: 56,
     banked: true,
