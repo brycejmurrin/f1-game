@@ -196,8 +196,9 @@ test("garage-angles has presets, --plan, --fast, and tunable settle", () => {
   assert.match(src, /"bayFront"/, "bayFront is a named view in ALL");
   assert.match(src, /--az-nudge/, "orbit framing via az-nudge click counts");
   assert.match(src, /--el-nudge/, "orbit framing via el-nudge click counts");
-  assert.match(src, /--logos/, "logos=default strips authored mark colours");
+  assert.match(src, /--logos/, "logos=default authors brand mark as liv.logo");
   assert.match(src, /clearLogos/, "applyDesign honours logos=default");
+  assert.match(src, /markBase/, "logos=default uses LiveryTex.markBase for brand colour");
   assert.match(src, /argvHas\("--site"\) \|\| argvHas\("--cdn"\)/,
     "--site/--cdn opens github.io; --live is gallery-only");
   assert.match(src, /if \(preset && !argvHas\("--views"\)\) return preset\.views/,

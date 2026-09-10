@@ -25,8 +25,9 @@
 // FRONT). `--zoom` / `--pan` / `--az-nudge` / `--el-nudge` are counted clicks on
 // #cs-view-* / #cs-pan-* so a framing that reads here is one a player can reach.
 // `--az` / `--el` set absolute orbit radians after the named preset.
-// `--logos=default` strips logo/logo2/logo3 so wall crest + saddle flank marks
-// use team default paintTeamMark colours (same path as the lightbox).
+// `--logos=default` clears logo2/logo3 and authors the team's brand mark as
+// liv.logo so markPalette keeps it verbatim on wall + saddle (no contrast
+// substitute). Pick any colour with --logo=#rrggbb the same way.
 //
 // DESIGN AXES: any field in `Liveries.FIELDS` is a flag, and passing more than
 // one walks their CARTESIAN PRODUCT as custom liveries on the team default
@@ -651,12 +652,17 @@ async function applyDesign(page, teamId, fields) {
         : raw;
       parts.push(k + "-" + raw.replace(/^#/, ""));
     }
-    // Default mark colours: wall lightbox + saddle flank share paintTeamMark.
-    // Strip authored logo/logo2/logo3 so the mark path uses team defaults.
+    // Default mark colours: author the team's brand mark as liv.logo so
+    // markPalette keeps it verbatim (no MARK_FLOOR substitute). Stripping
+    // alone left Williams white → blue on a white saddle while the wall
+    // lightbox kept white. logo2/logo3 stay cleared.
     if (clearLogos) {
-      delete liv.logo;
       delete liv.logo2;
       delete liv.logo3;
+      liv.logo = (typeof LiveryTex !== "undefined" && LiveryTex.markBase)
+        ? LiveryTex.markBase(team, { id: "default" })
+        : null;
+      if (!liv.logo) delete liv.logo;
       parts.push("logos-default");
     }
     const id = "_shot_" + (parts.join("_") || "def");

@@ -609,13 +609,12 @@ const LiveryTex = (function () {
     const brandPair = !!(B && plate && B.plate &&
       plate.join() === B.plate.join() && mark.join() === B.mark.join());
     // An AUTHORED TEAM LOGO (`liv.logo`) is taken as selected: no MARK_FLOOR
-    // substitution and no auto-halo. A team's OWN brand mark is kept too (so
-    // Williams white stays white on a white saddle the way the garage wall
-    // paints it) — the halo below still carries legibility. Only a DERIVED
-    // mark (other-livery c1/c2 fallback) is substituted when it fails the floor.
+    // substitution and no auto-halo. Derived / brand-default marks still floor
+    // against `under` so unreadible defaults cannot ship on plate-less crowns
+    // and flanks (livery-contrast area sweeps). Pick any colour in the editor —
+    // it paints exactly that colour.
     const authoredLogo = !!(liv && liv.logo);
-    const brandMark = !!(B && mark.join() === B.mark.join());
-    if (!brandPair && !authoredLogo && !brandMark && cMin(mark, under) < MARK_FLOOR) {
+    if (!brandPair && !authoredLogo && cMin(mark, under) < MARK_FLOOR) {
       const alts = [B && B.mark, liv && liv.c2, liv && liv.c1];
       mark = null;
       for (const c of alts) if (c && cMin(c, under) >= MARK_FLOOR) { mark = c.slice(); break; }

@@ -65,7 +65,8 @@ Presets:
 Views include `bay` / `bayFront` (tool + `__apex.garageFrame`). `bayFront` is the
 opposite diagonal of `bay`: door-side corner on the left flank — left side of
 the car and the back-wall crest, not head-on. `--logos=default` clears
-`logo`/`logo2`/`logo3` so wall and saddle marks use team default colours.
+`logo2`/`logo3` and authors the brand mark as `liv.logo` so wall and saddle
+keep that colour verbatim (no contrast substitute).
 
 ## Design axes (any `Liveries.FIELDS` key)
 
