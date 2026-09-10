@@ -570,16 +570,24 @@ test("week-2 dryRun refuses playwright_live from test-bg.json (no Chromium)", ()
   }
 });
 
-test("week-2 dryRun refuses host Playwright MCP from APEX_MCP_PS", () => {
-  const r = callCli(
-    "apex_eval",
-    { track: "monza", expr: "1", dryRun: true },
-    { APEX_MCP_MOCK: "0", APEX_MCP_PS: "88 node /opt/cursor/node_modules/@playwright/mcp/cli.js --headless\n" },
-  );
-  assert.equal(r.status, 1, r.stderr + r.stdout);
-  const body = JSON.parse(r.stdout);
+test("an IDLE host Playwright MCP server is reported, not occupancy; its launched browser is", () => {
+  // The @playwright/mcp server is a stdio process waiting for its first
+  // browser_* call — attached for a whole Cloud session, 0 % CPU, no canvas.
+  // Refusing on it refused every apex_* browser tool, always (2026-09-10).
+  const idle = "88 node /opt/cursor/node_modules/@playwright/mcp/cli.js --headless\n";
+  const r = callCli("apex_eval", { track: "monza", expr: "1", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: idle });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.equal(JSON.parse(r.stdout).ok, true, "an idle server must not refuse");
+  const st = callCli("apex_status", {}, { APEX_MCP_MOCK: "0", APEX_MCP_PS: idle });
+  const pw = JSON.parse(st.stdout).playwright;
+  assert.equal(pw.hostMcp, true, "…but it is still reported");
+  assert.equal(pw.busy, false);
+  const launched = idle + "91 /opt/pw-browsers/chromium --user-data-dir=/tmp/playwright-mcp-abc --headless\n";
+  const b = callCli("apex_eval", { track: "monza", expr: "1", dryRun: true }, { APEX_MCP_MOCK: "0", APEX_MCP_PS: launched });
+  assert.equal(b.status, 1, b.stderr + b.stdout);
+  const body = JSON.parse(b.stdout);
   assert.equal(body.error, "playwright_live");
-  assert.match(body.message, /Playwright MCP/);
+  assert.match(body.message, /Playwright MCP browser/);
 });
 
 test("a live Node-only test-bg group does not impersonate Playwright", () => {

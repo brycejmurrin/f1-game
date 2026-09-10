@@ -48,7 +48,7 @@ const KNOWN_GAP = {
   playwrightMcpStdio:
     "Cursor .mcp.json playwright-official (@playwright/mcp) is another browser and does not answer :3712/healthz",
   hostPlaywrightMcp:
-    "Playwright MCP browser_* / @playwright/mcp Chromium does not take apex-browser.lock; occupancy matches @playwright/mcp argv and a playwright-mcp user-data-dir. Cursor --mcp-config JSON is ignored.",
+    "Playwright MCP browser_* / @playwright/mcp Chromium does not take apex-browser.lock; occupancy refuses on a Chromium with a playwright-mcp user-data-dir (the launched browser), reports but allows the idle @playwright/mcp server. Cursor --mcp-config JSON is ignored.",
   outsideLock: ["layout-audit", "cdmcp-*", "raw node tools/shot/apex-eval.mjs", "playwright-mcp"],
 };
 
@@ -262,11 +262,13 @@ function occupancyRefuse() {
   }
   const bg = testBgStatus();
   const pw = playwrightLive();
-  if (bg.browserRunning.length || pw.live) {
+  // An idle host @playwright/mcp SERVER is not occupancy (see
+  // playwright-occupancy.mjs `busy`); its launched Chromium is.
+  if (bg.browserRunning.length || pw.busy) {
     const who = [
       bg.browserRunning.length ? "test-bg" : null,
       pw.suite ? "`playwright test`" : null,
-      pw.hostMcp || pw.hostBrowser ? "Playwright MCP (`browser_*`)" : null,
+      pw.hostBrowser ? "Playwright MCP browser (`browser_*`)" : null,
     ].filter(Boolean).join(" + ");
     return refuse(
       "playwright_live",

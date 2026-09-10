@@ -1,5 +1,5 @@
 /**
- * @doc Classifies process-table lines for Playwright occupancy (`playwright test` / `@playwright/mcp`) — the MCP lock's oracle.
+ * @doc Classifies process-table lines for Playwright occupancy (`playwright test` / `@playwright/mcp`) — the MCP lock's oracle; an idle host MCP server is reported, not busy.
  * @skill check-changes
  * Classify process-table lines for Playwright occupancy.
  *
@@ -9,7 +9,7 @@
  * not a live Playwright process).
  */
 export function emptyPlaywright() {
-  return { live: false, suite: false, hostMcp: false, hostBrowser: false, pids: [] };
+  return { live: false, busy: false, suite: false, hostMcp: false, hostBrowser: false, pids: [] };
 }
 
 export function classifyPlaywrightLine(line) {
@@ -45,5 +45,13 @@ export function scanPlaywrightLines(stdout) {
   }
   out.pids = pids;
   out.live = pids.length > 0;
+  // BUSY is what a browser tool has to wait for: a running suite, or a host
+  // MCP that has actually launched its Chromium. The @playwright/mcp SERVER
+  // alone is a stdio process waiting for its first browser_* call — 0 % CPU,
+  // no GPU, no canvas — and on a Cloud box it is attached for the whole
+  // session, so treating it as occupancy refused every apex_* browser tool,
+  // always (measured 2026-09-10: apex_garage open → playwright_live with the
+  // server idle). It stays reported (`hostMcp`) and is not a refusal.
+  out.busy = out.suite || out.hostBrowser;
   return out;
 }

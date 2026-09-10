@@ -223,10 +223,10 @@ printf '%s\n' '{"design":{"spineLogo":"wrap"},"frame":"spineTop","shot":"wrap"}'
 sheet / reload / status / close`, every key riding along in order. It holds
 the browser lock while open and needs the MCP *server* (`serve` /
 `serve-http`); a one-shot `call` ends the session with the process. Like
-every browser `apex_*` wrap it refuses `playwright_live` while the host
-`@playwright/mcp` server is attached (this container: always) — drive the CLI
-`--serve` directly then, or set `APEX_MCP_PS=""` for the server (the test
-hook that blanks the process scan; docs/AGENT-SURFACE.md §known gaps).
+every browser `apex_*` wrap it refuses `playwright_live` while a `playwright
+test` suite or the host Playwright MCP's *launched* Chromium is up; the idle
+`@playwright/mcp` server that Cloud attaches for the whole session is
+reported (`apex_status` → `playwright.hostMcp`) and no longer blocks.
 
 ### Output
 
