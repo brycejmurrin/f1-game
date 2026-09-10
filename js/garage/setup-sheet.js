@@ -109,24 +109,24 @@ const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "defaul
 const LIV_ROW_HINT = {
   c1: "PRIMARY — the bodywork itself: monocoque, nose, sidepods, engine cover.",
   c2: "ACCENT — the second BASE colour. Unset optional rows fall back to this or PRIMARY — not to each other.",
-  accent: "DETAIL — trim only (pinstripe, sidepod flash, nose flank spans, floor-edge lip, fin strip) and the keyline round the race number. The colour you pick is used as-is. Unset = ACCENT (then contrast-checked). Does not recolour stripe, saddle, sun, plate, or marks.",
+  accent: "DETAIL — trim only (pinstripe, sidepod flash, nose flank spans, floor-edge lip, fin strip) and the keyline round the race number (nose, SPINE SIDE number / code / lockup). The colour you pick is used as-is. Unset = ACCENT, contrast-checked beside the number. Does not recolour stripe, saddle, sun, plate, or marks.",
   stripe: "BODY STRIPE — full spine, nose tip to engine cover. This row only.",
   noseStripe: "NOSE STRIPE — the nose crown only, tip to bulkhead. Layers on top of BODY STRIPE.",
   nose: "NOSE CAP — a painted nose cone. Unset = the bodywork colour.",
   pod: "SIDEPOD — the sidepod panel, both sides. Unset = the bodywork colour.",
-  cover: "ENGINE COVER — airbox, roll hoop, cover loft and snorkel. Unset = the bodywork colour.",
-  spineTint: "BAND — the SPINE TOP graphic fill on the cover crown (and saddle flank when SADDLE is unset). The colour you pick is used as-is. Unset = SECONDARY, else PRIMARY, checked against ENGINE COVER — never BODY STRIPE or DETAIL.",
-  saddleTint: "SADDLE — the shoulder shelf and upper-flank saddle block. The colour you pick is used as-is. Unset = BAND under SADDLE or SADDLE WRAP.",
-  sideTint: "FLANK FILL — SPINE SIDE colour graphics (BAND, SASH, rake, …) on the cover flank. The colour you pick is used as-is. Unset = derived against the flank.",
-  sunTint: "SUN — the WRAP design's sun disc (crown, flanks, airbox). The colour you pick is used as-is. Unset = mark plate / SECONDARY against ENGINE COVER.",
-  bandTint2: "2ND BAND — the TRICOLOUR design's second band. The colour you pick is used as-is. Unset = derived against the cover and the first band.",
-  plateTint: "PLATE — the board for SPINE SIDE PLATE / TITLE. The colour you pick is used as-is. Unset = SECONDARY, contrast-checked against the flank. Lettering auto-inks.",
+  cover: "ENGINE COVER — airbox, roll hoop, cover loft and snorkel. Unset = the bodywork colour. (AIRBOX had its own row and no longer does: it painted a strict subset of these surfaces.)",
+  spineTint: "BAND — the SPINE TOP graphic fill on the cover crown, the tail top, the centreline RIDGE, and the saddle's flank half when SADDLE is unset. The colour you pick is used as-is. Unset = SECONDARY, else PRIMARY, checked against ENGINE COVER — never BODY STRIPE or DETAIL.",
+  saddleTint: "SADDLE — the shoulder shelf and upper-flank saddle block, and the SPINE SIDE shoulder / rake fills. The colour you pick is used as-is. Unset = BAND under SADDLE or SADDLE WRAP.",
+  sideTint: "FLANK FILL — every SPINE SIDE colour FILL on the cover flank (BAND, SASH, RIBBON strip, SLASH, RAKE, SHOULDER, STARFIELD dots), ALONE. A separate zone from BAND: with SPINE TOP on SADDLE the band paints the flank these sit on, so one colour cannot serve both. The colour you pick is used as-is. Unset = derived against the flank; RAKE and SHOULDER borrow SADDLE first.",
+  sunTint: "SUN — the WRAP design's sun disc, over the crown, both cover flanks and the airbox. Its own row because BAND used to paint it too: one field meant a band on most SPINE TOP designs and the sun on WRAP. The colour you pick is used as-is. Unset = the mark's plate / SECONDARY against ENGINE COVER.",
+  bandTint2: "2ND BAND — the TRICOLOUR design's second band. Only one of its two bands was ever choosable and the other was derived, which is how a tricolour could come out one colour repeated. The colour you pick is used as-is. Unset = derived against the cover and the first band.",
+  plateTint: "PLATE — the board SPINE SIDE's PLATE / TITLE designs paint on. The colour you pick is used as-is. Unset = SECONDARY, contrast-checked against the flank — never BODY STRIPE. Lettering auto-inks.",
   wing: "WINGS — the front and rear FLAPS. Unset = ACCENT.",
   rearWing: "REAR WING — the rear mainplane block. Unset = ACCENT.",
   fin: "TAIL FIN — the shark-fin plate. The colour you pick is used as-is (even under FIN HANDOFF CONTRAST). Unset = ACCENT, or a contrast-derived colour when HANDOFF is CONTRAST. Needs a FIN SHAPE other than NONE.",
   finArt: "TAIL GRAPHIC — fin motif / badge ink. The colour you pick is used as-is. Unset = first base colour that clears the fin plate.",
   halo: "HALO — the cockpit halo loop.",
-  logo: "TEAM LOGO — the dominant shape of the team mark everywhere it is drawn: crown, fin badge, SPINE SIDE logo/emblem/lockup, WRAP flank bull, garage wall. The colour you pick is used as-is (no contrast override). Lettering (numbers, wordmarks) auto-contrasts; it is not this row.",
+  logo: "TEAM LOGO — the dominant shape of the team mark everywhere it is drawn: crown, fin badge, SPINE SIDE logo/emblem/lockup, the WRAP design's flank bull, the livery tile, garage wall. The colour you pick is used as-is (no contrast override). Lettering (numbers, wordmarks) auto-contrasts; it is not this row.",
   logo2: "LOGO DETAIL — the mark's second shape (shield, disc, traced layer, or island), named per team. One-loop marks have no such row. The colour you pick is used as-is. Authored plates reach the flank logo/emblem too.",
   logo3: "OUTLINE — a rim around the mark only, in the colour you pick. Off by default.",
   finish: "FINISH — the paint surface: gloss, satin or chrome.",
@@ -843,6 +843,7 @@ function buildLiveryCreator(container, team) {
   const haveNames = () => (d.sponsors || "default") !== "clean";
   const NO_NAMES = "Needs sponsor names — SPONSORS is CLEAN";
   const syncDeps = () => {
+    if (typeof markAdvice === "function") markAdvice();
     for (const dep of deps) {
       const off = !dep.when();
       if (dep.pill) { dep.pill.disabled = off; dep.pill.title = off ? dep.why : ""; continue; }
@@ -867,9 +868,13 @@ function buildLiveryCreator(container, team) {
   // getting it nearly right. These chips are the colours already in play: every
   // distinct value in the draft, then the team's own two stock colours. Click
   // one and the slot takes it EXACTLY.
+  // The matching chips offer every colour already ON this car, design fills
+  // included — from LiveryTex's own list, so a new fill row joins the chips
+  // without a second copy of the key names here.
   const PAL_KEYS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod",
-                    "wing", "rearWing", "cover", "spineTint", "saddleTint", "sideTint",
-                    "sunTint", "bandTint2", "plateTint",
+                    "wing", "rearWing", "cover",
+                    ...(((typeof LiveryTex !== "undefined" && LiveryTex.FILL_SURFACES) || [])
+                      .map((f) => f.key)),   // design fills, from the painters' own list
                     "fin", "finArt", "logo", "logo2", "logo3", "halo"];
   const paletteColours = () => {
     const seen = [];
@@ -944,39 +949,21 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(section("ENGINE COVER"));
   wrap.appendChild(colorRow("ENGINE COVER", "cover", true));   // the airbox, roll hoop and cover top
   // Design fills — greyed until the current TOP/SIDE/BIND paints that surface.
-  const BAND_TOPS = { saddle:1, panel:1, stripe:1, streaks:1, twin:1, chevron:1, wedge:1,
-    rungs:1, tricolour:1, carbon:1, cap:1, ridge:1, fade:1 };
-  const FLANK_SIDES = { band:1, sash:1, slash:1, rake:1, shoulder:1, starfield:1, ribbon:1 };
-  const bandRow = colorRow("BAND", "spineTint", true);
-  const saddleRow = colorRow("SADDLE", "saddleTint", true);
-  const sideRow = colorRow("FLANK FILL", "sideTint", true);
-  const sunRow = colorRow("SUN", "sunTint", true);
-  const band2Row = colorRow("2ND BAND", "bandTint2", true);
-  const plateRow = colorRow("PLATE", "plateTint", true);
-  wrap.appendChild(bandRow);
-  wrap.appendChild(saddleRow);
-  wrap.appendChild(sideRow);
-  wrap.appendChild(sunRow);
-  wrap.appendChild(band2Row);
-  wrap.appendChild(plateRow);
-  const topOf = () => d.spineLogo || "logo";
-  const sideOf = () => d.spineSide || "none";
-  const bindOf = () => d.coverBind || "independent";
-  deps.push(
-    { row: bandRow, when: () => !!BAND_TOPS[topOf()],
-      why: "Needs a SPINE TOP that paints a band (e.g. stripe, saddle, panel)" },
-    { row: saddleRow, when: () => topOf() === "saddle" || bindOf() === "saddleWrap"
-        || sideOf() === "shoulder" || sideOf() === "rake",
-      why: "Needs SADDLE top, SADDLE WRAP bind, or shoulder/rake side" },
-    { row: sideRow, when: () => !!FLANK_SIDES[sideOf()],
-      why: "Needs a SPINE SIDE colour fill (band, sash, rake, …)" },
-    { row: sunRow, when: () => topOf() === "wrap",
-      why: "Needs SPINE TOP WRAP" },
-    { row: band2Row, when: () => topOf() === "tricolour",
-      why: "Needs SPINE TOP TRICOLOUR" },
-    { row: plateRow, when: () => sideOf() === "plate" || sideOf() === "title",
-      why: "Needs SPINE SIDE PLATE or TITLE" }
-  );
+  // DESIGN FILLS — the rows that only exist while a design paints their
+  // surface. WHICH design paints WHICH fill is LiveryTex's to say (it owns the
+  // painters, see FILL_SURFACES): the sheet asks, so a design added to
+  // SPINE_LOGO_IDS cannot leave a colour row nobody can spend, and a row
+  // cannot go on offering a colour the atlas throws away. The labels and the
+  // greyed-out reason come from the same table.
+  // `LT` is declared further down (the pill rows), so name the global here.
+  const LTX = typeof LiveryTex !== "undefined" ? LiveryTex : null;
+  const LT_FILLS = (LTX && LTX.FILL_SURFACES) || [];
+  const fillRows = LT_FILLS.map((f) => ({ f, row: colorRow(f.label, f.key, true) }));
+  for (const { row } of fillRows) wrap.appendChild(row);
+  const designNow = () => ({ spineLogo: d.spineLogo, spineSide: d.spineSide, coverBind: d.coverBind });
+  for (const { f, row } of fillRows) {
+    deps.push({ row, when: () => !LTX || !LTX.fillInert(f.key, designNow()), why: f.why });
+  }
   // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
   // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
   wrap.appendChild(section("WINGS & TAIL"));
@@ -999,6 +986,31 @@ function buildLiveryCreator(container, team) {
        { key: "logo3", label: "OUTLINE" }];
   wrap.appendChild(section("TEAM MARK"));
   for (const slot of mSlots) wrap.appendChild(colorRow(slot.label, slot.key, true));
+  // ADVISE, NEVER OVERRIDE. The colour you pick for the mark is painted as
+  // picked; what used to happen instead — a hidden re-pick to a readable
+  // colour — is gone, so this note is the only thing between a pale pick on a
+  // pale cover and a car with no visible mark. It names the surface, the ratio
+  // and the fix (an OUTLINE, the same row team data uses for the same job).
+  const markNote = document.createElement("div");
+  markNote.className = "cs-opt-desc";   // the sheet's existing small-text style (no new class)
+  markNote.setAttribute("aria-live", "polite");
+  markNote.hidden = true;
+  wrap.appendChild(markNote);
+  const markAdvice = () => {
+    const LTn = typeof LiveryTex !== "undefined" ? LiveryTex : null;
+    if (!LTn || !LTn.contrast || !d.logo) { markNote.hidden = true; return; }
+    const logo = hexToArr(d.logo);
+    const field = hexToArr(d.cover || d.c1);
+    const ratio = LTn.contrast(logo, field);
+    const rim = d.logo3 ? LTn.contrast(hexToArr(d.logo3), field) : 0;
+    const weak = ratio < (LTn.MARK_FLOOR || 4.2) && rim < (LTn.MARK_FLOOR || 4.2);
+    markNote.hidden = !weak;
+    if (weak) {
+      markNote.textContent = "TEAM LOGO reads " + ratio.toFixed(1) + ":1 on ENGINE COVER — it is painted as picked. "
+        + (d.logo3 ? "The OUTLINE does not separate either; pick a darker or lighter one."
+                   : "Add an OUTLINE to keep it legible.");
+    }
+  };
   wrap.appendChild(section("COCKPIT"));
   wrap.appendChild(colorRow("HALO", "halo", true));
   // One pill row per single-choice field: FINISH (Car3D's surface set — this

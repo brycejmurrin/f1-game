@@ -36,7 +36,15 @@ const SIZES = [
 // stripe||c2, so the background runs between them across the panel — the same
 // pair INKED_FOR declares in parts-livery-contrast.spec.js.
 function fieldsFor(liv, bare) {
-  return bare ? [(liv && liv.fin) || (liv && liv.c2)] : [liv && liv.c1, liv && liv.c2];
+  // THE SURFACE THE MARK ACTUALLY LANDS ON. The crown case used to score
+  // against [c1, c2] — the pair from when the crown carried a c2 tail wash.
+  // That wash is gone (every SPINE TOP stands on bare paint), so c2 was a
+  // PHANTOM field: Aston's lime wings "failed" 1.00 on a lime the crown never
+  // touches, Williams' white W "failed" on a white c2 while reading 18:1 on
+  // its black cover. Score the ENGINE COVER (cover || c1), which is what
+  // buildAtlas hands markPalette for the crown and the flank. The badge case
+  // is the fin plate, as before.
+  return bare ? [(liv && liv.fin) || (liv && liv.c2)] : [(liv && (liv.cover || liv.c1))];
 }
 function paletteFor(id, liv, bare) {
   const field = fieldsFor(liv, bare);
@@ -160,10 +168,15 @@ test("no crest is a blob, and none is a smear", () => {
   });
 });
 
-test("authored / brandPair marks keep markBase; others clear MARK_FLOOR", () => {
-  // Authored TEAM LOGO and brandPair (mark on its own plate) paint as markBase.
-  // Unauthored brand marks on arbitrary fields still floor so stock cars stay
-  // readable (Mercedes star on silver). Derived other-livery marks floor too.
+test("a mark's COLOUR is never substituted; its LEGIBILITY is always asserted", () => {
+  // Two promises that used to be one value. COLOUR: a player's TEAM LOGO and a
+  // team's brand mark are authored, and paint as markBase with no substitute
+  // and no outline nobody asked for. LEGIBILITY: still measured on every mark
+  // — through the mark, an authored OUTLINE (logo3), a plate, or (for derived
+  // marks only) the auto-halo. A PLAYER may paint white on white; the sheet
+  // advises and never overrides. TEAM DATA may not: a shipped car's mark must
+  // read on the car that ships it, and the fix is in teams.js (author logo3,
+  // as the real W17's dark-rimmed star does), never in a hidden re-pick.
   const bad = [];
   let scored = 0, freeN = 0, derivedN = 0;
   for (const team of Teams.LIST) {
@@ -185,7 +198,19 @@ test("authored / brandPair marks keep markBase; others clear MARK_FLOOR", () => 
             bad.push(`${team.id}/${liv.id}/${where} free mark ${P.mark.join()} != base ${base.join()}`);
           if (liv.logo && P.halo)
             bad.push(`${team.id}/${liv.id}/${where} auto-haloed authored logo`);
-        } else {
+          // Team data (a brand mark on the team's own default) must still read —
+          // on the surfaces the SHIPPED car has: a fin badge on a car with no
+          // fin (every 2026 car) is texels nothing samples, and a player who
+          // turns the fin on gets the sheet's advisory for their own picks.
+          const shippedFin = (liv.finShape || "standard") !== "none";
+          if (!liv.logo && !P.brandPair && (where !== "badge" || shippedFin)) for (const f of under) {
+            const best = Math.max(LT.contrast(P.mark, f),
+              P.outline ? LT.contrast(P.outline, f) : 0, P.halo ? LT.contrast(P.halo, f) : 0);
+            if (best < LT.MARK_FLOOR)
+              bad.push(`${team.id}/${liv.id}/${where} brand mark ${best.toFixed(2)} on ${f.join()} `
+                + `— author logo3 in teams.js`);
+          }
+        } else if (!P.brandPair) {
           derivedN++;
           for (const f of under) {
             const best = Math.max(LT.contrast(P.mark, f), P.halo ? LT.contrast(P.halo, f) : 0);
@@ -289,7 +314,14 @@ test("the LOGO DETAIL colour reaches the canvas on every mark, on both surfaces"
     return ctx.ops.some((o) => o.style === want || o.shadow === want);
   };
   const dead = [];
+  let rows = 0;
   for (const team of Teams.LIST) {
+    // Only the marks that HAVE a LOGO DETAIL row (markSlots is the sheet's own
+    // source of truth). A single-loop silhouette offers none: its only second
+    // slot is the OUTLINE, which has its own row — and team data may author
+    // that row (logo3), which would rightly outrank a legacy logo2 here.
+    if (!LT.markSlots(team.id).some((slot) => slot.key === "logo2")) continue;
+    rows++;
     for (const liv of Liveries.forTeam(team)) {
       for (const bare of [false, true]) {
         const where = `${team.id}/${liv.id}/${bare ? "badge" : "cover"}`;
@@ -300,6 +332,7 @@ test("the LOGO DETAIL colour reaches the canvas on every mark, on both surfaces"
       }
     }
   }
+  assert.ok(rows >= 5, `expected the plated / layered marks to carry a LOGO DETAIL row, got ${rows}`);
   assert.deepEqual(dead, [], "a mark takes the second colour and paints nothing with it");
 });
 
@@ -307,9 +340,11 @@ test("LOGO DETAIL is opt-in — an unset one leaves every shipped mark untouched
   // The outline slot adds a pass no mark had before. If it could fire without
   // the player asking, every crest in the game would change on this commit.
   for (const team of Teams.LIST) {
-    for (const liv of Liveries.forTeam(team)) {
+    for (const shipped of Liveries.forTeam(team)) {
+      // Unset LOGO DETAIL, and no OUTLINE either — team data may author logo3.
+      const liv = { ...shipped, logo2: undefined, logo3: undefined };
       for (const bare of [false, true]) {
-        const fields = bare ? [(liv.fin || liv.c2)] : [liv.c1, liv.c2];
+        const fields = fieldsFor(liv, bare);
         const P = LT.markPalette(team.id, liv, fields, bare);
         assert.equal(P.outline, null, `${team.id}/${liv.id} outlines with no LOGO DETAIL set`);
       }
@@ -475,9 +510,13 @@ test("the OUTLINE row is opt-in on every mark", () => {
   // offered on ALL eleven marks rather than only the ones with no second shape:
   // unset, it changes nothing.
   for (const team of Teams.LIST) {
-    for (const liv of Liveries.forTeam(team)) {
+    for (const shipped of Liveries.forTeam(team)) {
+      // "Unset" is a FIXTURE now, not an assumption about the shipped car: team
+      // data may author logo3 (the W17's dark-rimmed star), which is the row
+      // doing exactly the job this test says it is free to do.
+      const liv = { ...shipped, logo3: undefined };
       for (const bare of [false, true]) {
-        const fields = bare ? [(liv.fin || liv.c2)] : [liv.c1, liv.c2];
+        const fields = fieldsFor(liv, bare);
         assert.equal(LT.markPalette(team.id, liv, fields, bare).outline, null,
           `${team.id}/${liv.id} outlines with no OUTLINE colour set`);
       }

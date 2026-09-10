@@ -35,13 +35,29 @@ Unset → derive (unchanged). Authored → exact colour (unchanged).
 | Dead key | Migrate |
 |---|---|
 | `ridgeTint` | → `spineTint` if spineTint empty; else drop |
-| `airboxTint` | → `cover` if cover empty; else drop |
+| `airboxTint` | DROP (never promoted: it painted a strict subset of `cover`, and `cover` is also the surface the atlas inks the crest against — promoting it repainted the loft and flipped the crown ink on any file that set it) |
 | `crestInk` | drop (auto-ink) |
 | `plateInk` | drop (auto-ink) |
 
 Williams stock: bake ridge into `spineTint`, remove `ridgeTint` from `teams.js`.
 
-Runtime after migrate: `ridgeFill` always uses band; `airboxMeshColour` = sun under WRAP else cover; lettering/plate glyphs = `inkOn` only.
+Runtime after migrate: `ridgeFill` and the `fade` crown use BAND — an authored BAND as-is, a derived one re-picked to clear the cover; `airboxMeshColour` = sun under WRAP else cover; lettering/plate glyphs = `inkOn` only.
+
+## Colour vs legibility — two parameters (as built)
+
+A mark's COLOUR is authored (the player's TEAM LOGO row, or the team's
+`livery` block in `teams.js`) and `markPalette` never substitutes it. Its
+LEGIBILITY is a separate parameter: the OUTLINE row (`logo3`), a plate, or —
+for a DERIVED mark nobody authored — an automatic halo. A shipped car whose
+brand mark matches its own cover (Mercedes, McLaren, Alpine, Racing Bulls)
+authors `logo3` in team data, the same row a player uses for the same job.
+The sheet ADVISES a player whose pick will not read (ratio + fix under TEAM
+MARK) and never overrides it.
+
+Instruments, one model each: `cover-legibility` scores contrasting AREA and
+owns bands / saddles / suns / sashes; `crest-marks` scores mark + outline +
+halo per background and owns every mark, asserting team data reads and a
+player's pick is exact.
 
 ## Sheet layout + gating
 
@@ -53,8 +69,8 @@ Runtime after migrate: `ridgeFill` always uses band; `airboxMeshColour` = sun un
 
 | Row | Live when |
 |---|---|
-| BAND | TOP ∈ `{saddle,panel,stripe,streaks,twin,chevron,wedge,rungs,tricolour,carbon,cap,ridge,fade}` |
-| SADDLE | TOP=`saddle` OR BIND=`saddleWrap` OR SIDE ∈ `{shoulder,rake}` |
+| BAND | TOP ∈ `{saddle,panel,stripe,streaks,twin,chevron,wedge,rungs,tricolour,carbon,cap,ridge,fade}` (declared in `LiveryTex.FILL_SURFACES`, proven by `fill-gating.test.mjs`) |
+| SADDLE | TOP=`saddle` OR BIND=`saddleWrap` OR SIDE=`shoulder` (`rake` reads SADDLE only under the bind — measured) |
 | FLANK FILL | SIDE ∈ `{band,sash,slash,rake,shoulder,starfield,ribbon}` |
 | SUN | TOP=`wrap` |
 | 2ND BAND | TOP=`tricolour` |

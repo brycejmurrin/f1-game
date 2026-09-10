@@ -405,17 +405,20 @@ const api = {
   // Switch garage car without opening #teampicker — same store writes as the tile
   // click in select-screen.js (G.teamIdx, buildSetup, tickUi). Multi-team
   // garage-angles surveys use this instead of the picker UI (~15 s per team).
-  garageTeam(id) {
+  garageTeam(id, seatWanted) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     const i = Teams.LIST.findIndex((t) => t.id === id);
     if (i < 0) return { ok: false, error: "unknown_team", id };
     const t = Teams.LIST[i];
     const label = t.name.toUpperCase();
-    if (G.teamIdx === i) return { ok: true, switched: false, label };
+    // An explicit SEAT (0 / 1) switches the driver — number, helmet, T-cam —
+    // on the same team too; without one the first free seat is taken.
+    const wantSeat = Number.isInteger(seatWanted) && seatWanted >= 0 && seatWanted < t.drivers.length ? seatWanted : null;
+    if (G.teamIdx === i && (wantSeat == null || wantSeat === G.driverIdx)) return { ok: true, switched: false, label, seat: G.driverIdx };
     const taken = G.peerSeats ? G.peerSeats() : [];
     const isTaken = (si) => taken.some((s) => s.team === t.id && s.driver === si);
-    let seat = 0;
-    while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
+    let seat = wantSeat != null ? wantSeat : 0;
+    if (wantSeat == null) while (seat < t.drivers.length - 1 && isTaken(seat)) seat++;
     G.teamIdx = i;
     G.driverIdx = seat;
     G.store.set("team", i);
@@ -424,39 +427,28 @@ const api = {
     if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes();
     G.buildSetup();
     G.tickUi();
-    return { ok: true, switched: true, label };
+    return { ok: true, switched: true, label, seat };
   },
-  // One-shot preset + discrete framing — mirrors #cs-stack / cs-view-* / cs-pan-*.
-  // opts: zoom/strafe/dolly (click counts); azNudge/elNudge (UI left/right/up/down
-  // clicks, ±0.18 / ±0.12 rad); az/el (absolute radians after the preset).
+  // One-shot preset + framing — mirrors #cs-stack / cs-view-* / cs-pan-*: opts.target [x,y,z] car-space look-at, lamp (preset name | null), az/el/dist absolute (rad, m), pan [strafe, dolly] m, zoom/strafe/dolly/azNudge/elNudge counted clicks; view "free" keeps the current camera.
   garageFrame(view, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (!view) return { ok: false, error: "no_view" };
-    G.setSetupView(view);
-    opts = opts || {};
-    if (Number.isFinite(opts.az)) G.nudgeSetupCam(opts.az - G.setupPreviewAz, 0, 0);
-    if (Number.isFinite(opts.el)) G.nudgeSetupCam(0, opts.el - G.setupPreviewEl, 0);
-    const azN = Number(opts.azNudge != null ? opts.azNudge : opts.nudgeAz);
-    const elN = Number(opts.elNudge != null ? opts.elNudge : opts.nudgeEl);
-    if (Number.isFinite(azN) && azN) {
-      const step = azN > 0 ? 0.18 : -0.18;
-      for (let n = 0; n < Math.abs(azN); n++) G.nudgeSetupCam(step, 0, 0);
-    }
-    if (Number.isFinite(elN) && elN) {
-      const step = elN > 0 ? 0.12 : -0.12;
-      for (let n = 0; n < Math.abs(elN); n++) G.nudgeSetupCam(0, step, 0);
-    }
-    const zoom = opts.zoom || 0;
-    const strafe = opts.strafe || 0;
-    const dolly = opts.dolly || 0;
-    const zMul = zoom > 0 ? 1 / 1.12 : 1.12;
-    for (let n = 0; n < Math.abs(zoom); n++) G.nudgeSetupZoom(zMul);
-    for (let n = 0; n < Math.abs(strafe); n++) G.setupPan(strafe > 0 ? 0.15 : -0.15, 0);
-    for (let n = 0; n < Math.abs(dolly); n++) G.setupPan(0, dolly > 0 ? 0.15 : -0.15);
+    if (view !== "free") G.setSetupView(view);   // a preset resets orbit/target/pan; absolutes go on top
+    const o = opts || {}, num = (v) => (Number.isFinite(v) ? v : null);
+    if (Array.isArray(o.target) && o.target.length === 3) G.setSetupAim(o.target.map(Number));   // orbit + look-at, car space
+    if (o.lamp !== undefined && typeof GarageScene !== "undefined" && GarageScene.spot) GarageScene.spot(o.lamp || null);
+    if (num(o.az) != null) G.nudgeSetupCam(o.az - G.setupPreviewAz, 0, 0);
+    if (num(o.el) != null) G.nudgeSetupCam(0, o.el - G.setupPreviewEl, 0);
+    if (num(o.dist) > 0) G.nudgeSetupZoom(o.dist / G.setupPreviewDist);   // clamped by the game
+    const steps = (n, fn) => { for (let i = 0; i < Math.abs(n | 0); i++) fn(n > 0 ? 1 : -1); };
+    steps(o.azNudge != null ? o.azNudge : o.nudgeAz, (s) => G.nudgeSetupCam(0.18 * s, 0, 0));
+    steps(o.elNudge != null ? o.elNudge : o.nudgeEl, (s) => G.nudgeSetupCam(0, 0.12 * s, 0));
+    steps(o.zoom, (s) => G.nudgeSetupZoom(s > 0 ? 1 / 1.12 : 1.12));
+    steps(o.strafe, (s) => G.setupPan(0.15 * s, 0));
+    steps(o.dolly, (s) => G.setupPan(0, 0.15 * s));
+    if (Array.isArray(o.pan)) G.setupPan(+o.pan[0] || 0, +o.pan[1] || 0);
     const c = this.garageCam();
-    return {
-      ok: true, az: c.az, el: c.el, dist: c.effDist, pan: c.pan,
-    };
+    return { ok: true, view, az: c.az, el: c.el, dist: c.effDist, pan: c.pan };
   },
   // Merge catalog part ids into the current team's garage setup and rebuild.
   garageParts(parts) {

@@ -218,8 +218,11 @@ test("resolveLivery falls back through the team's own list", () => {
 
 test("resolveLivery and the live preview keep every editor tint", () => {
   // Aston's launch car authors spineTint; dropping it in resolveLivery painted
-  // stripe||accent (lime) on the crown band. Both paths go through pickLivery /
-  // LIVERY_FIELDS; migratePaint strips dead keys before pick.
+  // stripe||accent (lime) on the crown band. Editor tints must reach the atlas,
+  // and both paths now go through ONE field list (pickLivery / LIVERY_FIELDS),
+  // so a tint is on the car iff it is in that list and both paths call it.
+  // The four RETIRED keys (crestInk / plateInk / ridgeTint / airboxTint) are
+  // folded or dropped by migratePaint and must not be in the list at all.
   const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const fields = GAME.match(/const LIVERY_FIELDS = \[([\s\S]*?)\];/);
   assert.ok(fields, "LIVERY_FIELDS is gone from js/game.js");
@@ -228,12 +231,14 @@ test("resolveLivery and the live preview keep every editor tint", () => {
     assert.match(fields[1], new RegExp('"' + k + '"'), `LIVERY_FIELDS must carry ${k}`);
   }
   for (const k of ["crestInk", "plateInk", "ridgeTint", "airboxTint"]) {
-    assert.equal(new RegExp('"' + k + '"').test(fields[1]), false,
-      `LIVERY_FIELDS must not carry dead key ${k}`);
+    assert.equal(fields[1].includes('"' + k + '"'), false,
+      `LIVERY_FIELDS must not carry the retired key ${k}`);
   }
-  assert.match(GAME, /return pickLivery\(l\)/, "draft resolveLivery must resolve through pickLivery");
-  assert.match(GAME, /liv \? pickLivery\(liv\)/, "cached resolveLivery must resolve through pickLivery");
-  assert.match(GAME, /Liveries\.migratePaint/, "resolveLivery must migrate before pick");
+  // …and every read path folds a stored file's retired keys exactly once.
+  assert.match(GAME, /return pickLivery\(migrateLivery\(livDraftOverride\.liv\)\)/,
+    "draft resolveLivery must migrate, then resolve through pickLivery");
+  assert.match(GAME, /pickLivery\(migrateLivery\(liv\)\)/,
+    "cached resolveLivery must migrate, then resolve through pickLivery");
   assert.match(SHEET, /id:\s*"default"/,
     "livePreviewDraft must set id:\"default\" so brand plates stay on while editing");
   assert.equal(/colorRow\("CREST INK"/.test(SHEET), false, "CREST INK row must be gone");

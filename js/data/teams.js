@@ -22,7 +22,11 @@ const Teams = (function () {
       /* The W17 is a BLACK car with a SILVER engine cover: the launch photos show
          the airbox, roll structure and cover crown in bare-metal silver over a
          black chassis, with the star flake on the tail. */
-      livery: { cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "none", spineHeight: "dorsal",
+      livery: {
+        // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the W17's silver star carries a dark rim on its silver cover — 1.23:1 bare.
+        // The brand colour is exact (markPalette never substitutes it); the rim
+        // is what keeps it legible, the same row a player uses for the same job.
+        logo3: [0.06, 0.06, 0.08], cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "none", spineHeight: "dorsal",
                 spineLogo: "fade", spineSide: "starfield", coverBind: "spineOnly" },
       engine: "Mercedes", tier: 0,
       stats: { speed: 96, accel: 91, cornering: 93, braking: 90 },
@@ -39,7 +43,11 @@ const Teams = (function () {
          (crown + flanks). Same split as the launch photos, expressed as zones. */
       livery: { cover: [0.863, 0.0, 0.0], finShape: "none", spineHeight: "dorsal",
                 spineLogo: "cap", spineSide: "shoulder", coverBind: "saddleWrap", finHandoff: "contrast",
-                saddleTint: [0.95, 0.95, 0.96], fin: [0.863, 0.0, 0.0] },
+                saddleTint: [0.95, 0.95, 0.96], fin: [0.863, 0.0, 0.0],
+                // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the black horse is 3.75:1 on
+                // the red cover wherever it paints WITHOUT its shield (bigmark, flank logo). A
+                // shield-yellow rim reads 4.3:1 on red and vanishes on the shield itself.
+                logo3: [1.0, 0.925, 0.0] },
       engine: "Ferrari", tier: 1,
       stats: { speed: 97, accel: 88, cornering: 91, braking: 92 },
       drivers: [
@@ -49,7 +57,11 @@ const Teams = (function () {
     },
     {
       id: "mclaren", name: "McLaren", short: "MCL",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "panel", spineSide: "wordmark" },
+      livery: {
+        // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: papaya speedmark on the papaya cover is 1.04:1 bare — the MCL's mark is rimmed.
+        // The brand colour is exact (markPalette never substitutes it); the rim
+        // is what keeps it legible, the same row a player uses for the same job.
+        logo3: [0.06, 0.06, 0.08], finShape: "none", spineHeight: "dorsal", spineLogo: "panel", spineSide: "wordmark" },
       color: [1.0, 0.502, 0.0], color2: [0.122, 0.122, 0.122],     /* papaya #FF8000 / anthracite #1F1F1F */
       engine: "Mercedes", tier: 1,
       stats: { speed: 93, accel: 94, cornering: 96, braking: 91 },
@@ -60,7 +72,11 @@ const Teams = (function () {
     },
     {
       id: "redbull", name: "Red Bull Racing", short: "RBR",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "wrap", spineSide: "duo" },
+      // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the red bulls are 2.27:1 on navy
+      // wherever they paint WITHOUT the sun disc (bigmark, flank logo). A sun-gold rim reads
+      // 11:1 on navy and vanishes on the disc itself.
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "wrap", spineSide: "duo",
+                logo3: [1.0, 0.788, 0.024] },
       color: [0.086, 0.137, 0.294], color2: [1.0, 0.843, 0.0],     /* navy #16234B / yellow #FFD700 */
       engine: "Red Bull Ford", tier: 2,
       stats: { speed: 90, accel: 88, cornering: 91, braking: 87 },
@@ -73,7 +89,11 @@ const Teams = (function () {
       id: "alpine", name: "Alpine", short: "ALP",
       /* spineTint must clear the blue cover (≥2:1). Launch pink #FF87BC is only
          ~1.56:1 on #0093CC and made every crown band invisible to cover-legibility. */
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "band",
+      livery: {
+        // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: the A mark IS the cover blue (1.00:1) — rimmed, as on the A524.
+        // The brand colour is exact (markPalette never substitutes it); the rim
+        // is what keeps it legible, the same row a player uses for the same job.
+        logo3: [0.06, 0.06, 0.08], finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "band",
                 spineTint: [1.0, 1.0, 1.0] },
       color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737],       /* blue #0093CC / pink #FF87BC */
       engine: "Mercedes", tier: 3,
@@ -85,7 +105,11 @@ const Teams = (function () {
     },
     {
       id: "racingbulls", name: "Racing Bulls", short: "RB",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "streaks", spineSide: "sash",
+      livery: {
+        // OUTLINE (logo3) is TEAM DATA, not a hidden re-pick: RB letters on their own blue read 1.00:1 bare — a light rim.
+        // The brand colour is exact (markPalette never substitutes it); the rim
+        // is what keeps it legible, the same row a player uses for the same job.
+        logo3: [0.97, 0.97, 0.98], finShape: "none", spineHeight: "dorsal", spineLogo: "streaks", spineSide: "sash",
                 spineTint: [0.086, 0.204, 0.796] },
       color: [0.957, 0.941, 0.925], color2: [0.086, 0.204, 0.796], /* white #F4F0EC / blue #1634CB */
       engine: "Red Bull Ford", tier: 3,

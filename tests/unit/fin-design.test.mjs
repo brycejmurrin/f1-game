@@ -250,16 +250,21 @@ test("airboxMeshColour: non-wrap uses cover (airboxTint folded away)", () => {
   assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", cover }, cover), cover);
 });
 
-test("migratePaint folds ridge/airbox and drops lettering overrides", () => {
+test("migratePaint folds RIDGE, drops AIRBOX and the lettering overrides", () => {
   const M = A.Liveries || globalThis.Liveries;
   assert.ok(M && M.migratePaint, "Liveries.migratePaint must exist");
   const ridge = [0, 0.82, 0.95], air = [0.2, 0.3, 0.4];
   const a = M.migratePaint({ ridgeTint: ridge, c1: [0.1, 0.1, 0.1] });
   assert.deepEqual(a.spineTint, ridge);
   assert.equal(a.ridgeTint, undefined);
+  // AIRBOX is DROPPED, not folded onto `cover`. It painted the roll hoop,
+  // snorkel and intake lips ALONE — a strict subset of `cover`, which paints
+  // the whole loft AND is the surface the atlas inks the crown crest and every
+  // spine design against. Promoting it would repaint the cover and flip the
+  // crest ink on any stored file that set it, which is not a migration.
   const b = M.migratePaint({ airboxTint: air, c1: [0.1, 0.1, 0.1] });
-  assert.deepEqual(b.cover, air);
-  assert.equal(b.airboxTint, undefined);
+  assert.equal(b.airboxTint, undefined, "the retired key must go");
+  assert.equal(b.cover, undefined, "and must NOT be promoted onto ENGINE COVER");
   const c = M.migratePaint({ crestInk: [1, 1, 1], plateInk: [0, 0, 0], spineTint: ridge });
   assert.equal(c.crestInk, undefined);
   assert.equal(c.plateInk, undefined);

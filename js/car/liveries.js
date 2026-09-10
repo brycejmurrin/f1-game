@@ -509,10 +509,14 @@ const Liveries = (function () {
       if (!liv.spineTint) liv.spineTint = liv.ridgeTint;
       delete liv.ridgeTint;
     }
-    if (liv.airboxTint) {
-      if (!liv.cover) liv.cover = liv.airboxTint;
-      delete liv.airboxTint;
-    }
+    // AIRBOX is DROPPED, not folded onto `cover`. It painted the roll hoop,
+    // snorkel and intake lips ALONE — a strict subset of `cover`, which paints
+    // the whole loft AND is the surface the atlas inks the crown crest and
+    // every spine design against. Promoting it would repaint the cover and
+    // flip the crest ink on any stored file that set it; the row's own
+    // fallback was always ENGINE COVER, so dropping it lands where the sheet
+    // said it would land.
+    if (liv.airboxTint) delete liv.airboxTint;
     if (liv.crestInk) delete liv.crestInk;
     if (liv.plateInk) delete liv.plateInk;
     return liv;

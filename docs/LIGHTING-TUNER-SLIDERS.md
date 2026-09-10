@@ -690,7 +690,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `exposureMul` | EXPOSURE | 0.1 … 2.35 | 1 | — | ✓ | game.js |
-| `contrast` | CONTRAST | 0.5 … 2.05 | 1.12 | `uContrast` | ✓ | scene.js×4 |
+| `contrast` | CONTRAST | 0.5 … 2.05 | 1.12 | `uContrast` | ✓ | scene.js×4, setup-sheet.js×3 |
 | `shadows` | SHADOWS | -0.55 … 0.55 | 0 | — | ✓ | post-common.js |
 | `midtones` | MIDTONES | -2 … 1.4 | 0 | — | ✓ | post-common.js |
 | `highlights` | HIGHLIGHTS | -1 … 1.5 | 0 | — | ✓ | post-common.js |

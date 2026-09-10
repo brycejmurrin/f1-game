@@ -1,33 +1,49 @@
 #!/usr/bin/env node
-// @doc Garage preset shots, ONE Chromium: walks teams/liveries/any livery field; clears dead DISPLAY for headless WebGL.
+// @doc Garage shots, ONE Chromium: walks teams × liveries/any livery field/parts × cameras (views, absolute az/el/dist, zoom, pan) × viewports; clears dead DISPLAY for headless WebGL.
 //   node tools/shot/garage-angles.mjs [--team=redbull,mclaren|all] [--views=spine] [--livery=default,rb_white]
-//     [--spineLogo=wrap,saddle] [--finShape=blade] [--cover=#101014] [--against=HEAD~1]
-//     [--preset=wall|fin|flank|mark|quick|bay|bayFront|saddleWall] [--plan] [--fast]
-//     [--zoom=8] [--pan=2,0] [--az-nudge=-1] [--el-nudge=0] [--az=] [--el=] [--logos=default]
-//     [--out=dir] [--label=0] [--sheet=0] [--cell=420] [--live] [--site]
+//     [--spineLogo=wrap,saddle] [--finShape=blade] [--cover=#101014] [--part.engine=turbo,stock]
+//     [--design='[{"spineLogo":"wrap"},…]'|@file.json] [--zip] [--base=<liveryId>] [--against=HEAD~1]
+//     [--az=60deg,90deg|50deg..130deg:9] [--el=0.1,0.35] [--dist=6,9] [--zoom=8,4] [--pan=2,0;4,0]
+//     [--cam=bay,bayFront|side:1.2,0.3,7;…] [--target=crown,fin,wall|x,y,z] [--lamp=side,off]
+//     [--az-nudge=-1] [--el-nudge=1] [--viewport=1280x720,844x390] [--dpr=1,2] [--crop=0.3,0.2,0.4,0.5]
+//     [--driver=0,1] [--light.keyMul=0.8,1.2] [--spineSide=all] [--part.aero=all] [--base=default,rb_white]
+//     [--oracle] [--baseline=dir] [--budget=10m]
+//     [--preset=wall|fin|flank|mark|quick|sweep|none] [--plan] [--fast] [--settle=8] [--view-settle=4]
+//     [--name='{team}-{tag}-{cam}'] [--out=dir] [--label=0] [--sheet=0] [--cols=3] [--cell=420] [--json]
 //     [--team=all+custom] [--rollup-only|--full-views] [--rollup-view=wingRear]
 //     [--reset] [--resume] [--oracle] [--picker-team] [--slow]
 // @skill playwright-probe
 // @skill garage-parts-livery
 //
 // Counterpart to garage-frame.mjs (one preset × backend A/B). This walks the
-// CAMERA STACK on a single backend: open once, click each preset, soft-present
+// CAMERA STACK on a single backend: open once, frame each camera, soft-present
 // capture each frame. Two shipped defects (wordmarks vs gantry, sunk signs)
 // were only visible from one angle each.
 //
-// Views: hero,bay,bayFront,front,side,rear,top,wingFront,wingRear — or groups:
-//   spine     = hero,top,rear,side
-//   all       = every preset
-//   bay       = rear-left three-quarter, back wall in frame
-//   bayFront  = opposite diagonal — front-left, left flank + back wall (not head-on)
+// Views: hero,front,side,rear,top,wingFront,wingRear,free — or groups:
+//   spine  = hero,top,rear,side   (engine-cover crown / SPINE TOP)
+//   all    = every preset; `free` keeps whatever camera the last shot left
+//
+// CAMERA AXES: a view is only the BASE framing. Every camera number is a LIST
+// and the lists walk as a cartesian product with the views: `--az` / `--el`
+// (radians, `45deg`, `0.5pi`) and `--dist` (metres) are ABSOLUTE orbit values
+// applied after the preset; `--zoom` / `--pan` / `--az-nudge` / `--el-nudge`
+// are counted clicks on #cs-view-* / #cs-pan-* (`;` separates pan entries), so
+// a framing that reads here is one a player can reach. `--cam` names whole
+// cameras (`[view:]az,el[,dist[,strafe,dolly]]`, `;`-separated) on top of the
+// product. `--viewport` is an axis too — the docked sheet takes a different
+// share of a phone-landscape canvas than of a desktop one, and `--dpr` walks
+// device scale factors (one browser context each). `--target` aims the orbit at
+// a named car-space point (crown, fin, wall, …) or x,y,z so any azimuth looks
+// at the crown instead of panning toward it; `--lamp` aims the inspection lamp.
+// Any numeric list takes a RANGE, `a..b:n`. `--crop=x,y,w,h` (fractions) cuts
+// every frame to the region under review. `--oracle` records, per shot, how
+// much of the flank mark the car's own tyres and bodywork hide at that camera;
+// `--baseline=dir` scores every frame against a saved run as a changed-pixel
+// fraction; `--budget` refuses a matrix the estimate says will not fit.
 //
 // `--livery` walks paint jobs via a store write (opening the LIVERY tab slams
-// FRONT). `--zoom` / `--pan` / `--az-nudge` / `--el-nudge` are counted clicks on
-// #cs-view-* / #cs-pan-* so a framing that reads here is one a player can reach.
-// `--az` / `--el` set absolute orbit radians after the named preset.
-// `--logos=default` clears logo2/logo3 and authors the team's brand mark as
-// liv.logo so markPalette keeps it verbatim on wall + saddle (no contrast
-// substitute). Pick any colour with --logo=#rrggbb the same way.
+// FRONT); `--base` names the catalog livery a DESIGN walk paints on top of.
 //
 // DESIGN AXES: any field in `Liveries.FIELDS` is a flag, and passing more than
 // one walks their CARTESIAN PRODUCT as custom liveries on the team default
@@ -38,13 +54,21 @@
 // `--spine-side` / `--spine-logo` still work as aliases. Colours take `#rrggbb`;
 // everything else is the enum id, validated in-page against the real list so a
 // typo prints what was available instead of silently painting the default.
+// `--driver=0,1` walks the seat (number, helmet, T-cam); `--light.<knob>=`
+// walks a lighting-tuner knob (`__apex.lightTune()` lists them); `all` on any
+// enum axis expands to the real list, `--part.<category>=all` to the catalog.
+// `--zip` pairs the axes index-wise instead of multiplying them; `--design`
+// takes an explicit list (inline JSON, or `@file` of JSON / one object per
+// line) when the cars to shoot are not a grid at all. `--part.<category>=`
+// axes fit catalog PARTS through __apex.garageParts, so wing, fin and floor
+// geometry walk the same way paint does (parts persist in the store for the
+// rest of the run until a later design changes them).
 //
 // LABELS AND SHEETS: every PNG gets a caption bar burned under it (team,
 // design, view, az/el/dist) and the run gets a contact sheet, because a
 // directory of bare frames is unreadable an hour later and every session was
 // hand-rolling a compositor to find out which car it was looking at. `--label=0`
-// / `--sheet=0` opt out. `--live` writes an auto-refreshing live.html gallery
-// (does NOT open the CDN). `--site` / `--cdn` boots against github.io instead.
+// / `--sheet=0` opt out.
 //
 // `--against=<git ref>` shoots the WHOLE matrix twice — once on the working
 // tree, once with every js/css/index.html blob that differs at that ref served
@@ -99,67 +123,178 @@ const flag = (name, dflt) => {
 // browser per value.
 const argvHas = (name) => argv.some((a) => a === name || a.startsWith(name + "="));
 
-/** Purpose-built bundles — same idea as render-car --preset. CLI flags override. */
+/** Purpose-built bundles — same idea as render-car --preset. Every key is a
+ *  plain CLI flag (views / zoom / pan / az / el / dist / any livery field), so
+ *  a preset is a STARTING POINT and never a ceiling: `--preset=flank --az=80deg`
+ *  is the flank framing swung to a new azimuth. CLI flags override; `none` is
+ *  the default (no preset). */
 const PRESETS = {
   wall:  { views: "front", zoom: 4 },
   fin:   { views: "rear", zoom: 4 },
   flank: { views: "side", zoom: 8, pan: "5,0" },
-  // Rear-left three-quarter, garage back wall in frame.
-  bay:   { views: "bay", zoom: 1 },
-  // Opposite diagonal of bay: front-left — left flank + back-wall crest.
-  bayFront: { views: "bayFront", zoom: 1 },
-  // Survey: bayFront + saddle crown + flank crest, default logo colours.
-  saddleWall: {
-    views: "bayFront", zoom: 1,
-    spineLogo: "saddle", spineSide: "logo", logos: "default",
-  },
   // Wall crest + flank mark + fin badge in one pass (mark colour reviews).
   mark:  { views: "front,side,rear", zoom: 6, pan: "4,0", finBadge: "logo" },
   quick: { views: "side", zoom: 6, pan: "4,0", fast: true },
+  // Five azimuths across the flank at flank zoom — foreshortening review.
+  sweep: { views: "side", zoom: 6, pan: "4,0", az: "50deg,70deg,90deg,110deg,130deg" },
+  // Wall crest AND saddle flank mark in one frame, at the team's own mark
+  // colours — every key here is a plain flag, `bayFront` a named camera.
+  saddleWall: { views: "bayFront", spineLogo: "saddle", spineSide: "logo", logos: "default" },
 };
 const presetRaw = flag("--preset", "").trim();
 if (presetRaw === "list") {
-  console.log("Presets (CLI flags override preset defaults):");
+  console.log("Presets (every key is a CLI flag; CLI flags override):");
   for (const [id, p] of Object.entries(PRESETS)) {
-    const bits = [`views=${p.views}`];
-    if (p.spineLogo) bits.push(`spineLogo=${p.spineLogo}`);
-    if (p.spineSide) bits.push(`spineSide=${p.spineSide}`);
-    if (p.finBadge) bits.push(`finBadge=${p.finBadge}`);
-    if (p.logos) bits.push(`logos=${p.logos}`);
-    if (p.zoom) bits.push(`zoom=${p.zoom}`);
-    if (p.pan) bits.push(`pan=${p.pan}`);
-    if (p.azNudge) bits.push(`az-nudge=${p.azNudge}`);
-    if (p.elNudge) bits.push(`el-nudge=${p.elNudge}`);
-    if (p.fast) bits.push("fast");
-    console.log(`  ${id}: ${bits.join(" ")}`);
+    console.log(`  ${id}: ${Object.entries(p).map(([k, v]) => (v === true ? k : `${k}=${v}`)).join(" ")}`);
   }
   process.exit(0);
 }
-const preset = presetRaw && PRESETS[presetRaw];
-if (presetRaw && !preset) {
+const preset = (presetRaw && presetRaw !== "none" && PRESETS[presetRaw]) || null;
+if (presetRaw && presetRaw !== "none" && !preset) {
   console.error(`Unknown --preset=${presetRaw} — try --preset=list`);
   process.exit(1);
 }
+/** A flag with the preset as its fallback: explicit beats preset beats default. */
+const pflag = (name, key, dflt) => (argvHas(name) ? flag(name, dflt)
+  : (preset && preset[key] != null ? String(preset[key]) : dflt));
+const listOf = (raw, sep = ",") => String(raw ?? "").split(sep).map((s) => s.trim()).filter(Boolean);
+/** Angles: radians by default, `45deg`, or `0.5pi`. */
+const angle = (s) => (/deg$/i.test(s) ? Number(s.slice(0, -3)) * Math.PI / 180
+  : /pi$/i.test(s) ? Number(s.slice(0, -2) || 1) * Math.PI : Number(s));
+/** `a..b:n` expands to n evenly spaced values, inclusive — `50deg..130deg:9`
+ *  is nine azimuths in one token, and it composes with every other axis. */
+function expandRange(tok, map) {
+  const m = /^(.+?)\.\.(.+?):(\d+)$/.exec(tok);
+  if (!m) return [map(tok)];
+  const a = map(m[1]), b = map(m[2]), n = Math.max(2, Number(m[3]));
+  return Array.from({ length: n }, (_, i) => a + (b - a) * i / (n - 1));
+}
+const nums = (raw, map = Number) => listOf(raw).flatMap((t) => expandRange(t, map)).filter((n) => Number.isFinite(n));
 
 const teamArg = flag("--team", "mclaren").trim();
-const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).filter(Boolean);
-const vp = flag("--viewport", "1280x720").split("x").map(Number);
+const liveries = listOf(flag("--livery", "default"));
+// `--base` is a LIST: a design walk runs over each named catalog livery.
+const baseList = listOf(flag("--base", ""));
+const baseLivery = baseList[0] || null;
+// DEVICE PIXEL RATIO is an axis with a cost: a DPR needs its own browser
+// context, so every value re-boots the garage once. Phones are 2x–3x and the
+// docked sheet's text changes size with it.
+const dprs = nums(flag("--dpr", "1")).filter((d) => d > 0);
+if (!dprs.length) { console.error("--dpr needs one or more positive scale factors"); process.exit(1); }
+// `--budget=600s|10m`: refuse a matrix the estimate says will not fit. On this
+// box a casual product is an 80-minute run; the tool should say so, not boot.
+const budgetRaw = flag("--budget", "");
+const budgetSec = budgetRaw ? (/m$/i.test(budgetRaw) ? Number(budgetRaw.slice(0, -1)) * 60 : Number(budgetRaw.replace(/s$/i, ""))) : 0;
+// `--baseline=dir`: score every frame against the same-named PNG in that dir
+// (a saved run), as a changed-pixel fraction — an A/B with no git ref.
+const baselineDir = flag("--baseline", "").trim() || null;
+// VIEWPORTS are an axis: the docked sheet takes a different share of a
+// phone-landscape canvas than of a desktop one, and a framing signed off at
+// 1280x720 has shipped unreadable at 844x390.
+const vps = listOf(flag("--viewport", "1280x720"))
+  .map((s) => s.toLowerCase().split("x").map(Number))
+  .filter((v) => v.length === 2 && v.every((n) => n > 0));
+if (!vps.length) { console.error("--viewport needs WxH[,WxH…]"); process.exit(1); }
+const vp = vps[0];
 const outDir = flag("--out", "artifacts/garage-angles");
 const fast = argvHas("--fast") || !!(preset && preset.fast);
-let zoom = Number(flag("--zoom", preset && !argvHas("--zoom") ? String(preset.zoom || 0) : "0")) || 0;
-const panRaw = flag("--pan", preset && !argvHas("--pan") ? (preset.pan || "0,0") : "0,0");
-let [strafe = 0, dolly = 0] = panRaw.split(",").map(Number);
-const azNudge = Number(flag("--az-nudge",
-  preset && !argvHas("--az-nudge") ? String(preset.azNudge || 0) : "0")) || 0;
-const elNudge = Number(flag("--el-nudge",
-  preset && !argvHas("--el-nudge") ? String(preset.elNudge || 0) : "0")) || 0;
-const azAbsRaw = flag("--az", "");
-const elAbsRaw = flag("--el", "");
-const azAbs = azAbsRaw === "" ? null : Number(azAbsRaw);
-const elAbs = elAbsRaw === "" ? null : Number(elAbsRaw);
+// ── CAMERA AXES — every camera number is a LIST, walked as a product with the
+// named views. A preset is the base (it resets orbit, target and pan); the
+// absolutes go on top, then the counted UI nudges. Nothing here is a single
+// number any more: `--zoom=8,4` is two framings, `--pan=2,0;4,0` two more.
+const zoomList = nums(pflag("--zoom", "zoom", "0"));
+if (!zoomList.length) zoomList.push(0);
+const panList = listOf(pflag("--pan", "pan", "0,0"), ";").map((p) => {
+  const [s = 0, d = 0] = p.split(",").map(Number);
+  return [s || 0, d || 0];
+});
+if (!panList.length) panList.push([0, 0]);
+const azList = nums(pflag("--az", "az", ""), angle);
+const elList = nums(pflag("--el", "el", ""), angle);
+const distList = nums(pflag("--dist", "dist", ""));
+// The inspection LAMP is aimed by preset name; `off` parks it. A preset view
+// re-aims it, so the lamp is a CAMERA axis (applied after the framing).
+const LAMPS = ["hero", "bay", "bayFront", "wingRear", "rear", "side", "front", "wingFront", "off"];
+const lampList = listOf(pflag("--lamp", "lamp", "")).map((l) => (l === "all" ? LAMPS : [l])).flat();
+for (const l of lampList) if (!LAMPS.includes(l)) { console.error(`--lamp "${l}" is not one of ${LAMPS.join(", ")}`); process.exit(1); }
+// Where the orbit LOOKS. Every preset orbits the car centre (or a flap); a
+// target lets any azimuth look at the crown instead of panning toward it.
+// Names are car-space points, metres, +z nose; `x,y,z` is accepted too.
+const TARGETS = {
+  car: null,
+  nose:  [0, 0.35, 2.0],
+  crown: [0, 0.95, -0.55],
+  fin:   [0, 1.05, -1.5],
+  flank: [0.6, 0.65, -0.35],
+  wall:  [0, 1.8, -6.0],
+};
+const targetList = listOf(pflag("--target", "target", ""), ";").flatMap((part) => {
+  // `;` separates x,y,z triples; a list of NAMES has no commas of its own.
+  const names = listOf(part);
+  return (names.length > 1 && names.every((n) => n in TARGETS)) ? names : [part];
+}).map((t) => {
+  if (t in TARGETS) return { name: t, at: TARGETS[t] };
+  const xyz = t.split(",").map(Number);
+  if (xyz.length === 3 && xyz.every(Number.isFinite)) return { name: xyz.map((n) => +n.toFixed(2)).join("x").replace(/-/g, "m"), at: xyz };
+  console.error(`--target "${t}" is not one of ${Object.keys(TARGETS).join(", ")} or x,y,z`);
+  process.exit(1);
+});
+const azNudgeList = nums(pflag("--az-nudge", "azNudge", ""));
+const elNudgeList = nums(pflag("--el-nudge", "elNudge", ""));
+// NAMED CAMERAS ARE PARAMETER BUNDLES, not presets in the game. Each is the
+// `--cam` grammar itself — a base view (which also aims the work lamp) plus an
+// absolute orbit — so a name and a hand-written camera are the same thing, and
+// `--az`/`--el`/`--dist` can sweep BETWEEN two named framings. `bay` and
+// `bayFront` were briefly SP_VIEWS entries in js/game.js with no player button;
+// production data carrying a shot tool's camera is the thing this replaces.
+const CAM_ALIAS = {
+  bay:      "hero:0.68pi,0.26,9.2",    // rear-left three-quarter, back wall in frame
+  bayFront: "front:0.32pi,0.28,9.4",   // opposite diagonal, same left flank
+};
+/** `--cam=[view:]az,el[,dist[,strafe,dolly]];…`, or an alias name. */
+function parseCam(raw) {
+  const spec = CAM_ALIAS[raw] || raw;
+  const m = /^(?:([A-Za-z]+):)?(.+)$/.exec(spec);
+  const [az, el, dist, strafe, dolly] = m[2].split(",").map((v, i) => (i < 2 ? angle(v.trim()) : Number(v)));
+  if (!Number.isFinite(az) || !Number.isFinite(el)) {
+    console.error(`--cam entry "${spec}" needs at least az,el`);
+    process.exit(1);
+  }
+  return { view: m[1] || null, alias: CAM_ALIAS[raw] ? raw : null,
+           az, el, dist: Number.isFinite(dist) ? dist : null,
+           strafe: strafe || 0, dolly: dolly || 0, zoom: 0, azNudge: 0, elNudge: 0, explicit: true };
+}
+// `;` separates cameras because az,el,dist are commas — but a list of NAMES
+// has no commas of its own, so `--cam=bay,bayFront` expands too.
+// `;` separates cameras because az,el,dist are commas — but a list of NAMES
+// has no commas of its own, so `--cam=bay,bayFront` expands too. A NAME is a
+// combinable base (the axes below override its components); a camera written
+// out in numbers already names everything, so it stands alone.
+const camParts = listOf(flag("--cam", ""), ";").flatMap((part) => {
+  const names = listOf(part);
+  return (names.length > 1 && names.every((n) => CAM_ALIAS[n])) ? names : [part];
+});
+const camAliasNames = camParts.filter((c) => CAM_ALIAS[c]);
+const camSpecs = camParts.filter((c) => !CAM_ALIAS[c]).map(parseCam);
+const cropRaw = flag("--crop", "");
+const crop = cropRaw ? cropRaw.split(",").map(Number) : null;
+if (crop && (crop.length !== 4 || crop.some((n) => !(n >= 0 && n <= 1)) || crop[2] <= 0 || crop[3] <= 0)) {
+  console.error("--crop wants x,y,w,h as fractions of the frame (0..1)");
+  process.exit(1);
+}
+const nameTpl = flag("--name", "");
+// `--logos=default|clear` strips the authored mark rows so the wall lightbox and
+// the flank mark both fall to the team's default paintTeamMark colours — the
+// A/B for "is this MY colour or the brand's?".
+const logosMode = pflag("--logos", "logos", "").trim();
+const clearLogos = logosMode === "default" || logosMode === "clear";
+// `--site` / `--cdn` boots the DEPLOYED build instead of the working tree.
+// `--live` is the local gallery only and must never switch the tree under test.
+const doSite = argvHas("--site") || argvHas("--cdn");
 const againstRef = flag("--against", null);
 const doLabel = flag("--label", fast ? "0" : "1") !== "0";
 const doSheet = flag("--sheet", fast ? "0" : "1") !== "0";
+const sheetCols = Number(flag("--cols", "0")) || 0;
 const cell = Math.max(120, Number(flag("--cell", "420")) || 420);
 const liverySettle = Math.max(0, Number(flag("--settle", fast ? "6" : "8")) || 0);
 const viewSettle = Math.max(0, Number(flag("--view-settle", fast ? "2" : "4")) || 0);
@@ -168,21 +303,20 @@ const viewAwait = fast ? 5000 : 8000;
 const gateRetries = fast ? 1 : 3;
 const doPlan = argvHas("--plan");
 const doLive = argvHas("--live");
-const doSite = argvHas("--site") || argvHas("--cdn");
-const logosMode = flag("--logos",
-  preset && !argvHas("--logos") ? (preset.logos || "") : "").trim();
-const clearLogos = logosMode === "default" || logosMode === "clear";
+const doJson = argvHas("--json");
 
 // Everything the tool owns. Anything ELSE of the form --name=value is taken as
-// a livery field and validated in-page — so the flag surface grows with
-// Liveries.FIELDS instead of with this file.
+// a livery field (or `--part.<category>` — a catalog part) and validated
+// in-page — so the flag surface grows with Liveries.FIELDS and Parts.CATALOG
+// instead of with this file.
 const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom", "--pan",
-  "--az-nudge", "--el-nudge", "--az", "--el", "--logos",
   "--views", "--against", "--label", "--sheet", "--cell", "--spine-side", "--spine-logo",
   "--preset", "--plan", "--fast", "--slow", "--settle", "--view-settle", "--live",
-  "--site", "--cdn",
   "--reset", "--resume", "--oracle", "--picker-team", "--rollup-only", "--full-views",
-  "--rollup-view", "--rollup-side", "--rollup-logo"]);
+  "--rollup-view", "--rollup-side", "--rollup-logo",
+  "--az", "--el", "--dist", "--az-nudge", "--el-nudge", "--cam", "--crop", "--name",
+  "--cols", "--json", "--base", "--design", "--zip", "--logos", "--site", "--cdn",
+  "--lamp", "--target", "--dpr", "--budget", "--baseline"]);
 const axes = [];
 const addAxis = (field, raw) => {
   const values = String(raw).split(",").map((s) => s.trim()).filter(Boolean);
@@ -191,22 +325,72 @@ const addAxis = (field, raw) => {
 // The two legacy names first, so their order in the product is unchanged.
 if (flag("--spine-logo", "")) addAxis("spineLogo", flag("--spine-logo", ""));
 if (flag("--spine-side", "")) addAxis("spineSide", flag("--spine-side", ""));
-if (preset && preset.spineLogo && !argv.some((a) => a.startsWith("--spineLogo=") || a.startsWith("--spine-logo=")))
-  addAxis("spineLogo", preset.spineLogo);
-if (preset && preset.spineSide && !argv.some((a) => a.startsWith("--spineSide=") || a.startsWith("--spine-side=")))
-  addAxis("spineSide", preset.spineSide);
-if (preset && preset.finBadge && !argv.some((a) => a.startsWith("--finBadge=")))
-  addAxis("finBadge", preset.finBadge);
+// Every livery-field key a preset carries becomes an axis unless the CLI names it.
+const CAM_KEYS = new Set(["views", "zoom", "pan", "az", "el", "dist", "azNudge", "elNudge",
+  "fast", "cam", "logos", "lamp", "target"]);
+for (const [k, v] of Object.entries(preset || {})) {
+  if (CAM_KEYS.has(k) || argv.some((a) => a.startsWith(`--${k}=`))) continue;
+  addAxis(k, v);
+}
 for (const a of argv) {
   if (!a.startsWith("--") || !a.includes("=")) continue;
   const name = a.slice(0, a.indexOf("="));
   if (OWN_FLAGS.has(name)) continue;
   addAxis(name.slice(2), a.slice(a.indexOf("=") + 1));
 }
-/** The design matrix: the cartesian product of every axis given, or null. */
-const designs = axes.length
-  ? axes.reduce((acc, ax) => acc.flatMap((d) => ax.values.map((v) => ({ ...d, [ax.field]: v }))), [{}])
-  : null;
+// `all` on an enum axis expands to the real list — the same registries the
+// in-page validator reads, loaded here so `--plan` can count the matrix.
+function expandAllValues() {
+  if (!axes.some((ax) => ax.values.includes("all"))) return;
+  const M = loadParts();
+  const LT = M.LiveryTex, C3 = M.Car3D;
+  const ids = (reg, extra) => { const l = Array.isArray(reg) ? reg.slice() : Object.keys(reg || {}); if (extra && !l.includes(extra)) l.push(extra); return l; };
+  const ENUMS = {
+    spineLogo: ids(LT.SPINE_LOGO_IDS), spineSide: ids(LT.SPINE_SIDE_IDS), finStyle: ids(LT.TAIL_STYLE_IDS),
+    finBadge: ids(LT.FIN_BADGE_IDS), numFont: ids(LT.NUM_FONT_IDS), sponsors: ids(LT.SPONSOR_PACK_IDS),
+    finShape: ids(C3.FIN_SHAPES, "none"), tcam: ids(C3.TCAM_IDS), coverVents: ids(C3.COVER_VENT_IDS),
+    spineHeight: ids(C3.SPINE_HEIGHT_IDS), coverBind: ["independent", "saddleWrap", "spineOnly"],
+    finHandoff: ["match", "contrast", "hardCut"], wingCarbon: ["paint", "carbon"], bodySplit: ["off", "lr"],
+    finish: ["gloss"].concat(ids(C3.FINISH_SURFACE)), driver: ["0", "1"],
+  };
+  for (const ax of axes) {
+    if (!ax.values.includes("all")) continue;
+    let list = ENUMS[ax.field];
+    if (!list && ax.field.startsWith("part.")) {
+      const cat = M.Parts.CATALOG.find((c) => c.id === ax.field.slice(5));
+      list = cat && cat.options ? cat.options.map((o) => o.id) : null;
+    }
+    if (!list) { console.error(`--${ax.field}=all: no list to expand (colour rows and light.* take values)`); process.exit(1); }
+    ax.values = [...new Set(ax.values.flatMap((v) => (v === "all" ? list : [v])))];
+  }
+}
+expandAllValues();
+/** `--design`: an explicit list of cars — inline JSON, or `@file` holding a
+ *  JSON array / one object per line. Each object is livery fields plus optional
+ *  `part.<category>` keys and an optional `name`. */
+function explicitDesigns(raw) {
+  if (!raw) return null;
+  const text = raw.startsWith("@") ? readFileSync(raw.slice(1), "utf8") : raw;
+  const t = text.trim();
+  const parsed = t.startsWith("[") || t.startsWith("{")
+    ? JSON.parse(t)
+    : t.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => JSON.parse(l));
+  const list = Array.isArray(parsed) ? parsed : [parsed];
+  if (!list.length || list.some((d) => !d || typeof d !== "object")) {
+    console.error("--design must be a JSON object, an array of them, or @file with one per line");
+    process.exit(1);
+  }
+  return list;
+}
+/** The design matrix: an explicit list, the axes zipped (`--zip`, index-wise,
+ *  the shorter lists cycling), or the cartesian product of every axis — or null. */
+const designs = explicitDesigns(flag("--design", ""))
+  || (axes.length
+    ? (argvHas("--zip")
+      ? Array.from({ length: Math.max(...axes.map((ax) => ax.values.length)) }, (_, i) =>
+        Object.fromEntries(axes.map((ax) => [ax.field, ax.values[i % ax.values.length]])))
+      : axes.reduce((acc, ax) => acc.flatMap((d) => ax.values.map((v) => ({ ...d, [ax.field]: v }))), [{}]))
+    : null);
 
 // Roster order == store.team index (game.js boot). EVALUATED, not regexed: a
 // regex over teams.js also matched `id: "custom"` on DEFAULT_CUSTOM, the MY TEAM
@@ -256,35 +440,124 @@ const useStoreTeam = !argvHas("--picker-team") && (fast || multiTeam);
 const withOracle = argvHas("--oracle") && rollupOnly
   && axes.some((ax) => ax.field === "spineLogo" && ax.values.length);
 
-const ALL = ["hero", "bay", "bayFront", "front", "side", "rear", "top", "wingFront", "wingRear"];
+// `free` is not a preset: it keeps whatever camera the previous shot left, so
+// an absolute --az/--el/--dist (or a --cam) can start from a clean slate
+// without a preset first resetting the orbit under it.
+const ALL = ["hero", "front", "side", "rear", "top", "wingFront", "wingRear", "free"];
 const GROUPS = {
   spine: ["hero", "top", "rear", "side"],
   wings: ["wingFront", "wingRear"],
   front: ["front"],
   rear: ["rear"],
-  bay: ["bay"],
-  bayFront: ["bayFront"],
   aero: ["wingFront", "wingRear", "rear"],
-  all: ALL,
+  all: ALL.filter((v) => v !== "free"),
 };
+// A PRESET that names views beats the multi-team rollup default: the preset
+// asked for those views explicitly, and a rollup silently shooting one of them
+// is the "I asked for three angles and got one" surprise.
 const viewsDefault = (() => {
   if (preset && !argvHas("--views")) return preset.views;
   if (rollupOnly && !argvHas("--views")) return rollupViewFlag || "side";
   return "spine";
 })();
 const rawViews = flag("--views", viewsDefault).split(",").map((s) => s.trim()).filter(Boolean);
-const views = [...new Set(rawViews.flatMap((v) => GROUPS[v] || [v]))];
+// A named camera given as a view is lifted into --cam, so `--views=bay` and
+// `--cam=bay` mean the same thing and neither needs a game preset.
+const viewAliases = rawViews.filter((v) => CAM_ALIAS[v]);
+// Naming cameras and NOT naming views means the cameras are the run: the
+// default view group would otherwise silently double every such matrix.
+const camsNamed = argvHas("--cam") || viewAliases.length > 0;
+// `plainViews` drive the camera PRODUCT; an alias contributes exactly one
+// camera (its own bundle), so naming one does not also shoot its base view.
+const plainViews = (camsNamed && !argvHas("--views"))
+  ? []
+  : [...new Set(rawViews.filter((v) => !CAM_ALIAS[v]).flatMap((v) => GROUPS[v] || [v]))];
+const aliasViews = [...new Set(viewAliases.map((v) => parseCam(v).view).filter(Boolean))];
+const views = [...new Set([...plainViews, ...aliasViews])];
 const rollupView = rollupViewFlag
   || (views.length === 1 ? views[0]
     : (views.includes("wingRear") ? "wingRear"
-      : (views.includes("bayFront") ? "bayFront"
-        : (views.includes("bay") ? "bay"
-          : (views.includes("side") ? "side" : views[0])))));
+      : (views.includes("side") ? "side" : views[0])));
 const bad = views.filter((v) => !ALL.includes(v));
 if (bad.length) {
   console.error(`Unknown view(s): ${bad.join(", ")}\nAvailable: ${ALL.join(", ")} + groups ${Object.keys(GROUPS).join(", ")}`);
   process.exit(1);
 }
+
+// ── THE CAMERA MATRIX: views × az × el × dist × zoom × pan × nudges, plus the
+// explicit --cam entries. A camera's KEY names only what was set, so a run with
+// no camera axes keeps the old `<team>-<tag>-<view>.png` names exactly.
+const degs = (r) => Math.round(r * 180 / Math.PI);
+const orNull = (list) => (list.length ? list : [null]);
+function camKey(c) {
+  const b = [c.view];
+  if (c.target) b.push(`at${cap(c.target.name)}`);
+  if (c.lamp) b.push(`lamp${cap(c.lamp)}`);
+  if (c.az != null) b.push(`az${degs(c.az)}`);
+  if (c.el != null) b.push(`el${degs(c.el)}`);
+  if (c.dist != null) b.push(`d${c.dist}`);
+  if (c.zoom) b.push(`z${c.zoom}`);
+  if (c.strafe || c.dolly) b.push(`p${c.strafe}x${c.dolly}`);
+  if (c.azNudge) b.push(`na${c.azNudge}`);
+  if (c.elNudge) b.push(`ne${c.elNudge}`);
+  return b.join("_").replace(/-/g, "m").replace(/\./g, "_");
+}
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+function aliasKey(b, c) {
+  const bits = [b.alias];
+  if (c.target) bits.push(`at${cap(c.target.name)}`);
+  if (c.lamp) bits.push(`lamp${cap(c.lamp)}`);
+  if (c.az !== b.az) bits.push(`az${degs(c.az)}`);
+  if (c.el !== b.el) bits.push(`el${degs(c.el)}`);
+  if (c.dist !== b.dist) bits.push(`d${c.dist}`);
+  if (c.zoom) bits.push(`z${c.zoom}`);
+  if (c.strafe !== (b.strafe || 0) || c.dolly !== (b.dolly || 0)) bits.push(`p${c.strafe}x${c.dolly}`);
+  if (c.azNudge) bits.push(`na${c.azNudge}`);
+  if (c.elNudge) bits.push(`ne${c.elNudge}`);
+  return bits.join("_").replace(/-/g, "m").replace(/\./g, "_");
+}
+const cams = [];
+// A BASE is a plain view (no camera of its own) or a NAMED camera, whose
+// az / el / dist are defaults the axis lists override component by component —
+// so `--views=bay --az=100deg,140deg` sweeps azimuth from the bay framing and
+// keeps its elevation and distance. That is the whole point of naming one.
+const bases = [
+  ...plainViews.map((view) => ({ view })),
+  ...[...new Set([...viewAliases, ...camAliasNames])].map((name) => {
+    const c = parseCam(name);
+    return { view: c.view || "free", alias: name, az: c.az, el: c.el, dist: c.dist,
+             strafe: c.strafe, dolly: c.dolly };
+  }),
+];
+const pick = (list, dflt) => (list.length ? list : [dflt ?? null]);
+for (const b of bases) {
+  for (const target of orNull(targetList)) for (const lamp of orNull(lampList)) {
+  for (const az of pick(azList, b.az)) for (const el of pick(elList, b.el)) {
+    for (const dist of pick(distList, b.dist)) for (const zoom of zoomList) {
+      for (const [ps, pd] of panList) for (const azNudge of orNull(azNudgeList)) {
+        for (const elNudge of orNull(elNudgeList)) {
+          const c = { view: b.view, alias: b.alias || null, az, el, dist, zoom,
+                      strafe: (b.strafe || 0) + ps, dolly: (b.dolly || 0) + pd,
+                      azNudge: azNudge || 0, elNudge: elNudge || 0,
+                      target: target && target.at ? target : null, lamp: lamp || null };
+          // A named base keeps its NAME, and appends only what was changed on
+          // top of it, so `bay`, `bay_az100` and `bay_z6` are distinct files.
+          c.key = b.alias ? aliasKey(b, c) : camKey(c);
+          cams.push(c);
+        }
+      }
+    }
+  }
+  }
+}
+for (const c of camSpecs) {
+  c.view = c.view || plainViews[0] || "free";
+  if (!ALL.includes(c.view)) { console.error(`--cam view "${c.view}" is not one of ${ALL.join(", ")}`); process.exit(1); }
+  c.key = camKey(c);
+  cams.push(c);
+}
+if (!cams.length) { console.error("no camera to shoot — give --views, or a --cam"); process.exit(1); }
+const camsOf = (view) => cams.filter((c) => c.view === view);
 
 // ── timing ──────────────────────────────────────────────────────────────────
 const ms = (t0) => +(Date.now() - t0);
@@ -418,6 +691,84 @@ function oracleHiddenPct(teamId, spineLogo, cam) {
   return hidden;
 }
 
+/** WHICH DESIGN FLAGS CANNOT PAINT ANYTHING on the car they were given.
+ *  LiveryTex owns the answer (FILL_SURFACES / fillInert — the same table the
+ *  garage sheet greys a row with), so the tool and the sheet cannot disagree.
+ *  This is the class of mistake the tool has shipped twice: `--spineLogo=wrap`
+ *  used to be a silent no-op, and a run's JSON sidecar recorded the flag
+ *  anyway, because that is the CONFIG and not what was painted. Now a `sunTint`
+ *  handed to a car whose crown is not a wrap says so before the browser boots. */
+function inertFlags(designList) {
+  if (!designList || !designList.length) return [];
+  let LT;
+  try { LT = loadAtlas().LT; } catch (_) { return []; }
+  if (!LT || !LT.fillInert) return [];
+  const out = [];
+  for (const d of designList) {
+    for (const k of Object.keys(d)) {
+      if (k === "name" || k.startsWith("part.")) continue;
+      if (LT.fillInert(k, d)) {
+        const need = (LT.FILL_SURFACES.find((f) => f.key === k) || {}).why || "";
+        out.push({ design: d, field: k, why: need });
+      }
+    }
+  }
+  return out;
+}
+
+/** The team default's SPINE TOP, for the occlusion oracle when a run walks
+ *  liveries rather than designs. */
+let _teamCrown = null;
+function teamCrown(teamId) {
+  if (!_teamCrown) {
+    const A = loadAtlas();
+    _teamCrown = Object.fromEntries(A.Teams.LIST.map((t) => [t.id, (A.Liveries.forTeam(t)[0] || {}).spineLogo || "logo"]));
+  }
+  return _teamCrown[teamId] || "logo";
+}
+
+/** Fraction of pixels that changed between two PNGs (any channel off by more
+ *  than 24/255), on the smaller of the two sizes. `null` when `a` is absent. */
+async function pixelDiff(a, b) {
+  if (!existsSync(a) || !existsSync(b)) return null;
+  const [ma, mb] = await Promise.all([sharp(a).metadata(), sharp(b).metadata()]);
+  const w = Math.min(ma.width, mb.width), h = Math.min(ma.height, mb.height);
+  const [ra, rb] = await Promise.all([a, b].map((f) => sharp(f).resize(w, h, { fit: "fill" }).removeAlpha().raw().toBuffer()));
+  let changed = 0;
+  for (let i = 0; i < ra.length; i += 3) {
+    if (Math.abs(ra[i] - rb[i]) > 24 || Math.abs(ra[i + 1] - rb[i + 1]) > 24 || Math.abs(ra[i + 2] - rb[i + 2]) > 24) changed++;
+  }
+  return +(changed / (ra.length / 3)).toFixed(4);
+}
+
+/** Rows = car (team · design · viewport), columns = camera. A product of axes
+ *  is unreadable as a flat grid past a dozen frames; this is the grid the
+ *  matrix actually has. */
+async function writeMatrixSheet(shots, file) {
+  const rowKey = (s) => `${s.team} · ${s.name}${vps.length > 1 ? ` · ${s.vp}` : ""}${s.dpr > 1 ? ` @${s.dpr}x` : ""}`;
+  const rows = [...new Set(shots.map(rowKey))], cols = [...new Set(shots.map((s) => s.cam))];
+  if (rows.length < 2 || cols.length < 2) return null;
+  const first = await sharp(shots[0].png).metadata();
+  const cw = cell, ch = Math.round(cell * first.height / first.width);
+  const PAD = 8, LAB = 24, HEAD = 34, LEFT = 260;
+  const W = LEFT + cols.length * (cw + PAD) + PAD, H = HEAD + LAB + rows.length * (ch + PAD) + PAD;
+  const comp = [], svg = [];
+  cols.forEach((c, j) => svg.push(`<text x="${LEFT + PAD + j * (cw + PAD)}" y="${HEAD + 16}" fill="#e6e9ef" font-family="monospace" font-size="12">${esc(c)}</text>`));
+  for (let i = 0; i < rows.length; i++) {
+    const y = HEAD + LAB + PAD + i * (ch + PAD);
+    svg.push(`<text x="${PAD}" y="${y + ch / 2}" fill="#e6e9ef" font-family="monospace" font-size="12">${esc(rows[i])}</text>`);
+    for (let j = 0; j < cols.length; j++) {
+      const sh = shots.find((x) => rowKey(x) === rows[i] && x.cam === cols[j]);
+      if (!sh) continue;
+      comp.push({ input: await sharp(sh.png).resize(cw, ch, { fit: "fill" }).toBuffer(), left: LEFT + PAD + j * (cw + PAD), top: y });
+    }
+  }
+  svg.unshift(`<text x="${PAD}" y="22" fill="#fff" font-family="monospace" font-size="14">garage matrix — ${rows.length} car(s) × ${cols.length} camera(s)</text>`);
+  comp.push({ input: Buffer.from(`<svg width="${W}" height="${H}">${svg.join("")}</svg>`), left: 0, top: 0 });
+  await sharp({ create: { width: W, height: H, channels: 3, background: "#14161c" } }).composite(comp).png().toFile(file);
+  return file;
+}
+
 function surveyTag() {
   const bits = [];
   if (views.length === 1) bits.push(views[0]);
@@ -439,7 +790,9 @@ function resumeTeamSet() {
   }
   for (const tid of teams) {
     const tag = designs ? "def" : liveries[0];
-    const png = join(outDir, `${tid}-${tag}-${rollupOnly ? rollupView : views[0]}.png`);
+    const cam = (rollupOnly && camsOf(rollupView)[0]) || cams[0];
+    const png = join(outDir, shotName({ team: tid, tag, cam: cam.key, view: cam.view,
+      vp: `${vp[0]}x${vp[1]}`, i: 0, az: "", el: "", dist: "" }));
     if (existsSync(png)) done.add(tid);
   }
   return done;
@@ -516,45 +869,69 @@ async function nudge(page, id, n) {
   if (!ok) throw new Error(`no camera control #${id}`);
 }
 
-async function frame(page, teamId, tag, view, dir, capOpts = {}) {
+/** Output file name — `--name` template over {team} {tag} {cam} {view} {vp} {i}
+ *  {az} {el} {dist}; the default reproduces the historic names and appends the
+ *  viewport only when more than one is walked. */
+const safe = (s) => String(s).replace(/[^A-Za-z0-9_.-]+/g, "_");
+function shotName(fields) {
+  const tpl = nameTpl || `{team}-{tag}-{cam}${vps.length > 1 ? "-{vp}" : ""}${dprs.length > 1 ? "@{dpr}x" : ""}`;
+  return tpl.replace(/\{(\w+)\}/g, (_, k) => safe(fields[k] ?? "")) + ".png";
+}
+
+/** Cut a frame to `--crop` (fractions) in place — after the render gate, which
+ *  scores the whole canvas, and before the label bar. */
+async function cropPng(png) {
+  if (!crop) return;
+  const meta = await sharp(png).metadata();
+  const left = Math.round(crop[0] * meta.width), top = Math.round(crop[1] * meta.height);
+  const width = Math.max(8, Math.min(meta.width - left, Math.round(crop[2] * meta.width)));
+  const height = Math.max(8, Math.min(meta.height - top, Math.round(crop[3] * meta.height)));
+  const tmp = join(outDir, `.crop-${basename(png)}`);
+  await sharp(png).extract({ left, top, width, height }).png().toFile(tmp);
+  renameSync(tmp, png);
+}
+
+async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
   const tSettle = Date.now();
-  let framed;
-  const frameOpts = {
-    zoom, strafe, dolly,
-    azNudge, elNudge,
-    az: Number.isFinite(azAbs) ? azAbs : undefined,
-    el: Number.isFinite(elAbs) ? elAbs : undefined,
+  const view = cam.view;
+  const vpCur = capOpts.vp || vp;
+  const hookOpts = {
+    zoom: cam.zoom, strafe: cam.strafe, dolly: cam.dolly, azNudge: cam.azNudge, elNudge: cam.elNudge,
+    az: cam.az ?? undefined, el: cam.el ?? undefined, dist: cam.dist ?? undefined,
+    target: cam.target ? cam.target.at : undefined,
+    lamp: cam.lamp === "off" ? null : (cam.lamp || undefined),
   };
-  if (useStoreTeam) {
+  const absolute = cam.az != null || cam.el != null || cam.dist != null || view === "free"
+    || !!cam.target || !!cam.lamp;
+  let framed;
+  // The hook path frames in one call; the DOM path is what a player can click
+  // and cannot express an absolute orbit, so any absolute camera takes the hook.
+  if (useStoreTeam || absolute) {
     framed = await page.evaluate(({ v, o }) => {
       const a = window.__apex;
       if (!a.garageFrame) return { ok: false, error: "no garageFrame hook" };
       return a.garageFrame(v, o);
-    }, { v: view, o: frameOpts });
-    if (!framed.ok) throw new Error(`${teamId}/${tag}/${view}: ${framed.error || "frame failed"}`);
+    }, { v: view, o: hookOpts });
+    if (!framed.ok) throw new Error(`${teamId}/${tag}/${cam.key}: ${framed.error || "frame failed"}`);
   } else {
-    // Prefer garageFrame when present so tool-only views (bay) and az/el nudges
-    // work without a matching #cs-stack button.
-    framed = await page.evaluate(({ v, o }) => {
-      const a = window.__apex;
-      if (a && a.garageFrame) return a.garageFrame(v, o);
+    const clicked = await page.evaluate((v) => {
       const b = document.querySelector('#cs-stack [data-cs-view="' + v + '"]');
-      if (!b) return { ok: false, error: "no_view_button" };
+      if (!b) return false;
       b.click();
-      return { ok: true, via: "dom" };
-    }, { v: view, o: frameOpts });
-    if (!framed.ok) throw new Error(`no camera preset "${view}" (garageFrame/stack)`);
-    if (framed.via === "dom") {
-      await nudge(page, zoom > 0 ? "cs-view-in" : "cs-view-out", zoom);
-      await nudge(page, strafe > 0 ? "cs-pan-right" : "cs-pan-left", strafe);
-      await nudge(page, dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", dolly);
-      await nudge(page, azNudge > 0 ? "cs-view-right" : "cs-view-left", azNudge);
-      await nudge(page, elNudge > 0 ? "cs-view-up" : "cs-view-down", elNudge);
-    }
+      return true;
+    }, view);
+    if (!clicked) throw new Error(`no camera preset "${view}" in #cs-stack`);
+    await nudge(page, cam.zoom > 0 ? "cs-view-in" : "cs-view-out", cam.zoom);
+    await nudge(page, cam.strafe > 0 ? "cs-pan-right" : "cs-pan-left", cam.strafe);
+    await nudge(page, cam.dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", cam.dolly);
+    await nudge(page, cam.azNudge > 0 ? "cs-view-right" : "cs-view-left", cam.azNudge);
+    await nudge(page, cam.elNudge > 0 ? "cs-view-up" : "cs-view-down", cam.elNudge);
   }
   await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
   const settleMs = ms(tSettle);
-  const png = join(dir, `${teamId}-${tag}-${view}.png`);
+  const vpTag = `${vpCur[0]}x${vpCur[1]}`;
+  const png = join(dir, shotName({ team: teamId, tag, cam: cam.key, view, vp: vpTag, i: capOpts.index ?? 0, dpr: capOpts.dpr || 1,
+    az: cam.az != null ? degs(cam.az) : "", el: cam.el != null ? degs(cam.el) : "", dist: cam.dist ?? "" }));
   let gate = null, capMs = 0, gateMs = 0, tries = 0;
   for (let attempt = 0; attempt < gateRetries; attempt++) {
     tries++;
@@ -566,21 +943,38 @@ async function frame(page, teamId, tag, view, dir, capOpts = {}) {
     });
     capMs += ms(tCap);
     const tGate = Date.now();
-    gate = await bayRendered(png, vp[0]);
+    gate = await bayRendered(png, vpCur[0]);
     gateMs += ms(tGate);
     if (gate.ok) {
-      const cam = framed && framed.ok && framed.az != null
-        ? framed
-        : await page.evaluate(() => window.__apex.garageCam());
+      await cropPng(png);
+      // READ THE CAMERA BACK AFTER THE SETTLE, never the value garageFrame
+      // returned. `garageCam().effDist` is published by the LAST RENDERED
+      // FRAME, so a read taken inside the framing call reports the previous
+      // shot's distance: measured 2026-09-10, an absolute --dist=6.5 logged
+      // 11.2 (the preset it replaced) and the next shot logged 6.5. The frames
+      // themselves were right; the sidecar and the caption bar were one shot
+      // behind, which is the half of this tool that is EVIDENCE.
+      const c = await page.evaluate(() => window.__apex.garageCam());
+      // Occlusion from the camera actually used: how much of the flank mark the
+      // car's own tyres and bodywork hide at THIS az/el/dist. It used to label
+      // rollups only; a sweep is a question only this number answers.
+      const occl = argvHas("--oracle")
+        ? oracleHiddenPct(teamId, (capOpts.design && capOpts.design.spineLogo) || teamCrown(teamId),
+            { az: c.az, el: c.el, dist: c.dist ?? c.effDist })
+        : null;
+      const baselineDiff = baselineDir ? await pixelDiff(join(baselineDir, basename(png)), png) : null;
       return {
-        view, tag, png, spread: gate.spread, via: shot.via || "page-clip",
-        az: +cam.az.toFixed(3), el: +cam.el.toFixed(3), dist: +(cam.dist ?? cam.effDist).toFixed(3),
-        pan: cam.pan ? cam.pan.map((n) => +n.toFixed(3)) : null,
+        view, cam: cam.key, tag, png, vp: vpTag, spread: gate.spread, via: shot.via || "page-clip",
+        occl: occl == null ? undefined : +(occl * 100).toFixed(1),
+        baselineDiff: baselineDiff == null ? undefined : baselineDiff,
+        dpr: capOpts.dpr || 1,
+        az: +c.az.toFixed(3), el: +c.el.toFixed(3), dist: +(c.dist ?? c.effDist).toFixed(3),
+        pan: c.pan ? c.pan.map((n) => +n.toFixed(3)) : null,
         ms: { settle: settleMs, capture: capMs, gate: gateMs, tries },
       };
     }
   }
-  throw new Error(`${tag}/${view}: the bay never rendered (canvas pixel spread ${gate.spread})`);
+  throw new Error(`${tag}/${cam.key}: the bay never rendered (canvas pixel spread ${gate.spread})`);
 }
 
 async function applyLivery(page, teamId, livId) {
@@ -603,11 +997,14 @@ async function applyLivery(page, teamId, livId) {
 }
 
 /** Custom id so mesh/atlas caches (keyed on getLiveryId) miss — design walk, not catalog. */
-async function applyDesign(page, teamId, fields) {
-  const got = await page.evaluate(({ team, fields, clearLogos }) => {
+async function applyDesign(page, teamId, fields, base) {
+  const got = await page.evaluate(({ team, fields, base, clearLogos }) => {
     const t = Teams.LIST.find((x) => x.id === team);
     if (!t) return { ok: false, error: `no team "${team}"` };
-    const def = Liveries.forTeam(t)[0];
+    // `--base` paints the design over a named catalog livery, not the default.
+    const list = Liveries.forTeam(t);
+    const def = base ? list.find((l) => l.id === base) : list[0];
+    if (!def) return { ok: false, error: `no livery "${base}"`, have: list.map((l) => l.id) };
     // The field list is Liveries' own (Liveries.FIELDS), so the tool cannot
     // fall behind the livery system the way the hand-copied lists did.
     const known = (typeof Liveries !== "undefined" && Liveries.FIELDS) || [];
@@ -636,8 +1033,41 @@ async function applyDesign(page, teamId, fields) {
     };
     const liv = Object.assign({}, def);
     const parts = [];
+    // `part.<category>` keys are catalog PARTS, fitted through the same hook the
+    // garage sheet's own picks go through; `driver` is the seat (number, helmet,
+    // T-cam); `light.<knob>` is a lighting-tuner knob; the rest are livery fields.
+    const fit = {}, light = {};
+    let seat = null;
     for (const k of Object.keys(fields)) {
+      if (k === "name") continue;
       const raw = String(fields[k]);
+      if (k === "driver") {
+        seat = Number(raw);
+        if (!Number.isInteger(seat) || !t.drivers[seat]) return { ok: false, error: `no seat "${raw}"`, have: t.drivers.map((_, i) => String(i)) };
+        parts.push("d" + seat);
+        continue;
+      }
+      if (k.startsWith("light.")) {
+        const knob = k.slice(6), known = window.__apex.lightTune();
+        if (!(knob in known)) return { ok: false, error: `no lighting knob "${knob}"`, have: Object.keys(known) };
+        light[knob] = Number(raw);
+        parts.push(knob + "-" + raw);
+        continue;
+      }
+      if (k.startsWith("part.")) {
+        const cat = k.slice(5);
+        const catDef = typeof Parts !== "undefined" && Parts.CATALOG.find((c) => c.id === cat);
+        if (!catDef) {
+          return { ok: false, error: `no parts category "${cat}"`,
+                   have: typeof Parts !== "undefined" ? Parts.CATALOG.map((c) => c.id) : [] };
+        }
+        if (catDef.options && !catDef.options.some((o) => o.id === raw)) {
+          return { ok: false, error: `no ${cat} part "${raw}"`, have: catDef.options.map((o) => o.id) };
+        }
+        fit[cat] = raw;
+        parts.push(cat + "-" + raw);
+        continue;
+      }
       if (known.length && known.indexOf(k) < 0) {
         return { ok: false, error: `no livery field "${k}"`, have: known };
       }
@@ -652,19 +1082,6 @@ async function applyDesign(page, teamId, fields) {
         : raw;
       parts.push(k + "-" + raw.replace(/^#/, ""));
     }
-    // Default mark colours: author the team's brand mark as liv.logo so
-    // markPalette keeps it verbatim (no MARK_FLOOR substitute). Stripping
-    // alone left Williams white → blue on a white saddle while the wall
-    // lightbox kept white. logo2/logo3 stay cleared.
-    if (clearLogos) {
-      delete liv.logo2;
-      delete liv.logo3;
-      liv.logo = (typeof LiveryTex !== "undefined" && LiveryTex.markBase)
-        ? LiveryTex.markBase(team, { id: "default" })
-        : null;
-      if (!liv.logo) delete liv.logo;
-      parts.push("logos-default");
-    }
     const id = "_shot_" + (parts.join("_") || "def");
     liv.id = id;
     liv.name = id;
@@ -673,8 +1090,23 @@ async function applyDesign(page, teamId, fields) {
     GameStore.store.set("livery.custom." + team, customs);
     GameStore.store.set("livery." + team, id);
     if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes();
-    return { ok: true, name: parts.join(" ") || "default", tag: parts.join("_") || "def" };
-  }, { team: teamId, fields, clearLogos });
+    if (Object.keys(fit).length) {
+      const r = window.__apex.garageParts(fit);
+      if (!r || !r.ok) return { ok: false, error: `garageParts: ${(r && r.error) || "refused"}` };
+    }
+    if (seat != null) {
+      const r = window.__apex.garageTeam(team, seat);
+      if (!r || !r.ok) return { ok: false, error: `garageTeam seat ${seat}: ${(r && r.error) || "refused"}` };
+    }
+    if (Object.keys(light).length) window.__apex.lightTune(light);
+    if (clearLogos) {
+      delete liv.logo; delete liv.logo2; delete liv.logo3;
+      parts.push("logos-default");
+    }
+    if (base && base !== "default") parts.unshift("on-" + base);
+    const label = fields.name ? String(fields.name) : (parts.join(" ") || "default");
+    return { ok: true, name: label, tag: fields.name ? String(fields.name) : (parts.join("_") || "def") };
+  }, { team: teamId, fields, base: base || baseLivery, clearLogos });
   if (!got.ok) {
     const extra = got.have ? ` (have ${got.have.join(",")})` : "";
     throw new Error(`${got.error}${extra}`);
@@ -721,7 +1153,7 @@ async function switchTeam(page, teamId) {
 async function walk(browser, srvUrl, dir, side, opts = {}) {
   mkdirSync(dir, { recursive: true });
   const ownPage = !opts.page;
-  const page = opts.page || await browser.newPage();
+  const page = opts.page || await (opts.context || browser).newPage();
   const phase = {};
   const rollupEntries = opts.rollupEntries || null;
   const resumeSet = opts.resumeSet || new Set();
@@ -762,13 +1194,13 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
       console.log(`team sheet: ${label}  [switched=${sw.switched} ${switchMs}ms]`);
 
       const items = designs
-        ? designs.map((d) => ({ design: d }))
+        ? designs.flatMap((d) => (baseList.length ? baseList : [null]).map((b) => ({ design: d, base: b })))
         : liveries.map((l) => ({ livery: l }));
       for (const it of items) {
         let tag, name, designFields = null;
         const tagShots = [];
         if (it.design) {
-          const got = await applyDesign(page, teamId, it.design);
+          const got = await applyDesign(page, teamId, it.design, it.base);
           tag = got.tag;
           name = got.name;
           designFields = it.design;
@@ -776,21 +1208,33 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
           name = await applyLivery(page, teamId, it.livery);
           tag = it.livery;
         }
-        for (const v of views) {
-          const s = await frame(page, teamId, tag, v, dir, { gameVisible });
-          gameVisible = true;
-          s.team = teamId;
-          s.name = name;
-          if (it.design) s.design = it.design; else s.livery = it.livery;
-          if (side) s.side = side;
-          tagShots.push(s);
-          shots.push(s);
-          console.log(`shot ${teamId}/${tag}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist}`
-            + ` spread ${s.spread} [settle ${s.ms.settle} cap ${s.ms.capture} gate ${s.ms.gate}`
-            + `${s.ms.tries > 1 ? ` tries ${s.ms.tries}` : ""}] -> ${s.png}`);
-          if (doLive) {
-            writeLiveGallery(shots, join(dir, "live.html"),
-              `garage — ${teams.join(",")} · ${views.join(",")}`);
+        // Viewports are the inner walk: a resize re-lays the docked sheet out
+        // and needs a settle, but not a team switch or a repaint.
+        for (const v of vps) {
+          if (vps.length > 1 || v !== vp) {
+            await page.setViewportSize({ width: v[0], height: v[1] });
+            await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
+          }
+          for (const cam of cams) {
+            const s = await frame(page, teamId, tag, cam, dir, {
+              gameVisible, vp: v, index: shots.length, design: it.design || null, dpr: opts.dpr || 1,
+            });
+            gameVisible = true;
+            s.team = teamId;
+            s.name = name;
+            if (it.design) s.design = it.design; else s.livery = it.livery;
+            if (side) s.side = side;
+            tagShots.push(s);
+            shots.push(s);
+            console.log(`shot ${teamId}/${tag}/${s.cam}${vps.length > 1 ? "@" + s.vp : ""}${opts.dpr > 1 ? "@" + opts.dpr + "x" : ""} via=${s.via}`
+              + ` az ${s.az} el ${s.el} dist ${s.dist}`
+              + `${s.occl != null ? ` occl ${s.occl}%` : ""}${s.baselineDiff != null ? ` Δbaseline ${(s.baselineDiff * 100).toFixed(1)}%` : ""}`
+              + ` spread ${s.spread} [settle ${s.ms.settle} cap ${s.ms.capture} gate ${s.ms.gate}`
+              + `${s.ms.tries > 1 ? ` tries ${s.ms.tries}` : ""}] -> ${s.png}`);
+            if (doLive) {
+              writeLiveGallery(shots, join(dir, "live.html"),
+                `garage — ${teams.join(",")} · ${views.join(",")}`);
+            }
           }
         }
         pushRollupEntry(rollupEntries, teamId, label, name,
@@ -804,8 +1248,9 @@ async function walk(browser, srvUrl, dir, side, opts = {}) {
 }
 
 const capMs = (s) => s.ms.settle + s.ms.capture + s.ms.gate;
-const titleOf = (s) => `${s.team} · ${s.name} · ${s.view}`;
-const subOf = (s) => `az ${s.az} el ${s.el} dist ${s.dist} · spread ${s.spread} · ${(capMs(s) / 1000).toFixed(1)}s`;
+const titleOf = (s) => `${s.team} · ${s.name} · ${s.cam || s.view}${vps.length > 1 ? ` · ${s.vp}` : ""}`;
+const subOf = (s) => `az ${s.az} el ${s.el} dist ${s.dist}${s.occl != null ? ` · occl ${s.occl}%` : ""}`
+  + `${s.baselineDiff != null ? ` · Δbase ${(s.baselineDiff * 100).toFixed(1)}%` : ""} · spread ${s.spread} · ${(capMs(s) / 1000).toFixed(1)}s`;
 
 async function main() {
   if (argvHas("--reset") && existsSync(outDir)) {
@@ -816,17 +1261,36 @@ async function main() {
   const items = designs
     ? designs.map((d) => ({ design: d }))
     : liveries.map((l) => ({ livery: l }));
-  const shotCount = teams.length * items.length * views.length;
+  const shotCount = teams.length * items.length * (baseList.length || 1) * cams.length * vps.length * dprs.length;
+  const inert = inertFlags(designs);
+  const estSeconds = Math.round(shotCount * (fast ? 12 : 18) + 25 * dprs.length);
+  if (budgetSec && estSeconds > budgetSec && !doPlan) {
+    console.error(`REFUSED: ${shotCount} shot(s) ≈ ${estSeconds}s, over --budget=${budgetRaw} (${budgetSec}s). `
+      + `Trim an axis (--plan prints the matrix), or raise the budget.`);
+    process.exit(2);
+  }
   if (doPlan) {
     console.log(JSON.stringify({
-      teams, liveries, axes, designs, views, preset: presetRaw || null,
+      teams, liveries, base: baseLivery, axes, designs, views, cams, viewports: vps,
+      preset: presetRaw || null, crop, name: nameTpl || null, logos: logosMode || null,
+      inert: inert.map((i) => ({ field: i.field, design: i.design, why: i.why })),
       fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle,
-      liverySettle, viewSettle, gateRetries, zoom, pan: [strafe, dolly],
-      azNudge, elNudge, az: azAbs, el: elAbs,
-      shotCount, against: againstRef, live: doLive, site: doSite, logos: logosMode || null,
-      estSeconds: Math.round(shotCount * (fast ? 12 : 18) + 25),
+      liverySettle, viewSettle, gateRetries, zoom: zoomList, pan: panList,
+      shotCount, against: againstRef, dprs, bases: baseList, lamps: lampList, targets: targetList.map((t) => t.name),
+      baseline: baselineDir, budget: budgetSec || null,
+      estSeconds, overBudget: !!(budgetSec && estSeconds > budgetSec),
     }, null, 2));
     return;
+  }
+  for (const i of inert) {
+    console.warn(`WARNING ${i.field} paints NOTHING on ${JSON.stringify(i.design)} — ${i.why}`);
+  }
+  if (dprs.some((d) => d > 1)) {
+    // Measured 2026-09-10 on SwiftShader: at DPR 2 a team switch took 59.7 s
+    // (6 ms at DPR 1) and the capture's visibility poll starved past 30 s with
+    // the canvas already visible. Four times the pixels on a CPU rasteriser.
+    console.warn("WARNING --dpr above 1 needs a real GPU: on a software renderer the page starves "
+      + "(a 2x garage measured a 60 s team switch here) — raise --settle / --view-settle or run on the macOS census runner.");
   }
   const resumeSet = argvHas("--reset") ? new Set() : resumeTeamSet();
   const workTeams = resumeSet.size ? teams.filter((t) => !resumeSet.has(t)) : teams;
@@ -861,8 +1325,6 @@ async function main() {
   let liveBuild = null;
   let gameUrl;
   const servers = [];
-  // --site/--cdn boots against the deployed Pages URL. --live is the gallery only
-  // (live.html after each shot) — it must NOT silently switch the tree under test.
   if (doSite && !againstRef) {
     liveBuild = await fetch(LIVE_BASE + "version.json")
       .then((r) => r.json()).then((j) => j.build ?? null).catch(() => null);
@@ -884,9 +1346,18 @@ async function main() {
   const rollupEntries = multiTeam && rollupOnly ? [] : null;
   try {
     const afterDir = againstRef ? join(outDir, "after") : outDir;
+    // One browser, one context per DPR: a scale factor is fixed at context
+    // creation, so each value re-boots the garage once and reuses everything else.
     const A = await walk(browser, gameUrl, afterDir, againstRef ? "after" : null, {
-      keepPage: !!againstRef, rollupEntries, resumeSet, workTeams,
+      keepPage: !!againstRef, rollupEntries, resumeSet, workTeams, dpr: dprs[0],
+      context: dprs[0] !== 1 ? await browser.newContext({ deviceScaleFactor: dprs[0] }) : null,
     });
+    for (const dpr of dprs.slice(1)) {
+      const ctx = await browser.newContext({ deviceScaleFactor: dpr });
+      const D = await walk(browser, gameUrl, afterDir, null, { rollupEntries: null, resumeSet: new Set(), workTeams, dpr, context: ctx });
+      A.shots.push(...D.shots);
+      await ctx.close().catch(() => {});
+    }
     let B = null;
     if (againstRef) {
       const blobs = refBlobs(againstRef);
@@ -940,8 +1411,12 @@ async function main() {
         for (const a of A.shots) {
           const b = byKey.get(key(a));
           if (!b) continue;
+          // The pair as a NUMBER too: the changed-pixel fraction between the ref
+          // and the tree, so "did this change the car" is not only eyeballed.
+          a.diff = await pixelDiff(b.png, a.png);
           items.push({ png: b.png, title: `${titleOf(b)}`, sub: `BEFORE — ${againstRef}` });
-          items.push({ png: a.png, title: `${titleOf(a)}`, sub: "AFTER — working tree" });
+          items.push({ png: a.png, title: `${titleOf(a)}`, sub: `AFTER — working tree · Δ ${(a.diff * 100).toFixed(1)}% px` });
+          console.log(`pair ${key(a)}: ${(a.diff * 100).toFixed(1)}% of pixels changed`);
         }
         const f = await writeSheet(items, join(outDir, "pairs-sheet.png"),
           `garage A/B — ${againstRef} (left) vs the working tree (right)`, 2);
@@ -949,24 +1424,29 @@ async function main() {
       }
       const f = await writeSheet(A.shots.map((s) => ({ png: s.png, title: titleOf(s), sub: subOf(s) })),
         join(outDir, "sheet.png"),
-        `garage — ${teams.join(",")} · ${views.join(",")}${againstRef ? " (working tree)" : ""}`);
+        `garage — ${teams.join(",")} · ${views.join(",")}${againstRef ? " (working tree)" : ""}`,
+        sheetCols || undefined);
       if (f) sheets.push(f);
+      const mx = await writeMatrixSheet(A.shots, join(outDir, "matrix.png"));
+      if (mx) sheets.push(mx);
     }
 
     const seconds = +((Date.now() - t0) / 1000).toFixed(1);
     const meta = metaPath;
-    writeFileSync(meta, JSON.stringify({
-      teams, liveries, axes, designs, against: againstRef, preset: presetRaw || null,
-      fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle,
-      live: doLive, site: doSite, liveBuild,
+    const record = {
+      teams, liveries, base: baseLivery, axes, designs, against: againstRef, preset: presetRaw || null,
+      fast, rollupOnly, rollupView, multiTeam, useStoreTeam, withOracle, live: doLive, liveBuild,
       liverySettle, viewSettle, gateRetries,
-      zoom, pan: [strafe, dolly], azNudge, elNudge, az: azAbs, el: elAbs,
-      logos: logosMode || null, clearLogos,
-      sheetHead: A.sheetHead, viewport: vp, views,
+      zoom: zoomList, pan: panList, cams, crop, name: nameTpl || null,
+      logos: logosMode || null, site: doSite, inert, dprs, bases: baseList,
+      lamps: lampList, targets: targetList.map((t) => t.name), baseline: baselineDir, budget: budgetSec || null,
+      sheetHead: A.sheetHead, viewport: vp, viewports: vps, views,
       loadavg1: load, phase: { after: A.phase, before: B ? B.phase : null },
       sheets, shots, rollupEntries: mergedRollup, teamRollup,
       resumed: resumeSet.size ? [...resumeSet] : null, seconds,
-    }, null, 2));
+    };
+    writeFileSync(meta, JSON.stringify(record, null, 2));
+    if (doJson) console.log(JSON.stringify(record));
     const shotMs = shots.reduce((n, s) => n + capMs(s), 0);
     console.log(`wrote ${shots.length} angle(s) in ${seconds}s`
       + `  [boot ${A.phase.boot}ms open ${A.phase.open}ms · shots ${(shotMs / 1000).toFixed(1)}s`

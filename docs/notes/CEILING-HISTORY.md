@@ -2813,6 +2813,23 @@ bounded caches and visual-only descriptors; no live field or simulation RNG is
 changed. Ceilings remeasured with `ratchets.mjs --update`; no new facade members
 or top-level lets. GPU program compilation remains race-owned and unmeasured.
 
+2026-09-10 — `js/agent/apex.js` lines 2812 -> **2814**, codeLines 2089 -> **2090**:
+`garageFrame` takes ABSOLUTE `az` / `el` / `dist` and a metre `pan` beside the
+counted clicks, and a `free` view that keeps the current camera. That is what
+lets `tools/shot/garage-angles.mjs` walk cameras as lists (views × az × el ×
+dist × zoom × pan × viewport) instead of five fixed presets; two lines of hook
+for a tool that no longer needs a preset per question.
+Same change, `js/game.js` lines 9656 -> **9657**, codeLines 5175 -> **5176**, gMembers 239 -> **240**:
+`nudgeSetupCam` joins the façade (the same one-line spelling PR #124 adds) so
+`garageFrame` can set an absolute azimuth / elevation instead of only zoom.
+
+2026-09-10 — `js/game.js` lines 9678 -> **9679**, codeLines 5183 -> **5184**,
+gMembers 240 -> **241**; `js/agent/apex.js` lines 2814 -> **2819**, codeLines
+2090 -> **2093**: `setSetupAim` joins the façade and `garageFrame` takes a
+car-space `target` and a `lamp`, `garageTeam` a `seat`. That is the whole
+production cost of letting `garage-angles` aim at the crown / fin / wall from
+any orbit, walk the inspection lamp and the driver seat as axes, instead of a
+preset for each — the tool owns every name; the game owns three numbers.
 ## 2026-09-10 — car-draw extraction
 
 `js/game.js` 9656 → 9041 lines (codeLines 5175 → 4739, topLets 153 → 146):
@@ -2823,3 +2840,11 @@ wheels, the warm-ups and the optional GLB body. game.js keeps the render
 loop, the shadow batches and the ground/attitude matrices and reaches the
 caches only through the module's surface. No new façade members. Ceilings
 lowered with `ratchets.mjs --update`.
+
+## 2026-09-10 — merge: car-draw extraction × garage-angles axes
+
+`js/game.js` lines 9062 / codeLines 4745 / gMembers 241 / topLets 146 on the
+merged tree (the extraction's 9054 / 4748 / 240 plus `setSetupAim` and the
+`migrateLivery` fold from the livery branch); `js/agent/apex.js` 2819 / 2093
+(the deploy side's 2827 / 2101 were the pre-merge PR 124 values, superseded).
+Set with `ratchets.mjs --update` after the conflict resolution; nothing raised.

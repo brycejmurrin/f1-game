@@ -277,9 +277,9 @@ const markOnItsGround = (teamId, liv, region, key, ground, N = 32) => {
   return { worst, at, n: n / (N * N) };
 };
 
-test("the plate-less crown mark keeps authored colour; brand floors when needed", () => {
-  // bigmark is plate-less. Authored liv.logo stays exact. Unauthored brand
-  // marks may floor against the cover so stock cars stay readable.
+test("the plate-less crown mark keeps authored colour; team data stays legible", () => {
+  // bigmark is plate-less. Authored liv.logo stays exact, and so does a brand
+  // mark: legibility comes from an authored OUTLINE (logo3) in teams.js.
   const wantAuthored = [0.95, 0.1, 0.55];
   const bad = [];
   for (const t of A.Teams.LIST) {
@@ -292,8 +292,11 @@ test("the plate-less crown mark keeps authored colour; brand floors when needed"
         bad.push(`${t.id}/${liv.id}: authored mark ${P.mark.join()} != [${wantAuthored.join()}]`);
       const stock = A.LT.markPalette(t.id, liv, field, false, { noPlate: true });
       const under = stock.under;
+      // Legibility is a separate parameter from colour: a team-data mark reads
+      // through its authored OUTLINE (logo3) as often as through the mark itself.
       const best = Math.max(...under.map((f) =>
-        Math.max(A.LT.contrast(stock.mark, f), stock.halo ? A.LT.contrast(stock.halo, f) : 0)));
+        Math.max(A.LT.contrast(stock.mark, f), stock.outline ? A.LT.contrast(stock.outline, f) : 0,
+          stock.halo ? A.LT.contrast(stock.halo, f) : 0)));
       if (best < A.LT.MARK_FLOOR)
         bad.push(`${t.id}/${liv.id}: stock mark+halo ${best.toFixed(2)} under MARK_FLOOR`);
     }

@@ -11,6 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -189,23 +190,30 @@ test("garage-angles reports per-phase timing and reads the loadavg", () => {
     "teams walk inside ONE browser — boot was being paid per team");
 });
 
-test("garage-angles has presets, --plan, --fast, and tunable settle", () => {
+test("a preset is a bundle of plain flags, and a named camera is parameters", () => {
+  // Presets used to BE the vocabulary: a question they did not ask meant
+  // editing the tool, and two survey framings (bay / bayFront) were pushed
+  // into production SP_VIEWS just so this tool could name them. Now every
+  // preset key is a plain flag and every named camera is an az/el/dist bundle,
+  // so a preset is a starting point you can sweep away from.
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /const PRESETS = \{/, "purpose presets like render-car");
-  assert.match(src, /bay:\s*\{\s*views:\s*"bay"/, "bay preset = angled room framing");
-  assert.match(src, /bayFront:\s*\{\s*views:\s*"bayFront"/, "bayFront = opposite diagonal");
-  assert.match(src, /saddleWall:/, "saddleWall = bayFront + saddle + default logos");
-  assert.match(src, /"bayFront"/, "bayFront is a named view in ALL");
-  assert.match(src, /--az-nudge/, "orbit framing via az-nudge click counts");
-  assert.match(src, /--el-nudge/, "orbit framing via el-nudge click counts");
-  assert.match(src, /--logos/, "logos=default authors brand mark as liv.logo");
+  assert.match(src, /const CAM_ALIAS = \{/, "named cameras are a table of parameter bundles");
+  assert.match(src, /bay:\s*"hero:0\.68pi/, "bay = a base view plus an absolute orbit");
+  assert.match(src, /bayFront:\s*"front:0\.32pi/, "bayFront = the opposite diagonal");
+  assert.match(src, /saddleWall: \{ views: "bayFront"/, "saddleWall is a flag bundle over that camera");
+  assert.match(src, /presetRaw === "list"/, "--preset=list prints and exits");
+  assert.match(src, /presetRaw !== "none"/, "--preset=none is a first-class 'no preset'");
+  assert.match(src, /function aliasKey/, "a modified named camera gets its own file name");
+  for (const f of ["--az-nudge", "--el-nudge", "--logos", "--site"]) {
+    assert.ok(src.includes(`"${f}"`), `${f} must be one of the tool's OWN flags`);
+  }
   assert.match(src, /clearLogos/, "applyDesign honours logos=default");
-  assert.match(src, /markBase/, "logos=default uses LiveryTex.markBase for brand colour");
+  assert.match(src, /delete liv\.logo;/, "logos=default strips the authored mark rows");
   assert.match(src, /argvHas\("--site"\) \|\| argvHas\("--cdn"\)/,
     "--site/--cdn opens github.io; --live is gallery-only");
   assert.match(src, /if \(preset && !argvHas\("--views"\)\) return preset\.views/,
-    "preset views win over multi-team rollup default");
-  assert.match(src, /presetRaw === "list"/, "--preset=list prints and exits");
+    "preset views win over the multi-team rollup default");
   assert.match(src, /argvHas\("--plan"\)/, "--plan prints the matrix without booting");
   assert.match(src, /liverySettle/, "livery/design apply uses --settle");
   assert.match(src, /viewSettle/, "camera-only moves use --view-settle");
@@ -215,23 +223,44 @@ test("garage-angles has presets, --plan, --fast, and tunable settle", () => {
     "--live must not switch gameUrl to the CDN (that is --site)");
 });
 
-test("garageFrame accepts az/el nudges and absolute orbit", () => {
+test("garageFrame takes an absolute camera, not only counted clicks", () => {
   const src = code("js/agent/apex.js");
   const at = src.indexOf("garageFrame(view, opts)");
   assert.ok(at > 0, "garageFrame hook must exist");
-  const body = src.slice(at, at + 1200);
+  const body = src.slice(at, at + 1600);
   assert.match(body, /azNudge/, "UI left/right click counts");
   assert.match(body, /elNudge/, "UI up/down click counts");
-  assert.match(body, /Number\.isFinite\(opts\.az\)/, "absolute az after preset");
+  assert.match(body, /nudgeAz/, "their nudgeAz / nudgeEl aliases keep working");
+  assert.match(body, /num\(o\.az\) != null/, "absolute az applied after the preset");
+  assert.match(body, /num\(o\.el\) != null/, "absolute el applied after the preset");
+  assert.match(body, /o\.dist \/ G\.setupPreviewDist/,
+    "absolute dist goes through the game's own zoom clamp");
+  assert.match(body, /view !== "free"/, "`free` keeps the camera the last call left");
   assert.match(body, /nudgeSetupCam/, "orbit goes through G.nudgeSetupCam");
 });
 
-test("SP_VIEWS includes bay and bayFront angled garage framings", () => {
-  const src = code("js/game.js");
-  assert.match(src, /bay:\s*\{\s*az:\s*Math\.PI\s*\*\s*0\.68/,
-    "bay sits between side and hero for rear-left room shot");
-  assert.match(src, /bayFront:\s*\{\s*az:\s*Math\.PI\s*\*\s*0\.32/,
-    "bayFront is the front-left opposite diagonal (left flank + back wall)");
+test("every garage camera preset is one a PLAYER can reach", () => {
+  // A survey framing is not a game preset. `bay` / `bayFront` were added to
+  // SP_VIEWS with no #cs-stack button — production data carrying a shot tool's
+  // camera — and with absolute az/el/dist in garageFrame they are parameters
+  // (garage-angles CAM_ALIAS). So: everything in SP_VIEWS has a button, and
+  // the tool's named cameras are not in SP_VIEWS at all.
+  const game = code("js/game.js");
+  const block = /const SP_VIEWS = \{([\s\S]*?)\n\};/.exec(game);
+  assert.ok(block, "SP_VIEWS must still be a named const");
+  const presets = [...block[1].matchAll(/^\s{2}([A-Za-z]+):\s*\{/gm)].map((m) => m[1]);
+  assert.ok(presets.length >= 7, `expected the shipped camera stack, got ${presets.join(",")}`);
+  const shell = read("index.html");
+  const buttons = new Set([...shell.matchAll(/data-cs-view="([A-Za-z]+)"/g)].map((m) => m[1]));
+  for (const p of presets) {
+    assert.ok(buttons.has(p), `SP_VIEWS.${p} has no #cs-stack button — a tool camera belongs in CAM_ALIAS`);
+  }
+  const tool = code("tools/shot/garage-angles.mjs");
+  const alias = /const CAM_ALIAS = \{([\s\S]*?)\n\};/.exec(tool);
+  assert.ok(alias, "the tool must own its survey framings");
+  for (const name of [...alias[1].matchAll(/^\s{2}([A-Za-z]+):/gm)].map((m) => m[1])) {
+    assert.ok(!presets.includes(name), `${name} is a tool camera and must not be in SP_VIEWS`);
+  }
 });
 
 test("garage-angles multi-team rollup uses __apex fast path from PR #96 port", () => {
@@ -245,4 +274,84 @@ test("garage-angles multi-team rollup uses __apex fast path from PR #96 port", (
   assert.match(src, /argvHas\("--reset"\)/, "--reset clears output dir");
   assert.match(src, /argvHas\("--resume"\)/, "--resume skips finished teams");
   assert.match(src, /argvHas\("--oracle"\)/, "--oracle labels flank occlusion on rollup");
+});
+
+test("garage-angles walks CAMERAS as lists — views × az × el × dist × zoom × pan × viewport", () => {
+  // Five presets were the whole camera vocabulary: a question the presets did
+  // not ask (a 60-degree flank, a phone-landscape canvas, a tighter distance)
+  // meant editing the tool. Every camera number is a list now, walked as a
+  // product with the named views, and `--cam` names whole cameras; the hook
+  // takes absolute az/el/dist so the tool is not limited to counted clicks.
+  const src = code("tools/shot/garage-angles.mjs");
+  for (const f of ["--az", "--el", "--dist", "--cam", "--viewport", "--crop", "--name", "--design", "--zip", "--base"]) {
+    assert.ok(src.includes(`"${f}"`), `${f} must be one of the tool's OWN flags`);
+  }
+  assert.match(src, /function camKey/, "a camera's key names only what was set (old file names survive)");
+  assert.match(src, /part\.<category>|startsWith\("part\."\)/, "--part.<category> axes fit catalog parts in-page");
+  const hook = read("js/agent/apex.js");
+  assert.match(hook, /garageFrame\(view, opts\)[\s\S]*?view !== "free"/, "garageFrame's `free` view keeps the current camera");
+  assert.match(hook, /o\.dist \/ G\.setupPreviewDist/, "an absolute dist is applied through the game's own clamp");
+  // BEHAVIOUR, not just text: --plan builds the matrix without a browser.
+  const plan = (args) => JSON.parse(execFileSync("node",
+    ["tools/shot/garage-angles.mjs", "--plan", "--team=ferrari", ...args], { cwd: ROOT, encoding: "utf8" }));
+  const p = plan(["--views=side", "--az=60deg,90deg", "--el=0.2", "--zoom=6,4", "--pan=2,0;4,0", "--viewport=1280x720,844x390"]);
+  assert.equal(p.cams.length, 8, "2 az × 1 el × 2 zoom × 2 pan");
+  assert.equal(p.viewports.length, 2);
+  assert.equal(p.shotCount, 8 * 2, "one livery × 8 cams × 2 viewports");
+  assert.ok(p.cams.every((c) => Math.abs(c.el - 0.2) < 1e-9), "el is applied to every camera");
+  assert.ok(p.cams.some((c) => Math.abs(c.az - Math.PI / 3) < 1e-9), "60deg parses to radians");
+  const q = plan(["--views=side", "--cam=free:1.2,0.3,7;rear:180deg,0.4"]);
+  assert.equal(q.cams.length, 3, "the base view plus two explicit cameras");
+  assert.deepEqual(q.cams.map((c) => c.view), ["side", "free", "rear"]);
+  assert.equal(q.cams[1].dist, 7);
+  const z = plan(["--spineLogo=wrap,saddle", "--part.engine=turbo,stock", "--zip"]);
+  assert.deepEqual(z.designs, [{ spineLogo: "wrap", "part.engine": "turbo" }, { spineLogo: "saddle", "part.engine": "stock" }],
+    "--zip pairs the axes index-wise");
+  const legacy = plan(["--preset=mark", "--logo=#00ffcc"]);
+  assert.deepEqual(legacy.cams.map((c) => c.key), ["front_z6_p4x0", "side_z6_p4x0", "rear_z6_p4x0"],
+    "a preset is a starting point: its views, zoom and pan survive as camera keys");
+  assert.deepEqual(legacy.designs, [{ finBadge: "logo", logo: "#00ffcc" }], "a preset's livery keys stay axes");
+  const plain = plan(["--views=side"]);
+  assert.deepEqual(plain.cams.map((c) => c.key), ["side"], "no camera axes: the old `<team>-<tag>-<view>` name");
+});
+
+test("garage-angles: ranges, targets, lamps, seats, DPR, `all`, base lists and a budget are all axes", () => {
+  // The camera vocabulary stopped being presets: every number is a list, a
+  // list takes a range, the orbit can LOOK at a named point, the inspection
+  // lamp and the driver seat walk like any other axis, and the plan refuses a
+  // matrix that will not fit a budget — before a browser boots.
+  const src = code("tools/shot/garage-angles.mjs");
+  for (const f of ["--target", "--lamp", "--dpr", "--budget", "--baseline", "--oracle"]) {
+    assert.ok(src.includes(`"${f}"`) || src.includes(`argvHas("${f}")`), `${f} must be a flag the tool owns`);
+  }
+  assert.match(src, /function expandRange/, "a..b:n ranges on every numeric list");
+  assert.match(src, /const TARGETS = \{/, "named look-at points are a table in the TOOL");
+  assert.match(src, /function pixelDiff/, "an A/B is a changed-pixel fraction, not only a pair sheet");
+  assert.match(src, /function writeMatrixSheet/, "rows × cameras contact sheet");
+  assert.match(src, /oracleHiddenPct\(teamId,/, "occlusion is recorded per SHOT, not only on rollups");
+  assert.match(src, /deviceScaleFactor: dpr/, "a DPR is its own browser context");
+  const hook = read("js/agent/apex.js");
+  assert.match(hook, /G\.setSetupAim\(o\.target\.map\(Number\)\)/, "garageFrame aims the orbit at a car-space point");
+  assert.match(hook, /GarageScene\.spot\(o\.lamp \|\| null\)/, "garageFrame aims the lamp");
+  assert.match(hook, /garageTeam\(id, seatWanted\)/, "garageTeam takes a seat");
+  const plan = (args) => JSON.parse(execFileSync("node",
+    ["tools/shot/garage-angles.mjs", "--plan", "--team=ferrari", ...args], { cwd: ROOT, encoding: "utf8" }));
+  const r = plan(["--views=side", "--az=50deg..130deg:5"]);
+  assert.deepEqual(r.cams.map((c) => c.key), ["side_az50", "side_az70", "side_az90", "side_az110", "side_az130"],
+    "a range expands to evenly spaced values, inclusive");
+  const t = plan(["--views=side", "--target=crown,wall", "--lamp=side,off"]);
+  assert.deepEqual(t.cams.map((c) => c.key),
+    ["side_atCrown_lampSide", "side_atCrown_lampOff", "side_atWall_lampSide", "side_atWall_lampOff"],
+    "targets × lamps multiply into the camera matrix with readable keys");
+  assert.deepEqual(t.cams[0].target.at, [0, 0.95, -0.55], "a named target resolves to car-space metres");
+  const all = plan(["--views=side", "--spineSide=all"]);
+  assert.ok(all.designs.length >= 12 && all.designs.every((d) => d.spineSide), "`all` expands an enum axis to its real list");
+  const seats = plan(["--views=side", "--driver=all", "--base=default,rb_white", "--spineLogo=wrap"]);
+  assert.deepEqual(seats.designs, [{ driver: "0", spineLogo: "wrap" }, { driver: "1", spineLogo: "wrap" }]);
+  assert.equal(seats.shotCount, 4, "2 seats × 2 base liveries × 1 camera");
+  const dpr = plan(["--views=side", "--dpr=1,2", "--viewport=1280x720,844x390"]);
+  assert.equal(dpr.shotCount, 4, "DPR and viewport are both axes");
+  const big = plan(["--team=all", "--views=all", "--az=0..2pi:12", "--budget=10m"]);
+  assert.equal(big.overBudget, true, "the plan flags a matrix the budget cannot hold");
+  assert.equal(plan(["--views=side", "--budget=10m"]).overBudget, false);
 });

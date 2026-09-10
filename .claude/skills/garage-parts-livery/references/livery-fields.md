@@ -91,6 +91,23 @@ rgb triples, and a partly-corrupt array keeps the sound paint jobs. Without it
 one entry lacking `c1` took the LIVERY tab down — `cssCol` reads `c[0]` on
 whatever it is handed.
 
+**COLOUR AND LEGIBILITY ARE TWO DIFFERENT PARAMETERS.** A mark's colour is
+AUTHORED — by the player's TEAM LOGO row or by the team's `livery` block in
+`js/data/teams.js` — and `markPalette` never substitutes an authored colour.
+Legibility is its own parameter: the OUTLINE row (`logo3`), a plate, or (for a
+DERIVED mark only, nobody authored it) an automatic halo. A shipped car whose
+brand mark matches its own cover (the W17's silver star, the MCL's papaya
+speedmark, Alpine's A, the RB letters) authors its `logo3` in team data, the
+same row a player uses for the same job; the paint sheet ADVISES a player
+whose pick will not read (ratio and fix under TEAM MARK) and never overrides
+it. Two instruments, one model each: `cover-legibility.test.mjs` scores
+contrasting AREA and owns the bands, saddles, suns and sashes;
+`crest-marks.test.mjs` scores mark + outline + halo per background and owns
+every mark. A design fill row is live only while a design spends it —
+`LiveryTex.FILL_SURFACES` / `liveFills()` is declared beside the painters,
+consumed by the sheet's greying and by `garage-angles --plan`'s inert-flag
+warning, and proven against the rasterised atlas by `fill-gating.test.mjs`.
+
 The mark takes up to THREE livery colours and the editor asks
 `LiveryTex.markSlots(teamId)` how many and what to call them — never assume a
 length. `logo` is the dominant shape; `logo2` is the mark's second SHAPE and
