@@ -1644,6 +1644,25 @@ const TLX = (function () {
       // faces is ~200 KB and the answer does not change frame to frame.
       let _envCube = null, _envCubeRead = false;
       let _warmed = false;   // programs linked once per backend instance
+      // TLX OPTS OUT OF THE ENV PROBE (2026-09-10), measured, not assumed.
+      // Census 84 ran the WebGL2 three leg with apex26.envProbeOff=1: a flat 60
+      // fps at scale 1.0, frame times down to 10.8 ms, no beat gap over 2 s.
+      // With the probe on, the SAME leg dips to 10-13 fps and sheds resolution
+      // to 0.9 (run 82) or 0.5 (run 79), and the WebGPU leg loses a whole 8 s
+      // beat. It is NOT a warm-up cost — the probe re-renders the world SIX
+      // times per cycle every 4th frame for the whole race, so it is a sustained
+      // multiplier that this backend cannot afford.
+      // It also does not WORK here: on the WebGPU path the latched cube renders
+      // the world near-black, meanLuma 2.9 against 64 on WebGL2, with the mip
+      // chain and a capture artefact both excluded (PERF-FINDINGS 2t). So the
+      // feature currently costs a resolution tier and buys a defect.
+      // GLX runs the same probe through the same game.js gate and holds 60
+      // either way — this is specific to three, and the cost is car reflections
+      // falling back to the analytic mirror until the probe is fixed.
+      // The path below is INTACT: apex26.tlxEnvProbe=1 re-enables it for that
+      // work, and this is one early return, not a deletion.
+      let _envOptOut = true;
+      try { _envOptOut = localStorage.getItem("apex26.tlxEnvProbe") !== "1"; } catch (_) { /* no storage: stay opted out */ }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -2460,6 +2479,7 @@ const TLX = (function () {
         // GLX/WGX so drawWorldMeshes culls props to THIS face, push lighting
         // via lit.updateFrame, and envFaceEnd owns the face render.
         envFaceBegin(face, eye, frame) {
+          if (_envOptOut) return null;   // see _envOptOut: measured cost, and a black world on WebGPU
           if (!envRT || !lit || !eye || !frame || !frame.viewProj) return null;
           // "A probe that cannot succeed must stop being retried" — the
           // producer half. After the give-up latch flipped, game.js kept
