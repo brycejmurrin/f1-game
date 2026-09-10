@@ -1425,7 +1425,11 @@ const _livResolveCache = new Map();
 function resolveLivery(team) {
   // The live creator draft wins while it is open — through the same field list
   // as a saved livery, so no editor row can stop short of the atlas or mesh.
-  if (livDraftOverride && livDraftOverride.teamId === team.id) return pickLivery(livDraftOverride.liv);
+  if (livDraftOverride && livDraftOverride.teamId === team.id) {
+    const l = Object.assign({}, livDraftOverride.liv);
+    if (typeof Liveries !== "undefined" && Liveries.migratePaint) Liveries.migratePaint(l);
+    return pickLivery(l);
+  }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
   // A STORED ID THAT NO LONGER RESOLVES FALLS BACK TO THE TEAM'S OWN PAINT JOB.
@@ -1434,20 +1438,22 @@ function resolveLivery(team) {
   // spineSide, so a dangling id grew a shark fin instead of the car the team
   // races. Reachable via an imported garage file (js/ui/settings-export.js).
   const list = getLiveries(team);
-  const liv = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
+  const raw = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
+  const liv = raw ? (typeof Liveries !== "undefined" && Liveries.migratePaint
+    ? Liveries.migratePaint(Object.assign({}, raw)) : raw) : null;
   const val = liv ? pickLivery(liv) : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
 }
 // The resolved paint-job shape, from a catalog entry or the creator's draft.
-// Optional detail colours are additive. Every LIV_DRAFT_COLORS tint must be
-// listed: dropping sunTint / crestInk / bandTint2 / plateTint / plateInk made
-// those editor rows inert on track and in the live preview.
+// Optional detail colours are additive. Every live LIV_DRAFT_COLORS tint must be
+// listed. Dead keys (crestInk / plateInk / ridgeTint / airboxTint) are stripped
+// by Liveries.migratePaint before this runs — do not put them back.
 const LIVERY_FIELDS = ["stripe", "accent", "nose", "pod", "wing", "halo", "fin", "finArt", "logo", "logo2",
   "logo3", "noseStripe", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape",
   "tcam", "coverVents", "spineHeight", "spineSide", "rearWing", "wingCarbon", "cover", "spineTint", "sideTint",
-  "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk",
-  "saddleTint", "ridgeTint", "airboxTint", "coverBind", "finHandoff"];
+  "sunTint", "bandTint2", "plateTint",
+  "saddleTint", "coverBind", "finHandoff"];
 function pickLivery(l) {
   const v = { id: l.id || null, c1: l.c1, c2: l.c2 };
   for (let i = 0; i < LIVERY_FIELDS.length; i++) { const k = LIVERY_FIELDS[i]; v[k] = l[k] || null; }
@@ -2861,6 +2867,7 @@ const G = {
   stepSetupAero: (dt) => stepSetupAero(dt),
   setSetupView: (...a) => setSetupView(...a),
   setupPan: (...a) => setupPan(...a),
+  nudgeSetupCam: (...a) => nudgeSetupCam(...a),
   nudgeSetupZoom: (mul) => nudgeSetupCam(0, 0, mul),
   // Exactly what drawAeroFlaps() is handed in the garage — the resolved aero
   // LEVEL and STYLE from the player's own parts, not the defaults. Probing with
@@ -5587,6 +5594,12 @@ const SP_EL_MIN = 0, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
 // rather than one nominal distance that crops the nose off two of the five.
 const SP_VIEWS = {
   hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.35 },   // rear three-quarter
+  // Angled bay: slightly left of hero so the flank reads and the back wall stays
+  // in frame — the survey framing garage-angles --preset=bay exists to shoot.
+  bay:   { az: Math.PI * 0.68, el: 0.26, dist: 9.2 },
+  // Opposite diagonal of bay: front three-quarter on the SAME left flank
+  // (door-side corner) — left side of the car + back-wall crest, not head-on.
+  bayFront: { az: Math.PI * 0.32, el: 0.28, dist: 9.4 },
   front: { az: 0,              el: 0.20, dist: 8.2 },
   side:  { az: Math.PI * 0.5,  el: 0.10, dist: 11.2 },
   rear:  { az: Math.PI,        el: 0.22, dist: 8.4 },

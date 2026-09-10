@@ -415,14 +415,29 @@ const api = {
     G.tickUi();
     return { ok: true, switched: true, label };
   },
-  // One-shot preset + discrete zoom/pan clicks — mirrors #cs-stack / cs-pan-*.
+  // One-shot preset + discrete framing — mirrors #cs-stack / cs-view-* / cs-pan-*.
+  // opts: zoom/strafe/dolly (click counts); azNudge/elNudge (UI left/right/up/down
+  // clicks, ±0.18 / ±0.12 rad); az/el (absolute radians after the preset).
   garageFrame(view, opts) {
     if (!G.setupPreviewOn) return { ok: false, error: "garage_closed" };
     if (!view) return { ok: false, error: "no_view" };
     G.setSetupView(view);
-    const zoom = (opts && opts.zoom) || 0;
-    const strafe = (opts && opts.strafe) || 0;
-    const dolly = (opts && opts.dolly) || 0;
+    opts = opts || {};
+    if (Number.isFinite(opts.az)) G.nudgeSetupCam(opts.az - G.setupPreviewAz, 0, 0);
+    if (Number.isFinite(opts.el)) G.nudgeSetupCam(0, opts.el - G.setupPreviewEl, 0);
+    const azN = Number(opts.azNudge != null ? opts.azNudge : opts.nudgeAz);
+    const elN = Number(opts.elNudge != null ? opts.elNudge : opts.nudgeEl);
+    if (Number.isFinite(azN) && azN) {
+      const step = azN > 0 ? 0.18 : -0.18;
+      for (let n = 0; n < Math.abs(azN); n++) G.nudgeSetupCam(step, 0, 0);
+    }
+    if (Number.isFinite(elN) && elN) {
+      const step = elN > 0 ? 0.12 : -0.12;
+      for (let n = 0; n < Math.abs(elN); n++) G.nudgeSetupCam(0, step, 0);
+    }
+    const zoom = opts.zoom || 0;
+    const strafe = opts.strafe || 0;
+    const dolly = opts.dolly || 0;
     const zMul = zoom > 0 ? 1 / 1.12 : 1.12;
     for (let n = 0; n < Math.abs(zoom); n++) G.nudgeSetupZoom(zMul);
     for (let n = 0; n < Math.abs(strafe); n++) G.setupPan(strafe > 0 ? 0.15 : -0.15, 0);

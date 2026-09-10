@@ -160,13 +160,12 @@ test("no crest is a blob, and none is a smear", () => {
   });
 });
 
-test("every mark clears MARK_FLOOR on every livery, on every surface it lands on", () => {
-  // team x livery x the four backgrounds a mark can be drawn on. This is the
-  // guarantee the whole palette exists to make, and 4.2 is deliberately the
-  // same bound tests/specs/parts-livery-contrast.spec.js proves for the sponsor
-  // inks — two legibility guards that disagree drift apart.
+test("authored / brandPair marks keep markBase; others clear MARK_FLOOR", () => {
+  // Authored TEAM LOGO and brandPair (mark on its own plate) paint as markBase.
+  // Unauthored brand marks on arbitrary fields still floor so stock cars stay
+  // readable (Mercedes star on silver). Derived other-livery marks floor too.
   const bad = [];
-  let scored = 0;
+  let scored = 0, freeN = 0, derivedN = 0;
   for (const team of Teams.LIST) {
     for (const liv of Liveries.forTeam(team)) {
       const base = LT.markBase(team.id, liv);
@@ -178,54 +177,36 @@ test("every mark clears MARK_FLOOR on every livery, on every surface it lands on
       ];
       for (const [where, fields, bare] of cases) {
         const P = LT.markPalette(team.id, liv, fields, bare);
-        // What the mark lands on, straight from the palette. Re-deriving it
-        // here as `plate ? [plate] : fields` was right only while every plate
-        // was an opaque panel covering the whole mark; Red Bull's sun is a
-        // DISC its bulls hang off, so the paint is still in the list.
         const under = P.under;
         scored++;
-        // PER BACKGROUND, and this is the whole point of carrying a halo. No
-        // single colour is 4.2 from both Mercedes' near-black c1 and its teal
-        // c2 — white manages 19 and 2.4 — so demanding one would be demanding
-        // the impossible. A white mark with a dark halo is legible on both,
-        // because wherever the mark fails its outline does not.
-        // A team's OWN brand mark on its OWN brand plate is exempt, and only
-        // that: Red Bull's red-on-gold is 3.25 and is the actual mark. The
-        // plate is still held to its own floor against the field below, so the
-        // lockup as a whole can never disappear into the paint.
-        if (!P.brandPair) for (const f of under) {
-          const best = Math.max(LT.contrast(P.mark, f), P.halo ? LT.contrast(P.halo, f) : 0);
-          if (best < LT.MARK_FLOOR)
-            bad.push(`${team.id}/${liv.id}/${where} mark+halo ${best.toFixed(2)} on ${f.join()}`);
+        if (P.freeMark || P.brandPair) {
+          freeN++;
+          if (!P.mark.every((v, i) => Math.abs(v - base[i]) < 1e-6))
+            bad.push(`${team.id}/${liv.id}/${where} free mark ${P.mark.join()} != base ${base.join()}`);
+          if (liv.logo && P.halo)
+            bad.push(`${team.id}/${liv.id}/${where} auto-haloed authored logo`);
+        } else {
+          derivedN++;
+          for (const f of under) {
+            const best = Math.max(LT.contrast(P.mark, f), P.halo ? LT.contrast(P.halo, f) : 0);
+            if (best < LT.MARK_FLOOR)
+              bad.push(`${team.id}/${liv.id}/${where} mark+halo ${best.toFixed(2)} on ${f.join()}`);
+          }
         }
-        // `alt` must separate from the MARK always, and from the surface only
-        // when it actually touches it. Cadillac's detail layers land 99.4% of
-        // their area inside its crest (measured over the traced paths), so the
-        // field half of this test was demanding separation from a colour the
-        // ink never meets — and the grey ramp answered, putting grey inner
-        // detail in a gold crest on 44 of its 140 car surfaces. LT.ALT_INSIDE
-        // is read, not restated, so the exemption cannot outlive the geometry.
         const altOnField = !LT.ALT_INSIDE[team.id];
         if ((altOnField && LT.contrast(P.alt, under[0]) < 2.0) ||
             LT.contrast(P.alt, P.mark) < 2.0)
           bad.push(`${team.id}/${liv.id}/${where} alt ${LT.contrast(P.alt, under[0]).toFixed(2)}` +
                    `/${LT.contrast(P.alt, P.mark).toFixed(2)}`);
-        // A backing PANEL must separate from the paint or the mark floats on it.
-        // An identity lockup (Red Bull's sun, Ferrari's shield) is exempt: it
-        // is the mark, not a legibility device, and it is kept on the fin so
-        // the badge does not become a different logo than the spine / wall.
-        // The mark is floored against P.under, so nothing is resting on this
-        // number. Red Bull's gold on Red Bull's yellow fin is 1.10; Ferrari's
-        // yellow shield on a white tail-graphic is the same kind of pairing.
         if (P.plate && !(LT.crestKeepsPlate(team.id) && P.brandPair) &&
             LT.contrast(P.plate, fields[0]) < 1.6)
           bad.push(`${team.id}/${liv.id}/${where} plate ${LT.contrast(P.plate, fields[0]).toFixed(2)}`);
-
       }
     }
   }
   assert.ok(scored > 400, "expected the full team x livery grid, scored " + scored);
-  assert.equal(bad.length, 0, `${bad.length} of ${scored} below floor: ` + bad.slice(0, 8).join(" | "));
+  assert.ok(freeN > 0 && derivedN > 0, `expected both free and derived rows (free=${freeN} derived=${derivedN})`);
+  assert.equal(bad.length, 0, `${bad.length} of ${scored} failed: ` + bad.slice(0, 8).join(" | "));
 });
 
 test("a team's own livery keeps its brand mark; any other livery recolours it", () => {
@@ -259,51 +240,34 @@ test("the roster no longer reaches for a logo PNG", () => {
   }
 });
 
-test("an authored TEAM LOGO colour is painted, or no halo could have carried it", () => {
+test("an authored TEAM LOGO colour is painted exactly as selected", () => {
   // The editor's TEAM LOGO row writes liv.logo. markPalette used to overrule it
-  // whenever it fell under MARK_FLOOR against the paint, which on Audi is
-  // almost every mid-tone in the picker — its fin is [0.96,0.02,0.22], and only
-  // near-white and near-black clear 4.2 against that. The player set a colour
-  // and the car came back in a different one, with no way to tell why.
-  //
-  // The rule now: keep the colour and outline it. This asserts the rule EXACTLY
-  // rather than as a percentage — every substitution has to be one no halo
-  // could have rescued, so the fallback cannot quietly widen again.
+  // whenever it fell under MARK_FLOOR against the paint (or force a halo, or
+  // substitute when no halo cleared). The colour picked is the colour painted —
+  // no contrast floor, no auto-halo.
   const PICKS = [
     [0.97, 0.97, 0.98], [0.06, 0.06, 0.08], [1.00, 0.55, 0.00], [0.10, 0.80, 0.90],
     [0.55, 0.90, 0.20], [0.90, 0.20, 0.70], [0.90, 0.72, 0.20], [0.10, 0.16, 0.45],
   ];
-  const INK_LIGHT = [0.97, 0.97, 0.98], INK_DARK = [0.06, 0.06, 0.08];
   const bad = [];
-  let scored = 0, kept = 0;
+  let scored = 0;
   for (const team of Teams.LIST) {
     for (const liv of Liveries.forTeam(team)) {
       for (const logo of PICKS) {
         for (const [where, bare] of [["cover", false], ["badge", true]]) {
           const L = { ...liv, logo };
           const P = LT.markPalette(team.id, L, fieldsFor(L, bare), bare);
-          const under = P.under;
           scored++;
-          if (P.mark.every((v, i) => Math.abs(v - logo[i]) < 1e-6)) { kept++; continue; }
-          // Substituted. That is only allowed when NEITHER ink can serve as a
-          // halo, scored the way the grid above scores one: PER BACKGROUND,
-          // mark-or-halo, because where the mark already clears a background
-          // its outline owes that background nothing. The halo must still
-          // separate from the mark.
-          const rescuable = [INK_LIGHT, INK_DARK].some((h) =>
-            LT.contrast(h, logo) >= LT.INK_FLOOR &&
-            under.every((u) => Math.max(LT.contrast(logo, u), LT.contrast(h, u)) >= LT.MARK_FLOOR));
-          if (rescuable)
-            bad.push(`${team.id}/${liv.id}/${where} dropped ${logo.join()} a halo could carry`);
+          if (!P.mark.every((v, i) => Math.abs(v - logo[i]) < 1e-6))
+            bad.push(`${team.id}/${liv.id}/${where} painted ${P.mark.join()} not ${logo.join()}`);
+          if (P.halo)
+            bad.push(`${team.id}/${liv.id}/${where} auto-haloed authored logo`);
         }
       }
     }
   }
   assert.ok(scored > 8000, "expected the full grid, scored " + scored);
   assert.equal(bad.length, 0, `${bad.length} authored colours overruled: ` + bad.slice(0, 6).join(" | "));
-  // And the badge — the shark-fin surface the report was about — has to keep
-  // the great majority, or the "keep it" path has stopped being reached at all.
-  assert.ok(kept / scored > 0.6, `only ${(100 * kept / scored).toFixed(1)}% of authored colours survive`);
 });
 
 test("the LOGO DETAIL colour reaches the canvas on every mark, on both surfaces", () => {
@@ -386,15 +350,10 @@ test("an UPLOADED emblem takes LOGO DETAIL as a rim, tinted or not", () => {
   }
 });
 
-test("an authored SAME-INK island stays legible and is opt-in", () => {
+test("an authored SAME-INK island is painted as selected and is opt-in", () => {
   // `part` is a shape the trace found to share no pixel with the rest of its
-  // layer — Racing Bulls' bull beside its RB letters. It is the one slot that
-  // lets a single-INK mark take a second colour, so it needs its own floor.
-  //
-  // This test drives logo2 itself rather than riding the shipped-livery grid.
-  // It has to: NO shipped livery authors logo2, so a `P.part` rule placed in
-  // that grid scores 0 of 1514 palettes and asserts nothing at all. Measured
-  // before writing this — the count guard below is what keeps it honest.
+  // layer — Racing Bulls' bull beside its RB letters. LOGO DETAIL is a free
+  // pick: the colour lands exactly, no auto-halo.
   const { LiveryTex: LT, Teams, Liveries } = loadCrests();
   const PICKS = [[1, 0.55, 0], [0.1, 0.1, 0.12], [0.95, 0.95, 0.96],
                  [0.8, 0.1, 0.12], [0.15, 0.5, 0.9], [0.5, 0.5, 0.5]];
@@ -404,21 +363,16 @@ test("an authored SAME-INK island stays legible and is opt-in", () => {
     for (const liv of Liveries.forTeam(team)) {
       for (const field of [[0.1, 0.1, 0.12], [0.9, 0.9, 0.92], [0.8, 0.1, 0.1]]) {
         for (const bare of [false, true]) {
-          // Opt-in: with logo2 absent the island must resolve to null, which is
-          // what makes crestTraced fall back to the mark and keeps every
-          // shipped crest pixel-identical to what it was before parts existed.
           if (LT.markPalette(team.id, liv, field, bare).part !== null)
             unset.push(`${team.id}/${liv.id}`);
           for (const pick of PICKS) {
             const P = LT.markPalette(team.id, { ...liv, logo2: pick }, field, bare);
-            if (!P.part) continue;          // this mark spends logo2 elsewhere
+            if (!P.part) continue;
             scored++;
-            // Same test the mark answers: the ink OR its outline must carry it.
-            // Wherever the fill fails, the halo does not.
-            const best = Math.max(LT.contrast(P.part, field),
-                                  P.halo ? LT.contrast(P.halo, field) : 0);
-            if (best < 2.0)
-              bad.push(`${team.id}/${liv.id} part+halo ${best.toFixed(2)} on ${field.join()}`);
+            if (!P.part.every((v, i) => Math.abs(v - pick[i]) < 1e-6))
+              bad.push(`${team.id}/${liv.id} part ${P.part.join()} != ${pick.join()}`);
+            if (P.halo)
+              bad.push(`${team.id}/${liv.id} auto-haloed authored LOGO DETAIL`);
           }
         }
       }
@@ -428,7 +382,7 @@ test("an authored SAME-INK island stays legible and is opt-in", () => {
   assert.ok(scored > 0,
     "no mark has a `part` island, so this test scored nothing — if the crest " +
     "data lost its per-island roles, that is the bug, not this assertion");
-  assert.deepEqual(bad, [], "an authored same-ink island vanished into the field");
+  assert.deepEqual(bad, [], "an authored same-ink island was overruled");
 });
 
 test("every mark row the editor offers paints a shape, and no row is a duplicate", () => {
@@ -464,10 +418,9 @@ test("every mark row the editor offers paints a shape, and no row is a duplicate
     for (const liv of Liveries.forTeam(team)) {
       for (const bare of [false, true]) {
         for (const r of rows) {
-          // `logo` is the DOMINANT shape and the one slot markPalette is
-          // allowed to overrule — an unreadable choice is substituted, which
-          // the test above bounds exactly. Its reachability is that test's; a
-          // colour census here would just re-litigate the substitution policy.
+          // `logo` is the DOMINANT shape. An unreadable DERIVED colour is still
+          // floored; an authored TEAM LOGO pick is kept as selected (see the
+          // authored-colour test). Reachability for logo2/logo3 is below.
           if (r.key === "logo") continue;
           const where = `${team.id}/${liv.id}/${bare ? "badge" : "cover"} ${r.label}`;
           if (paints(team.id, liv, bare)) { dead.push(where + " painted D unset"); continue; }

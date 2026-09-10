@@ -49,9 +49,11 @@ test("render-car walks a team LIST in one browser, and grids the sheet by team",
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
-  assert.match(src, /viewsDefault = rollupOnly && !argvHas\("--views"\)/,
-    "multi-team rollup defaults to one view unless --full-views");
-  assert.match(src, /preset && !argvHas\("--views"\) \? preset\.views : "spine"/,
+  assert.match(src, /if \(preset && !argvHas\("--views"\)\) return preset\.views/,
+    "preset views win over multi-team rollup default");
+  assert.match(src, /if \(rollupOnly && !argvHas\("--views"\)\) return rollupViewFlag \|\| "side"/,
+    "multi-team rollup defaults to one view unless --full-views or a preset");
+  assert.match(src, /return "spine"/,
     "single-team default views=spine unless a preset overrides");
   assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
   assert.match(src, /screenshotGameCanvas\(page, png, \{[\s\S]*skipAwait: true/,
@@ -154,6 +156,8 @@ test("liveries.js publishes ONE field list and forTeam consumes it", () => {
   }
   assert.equal(list.includes('"crestInk"'), false, "crestInk left the paint sheet / FIELDS");
   assert.equal(list.includes('"plateInk"'), false, "plateInk left the paint sheet / FIELDS");
+  assert.equal(list.includes('"ridgeTint"'), false, "ridgeTint folded into spineTint");
+  assert.equal(list.includes('"airboxTint"'), false, "airboxTint folded into cover");
 });
 
 test("garage-angles labels frames and can A/B a ref without touching the tree", () => {
@@ -188,12 +192,46 @@ test("garage-angles reports per-phase timing and reads the loadavg", () => {
 test("garage-angles has presets, --plan, --fast, and tunable settle", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /const PRESETS = \{/, "purpose presets like render-car");
+  assert.match(src, /bay:\s*\{\s*views:\s*"bay"/, "bay preset = angled room framing");
+  assert.match(src, /bayFront:\s*\{\s*views:\s*"bayFront"/, "bayFront = opposite diagonal");
+  assert.match(src, /saddleWall:/, "saddleWall = bayFront + saddle + default logos");
+  assert.match(src, /"bayFront"/, "bayFront is a named view in ALL");
+  assert.match(src, /--az-nudge/, "orbit framing via az-nudge click counts");
+  assert.match(src, /--el-nudge/, "orbit framing via el-nudge click counts");
+  assert.match(src, /--logos/, "logos=default authors brand mark as liv.logo");
+  assert.match(src, /clearLogos/, "applyDesign honours logos=default");
+  assert.match(src, /markBase/, "logos=default uses LiveryTex.markBase for brand colour");
+  assert.match(src, /argvHas\("--site"\) \|\| argvHas\("--cdn"\)/,
+    "--site/--cdn opens github.io; --live is gallery-only");
+  assert.match(src, /if \(preset && !argvHas\("--views"\)\) return preset\.views/,
+    "preset views win over multi-team rollup default");
   assert.match(src, /presetRaw === "list"/, "--preset=list prints and exits");
   assert.match(src, /argvHas\("--plan"\)/, "--plan prints the matrix without booting");
   assert.match(src, /liverySettle/, "livery/design apply uses --settle");
   assert.match(src, /viewSettle/, "camera-only moves use --view-settle");
   assert.match(src, /keepPage: !!againstRef/, "--against reuses the page for pass B");
   assert.match(src, /argvHas\("--live"\)/, "--live writes auto-refresh live.html after each shot");
+  assert.doesNotMatch(src, /if \(doLive && !againstRef\)/,
+    "--live must not switch gameUrl to the CDN (that is --site)");
+});
+
+test("garageFrame accepts az/el nudges and absolute orbit", () => {
+  const src = code("js/agent/apex.js");
+  const at = src.indexOf("garageFrame(view, opts)");
+  assert.ok(at > 0, "garageFrame hook must exist");
+  const body = src.slice(at, at + 1200);
+  assert.match(body, /azNudge/, "UI left/right click counts");
+  assert.match(body, /elNudge/, "UI up/down click counts");
+  assert.match(body, /Number\.isFinite\(opts\.az\)/, "absolute az after preset");
+  assert.match(body, /nudgeSetupCam/, "orbit goes through G.nudgeSetupCam");
+});
+
+test("SP_VIEWS includes bay and bayFront angled garage framings", () => {
+  const src = code("js/game.js");
+  assert.match(src, /bay:\s*\{\s*az:\s*Math\.PI\s*\*\s*0\.68/,
+    "bay sits between side and hero for rear-left room shot");
+  assert.match(src, /bayFront:\s*\{\s*az:\s*Math\.PI\s*\*\s*0\.32/,
+    "bayFront is the front-left opposite diagonal (left flank + back wall)");
 });
 
 test("garage-angles multi-team rollup uses __apex fast path from PR #96 port", () => {
