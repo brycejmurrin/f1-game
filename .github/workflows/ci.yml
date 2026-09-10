@@ -1070,10 +1070,25 @@ jobs:
     runs-on: ubuntu-latest
     # BLOCKING ON BRANCH PUSHES AND PULL REQUESTS. A PR's event.before is not its
     # comparison base, so the selector uses pull_request.base.sha explicitly;
-    # pushes use event.before. workflow_call remains disabled: the Pages workflow
+    # pushes use event.before. workflow_call stays disabled: the Pages workflow
     # already gates deploys with guards / sweeps / smoke / driving-model, and its
     # event payload does not carry a PR base.
-    if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
+    #
+    # THE EVENT NAME CANNOT SAY THAT, and for three weeks this condition did not
+    # do what the paragraph above claims. In a REUSABLE workflow the github
+    # context is the CALLER's, so `github.event_name` here reads `push` on a
+    # Pages call exactly as it does on a direct push -- it never reads
+    # "workflow_call" and there is no value of it that excludes one. So this job
+    # ran inside the deploy gate and blocked it: Pages run 2215 (2026-09-10)
+    # ended `failure` with `ci / Selected specs` as its ONLY failed job, on a
+    # newContext() hang that has nothing to do with what was being deployed. A
+    # skipped job would have reported `skipped`; `failure` is the proof it ran.
+    #
+    # `inputs` IS caller-specific, so gate on that instead. pages.yml passes
+    # concurrency_key: pages-<run_id>; a direct push or PR leaves it "" (the
+    # declared default, and `inputs` is empty for non-workflow_call events --
+    # the concurrency group below already leans on that same falsiness).
+    if: ${{ inputs.concurrency_key == '' && (github.event_name == 'push' || github.event_name == 'pull_request') }}
     #
     # The budget maths is tools/ci/select-budget.mjs (measured: 79.7 s/test at one
     # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).

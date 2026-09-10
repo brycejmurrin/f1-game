@@ -98,8 +98,14 @@ test("the selected gate blocks pushes and PRs, but not workflow calls", () => {
     failsClosedOnInvalidBase: true,
     surfacesBudgetSkips: true,
   });
+  // The event_name half alone is NOT the gate and never was: github.event_name
+  // is the caller's inside a reusable workflow, so it reads 'push' on a Pages
+  // call too. The inputs.concurrency_key half is what excludes the deploy, and
+  // it is the half worth pinning -- dropping it silently puts a browser gate
+  // back in front of every deploy (Pages run 2215).
+  assert.match(selected, /if: \$\{\{ inputs\.concurrency_key == '' &&/);
   assert.match(selected,
-    /if: \$\{\{ github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \}\}/);
+    /github\.event_name == 'push' \|\| github\.event_name == 'pull_request'/);
   assert.doesNotMatch(selected, /^    continue-on-error:/m);
 });
 
