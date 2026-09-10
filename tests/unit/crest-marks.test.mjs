@@ -259,51 +259,34 @@ test("the roster no longer reaches for a logo PNG", () => {
   }
 });
 
-test("an authored TEAM LOGO colour is painted, or no halo could have carried it", () => {
+test("an authored TEAM LOGO colour is painted exactly as selected", () => {
   // The editor's TEAM LOGO row writes liv.logo. markPalette used to overrule it
-  // whenever it fell under MARK_FLOOR against the paint, which on Audi is
-  // almost every mid-tone in the picker — its fin is [0.96,0.02,0.22], and only
-  // near-white and near-black clear 4.2 against that. The player set a colour
-  // and the car came back in a different one, with no way to tell why.
-  //
-  // The rule now: keep the colour and outline it. This asserts the rule EXACTLY
-  // rather than as a percentage — every substitution has to be one no halo
-  // could have rescued, so the fallback cannot quietly widen again.
+  // whenever it fell under MARK_FLOOR against the paint (or force a halo, or
+  // substitute when no halo cleared). The colour picked is the colour painted —
+  // no contrast floor, no auto-halo.
   const PICKS = [
     [0.97, 0.97, 0.98], [0.06, 0.06, 0.08], [1.00, 0.55, 0.00], [0.10, 0.80, 0.90],
     [0.55, 0.90, 0.20], [0.90, 0.20, 0.70], [0.90, 0.72, 0.20], [0.10, 0.16, 0.45],
   ];
-  const INK_LIGHT = [0.97, 0.97, 0.98], INK_DARK = [0.06, 0.06, 0.08];
   const bad = [];
-  let scored = 0, kept = 0;
+  let scored = 0;
   for (const team of Teams.LIST) {
     for (const liv of Liveries.forTeam(team)) {
       for (const logo of PICKS) {
         for (const [where, bare] of [["cover", false], ["badge", true]]) {
           const L = { ...liv, logo };
           const P = LT.markPalette(team.id, L, fieldsFor(L, bare), bare);
-          const under = P.under;
           scored++;
-          if (P.mark.every((v, i) => Math.abs(v - logo[i]) < 1e-6)) { kept++; continue; }
-          // Substituted. That is only allowed when NEITHER ink can serve as a
-          // halo, scored the way the grid above scores one: PER BACKGROUND,
-          // mark-or-halo, because where the mark already clears a background
-          // its outline owes that background nothing. The halo must still
-          // separate from the mark.
-          const rescuable = [INK_LIGHT, INK_DARK].some((h) =>
-            LT.contrast(h, logo) >= LT.INK_FLOOR &&
-            under.every((u) => Math.max(LT.contrast(logo, u), LT.contrast(h, u)) >= LT.MARK_FLOOR));
-          if (rescuable)
-            bad.push(`${team.id}/${liv.id}/${where} dropped ${logo.join()} a halo could carry`);
+          if (!P.mark.every((v, i) => Math.abs(v - logo[i]) < 1e-6))
+            bad.push(`${team.id}/${liv.id}/${where} painted ${P.mark.join()} not ${logo.join()}`);
+          if (P.halo)
+            bad.push(`${team.id}/${liv.id}/${where} auto-haloed authored logo`);
         }
       }
     }
   }
   assert.ok(scored > 8000, "expected the full grid, scored " + scored);
   assert.equal(bad.length, 0, `${bad.length} authored colours overruled: ` + bad.slice(0, 6).join(" | "));
-  // And the badge — the shark-fin surface the report was about — has to keep
-  // the great majority, or the "keep it" path has stopped being reached at all.
-  assert.ok(kept / scored > 0.6, `only ${(100 * kept / scored).toFixed(1)}% of authored colours survive`);
 });
 
 test("the LOGO DETAIL colour reaches the canvas on every mark, on both surfaces", () => {
@@ -464,10 +447,9 @@ test("every mark row the editor offers paints a shape, and no row is a duplicate
     for (const liv of Liveries.forTeam(team)) {
       for (const bare of [false, true]) {
         for (const r of rows) {
-          // `logo` is the DOMINANT shape and the one slot markPalette is
-          // allowed to overrule — an unreadable choice is substituted, which
-          // the test above bounds exactly. Its reachability is that test's; a
-          // colour census here would just re-litigate the substitution policy.
+          // `logo` is the DOMINANT shape. An unreadable DERIVED colour is still
+          // floored; an authored TEAM LOGO pick is kept as selected (see the
+          // authored-colour test). Reachability for logo2/logo3 is below.
           if (r.key === "logo") continue;
           const where = `${team.id}/${liv.id}/${bare ? "badge" : "cover"} ${r.label}`;
           if (paints(team.id, liv, bare)) { dead.push(where + " painted D unset"); continue; }
