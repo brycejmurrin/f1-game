@@ -146,9 +146,9 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
     assert.equal(fs.existsSync(path.join(SKILLS, gone)), false, `${gone} was folded/deleted 2026-09`);
   }
   const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
-  // 26 -> 25 on 2026-09-03: webgpu-debug left with the WGX/TLX spike-out and
-  // lives at spike/backends/skills/webgpu-debug/. It comes back with the backends.
-  assert.equal(dirs.length, 26, `expected 25 skills, got ${dirs.length}`);
+  // Count tracks disk: webgpu-debug returned with the backends; keep the
+  // assertion message honest so a drift failure does not cite a stale 25.
+  assert.equal(dirs.length, 26, `expected 26 skills, got ${dirs.length}`);
   // cross-backend-parity was a 15-line pointer at the renderers doc; that doc
   // was absorbed into docs/ARCHITECTURE.md in Phase 5 and the section moved
   // with it (docs/RENDERERS.md is a redirect stub now).

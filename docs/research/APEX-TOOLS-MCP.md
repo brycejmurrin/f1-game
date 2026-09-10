@@ -1,5 +1,11 @@
 # Apex Tools MCP — design
 
+> **Errata (2026-09):** Repo `.mcp.json` attaches **three** servers
+> (`apex-tools`, `playwright-official`, `chrome-devtools`). TinyFish and
+> `probe` are CLI-only. Live Pages / github.io checks go to **deploy-research**
+> (host fetch / WebFetch), not `tinyfish-mcp.sh`. Sections below that still say
+> “five servers” or “Pages is TinyFish” are historical.
+
 **Agent map (what is wrapped, which skill, never-wrap):**
 [`docs/AGENT-SURFACE.md`](../AGENT-SURFACE.md). This file is the refuse table
 and week-by-week pin history.
@@ -79,8 +85,10 @@ Chromium) — same role as `PROBE_MCP_MOCK`.
 
 ## Local vs deploy
 
-**No `apex_*` tool may hit github.io.** Pages is TinyFish / `deploy-research`
-/ `tinyfish-mcp.sh deploy-check --tip`. The Cloud proxy blocks `github.io`
+**No `apex_*` tool may hit github.io.** Pages checks belong to
+**deploy-research** (host fetch / WebFetch). The in-repo `tinyfish-mcp.sh`
+CLI remains for a box with egress only — it is not MCP-attached and cannot
+answer in this container. The Cloud proxy blocks `github.io`
 anyway. `__apex` recipes assume the local harness, not a TinyFish HTML fetch.
 
 Precedence: per-call `url` → per-call `target` → `APEX_MCP_TARGET` → default

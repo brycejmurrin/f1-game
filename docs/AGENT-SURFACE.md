@@ -27,6 +27,7 @@ surface without hand-wiring:
 | Subagents | `.claude/agents/*.md` | Yes for Claude / Cursor. Codex has no parallel path — use AGENTS.md routes. |
 | MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop Cursor loads them; Cloud often does not. |
 | Codex MCP | `.codex/config.toml` | Project `[mcp_servers.*]` lockstepped to `.mcp.json`. Loads only when the project is **trusted**; user overrides may live in `~/.codex/config.toml`. |
+| Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the three catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
 | Cloud VM | `.cursor/environment.json` | `install` + Chromium path + allowlist of the three catalog commands. |
 | Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
 

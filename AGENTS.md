@@ -311,7 +311,9 @@ Committed bootstrap (auto for every Cloud VM that uses this repo):
    symlinks — do not fork copies. No `.cursor/skills/` or `.cursor/agents/`.
 4. Codex MCP: `.codex/config.toml` mirrors the three catalog servers (project
    must be trusted for Codex to load it).
-5. Rules: `AGENTS.md` (canonical); `CLAUDE.md` is `@AGENTS.md` only.
+5. Claude Code MCP approve: `.claude/settings.json` `enabledMcpjsonServers`
+   lists the same three names (applies after workspace trust).
+6. Rules: `AGENTS.md` (canonical); `CLAUDE.md` is `@AGENTS.md` only.
 
 Cloud often does **not** attach project stdio MCP. Then use the CLI fallbacks
 in `docs/AGENT-SURFACE.md` (`tools/mcp/apex-tools-mcp.sh call`, …). Team MCP

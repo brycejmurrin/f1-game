@@ -152,6 +152,13 @@ test("bootstrap contract is documented for Cloud + desktop", () => {
   assert.match(agents, /mcpServerAllowlist/);
   assert.match(agents, /\.agents\/skills/);
   assert.match(read("CLAUDE.md"), /@AGENTS\.md/);
+  const settings = JSON.parse(read(".claude/settings.json"));
+  assert.deepEqual(
+    [...(settings.enabledMcpjsonServers || [])].sort(),
+    ["apex-tools", "chrome-devtools", "playwright-official"],
+    ".claude/settings.json must approve the three catalog servers",
+  );
+  assert.match(doc, /enabledMcpjsonServers/);
 });
 
 test("Codex skill mirror locksteps .claude/skills via symlinks", () => {
