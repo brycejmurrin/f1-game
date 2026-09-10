@@ -124,8 +124,25 @@ export function specsOf(scriptNames, scripts) {
   return [...out].sort();
 }
 
-/** Cut the spec list to what fits `budgetMin` surviving one timeout. */
-export function fit(specs, budgetMin) {
+// A spec the change AFFECTS (edited, previously failed, or importing a changed
+// helper) that does not fit the main budget is not dropped: it runs alone in
+// its own matrix shard, billed at its own declared test count. Bounded, so a
+// helper edit that touches 59 specs cannot fan out into 59 runners — the rest
+// are named as skipped, which is the honesty contract this file has always had.
+export const MAX_OVERSIZE_SHARDS = 3;
+// Minutes a shard may take before the runner kills it: every test at the gate's
+// per-test timeout, plus setup (npm ci + chromium, ~4 min) and margin. A killed
+// job reads as "0 failures" in the aggregate, which this file's history shows
+// hiding a dead deploy, so the cap is derived, never guessed.
+export const shardTimeoutMin = (tests) =>
+  Math.min(90, Math.ceil((tests * SELECTED_GATE.perTestTimeoutSec) / 60) + 6);
+
+/** Cut the spec list to what fits `budgetMin` surviving one timeout.
+ *  `rank(file)` orders the cut: lower ranks fill the budget first (prioritise()
+ *  defines the scale — 0 edited, 1 previously failed, 2 imports a changed
+ *  helper, 3 routed by a path rule), ties smallest-first. Affected specs
+ *  (rank < 3) that miss the budget go to `oversize` instead of `skipped`. */
+export function fit(specs, budgetMin, { rank = () => 3 } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByVmTwin = [];
@@ -166,24 +183,44 @@ export function fit(specs, budgetMin) {
     }
     counted.push({ file, tests });
   }
-  counted.sort((a, b) => a.tests - b.tests);
-  const selected = [], skipped = [], unreachable = [];
+  // AFFECTED FIRST, then smallest-first. The cut used to be smallest-first
+  // alone with the priority applied AFTER it as a mere reordering, so a changed
+  // 10-test spec was omitted whenever smaller routed specs had already filled
+  // the 10-test cap — the one spec the change most needed was the one dropped.
+  // A budget that cannot afford the spec you just edited is not "change-aware".
+  for (const r of counted) r.rank = rank(r.file);
+  counted.sort((a, b) => a.rank - b.rank || a.tests - b.tests);
+  const selected = [], skipped = [], unreachable = [], oversize = [];
   let used = 0;
   for (const r of counted) {
-    // A spec bigger than the WHOLE cap can never be selected — not "did not fit
-    // today", but "cannot fit on any change, ever", because the cut is greedy
-    // smallest-first. Naming it as merely skipped is what let
-    // multiplayer-session.spec.js (19 tests against a 10-test cap) sit red for
-    // weeks: every js/net change listed it as skipped and nobody read a routine
-    // line. Separating the two turns a permanent hole into a visible one — the
-    // spec still does not run here, so this is a REPORT, not a fix: it belongs
-    // in a fixed gate, or split, or its invariant needs a cheap unit home.
-    if (r.tests > cap.tests) { unreachable.push(r); continue; }
-    if (used + r.tests <= cap.tests) { selected.push(r); used += r.tests; }
+    // A spec bigger than the WHOLE cap can never be selected into the main
+    // shard — not "did not fit today", but "cannot fit on any change, ever".
+    // Naming it as merely skipped is what let multiplayer-session.spec.js (19
+    // tests against a 10-test cap) sit red for weeks: every js/net change listed
+    // it as skipped and nobody read a routine line. An AFFECTED one now runs in
+    // its own shard (below); an unaffected one stays a visible REPORT — it
+    // belongs in a fixed gate, or split, or its invariant needs a unit home.
+    if (used + r.tests <= cap.tests) { selected.push(r); used += r.tests; continue; }
+    if (r.rank < 3) oversize.push(r);
+    else if (r.tests > cap.tests) unreachable.push(r);
     else skipped.push(r);
   }
-  return { selected, skipped, unreachable, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
+  // The oversize list is bounded; the overflow is skipped BY NAME, never silently.
+  const oversizeRun = oversize.slice(0, MAX_OVERSIZE_SHARDS);
+  for (const r of oversize.slice(MAX_OVERSIZE_SHARDS)) skipped.push(r);
+  return { selected, skipped, unreachable, oversize: oversizeRun, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
     testsSelected: used, testsFit: cap.tests, cap };
+}
+
+/** The matrix the CI gate runs: one shard for the budgeted selection, one per
+ *  oversize affected spec, each with the derived cap it is billed at. */
+export function shards(r) {
+  const out = [];
+  if (r.selected.length) out.push({ name: "selected", specs: r.selected.map((s) => s.file).join(" "),
+    tests: r.testsSelected, timeout: shardTimeoutMin(r.testsFit) });
+  for (const s of r.oversize || []) out.push({ name: `oversize-${path.basename(s.file, ".spec.js")}`,
+    specs: s.file, tests: s.tests, timeout: shardTimeoutMin(s.tests) });
+  return out;
 }
 
 // TRACKED (infra) PATHS — a change here makes the SELECTION ITSELF untrustworthy,
@@ -328,12 +365,19 @@ export function select(changedRef, budgetMin = 15, opts = {}) {
     : docsOnly ? "docs"
     : tracked.length ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
-  const cut = fit(candidates, budgetMin);
+  const rank = (f) => changedSpecs.includes(f) ? 0 : failedInScope.includes(f) ? 1
+    : imported.includes(f) ? 2 : 3;
+  const cut = fit(candidates, budgetMin, { rank });
+  // "infra" no longer EMPTIES the selection. A tracked-path change (the shell,
+  // a fixture every spec imports, this selector) can affect any spec, which is
+  // a reason to distrust the routing, not a reason to run nothing: the specs
+  // this diff edited or imports are still the best-evidenced ones to run, and
+  // the fixed gates still own the rest. The warning stays so the log says why
+  // the selection is narrower than the change.
   const r = { reason, changed: changed.length, tracked, groups: browserGroups, bootCoveredBySmoke,
               changedSpecs, imported, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
-  // On "infra" the selection is reported but NOT run — the gates own that push.
-  if (reason === "infra") { r.skipped = [...r.selected, ...r.skipped]; r.selected = []; r.testsSelected = 0; }
+  r.shards = shards(r);
   return r;
 }
 
@@ -357,9 +401,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (argv.includes("--json")) { console.log(JSON.stringify(r, null, 2)); process.exit(0); }
   console.error(`${r.changed} changed file(s) [${r.reason}] -> groups: ${r.groups.join(", ") || "(none)"}`);
   if (r.reason === "infra") console.error(
-    `SELECTION NOT MEANINGFUL: this diff touches ${r.tracked.length} tracked/infra path(s) ` +
+    `SELECTION NARROWER THAN THE CHANGE: this diff touches ${r.tracked.length} tracked/infra path(s) ` +
     `(${r.tracked.slice(0, 4).join(", ")}${r.tracked.length > 4 ? ", …" : ""}) — a change there can affect ` +
-    `any spec, so nothing is selected and the GATES own this push.`);
+    `any spec; the edited/imported specs below still run, and the fixed GATES own the rest.`);
   if (r.reason === "unmatched") console.error(
     "SELECTION NOT TRUSTWORTHY: files changed but no pick-tests rule claimed them.");
   for (const s of r.failedDropped || []) console.error(
@@ -376,5 +420,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `UNREACHABLE (declares ${s.tests} tests > the whole ${r.testsFit}-test cap — this gate can ` +
     `NEVER run it): ${s.file}`);
   for (const s of r.skipped) console.error(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
+  for (const s of r.oversize) console.error(
+    `OVERSIZE (affected by this change, runs in its own shard, ${shardTimeoutMin(s.tests)} min cap): ${s.file} (${s.tests} tests)`);
   for (const s of r.selected) console.log(s.file);
+  for (const s of r.oversize) console.log(s.file);
 }

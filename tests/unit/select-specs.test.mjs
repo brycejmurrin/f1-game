@@ -9,13 +9,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
-  DOCS_ONLY, isDocsOnly,
+  DOCS_ONLY, isDocsOnly, shards, shardTimeoutMin, MAX_OVERSIZE_SHARDS,
   SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
   scopeCarryForward } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
-import { MEASURED, capacity } from "../../tools/ci/select-budget.mjs";
+import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -297,6 +297,50 @@ test("the gate's per-test timeout clears the SLOWEST spec, not the average one",
     "a timeout that only just clears the slowest spec fails on any contention");
 });
 
+test("the cut fills AFFECTED specs first, so the spec you edited cannot lose to smaller routed ones", () => {
+  // 2026-09-10 audit: a changed 10-test assets spec was omitted while three
+  // smaller routed specs consumed the 10-test budget, because the priority was
+  // applied AFTER a smallest-first cut. Real specs so declaredTests resolves.
+  const changed = "tests/specs/assets-api.spec.js";
+  const small = ["tests/specs/output-paths.spec.js", "tests/specs/telemetry-compare.spec.js",
+                 "tests/specs/race-control.spec.js"];
+  const rank = (f) => f === changed ? 0 : 3;
+  const r = fit([...small, changed], 15, { rank });
+  const bigEnough = declaredTests(changed) + Math.min(...small.map(declaredTests)) > r.testsFit;
+  assert.ok(bigEnough, "the fixture must not fit alongside the smallest routed spec, or this proves nothing");
+  assert.ok(r.selected.some((s) => s.file === changed), "the edited spec is selected");
+  assert.equal(r.selected[0].file, changed, "and it is first in the budgeted shard");
+  // Under the old smallest-first cut the same inputs dropped it:
+  const old = fit([...small, changed], 15);
+  assert.ok(!old.selected.some((s) => s.file === changed), "the pre-fix ordering reproduces the audit's omission");
+});
+
+test("an affected spec that cannot fit the budget runs in its own OVERSIZE shard, bounded and named", () => {
+  const big = "tests/specs/multiplayer-session.spec.js";   // 19 tests against a 10-test cap
+  assert.ok(declaredTests(big) > fit([], 15).testsFit, "fixture must exceed the whole cap");
+  const affected = fit([big, "tests/specs/boot-guard.spec.js"], 15, { rank: (f) => f === big ? 0 : 3 });
+  assert.deepEqual(affected.oversize.map((s) => s.file), [big], "affected + too big = its own shard");
+  assert.ok(!affected.unreachable.some((s) => s.file === big), "not reported as unreachable when it will run");
+  const routed = fit([big, "tests/specs/boot-guard.spec.js"], 15);
+  assert.ok(routed.unreachable.some((s) => s.file === big), "merely routed + too big stays a visible REPORT");
+  assert.deepEqual(routed.oversize, [], "no shard is spent on a spec the change did not touch");
+  const plan = shards({ ...affected, testsSelected: affected.testsSelected });
+  const shard = plan.find((s) => s.name.startsWith("oversize-"));
+  assert.ok(shard && shard.specs === big, "the plan carries the oversize spec as its own matrix entry");
+  assert.equal(shard.timeout, shardTimeoutMin(declaredTests(big)), "billed at its own declared count");
+  assert.ok(MAX_OVERSIZE_SHARDS >= 1 && MAX_OVERSIZE_SHARDS <= 4, "fan-out stays bounded");
+});
+
+test("a tracked-path change narrows the selection to the edited/imported specs instead of emptying it", () => {
+  // Before: reason "infra" set selected = [] and the gate ran nothing for a
+  // change to the shell or a shared fixture — silent exactly when everything
+  // might be affected. The reason still reports "infra" so the log says why the
+  // selection is narrower than the change; the selection itself stands.
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/select-specs.mjs"), "utf8");
+  assert.ok(!/reason === "infra"\) \{ r\.skipped/.test(src), "select() no longer blanks the selection on infra");
+  assert.match(src, /r\.shards = shards\(r\)/, "select() emits the matrix plan the CI job consumes");
+});
+
 test("ci.yml runs the selected gate with the settings the selector models", () => {
   // Three files encode this one number (select-specs, select-budget, ci.yml) and
   // the workflow is the only one the runner actually obeys. When they drifted,
@@ -306,11 +350,20 @@ test("ci.yml runs the selected gate with the settings the selector models", () =
   assert.match(yml, new RegExp(`--retries=0 --timeout=${ms} --max-failures=3`),
     `ci.yml's selected step does not run --timeout=${ms}`);
   // cap >= (tests x per-test timeout) + setup + margin, per the job's own comment.
-  const cap = Number(/name: Selected specs[\s\S]*?timeout-minutes: (\d+)/.exec(yml)?.[1]);
-  const worstCaseMin = (10 * SELECTED_GATE.perTestTimeoutSec) / 60 + 4;
-  assert.ok(cap >= worstCaseMin,
-    `timeout-minutes ${cap} is under the worst case (${worstCaseMin.toFixed(0)} min): ` +
+  // The cap is now DERIVED per shard by shardTimeoutMin and handed to the job
+  // through the matrix, so the workflow must read it from there and the
+  // function must clear the worst case for the budgeted shard.
+  assert.match(yml, /name: Selected specs[\s\S]*?timeout-minutes: \$\{\{ matrix\.timeout \}\}/,
+    "the selected job's cap must come from the matrix (shardTimeoutMin), not a literal");
+  const budgeted = fit([], 15).testsFit;
+  const worstCaseMin = (budgeted * SELECTED_GATE.perTestTimeoutSec) / 60 + 4;
+  assert.ok(shardTimeoutMin(budgeted) >= worstCaseMin,
+    `shardTimeoutMin(${budgeted}) = ${shardTimeoutMin(budgeted)} is under the worst case (${worstCaseMin.toFixed(0)} min): ` +
     "the job would be CANCELLED, which reads as 0 failures and hides a dead deploy");
+  // The deploy gate runs it now: no caller-key exclusion on the plan job.
+  const selectJob = /\n  select:\n[\s\S]*?\n  selected:\n/.exec(yml)?.[0] || "";
+  assert.ok(selectJob && !/concurrency_key == ''/.test(selectJob),
+    "the select job must not skip itself on the Pages call — exact-commit deploys need the change-aware gate too");
 });
 
 test("raising the gate must not enrol specs that opted out of the lower one", () => {

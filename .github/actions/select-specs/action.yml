@@ -13,5 +13,11 @@ runs:
       run: bash tools/ci/ci-select-specs-step.sh
 outputs:
   specs:
-    description: space-separated spec paths
+    description: space-separated spec paths of the budgeted shard
     value: ${{ steps.sel.outputs.specs }}
+  shards:
+    description: JSON matrix — the budgeted shard plus one shard per oversize affected spec, each with its derived cap
+    value: ${{ steps.sel.outputs.shards }}
+  any:
+    description: "true when there is at least one shard to run"
+    value: ${{ steps.sel.outputs.any }}
