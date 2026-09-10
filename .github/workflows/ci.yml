@@ -348,8 +348,10 @@ jobs:
     # One subtest of parts-visual-distinctness ("every option resolves to
     # itself") measured 559 s of the 999 s sweeps run on 2026-09-01. Its own
     # runner, unconditional and in parallel, so the geometry sweeps finish in
-    # ~7 min and this never blocks them. 20 = 2x the measured 9.5 min.
-    timeout-minutes: 20
+    # ~7 min and this never blocks them. The census now runs its categories
+    # across worker threads over an integer-keyed grid: 71 s on four cores
+    # (2026-09-10, byte-identical rows). 10 = well over 2x that, plus setup.
+    timeout-minutes: 10
     env:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:

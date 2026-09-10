@@ -34,9 +34,11 @@
 //
 // Exits non-zero when any row is INVISIBLE or BROKEN.
 import fs from "node:fs";
+import os from "node:os";
 import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -322,39 +324,74 @@ function distPointTri(px, py, pz, T, t) {
 }
 
 const CELL = 0.04;
+// Uniform grid over the mesh bbox with INTEGER cell keys in a CSR layout:
+// cellStart[c]..cellStart[c+1] indexes tris[], in triangle order, so the
+// argmin ties break exactly as the Map-of-arrays version did. The string-keyed
+// Map it replaces spent most of the census building "i,j,k" keys.
+// Each triangle also carries a bounding sphere (centroid + max vertex distance):
+// a query point farther than |p - c| - r cannot be nearer than that to the
+// triangle, so nearest() skips it before the full closest-point test. Skipping
+// only when the bound is >= best cannot change the result (the update is a
+// strict `<`), which is why the full-catalog output is byte-identical.
 function triGrid(T) {
-  const g = new Map();
-  const key = (i, j, k) => i + "," + j + "," + k;
-  for (let t = 0; t < T.n; t++) {
-    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-    for (let k = 0; k < 3; k++) {
-      const x = T.a[t * 9 + k * 3], y = T.a[t * 9 + k * 3 + 1], z = T.a[t * 9 + k * 3 + 2];
-      if (x < x0) x0 = x; if (x > x1) x1 = x;
-      if (y < y0) y0 = y; if (y > y1) y1 = y;
-      if (z < z0) z0 = z; if (z > z1) z1 = z;
-    }
-    for (let i = Math.floor(x0 / CELL); i <= Math.floor(x1 / CELL); i++)
-      for (let j = Math.floor(y0 / CELL); j <= Math.floor(y1 / CELL); j++)
-        for (let k = Math.floor(z0 / CELL); k <= Math.floor(z1 / CELL); k++) {
-          const kk = key(i, j, k);
-          let a = g.get(kk); if (!a) g.set(kk, a = []);
-          a.push(t);
-        }
+  let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (let i = 0; i < T.n * 9; i += 3) {
+    const x = T.a[i], y = T.a[i + 1], z = T.a[i + 2];
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z;
   }
-  return g;
+  const ix0 = Math.floor(x0 / CELL), jy0 = Math.floor(y0 / CELL), kz0 = Math.floor(z0 / CELL);
+  const nx = Math.floor(x1 / CELL) - ix0 + 1, ny = Math.floor(y1 / CELL) - jy0 + 1, nz = Math.floor(z1 / CELL) - kz0 + 1;
+  const ncell = nx * ny * nz;
+  const start = new Int32Array(ncell + 1);
+  const lo = new Int32Array(T.n * 3), hi = new Int32Array(T.n * 3);
+  const cx = new Float64Array(T.n), cy = new Float64Array(T.n), cz = new Float64Array(T.n), rad = new Float64Array(T.n);
+  for (let t = 0; t < T.n; t++) {
+    const o = t * 9;
+    let ax = Infinity, bx = -Infinity, ay = Infinity, by = -Infinity, az = Infinity, bz = -Infinity;
+    for (let k = 0; k < 3; k++) {
+      const x = T.a[o + k * 3], y = T.a[o + k * 3 + 1], z = T.a[o + k * 3 + 2];
+      if (x < ax) ax = x; if (x > bx) bx = x; if (y < ay) ay = y; if (y > by) by = y; if (z < az) az = z; if (z > bz) bz = z;
+    }
+    lo[t * 3] = Math.floor(ax / CELL) - ix0; hi[t * 3] = Math.floor(bx / CELL) - ix0;
+    lo[t * 3 + 1] = Math.floor(ay / CELL) - jy0; hi[t * 3 + 1] = Math.floor(by / CELL) - jy0;
+    lo[t * 3 + 2] = Math.floor(az / CELL) - kz0; hi[t * 3 + 2] = Math.floor(bz / CELL) - kz0;
+    for (let i = lo[t * 3]; i <= hi[t * 3]; i++) for (let j = lo[t * 3 + 1]; j <= hi[t * 3 + 1]; j++) for (let k = lo[t * 3 + 2]; k <= hi[t * 3 + 2]; k++)
+      start[(i * ny + j) * nz + k + 1]++;
+    const mx = (T.a[o] + T.a[o + 3] + T.a[o + 6]) / 3, my = (T.a[o + 1] + T.a[o + 4] + T.a[o + 7]) / 3, mz = (T.a[o + 2] + T.a[o + 5] + T.a[o + 8]) / 3;
+    let r2 = 0;
+    for (let k = 0; k < 3; k++) {
+      const dx = T.a[o + k * 3] - mx, dy = T.a[o + k * 3 + 1] - my, dz = T.a[o + k * 3 + 2] - mz;
+      const d2 = dx * dx + dy * dy + dz * dz; if (d2 > r2) r2 = d2;
+    }
+    cx[t] = mx; cy[t] = my; cz[t] = mz; rad[t] = Math.sqrt(r2);
+  }
+  for (let c = 0; c < ncell; c++) start[c + 1] += start[c];
+  const fill = new Int32Array(ncell), tris = new Int32Array(start[ncell]);
+  for (let t = 0; t < T.n; t++)
+    for (let i = lo[t * 3]; i <= hi[t * 3]; i++) for (let j = lo[t * 3 + 1]; j <= hi[t * 3 + 1]; j++) for (let k = lo[t * 3 + 2]; k <= hi[t * 3 + 2]; k++) {
+      const c = (i * ny + j) * nz + k;
+      tris[start[c] + fill[c]++] = t;
+    }
+  return { start, tris, ix0, jy0, kz0, nx, ny, nz, cx, cy, cz, rad };
 }
 function nearest(T, grid, px, py, pz, cap) {
-  const ci = Math.floor(px / CELL), cj = Math.floor(py / CELL), ck = Math.floor(pz / CELL);
+  const ci = Math.floor(px / CELL) - grid.ix0, cj = Math.floor(py / CELL) - grid.jy0, ck = Math.floor(pz / CELL) - grid.kz0;
+  const { start, tris, nx, ny, nz, cx, cy, cz, rad } = grid;
   let best = cap, bestT = -1;
   for (let r = 0; r <= 8; r++) {
     // Stop as soon as the ring cannot beat what we have: a triangle in ring r
     // is at least (r-1)*CELL away.
     if (r > 1 && best <= (r - 1) * CELL) break;
-    for (let i = ci - r; i <= ci + r; i++) for (let j = cj - r; j <= cj + r; j++) for (let k = ck - r; k <= ck + r; k++) {
+    const i0 = Math.max(0, ci - r), i1 = Math.min(nx - 1, ci + r);
+    const j0 = Math.max(0, cj - r), j1 = Math.min(ny - 1, cj + r);
+    const k0 = Math.max(0, ck - r), k1 = Math.min(nz - 1, ck + r);
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) for (let k = k0; k <= k1; k++) {
       if (r > 0 && Math.abs(i - ci) !== r && Math.abs(j - cj) !== r && Math.abs(k - ck) !== r) continue;
-      const a = grid.get(i + "," + j + "," + k);
-      if (!a) continue;
-      for (const t of a) {
+      const c = (i * ny + j) * nz + k;
+      for (let q = start[c], e = start[c + 1]; q < e; q++) {
+        const t = tris[q];
+        const ex = px - cx[t], ey = py - cy[t], ez = pz - cz[t];
+        if (Math.sqrt(ex * ex + ey * ey + ez * ez) - rad[t] >= best) continue;
         const d = distPointTri(px, py, pz, T, t);
         if (d < best) { best = d; bestT = t; }
       }
@@ -466,9 +503,11 @@ export function compare(A, B, opts = {}) {
     if (r.d > dA) dA = r.d;
     if (r.d > eps) movedA += TA.area[t];
   }
+  const nearIdxB = new Int32Array(TB.n).fill(-1), nearDB = new Float64Array(TB.n);
   for (let t = 0; t < TB.n; t++) {
     const c = centroid(TB, t);
     const r = nearest(TA, GA, c[0], c[1], c[2], cap);
+    nearIdxB[t] = r.t; nearDB[t] = r.d;
     if (r.d > dB) dB = r.d;
     if (r.d > eps) movedB += TB.area[t];
   }
@@ -556,17 +595,14 @@ export function compare(A, B, opts = {}) {
   let dHausVis = 0;
   if (opts.vis !== false) {
     const VA = visibleTris(A, TA), VB = visibleTris(B, TB);
+    // The same centroid queries the two passes above already answered.
     for (let t = 0; t < TA.n; t++) {
       if (!VA[t]) continue;
-      const c = centroid(TA, t);
-      const r = nearest(TB, GB, c[0], c[1], c[2], cap);
-      if (r.d > dHausVis && (r.t < 0 || VB[r.t])) dHausVis = r.d;
+      if (nearD[t] > dHausVis && (nearIdx[t] < 0 || VB[nearIdx[t]])) dHausVis = nearD[t];
     }
     for (let t = 0; t < TB.n; t++) {
       if (!VB[t]) continue;
-      const c = centroid(TB, t);
-      const r = nearest(TA, GA, c[0], c[1], c[2], cap);
-      if (r.d > dHausVis && (r.t < 0 || VA[r.t])) dHausVis = r.d;
+      if (nearDB[t] > dHausVis && (nearIdxB[t] < 0 || VA[nearIdxB[t]])) dHausVis = nearDB[t];
     }
   } else dHausVis = Math.max(dA, dB);
 
@@ -794,11 +830,67 @@ export function clampScan(M, cats, opts = {}) {
   return out;
 }
 
+// ── parallel sweep ─────────────────────────────────────────────────────────
+// The census is a pure function per category, so the categories are farmed out
+// to worker threads (each with its own vm context and mesh cache) and the rows
+// are reassembled in CATALOG order: the same rows, in the same order, as one
+// thread's sweep() produces. Categories are handed out dearest-first so the
+// long pole (aero builds every option twice, once per flap pose) starts first.
+// Workers default to the machine's parallelism capped at 4 — the CI runner has
+// four cores. `workers: 1` runs sweep() in-process, which is what --attribute
+// and a debugger want.
+const WORKER_ROLE = "parts-sweep-worker";
+export function sweepParallel({ cats, M, vis, workers } = {}) {
+  const Parts = (M || loadParts()).Parts;
+  // Array.from, not CATALOG.map: CATALOG is a vm-realm array, and mapping it
+  // yields vm-realm arrays all the way to the caller, which deepStrictEqual
+  // rejects against a host `[]` even when both are empty.
+  const ids = Array.from(Parts.CATALOG, (c) => c.id).filter((id) => !cats || cats.includes(id));
+  const n = Math.max(1, Math.min(workers || Math.min(4, os.availableParallelism()), ids.length));
+  if (n === 1) return Promise.resolve(sweep({ cats, M, vis }));
+  const cost = (id) => Parts.CATALOG.find((c) => c.id === id).options.length * (id === "aero" ? 2 : 1);
+  const queue = [...ids].sort((a, b) => cost(b) - cost(a));
+  const done = new Map();
+  return new Promise((resolve, reject) => {
+    const pool = [];
+    let settled = false;
+    const fail = (e) => { if (settled) return; settled = true; for (const w of pool) w.terminate(); reject(e); };
+    // Retire an idle worker with a message, never terminate(): a terminated
+    // worker reports exit code 1, indistinguishable from a crash below.
+    const feed = (w) => {
+      const cat = queue.shift();
+      w.postMessage(cat ? { cat } : { done: true });
+    };
+    for (let i = 0; i < n; i++) {
+      const w = new Worker(fileURLToPath(import.meta.url), {
+        workerData: { role: WORKER_ROLE, vis },
+        resourceLimits: { maxOldGenerationSizeMb: 3072 },
+      });
+      pool.push(w);
+      w.on("message", (m) => {
+        done.set(m.cat, m.rows);
+        if (done.size === ids.length) {
+          settled = true;
+          const out = [];
+          for (const id of ids) out.push(...done.get(id));
+          resolve(out);
+        }
+        feed(w);
+      });
+      w.on("error", fail);
+      w.on("exit", (code) => { if (code !== 0) fail(new Error(`parts-sweep worker exited with ${code}`)); });
+      feed(w);
+    }
+  });
+}
+
 // ── CLI ────────────────────────────────────────────────────────────────────
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const flag = (n, d) => { const i = args.indexOf("--" + n); return i < 0 ? d : args[i + 1]; };
   const has = (n) => args.includes("--" + n);
+  const workersArg = args.find((a) => a.startsWith("--workers="));
+  const workers = workersArg ? +workersArg.slice(10) : undefined;
   const catsArg = args.find((a) => a.startsWith("--cats="));
   const cats = catsArg ? catsArg.slice(7).split(",") : null;
   const onlyArg = args.find((a) => a.startsWith("--only="));
@@ -821,7 +913,7 @@ function main() {
     return;
   }
 
-  const rows = sweep({ cats, M, vis });
+  const rows = await sweepParallel({ cats, M, vis, workers });
 
   if (has("attribute")) {
     const flagged = rows.filter((r) => only ? only.includes(r.cls)
@@ -879,4 +971,15 @@ function main() {
   if (rows.some((r) => r.cls === "INVISIBLE" || r.cls === "BROKEN")) process.exitCode = 1;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+if (!isMainThread && workerData && workerData.role === WORKER_ROLE) {
+  // A sweepParallel worker: one vm context and mesh cache per thread, one
+  // category per message. Workers share process.argv with the CLI parent, so
+  // this branch must come before the main() guard.
+  const M = loadParts();
+  parentPort.on("message", (msg) => {
+    if (msg.done) { parentPort.close(); return; }
+    parentPort.postMessage({ cat: msg.cat, rows: sweep({ cats: [msg.cat], M, vis: workerData.vis }) });
+  });
+} else if (isMainThread && process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}
