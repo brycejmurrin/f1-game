@@ -190,8 +190,8 @@ for (const sheet of document.styleSheets) {
 return { computed: getComputedStyle(el).minHeight, ruleInCSSOM: found };
 ```
 
-If `ruleInCSSOM` is the OLD text, the browser cached the stylesheet (tags read
-`?v=dev`): hard-reload with the cache disabled. If the rule is present but the computed value
+If `ruleInCSSOM` is the OLD text, the browser cached the stylesheet: hard-reload (tags stay `?v=dev`; do not hand-bump `?v=N`)
+and `version.json`, then reload. If the rule is present but the computed value
 differs, it is losing a cascade fight — check `@layer` order first (unlayered
 beats every layer; later layers beat earlier ones) and remember a container query
 adds no specificity.
@@ -235,7 +235,7 @@ re-bless them deliberately rather than by reflex.
 - Comparing a `getBoundingClientRect()` height against a CSS-px token without
   dividing by `currentCSSZoom` — everything inside `.sheet` looks 15% too big.
 - Measuring during the open transition — the screen reports as absent.
-- Soft-reloading after an edit — you measure the previous, cached stylesheet.
+- Soft-reload without cache bypass — you measure the previous stylesheet (hard-reload; tags stay `?v=dev`).
 - Screenshotting with the WebGL canvas visible — large black regions that look
   exactly like a layout bug.
 - Leaving the MCP browser on a live game page while Playwright runs — contention

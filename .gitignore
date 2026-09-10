@@ -36,4 +36,3 @@ assets/pack/src/
 **/__pycache__/
 
 # Codex skill mirror (bash tools/env/mirror-skills.sh) — a copy, never the source
-.agents/

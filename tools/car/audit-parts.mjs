@@ -17,7 +17,7 @@ import {
 } from "../lib/output-paths.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = resolve(HERE, "..", '..', '..');
+const ROOT = resolve(HERE, "..", "..");
 const arg = (key, fallback) => {
   const hit = process.argv.find((value) => value.startsWith(`--${key}=`));
   return hit ? hit.slice(key.length + 3) : fallback;

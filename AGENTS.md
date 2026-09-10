@@ -4,17 +4,15 @@ Unofficial WebGL2 F1 fan game. No build step, no frameworks: pure IIFE modules
 loaded via `<script>` tags, static files on GitHub Pages.
 
 This file holds the rules every session needs and nothing else. Evidence lives
-in `docs/` (start at `docs/README.md`, a reading order); workflows live in
-`.claude/skills/`; rules that must hold every time are hooks in `.claude/hooks/`;
-renderer-specific rules load with their files from `.claude/rules/`.
-`CLAUDE.md` is a stub that imports this file; Cursor and Codex read it directly.
+in `docs/` (start at `docs/README.md`); workflows live in `.claude/skills/`; rules
+that must hold every time are hooks in `.claude/hooks/`; renderer rules load with
+their files from `.claude/rules/`. `CLAUDE.md` imports this; Cursor and Codex read it.
 
 ## Key commands
 
 ```sh
 npx serve -l 3456 .                 # run locally (or: python3 -m http.server 3456)
 npm run test:tooling-fast           # the no-browser guard suite (~3 min)
-npm run test:guards                 # the 14 cross-file guards (11 s; the commit hook runs it)
 node tools/ci/verify-change.mjs     # ONE command: fast gate + batched groups (--wait/--plan/--fast)
 node tools/track/verify-track.cjs <id>    # 2 s headless build check for track edits
 node tools/ci/pick-tests.mjs        # which test GROUPS does this change need? (select-specs.mjs: per-SPEC)
@@ -81,17 +79,16 @@ Session shape — eleven rules that control wall time and waiting:
    3D scene. Stale under `headless(true)`; `snapCam()` after `park()`/`jump()`.
 3. DOM/a11y snapshot (Playwright MCP `browser_*`, or chrome-devtools) —
    menu/HUD work only; hide `#game`.
-4. Pixel screenshot — visual sign-off only, never an assertion source. Live
-   poking is the `mcp-probe` skill; the suite itself always runs script-driven.
+4. Pixel screenshot — visual sign-off only, never an assertion source (live
+   poking: `mcp-probe`; the suite always runs script-driven).
 
 This container has no real GPU: renderers blit onto `#game-soft` and a probe
-waits on `awaitSoftPresent()` (`docs/notes/CI-RENDERING-PERFORMANCE.md`).
-Never run Chrome MCP while Playwright runs; a `version.json` check is the
-`deploy-research` subagent. A unit test of a renderer backend is not evidence
-that it runs: boot it live and confirm one positive signal
-(`docs/ARCHITECTURE.md` §Boot evidence,
-`.claude/skills/mcp-probe/references/recipes.md`; `.claude/rules/render-wgx.md`
-and `.claude/rules/render-tlx.md` hold each backend's gate).
+waits on `awaitSoftPresent()` (`docs/notes/CI-RENDERING-PERFORMANCE.md`). Never
+run Chrome MCP while Playwright runs; a `version.json` check is `deploy-research`.
+A unit test of a renderer backend is not evidence that it runs: boot it live and
+confirm one positive signal (`docs/ARCHITECTURE.md` §Boot evidence,
+`.claude/skills/mcp-probe/references/recipes.md`; each backend's gate is in
+`.claude/rules/render-wgx.md` / `render-tlx.md`).
 
 ## Layout
 
@@ -127,12 +124,12 @@ what exists. Per-directory module tables: `docs/ARCHITECTURE.md`.
 - `tests/data/ratchets.json` ratchets game.js and the other big modules at
   their current values — pay for every added line (`node
   tools/check/ratchets.mjs --update` lowers them after an extraction).
-- localStorage keys are prefixed `apex26.`.
+- localStorage keys are prefixed `apex26.`. Logging goes through `Log`
+  (`js/core/log.js`), never bare `console.*`.
 - Coordinates: +Y up, metres, radians, arc `s`, lateral `x` +right; +k = LEFT
   turn (measured). Never flip a curvature sign without a rendered lap.
 - Frac-keyed def tables must respect `def._sceneryShift` (consume via
   `bankingProfile` / `buildCenterline`); a raw `frac` read lands 2/3 of a lap away.
-- Logging goes through `Log` (`js/core/log.js`), never bare `console.*`.
 - Regenerable output goes in `artifacts/` or `scratch/` only, never `/tmp`.
 
 ## Physics
@@ -152,11 +149,10 @@ Read `c.aeroX` (or `aeroDfMult(c)`), never `c.xOn`. Immutable numbers live in
 
 ## Baked asset pack
 
-`assets/pack/`: PBR material arrays — one `TEXTURE_2D_ARRAY` whose layer index
-IS the `MAT` id; blended (`albedo * tex.rgb * 2.0`) so tint and wear survive.
-**Ships ON.** (`matTexMix` def 1.0; `__apex.matTex(0)` is the A/B off-switch.)
-Every failure degrades to the procedural look; boot never awaits assets. GLX,
-TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
+`assets/pack/`: PBR material arrays, one `TEXTURE_2D_ARRAY` whose layer index
+IS the `MAT` id, blended (`albedo * tex.rgb * 2.0`). **Ships ON.** (`matTexMix` def 1.0;
+`__apex.matTex(0)` is the A/B off-switch.) Every failure degrades to the procedural
+look; boot never awaits assets. GLX, TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
 
 ## `window.__apex` dev API
 
@@ -167,8 +163,9 @@ need `player.px` initialised (`jump()` or `step()` after `race()`+`go()`).
 
 ## Agent extensions (skills / subagents / hooks / MCP)
 
-Skills (`.claude/skills/`, index `.claude/skills/README.md`) say when and
-how; subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURFACE.md`
+Available workflows are skills (`.claude/skills/`, index
+`.claude/skills/README.md`): they say when and how, and load only when
+matched. Subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURFACE.md`
 maps which CLIs are wrapped as `apex_*`. Routes: live canvas → `mcp-probe`;
 pre-push or deploy → `check-changes` (spawns `verify-agent`; `--base <ref>` is
 the "was it already red?" check); live `version.json` → `deploy-research`;
@@ -178,11 +175,15 @@ Hooks (`.claude/hooks/`): `session-start.sh` installs deps; `protect-files.sh`
 blocks generated-file edits and source edits during a live browser run;
 `bash-guard.sh` runs the guards before `git commit` and blocks `pkill -f` and
 PID kills of a test-bg run; `touch .claude/allow-protected` is the escape hatch
-for an assigned edit. Cursor loads the same skills and agents
-(`.cursor/rules/apex-shared.mdc` is its pointer); Codex reads this file and
-`.codex/config.toml` (the same MCP servers as `.mcp.json`) and scans
-`.agents/skills/`, which `bash tools/env/mirror-skills.sh` fills. Never
-duplicate skills or agents under `.cursor/`.
+for an assigned edit. Never duplicate skills or agents under `.cursor/`.
+
+## Cursor Cloud specific instructions
+
+`.cursor/environment.json` bootstraps every Cloud VM (`tools/env/cloud-agent-install.sh`,
+Chromium at `/opt/pw-browsers/chromium`, `mcpServerAllowlist` = `.mcp.json`'s three
+servers). Cursor enters via `.cursor/rules/apex-shared.mdc`; Codex reads this file with
+`.codex/config.toml` and the tracked `.agents/skills/` symlinks (`tools/env/mirror-skills.sh`
+repairs them). Checklist: `docs/AGENT-SURFACE.md` §Bootstrap.
 
 ## Git branch & deploy
 
@@ -193,8 +194,7 @@ sessions develop directly on the deploy branch, so a deploy is a merge of THEIR
 work — re-measure baselines on the merged tree, never force-push.
 
 `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
-`test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens
-a reviewable PR, `--plan` prints the union first). It auto-cures a conflict in
-a GENERATED file and stops on anything else. The live check is `pages.yml`'s
-`verify-live` job; this container cannot reach `github.io`, so read the Actions
-run or fetch `version.json` through the host's fetch tool, never curl.
+`test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens a
+reviewable PR, `--plan` prints the union first); it auto-cures a conflict in a
+GENERATED file and stops on anything else. The live check is `pages.yml`'s
+`verify-live` job; this container cannot reach `github.io` (read the Actions run).

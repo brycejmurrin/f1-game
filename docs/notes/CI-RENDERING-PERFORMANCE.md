@@ -62,7 +62,7 @@ Three software paths matter for Apex probing; they are **not interchangeable**:
 Commands that produced the table:
 
 ```sh
-node gfx/wgpu-flag-test.mjs   # (under tools/; REMOVED 2026-09-10, in git history) swiftshader / lavapipe / lavapipe_xvfb
+node docs/archive/tools/gfx/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
 node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal
 node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite
 APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
@@ -582,6 +582,13 @@ shell has no `navigator.gpu`). System packages (`mesa-vulkan-drivers`,
 `vulkan-tools`, `xvfb`) survive a cold boot only via snapshot + Save on the
 environment dashboard; `test -f /usr/share/vulkan/icd.d/lvp_icd.json` proves
 Lavapipe. The npm ECONNRESET note is in §Part 3.
+
+**Dead `DISPLAY` kills headless WebGL (2026-09-10).** A stale `DISPLAY=:1`
+with no `/tmp/.X11-unix/X1` made `getContext("webgl2")` return null under
+SwiftShader, so `__apex` never appeared and `garage-angles` timed out at
+120 s. Unsetting DISPLAY restored GL; `xvfb-run -a` also works. Fix:
+`tools/lib/harness.mjs` `clearDeadDisplay()` runs from `launchChromium` for
+headless launches (opt out `APEX_KEEP_DISPLAY=1`).
 
 
 ## The census's two TLX legs are not comparable (2026-09-08)

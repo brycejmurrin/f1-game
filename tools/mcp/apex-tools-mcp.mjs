@@ -127,7 +127,7 @@ function gateTreeArgs(args) {
     return refuse(
       "tree_only",
       "Tree tools operate on the working tree only.",
-      "Omit target / use target=local. Deployed Pages checks: TinyFish deploy-check --tip.",
+      "Omit target / use target=local. Deployed Pages checks: deploy-research (host fetch / WebFetch).",
     );
   }
   return null;
@@ -147,7 +147,7 @@ function gateBrowserArgs(args) {
     return refuse(
       "local_only",
       "Browser apex_* tools are local harness only.",
-      "Omit target / use target=local. Deployed Pages checks: TinyFish / deploy-research.",
+      "Omit target / use target=local. Deployed Pages checks: deploy-research (host fetch / WebFetch).",
     );
   }
   return null;

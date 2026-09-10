@@ -3791,7 +3791,7 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
 test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
   const THREE = await import("../../vendor/three-0.185.1/three.webgpu.min.js");
   const renderer = new THREE.WebGPURenderer({ canvas: { width: 1, height: 1, style: {} } });
-  let _gpuTimerOn = false, _gpuMs = 12;
+  let _gpuTimerOn = false, _gpuMs = 12, _gpuTimerEpoch = 0;
   const _gpuSupported = () => true;
   const body = fnBody(code("js/render/three/tlx.js"), "gpuTimer");
   const timer = eval("(function(on){" + body + "})");
@@ -3842,6 +3842,7 @@ test("TLX registry pruning preserves live refs and is independent of mirror rele
 
 test("TLX warm holds renderer state across awaits and restores it on rejection", async () => {
   let _warmRequested = true, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
+  let _gpuLastOperation = "boot";
   const _postF = { proj: [] }, vizMat = null, scene = {}, camera = {};
   let target = "canvas", mrt = "previous", tag = false, postCalls = 0, rejectMain;
   const renderer = {
@@ -3905,4 +3906,203 @@ test("GPU verdict rejects captured compilation errors even with zero uncaptured 
     legs: { webgpu: gpu, webgl2: tlxLegJson(), glx: glxLegJson(), wgx: wgxLegJson() },
   });
   assert.equal(result.code, 1); assert.match(result.out, /shader\/pipeline console errors/);
+});
+
+test("TLX defers resize during compilation and applies the latest requested size afterward", () => {
+  let _warmPending = {}, cssDirty = false, cssVW = 1136, cssVH = 524, cssRecheck = 0;
+  let cssW = 1136, cssH = 524, presentW = 1704, presentH = 786, W = 852, H = 393;
+  let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null;
+  let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
+  const CSS_RECHECK_FRAMES = 3, DPR_CAP = 1.5;
+  const window = { innerWidth: 1100, innerHeight: 500, devicePixelRatio: 3 };
+  const _layoutCanvas = { clientWidth: 1100, clientHeight: 500 }, _displayCanvas = null;
+  const wantSpatialUpscale = () => false, calls = [];
+  const renderer = { domElement: { width: 852, height: 393 }, setSize(w, h) {
+    calls.push(["canvas", w, h]); this.domElement.width = w; this.domElement.height = h;
+  } };
+  const post = { resize(w, h) { calls.push(["post", w, h]); } };
+  const resize = eval("(function(){" + fnBody(code("js/render/three/tlx.js"), "resize") + "})");
+  resize();
+  renderScale = 0.75; _layoutCanvas.clientWidth = window.innerWidth = 1000;
+  resize();
+  assert.deepEqual(calls, []);
+  assert.deepEqual([W, H], [852, 393]);
+  _warmPending = null; resize();
+  assert.deepEqual(calls, [["canvas", 1125, 563], ["post", 1125, 563]]);
+  resize(); assert.equal(calls.length, 2, "deferred changes apply once");
+});
+
+test("TLX ignores a timing result after disabling or restarting its measurement session", async () => {
+  let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0;
+  const pending = [], _gpuSupported = () => true;
+  const renderer = { backend: {}, resolveTimestampsAsync: () => new Promise(r => pending.push(r)) };
+  const src = code("js/render/three/tlx.js");
+  const timer = eval("(function(on){" + fnBody(src, "gpuTimer") + "})");
+  const resolve = eval("(function(){" + fnBody(src, "resolveGpuTimer") + "})");
+  timer(true); resolve(); timer(false); pending.shift()(7.25); await Promise.resolve();
+  assert.equal(_gpuMs, -1);
+  timer(true); resolve(); timer(false); timer(true);
+  pending.shift()(8); await Promise.resolve(); assert.equal(_gpuMs, -1);
+  resolve(); pending.shift()(4); await Promise.resolve(); assert.equal(_gpuMs, 4);
+});
+
+test("all track loaders release selector ownership before building, even on failure", () => {
+  const _menuGate = { track: { old: true }, ready: "0|default|dry", warm: 2 };
+  const Tracks = { LIST: [{}] }, PerfGov = { sentinelArm() {} }, state = "menu";
+  const _loadTrackBody = () => {
+    assert.equal(_menuGate.track, null);
+    assert.equal(_menuGate.ready, "");
+    assert.equal(_menuGate.warm, 0);
+    throw new Error("build failed");
+  };
+  const load = eval("(function(idx){" + fnBody(read("js/game.js"), "loadTrack") + "})");
+  assert.throws(() => load(0), /build failed/);
+  assert.equal(_menuGate.track, null, "failed replacement cannot retain a stale world");
+});
+
+test("three warm-up fallback yields tasks without waiting for display frames", async () => {
+  const core = read("vendor/three-0.185.1/three.core.min.js");
+  assert.match(core, /li as yieldToMain/);
+  const body = fnBody(core, "li");
+  const queued = [], channels = [];
+  let frames = 0, timers = 0;
+  const raf = () => { frames++; throw new Error("must not wait for a frame"); };
+  class Channel {
+    constructor() {
+      const rec = { closed: 0 }; channels.push(rec);
+      this.port1 = { close: () => rec.closed++ };
+      this.port2 = { close: () => rec.closed++, postMessage: () => queued.push(() => this.port1.onmessage()) };
+    }
+  }
+  const timer = (fn, delay) => { assert.equal(delay, 0); timers++; queued.push(fn); };
+  const factory = new Function("self", "MessageChannel", "setTimeout", "requestAnimationFrame", "return function(){" + body + "}");
+  const fallback = factory({}, Channel, timer, raf);
+  let completed = 0;
+  const pending = Array.from({ length: 8 }, () => fallback().then(() => completed++));
+  assert.equal(completed, 0); assert.equal(queued.length, 8, "each yield waits for a task");
+  while (queued.length) queued.shift()();
+  await Promise.all(pending);
+  assert.equal(completed, 8); assert.ok(channels.every(c => c.closed === 2));
+  assert.equal(frames, 0); assert.equal(timers, 0);
+  const timed = factory(undefined, undefined, timer, raf)();
+  assert.equal(timers, 1); queued.shift()(); await timed;
+  const nativePromise = Promise.resolve("native");
+  const scheduler = { yield() { assert.equal(this, scheduler); return nativePromise; } };
+  assert.equal(factory({ scheduler }, Channel, timer, raf)(), nativePromise);
+  assert.equal(channels.length, 8, "native scheduler does not allocate fallback channels");
+  const realChannel = (await import("node:worker_threads")).MessageChannel;
+  await Promise.all(Array.from({ length: 3 }, () => factory({}, realChannel, timer, raf)()));
+});
+
+test("menu player and cockpit preparation reuse the real race mesh keys", () => {
+  let playerVisualKey = "previous-setup", carModelBuf = null, builds = 0;
+  const playerBodies = {}, playerBodyOrder = [], PLAYER_BODY_CACHE_MAX = 3;
+  const cockpitBodies = {}, cockpitBodyOrder = [], COCKPIT_BODY_CACHE_MAX = 3;
+  const CockpitOpts = { halo: () => true }, Parts = { getVisualTiers: () => ({}) };
+  const Car3D = { build: () => { builds++; return {}; } }, gfx = { createMesh: x => x };
+  const getTeamParts = () => ({}), resolveLivery = () => ({ c1: [], c2: [] });
+  const carDecalNum = (t, c) => c.num;
+  const putBoundedMesh = (cache, order, key, make) => cache[key] || (cache[key] = make());
+  const body = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/game.js"), "playerBodyMesh") + "})");
+  const cockpit = eval("(function(team, car, visualKey = playerVisualKey){" + fnBody(read("js/game.js"), "cockpitBodyMesh") + "})");
+  const team = { id: "mclaren" }, car = { num: 81 };
+  const preparedBody = body(team, car, "selected-setup"), preparedCockpit = cockpit(team, car, "selected-setup");
+  assert.equal(playerVisualKey, "previous-setup", "menu preparation does not mutate race globals");
+  playerVisualKey = "selected-setup";
+  assert.equal(body(team, car), preparedBody); assert.equal(cockpit(team, car), preparedCockpit);
+  assert.equal(builds, 2, "race reuses both prepared meshes instead of rebuilding");
+});
+
+test("selector car assets yield per driver, preserve simulation, and cancel stale settings", async () => {
+  for (const cancel of ["none", "screen", "store", "team", "driver", "compile", "model", "solo", "headless"]) {
+    let carModelBuf = null, headlessMode = false, teamIdx = 0, driverIdx = 1, camMode = 0;
+    let active = true, compiling = false, solo = false, yields = 0;
+    const store = { rev: 1 }, cars = [{ live: true }], player = cars[0];
+    const Teams = { LIST: [
+      { id: "a", drivers: [{ num: 1 }, { num: 2 }] },
+      { id: "b", drivers: [{ num: 3 }] },
+      { id: "custom", custom: true, drivers: [{ num: 4 }] }
+    ] };
+    const Career = { gridDrivers: t => t.drivers, driverOverride: (id, di) => id === "a" && di === 1 ? { num: 99 } : null };
+    const calls = [], gfx = { warming: () => compiling }, CAM_MODES = [{ id: "cockpit" }];
+    const Log = { info() {}, warn() {} }, performance = { now: () => 0 };
+    const isTimeTrial = () => solo, isQuali = () => false, current = () => active;
+    const partsVisualKey = id => "parts:" + id, carDecalNum = (t, c) => c.num;
+    const playerBodyMesh = (t, c, key) => calls.push(["player", c.num, key]);
+    const cockpitBodyMesh = (t, c, key) => calls.push(["cockpit", c.num, key]);
+    const teamBodyMesh = (t, c) => calls.push(["field", c.num]);
+    const getCarDecalTexture = (t, num, p) => calls.push(["atlas", num, p]);
+    const setTimeout = fn => {
+      yields++;
+      if (yields === 2) {
+        if (cancel === "screen") active = false;
+        if (cancel === "store") store.rev++;
+        if (cancel === "team") teamIdx = 1;
+        if (cancel === "driver") driverIdx = 0;
+        if (cancel === "compile") compiling = true;
+        if (cancel === "model") carModelBuf = {};
+        if (cancel === "solo") solo = true;
+        if (cancel === "headless") headlessMode = true;
+      }
+      Promise.resolve().then(fn);
+    };
+    const prepare = eval("(async function(current){" + fnBody(read("js/game.js"), "prepareMenuCarAssets") + "})");
+    await prepare(current);
+    assert.deepEqual(calls.slice(0, 3), [["player", 99, "parts:a"], ["cockpit", 99, "parts:a"], ["atlas", 99, true]]);
+    assert.equal(calls.length, cancel === "none" ? 7 : 3, cancel);
+    assert.equal(yields, cancel === "none" ? 3 : 2, "one driver per yielded task");
+    assert.equal(cars[0], player); assert.deepEqual(cars, [{ live: true }]);
+    calls.length = 0; active = true; compiling = false; carModelBuf = null; headlessMode = false;
+    teamIdx = 0; driverIdx = 1; solo = true; yields = 10;
+    await prepare(current);
+    assert.equal(calls.length, 3, "solo sessions prepare only their player");
+  }
+});
+
+test("selector preparation rejects stale requests, reuses the world, and waits for compilation", async () => {
+  const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
+  let flybyBuildTimer = 0, trackIdx = 0, raceTimeOfDay = "default", raceWeather = "dry";
+  let state = "menu", setupPreviewOn = false, track = null, compiling = false;
+  const els = { select: { hidden: false } }, settings = { hidden: true }, $ = () => settings;
+  const timers = new Map(), requests = [], builds = [];
+  let timerId = 0;
+  const setTimeout = (fn) => { timers.set(++timerId, fn); return timerId; };
+  const clearTimeout = id => timers.delete(id);
+  const gfx = { warming: () => compiling }, Log = { warn() {} };
+  const prepareMenuCarAssets = async () => {};
+  const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
+  const loadTrack = id => { builds.push(id); track = { id }; };
+  const schedule = eval("(function(settle){" + fnBody(read("js/game.js"), "scheduleFlybyTrack") + "})");
+  const fire = () => { const [id, fn] = [...timers].pop(); timers.delete(id); return fn(); };
+  schedule(true); const old = fire();
+  trackIdx = 1; schedule(true); trackIdx = 0; schedule(true); const latest = fire();
+  requests.shift().resolve(); await old; assert.deepEqual(builds, [], "A-B-A cannot revive old work");
+  requests.shift().resolve(); await latest; assert.deepEqual(builds, [0]);
+  schedule(); const reuse = fire(); requests.shift().resolve(); await reuse;
+  assert.deepEqual(builds, [0], "NEXT reuses the prepared world");
+  assert.equal(_menuGate.warm, 2, "NEXT resumes hidden warming interrupted by rescheduling");
+  raceTimeOfDay = "night"; compiling = true; schedule(); await fire();
+  assert.equal(requests.length, 0, "no scene replacement during compilation");
+  compiling = false; const night = fire(); requests.shift().resolve(); await night;
+  assert.deepEqual(builds, [0, 0], "time-of-day changes prepare again");
+  trackIdx = 1; schedule(); const leaving = fire(); els.select.hidden = true;
+  requests.shift().resolve(); await leaving; assert.deepEqual(builds, [0, 0]);
+  els.select.hidden = false; schedule(); const changed = fire(); raceWeather = "rain";
+  requests.shift().resolve(); await changed; assert.deepEqual(builds, [0, 0]);
+});
+
+test("TLX bounds GPU error history and preserves resize context at receipt", () => {
+  let _gpuFirstError = null, _gpuErrors = 0, _gpuErrLastPresent = -1, _gpuErrFrames = 0, _presentN = 12;
+  let _warmPending = {}, _gpuLastOperation = "compile-post", _gpuLastResize = { width: 852, height: 393 };
+  const _gpuRecentErrors = [], GPU_ERR_LOG_CAP = 8, Log = { warn() {} };
+  const src = code("js/render/three/tlx.js").replace("const onErr = function", "function onErr");
+  const onErr = eval("(function(ev){" + fnBody(src, "onErr") + "})");
+  for (let i = 0; i < 10; i++) onErr({ error: new Error("error " + i) });
+  _gpuLastResize = { width: 1278, height: 590 };
+  assert.equal(_gpuErrors, 10); assert.equal(_gpuFirstError, "error 0");
+  assert.equal(_gpuRecentErrors.length, 8); assert.equal(_gpuRecentErrors[0].message, "error 2");
+  assert.equal(_gpuRecentErrors[0].lastResize.width, 852);
+  assert.equal(_gpuRecentErrors[0].warmingAtReceipt, true);
+  assert.equal(_gpuRecentErrors[0].presentAtReceipt, 12);
+  assert.equal(_gpuErrFrames, 1, "receipt counters retain their existing semantics");
 });

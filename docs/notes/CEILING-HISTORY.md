@@ -2728,6 +2728,20 @@ once per run) is NOT fixed by this and is written up in the tool's header and
 
 `js/game.js` lines 10422 -> **10428** (+6) / codeLines 5644 -> **5648** (+4). `sunTint` / `crestInk` / `bandTint2` / `plateTint` / `plateInk` pass through both resolveLivery branches so those garage rows reach the atlas.
 
+## 2026-09-10 — merge deploy into spine-zones-bind
+
+`js/game.js` lines 10303 -> **10307** (+4) / codeLines 5586 -> **5590** (+4);
+`js/car/car3d.js` lines 4135 -> **4137** (+2). Union of spine-zones
+`resolveFinPaint` / airbox mesh wiring with deploy's `bodySplit` path — the
+merge left ratchets.json at deploy's ceilings while the sources held both
+sides' lines. `node tools/check/ratchets.mjs --update` re-measured the union
+(bounded well under the pre-merge spine-zones tip of 10428/5648).
+
+## 2026-09-10 — re-merge deploy (save-migrate / race-settings)
+
+`js/game.js` lines -> **9910** / codeLines -> **5322**;
+`js/car/car3d.js` lines -> **4137**. Second deploy merge into
+spine-zones-bind; `ratchets.mjs --update` after conflict in ceilings.
 ## 2026-09-10 — shellNodes +6: the DEBRIS set-row
 
 `(tree) shellNodes` 1353 -> **1359** (+6). One `SettingRow` in the DISPLAY
@@ -2762,3 +2776,33 @@ limit, `makeAnswer` re-entry guard, `stopScan` on every exit);
 `Object.freeze` tail line each — `tests/unit/frozen-globals.test.mjs`).
 New tree ratchet `waitForTimeout` at 155 (fixed sleeps in specs and helpers;
 the two track-helper sleeps became frame waits).
+## 2026-09-10 — re-merge deploy (renderer / garage-angles)
+
+`js/game.js` lines -> **9916** / codeLines -> **5324**;
+`js/car/car3d.js` lines -> **4137**. Third deploy merge into
+spine-zones-bind after CI green; `ratchets.mjs --update` after ceiling conflict.
+
+## 2026-09-10 — re-merge deploy (garage-angles port)
+
+`js/game.js` lines -> **9919** / codeLines -> **5327** / gMembers -> **238**;
+`js/agent/apex.js` lines -> **2812** / codeLines -> **2092**. Fourth deploy
+merge into spine-zones-bind (PR #96 garage-angles rollup on deploy tip
+`9cdde031`). `ratchets.mjs --update` after ceiling conflict — union carries
+spine-zones bind fields plus garage-angles G members.
+
+## 2026-09-10 — selector preparation generations
+
+`js/game.js` gains 14 code lines for guarded, single-world selector preparation:
+reject stale scenery completions, wait for renderer compilation ownership,
+reuse matching preparation, and handle failed optional loads. No new facade
+members or top-level lets; the existing flyby scheduler owns this lifecycle.
+Ceilings remeasured with `ratchets.mjs --update` for this added behavior.
+
+## 2026-09-10 — incremental selector car assets
+
+`js/game.js` gains 37 code lines to prepare car body/cockpit meshes and livery
+atlases one driver per yielded menu task, cancel stale selection/store/model
+work, and log selector versus race-time CPU preparation cost. It uses existing
+bounded caches and visual-only descriptors; no live field or simulation RNG is
+changed. Ceilings remeasured with `ratchets.mjs --update`; no new facade members
+or top-level lets. GPU program compilation remains race-owned and unmeasured.

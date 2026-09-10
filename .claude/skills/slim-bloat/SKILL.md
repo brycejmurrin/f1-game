@@ -17,8 +17,9 @@ node tools/check/extract-module.mjs js/game.js 100 180   # analyse free refs
 ```
 
 Spawn `bloat-auditor` with a **named scope** (one file, one skill, or
-`HEAD` / last-touched). It returns `BLOAT` rows only. The parent edits,
-locksteps, and regenerates the shell.
+`HEAD` / last-touched). It returns `BLOAT` rows only. The parent edits and
+locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
+(committed tags stay `?v=dev` — no cache bump).
 
 ## Hard don'ts (always)
 
@@ -27,7 +28,7 @@ locksteps, and regenerates the shell.
 2. **Never raise a ratchet to hide growth.** `node tools/check/ratchets.mjs --update`
    in the same commit as the extract. Same for skill line caps.
 3. **Never convert IIFE → ESM.** New-file lockstep: file + `<script>` +
-   `tools/manifest.cjs` (+ `HARD_EDGES` if eval-time) + cache bump.
+   `tools/manifest.cjs` (+ `HARD_EDGES` if eval-time) + `node tools/gen/gen-shell.mjs`.
 4. **Never hand the auditor a browser run.** Dead `__apex` hooks: parent
    confirms with **mcp-probe** / `mcp-cli.mjs probe` after `apex_status`.
    Context7 / WebFetch are fine (Agent Skills caps, library docs).

@@ -56,7 +56,7 @@ Load from the SKILL.md index when the task needs this detail.
 
 8. **Cache-bust JS/CSS edits.**
    - Career often touches `js/career/career*.js`, `js/race/quali-model.js`,
-     `js/race/reliability.js`, or `css/career.css`; run `node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`).
+     `js/race/reliability.js`, or `css/career.css`; run `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
 
 ## Common Mistakes
 

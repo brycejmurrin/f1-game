@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Garage preset shots, ONE Chromium: walks teams/liveries/any livery field, labels frames, sheets, `--against` A/Bs a ref.
+// @doc Garage preset shots, ONE Chromium: walks teams/liveries/any livery field; clears dead DISPLAY for headless WebGL.
 //   node tools/shot/garage-angles.mjs [--team=redbull,mclaren|all] [--views=spine] [--livery=default,rb_white]
 //     [--spineLogo=wrap,saddle] [--finShape=blade] [--cover=#101014] [--against=HEAD~1]
 //     [--preset=wall|fin|flank|mark|quick] [--plan] [--fast] [--settle=8] [--view-settle=4]
@@ -47,6 +47,13 @@
 //
 // Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
 // under SwiftShader (document.fonts.ready after freeze).
+//
+// SETUP: launchChromium clears a dead local DISPLAY (no /tmp/.X11-unix/XN) so
+// headless SwiftShader WebGL can start. If you still see "__apex never appeared"
+// with gl2:false, unset DISPLAY or wrap: xvfb-run -a node tools/shot/garage-angles.mjs …
+// Chromium args come from chromiumArgsForBackend("webgl2") and include
+// --enable-unsafe-swiftshader. No separate serve on :3456 — this tool starts
+// its own static server. Check loadavg < 3 first (AGENTS.md §Verification).
 //
 // TIMING: every phase is recorded (boot, open, and per shot settle/capture/gate)
 // and printed. A run reporting one total number cannot tell a slow tool from a

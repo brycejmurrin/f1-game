@@ -82,6 +82,9 @@ const TLX = (function () {
       let _softAdapter = false;
       // GPU error tally — see the onuncapturederror hook below.
       let _gpuErrors = 0, _gpuFirstError = null;
+      const _gpuRecentErrors = [];
+      let _gpuLastResize = null, _gpuLastOperation = "boot";
+      let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -394,6 +397,11 @@ const TLX = (function () {
                 const msg = (ev && ev.error && ev.error.message) || "gpu error";
                 if (!_gpuFirstError) _gpuFirstError = msg;
                 _gpuErrors++;
+                // Receipt context, NOT attribution: GPU errors arrive async.
+                if (_gpuRecentErrors.length === GPU_ERR_LOG_CAP) _gpuRecentErrors.shift();
+                _gpuRecentErrors.push({ message: msg, type: ev && ev.error && ev.error.constructor && ev.error.constructor.name,
+                  receivedAt: performance.now(), presentAtReceipt: _presentN, warmingAtReceipt: !!_warmPending,
+                  lastOperation: _gpuLastOperation, lastResize: _gpuLastResize });
                 if (_gpuErrLastPresent !== _presentN) { _gpuErrLastPresent = _presentN; _gpuErrFrames++; }
                 if (_gpuErrors <= GPU_ERR_LOG_CAP) {
                   try { Log.warn("gfx", "TLX GPU error #" + _gpuErrors + ":", msg); } catch (_) { /* no Log in the node VM harness: the count is the load-bearing part */ }
@@ -853,7 +861,16 @@ const TLX = (function () {
       // supported only where three's timestamp-query feature is present — the
       // WebGPU backend with the adapter feature; never on the WebGL2 fallback
       // (SwiftShader/CI), keeping the GLX {supported:false} shape there.
-      let _gpuTimerOn = false, _gpuMs = -1;
+      let _gpuTimerOn = false, _gpuMs = -1, _gpuTimerEpoch = 0;
+      function resolveGpuTimer() {
+        if (!_gpuTimerOn) return;
+        const epoch = _gpuTimerEpoch;
+        try {
+          renderer.resolveTimestampsAsync("render").then(v => {
+            if (_gpuTimerOn && epoch === _gpuTimerEpoch && v != null && isFinite(v)) _gpuMs = v;
+          }).catch(() => {});
+        } catch (_) { /* timing is optional */ }
+      }
       function _gpuSupported() {
         try {
           return !!(renderer.backend && renderer.backend.isWebGPUBackend)
@@ -1628,7 +1645,6 @@ const TLX = (function () {
       // or a void, and only a readback answers it. ONCE per session: six 64px
       // faces is ~200 KB and the answer does not change frame to frame.
       let _envCube = null, _envCubeRead = false;
-      let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
       // TLX OPTS OUT OF THE ENV PROBE (2026-09-10), measured, not assumed.
       // Census 84 ran the WebGL2 three leg with apex26.envProbeOff=1: a flat 60
       // fps at scale 1.0, frame times down to 10.8 ms, no beat gap over 2 s.
@@ -1665,9 +1681,12 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
             renderer.setMRT(usePost ? _ssrMrtNode() : null);
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+            _gpuLastOperation = "compile-scene";
             await renderer.compileAsync(scene, camera);
             renderer.setMRT(null);
-            if (usePost && post.warm && performance.now() - _warmAt < 3000) await post.warm(opts, _postF);
+            if (usePost && post.warm && performance.now() - _warmAt < 3000) {
+              _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
+            }
           } catch (e) {
             _warmRequested = _warmAttempts < 2;
             try { Log.warn("gfx", "TLX program warm failed", String(e)); } catch (_) { /* logging is optional */ }
@@ -2062,6 +2081,10 @@ const TLX = (function () {
         try { new ResizeObserver(markCssDirty).observe(_layoutCanvas); } catch (_) {}
       }
       function resize() {
+        // Window/settings callbacks also reach here while the frame loop waits
+        // for compilation. Keep its targets alive; the next frame applies the
+        // latest CSS size and settings once the warm task releases ownership.
+        if (_warmPending) { cssDirty = true; return; }
         // CSS size only — NEVER fall back to canvas.width/.height. setSize() below
         // writes the backing store, so reading it back here fed the previous frame's
         // size into the DPR multiply: a hidden/detached canvas (clientWidth 0) then
@@ -2107,6 +2130,8 @@ const TLX = (function () {
           _softReadEpoch++;
           _softReadQueued = null;
           W = rw; H = rh;
+          _gpuLastOperation = "resize";
+          _gpuLastResize = { at: performance.now(), width: rw, height: rh };
           // setSize drives the WebGPU/WebGL drawing buffer; when upscaling the
           // canvas is present-sized while post RTs stay at W×H (render).
           renderer.setSize(cwBuf, chBuf, false);    // false: CSS keeps sizing the canvas
@@ -2306,7 +2331,9 @@ const TLX = (function () {
         gpuTimer(on) {
           const sup = _gpuSupported();
           if (on !== undefined) {
-            _gpuTimerOn = !!on && sup;
+            const next = !!on && sup;
+            if (next !== _gpuTimerOn) { _gpuTimerEpoch++; _gpuMs = -1; }
+            _gpuTimerOn = next;
             try { renderer.backend.trackTimestamp = _gpuTimerOn; } catch (_) {}
             if (!_gpuTimerOn) _gpuMs = -1;
           }
@@ -2639,6 +2666,7 @@ const TLX = (function () {
             if (softContent("env")) scene.backgroundNode = null;
             else pinSkyMaterial();
             renderer.setRenderTarget(envRT, face & 7);
+            _gpuLastOperation = "render-env";
             renderer.render(scene, faceCam);
           } catch (e) {
             // A probe face must never strand the frame — and it must never
@@ -3148,6 +3176,7 @@ const TLX = (function () {
             try { if (!_presentWarned) { _presentWarned = true; Log.warn("gfx", "TLX: present failed —", e); } } catch (_) { /* Log absent in the node harness */ }
           };
           const paintCanvas = () => {
+            _gpuLastOperation = "render-canvas";
             pinSkyMaterial();
             if (_softBlit) {
               const rt = _ensureBlitRT(W, H);
@@ -3224,7 +3253,9 @@ const TLX = (function () {
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               try {
                 renderer.setRenderTarget(post.sceneTarget());
+                _gpuLastOperation = "render-scene";
                 renderer.render(scene, camera);
+                _gpuLastOperation = "render-post";
                 post.present(opts, _postF);
               } finally {
                 if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
@@ -3348,13 +3379,7 @@ const TLX = (function () {
           // M9: resolve the GPU timestamp for the frame just presented (async
           // — the value lands a frame or two later, exactly like GLX's
           // deferred query readback). Truthful: three's own resolved ms.
-          if (_gpuTimerOn) {
-            try {
-              renderer.resolveTimestampsAsync("render")
-                .then((v) => { if (v != null && isFinite(v)) _gpuMs = v; })
-                .catch(() => {});
-            } catch (_) {}
-          }
+          resolveGpuTimer();
           // debug — the __tlx tooling
         },
 
@@ -3551,6 +3576,7 @@ const TLX = (function () {
               // phone screenshot of the GOV panel carries these, which is the
               // evidence a "see-through car" report has never had.
               gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstError,
+              gpuRecentErrors: _gpuRecentErrors.map(e => ({ ...e, lastResize: e.lastResize && { ...e.lastResize } })),
               presents: _presentN, healed: _healTried, gpuErrFrames: _gpuErrFrames,
               // three refreshes every OBJECT-group uniform per draw (r185
               // NodeManager), so the draw count is the CPU lever on a phone;

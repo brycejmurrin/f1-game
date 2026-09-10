@@ -572,33 +572,32 @@ const LiveryTex = (function () {
     const keepPlate = crestKeepsPlate(teamId);
     const slot2 = secondSlot(teamId, bare);
     let plate = null;
-    if (wantsPlate && (!bare || keepPlate) && !(opts && opts.noPlate)) {
-      // An authored LOGO DETAIL colour IS the plate for the two marks that have
-      // one, and it wins OUTRIGHT rather than being layered over a resolved
-      // candidate. Gating it on a candidate having resolved first left the
-      // colour homeless on the `pastel` livery, where nothing clears 1.6
-      // against the paint and `plate` stays null — measured, both plate marks.
-      // Taken as given, like the paint rows: the mark is still floored against
-      // whatever the player chose (`under`, below), so the lockup cannot go
-      // unreadable — only the player's own disc can go quiet.
+    // `noPlate` drops the DERIVED / brand shield on call sites that paint the
+    // mark bare (flank logo/emblem on a saddle field) — Ferrari's yellow plate
+    // was 1.09:1 on a white saddle. It must NOT swallow an authored LOGO DETAIL:
+    // that row is the player's plate colour, and skipping it made TEAM LOGO /
+    // LOGO DETAIL edits update the crown while the side spine mark stayed stuck.
+    if (wantsPlate && (!bare || keepPlate)) {
       if (slot2 === "plate" && liv && liv.logo2) plate = liv.logo2.slice();
-      // A brand DISC wins outright, contrast unscored. The 1.6 floor below asks
-      // a backing to separate from the paint, which is the right question for a
-      // PANEL the mark sits on and the wrong one for a sun: Red Bull's fin
-      // field is the team's own yellow, gold scores 1.10 against it, and the
-      // floor answered by swapping in a navy disc and bleaching the bulls white
-      // to read on it. The disc is identity; legibility is the MARK's floor,
-      // and `under` now holds both the disc and the paint so it is really
-      // asked. Only reachable on the team's own livery — B is null on any other.
-      else if (keepPlate && B && B.plate) plate = B.plate.slice();
-      else {
-        // Bases / brand only — SIDEPOD is its own mesh row.
-        const cands = [B && B.plate, liv && liv.c1, liv && liv.c2];
-        // Against the PRIMARY paint only. A plate is opaque and covers whatever
-        // wash is on top of the panel, so asking it to separate from the wash
-        // colour too rejects the Red Bull gold disc on a gold-accented livery
-        // and leaves the bulls floating with nothing behind them.
-        for (const c of cands) if (c && contrast(c, flds[0]) >= PLATE_ON_PAINT) { plate = c.slice(); break; }
+      else if (!(opts && opts.noPlate)) {
+        // A brand DISC wins outright, contrast unscored. The 1.6 floor below asks
+        // a backing to separate from the paint, which is the right question for a
+        // PANEL the mark sits on and the wrong one for a sun: Red Bull's fin
+        // field is the team's own yellow, gold scores 1.10 against it, and the
+        // floor answered by swapping in a navy disc and bleaching the bulls white
+        // to read on it. The disc is identity; legibility is the MARK's floor,
+        // and `under` now holds both the disc and the paint so it is really
+        // asked. Only reachable on the team's own livery — B is null on any other.
+        if (keepPlate && B && B.plate) plate = B.plate.slice();
+        else {
+          // Bases / brand only — SIDEPOD is its own mesh row.
+          const cands = [B && B.plate, liv && liv.c1, liv && liv.c2];
+          // Against the PRIMARY paint only. A plate is opaque and covers whatever
+          // wash is on top of the panel, so asking it to separate from the wash
+          // colour too rejects the Red Bull gold disc on a gold-accented livery
+          // and leaves the bulls floating with nothing behind them.
+          for (const c of cands) if (c && contrast(c, flds[0]) >= PLATE_ON_PAINT) { plate = c.slice(); break; }
+        }
       }
     }
     // An opaque plate REPLACES everything behind it, so it becomes the only
@@ -1235,7 +1234,7 @@ const LiveryTex = (function () {
   // the title sponsor running along the spine, an exposed-carbon panel, or the
   // race number. All paint into REGIONS.crest, so the strip in car-mesh drapes
   // them over the rounded crown like the crest.
-  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number"];
+  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "streaks", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number", "cap", "ridge", "fade"];
   // WRAP: one shape in CAR space painted into every region it crosses, so the
   // paint job goes over the spine and down both flanks as a single graphic —
   // the RB22's sun and bull. The car-space → region maps are car-mesh's:
@@ -1506,6 +1505,58 @@ const LiveryTex = (function () {
     return { R, fx, dir: side.frontLeft ? 1 : -1 };
   }
   const eachFlank = (fn) => { for (const side of FLANKS) { const F = flankFrame(side); if (F) fn(F); } };
+  const COVER_BIND_IDS = ["independent", "saddleWrap", "spineOnly"];
+  const FIN_HANDOFF_IDS = ["match", "contrast", "hardCut"];
+  function coverBindOf(liv) {
+    const v = liv && liv.coverBind;
+    return COVER_BIND_IDS.includes(v) ? v : "independent";
+  }
+  function finHandoffOf(liv) {
+    const v = liv && liv.finHandoff;
+    return FIN_HANDOFF_IDS.includes(v) ? v : "match";
+  }
+  // SADDLE zone fill: saddleTint when set; else bandC under saddle / saddleWrap.
+  function saddleFill(liv, bandC, coverPaint) {
+    if (liv && liv.saddleTint) return liv.saddleTint;
+    const bind = coverBindOf(liv);
+    const logo = (liv && liv.spineLogo) || "logo";
+    if (logo === "saddle" || bind === "saddleWrap") return bandC;
+    return null;
+  }
+  // RIDGE zone fill: an explicit ridgeTint is a pick (never re-derived). When
+  // omitted, fall back to bandC re-picked against the cover so catalog
+  // team×ridge cannot vanish into a dark cover.
+  function ridgeFill(liv, bandC, coverPaint) {
+    if (liv && liv.ridgeTint) return liv.ridgeTint;
+    return pickOn(
+      [bandC, INK_LIGHT, INK_DARK].filter(Boolean),
+      coverPaint || bandC, SUN_FLOOR);
+  }
+  const FIN_ON_BLOCK = 2.0;
+  // AIRBOX mesh paint (Car3D roll hoop / snorkel / intake lips). Under WRAP the
+  // resolved sun wins over airboxTint; otherwise airboxTint or ENGINE COVER.
+  function airboxMeshColour(teamId, liv, coverC) {
+    const logo = (liv && liv.spineLogo) || "logo";
+    if (logo === "wrap") return sunColour(teamId, liv).slice();
+    if (liv && liv.airboxTint) return liv.airboxTint.slice();
+    return coverC ? coverC.slice() : [0.1, 0.1, 0.12];
+  }
+  // Crown/saddle block the fin root meets — contrast handoff scores against this.
+  function finContrastBlock(liv, coverPaint, bandC) {
+    const saddle = saddleFill(liv, bandC, coverPaint);
+    return saddle || coverPaint;
+  }
+  // Fin PLATE colour for mesh + atlas; finHandoff selects match / contrast.
+  function resolveFinPaint(teamId, liv, coverPaint, bandC, c1, c2) {
+    const base = (liv && liv.fin) || c2;
+    if (finHandoffOf(liv) === "contrast") {
+      const block = finContrastBlock(liv, coverPaint, bandC);
+      const order = [c2, c1, INK_DARK, INK_LIGHT];
+      if (liv && liv.fin && contrast(liv.fin, block) >= FIN_ON_BLOCK) order.unshift(liv.fin);
+      return pickOn(order, block, FIN_ON_BLOCK).slice();
+    }
+    return base.slice();
+  }
   // The saddle's other half: from the airbox back along the crease to
   // mid-cover, then a raked edge down to the sidepod line just behind the
   // number (the SF-26's white cover top), on each flank in its own frame.
@@ -1513,7 +1564,9 @@ const LiveryTex = (function () {
   function saddleFlanks(ctx, acc) {
     // Crease runs farther aft (0.64) then drops on a sharper rake so the white
     // panel reads as a cut vinyl, not a soft blob into the sidepod. A thin ink
-    // keyline on the rake is what sells the edge at garage distance.
+    // keyline on the rake is what sells the edge at garage distance. `acc` is
+    // the resolved saddle fill (pick or derived) — never re-pick here; a pick
+    // must reach the atlas as chosen.
     eachFlank((F) => {
       const Sf = F.R;
       ctx.save();
@@ -1553,7 +1606,7 @@ const LiveryTex = (function () {
       lw: (px, W) => (weak ? Math.max(px, W * TRIM_STROKE) : px),   // stroke px
     };
   }
-  function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont, acc2, weak) {
+  function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont, acc2, colors, weak) {
     const X = R.x, Y = R.y, W = R.w, H = R.h;
     const T = bandTrim(weak);
     ctx.save();
@@ -1737,6 +1790,61 @@ const LiveryTex = (function () {
       // along the spine so the digits come out in proportion.
       ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(Math.PI); ctx.scale(1, CROWN_SQUASH);
       drawNumber(ctx, num, { x: -W * 0.34, y: -W * 0.34, w: W * 0.68, h: W * 0.68 }, ink, acc, null, numFont, 0);
+    } else if (id === "cap") {
+      // Solid block airbox → mid-cover with a hard rear cut. Shoulders follow
+      // coverBind: saddleWrap fills the whole crown in the saddle zone, spineOnly
+      // keeps shoulders on the cover paint, independent paints the block in the
+      // band colour alone. Flank spill is saddleFlanks at the call site.
+      const liv = colors || {};
+      const bind = coverBindOf(liv);
+      // Explicit saddleTint under wrap is a pick — paint it. Otherwise the
+      // band colour (already cover-safe via bandC).
+      const fill = bind === "saddleWrap" ? (saddleFill(liv, acc, c1) || acc) : acc;
+      const cutY = Y + H * 0.38;
+      const bh = Y + H - cutY;
+      if (bind === "spineOnly") {
+        const px = X + W * 0.28, pw = W * 0.44;
+        ctx.fillStyle = cssA(fill, 0.97); ctx.fillRect(px, cutY, pw, bh);
+        ctx.fillStyle = cssA(ink, 0.45); ctx.fillRect(px, cutY, pw, Math.max(2, H * 0.012));
+      } else {
+        ctx.fillStyle = cssA(fill, 0.97); ctx.fillRect(X, cutY, W, bh);
+        ctx.fillStyle = cssA(ink, 0.35); ctx.fillRect(X, cutY, W, Math.max(2, H * 0.012));
+        if (bind === "independent") {
+          ctx.fillRect(X, cutY, W * 0.012, bh); ctx.fillRect(X + W * 0.988, cutY, W * 0.012, bh);
+        }
+      }
+      if (liv.ridgeTint) {
+        const ridgeC = ridgeFill(liv, acc, c1), rw = W * 0.018;
+        ctx.fillStyle = cssA(ridgeC, 0.9);
+        ctx.fillRect(X + W * 0.5 - rw / 2, cutY, rw, bh);
+      }
+    } else if (id === "ridge") {
+      // Thin centreline only — thinner than `stripe` — in the ridge zone colour.
+      const ridgeC = ridgeFill(colors || {}, acc, c1);
+      const rw = W * 0.07;
+      ctx.fillStyle = cssA(ridgeC, 0.96);
+      ctx.fillRect(X + W * 0.5 - rw / 2, Y, rw, H);
+      ctx.fillStyle = cssA(ink, 0.55);
+      ctx.fillRect(X + W * 0.5 - rw / 2, Y, W * 0.008, H);
+      ctx.fillRect(X + W * 0.5 + rw / 2 - W * 0.008, Y, W * 0.008, H);
+    } else if (id === "fade") {
+      // Micro-field density dying aft (canvas top = rear). Ground is the cover;
+      // ink from the band / crest ink, re-picked to clear the cover.
+      const dotInk = pickOn([acc, ink, INK_LIGHT, INK_DARK].filter(Boolean), c1, SUN_FLOOR);
+      const step = Math.max(3, W * 0.032);
+      for (let py = Y; py < Y + H - step * 0.5; py += step) {
+        for (let px = X; px < X + W - step * 0.5; px += step) {
+          const t = (py - Y) / H;
+          const density = 0.18 + 0.82 * t;
+          const h = (((px * 73856093) ^ (py * 19349663)) >>> 0) % 1000;
+          if (h / 1000 > density) continue;
+          const r = step * 0.34;
+          ctx.fillStyle = cssA(dotInk, 0.97);
+          ctx.beginPath();
+          ctx.arc(px + step * 0.5, py + step * 0.5, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
     ctx.restore();
   }
@@ -1744,7 +1852,7 @@ const LiveryTex = (function () {
   // band designs continue down it so a stripe or a saddle runs to the wing,
   // and "wordmark" puts the SECOND sponsor there reading from behind. The
   // marks (logo, number) and "none" leave it bare.
-  function drawTailTop(ctx, id, R, acc, ink, name2, weak) {
+  function drawTailTop(ctx, id, R, acc, ink, name2, colors, coverPaint, weak) {
     const X = R.x, Y = R.y, W = R.w, H = R.h;
     const T = bandTrim(weak);      // the crown's trim rule, continued down the tail
     ctx.save();
@@ -1760,16 +1868,25 @@ const LiveryTex = (function () {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.41, Y, W * 0.18, H);
       const kw = W * T.w(0.014);
       ctx.fillStyle = cssA(ink, T.a(0.62)); ctx.fillRect(X + W * 0.41, Y, kw, H); ctx.fillRect(X + W * (0.59 - T.w(0.014)), Y, kw, H);
+    } else if (id === "ridge") {
+      const ridgeC = ridgeFill(colors || {}, acc, coverPaint);
+      const rw = W * 0.07;
+      ctx.fillStyle = cssA(ridgeC, 0.96);
+      ctx.fillRect(X + W * 0.5 - rw / 2, Y, rw, H);
+      ctx.fillStyle = cssA(ink, 0.55);
+      ctx.fillRect(X + W * 0.5 - rw / 2, Y, W * 0.008, H);
+      ctx.fillRect(X + W * 0.5 + rw / 2 - W * 0.008, Y, W * 0.008, H);
     } else if (id === "streaks") {
       for (let i = 0; i < 4; i++) {
-        const t = (i + 0.85) / 5;
-        const x0 = X + W * (t - 0.028), x1 = X + W * (t + 0.028);
+        const tt = (i + 0.85) / 5;
+        const x0 = X + W * (tt - 0.028), x1 = X + W * (tt + 0.028);
         ctx.fillStyle = cssA(acc, 0.96);
         ctx.beginPath();
         ctx.moveTo(x0 + W * 0.008, Y); ctx.lineTo(x1 + W * 0.008, Y);
         ctx.lineTo(x1 - W * 0.008, Y + H); ctx.lineTo(x0 - W * 0.008, Y + H);
         ctx.closePath(); ctx.fill();
       }
+
     } else if (id === "twin") {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.035, Y, W * 0.052, H); ctx.fillRect(X + W * 0.913, Y, W * 0.052, H);
       const kw = W * T.w(0.010);
@@ -1807,13 +1924,14 @@ const LiveryTex = (function () {
   // (Red Bull's ORACLE, Mercedes' PETRONAS), "plate" the SF-26's number on a
   // contrasting panel, "duo" the RB22 (title aft, partner forward). `"slash"`
   // is ONE raked stroke (W17 language as a single band) — restored as a real
-  // SIDE design, not the culled multi-bar sticker sheet. Mercedes still ships
-  // `"sash"`. `bars`/`split`/`chevron` stay culled.
-  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "slash"];
+  // SIDE design. Mercedes still ships `"sash"`. Spine-zones pack adds
+  // `rake` / `shoulder` / `starfield` (not `stars` — that remains finStyle).
+  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "slash", "rake", "shoulder", "starfield"];
   // FILLS sit under the wrap's bull; lettering/numbers/badges sit over it.
-  // `ribbon` is content (strip + number). `band`/`sash` are colour panels.
+  // `ribbon` is content (strip + number). `band`/`sash`/`rake`/`shoulder` are colour panels.
   // `slash` is a stroke on bare flank — not SIDE_FILL.
-  const SIDE_FILL = { band: 1, sash: 1 };
+  const SIDE_FILL = { band: 1, sash: 1, rake: 1, shoulder: 1 };
+
   // Where a MARK (logo / number / code / plate) sits on the flank canvas.
   // v is the centre, 0 at the shoulder crease and 1 at the sidepod line.
   // Hung at 0.56 the plate sat in the sidepod (owner: "a little low"); hung
@@ -2052,7 +2170,6 @@ const LiveryTex = (function () {
     const c1 = colors.c1 || [0.1, 0.1, 0.12];
     const c2 = colors.c2 || [0.9, 0.9, 0.92];
     const stripe = colors.stripe || null;
-    const finPaint = colors.fin || c2;
     const finArt = colors.finArt || null;
     const logo = colors.logo || null;
 
@@ -2077,13 +2194,11 @@ const LiveryTex = (function () {
     // which is what the fin badge already uses; every shipped car now sets
     // finShape "none", so a fin that is not there was choosing the ink for a
     // mark that is.
-    // CREST INK (liv.crestInk) — what the crown's LETTERING wears: the wordmark,
-    // the number, `carbon`'s keylines, the trim on `panel` and `stripe`, and the
-    // flank marks that take this same ink. Authored wins outright, like every
-    // tint row: an explicit pick is a decision about one surface, and the
-    // contrast derivation below owns only the DEFAULT.
+    // CREST INK (liv.crestInk) — legacy lettering override. The paint sheet no
+    // longer offers this row (logo/logo2/logo3 own the mark; glyphs auto-ink).
+    // Still honoured when present on a stored garage file so a re-open does not
+    // jump the lettering until the player re-saves.
     const inkCrest = colors.crestInk || inkOn([coverPaint]);
-    const inkFin = inkOn([finPaint]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks (titleA only)
     const inkNose = inkOn([c1, c2]);          // titleB — the monocoque top
     const inkStrip = inkOn(stripBg);
@@ -2120,6 +2235,7 @@ const LiveryTex = (function () {
     const tailStyle = colors.finStyle || "team";
     const finBadge = colors.finBadge || "logo";
     const spineLogo = colors.spineLogo || "logo";
+    const coverBind = coverBindOf(colors);
     // SPINE TINT (liv.spineTint) — the crown band's OWN colour. An EXPLICIT
     // pick wins and skips the contrast re-pick. The derived default is the
     // BASE colours only (secondary, then primary, then inks) — never BODY
@@ -2133,6 +2249,8 @@ const LiveryTex = (function () {
     // pick by construction; true only for an authored SPINE TINT that sits
     // under the floor, which is what the band designs' trim answers to.
     const bandWeak = contrast(bandC, coverPaint) < BAND_ON_COVER;
+    const finPaint = resolveFinPaint(teamId, colors, coverPaint, bandC, c1, c2);
+    const inkFin = inkOn([finPaint]);
     // The cover's HEIGHT decides how tall the flank band is in metres, and so
     // how wide a mark must be drawn to come out square on it (flankSquash).
     const spineHeight = colors.spineHeight || "standard";
@@ -2143,7 +2261,7 @@ const LiveryTex = (function () {
     // fin keeps its motif (drawTailGraphic on REGIONS.fin below).
     const markHalo = (img, bg, ink) =>
       (img && img._avg && contrast(img._avg, bg) < 2.6 ? ink : null);
-    const emblemRim = colors.logo3 || colors.logo2 || null;
+    const emblemRim = colors.logo3 || null;
     // ONE lockup for the engine cover and the fin badge. Resolving the badge
     // against the fin wash used to drop Ferrari's shield (and recolour the
     // horse) so top-down / the garage wall disagreed with the tail.
@@ -2309,11 +2427,13 @@ const LiveryTex = (function () {
       // and the other was derived, which is how four teams ended up wearing a
       // "tricolour" of one colour repeated (1.01:1 on Mercedes).
       const bandC2 = colors.bandTint2 || pickOn([inkCrest].concat(BAND_ORDER), [coverPaint, bandC], BAND_ON_COVER);
-      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont, bandC2, bandWeak);
-      if (spineLogo === "saddle") saddleFlanks(ctx, bandC);
+      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont, bandC2, colors, bandWeak);
+      if (spineLogo === "saddle" || coverBind === "saddleWrap") {
+        saddleFlanks(ctx, saddleFill(colors, bandC, coverPaint) || bandC);
+      }
     }
-    if (REGIONS.tail) {
-      drawTailTop(ctx, spineLogo, REGIONS.tail, bandC, inkCrest, names[1] || "", bandWeak);
+    if (REGIONS.tail && finHandoffOf(colors) !== "hardCut") {
+      drawTailTop(ctx, spineLogo, REGIONS.tail, bandC, inkCrest, names[1] || "", colors, coverPaint, bandWeak);
     }
     // TAIL GRAPHIC wash: finArt if set, else the first BASE that clears the
     // fin plate. BODY STRIPE / DETAIL used to sit ahead of c1 here and steal
@@ -2350,8 +2470,10 @@ const LiveryTex = (function () {
     // painted 1.00:1 after the flank band was first pointed here. The wrap's
     // sun covers only the front of the band, so under it a flank-wide graphic
     // crosses BOTH the sun and the bare cover and has to clear each.
+    const saddleFlankC = saddleFill(colors, bandC, coverPaint);
     const flankBg = spineLogo === "wrap" ? sunColour(teamId, colors)
-                  : spineLogo === "saddle" ? bandC : coverPaint;
+                  : saddleFlankC != null && (spineLogo === "saddle" || coverBind === "saddleWrap")
+                    ? saddleFlankC : coverPaint;
     const flankBgs = spineLogo === "wrap" ? [sunColour(teamId, colors), coverPaint] : [flankBg];
     // …and a MARK on that flank answers to the same surfaces the band does.
     // Every flank pick — the crest, the number, the code, the wordmarks, duo —
@@ -2361,8 +2483,8 @@ const LiveryTex = (function () {
     // cover, so an ink picked for the cover is picked to sit close to the band.
     // Measured on the shipped defaults with SPINE TOP saddle: Mercedes' number
     // 1.02:1 on its own saddle, McLaren's crest 1.01, Cadillac's number 1.09.
-    // An authored CREST INK still wins — it is documented as covering the flank
-    // marks too, and a pick is a pick.
+    // A leftover CREST INK on a stored liv still wins for flank glyphs (legacy);
+    // the sheet no longer authors it — new paint jobs auto-ink here.
     // …and under a WRAP that surface is not the sun: the mark never touches
     // it, and naming it would be the same phantom-surface mistake as the fin
     // (with a near-white sun over a near-black cover NO ink clears both, and
@@ -2486,16 +2608,15 @@ const LiveryTex = (function () {
       // (shield on red, disc on navy) and stays; an authored LOGO DETAIL plate
       // is a pick and stays regardless. Measured against every paint the mark
       // spans (markBgs), the same list the mark itself is floored on.
-      const flankPlate = markPalette(teamId, colors, markBgs, false).plate;
-      const flankNoPlate = !!flankPlate
-        && !(colors.logo2 && secondSlot(teamId, false) === "plate")
-        && markBgs.some((bg) => contrast(flankPlate, bg) < PLATE_ON_PAINT);
       const paintFlankLogo = (Rm, scaleCrest) => {
         const img = LOGOS[teamId];
         paintTeamMark(ctx, teamId, colors, Rm, markBgs, {
           halo: img ? markHalo(img, markBg, inkMark) : null,
           crestScale: !!scaleCrest,
-          noPlate: flankNoPlate,
+          // Brand plates (Ferrari yellow shield, Red Bull sun) win unscored in
+          // markPalette — on a white saddle flank that is 1.09:1. The flank
+          // field is already the contrast surface; skip the plate here.
+          noPlate: true,
         });
       };
       if (spineSide === "emblem") {
@@ -2524,10 +2645,9 @@ const LiveryTex = (function () {
       // The plate has to separate from the FLANK, and the saddle paints that
       // flank in stripe||accent — the plate's own first choice. Ferrari shipped
       // a number board the exact colour of the panel it sits on.
-      // PLATE PANEL (liv.plateTint) and PLATE NUMBER (liv.plateInk) are picked
-      // rows now. An authored panel skips the re-pick below entirely — it is a
-      // choice about one surface, and re-deriving it is exactly the "my colour
-      // was thrown away" the tint rows exist to stop.
+      // PLATE PANEL (liv.plateTint) is the board colour. PLATE INK is legacy —
+      // the sheet no longer offers it; board lettering auto-inks unless a
+      // stored liv still carries plateInk.
       // PLATE PANEL is its own row. Unset = bases against the mark/flank field —
       // not BODY STRIPE or DETAIL (those are other rows). Contrast vs markBg
       // (wrap may put the plate on the bull colour, not bare cover).
@@ -2732,6 +2852,102 @@ const LiveryTex = (function () {
         ctx.stroke();
         ctx.restore();
       });
+    } else if (spineSide === "rake") {
+      // One hard diagonal colour cut — not the parallel-edge sash. An explicit
+      // sideTint is a pick and is never re-derived. Under saddleWrap without a
+      // sideTint, prefer saddleFill when it clears flankBgs; otherwise derive.
+      let rakeC;
+      if (colors.sideTint) {
+        rakeC = colors.sideTint;
+      } else {
+        const rakePref = coverBind === "saddleWrap" ? (saddleFlankC || flankBandC) : flankBandC;
+        // flankBgs is a LIST — contrast() is pairwise; score the worst pair.
+        const bgs = (Array.isArray(flankBgs) && Array.isArray(flankBgs[0])) ? flankBgs : [flankBgs];
+        const keep = rakePref && bgs.every((b) => b && contrast(rakePref, b) >= BAND_ON_COVER);
+        rakeC = keep ? rakePref : pickOn(
+          [flankBandC, inkCrest, c1, c2, INK_DARK, INK_LIGHT].filter(Boolean),
+          flankBgs, BAND_ON_COVER);
+      }
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(rakeC, 0.97);
+        const u0 = sideFrom || 0.02;
+        const uEnd = sideFrom ? sideTo : FLANK_SEEN;
+        const vTop = Sf.y + Sf.h * 0.04, vBot = Sf.y + Sf.h * 0.58;
+        ctx.beginPath();
+        ctx.moveTo(su(F, u0), vBot);
+        ctx.lineTo(su(F, uEnd), vTop);
+        ctx.lineTo(su(F, uEnd), vBot);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = cssA(INK_DARK, 0.38); ctx.lineWidth = Math.max(2, Sf.h * 0.016);
+        ctx.beginPath();
+        ctx.moveTo(su(F, u0), vBot); ctx.lineTo(su(F, uEnd), vTop);
+        ctx.stroke();
+        ctx.restore();
+      });
+    } else if (spineSide === "shoulder") {
+      // Upper-third shelf only; lower flank stays cover/body. Explicit sideTint
+      // is a pick. Explicit saddleTint is used only when it clears flankBgs
+      // (otherwise a wrap shelf would paint 1:1 on the saddle block).
+      let shoulderC;
+      if (colors.sideTint) {
+        shoulderC = colors.sideTint;
+      } else if (colors.saddleTint) {
+        const bgs = (Array.isArray(flankBgs) && Array.isArray(flankBgs[0])) ? flankBgs : [flankBgs];
+        shoulderC = bgs.every((b) => b && contrast(colors.saddleTint, b) >= BAND_ON_COVER)
+          ? colors.saddleTint
+          : pickOn([flankBandC, inkCrest, c1, c2, INK_DARK, INK_LIGHT].filter(Boolean),
+                   flankBgs, BAND_ON_COVER);
+      } else {
+        shoulderC = pickOn(
+          [flankBandC, inkCrest, c1, c2, INK_DARK, INK_LIGHT].filter(Boolean),
+          flankBgs, BAND_ON_COVER);
+      }
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(shoulderC, 0.97);
+        const u0 = sideFrom || 0.02;
+        const uEnd = sideFrom ? sideTo : FLANK_SEEN;
+        const y0 = Sf.y + Sf.h * 0.04, y1 = Sf.y + Sf.h * 0.33;
+        ctx.fillRect(Math.min(su(F, u0), su(F, uEnd)), y0, Math.abs(su(F, uEnd) - su(F, u0)), y1 - y0);
+        ctx.strokeStyle = cssA(INK_DARK, 0.35); ctx.lineWidth = Math.max(2, Sf.h * 0.014);
+        ctx.beginPath();
+        ctx.moveTo(su(F, u0), y1); ctx.lineTo(su(F, uEnd), y1);
+        ctx.stroke();
+        ctx.restore();
+      });
+    } else if (spineSide === "starfield") {
+      // Micro dot field on the flank panel — not finStyle "stars". Density
+      // floor keeps cover-legibility's 1.5 % flank area readable.
+      // sideTint owns starfield ink; never crestInk (that row is gone from the
+      // sheet and was never a flank graphic colour).
+      const dotInk = colors.sideTint
+        || pickOn(BAND_ORDER, flankBgs, BAND_ON_COVER);
+      const density = 0.28;
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        const u0 = sideFrom || 0.02;
+        const uEnd = sideFrom ? sideTo : FLANK_SEEN;
+        const x0 = su(F, u0), x1 = su(F, uEnd);
+        const y0 = Sf.y + Sf.h * 0.06, y1 = Sf.y + Sf.h * 0.58;
+        const w = Math.abs(x1 - x0), h = y1 - y0;
+        const step = Math.max(3, w * 0.045);
+        for (let py = y0; py < y1 - step * 0.5; py += step) {
+          for (let px = Math.min(x0, x1); px < Math.min(x0, x1) + w - step * 0.5; px += step) {
+            const hsh = (((px * 73856093) ^ (py * 19349663)) >>> 0) % 1000;
+            if (hsh / 1000 > density) continue;
+            const r = step * 0.32;
+            ctx.fillStyle = cssA(dotInk, 0.97);
+            ctx.beginPath();
+            ctx.arc(px + step * 0.5, py + step * 0.5, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+      });
     } else if (spineSide === "slash") {
       // ONE bold diagonal band from the crease — W17 rake as a single stroke,
       // not three pasted pinstripes. Not SIDE_FILL (wrap bull sits under sash/
@@ -2812,9 +3028,29 @@ const LiveryTex = (function () {
   function paintTeamMark(ctx, teamId, liv, R, field, opts) {
     const o = opts || {};
     const logo = liv && liv.logo;
-    const outline = (liv && (liv.logo3 || liv.logo2)) || null;
+    // Outline is logo3 only. logo2 is often the PLATE slot (Ferrari shield,
+    // Red Bull disc) — feeding it here as a rim stole the plate colour from
+    // the crest path and outlined uploaded emblems in the shield tint.
+    const outline = (liv && liv.logo3) || null;
+    const bgs = field && field.length
+      ? (Array.isArray(field[0]) ? field : [field]).filter(Boolean)
+      : [];
     if (LOGOS[teamId]) {
-      drawLogoImage(ctx, LOGOS[teamId], R, logo || null, o.halo || null, outline);
+      // Untinted art can still vanish — Ferrari's white horse on a white saddle
+      // flank. When the field is pale and no tint was authored, force an ink.
+      // An authored TEAM LOGO tint is kept even when it fails the field (halo
+      // carries it) — re-picking collapsed every mid-tone to the same ink and
+      // made the garage colour row look dead on the flank.
+      let tint = logo || null;
+      let halo = o.halo || null;
+      if (tint && bgs.length && !bgs.every((b) => contrast(tint, b) >= 2.0)) {
+        if (!halo) halo = haloFor(tint);
+      } else if (!tint && bgs.length && bgs.some((b) => lum(b) > 0.55)) {
+        tint = pickOn(
+          [liv && liv.c1, liv && liv.c2, INK_DARK, INK_LIGHT].filter(Boolean),
+          bgs, 2.0);
+      }
+      drawLogoImage(ctx, LOGOS[teamId], R, tint, halo, outline);
       return;
     }
     const crestR = o.crestScale ? flankEmblemBox(R, teamId) : R;
@@ -2822,7 +3058,7 @@ const LiveryTex = (function () {
     // flank passes it where the brand plate cannot clear the flank paint.
     drawCrest(ctx, teamId, crestR, {
       liv, field, bare: !o.fullLockup,
-      palette: markPalette(teamId, liv, field, false, o.noPlate ? { noPlate: true } : undefined),
+      palette: markPalette(teamId, liv, field, false, { noPlate: !!o.noPlate }),
     });
   }
 
@@ -2858,6 +3094,8 @@ const LiveryTex = (function () {
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
+           coverBindOf, finHandoffOf, saddleFill, ridgeFill,
+           airboxMeshColour, finContrastBlock, resolveFinPaint,
            hasFlankBull: (teamId) => !!bullPath(teamId) };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

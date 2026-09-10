@@ -58,8 +58,10 @@ Static guards over the source — a red exit here is a defect, not a report.
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **check/ai-field.mjs** | Field behaviour of the AI race: pace spread, how fast it strings out, settled passes vs oscillation, nose-to-tail dwell. | tune-physics |
-| **check/ai-pace.mjs** | How fast is the AI field, per circuit and per difficulty? Simulated laps in the VM, no browser, no renderer. | tune-physics |
+| **check/ai-field.mjs** | Field behaviour of the AI race: pace spread, how fast it strings out, settled passes vs oscillation, nose-to-tail dwell. | ai-racecraft |
+| **check/ai-line.mjs** | Where the AI actually puts the car in a corner: approach offset and apex depth per baked corner, with run-to-run range. | ai-racecraft |
+| **check/ai-pace.mjs** | How fast is the AI field, per circuit and per difficulty? Simulated laps in the VM, no browser, no renderer. | ai-racecraft |
+| **check/ai-race.mjs** | One entry for the AI instrument trio: `pace` / `field` / `line` (VM, no browser). | ai-racecraft |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
@@ -107,7 +109,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |
 | **shot/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **shot/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
-| **shot/garage-angles.mjs** | Garage preset shots, ONE Chromium: walks teams/liveries/any livery field, labels frames, sheets, `--against` A/Bs a ref. | playwright-probe |
+| **shot/garage-angles.mjs** | Garage preset shots, ONE Chromium: walks teams/liveries/any livery field; clears dead DISPLAY for headless WebGL. | playwright-probe |
 | **shot/garage-frame.mjs** | Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B. | — |
 | **shot/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
@@ -130,14 +132,12 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | — |
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | webgpu-debug |
-| **gfx/soft-present-bench.mjs** | Soft-present upscale ON/OFF timing (software blit ≠ player FPS). | — |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | webgl-debug |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
-| **gfx/wgx-capture.mjs** | REAL WGX pixels in-container (~10 s): soft-present readback via `GLX.capturePixels()` → `frame.png`. | webgpu-debug |
-| **gfx/wgx-lavapipe-probe.mjs** | WebGPU on Mesa Lavapipe + Xvfb — the second software backend beside SwiftShader; `[track] [--lite]`. | webgpu-debug / mcp-probe |
+| **gfx/wgx-capture.mjs** | Thin alias → `gfx-probe.mjs --backend webgpu` (WGX soft-present + optional readback). | webgpu-debug |
+| **gfx/wgx-lavapipe-probe.mjs** | Thin alias → `gfx-probe.mjs --backend three --tlx-webgpu --lavapipe`. | webgpu-debug / mcp-probe |
 | **gfx/wgx-shot.mjs** | WebGPU screenshots, one track or `--gallery`: `canvas.png`, HUD, `view.txt`; polls until pixels are non-black. | webgpu-debug |
 | **gfx/wgx-validate.mjs** | REAL Dawn validation of the WGX renderer in-container (~5 s): full Chromium, races a track, fails on any GPU error. | webgpu-debug |
-| **gfx/wgx-vid-repro.mjs** | Raw-WebGPU `vertex_index` verdict matrix (draw shapes × N crossing 4095 × read path) on SwiftShader/Lavapipe. | webgpu-debug |
 
 ### `tools/track/`
 
@@ -168,7 +168,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **car/audit-aero.mjs** | Renders every aero option from three wing views into one comparison sheet → `scratch/renders/aero/`. | playwright-probe |
+| **car/audit-aero.mjs** | Thin alias → `render-car.mjs --preset=wing` (three wing views). Prefer the parent. | garage-parts-livery |
 | **car/audit-parts.mjs** | Renders every option of chosen part categories through `carview.html`; per-category contact sheets. | playwright-probe |
 | **car/career-economy.mjs** | Sims a career season per starting team through the real `Career.settleRound()`; reports what a year's income affords. | career-mode |
 | **car/carshot.mjs** | Cropped studio-orbit car JPEG, self-booting: `carshot.mjs [az] [tod] [teamIdx] [out]` → `artifacts/tmp/carshot.jpg`. | playwright-probe |
@@ -261,7 +261,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 |---|---|---|
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
 | **env/install-browsers.sh** | Idempotent Playwright Chromium install into `/opt/pw-browsers`; skips `npm install` when node_modules is usable. | — |
-| **env/mirror-skills.sh** | Mirror `.claude/skills/` into the gitignored `.agents/skills/` Codex scans (`--check` reports drift). | check-changes |
+| **env/mirror-skills.sh** | Repair the tracked `.agents/skills/` Codex mirror: one symlink per `.claude/skills/<name>` dir (`--check` reports… | check-changes |
 
 ## Test runner & coverage
 
@@ -269,6 +269,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 |---|---|
 | **check/cross-file-paths.mjs** | Every relative reference between files resolves to a file that exists (espree extraction; built for the tests/ split). |
 | **check/evaluate-scope-lint.mjs** | A `page.evaluate()` callback may not close over Node — flags module-scope reads inside serialised callbacks. |
+| **check/offline-precache-check.cjs** | Does an installed PWA still work with the origin gone? The only check that sees a bare circuit after a missed precache. |
 | **check/wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |
 | **ci/assert-audit.mjs** | Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`. |
 | **ci/ci-coverage.mjs** | What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs. |

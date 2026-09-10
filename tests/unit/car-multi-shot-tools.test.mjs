@@ -149,9 +149,11 @@ test("liveries.js publishes ONE field list and forTeam consumes it", () => {
   assert.match(src, /for \(const k of FIELDS\)/, "forTeam must consume that const");
   assert.match(src, /return \{[^}]*\bFIELDS\b/, "and it must be exported on the global");
   const list = /const FIELDS = \[([\s\S]*?)\];/.exec(src)[1];
-  for (const k of ["spineLogo", "spineSide", "finShape", "cover", "sunTint", "plateInk"]) {
+  for (const k of ["spineLogo", "spineSide", "finShape", "cover", "sunTint", "plateTint"]) {
     assert.ok(list.includes(`"${k}"`), `FIELDS must still carry ${k}`);
   }
+  assert.equal(list.includes('"crestInk"'), false, "crestInk left the paint sheet / FIELDS");
+  assert.equal(list.includes('"plateInk"'), false, "plateInk left the paint sheet / FIELDS");
 });
 
 test("garage-angles labels frames and can A/B a ref without touching the tree", () => {

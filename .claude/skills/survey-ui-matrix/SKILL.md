@@ -27,6 +27,8 @@ node tools/ui/layout-audit.mjs --survey          # title-path + shots (npm run u
 node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
 node tools/ui/layout-audit.mjs --screen=settings # one cell
 node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
+# Numbers companion (type/spacing floors): node tools/ui/fit-audit.mjs
+# Notch insets only: node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,21
 ```
 
 This skill is the **interactive** complement: Playwright MCP for resize / DOM /

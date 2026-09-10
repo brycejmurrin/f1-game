@@ -89,7 +89,7 @@ shot as UI evidence.
 
 ## 5. Ship
 
-When the look is right: `node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`) (last edit),
+When the look is right: `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) (last edit),
 then the ui / gallery group if the change is more than a token. One-screen
 play is not a matrix proof.
 

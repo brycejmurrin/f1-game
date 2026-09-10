@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: Use when the user asks did I break anything, run the right tests, validate changes, ready to push, pre-commit/pre-push checks, test selection for touched files, verify track edits, bump the version / cache bust after a js/css edit, merge with or push to the deploy branch, or when a Playwright test times out (timeout) or hangs and the question is machine-load vs real failure. Spawn verify-agent for a read-only --fast JSON verdict (--base <ref> for "was it already red?"). Live version.json is deploy-research.
+description: Use when the user asks did I break anything, run the right tests, validate changes, ready to push, pre-commit/pre-push checks, test selection for touched files, verify track edits, shell/cache policy after a js/css edit (tags stay ?v=dev; gen-shell after manifest), merge with or push to the deploy branch, or when a Playwright test times out (timeout) or hangs and the question is machine-load vs real failure. Spawn verify-agent for a read-only --fast JSON verdict (--base <ref> for "was it already red?"). Live version.json is deploy-research.
 ---
 
 # Validate changes before committing/pushing
@@ -21,6 +21,7 @@ node tools/ci/verify-change.mjs --plan       # what this change needs (JSON)
 node tools/ci/verify-change.mjs --fast       # no browsers — default for verify-agent
 node tools/ci/verify-change.mjs              # fast gate + start batch 1 (background)
 node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked
+# Optional Playwright smoke only — do NOT fork the pre-push path onto quick-validate.mjs
 ```
 
 `--wait` blocks for the full queue. Subagents and the default loop use

@@ -45,10 +45,16 @@ node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
 # ONE Chromium, many angles (soft #game-soft/#view → CDP — never page.screenshot):
 node tools/car/render-car.mjs --team=redbull --preset=spine   # needs :3456
 node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=scratch/renders/garage-spine
-# every axis is a LIST — one boot walks the product (--dry-run prints it first):
-node tools/shot/garage-angles.mjs --team=redbull,ferrari --parts=factory,stock --views=hero,side --dry-run
+# every axis is a LIST — one boot walks the product (--plan prints it first):
+node tools/shot/garage-angles.mjs --team=redbull,ferrari --parts=factory,stock --views=hero,side --plan
 node tools/car/carshot.mjs 40 day 2 artifacts/tmp/carshot.jpg  # tiny cropped JPEG
 ```
+
+`garage-angles` boots its own static server (no `:3456` serve). A dead local
+`DISPLAY=:N` (no `/tmp/.X11-unix/XN`) used to make WebGL null and hang on
+`__apex` — `launchChromium` clears that automatically; fallback is
+`unset DISPLAY` or `xvfb-run -a`. Details:
+[garage-parts-livery/references/garage-angles.md](../garage-parts-livery/references/garage-angles.md).
 
 ## Single framed screenshot (`shot.mjs`)
 

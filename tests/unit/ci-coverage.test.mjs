@@ -20,15 +20,8 @@ const SELECTED_TIMEOUT_MS = SELECTED_GATE.perTestTimeoutSec * 1000;
 const ciWorkflow = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
 const pagesWorkflow = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
 
-test("soft-present benchmark boots the application once per measured leg", () => {
-  const src = fs.readFileSync(new URL("../../tools/gfx/soft-present-bench.mjs", import.meta.url), "utf8");
-  assert.equal((src.match(/\bpage\.goto\(/g) || []).length, 1,
-    "one goto in leg() gives the three measured legs exactly three application boots");
-  assert.doesNotMatch(src, /\bpage\.reload\(/,
-    "a reload after each leg navigation doubles every measured boot");
-  assert.match(src, /page\.addInitScript\(/,
-    "storage needed before application scripts must be configured through an init script");
-});
+// soft-present-bench.mjs archived 2026-09-10 → docs/archive/tools/gfx/
+// (closed perf note; gfx-probe is the live soft-present path).
 
 test("it sees the specs on disk", () => {
   assert.ok(ALL_SPECS.length > 50, `only ${ALL_SPECS.length} specs found — the scan is broken`);
@@ -98,8 +91,14 @@ test("the selected gate blocks pushes and PRs, but not workflow calls", () => {
     failsClosedOnInvalidBase: true,
     surfacesBudgetSkips: true,
   });
+  // The event_name half alone is NOT the gate and never was: github.event_name
+  // is the caller's inside a reusable workflow, so it reads 'push' on a Pages
+  // call too. The inputs.concurrency_key half is what excludes the deploy, and
+  // it is the half worth pinning -- dropping it silently puts a browser gate
+  // back in front of every deploy (Pages run 2215).
+  assert.match(selected, /if: \$\{\{ inputs\.concurrency_key == '' &&/);
   assert.match(selected,
-    /if: \$\{\{ github\.event_name == 'push' \|\| github\.event_name == 'pull_request' \}\}/);
+    /github\.event_name == 'push' \|\| github\.event_name == 'pull_request'/);
   assert.doesNotMatch(selected, /^    continue-on-error:/m);
 });
 

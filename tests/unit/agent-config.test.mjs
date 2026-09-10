@@ -124,9 +124,14 @@ test("settings.json registers the hooks that enforce the rules, and each hook ex
     assert.match(read(`.claude/hooks/${hook}`), /allow-protected|APEX_SKIP_GUARDS/, `${hook} needs its escape hatch`);
 });
 
-test("the Codex skill mirror is gitignored and the mirror script exists", () => {
-  assert.match(read(".gitignore"), /^\.agents\/$/m, ".agents/ (the Codex skill mirror) must be gitignored");
+test("the Codex skill mirror is tracked symlinks and the repair script exists", () => {
+  // The deploy branch tracks .agents/skills/<name> -> ../../.claude/skills/<name>
+  // (agent-surface.test.mjs locksteps every dir); it must NOT be gitignored,
+  // or a fresh clone's Codex sees no skills. The script repairs, never copies
+  // into git.
+  assert.doesNotMatch(read(".gitignore"), /^\.agents\/?$/m, ".agents/ is the tracked Codex mirror — do not gitignore it");
   assert.match(read(".gitignore"), /^!\.claude\/rules\/$/m, ".claude/rules/ must be tracked");
   assert.ok(exists("tools/env/mirror-skills.sh"));
   assert.match(read("tools/env/mirror-skills.sh"), /\.agents\/skills/);
+  assert.match(read("tools/env/mirror-skills.sh"), /ln -s/, "the repair makes symlinks, the tracked form");
 });

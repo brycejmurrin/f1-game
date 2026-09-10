@@ -26,15 +26,15 @@ expectation vs real regression.
    prop geometry vertex for vertex. `verify-change` runs this inline when
    `graph.js` is in the plan.
 
-3. **Shell still reads `?v=dev`?** There is no cache bump in development:
-   every tag in the committed `index.html` reads `?v=dev` and `pages.yml`
-   stamps content hashes while staging (`references/bump.md`). After a
-   `tools/manifest.cjs` change, regenerate and check:
+3. **Shell / cache bust (no numeric bump).** Committed asset tags stay
+   `?v=dev`; the deploy stamps content hashes. After a `js/`/`css/` edit:
    ```sh
-   node tools/gen/gen-shell.mjs --check
-   node tools/ci/bump-cache.mjs --check
+   node tools/ci/bump-cache.mjs --check   # must stay clean (refuses --apply here)
+   node tools/gen/gen-shell.mjs --check   # after tools/manifest.cjs: gen-shell.mjs
    ```
-   Never `--apply` on the repo (it refuses without `--root`).
+   Never hand-grep for `?v=[0-9]` on the repo shell, and never bump
+   `version.json` while a browser run is in flight. Cross-lineage merge:
+   `node tools/gen/gen-shell.mjs` regenerates the union shell.
 
 4. **Smoke + load order** if you touched load order, `index.html`, or a core
    module (`index.html` script tags must match `tools/manifest.cjs`):

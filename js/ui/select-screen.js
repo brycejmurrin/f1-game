@@ -492,6 +492,8 @@ function buildSelect() {
     applyTrackSearch(trackQuery);
     updateTrackPreview();
   }
+  // Prepare the initial/current tile too, even when no tile is clicked.
+  if (!seasonComplete) scheduleFlybyTrack(true);
   // buildSelect runs while #select is still hidden at every entry point, so
   // the synchronous preview pass can only draw against placeholder geometry.
   // Refit after two frames: the first exposes and classifies the sheet, the

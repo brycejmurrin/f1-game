@@ -2,10 +2,10 @@
 
 The island is otherwise byte-identical to the pristine npm `three@0.185.1`
 tarball (`build/three.{webgpu,core,tsl}.min.js` + `examples/jsm/tsl/display/
-BloomNode.js` → `addons/tsl/display/BloomNode.js`). All four patches below live in
-`three.webgpu.min.js` only, and each is asserted by
+BloomNode.js` → `addons/tsl/display/BloomNode.js`). Patches 1–4 below live in
+`three.webgpu.min.js`; patch 5 lives in `three.core.min.js`. Each is asserted by
 `tests/unit/gfx-backend-canary.test.mjs` — a vendor re-drop that silently
-reverts any one fails the guard suite, not production. Re-apply ALL FOUR on any
+reverts any one fails the guard suite, not production. Re-apply ALL FIVE on any
 vendor bump, then re-run `npm run test:tlx` and the TLX WebGPU boot diag.
 
 ## 1. swizzle — Chromium 141 rejects the r185 texture-view descriptor
@@ -126,3 +126,42 @@ noise helpers (same commit) — that is what took the lit shader from 1,597
 node variables to a compilable size; this patch is what makes the remainder
 not count. Drop when upstream emits render-stage vars at function scope (no
 such change on `dev` as of 2026-09-03; worth filing).
+
+
+## 5. Warm-up yields tasks instead of display frames without scheduler.yield
+
+`Renderer.compileAsync()` walks every projected render object and awaits
+`yieldToMain()` after each one, including objects with cached pipelines. The
+r185 fallback in `three.core.min.js` (`li`, exported as `yieldToMain`) used
+`requestAnimationFrame`. Without native `scheduler.yield`, that imposes a
+separate display-frame wait per object while Apex deliberately holds the game
+loop during compilation. Hidden tabs can stop the fallback entirely.
+
+Keep native `self.scheduler.yield()` unchanged, including its method receiver.
+Replace only the fallback with a MessageChannel task; close both ports before
+resolving. Environments without MessageChannel use `setTimeout(resolve, 0)`.
+Do not substitute a resolved Promise/microtask, which does not yield to browser
+input or rendering. This fallback does not promise native scheduler priority.
+
+Recipe in the pinned bundle: replace the body of `function li()` with:
+
+```js
+function li() {
+  return typeof self !== "undefined" && self.scheduler !== undefined &&
+    self.scheduler.yield !== undefined ? self.scheduler.yield() : new Promise(resolve => {
+      if (typeof MessageChannel === "undefined") { setTimeout(resolve, 0); return; }
+      const channel = new MessageChannel();
+      channel.port1.onmessage = () => {
+        channel.port1.close(); channel.port2.close(); resolve();
+      };
+      channel.port2.postMessage(null);
+    });
+}
+```
+
+Regression tests exercise the actual vendored function body: native method
+preservation, asynchronous/concurrent completion, both-port cleanup, absence
+of animation-frame waits, and the timer fallback. No GPU commands, shader
+content, compilation ordering, or render-target ownership change. Real iPhone
+latency remains to be measured; this patch removes the frame-based scheduling
+cost, not the underlying shader compilation work.

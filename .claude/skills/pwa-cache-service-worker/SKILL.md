@@ -22,7 +22,7 @@ swallowed.
 
 **Fetch.** Navigation + `version.json` = network-first (3 s → cache).
 Everything else = cache-first. Always refresh **content hashes AND the
-shell generation** together (`node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`)). Never bump `version.json`
+shell generation** together (`node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md): `?v=dev`, no bump)). Never bump `version.json`
 during a Playwright run.
 
 ## When to Use
@@ -48,6 +48,7 @@ during a Playwright run.
 ```sh
 npm run test:service-worker
 npm run test:tooling-fast
+node tools/check/offline-precache-check.cjs   # offline precache contract (no browser)
 ```
 
 Related: `node tools/gen/gen-shell.mjs --check`, **check-changes**.

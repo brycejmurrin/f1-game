@@ -58,15 +58,27 @@ class LiveReporter {
     const now = Date.now();
     const parts = [...this.inflight.values()]
       .sort((a, b) => a.start - b.start)   // longest-running first: the hang suspect
-      .map((t) => `w${t.worker} ${Math.round((now - t.start) / 1000)}s ${t.name}`);
+      .map((t) => {
+        const step = [...t.steps].pop();
+        return `w${t.worker} ${Math.round((now - t.start) / 1000)}s ${t.name}` +
+          (step ? ` | in ${step.title}` : "");
+      });
     this.write(`[${ts()}] . running ${this.done}/${this.total} done, ${this.failed} failed | ${parts.join(" | ")}`);
   }
 
   onTestBegin(test, result) {
     const w = result && result.workerIndex != null ? result.workerIndex : 0;
     const name = this.name(test);
-    this.inflight.set(test, { name, start: Date.now(), worker: w });
+    this.inflight.set(test, { name, start: Date.now(), worker: w, steps: new Set() });
     this.write(`[${ts()}] > start   w${w} ${name}${test.retries && test.results.length > 1 ? `  (retry ${test.results.length - 1})` : ""}`);
+  }
+
+  onStepBegin(test, result, step) {
+    this.inflight.get(test)?.steps.add(step);
+  }
+
+  onStepEnd(test, result, step) {
+    this.inflight.get(test)?.steps.delete(step);
   }
 
   onTestEnd(test, result) {
@@ -106,6 +118,21 @@ class LiveReporter {
     // afterEach); a spec on the base Playwright fixture attaches none and
     // simply prints nothing extra.
     if (result.status !== "passed" && result.status !== "skipped") {
+      // Setup can consume the test budget before its body begins. Report the
+      // deepest expensive steps so a context stall cannot masquerade as a
+      // gameplay or assertion failure (Pages run 2215: Create context ~179 s).
+      const expensive = [];
+      const visit = (steps) => {
+        for (const step of steps || []) {
+          if (step.duration >= 1000 && !(step.steps || []).some(s => s.duration >= 1000))
+            expensive.push(step);
+          visit(step.steps);
+        }
+      };
+      visit(result.steps);
+      expensive.sort((a, b) => b.duration - a.duration);
+      for (const step of expensive.slice(0, 3))
+        this.write(`           slow step: ${(step.duration / 1000).toFixed(1)}s ${step.title}`);
       const att = (name) => (result.attachments || []).find((a) => a.name === name);
       const st = att("apex-state");
       if (st && st.body) {

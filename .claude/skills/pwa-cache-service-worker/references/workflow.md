@@ -1,17 +1,17 @@
 # PWA / service-worker workflow and mistakes
 
 Load this when adding a DEFERRED file, debugging a stale install, or a
-Playwright hang after a mid-run `version.json` change.
+Playwright hang after a mid-run `version.json` bump.
 
 ## Workflow
 
 1. **Identify what changed.**
-   - New tagged `<script>`/`<link>` in `index.html` → picked up automatically
-     on next install (tags read `?v=dev`; the deploy stamps hashes and
-     `version.json`).
+   - New tagged `<script>` / `<link>` in `index.html` → picked up automatically
+     on next install. Committed tags stay `?v=dev`; the deploy stamps content
+     hashes. Do **not** hand-bump numeric `?v=N`.
    - New file with **no tag** (DEFERRED backend, font, on-demand vendor) →
      update `tools/manifest.cjs` `DEFERRED`, then `node tools/gen/gen-shell.mjs`
-     (it writes `js/roster.js` and the `sw.js` optional seed).
+     (writes `js/roster.js` and the `sw.js` optional seed).
      `tests/unit/load-order.test.mjs` asserts the generated blocks match.
 
 2. **Edit `sw.js` carefully.**
@@ -25,28 +25,32 @@ Playwright hang after a mid-run `version.json` change.
    npm run test:tooling-fast
    ```
 
-4. **Bump version last** (`node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`)). Verify one uniform N:
+4. **Shell sync (not a numeric bump).**
    ```sh
-   grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
+   node tools/gen/gen-shell.mjs --check
+   # after a tools/manifest.cjs change:
+   node tools/gen/gen-shell.mjs
    ```
+   Tags in the committed shell read `?v=dev`. `bump-cache --apply` refuses on
+   this repo. Never edit `version.json` during a Playwright run.
 
 5. **Test offline behaviour.**
    ```sh
    npm run test:service-worker
    ```
    Manual: install PWA, go offline, reload — shell and tagged assets should
-   serve from `apex26-{N}`.
+   serve from `apex26-{build}`.
 
 6. **Pre-push.** `sw.js` edits: `pick-tests` routes to `service-worker`.
-   Shell/cache-bust only (`index.html` / `version.json`): also run
-   `npm run test:service-worker` manually — pick-tests routes those paths to
-   `tooling-fast`, not `service-worker`.
+   Shell-only (`index.html` / generated roster): also run
+   `npm run test:service-worker` manually when the change touches precache
+   discovery — pick-tests may route those paths to `tooling-fast` only.
 
 ## Common mistakes
 
 - Hand-maintaining a precache manifest parallel to `index.html`.
-- Hand-editing `version.json` or a `?v=` tag — both are the deploy's (hook-blocked).
-- **Changing `version.json` mid Playwright run** — shell guard reloads every
+- Hand-bumping numeric `?v=N` or only `version.json`.
+- **Bumping `version.json` mid Playwright run** — shell guard reloads every
   open page → timeouts.
 - **Stale pause menu after deploy** — pause/settings DOM is inline in
   `index.html` (not `?v=` JS). If buttons/layout are old while in-race HUD

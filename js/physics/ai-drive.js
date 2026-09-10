@@ -313,7 +313,7 @@ const AiDrive = (function () {
     const brake = ctx.brake || 22;
     const grip = ctx.grip || 1;
     const skill = t.skill;
-    let vLim = Infinity;
+    let vLimSq = Infinity;
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
       const k = Math.max(Math.abs(s.k || 0), 1e-5);
@@ -321,9 +321,12 @@ const AiDrive = (function () {
       const vC = Math.sqrt(latMax * bankMu * grip / k) * skill;
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
       const d = Math.max(s.d || 0, 1);
-      const vEntry = Math.sqrt(vC * vC + 2 * brake * 0.85 * d);
-      if (vEntry < vLim) vLim = vEntry;
+      const entrySq = vC * vC + 2 * brake * 0.85 * d;
+      if (entrySq >= 0 && entrySq < vLimSq) vLimSq = entrySq;
     }
+    // sqrt is monotonic: choose the tightest entry budget before taking it.
+    // Keep vC's arithmetic unchanged so the brake limit stays bit-identical.
+    let vLim = Math.sqrt(vLimSq);
     if (!Number.isFinite(vLim)) vLim = 1e6;
     const hold = houseStyle(ctx.team, ctx.seat, ctx.stats).hold;
     if (hold) vLim *= 1 - hold * 0.025;

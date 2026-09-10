@@ -220,7 +220,7 @@ Chrome DevTools MCP — local clone helper (working-tree browser probe)
   $0 status    Show paths and clone state
   $0 chrome-path
 
-For the deployed site use tools/mcp/tinyfish-mcp.sh (ensure / deploy-check / deploy-js),
+For the deployed site use the deploy-research subagent (host fetch / WebFetch),
 not this browser — github.io is blocked from this container's Chromium.
 
 Falls back to pinned npx $MCP_NPM_PACKAGE when the local clone is missing.

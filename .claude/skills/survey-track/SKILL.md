@@ -41,7 +41,7 @@ circuit file; no browser runs).
    **track-surveyor**).
 4. `verify-track.cjs <id>` — a THROW strands the game on the menu.
 5. `survey-track.mjs <id> after` — same framings; flags should clear.
-6. Parent ship: `node tools/ci/test-bg.mjs circuits` + `node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`). The
+6. Per-circuit gate: `node tools/track/verify-track.cjs <id>`. Parent ship (optional fleet): `node tools/ci/test-bg.mjs circuits` + `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md): `?v=dev`, no bump). The
    **track-surveyor** subagent stops at verify-track / coplanar / float-audit.
 
 Montreal already ships `flatTerrain: true` + `terrainOuter: 70` — survey

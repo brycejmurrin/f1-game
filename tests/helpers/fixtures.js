@@ -236,6 +236,68 @@ test.afterEach(async ({ page }, testInfo) => {
   } catch (_) { /* page may be closed / __apex absent — best-effort only */ }
 });
 
+// STOP RASTERISING BEFORE THE CONTEXT GOES AWAY. Registered AFTER the capture
+// above on purpose: hooks run in registration order, so a failing test still
+// snapshots a live page, and only then does the page go quiet.
+//
+// THE FAILURE THIS TARGETS. On the shared CI runner a worker runs one heavy
+// browser test, and the NEXT test dies in `browser.newContext()` having never
+// entered its body: "Test timeout of 180000ms exceeded while setting up
+// context", at exactly the cap. A replacement worker — i.e. a new BROWSER —
+// then runs the same kind of test in seconds. Seen on race-control,
+// telemetry-compare and carview-parts, which share no fixture and no subject;
+// two of them import raw @playwright/test, whose context fixture is nothing but
+// browser.newContext(), so the stall is browser-side, not ours.
+//
+// WHY THIS SHOULD HELP, stated as the guess it is. LAUNCH sets
+// --disable-renderer-backgrounding and --disable-background-timer-throttling
+// (playwright.config.js), which switch OFF the throttling Chromium would
+// otherwise apply to a page nobody is looking at. A game page rAFs forever, and
+// SwiftShader rasterises on the CPU, so a renderer that outlives its test keeps
+// a core busy at full rate while the next newContext() is trying to start one.
+// __apex.headless(true) stops render(), so the page is idle before teardown.
+// The config's own measured lesson is that CPU headroom is the lever, not the
+// frame rate — this frees headroom rather than changing any clock.
+//
+// NOT PROVEN: the stall does not reproduce on a quiet box, so only CI can say.
+// Best-effort by construction too — a closed page, a missing hook, or a spec
+// with no __apex at all must never turn a green test red.
+//
+// WHAT MATTERS IS THE PREDECESSOR, NOT THE VICTIM, and that is worth writing
+// down because the obvious follow-up is a dead end. Read the worker ordering of
+// the run that motivated this (ci 3341, "Selected specs"):
+//
+//   w0  race-control #1  35.7 s pass  ->  race-control #2      180.0 s FAIL
+//   w1  race-control #3  34.7 s pass  ->  telemetry-compare #1 180.1 s FAIL
+//   w2  telemetry-compare #2  1.7 s   ->  telemetry-compare #3   0.3 s  pass
+//
+// Both failures follow a race-control test, which boots the game. The two
+// telemetry-compare tests that follow each other with no game in front of them
+// are fine. So the hanging test is not the problem — whatever ran BEFORE it is.
+//
+// Which means the two specs that import @playwright/test directly do NOT both
+// want their import switched, and an earlier version of this comment was wrong
+// to say so:
+//   - telemetry-compare never boots the game at all. It goes to /version.json,
+//     sets its own markup and injects log/mat4/js/data only, so it has no
+//     __apex, no GL context and no rAF loop. It is only ever the victim, never
+//     the predecessor; switching its import would buy exactly nothing.
+//   - carview-parts DOES drive a WebGL viewer, so it is a real predecessor —
+//     but tools/carview.html loads neither game.js nor agent/apex.js, so there
+//     is no __apex to quiet and switching its import would not reach it either.
+//     Its exposure is instead cut structurally: its three same-url tests share
+//     one context, leaving a single inter-test transition in that file. Giving
+//     CARVIEW (today: ready/set/angle) a stop is what would close the rest.
+//
+// Safe for sharedTest, which reuses one page: its per-test reset already calls
+// headless(false) before each test, so the page wakes back up. Between tests it
+// now idles instead of rasterising, which is the same win.
+test.afterEach(async ({ page }) => {
+  try {
+    await page.evaluate(() => { try { window.__apex && window.__apex.headless(true); } catch (_) {} });
+  } catch (_) { /* page already closed, or never had __apex — nothing to quiet */ }
+});
+
 /* ─────────────────────────────────────────────────────────────────────────────
    sharedTest — ONE booted page per worker, reused by every test in the file.
 

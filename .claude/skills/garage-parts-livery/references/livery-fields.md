@@ -1,7 +1,11 @@
-# Livery fields — every enum, the surface it paints, and its trap
+# Livery / hull field catalog
 
-Load when adding or debugging a livery field. Split out of `SKILL.md` so the
-index stays thin; nothing here is summarised elsewhere.
+Load from the garage skill when editing paint,
+fin/spine/cover fields, or the draft lockstep.
+
+The GARAGE (`#carsetup`, `js/garage/setup-sheet.js`) is who you are, what you drive
+(12 categories + 600 cr), and how it looks. Catalog: `js/car/parts.js`. Paint:
+`js/car/liveries.js` + `js/car/liverytex.js`. Geometry: `js/car/car3d.js`.
 
 `Parts.CATALOG` is an **ordered array**, not a keyed map. `Parts.getMods`
 returns four stat multipliers; `getVisualTiers()` feeds `Car3D.build`.

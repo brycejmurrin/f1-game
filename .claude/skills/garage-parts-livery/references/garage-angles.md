@@ -87,6 +87,22 @@ for the B pass (one boot, two reloads).
 1. Check `/proc/loadavg` < 3 — a busy box measures the machine, not the code.
 2. Reap orphan Chromium from prior probes (`ps … | head`, kill by PID).
 3. Never run while Playwright browser groups are in flight.
+4. **WebGL / DISPLAY:** headless SwiftShader needs a usable GL context.
+   `launchChromium` (via this tool) clears a *dead local* `DISPLAY=:N` when
+   `/tmp/.X11-unix/XN` is missing — that was the 2026-09-10 Cloud failure mode
+   where `__apex` never appeared. You do **not** need a separate `serve` on
+   `:3456`; the tool starts its own static server. If GL is still missing:
+   `unset DISPLAY` or `xvfb-run -a node tools/shot/garage-angles.mjs …`.
+   Opt out of the clear with `APEX_KEEP_DISPLAY=1`.
+
+```sh
+# Typical Cloud / CI invocation (no manual xvfb once DISPLAY is sane):
+node tools/shot/garage-angles.mjs --fast --preset=flank --team=ferrari \
+  --spineSide=logo --out=artifacts/garage-flank
+
+# Plan first — shot count + rough ETA, zero Chromium:
+node tools/shot/garage-angles.mjs --plan --preset=flank --team=ferrari,mercedes
+```
 
 ## When NOT to use
 

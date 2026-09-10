@@ -45,7 +45,7 @@ geometry bug.
    input exist?"
 
 8. **Verify.** `npm run test:tooling-fast`, then `node tools/ci/test-bg.mjs ui`.
-   If JS/CSS changed, `node tools/gen/gen-shell.mjs --check` (no cache bump: `.claude/skills/check-changes/references/bump.md`) before commit.
+   If JS/CSS changed, `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) before commit.
 
 ### Pause settings overlay
 

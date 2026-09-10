@@ -59,10 +59,9 @@
      to paint it: one field meant a BAND on most SPINE TOP designs and the SUN
      on `wrap`. Unset = mark plate / secondary / primary against the cover —
      never inherits spineTint.
-   crestInk? optional CREST INK — lettering for the crown AND the cover-flank
-     marks (number, code, logo, wordmark, duo). Under SADDLE that includes the
-     saddle panel; under WRAP the cover (the sun is a separate disc). Absent =
-     the automatic contrast ink against ENGINE COVER / the flank left behind.
+   crestInk? optional LEGACY lettering override (no longer on the paint sheet —
+     logo/logo2/logo3 own the mark; glyphs auto-ink). Still applied when present
+     on a stored garage file. Absent = automatic contrast ink against the surface.
    bandTint2? optional 2ND BAND — the tricolour's second band. The design draws
      two bands with body paint between them, and only one of them was ever
      choosable; the other was derived and could land on its neighbour (four
@@ -70,10 +69,23 @@
      re-picked against both the cover and the first band.
    plateTint? optional PLATE PANEL — the contrasting board SPINE SIDE "plate"
      and "title" paint on. Absent = SECONDARY or DETAIL, re-picked against the
-     flank — never BODY STRIPE.
-   plateInk? optional PLATE INK — the number ON that board, and the sponsor text
-     on TITLE. Absent = the body colour when it reads there, else the automatic
-     ink.
+     flank — never BODY STRIPE. Board lettering auto-inks.
+   plateInk? optional LEGACY plate/title glyph colour (no longer on the paint
+     sheet). Still applied when present on a stored file. Absent = automatic ink.
+   saddleTint? optional SADDLE — the shoulder shelf and upper-flank saddle block
+     (atlas: crest shoulders + saddleFlanks). Absent = today's bandC path under
+     saddle or saddleWrap; else derived flank fill.
+   ridgeTint? optional RIDGE — the thin centreline ridge only (crest + tail if
+     continued). Absent = spineTint if set, else derived band colour.
+   airboxTint? optional AIRBOX — roll hoop, snorkel and intake lips on the mesh
+     (Car3D only — no atlas region). Absent = cover; under WRAP the resolved sun
+     still wins over airboxTint.
+   coverBind? optional COVER BIND — how crown and flank zones couple:
+     "independent" (absent), "saddleWrap" (saddle block spans crown shoulders and
+     upper flanks), or "spineOnly" (crown/ridge accent only; shoulders stay cover).
+   finHandoff? optional FIN HANDOFF — how the fin meets the cover block:
+     "match" (absent), "contrast" (fin resolves against crown/saddle block), or
+     "hardCut" (fin ignores crown graphic continuation at the fin root).
    spineLogo? optional SPINE TOP — what the engine-cover crown carries on bare
      body colour (no gradient wash under any design — hard edges only).
      "logo" (absent) draws the crest there as well as on the fin; "none" leaves
@@ -478,13 +490,17 @@ const Liveries = (function () {
   // Every field a team's `livery` block may carry onto the derived default —
   // i.e. every livery row that is NOT c1/c2/id/name. PUBLISHED as Liveries.FIELDS
   // because it was being copied by hand and the copies drifted: render-car's
-  // own list had 23 of these 33, so nine fields (crestInk, bandTint2, plateTint,
-  // plateInk and the tint rows) could not be reached from any shot tool at all.
+  // own list had 23 of these 33, so nine fields (bandTint2, plateTint, and the
+  // tint rows) could not be reached from any shot tool at all.
+  // crestInk / plateInk are LEGACY — still read by resolveLivery/buildAtlas when
+  // present on a stored garage file, but no longer on the paint sheet or this
+  // whitelist (a re-save of a custom drops them via livDraftTo).
   // One list, consumed by forTeam below and by the tools through the global.
   const FIELDS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt",
     "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge",
     "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover",
-    "spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk",
+    "spineTint", "sideTint", "sunTint", "bandTint2", "plateTint",
+    "saddleTint", "ridgeTint", "airboxTint", "coverBind", "finHandoff",
     "rearWing", "wingCarbon", "bodySplit"];
 
   function forTeam(team) {

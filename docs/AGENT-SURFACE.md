@@ -8,10 +8,55 @@ need → skill (when / don'ts)
          ↓
        MCP?  local CLI pin → apex-tools (apex_*)
              live canvas   → chrome-devtools (chrome_*)      (mcp-probe)
-             host browser  → playwright-official (browser_*) (playwright-probe / css-play)
+             host browser  → playwright-official (browser_*) (survey-ui-matrix / css-play)
              Pages / web   → deploy-research subagent (host fetch / WebFetch)
              no wrap       → run the tools/ CLI
 ```
+
+## Bootstrap (auto-setup)
+
+So every new Cursor / Claude Code / Codex / Cloud session gets the same
+surface without hand-wiring:
+
+| Piece | Path | Auto? |
+|---|---|---|
+| Rules | `AGENTS.md` | Yes (Cursor + Cloud + Codex). Claude Code via `CLAUDE.md` → `@AGENTS.md`. |
+| Claude stub | `CLAUDE.md` | Must stay a one-line import; never duplicate rules. |
+| Skills (canonical) | `.claude/skills/*/SKILL.md` | Yes for Claude Code + Cursor (compat). Do **not** copy into `.cursor/skills/`. |
+| Skills (Codex mirror) | `.agents/skills/<name>` → `../../.claude/skills/<name>` | Yes. Codex scans `.agents/skills` (symlinks OK — OpenAI docs). Keep lockstep; never fork bodies. |
+| Subagents | `.claude/agents/*.md` | Yes for Claude / Cursor. Codex has no parallel path — use AGENTS.md routes. |
+| MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop Cursor loads them; Cloud often does not. |
+| Codex MCP | `.codex/config.toml` | Project `[mcp_servers.*]` lockstepped to `.mcp.json`. Loads only when the project is **trusted**; user overrides may live in `~/.codex/config.toml`. |
+| Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the three catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
+| Cloud VM | `.cursor/environment.json` | `install` + Chromium path + allowlist of the three catalog commands. |
+| Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
+
+**Layout principles (Claude + Codex + Cursor, 2026):**
+
+1. **One always-on file.** `AGENTS.md` stays short: commands, hard don'ts,
+   skill trigger table. Claude Code reaches it via `CLAUDE.md` → `@AGENTS.md`.
+2. **One skill body.** Author under `.claude/skills/`; mirror to
+   `.agents/skills/` with symlinks for Codex. Cursor loads both — never fork
+   into `.cursor/skills/`.
+3. **Progressive disclosure.** Skill `description` is the matcher; put deep
+   recipes in `references/` so cold start stays cheap.
+4. **Enforcement ≠ prose.** Permissions / MCP allowlists live in
+   `.claude/settings.json`, `.cursor/environment.json`, and MCP catalogs —
+   not as "NEVER" lines agents can forget.
+5. **Path-scoped rules** (`.cursor/rules/*.mdc` with globs) for renderer
+   backends; keep always-on rules thin.
+
+**One-time Dashboard (not inventable from git):**
+
+1. Save / Build the environment from this repo’s `.cursor/environment.json`.
+2. Mirror the three servers under **Integrations & MCP** (same names/commands;
+   prefer HTTP when a server can be remote; stdio needs the install script).
+3. Put secrets in Cursor Secrets — never commit them into `mcp.json` `env`.
+4. Per-user OAuth for any remote MCP that needs it.
+
+When the host catalog is empty, use the Fallback column below (and
+`./tools/mcp/apex-tools-mcp.sh call …`). Do not invent a fourth allowlist
+name for a server that left `.mcp.json`.
 
 ## MCP servers
 
@@ -26,7 +71,7 @@ auto-load them — then use the Fallback column.
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
 | **apex-tools** | `apex_*` | Pin safe flags on ten committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
-| **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **playwright-probe**, **survey-ui-matrix**, **css-play**. | `npx -y @playwright/mcp@0.0.79` |
+| **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **survey-ui-matrix**, **css-play**. Batch shots → **playwright-probe** (CLI, not this MCP). | `npx -y @playwright/mcp@0.0.79` |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 
 **Removed 2026-09 (CLI only now, not MCP-attached):**

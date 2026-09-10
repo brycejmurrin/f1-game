@@ -86,13 +86,15 @@ const PSEUDO_CATS = ["team", "tune", "livery"];
 // copy list are the other two spellings of these keys; team-livery.test.mjs
 // holds all three together.
 const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo",
-                          "rearWing", "cover", "spineTint", "sideTint", "sunTint",
-                          "crestInk", "bandTint2", "plateTint", "plateInk",
+                          "rearWing", "cover", "spineTint", "saddleTint", "ridgeTint", "airboxTint",
+                          "sideTint", "sunTint",
+                          "bandTint2", "plateTint",
                           "fin", "finArt", "logo", "logo2", "logo3"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
-                          coverVents: "none", spineHeight: "standard", spineSide: "none", bodySplit: "off" };
+                          coverVents: "none", spineHeight: "standard", spineSide: "none",
+                          coverBind: "independent", finHandoff: "match", bodySplit: "off" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
 // does this change? Worse, two rows read as a pair and are not one — ACCENT is
@@ -114,20 +116,21 @@ const LIV_ROW_HINT = {
   pod: "SIDEPOD — the sidepod panel, both sides. Unset = the bodywork colour.",
   cover: "ENGINE COVER — airbox, roll structure, cover loft and snorkel. Unset = the bodywork colour.",
   spineTint: "SPINE TINT — the SPINE TOP band on the cover crown, and the saddle's flank half, ALONE. BODY STRIPE above runs the whole spine including the nose, so it cannot paint a dark band on a light nose. Unset = SECONDARY, else PRIMARY, checked against ENGINE COVER — never BODY STRIPE or DETAIL.",
+  saddleTint: "SADDLE — the shoulder shelf and upper-flank saddle block on the atlas crown and flanks. Unset = today's band colour under SADDLE or SADDLE WRAP; else derived flank fill.",
+  ridgeTint: "RIDGE — the thin centreline ridge only on the crown (and tail if the design continues). Unset = SPINE TINT if set, else the derived band colour.",
+  airboxTint: "AIRBOX — roll hoop, snorkel and intake lips on the mesh only (not the atlas). Unset = ENGINE COVER. Under WRAP, SUN wins over this row.",
   sideTint: "SIDE TINT — the SPINE SIDE colour graphics (BAND, SASH) on the cover flank, ALONE. A separate zone from SPINE TINT: with SPINE TOP on SADDLE the tint paints the flank these sit on, so one colour cannot serve both. Unset = derived from the livery and checked against the flank.",
   sunTint: "SUN — the WRAP design's sun disc, over the crown, both cover flanks and the airbox. Its own row because SPINE TINT used to paint this too: one field meant a band on most SPINE TOP designs and the sun on WRAP, so choosing WRAP repurposed a colour picked for a band. Unset = the mark's plate / SECONDARY against ENGINE COVER (never BODY STRIPE, never SPINE TINT).",
-  crestInk: "CREST INK — lettering ink for the crown AND the cover-flank marks (number, code, logo, wordmark, duo). It is one ink for every surface those marks stand on: under SADDLE that includes the saddle panel; under WRAP the cover (the sun is a separate disc). Unset = picked to contrast with ENGINE COVER (or the flank the crown left).",
   bandTint2: "2ND BAND — the TRICOLOUR design's second band. Only one of its two bands was ever choosable and the other was derived, which is how a tricolour could come out one colour repeated. Unset = derived against both the cover and the first band.",
-  plateTint: "PLATE PANEL — the board SPINE SIDE's PLATE / TITLE designs paint on. Unset = SECONDARY or DETAIL, re-picked to separate from the flank — never BODY STRIPE.",
-  plateInk: "PLATE INK — the number on PLATE, and the sponsor text on TITLE. Unset = PRIMARY where it reads on the board, else the automatic ink.",
+  plateTint: "PLATE PANEL — the board SPINE SIDE's PLATE / TITLE designs paint on. Unset = SECONDARY or DETAIL, re-picked to separate from the flank — never BODY STRIPE. Board lettering auto-contrasts (no separate ink row).",
   wing: "WINGS — the front and rear FLAPS. Unset = ACCENT.",
   rearWing: "REAR WING — the rear mainplane block. Unset = ACCENT.",
   fin: "TAIL FIN — the shark-fin plate. Unset = ACCENT. Needs a FIN SHAPE other than NONE.",
   finArt: "TAIL GRAPHIC — fin motif / badge ink. Unset = first base colour that clears the fin plate.",
   halo: "HALO — the cockpit halo loop.",
-  logo: "The dominant shape of the team mark, wherever it is drawn: fin badge, cover crown, garage wall.",
-  logo2: "The mark's SECOND shape — a backing plate, a traced layer or an inner island, named per team. Marks built from one loop have no such row.",
-  logo3: "OUTLINE — a rim around the mark. Offered on every mark, off by default.",
+  logo: "TEAM LOGO — the dominant shape of the team mark everywhere it is drawn: crown, fin badge, SPINE SIDE logo/emblem/lockup, garage wall. Lettering (numbers, wordmarks) auto-contrasts; it is not this row.",
+  logo2: "LOGO DETAIL — the mark's second shape (shield, disc, traced layer, or island), named per team. One-loop marks have no such row. Authored plates reach the flank logo/emblem too.",
+  logo3: "OUTLINE — a rim around the mark only. Off by default.",
   finish: "FINISH — the paint surface: gloss, satin or chrome.",
   wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
   numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
@@ -136,6 +139,8 @@ const LIV_ROW_HINT = {
   finStyle: "TAIL STYLE — the motif painted on the fin.",
   finBadge: "FIN BADGE — what the fin carries: the mark, the race number, the driver code, or nothing.",
   spineLogo: "SPINE TOP — what the engine-cover CROWN carries, painted on bare body colour.",
+  coverBind: "COVER BIND — how crown and flank zones couple. INDEPENDENT = each zone free; SADDLE WRAP = saddle block spans crown shoulders and upper flanks; SPINE ONLY = crown/ridge accent only, shoulders stay cover.",
+  finHandoff: "FIN HANDOFF — how the fin meets the cover block. MATCH = current fin resolution; CONTRAST = fin colour resolves against the crown/saddle block; HARD CUT = fin ignores crown graphic continuation at the fin root.",
   tcam: "T-CAM — the camera housing colour. AUTO is the real rule: car 1 black, car 2 yellow.",
   coverVents: "COVER VENTS — cooling slits cut into the engine cover. Geometry, not paint.",
   spineHeight: "SPINE HEIGHT — how tall the cover crown runs behind the roll hoop. DORSAL is the fin-less 2026 look every team uses.",
@@ -939,15 +944,16 @@ function buildLiveryCreator(container, team) {
   // SPINE TINT colours the SPINE TOP band alone. BODY STRIPE above runs the
   // whole spine including the nose, so it cannot say "dark band, light nose".
   wrap.appendChild(colorRow("SPINE TINT", "spineTint", true));
+  wrap.appendChild(colorRow("SADDLE", "saddleTint", true));
+  wrap.appendChild(colorRow("RIDGE", "ridgeTint", true));
+  wrap.appendChild(colorRow("AIRBOX", "airboxTint", true));
   wrap.appendChild(colorRow("SIDE TINT", "sideTint", true));
   // The four surfaces the crown and flank used to DERIVE. Each is a pick now,
   // and each falls back to exactly what it computed before when left unset, so
   // a livery that never touches these renders identically.
   wrap.appendChild(colorRow("SUN", "sunTint", true));          // the WRAP design's disc
-  wrap.appendChild(colorRow("CREST INK", "crestInk", true));   // wordmark / number / keylines
   wrap.appendChild(colorRow("2ND BAND", "bandTint2", true));   // the TRICOLOUR's other band
   wrap.appendChild(colorRow("PLATE PANEL", "plateTint", true));
-  wrap.appendChild(colorRow("PLATE NUMBER", "plateInk", true));
   // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
   // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
   wrap.appendChild(section("WINGS & TAIL"));
@@ -1016,6 +1022,8 @@ function buildLiveryCreator(container, team) {
   deps.push({ row: pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team"), when: needFin, why: NO_FIN });
   deps.push({ row: pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo"), when: needFin, why: NO_FIN });
   pillRow("SPINE TOP", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
+  pillRow("COVER BIND", "coverBind", ["independent", "saddleWrap", "spineOnly"], "independent");
+  pillRow("FIN HANDOFF", "finHandoff", ["match", "contrast", "hardCut"], "match");
   // Body details: the T-cam housing colour (the real car-1 / car-2 code) and
   // the engine-cover cooling vents. Both are mesh, so their id lists are Car3D's.
   pillRow("T-CAM", "tcam", Car3D.TCAM_IDS || ["team"], "team");

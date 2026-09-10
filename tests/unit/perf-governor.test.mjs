@@ -152,6 +152,34 @@ test("floorMs is exposed for live inspection (__apex.renderScale())", () => {
   assert.equal(PerfGov.floorMs(), 16.7, "starts at the same 60 fps default fpsEMA does");
 });
 
+test("inactive early features do not prevent a later post reduction from helping", () => {
+  for (const helpfulTier of [2, 3, 4]) {
+    const gov = makeGovAtFloor();
+    gov.setAutoRes(false);
+    // No artificial fast frames to keep the floor gate open. Env/SSR/shadows
+    // may already be off; only the named later rung changes this workload.
+    feed(gov, (i) => (gov.autoTier() >= helpfulTier ? 18 : 26) + [0, 1, -1, 0][i % 4], 600);
+    assert.equal(gov.autoTier(), helpfulTier);
+    assert.equal(gov.autoShed(), helpfulTier);
+    assert.equal(gov.tierFutile(), false);
+    // Pass the 600-frame hold armed at the first decision (frame 44),
+    // plus the next 45-frame evaluation, but not a second restore cooldown.
+    feed(gov, () => 16.7, 120);
+    assert.equal(gov.autoTier(), helpfulTier - 1, "recovery restores one tier at a time");
+    assert.equal(gov.autoShed(), helpfulTier - 1, "remaining cuts retain their accounting");
+  }
+});
+
+test("an exhausted feature probe rolls back the entire trial on a capped clock", () => {
+  const gov = makeGovAtFloor();
+  gov.setAutoRes(false);
+  const seen = new Set();
+  feed(gov, () => { seen.add(gov.autoTier()); return 1000 / 30; }, 600);
+  assert.deepEqual([...seen], [0, 1, 2, 3, 4]);
+  assert.equal(gov.autoTier(), 0);
+  assert.equal(gov.autoShed(), 0);
+});
+
 test("the two futility latches are inspectable, and start clear", () => {
   // They can each park a lever for the rest of the session, and until
   // 2026-09-10 neither had an accessor — so answering "why did this device shed
@@ -164,7 +192,7 @@ test("the two futility latches are inspectable, and start clear", () => {
   assert.equal(PerfGov.tierFutile(), false);
 });
 
-test("a sustained-slow device gets ONE rung of the ladder, however much shedding buys", () => {
+test("a sustained-slow device still stops after a successful first rung", () => {
   // docs/notes/PERF-FINDINGS.md §2u, from a live iPhone capture: Suzuka,
   // 32.2 fps, scale already at the 0.5 mobile floor, tier 0 — nothing optional
   // shed on a device missing half its frames.
@@ -189,7 +217,8 @@ test("a sustained-slow device gets ONE rung of the ladder, however much shedding
   // indifferent to render scale and a fill-bound frame is not, which is exactly
   // what _pendingVerify measures on every scale step.
   const AT_HALF = 1000 / 32.2;   // 31.06 ms, the captured frame time
-  for (const gain of [0, 0.04, 0.08, 0.15, 0.25]) {
+  // Zero-gain early rungs now continue the bounded trial (covered above).
+  for (const gain of [0.04, 0.08, 0.15, 0.25]) {
     const { PerfGov, scale } = makeGov();
     // Start where the phone starts — the 0.5 mobile scale — through the same
     // fake renderer, so the 0.02 dead zone and the 0.5 clamp both still apply.

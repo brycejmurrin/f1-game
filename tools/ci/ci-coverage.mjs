@@ -119,7 +119,15 @@ const selectionGate = {
   blocking: Boolean(selectedJob) && !/^    continue-on-error:\s*true\s*$/m.test(selectedJob),
   onPush: selectedIf.includes("github.event_name == 'push'"),
   onPullRequest: selectedIf.includes("github.event_name == 'pull_request'"),
-  onWorkflowCall: selectedIf.includes("github.event_name == 'workflow_call'"),
+  // NOT an event_name test. Inside a REUSABLE workflow the github context is
+  // the CALLER's, so this if: reads `push` on a Pages call exactly as on a
+  // direct push -- "github.event_name == 'workflow_call'" is a string that
+  // never appears and never could, so looking for it reported false for a job
+  // that DID run in the deploy gate (Pages run 2215, 2026-09-10). `inputs` is
+  // the only caller-specific context, and pages.yml is the only caller: it
+  // passes a non-empty concurrency_key, so a guard on that empty-string
+  // default is what actually keeps this job out of a deploy.
+  onWorkflowCall: !/inputs\.concurrency_key\s*==\s*''/.test(selectedIf),
   usesPullRequestBase: /PR_BASE:\s*\$\{\{ github\.event\.pull_request\.base\.sha \}\}/.test(selectedJob),
   failsClosedOnInvalidBase: /fail\(\).*SELECTED GATE FAILED CLOSED/.test(selectedJob)
     && /no valid comparison base/.test(selectedJob)

@@ -421,6 +421,11 @@ sharedTest.describe("Apex 26 — HUD", () => {
     // seconds here. goToRace + park alone is most of the budget before this test
     // asserts anything. Keep the workflow's explicit 420 s timeout as the bound;
     // test.slow() would silently triple it.
+    // This test reads the 2D HUD, not the 3D scene. park() publishes it
+    // synchronously via refreshHud(true), even in headless mode. Stop the
+    // unrelated redraw before race setup/readback (CI shard 4 timed out in
+    // locator.evaluate twice with GPU ReadPixels stalls).
+    await quietRenderer(page);
     await raceOnBootedPage(page);
     await park(page, 0);
 

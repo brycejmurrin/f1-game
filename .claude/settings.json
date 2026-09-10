@@ -27,6 +27,11 @@
       "Bash(ps *)"
     ]
   },
+  "enabledMcpjsonServers": [
+    "apex-tools",
+    "playwright-official",
+    "chrome-devtools"
+  ],
   "hooks": {
     "SessionStart": [
       {

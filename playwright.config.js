@@ -89,20 +89,6 @@ export default defineConfig({
   // (passed-on-retry) counts either way.
   retries: process.env.CI ? 1 : 0,
   timeout: 120_000,
-  // AN UNBOUNDED ACTION IS WHY A STUCK CLICK READS AS A MYSTERY. Playwright's
-  // actionTimeout defaults to 0 — no limit — so a locator that never becomes
-  // actionable consumes the whole TEST budget and reports "Test timeout of
-  // Nms exceeded" without naming the element. That is exactly what three
-  // lighting-tuner-grade tests did: 552.9 / 612.9 / 625.0 s each, against caps
-  // of 360 s and then 600 s, with no clue which click was waiting. Raising the
-  // cap only bought the hang more time.
-  //
-  // 60 s is generous for an ACTION here: the slowest measured interaction on
-  // this box is a screen swap at 8.1 s (scratch/perf, idle), and captures —
-  // which legitimately take ~150 s on a night scene — are not actions and keep
-  // their own explicit timeouts. A real hang now fails in a minute, naming the
-  // locator.
-  actionTimeout: 60_000,
   // AND THE SAME FOR ASSERTIONS. This config declared no `expect` block, so
   // every web-first assertion ran on Playwright's 5 s default — below the
   // measured floor for anything that follows a UI transition here, where a
@@ -116,6 +102,20 @@ export default defineConfig({
   expect: { timeout: 20_000 },
   outputDir: `artifacts/test-results${SUF}`,
   use: {
+    // AN UNBOUNDED ACTION IS WHY A STUCK CLICK READS AS A MYSTERY. Playwright's
+    // actionTimeout defaults to 0 — no limit — so a locator that never becomes
+    // actionable consumes the whole TEST budget and reports "Test timeout of
+    // Nms exceeded" without naming the element. That is exactly what three
+    // lighting-tuner-grade tests did: 552.9 / 612.9 / 625.0 s each, against caps
+    // of 360 s and then 600 s, with no clue which click was waiting. Raising the
+    // cap only bought the hang more time.
+    //
+    // 60 s is generous for an ACTION here: the slowest measured interaction on
+    // this box is a screen swap at 8.1 s (scratch/perf, idle), and captures —
+    // which legitimately take ~150 s on a night scene — are not actions and keep
+    // their own explicit timeouts. A real hang now fails in a minute, naming the
+    // locator.
+    actionTimeout: 60_000,
     baseURL: `http://127.0.0.1:${PORT}`,
     viewport: { width: 1280, height: 720 },
     trace: 'on-first-retry',

@@ -35,7 +35,11 @@
 // soft-presents to visible #game via 2D blit. Lavapipe (+ xvfb-run for headed):
 // three.js e2e recipe — real Vulkan ICD; same soft-present path as SwiftShader.
 // Set VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json in env for Lavapipe.
-import { createReadStream, existsSync, statSync } from "node:fs";
+//
+// Dead local DISPLAY (:N with no /tmp/.X11-unix/XN) makes headless WebGL return
+// null — launchChromium clears it via clearDeadDisplay() unless headed or
+// APEX_KEEP_DISPLAY=1.
+import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { extname, join, normalize, relative, resolve, sep } from "node:path";
@@ -78,6 +82,51 @@ const SYSTEM_CHROME = [
 export function pickChromium() {
   return chromiumPath()
     || SYSTEM_CHROME.find(existsSync);
+}
+
+/**
+ * Local `:N` / `:N.0` DISPLAY → `/tmp/.X11-unix/XN`. Remote hosts return null
+ * (we cannot probe them from the socket dir and must leave DISPLAY alone).
+ */
+export function x11SocketPath(display) {
+  if (display == null || display === "") return null;
+  const m = String(display).match(/^:(\d+)/);
+  if (!m) return null;
+  return `/tmp/.X11-unix/X${m[1]}`;
+}
+
+/** True when DISPLAY points at a live local X11 unix socket. */
+export function displaySocketAlive(display = process.env.DISPLAY) {
+  const sock = x11SocketPath(display);
+  return !!(sock && existsSync(sock));
+}
+
+/**
+ * Stale DISPLAY kills headless SwiftShader WebGL: Chromium still talks to the
+ * dead X, `getContext("webgl2")` returns null, and game.js never exposes
+ * `__apex` (garage-angles then burns 120 s on waitForFunction). Measured
+ * 2026-09-10 on Cursor Cloud with DISPLAY=:1 and no `/tmp/.X11-unix/X1`.
+ * Clearing the env var restores software GL; `xvfb-run -a` also works because
+ * it creates a real socket. Headed launches keep DISPLAY. Opt out with
+ * APEX_KEEP_DISPLAY=1. `socketAlive` is injectable for unit tests.
+ */
+export function clearDeadDisplay({
+  headed = false,
+  env = process.env,
+  socketAlive = displaySocketAlive,
+  log = console.warn,
+} = {}) {
+  if (headed) return false;
+  if (env.APEX_KEEP_DISPLAY === "1") return false;
+  const d = env.DISPLAY;
+  if (!d) return false;
+  // Remote DISPLAY (host:0) — leave it; we only clear proven-dead local sockets.
+  if (x11SocketPath(d) == null) return false;
+  if (socketAlive(d)) return false;
+  log(`DISPLAY=${d} has no X11 socket — clearing it so headless SwiftShader WebGL can start `
+    + `(set APEX_KEEP_DISPLAY=1 to keep, or wrap with xvfb-run -a)`);
+  delete env.DISPLAY;
+  return true;
 }
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -210,6 +259,10 @@ function killGroup(browser) {
 export async function launchChromium(opts = {}) {
   const { chromium } = require("playwright");
   const exe = pickChromium();
+  // Headless defaults true when omitted — same as Playwright. A dead DISPLAY
+  // must be cleared before launch or WebGL never comes up (see clearDeadDisplay).
+  const headed = opts.headless === false;
+  clearDeadDisplay({ headed });
   const browser = await chromium.launch({
     ...(exe ? { executablePath: exe } : {}),
     // We own SIGINT/SIGTERM/SIGHUP (see file header): playwright's handlers close
