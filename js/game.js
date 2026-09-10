@@ -2630,6 +2630,8 @@ async function loadCarModel(url) {
 
 // ---------- track loading ----------
 function loadTrack(idx) {
+  // Every loader releases selector ownership before replacing the world.
+  _menuGate.track = null; _menuGate.ready = ""; _menuGate.warm = 0;
   const def = Tracks.LIST[idx];
   // ARM THE CRASH SENTINEL ACROSS THE BUILD. This function's own comment calls
   // the build's transient peak "the moment a near-limit phone gets jetsam
@@ -2735,31 +2737,35 @@ function _loadTrackBody(idx, def) {
   };
 }
 
-// The full 3D track build (loadTrack -> Tracks.build) is heavy. On the menu it's
-// only needed for the background flyby, so don't run it synchronously — defer +
-// debounce it. startRace() builds the real track when the race actually starts,
-// so racing never depends on this.
-// SHOWN UNDER RACE SETTINGS ONLY, BUILT A LITTLE EARLIER (2026-09). The title
-// sits on the plain page and the picker shows the chosen circuit itself, so
-// render() keeps the canvas hidden there — but once the player SETTLES on a tile
-// (1.5 s; browsing never triggers it) the circuit is pre-built and the renderer
-// warmed with hidden frames, so NEXT opens onto a ready world instead of freezing
-// the sheet for the build plus the first frame (0.9–3.3 s a tap on a phone).
-const _menuGate = { warm: 0 };   // hidden warm-up frames still owed after a menu build (render)
+// Keep one prepared track, never a cache of whole circuits. A generation
+// prevents late scenery downloads (including A -> B -> A) from committing.
+const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
 let flybyBuildTimer = 0;
-function scheduleFlybyTrack(settle) {   // settle: the picker's 1.5 s "player has stopped browsing" debounce
+function scheduleFlybyTrack(settle) {
   clearTimeout(flybyBuildTimer);
-  // Never hand loadTrack a negative index (exhausted career/season calendar).
+  const generation = ++_menuGate.generation;
+  _menuGate.warm = 0;
   if (!(trackIdx >= 0)) return;
-  flybyBuildTimer = setTimeout(() => {
-    if (!(state === "menu" && trackIdx >= 0)) return;
-    // Re-test after the fetch: the debounce plus a network round trip is long
-    // enough for the player to have browsed on or pressed GO.
-    const want = trackIdx;
-    ensureScenery(want).then(() => {
-      if (state === "menu" && trackIdx === want) { loadTrack(want); _menuGate.warm = 2; }
-    });
-  }, settle ? 1500 : 120);
+  const want = trackIdx, tod = raceTimeOfDay, weather = raceWeather;
+  const key = [want, tod, weather].join("|");
+  const current = () => generation === _menuGate.generation && state === "menu" &&
+    !setupPreviewOn && trackIdx === want && raceTimeOfDay === tod && raceWeather === weather &&
+    (!els.select.hidden || !$("race-settings").hidden);
+  const prepare = async () => {
+    if (!current()) return;
+    // Compilation owns its scene/targets until it settles; never free them
+    // to service a newer selection in the middle of an asynchronous warm-up.
+    if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
+    try {
+      await ensureScenery(want);
+      if (!current()) return;
+      if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
+      if (_menuGate.ready === key && _menuGate.track === track) { _menuGate.warm = 2; return; }
+      loadTrack(want);
+      _menuGate.ready = key; _menuGate.track = track; _menuGate.warm = 2;
+    } catch (e) { if (current()) Log.warn("gfx", "track preparation failed", e); }
+  };
+  flybyBuildTimer = setTimeout(prepare, settle ? 1500 : 120);
 }
 
 // Night ambient band: floor/cap the (up-facing-dominant) hemisphere ambient into

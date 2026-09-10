@@ -2760,3 +2760,11 @@ spine-zones-bind after CI green; `ratchets.mjs --update` after ceiling conflict.
 merge into spine-zones-bind (PR #96 garage-angles rollup on deploy tip
 `9cdde031`). `ratchets.mjs --update` after ceiling conflict — union carries
 spine-zones bind fields plus garage-angles G members.
+
+## 2026-09-10 — selector preparation generations
+
+`js/game.js` gains 14 code lines for guarded, single-world selector preparation:
+reject stale scenery completions, wait for renderer compilation ownership,
+reuse matching preparation, and handle failed optional loads. No new facade
+members or top-level lets; the existing flyby scheduler owns this lifecycle.
+Ceilings remeasured with `ratchets.mjs --update` for this added behavior.
