@@ -1050,6 +1050,32 @@ host. The rule that keeps them honest: never widen one of these tolerances to
 get green — a software-GL pass is not evidence about a player's GPU, and a bent
 bar would erase the only signal that says so.
 
+**Re-read against the code (same day): two of the three were test defects,
+and "a real GPU is not SwiftShader" was the wrong frame.** The image-grade diag
+in 3469 carried the answer — `gov.tier 2, autoShed 2` on the first attempt,
+`tier 4, autoShed 4` on the retry. A shadows-lift curve cannot darken
+highlights by 44/255; `autoTier() >= 4` zeroing bloom/SSAO/godray
+(`js/game.js` `po.*`) and `tier() >= 2` dropping SSR can. The test compared a
+baseline at one tier with a "changed" frame at another. The fog test is the
+same shape: `frame.lampFog` needs `frame.lights`, whose budget `tierShed()`
+cuts at tier >= 1 (`js/lighting/frame-lights.js`), and the lamp halos are
+bloom — the dry capture lands right after boot and the foggy one 3 s later on a
+runner still shedding, which reads as fog darkening the sky and as "dry"
+moving 10 points between attempts. Both pass here only because SwiftShader has
+bottomed out at one tier before the first capture — a coincidence, not
+evidence. And the scale pin from the previous entry made both WORSE:
+`governor.js` falls straight through to the ladder once the scale lever is
+gone ("the ladder is the only lever left"). No pin existed — `setUserTier` is a
+floor. Added `PerfGov.setTierHold` / `__apex.govHold(true)` (no shed, no
+restore), both specs hold the tier and assert it EQUAL at the two captures
+before comparing pixels, so the next such failure names the governor.
+M6 is not explained by this: `skids.draw` has no tier gate, the stamp lands on
+the first laying frame (`js/fx/skidmarks.js`), and the premise numbers were
+byte-identical to this container's — the timeout now dumps `state`, `offroad`,
+`onKerb`, `skidIntensity`, `fxState()` and the governor so the next Metal run
+says which link broke. Lesson for the table above: read the diag the failure
+already printed before calling a failure hardware.
+
 
 ## 8. Backlog
 

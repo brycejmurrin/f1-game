@@ -116,6 +116,25 @@ async function boot(page, {
   // ladder stops fighting the pin (js/agent/apex.js). 1 = native: this suite is
   // about the GRADE, not about which tier the runner deserves.
   await page.evaluate(() => window.__apex.renderScale(1));
+  // AND HOLD THE TIER. The pin above made the next problem WORSE: with the
+  // scale lever gone the feature ladder is the governor's only lever, and on
+  // the Metal runner (26-38 fps, below its own derived floor) it stepped
+  // 0 -> 2 -> 4 between a test's baseline and its "changed" capture. "shadows
+  // +0.5" then read as highlights DARKENING by 44/255 (run 3469: darkSigned
+  // +34.8, brightSigned -44.1, gov.tier 2 then 4) — that is bloom/SSAO/SSR
+  // being shed at tier >= 2 / autoTier 4 (js/game.js po.* gates), not a grade
+  // curve. The suite passes on SwiftShader only because that box has already
+  // bottomed out at one tier before the first capture. govHold(true) freezes
+  // the ladder both ways (js/perf/governor.js _tierHold); tierAt() below reads
+  // the tier at each capture so a comparison whose premise broke says so.
+  await page.evaluate(() => window.__apex.govHold(true));
+}
+
+// The governor tier at the moment of a capture. A two-capture test asserts the
+// two are EQUAL before it compares pixels: a tier change is a different
+// picture, and the tonal delta of a different picture is not the grade.
+async function tierAt(page) {
+  return page.evaluate(() => window.__apex.govHold().tier);
 }
 
 async function pixels(page) {
@@ -262,11 +281,14 @@ test.describe("rendered image grade", () => {
     await boot(page);
     await pixels(page); // discard first composited frame while render caches settle
     const baseline = await pixels(page);
+    const tier0 = await tierAt(page);
     await setTune(page, { shadows: 0.5 });
     const changed = await pixels(page);
+    const tier1 = await tierAt(page);
+    expect(tier1, "governor tier moved between captures — the delta below is a tier shed, not the grade").toBe(tier0);
     const delta = tonalChanges(baseline, changed);
     const diag = JSON.stringify({
-      px: [baseline.length / 4, changed.length / 4], delta,
+      px: [baseline.length / 4, changed.length / 4], delta, tier: tier0,
       gov: await page.evaluate(() => window.__apex.renderScale()),   // a mid-test resize is the governor's auto-res
     });
     expect(delta.darkCount, diag).toBeGreaterThan(1000);
@@ -279,10 +301,14 @@ test.describe("rendered image grade", () => {
     await boot(page);
     await pixels(page);
     const baseline = await pixels(page);
+    const tier0 = await tierAt(page);
     await setTune(page, { highlights: 0.5 });
     const changed = await pixels(page);
+    const tier1 = await tierAt(page);
+    expect(tier1, "governor tier moved between captures — the delta below is a tier shed, not the grade").toBe(tier0);
     const delta = tonalChanges(baseline, changed);
-    expect(delta.bright).toBeGreaterThanOrEqual(delta.dark * 2);
+    const diag = JSON.stringify({ delta, tier: tier0, gov: await page.evaluate(() => window.__apex.renderScale()) });
+    expect(delta.bright, diag).toBeGreaterThanOrEqual(delta.dark * 2);
   });
 
   test("red gain predominantly changes the red channel", async ({ page }) => {

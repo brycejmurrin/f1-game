@@ -1571,9 +1571,21 @@ const api = {
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile() };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
+  },
+
+  // govHold(on?) — hold the governor's feature ladder at the tier it is on
+  // now (no shed, no restore). No arg: report {tierHold, tier, autoTier,
+  // autoShed}. A test that diffs two captures of one scene needs the SAME tier
+  // at both, and renderScale(v) does not give it that — pinning the scale
+  // leaves the ladder as the governor's only lever (js/perf/governor.js,
+  // _tierHold). Holds the tier, not the scale: pair with renderScale(1) when
+  // the capture size has to match too. false releases the hold.
+  govHold(on) {
+    if (on !== undefined) PerfGov.setTierHold(!!on);
+    return { tierHold: PerfGov.tierHold(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed() };
   },
 
   // spatialUpscale(v?) — GLX + WGX + TLX SGSR1 (docs/research/UPSCALING-2026-09.md §6–7).

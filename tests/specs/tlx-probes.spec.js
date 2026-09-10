@@ -349,7 +349,23 @@ test.describe("TLX — boot", () => {
     expect(Math.abs(drive.x)).toBeGreaterThan(8);
     // Two presented frames, and a TLX frame on a built Monza under SwiftShader
     // is seconds, not milliseconds — so this bound is generous on purpose.
-    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().skidVerts > 0, null, { polling: 100, timeout: 60_000 });
+    // ON TIMEOUT, SAY WHICH LINK BROKE. Metal run 3469: the premise above held
+    // with numbers byte-identical to SwiftShader (x 9.2077, speed 29.277) and
+    // skidVerts stayed 0 for 60 s on both attempts, and the timeout's apex-state
+    // dump is cut before any field that could tell (a) the stamp gate in
+    // js/game.js — `state === "race"`, `(skid > 0.25 || c.offroad) && speed > 10`,
+    // where offroad is |x| > hw && !onKerb (js/game.js:4136) — from (b) a
+    // stamped ring buffer the TLX batch never drew (drawSkidBatch returns
+    // early on a null fx). This diag reads every term of (a) and the fx
+    // counters of (b) so the next hardware run names the link, not the backend.
+    await page.waitForFunction(() => typeof GLX !== "undefined" && GLX.__tlx && GLX.__tlx.fxState().skidVerts > 0, null, { polling: 100, timeout: 60_000 }).catch(async (e) => {
+      const d = await page.evaluate(() => {
+        const a = window.__apex, p = a.physState() || {};
+        const c = a.carState().find((k) => k.isPlayer) || {};
+        return { state: a.info().state, frozen: a.freeze(), speed: p.speed, x: p.x, offroad: c.offroad, onKerb: c.onKerb, skidIntensity: c.skidIntensity, fx: GLX.__tlx.fxState(), gov: a.renderScale() };
+      }).catch((err) => ({ diagFailed: String(err) }));
+      throw new Error("no skid mark reached the TLX batch in 60 s: " + JSON.stringify(d) + " — " + e.message);
+    });
     const st = await page.evaluate(() => GLX.__tlx.fxState());
     expect(st.skidVerts).toBeGreaterThan(0);
     expect(st.skidVerts % 6).toBe(0);          // 6 verts per mark

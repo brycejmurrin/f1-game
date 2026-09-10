@@ -219,6 +219,17 @@ let _perfTier = 0;
 // autoShed() is HOW MUCH THE GOVERNOR SHED BY EVIDENCE, which is what a feature
 // held off "because this device is missing frames" has to ask.
 let _autoShed = 0;
+// HOLD THE LADDER. A measurement that compares two captures of the same scene
+// (the image-grade tonal tests, lighting-ab's fog glow) is only a measurement of
+// the thing it changed if the tier is the same at both captures. On the Metal
+// runner it was not: at 26-38 fps the governor stepped 0 -> 2 -> 4 between a
+// baseline and its "changed" frame, and the tests read bloom/SSR/lamp-budget
+// sheds as a grade curve darkening highlights by 44/255 (run 3469). Pinning the
+// scale made it WORSE — with the scale lever gone the ladder is the only lever
+// left (see the degrade branch). setUserTier() is a floor, so it cannot hold a
+// tier at 0; this is the missing pin. Held: no shed, no restore; the scale
+// lever and every accessor keep working. Never set by the game itself.
+let _tierHold = false;
 // THE OPENING WINDOW, recorded so a player's own device can answer a question
 // this repo's containers cannot. "WebGPU lags for the first few seconds and
 // then runs fine" is a report about frames that have already gone by the time
@@ -480,7 +491,7 @@ function tick(dtMs) {
     if (stepped) {
       _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
       _govCool = 30; _downHold = 600;
-    } else if (_perfTier < 4 && _perfTierFloor < 4 && !_tierFutile) {   // scale lever exhausted — shed a feature (a crash floor of 4 has already shed everything this ladder can)
+    } else if (!_tierHold && _perfTier < 4 && _perfTierFloor < 4 && !_tierFutile) {   // scale lever exhausted — shed a feature (a crash floor of 4 has already shed everything this ladder can)
       // Step from the EFFECTIVE tier, not from _perfTier alone. A rung at or
       // below the floor (crash sentinel, or the player's GRAPHICS preset) is
       // already shed, so incrementing onto it changes nothing the EMA can see:
@@ -550,7 +561,7 @@ function tick(dtMs) {
     // Features come back only at full res under the same sustained headroom,
     // one per ~4 s. tier() retains both floors even when a measured post cut
     // taken AT the user's floor is released; the crash floor is never lifted.
-    if (!stepped && (_perfTier > _floorTier() || (_autoShed > 0 && _perfTier > _perfTierFloor))) {
+    if (!stepped && !_tierHold && (_perfTier > _floorTier() || (_autoShed > 0 && _perfTier > _perfTierFloor))) {
       _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA, up: true };
       // LOW starts at its preset floor: its measured post/lamp cut still
       // needs recovery. tier() keeps the preset and crash floors intact.
@@ -678,6 +689,16 @@ return {
     _autoRes = !!on;
     if (_pendingVerify && _pendingVerify.kind === "scale") _pendingVerify = null;
     if (_live) _govCool = Math.max(_govCool, VERIFY_COOL);   // see _live: never before the first race tick
+  },
+  // The ladder pin described at _tierHold. Same pending-verify hygiene as
+  // setAutoRes, for the TIER kind: a provisional step must not be "reverted"
+  // by the evaluation after the hold lands, and releasing the hold must not
+  // let a stale verdict from before it revert a rung either.
+  tierHold: () => _tierHold,
+  setTierHold: (on) => {
+    _tierHold = !!on;
+    if (_pendingVerify && _pendingVerify.kind === "tier") _pendingVerify = null;
+    if (_live) _govCool = Math.max(_govCool, VERIFY_COOL);
   },
 };
 })();

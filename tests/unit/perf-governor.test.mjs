@@ -338,6 +338,30 @@ function makeGovPinned(scaleAt) {
   return { PerfGov, scale: () => scale };
 }
 
+// govHold(true) in js/agent/apex.js. A two-capture comparison spec needs the
+// SAME tier at both captures; with the scale pinned the ladder is the only
+// lever, so an overloaded runner sheds between them (Metal run 3469: 0 -> 2 -> 4
+// inside one image-grade test). The hold must stop both directions and must
+// not touch the scale lever or the accessors; releasing it hands the ladder
+// straight back.
+test("setTierHold(true) pins the ladder on an overloaded pinned box, and releases cleanly", () => {
+  const { PerfGov } = makeGovPinned(1);
+  PerfGov.setTierHold(true);
+  assert.equal(PerfGov.tierHold(), true);
+  feed(PerfGov, (i) => (i % 20 === 0 ? 12 : 30 - PerfGov.tier() * 4), 3000);
+  assert.equal(PerfGov.tier(), 0, "held: an overloaded frame must not shed a rung");
+  assert.equal(PerfGov.autoShed(), 0);
+  PerfGov.setTierHold(false);
+  feed(PerfGov, (i) => (i % 20 === 0 ? 12 : 30 - PerfGov.tier() * 4), 3000);
+  assert.ok(PerfGov.tier() > 0, `released: the same load must shed again — tier ${PerfGov.tier()}`);
+  // Held at a shed rung, headroom must not restore it either: the hold means
+  // "whatever tier you are on, stay there", in both directions.
+  const held = PerfGov.tier();
+  PerfGov.setTierHold(true);
+  feed(PerfGov, () => 12, 3000);
+  assert.equal(PerfGov.tier(), held, "held: sustained headroom must not restore a rung");
+});
+
 test("a PINNED resolution still sheds features when the device is overloaded", () => {
   const { PerfGov } = makeGovPinned(1);
   feed(PerfGov, (i) => (i % 20 === 0 ? 12 : 30 - PerfGov.tier() * 4), 3000);

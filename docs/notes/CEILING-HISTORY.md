@@ -2834,3 +2834,12 @@ caster pools and the blob flush. The render loop keeps the live player
 transform (resolved into `shadowPass.livePlayerMat`) and calls beginFrame /
 pushCaster / sunPass / lampPass / flushBlobs; loadTrack calls reset. No new
 façade members. Ceilings lowered with `ratchets.mjs --update`.
+
+## 2026-09-10 — `__apex.govHold` (governor tier pin for two-capture specs)
+
+`js/agent/apex.js` 2812 → 2824 lines (codeLines 2088 → 2092): one hook,
+`govHold(on?)`, over `PerfGov.setTierHold`. Raised deliberately: the hook is
+the only way a spec that diffs two captures of one scene can hold the feature
+ladder at one tier (image-grade tonal tests, lighting-ab fog glow — Metal run
+3469 read a tier shed as a grade curve), and `renderScale(v)` cannot be
+widened to do it without changing what the tuner's pinned modes mean.

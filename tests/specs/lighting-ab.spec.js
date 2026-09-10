@@ -124,12 +124,26 @@ test("night fog GLOWS around lamps (fog wall brighter than dry-night sky band)",
   // luminance-neutral (haze dims the bright facades as much as glow adds), so
   // the old region measured ~0% delta even with the glow plainly visible.
   // The dark sky shows the lamp-tinted in-scatter directly (~+35% measured).
+  // HOLD THE GOVERNOR'S TIER FIRST. The glow this test measures is the part of
+  // the picture the ladder sheds: frame.lampFog needs frame.lights, whose
+  // budget tierShed() cuts at tier >= 1 (js/lighting/frame-lights.js), and the
+  // halo around each lamp is bloom, zeroed at autoTier 4 (js/game.js po.bloom).
+  // The dry capture lands right after boot; the foggy one 3 s later — and on
+  // the Metal runner (26-38 fps, still shedding) that read as fog DARKENING
+  // the sky (run 3469: dry 76-86, foggy 68-73), with "dry" itself moving 10
+  // points between attempts. Same tier at both captures, asserted, or the
+  // comparison is of two tiers and says nothing about fog.
+  await page.evaluate(() => window.__apex.govHold(true));
+  const tier0 = await page.evaluate(() => window.__apex.govHold().tier);
   const dry = await regionMean(page, 0.30, 0.02, 0.40, 0.12);
   await page.evaluate(() => window.__apex.weather("fog"));
   await page.waitForTimeout(3000);   // let the fog exposure ramp settle
   const foggy = await regionMean(page, 0.30, 0.02, 0.40, 0.12);
+  const tier1 = await page.evaluate(() => window.__apex.govHold().tier);
+  const diag = JSON.stringify({ dry, foggy, tier: [tier0, tier1], gov: await page.evaluate(() => window.__apex.renderScale()) });
+  expect(tier1, "governor tier moved between captures: " + diag).toBe(tier0);
   // The lamp-tinted fog glow must add real luminance to the night sky.
-  expect(foggy).toBeGreaterThan(dry * 1.1);
+  expect(foggy, diag).toBeGreaterThan(dry * 1.1);
 });
 
 test("night light budget: lamps on at night, off by day, exposure per table", async ({ page }) => {
