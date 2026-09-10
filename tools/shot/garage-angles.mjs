@@ -685,9 +685,14 @@ async function frame(page, teamId, tag, cam, dir, capOpts = {}) {
     gateMs += ms(tGate);
     if (gate.ok) {
       await cropPng(png);
-      const c = framed && framed.ok
-        ? framed
-        : await page.evaluate(() => window.__apex.garageCam());
+      // READ THE CAMERA BACK AFTER THE SETTLE, never the value garageFrame
+      // returned. `garageCam().effDist` is published by the LAST RENDERED
+      // FRAME, so a read taken inside the framing call reports the previous
+      // shot's distance: measured 2026-09-10, an absolute --dist=6.5 logged
+      // 11.2 (the preset it replaced) and the next shot logged 6.5. The frames
+      // themselves were right; the sidecar and the caption bar were one shot
+      // behind, which is the half of this tool that is EVIDENCE.
+      const c = await page.evaluate(() => window.__apex.garageCam());
       return {
         view, cam: cam.key, tag, png, vp: vpTag, spread: gate.spread, via: shot.via || "page-clip",
         az: +c.az.toFixed(3), el: +c.el.toFixed(3), dist: +(c.dist ?? c.effDist).toFixed(3),
