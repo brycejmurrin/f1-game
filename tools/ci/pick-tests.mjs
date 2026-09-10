@@ -166,8 +166,10 @@ export const RULES = [
   // to guard it. `js/ui/driving-line-opts.js` is the one that proved it: it
   // matches "js/ui/ -> ui", its suite is in `sweeps`, and a rename of the store
   // key it owns went green locally and red in CI on that very suite.
-  // tests/unit/pick-tests.test.mjs holds the invariant, so a ninth cannot appear
-  // in silence — these eight are what it measured.
+  // tests/unit/pick-tests.test.mjs holds the invariant, so an eleventh cannot
+  // appear in silence — these ten are what it measured.
+  [/^js\/race\/race-settings\.js/, ["game-vm"], "race-settings-vm.test.mjs"],
+  [/^js\/career\/custom-team\.js/, ["car"], "custom-team.spec.js"],
   [/^js\/car\/helmets\.js/, ["garage-unit"], "helmets.test.mjs"],
   [/^js\/garage\/setup-tune\.js/, ["parts-unit"], "setup-tune.test.mjs"],
   [/^js\/lighting\/presets\.js/, ["input"], "presets.test.mjs"],

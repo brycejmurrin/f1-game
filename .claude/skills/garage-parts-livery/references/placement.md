@@ -31,16 +31,33 @@ Three surfaces can answer it and the first is ~2000x cheaper than the last:
 | where on the flank does this land? | `node tools/car/spine-station.mjs --team=redbull` | 0.2 s |
 | does the CAR hide it? | the same, `--occlude` (or `flank-occlusion.mjs` for the map) | 1 s |
 | what does the flat art look like? | the same, `--png=artifacts/spine` | 0.3 s |
-| does it read at racing distance, lit? | `node tools/shot/garage-angles.mjs --team redbull --spine-side logo --views side --zoom 8 --pan 5,0` | ~50 s boot + ~35 s a shot |
+| does it read at racing distance, lit? | `node tools/shot/garage-angles.mjs --preset=flank --team=redbull --spineSide=logo` (or `--fast --preset=quick`) | ~25 s boot + ~12–18 s a shot (~8 s with `--fast`) |
 
 `spine-station.mjs` replays the real `buildAtlas` into crest-sweep's recording
 context and diffs the flank against the same livery wearing `spineSide: "none"`,
 so the box it reports is the design's own ink whatever painted it — no
 per-design knowledge in the tool, and a new design is measured the day it is
 written. `v` is the axis the complaints are about (0 the shoulder crease, 1 the
-sidepod line); `u` runs front to rear, which is how you see a CROWN squeezing a
-mark aft without booting anything: `wrap` hands the marks u 0.52–0.95, and that
-is the station the rear tyre eats from a side camera.
+sidepod line); `u` runs front to rear, which is how you saw a CROWN squeezing a
+mark aft without booting anything: `wrap` used to hand the marks u 0.52–0.95,
+which is the station the rear tyre eats from a side camera.
+
+Two things the diff CANNOT see, both because of its own premise. The first is a
+crown whose flank content depends on `spineSide`: under `wrap` a team with no
+traced bull yields its filler badge to the side design, so the base ("none")
+carries a badge the design's frame does not, and the diff reports the badge's
+REMOVAL as part of the design's ink — measured 0.11 of v low on McLaren. Sweep a
+team with a traced bull (`redbull`, `racingbulls`) whenever the crown is `wrap`.
+
+The second is the CROWN's own graphic, which is in both samples and therefore in
+no row — the biggest thing on the flank, invisible to the instrument built to
+watch the flank. That is the `(crown)` row now: sampled with no side design, so
+everything in the region is the crown's, minus the SUN, which is the one thing
+the crown paints there that is a field rather than a mark. Translucency is what
+tells them apart, and it is the painter's own distinction — the disc goes down
+at alpha 0.97 and every mark is opaque. (Filtering on the fill RULE reads
+tidier, and silently measured nothing for the two teams whose crest paints
+nonzero.) `--team=all` runs one crown across the grid, which is the survey.
 
 Two caveats it prints but you should know before reading a PNG. Lettering
 renders as its METRIC BOX, not as glyphs, because that is what the recording
@@ -70,17 +87,74 @@ side camera the tyre projects straight over the cover. Measured on the marks:
 | crown | station | side (4.6 m) | side (11.2 m) | hero 3/4 | rear | top |
 |---|---|---|---|---|---|---|
 | every crown but `wrap` | u 0.03–0.35 | 0 % | 0 % | 1 % | 0 % | 0 % |
-| `wrap` | u 0.52–0.84 | 51 % | 76 % | 7 % | 81 % | 1 % |
+| `wrap`, BEFORE the fix | u 0.52–0.84 | 51 % | 76 % | 7 % | 81 % | 1 % |
+| `wrap`, after | u 0.22–0.54 | 0 % | — | — | — | — |
 
-`wrap` hangs a metre-long bull over the front two thirds, so `sideFrom` pushes
-every flank design into the aft third — which is the tyre's. **Read the camera
-column before calling that a defect**: it is 7 % from the hero preset the garage
-opens on. `fin-design.test.mjs` ratchets `wrap` at its measured 0.60 and holds
-every other crown under 0.20, so the class cannot spread silently.
+**Read the camera column before calling a number a defect** — the row above was
+7 % from the hero preset the garage opens on. It was still a defect, and a
+shipped one: Red Bull's default is crown `wrap` + side `duo`, and the same push
+put 92 % of its sponsor names, 95 % of a wordmark and 100 % of the then-`slash`
+side behind the wheel. `sideFrom` started the band aft of the BULL, the bull ends at u 0.58
+and `FLANK_SEEN` is 0.62, so "behind the animal" and "behind the wheel" were one
+instruction.
 
-Validated against a controlled render pair, same plate, same camera, crown the
-only variable: forward it is whole, aft it is a sliver at the tyre's leading
-edge (`artifacts/occl-check/`, 2026-09-09).
+The fix is the rule this file is really about. A band may run to the tail of the
+flank; CONTENT may not — a stripe's aft end behind the wheel is a stripe, a
+sponsor name's is half a word. So `liverytex.js` carries two axes, `su` for
+bands and `sc` clamped to `FLANK_SEEN` for content; the band clears the SUN
+(a hard disc, `sunReach`) and SHARES the bull (a silhouette, and every mark
+carries a keyline, halo or plate); `SIDE_FILL` puts flat fills UNDER the crown's
+flank graphic and lettering over it, so a solid colour fill (`band`/`sash`; the
+culled `split` was the same class) cannot erase the bull's
+legs and the bull cannot erase a sponsor; and `BULL.top` drops the animal clear
+of the crease strip the lettering rides. Everything that has to be read now
+measures 0 % from the side, and `fin-design.test.mjs` holds content — marks AND
+lettering — under 0.40 on every crown.
+
+### …and then the bull paid for it
+
+Dropping it was the next defect, because **the flank's bottom corner is not on
+camera either**. Below v ~0.81 forward of u 0.2 the sidepod eats the band, so an
+animal standing on the sidepod line (top 0.26, h 0.74, reaching v 0.99) lost
+19 % of its ink and **36 % of its HEAD** — the head is the low forward part of a
+charging silhouette, so what went was the half that makes it a bull. Nothing
+caught it: the side rows were all 0 %, and the animal was not in them.
+
+`BULL` is now `{ h: 0.52, u0: 0.05, top: 0.30 }` — half the area, its centre
+0.09 of the flank further forward, its lowest hoof at v 0.81, 2 % hidden. Both
+ends of the constant answer to a different edge (`top` to the lettering strip
+above, `h` to the sidepod below) and neither is free. The same station carries
+the badge a bull-less crest yields to, so the survey moved with it: Mercedes
+23 % hidden → 2 %, Haas 21 → 1, Ferrari 18 → 1, Racing Bulls 16 → 0, and the
+five already-clear teams unchanged at 0-2 %.
+
+The oracle was validated against a controlled render pair before any of that,
+same plate, same camera, crown the only variable: forward it is whole, aft it is
+a sliver at the tyre's leading edge (`artifacts/occl-check/`, 2026-09-09).
+
+### The crease strip was not empty
+
+Freeing it was only half the move, because **the CAR can spoil a design without
+hiding it, and no ray-cast will tell you** — the occluders it tests are things
+in FRONT of the flank, and the cover's own trim is ON it. `car3d.js` puts an
+accent pinstripe and up to four grey service hatches on that skin, and both
+were stationed to sit aft of a flank mark at f 0.19, which is where every crown
+except `wrap` leaves one. Move the design into the mid-flank and the trim is
+inside it: the pinstripe crossed the first sponsor row and a hatch took the last
+two letters of the second, white ink on a lit metal plate (garage, u 0.51–0.62 /
+v 0.25–0.50). The cooling-outlet louvres cross it too and are FINE — white on
+near-black carbon reads; a lit metal plate is what kills a name.
+
+So `trimAft` derives both stations from `LiveryTex.FLANK_SEEN` instead of a
+third hand-picked literal, and where the design and a hatch want the same
+station **the hatch is what moves**: it is detail, and aft of `FLANK_SEEN` it
+still reads from hero/top/rear while a sponsor name only ever reads from the
+side. Guarded in `fin-design.test.mjs` by diffing the body with and without a
+`spineSide` — that diff IS the trim, so the guard needs no per-feature
+knowledge — and mutation-checked by pinning `trimAft` back to 0.
+
+When you move content on the flank, shoot it and LOOK, or enumerate the
+bodywork at that station first; the atlas raster shows none of this.
 
 ## What still needs a browser
 

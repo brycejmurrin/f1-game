@@ -1,0 +1,95 @@
+# garage-angles.mjs — when, how, and how fast
+
+The garage is the only place occlusion, wall crests, and real lighting get a
+vote. Use this tool when `spine-station.mjs` (0.2 s, flat atlas) has already
+answered placement and you need **lit, foreshortened** proof.
+
+## Pick the cheapest path first
+
+| question | tool | typical cost |
+|---|---|---|
+| where does ink land on the flank? | `spine-station.mjs --team=X --occlude` | 0.2–1 s |
+| flat art / PNG of the mark | `spine-station.mjs --png=…` | 0.3 s |
+| wall crest / fin badge / wrap bull **in the room** | `garage-angles.mjs` | ~25 s boot + ~24 s per shot (~12 s with `--fast`) |
+| car-only, no garage shell | `render-car.mjs --preset=spine` | ~15 s boot + ~3 s per angle |
+
+**One Chromium** for the whole matrix: teams × design axes × views. Never spawn
+one browser per team or per angle.
+
+## Fast iteration
+
+```sh
+# Print the matrix without booting (shot count + rough ETA):
+node tools/shot/garage-angles.mjs --plan --team=redbull \
+  --spineLogo=wrap --finBadge=logo --views=front,side,rear
+
+# Purpose presets (override with explicit flags):
+node tools/shot/garage-angles.mjs --preset=list
+node tools/shot/garage-angles.mjs --preset=wall  --team=ferrari --logo=#ffffff --logo2=#0066ff
+node tools/shot/garage-angles.mjs --preset=flank --team=redbull --spineLogo=wrap --spineSide=none
+node tools/shot/garage-angles.mjs --preset=fin   --team=ferrari --finBadge=logo
+node tools/shot/garage-angles.mjs --preset=mark  --team=redbull --logo=#00ffcc --logo2=#ff0066 --logo3=#111111
+
+# Fast mode: fewer settle frames, no label/sheet, one gate retry (~40% quicker per shot):
+node tools/shot/garage-angles.mjs --fast --preset=quick --team=redbull --spineLogo=wrap
+
+# Live gallery: auto-refreshing live.html after each shot (pair with --fast for big matrices):
+node tools/shot/garage-angles.mjs --fast --live --team=redbull,ferrari --views=front,side \
+  --spineLogo=wrap,saddle --spineSide=none,logo --out=artifacts/combo-live
+
+# Tune settle yourself (defaults: livery 8, view 4; was 12/6):
+node tools/shot/garage-angles.mjs --settle=6 --view-settle=3 --views=side --team=redbull
+```
+
+Presets:
+
+| preset | views | framing | also sets |
+|---|---|---|---|
+| `wall` | front | zoom 4 | — |
+| `fin` | rear | zoom 4 | — |
+| `flank` | side | zoom 8, pan 5,0 | — |
+| `mark` | front, side, rear | zoom 6, pan 4,0 | `finBadge=logo` |
+| `quick` | side | zoom 6, pan 4,0 | `--fast` |
+
+## Design axes (any `Liveries.FIELDS` key)
+
+Colours: `#rrggbb`. Enums validated in-page against the real list.
+
+```sh
+node tools/shot/garage-angles.mjs --team=redbull \
+  --spineLogo=wrap,saddle --spineSide=none,logo \
+  --logo=#00ffcc --logo2=#ff0066 --logo3=#111111 \
+  --views=front,side,rear --out=artifacts/garage-mark
+```
+
+Legacy aliases still work: `--spine-logo`, `--spine-side`.
+
+## A/B without checking out the ref
+
+```sh
+node tools/shot/garage-angles.mjs --team=ferrari --views=side \
+  --spineSide=logo --against=HEAD~1 --out=artifacts/garage-ab
+```
+
+Serves differing js/css/shell blobs from memory; reuses the same Playwright page
+for the B pass (one boot, two reloads).
+
+## Output
+
+- PNGs under `--out` (default `artifacts/garage-angles`)
+- Caption bars under each frame (`--label=0` to skip)
+- Contact sheet `sheet.png` (`--sheet=0` to skip)
+- `live.html` auto-refresh gallery when `--live` (3 s refresh, one card per shot)
+- JSON sidecar `<teams>-angles.json` with per-shot settle/capture/gate ms
+
+## Before you run
+
+1. Check `/proc/loadavg` < 3 — a busy box measures the machine, not the code.
+2. Reap orphan Chromium from prior probes (`ps … | head`, kill by PID).
+3. Never run while Playwright browser groups are in flight.
+
+## When NOT to use
+
+- Placement-only questions → `spine-station.mjs` first.
+- Isolated car geometry with no garage shell → `render-car.mjs`.
+- Live poking / console → mcp-probe skill, not this batch tool.

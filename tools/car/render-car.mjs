@@ -1,5 +1,5 @@
 // render-car.mjs — headless batch renderer for the ISOLATED car viewer.
-// @doc Headless batch renderer for `carview.html` — preset orbit angles + HTML contact sheet; needs a server on :3456.
+// @doc Headless batch renderer for `carview.html` — orbit presets, `--team=all` walks the grid, contact sheet; needs :3456.
 // @skill playwright-probe
 //
 // Loads tools/carview.html (the standalone, track-free car "photo studio") once
@@ -37,6 +37,12 @@
 //
 // Options:
 //   --team=mclaren        team id (js/data/teams.js). Default: mclaren
+//   --team=redbull,ferrari  …or a LIST, or `all` — walks every team in ONE
+//                         browser and grids the sheet rows=team, cols=shot.
+//                         Pair it with a livery FIELD below to ask the question
+//                         those fields exist for: "does spineLogo=wrap read on
+//                         every car?" Twelve runs is twelve Chromium boots and
+//                         twelve sheets to open side by side; this is one.
 //   --livery=mcl_gulf     livery id (js/car/liveries.js). Default: team default
 //   --num=4               driver number override
 //   --engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel=
@@ -72,9 +78,11 @@
 //   node tools/car/render-car.mjs --team=mclaren --preset=brakes --brakes=ceramic     # 3 shots, one part
 //   node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme         # 3 shots, one wing
 //   node tools/car/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night  # 3x3 grid
+//   node tools/car/render-car.mjs --team=all --spineLogo=wrap --views=top,rearquarter  # one design, every car
 
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
@@ -197,7 +205,40 @@ const PRESETS = {
 };
 PRESETS.aero = PRESETS.wing;   // alias — both names read naturally depending on intent
 
-const TEAM   = assertSafePathToken(arg('team', 'mclaren'), 'team');
+// THE ROSTER, read from the data file rather than hard-coded here — a tool that
+// carries its own copy of the grid is wrong the first time a team is added.
+// `const Teams = …` in an IIFE is a LEXICAL binding, so it never lands on the
+// sandbox object; evaluating the identifier back out of the same context is how
+// the other car tools reach it (livery-contrast.mjs, spine-station.mjs).
+const ROSTER_IDS = (() => {
+  const sb = { console, Math, Object, Array, String, Number, JSON };
+  sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(readFileSync(resolve(ROOT, 'js/data/teams.js'), 'utf8'), sb, { filename: 'teams.js' });
+  return vm.runInContext('Teams', sb).LIST.map((t) => t.id);
+})();
+
+// --team takes a LIST, or `all` for every team on the roster. The livery FIELD
+// overrides below exist so one design can be swept across cars — "does
+// spineLogo=wrap read on every team?" — and that question needs every team in
+// ONE browser. Twelve separate runs is twelve Chromium boots and twelve contact
+// sheets you then have to open side by side; the walk costs one boot and lays
+// the answer out as a grid. Each id is still a path token: the sheet writes a
+// PNG per team, so the same containment rule applies to each.
+const TEAM_IDS = (() => {
+  const raw = arg('team', 'mclaren').trim();
+  if (raw === 'all') return ROSTER_IDS.slice();
+  const ids = raw.split(',').map((t) => t.trim()).filter(Boolean)
+                 .map((t) => assertSafePathToken(t, 'team'));
+  const bad = ids.filter((t) => !ROSTER_IDS.includes(t));
+  if (bad.length) {
+    console.error(`Unknown team(s): ${bad.join(', ')}\nAvailable: ${ROSTER_IDS.join(', ')}, or "all"`);
+    process.exit(1);
+  }
+  return ids;
+})();
+const TEAM   = TEAM_IDS[0];          // the boot team, and the sheet's default name
+const MULTI_TEAM = TEAM_IDS.length > 1;
 const LIVERY = arg('livery', null);
 const NUM    = arg('num', null);
 const TOD    = arg('tod', 'day');
@@ -229,7 +270,7 @@ const OUTARG = arg('out', null);
 // the car-shot workflow's upload step found nothing at all.
 const OUT    = OUTARG != null
   ? resolve(process.cwd(), OUTARG)
-  : resolveRepoDefault(ROOT, 'scratch', 'renders', 'cars', TEAM);
+  : resolveRepoDefault(ROOT, 'scratch', 'renders', 'cars', MULTI_TEAM ? 'teams' : TEAM);
 // Browser: PW_CHROMIUM wins, else Playwright's bundled build, else a Chromium
 // already installed under PLAYWRIGHT_BROWSERS_PATH. Sandboxes that preinstall
 // the browser (and set PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD) have no bundled build,
@@ -313,6 +354,15 @@ if (lightTods) {
   shotDefs = shotDefs.map((s) => ({ ...s, tod: s.tod || TOD, group: s.label }));
 }
 
+// …and across TEAMS, the same way. Team is the OUTER loop deliberately: a team
+// change reboots more of the car than a camera move does, so grouping by team
+// pays that cost once per team instead of once per shot.
+if (MULTI_TEAM) {
+  shotDefs = TEAM_IDS.flatMap((team) => shotDefs.map((sd) => ({ ...sd, team })));
+} else {
+  shotDefs = shotDefs.map((sd) => ({ ...sd, team: TEAM }));
+}
+
 mkdirSync(OUT, { recursive: true });
 
 // Build the carview URL from the shared params (parts + team + livery + lighting).
@@ -391,7 +441,7 @@ try {
   await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, bootFrame, { polling: 100, timeout: WAIT_MS })
     .catch(async () => { await page.waitForTimeout(2_000); });
 
-  let renderedTod = TOD, firstShot = true;
+  let renderedTod = TOD, renderedTeam = TEAM, firstShot = true;
   const t0 = Date.now();
   /** Soft #view / #game-soft → CDP. Never page.screenshot (fonts hang under SwiftShader). */
   async function captureCanvas(dest) {
@@ -409,12 +459,18 @@ try {
          look:  s.look  != null ? s.look  : LOOK,
          lookX: s.lookX != null ? s.lookX : LOOKX,
          lookY: s.lookY != null ? s.lookY : (LOOKY != null ? parseFloat(LOOKY) : 0),
-         tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN });
+         tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN,
+         // Only when it CHANGES: CARVIEW.set({team}) rebuilds the car, and
+         // re-sending the same id every shot pays that on every camera move.
+         ...(s.team !== renderedTeam ? { team: s.team } : {}) });
     // Soft-present waiters force a blit; 3 frames + awaitSoftPresent is enough
     // for same-tod orbit moves. Keep the longer settle only on first/tod change.
     // `need` MUST be in the arg bag — a free `need` in the page fn is ReferenceError
     // ("need is not defined"), the waiter fails, and every shot falls back to sleep.
-    const need = (firstShot || s.tod !== renderedTod) ? 8 : 3;
+    // A team swap rebuilds the mesh and repaints the atlas — strictly more work
+    // than an orbit move, so it gets the same long settle a tod change does.
+    const heavy = firstShot || s.tod !== renderedTod || s.team !== renderedTeam;
+    const need = heavy ? 8 : 3;
     await page.waitForFunction(
       ({ before, n }) => window.CARVIEW.frame >= before + n,
       { before: frame, n: need },
@@ -423,10 +479,12 @@ try {
       console.log(`  (slow frame settle — falling back to a timed wait)`);
       await page.waitForTimeout(1_500);
     });
-    if (firstShot || s.tod !== renderedTod) await page.waitForTimeout(400);
+    if (heavy) await page.waitForTimeout(400);
     firstShot = false;
     renderedTod = s.tod;
-    const file = lightTods ? `${s.group}-${s.tod}.png` : `${s.label}.png`;
+    renderedTeam = s.team;
+    const file = MULTI_TEAM ? `${s.team}-${s.label}${lightTods ? '-' + s.tod : ''}.png`
+               : lightTods ? `${s.group}-${s.tod}.png` : `${s.label}.png`;
     const dest = resolveContainedChild(OUT, file, 'render output path');
     const via = await captureCanvas(dest);
     const shades = await blankCheck(dest);
@@ -435,7 +493,7 @@ try {
       console.error(`    Chromium renders this through SwiftShader; check the launch flag is --use-angle=swiftshader.`);
       process.exitCode = 3;
     } else console.log(`  ✓ ${file} (via=${via})`);
-    shots.push({ file, label: s.label, group: s.group, tod: s.tod, via });
+    shots.push({ file, label: s.label, group: s.group, tod: s.tod, team: s.team, via });
   }
   console.log(`Rendered ${shots.length} shot(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s -> ${OUT}`);
 
@@ -453,7 +511,20 @@ try {
   td img{width:260px;border:1px solid #222;border-radius:6px;display:block}`;
 
   let body;
-  if (lightTods) {
+  if (MULTI_TEAM) {
+    // Rows = team, columns = shot. The question a team walk asks is "does this
+    // design read on every car", and that is answered by scanning ONE column
+    // down the grid — which only works if every car's same view sits in it.
+    const cols = [...new Set(shots.map((x) => x.label + (lightTods ? ' ' + x.tod : '')))];
+    const rows = TEAM_IDS.map((team) => {
+      const cells = cols.map((c) => {
+        const s = shots.find((x) => x.team === team && (x.label + (lightTods ? ' ' + x.tod : '')) === c);
+        return `<td>${s ? `<img src="${s.file}" alt="${team} ${c}" loading="lazy">` : ''}</td>`;
+      }).join('');
+      return `<tr><th>${team}</th>${cells}</tr>`;
+    }).join('\n');
+    body = `<table><thead><tr><th></th>${cols.map((c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+  } else if (lightTods) {
     // Grid: one row per shot (preset label), one column per tod — the layout
     // that makes a lighting comparison actually scannable at a glance.
     const groups = [...new Set(shots.map(s => s.group))];
@@ -470,11 +541,11 @@ try {
   }
 
   writeFileSync(resolveContainedChild(OUT, 'index.html', 'render contact sheet path'), `<!doctype html><meta charset="utf8">
-<title>${TEAM} — render sheet</title>
+<title>${MULTI_TEAM ? TEAM_IDS.length + ' teams' : TEAM} — render sheet</title>
 <style>
   ${style}
 </style>
-<h1>${TEAM}${LIVERY ? ' · ' + LIVERY : ''}</h1>
+<h1>${MULTI_TEAM ? TEAM_IDS.join(' · ') : TEAM}${LIVERY ? ' · ' + LIVERY : ''}</h1>
 <div class="meta">${metaLine}</div>
 ${body}`);
 

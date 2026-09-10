@@ -4,11 +4,11 @@
 const Car3D = (function () {
   const SURFACES = Object.freeze({
     custom: 0, paint: 20, carbon: 21, rubber: 22,
-    metal: 23, glass: 24,
+    metal: 23, glass: 24, visor: 32,   // 32 is glass-like but DIELECTRIC, not chrome: glsl-lit.js baseRefl
     emissive: 25, functionalEmissive: 25, panel: 26, mirror: 27,
   });
   // A livery FINISH is a surface-id remap on painted vertices, not a material
-  // uniform: the shaders classify car surfaces 20-30 and branch per id, so a new
+  // uniform: the shaders classify car surfaces 20-32 and branch per id, so a new
   // finish costs an id in that chain (js/render/glx/shaders/glsl-lit.js and its WGSL/TSL
   // mirrors) and one row here. `carbon` gets id 31 rather than reusing
   // SURFACES.carbon (21): 21 keeps the vertex colour, so pointing the finish at
@@ -2063,7 +2063,7 @@ const Car3D = (function () {
     };
   }
 
-  function buildEngineCoverBodywork(out, c1, accentC, eng, anchors, rise, sideMark) {
+  function buildEngineCoverBodywork(out, c1, accentC, eng, anchors, rise, sideMark, trimAft) {
     const coverHeight = Math.max(0.78, Math.min(1.28, eng.coverHeight));
     rise = rise || 0;
     // t was 0.0 — frame() puts BOTH top corners on the centreline, so the engine
@@ -2094,13 +2094,13 @@ const Car3D = (function () {
                               [p.pts[k + 1][0], p.pts[k + 1][1], z], [-p.pts[k + 1][0], p.pts[k + 1][1], z]];
       addBlock(out, ring(pf, front.z).concat(ring(pr, rear.z)), c1, c1);
     }
-    // The accent pinstripe runs the flank at top-0.10, straight through the
-    // SPINE SIDE band (z -0.72..-1.22 in car-mesh); with a flank mark on it
-    // starts aft of the band instead — a real number interrupts the trim.
-    // (The band is z -0.66..-1.90 — the whole flank — so there is no "aft of the
-    // band" any more. The aft shift still keeps the trim off the MARK, which sits
-    // at f 0.19; COVER_STACK.flankTrim is what keeps it out of the decal PLANE.)
-    const stripeFront = anchors.coverAt(sideMark ? -1.26 : -0.825), stripeRear = anchors.coverAt(-1.675);
+    // The accent pinstripe runs the flank just under the crease, across the
+    // SPINE SIDE band — which is the WHOLE flank, z -0.66..-1.90 — so with a
+    // mark on it the trim starts aft of the MARK instead: a real number
+    // interrupts the trim. -1.26 is "aft of the mark" only while the mark is at
+    // f 0.19, so a crown that moved the design hands its own station in trimAft
+    // (see build). COVER_STACK.flankTrim keeps the trim out of the decal PLANE.
+    const stripeFront = anchors.coverAt(trimAft || (sideMark ? -1.26 : -0.825)), stripeRear = anchors.coverAt(-1.675);
     // The pinstripe runs the flank just under the shoulder crease, ON the skin.
     const sfY = coverProfile(stripeFront).shoulder - 0.03, srY = coverProfile(stripeRear).shoulder - 0.025;
     for (const side of [-1, 1]) {
@@ -2117,6 +2117,15 @@ const Car3D = (function () {
       coolingY: mid.top - 0.12,
       tailVentY: rear.y + rear.h * 0.20,
     };
+  }
+
+
+  function applyBodySplit(out, i0, i1, leftC, rightC) {
+    for (let i = i0; i < i1; i++) {
+      if (out.mat[i] !== SURFACES.paint) continue;
+      const c = out.pos[i * 3] < 0 ? leftC : rightC;
+      out.col[i * 3] = c[0]; out.col[i * 3 + 1] = c[1]; out.col[i * 3 + 2] = c[2];
+    }
   }
 
   function build(color, color2, opts) {
@@ -2174,6 +2183,10 @@ const Car3D = (function () {
     // black. Absent = c1, today's look. The atlas inks the crest against this too
     // (liverytex `coverPaint`), or a light cover would swallow a light crest.
     const coverC = _ckAcc(liv.cover) || c1;
+    // BODY SPLIT (liv.bodySplit === "lr"): Cadillac-style L/R body. Left (x<0)
+    // keeps c1, right (x>=0) takes c2. Applied as a paint-only recolour over the
+    // chassis→livery sections so carbon / wings / glass stay untouched.
+    const bodySplitLR = liv.bodySplit === "lr";
     const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
@@ -2198,6 +2211,7 @@ const Car3D = (function () {
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
 
     part("chassis");
+    const bodySplitFrom = out.pos.length / 3;
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
     buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt);
 
@@ -2422,10 +2436,13 @@ const Car3D = (function () {
                      h: Math.max(0.03, 0.968 - hoopF), t: 0.40 },
                    { z: -0.63, y: (hoopR + 0.938) / 2, w: 0.13 * inScale,
                      h: Math.max(0.03, 0.938 - hoopR), t: 0.38 }, sunC);
-      // A SPINE SIDE mark (liv.spineSide) claims the flank band z -0.72..-1.22:
-      // the pinstripe and the service panels keep clear of it (see both sites).
-      const sideMark = (liv.spineSide || "none") !== "none";
-      coverGeom = buildEngineCoverBodywork(out, coverC, accentC, engStyle, anchors, spineRise(liv.spineHeight), sideMark);
+      // A SPINE SIDE mark claims the flank band; culled ids leave panels alone.
+      // Under wrap, trim aft tracks FLANK_SEEN so the pinstripe/hatch clear the mid-flank design.
+      const sideMark = (liv.spineSide || "none") !== "none" && (!globalThis.LiveryTex || !LiveryTex.SPINE_SIDE_IDS || LiveryTex.SPINE_SIDE_IDS.includes(liv.spineSide));
+      const trimAft = (sideMark && (liv.spineLogo || "logo") === "wrap"
+        && typeof LiveryTex !== "undefined" && LiveryTex.FLANK_SEEN)
+        ? LiveryTex.FLANK.zF - LiveryTex.FLANK_SEEN * LiveryTex.FLANK.zLen : 0;
+      coverGeom = buildEngineCoverBodywork(out, coverC, accentC, engStyle, anchors, spineRise(liv.spineHeight), sideMark, trimAft);
       // Optional scoop lip on the roll-hoop mouth (recipe-gated; default 0).
       const scoopLip = Math.max(0, Math.min(2, Math.round((engStyle && engStyle.scoopLip) || 0)));
       if (scoopLip >= 1) {
@@ -2504,11 +2521,16 @@ const Car3D = (function () {
         if (engOutlet >= 2) addBox(out, 0, coverGeom.tailVentY, -1.72, 0.13, 0.05, 0.18, INTAKE);
       }
       const servicePanels = Math.max(0, Math.min(4, Math.round(engStyle.servicePanel || 0)));
-      // With a SPINE SIDE mark on the flank the panels move aft of the band:
-      // a grey hatch through the race number is the one thing a real livery
-      // never shows.
-      const pz0 = sideMark ? -1.36 : -0.82, pdz = sideMark ? 0.15 : 0.19;
-      for (const s of [-1, 1]) for (let i = 0; i < servicePanels; i++) {
+      // With a SPINE SIDE mark on the flank the panels move aft of it: a grey
+      // hatch through the race number is the one thing a real livery never
+      // shows. A hatch is DETAIL, not content, so where both want a station the
+      // HATCH moves — aft of trimAft, which under a wrap is where the rear tyre
+      // covers the flank anyway: it still reads from hero/top/rear, a sponsor
+      // name only from the side. The flank ends at z -1.90, so that start fits
+      // three hatches, not a fourth hung off the back of the bodywork.
+      const pz0 = trimAft ? trimAft - 0.065 : sideMark ? -1.36 : -0.82;
+      const pdz = sideMark ? 0.15 : 0.19, pn = Math.min(servicePanels, trimAft ? 3 : 4);
+      for (const s of [-1, 1]) for (let i = 0; i < pn; i++) {
         const z = pz0 - i * pdz, p = anchors.coverAt(z);
         // Sunk to COVER_STACK.flankTrim: a hatch is a panel line, not a blister,
         // and the drape has to run over it. At the old 19 mm it stood PROUD of
@@ -2984,6 +3006,8 @@ const Car3D = (function () {
     const camPod = anchors.noseAt(1.55);
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
 
+    if (bodySplitLR) applyBodySplit(out, bodySplitFrom, out.pos.length / 3, c1, c2);
+
     part("cockpit");
     // NONE OF THIS BELONGS IN THE FIRST-PERSON BUILD. The cockpit body is its
     // own model (opts.cockpit — see cockpitBodyMesh in game.js), drawn from
@@ -3205,8 +3229,8 @@ const Car3D = (function () {
       // tens of pixels; depth silhouettes never see paint. Both drop to 0.
       const field = !!(opts && opts.field);
       Helmets.build(out, 0, 0.715, -0.075, des, {
-        paint: SURFACES.paint, glass: SURFACES.glass,
-        maxSplit: (sil || field) ? 0 : undefined,
+        paint: SURFACES.paint, glass: SURFACES.visor,
+        maxSplit: (sil || field) ? 0 : undefined, simplePaint: sil || field,
       });
       // No brow box and no rear spoiler box: the traced shell carries its own
       // ridge over the aperture and its own aero lip at the back.

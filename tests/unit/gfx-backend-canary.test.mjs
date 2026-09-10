@@ -73,6 +73,16 @@ test("#pm-renderer is visible in the SETTINGS markup (not hidden)", () => {
   assert.doesNotMatch(m[0], /\bhidden\b/, "hidden on the tag hid RENDERER until game.js finished an async backend load");
 });
 
+test("no stored renderer means WebGL2 on touch and desktop alike", () => {
+  const game = code("js/game.js");
+  const select = game.slice(game.indexOf("let pref = null;"), game.indexOf("const PROBE_KEY"));
+  assert.ok(select.length > 0, "renderer preference selection block found");
+  assert.doesNotMatch(select, /matchMedia\s*\([^)]*pointer:\s*coarse/,
+    "a coarse pointer must not silently opt every fresh phone into the larger deferred THREE stack");
+  assert.doesNotMatch(select, /if\s*\(\s*!pref\s*\)[^]*?pref\s*=\s*"three"/,
+    "absence of a preference must remain the WebGL2 default");
+});
+
 test("boot canary disarms after a successful bind, not only after present()", () => {
   const game = code("js/game.js");
   const bind = game.search(/Object\.defineProperties\(\s*GLX\s*,\s*Object\.getOwnPropertyDescriptors\(\s*backend\s*\)\s*\)/);
@@ -121,6 +131,8 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
     "AUTO stays on WebGL2 when no WebGPU context is obtainable, after an init failure, or on WebKit; a pin of 1/0 overrides");
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
+  assert.match(src, /await renderer\.init\(\)[\s\S]{0,200}?renderer\.dispose/,
+    "failed renderer.init must dispose before AUTO WebGPU→WebGL2 retry");
   assert.match(src, /AUTO stayed on three WebGL2/);
   assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
   assert.match(src, /powerPreference:\s*"low-power"/);
@@ -541,6 +553,16 @@ test("applyBackend clears session renderer latches before reload", () => {
     "applyBackend must clear every RENDERER_SS_KEYS latch, not only gfxBound");
   assert.doesNotMatch(fn, /clearRendererStorage\(\)/,
     "must not wipe LS backend prefs — that would delete the pick just written");
+});
+
+test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () => {
+  const src = read("js/perf/renderer-picker.js");
+  const three = src.slice(src.indexOf("function applyThreePath("), src.indexOf("function readShotMode("));
+  assert.match(three, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
+    "THREE PATH reload must wipe the same session latches as applyBackend");
+  const shot = src.slice(src.indexOf("function applyShotMode("), src.indexOf("function presentStatus("));
+  assert.match(shot, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
+    "SCREENSHOTS reload must drop inherited hold/claim latches before writeShotMode");
 });
 
 test("blocked sessionStorage skips the opt-in so this tab never claims the canvas", () => {
@@ -1739,8 +1761,8 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "soft-present must blit readPixels into the 2D overlay");
   assert.match(src, /awaitSoftPresent/,
     "garage settle / SAVE SCREENSHOT wait on awaitSoftPresent");
-  assert.match(src, /SOFT_BLIT_EVERY/,
-    "soft-present must throttle full-frame readPixels (car-group SwiftShader tax)");
+  assert.match(src, /if\s*\(\s*!_softPresentWaiters\.length\s*&&\s*!_softCaptureDue\s*\)\s*return/,
+    "soft-present must read back only when a capture explicitly waits for it");
   assert.match(src, /softPresent:\s*\(\)\s*=>\s*!!_softPresent/,
     "softPresent() capability bit for renderer-picker / probes");
   assert.match(src, /function invalidateSoftPresent\(/,
@@ -2788,14 +2810,15 @@ test("GLX links its core programs as one parallel batch when KHR_parallel_shader
 
 test("the flyby shows under race settings only; the picker pre-builds it hidden once the pick settles", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const raceSettings = read("js/race/race-settings.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const menus = read("js/ui/select-screen.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.doesNotMatch(game, /\n\s*scheduleFlybyTrack\(\);\s*\n\s*window\.addEventListener\("resize"/,
     "the boot builds no world for the title");
-  assert.match(game, /\$\("race-settings"\)\.hidden = false;\s*scheduleFlybyTrack\(\);/,
+  assert.match(raceSettings, /\$\("race-settings"\)\.hidden = false;\s*scheduleFlybyTrack\(\);/,
     "opening race settings schedules the flyby of the chosen circuit (120 ms)");
   // The TIME OF DAY row's write (js/ui/setting-row.js): every write repaints the
   // screen through wireRaceSettings' `after`, so only the flyby call is pinned.
-  assert.match(game, /wire\("rs-time", \(\) => raceTimeOfDay, \(v\) => \{ raceTimeOfDay = v; scheduleFlybyTrack\(\); \}\)/,
+  assert.match(raceSettings, /wire\("rs-time", getRaceTimeOfDay, \(v\) => \{ setRaceTimeOfDay\(v\); scheduleFlybyTrack\(\); \}\)/,
     "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
   assert.match(menus, /scheduleFlybyTrack\(true\)/,
     "a circuit tile pre-builds after the settle delay, never on the tap itself");

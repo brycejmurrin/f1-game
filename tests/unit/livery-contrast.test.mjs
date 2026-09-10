@@ -10,10 +10,10 @@
  * thresholds, so a new design is only as safe as whoever wrote it remembering to
  * ask. This asks once, knowing nothing about which code path painted what.
  *
- * The full sweep is tools/car/livery-contrast.mjs (every team x 13 x 10, ~80 s).
- * This runs the slice that has actually caught something — the crown designs
- * that repaint the flank, against the flank designs that stand on it — over
- * every team, in a few seconds.
+ * The full sweep is tools/car/livery-contrast.mjs (every team × SPINE_LOGO_IDS ×
+ * SPINE_SIDE_IDS, ~80 s). This runs the slice that has actually caught something
+ * — the crown designs that repaint the flank, against the flank designs that
+ * stand on it — over every team, in a few seconds.
  *
  * Run: node --test tests/unit/livery-contrast.test.mjs
  */
@@ -45,9 +45,9 @@ const A = loadAtlas();
 // wrap and saddle are the two SPINE TOPs that repaint the cover flank, so they
 // are the ones a flank design can collide with; logo is the untouched control.
 const CROWN = ["logo", "wrap", "saddle", "bigmark"];
-// The three that paint a band on the flank, plus the mark and plate that have to
-// survive one, plus the control.
-const SIDE = ["none", "split", "bars", "slash", "plate", "logo"];
+// Colour fills, boards, marks and lettering that own a large flank share — the
+// live SIDE heroes after the 2026-09-09 cull (not the sticker geometry).
+const SIDE = ["none", "band", "sash", "plate", "logo", "ribbon", "lockup", "title", "emblem"];
 
 test("no design paints a large area that cannot be seen on what it covers", () => {
   const bad = [];
@@ -111,8 +111,8 @@ test("a colour you PICK is the colour that gets painted, contrast or not", () =>
   // colour only suggested it. So this deliberately picks one that FAILS the
   // floor (1.81:1 on McLaren's papaya) and asserts it survives to the paint on
   // every surface its field owns. Two of these used to be re-derived silently:
-  // the wrap's sun ignored spineTint entirely, and the flank band had no
-  // explicit field at all.
+  // the wrap's sun ignored sunTint (and used to steal spineTint), and the flank
+  // band had no explicit field at all.
   const PICK = [0.62, 0.42, 0.20];
   const css = "rgba(158,107,51,";                 // PICK at 0-255
   const team = A.Teams.LIST.find((t) => t.id === "mclaren");
@@ -132,9 +132,9 @@ test("a colour you PICK is the colour that gets painted, contrast or not", () =>
     ["the crown band",       { spineLogo: "saddle", spineTint: PICK }, "crest"],
     ["the tail strip",       { spineLogo: "saddle", spineTint: PICK }, "tail"],
     ["the saddle's flank",   { spineLogo: "saddle", spineTint: PICK }, "spineSide"],
-    ["the wrap's sun",       { spineLogo: "wrap",   spineTint: PICK }, "crest"],
-    ["the flank band",       { spineLogo: "saddle", spineSide: "split", sideTint: PICK }, "spineSide"],
-    ["the flank band, wrap", { spineLogo: "wrap",   spineSide: "bars",  sideTint: PICK }, "spineSide"],
+    ["the wrap's sun",       { spineLogo: "wrap",   sunTint: PICK }, "crest"],
+    ["the flank band",       { spineLogo: "saddle", spineSide: "band", sideTint: PICK }, "spineSide"],
+    ["the flank band, wrap", { spineLogo: "wrap",   spineSide: "band", sideTint: PICK }, "spineSide"],
   ];
   for (const [what, liv, region] of cases)
     assert.ok(dominant(liv, region).startsWith(css),
@@ -225,7 +225,8 @@ const markOnItsGround = (teamId, liv, region, key, ground, N = 32) => {
   const withM = A.paint(teamId, liv);
   const without = A.paint(teamId, Object.assign({}, liv, { [key]: "none" }));
   const R = A.LT.REGIONS[region];
-  let worst = null, at = null, n = 0;
+  const pairs = new Map();
+  let n = 0;
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
     const x = R.x + R.w * (i + 0.5) / N, y = R.y + R.h * (j + 0.5) / N;
     const a = paintAt(withM, x, y), b = paintAt(without, x, y);
@@ -240,7 +241,20 @@ const markOnItsGround = (teamId, liv, region, key, ground, N = 32) => {
     // paint", not "black". Reading it as black compared the mark to a surface
     // that does not exist and reported every dark mark on a dark car as broken.
     const v = contrastCss(a, b || ground);
-    if (v != null && (worst == null || v < worst)) { worst = v; at = `${a} on ${b}`; }
+    if (v == null) continue;
+    const k = `${a} on ${b || ground}`;
+    if (!pairs.has(k)) pairs.set(k, { v, n: 0 });
+    pairs.get(k).n++;
+  }
+  // THE WORST PAIR THAT COVERS REAL AREA, not the worst single sample. Every
+  // glyph edge anti-aliases against whatever it abuts, so one boundary pixel
+  // of white-on-lime made this report Aston Martin's driver code as invisible
+  // while 286 of its 288 sampled points read 7.73:1. A pair has to hold at
+  // least 5 % of the mark's own ink before it describes what a viewer sees.
+  let worst = null, at = null;
+  for (const [k, p] of pairs) {
+    if (p.n < Math.max(3, n * 0.05)) continue;
+    if (worst == null || p.v < worst) { worst = p.v; at = k; }
   }
   return { worst, at, n: n / (N * N) };
 };
@@ -263,40 +277,159 @@ test("the plate-less crown mark clears the cover it is actually drawn on", () =>
 
 test("a flank mark clears the flank the crown design actually left it", () => {
   const bad = [];
+  // Marks and lettering. plate/ribbon/title boards are in the area SIDE sweep;
+  // this probe is glyph-vs-flank (lockup/emblem included). Wrap empty-flank
+  // lockup filler is skipped via `_bareWrapFlank` so Aston wrap/code is real.
+  const MARK_SIDES = ["number", "code", "logo", "wordmark", "duo", "emblem"];
   for (const t of A.Teams.LIST) {
     const base = A.Liveries.forTeam(t)[0];
     for (const spineLogo of ["saddle", "wrap"]) {
-      for (const spineSide of ["number", "code", "logo", "wordmark", "duo"]) {
+      for (const spineSide of MARK_SIDES) {
         const liv = Object.assign({}, base, { spineLogo, spineSide });
-        const r = markOnItsGround(t.id, liv, "spineSide", "spineSide", cssOf(base.cover || base.c1 || t.color));
-        if (r.worst == null || r.n < 0.004) continue;
-        if (r.worst < AREA_FLOOR) bad.push(`${t.id} ${spineLogo}/${spineSide}`);
+        // Under WRAP with no traced bull, spineSide "none" paints a lockup
+        // filler — differencing against that crest is a false invisible.
+        // Probe with `_bareWrapFlank` so the ground is the sun/cover only.
+        const withoutLiv = Object.assign({}, liv, {
+          spineSide: "none",
+          ...(spineLogo === "wrap" && !A.LT.hasFlankBull(t.id) ? { _bareWrapFlank: true } : {}),
+        });
+        const withM = A.paint(t.id, liv);
+        const without = A.paint(t.id, withoutLiv);
+        const R = A.LT.REGIONS.spineSide;
+        const ground = cssOf(base.cover || base.c1 || t.color);
+        let worst = null, n = 0;
+        const N = 32;
+        for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+          const x = R.x + R.w * (i + 0.5) / N, y = R.y + R.h * (j + 0.5) / N;
+          const a = paintAt(withM, x, y), b = paintAt(without, x, y);
+          if (!a || a === b) continue;
+          if (alphaOf(a) < 0.5) continue;
+          n++;
+          const v = contrastCss(a, b || ground);
+          if (v != null && (worst == null || v < worst)) worst = v;
+        }
+        if (worst == null || n / (N * N) < 0.004) continue;
+        if (worst < AREA_FLOOR) bad.push(`${t.id} ${spineLogo}/${spineSide}`);
       }
     }
   }
-  // KNOWN — measured, not waived. One class: a mark that SPANS the saddle's
-  // raked edge. saddleFlanks fills to u 0.58 tapering to 0.40 while the wordmark
-  // and duo boxes run out to u 0.96, so they start on the saddle and finish on
-  // bare cover, and no single ink clears both. Inking against the pair was tried
-  // and is WORSE — Red Bull's number, code and wordmark all fell to 1.31:1 on
-  // its gold saddle, surfaces that had been fine. The answer is the HALO
-  // markPalette already builds for marks, which is a change to the flank
-  // painting path, not a better choice of ink. wrap/logo leftovers are the
-  // brand PLATE, which wins outright by an explicit identity-over-legibility
-  // decision documented in markPalette — a different argument, not this one.
+  // `_bareWrapFlank` grounds wrap/no-bull differencing on the sun/cover, so
+  // Aston wrap/code is a real mark-vs-ground read (no lockup-filler false fail).
+  assert.deepEqual(bad, [], `flank mark below ${AREA_FLOOR}:1 —\n  ${bad.join("\n  ")}`);
+});
+
+test("the wrap's flank badge is inked against the cover it lands on", () => {
+  // A CLASS the area sweep above cannot see. That sweep needs AREA_SHARE (15 %)
+  // of a panel before it will call a colour a problem, and this badge is a mark
+  // — a few per cent of the flank — so it was invisible to every guard here
+  // while being one of the two things `wrap` paints.
   //
-  // Fails if the list GROWS and fails if an entry starts PASSING, so the fix
-  // cannot leave a stale allowance behind and a regression cannot hide in one.
-  const KNOWN = new Set([
-    "audi saddle/wordmark", "audi saddle/duo",
-    "cadillac saddle/wordmark", "cadillac saddle/duo",
-    "ferrari saddle/wordmark", "ferrari saddle/duo", "ferrari wrap/logo",
-    "mercedes saddle/wordmark", "mercedes saddle/duo",
-    "racingbulls saddle/wordmark", "racingbulls saddle/duo",
-    "redbull saddle/wordmark", "redbull saddle/duo", "redbull saddle/logo",
-    "williams saddle/wordmark", "williams saddle/duo",
-  ]);
-  assert.deepEqual(bad.filter((k) => !KNOWN.has(k)), [], "a flank mark went invisible");
+  // The bug it pins: the fallback lockup (every team whose crest has no single
+  // forward-facing traced path, i.e. all but Red Bull) was scored against the
+  // pair [sun, cover] that the traced BULL gets, because the bull straddles the
+  // sun disc. This badge does not: it spans v BULL.top .. BULL.top + BULL.h and
+  // the sun's flank ellipse bottoms out at v 0.277, so it never reaches the
+  // disc at any u. Asking one ink to clear a light sun AND a
+  // dark cover is unsatisfiable, so the mark FAILED MARK_FLOOR on every one of
+  // those teams and markPalette fell back on the thing it falls back on: a
+  // HALO. Cadillac's crest went out near-black (1.04:1 on its own black cover)
+  // inside a white glow, Mercedes' star white (1.59:1) inside a dark one.
+  //
+  // WHICH IS WHY THE GARAGE HAD TO BE SHOT AND THE ATLAS WAS NOT ENOUGH. Scored
+  // as ink-against-cover this reads as "invisible", and it is not: the halo is
+  // load-bearing and the badge is legible, as a soft glow around a mark whose
+  // own colour has been thrown away. What is actually lost is identity —
+  // Cadillac's gold (#c9a45a) became #0f0f14, Racing Bulls' blue and Haas's red
+  // ring the same — plus the crispness, a halo being a blurred shadow pass.
+  // Scored on the cover alone the floor is satisfiable, the brand colour
+  // survives (Cadillac 8.43:1) and NO halo is drawn. Nine teams kept a readable
+  // badge throughout; the split only opens when a team's sun and cover sit at
+  // opposite ends of the luminance range.
+  //
+  // So this test asks for the mark to clear the cover ON ITS OWN, which is the
+  // stronger property: a halo is the rescue, not the goal.
+  //
+  // DOMINANT ink, not every colour: a lockup is layered (Cadillac's gold crest
+  // carries a near-black INNER DETAIL, Haas's red ring a white H) and the inner
+  // layers sit ON the mark, not on the cover. What has to clear the cover is
+  // the mark the badge reads as.
+  const R = A.LT.REGIONS.spineSide, N = 40;
+  // Below the sun with room to spare — its flank ellipse reaches v 0.28 on the
+  // centreline and less either side, so 0.35 is bare cover on every team.
+  const V0 = 0.35;
+  const MARK_ON_BODY = 2.0;                    // the floor this branch declares
+  for (const t of A.Teams.LIST) {
+    const base = A.Liveries.forTeam(t)[0];
+    const bare = A.paint(t.id, Object.assign({}, base, { spineLogo: "none", spineSide: "none" }));
+    const wrap = A.paint(t.id, Object.assign({}, base, { spineLogo: "wrap", spineSide: "none" }));
+    const seen = new Map();
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const x = R.x + R.w * (i + 0.5) / N, y = R.y + R.h * (V0 + (1 - V0) * (j + 0.5) / N);
+      const b = paintAt(bare, x, y), w = paintAt(wrap, x, y);
+      if (!w || w === b) continue;             // untouched cover
+      seen.set(w, (seen.get(w) || 0) + 1);
+    }
+    const top = [...seen.entries()].sort((a, b) => b[1] - a[1])[0];
+    assert.ok(top, `${t.id}: wrap painted no badge on the flank below v ${V0}`);
+    // buildAtlas leaves the cover BARE — the mesh supplies its colour — so a
+    // sample there is null, not a paint. The livery's own field is the ground.
+    const cov = base.cover || base.c1;
+    const coverCss = `rgb(${cov.map((v) => Math.round(v * 255)).join(",")})`;
+    const c = contrastCss(top[0], coverCss);
+    assert.ok(c >= MARK_ON_BODY,
+      `${t.id}: the wrap badge reads ${c}:1 on its cover (${top[0]} over ${coverCss})`);
+  }
+});
+
+// A flank pick has to land where the flank can be SEEN — measured, and NOT
+// currently satisfied. tools/car/flank-occlusion.mjs projects the real body and
+// both rear wheels through the garage side camera: the tyre sits 0.5 m outboard
+// of the cover and covers its aft half (12 % hidden at u 0.5, 48 % at 0.6, 86 %
+// at 0.7, 100 % past 0.8). Pure car geometry, identical for every team.
+//
+// Red Bull is the only team whose bull is TRACED, so wrapMarkSpan gives it a
+// span of u 0.06 -> 0.61 while the visible flank ends at 0.62 — the bull fills
+// the whole visible band. `sideFrom` then starts every flank pick aft of it, at
+// u 0.57-0.79, which is behind the tyre.
+//
+// THERE ARE ONLY TWO POSITIONS, and this is why the entry below is recorded
+// rather than fixed. Clamping sideFrom to 0.41 puts the mark at u 0.49-0.62:
+// 0 % hidden, and INSIDE the bull's own span, so it lands on the bull's haunch
+// and reads as a smudge (shot 2026-09-09, garage side view, artifacts/
+// CLAMP-FLANK-CROP.png). Hidden or colliding — no third placement exists while
+// the bull is that wide. The real choices are to shrink the bull under `wrap`
+// or to stop putting a second mark on a flank that already wears one, and both
+// change a shipped car's look, so both are the owner's call and not a guard's.
+//
+// The clamp was written, measured, SHOT, and reverted on the strength of the
+// shot: the metric improved and the render got worse.
+test("a flank MARK lands where the flank is visible, under every crown", async () => {
+  const { loadParts } = await import("../../tools/car/parts-sweep.mjs");
+  const { occlusionMap } = await import("../../tools/car/flank-occlusion.mjs");
+  const { sweep } = await import("../../tools/car/spine-station.mjs");
+  const MARKS = ["number", "logo", "code", "plate"];
+  // Measured on this tree. Fails if the list GROWS and fails if an entry starts
+  // passing, so neither a regression nor the fix can land unremarked.
+  // EMPTY, and it earned that: the four redbull `wrap` entries recorded here
+  // were fixed on the deploy branch by c4d585b63 and 89c8261db — the flank
+  // designs moved off the rear wheel and the bull was shortened and pushed
+  // forward. This guard reported them the moment that merge landed, which is
+  // the whole point of failing when an entry starts PASSING.
+  const KNOWN = new Set([]);
+  const bad = [];
+  for (const teamId of ["redbull", "ferrari", "mercedes"]) {
+    const om = occlusionMap(loadParts(), { team: teamId, grid: 96 });
+    const hiddenAt = (u, v) => om.cell[Math.min(om.rows - 1, (v * om.rows) | 0) * om.cols
+                                       + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1;
+    for (const logo of ["wrap", "panel"]) {
+      const r = sweep(A, { team: teamId, logo, sides: MARKS, hiddenAt });
+      for (const row of r.rows) {
+        if (!row.px || row.hidden == null) continue;
+        if (row.hidden > 0.25) bad.push(`${teamId} ${logo}/${row.spineSide}`);
+      }
+    }
+  }
+  assert.deepEqual(bad.filter((k) => !KNOWN.has(k)), [], "a flank mark went behind the car");
   assert.deepEqual([...KNOWN].filter((k) => !bad.includes(k)), [],
     "these KNOWN gaps now pass — delete them from KNOWN");
 });

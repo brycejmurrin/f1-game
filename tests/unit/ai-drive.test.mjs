@@ -287,13 +287,13 @@ test("letPass: awareness commits earlier, yield fits a permanent lane", () => {
   }
 });
 
-test("minLatGap and racingLineMix keep street home seats", () => {
+test("minLatGap and lineFollow keep street home seats", () => {
   assert.equal(A.minLatGap(8, false), 2.8);
   const monaco = A.minLatGap(5, true);
   assert.ok(monaco >= 2.12 && monaco <= 2.3, `monaco gap ${monaco}`);
   assert.ok(monaco < 2.8, "street gap must be tighter than the permanent 2.8");
-  assert.equal(A.racingLineMix(false), 0.55);
-  assert.ok(A.racingLineMix(true) < 0.55, "streets must hold the grid seat more");
+  assert.equal(A.lineFollow(false), 0.92);
+  assert.ok(A.lineFollow(true) < 0.92, "streets must hold the grid seat more");
 });
 
 test("street OT scale still uses a clean gap after the seating fix", () => {
@@ -534,11 +534,11 @@ test("ERS map and wantX: harvest banks, attack opens X", () => {
   assert.equal(A.wantX({ energy: 0.18, team: att }), true);
 });
 
-test("hold cars mix less racing line; omitted hold keeps the street/permanent defaults", () => {
-  assert.equal(A.racingLineMix(false), 0.55);
-  assert.equal(A.racingLineMix(true), 0.32);
-  assert.ok(A.racingLineMix(false, 0.6) < 0.55);
-  assert.ok(A.racingLineMix(true, 0.6) < 0.32);
+test("hold cars follow less racing line; omitted hold keeps the street/permanent defaults", () => {
+  assert.equal(A.lineFollow(false), 0.92);
+  assert.equal(A.lineFollow(true), 0.86);
+  assert.ok(A.lineFollow(false, 0.6) < 0.92);
+  assert.ok(A.lineFollow(true, 0.6) < 0.86);
 });
 
 test("adaptLane on streets will not crawl toward a tight wall", () => {

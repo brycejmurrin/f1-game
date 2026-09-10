@@ -20,6 +20,16 @@ const SELECTED_TIMEOUT_MS = SELECTED_GATE.perTestTimeoutSec * 1000;
 const ciWorkflow = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
 const pagesWorkflow = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
 
+test("soft-present benchmark boots the application once per measured leg", () => {
+  const src = fs.readFileSync(new URL("../../tools/gfx/soft-present-bench.mjs", import.meta.url), "utf8");
+  assert.equal((src.match(/\bpage\.goto\(/g) || []).length, 1,
+    "one goto in leg() gives the three measured legs exactly three application boots");
+  assert.doesNotMatch(src, /\bpage\.reload\(/,
+    "a reload after each leg navigation doubles every measured boot");
+  assert.match(src, /page\.addInitScript\(/,
+    "storage needed before application scripts must be configured through an init script");
+});
+
 test("it sees the specs on disk", () => {
   assert.ok(ALL_SPECS.length > 50, `only ${ALL_SPECS.length} specs found — the scan is broken`);
   assert.ok(ALL_SPECS.every((s) => s.startsWith("tests/") && s.endsWith(".spec.js")));

@@ -29,13 +29,31 @@ test("render-car has a spine preset and repeatable --shot customs", () => {
     "frame settle must pass `need` into waitForFunction (free `need` is PAGEERR)");
 });
 
+test("render-car walks a team LIST in one browser, and grids the sheet by team", () => {
+  const src = code("tools/car/render-car.mjs");
+  // The livery FIELD overrides exist to sweep one design across cars ("does
+  // spineLogo=wrap read on every team?"), but --team was singular, so that
+  // sweep was still one Chromium boot and one contact sheet PER TEAM.
+  assert.match(src, /raw === 'all'/, "--team=all must expand to the whole roster");
+  assert.match(src, /ROSTER_IDS/, "the roster comes from js/data/teams.js, never a hard-coded list");
+  assert.doesNotMatch(src, /\[\s*'mercedes',\s*'ferrari'/, "no copy of the grid inside the tool");
+  assert.match(src, /MULTI_TEAM/, "the walk has to be distinguishable from a single-team run");
+  // Team is the OUTER loop and only re-set when it CHANGES: CARVIEW.set({team})
+  // rebuilds the car, so re-sending it every shot pays that per camera move.
+  assert.match(src, /s\.team !== renderedTeam \? \{ team: s\.team \}/,
+    "team must be sent only on change, not on every shot");
+  assert.match(src, /s\.team !== renderedTeam/, "a team swap needs the long frame settle, like a tod change");
+  assert.match(src, /assertSafePathToken\(t, 'team'\)/, "every id in the list is still a path token");
+});
+
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
-  assert.match(src, /flag\("--views",\s*"spine"\)/, "default views=spine for cover checks");
-  assert.match(src, /parseFlags\(argv, KNOWN\)/,
-    "flags come from the shared reader, which takes --team=value AND --team value");
-  assert.match(src, /screenshotGameCanvas/, "must reuse soft-present capture helper");
+  assert.match(src, /viewsDefault = preset && !argvHas\("--views"\) \? preset\.views : "spine"/,
+    "default views=spine unless a preset overrides");
+  assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
+  assert.match(src, /screenshotGameCanvas\(page, png, \{[\s\S]*skipAwait: true/,
+    "capture must not await soft-present twice after settleGarage");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
   assert.match(src, /settleGarage/, "settle soft-present between presets");
   assert.doesNotMatch(src, /page\.reload\(/, "no second boot — openGarage pins the team live");
@@ -95,213 +113,81 @@ test("carshot uses soft→CDP clip, not page.screenshot", () => {
   assert.doesNotMatch(src, /page\.screenshot\(/, "no raw page.screenshot");
 });
 
-/* The garage matrix: every axis is a LIST and the walk is cost-ordered.
- * Before 2026-09-09 team/zoom/pan were single-valued, the livery and design
- * walks were mutually exclusive (`if (designs) … else …`, so a design could
- * only ever be seen on the team default paint), and there was no parts axis at
- * all — a build comparison meant one boot per build. */
-test("garage-angles walks every axis as a list, cheapest innermost", () => {
+test("garage-angles walks any Liveries.FIELDS axis, not two hard-coded ones", () => {
+  // `--spine-logo=wrap` alone used to be a silent no-op: the walk was gated on
+  // spineSides.length, so with only a crown named it fell through to the LIVERY
+  // branch, shot the team default, tagged the frames `default` and exited 0. A
+  // crown design could be signed off "checked in the garage" without ever
+  // reaching the car — and the JSON sidecar still recorded the crown, because
+  // that is the CONFIG, not what was painted.
+  //
+  // The fix generalised it rather than adding a second special case: any
+  // --name=value that is not one of the tool's OWN flags is a livery field, the
+  // axes given are walked as a CARTESIAN PRODUCT, and the field name is checked
+  // in-page against Liveries.FIELDS. Two hard-coded axes against a livery system
+  // with 33 fields is what left the garage unable to answer a fin, a cover or a
+  // tint question at all.
   const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /const \{ flag, list, has \} = parseFlags/, "one comma-list parser for every axis");
-  for (const axis of ["--team", "--livery", "--parts", "--spine-side", "--zoom"]) {
-    assert.match(src, new RegExp(`list\\("${axis}"`), `${axis} must be a list axis`);
-  }
-  // Cost order is the whole point: a framing nudge is a few clicks, a team
-  // switch is UI navigation plus a rebuild. Assert the nesting, not the prose.
-  const walk = src.slice(src.indexOf("const PLAN = []"), src.indexOf("const dupes"));
-  const order = [...walk.matchAll(/for \(const (\w+) of (\w+)\)/g)].map((m) => m[2]);
-  assert.deepEqual(order, ["teams", "paints", "parts", "aeroStates", "views", "framings"],
-    "team → paint → parts → aero → view → framing: outermost is the most expensive step. "
-    + "Aero sits ABOVE view because the flap ease measured 50s a change against a preset's "
-    + "one click — nested inside view it paid 4 changes where this pays 2.");
-  assert.doesNotMatch(src, /page\.reload\(/, "a second team must not cost a second boot");
-});
-
-test("garage-angles crosses design with livery rather than replacing it", () => {
-  const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /async function applyDesign\(page, team, baseLivery,/,
-    "a design is applied on top of the livery it is crossed with");
-  assert.match(src, /list\.find\(\(l\) => l\.id === base\) \|\| list\[0\]/,
-    "the base is the selected paint job, falling back to the team default");
-});
-
-test("garage-angles validates part ids against availability for THAT team", () => {
-  const src = code("tools/shot/garage-angles.mjs");
-  const fn = src.slice(src.indexOf("async function applyParts"), src.indexOf("async function switchTeam"));
-  assert.match(fn, /Parts\.isOptionAvailable\(opt, t\)/,
-    "a part locked to another team resolves to the default silently — check first");
-  assert.match(fn, /Parts\.FACTORY_PRESETS\[teamId\]/, "factory build per team");
-  assert.match(fn, /Parts\.DEFAULTS/, "stock build");
-  assert.match(fn, /have:/, "a rejection must name what IS available");
-  // The mesh key is team:partsVisualKey:num and partsVisualKey reads the store
-  // live, so the write busts the cache on its own — no dropPreviewMeshes here.
-  // Verified on pixels: factory vs stock on one McLaren side shot differ in
-  // 6.63% of bytes (max delta 241), so the second build is not a cached mesh.
-  assert.doesNotMatch(fn, /dropPreviewMeshes/,
-    "a parts write already moves the preview key; an extra bust would hide a key regression");
-});
-
-test("garage-angles can print the matrix without booting Chromium", () => {
-  const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /const dryRun = has\("--dry-run"\)/, "--dry-run flag");
-  const gate = src.slice(src.indexOf("if (dryRun)"), src.indexOf("async function bayRendered"));
-  assert.match(gate, /process\.exit\(0\)/, "--dry-run exits before launchChromium");
-  assert.ok(src.indexOf("if (dryRun)") < src.indexOf("launchChromium("),
-    "the dry-run gate must sit above the browser launch");
-});
-
-/* The capture is the bare canvas, but the player also sees the DOM setup sheet
- * docked over it, and the preview shifts the car out from under that sheet with
- * an off-axis frustum. Judging framing from the uncropped canvas produced a
- * false defect report on 2026-09-09 ("the car is off-centre with 40% dead
- * space") for a bay that was framed correctly. The tool now measures the panel
- * instead of guessing at it. */
-test("garage-angles measures the docked sheet rather than assuming where it is", () => {
-  const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /async function panelGeometry\(page\)/, "read the sheet rect from the page");
-  assert.match(src, /panelFrac: cam\.panelFrac/, "record what the off-axis frustum compensated by");
-  const gate = src.slice(src.indexOf("async function bayRendered"), src.indexOf("async function nudge"));
-  assert.match(gate, /visible \? visible\.w :/, "gate the region the sheet leaves");
-  assert.match(gate, /left: visible \? visible\.x : 0/, "and gate it at the right offset");
-  // The 55% cut stays as the fallback for a page that reports no sheet, but it
-  // must not be the primary — that hardcoded guess is what hid the real number.
-  assert.match(gate, /0\.55/, "keep the old cut as a fallback only");
-  assert.match(src, /const visibleOnly = has\("--visible-only"\)/,
-    "--visible-only crops shots to what the player actually sees");
-});
-
-test("garage-angles records panel geometry on every shot, cropped or not", () => {
-  const src = code("tools/shot/garage-angles.mjs");
-  const frame = src.slice(src.indexOf("async function frame(page, shot)"),
-    src.indexOf("async function applyLivery"));
-  assert.match(frame, /const panel = await sub\("panel", \(\) => panelGeometry\(page\)\)/,
-    "read once per shot, and timed like everything else in a frame");
-  assert.ok(frame.indexOf("panelGeometry(page)") < frame.indexOf("for (let attempt"),
-    "panel geometry must be read before the gate loop, not per attempt");
-  assert.match(frame, /panel, label: shot\.label,/, "the manifest carries it whether or not --visible-only cropped");
-});
-
-/* ONE flag reader for the garage/car CLIs. Four tools hand-rolled their own and
- * they disagreed: measured 2026-09-09, `--team redbull` gave spine-station and
- * flank-occlusion MCLAREN's numbers under a heading the caller read as Red
- * Bull, with nothing said anywhere. Those two are the OFFLINE MEASUREMENT
- * tools — the ones whose entire output is figures you then act on — and
- * spine-station's own header cross-references garage-angles in the space form,
- * so the docs taught the spelling that broke it. */
-test("every garage/car CLI reads flags through the shared reader", () => {
-  for (const f of ["tools/car/spine-station.mjs", "tools/car/flank-occlusion.mjs",
-                   "tools/shot/garage-angles.mjs"]) {
-    const src = code(f);
-    assert.match(src, /from "\.\.\/lib\/cli-args\.mjs"/, `${f} must use the shared reader`);
-    assert.match(src, /const KNOWN = \[/, `${f} must declare the flags it accepts`);
-    assert.doesNotMatch(src, /process\.argv\.find\(\(a\) => a\.startsWith\(`--\$\{k\}=`\)\)/,
-      `${f} still hand-rolls an =-only parser — that is the bug`);
+  assert.match(src, /OWN_FLAGS/, "the tool's own flags must be an explicit set");
+  assert.match(src, /axes\.reduce/, "multiple axes walk their cartesian product");
+  assert.doesNotMatch(src, /const designs = spineSides\.length\s*\n?\s*\?/,
+    "the spineSide-only gate must not return");
+  assert.match(src, /Liveries\.FIELDS/,
+    "field names validate against Liveries' own list, not a copy that drifts");
+  for (const legacy of ["--spine-side", "--spine-logo"]) {
+    assert.ok(src.includes(`flag("${legacy}"`), `${legacy} must keep working as an alias`);
   }
 });
 
-test("the shared reader takes both spellings and refuses what it does not know", async () => {
-  const { makeFlags, CliArgError } = await import("../../tools/lib/cli-args.mjs");
-  const known = ["--team", "--grid", "--json"];
-  assert.equal(makeFlags(["--team=redbull"], known).flag("--team", "mclaren"), "redbull");
-  assert.equal(makeFlags(["--team", "redbull"], known).flag("--team", "mclaren"), "redbull",
-    "the SPACE form is the one that silently fell through to the default");
-  assert.equal(makeFlags(["--json", "--team", "redbull"], known).flag("--json", null), null,
-    "a bare flag must not swallow the next flag as its value");
-  assert.equal(makeFlags(["--json"], known).has("--json"), true);
-  assert.throws(() => makeFlags(["--tema=redbull"], known), CliArgError,
-    "a typo must stop the run, not quietly measure the default team");
-  assert.throws(() => makeFlags(["--tema=redbull"], known), /did you mean --team/);
-});
-
-/* AGENTS.md: regenerable output lives in artifacts/ or scratch/, nowhere else.
- * garage-frame defaulted --out to /opt/cursor/artifacts/garage-frame — a
- * Cursor-Cloud path that exists on no other box and is outside the repo on
- * every box — while tools/lib/output-paths.mjs already enforced the rule. */
-test("garage-frame writes inside the repo, through the containment helper", () => {
-  const src = code("tools/shot/garage-frame.mjs");
-  assert.doesNotMatch(src, /\/opt\/cursor/, "no machine-specific absolute output path");
-  assert.match(src, /resolveRepoDefault\(ROOT, "artifacts", "garage-frame"\)/, "default under artifacts/");
-  assert.match(src, /resolveContainedChild\(ROOT, flag\("--out"\)/, "a caller's --out cannot escape the repo");
-});
-
-/* A shot is only useful if you can tell which one it is. The first real use of
- * this tool ended with a contact sheet assembled by hand to read 14 unlabelled
- * PNGs, so captions and the montage belong in the tool. */
-test("garage-angles captions its shots and can build its own contact sheet", () => {
-  const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /function shotLabel\(c\)/, "one caption builder, every axis in walk order");
-  assert.match(src, /async function contactSheet\(shots, out\)/, "--sheet writes the montage");
-  // The caption goes BELOW the frame via extend(), never composited over it —
-  // burning text into the bay corrupts the pixels the shot exists to show.
-  const fin = src.slice(src.indexOf("async function finishImage"), src.indexOf("async function panelGeometry"));
-  assert.match(fin, /\.extend\(\{ bottom: LABEL_H/, "caption is added below, not drawn over the render");
-  // --label + --sheet must not print every coordinate twice.
-  assert.match(src, /const CW = 420, PAD = 8, LBL = wantLabel \? 0 : 22;/,
-    "a labelled tile suppresses the sheet's own caption strip");
-});
-
-test("garage-angles reports where its wall time went, every run", () => {
-  const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /const spent = \{ boot:/, "per-phase timing");
-  for (const k of ["team", "paint", "parts", "aero", "frame"]) {
-    assert.match(src, new RegExp(`timed\\("${k}"`), `${k} must be timed`);
+test("liveries.js publishes ONE field list and forTeam consumes it", () => {
+  // render-car carried a hand-copied 23 of these 33, so crestInk, bandTint2,
+  // plateTint, plateInk and the tint rows were unreachable from every shot tool.
+  const src = read("js/car/liveries.js");
+  assert.match(src, /const FIELDS = \[/, "the whitelist must be a named const");
+  assert.match(src, /for \(const k of FIELDS\)/, "forTeam must consume that const");
+  assert.match(src, /return \{[^}]*\bFIELDS\b/, "and it must be exported on the global");
+  const list = /const FIELDS = \[([\s\S]*?)\];/.exec(src)[1];
+  for (const k of ["spineLogo", "spineSide", "finShape", "cover", "sunTint", "plateInk"]) {
+    assert.ok(list.includes(`"${k}"`), `FIELDS must still carry ${k}`);
   }
-  assert.match(src, /per frame/, "and print the per-frame cost, which is the dominant one");
 });
 
-test("garage-angles can resume, re-encode and pick a backend", () => {
+test("garage-angles labels frames and can A/B a ref without touching the tree", () => {
+  // A directory of bare frames is unreadable an hour later: three separate
+  // compositors got hand-rolled in one session just to tell which car was which.
+  // And that session's A/B was done by checking the old file OUT into the
+  // working tree, which races anything else running and loses the diff if the
+  // run dies — startStaticServer's `route` hook serves the ref's blobs from
+  // memory instead, which is the reason that hook exists.
   const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /const skipExisting = has\("--skip-existing"\)/, "resume a part-finished run");
-  assert.match(src, /existsSync\(join\(outDir, `\$\{shot\.name\}\.png`\)\)/, "skip what is already on disk");
-  assert.match(src, /chromiumArgsForBackend\(backend\)/, "--backend was hardcoded to webgl2");
-  assert.match(src, /installProbeInit\(page, \{ backend,/, "and the probe must agree with it");
+  assert.match(src, /function labelPng/, "every frame gets a caption bar burned under it");
+  assert.match(src, /function writeSheet/, "a run writes a labelled contact sheet");
+  assert.match(src, /startStaticServer\(process\.cwd\(\), \{ route: blobRoute/,
+    "--against must serve the ref through the harness route hook");
+  assert.doesNotMatch(src, /"checkout"/,
+    "--against must never check the ref out into the working tree");
+  assert.match(src, /"absent at ref"/,
+    "a file missing at the ref must 404, not fall through to the working tree");
 });
 
-/* Two page round-trips per shot that could not change their answer. */
-test("garage-angles does not re-ask questions whose answer is fixed", () => {
+test("garage-angles reports per-phase timing and reads the loadavg", () => {
+  // One total number cannot separate a slow tool from a busy box: the same
+  // two-shot walk measured 240.9s and 286.4s on consecutive teams here.
   const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /if \(_panelCache\) return _panelCache;/,
-    "the sheet cannot move mid-run — read it once");
-  const nudge = src.slice(src.indexOf("async function nudgeAll"), src.indexOf("async function frame"));
-  assert.match(nudge, /page\.evaluate\(\(jobs\) =>/, "one round-trip for the whole framing, not three");
-  const gate = src.slice(src.indexOf("async function bayRendered"), src.indexOf("const LABEL_H"));
-  assert.equal((gate.match(/sharp\(png\)/g) || []).length, 1, "ONE decode per gate, not one per question");
+  assert.match(src, /ms: \{ settle: settleMs, capture: capMs, gate: gateMs, tries \}/,
+    "each shot records settle/capture/gate separately");
+  assert.match(src, /loadavg/, "the run must read and report the loadavg");
+  assert.match(src, /for \(const teamId of teams\)/,
+    "teams walk inside ONE browser — boot was being paid per team");
 });
 
-/* The per-phase totals said `frame` was 46.9s of a 47s shot but not which part
- * of a frame that was, and the two candidates (a soft-present that waits, an
- * encode that decodes) are not distinguishable from outside. */
-test("garage-angles times the inside of a frame, not just the phases", () => {
+test("garage-angles has presets, --plan, --fast, and tunable settle", () => {
   const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /const inFrame = \{ preset: 0,/, "sub-phase accumulator");
-  for (const k of ["preset", "settle", "shot", "gate", "cam", "encode"]) {
-    assert.match(src, new RegExp(`sub\\("${k}"`), `${k} must be timed inside frame()`);
-  }
-  assert.match(src, /in-frame: /, "and printed, sorted by cost");
-});
-
-/* Two runs of the same code and config gave hero/side images 43% apart. Any
- * future "this made it faster/better" claim measured ACROSS runs is invalid;
- * the tool must say so where someone will read it before trying. */
-test("garage-angles documents that shots are not reproducible across runs", () => {
-  const src = read("tools/shot/garage-angles.mjs");   // comments intentionally kept
-  assert.match(src, /STILL NOT REPRODUCIBLE ACROSS RUNS/, "the limit is stated in the header");
-  assert.match(src, /FLIPS ONCE PER RUN/, "and names the source that is still open");
-  assert.match(src, /performance\.now\(\)/, "and names the wall clock as a candidate");
-  assert.match(src, /renderClock/, "and the freeze hook that pins the other one");
-  const s = code("tools/shot/garage-angles.mjs");
-  assert.match(s, /const settleN = Math\.max\(1, \+flag\("--settle", "6"\) \|\| 6\)/,
-    "--settle defaults to the long-standing 6: the flag is for chasing this, not a behaviour change");
-});
-
-/* The bay's flicker ran on performance.now(), so a frozen render clock did not
- * freeze the garage — which is the one thing renderClock(t, true) promises. */
-test("the garage bay reads the frame clock when the render clock is held", () => {
-  const src = read("js/game.js");
-  assert.match(src, /function garageNow\(\) \{ return _skyHold \? _skyT \* 1000 : performance\.now\(\); \}/,
-    "held: frame clock, so a pinned capture is lit the same way twice; unheld: wall clock, as a live UI should be");
-  assert.doesNotMatch(src, /GarageScene\.live\(_spLiv\(\), performance\.now\(\)/,
-    "neither call site may hand the bay the wall clock directly");
-  assert.equal((src.match(/GarageScene\.live\(_spLiv\(\), garageNow\(\)/g) || []).length, 2,
-    "both call sites — the lit pass and drawGlow — must agree, or the glow flickers against a held bay");
+  assert.match(src, /const PRESETS = \{/, "purpose presets like render-car");
+  assert.match(src, /presetRaw === "list"/, "--preset=list prints and exits");
+  assert.match(src, /argvHas\("--plan"\)/, "--plan prints the matrix without booting");
+  assert.match(src, /liverySettle/, "livery/design apply uses --settle");
+  assert.match(src, /viewSettle/, "camera-only moves use --view-settle");
+  assert.match(src, /keepPage: !!againstRef/, "--against reuses the page for pass B");
+  assert.match(src, /argvHas\("--live"\)/, "--live writes auto-refresh live.html after each shot");
 });

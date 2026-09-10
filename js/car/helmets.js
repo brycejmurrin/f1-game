@@ -176,6 +176,7 @@ const Helmets = (function () {
      than the measurement that placed the band. A band is always widened to at
      least one whole row, so a keyline can never snap itself out of existence. */
   const RINGS = 20, SLICES = 28;
+  const FIELD_RINGS = 12, FIELD_SLICES = 18;
   const ringT = (i) => Math.pow(i / RINGS, 1.25);
   const RING_TS = Array.from({ length: RINGS + 1 }, (_, i) => ringT(i));
   const snapT = (t) => RING_TS.reduce((a, v) => (Math.abs(v - t) < Math.abs(a - t) ? v : a), RING_TS[0]);
@@ -582,11 +583,33 @@ const Helmets = (function () {
      twice the whole rest of the car for something ~100 px across, so it buys
      pixels no player is looking at. Past depth 1 the honest fix is not more
      geometry at all — it is per-fragment paint. The lit shader carries
-     vObjPos already (glsl-lit.js uses it for the orange-peel flake), so the
-     shell's (t, az) IS recoverable in the fragment shader without a new
-     vertex attribute; what is missing is the DESIGN there, which means either
-     a sampled texture or 22 designs in GLSL, across GLX, TLX and WGX. That is
-     a renderer change and not this one.
+     vObjPos already (glsl-lit.js:59 sets it for the orange-peel flake), so
+     the shell's (t, az) IS recoverable in the fragment shader without a new
+     vertex attribute.
+
+     What is missing there is the DESIGN, and an earlier version of this
+     comment put that at "a sampled texture or 22 designs in GLSL". Both are
+     wrong. Only SIX zone kinds are used across all 22 drivers (band, cap,
+     flash, mottle, patch, stripe) and no design carries more than ten zones,
+     so the shader needs six smoothstep primitives, not 22 designs. And the
+     design IDENTITY needs no uniform at all: glsl-lit.js:46-53 already reads
+     fract(aMat) as data inside a reserved integer window for track flags, so
+     a helmet id of 32 + designIndex/64 survives int(vMat + 0.5) for all 22
+     and recovers as fract(vMat) * 64. The zone PARAMETERS are static — one
+     small LUT texture bound once a frame, on one of GLX's free texture units,
+     which matters because the lit program's default uniform block is already
+     over the 224-row GLES3 floor (uLight[192] + uMatTexScale[17] + three
+     mat4) and cannot take ~20 more vec4 safely.
+
+     Two traps for whoever does it. The visor is a SURFACE CLASS, not a
+     colour — shell() returns {c, glass} and build() writes S.glass, which
+     gates roughness, clearcoat and env reflection from a flat varying, so
+     per-fragment paint has to override surfaceId ABOVE those chains rather
+     than drop in at the albedo site. And t is the inverse of a Catmull-Rom
+     over 19 non-uniform knots (SHAPE.Y), so the shader needs the table and a
+     search step, not a closed form; how closely that inverse must match this
+     one before band edges visibly shift is a rendered comparison nobody has
+     made yet. It is still a renderer change, and not this one.
 
      The base grid still sets the NORMALS' finite-difference step, so
      subdivision changes the paint and never the lighting — the shell reads
@@ -594,12 +617,20 @@ const Helmets = (function () {
   const MAX_SPLIT = 1;
 
   function build(out, cx, cy, cz, design, S) {
-    const skin = shell(design);
+    // Field cars and depth casters retain the traced shell, smooth normals and
+    // visor, but do not evaluate 22 detailed artwork functions per triangle.
+    // At tens of pixels the design zones are sub-pixel; player/garage/cockpit
+    // builds keep the full painter and boundary subdivision.
+    const simplePaint = !!(S && S.simplePaint);
+    const skin = simplePaint ? null : shell(design);
+    const rings = simplePaint ? FIELD_RINGS : RINGS;
+    const slices = simplePaint ? FIELD_SLICES : SLICES;
+    const meshRingT = (i) => Math.pow(i / rings, 1.25);
     const clamp1 = (c) => [Math.min(c[0], 1), Math.min(c[1], 1), Math.min(c[2], 1)];
     // (t, azimuth in degrees) -> position, smooth normal, and the pair itself.
     // du/da stay tied to the BASE grid so a split quad's normals match its
     // neighbours' exactly and no subdivision seam can show in the light.
-    const du = 0.5 / RINGS, da = Math.PI / SLICES;
+    const du = 0.5 / rings, da = Math.PI / slices;
     const corner = (t, az) => {
       const a = (az * Math.PI) / 180;
       const p = pointAt(t, a);
@@ -613,7 +644,12 @@ const Helmets = (function () {
       if (t <= 0) n = [0, 1, 0];                         // the pole, where both tangents vanish
       return { p, n, t, az };
     };
-    const sample = (t, az) => skin(Math.min(1, t), ((az % 360) + 360) % 360);
+    const sample = simplePaint
+      ? (t, az) => {
+          const glass = isVisor(Math.min(1, t), ((az % 360) + 360) % 360);
+          return { c: glass ? design.visor : design.base, glass };
+        }
+      : (t, az) => skin(Math.min(1, t), ((az % 360) + 360) % 360);
     // what the paint IS at a point, as a value two samples can be compared on
     const key = (t, az) => { const v = sample(t, az);
       return (v.glass ? "g" : "") + v.c.map((x) => Math.round(x * 255)).join(","); };
@@ -650,12 +686,12 @@ const Helmets = (function () {
       const a = corner(t0, a0), b = corner(t0, a1), c = corner(t1, a1), d = corner(t1, a0);
       emit(a, b, c); emit(a, c, d);
     };
-    for (let r = 0; r < RINGS; r++)
-      for (let sl = 0; sl < SLICES; sl++)
-        patch(ringT(r), ringT(r + 1), (sl / SLICES) * 360, ((sl + 1) / SLICES) * 360, 0);
+    for (let r = 0; r < rings; r++)
+      for (let sl = 0; sl < slices; sl++)
+        patch(meshRingT(r), meshRingT(r + 1), (sl / slices) * 360, ((sl + 1) / slices) * 360, 0);
     return out;
   }
 
   return { DESIGNS, COLORS: C, designFor, painter, shell, isVisor, generated, ZONES, SHAPE, pointAt, build,
-           RINGS, SLICES, ringT, MAX_SPLIT };   // the tessellation, so a preview can show what the MESH carries
+           RINGS, SLICES, FIELD_RINGS, FIELD_SLICES, ringT, MAX_SPLIT };   // the tessellation, so previews/tests can name both detail levels
 })();

@@ -18,11 +18,14 @@ node tools/car/render-car.mjs                                   # mclaren hero
 node tools/car/render-car.mjs --team=ferrari --views=all
 node tools/car/render-car.mjs --team=redbull --preset=spine
 node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=/opt/cursor/artifacts/redbull-garage
+node tools/shot/garage-angles.mjs --plan --preset=mark --team=redbull --spineLogo=wrap
+node tools/shot/garage-angles.mjs --fast --preset=quick --team=redbull --spineLogo=wrap
 ```
 
 `--preset=spine` / `--shot=label,az,el,dist` (repeatable) keep ONE Chromium for
 many angles. Garage multi-angle: `tools/shot/garage-angles.mjs` (soft-present
-`#game-soft` capture). Batch audits: `tools/car/audit-parts.mjs` →
+`#game-soft` capture; `--preset=wall|fin|flank|mark`, `--plan`, `--fast`).
+See **garage-parts-livery** `references/garage-angles.md`. Batch audits: `tools/car/audit-parts.mjs` →
 `scratch/renders/parts/<category>/`; `tools/car/audit-aero.mjs` →
 `scratch/renders/aero/`.
 

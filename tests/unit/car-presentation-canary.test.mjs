@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+const gameAndCustom = () => read("js/game.js") + read("js/career/custom-team.js");
 
 test("render interpolates world px/pz for every car, not only humans", () => {
   const game = read("js/game.js");
@@ -102,10 +103,19 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
     "field wheels must promote hits like every other mesh LRU");
   assert.match(game, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
     "loadCarModel must clear fieldWheelOrder with the cache (putBoundedMesh desync frees a live mesh)");
-  assert.match(game, /change\.key === "customTeam"\)\s*syncCustomTeam\(\)/,
+  const custom = gameAndCustom();
+  assert.match(custom, /change\.key === "customTeam"\)[\s\S]{0,80}?syncCustomTeam\(\)/,
     "foreign-tab customTeam writes must re-inject MY TEAM via syncCustomTeam");
-  assert.match(game, /Object\.assign\(\{\}, DEFAULT_CUSTOM\.livery/,
+  assert.match(custom, /change\.key === "customLogo"/,
+    "foreign-tab customLogo writes must re-apply the emblem");
+  assert.match(custom, /Object\.assign\(\{\}, DEFAULT_CUSTOM\.livery/,
     "cz-save must keep structural DEFAULT_CUSTOM.livery (finShape/spine*) under colour edits");
+  assert.match(custom, /function czLivFromDialog\(\)/,
+    "cz-save and czPreview share one structural+colour livery builder");
+  assert.match(custom, /setLivDraftOverride\(\{ teamId: "custom", liv \}\)/,
+    "czPreview must push the full structural draft, not bare {c1,c2}");
+  assert.doesNotMatch(custom, /setLivDraftOverride\(\{ teamId: "custom", liv: \{ c1:/,
+    "bare {c1,c2} override regrows the shark fin while customize is open");
   assert.match(game, /function cockpitBodyMesh\(team, car\)/);
   assert.match(game, /function garageSeat\(\)/);
   const draw = game.match(
