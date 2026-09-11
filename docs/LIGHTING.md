@@ -109,7 +109,7 @@ There is no UBO. `frame.lights` is a flat JS array of **15-float records**:
 
 GLX uploads packed `vec4` arrays per frame — `uLightA[i]` (xyz + radius),
 `uLightB[i]` (rgb + bleed), `uLightC[i]` (aim + coneIn), `uLightD[i]` (coneOut),
-plus `uNumLights`. God-rays still use their own 12-slot unpacked set. Every
+plus `uNumLights`. God-rays still use their own 6-slot unpacked set. Every
 `lights.push(...)` in `buildTrackLights` (`js/lighting/track-lights.js`) must be
 exactly 15 values.
 
@@ -130,7 +130,7 @@ cull budgeted 48 there and no tail-light ever reached the shader.
 minimum **224** `vec4` rows; this repo's SwiftShader Chrome measured **4096**,
 UBO block **64 KB**). Four packed `vec4` arrays of 48 (`uLightA..D`) cost 192
 rows — the same budget the old six vertical arrays used at 32. God-rays stay
-at 12 (`GR_MAX_LIGHTS`). Mobile night clamps to 24 for fragment cost, not
+at 6 (`GR_MAX_LIGHTS`, reduced from 12). Mobile night clamps to 24 for fragment cost, not
 uniforms.
 
 ### Two invariants, gated by `tests/unit/lamp-fixture-anchor.test.mjs`

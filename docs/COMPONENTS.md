@@ -258,7 +258,7 @@ being held to.
 - **Before editing a class, check whether it appears above under "more than one
   file".** If it does, you are editing more than one screen.
 - **Before adding a family**, ask whether an existing one already covers it. The
-  audit grid (*Layout axes* below) measures 38 screens; a new family usually
+  audit grid (*Layout axes* below) measures 44 screens; a new family usually
   means a new one-off, and one-offs are what `.pane-pair` was built to retire.
 - **Regenerate with the same method** the test uses if the numbers here drift:
   `node --test tests/unit/component-inventory.test.mjs` will say so first.
@@ -375,7 +375,7 @@ from it is a screen nobody measures.
 The first draft of this grid held twelve entries and reported "130 cells, 0 red",
 which read as full coverage. It was not: the app has far more screen roots than
 that (**24** top-level ones are tabled below; counting the sub-views, `SCREENS`
-in `tools/ui/layout-audit.mjs` now spans 34 cells over 24 distinct roots — that
+in `tools/ui/menu-screens.mjs` now spans 44 cells over 27 distinct roots — that
 inventory, not this prose, is the count that matters), and
 several change shape entirely between states behind one root. Qualifying, the
 livery editor, the standings table, both tuner panels and every career

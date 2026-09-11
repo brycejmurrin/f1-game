@@ -16,7 +16,11 @@
 //   js/circuits/  the 40 circuit DEFINITIONS (24 season + 16 classic; one file each)
 //   js/car/       car model, liveries, parts, ghost, teams
 //   js/data/      data hub (api client + tab modules + shell)
-//   js/game/      game-support modules extracted from / loaded before game.js
+//   js/ui/ js/race/ js/career/ js/camera/ js/audio/ js/input/ js/perf/
+//   js/physics/ js/lighting/ js/garage/ js/agent/ js/fx/ js/core/
+//                game-support modules extracted from / loaded before game.js
+//                (these replaced the single js/game/ directory; the MOVED
+//                 map below is the record of that split)
 //
 // Rules encoded here:
 //  - FULL is every TAGGED js/ file, in the exact index.html <script> order.

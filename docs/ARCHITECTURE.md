@@ -17,7 +17,10 @@ static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
 **engine** — shared spline/mesh/scenery code), `js/circuits/` (the 40 circuit
 **data** files), `js/car/` (car geometry, liveries, parts, teams), `js/data/`
-(API clients + data hub), `js/game/` (game subsystems), with `js/core/mat4.js` and
+(API clients + data hub), and the domain directories the old `js/game/` became
+(`js/ui/`, `js/race/`, `js/career/`, `js/camera/`, `js/audio/`, `js/input/`,
+`js/perf/`, `js/physics/`, `js/lighting/`, `js/garage/`, `js/agent/`, `js/fx/`),
+with `js/core/mat4.js` and
 the `js/game.js` entry at the root.
 
 **`tools/manifest.cjs` is the single source of truth for load order.** The
@@ -35,7 +38,7 @@ consult the manifest for the full, current order:
 ```
 js/core/log.js                -> Log        (levelled logging; loads FIRST)
 js/core/mat4.js               -> M4, V3
-js/render/shaders/*      -> GLXChunks, GLXShaders   (pure data, before glx.js)
+js/render/glx/shaders/*  -> GLXChunks, GLXShaders   (pure data, before glx.js)
 js/render/glx/glx.js + glx/* -> GLX        (default WebGL2 renderer + its passes)
 js/render/gfx.js         -> Gfx        (renderer selection seam; the WGX and
                                         TLX backends are DEFERRED — no script
@@ -46,7 +49,7 @@ js/circuits/*.js         -> TrackDefs  (one def per circuit; its scenery(api) cl
                                         split to js/circuits/scenery/<id>.js, fetched per build)
 js/track/tracks.js       -> Tracks     (engine shell: resolve + build; reads TrackDefs)
 js/car/*                 -> Car3D, Liveries, LiveryTex, Parts, Ghost
-js/game/*                -> Input, GameAudio, LightTune, Particles, GameCams, GameHud, …
+js/ui/* js/race/* …       -> Input, GameAudio, LightTune, Particles, GameCams, GameHud, …
 js/data/*                -> F1API, DataHub + tab modules
 js/game.js               -> (main, self-executing)
 ```
@@ -397,7 +400,7 @@ truth about today.
 
 The mechanisms that keep a no-build, script-tag codebase coherent after the split:
 
-- **The `G` ctx façade.** Extracted `js/game/*` modules never reach into
+- **The `G` ctx façade.** The extracted domain modules never reach into
   game.js's closure. game.js builds one `G` object — live getters/setters over
   its closure state (player, cars, race flags, …) plus stable helpers — and
   instantiates each module once via `Module.create(G)`. A module reads
@@ -543,15 +546,15 @@ M4.invertTo(out, m)                     -> out (general 4x4 inverse; identity on
 V3.norm(a)                              -> [x,y,z]
 ```
 
-## js/render/shaders/ — `GLXChunks`, `GLXShaders`
+## js/render/glx/shaders/ — `GLXChunks`, `GLXShaders`
 
 All GLSL sources for the renderer as template-literal strings with no
-interpolation — pure data. `chunks.js` (`GLXChunks`) holds the shared leaves
-(noise/hash, GGX BRDF trio, tonemap/grade) authored once; `lit.js`, `sky.js`,
-`fx.js`, and `post.js` compose them into the program sources
+interpolation — pure data. `glsl-chunks.js` (`GLXChunks`) holds the shared leaves
+(noise/hash, GGX BRDF trio, tonemap/grade) authored once; `glsl-lit.js`,
+`glsl-sky.js`, `glsl-fx.js` and `glsl-post.js` compose them into the program sources
 (LIT/SKY/SHADOW/MARK/DECAL/GLOW, the post chain, SSAO/GODRAY/COMPOSITE/FXAA/
-DEPTH) on the shared `GLXShaders` global. Replaces the old monolithic
-`js/render/glx/shaders/glsl-lit.js`. `glx.js` destructures `GLXShaders` at the top of
+DEPTH) on the shared `GLXShaders` global. Replaced one monolithic shader
+file. `glx.js` destructures `GLXShaders` at the top of
 its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 
 ## js/render/glx/glx.js (+ js/render/glx/) / js/render/gfx.js — renderers
@@ -668,7 +671,7 @@ context object so the public `GLX` surface is unchanged. WGX is selected
 through the active Gfx seam only when `apex26.gfxBackend=webgpu` opts in and
 WebGPU initializes successfully; otherwise game.js uses GLX. One standard lit
 shader handles everything except the sky on the GLX path. Shader source
-strings live in `js/render/shaders/` (globals `GLXChunks`/`GLXShaders`).
+strings live in `js/render/glx/shaders/` (globals `GLXChunks`/`GLXShaders`).
 
 ```
 GLX.init(canvasEl) -> boolean         // false if no WebGL2
@@ -761,9 +764,9 @@ One concern per file, all loaded before `tracks.js`:
 | `surface.js` | `TrackSurface` | road-surface build details, per-track tarmac/verge tints |
 | `models.js` | `TrackModels` | composite prop models shared across circuits |
 | `themes.js` | `SceneryThemes` | theme tables for the city generator |
-| `landmark-kit.js` / `circuit-kit.js` | `LandmarkKit` / `CircuitKit` | landmark & circuit composite kits for `scenery(api)` |
-| `maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine — was `trackmaps.js` |
-| `scenery-nature.js` / `scenery-city.js` / `scenery-structures.js` / `scenery-identity.js` | `Scenery*` | the buildProps split (below) |
+| `scenery/landmark-kit.js` / `scenery/circuit-kit.js` | `LandmarkKit` / `CircuitKit` | landmark & circuit composite kits for `scenery(api)` |
+| `js/ui/track-maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine — left `js/track/` in the reorg |
+| `scenery/nature.js` / `scenery/city.js` / `scenery/structures.js` / `scenery/identity.js` | `Scenery*` | the buildProps split (below) |
 
 **The buildProps split.** Prop placement is four `Scenery*.create(ctx)`
 modules — nature (trees/terrain furniture), city (the `cityStyle` building
@@ -893,7 +896,7 @@ shading (duplicated verts, face normals).
 |---|---|---|
 | `liveries.js` | `Liveries` | custom paint jobs — `{id, name, c1, c2, stripe?, noseStripe?, …}` |
 | `liverytex.js` | `LiveryTex` | per-team livery texture atlas (canvas-2D; stylised fan-art crests, invented sponsor wordmarks, car number onto a 1024² atlas mapped by panel UVs) |
-| `driver-ratings.js` | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` |
+| `js/data/driver-ratings.js` | `DriverRatings` | the five-axis skill table for the grid (pace / racecraft / awareness / consistency / experience), keyed by driver CODE. Feeds every AI car's `skill` in EVERY mode, not just career. Kept out of `teams.js` because that is verified real-world data and is also loaded by `tools/carview.html` — lives in `js/data/`, not `js/car/` |
 | `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 780 cr budget (see CAREER.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 
@@ -1036,7 +1039,7 @@ The lighting-tuner core, split by lifecycle (Phase 2a of
 - `js/lighting/knobs.js` — `LightKnobs`: `TUNE_DEFS` (the slider
   registry — the `def` values ARE the shipped tuning; min/max/step are the
   clamps) and the live `LT` value object (a plain object mutated in place by
-  `light-store.js`'s profile resolution and `__apex.lightTune`).
+  `js/lighting/profiles.js`'s profile resolution and `__apex.lightTune`).
 - `js/lighting/track-lights.js` — `TrackLights`: `buildTrackLights(track)` bakes
   the per-track light records ONCE per track (colour and fixture character from
   the internal `floodColor` + `LAMP_KINDS` tables, the LAMP DENSITY and
@@ -1072,7 +1075,7 @@ owns the **rain overlay** (`Particles.rain*`). Emitters only READ car state;
 update/draw run in the RENDER path only, never inside the physics step, so
 headless obs/act runs are identical with FX on or off.
 
-## js/game/ — the extracted game modules
+## The extracted game modules
 
 Each is an IIFE global instantiated by game.js with the **`G` ctx façade**
 (see Reorg above) — one object of live getters/setters over game.js closure
@@ -1080,36 +1083,37 @@ state plus stable helpers, passed to `Module.create(G)`:
 
 | File | Global | Owns |
 |---|---|---|
-| `physics-consts.js` | `PhysicsConsts` | the driving model's immutable numbers (`VMAX`, `LAT_MAX`, `BRAKE`, …, the `GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` gearbox and the `DIFF` difficulty presets), destructured once by game.js at eval time (a `HARD_EDGES` entry in `tools/manifest.cjs`; `hud.js` reads the RPM pair the same way). Values only — anything a slider or `setPhysics` can change stays a `let` in game.js. A plain data global, not a `create(G)` module |
-| `store.js` | `GameStore` | localStorage persistence (settings, season, parts, records) + the career save and its migration ladder |
-| `career.js` | `Career` | CAREER rules: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots in separate sets, one live at a time; both earlier layouts migrate in), the credits economy, contracts, driver/team development, R&D ownership, round settlement. Pure data — no DOM, and a plain global (no ctx), because game.js calls it from `makeCars()`/`recomputePlayerMods()`/`endRace()`. Every GAMEPLAY accessor is gated on `inCareer()`, NOT on "a save exists": the save loads at boot so the title button can offer CONTINUE, but its rules must never reach a Grand Prix |
-| `career-ui.js` | `CareerUI` | the CAREER screen (`#career`) — three states in one sheet: CAREER MODES (both modes, their six slots and their guides — the title button's one door), new-career setup, and the season hub. States rather than screens, so all three inherit the sheet's MenuNav / ScrollFade / AriaState registration instead of needing their own. Replaces `#select` in career, since the calendar owns where you race |
-| `quali.js` | `Quali` | ONE-LAP QUALIFYING, the MODEL. A `session`, not a game state: the player's flying lap reuses the time-trial path, and the rest of the field is MODELLED — a quasi-steady forward/backward lap simulation off the same `LAT_MAX`/`ACCEL`/`BRAKE` the driving model uses, so a simulated time and a driven one land on one scale. Owns the classification between session and grid and its persist (`season.qualiOrder`); feeds `gridUp()`. No DOM — `rows()` is what the sheet paints |
-| `quali-sheet.js` | `QualiSheet` | the QUALIFYING sheet (`#quali`): `build(rows)` / `open(rows)` / `close()` over `quali.rows()` — pure DOM assembly of the model's classification (podium classes, the DRIVEN tag on a rival's real lap, the P-title). No timing, no ordering, no persist |
-| `reliability.js` | `Reliability` | RELIABILITY / DNFs — whether a car reaches the flag. Risk is DERIVED (team tier, relieved by career team development and by the player's fitted engine + gearbox), never authored per team. The whole field's retirements are drawn ONCE at the green light from a stateless hash of `(seed, round, driver)`, so arming a race consumes nothing from the sim RNG stream. Ships OFF — opt-in per race via the RELIABILITY setting |
-| `perf.js` | `PerfGov` | adaptive performance governor (render scale / FX tiers) |
-| `cameras.js` | `GameCams` | the 13 player camera modes + the `__apex.view` debug free-cam framing |
-| `cam-modes.js` | `CamModes` | `CAM_MODES` (the 13-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to `cameras.js` |
-| `hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
-| `results.js` | `GameResults` | results + season-end screens, penalties, points |
-| `apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md). `LAZY_AGENT` — no tagged script; `game.js` injects it when `wantAgentSurface()` |
-| `atmosphere.js` | `Atmosphere` | `applyRaceSettings` — time-of-day/weather scene state, palettes, flood activation |
-| `setup-ui.js` | `SetupUI` | GARAGE screen — TEAM & DRIVER, 12 part categories + budget, LIVERY |
-| `menus.js` | `Menus` | menu/select/pause DOM flows |
-| `scrollfade.js` | `ScrollFade` | edge fade + scroll-position indicator on every menu pane (self-initialising, owns no game state) |
-| `menunav.js` | `MenuNav` | desktop menu input (self-initialising): wheel/trackpad gestures that land outside a pane are redirected into the open menu's nearest one, and arrow keys / Home / End / PageUp / PageDown move focus through it |
-| `photomode.js` | `Photomode` | photo mode ONLY — the free-fly camera, its touch sticks / hold buttons and the enter/exit plumbing; the lighting tuner's `lt-*` buttons live in `tuner.js` |
-| `tuner.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel: slider rows from `TUNE_DEFS`, preview chips, COPY TO ALL TRACKS, the help toggle, RESET and the COPY VALUES export (`window.LightEdits`) |
-| `steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
-| `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
-| `skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
-| `sheetshape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
-| `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 19 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |
-| `ariastate.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
+| `js/physics/consts.js` | `PhysicsConsts` | the driving model's immutable numbers (`VMAX`, `LAT_MAX`, `BRAKE`, …, the `GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` gearbox and the `DIFF` difficulty presets), destructured once by game.js at eval time (a `HARD_EDGES` entry in `tools/manifest.cjs`; `hud.js` reads the RPM pair the same way). Values only — anything a slider or `setPhysics` can change stays a `let` in game.js. A plain data global, not a `create(G)` module |
+| `js/core/store.js` | `GameStore` | localStorage persistence (settings, season, parts, records) + the career save and its migration ladder |
+| `js/career/career.js` | `Career` | CAREER rules: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots in separate sets, one live at a time; both earlier layouts migrate in), the credits economy, contracts, driver/team development, R&D ownership, round settlement. Pure data — no DOM, and a plain global (no ctx), because game.js calls it from `makeCars()`/`recomputePlayerMods()`/`endRace()`. Every GAMEPLAY accessor is gated on `inCareer()`, NOT on "a save exists": the save loads at boot so the title button can offer CONTINUE, but its rules must never reach a Grand Prix |
+| `js/career/career-ui.js` | `CareerUI` | the CAREER screen (`#career`) — three states in one sheet: CAREER MODES (both modes, their six slots and their guides — the title button's one door), new-career setup, and the season hub. States rather than screens, so all three inherit the sheet's MenuNav / ScrollFade / AriaState registration instead of needing their own. Replaces `#select` in career, since the calendar owns where you race |
+| `js/race/quali-model.js` | `Quali` | ONE-LAP QUALIFYING, the MODEL. A `session`, not a game state: the player's flying lap reuses the time-trial path, and the rest of the field is MODELLED — a quasi-steady forward/backward lap simulation off the same `LAT_MAX`/`ACCEL`/`BRAKE` the driving model uses, so a simulated time and a driven one land on one scale. Owns the classification between session and grid and its persist (`season.qualiOrder`); feeds `gridUp()`. No DOM — `rows()` is what the sheet paints |
+| `js/ui/quali-sheet.js` | `QualiSheet` | the QUALIFYING sheet (`#quali`): `build(rows)` / `open(rows)` / `close()` over `quali.rows()` — pure DOM assembly of the model's classification (podium classes, the DRIVEN tag on a rival's real lap, the P-title). No timing, no ordering, no persist |
+| `js/race/reliability.js` | `Reliability` | RELIABILITY / DNFs — whether a car reaches the flag. Risk is DERIVED (team tier, relieved by career team development and by the player's fitted engine + gearbox), never authored per team. The whole field's retirements are drawn ONCE at the green light from a stateless hash of `(seed, round, driver)`, so arming a race consumes nothing from the sim RNG stream. Ships OFF — opt-in per race via the RELIABILITY setting |
+| `js/perf/governor.js` | `PerfGov` | adaptive performance governor (render scale / FX tiers) |
+| `js/camera/vantage.js` | `GameCams` | the 13 player camera modes + the `__apex.view` debug free-cam framing |
+| `js/camera/mode-switch.js` | `CamModes` | `CAM_MODES` (the 13-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to `cameras.js` |
+| `js/ui/hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
+| `js/ui/results-sheet.js` | `GameResults` | results + season-end screens, penalties, points |
+| `js/agent/apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md). `LAZY_AGENT` — no tagged script; `game.js` injects it when `wantAgentSurface()` |
+| `js/lighting/atmosphere.js` | `Atmosphere` | `applyRaceSettings` — time-of-day/weather scene state, palettes, flood activation |
+| `js/garage/setup-sheet.js` | `SetupUI` | GARAGE screen — TEAM & DRIVER, 12 part categories + budget, LIVERY |
+| `js/ui/select-screen.js` | `Menus` | menu/select/pause DOM flows |
+| `js/ui/scroll-fade.js` | `ScrollFade` | edge fade + scroll-position indicator on every menu pane (self-initialising, owns no game state) |
+| `js/ui/menu-nav.js` | `MenuNav` | desktop menu input (self-initialising): wheel/trackpad gestures that land outside a pane are redirected into the open menu's nearest one, and arrow keys / Home / End / PageUp / PageDown move focus through it |
+| `js/camera/photo-cam.js` | `Photomode` | photo mode ONLY — the free-fly camera, its touch sticks / hold buttons and the enter/exit plumbing; the lighting tuner's `lt-*` buttons live in `tuner.js` |
+| `js/lighting/tuner-panel.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel: slider rows from `TUNE_DEFS`, preview chips, COPY TO ALL TRACKS, the help toggle, RESET and the COPY VALUES export (`window.LightEdits`) |
+| `js/input/steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
+| `js/physics/aero-zones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
+| `js/fx/skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
+| `js/ui/sheet-shape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
+| `js/ui/modal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 19 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |
+| `js/ui/aria-state.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
-The table lists the modules whose contracts need prose; the rest of `js/game/`
-(58 files today — input, audio, lighting, particles, ai-drive, season-cal,
-ui-scale, gfx-quality, renderer-picker, metrics and the rest) is enumerated by
+The table lists the modules whose contracts need prose; the rest of them —
+input, audio, lighting, particles, ai-drive, season-cal, ui-scale, gfx-quality,
+renderer-picker, metrics and the others, spread across the domain directories —
+is enumerated by
 `tools/manifest.cjs`, which is the roster truth AGENTS.md's layout defers to
 (the docs-integrity guard asserts the deferral, not a per-file list).
 
@@ -1253,7 +1257,7 @@ would keep GLX’s dead closure).
 
 | Backend | Role | Entry | Shaders |
 |---|---|---|---|
-| **GLX** | Default always-tagged WebGL2 | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
+| **GLX** | Default always-tagged WebGL2 | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/glx/shaders/` |
 | **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
 | **TLX** | Opt-in Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
 
@@ -1422,7 +1426,7 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   `gfx.hasPerChunkLights` is the capability read (GLX + WGX; absent TLX).
   `gfx.updateInstances(batch, matrices, n)` is the second capability of
   that shape, and unlike per-chunk lights it is now on ALL THREE
-  (`glx.js:1742`, `wgx.js:5069`, `tlx.js:924` — WGX and TLX ported
+  (`updateInstances` in `glx.js`, `wgx.js` and `tlx.js` — WGX and TLX ported
   2026-09-02): it hands an existing instanced batch a
   caller-packed transform set, for a batch whose poses are new every
   frame rather than static geometry narrowed by a frustum. Its one
