@@ -486,10 +486,19 @@ window.SheetShape = (function () {
     if (!vv) return;
     let last = -1;
     let raf = 0;
+    let settle = 0;
+    /* A KEYBOARD NEEDS A FOCUSED FIELD. iOS never shows one without an
+       editable element focused, and dismissing it (Done, a tap elsewhere, a
+       rotation) blurs that element. So "nothing editable has focus" is proof
+       there is no keyboard, whatever visualViewport last said. */
+    const editing = () => {
+      const ae = document.activeElement;
+      return !!(ae && ae.matches && ae.matches("input,textarea,select,[contenteditable]"));
+    };
     const apply = () => {
       raf = 0;
       let kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      if (vv.scale > 1.01 || kb < window.innerHeight * 0.15) kb = 0;
+      if (vv.scale > 1.01 || kb < window.innerHeight * 0.15 || !editing()) kb = 0;
       kb = Math.round(kb);
       if (kb === last) return;
       last = kb;
@@ -516,6 +525,25 @@ window.SheetShape = (function () {
     const onvv = () => { if (!raf) raf = requestAnimationFrame(apply); };
     vv.addEventListener("resize", onvv, { passive: true });
     vv.addEventListener("scroll", onvv, { passive: true });
+    /* THE BAND MUST NOT OUTLIVE THE KEYBOARD. Reported from a phone: type a
+       livery name in the GARAGE (portrait, keyboard up, --kb written), rotate,
+       and the sheet stays a ~220px strip at the top of a 393px landscape
+       screen with the stacked layout and the fit cap both latched to that
+       height — the keyboard had gone but the last visualViewport delivery
+       still described it, and nothing else ever re-asked. Rotation is the
+       moment iOS updates innerHeight and the visual viewport in separate
+       steps and can drop the final resize, so three more triggers re-run the
+       same arithmetic: the field losing focus (the proof above), the window
+       resizing/rotating, and a settle pass after the rotation animation has
+       finished, in case that frame's numbers were mid-transition. */
+    document.addEventListener("focusout", onvv, { passive: true });
+    const onrotate = () => {
+      onvv();
+      clearTimeout(settle);
+      settle = setTimeout(onvv, 500);
+    };
+    addEventListener("resize", onrotate, { passive: true });
+    addEventListener("orientationchange", onrotate, { passive: true });
   }
 
   function init() {

@@ -157,6 +157,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/component-inventory.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
   "tests/unit/sheetshape-registry.test.mjs",
+  "tests/unit/sheetshape-keyboard.test.mjs",
   "tests/unit/test-groups.test.mjs",
   "tests/unit/pick-tests.test.mjs",
   "tests/unit/test-observed.test.mjs",
