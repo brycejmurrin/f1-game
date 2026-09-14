@@ -243,7 +243,16 @@ function setTrackFilter(id, focus) {
   if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
   vt(() => {
     buildSelect(); tickUi();
-    if (focus) els.selTracks.querySelector('[data-filter="' + id + '"]')?.focus();
+    // THE BAR IS NOT INSIDE THE STRIP. mountToolbar puts it on the SHELF, as a
+    // sibling of #sel-tracks and not a child, precisely so it does not scroll
+    // sideways with the tiles — and this read searched the strip, found
+    // nothing, and the `?.` swallowed it. Every arrow press therefore rebuilt
+    // the bar and left focus on <body>: the filter changed, the keyboard user
+    // lost their place, and the next arrow key had nothing to act on. Measured
+    // before the fix: aria-pressed moved to "season" while document.activeElement
+    // was BODY. Red since the assertion was written (menu-keyboard.spec.js,
+    // "circuit filter tabs ... expose distinct semantics").
+    if (focus) mountedToolbar()?.querySelector('[data-filter="' + id + '"]')?.focus();
   });
 }
 
@@ -346,6 +355,11 @@ function trackTile(t, i, opts) {
 
 // The toolbar lives on the SHELF, before the strip — a sibling of #sel-tracks,
 // not a child, because the strip scrolls sideways and the filter must not.
+/** The live toolbar, wherever mountToolbar put it — see setTrackFilter. */
+function mountedToolbar() {
+  return els.selTracks.parentNode.querySelector("#sel-track-filter");
+}
+
 function mountToolbar(bar) {
   const shelf = els.selTracks.parentNode;
   const old = shelf.querySelector("#sel-track-filter");

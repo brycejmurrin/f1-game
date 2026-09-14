@@ -287,7 +287,12 @@ const Collide = (() => {
             // near-inelastic at racing speeds (COR ~0.1 above ~7 m/s); below 1 m/s
             // closing the contact is resting and e is 0 (Box2D's velocity
             // threshold), so a following car does not jitter off a bumper.
-            const e = AiDrive.bumpRestitution(relV);
+            // ...and the coefficient off the pre-step reference, so the same
+            // pair bounces the same way whoever else is in the queue.
+            const aSp0 = Number.isFinite(a._preColSpd) ? a._preColSpd : aSp;
+            const bSp0 = Number.isFinite(b._preColSpd) ? b._preColSpd : bSp;
+            const relV0 = sgn >= 0 ? bSp0 - aSp0 : aSp0 - bSp0;
+            const e = AiDrive.bumpRestitution(relV0 > 0 ? relV0 : relV);
             const jImp = (1 + e) * relV / iSum;
             // The car in front takes the punt in full — that is the kick you feel
             // and see. A HUMAN in front is capped: an AI misjudging a braking zone
@@ -338,8 +343,22 @@ const Collide = (() => {
     // Walk each occupied bucket against itself and the next bucket (mod nB).
     // Bucket width = LCAR → any contacting pair is co-bucketed or adjacent.
     // Each unordered pair is visited once (within-bucket i<j; across only b→b+1).
-    function _colForBucketPairs(nB, fn) {
-      for (let bi = 0; bi < _colBucketIds.length; bi++) {
+    // `fwd` alternates the SWEEP DIRECTION, and its absence here was a real
+    // asymmetry between the two paths. Relaxation is Gauss-Seidel: each pair is
+    // resolved against positions already moved by the pairs before it, so the
+    // result carries a bias in the direction of the sweep. The all-pairs branch
+    // has always cancelled that by reversing on odd passes (`fwd = (pass & 1)
+    // === 0`) — and the BUCKET branch, which is the one every race over twelve
+    // cars actually takes, always walked the buckets forward. So the small
+    // field got the symmetrised solver and the full grid did not.
+    // Same pair SET either way (each undirected edge is still visited exactly
+    // once, via the forward-neighbour rule below) — only the order changes,
+    // which is the whole point. Omitted (the separation pass, which runs once)
+    // it stays forward, exactly as before.
+    function _colForBucketPairs(nB, fn, fwd) {
+      const nIds = _colBucketIds.length;
+      for (let k = 0; k < nIds; k++) {
+        const bi = fwd === false ? nIds - 1 - k : k;
         const id = _colBucketIds[bi];
         const A = _colBuckets[id];
         if (!A || !A.length) continue;
@@ -369,6 +388,18 @@ const Collide = (() => {
       // AI cars mirrored their world pose BEFORE this pass (updateCar's tail), so a
       // shove rendered one step late; snapshot so the clamp loop can re-mirror.
       for (const c of ranked) if (!c.human) { c._preColS = c.s; c._preColX = c.x; }
+      // PRE-STEP CLOSING SPEED, for the restitution reference only. aSp/bSp are
+      // read LIVE, and _colResolvePair mutates .speed as it goes, so in a
+      // concertina a car that was already bumped earlier in the same pass
+      // presents a different closing speed to its next pair — and
+      // bumpRestitution is a RAMP over closing speed (0 under 1 m/s, 0.1 above
+      // 3), so how bouncy your bump is depended on who happened to be behind
+      // you and in what order the solver reached them. The impulse itself keeps
+      // the live relative velocity: that is momentum, and it must see the state
+      // it is actually correcting. Only `e` moves to the snapshot.
+      // Mirrors aSp/bSp for a net-owned car, whose predicted speed is the
+      // reference and is not ours to mutate.
+      for (const c of ranked) c._preColSpd = c._nOk ? c._nSpd : c.speed;
       // Side-rub speed loss for this step, in m/s: a deceleration (AiDrive.rubDecel)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
       const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || 1 / 60);
@@ -386,7 +417,7 @@ const Collide = (() => {
           // Re-bucket only when shiftLong moved someone — idle passes keep the grid.
           if (pass > 0 && _colShifted) { nB = _colFillBuckets(ranked); _colShifted = false; }
           _colCbLast = last; _colCbRub = rubScrub;
-          _colForBucketPairs(nB, _colResolveCB);
+          _colForBucketPairs(nB, _colResolveCB, (pass & 1) === 0);
         } else {
           const fwd = (pass & 1) === 0;
           for (let ii = 0; ii < ranked.length; ii++) {
