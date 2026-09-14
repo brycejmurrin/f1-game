@@ -189,3 +189,70 @@ test("a full drag costs ONE bake, not one per input event", () => {
   assert.equal(bakes, 1, `a 1001-step drag ran buildTable ${bakes} times; it must bake once`);
   assert.equal(typeof real, "function");
 });
+
+/* ── buildGrid: the form three.js needs ────────────────────────────────────
+ *
+ * GLX binds a chunk's list per draw and WGX passes (offset, count) in a
+ * per-draw uniform. THREE HAS NEITHER — every visible chunk is drawn from one
+ * pooled mesh sharing ONE material, so there is nowhere to put a per-chunk
+ * value. (Checked in vendor/three-0.185.1 rather than assumed:
+ * `nodeUniformDrawId` is declared only when `object.isBatchedMesh` and set only
+ * in the BatchedMesh branch of WebGLBackend._draw, so `drawIndex` reads nothing
+ * from a plain Mesh.) What three CAN read is positionWorld — and the chunks are
+ * a regular XZ grid — so buildGrid flattens the table into a dense
+ * (offset, count) image the fragment samples with one fetch.
+ */
+const gchunk = (gx, gz) => ({ min: [0, 0, 0], max: [1, 1, 1], gx, gz });
+
+test("buildGrid places each chunk's (offset, count) at its own cell", () => {
+  const chunks = [gchunk(10, 20), gchunk(12, 20), gchunk(10, 22)];
+  const table = { offsets: new Uint32Array([0, 7, 19]), counts: new Uint32Array([7, 12, 5]) };
+  const g = LampChunks.buildGrid(table, chunks);
+  // Extent is the occupied span, not the 4096-biased key space.
+  assert.deepEqual([g.gw, g.gh, g.gx0, g.gz0], [3, 3, 10, 20]);
+  const at = (gx, gz) => {
+    const o = ((gz - g.gz0) * g.gw + (gx - g.gx0)) * 2;
+    return [g.data[o], g.data[o + 1]];
+  };
+  assert.deepEqual(at(10, 20), [0, 7]);
+  assert.deepEqual(at(12, 20), [7, 12]);
+  assert.deepEqual(at(10, 22), [19, 5]);
+  // Unoccupied cells read count 0 — the shader's signal to fall back to the
+  // global lamp set, which is exactly today's behaviour.
+  assert.deepEqual(at(11, 21), [0, 0]);
+  assert.equal(g.data.length, 3 * 3 * 2);
+});
+
+test("buildGrid survives a chunk with no cell, and an empty set", () => {
+  // A chunk built before the grid coords existed (or by a non-grid path) has no
+  // gx/gz. It must not place, must not throw, and must not drag the extent to 0.
+  const chunks = [gchunk(5, 5), { min: [0, 0, 0], max: [1, 1, 1] }];
+  const table = { offsets: new Uint32Array([0, 3]), counts: new Uint32Array([3, 4]) };
+  const g = LampChunks.buildGrid(table, chunks);
+  assert.deepEqual([g.gw, g.gh, g.gx0, g.gz0], [1, 1, 5, 5]);
+  assert.deepEqual(Array.from(g.data), [0, 3]);
+
+  // Empty input still yields a bindable 1x1 texture rather than a zero-sized
+  // one — a backend always has something to bind.
+  const e = LampChunks.buildGrid({ offsets: new Uint32Array(0), counts: new Uint32Array(0) }, []);
+  assert.deepEqual([e.gw, e.gh], [1, 1]);
+  assert.equal(e.data.length, 2);
+});
+
+test("buildGrid round-trips a real bake through the cell mapping", () => {
+  // End to end: bake a table for two chunks, flatten it, and read back the
+  // slice each cell names. The indices must be the chunk's own list.
+  const lights = lampSet([[0, 0, 0, 50], [100, 0, 0, 50]]);
+  const chunks = [
+    { min: [-5, -1, -1], max: [5, 1, 1], gx: 1024, gz: 1024 },
+    { min: [95, -1, -1], max: [105, 1, 1], gx: 1025, gz: 1024 },
+  ];
+  const t = LampChunks.buildTable(lights, chunks, 1);
+  const g = LampChunks.buildGrid(t, chunks);
+  for (let c = 0; c < chunks.length; c++) {
+    const o = ((chunks[c].gz - g.gz0) * g.gw + (chunks[c].gx - g.gx0)) * 2;
+    const off = g.data[o], n = g.data[o + 1];
+    assert.deepEqual(Array.from(t.concat.slice(off, off + n)), Array.from(t.lists[c]),
+      `cell ${chunks[c].gx},${chunks[c].gz} must name chunk ${c}'s own lamps`);
+  }
+});
