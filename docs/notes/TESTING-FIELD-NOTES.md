@@ -1858,3 +1858,20 @@ cross-file guard is the fallback when load order forbids it.**
 
 The general rule: when a default lives in two places, one of them will be wrong,
 and the symptom is a control that silently ignores one end of its own range.
+
+### …and the two smaller sweeps from the same day (both negative)
+
+`selectOption("literal")` across `tests/`: eight call sites, all sound. Each
+either asserts the option count first (`rs-reliab-sel`, the Data Hub pickers) or
+uses a value confirmed elsewhere in the same test. Checked the two static ones
+against the source: `RS_RELIAB` really does carry `"real"`, `lapOpts` really does
+carry 5. The `ui-button-touch` typo was the only one.
+
+Stale tests from the 2026-09-09 STRIP redesign: `ui-redesign.spec.js` was updated
+with it and asserts the strip horizontally (`stripPans: scrollWidth -
+clientWidth > 1`). The only two missed were in `ui-button-touch.spec.js` — and
+that is the lesson worth keeping: **a redesign sweep follows the feature's own
+spec file, so assertions about that feature filed under an unrelated name are the
+ones left behind.** Two selection-screen cases were sitting in a file named for
+button/touch steering. When a screen is reworked, grep the id across all of
+`tests/`, not just the spec that owns the screen.
