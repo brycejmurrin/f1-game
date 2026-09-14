@@ -525,6 +525,12 @@ const PitLane = (function () {
         // the line into the pits right now. There is no button; this is it.
         commit: +commitFrac(car).toFixed(3),
         side: zz.side,
+        // The four numbers the lit shaders paint the lane from, exactly as the
+        // frame carries them: (entry s, window length, side, lap length). Null
+        // means no lane is armed and nothing is painted — which is the first
+        // thing to check when the lane is invisible.
+        lane: laneUniform(),
+        laneEdgeX: +laneEdge(7, zz.side).toFixed(2),   // at a nominal 7 m half-width
       };
     }
 
