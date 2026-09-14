@@ -221,6 +221,37 @@ test("toHalf handles the edges rather than wrapping them", () => {
   assert.ok(decodeHalf(P.toHalf(1e-6)) > 0);
 });
 
+test("TLX's own half-float encoder agrees with this one, and rounds", () => {
+  // js/render/three/tlx-chunked.js carries a second _toHalf — it is a bit
+  // twiddler over a Float32Array view where this one is arithmetic, and TLX is
+  // DEFERRED so it cannot simply call this module at eval time. Two encoders is
+  // a standing invitation to drift, so they are compared here rather than
+  // trusted. The TLX copy USED to truncate its mantissa, which is
+  // always-toward-zero and therefore a darkening bias on every emissive colour
+  // and material id it touched, on both legs.
+  const tlxSrc = fs.readFileSync(
+    new URL("../../js/render/three/tlx-chunked.js", import.meta.url), "utf8");
+  const from = tlxSrc.indexOf("const _fb = new Float32Array(1)");
+  const to = tlxSrc.indexOf("// One shared all-zero buffer");
+  assert.ok(from > 0 && to > from, "could not find _toHalf in tlx-chunked.js");
+  const ctx = { console };
+  vm.createContext(ctx);
+  vm.runInContext(tlxSrc.slice(from, to) + "\n;globalThis.__t = _toHalf;", ctx);
+  const tlxHalf = ctx.__t;
+
+  let bias = 0, n = 0;
+  for (let k = 0; k <= 200000; k++) {
+    const v = k / 50000;                       // 0 .. 4, the colour range
+    assert.equal(tlxHalf(v), P.toHalf(v), `encoders disagree at ${v}`);
+    if (k) { bias += decodeHalf(tlxHalf(v)) - v; n++; }
+  }
+  assert.ok(Math.abs(bias / n) < 1e-7,
+    `TLX _toHalf mean signed bias ${bias / n} — it is truncating again`);
+  for (let i = 0; i <= 2048; i++) {
+    assert.equal(decodeHalf(tlxHalf(i)), i, `TLX _toHalf lost integer ${i}`);
+  }
+});
+
 test("the packed format is materially smaller than the float32 layout it replaced", () => {
   // The whole point. 9 floats (36 B), or 10 with a material column (40 B), or
   // 13 with track coords (52 B) — against 28 and 40 now.

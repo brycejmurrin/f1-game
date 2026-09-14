@@ -34,8 +34,16 @@
     // "unorm, 3.1 M values, max 3.87" says the colours carry emissive above 1.
     half: 0, wideBy: {}, wideMax: {}, wideLen: {} };
   // float32 -> float16 bits. three exports Float16BufferAttribute but no
-  // converter, so this is ours: truncating mantissa (fine for colour), with
-  // the subnormal and overflow cases handled rather than wrapped.
+  // converter, so this is ours, with the subnormal and overflow cases handled
+  // rather than wrapped.
+  //
+  // ROUNDS, half-to-even. It used to truncate — `man >>> 13` and nothing else —
+  // which is always-toward-zero and therefore a DARKENING bias on every value
+  // it touches, not a wash: measured -6.5e-4 mean signed error against ~0 now,
+  // with the worst case twice as large. That is live on both legs for emissive
+  // colour and material ids. It is small, and it is still a bias where there
+  // should be none, which is the kind of thing that is invisible in one frame
+  // and argued about for a week in a look review.
   const _fb = new Float32Array(1), _ib = new Uint32Array(_fb.buffer);
   function _toHalf(v) {
     _fb[0] = v;
@@ -43,14 +51,25 @@
     const exp = (x >>> 23) & 0xff;
     let man = x & 0x7fffff;
     if (exp === 255) return sign | 0x7c00 | (man ? 0x200 : 0);   // Inf / NaN
-    const e = exp - 112;                                          // 127 - 15
+    let e = exp - 112;                                            // 127 - 15
     if (e >= 31) return sign | 0x7c00;                            // overflows half
     if (e <= 0) {                                                 // subnormal / zero
-      if (e < -10) return sign;
-      man = (man | 0x800000) >>> (1 - e);
-      return sign | (man >>> 13);
+      if (e < -11) return sign;
+      man |= 0x800000;
+      const sh = 14 - e;                                          // bits discarded
+      const lsb = Math.pow(2, sh), half = lsb / 2;
+      const rem = man % lsb;
+      let out = Math.floor(man / lsb);
+      if (rem > half || (rem === half && (out & 1))) out += 1;
+      // A carry out of the subnormal range lands on the smallest NORMAL half
+      // (exponent 1, mantissa 0) all by itself — 0x400 is exactly that.
+      return sign | out;
     }
-    return sign | (e << 10) | (man >>> 13);
+    const rem = man & 0x1fff;                                     // the 13 dropped bits
+    let h = man >>> 13;
+    if (rem > 0x1000 || (rem === 0x1000 && (h & 1))) h += 1;
+    if (h & 0x400) { h = 0; e += 1; if (e >= 31) return sign | 0x7c00; }
+    return sign | (e << 10) | h;
   }
   // One shared all-zero buffer behind every absent attribute. Views into it
   // carry the right per-mesh count while costing one allocation in total —
@@ -75,8 +94,54 @@
   // GLX silently. Under fmt24 those widths keep Float32 (the pre-pack
   // layout); padding x3 to x4 is NOT the fix — three reads a 4-wide colour
   // attribute as RGBA.
+  // WIDEN rather than give up, on the WebGPU leg.
+  //
+  // `fmt24` used to set kind = null for every 1- or 3-wide channel, so normal,
+  // colour and mat all fell back to Float32 there: the WebGL2 leg packed to
+  // ~23 bytes a vertex while the WebGPU leg ran the same geometry at the full
+  // 40. That is the wrong conclusion to draw from the restriction — a 3-wide
+  // channel fits a 4-wide FORMAT perfectly well with a zero in w, and WebGPU
+  // lets a vertex format carry MORE components than the shader input reads.
+  // tsl-lit.js keeps reading attribute("color", "vec3"); no TSL changes.
+  //
+  // mat is left alone: it is one scalar, float32 is already the narrowest lane
+  // WebGPU offers at 1-wide, and padding it to 4 would COST 12 bytes.
+  const pad4 = (src, len) => {
+    const n = len / 3, out = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) {
+      out[i * 4] = src[i * 3]; out[i * 4 + 1] = src[i * 3 + 1]; out[i * 4 + 2] = src[i * 3 + 2];
+    }
+    return out;
+  };
+
   function packAttr(THREE, src, len, itemSize, kind, fmt24) {
-    const ok = src && src.length === len;
+    let ok = src && src.length === len;
+    if (fmt24 && itemSize === 3 && ok && kind === "unit") {
+      src = pad4(src, len); len = (len / 3) * 4; itemSize = 4;
+    }
+    // NORMAL ONLY, and COLOUR DELIBERATELY LEFT WIDE. Bisected on lavapipe,
+    // montreal, against a control whose mean luma varies by only +/-0.1 across
+    // runs (45.6 / 45.5 / 45.6) — each row is one probe, coverage census
+    // identical to the tenth of a percent in every one:
+    //
+    //   control, nothing widened          mean luma 45.6   max 486
+    //   widen NORMAL only  (snorm16x4)    mean luma 45.6   max 486  <- free
+    //   widen COLOUR only  (unorm8x4)     mean luma 42.9   max 485
+    //   widen both                        mean luma 42.8   max 485
+    //   colour as Float16BufferAttribute  mean luma 39.1   max 467
+    //
+    // So the normal is free at 16 bits and the colour is not free at any width
+    // tried. Eight bits costs ~6 % of the frame; three's Float16BufferAttribute
+    // costs MORE (~14 %) than the byte does, which is backwards on precision
+    // grounds and says the fault is in how three hands that array to the
+    // WebGPU backend rather than in the encoding — unexplained, so not shipped.
+    // Colour therefore stays float32x3 here and the channel keeps its 12 bytes.
+    //
+    // Two things fall out of this worth someone's time. The WebGL2 leg DOES
+    // quantise colour to a byte today, so it is probably paying that same 6 %
+    // where nobody can see it — the probe cannot read a frame on that leg.
+    // And the Float16BufferAttribute result wants a real GPU before anyone
+    // trusts it; lavapipe is not a player's machine.
     if (fmt24 && itemSize !== 2 && itemSize !== 4) kind = null;
     if (!packOn) {
       return new THREE.BufferAttribute(
