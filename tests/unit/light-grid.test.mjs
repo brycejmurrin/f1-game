@@ -305,20 +305,39 @@ test("every TUNE_DEFS uniform lives on GLX, WGX, and TLX", () => {
 });
 
 test("lamp-chunk sliders name their backend support honestly", () => {
-  // Honest gaps, not forgotten ports: per-chunk lamps ship on GLX (uniform
-  // upload) and WGX (storage-buffer bake); TLX cannot have them (shared
-  // node-material uniforms — per-chunk sets would mint a program per chunk,
-  // the pinProgram lesson). Help must keep naming the unsupported backend so
-  // a dead three.js thumb is not filed as a backend-parity bug.
+  // Honest gaps, not forgotten ports — so a dead thumb is never filed as a
+  // backend-parity bug. The two knobs no longer have the SAME answer:
+  //
+  //   perChunkLights  all three. GLX uploads each chunk's set per draw, WGX
+  //                   passes (offset,count) in a per-draw uniform, and TLX —
+  //                   which can do neither, one material meaning one uniform
+  //                   set — reads the same LampChunks bake out of textures and
+  //                   resolves per FRAGMENT from world position.
+  //   roadChunkLamps  still WebGL2 + WebGPU. The road is one mesh on TLX
+  //                   either way; nothing chunks it there yet.
+  //
+  // This test USED to assert "three.js" appeared in both as the unsupported
+  // backend, on the premise that TLX could never have per-chunk lamps. That
+  // premise is gone, so the assertion follows the capability rather than the
+  // other way round.
   const byId = new Map(defs().map((d) => [d.id, d]));
-  for (const id of ["perChunkLights", "roadChunkLamps"]) {
-    const d = byId.get(id);
-    assert.ok(d, `${id} missing from TUNE_DEFS`);
-    assert.match(d.help || "", /WebGL2 and WebGPU/,
-      `${id} help must name the supported backends`);
-    assert.match(d.help || "", /three\.js/,
-      `${id} help must keep naming the unsupported backend so it is not a mystery`);
-  }
+  const road = byId.get("roadChunkLamps");
+  assert.ok(road, "roadChunkLamps missing from TUNE_DEFS");
+  assert.match(road.help || "", /WebGL2 and WebGPU only/,
+    "roadChunkLamps is still the two-backend one — say so");
+  assert.match(road.help || "", /three\.js/,
+    "roadChunkLamps help must keep naming the backend that does NOT have it");
+
+  const pc = byId.get("perChunkLights");
+  assert.ok(pc, "perChunkLights missing from TUNE_DEFS");
+  assert.match(pc.help || "", /All three backends/,
+    "perChunkLights now ships on TLX too — the help must not still call it a gap");
+  assert.match(pc.help || "", /three\.js/,
+    "perChunkLights help must explain HOW three.js does it, since it differs");
+  // The difference is the part a player (or the next reader) needs, because it
+  // is visible: per fragment, not per chunk.
+  assert.match(pc.help || "", /per FRAGMENT/,
+    "the TLX route resolves per fragment — docs/ARCHITECTURE.md §Cross-backend parity");
 });
 
 test("amount-knob defaults are not crushed into the first quarter of the slider", () => {

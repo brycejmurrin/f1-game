@@ -71,6 +71,7 @@
     const MAX_LIGHTS = (ctx && ctx.maxLights > 0) ? (ctx.maxLights | 0) : LightBudget.MAX;
     const {
       Fn, If, Loop, Break, uniform, uniformArray, attribute, varying, texture, cubeTexture,
+      textureLoad, ivec2,
       float, int, vec2, vec3, vec4, mrt,
       positionWorld, positionGeometry, positionLocal, normalLocal, normalWorld,
       cameraPosition, frontFacing,
@@ -205,6 +206,22 @@
       lampShadowVP:   uniform(new THREE.Matrix4()),
       lampShadowOn:   uniform(0.0),
       lampShadowIdx:  uniform(-1.0),  // float compare vs the loop index (small ints are exact)
+      // PER-CHUNK LAMPS (see LGRID below). The textures are allocated once at a
+      // fixed size and re-filled per track bake, so their DIMENSIONS are
+      // uniforms rather than compile-time constants: a track change must never
+      // mint a new node graph (r184's program-cache-key trap, above).
+      //   lgOrigin (gx0, gz0) — cell coords of the grid's first texel
+      //   lgSize   (gw, gh)   — occupied extent, in cells
+      //   lgCell              — world metres per cell (tlx-chunked build())
+      //   lgIdxW              — idxTex width, for the 1-D -> 2-D unwrap
+      //   lgOn                — 0 disables the whole path at runtime, without
+      //                         recompiling: the knob going to 0, or a bake
+      //                         that produced nothing.
+      lgOrigin:       uniform(new THREE.Vector2(0, 0)),
+      lgSize:         uniform(new THREE.Vector2(1, 1)),
+      lgCell:         uniform(72.0),
+      lgIdxW:         uniform(256.0),
+      lgOn:           uniform(0.0),
     };
     // Lamp arrays: the flat stride-15 frame.lights record split by consumer,
     // exactly like js/render/glx/glx.js / the spike. geo = (rad, cosInner, cosOuter,
@@ -333,6 +350,61 @@
         lampDir[i].set(L[o + 7], L[o + 8], L[o + 9]);
         lampGeo[i].set(L[o + 6], L[o + 10], L[o + 11], L[o + 12]);
       }
+    }
+
+    /* Fill the per-chunk lamp textures and switch the path on.
+     *
+     * Called by tlx.js when the bake changes (track, lamp set, or the PER-CHUNK
+     * LAMPS knob) — never per frame: the lamps are baked per track and the chunk
+     * bounds never move, which is the premise LampChunks is built on.
+     *
+     * setLampGrid(null) — or ANY input that will not fit the fixed textures —
+     * leaves lgOn at 0, and every fragment keeps the global lamp set. That is
+     * the picture TLX draws today, so a refusal here costs the feature and
+     * nothing else. It matters more than usual because no software adapter can
+     * show whether this path looks right.
+     *
+     * The stride-15 record is split exactly as updateFrame splits frame.lights
+     * above — pos 0..2, col 3..5, rad 6, dir 7..9, cone 10..12 — so the two
+     * sources cannot drift. */
+    function setLampGrid(info) {
+      if (!LGRID) return false;
+      const off = () => { U.lgOn.value = 0.0; return false; };
+      if (!info || !info.lights || !info.table || !info.grid) return off();
+      const L = info.lights, t = info.table, g = info.grid;
+      const nLamps = (L.length / 15) | 0;
+      if (!(nLamps > 0) || nLamps > LGRID.LAMPS) return off();
+      if (t.concat.length > LGRID.IDXW * LGRID.IDXW) return off();
+      if (!(g.gw > 0) || !(g.gh > 0) || g.gw > LGRID.G || g.gh > LGRID.G) return off();
+
+      const lt = LGRID.lampTex.image.data;
+      lt.fill(0);
+      for (let i = 0; i < nLamps; i++) {
+        const o = i * 15, r = i * 16;            // 4 texels x RGBA
+        lt[r]      = L[o];     lt[r + 1]  = L[o + 1]; lt[r + 2]  = L[o + 2]; lt[r + 3]  = L[o + 6];
+        lt[r + 4]  = L[o + 3]; lt[r + 5]  = L[o + 4]; lt[r + 6]  = L[o + 5]; lt[r + 7]  = 0;
+        lt[r + 8]  = L[o + 7]; lt[r + 9]  = L[o + 8]; lt[r + 10] = L[o + 9]; lt[r + 11] = 0;
+        lt[r + 12] = L[o + 6]; lt[r + 13] = L[o + 10]; lt[r + 14] = L[o + 11]; lt[r + 15] = L[o + 12];
+      }
+      const it = LGRID.idxTex.image.data;
+      it.fill(0);
+      for (let k = 0; k < t.concat.length; k++) it[k] = t.concat[k];
+      const gt = LGRID.gridTex.image.data;
+      gt.fill(0);
+      for (let c = 0; c < g.gw * g.gh; c++) {
+        // gridTex is RG, the bake is (offset, count) pairs — same stride, so a
+        // straight copy. Row r of the bake lands on row r of the texture, which
+        // is why the shader's cz is a plain (cell - gz0).
+        gt[c * 2] = g.data[c * 2];
+        gt[c * 2 + 1] = g.data[c * 2 + 1];
+      }
+      LGRID.lampTex.needsUpdate = LGRID.idxTex.needsUpdate = LGRID.gridTex.needsUpdate = true;
+      U.lgOrigin.value.set(g.gx0, g.gz0);
+      U.lgSize.value.set(g.gw, g.gh);
+      U.lgCell.value = info.cell > 0 ? info.cell : 72.0;
+      U.lgIdxW.value = LGRID.IDXW;
+      U.lgOn.value = 1.0;
+      return true;
     }
 
     /* BRDF leaves (js/render/glx/shaders/glsl-lit.js) — plain node composition, inlined */
@@ -668,6 +740,32 @@
      * be created) means NONE of this is compiled in and TLX renders exactly the
      * pre-existing procedural look. */
     const MAT_MAPS = ctx.matMaps || null;
+
+    /* PER-CHUNK LAMPS (ctx.lampGrid). Compiled into the CHUNKED variant only,
+     * and only when tlx.js has built the textures — absent, every read below
+     * falls back to the global set and this file behaves exactly as before.
+     *
+     * WHY A GRID AND NOT A PER-DRAW BINDING. GLX binds each chunk's index list
+     * per draw; WGX passes (offset, count) in a per-draw uniform. Three has
+     * neither: every visible chunk is drawn from one pooled mesh sharing ONE
+     * material, and a uniform belongs to the material. `drawIndex` looks like
+     * the way out and is not — in vendor/three-0.185.1 both the declaration of
+     * `nodeUniformDrawId` and its only assignment are gated on
+     * `object.isBatchedMesh`, so a plain Mesh reads nothing.
+     *
+     * What a fragment CAN read is its own world position, and the chunks are a
+     * regular XZ grid (tlx-chunked.js bins by triangle centroid into
+     * `cell`-sized cells). So the fragment finds its own cell, reads that
+     * cell's (offset, count) from gridTex, and walks its slice of idxTex into
+     * lampTex. One texelFetch to enter, one per lamp.
+     *
+     * PER FRAGMENT, NOT PER CHUNK — the deliberate difference from the other
+     * two backends, argued in docs/ARCHITECTURE.md §Cross-backend parity. A
+     * triangle straddling a cell boundary lights from the neighbour's set
+     * beyond that line, which is the set nearer the PIXEL.
+     *
+     * lampTex is 4 texels per lamp on x: (pos,rad) (col,-) (dir,-) (geo). */
+    const LGRID = (ctx.lampGrid && ctx.lampGrid.lampTex) ? ctx.lampGrid : null;
     const matAlbedoNode = MAT_MAPS && MAT_MAPS.albedo ? texture(MAT_MAPS.albedo) : null;
     const matNormalNode = MAT_MAPS && MAT_MAPS.normal ? texture(MAT_MAPS.normal) : null;
 
@@ -1288,10 +1386,59 @@
         // (M4) — direct terms only; bounce fill + fog in-scatter stay
         // unshadowed (they are indirect).
         const lampFogAcc = vec3(0.0).toVar();
+
+        /* PER-CHUNK LAMP SOURCE. Off (LGRID null, or lgOn 0) every accessor
+         * below is the plain uniform-array read this loop has always done.
+         *
+         * On, the fragment finds its OWN grid cell from world XZ — the same
+         * floor(x / cell) + 1024 binning tlx-chunked.js used to bucket the
+         * triangles — reads that cell's (offset, count) out of gridTex, and
+         * walks its slice of idxTex into lampTex. A cell outside the baked
+         * extent, or an empty one, yields count 0, and `pcN` then falls back to
+         * the global set: a miss degrades to today's picture, never to darkness.
+         *
+         * `lgOn` is a UNIFORM, not a compile flag, so the knob and an empty bake
+         * both switch this at runtime without minting a second node graph. */
+        const PC = (LGRID && chunked) ? (() => {
+          const on = U.lgOn.greaterThan(0.5);
+          const cx = floor(wp.x.div(U.lgCell)).add(1024.0).sub(U.lgOrigin.x);
+          const cz = floor(wp.z.div(U.lgCell)).add(1024.0).sub(U.lgOrigin.y);
+          const inside = on.and(cx.greaterThanEqual(0.0)).and(cx.lessThan(U.lgSize.x))
+                           .and(cz.greaterThanEqual(0.0)).and(cz.lessThan(U.lgSize.y));
+          // One fetch to enter. Clamped so the out-of-extent case reads texel 0
+          // rather than sampling out of bounds; `inside` discards the result.
+          const g = textureLoad(LGRID.gridTex,
+            ivec2(select(inside, cx, float(0.0)), select(inside, cz, float(0.0)))).toVar();
+          const cnt = select(inside, g.y, float(0.0)).toVar();
+          return { base: g.x.toVar(), n: cnt, use: cnt.greaterThan(0.5) };
+        })() : null;
+
+        // Resolve slot `i` to a lamp record. On the per-chunk path `i` indexes
+        // the CHUNK'S slice; the index texture maps it to the track-lamp id.
+        const _lid = PC ? (i) => {
+          const k = PC.base.add(float(i)).toVar();
+          const row = floor(k.div(U.lgIdxW));
+          return textureLoad(LGRID.idxTex, ivec2(k.sub(row.mul(U.lgIdxW)), row)).r.toVar();
+        } : null;
+        const lampRow = PC ? (i) => _lid(i) : null;
+        const _fetch = (row, col) => textureLoad(LGRID.lampTex, ivec2(float(col), row));
+        const LGeo = PC ? ((i, r) => select(PC.use, _fetch(r, 3), U.lampGeo.element(i)))
+                        : ((i) => U.lampGeo.element(i));
+        const LPos = PC ? ((i, r) => select(PC.use, _fetch(r, 0).xyz, U.lampPos.element(i)))
+                        : ((i) => U.lampPos.element(i));
+        const LCol = PC ? ((i, r) => select(PC.use, _fetch(r, 1).xyz, U.lampCol.element(i)))
+                        : ((i) => U.lampCol.element(i));
+        const LDir = PC ? ((i, r) => select(PC.use, _fetch(r, 2).xyz, U.lampDir.element(i)))
+                        : ((i) => U.lampDir.element(i));
+        // The loop still runs to MAX_LIGHTS — a TSL Loop bound must be a
+        // compile-time constant — and breaks on whichever count applies.
+        const lampN = PC ? select(PC.use, PC.n, U.numLights) : U.numLights;
+
         Loop({ start: int(0), end: int(MAX_LIGHTS), type: "int", condition: "<" }, ({ i }) => {
-          If(float(i).greaterThanEqual(U.numLights), () => { Break(); });
-          const geo = U.lampGeo.element(i);
-          const LP = U.lampPos.element(i).sub(wp).toVar();
+          If(float(i).greaterThanEqual(lampN), () => { Break(); });
+          const row = lampRow ? lampRow(i) : null;
+          const geo = LGeo(i, row);
+          const LP = LPos(i, row).sub(wp).toVar();
           const dist = length(LP).toVar();
           const rad = geo.x;
           If(dist.lessThan(rad), () => {
@@ -1301,14 +1448,14 @@
             const distC = max(dist, U.lampNearClamp);   // LAMP NEAR CLAMP
             const att = win.mul(win).div(distC.mul(distC).add(1.0)).toVar();
             If(att.greaterThanEqual(1e-6), () => {
-              const cd = dot(Ld.negate(), U.lampDir.element(i));
+              const cd = dot(Ld.negate(), LDir(i, row));
               const beam = smoothstep(geo.z, geo.y, cd).toVar();
               const spotD = mix(geo.w, float(1.0), beam);                       // illumination follows the beam
               const spotS = mix(mix(float(0.16), float(0.30), wetSheen).mul(U.lampWallSpill), float(1.0), beam);  // reflection floor
               // U.lampFog is 0 by day, so skip the accumulate (uniform CF —
               // safe for TSL→WGSL). Matches GLX lit.js / WGSL chunks.
               If(U.lampFog.greaterThan(0.0), () => {
-                lampFogAcc.addAssign(U.lampCol.element(i).mul(att.mul(mix(float(0.35), float(1.0), beam))));
+                lampFogAcc.addAssign(LCol(i, row).mul(att.mul(mix(float(0.35), float(1.0), beam))));
               });
               const NoLl = max(dot(N, Ld), 0.0).toVar();
               // Per-lamp shadow for the one mapped floodlight (js/render/glx/shaders/glsl-lit.js):
@@ -1321,7 +1468,15 @@
                 // are the NoLl-scaled diffuse and the specular block already
                 // inside NoLl>0. A back-facing fragment paid 4 compare taps
                 // for a result multiplied by zero.
-                If(U.lampShadowOn.greaterThan(0.5).and(float(i).equal(U.lampShadowIdx)).and(NoLl.greaterThan(0.0)), () => {
+                // NOT ON THE PER-CHUNK PATH. lampShadowIdx names a slot in the
+                // FRAME set (tlx-shadow.js: "frame.lights is re-sorted every
+                // frame; it names THIS frame's slot"), while `i` here indexes
+                // the chunk's slice of the TRACK set — the two numbering
+                // systems are unrelated, so the compare would shadow an
+                // arbitrary lamp. The mapped floodlight keeps its shadow on
+                // every non-chunked surface, which is where it was authored.
+                If(U.lampShadowOn.greaterThan(0.5).and(float(i).equal(U.lampShadowIdx)).and(NoLl.greaterThan(0.0))
+                   .and(PC ? PC.use.not() : float(1.0).greaterThan(0.5)), () => {
                   const lpc = U.lampShadowVP.mul(vec4(wp, 1.0)).toVar();
                   If(lpc.w.greaterThan(0.0), () => {
                     const lps = lpc.xyz.div(lpc.w).mul(0.5).add(0.5).toVar();
@@ -1339,12 +1494,12 @@
                 });
               }
               // diffuse pool — fades as the road wets (reflection takes over)
-              color.addAssign(albedo.mul(U.lampCol.element(i))
+              color.addAssign(albedo.mul(LCol(i, row))
                 .mul(att.mul(spotD).mul(lampSh)).mul(NoLl)
                 .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
               // bounce fill (uBounceK, def 0.04 — js/render/glx/shaders/glsl-lit.js)
               If(U.bounceK.greaterThan(0.0), () => {
-                color.addAssign(albedo.mul(U.lampCol.element(i))
+                color.addAssign(albedo.mul(LCol(i, row))
                   .mul(att.mul(U.bounceK).mul(NoLl.mul(0.45).add(0.55)))
                   .mul(metalness.oneMinus()));
               });
@@ -1356,7 +1511,7 @@
                 const Dl = D_GGX(NoHl, a);
                 const Vl = V_SmithGGX(NoV, NoLl, a);
                 const Fll = F_Schlick(VoHl, f0, clamp(rough.oneMinus(), 0.0, 1.0));
-                const radianceS = U.lampCol.element(i).mul(att.mul(spotS).mul(lampSh)).toVar();
+                const radianceS = LCol(i, row).mul(att.mul(spotS).mul(lampSh)).toVar();
                 const lspec = Fll.mul(Dl.mul(Vl)).mul(radianceS).mul(NoLl).toVar();
                 color.addAssign(lspec.div(lspec.add(1.0)));                     // soft-clip
                 If(clearcoat.greaterThan(0.001), () => {
@@ -1846,7 +2001,7 @@
       if (i >= 0) _mats.splice(i, 1);
     }
 
-    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, updateFrame, setEnvStr, setEnvCube,
+    return { makeMaterial, makeViz, releaseMaterial, uniforms: U, updateFrame, setEnvStr, setEnvCube, setLampGrid,
              setSsrMrt, setMaterialMaps, hasMaterialMaps: !!matAlbedoNode, MAX_LIGHTS };
   }
 
