@@ -7,11 +7,29 @@ the next attempt starts from the measurements instead of repeating them.*
 ## The defect
 
 `font-variant-numeric: tabular-nums` appears ~36 times on `--font-hud` across
-`hud/data/career/components`. **Every one of them is inert.** Rajdhani — the
-first family in that stack — ships no OpenType features at all (empty
-GSUB/GPOS) and proportional digit advances (upem 1000; "1" is 0.334em, "4" is
-0.541em). CSS cannot synthesise a feature a font does not contain, and the
-failure is silent: the declaration reads as working.
+`hud/data/career/components`. **Every one of them is inert**, and the reason is
+narrower and more interesting than "the font has no features".
+
+Rajdhani's full TTF is NOT feature-empty: v1.201 ships 11 GSUB features
+(`abvs akhn blwf blws half haln nukt pres psts rphf vatu`) and 2 GPOS
+(`abvm blwm`) — **all registered under script `deva` only.** There is no `latn`
+script entry at all, so for Latin text there is no `tnum` and no kerning
+either. The upstream feature files (`itfoundry/rajdhani`, `family.fea`) declare
+`languagesystem DFLT/dev2/deva` and contain no figure feature — no `tnum`,
+`lnum`, `pnum` or `zero` — anywhere in 1712 lines. What Google's subsetter then
+serves for the Latin range is a font whose feature list is **literally empty**:
+it dropped the Devanagari features and there was nothing Latin to keep.
+
+So the shipped face genuinely has nothing to apply, but a maintainer reading
+the source TTF would see 13 features and conclude the opposite. Verified with
+fontTools against both the upstream TTF and the served woff2.
+
+On top of that, Rajdhani's digits are proportional (upem 1000; "1" is 0.334em,
+"8" is 0.542em — the widest, not "4"). CSS cannot synthesise a feature a font
+does not contain ([CSS Fonts 4 §7.2](https://drafts.csswg.org/css-fonts-4/):
+"text is simply rendered as if that font feature was not enabled; font fallback
+does not occur"), and the failure is silent. `@supports` cannot catch it — it
+tests the PROPERTY, which is supported; it is the FONT that is missing.
 
 Measured in Chromium at `#hud-speed`'s 34px/700:
 
@@ -23,9 +41,16 @@ Measured in Chromium at `#hud-speed`'s 34px/700:
 | `"+0.123"` / `"+8.888"` | 89.79 / 99.86 |
 
 So every changed digit shifts the readout by up to 7px, per frame, on the
-number you read while driving. `min-width: 3ch` on `#hud-speed-n` does not save
-it: `1ch` is the advance of "0" (536 units), so the slot is 1608 while `"888"`
-needs 1626 and `"111"` needs 1002.
+number you read while driving.
+
+**`min-width: 3ch` is not the culprit, and an earlier draft of this note said
+it was.** `1ch` is normatively the advance of "0" alone (536 units here), so
+`3ch` = 1.608em = 54.67px against `"888"`'s 1.626em = 55.30px — short by
+**0.63px, 1.1%**. The box was very nearly pinned. The 7px comes from the STRING
+shrinking inside that box: `"888"` is 55.3px of glyphs and `"111"` is 34.1px,
+so with any alignment but a hard edge every digit slides within a box that is
+itself barely moving. This is an intra-string problem, not a box-width problem,
+and a fix aimed at the box will not touch it.
 
 ## The fix that works
 
@@ -75,6 +100,57 @@ that is enough to tip six knife-edge cases from just-passing to just-failing.
 This pair is in that spec because it shipped broken once before, painting the
 gap strip over the POS/LAP/TIME/BEST plates. It has no slack at 667×375.
 
+## A better option than the composite face: just change the font
+
+Measured with fontTools across the condensed/display faces in the same register
+as Rajdhani (wght 600 Latin subsets). `tnum` means the feature exists AND
+resolves to uniform advances:
+
+| family | tabular digits? |
+|---|---|
+| **Rajdhani** | no — 8 distinct widths, no `latn` features |
+| Oswald, Saira Condensed, Chakra Petch, Teko | no — no `tnum`, 9–10 distinct widths |
+| **Barlow Condensed** | **yes** — `tnum` → all 475 |
+| **Fira Sans Condensed** | **yes** — `tnum` → all 504 |
+| **Encode Sans Condensed** | **yes** — `tnum` → all 1109/2000 |
+| **Archivo Narrow** | **yes** — already all 456 |
+| **Roboto Condensed** | **yes** — already all 1030/2048 |
+| Titillium Web, IBM Plex Sans Condensed | no `tnum`, but digits are ALREADY uniform |
+| Exo 2 | `tnum` present but BROKEN — "4" is 616, the other nine are 620 |
+
+Swapping the HUD display face for one that has real tabular figures removes the
+composite-font machinery, the `size-adjust` constant, and the Safari-17 floor in
+one move. That was not considered on the first pass and should be considered
+first on the next.
+
+Two cautions the measurements turned up:
+
+- **`size-adjust: 96.79%` rested on an assumption that is not a law.** It was
+  derived from "the tabular width should equal Rajdhani's widest digit". Encode
+  Sans Condensed is a counter-example: its `tnum` width (1109) is NARROWER than
+  its widest proportional digit (1137). The constant is a design choice, not a
+  derivation, and it needs re-measuring against whatever face is chosen.
+- **The composite face would have moved `ch` underneath us.** A digits-only face
+  excludes U+0020, so it is not the "first available font" and `ex`/`line-height`
+  stay Rajdhani — but `ch` is defined as the advance of "0" *in the font used to
+  render it*, so `1ch` would have become Titillium's zero times `size-adjust`,
+  silently resizing every `ch`-sized box on the page. Spec-derived, NOT measured
+  (CSS Values 4 §6.1.1 + the CSS Fonts 4 changelog line "stop claiming that `ch`
+  uses the first available font"); implementations may disagree. Measure before
+  relying on it either way.
+
+## A guard that would have caught this
+
+The bug class is "a declaration that reads as working and is not", which is the
+same class as the vacuously-green test noted below. A `tools/check/` guard can
+close it: for every font the shell ships, assert EITHER `tnum` is present and
+its substituted advances are uniform, OR the default digit advances are already
+uniform. fontkit's `availableFeatures` or fontTools' `GSUB.table.FeatureList`
+both answer it in a few lines (guard for `FeatureList is None` — Rajdhani's
+subset is exactly the input that crashes naive code). Tag presence alone is not
+enough: Exo 2 above has the tag and still fails. This mechanises the same check
+fontspector proposes in its issue #896.
+
 ## What the next attempt needs
 
 Fixed slots before the font, not after. `.hud-top` and `.hud-gaps` are
@@ -83,6 +159,19 @@ slot sized for its worst-case string and `.hud-top` stops growing at all —
 at which point tabular digits are free, and are in fact what makes fixed slots
 honest. Sizing those slots needs a look at the real screen, which is why it was
 not bolted onto this pass.
+
+Two ways to size a slot that do not repeat the `ch` mistake:
+
+1. **Per-digit slots.** One inline-block per digit at the WIDEST digit's advance
+   (`0.542em` for Rajdhani Bold, not `1ch`), digit centred inside. Fixes the box
+   AND the intra-string slide in one move, with no font change and no download.
+2. **Grid-stack a hidden worst case.** Put the live value and a
+   `visibility: hidden` `"888"` in the same grid cell so the cell always sizes to
+   the larger. Font-agnostic — it survives a future font swap without a magic
+   em constant in the CSS.
+
+Keep the ~36 `tabular-nums` declarations either way. They cost nothing and
+become correct the day the face changes.
 
 Do **not** re-derive the font metrics: they are in the tables above, measured
 with `document.fonts.load()` + `check()` first (a first reading was taken
