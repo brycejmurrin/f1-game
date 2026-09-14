@@ -11,6 +11,50 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-14 — `career.spec.js` is 14 red and `time-trial.spec.js`'s two ghost
+tests are red, on a CLEAN tree. OPEN.** Found while gating the tyre phases, and
+proven pre-existing rather than assumed: the same specs were run alone on a
+quiet box against this tree and against a worktree at `a28b77d`, the commit
+before any of the tyre work.
+
+```
+career.spec.js       mine 14 failed / 87 passed    base 15 failed / 86 passed
+time-trial.spec.js   mine  2 failed /  2 passed    base  2 failed /  2 passed   (-g ghost)
+```
+
+Every failure on this tree is also a failure at base — the set difference in the
+regression direction is EMPTY, and base additionally fails
+`the hire's contract › it expires`. So this is the tree's state, not a change's.
+
+**Career: the same un-awaited `startRace` as the `quick-validate` entry below.**
+The failing reads are all of one shape — `__apex.race("monza")` followed by a
+SYNCHRONOUS read in the same `page.evaluate`:
+
+```js
+window.__apex.seed(5); window.__apex.race("monza");
+for (let i = 0; i < 24; i++) { const c = window.__apex.carAt(i); if (!c) break; … }
+expect(a.length).toBeGreaterThan(20);   // Received: 0
+```
+
+`race()` starts `startRace()` and does not await it, and `startRace`'s first
+statement is `await ensureScenery(trackIdx)`, so the race arms in a LATER task
+and a synchronous pass never sees it. Every other failure in the file is the
+same thing wearing a different hat: `picked` null, `by("VER")` undefined, and a
+team-development multiplier reading `0.98889` — which is not a wrong number, it
+is the NEUTRAL one, before development applied.
+
+**Time trial: not a race at all.** The second ghost test never boots a session —
+it calls `Ghost.clear/setTrack/startLap/record/finishLap` and reads
+`localStorage` directly — and still fails on `saved.s` with `saved` undefined.
+So the ghost is not being persisted. `storage.persist denied` appears in these
+logs, so a container that refuses persistent storage is the first thing to check
+before touching `js/race/ghost.js`.
+
+**The fix is the one already made for `quick-validate.mjs`**: poll for
+`info().state` instead of reading synchronously after `race()`. Not attempted
+here — it is fourteen specs in a file this change does not touch, and folding a
+speculative rewrite of them into a tyre commit would bury both.
+
 **2026-09-14 — `debris.spec.js › enabled by default` fails on `rapierFetches`. OPEN.**
 Found while gating the tyre thermal layer; **pre-existing**, and proven so
 rather than assumed — the same single spec fails identically on a worktree at
