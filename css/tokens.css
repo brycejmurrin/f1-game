@@ -486,6 +486,11 @@
      delta inks (ghost, gaps, data hub), named so every reader agrees. */
   --faster: #a3e635;
   --slower: #ff3b30;
+  /* The HUD's dark halo — the recipe #hud-speed-n, .sec-val and .hud-energy-label
+     all spell out by hand so light ink stays legible over the live scene. Named
+     here so a new HUD readout can reach for it instead of restating the literal
+     (which is what the rawColor ratchet is counting). */
+  --hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
   /* SESSION BEST WAS THE HARDEST OF THE THREE TO READ, which is the wrong way
      round: it marks the best lap you can set, on a 14px readout, at 300 km/h.
      Measured in APCA (the contrast model that actually works on dark UI — WCAG
@@ -506,8 +511,8 @@
      PINK, and purple-means-session-best is a motorsport convention worth more
      than the last 14 Lc. At 65 it keeps 80 % of the chroma.
 
-     CAVEAT ON THE NUMBERS: .sec-val carries `text-shadow: 0 1px 3px
-     rgba(0,0,0,0.9)`, and a dark halo raises effective contrast for light ink,
+     CAVEAT ON THE NUMBERS: .sec-val carries the --hud-halo shadow declared just
+     above, and a dark halo raises effective contrast for light ink,
      so these Lc values are a FLOOR rather than what the eye gets. All three
      colours carry the same halo, which is why the 30 Lc gap between them is the
      robust part and the absolute figures are not. tests/unit/apca-timing.test.mjs

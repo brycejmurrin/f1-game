@@ -141,6 +141,8 @@ export const RULES = [
   // that checks that projection.
   [/^js\/physics\/incident-sim\.js/, ["collisions", "sweeps"], "the Rapier takeover is a CONTACT model"],
   [/^js\/physics\/debris-world\.js/, ["physics-core", "sweeps"], "debris.spec.js rides in test:physics-core"],
+  [/^js\/physics\/tyre-model\.js/, ["physics-core"], "the wear model feeds the grip seam — pit-lane.spec.js and the characterization ride in test:physics-core"],
+  [/^js\/race\/pit-lane\.js/, ["physics-core"], "pit-lane.spec.js rides in test:physics-core"],
   [/^js\/physics\/(active-aero|aero)/, ["aero"], "the aero model — active-aero + aero-zones specs"],
   [/^js\/physics\//, ["physics-core"], "the driving model and what feeds it"],
   [/^js\/race\/race-control\.js/, ["physics-core"], "race-control.spec.js rides in test:physics-core"],

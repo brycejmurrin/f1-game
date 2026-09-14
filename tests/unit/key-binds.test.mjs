@@ -78,6 +78,7 @@ test("the defaults are the keys the game always had", () => {
     left: ["ArrowLeft", "KeyA"], right: ["ArrowRight", "KeyD"], throttle: ["ArrowUp", "KeyW"], brake: ["ArrowDown", "KeyS"],
     boost: ["Space", null], overtake: ["KeyX", null], aero: ["KeyZ", null], shiftUp: ["KeyE", null],
     shiftDown: ["KeyQ", "ShiftLeft"], camera: ["KeyC", null],
+    pit: ["KeyV", null],
   });
   assert.equal(Input.keysAreDefault(), true);
 });
@@ -161,9 +162,10 @@ test("controller defaults are the standard layout the game always had", () => {
   assert.deepEqual(plain(Input.getPadMap()), {
     throttle: [7, 0], brake: [6, 1], boost: [2, null], overtake: [3, null],
     aero: [12, null], shiftUp: [5, null], shiftDown: [4, null], camera: [8, null],
+    pit: [13, null],
   });
   assert.equal(Input.padsAreDefault(), true);
-  assert.deepEqual(plain(Input.padBindings()).map((a) => a.id), ["throttle", "brake", "boost", "overtake", "aero", "shiftUp", "shiftDown", "camera"]);
+  assert.deepEqual(plain(Input.padBindings()).map((a) => a.id), ["throttle", "brake", "boost", "overtake", "aero", "pit", "shiftUp", "shiftDown", "camera"]);
 });
 
 test("a rebound button drives and the old one stops answering", () => {

@@ -19,6 +19,10 @@ let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
 let _redline = false;         // tach redline latch: on above 92% of MAX_RPM, off again below 89%
+// Where the tyre bar turns amber. 70% of the set's life is the point a stop
+// stops being hypothetical — F1 games teach "pit before 65-75% wear" and it is
+// far enough out that a player still has a lap or two to act on it.
+const TYRE_WARN = 0.70;
 
 const _hudTxt = new WeakMap();   // el -> last textContent
 const _hudSty = new WeakMap();   // el -> { prop: lastVal }
@@ -617,6 +621,25 @@ function updateHud(force) {
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
   hText(els.speed, "" + Math.round(G.dashKph(player.speed)));
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
+  // TYRES (js/physics/tyre-model.js). The widget is hidden entirely while the
+  // setting is off — the shipped default — so a player who never turns it on
+  // pays nothing for it, not even a greyed-out bar. `spent` is wear as a
+  // fraction of the compound's life, so the bar reads LIFE REMAINING and the
+  // three colour states are the three things the engineer would say on the
+  // radio: fine, think about a stop, you are past it.
+  const tyres = G.tyres;
+  const tyreOn = !!(tyres && tyres.on());
+  if (els.tyre) els.tyre.hidden = !tyreOn;
+  if (tyreOn) {
+    const spent = tyres.spent(player);
+    hText(els.tyreCode, (player.tyre && player.tyre.code) || "-");
+    hStyle(els.tyreFill, "width", (clamp(1 - spent, 0, 1) * 100).toFixed(0) + "%");
+    els.tyre.dataset.wear = spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok";
+    // The PIT button carries its own state the way BOOST/OT/AERO do: armed while
+    // the stop is called, on while the car is actually in the lane.
+    hToggle(els.btnPit, "armed", !!player.pitArmed && player.pitState !== "box");
+    hToggle(els.btnPit, "on", player.pitState === "lane" || player.pitState === "box");
+  }
   // gear + tachometer
   hText(els.gear, "" + player.gear);
   const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
