@@ -157,7 +157,7 @@ test("the folded per-circuit data reaches the built def", () => {
   assert.equal(typeof ctx.CircuitMarkings, "undefined", "CircuitMarkings must not exist any more");
   for (const k of ["BARRIER", "FURN", "KIT", "STYLES", "STAND_SETS"])
     assert.equal(ctx.TrackSceneryData[k], undefined, `TrackSceneryData.${k} must not exist any more`);
-  assert.equal(Tracks.LIST.length, 51);
+  assert.equal(Tracks.LIST.length, 52);
   for (const t of Tracks.LIST) {
     assert.ok(t.path && Array.isArray(t.path.pts) && t.path.pts.length > 50, `${t.id} must carry path.pts`);
     assert.ok(Number.isFinite(t.path.len) && t.path.len > 3000, `${t.id} must carry path.len`);

@@ -374,7 +374,7 @@ test("all current track mesh buffers are finite and structurally indexable", () 
   // lengthen the championship, and that is the failure mode worth catching.
   // 40 -> 51 when eleven circuits were recovered from OpenStreetMap, the
   // bacinger/f1-circuits file having run out of features (tools/track/osm-circuits.json).
-  assert.equal(Tracks.LIST.length, 51);
+  assert.equal(Tracks.LIST.length, 52);
   assert.equal(Tracks.SEASON.length, 24);
   assert.ok(Tracks.SEASON.every((t) => !t.classic));
   assert.deepEqual(issues, []);

@@ -826,3 +826,81 @@ test("the straight branch respects the gates the corner branch already had", () 
   // no room that side on a street
   assert.equal(A.defendPull({ ...onStraight, street: true, roomR: 1.5, other: { x: 1.4 } }), 0);
 });
+
+/* THE HUMAN-YIELD GRACE.
+ *
+ * sideYieldsA elects exactly ONE car of an alongside pair to concede, and only
+ * the elected car backs off (the rubClamp in js/game.js). Between two AI cars
+ * that resolves, because both run the rule. A human runs no yield logic at all
+ * — and must not, since the arc may not reach the driver — so when the rule
+ * elects the player the pair has NO yielder: the AI keeps aiming at the racing
+ * line through a car that was never going to move.
+ *
+ * Measured before the fix (monza, 240 s, scripted player holding the line at
+ * racing pace): of 276 frames alongside inside the clear gap, the rule elected
+ * the HUMAN 276 times and the AI zero, while AI-AI pairs resolved at
+ * +0.169 m/s over 22,524 frames.
+ *
+ * js/physics/collide.js already encodes this principle at the CONTACT layer
+ * ("with a HUMAN in the pair there is no planner to mirror"); the steering
+ * layer had no equivalent. The grace is what keeps it from becoming a blanket
+ * exemption, so these assertions are about its SHAPE, not just its existence.
+ */
+test("the human-yield grace is a real reaction window, not zero and not a lap", () => {
+  const A = load();
+  const g = A.humanYieldGrace();
+  assert.equal(typeof g, "number");
+  assert.ok(Number.isFinite(g) && g > 0,
+    "a zero or non-finite grace makes the AI an instant pushover against a player");
+  // Long enough to be a genuine side-by-side rather than an instant concession,
+  // short enough that a lean cannot persist. A driver's reaction is ~0.25 s.
+  assert.ok(g >= 0.15 && g <= 0.8, `grace ${g}s is outside the reaction-time band`);
+});
+
+test("the grace does not disturb who the rule elects between two AI cars", () => {
+  const A = load();
+  // The election rule itself is untouched — the grace acts only in game.js, and
+  // only when the elected car is a human. Pin the three branches so a future
+  // edit to sideYieldsA cannot quietly change AI-vs-AI racing.
+  assert.equal(A.sideYieldsA(-5, 0, 0), true, "behind on arc yields");
+  assert.equal(A.sideYieldsA(5, 0, 0), false, "ahead on arc does not");
+  assert.equal(A.sideYieldsA(0, 3, 1), true, "level: the outer car concedes");
+  assert.equal(A.sideYieldsA(0, 1, 3), false, "level: the inner car holds");
+});
+
+test("the grace arms only when it is OUR aim intruding, and only inside the band", () => {
+  const A = load();
+  const dt = 1 / 60, G = A.humanYieldGrace();
+  // Not alongside at all -> nothing to concede, and the timer is cleared.
+  assert.equal(A.humanYieldT(5, false, false, true, true, dt), 0);
+  // Alongside another AI -> the normal election already covers it.
+  assert.equal(A.humanYieldT(5, true, false, false, true, dt), 0);
+  // The rule already elected US -> we are yielding on the normal path.
+  assert.equal(A.humanYieldT(5, true, true, true, true, dt), 0);
+  // THE REGRESSION collision-contact-vm caught. A player leaning on an AI that
+  // is holding its own line is a RUB, not a free lane: with `intruding` false
+  // the timer holds where it is and never reaches the grace on its own.
+  assert.equal(A.humanYieldT(0, true, false, true, false, dt), 0,
+    "a car that is not steering into anyone must not arm the takeover");
+  // ...and the case the fix is for: alongside a human, not elected, our aim is
+  // going through them. This is the only combination that accumulates.
+  assert.ok(A.humanYieldT(0, true, false, true, true, dt) > 0);
+  // It takes the whole grace, not one frame.
+  let t = 0;
+  for (let i = 0; i < Math.round(G / dt) - 2; i++) t = A.humanYieldT(t, true, false, true, true, dt);
+  assert.equal(A.humanYieldTakes(t), false, `took the role after ${t}s, before the ${G}s grace`);
+  for (let i = 0; i < 4; i++) t = A.humanYieldT(t, true, false, true, true, dt);
+  assert.equal(A.humanYieldTakes(t), true, "never took the role at all");
+});
+
+test("the intrusion band leaves a settled pair settled", () => {
+  const A = load();
+  // The band is why a pair sitting AT the clean gap is not perpetually
+  // re-arming: traced on the start straight, an AI that had already conceded
+  // (x 1.19 -> 0.58, gap exactly on CLEAR) drifted 0.08 m back toward its line
+  // and that read as a fresh intrusion. The band must be a real distance and
+  // must stay under the gap it is measured inside.
+  const band = A.humanYieldBand();
+  assert.ok(band > 0.05 && band < A.minLatGap(5, false),
+    `band ${band} must be a real margin inside the clear gap`);
+});

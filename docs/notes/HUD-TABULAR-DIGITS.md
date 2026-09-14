@@ -177,57 +177,66 @@ Do **not** re-derive the font metrics: they are in the tables above, measured
 with `document.fonts.load()` + `check()` first (a first reading was taken
 before Rajdhani had loaded and showed a 3.75px spread — wrong by 2x).
 
-## Second attempt, 2026-09-14 — and the real obstacle, now measured
+## Second attempt, 2026-09-14 — and what the obstacle actually is
 
-The `--hud-scale` correction (1.24 -> 1, see the `(pointer: coarse)` note in
-css/tokens.css) shrank every readout in that zoom group by 24%, so the fix was
-re-applied on the theory that the room now existed. It does not, and the reason
-is sharper than "no slack":
+The `--hud-scale` correction (1.24 -> 1) shrank every readout in that zoom group
+by 24%, so the fix was re-applied on the theory that the room now existed. It was
+reverted again, but the first write-up of WHY was wrong in a way worth recording,
+because the wrong version is the one a frozen probe tells you.
 
-**`.hud-top` vs `.hud-gaps` already overlap by 27px at 667x375, without any font
-change at all** — but only once the readouts POPULATE. A/B'd on one frozen page
-(`__apex.freeze(true)`, both readings carrying byte-identical strings):
+### The overlap is TRANSIENT, not permanent — the correction
 
-| | `.hud-top` left | `.hud-gaps` right | overlap |
-|---|---|---|---|
-| Apex Digits | 168.9 | 200.4 | 31.5px |
-| Rajdhani only | 175.5 | 202.8 | **27.3px** |
+`.hud-top` and `.hud-gaps` do overlap at 667x375 once the readouts populate. They
+do NOT stay that way. Sampled through a LIVE race, never frozen:
 
-So the digits face costs 4.2px on a pair that is already 27px into each other.
-That is why it is reverted a second time: it is not the cause, and it is not
-free either.
+```
+t=15.7-20.3  short=F drop=F  clash=F   topX=194.5 gapsR=130.7   "POS-/22 LAP1/3 TIME- BEST-"
+t=21.3-26.3  short=F drop=F  clash=T   topX=173.0 gapsR=204.2   "POS22/22 LAP1/3 TIME0:00.33 BEST-"
+t=27.3+      short=T drop=T  clash=F   topX=172.4 gapsR=169.8 gapsY=62
+```
 
-### Why hud-layout.spec.js is green anyway
+The band populates, the pair overlaps for ~4-6 s, then `gapShort` and `gapDrop`
+latch, the strip moves to y=62 and it is clear for the rest of the race. **The
+mechanism works.** Measured window across two runs: 3.8 s and 4.8 s.
 
-It measures ~300ms after `go()`, while the band still reads
-`POS-/22 LAP1/3 TIME- BEST-`. Populated it reads `POS22/22 LAP1/3 TIME0:00.08
-BEST-` and, being CENTRED, grows LEFTWARD into the strip. The spec never sees
-the wide state. **Its green is a timing artefact on this pair.** Anyone working
-here should freeze a populated race rather than trust the suite.
+WHY THE FIRST WRITE-UP SAID "ALREADY OVERLAP BY 27px" with no mention of it
+clearing: that probe used `__apex.freeze(true)` to hold the strings still for a
+clean A/B, and freeze parks the HUD inside the transient. A frozen HUD shows you
+one instant and tells you nothing about whether it is on its way somewhere. The
+A/B it produced (27.3px on Rajdhani, 31.5px with the digits face) is still
+correct about the FONT — both configurations sit in the transient, and the face
+costs ~4px of it — but "already overlap" implied permanence and that was wrong.
 
-### What was fixed, and what is still open
+### The delay is the two-rung design, not a missed re-fit
 
-`fitHud`'s re-run key gained the top band's own `textContent.length`. The key
-already carried the GAP chip's length for precisely this reason — a recorded
-bug where "a mid-window growth overlapped the POS tile until the next forced
-read" — and the same argument applies symmetrically to the band that grows
-toward it. That is correct by construction and is kept.
+The rungs are deliberately ordered — shorten (loses the driver code) before drop
+(loses alignment with the map) — and `capShort` cannot be judged until the short
+spelling has been rendered once, so convergence needs more than one forced pass.
+`_fitWait` paces those passes at ~3 s. That is where the window comes from.
 
-**It is not sufficient, and the remaining cause is not yet found.** With the key
-fix in place, `data-gap-drop` and `data-gap-short` both still read false in the
-populated state, so `capFor()` is concluding the strip fits when the measured
-boxes say it does not. `capFor(l) = min((half - sal) / (l + top/2), ...)`; at
-667x375 with `top` = 329.1 and `l` ~= 208 that evaluates to ~0.89, which is
-below `scale` and SHOULD have set `_gapTight`. Either `top` is not the width
-measured above when the comparison runs, or the rung is being computed from a
-spelling that is not on screen. The next session should instrument `capLong` /
-`capShort` / `top` directly rather than infer them.
+`fitHud`'s re-run key was given the top band's own `textContent.length` on the
+theory that the band growing leftward was a missed re-fit, mirroring the gap
+chip's length which is in the key for exactly that reason. **Measured A/B: it
+changes nothing** — 3.8 s window without it, 4.8 s with (run-to-run noise, and
+certainly no gain). It was reverted rather than left in as complexity carrying a
+rationale the measurement does not support. Do not re-add it without a
+measurement showing a shorter window.
 
-Note the strings here are a backmarker's: `+84.3s` at P22. A normal racing gap
-(`+0.3s`) is much narrower, which is why this is content-dependent and why it
-has survived unreported.
+### What would actually shorten it
 
-## Caveat on the surrounding spec run
+Nothing here is free: shrinking `_fitWait` costs forced layout reads at 10 Hz,
+and collapsing the two rungs into one reintroduces the oscillation the split was
+built to stop (the code says so at length). The honest options are to accept a
+few seconds of overlap at race start on a 667-wide phone, or to give the strip a
+slot that cannot collide in the first place. Neither is a font problem.
+
+### Still true about the font
+
+The digits face costs ~4px on a pair that spends several seconds inside each
+other at race start. That is why it is reverted a second time. Jitter 7.07px ->
+0.00px and worst-case widths unchanged both still hold, and the recipe is above.
+
+## Caveat on the surrounding spec run## Caveat on the surrounding spec run
 
 `hud-layout.spec.js` is **16/32 red on this container regardless** — the same
 16 test names fail on the base commit `93804f7`, with byte-identical overlap

@@ -1,6 +1,6 @@
 # js/circuits/ — circuit DATA only
 
-51 circuit definition files. Engine behaviour lives in `js/track/` — if a fix
+52 circuit definition files. Engine behaviour lives in `js/track/` — if a fix
 needs code, it goes there; these files carry layout, palette, theme, metadata,
 and the `scenery(api)` callback (reference: `docs/SCENERY-API.md`).
 

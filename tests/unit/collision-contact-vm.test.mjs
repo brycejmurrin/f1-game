@@ -178,7 +178,132 @@ test("sgn-of-zero is unreachable: a side contact always has a real dX to sign", 
 
 test("the shipped rule is the scaled one", () => {
   const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
-  assert.match(src, /_ct\.sideContact = \(penLat \* LCAR < penLong \* WCAR\)/);
+  // The constants became per-PAIR extents when the extents went yaw-aware
+  // (eLong/eLat), so the shipped form scales by those. Same rule, same
+  // cross-multiplication — and for an unyawed pair eLong/eLat ARE LCAR/WCAR.
+  assert.match(src, /_ct\.sideContact = \(penLat \* eLong < penLong \* eLat\)/);
   assert.doesNotMatch(src, /_ct\.sideContact = penLat < penLong/,
     "raw least-penetration misclassifies nose-to-tail on a 2.4:1 box");
+});
+
+/* ── YAW-AWARE EXTENTS: the spun-car hole ─────────────────────────────────
+ *
+ * (prog, x) is a plane, and every car used to be axis-aligned in it — heading
+ * relative to the tangent never entered the contact test. A car crossways is
+ * 4.8 m across the road while the pair got 2.0 m of lateral reach, so a rival
+ * passing at |dX| between 2.0 and 3.4 m drove through drawn bodywork.
+ *
+ * Pure arithmetic again: the extents are a function of psi alone, so the hole
+ * and its closure are both a table. The functions here mirror collide.js; the
+ * live-source assertions below stop them drifting apart.
+ */
+const HL_T = 2.4, WL_T = 1.0;
+const LO_T = 20 * Math.PI / 180, HI_T = 60 * Math.PI / 180;
+const mix = (psi) => {
+  const a = Math.abs(psi);
+  if (!(a > LO_T)) return 0;
+  if (a >= HI_T) return 1;
+  const t = (a - LO_T) / (HI_T - LO_T);
+  return t * t * (3 - 2 * t);
+};
+const eLongT = (p) => { const k = mix(p); return k === 0 ? HL_T : HL_T * (1 - k) + k * (HL_T * Math.abs(Math.cos(p)) + WL_T * Math.abs(Math.sin(p))); };
+const eLatT  = (p) => { const k = mix(p); return k === 0 ? WL_T : WL_T * (1 - k) + k * (HL_T * Math.abs(Math.sin(p)) + WL_T * Math.abs(Math.cos(p))); };
+const deg = (d) => d * Math.PI / 180;
+
+test("an unyawed car measures exactly the old constants — the field is untouched", () => {
+  // The whole safety argument: only a car past the blend floor changes at all,
+  // so an ordinary race is bit-identical to before this existed.
+  assert.equal(eLongT(0), HL_T);
+  assert.equal(eLatT(0), WL_T);
+  for (const d of [1, 5, 10, 15, 19.9]) {
+    assert.equal(eLongT(deg(d)), HL_T, `psi ${d} deg is under the blend floor`);
+    assert.equal(eLatT(deg(d)), WL_T, `psi ${d} deg is under the blend floor`);
+  }
+  // ...and cornering slip never reaches it. AI cars are pinned to psi = 0 by
+  // the c.human gate in collide.js anyway (they have no real heading), which
+  // the source assertion below pins.
+});
+
+test("a spun car is finally as wide as it is drawn", () => {
+  // The hole, as metres of lateral reach the PAIR gets against a normal rival.
+  const pairLat = (psi) => eLatT(psi) + WL_T;
+  assert.equal(+pairLat(0).toFixed(2), 2.00);
+  // TWO DIFFERENT NUMBERS, and conflating them is easy: the GEOMETRIC truth of
+  // how wide the car is, and what the blend actually ships. The blend closes
+  // the hole progressively so ordinary cornering is untouched, so at low yaw it
+  // is a deliberate PARTIAL closure — the cost of the 20 deg floor.
+  //
+  //   psi     true reach   shipped   hole closed
+  //    20°       2.76 m     2.00 m       0 %     (the floor: nothing yet)
+  //    30°       3.07 m     2.17 m      16 %
+  //    45°       3.40 m     2.96 m      68 %
+  //    60°       3.58 m     3.58 m     100 %
+  //    90°       3.40 m     3.40 m     100 %
+  //
+  // Full strength covers 60-90 deg, which is where the miss peaks — a car that
+  // is properly sideways can no longer be driven through at all.
+  const shipped = { 30: 2.17, 45: 2.96, 60: 3.58, 75: 3.58, 90: 3.40 };
+  for (const d of Object.keys(shipped)) {
+    assert.equal(+pairLat(deg(+d)).toFixed(2), shipped[d], `psi ${d} deg`);
+    assert.ok(pairLat(deg(+d)) > 2.0, `psi ${d} deg must reach past the old 2.0 m`);
+  }
+  // At and past 60 deg the blend is done, so the shipped reach IS the geometry.
+  for (const d of [60, 75, 90]) {
+    const truth = HL_T * Math.abs(Math.sin(deg(d))) + WL_T * Math.abs(Math.cos(deg(d))) + WL_T;
+    assert.ok(Math.abs(pairLat(deg(d)) - truth) < 1e-9, `psi ${d} deg must be the full geometry`);
+  }
+  // A rival at 2.8 m alongside a car spun 90 deg: through the bodywork before,
+  // a contact now. This is the case the entry asked for.
+  const GAP = 2.8;
+  assert.ok(GAP > 2.0, "2.8 m is outside the OLD 2.0 m pair reach — no contact was reported");
+  assert.ok(GAP < pairLat(deg(90)), "and inside the new reach, so it is a contact now");
+});
+
+test("the peak miss is the three-quarters-on car, not the sideways one", () => {
+  // The entry framed this as the sideways car and proposed blending to full by
+  // 45 deg. Measured, the miss peaks at 60-75 deg, so the blend runs to 60.
+  const miss = (d) => eLatT(deg(d)) + WL_T - 2.0;
+  assert.ok(miss(60) > miss(90), "60 deg misses more than 90 deg");
+  assert.ok(miss(75) > miss(90), "75 deg misses more than 90 deg");
+  // ...and at 90 deg the LONGITUDINAL extent has shrunk below the old constant,
+  // so this removes contacts there as well as adding them laterally. That shows
+  // up in the characterization gate and is not a regression.
+  assert.ok(eLongT(deg(90)) + HL_T < 4.8, "a sideways car is SHORTER along the track");
+});
+
+test("the broadphase can still see every pair the extents now reach", () => {
+  // THE COMPANION EDIT, and the reason it is not optional. The bucket walk only
+  // compares a bucket with itself and the next one, so it is correct exactly
+  // while the bucket is at least as wide as the widest contacting pair. Widen
+  // the extents without widening the bucket and the broadphase silently drops
+  // the very pairs the change was made to catch.
+  // One car can reach sqrt(2.4^2 + 1^2) = 2.6 (at 22.6 deg off the tangent);
+  // the other is at most 2.4. Sample densely to show nothing EXCEEDS that — the
+  // sampled peak lands just under it, which is the grid, not a looser bound.
+  const analytic = Math.hypot(HL_T, WL_T);
+  let worst = 0;
+  for (let d = 0; d <= 180; d += 0.05) worst = Math.max(worst, eLongT(deg(d)));
+  assert.ok(worst <= analytic + 1e-12, `sampled ${worst} exceeds the analytic bound ${analytic}`);
+  assert.ok(worst > analytic - 1e-3, `sampled peak ${worst} is far below ${analytic} — wrong shape`);
+  const widestPair = analytic + HL_T;
+  assert.equal(+widestPair.toFixed(4), 5.0);
+
+  const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
+  const m = src.match(/const LCAR_MAX = ([\d.]+);/);
+  assert.ok(m, "LCAR_MAX must exist");
+  assert.ok(+m[1] >= widestPair, `LCAR_MAX ${m[1]} is under the widest pair ${widestPair}`);
+  assert.match(src, /const COL_BUCKET_M = LCAR_MAX;/,
+    "the bucket must be the widened span, not LCAR");
+  assert.match(src, /if \(adProg > LCAR_MAX && adProg < L - LCAR_MAX\) return null;/,
+    "the cheap reject must use the widened span too");
+});
+
+test("only a car with a REAL heading is ever yawed", () => {
+  // AI cars are kinematic: game.js writes head = atan2(tangent) for them and
+  // their yawVis is a cosmetic lean of up to ~36 deg. Widening a car because it
+  // LOOKS tilted would be the renderer entering the physics, and a genuine spin
+  // is Rapier-owned and skipped by pairContact's callers entirely.
+  const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
+  const hits = src.match(/const psi = c\.human \? \(c\.yawVis \|\| 0\) : 0;/g) || [];
+  assert.equal(hits.length, 2, "both extent functions must gate psi on c.human");
 });

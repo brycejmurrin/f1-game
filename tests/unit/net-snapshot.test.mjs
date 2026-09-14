@@ -289,3 +289,81 @@ test("a state with no lap field is left alone by both movers", () => {
   assert.equal(buf.sample(50).lap, undefined);
   assert.equal(buf.sample(500).lap, undefined);   // extrapolated
 });
+
+// ---------------------------------------------------------------------------
+// Brake-aware extrapolation — F_BRAKE was decoded and thrown away
+// ---------------------------------------------------------------------------
+/* `braking` rides in every packet (F_BRAKE) and was decoded into the view, and
+ * then nothing read it: advance() moved s at a flat st.speed. A car standing on
+ * the brakes was predicted to keep coming at the speed it had when the packet
+ * left. And predict() extrapolates by delayMs on EVERY frame — not only during
+ * a stall — so the follower's predicted contact pose overshot continuously.
+ * That is the last-millisecond-brake asymmetry documented in real P2P racing
+ * netcode, and here it feeds the contact solver as c._nSpd / c._nProg.
+ *
+ * The rate is OBSERVED from the last two packets rather than taken from a
+ * constant: a literal would be a second copy of BRAKE to keep in step with the
+ * physics and re-derive against PACE, which is the coupling aStd exists to
+ * prevent. The wire already carries it, correctly scaled, for free.
+ */
+const TOT = 5000;
+
+test("a car that is not braking extrapolates exactly as it always did", () => {
+  // The safety half: the flag gates everything, so an unbraked field is
+  // bit-identical to before this existed.
+  const buf = NetSnapshot.createInterp({ total: TOT, delayMs: 0 });
+  buf.push(1000, car({ s: 100, speed: 50, braking: false }));
+  buf.push(1100, car({ s: 105, speed: 40, braking: false }));   // a real dip, flag off
+  const o = buf.sample(1200);
+  assert.equal(o.extrapolated, true);
+  assert.equal(o.s, 105 + 40 * 0.1, "no flag, no deceleration — flat speed as before");
+  assert.equal(o.speed, 40);
+});
+
+test("a braking car is predicted short of where flat speed would put it", () => {
+  const buf = NetSnapshot.createInterp({ total: TOT, delayMs: 0 });
+  buf.push(1000, car({ s: 100, speed: 50, braking: true }));
+  buf.push(1100, car({ s: 104.5, speed: 48, braking: true }));  // 20 m/s^2 observed
+  const flat = 104.5 + 48 * 0.1;
+  const o = buf.sample(1200);
+  assert.ok(o.s < flat, `braking must fall short of the flat ${flat}, got ${o.s}`);
+  // 20 m/s^2 over 100 ms: 48*0.1 - 0.5*20*0.01 = 4.8 - 0.1 = 4.7
+  assert.ok(Math.abs(o.s - (104.5 + 4.7)) < 1e-9, `expected 109.2, got ${o.s}`);
+  // ...and the speed agrees with the pose, because they are one claim.
+  assert.ok(Math.abs(o.speed - 46) < 1e-9, `speed should be 46, got ${o.speed}`);
+});
+
+test("the prediction never runs past a stop, or past the slow-down cap", () => {
+  // A jittery pair of packets can imply an absurd rate. Two clamps bound it:
+  // the car never reverses, and extrapolation may not shave more than the
+  // stated share of its speed however hard the wire says it braked.
+  const buf = NetSnapshot.createInterp({ total: TOT, delayMs: 0, maxExtrapMs: 1000 });
+  buf.push(1000, car({ s: 100, speed: 30, braking: true }));
+  buf.push(1010, car({ s: 100.2, speed: 20, braking: true }));  // 1000 m/s^2 — nonsense
+  const o = buf.sample(1500);
+  assert.ok(o.speed >= 0, "never negative");
+  assert.ok(o.speed >= 20 * (1 - 0.35) - 1e-9, `capped at a third off, got ${o.speed}`);
+  assert.ok(o.s > 100.2, "still moves forward");
+  assert.ok(o.s < 100.2 + 20 * 0.5, "but less far than flat speed would take it");
+});
+
+test("one sample cannot imply a rate, and falls back to flat speed", () => {
+  // Guard the guard: with nothing to difference against, the braking flag must
+  // change nothing rather than invent a deceleration.
+  const buf = NetSnapshot.createInterp({ total: TOT, delayMs: 0 });
+  buf.push(1000, car({ s: 100, speed: 50, braking: true }));
+  const o = buf.sample(1100);
+  assert.equal(o.s, 100 + 50 * 0.1);
+  assert.equal(o.speed, 50);
+});
+
+test("a car that is speeding up while flagged braking is not accelerated further", () => {
+  // Only a positive observed deceleration counts; a negative one (speed rising)
+  // must not turn into free forward speed.
+  const buf = NetSnapshot.createInterp({ total: TOT, delayMs: 0 });
+  buf.push(1000, car({ s: 100, speed: 40, braking: true }));
+  buf.push(1100, car({ s: 104, speed: 45, braking: true }));
+  const o = buf.sample(1200);
+  assert.equal(o.s, 104 + 45 * 0.1, "no negative deceleration");
+  assert.equal(o.speed, 45);
+});

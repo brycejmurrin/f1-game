@@ -1816,3 +1816,62 @@ question from "why was it slow?". Where a helper selects by value, assert the
 value EXISTS first; `cycleToPauseSteerMode` in that spec now does, and a
 mismatch fails in a second naming the options that do exist. The four went from
 four 60 s timeouts to 4 passed in 2.3 min.
+
+## 2026-09-14 — swept the CORNER LEAD bug class; it was contained, and why
+
+CORNER LEAD shipped with its slider's off switch broken: the knob's registry
+`def` was 0 while `js/camera/vantage.js` fell back to `CHASE_CORNER_LEAD_DEFAULT`
+(0.54) whenever nothing was stored, and `CamTune.set()` DELETES a value equal to
+`def`. So an explicit 0 was deleted and read back as 0.54. Swept the rest of the
+tree for the same shape rather than assuming it was a one-off. It was contained.
+Recording the sweep so nobody pays for it twice, and the safe pattern it found.
+
+**The three shapes searched, and what turned up:**
+
+1. *A store that drops values equal to `def`.* `grep` for `=== d.def` / `!== d.def`
+   across `js/` hits ONLY `js/camera/offsets.js`, at two sites — `set()` (119)
+   and `sanitize()` (65). Both are cured by making `def` the shipped amount, and
+   note there were TWO: fixing `set()` alone would have left a stored 0 to be
+   dropped again on the next load.
+
+2. *A getter returning null meaning "use the shipped default", with the consumer
+   holding that constant.* `!= null ? x : CONSTANT` hits exactly two places:
+   `vantage.js:452` (CORNER LEAD, now consistent) and `lobby.js:343` (a peer id,
+   not a knob). Nothing else in the tree splits a default across two files.
+
+3. *The falsy-zero parse trap*, `parseFloat(x) || FALLBACK`, which turns a stored
+   0 into the fallback. Every hit is either `|| 0` (harmless) or has a fallback
+   where 0 is not a legitimate value. The one that looked live —
+   `sheet-shape.js:229`, `parseFloat(raw) || SHORT_DEFAULT` on `--compact-at` —
+   is not: no stylesheet sets it to 0, and `tokens.css:153` registers the
+   property with `@property … initial-value: 380px`, the same number, so the
+   `||` only catches an empty computed value.
+
+**The safe pattern, from the registry that is immune.** `js/lighting/knobs.js`
+seeds its live values FROM the registry — `for (const d of TUNE_DEFS) LT[d.id] =
+d.def;` — so a knob's default cannot disagree with what ships, because there is
+only one copy of the number. CamTune could not do that (`offsets.js` loads
+before `vantage.js`, so it cannot read the constant at eval time), which is
+exactly why it needed a test to hold the two numbers together
+(`tests/unit/camera-defaults.test.mjs`). **Prefer seeding from the registry; a
+cross-file guard is the fallback when load order forbids it.**
+
+The general rule: when a default lives in two places, one of them will be wrong,
+and the symptom is a control that silently ignores one end of its own range.
+
+### …and the two smaller sweeps from the same day (both negative)
+
+`selectOption("literal")` across `tests/`: eight call sites, all sound. Each
+either asserts the option count first (`rs-reliab-sel`, the Data Hub pickers) or
+uses a value confirmed elsewhere in the same test. Checked the two static ones
+against the source: `RS_RELIAB` really does carry `"real"`, `lapOpts` really does
+carry 5. The `ui-button-touch` typo was the only one.
+
+Stale tests from the 2026-09-09 STRIP redesign: `ui-redesign.spec.js` was updated
+with it and asserts the strip horizontally (`stripPans: scrollWidth -
+clientWidth > 1`). The only two missed were in `ui-button-touch.spec.js` — and
+that is the lesson worth keeping: **a redesign sweep follows the feature's own
+spec file, so assertions about that feature filed under an unrelated name are the
+ones left behind.** Two selection-screen cases were sitting in a file named for
+button/touch steering. When a screen is reworked, grep the id across all of
+`tests/`, not just the spec that owns the screen.

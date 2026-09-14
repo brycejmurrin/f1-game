@@ -86,26 +86,38 @@
       // ---------------------------------------------------------------------
       // 2. s 0.005 +1 14 — PITS, PADDOCK, BROADCAST, CAMERA TOWER
       //    Club-circuit pit block: one long, low, flat-roofed run. No towers.
+      //
+      //    RE-KEYED THROUGH sl(). The start line moved onto a straight
+      //    (def startFrac) because the grid had been laid through a 28 m
+      //    hairpin, and sceneryStartFrac holds the rest of this file on its
+      //    real corners — Redgate, Craner and the Old Hairpin must not travel
+      //    with the line. But the PIT COMPLEX belongs AT the line wherever the
+      //    line is, so these rows alone are shifted: sl(f) is the authored
+      //    frac that lands at the corrected line. Everything below block 3
+      //    stays in the authoring frame on purpose.
       // ---------------------------------------------------------------------
-      building(K(0.968), 1, 15, 14, 6.5, 108, { col: WALL, roof: ROOF });
-      building(K(0.032), 1, 19, 12, 5.5, 34, { col: WALL_2, roof: ROOF });
+      const SL = 0.9027;                       // = 1 - def._sceneryShift
+      const sl = (f) => (f + SL) % 1;
+      building(K(sl(0.968)), 1, 15, 14, 6.5, 108, { col: WALL, roof: ROOF });
+      building(K(sl(0.032)), 1, 19, 12, 5.5, 34, { col: WALL_2, roof: ROOF });
       // Paddock apron behind the garages.
-      groundPatch(K(0.000), 1, 34, [40, 0.18, 96], TARMACISH);
-      for (let i = 0; i < 5; i++) motorhome(K(0.975 + i * 0.012), 1, 30, 3.0, 3.2, 11, { wall: WALL });
-      broadcastCompound(K(0.020), 1, 30, { col: WALL_2 });
-      cameraTower(K(0.004), 1, 20, { h: 11 });
+      groundPatch(K(sl(0.000)), 1, 34, [40, 0.18, 96], TARMACISH);
+      for (let i = 0; i < 5; i++) motorhome(K(sl(0.975 + i * 0.012)), 1, 30, 3.0, 3.2, 11, { wall: WALL });
+      broadcastCompound(K(sl(0.020)), 1, 30, { col: WALL_2 });
+      cameraTower(K(sl(0.004)), 1, 20, { h: 11 });
       // Paddock perimeter fencing, not spectator debris fence.
-      fence(0.955, 0.055, 1, 30, 2.4, FENCE_C);
+      fence(sl(0.955), sl(0.055), 1, 30, 2.4, FENCE_C);
 
       // ---------------------------------------------------------------------
       // 3. s 0.022 -1 20 — START/FINISH STAND (modest, two shallow banks)
       //    shell/crowd are COLOUR ARRAYS; null lets the emitter pick a livery.
+      //    Re-keyed with the pits — the stand and gantry face the line.
       // ---------------------------------------------------------------------
-      grandstandEx(0.014, -1, 21, 76, null, null);
-      grandstandEx(0.040, -1, 21, 58, null, null);
-      sponsorHoarding(0.995, 0.062, -1, 13);
-      fence(0.990, 0.070, -1, 12, 3.0, FENCE_C);
-      gantry(0.002, 7.2, [0.80, 0.80, 0.78]);
+      grandstandEx(sl(0.014), -1, 21, 76, null, null);
+      grandstandEx(sl(0.040), -1, 21, 58, null, null);
+      sponsorHoarding(sl(0.995), sl(0.062), -1, 13);
+      fence(sl(0.990), sl(0.070), -1, 12, 3.0, FENCE_C);
+      gantry(sl(0.002), 7.2, [0.80, 0.80, 0.78]);
 
       // ---------------------------------------------------------------------
       // 4. s 0.048 +1 34 — THE DONINGTON COLLECTION

@@ -196,9 +196,28 @@
   /* Spark accent — warnings / NEW / session badges only. Never body copy.
      Kept out of Warm Red so red stays scarce (P1 / primary / true alerts). */
   --spark: #ff8c42;
-  /* Cool steel chrome — section labels, secondary plate ink. F1 Carbon's
-     blue-steel role at readable contrast; never a red substitute. */
-  --steel: #8a8a96;
+  /* Section-label and secondary-plate ink — the role d02d19bd4 standardised
+     here when "leftover idle ink and leftover-red headlines" moved onto one
+     name. That pass picked the token; it did not measure it. #8a8a96 is APCA
+     Lc 39.8 on --bg (39.3 on --surf-1, 37.7 on --surf-3), carried at
+     --fs-micro/--fs-2 — the two smallest sizes — on settings labels, section
+     headings and #howtoplay dt. Those are read, not scanned past.
+
+     IT IS NOT LIGHTENED TO SOME NEW VALUE, because there is no room for one.
+     --dim does this job at Lc 48.0, and the two are the SAME INK: identical
+     OKLab hue angle (-74.1deg), chroma 0.0178 vs 0.0203, differing only in
+     lightness (0.637 vs 0.691). Sweeping this token's lightness with a and b
+     held fixed, every value that clears a defensible floor on the worst ground
+     is at or past --dim's own lightness. The "cool steel chrome" hierarchy was
+     a lightness step dressed as a hue, and one end of it had fallen out of
+     readability — so the step goes and the NAME stays, because the role is
+     real and the call sites say which ink they mean.
+
+     Kept as an alias rather than inlined at ~30 call sites: section chrome is
+     a thing you may want to tune apart from body-secondary later, and the
+     alias is where that tuning would happen. tests/unit/steel-role.test.mjs
+     holds both halves. Never a red substitute. */
+  --steel: var(--dim);
   /* Translucent on purpose: sheets sit over the live #game circuit, and that
      3D view is the imagery. 0.76 leaves floodlights and tarmac readable
      through the card without dropping type contrast. Reduced-transparency

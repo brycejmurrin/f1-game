@@ -147,6 +147,154 @@ Two refinements worth folding in from the game-theory lens: use **two thresholds
 **Determinism.** All deterministic; build order is the existing fixed `ranked` order. Note the two *asymmetries that must survive*: `humanInvMass` makes the player heavier so AI cannot shove them, and `sepShares` gives a network-posed car zero of the correction. Both are ownership policy, not physics, and a naive solver rewrite erases them.
 **Cheapest experiment.** Items 4, 5 and the pre-step restitution snapshot are separable and individually one-liners — do those alone first, with a scripted three-car concertina at fixed speeds asserting order-independent post-impulse speeds. Only if the contact-blame counters from #3 show real per-pass classification churn is the full manifold refactor justified.
 
+## Measured since — two entries above are now settled (2026-09-14)
+
+Both were taken to the experiment this document prescribes for them, and both
+came back NO. Recorded here rather than in a commit message because the list
+above is what the next session reads.
+
+### #6 (latch the priority verdict) — DO NOT BUILD, on its own criterion
+
+The entry sets the bar itself: *"count verdict flips per corner per pair over a
+headless race on the current tree. If the number is small, this is theory and
+should not be built. If it is the 88-crossings shape the pass-latch comment
+records, the latch is justified."*
+
+Counted over 240 s at monza, every pair inside the 5.5 m alongside window,
+`sideYieldsA` re-evaluated per frame:
+
+| | |
+|---|---|
+| alongside episodes (≥ 0.5 s) | 221 |
+| median episode | 2.35 s |
+| **median flips per episode** | **1** |
+| episodes with 3+ flips | 15 of 221 (6.8 %) |
+| **flips per second while alongside** | **0.24** |
+
+The pass latch was justified by ~88 crossings in one 43 s dwell — about 2/s.
+This is 0.24/s, and a median episode flipping ONCE is not flip-flop: it is one
+car completing a pass, which is the verdict correctly changing. The entry called
+itself "the riskiest of the AI entries"; it buys nothing. Left unbuilt.
+
+### #5 (yaw-aware contact extents) — BUILT
+
+The hole was real and bigger than "a sideways car is a sliver". Per-car half
+extents are 2.4 x 1.0; support half-widths at yaw psi to the tangent are
+`eLong = 2.4|cos psi| + 1.0|sin psi|`, `eLat = 2.4|sin psi| + 1.0|cos psi|`.
+Against a normally-oriented rival alongside, the pair's lateral reach:
+
+| psi | old | geometric truth | **shipped** | hole closed |
+|---|---|---|---|---|
+| 20° | 2.00 m | 2.76 m | 2.00 m | 0 % (the blend floor) |
+| 30° | 2.00 m | 3.07 m | 2.17 m | 16 % |
+| 45° | 2.00 m | 3.40 m | 2.96 m | 68 % |
+| **60°** | 2.00 m | **3.58 m** | **3.58 m** | **100 %** |
+| 75° | 2.00 m | 3.58 m | 3.58 m | 100 % |
+| 90° | 2.00 m | 3.40 m | 3.40 m | 100 % |
+
+A rival passing a properly sideways car at |dX| between 2.0 and 3.4 m used to
+drive straight through the bodywork the renderer was drawing. It cannot now.
+Below 60° the closure is deliberately partial — the price of a blend floor that
+keeps ordinary cornering out of the physics entirely.
+
+TWO CORRECTIONS TO THE ENTRY, both from the table:
+
+1. The worst case is **60-75°, not 90°**. The entry frames this as the sideways
+   car and fades the term in from 20° to 45°; the peak miss is the
+   three-quarters-on car, so the blend runs to **60°**.
+2. At 90° the LONGITUDINAL extent shrinks to 3.40 m against the fixed 4.80 m, so
+   there the old code over-detected. Yaw-aware extents REMOVE contacts at high
+   yaw as well as adding them. That is not a regression.
+
+WHOSE YAW, which the entry does not settle and which decides the whole scope.
+`c.yawVis` is the real yaw-to-tangent only for the PLAYER. AI cars are
+kinematic — game.js writes `head = atan2(tangent)` for them and their `yawVis`
+is a cosmetic damped lean reaching ~36°, which is presentation, not a pose;
+widening a car because it LOOKS tilted would be the renderer entering the
+physics. And a car in a genuine spin is owned by the incident sim, which
+`pairContact`'s callers skip outright. So the extents read psi for the player
+only, every AI car keeps exactly 2.4 x 1.0, and an unyawed field is bit-identical
+to before. The reachable half of the hole — an AI driving through a spun PLAYER
+— is the half that closes.
+
+The companion edit was required, exactly as flagged: the widest contacting pair
+is `sqrt(2.4² + 1²) + 2.4` = **5.0 m** against `COL_BUCKET_M = LCAR = 4.8`. The
+bucket walk only compares a bucket with itself and the next, so it is correct
+only while the bucket is at least as wide as the widest pair — widen the extents
+without it and the broadphase silently drops the very pairs the change was made
+to catch. `LCAR_MAX = 5.0` now feeds both the bucket and the cheap reject, and a
+test pins that relationship rather than the number.
+
+Verified: collision-contact-vm 13/13 (5 new), test:game-vm 292/292,
+test:tooling-fast 187/187, test:guards 178/178, and in the browser
+physics-characterization + collisions + collision-ai-fixes 18/18 — the
+characterization gate did NOT move, because a clean driving trace never yaws
+the player past the blend floor.
+
+### #7, second bullet (braking-aware net extrapolation) — BUILT
+
+`F_BRAKE` was encoded, decoded into the view, and then read by nothing:
+`advance()` moved `s` at a flat `st.speed`. A remote car standing on the brakes
+was predicted to keep coming at the speed it had when the packet left.
+
+Worse than the entry suggests: `predict()` is `sample(now + delayMs)`, so it
+extrapolates on EVERY frame, not only during a stall. The follower's predicted
+contact pose — `c._nProg` / `c._nSpd`, what the collision solver actually reads
+— overshot continuously, which is the last-millisecond-brake asymmetry the
+netcode lens cited.
+
+The rate is OBSERVED from the last two packets, not taken from a constant. A
+literal here would be a second copy of `BRAKE` to keep in step with the physics
+and re-derive against `PACE` — the coupling `aStd` exists to prevent — and the
+wire already carries the answer correctly scaled. Gated on the flag, so a
+momentary dip between two packets is not extrapolated as if sustained; clamped
+so the prediction never runs past a stop, never reverses, and never sheds more
+than a third of the speed however absurd a jittery packet pair implies.
+
+Speed follows `s` out of `advance()`, because they are one claim about one car:
+a pose that slowed with a speed that did not is two predictions that disagree,
+and the contact solver reads both.
+
+Determinism is untouched — this changes only each peer's own local guess, no
+cross-peer bit-exactness is claimed or required, and no new trig.
+
+Verified: net-snapshot 25/25 (5 new), test:net-unit 203/203, test:tooling-fast
+187/187, test:guards 178/178, and in the browser multiplayer-session +
+multiplayer-npeer 24/24. The primary new test fails with the fix neutered, so it
+is pinning the behaviour rather than the arithmetic.
+
+### #7, first bullet (publish `_vLimNow`, compare corner-entry limits) — REVERTED
+
+Built exactly as described — `c._vLimNow = br.vLim` stashed beside `_vmaxNow`,
+`attackOK` comparing its own limit against the blocker's, as a bounded ±25 %
+multiplier on the attack score, cutting both ways so it damps the attack the car
+was going to abandon at the apex. Human blockers publish nothing, so the
+multiplier is exactly 1 for them.
+
+It does not work, and the interesting part is HOW it looked like it did.
+
+| `ai-field.mjs` | before | after |
+|---|---|---|
+| 5 seeds — oscillationShare | 0.634 [0.549–0.653] | 0.568 [0.489–0.616] |
+| **9 seeds — oscillationShare** | **0.634 [0.457–0.667]** | **0.599 [0.489–0.734]** |
+| 9 seeds — noseToTailPct | 25.6 [23.9–31.8] | 26.8 [22.1–28.0] (worse) |
+| 9 seeds — settledPasses | 32 [22–39] | 38 [18–55] |
+
+At five seeds the target metric fell 10 % and the before-median sat above the
+whole after-range — enough to read as a win. At nine the ranges swallow it, the
+after-range reaches HIGHER than before, and nose-to-tail share moves the wrong
+way. `paceSpreadPct` is identical throughout (1.43), which confirms the change
+touched no pace and that the metric's spread is the race reshuffling.
+
+So: five seeds was not enough for this metric, and `--runs 5` — the number
+ai-field.mjs's own usage line suggests — would have shipped it. For an
+oscillation-share comparison use nine or more, and treat the 5-seed number as a
+smoke test. The entry's claim that this one "needs no argument" is withdrawn: it
+needs the argument, and loses it.
+
+Not re-litigated: the publication of `_vLimNow` alone is free and harmless, but
+an unread field is bloat, so it went out with the consumer.
+
 ## Tempting but wrong
 
 **Ship a learned policy (GT Sophy / Forza 8 Drivatar).** Rejected by three lenses independently. No build step to bake weights into, no training harness, and decisively: the AI field is *kinematic*, so there is no throttle/brake/steer action space for a learned policy to control. Even the clever version — distil to a 32-unit MLP as a `const W = [...]` float array, which genuinely fits the budget at ~2.4 Mflop/s — fails on process fit: a weight blob is the least defensible artefact possible in a codebase where every constant carries the measurement that produced it.
