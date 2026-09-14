@@ -1905,3 +1905,63 @@ Three things an adversarial review corrected, recorded because each is a trap:
   and it means this metric has well under a pixel of geometric headroom: the
   camera has to be pinned exactly, not approximately. `eyeAt()`/`view()` write a
   static object, so it is.
+
+## 2026-09-14 — `debris.spec` had TWO defects that alternated, and neither was the one on record
+
+The spec was carried as "red at base for environment reasons: the Rapier WASM
+fetch takes 40 s against a 30 s `waitForFunction` budget". Half right, and the
+half that was wrong sent the first fix attempt at the wrong target. A BASELINE
+run of the unmodified spec is what settled it, and running one before patching is
+the whole lesson here.
+
+**Defect 1 — the assertion measured a full buffer, not a fetch.** The baseline
+run FINISHED in 94.4 s of its 120 s budget and failed an ASSERTION, and the
+30 s wait it was supposed to blow took 16.4 s and succeeded (the log even carries
+`DebrisWorld.buildWorld cars=22` at 42033 ms). Probing what actually returns
+zero, three runs out of three:
+
+    active:true enabled:true ready:true  stepped:30  live:36
+    rapierFetches:0   resourceEntries:250
+
+`stepped` and `live` are healthy — the side-world works. The zero is
+`rapierFetches`, and `resourceEntries` is exactly **250**: Chrome's default
+resource-timing buffer, full. Once it fills, later entries are dropped silently
+(`resourcetimingbufferfull`, which nothing here listens for) — and rapier.mjs is
+imported LAZILY ~42 s in, long after the script roster and the baked asset pack
+have filled it. With the buffer raised the page measures **260** entries with
+rapier.mjs among them: it overflows the cap by TEN, which is why this read as
+flaky rather than always red. Whether it tipped over depended on which optional
+assets loaded that run.
+
+The sibling test is the better catch. "can be disabled … inert, **no rapier
+fetch**" asserts `rapierFetches === 0`, and with the buffer full that assertion
+CANNOT FAIL. The one thing that test exists to prove had been unfalsifiable.
+`performance.setResourceTimingBufferSize` in an init script fixes both directions
+at once.
+
+**Defect 2 — the budget had no margin, and only appeared once defect 1 was
+fixed.** The very next run failed differently: `Timeout 30000ms exceeded`, the
+wait measured at 34.1 s. The lazy rapier import is a 2.24 MB vendored module
+parsed and instantiated after boot on a page already rendering a race. MEASURED,
+four fresh contexts on an IDLE box, from `__apex.debris(true)` to `st.ready`:
+
+    27.9 / 28.8 / 28.8 / 28.9 s     worst 28.9
+
+1.1 s under the hand-rolled 30 s on an idle box — the same shape as the budgets
+the BOOT_MS note above was written about. `RAPIER_MS = 55000` (~1.9x worst idle,
+matching BOOT_MS's own 1.8x) with the measurements in its comment.
+
+The file timeout had to move with it or the fix relocates the failure a third
+time: the failing test measured 104.3 s while dying EARLY at 30 s, so letting the
+wait run its measured length pushes it past the config's 120 s default. 240 s,
+alongside the existing per-file caps on image-grade-visual (480 s) and
+lighting-ab (420 s).
+
+No assertion tolerance was touched. Both are load budgets, and the rule for those
+is the one fixtures.js already states: measure the slow one and give it its own
+number.
+
+**Verified:** 5/5 with both fixes, where the unmodified spec failed 1/5 and the
+buffer-only tree also failed 1/5 (differently). A repeat run is in flight as this
+is written — the complaint was flakiness, so one green is not evidence against it
+and this line should be updated with the second result, not left standing alone.
