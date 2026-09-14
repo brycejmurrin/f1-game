@@ -61,6 +61,22 @@ const focusInfo = (page) =>
   });
 
 test.describe("Menu keyboard + trackpad (desktop)", () => {
+  // DECLARE THE BUDGET. Four tests in this file boot a full race — 22 cars, a
+  // built circuit, the maps pass — and the file declared nothing, so each got
+  // Playwright's 120 s default. Two of them died on exactly "Test timeout of
+  // 120000ms exceeded" at the DEPLOYED commit 761b81418, with the apex log
+  // showing monza still in buildProps: the budget ran out mid-fixture, before
+  // any assertion ran.
+  //
+  // 300 s is what every peer on this fixture already carries
+  // (hud-layout, bahrain/cota/monaco/montreal-foundation, autopilot), and
+  // hud-layout's header records why the number must be DECLARED rather than
+  // inherited: tools/ci/select-specs.mjs keys its "EXCLUDED (declares Ns test
+  // budget > gate 120s)" guard on test.setTimeout, so a race-fixture spec that
+  // declares nothing silently enters the 120 s change-aware gate that every
+  // other race-fixture spec is excluded from — which is how hud-layout once
+  // burned a whole job's 26-minute cap and CANCELLED a Pages deploy.
+  test.setTimeout(300_000);
   test.use({ viewport: DESKTOP });
 
   test("wheel anywhere on the screen pans the flag strip", async ({ page }) => {
@@ -228,6 +244,14 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
 
   test("left/right move along a chip row without leaving it", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
+    // The GARAGE runs a 3D car preview, and Playwright's actionability check
+    // wants the same bounding box on two consecutive animation frames — so a
+    // locator click on that screen retries until its budget is gone. Measured
+    // on the same class of defect in audio-smoke.spec.js today: 14.1 s against
+    // 1.2 s for one click, with rAF at a healthy 40.7 Hz, so this is the live
+    // canvas and not a starved frame clock. Stop the render loop first, the
+    // way menu-baseline.spec.js already does before clicking menus.
+    await page.evaluate(() => window.__apex.headless(true));
     await openSelect(page);
     // The DRIVER chips moved from the select screen into the GARAGE's TEAM tab
     // when the screens were split by question (who you are / where you race).
@@ -458,6 +482,8 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
  * never do something no visible button does.
  */
 test.describe("Escape is BACK", () => {
+  // Same reason as the block above: two tests here boot a race.
+  test.setTimeout(300_000);
   test.use({ viewport: DESKTOP });
 
   // THE STRUCTURAL ONE, and the reason the next screen to be added cannot
@@ -535,6 +561,10 @@ test.describe("Escape is BACK", () => {
     await page.evaluate(() => {
       window.__apex.park(0.1);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
+      // Same live-canvas stall as the garage above — #pausebtn sits over a
+      // rendering race. headlessMode only skips render() (js/game.js), so the
+      // pause/Escape behaviour under test is untouched.
+      window.__apex.headless(true);
     });
     await page.locator("#pausebtn").click();
     await page.locator("#pausemenu").waitFor({ state: "visible" });

@@ -45,7 +45,12 @@ async function openSettings(page, track = "bahrain", tod = "day", wx = "dry") {
     document.getElementById("pausemenu").hidden = false;
     document.getElementById("pm-settings").click();
   });
-  await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: 8_000 });
+  // BOOT_MS, not 8 s: this opens the settings sheet over a RUNNING race, so the
+  // wait sits behind SwiftShader. It timed out here at the deployed commit
+  // 761b81418 ("36 lighting tuner"), and 8 s was never a measured budget — the
+  // peers on this fixture all read BOOT_MS, which carries the 11-33 s boot
+  // measurement behind it.
+  await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: BOOT_MS });
   await page.waitForTimeout(200);
 }
 // Cycle a labelled toggle in-page until its text contains `want`.
@@ -106,7 +111,13 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
     // duplicate SOUND toggle was removed, since it was the master mute while
     // the panel's switch is the effects bus and the two read as one control.
     await page.evaluate(() => document.getElementById("pm-audio").click());
-    await page.waitForTimeout(120);
+    // WAIT FOR THE PANEL, do not sleep at it. A flat 120 ms was enough on a
+    // quiet box and not on a loaded one: at the deployed commit this threw
+    // "Cannot read properties of null (reading 'click')" because #as-music-off
+    // did not exist yet. SettingsNav renders the audio panel on demand, so the
+    // honest wait is for the control itself.
+    await page.waitForFunction(() => document.getElementById("as-music-off") != null
+      && document.getElementById("as-sound-off") != null, null, { polling: 50, timeout: BOOT_MS });
     await page.evaluate(() => document.getElementById("as-music-off").click());
     await page.evaluate(() => document.getElementById("as-sound-off").click());
     // The OFF half of each switch must now carry the selected ("active") ring —
