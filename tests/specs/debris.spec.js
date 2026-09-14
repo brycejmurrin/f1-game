@@ -8,6 +8,21 @@ import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function boot(page) {
+  // RAISE THE RESOURCE-TIMING BUFFER BEFORE ANYTHING LOADS. Two tests here read
+  // performance.getEntriesByType("resource") to prove rapier was (or was not)
+  // fetched, and that buffer defaults to 250 ENTRIES and simply STOPS RECORDING
+  // when full — it does not evict. A full boot loads the shell, every module,
+  // the asset pack and its textures, so on a slow boot rapier's own entry can
+  // arrive after the buffer has closed and be missing from a page that fetched
+  // and ran it perfectly well. That is exactly how the positive assertion
+  // failed: `ready`, `stepped` and `live` all passed and only the FETCH RECORD
+  // was absent.
+  //
+  // addInitScript runs before any page script, which is the only moment this
+  // can be set — by the time a test evaluates, the buffer has long since
+  // filled. Test-side on purpose: the game has no reason to carry a bigger
+  // buffer for a spec's benefit.
+  await page.addInitScript(() => performance.setResourceTimingBufferSize(3000));
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
@@ -65,6 +80,9 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
         live: st.live,
         rapierFetches: performance.getEntriesByType("resource")
           .filter((e) => e.name.includes("rapier")).length,
+        // For the failure message: a resource-timing buffer that FILLED is the
+        // difference between "rapier never loaded" and "we stopped watching".
+        resourceCount: performance.getEntriesByType("resource").length,
       };
     });
     if (!r.ready) throw new Error("rapier load failed: " + r.error);
@@ -73,7 +91,10 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
     expect(r.ready).toBe(true);
     expect(r.stepped).toBeGreaterThan(0);   // the burst made the side-world step
     expect(r.live).toBeGreaterThan(0);      // and spawn debris
-    expect(r.rapierFetches).toBeGreaterThan(0);
+    expect(r.rapierFetches,
+      `no rapier resource entry among ${r.resourceCount} recorded — if that number is at the `
+      + "buffer cap the entry was dropped, not the fetch (boot() raises it to 3000)")
+      .toBeGreaterThan(0);
   });
 
   test("can be disabled via apex26.debris='0': inert, no rapier fetch", async ({ page }) => {

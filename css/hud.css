@@ -436,6 +436,26 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
 #hud-tyre[data-pit="box"] #hud-tyre-code {
   background: var(--you); color: var(--bg); border-radius: var(--r-xs);
 }
+/* PIT CUE (js/race/pit-lane.js cue()). With no pit button, the entry has to
+   announce itself — the arrow IS the instruction, because the thing it points
+   at is 450 m of arc with nothing painted on it. Four phases: counting down to
+   the entry, at the entry, committed, and in the lane. It stays hidden unless a
+   stop is worth making, so it never becomes wallpaper. */
+/* …and the restatement the shell needs: an author `display` beats the UA's
+   `[hidden] { display: none }`, so without this the cue paints while hidden.
+   tests/unit/css-layers.test.mjs caught exactly that. */
+#hud-pit[hidden] { display: none; }
+#hud-pit {
+  display: flex; align-items: center; gap: calc(var(--gap) / 3);
+  font-family: var(--font-hud); font-size: var(--fs-micro); font-weight: 800;
+  letter-spacing: 0.08em; color: var(--text); text-shadow: var(--hud-halo);
+}
+#hud-pit-arrow { color: var(--you); }
+#hud-pit[data-phase="enter"] #hud-pit-arrow,
+#hud-pit[data-phase="armed"] #hud-pit-arrow { animation: pulse var(--hud-pulse) infinite; }
+#hud-pit[data-phase="box"] { color: var(--you); }
+body.hud-met-timing #hud-pit,
+body.hud-met-compact #hud-pit { display: none !important; }
 body.hud-met-timing #hud-tyre,
 body.hud-met-compact #hud-tyre { display: none !important; }
 /* Light ink with the HUD's dark halo (the #hud-speed / .sec-val recipe) reads on

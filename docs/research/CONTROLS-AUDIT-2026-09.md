@@ -507,13 +507,13 @@ deliberately changed.
 |---|---|---|---|
 | `gamepad` left-stick centre dead zone | pass | **fixed spec** | mine — 0.14 → 0.05 |
 | `gamepad` d-pad full-lock override | pass | **fixed spec** | mine — it ramps now |
-| `gamepad` triggers and face buttons | fail | fail | pre-existing |
-| `gamepad` face/shoulder edge-triggered | fail | fail | pre-existing |
-| `gamepad` keyboard driving after a HUD button | fail | fail | pre-existing |
-| `gamepad` trigger travel is analog | fail | fail | pre-existing |
+| `gamepad` triggers and face buttons | fail | fail | pre-existing — **green 2026-09-14; see below** |
+| `gamepad` face/shoulder edge-triggered | fail | fail | pre-existing — **green 2026-09-14** |
+| `gamepad` keyboard driving after a HUD button | fail | fail | pre-existing — **green 2026-09-14** |
+| `gamepad` trigger travel is analog | fail | fail | pre-existing — **green 2026-09-14** |
 | `camera-tuner` CORNER LEAD | fail | fail | pre-existing — **fixed 2026-09-14, a real product bug; see below** |
 | `presets` STANDARD sits between RELAX and PRO | fail | fail | pre-existing — **green once RELAX took `steerRate: 2`; no test change** |
-| `steering` ×9, `sliders` ×4 | fail | fail | pre-existing |
+| `steering` ×9, `sliders` ×4 | fail | fail | pre-existing — `steering` fixed (DOM clicks + declared budget, row below); `sliders` see the ledger |
 | `touch-steer` + `tilt-pipeline` + `steer-migration` | — | **47/47 pass** | the specs closest to this change |
 
 **The presets failure is arithmetic, and worth naming.** `STANDARD sits between
@@ -585,6 +585,29 @@ collapse caused this.
 
 Verified green: the CORNER LEAD spec, the rest of `camera-tuner.spec.js`, and
 `presets.spec.js`. Guards 178/178, tooling-fast 183/183.
+
+**The four `gamepad` rows above are STALE, and were re-measured 2026-09-14:
+`gamepad.spec.js` is 27/27 green.** Both trigger cases pass (2.8 min), the
+edge-trigger and HUD-button cases pass (4.2 min), and the whole file passes in
+10.4 min — run individually on a quiet box, not inferred from a group.
+
+This matters because `docs/notes/DEFECT-LEDGER.md` recorded those same four as
+an OPEN defect with a specific diagnosis — "the pad reads as absent:
+`Input.throttle()` false on button 7, analog trigger 0" — which does not
+reproduce. The likeliest source of that reading is a full `test:input` GROUP run
+on a loaded box, where these are among the slowest cases: a group-level red got
+attributed to a code path. Worth naming plainly, because it is the same error as
+the `ui-button-touch` misdiagnosis recorded in TESTING-FIELD-NOTES the same day,
+pointing the other way — there a real test bug was written off as the
+environment, here the environment was written up as a real bug. Both took a
+failure's SIGNATURE for its CAUSE.
+
+One hypothesis was chased and eliminated before measuring, and is kept so it is
+not chased again: `pollGamepad()` returns early behind a 60-frame reprobe gate
+when `padConnected` is false, and each `poll()` helper calls `Input.poll()`
+exactly once — which would produce "pad absent" precisely. It cannot fire here:
+the helper dispatches `gamepadconnected` first, and that listener
+(`js/input/input.js:2036`) sets `padConnected = true`.
 
 **A guard came out of this.** `#ios-install` shipped with `display: flex`, which
 outranks the UA's `[hidden] { display: none }` — an author rule always beats a

@@ -3531,6 +3531,15 @@ const WGX = (function () {
         }
       }
       d[140] = _absShadowIdx;
+      // pitLane (floats 144..147, off 576): the PAINTED pit lane — entry s,
+      // window length, pit side, lap length. Mirrors GLX's uPitLane. A null
+      // frame.pitLane writes a zero LENGTH, which is what roadMarkings tests,
+      // so nothing is drawn until a lane is armed.
+      {
+        const pl = f.pitLane;
+        d[144] = pl ? pl[0] : 0; d[145] = pl ? pl[1] : 0;
+        d[146] = pl ? pl[2] : 1; d[147] = pl ? pl[3] : 1;
+      }
       device.queue.writeBuffer(frameUBO, 0, frameData);
 
       // Lights: flat stride-15 -> 4×vec4 per light (verbatim field map).

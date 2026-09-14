@@ -2204,6 +2204,8 @@ half-width toward `side` within `COMMIT_M` of the entry and hold it for
 | `stops` | Stops this car has made |
 | `commit` | How far through the commitment dwell this car is, 0-1 — 0 unless it is holding the line into the pits right now. With no button, this is the whole input, and the HUD's compound chip fills with it |
 | `side` | Which way "in" is: `+1` right (where `js/track/tracks.js` places the pit building), `-1` left. Overridable per circuit via `def.pitZone.side` |
+| `lane` | The four numbers the lit shaders paint the lane from, exactly as the frame carries them: `[entry s, window length, side, lap length]`. **`null` means no lane is armed and nothing is painted** — the first thing to check when the lane is invisible |
+| `laneEdgeX` | Where the painted boundary sits laterally at a nominal 7 m half-width. The real line is at `(hw − 3.2) × side`, so it tracks the road's actual width |
 
 **The lane is a STATE, not a place.** There is no lateral lane to drive into:
 a driveable one was built and measured badly twice (a forced boundary went

@@ -220,22 +220,31 @@
       }
 
       // ---------------------------------------------------------------- 7.
+      // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
+      // startFrac) because the grid had been laid through a 104 m corner, and
+      // sceneryStartFrac holds the rest of this file on its real corners —
+      // Namerow, the Esses and the ski-mountain framing must not travel with
+      // the line. The paddock and the start-line stand belong AT the line, so
+      // these two blocks alone are shifted.
+      const SL = 0.7166;                       // = 1 - def._sceneryShift
+      const sl = (f) => (f + SL) % 1;
+
       // PADDOCK (row 0.005). Club scale: ONE long low garage/timing block, two
       // motorhomes parked behind it, one camera tower by the pit exit. This is
       // the only substantial built structure on the lap.
-      building(K(0.005), 1, 14, 15, 7.5, 118, { wall: CONC, roof: ROOF, floor: 2, window: WIN });
-      motorhome(K(0.996), 1, 30, 12, 5.0, 20, { wall: VAN_A, window: GLASS });
-      motorhome(K(0.016), 1, 30, 12, 5.0, 18, { wall: VAN_B, window: GLASS });
-      cameraTower(K(0.042), 1, 16, {});
-      fence(0.975, 0.062, 1, 11, 2.4, [0.62, 0.64, 0.66]);
-      groundPatch(K(0.005), 1, 26, [52, 0.35, 96], [0.31, 0.31, 0.33]);
+      building(K(sl(0.005)), 1, 14, 15, 7.5, 118, { wall: CONC, roof: ROOF, floor: 2, window: WIN });
+      motorhome(K(sl(0.996)), 1, 30, 12, 5.0, 20, { wall: VAN_A, window: GLASS });
+      motorhome(K(sl(0.016)), 1, 30, 12, 5.0, 18, { wall: VAN_B, window: GLASS });
+      cameraTower(K(sl(0.042)), 1, 16, {});
+      fence(sl(0.975), sl(0.062), 1, 11, 2.4, [0.62, 0.64, 0.66]);
+      groundPatch(K(sl(0.005)), 1, 26, [52, 0.35, 96], [0.31, 0.31, 0.33]);
 
       // ---------------------------------------------------------------- 8.
       // START LINE OUTSIDE (row 0.020). One grandstand bank with armco hard in
       // front of it — one of only two real gaps in the treeline all lap.
-      grandstandEx(0.020, -1, 7, 110, null, null);
-      guardrail(0.008, 0.040, -1, 2.6, ARMCO);
-      billboard(K(0.038), -1, 9, 9, 3, [0.80, 0.16, 0.16]);
+      grandstandEx(sl(0.020), -1, 7, 110, null, null);
+      guardrail(sl(0.008), sl(0.040), -1, 2.6, ARMCO);
+      billboard(K(sl(0.038)), -1, 9, 9, 3, [0.80, 0.16, 0.16]);
 
       // ---------------------------------------------------------------- 9.
       // TURN 1, apex on the crest (row 0.181). Marshal post and a short tyre

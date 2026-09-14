@@ -18,7 +18,7 @@ partial account is what let the RELAX drift below sit for a week.
 | failures | cause | state |
 |---|---|---|
 | 3 (`sliders`, `presets`) | `PRESETS.relax` left behind by the 2026-09-08 re-centring | **FIXED** — see the entry below |
-| 2 (`sliders › OVERALL SPEED`) | the car reaches gear 5, not 8, flat out | **OPEN**, pre-existing |
+| 2 (`sliders › OVERALL SPEED`) | the car reaches gear 5, not 8, flat out | **FIXED** on the deploy branch — see below |
 | 4 (`gamepad.spec.js`) | the pad reads as absent: `Input.throttle()` false on button 7, analog trigger 0 | **OPEN**, pre-existing |
 | 9 (`steering.spec.js`) | every one 103-142 s against a 120 s test timeout | box, not code |
 | 2 (`camera-hooks`, `camera-tuner`) | 146 s / 44 s | box, not code |
@@ -28,14 +28,19 @@ on a quiet box against the tree and against a worktree at `a28b77d`, and came
 back identical — `gamepad.spec.js` 4 failed / 23 passed on both, the same four
 tests; `OVERALL SPEED` the same two with the same `Expected: 8, Received: 5`.
 
-**The two OPEN ones deserve a look, and neither is a timeout.**
+**`OVERALL SPEED`: RESOLVED by the deploy-branch merge (2026-09-14), and the
+diagnosis is worth keeping.** The spec hardcoded `jump(0.1, …)` as its
+"straight". Nothing steers the car in this test — road-follow and the racing
+line both default to 0 — so on a curved stretch it drove straight off the road,
+hit the grass drag, and settled on the off-track floor: **gear 5 of 8** and
+14.75 m/s where 76.5 was wanted. Not a driving defect at all; the car was on
+the grass. The deploy branch's fix is to locate a real straight first
+(`straightFrac()` walks 60 fractions and takes the lowest |k|), which both
+OVERALL SPEED tests now do. Verified on the merged tree: **4 passed**.
 
-`OVERALL SPEED reaches the full gearbox` is 1200 fixed `__apex.step(1/60, 60)`
-ticks flat out — pure sim time, no wall-clock dependence — and the car tops out
-in **gear 5 of 8** at every pace setting. Its sibling wants > 76.5 m/s in manual
-and measures **14.75**. Something is holding the car far below the envelope from
-a standing start; that is a driving defect, not a test defect, and it is worth a
-session of its own.
+The lesson is the generalisable half: a driving spec that hardcodes a track
+fraction is asserting something about GEOMETRY it never states, and circuit
+geometry moves — the elevations were re-surveyed the same week this went red.
 
 `gamepad.spec.js` fails on the pad being read at all: `Input.throttle()` comes
 back false for button 7 held at 1.0, and the analog trigger reads a flat 0 where
@@ -1493,3 +1498,78 @@ Deferred with reasoning, none lost:
   not the fix**: "still happening, on X not Y" is a bisect the reporter has
   already run for you, and the second cause was found by taking it literally
   rather than re-examining the first.
+
+---
+
+- **The four `gamepad.spec.js` failures logged above as OPEN do not reproduce:
+  the file is 27/27 green (re-measured 2026-09-14, later the same day).** The
+  entry above reads them as a real button-path defect — "the pad reads as
+  absent: `Input.throttle()` false on button 7, analog trigger 0" — and that is
+  the part that does not hold. Measured individually on a quiet box: both
+  trigger cases pass in 2.8 min, the edge-trigger and HUD-button cases in
+  4.2 min, the whole file in 10.4 min.
+
+  The entry is left standing rather than edited, because HOW it went wrong is
+  the useful part. Its own numbers say it: nine `steering` failures at
+  "103-142 s against a 120 s test timeout" and two camera ones at "146 s / 44 s"
+  are all budget, and the four gamepad cases are among the slowest in the group
+  — so a `test:input` GROUP run on a loaded box produces exactly this shape.
+  A group-level red was then attributed to a specific code path, and the
+  attribution came with a plausible mechanism, which is what made it stick.
+
+  **This is the same mistake as the `ui-button-touch` misdiagnosis recorded in
+  TESTING-FIELD-NOTES the same day, pointing the opposite way.** There, four
+  real test bugs (a wrong `selectOption` value, two tests outliving a redesign)
+  were written off as the SwiftShader actionability stall. Here, slow tests were
+  written up as a button-path defect. Both took a failure's SIGNATURE for its
+  CAUSE, and both cost a later session an investigation. A group verdict is
+  evidence about the GROUP; before a failure earns a named mechanism, re-run
+  that spec ALONE.
+
+  One hypothesis was eliminated before measuring, kept so it is not chased
+  again: `pollGamepad()` returns early behind a 60-frame reprobe gate while
+  `padConnected` is false, and the spec's `poll()` helper calls `Input.poll()`
+  exactly once — which would look exactly like an absent pad. It cannot fire:
+  the helper dispatches `gamepadconnected` first, and that listener
+  (`js/input/input.js:2036`) sets `padConnected = true`.
+
+  Still genuinely OPEN from that entry, and untouched here: `sliders › OVERALL
+  SPEED`, where the car tops out in gear 5 of 8 and its sibling measures
+  14.75 m/s against a > 76.5 expectation, over 1200 fixed sim ticks with no
+  wall-clock dependence. That one is not a budget artefact and deserves the
+  session the entry asks for.
+
+---
+
+- **The `sliders › OVERALL SPEED` entry is stale too: both cases pass.**
+  Re-measured 2026-09-14 — "reaches the full gearbox and dial at every setting"
+  and "clears the old top-gear limiter in MANUAL gears" pass together in 2.1 min,
+  run alone on a quiet box. The whole file is 22/22 in 7.2 min, which also covers
+  the third-case fix below.
+
+  This one had to be MEASURED, not reasoned about, and the entry above is right
+  about why: 1200 fixed `__apex.step(1/60, 60)` ticks is pure sim time with no
+  wall-clock dependence, so "the box was loaded" could not have explained it the
+  way it explains the four gamepad cases. It was the one claim in that entry that
+  deserved a real investigation. The answer is that the fix had already landed —
+  `straightFrac()` asks the track for its straightest point instead of standing
+  at a hardcoded frac, because held at zero steer a car planted on a bend runs
+  wide inside the first second, hits the off-track floor, and plateaus near half
+  of vTop reporting **gear 5 where the test wants 8**. That is the reported
+  symptom exactly, and it is a statement about where the test stood, not about
+  the powertrain.
+
+  **What the re-measurement did find is the quieter half of the same bug.** A
+  THIRD case, "OVERALL SPEED lifts BOTH the player's and the AI's top speed",
+  was still doing `park(0.0)` / `jump(0.0, 0, 0)` long after the helper landed —
+  and PASSING, because it only asserts `fast > slow + 5` and running wide costs
+  both samples about equally. So it measured from wherever frac 0.0 sits rather
+  than from clear road, and would have become a real failure the moment someone
+  tightened the assertion or the geometry moved under it. Now fixed to take the
+  straight like its two siblings.
+
+  The lesson worth carrying: a green test can still be measuring the wrong
+  thing, and a relative assertion (`fast > slow`) will hide a systematic error
+  that biases both sides. When a bug is traced to a hardcoded position, grep for
+  the other hardcoded positions in the same file before closing it — two of the
+  three here were fixed and the third was left, which is how it survived.
