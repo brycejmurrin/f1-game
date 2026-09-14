@@ -2,8 +2,6 @@
 "use strict";
 
 const NetNostr = (function () {
-  const APP_ID = "apex26-vs";
-
   const JOIN_TIMEOUT_MS = 120000;
   const RELAY_CHECK_MS = 6000;
   const REPOST_MS = 5000;
@@ -441,7 +439,7 @@ const NetNostr = (function () {
   // createEvent/subscribe is reached any more.
   const exchange = directExchange;
 
-  return { APP_ID, JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, roomId, exchange, directExchange, load,
+  return { JOIN_TIMEOUT_MS, RELAY_CHECK_MS, available, roomId, exchange, directExchange, load,
     RELAYS, relayUrls, validRelay,
     MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE,
     readRelayFrame, createBoundedInbox };

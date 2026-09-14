@@ -14,8 +14,7 @@ const F1API = (function () {
   // not be verified here — a safe swap once someone confirms it responds.
   //
   // Between Jan 1 and the opener, the standings endpoints return an empty
-  // list — correct, and every caller already handles it. lastRace() is the
-  // exception: it asks season()-1 once so January still shows the last finale.
+  // list — correct, and every caller already handles it.
   const season = () => String(new Date().getFullYear());
   const CACHE_PREFIX = "apex26.api.";
   const MIN_GAP_MS = 400;
@@ -399,43 +398,6 @@ const F1API = (function () {
     });
   }
 
-  // Between Jan 1 and the opener `<year>/last` is empty, and the LAST RACE
-  // tab sat blank for two months. The previous season's finale is the honest
-  // answer, so an empty current year asks season()-1 ONCE — through request(),
-  // so it queues, retries and caches like every other call.
-  function lastRace() {
-    const year = Number(season());
-    return lastRaceOf(year).then(function (race) {
-      return race || lastRaceOf(year - 1);
-    });
-  }
-  function lastRaceOf(year) {
-    return request(JOLPICA + "/" + year + "/last/results.json", TTL_STANDINGS).then(function (json) {
-      const race = jRaces(json)[0];
-      if (!race) return null;
-      return {
-        name: str(race.raceName),
-        round: num(race.round),
-        date: str(race.date),
-        results: arr(race.Results).map(function (r) {
-          const d = (r && r.Driver) || {};
-          const cons = (r && r.Constructor) || {};
-          const name = ((d.givenName || "") + " " + (d.familyName || "")).trim();
-          return {
-            pos: num(r && r.position),
-            name: name || null,
-            code: str(d.code),
-            team: str(cons.name),
-            grid: num(r && r.grid),
-            points: num(r && r.points) || 0,
-            status: str(r && r.status),
-            time: (r && r.Time && str(r.Time.time)) || null
-          };
-        })
-      };
-    });
-  }
-
   function sessionTtl(sessionKey) {
     // The known-latest session is always treated as live.
     if (sessionKey === latestSessionKey) return TTL_LATEST;
@@ -813,7 +775,6 @@ const F1API = (function () {
     schedule,
     driverStandings,
     constructorStandings,
-    lastRace,
     latestSession,
     meetings,
     sessionsForMeeting,

@@ -196,6 +196,56 @@ test("RENDER_SPECS partitions the root specs — every spec lands in exactly one
     "RENDER_SPECS names a spec that no longer exists — it would silently run in the headless project");
 });
 
+test("a spec that CAPTURES an image is in RENDER_SPECS", () => {
+  // The direction neither guard above covers. The two of them watch the LIST
+  // (a name with no file; a pinned project that cannot match a named spec).
+  // Nothing watched the FILES: a spec could take screenshots, boot the garage
+  // and build car meshes while sitting in the "headless — assertion-only,
+  // scale wide" project, and every existing check would stay green.
+  //
+  // That is not hypothetical. parts-liveries.spec.js did exactly this. Its
+  // three siblings (parts-budget, parts-catalog, parts-persistence) were all
+  // classified render; it alone was not, and it is the heaviest of the four —
+  // it calls page.screenshot() three times, clicks through to #carsetup and
+  // builds McLaren's meshes. Measured 2026-09-14 on this box: the 8 "Liveries
+  // — creator" tests take 122-142 s each at 2 workers, timing out 7 of 8
+  // against the 120 s cap, and 23-82 s each solo at --workers=1. Green solo,
+  // red in a batch, for two sessions running.
+  //
+  // CAPTURE is the criterion because it is the list's own first clause
+  // ("specs that take screenshots / pixel-diffs") and because it is the only
+  // half of the definition a static check can honestly decide. "Drives real GL"
+  // is NOT greppable: a scan for page boots and __apex world calls classifies
+  // 97 of 116 specs as render, sweeping in every *-foundation geometry spec,
+  // which are the fast ones. A guard that over-matches would be worse than none.
+  //
+  // Match the CALL, not the path helper: output-paths.spec.js is a unit test OF
+  // galleryPath() and names it a dozen times without ever opening a page.
+  const cfg = read("playwright.config.js");
+  const body = cfg.match(/const RENDER_SPECS = \[([\s\S]*?)\]\s*\.map/);
+  assert.ok(body, "could not find RENDER_SPECS in playwright.config.js");
+  const render = new Set([...body[1].matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]));
+
+  const dir = path.join(ROOT, "tests", "specs");
+  const offenders = [];
+  let captured = 0;
+  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith(".spec.js"))) {
+    const src = fs.readFileSync(path.join(dir, file), "utf8");
+    if (!/\.screenshot\(|toHaveScreenshot/.test(src)) continue;
+    captured++;
+    const name = file.replace(/\.spec\.js$/, "");
+    if (!render.has(name)) offenders.push(name);
+  }
+  // Same discipline as the guard above: prove the input set was not empty, so a
+  // stale pattern reads as a broken pattern rather than a clean repo.
+  assert.ok(captured > 5,
+    `only ${captured} specs matched the capture pattern — the pattern is stale, not the repo clean`);
+
+  assert.deepEqual(offenders, [],
+    "these specs capture images but run in the headless project, which scales wide " +
+    "and thrashes SwiftShader — add them to RENDER_SPECS in playwright.config.js");
+});
+
 test("no test:* group pins a --project that excludes one of the specs it names", () => {
   // The other direction of the partition, and the one that bites hardest.
   // `test:tiny` used to pass tests/specs/logging.spec.js together with

@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_168 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_169 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -215,6 +215,7 @@ _168 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
+| `circuit-elevations.js` | `—` | tag | surveyed circuit elevation profiles (metres relative to the start/finish line, 64 samples by arc-fraction around the lap). |
 | `tracks.js` | `Tracks` | tag | track engine: circuit defs (js/circuits/) → splines, meshes, scenery(api). |
 
 **`js/car/`**
@@ -977,7 +978,6 @@ network error: serve stale cache if present, else reject. Never auto-poll.
 F1API.schedule()              -> [{round, name, circuit, locality, country, date, time, hasSprint}]
 F1API.driverStandings()       -> [{pos, points, wins, name, code, number, team}]
 F1API.constructorStandings()  -> [{pos, points, wins, name}]
-F1API.lastRace()              -> {name, round, date, results:[{pos, name, code, team, grid, points, status, time}]}
 F1API.latestSession()         -> {sessionKey, name, type, circuit, country, dateStart} | null
 F1API.weather(sessionKey)     -> {airT, trackT, humidity, rainfall, windSpeed} | null
 F1API.positions(sessionKey)   -> [{num, pos}] | null      // folded latest per driver

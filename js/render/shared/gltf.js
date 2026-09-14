@@ -264,7 +264,6 @@ const GLTF = (function () {
   function toMesh(arrayBuffer, opts) {
     opts = opts || {};
     const scale = opts.scale !== undefined ? opts.scale : 1;
-    const swapYZ = !!opts.swapYZ;
     const tint = opts.tint || null;
 
     const { json, bin } = parseGLB(arrayBuffer);
@@ -329,12 +328,10 @@ const GLTF = (function () {
         for (let i = 0; i < vCount; i++) {
           let p = [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]];
           p = mPoint(world, p);
-          if (swapYZ) p = [p[0], p[2], p[1]];
           posOut.push(p[0] * scale, p[1] * scale, p[2] * scale);
 
           if (normals) {
-            let n = normalMatTransform(world, [normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]]);
-            if (swapYZ) n = [n[0], n[2], n[1]];
+            const n = normalMatTransform(world, [normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]]);
             const l = Math.hypot(n[0], n[1], n[2]) || 1;
             nrmOut.push(n[0] / l, n[1] / l, n[2] / l);
           } else {
@@ -351,26 +348,13 @@ const GLTF = (function () {
           colOut.push(cr, cg, cb);
         }
 
-        // A Y/Z swap is a reflection (determinant −1): triangle winding
-        // inverts, so with backface culling the model renders inside-out and
-        // flat normals computed from swapped positions point into the surface.
-        // Rewind each triangle so the flat-normal pass and the emitted indices
-        // both see the corrected winding.
-        let tri = indices;
-        if (swapYZ) {
-          tri = new Uint32Array(indices.length);
-          for (let i = 0; i + 2 < indices.length; i += 3) {
-            tri[i] = indices[i]; tri[i + 1] = indices[i + 2]; tri[i + 2] = indices[i + 1];
-          }
-        }
-
         // compute averaged vertex normals if the primitive had none
         if (!normals) {
-          computeVertexNormals(posOut, tri, vertBase, vCount, nrmOut);
+          computeVertexNormals(posOut, indices, vertBase, vCount, nrmOut);
         }
 
         // emit indices, offset by this primitive's vertex base
-        for (let i = 0; i < tri.length; i++) idxOut.push(tri[i] + vertBase);
+        for (let i = 0; i < indices.length; i++) idxOut.push(indices[i] + vertBase);
         vertBase += vCount;
       }
     }

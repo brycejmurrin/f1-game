@@ -319,7 +319,18 @@ function bend(pts, i) {
 
 /* ---------- main ---------- */
 
-const argv = process.argv.slice(2);
+// A bbox in the southern hemisphere starts with a minus, and cli-args' space
+// form ends a value at a leading "-" so `--a --b` cannot swallow the next flag.
+// That rule is right for the library and wrong for a coordinate: measured
+// 2026-09-14, `--bbox -33.05,27.85,-33.02,27.89` (East London) and the Adelaide
+// box both failed with "--bbox is required". Rewrite the space form into the
+// `=` form here, which the library reads verbatim, rather than loosening a
+// shared parser everything else depends on.
+const argv = process.argv.slice(2).reduce((out, tok, i, all) => {
+  if (tok === "--bbox" && all[i + 1] && /^-?\d/.test(all[i + 1])) out.push(`--bbox=${all[i + 1]}`);
+  else if (!(i > 0 && all[i - 1] === "--bbox" && /^-?\d/.test(tok))) out.push(tok);
+  return out;
+}, []);
 // Flags that consume the next token in the space form (`--target 4563`); the
 // positional id must not be read out of one of those slots.
 const VALUED = ["--bbox", "--target", "--name", "--location", "--start", "--out",

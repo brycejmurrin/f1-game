@@ -901,11 +901,14 @@ function drawMinimap() {
     const gh = Ghost.at(player.lapTime);
     if (gh) {
       const gp = at(gh.s);   // a persisted ghost is stored input: never trust its s
-      if (!gp) return;
-      mm.fillStyle = "rgba(120, 220, 255, 0.95)";
-      mm.beginPath();
-      mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
-      mm.fill();
+      // Skip only the GHOST dot on a bad s — returning here would take the
+      // player's own white marker (drawn below) down with it for the session.
+      if (gp) {
+        mm.fillStyle = "rgba(120, 220, 255, 0.95)";
+        mm.beginPath();
+        mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
+        mm.fill();
+      }
     }
   }
   const p = at(player.s);
