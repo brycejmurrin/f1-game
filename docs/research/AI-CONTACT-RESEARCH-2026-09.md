@@ -176,6 +176,48 @@ This is 0.24/s, and a median episode flipping ONCE is not flip-flop: it is one
 car completing a pass, which is the verdict correctly changing. The entry called
 itself "the riskiest of the AI entries"; it buys nothing. Left unbuilt.
 
+### #5 (yaw-aware contact extents) — CONFIRMED and sized, not yet built
+
+The hole is real and it is bigger than "a sideways car is a sliver". Per-car
+half extents are 2.4 x 1.0; support half-widths at yaw psi to the tangent are
+`eLong = 2.4|cos psi| + 1.0|sin psi|`, `eLat = 2.4|sin psi| + 1.0|cos psi|`.
+Against a normally-oriented rival alongside:
+
+| psi | collider's lateral reach | truth | missed |
+|---|---|---|---|
+| 0° | 2.00 m | 2.00 m | — |
+| 30° | 2.00 m | 3.07 m | +1.07 |
+| 45° | 2.00 m | 3.40 m | +1.40 |
+| **60°** | 2.00 m | 3.58 m | **+1.58** |
+| **75°** | 2.00 m | 3.58 m | **+1.58** |
+| 90° | 2.00 m | 3.40 m | +1.40 |
+
+So a rival passing a fully spun car at |dx| between 2.0 and 3.4 m drives
+straight through the bodywork the renderer is drawing.
+
+TWO CORRECTIONS TO THE ENTRY ABOVE, both from this table:
+
+1. The worst case is **60-75°, not 90°**. The entry frames this as the sideways
+   car; the peak miss is the three-quarter-on one, and a blend that fades in
+   from 20° to 45° reaches full strength just below where the error is largest.
+   Fade to full by ~60°.
+2. At 90° the LONGITUDINAL extent shrinks to 3.40 m against the fixed 4.80 m, so
+   there the current code is conservative rather than blind — it over-detects.
+   Making extents yaw-aware therefore REMOVES contacts at high yaw as well as
+   adding them, which the characterization spec will see and which is not a
+   regression.
+
+The companion edit the entry flags is confirmed by the same arithmetic: worst
+case combined longitudinal extent is `2*sqrt(2.4² + 1²)` = **5.20 m** against
+`COL_BUCKET_M = LCAR = 4.8`, so the bucket must grow or the adjacent-bucket walk
+can miss a pair.
+
+NOT BUILT HERE, deliberately. This is the collision hot path, it moves the
+characterization gate by design, and it needs the brute-force-vs-bucketed
+assertion the entry asks for before the bucket width can be trusted. It wants
+its own session rather than the tail of one — the defect is now measured and
+scoped so that session starts from the table rather than from the question.
+
 ### #7, first bullet (publish `_vLimNow`, compare corner-entry limits) — REVERTED
 
 Built exactly as described — `c._vLimNow = br.vLim` stashed beside `_vmaxNow`,
