@@ -153,6 +153,48 @@ Both were taken to the experiment this document prescribes for them, and both
 came back NO. Recorded here rather than in a commit message because the list
 above is what the next session reads.
 
+### #8, the two separable one-liners — BUILT (the manifold refactor is not)
+
+The entry itself says items inside #8 "are separable and individually
+one-liners — do those alone first". Both were real, and both were the same
+shape: relaxation here is Gauss-Seidel, so the ORDER of resolution is part of
+the answer, and two places let that order leak into the result.
+
+**The sweep was symmetrised on only one of the two paths.** The all-pairs branch
+has always reversed direction on odd passes (`fwd = (pass & 1) === 0`) to cancel
+the directional bias a single-direction sweep carries. `_colForBucketPairs`
+always walked the buckets forward — and the bucket path is the one every race
+over twelve cars takes. So the symmetrised solver was running only on the field
+sizes that need it least. Fixed by giving the bucket walk the same alternation;
+the pair SET is provably unchanged (each undirected edge is still visited once
+via the forward-neighbour rule), only the order moves, which is the point. The
+single separation pass stays forward, as before.
+
+**Bump bounciness depended on who was behind you.** `aSp`/`bSp` are read live,
+and `_colResolvePair` mutates `.speed` as it goes, so in a concertina a car
+already bumped earlier in the same pass presented a different closing speed to
+its next pair. `bumpRestitution` is a RAMP over that speed (0 below 1 m/s, 0.1
+from 3 m/s), so a 1.2 m/s shift in the reference more than triples the
+coefficient — and which shift you got depended on the solver's arrival order.
+`_preColSpd` is now snapshotted for every car before the passes (mirroring
+`aSp`/`bSp` for a net-owned car, whose predicted speed is the reference and is
+not ours to mutate) and the coefficient reads it. The IMPULSE keeps the live
+relative velocity: that is momentum, and it has to see the state it is actually
+correcting. Only `e` moved.
+
+Verified: collision-contact-vm 17/17 (4 new), test:game-vm 296/296,
+test:tooling-fast 187/187, test:guards 178/178, and in the browser
+physics-characterization + collisions + collisions-deep + collision-ai-fixes
+33/33 — including "five-car pileup around the player stays bounded and finite",
+which is the concertina case the restitution reference is about. The
+characterization gate did not move: its trace is a solo driving run with no
+contacts in it.
+
+NOT BUILT: the manifold refactor itself (one broadphase walk instead of five,
+pooled contact records). The entry gates it on "only if the contact-blame
+counters from #3 show real per-pass classification churn", and those counters do
+not exist yet. Unblocked now that #2 and #5 are done, still waiting on evidence.
+
 ### #6 (latch the priority verdict) — DO NOT BUILD, on its own criterion
 
 The entry sets the bar itself: *"count verdict flips per corner per pair over a

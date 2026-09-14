@@ -307,3 +307,82 @@ test("only a car with a REAL heading is ever yawed", () => {
   const hits = src.match(/const psi = c\.human \? \(c\.yawVis \|\| 0\) : 0;/g) || [];
   assert.equal(hits.length, 2, "both extent functions must gate psi on c.human");
 });
+
+// ---------------------------------------------------------------------------
+// The solver's two order dependencies
+// ---------------------------------------------------------------------------
+/* Relaxation here is Gauss-Seidel: every pair is resolved against state the
+ * pairs before it have already moved. That makes the ORDER part of the answer,
+ * and the file had two places where the order leaked into the result.
+ */
+
+test("reversing the bucket sweep visits exactly the same pairs", () => {
+  // The safety property behind alternating the sweep: the direction may change
+  // WHICH ORDER pairs are resolved in, and must not change WHICH PAIRS exist.
+  // Mirrors _colForBucketPairs: within a bucket i<j, then that bucket against
+  // its forward neighbour only, wrap included.
+  const walk = (buckets, nB, fwd) => {
+    const ids = Object.keys(buckets).map(Number).sort((p, q) => p - q);
+    const seen = [];
+    for (let k = 0; k < ids.length; k++) {
+      const id = ids[fwd === false ? ids.length - 1 - k : k];
+      const A = buckets[id] || [];
+      for (let i = 0; i < A.length; i++) for (let j = i + 1; j < A.length; j++) seen.push([A[i], A[j]]);
+      if (nB < 2) continue;
+      const B = buckets[(id + 1) % nB] || [];
+      for (let i = 0; i < A.length; i++) for (let j = 0; j < B.length; j++) seen.push([A[i], B[j]]);
+    }
+    return seen;
+  };
+  const buckets = { 0: ["a", "b"], 1: ["c"], 3: ["d", "e", "f"] };
+  const nB = 4;
+  const key = (ps) => ps.map((p) => p.slice().sort().join("-")).sort().join(",");
+  const f = walk(buckets, nB, true), r = walk(buckets, nB, false);
+  assert.equal(f.length, r.length, "a reversed sweep must not add or drop a pair");
+  assert.equal(key(f), key(r), "same pair set, different order");
+  // Guard the guard: the orders really are different, or this proves nothing.
+  assert.notEqual(f.map((p) => p.join("-")).join(","), r.map((p) => p.join("-")).join(","));
+});
+
+test("both solver paths alternate the sweep, not just the small-field one", () => {
+  // The asymmetry this closes: the all-pairs branch has always reversed on odd
+  // passes, and the BUCKET branch — the one every race over twelve cars takes —
+  // always walked forward. The symmetrised solver was running only on the
+  // field sizes that need it least.
+  const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
+  assert.match(src, /_colForBucketPairs\(nB, _colResolveCB, \(pass & 1\) === 0\)/,
+    "the bucket relaxation must alternate like the all-pairs branch");
+  assert.match(src, /const fwd = \(pass & 1\) === 0;/,
+    "...and the all-pairs branch must still do so");
+  // The separation pass runs once and stays forward — no alternation to do.
+  assert.match(src, /_colForBucketPairs\(nB, _colSepCB\)/);
+});
+
+test("bump bounciness is taken from a pre-step speed, the impulse from the live one", () => {
+  // bumpRestitution is a RAMP over closing speed (0 below 1 m/s, 0.1 from 3),
+  // so its input being order-dependent made it order-dependent too: in a
+  // concertina a car already bumped earlier in the same pass presented a
+  // different closing speed to its next pair, and how bouncy your bump was
+  // depended on who happened to be behind you.
+  //
+  // Only the COEFFICIENT moves to the snapshot. The impulse keeps the live
+  // relative velocity because that is momentum — it has to see the state it is
+  // actually correcting.
+  const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
+  assert.match(src, /for \(const c of ranked\) c\._preColSpd = c\._nOk \? c\._nSpd : c\.speed;/,
+    "every car needs the snapshot, and a net car's reference is its predicted speed");
+  assert.match(src, /const e = AiDrive\.bumpRestitution\(relV0 > 0 \? relV0 : relV\);/,
+    "the coefficient must read the pre-step closing speed");
+  assert.match(src, /const jImp = \(1 \+ e\) \* relV \/ iSum;/,
+    "the impulse must keep the LIVE relative velocity — that is momentum");
+});
+
+test("the ramp is why the reference matters", () => {
+  // If restitution were a constant, none of the above would be worth doing.
+  // It is not: over the band a concertina actually lives in, a modest shift in
+  // the reference speed changes the coefficient by a large fraction.
+  const rest = (v) => (v <= 1 ? 0 : v >= 3 ? 0.1 : 0.1 * (v - 1) / 2);
+  assert.ok(Math.abs(rest(1.2) - 0.01) < 1e-9, `e at 1.2 m/s is ${rest(1.2)}`);
+  assert.ok(rest(2.4) > 3 * rest(1.2), "a 1.2 m/s shift in the reference more than triples e");
+  assert.equal(rest(0.9), 0, "and below the resting threshold it vanishes entirely");
+});
