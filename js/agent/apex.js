@@ -3,6 +3,23 @@ const ApexApi = (function () {
   "use strict";
 
 function create(G) {
+// race()/tt() hand back a descriptor that is ALSO awaitable. startRace() awaits
+// ensureScenery() — the scenery closure is LAZY_SCENERY and Tracks.build is
+// synchronous — so firing it unawaited made the hook claim success while the
+// PREVIOUS track was still built. Measured 2026-09-14: booted on bahrain,
+// `race("monaco")` returned {track:"monaco"} and wallStats() then reported
+// n=1346 / street=false, bahrain's numbers, and waiting did not help because
+// nothing re-read it. Five tracks-walls street assertions failed on this, on
+// the deploy branch too. Thenable, not a Promise, so the ~70 existing call
+// sites are unchanged (`r.track` still reads synchronously); a caller needing
+// the track BUILT writes `await __apex.race(id)`. The resolved value drops
+// `then` so a second await cannot recurse.
+function settled(promise, out) {
+  const value = Object.assign({}, out);
+  return Object.assign({}, out, {
+    then: (res, rej) => Promise.resolve(promise).then(() => res(value), rej),
+  });
+}
 // The four audio hooks share one precondition. `null` when GameAudio is there,
 // so each hook reads `return noAudio() || <the real answer>` rather than
 // repeating a three-line guard four times.
@@ -1070,8 +1087,8 @@ const api = {
     G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
-    startRace();
-    return { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather };
+    return settled(startRace(),
+      { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather });
   },
   tt(trackRef, timeOfDay) {
     const i = typeof trackRef === "number"
@@ -1084,8 +1101,7 @@ const api = {
     G.raceLaps = TT_LAPS;
     G.raceWeather = "dry";
     G.raceTimeOfDay = timeOfDay || "default";
-    startRace();
-    return { track: Tracks.LIST[i].id, timeTrial: true };
+    return settled(startRace(), { track: Tracks.LIST[i].id, timeTrial: true });
   },
   career(opts) {
     if (opts === undefined) return Career.data();

@@ -21,6 +21,7 @@ const Flags = (function () {
     "Malaysia": "my", "China": "cn", "UK": "gb", "United Kingdom": "gb", "Great Britain": "gb",
     "Singapore": "sg", "Russia": "ru", "Belgium": "be", "Qatar": "qa",
     "Austria": "at", "Netherlands": "nl", "Holland": "nl",
+    "South Korea": "kr", "Korea": "kr", "Sweden": "se", "India": "in",
   };
 
   // Geometry helpers, viewBox 0 0 60 40.
@@ -79,6 +80,21 @@ const Flags = (function () {
       + rect(w / 2 - 5 * s, 0, 10 * s, h, "#fff") + rect(0, h / 2 - 5 * s, w, 10 * s, "#fff")
       + rect(w / 2 - 3 * s, 0, 6 * s, h, "#c8102e") + rect(0, h / 2 - 3 * s, w, 6 * s, "#c8102e");
   };
+  // One of South Korea's four corner trigrams: three bars, each whole or split,
+  // on an axis rotated to face the disc. Proportions are the official ones
+  // scaled to this viewBox (bar length = the taegeuk radius, pitch and
+  // thickness from the construction sheet); only the split is widened, from
+  // 0.8 to 1.2, because at 40 px the official gap closes up.
+  const trigram = (cx, cy, deg, solid) => {
+    const L = 10, t = 1.65, pitch = 2.5, split = 1.2;
+    const bars = solid.map((whole, i) => {
+      const y = (i - 1) * pitch - t / 2;
+      return whole
+        ? rect(-L / 2, y, L, t, "#000")
+        : rect(-L / 2, y, (L - split) / 2, t, "#000") + rect(split / 2, y, (L - split) / 2, t, "#000");
+    }).join("");
+    return `<g transform="translate(${n2(cx)} ${n2(cy)}) rotate(${n2(deg)})">${bars}</g>`;
+  };
   const stripes = (n, a, b) => {
     let out = "";
     for (let i = 0; i < n; i++) out += rect(0, H * i / n, W, H / n + 0.05, i % 2 ? b : a);
@@ -127,6 +143,28 @@ const Flags = (function () {
     qa: () => rect(0, 0, W, H, "#8a1538") + serrated(17, 5, 9, "#fff"),
     at: () => hbands(["#ed2939", "#fff", "#ed2939"]),
     nl: () => hbands(["#ae1c28", "#fff", "#21468b"]),
+    se: () => rect(0, 0, W, H, "#005293") + rect(0, 17, W, 6, "#fecb00") + rect(16, 0, 6, H, "#fecb00"),
+    // Taegeuk: a red disc with the lower half taken by blue across an S of two
+    // half-radius arcs, the whole thing tilted 33.69 degrees. Geometry checked
+    // against the Wikimedia reference SVG rather than reasoned about — the S
+    // was mirrored on the first attempt, which is not a subtle error to anyone
+    // who knows the flag. Blue bulges UP on the fly side and red dips down on
+    // the hoist side. Trigrams clockwise from top hoist: geon, gam, gon, ri.
+    kr: () => rect(0, 0, W, H, "#fff")
+      + '<g transform="rotate(33.69 30 20)">' + circle(30, 20, 10, "#cd2e3a")
+      + '<path d="M20 20A10 10 0 1 0 40 20A5 5 0 1 0 30 20A5 5 0 1 1 20 20Z" fill="#0047a0"/></g>'
+      + trigram(14.8, 9.8, -56.31, [true, true, true])       // geon, top hoist
+      + trigram(45.2, 9.8, 56.31, [false, true, false])      // gam, top fly
+      + trigram(45.2, 30.2, -56.31, [false, false, false])   // gon, bottom fly
+      + trigram(14.8, 30.2, 56.31, [true, false, true]),     // ri, bottom hoist
+    // The Ashoka Chakra has 24 spokes; 12 are drawn. Past ~8 px a spoke is
+    // thinner than a pixel and 24 of them grey the disc into a smudge, which
+    // is the same reason a small star here is a dot.
+    in: () => hbands(["#ff9933", "#fff", "#138808"]) + circle(30, 20, 6, "#000080") + circle(30, 20, 5.2, "#fff")
+      + Array.from({ length: 12 }, (_, i) => i * Math.PI / 12)
+        .map((a) => line(n2(30 - Math.cos(a) * 5.2), n2(20 - Math.sin(a) * 5.2),
+          n2(30 + Math.cos(a) * 5.2), n2(20 + Math.sin(a) * 5.2), "#000080", 0.45)).join("")
+      + circle(30, 20, 1.1, "#000080"),
     // The unknown-country fallback: a chequered flag, so a new circuit whose
     // country is not in CODES still gets a tile that reads as "a circuit".
     xx: () => rect(0, 0, W, H, "#fff") + [0, 1, 2, 3, 4, 5].map((i) => [0, 1, 2, 3].map((j) =>
