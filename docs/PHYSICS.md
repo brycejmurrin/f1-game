@@ -459,8 +459,24 @@ the numbers):
   hards are drawn for. Zero-mean over a mixed field, so the AI's pace against the
   player is unchanged on average. With TYRE WEAR **on**, this fudge is bypassed
   entirely and the AI's pace comes off the same `TyreModel` curve the player is
-  driving, so a strategy fight is fought on one model (§Wear, and the stop).
-  The class draw still picks the starting compound either way.
+  driving, so a strategy fight is fought on one model (§Wear, and the stop), and
+  the STARTING compound comes from the car's own plan rather than the class draw.
+- **The field races a strategy** (`AiDrive.stintPlan` / `pitNow`, executed by
+  `PitLane.planFor` / `think`), when TYRE WEAR is on. Each car enumerates every
+  0-, 1- and 2-stop plan over the three dry compounds and keeps the cheapest
+  under `Σ stint costs + stops × pit loss` — the formulation strategists
+  actually solve, with pit loss taken from the LANE's own geometry so a circuit
+  that costs more to stop at really does see fewer stops. Two per-car tastes
+  come out of the same race hash the launch plan uses (so arming still costs the
+  sim RNG nothing): one for stopping, one for grip over durability. Both are
+  needed — biasing only the stop count measured as twenty cars on one plan.
+  Strategies MIX because a full tank wears tyres (`FUEL_WEAR`), which is what
+  puts harder rubber early and softer late.
+  Three rules override the plan: the **free stop** under a caution (worth
+  8-12 s, the biggest lever in the sport), the **wrong tyre for the conditions**
+  in either direction, and a **spent set**. The last two ignore the plan's stop
+  budget, because both are about a tyre that cannot do its job rather than about
+  strategy — gating them left every 0-stop car circulating on slicks in the rain.
 - **Mistakes, under pressure most of all** (`AiDrive.mistakeChance`). Once per
   braking point a car may miss it: base 0.4% × (1 + 2 × pressure) × (1.3 −
   consistency), pressure being the share of the last six seconds spent with a

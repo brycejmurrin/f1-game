@@ -53,10 +53,17 @@ function ctxFor({ laps = 25, total = 5386, severity = null } = {}) {
   });
 }
 // Drive `n` laps' worth of distance at a given load, in one-second ticks.
+// `c.lap` is advanced as the distance is covered: the model reads it for the
+// fuel load, so a car that never completes a lap would run the whole stint on
+// full tanks and wear ~11% faster than any real one.
 function run(session, car, laps, { speed = 60, total = 5386 } = {}) {
   const dt = 1;
   const ticks = Math.round((laps * total) / speed);
-  for (let i = 0; i < ticks; i++) session.update(car, dt);
+  const lap0 = car.lap || 0;
+  for (let i = 0; i < ticks; i++) {
+    car.lap = lap0 + Math.floor((i * speed * dt) / total);
+    session.update(car, dt);
+  }
   return car;
 }
 function freshCar(session, life, extra = {}) {
@@ -100,10 +107,12 @@ test("wear reaches 1.0 after `life x lapsTarget` laps at load 1", () => {
   s.setLevel("real");
   const c = freshCar(s, 0.5, { consistency: 1 });    // consistency 1 => load exactly LOAD_AI_BASE
   run(s, c, 10);                                      // 0.5 x 20 laps
-  // AI load at consistency 1 and zero longitudinal demand is 0.92, not 1.0, so
-  // ten laps lands a little short of spent — the bound is what matters.
-  assert.ok(c.tyreWear > 0.8 && c.tyreWear < 1.0,
-    `ten laps of a 0.5-life set in a 20-lap race should be nearly spent, got ${c.tyreWear.toFixed(3)}`);
+  // NEAR 1, not exactly: a metronome's base load is 0.92 rather than 1.0, and
+  // the FIRST half of a race carries more than the average fuel load, so this
+  // stint wears a little faster than nominal. The claim is that `life` means
+  // what its name says to within the spread those two put on it.
+  assert.ok(c.tyreWear > 0.85 && c.tyreWear < 1.25,
+    `ten laps of a 0.5-life set in a 20-lap race should be about spent, got ${c.tyreWear.toFixed(3)}`);
 });
 
 test("the SAME compound lasts proportionally longer in a longer race", () => {
@@ -173,6 +182,19 @@ test("traction loses a smaller share of the same drop than cornering", () => {
     assert.ok(lng > 0 && lng < lat, `at wear ${w}, traction drop ${lng} must be between 0 and the lateral drop ${lat}`);
     assert.ok(Math.abs(lng - lat * T.LONG_SHARE) < 1e-9);
   }
+});
+
+test("a full tank wears the tyre faster than an empty one", () => {
+  // The term that makes a strategy MIX — harder rubber early, softer late.
+  // AiDrive.stintPlan carries the same constant and plans around it, so the sim
+  // has to agree or the field would be planning for physics it does not have.
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const full = freshCar(s, 0.6, { lap: 0 });
+  const empty = freshCar(s, 0.6, { lap: 20 });
+  for (let i = 0; i < 200; i++) { s.update(full, 1); s.update(empty, 1); }
+  assert.ok(full.tyreWear > empty.tyreWear,
+    `a full tank (${full.tyreWear.toFixed(4)}) must wear more than an empty one (${empty.tyreWear.toFixed(4)})`);
+  assert.ok(full.tyreWear / empty.tyreWear < 1 + T.FUEL_LOAD + 1e-6, "and by no more than the stated fraction");
 });
 
 test("fuel runs from a full tank at the start to empty at the flag", () => {

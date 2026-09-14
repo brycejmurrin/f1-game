@@ -614,7 +614,11 @@ const api = {
     const o = arg && typeof arg === "object" ? arg : {};
     const c = o.car != null ? (G.cars || [])[o.car] : G.player;
     if (o.arm != null) G.pits.arm(c, !!o.arm);
-    return G.pits.info(c);
+    const out = G.pits.info(c);
+    // The AI's strategy, when it has one: what it plans to do and why it last
+    // deviated. Null for the player, who plans their own race.
+    if (out && c) { out.plan = c.pitPlan || null; out.why = c.pitWhy || ""; }
+    return out;
   },
   // The whole tyre picture for one car (default: the player) — compound, life
   // in laps at THIS race distance, wear, the grip it costs and the load that

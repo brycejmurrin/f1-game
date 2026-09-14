@@ -64,6 +64,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // line, the lane is metres not a fraction of the lap, and openBarrier
   // opens the pit side without moving hw. ~0.1 s.
   "tests/unit/pit-lane.test.mjs",
+  // ...and the field's strategy: the plan scales with the distance, a 20-car
+  // grid does not converge on one plan, strategies mix, and the reactive
+  // rules (free stop, weather, spent set) fire in the right order. ~0.1 s.
+  "tests/unit/ai-strategy.test.mjs",
   "tests/unit/team-livery.test.mjs",
   // 10 s of pure geometry: builds all 297 catalog options and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog

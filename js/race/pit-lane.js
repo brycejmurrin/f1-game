@@ -48,6 +48,8 @@
 const PitLane = (function () {
   "use strict";
 
+  const clamp = M4.clamp;
+
   // Lane geometry, in METRES along the lap rather than as a fraction of it.
   // A fraction would make Spa's lane (7 km lap) twice Monaco's, which is
   // backwards — a pit lane is a building, not a share of a circuit. Measured
@@ -82,6 +84,10 @@ const PitLane = (function () {
   // tolerance existed. Real boxes are about this long, so it is also the right
   // number rather than merely a safe one.
   const BOX_TOL = 8;
+  // How hard a car brakes for its own box, m/s^2. Only the AI reads this: for a
+  // human, stopping on the mark is the skill, and a game that braked for you
+  // would be running the one part of a pit stop the driver actually does.
+  const BOX_BRAKE = 6;
 
   // Resolve the lane for a built track: absolute arc positions, the side, the
   // width and the limit. A circuit def may override any field through
@@ -144,6 +150,23 @@ const PitLane = (function () {
     function limit() {
       const zz = z();
       return zz ? G.vTop() * zz.limitFrac : Infinity;
+    }
+
+    /** How far this car still has to go to reach its box, in metres (-1 when it
+     *  is not in the window, and negative once it is past). */
+    function toBox(c) {
+      const zz = z(), t = G.track;
+      if (!zz || !t || !c || !inWindow(zz, c.s, t.total)) return -1;
+      return throughM(zz, zz.sBox, t.total) - throughM(zz, c.s, t.total);
+    }
+
+    /** A stopping envelope onto the box: how fast a car may be HERE and still be
+     *  stopped by the time it arrives. AI-ONLY by contract — game.js applies it
+     *  only to `!c.human`, because braking onto the mark is the player's job. */
+    function approachV(c) {
+      const togo = toBox(c);
+      if (togo < 0) return Infinity;                 // not in the window, or past the box
+      return Math.sqrt(2 * BOX_BRAKE * Math.max(0, togo - BOX_TOL * 0.5));
     }
 
     /** Is this car serving a stop right now? A STATE, not a position — so a car
@@ -213,9 +236,70 @@ const PitLane = (function () {
     /** The compound this car will fit at its next stop (a TyreModel record). */
     function setNext(c, record) { if (c) c.pitNext = record || null; }
 
+    // ── STRATEGY ─────────────────────────────────────────────────────────────
+    // The plan is AiDrive's (stintPlan); what lives here is the race state it
+    // needs and the state its decisions write. Kept in this module rather than
+    // in game.js because the pit state machine is already here — and because
+    // game.js is ratcheted and this is not game-loop work.
+
+    /** Draw a stint plan for one AI car. PIT LOSS IS DERIVED FROM THE LANE, in
+     *  laps, so a circuit whose lane costs more really does see fewer stops —
+     *  which is the whole reason pit loss was kept emergent. */
+    function planFor(roll) {
+      const zz = z();
+      if (!zz) return null;
+      // A representative racing speed for the pit straight, as a fraction of the
+      // envelope: fast enough to be a straight, slow enough not to be a peak.
+      const raceV = Math.max(1, G.vTop() * 0.55);
+      const lapRefS = G.track && G.track.total > 0 ? G.track.total / raceV : 100;
+      const lossS = zz.lenM / Math.max(1, limit()) - zz.lenM / raceV + zz.boxS;
+      return AiDrive.stintPlan({
+        laps: G.lapsTarget,
+        lifeLaps: (cls) => TyreModel.lifeLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget),
+        pitLossLaps: clamp(lossS / Math.max(1, lapRefS), 0.02, 0.9),
+        roll,
+      });
+    }
+
+    /** Does this AI car call its stop this tick? The plan says WHEN; AiDrive.pitNow
+     *  owns the three reasons to ignore it, and this owns the state they read. */
+    function think(c) {
+      const plan = c && c.pitPlan;
+      if (!plan || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
+      const stopsLeft = plan.stops - (c.pitStops || 0);
+      const nextAt = plan.lapsAt[c.pitStops || 0];
+      // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
+      // AND wets on a drying track. This is the recourse docs/PHYSICS.md said a
+      // dry->rain arc did not have.
+      const wantTread = TyreModel.treadFor(G.raceWeather);
+      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
+      const caution = G.cautionInfo ? G.cautionInfo() : null;
+      const why = AiDrive.pitNow({
+        stopsLeft,
+        lapsToStop: nextAt == null ? 99 : nextAt - (c.lap || 0),
+        cautionLevel: caution ? caution.level : 0,
+        wear: G.tyres.spent(c),
+        wrongTread,
+      });
+      if (!why) return "";
+      // A weather stop fits what the WEATHER wants; any other stop follows the
+      // plan. Without the first branch a car pits, fits another slick, is still
+      // wrong, and pits again — a stop every lap.
+      const wetCls = TyreModel.classForTread(wantTread);
+      const lifeLaps = (cls) => TyreModel.lifeLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
+      const lapsLeft = Math.max(1, G.lapsTarget - (c.lap || 0));
+      const planned = plan.seq[(c.pitStops || 0) + 1];
+      const want = wrongTread ? (wetCls || AiDrive.compoundFor(lapsLeft, lifeLaps))
+                 : (planned || AiDrive.compoundFor(lapsLeft, lifeLaps));
+      arm(c, true);
+      setNext(c, G.tyres.classRecord(want));
+      c.pitWhy = why;
+      return why;
+    }
+
     function reset(c) {
       if (!c) return;
-      c.pitArmed = false; c.pitState = "none"; c.pitT = 0; c.pitNext = null; c.pitStops = 0;
+      c.pitArmed = false; c.pitState = "none"; c.pitT = 0; c.pitNext = null; c.pitStops = 0; c.pitWhy = "";
     }
 
     function info(c) {
@@ -243,10 +327,12 @@ const PitLane = (function () {
       };
     }
 
-    return { zoneOf: () => z(), limit, inLane, inWindow: inWindowOf, arm, update, reset, info, setNext, serviceCar };
+    return { zoneOf: () => z(), limit, toBox, approachV, inLane, inWindow: inWindowOf,
+             arm, update, reset, info, setNext, serviceCar, planFor, think };
   }
 
   return { create, zoneOf, inWindow, throughM,
-           ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC, BOX_TOL };
+           ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
+           BOX_TOL, BOX_BRAKE };
 })();
 Object.freeze(PitLane);

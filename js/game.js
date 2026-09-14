@@ -1866,6 +1866,15 @@ function gridUp(preOrder) {
     // stream nothing, exactly as Reliability's retirement draw does.
     c.tyreStints = 0;
     pits.reset(c);
+    // STRATEGY (js/physics/ai-drive.js stintPlan). Drawn ONCE here, from the
+    // same per-car race hash the launch plan and the pace phase come from, so
+    // arming a race consumes nothing from the sim RNG stream — the contract
+    // js/race/reliability.js holds for retirements, held for strategy too.
+    // An AI car's STARTING compound is the plan's, not the class draw's, when
+    // wear is on; the class draw still stands in for the legacy fudge when it
+    // is off. The player plans their own race.
+    c.pitPlan = (!c.human && tyres.on()) ? pits.planFor((h >>> 24) / 256) : null;
+    if (c.pitPlan) c.tyreClass = c.pitPlan.start;
     tyres.fit(c, c.tyreOpt ? tyres.optionRecord(c.tyreOpt) : tyres.classRecord(c.tyreClass));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
@@ -3648,7 +3657,14 @@ function updateCar(c, dt, ranked) {
   // vTop() inside PitLane, so it rides OVERALL SPEED and a player's measured pit
   // loss does not move when they change the pace slider.
   let pitV = -1;
-  if (pits.inLane(c)) { pitV = pits.limit(); vmax = Math.min(vmax, pitV); }
+  if (pits.inLane(c)) {
+    pitV = pits.limit();
+    // The AI brakes for its own box; a human does that themselves, and a game
+    // that did it for them would be driving the one part of a stop the driver
+    // actually does.
+    if (!c.human) pitV = Math.min(pitV, pits.approachV(c));
+    vmax = Math.min(vmax, pitV);
+  }
   let cautionV = -1;   // the delta pace a caution demands; -1 = green
   if (raceCtl) {
     const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
@@ -3670,6 +3686,7 @@ function updateCar(c, dt, ranked) {
   let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
   const aiT = c.human ? null : AiDrive.traits(c);
   if (!c.human) vmax *= AiDrive.pacePhase(raceT, aiT.consistency, c.phaseRoll);   // a stint drifts; lockstep never passes
+  if (!c.human && tyres.on() && state === "race") pits.think(c);   // strategy: does this car box?
   if (!c.human && AiDrive.mistakePhase(c.errT) === 2) vmax *= AiDrive.mistakeGatherMul();   // gathering it up after a mistake
   // TYRES. With TYRE WEAR off this is the shipped AiDrive fudge, untouched — a
   // ground-speed scale on an AI-only deg curve. With it on, the AI's pace comes

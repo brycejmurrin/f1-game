@@ -120,6 +120,11 @@ const TyreModel = (function () {
   //
   //   monza 0.944       monaco 1.221
   //
+  // (Re-anchored to 0.49 when the fuel term below landed: a lap now carries a
+  // fuel multiplier averaging ~1.11 over a race, so the divisor absorbs it and
+  // a MID-RACE clean lap is what scores ~1.0. A lap on full tanks scores more,
+  // which is the point of the term.)
+  //
   // which at 25 laps gives stints of 28 / 23 / 18 / 8 laps at Monza and
   // 22 / 18 / 14 / 6 at Monaco for hard / medium / soft / hyper-soft. That is
   // the strategy space: at Monza the harder half goes the distance and the soft
@@ -131,7 +136,7 @@ const TyreModel = (function () {
   // deg circuits on the calendar (0.050 s/lap against Austria's 0.097). So the
   // emergent number is the right shape and the wrong ranking for the slow
   // street circuits, and their defs are where that gets corrected.
-  const LOAD_REF = 0.44;
+  const LOAD_REF = 0.49;
   const LOAD_IDLE = 0.30;    // a tyre rolling in a straight line still wears
   const W_LAT = 0.95;        // squared lateral utilisation — the dominant term
   const W_LONG = 0.30;       // squared longitudinal (braking + traction)
@@ -161,6 +166,14 @@ const TyreModel = (function () {
   // These are authored DIRECTLY on the normalised scale (a mid-rated driver
   // scores ~1.03), which is why there is no LOAD_REF here: the player's raw sum
   // has to be divided into that scale, the AI's is simply written in it.
+  // A FULL TANK EATS TYRES. A heavier car works its rubber harder, which is
+  // both true and the thing that makes a strategy MIX — harder rubber early,
+  // softer late (AiDrive.stintPlan carries the same constant and would believe
+  // it whether or not the sim did, which is the inconsistency this removes).
+  // Applied to both load scales, so the player and the field pay it alike.
+  const FUEL_LOAD = 0.22;
+  function fuelLoadMul(c, lapsTarget) { return 1 + FUEL_LOAD * fuelFrac(c, lapsTarget); }
+
   const LOAD_AI_BASE = 0.92;
   const LOAD_AI_STYLE = 0.45;   // full spread across the consistency axis
   const LOAD_AI_LONG = 0.30;
@@ -218,15 +231,26 @@ const TyreModel = (function () {
   // catalog (the player and the MY TEAM team-mate) or from an AI class draw.
   // `off` is the AI's pace offset ONLY: the player's compound pace already lives
   // in mods.cornering via the catalog stat, and adding it here would double-count.
+  // THE WET CLASSES ARE NOT OPTIONAL. An AI field with only slicks cannot answer
+  // a dry->rain arc: it pits for the weather, fits another slick, is still on
+  // the wrong tyre, and pits again — measured as a stop every lap. The two wet
+  // rows are what make the weather call terminate.
   const AI_CLASS = {
-    soft:   { code: "S", life: 0.48, off: 0.004,  colour: [0.92, 0.12, 0.10] },
-    medium: { code: "M", life: 0.74, off: 0,      colour: [0.96, 0.80, 0.10] },
-    hard:   { code: "H", life: 1.05, off: -0.004, colour: [0.90, 0.90, 0.93] },
+    soft:   { code: "S", life: 0.48, off: 0.004,  tread: 0, colour: [0.92, 0.12, 0.10] },
+    medium: { code: "M", life: 0.74, off: 0,      tread: 0, colour: [0.96, 0.80, 0.10] },
+    hard:   { code: "H", life: 1.05, off: -0.004, tread: 0, colour: [0.90, 0.90, 0.93] },
+    inter:  { code: "I", life: 1.00, off: -0.010, tread: 1, colour: [0.10, 0.72, 0.24] },
+    wet:    { code: "W", life: 1.10, off: -0.020, tread: 2, colour: [0.10, 0.40, 0.92] },
   };
   function classRecord(cls) {
     const t = AI_CLASS[cls] || AI_CLASS.medium;
-    return { id: cls, code: t.code, life: t.life, off: t.off, tread: 0, colour: t.colour };
+    return { id: cls, code: t.code, life: t.life, off: t.off, tread: t.tread || 0, colour: t.colour };
   }
+  // Which tread the conditions ask for: slick / intermediate / full wet. The
+  // same ladder js/physics/consts.js WET_GRIP is indexed by, so "the right tyre"
+  // means the one that actually wins there.
+  function treadFor(weather) { return weather === "rain" ? 2 : weather === "wet" ? 1 : 0; }
+  function classForTread(tread) { return tread === 2 ? "wet" : tread === 1 ? "inter" : null; }
   // The catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md §6):
   // one axis, not a compound axis multiplied by an upgrade tier. The single
   // letter the HUD shows is derived from life rather than from the row's name,
@@ -279,7 +303,8 @@ const TyreModel = (function () {
       if (!c.tyre) fit(c, classRecord("medium"));
       const lapFrac = Math.abs(c.speed || 0) * dt / track.total;
       if (!(lapFrac > 0)) return;
-      const load = c.human ? humanLoad(c, G.LAT_MAX) : aiLoad(c, G.aTop());
+      const load = (c.human ? humanLoad(c, G.LAT_MAX) : aiLoad(c, G.aTop()))
+        * fuelLoadMul(c, G.lapsTarget);
       const laps = lifeLaps(c.tyre.life, G.lapsTarget);
       c.tyreWear = (c.tyreWear || 0) + lapFrac * load * severity() * LEVELS[level] / laps;
       c._tyreLoad = load;    // debug/telemetry only — see __apex.tyres()
@@ -333,8 +358,8 @@ const TyreModel = (function () {
   return {
     LEVELS, isLevel, deriveLife, lifeOf, lifeLaps, MIN_LIFE_LAPS,
     gripFor, longFor, humanLoad, aiLoad, fuelFrac,
-    classRecord, optionRecord, AI_CLASS,
-    DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX,
+    classRecord, optionRecord, AI_CLASS, treadFor, classForTread,
+    DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,
   };
 })();
