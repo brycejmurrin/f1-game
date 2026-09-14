@@ -32,6 +32,32 @@ async function boot(page) {
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
 
+// ARM A RACE AND WAIT FOR IT, which is not the same as calling race().
+//
+// `__apex.race()` starts startRace() and does NOT await it, and startRace's
+// very first statement is `await ensureScenery(trackIdx)` — so the session arms
+// in a LATER task and a synchronous read in the same page.evaluate still sees
+// the menu. Every read below used to do exactly that, and the values came back
+// not WRONG but EMPTY or NEUTRAL: a grid of zero cars, `carAt(0)` null, a
+// team-development multiplier still at its pre-development 0.98889. Fourteen
+// specs in this file failed that way.
+//
+// The identical defect in a different caller is what made
+// tools/check/quick-validate.mjs report a red tree for its entire life, fixed
+// there the same way: poll for the armed session instead of assuming it.
+//
+// `setup` runs in the page and should do the seeding/career/race calls; the
+// wait is here so no caller has to remember it.
+async function armRace(page, setup, arg) {
+  await page.evaluate(setup, arg);
+  await page.waitForFunction(() => {
+    try {
+      const st = window.__apex.info().state;
+      return (st === "race" || st === "count") && !!window.__apex.carAt(0);
+    } catch (_) { return false; }
+  }, null, { polling: 100, timeout: BOOT_MS });
+}
+
 // A career started through the hook rather than the setup screen — most specs
 // care about what a career DOES, not how it was created.
 async function startCareer(page, opts) {
@@ -191,19 +217,20 @@ test.describe("Career — isolation", () => {
     // RULES stay switched off outside career. tierV is the one number career
     // development moves, so read it per car directly rather than inferring it
     // from lap positions (which also move when the career changes your team).
-    const tierVs = () => {
-      window.__apex.seed(99);
-      window.__apex.race("monza");
-      const out = {};
-      for (let i = 0; i < 24; i++) {
-        const c = window.__apex.carAt(i);
-        if (!c) break;
-        out[c.team + ":" + c.seat] = c.tierV;
-      }
-      return out;
+    const tierVs = async () => {
+      await armRace(page, () => { window.__apex.seed(99); window.__apex.race("monza"); });
+      return page.evaluate(() => {
+        const out = {};
+        for (let i = 0; i < 24; i++) {
+          const c = window.__apex.carAt(i);
+          if (!c) break;
+          out[c.team + ":" + c.seat] = c.tierV;
+        }
+        return out;
+      });
     };
     await boot(page);
-    const before = await page.evaluate(tierVs);
+    const before = await tierVs();
     // Give the career development big enough that any leak is unmissable.
     await page.evaluate(() => {
       window.__apex.career({ teamId: "haas", seat: 1, seed: 7 });
@@ -211,7 +238,7 @@ test.describe("Career — isolation", () => {
       c.tdev.mercedes = 8; c.tdev.haas = -8;
     });
     await page.locator("#cr-back").click();
-    const after = await page.evaluate(tierVs);
+    const after = await tierVs();
     expect(after).toEqual(before);
   });
 
@@ -280,13 +307,17 @@ test.describe("Career — isolation", () => {
     // Quali seeded its field off Career.rnd() (career.seed) at Career.round(),
     // neither of which is inCareer()-gated — so the same sim seed gave a
     // different grid depending on a save the Grand Prix has nothing to do with.
-    const gridFor = async (careerOpts) => page.evaluate((o) => {
-      if (o) window.__apex.career(o); else window.__apex.careerReset();
-      window.__apex.seed(1234);
-      window.__apex.race("monza");
-      const q = window.__apex.qualiSim();
-      return (q && q.rows ? q.rows : q || []).map((r) => r.code).join(",");
-    }, careerOpts);
+    const gridFor = async (careerOpts) => {
+      await armRace(page, (o) => {
+        if (o) window.__apex.career(o); else window.__apex.careerReset();
+        window.__apex.seed(1234);
+        window.__apex.race("monza");
+      }, careerOpts);
+      return page.evaluate(() => {
+        const q = window.__apex.qualiSim();
+        return (q && q.rows ? q.rows : q || []).map((r) => r.code).join(",");
+      });
+    };
 
     await boot(page);
     const noCareer = await gridFor(null);
@@ -393,16 +424,17 @@ test.describe("Career — a round", () => {
 test.describe("Driver ratings", () => {
   test.use({ viewport: LANDSCAPE });
 
-  const skills = () => {
-    window.__apex.seed(5);
-    window.__apex.race("monza");
-    const out = [];
-    for (let i = 0; i < 24; i++) {
-      const c = window.__apex.carAt(i);
-      if (!c) break;
-      out.push(c.code + ":" + c.skill);
-    }
-    return out;
+  const skills = async (page) => {
+    await armRace(page, () => { window.__apex.seed(5); window.__apex.race("monza"); });
+    return page.evaluate(() => {
+      const out = [];
+      for (let i = 0; i < 24; i++) {
+        const c = window.__apex.carAt(i);
+        if (!c) break;
+        out.push(c.code + ":" + c.skill);
+      }
+      return out;
+    });
   };
 
   test("the same seed produces the same grid — the RNG stream is unchanged", async ({ page }) => {
@@ -410,16 +442,16 @@ test.describe("Driver ratings", () => {
     // inside a branch, the stream position after makeCars() shifts and every
     // seeded spec in the suite starts lying. This is that guard.
     await boot(page);
-    const a = await page.evaluate(skills);
-    const b = await page.evaluate(skills);
+    const a = await skills(page);
+    const b = await skills(page);
     expect(b).toEqual(a);
     expect(a.length).toBeGreaterThan(20);
   });
 
   test("ratings differentiate the field, fastest to slowest", async ({ page }) => {
     await boot(page);
+    await armRace(page, () => { window.__apex.seed(5); window.__apex.race("monza"); });
     const grid = await page.evaluate(() => {
-      window.__apex.seed(5); window.__apex.race("monza");
       const g = [];
       for (let i = 0; i < 24; i++) { const c = window.__apex.carAt(i); if (!c) break; g.push(c); }
       return g.map((c) => ({ code: c.code, skill: c.skill }));
@@ -473,8 +505,8 @@ test.describe("Driver ratings", () => {
     expect(inCareer).toBe(gpBefore + 9);
 
     // …and gone again in a Grand Prix, which never inherits career development.
+    await armRace(page, () => window.__apex.race("monza"));
     const gpAfter = await page.evaluate(() => {
-      window.__apex.race("monza");
       for (let i = 0; i < 24; i++) {
         const c = window.__apex.carAt(i);
         if (c && c.code === "OCO") return c.ratings.pace;
@@ -688,7 +720,7 @@ test.describe("Career — MY TEAM", () => {
     // or picking MY TEAM in a Grand Prix would silently add a second entry.
     await page.addInitScript(() => localStorage.setItem("apex26.team", "11"));
     await boot(page);
-    await page.evaluate(() => { window.__apex.seed(2); window.__apex.race("monza"); });
+    await armRace(page, () => { window.__apex.seed(2); window.__apex.race("monza"); });
     const grid = await page.evaluate(() => window.__apex.fieldState());
     const mine = grid.filter((c) => c.team === "custom");
     expect(mine.length).toBe(1);
@@ -1418,14 +1450,16 @@ test.describe("Career — reliability", () => {
     // simRnd would shift every seeded result that follows — this is the guard.
     const grid = async (level) => {
       await boot(page);
-      return page.evaluate((lvl) => {
+      await armRace(page, (lvl) => {
         window.__apex.seed(7);
         window.__apex.reliability(lvl);
         window.__apex.race("monza");
+      }, level);
+      return page.evaluate(() => {
         const out = { skills: [], plan: window.__apex.retirements() };
         for (let i = 0; i < 22; i++) out.skills.push(window.__apex.carAt(i).skill);
         return out;
-      }, level);
+      });
     };
     const off = await grid("off");
     const real = await grid("real");
