@@ -245,22 +245,41 @@ test.describe("Career — isolation", () => {
   test("…but it DOES reach the career itself", async ({ page }) => {
     // The other half of the same guarantee: inside a career the development is
     // real, or the whole progression arc is cosmetic.
+    //
+    // MEASURED AGAINST ITSELF, not against a literal. This read
+    // `expect(merc).toBeGreaterThan(1)` with the note "TIER_V[0] is 1.0" — and
+    // TIER_V[0] is 0.9695. It is a PACE TUNING TABLE and it was retuned, so the
+    // premise went stale and the spec failed on a car whose development was
+    // working perfectly: the observed 0.98889 is exactly 0.9695 × (1 + 8 ×
+    // TDEV_TO_PACE), i.e. the development applied, in full. Same failure shape
+    // as the hardcoded track fraction in sliders.spec.js — an absolute number
+    // standing in for a relationship.
+    const mercTierV = async () => {
+      await goRacing(page);
+      return page.evaluate(() => {
+        for (let i = 0; i < 24; i++) {
+          const c = window.__apex.carAt(i);
+          if (c && c.team === "mercedes") return c.tierV;
+        }
+        return null;
+      });
+    };
     await boot(page);
+    // Go racing through the hub — __apex.race() is explicitly a Grand Prix and
+    // would switch the flow back to gp.
+    await page.evaluate(() => window.__apex.career({ teamId: "haas", seat: 1, seed: 7 }));
+    const plain = await mercTierV();
+    expect(plain, "no mercedes car on the grid").not.toBeNull();
+
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       window.__apex.career({ teamId: "haas", seat: 1, seed: 7 });
       window.__apex.career().tdev.mercedes = 8;
     });
-    // Go racing through the hub — __apex.race() is explicitly a Grand Prix and
-    // would switch the flow back to gp.
-    await goRacing(page);
-    const merc = await page.evaluate(() => {
-      for (let i = 0; i < 24; i++) {
-        const c = window.__apex.carAt(i);
-        if (c && c.team === "mercedes") return c.tierV;
-      }
-      return null;
-    });
-    expect(merc).toBeGreaterThan(1);   // TIER_V[0] is 1.0; +8 dev lifts it
+    const developed = await mercTierV();
+    expect(developed).not.toBeNull();
+    expect(developed).toBeGreaterThan(plain);   // +8 dev makes the car faster, whatever the table says
   });
 
   // The three guards below all cover the same class of mistake: gating on "a
@@ -523,9 +542,31 @@ test.describe("Career — the garage", () => {
   test.use({ viewport: LANDSCAPE });
 
   // The garage is opened from the hub, and its rows are rebuilt on every mutation.
+  // Open the garage AND land on a PART category. The garage opens on whatever
+  // `garageTab` says and its default is "team" — and TEAM, LIVERY and TUNE are
+  // pseudo-categories that build their own panes and return before any
+  // `.cs-opt` row is made (js/garage/setup-sheet.js PSEUDO_CATS). So a spec
+  // that opens the garage and looks for a locked PART row finds an empty pane
+  // and reads null, which is what these three did — not a timing problem and
+  // not a renamed class, just the wrong tab.
+  //
+  // Picks the first catalog category that actually HAS a researchable option,
+  // rather than naming one: a category whose rows are all cost-0 would have no
+  // locked row either, and hardcoding "engine" would rot the same way the
+  // hardcoded track fraction did in sliders.spec.js.
   async function openGarage(page) {
     await page.evaluate(() => document.getElementById("cr-garage").click());
     await expect(page.locator("#carsetup")).toBeVisible();
+    const cat = await page.evaluate(() => {
+      const c = Parts.CATALOG.find((x) => x.options.some((o) => o.cost > 0));
+      if (!c) return null;
+      const tab = document.getElementById(`cs-tab-${c.id}`);
+      if (tab) tab.click();
+      return c.id;
+    });
+    expect(cat, "no catalog category has a paid option — firstLocked can never find a row").not.toBeNull();
+    await page.waitForFunction(() => !!document.querySelector("#cs-options .cs-opt"),
+      null, { polling: 100, timeout: BOOT_MS });
   }
   // The first unowned row in the open category, or null. Rows are <button>s, and
   // the canvas renders behind the sheet, so click through evaluate() — Playwright's
