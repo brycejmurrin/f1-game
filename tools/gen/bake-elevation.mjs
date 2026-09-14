@@ -95,6 +95,68 @@ async function elevations(lnglat) {
   return out;
 }
 
+// SRTM is a SURFACE model on 30 m posts, not a road survey. It carries tree
+// canopy, buildings and cut/fill embankments, and the ring vertices sit metres
+// off the racing line — so a raw sample series reproduces a circuit's MACRO
+// shape well (Fuji's 38 m, Donington's 35 m, the half-lap fall-and-climb at
+// Mosport all check out against published figures) and its LOCAL GRADIENT
+// badly. Shipped raw on 2026-09-14 it put 18.5% at Dijon and ~12% at four
+// others: Eau Rouge steepness on circuits that have nothing like it, and
+// visibly wrong in the game.
+//
+// A ROAD IS GRADED AND TERRAIN IS NOT, so the fix is to reject the sampling
+// noise rather than to scale the relief down — scaling would flatten the one
+// thing the data gets right. Two passes, in this order:
+//
+//   1. circular binomial smoothing [1,2,1]/4 — removes single-post spikes
+//      (one sample that landed on a treetop) while leaving anything spanning
+//      several hundred metres untouched;
+//   2. a hard gradient clamp, iterated, because smoothing alone still leaves a
+//      sustained slope that is really an embankment the road cuts through.
+//
+// MAX_GRADE is 8%: steeper than any straight in the game's shipped fleet and
+// comfortably under the 17-18% of Spa's Raidillon, which is the sport's
+// extreme and is NOT what these circuits are. Both passes keep the loop closed
+// (sample 0 and sample SAMPLES-1 must still meet) — realPoints() de-trends any
+// residual, but a profile that needs de-trending has already lied about a
+// gradient somewhere.
+const MAX_GRADE = 0.08;
+
+function smoothClosed(p, passes) {
+  const n = p.length;
+  let a = p.slice();
+  for (let k = 0; k < passes; k++) {
+    const b = new Array(n);
+    for (let i = 0; i < n; i++) {
+      b[i] = 0.25 * a[(i - 1 + n) % n] + 0.5 * a[i] + 0.25 * a[(i + 1) % n];
+    }
+    a = b;
+  }
+  return a;
+}
+
+// Walk the loop repeatedly, pulling any step steeper than MAX_GRADE back to it
+// by moving BOTH ends half way. Converges because every pass strictly reduces
+// the largest step; the cap on iterations is a guard, not a target.
+function clampGrade(p, spacing) {
+  const n = p.length, lim = MAX_GRADE * spacing;
+  let a = p.slice(), worst = 0;
+  for (let iter = 0; iter < 200; iter++) {
+    let moved = false;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const d = a[j] - a[i];
+      if (Math.abs(d) <= lim) continue;
+      worst = Math.max(worst, Math.abs(d) / spacing);
+      const fix = (Math.abs(d) - lim) * Math.sign(d) * 0.5;
+      a[i] += fix; a[j] -= fix;
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  return { prof: a, worstRaw: worst };
+}
+
 // resample per-vertex elevations to SAMPLES points evenly spaced by arc length,
 // normalized so the start sits at 0
 function toProfile(coords, ele) {
@@ -111,9 +173,16 @@ function toProfile(coords, ele) {
     const segLen = (cum[i + 1] ?? total) - cum[i] || 1;
     const t = Math.min(1, Math.max(0, (target - cum[i]) / segLen));
     const eA = ele[i], eB = ele[(i + 1) % N];
-    prof.push(+(eA + (eB - eA) * t - e0).toFixed(2));
+    prof.push(eA + (eB - eA) * t - e0);
   }
-  return prof;
+  const spacing = total / SAMPLES;
+  const { prof: capped, worstRaw } = clampGrade(smoothClosed(prof, 2), spacing);
+  const base = capped[0];
+  return {
+    prof: capped.map((v) => +(v - base).toFixed(2)),
+    spacing,
+    worstRaw,
+  };
 }
 
 // The eleven circuits recovered from OpenStreetMap in 2026-09 have no bacinger
@@ -162,8 +231,12 @@ async function bake(ids) {
         coords = line.geometry.coordinates.map((c) => [c[0], c[1]]);
       }
       const ele = await elevations(coords);
-      const prof = toProfile(coords, ele);
+      const { prof, spacing, worstRaw } = toProfile(coords, ele);
       const lo = Math.min(...prof), hi = Math.max(...prof);
+      let grade = 0;
+      for (let i = 0; i < prof.length; i++) {
+        grade = Math.max(grade, Math.abs(prof[(i + 1) % prof.length] - prof[i]) / spacing);
+      }
       // A DEAD-FLAT profile is not a measurement, it is missing data, and it is
       // worse than no entry at all: listing the circuit makes hasRealElevation
       // true, which nulls out its authored `elevations` for ever after. Korea
@@ -178,7 +251,10 @@ async function bake(ids) {
         continue;
       }
       result[id] = prof;
-      console.log(`${coords.length} pts, range ${(hi - lo).toFixed(1)} m`);
+      // worstRaw is 0 when the clamp never fired, which reads as "0% gradient"
+      // if printed unconditionally — say what actually happened instead.
+      console.log(`${coords.length} pts, range ${(hi - lo).toFixed(1)} m, grade ${(grade * 100).toFixed(1)}%` +
+        (worstRaw ? ` (clamped down from ${(worstRaw * 100).toFixed(1)}%)` : ` (smoothing alone; clamp never fired)`));
       await sleep(1100); // be polite between circuits
     } catch (e) {
       console.log(`FAILED: ${e.message}`);
