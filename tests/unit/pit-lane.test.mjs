@@ -422,19 +422,43 @@ test("LANE_W agrees across the model and all three lit shaders", () => {
   // is not where the model thinks it is — the worst kind of bug, because it
   // looks like bad driving. There is no shared constant to import across GLSL,
   // WGSL and TSL, so this is the thing that holds them together.
-  const SHADERS = [
-    ["js/render/glx/shaders/glsl-lit.js", /PIT_LANE_W\s*=\s*([0-9.]+)/],
-    ["js/render/webgpu/wgsl-chunks.js",   /PIT_LANE_W\s*[:=]\s*(?:f32\s*\(\s*)?([0-9.]+)/],
-    ["js/render/three/tsl-lit.js",        /PIT_LANE_W\s*=\s*([0-9.]+)/],
+  const FILES = [
+    "js/render/glx/shaders/glsl-lit.js",
+    "js/render/webgpu/wgsl-chunks.js",
+    "js/render/three/tsl-lit.js",
   ];
-  for (const [file, re] of SHADERS) {
+  // All THREE numbers, not just the width: the lane narrows on a tight circuit
+  // (PitLane.laneWidth), so a backend that kept the flat width would paint the
+  // stripe somewhere the model does not think the lane is.
+  const WANT = { PIT_LANE_W: P.LANE_W, PIT_LANE_MIN: P.LANE_MIN, PIT_MIN_RACING: P.MIN_RACING };
+  for (const file of FILES) {
     const src = readFileSync(join(ROOT, file), "utf8");
-    const m = src.match(re);
-    assert.ok(m, `${file} has no PIT_LANE_W — the lane is unpainted on this backend`);
-    assert.equal(Number(m[1]), P.LANE_W,
-      `${file} paints the lane edge at ${m[1]} m but PitLane.LANE_W is ${P.LANE_W} — `
-      + "a driver steering at the stripe would miss the lane the model checks");
+    for (const [name, want] of Object.entries(WANT)) {
+      const m = src.match(new RegExp(`${name}\\s*[:=]\\s*(?:f32\\s*\\(\\s*)?([0-9.]+)`));
+      assert.ok(m, `${file} has no ${name} — the lane is mis-painted on this backend`);
+      assert.equal(Number(m[1]), want,
+        `${file} has ${name} = ${m[1]} but PitLane says ${want} — a driver steering at the `
+        + "stripe would miss the lane the model checks");
+    }
   }
+});
+
+test("the lane yields to the racing surface, and only where it has to", () => {
+  // Measured across all 51 built circuits: pit-window half-width runs 4.93 m
+  // (Monaco) to 8.0 m. A flat 3.2 m lane leaves Monaco 6.7 m to race on — on
+  // the one circuit where overtaking is already impossible.
+  const road = (hw) => 2 * hw;
+  const left = (hw) => road(hw) - P.laneWidth(hw);
+  assert.ok(left(4.93) >= P.MIN_RACING - 1e-9, `Monaco keeps only ${left(4.93).toFixed(1)} m to race on`);
+  assert.ok(P.laneWidth(4.93) < P.LANE_W, "Monaco's lane must narrow");
+  // …and nowhere else. The next-narrowest circuits measured 6.0 m half-width.
+  for (const hw of [6.0, 6.1, 7.0, 8.0]) {
+    assert.equal(P.laneWidth(hw), P.LANE_W, `hw ${hw} should keep the full lane`);
+    assert.ok(left(hw) > P.MIN_RACING, `hw ${hw} must keep more than the floor`);
+  }
+  // A pathologically narrow road still gets a lane a car can fit in.
+  assert.equal(P.laneWidth(3), P.LANE_MIN);
+  assert.ok(P.LANE_MIN > 2.0, "an F1 car is 2.0 m wide — the lane must exceed it");
 });
 
 test("the lane sits INSIDE the road, and the box sits inside the lane", () => {

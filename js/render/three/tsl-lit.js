@@ -761,7 +761,11 @@
      * fallback. For the same reason the body uses select()/arithmetic
      * throughout instead of If().
      * Returns vec4(albedo, rough), matching applyMaterial's packing. */
-    const PIT_LANE_W = 3.2;   // lane width off the road's pit side — MUST match PitLane.LANE_W
+    // MUST match PitLane.laneWidth(): the lane yields to the racing surface on a
+    // narrow circuit (a flat lane would leave Monaco only 6.7 m to race on).
+    const PIT_LANE_W = 3.2;
+    const PIT_LANE_MIN = 2.4;
+    const PIT_MIN_RACING = 7.0;
     const roadMarkings = Fn(([trkIn, albedoIn, roughIn]) => {
       const s = float(trkIn.x).toVar();
       const x = float(trkIn.y).toVar();
@@ -803,7 +807,8 @@
       const L = float(U.pitLane.w).toVar();
       const lenM = float(U.pitLane.y).toVar();
       const through = mod(s.sub(U.pitLane.x).add(L), L).toVar();
-      const lx = hw.sub(PIT_LANE_W).mul(U.pitLane.z).toVar();
+      const laneW = min(float(PIT_LANE_W), max(float(PIT_LANE_MIN), hw.mul(2.0).sub(PIT_MIN_RACING))).toVar();
+      const lx = hw.sub(laneW).mul(U.pitLane.z).toVar();
       const pitBand = smoothstep(aaX.mul(-1.0).add(0.14), aaX.add(0.14), abs(x.sub(lx))).oneMinus().toVar();
       const fade = smoothstep(0.0, 6.0, through).mul(smoothstep(0.0, 6.0, lenM.sub(through))).toVar();
       const hasLane = select(lenM.greaterThan(0.0), float(1.0), float(0.0)).toVar();

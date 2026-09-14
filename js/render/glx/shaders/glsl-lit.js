@@ -573,7 +573,14 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
 // a crisp edge at any distance and any viewing angle, costs no vertices, and
 // cannot alias against the geometry. Gated on half-width so only road geometry
 // paints itself — every other mesh reads aTrk = (0,0,0).
-const float PIT_LANE_W = 3.2;   // lane width, taken off the road's pit side
+// Lane width off the road's pit side — MUST match PitLane.laneWidth(). The lane
+// yields to the RACING SURFACE on a narrow circuit: measured across all 51
+// built circuits the pit-window half-width runs 4.93 m (Monaco) to 8.0 m, and a
+// flat 3.2 m lane would leave Monaco only 6.7 m to race on.
+const float PIT_LANE_W = 3.2;
+const float PIT_LANE_MIN = 2.4;
+const float PIT_MIN_RACING = 7.0;
+float pitLaneWidth(float hw) { return min(PIT_LANE_W, max(PIT_LANE_MIN, 2.0 * hw - PIT_MIN_RACING)); }
 void roadMarkings(inout vec3 albedo, inout float rough) {
   float hw = vTrk.z;
   if (hw <= 0.5) return;                     // not road surface (or no trk attribute)
@@ -626,7 +633,7 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
     float through = mod(s - uPitLane.x + L, L);
     if (through <= uPitLane.y) {
       float side = uPitLane.z;
-      float lx = (hw - PIT_LANE_W) * side;    // the boundary line's lateral position
+      float lx = (hw - pitLaneWidth(hw)) * side;   // the boundary line's lateral position
       // Solid, and wider than the edge lines: this one is an instruction.
       float dPit = abs(x - lx);
       float pit = 1.0 - smoothstep(0.14 - aaX, 0.14 + aaX, dPit);

@@ -126,7 +126,23 @@ const PitLane = (function () {
   // tsl-lit.js) — the painted line IS the lane edge, and a driver steering at
   // what they can see has to land inside what the model calls the lane.
   // tests/unit/pit-lane.test.mjs asserts all four agree.
+  // A FLAT 3.2 m LANE IS WRONG ON THE NARROWEST CIRCUIT, and that was measured
+  // rather than guessed: across all 51 built circuits the pit-window half-width
+  // runs 4.93 m (Monaco) to 8.0 m (Spa/Silverstone/Shanghai). At Monaco a flat
+  // lane takes 32% of a 9.9 m road and leaves 6.7 m to race on — on the one
+  // circuit where overtaking is already impossible. Everywhere else it leaves
+  // 8.8 m or more.
+  //
+  // So the lane yields to the RACING SURFACE rather than the other way round:
+  // never leave less than MIN_RACING, which is two 2 m cars with a metre
+  // between them and a metre either side. Only Monaco is narrowed (to 2.86 m);
+  // every other circuit keeps the full 3.2 m.
   const LANE_W = 3.2;
+  const LANE_MIN = 2.4;      // a car is 2.0 m — below this it is not a lane
+  const MIN_RACING = 7.0;    // two cars side by side, with room
+  function laneWidth(hw) {
+    return Math.min(LANE_W, Math.max(LANE_MIN, 2 * hw - MIN_RACING));
+  }
   const COMMIT_M = 120;       // commit only this far into the window
   const COMMIT_S = 0.55;      // held, in seconds
   const COMMIT_V = 0.10;      // of the speed envelope: a parked car is not pitting
@@ -281,9 +297,9 @@ const PitLane = (function () {
     // rejections come first so the spline sample is reached by almost nobody.
     const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
     /** The lane's inner edge — the painted line — as a lateral x. */
-    function laneEdge(hw, side) { return (hw - LANE_W) * side; }
+    function laneEdge(hw, side) { return (hw - laneWidth(hw)) * side; }
     /** The lane's lateral CENTRE: where the box is and where a car in it sits. */
-    function laneCentre(hw, side) { return (hw - LANE_W * 0.5) * side; }
+    function laneCentre(hw, side) { return (hw - laneWidth(hw) * 0.5) * side; }
     function committing(c, zz, L) {
       if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
       if (!((c.speed || 0) > G.vTop() * COMMIT_V)) return false;
@@ -543,6 +559,6 @@ const PitLane = (function () {
   return { create, zoneOf, inWindow, throughM,
            ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
            BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V,
-           CUE_M: 550, CUE_WEAR: 0.55, LANE_W };
+           CUE_M: 550, CUE_WEAR: 0.55, LANE_W, LANE_MIN, MIN_RACING, laneWidth };
 })();
 Object.freeze(PitLane);

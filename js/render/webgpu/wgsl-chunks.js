@@ -356,7 +356,12 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
   *albedo_ptr = albedo;
   *rough_ptr = rough;
 }
-const PIT_LANE_W = 3.2;   // lane width off the road's pit side — MUST match PitLane.LANE_W
+// MUST match PitLane.laneWidth(): the lane yields to the racing surface on a
+// narrow circuit (a flat lane would leave Monaco only 6.7 m to race on).
+const PIT_LANE_W = 3.2;
+const PIT_LANE_MIN = 2.4;
+const PIT_MIN_RACING = 7.0;
+fn pitLaneWidth(hw: f32) -> f32 { return min(PIT_LANE_W, max(PIT_LANE_MIN, 2.0 * hw - PIT_MIN_RACING)); }
 fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, trk: vec3<f32>, fwTrk: vec3<f32>, pit: vec4<f32>) {
   let hw = trk.z;
   if (hw <= 0.5) { return; }
@@ -389,7 +394,7 @@ fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f
     let L = pit.w;
     let through = (s - pit.x + L) % L;
     if (through <= pit.y) {
-      let lx = (hw - PIT_LANE_W) * pit.z;
+      let lx = (hw - pitLaneWidth(hw)) * pit.z;
       let dPit = abs(x - lx);
       var pitM = 1.0 - smoothstep(0.14 - aaX, 0.14 + aaX, dPit);
       pitM = pitM * smoothstep(0.0, 6.0, through) * smoothstep(0.0, 6.0, pit.y - through);
