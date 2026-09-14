@@ -206,6 +206,30 @@ const Assets = (function () {
 
   // ── baked models ───────────────────────────────────────────────────────────
 
+  // Two on-disk layouts, both written by tools/gen/assets.mjs writeAX26():
+  //
+  //   v1  pos/nrm/col f32x3, mat f32, idx u32       — 40 B a vertex + 4 B an index
+  //   v2  pos f32x3, nrm i16x3, col u8x3, mat u8,
+  //       idx u16                                    — 22 B a vertex + 2 B an index
+  //
+  // v2 is what the shipped pack uses: the 36 baked models went from 2.95 MB to
+  // 1.60 MB, and every one of them is fetched at boot (loadModels() in
+  // js/game.js). The quantisation is chosen against what the models actually
+  // contain, not against the format's limits — measured over the whole pack,
+  // colours live in [0.1, 1] and are palette-derived so a byte is within half a
+  // display level; normals are unit, so a signed short is 0.001° off; material
+  // ids are whole numbers under 15; and the largest model is 6816 vertices, an
+  // order of magnitude under what a u16 index can address.
+  //
+  // v1 is still READ, and the writer still falls back to it for anything that
+  // does not fit (an emissive colour past 1.0, a non-integer or >255 material,
+  // more than 65535 vertices) — an imported CC0 pack is not bound by what the
+  // procedural catalogue happens to contain. Both decode to the same
+  // {pos,nrm,col,mat,idx} Float32Arrays, so nothing downstream can tell.
+  //
+  // v2 COPIES where v1 returned views onto the fetched buffer. That is the
+  // trade: the 1.35 MB saving is on the wire and the decoded arrays are the
+  // same size either way, since the consumers need float32.
   function _parseModel(buf) {
     const dv = new DataView(buf);
     if (dv.byteLength < 20) return null;
@@ -213,17 +237,31 @@ const Assets = (function () {
     if (dv.getUint8(0) !== 0x41 || dv.getUint8(1) !== 0x58 ||
         dv.getUint8(2) !== 0x32 || dv.getUint8(3) !== 0x36) return null;
     const ver = dv.getUint32(4, true);
-    if (ver !== 1) return null;
+    if (ver !== 1 && ver !== 2) return null;
     const nv = dv.getUint32(8, true), ni = dv.getUint32(12, true);
     if (!nv || !ni) return null;
     let o = 20;
-    const need = o + nv * 3 * 4 * 3 + nv * 4 + ni * 4;
+    if (ver === 1) {
+      const need = o + nv * 3 * 4 * 3 + nv * 4 + ni * 4;
+      if (dv.byteLength < need) return null;
+      const pos = new Float32Array(buf, o, nv * 3); o += nv * 12;
+      const nrm = new Float32Array(buf, o, nv * 3); o += nv * 12;
+      const col = new Float32Array(buf, o, nv * 3); o += nv * 12;
+      const mat = new Float32Array(buf, o, nv);     o += nv * 4;
+      const idx = new Uint32Array(buf, o, ni);
+      return { pos, nrm, col, mat, idx };
+    }
+    const need = o + nv * 12 + nv * 6 + nv * 3 + nv + ni * 2;
     if (dv.byteLength < need) return null;
     const pos = new Float32Array(buf, o, nv * 3); o += nv * 12;
-    const nrm = new Float32Array(buf, o, nv * 3); o += nv * 12;
-    const col = new Float32Array(buf, o, nv * 3); o += nv * 12;
-    const mat = new Float32Array(buf, o, nv);     o += nv * 4;
-    const idx = new Uint32Array(buf, o, ni);
+    const qn = new Int16Array(buf, o, nv * 3);     o += nv * 6;
+    const qc = new Uint8Array(buf, o, nv * 3);     o += nv * 3;
+    const qm = new Uint8Array(buf, o, nv);         o += nv;
+    const idx = new Uint16Array(buf, o, ni);
+    const nrm = new Float32Array(nv * 3), col = new Float32Array(nv * 3);
+    const mat = new Float32Array(nv);
+    for (let i = 0; i < nv * 3; i++) { nrm[i] = qn[i] / 32767; col[i] = qc[i] / 255; }
+    for (let i = 0; i < nv; i++) mat[i] = qm[i];
     return { pos, nrm, col, mat, idx };
   }
 

@@ -13,10 +13,30 @@
 (function () {
   const LIT_VS = `#version 300 es
 layout(location=0) in vec3 aPos;
-layout(location=1) in vec3 aNrm;
-layout(location=2) in vec3 aCol;
-layout(location=3) in float aMat;   // per-vertex material id (0 = FLAT/untextured)
+// PACKED world vertex format — 28 bytes/vertex (40 with aTrk), written by
+// createMesh/createChunkedMesh in js/render/glx/. Position keeps full float32
+// (world coordinates run to ~7 km and quantising them would crack the ribbon);
+// normals and colours do not need 32 bits and were 24 of the old 40 bytes.
+//
+//   loc 1  SHORT x4  normalized  xyz = unit normal (1/32767), w = pad
+//   loc 2  USHORT x4 normalized  rgb = colour / COL_SCALE, a = material / MAT_SCALE
+//
+// The two scales are 65535/4369 and 65535/771 — EXACT divisors of the
+// normalized-integer denominator, so an integer material id decodes to itself
+// bit-for-bit. That matters: the FLAG branch below keys on aMat == 15 and reads
+// its fractional part, so an id that drifted to 15.99998 would make ASPHALT (16)
+// ripple like cloth, and every surfaceId == N test in the FS below is the same
+// kind of comparison. Measured headroom: colour 15.0 against a fleet maximum of
+// 3.4 (nose running lights), material 85.0 against a maximum id of 32.
+// Full rationale: js/render/glx/vertex-pack.js.
+layout(location=1) in vec4 aNrmP;
+layout(location=2) in vec4 aColMat;
 layout(location=4) in vec3 aTrk;    // road only: (arc-length s, signed lateral x, half-width). (0,0,0) elsewhere.
+#define COL_SCALE 15.0
+#define MAT_SCALE 85.0
+#define aNrm (aNrmP.xyz)
+#define aCol (aColMat.rgb * COL_SCALE)
+#define aMat (aColMat.a * MAT_SCALE)
 // INSTANCING (opt-in). Locations 5-8 are the four COLUMNS of a per-instance
 // model matrix and 9 a per-instance colour, all with vertexAttribDivisor(1).
 // They are only bound by drawInstanced(); every other draw leaves them disabled,
@@ -48,8 +68,12 @@ void main() {
   // the pole, 0.4 → weight 1 = free edge); a travelling two-sine ripple
   // displaces along the face normal, so marshal flags flutter while every
   // other material keeps the exact static path (pos == aPos).
-  if (aMat >= 15.0 && aMat < 16.0) {
-    float fw = fract(aMat) * 2.5;
+  // Gate on the ROUNDED id: a half-open 15.0 <= aMat < 16.0 test would also admit a
+  // neighbouring id that decoded a hair low, and fract() of that is ~1.0 — a
+  // full-amplitude wave on a building or the road. int(aMat + 0.5) is the same
+  // rounding the fragment shader already uses for every material lookup.
+  if (int(aMat + 0.5) == 15) {
+    float fw = clamp(aMat - 15.0, 0.0, 1.0) * 2.5;
     float ph = uTime * 5.5 + aPos.x * 1.9 + aPos.z * 1.9;
     pos += aNrm * ((sin(ph) * 0.085 + sin(ph * 2.17 + 1.3) * 0.045) * fw);
   }

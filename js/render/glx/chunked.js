@@ -52,23 +52,12 @@ const GLXChunked = (function () {
       }
       let mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
       const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
-      const hasMat = mat != null;
       const hasTrk = trk != null;
-      const fpv = 9 + (hasMat ? 1 : 0) + (hasTrk ? 3 : 0);
-      const trkOff = 9 + (hasMat ? 1 : 0);
-      let interleaved = new Float32Array(vCount * fpv);
-      for (let i = 0; i < vCount; i++) {
-        const o = i * fpv;
-        interleaved[o  ]=pos[i*3  ]; interleaved[o+1]=pos[i*3+1]; interleaved[o+2]=pos[i*3+2];
-        interleaved[o+3]=nrm[i*3  ]; interleaved[o+4]=nrm[i*3+1]; interleaved[o+5]=nrm[i*3+2];
-        interleaved[o+6]=col[i*3  ]; interleaved[o+7]=col[i*3+1]; interleaved[o+8]=col[i*3+2];
-        if (mat) interleaved[o+9]=mat[i];
-        if (trk) {
-          interleaved[o+trkOff  ] = trk[i*3  ];
-          interleaved[o+trkOff+1] = trk[i*3+1];
-          interleaved[o+trkOff+2] = trk[i*3+2];
-        }
-      }
+      // Packed layout — js/render/glx/vertex-pack.js. 28 bytes a vertex
+      // (40 on the road, which carries track coords), against 36-52 when every
+      // column was float32: on a street circuit's props this is tens of MB of
+      // VBO, and the same fraction off the per-frame vertex fetch.
+      let interleaved = GLXVertexPack.pack(vCount, pos, nrm, col, mat, trk);
       // Interleave done: normals/colours/materials are now baked into `interleaved`
       // and never read again. Drop them (both the toF32 copies and the source refs)
       // so ~half the source arrays can be GC'd before the bucket index arrays are
@@ -102,12 +91,7 @@ const GLXChunked = (function () {
       gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
       gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
       interleaved = null;   // uploaded to the VBO — drop the CPU copy
-      const stride = fpv * 4;
-      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride,  0);
-      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
-      gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
-      if (hasMat) { gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 36); }
-      if (hasTrk) { gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, stride, trkOff * 4); }
+      GLXVertexPack.bindAttribs(gl, hasTrk);
       const IndexArray = big ? Uint32Array : Uint16Array;
       const indexType = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
       const BPI = big ? 4 : 2;                 // bytes per index
