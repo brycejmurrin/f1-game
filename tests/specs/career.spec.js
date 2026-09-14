@@ -58,6 +58,33 @@ async function armRace(page, setup, arg) {
   }, null, { polling: 100, timeout: BOOT_MS });
 }
 
+// LAND ON A PART CATEGORY. The garage opens on whatever `garageTab` says and
+// its default is "team" — and TEAM, LIVERY and TUNE are pseudo-categories that
+// build their own pane and return before any `.cs-opt` row is made
+// (js/garage/setup-sheet.js PSEUDO_CATS). So a spec that opens the garage and
+// looks for a part row finds an empty pane and reads null. That is not a timing
+// problem and not a renamed class, just the wrong tab, and it is why FOUR specs
+// here failed — through two different doors, #cr-garage and #mb-garage, which
+// is why this is a helper and not a line inside openGarage.
+//
+// Picks the first catalog category that actually HAS a paid option rather than
+// naming one: a category whose rows are all cost-0 would have no locked row
+// either, and hardcoding "engine" would rot the way the hardcoded track
+// fraction did in sliders.spec.js.
+async function selectPartCategory(page) {
+  const cat = await page.evaluate(() => {
+    const c = Parts.CATALOG.find((x) => x.options.some((o) => o.cost > 0));
+    if (!c) return null;
+    const tab = document.getElementById(`cs-tab-${c.id}`);
+    if (tab) tab.click();
+    return c.id;
+  });
+  expect(cat, "no catalog category has a paid option — a part row can never be found").not.toBeNull();
+  await page.waitForFunction(() => !!document.querySelector("#cs-options .cs-opt"),
+    null, { polling: 100, timeout: BOOT_MS });
+  return cat;
+}
+
 // A career started through the hook rather than the setup screen — most specs
 // care about what a career DOES, not how it was created.
 async function startCareer(page, opts) {
@@ -302,6 +329,7 @@ test.describe("Career — isolation", () => {
     const fittedBefore = await page.evaluate(() => JSON.stringify(window.__apex.career().fitted));
     await page.evaluate(() => document.getElementById("mb-garage").click());
     await expect(page.locator("#carsetup")).toBeVisible();
+    await selectPartCategory(page);
     const picked = await page.evaluate(() => {
       // Any row that is not the one already fitted, so the click is a real change.
       const rows = [...document.querySelectorAll("#cs-options .cs-opt")];
@@ -557,16 +585,7 @@ test.describe("Career — the garage", () => {
   async function openGarage(page) {
     await page.evaluate(() => document.getElementById("cr-garage").click());
     await expect(page.locator("#carsetup")).toBeVisible();
-    const cat = await page.evaluate(() => {
-      const c = Parts.CATALOG.find((x) => x.options.some((o) => o.cost > 0));
-      if (!c) return null;
-      const tab = document.getElementById(`cs-tab-${c.id}`);
-      if (tab) tab.click();
-      return c.id;
-    });
-    expect(cat, "no catalog category has a paid option — firstLocked can never find a row").not.toBeNull();
-    await page.waitForFunction(() => !!document.querySelector("#cs-options .cs-opt"),
-      null, { polling: 100, timeout: BOOT_MS });
+    await selectPartCategory(page);
   }
   // The first unowned row in the open category, or null. Rows are <button>s, and
   // the canvas renders behind the sheet, so click through evaluate() — Playwright's
@@ -1169,6 +1188,14 @@ test.describe("Career — contracts", () => {
 
 test.describe("Career — determinism", () => {
   test.use({ viewport: LANDSCAPE });
+  // A SEASON'S WORK DOES NOT FIT THE DEFAULT BUDGET, and that is a sizing fact
+  // rather than a slow box: each test here boots, arms a real race through the
+  // quali sheet, then simulates 24 rounds and a rollover. 120 s was never the
+  // right budget for that — these timed out at exactly 120000 ms waiting on
+  // #quali, with no assertion having failed. The repo's convention for heavy
+  // specs (autopilot, the circuit foundations) is an explicit setTimeout, so
+  // this says what it needs out loud.
+  test.setTimeout(300_000);
 
   // The seed is the contract: same seed, same career. Career draws go through the
   // stateless Career.rnd hash rather than simRnd for exactly this reason — there
@@ -1269,6 +1296,14 @@ test.describe("Career — determinism", () => {
 
 test.describe("Career — history", () => {
   test.use({ viewport: LANDSCAPE });
+  // A SEASON'S WORK DOES NOT FIT THE DEFAULT BUDGET, and that is a sizing fact
+  // rather than a slow box: each test here boots, arms a real race through the
+  // quali sheet, then simulates 24 rounds and a rollover. 120 s was never the
+  // right budget for that — these timed out at exactly 120000 ms waiting on
+  // #quali, with no assertion having failed. The repo's convention for heavy
+  // specs (autopilot, the circuit foundations) is an explicit setTimeout, so
+  // this says what it needs out loud.
+  test.setTimeout(300_000);
 
   // The canvas renders continuously, so Playwright's actionability check can spin
   // on a control laid over it. Click through the DOM instead, the way
@@ -1883,6 +1918,14 @@ test.describe("Career — the guide", () => {
 
 test.describe("Career — the settlement", () => {
   test.use({ viewport: LANDSCAPE });
+  // A SEASON'S WORK DOES NOT FIT THE DEFAULT BUDGET, and that is a sizing fact
+  // rather than a slow box: each test here boots, arms a real race through the
+  // quali sheet, then simulates 24 rounds and a rollover. 120 s was never the
+  // right budget for that — these timed out at exactly 120000 ms waiting on
+  // #quali, with no assertion having failed. The repo's convention for heavy
+  // specs (autopilot, the circuit foundations) is an explicit setTimeout, so
+  // this says what it needs out loud.
+  test.setTimeout(300_000);
 
   test("a career round shows what it paid, and the total is the new balance", async ({ page }) => {
     await boot(page);
