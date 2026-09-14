@@ -122,6 +122,38 @@ test("the size-adjust that matches cap height is pinned to its derivation", () =
     `new cap height rather than carrying this number forward`);
 });
 
+test("#hud-speed's fixed slot is three TABULAR advances, not three `ch`", () => {
+  // `ch` is the advance of "0" and the browser takes the PROPORTIONAL one — it
+  // ignores the tabular-nums on the same element. Measured on the live element:
+  // 1ch = 0.4161em against a rendered tabular digit of 0.4577em, so the `3ch`
+  // this used to say was 9.1% short and the readout still jumped 3.5px at
+  // 100 km/h. Under Rajdhani the same gap was only 1.1%, which is why it read
+  // as working. Derive the slot here so a font swap cannot shorten it quietly.
+  const hud = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");
+  const slot = hud.match(/#hud-speed-n\s*\{[^}]*min-width:\s*([\d.]+)(em|ch)/);
+  assert.ok(slot, "#hud-speed-n must declare a min-width");
+  assert.equal(slot[2], "em",
+    `#hud-speed-n is sized in ${slot[2]} again. \`ch\` is the PROPORTIONAL zero ` +
+    `on every face measured here, so it does not hold three tabular digits`);
+
+  const m = tokens.match(/--font-hud:\s*([^;]+);/);
+  const first = m[1].split(",")[0].trim().replace(/^["']|["']$/g, "");
+  const slug = first.toLowerCase().replace(/\s+/g, "-");
+  const face = Object.entries(ledger.fonts).find(([n]) => n.startsWith(slug + "-") && n.includes("-700-"));
+  assert.ok(face, `no ${slug}-*-700-* face in the ledger to derive the slot from`);
+  const adv = effective(face[1])[0] / face[1].unitsPerEm;
+
+  const block = tokens.match(/@font-face\s*\{[^}]*Barlow Condensed[^}]*\}/);
+  const adj = block ? +(block[0].match(/size-adjust:\s*([\d.]+)%/) || [0, 100])[1] / 100 : 1;
+
+  const want = 3 * adv * adj;
+  assert.ok(Math.abs(+slot[1] - want) < 0.005,
+    `#hud-speed-n reserves ${slot[1]}em but three tabular digits of ${first} are ` +
+    `${want.toFixed(4)}em (advance ${adv.toFixed(4)}em x size-adjust ${adj}). A slot ` +
+    `SHORTER than its content puts the 99->100 jump back; a longer one just wastes ` +
+    `room. Re-derive it from this ledger, do not carry the old number forward`);
+});
+
 test("the tabular-nums declarations are load-bearing now — keep them", () => {
   // They were inert under Rajdhani and kept anyway, on the argument that they
   // become correct the day the face changes. That day is here: with Barlow they
