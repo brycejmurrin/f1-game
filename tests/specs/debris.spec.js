@@ -5,7 +5,7 @@
 // disabled (no rapier fetch, zero steps), spawn debris from a real wall hit,
 // respect the pool cap, and replay a seeded episode bit-for-bit.
 import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { BOOT_MS, RAPIER_MS } from "../helpers/fixtures.js";
 
 async function boot(page) {
   // RAISE THE RESOURCE-TIMING BUFFER BEFORE THE FIRST BYTE. Chrome keeps 250
@@ -50,10 +50,19 @@ async function enableDebris(page) {
   await page.waitForFunction(() => {
     const st = window.__apex.debris();
     return st.ready || st.loadState === -1;
-  }, null, { polling: 100, timeout: 30000 });
+  }, null, { polling: 100, timeout: RAPIER_MS });
   const st = await page.evaluate(() => window.__apex.debris());
   if (!st.ready) throw new Error("rapier load failed: " + st.error);
 }
+
+// NOT the config's 120 s default. One test here pays for a boot (BOOT_MS), a
+// track build, the rapier load (RAPIER_MS, measured at ~29 s idle) and a physics
+// pump, and the failing run measured 104.3 s while dying EARLY at the old 30 s
+// rapier budget — so simply letting that wait run to its measured length pushes
+// the test past 120 s and moves the failure rather than fixing it. 240 s is the
+// backstop for the sum, in the same spirit as the per-file caps on
+// image-grade-visual (480 s) and lighting-ab (420 s); a genuine hang still fails.
+test.describe.configure({ timeout: 240_000 });
 
 test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
 
@@ -65,7 +74,7 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
     await page.waitForFunction(() => {
       const st = window.__apex.debris();
       return st.ready || st.loadState === -1;
-    }, null, { polling: 100, timeout: 30000 });
+    }, null, { polling: 100, timeout: RAPIER_MS });
     const r = await page.evaluate(() => {
       window.__apex.jump(0.1, 40, 0);
       // The world runs the WASM solve only when something dynamic is in play

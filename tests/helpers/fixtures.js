@@ -27,6 +27,25 @@ export const BOOT_MS = 45000;
 // specs should move to whenever one of them next goes red on a slow box.
 export const TRACK_MS = 45000;
 
+/**
+ * The lazy rapier import + WASM init (js/physics/debris-world.js), which is a
+ * 2.24 MB vendored module parsed and instantiated AFTER boot, on a page that is
+ * already rendering a race.
+ *
+ * MEASURED here 2026-09-14, four fresh contexts on an IDLE box, from
+ * __apex.debris(true) to st.ready:
+ *
+ *   27.9 / 28.8 / 28.8 / 28.9 s     worst 28.9
+ *
+ * debris.spec.js hand-rolled 30000 for this, which is 1.1 s above the idle-box
+ * worst case — no margin at all, so it died at 34.1 s inside a real spec run.
+ * That is the same defect the BOOT_MS note above describes, and it takes the
+ * same cure: 55 s is ~1.9x the worst idle load, matching BOOT_MS's own 1.8x
+ * ratio. The file's describe timeout is the backstop, and a genuine load
+ * failure still fails fast on loadState === -1 rather than waiting this out.
+ */
+export const RAPIER_MS = 55000;
+
 import { TRACK_STALL_MS, awaitTrackBuild } from "./await-track-build.js";
 export { TRACK_STALL_MS, awaitTrackBuild };
 
