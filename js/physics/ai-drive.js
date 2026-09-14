@@ -599,6 +599,158 @@ const AiDrive = (function () {
     return 1 + t.off - Math.min(t.deg * Math.max(lapsDone || 0, 0), 0.025);
   }
 
+  // ── STRATEGY ───────────────────────────────────────────────────────────────
+  // What the field does about a worn tyre once TYRE WEAR is on. With it OFF the
+  // TYRE table above is the whole model and none of this runs.
+  //
+  // THE MODEL IS THE ONE STRATEGISTS ACTUALLY USE, shrunk to fit:
+  //
+  //   T = SUM over stints [ laps_i x (paceOffset(cls_i) + degCost(laps_i, life_i)) ]
+  //       + stops x pitLossLaps
+  //
+  // — the formulation a 2026 MILP solves with 25 integers and 15 binaries
+  // (docs/research/TYRE-STRATEGY-DESIGN.md §2.8). We do not need a solver: with
+  // three compounds and at most two stops there are 39 candidate plans, and they
+  // are enumerated once per car at the green light.
+  //
+  // EVERY COST IS IN LAP-TIME FRACTIONS so they add. `degCost` is the average
+  // grip lost over a stint of `n` laps on a compound whose life is `life` laps:
+  // linear wear makes that the area under the drop line, n/(2*life) of the full
+  // drop, and anything past `life` is charged at the cliff rate — which is what
+  // makes over-running a set the thing the planner avoids rather than a rounding
+  // error. `pitLossLaps` is the stop's cost expressed the same way.
+  // A FULL TANK EATS TYRES, and this is what makes strategies MIX. Without it
+  // the cost is separable and the taste is constant, so the best compound for
+  // the first stint is the best for the last one and every plan comes out
+  // soft/soft/soft — which is not what anyone who watches the sport expects to
+  // see. A heavy car works its tyres harder, so a stint's effective life falls
+  // with the fuel still aboard, and the planner reaches for harder rubber early
+  // and softer late. That is the real pattern, arrived at from the real cause.
+  const FUEL_WEAR = 0.22;    // life lost at a full tank, as a fraction
+  const DEG_LIN = 0.05;      // lateral grip lost across a full stint (TyreModel.DROP_LIN)
+  const DEG_CLIFF = 0.25;    // ...and per unit of wear past it
+  const GRIP_TO_LAP = 0.55;  // a fraction of grip is worth this much of a lap — sub-linear
+  function degCost(n, life) {
+    const L = Math.max(0.5, life);
+    const over = Math.max(0, n - L);
+    const inLife = Math.min(n, L);
+    // Mean drop over the in-life part, plus the cliff over whatever ran past it.
+    const mean = DEG_LIN * (inLife / (2 * L)) * inLife + DEG_CLIFF * (over * over) / (2 * L);
+    return mean * GRIP_TO_LAP;
+  }
+
+  // Split `laps` into `k` stints in proportion to the compounds' lives, so the
+  // marginal degradation at each stop is roughly equal — the classic result for
+  // linear deg, and the reason real stint lengths come out similar.
+  function splitStints(laps, lives) {
+    const total = lives.reduce((a, v) => a + v, 0) || 1;
+    const out = lives.map((v) => Math.max(1, Math.round(laps * v / total)));
+    let drift = out.reduce((a, v) => a + v, 0) - laps;
+    for (let i = out.length - 1; i >= 0 && drift !== 0; i--) {
+      const take = Math.min(Math.abs(drift), out[i] - 1) * Math.sign(drift);
+      out[i] -= take; drift -= take;
+    }
+    return out;
+  }
+
+  // Enumerate 0-, 1- and 2-stop plans over the three classes and keep the best.
+  // `roll` is the car's own deterministic draw and does two jobs: it breaks ties
+  // so the field does not converge on one plan, and it biases the taste — real
+  // strategy diversity is the largest lever a race controls over how much
+  // overtaking happens, which is the same argument the TYRE table above makes.
+  const MAX_STOPS = 2;
+  const CLASSES = ["soft", "medium", "hard"];
+  function stintPlan(ctx) {
+    const laps = Math.max(1, Math.round(ctx.laps || 1));
+    const lifeLaps = ctx.lifeLaps || ((cls) => (TYRE[cls] ? laps * 0.7 : laps));
+    const pitLossLaps = ctx.pitLossLaps != null ? ctx.pitLossLaps : 0.18;
+    const roll = clamp(ctx.roll || 0, 0, 1);
+    // TWO tastes, because one is not enough to spread a field. Biasing only the
+    // STOP COUNT moves the stop/no-stop boundary and leaves every car choosing
+    // the same rubber, which measured as a 20-car field on one plan — the
+    // procession the TYRE table above exists to avoid.
+    //
+    //   `bias`   — a taste for stopping, +/- a third of a stop's cost. A
+    //              cautious driver stops early and often, an aggressive one
+    //              runs the set long.
+    //   `soften` — a taste for grip over durability, worth up to about half a
+    //              compound step per lap. A low roll shops for hards, a high
+    //              one for softs, and the field arrives at the first stop on
+    //              different tyres.
+    const bias = (roll - 0.5) * 0.66 * pitLossLaps;
+    const soften = (roll - 0.5) * 0.006;
+    const taste = { soft: soften, medium: 0, hard: -soften };
+    let best = null;
+    const walk = (seq) => {
+      const stops = seq.length - 1;
+      const lives = seq.map((cls) => lifeLaps(cls));
+      const stints = splitStints(laps, lives);
+      let cost = stops * pitLossLaps + stops * bias;
+      let done = 0;
+      for (let i = 0; i < seq.length; i++) {
+        const t = TYRE[seq[i]] || TYRE.medium;
+        // Mean fuel aboard across THIS stint, 1 on the grid to 0 at the flag.
+        const fuel = 1 - (done + stints[i] / 2) / laps;
+        cost += -(t.off + (taste[seq[i]] || 0)) * stints[i]
+              + degCost(stints[i], lives[i] * (1 - FUEL_WEAR * fuel));
+        done += stints[i];
+      }
+      if (!best || cost < best.cost) best = { cost, seq: seq.slice(), stints: stints.slice(), stops };
+    };
+    const rec = (seq) => {
+      walk(seq);
+      if (seq.length > MAX_STOPS) return;
+      for (const cls of CLASSES) rec(seq.concat(cls));
+    };
+    for (const cls of CLASSES) rec([cls]);
+    // Stop laps are the running totals of the stint lengths.
+    const lapsAt = [];
+    let acc = 0;
+    for (let i = 0; i < best.stints.length - 1; i++) { acc += best.stints[i]; lapsAt.push(acc); }
+    return { start: best.seq[0], seq: best.seq, stints: best.stints, stops: best.stops, lapsAt, cost: best.cost };
+  }
+
+  // The compound for an UNPLANNED stop — a spent set, or a track that has dried
+  // out. The plan has nothing to say about these (a 0-stop plan has no next
+  // compound at all, which used to fall back to "medium" whether there were
+  // three laps left or thirty), so pick the fastest rubber that can still cover
+  // what remains: softest first, and the hardest as the fallback when nothing
+  // comfortably lasts.
+  function compoundFor(lapsLeft, lifeLaps) {
+    const need = Math.max(1, lapsLeft);
+    for (const cls of CLASSES) if (lifeLaps(cls) >= need) return cls;
+    return CLASSES[CLASSES.length - 1];
+  }
+
+  // Should this car come in NOW, ahead of its plan? Three rules, in the order
+  // their value was measured (docs/research/TYRE-STRATEGY-DESIGN.md §2.7, §2.9).
+  //
+  //   1. THE FREE STOP. Under a safety car or VSC the whole field is slowed, so
+  //      a stop costs 40-60% less — 8-12 s, the single biggest lever in the
+  //      sport. A car within reach of its planned stop takes it.
+  //   2. THE WRONG TYRE. A dry->rain arc used to punish a slick with no
+  //      recourse; docs/PHYSICS.md called that the first thing to revisit if
+  //      rain felt unfair. Pitting IS the recourse.
+  //   3. THE SET IS GONE. Past its life the cliff costs more than the stop.
+  //
+  // Returns a REASON string (or "") rather than a boolean, so the caller can say
+  // why on the radio and a test can assert which rule fired.
+  const CAUTION_REACH = 6;    // laps of the plan a free stop is worth pulling forward
+  function pitNow(ctx) {
+    if (!ctx) return "";
+    // TWO RULES IGNORE THE PLAN'S STOP BUDGET, because both are about a tyre
+    // that cannot do its job at all rather than about strategy. A car planning
+    // no stops still has to come in for slicks in the rain, and still has to
+    // change a set it has run off the cliff — gating these on `stopsLeft` left
+    // every 0-stop car circulating on the wrong rubber, measured.
+    if (ctx.wrongTread) return "weather";
+    if (ctx.wear >= 1) return "worn";
+    if (ctx.stopsLeft <= 0) return "";
+    if (ctx.cautionLevel >= 2 && ctx.lapsToStop <= CAUTION_REACH) return "caution";
+    if (ctx.lapsToStop <= 0) return "plan";
+    return "";
+  }
+
   function mistakeChance(t, pressure) {
     const cons = t && t.consistency != null ? t.consistency : 0.75;
     return 0.004 * (1 + 2 * clamp(pressure || 0, 0, 1)) * (1.3 - cons);
@@ -732,6 +884,7 @@ const AiDrive = (function () {
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
-    tyreClass, tyrePace,
+    tyreClass, tyrePace, stintPlan, pitNow, degCost, splitStints, compoundFor,
+    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR },
   };
 })();

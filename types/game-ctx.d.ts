@@ -278,6 +278,44 @@ type Weather = string;
 type TimeOfDay = string;
 /** "off" | "low" | "real" — Reliability.isLevel() gates the setter. */
 type ReliabilityLevel = string;
+/** TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js LEVELS). */
+type TyreLevel = string;
+/** The session-bound half of PitLane — PitLane.create(G)'s return. */
+interface PitSession {
+  zoneOf(): Record<string, number> | null;
+  /** The lane's speed cap in m/s at the CURRENT pace scale. */
+  limit(): number;
+  inLane(c: CarState): boolean;
+  inWindow(c: CarState): boolean;
+  /** Arm (or cancel) the stop; omit `on` to toggle. */
+  arm(c: CarState, on?: boolean): boolean;
+  update(c: CarState, dt: number): void;
+  reset(c: CarState): void;
+  info(c?: CarState): Record<string, unknown> | null;
+  setNext(c: CarState, record: unknown): void;
+  serviceCar(c: CarState): void;
+}
+/** The session-bound half of TyreModel — TyreModel.create(G)'s return. */
+interface TyreSession {
+  fit(c: CarState, record: unknown): void;
+  update(c: CarState, dt: number): void;
+  /** Lateral grip scale; exactly 1 while the setting is off. */
+  gripMul(c: CarState): number;
+  /** Traction/braking scale — a smaller share of the same drop. */
+  tractionMul(c: CarState): number;
+  fuelAccelMul(c: CarState): number;
+  fuelVmaxMul(c: CarState): number;
+  lapsOn(c: CarState): number;
+  /** Wear as a fraction of the compound's life, 0..2. */
+  spent(c: CarState): number;
+  info(c: CarState): Record<string, unknown> | null;
+  severity(): number;
+  level(): TyreLevel;
+  setLevel(v: TyreLevel): TyreLevel;
+  on(): boolean;
+  classRecord(cls: string): unknown;
+  optionRecord(opt: unknown): unknown;
+}
 /** "manual" | "auto" — the ACTIVE AERO race setting. */
 type AeroMode = string;
 
@@ -321,6 +359,11 @@ interface GameCtx {
   // ── Reliability: the race setting, the arming path, the manual retire ──────
   raceReliability: ReliabilityLevel;
   readonly armReliability: (field?: CarState[]) => CarState[];
+
+  // ── Tyres: the race setting and the live wear model ───────────────────────
+  raceTyreWear: TyreLevel;
+  readonly tyres: TyreSession;
+  readonly pits: PitSession;
   readonly retireCar: (c: CarState, reason?: string) => void;
   readonly ranked: CarState[];
   readonly sectorLast: [number | null, number | null, number | null];
@@ -647,6 +690,8 @@ declare const Atmosphere: GameModuleFactory;
 declare const AudioPanel: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
 declare const BrakeCue: GameModuleFactory;
+declare const TyreModel: GameModuleFactory;
+declare const PitLane: GameModuleFactory;
 declare const CamModes: GameModuleFactory;
 declare const CamTunerPanel: GameModuleFactory;
 declare const CareerUI: GameModuleFactory;

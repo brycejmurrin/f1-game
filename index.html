@@ -417,6 +417,11 @@
       </div>
       <div id="hud-speed"><span id="hud-speed-n">0</span><span class="hud-unit">KM/H</span></div>
       <div id="hud-energy"><div id="hud-energy-fill"></div><div class="hud-energy-label">ENERGY</div></div>
+      <!-- TYRES. Sibling of ENERGY on purpose: the two resources a driver
+           spends, one over seconds and one over laps. Hidden whenever TYRE WEAR
+           is off, which is the shipped default, so the bar costs nothing to a
+           player who never turns it on. -->
+      <div id="hud-tyre" hidden><span id="hud-tyre-code">M</span><div id="hud-tyre-bar"><div id="hud-tyre-fill"></div></div></div>
       <div id="hud-ot" class="ot-off">OVERTAKE</div>
       <div id="hud-aero" class="ax-off">Z-MODE</div>
     </div>
@@ -444,8 +449,10 @@
      the width runs out, which produced a DN button above its own UP. These four
      groups each have a fixed shape — pedals and shifts are vertical pairs
      (brake over gas, up over down, as every car has them), and the taps are a
-     3-tall COLUMN standing beside them — so a dock can only ever place whole
-     groups, and a pair cannot come apart or invert. layoutDocks() in js/game.js
+     COLUMN standing beside them — so a dock can only ever place whole
+     groups, and a pair cannot come apart or invert. The tap column is 3 tall by
+     default and 4 with TYRE WEAR on (PIT appears only when there is something
+     to change tyres for), which the flex column takes without a count anywhere. layoutDocks() in js/game.js
      moves the GROUPS between docks; the buttons never move again. -->
 <div id="grp-pedals" class="dock-grp col">
   <button id="btn-brake" class="touchbtn pedal" hidden aria-label="Brake">BRAKE</button>
@@ -463,6 +470,7 @@
   <button id="btn-boost" class="touchbtn" hidden aria-label="Boost">BOOST</button>
   <button id="btn-ot" class="touchbtn" hidden aria-label="Overtake">OT</button>
   <button id="btn-aero" class="touchbtn" hidden aria-label="Active aero">AERO</button>
+  <button id="btn-pit" class="touchbtn" hidden aria-label="Pit in">PIT</button>
 </div>
 
 <button id="btn-cam" hidden aria-label="Camera">CHASE</button>
@@ -1648,6 +1656,14 @@
           <button id="rs-line-next" type="button" data-step="1" aria-label="Next driving line">&rsaquo;</button>
         </div>
       </div>
+      <div id="rs-tyres" class="set-row" role="group" aria-labelledby="rs-tyres-label">
+        <span class="tune-label" id="rs-tyres-label">TYRE WEAR</span>
+        <div>
+          <button id="rs-tyres-prev" type="button" data-step="-1" aria-label="Previous tyre wear">&lsaquo;</button>
+          <select id="rs-tyres-sel" aria-labelledby="rs-tyres-label"></select>
+          <button id="rs-tyres-next" type="button" data-step="1" aria-label="Next tyre wear">&rsaquo;</button>
+        </div>
+      </div>
       <div id="rs-reliab" class="set-row" role="group" aria-labelledby="rs-reliab-label">
         <span class="tune-label" id="rs-reliab-label">RELIABILITY</span>
         <div>
@@ -2307,6 +2323,7 @@
 <script defer crossorigin="anonymous" src="js/circuits/dijon.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/buddh.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/mont_tremblant.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/pit-lane.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/circuit-elevations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/track-maps.js?v=dev"></script>
@@ -2340,6 +2357,7 @@
 <script defer crossorigin="anonymous" src="js/career/career.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-cal.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>

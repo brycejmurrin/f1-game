@@ -22,6 +22,15 @@ export function probeFailures(probe, errors) {
   const fails = [];
   if (missing.length) fails.push("missing globals: " + missing.join(", "));
   if (!probe.race) fails.push("race() failed");
+  // "The race never armed" and "the race armed and the physics is wrong" are
+  // different bugs. Reporting both as `probe() invalid after race+step` is what
+  // made this tool's one red line useless — so when the race never armed, say
+  // ONLY that: everything downstream of it is unmeasured, not failing.
+  if (probe.armed === false) {
+    fails.push("race never armed (state stayed " + (probe.state || "?") + ")");
+    if (errors.length) fails.push(...errors.slice(0, 5));
+    return fails;
+  }
   if (!probe.obs) fails.push("probe() invalid after race+step");
   if (!probe.light) fails.push("lightState() invalid");
   if (!probe.cams) fails.push("camera() failed");
@@ -29,17 +38,41 @@ export function probeFailures(probe, errors) {
   return fails;
 }
 
-export function evaluateLiveProbe(
+/**
+ * ASYNC, and it has to be. `__apex.race()` kicks off `startRace()` and does NOT
+ * await it — startRace's very first statement is `await ensureScenery(...)`, so
+ * it yields and the race arms in a later task. This helper used to do
+ * race()/jump()/step()/probe() in one synchronous run inside a single
+ * page.evaluate, and a synchronous run never lets a microtask land: the session
+ * was still in the menu, `probe()` returned null, and the tool reported
+ * `probe() invalid after race+step` on a clean tree, every time, with no
+ * console error behind it. It had therefore never been a working gate.
+ * (docs/notes/DEFECT-LEDGER.md, 2026-09-14.)
+ */
+export async function evaluateLiveProbe(
   apex = globalThis.__apex,
   hasGlobal = (name) => typeof globalThis[name] !== "undefined" ||
     (() => { try { return (0, eval)(`typeof ${name}`) !== "undefined"; } catch { return false; } })(),
+  { timeoutMs = 180000, pollMs = 100, sleep } = {},
 ) {
-  const out = { globals: {}, race: null, obs: null, light: null, cams: null };
+  const nap = sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const out = { globals: {}, race: null, armed: null, state: null, obs: null, light: null, cams: null };
   for (const name of ["GLX", "Tracks", "Parts", "Teams", "TrackDefs", "GLXShaders",
                       "TrackGeom", "TrackSceneryData", "PhysicsConsts"]) {
     out.globals[name] = hasGlobal(name);
   }
   out.race = apex.race("monza");
+  // Wait for the race to actually arm. Generous, because a SwiftShader track
+  // build measures 11-33 s here and the scenery build can add more.
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const info = apex.info ? apex.info() : null;
+    out.state = info ? info.state : null;
+    if (out.state === "race" || out.state === "count") { out.armed = true; break; }
+    if (Date.now() >= deadline) { out.armed = false; break; }
+    await nap(pollMs);
+  }
+  if (!out.armed) return out;          // nothing below can mean anything yet
   apex.jump(0.3, 50, 0);
   apex.step(1 / 60, 30);
   const observation = apex.probe();
