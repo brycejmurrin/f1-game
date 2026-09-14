@@ -257,20 +257,34 @@ const GameAudio = (function () {
     node._apexAimTgt = target;
   }
   let engineOn = false;
-  // Nodes from the last stopEngine() that still sit on sfxBus until their
-  // 0.35 s fade ends. A resume that starts a new graph BEFORE that timeout
-  // used to leave both graphs rendering (~450 ms of doubled CPU, stacked
-  // on every pause/hide). startEngine() buries them first.
+  // Node batches from stopEngine() that still sit on sfxBus until their
+  // 0.35 s fade ends — ONE ENTRY PER STOP. A resume that starts a new graph
+  // BEFORE that timeout used to leave both graphs rendering (~450 ms of
+  // doubled CPU, stacked on every pause/hide). startEngine() buries them first.
   let _dying = [];
-  function flushDying() {
-    for (let i = 0; i < _dying.length; i++) {
-      try { const n = _dying[i]; if (n && n.disconnect) n.disconnect(); } catch (e) { /* torn down */ }
+  function killNodes(nodes) {
+    for (let i = 0; i < nodes.length; i++) {
+      try { const n = nodes[i]; if (n && n.disconnect) n.disconnect(); } catch (e) { /* torn down */ }
     }
+  }
+  function flushDying() {
+    for (let i = 0; i < _dying.length; i++) killNodes(_dying[i]);
     _dying.length = 0;
   }
   function queueDying(nodes) {
-    for (let i = 0; i < nodes.length; i++) { const n = nodes[i]; if (n) _dying.push(n); }
-    setTimeout(flushDying, 450);
+    const batch = [];
+    for (let i = 0; i < nodes.length; i++) { const n = nodes[i]; if (n) batch.push(n); }
+    if (!batch.length) return;
+    _dying.push(batch);
+    // EACH BATCH OWNS ITS TIMER. One shared 450 ms timeout flushed the whole
+    // list, so a second stopEngine() inside that window had its 0.35 s fades
+    // disconnected early — an abrupt cut instead of a fade.
+    setTimeout(() => {
+      const i = _dying.indexOf(batch);
+      if (i < 0) return;             // already buried by flushDying()
+      _dying.splice(i, 1);
+      killNodes(batch);
+    }, 450);
   }
   let lastSpeed = 0, lastEngT = 0, harvLevel = 0;
   let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
@@ -337,7 +351,6 @@ const GameAudio = (function () {
   let lastTrackIdx = -1;
   let musicGain = null;
   let musicSrc = null;
-  let currentUrl = null;
   let musicToken = 0;
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
   const _musicLoads = {};                  // url -> in-flight fetch+decode (see playIndex)
@@ -556,7 +569,6 @@ const GameAudio = (function () {
     sfxBus = null;
     limiter = null;
     musicGain = null;
-    currentUrl = null;
     rainStopping = false;
     rainPending = null;
     rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
@@ -587,7 +599,13 @@ const GameAudio = (function () {
       resumeMusic = musicOn;
       resumeEngine = engineOn;
       resumeRain = rainWanted;
+      // stopMusic() drops the resume position along with the decoded track, and
+      // a hide/show is the exact case playMusicBuffer's offset exists for — so
+      // carry it across the stop by hand. musicBuffers still holds the buffer,
+      // so re-taking the reference costs nothing.
+      const hidBuf = musicResumeBuf, hidAt = musicResumeAt, hidOff = musicResumeOff;
       if (musicOn) stopMusic();
+      if (resumeMusic) { musicResumeBuf = hidBuf; musicResumeAt = hidAt; musicResumeOff = hidOff; }
       if (engineOn) stopEngine();
       if (rainWanted) stopRain(true);
       // SUSPEND THE CONTEXT, not only its sources. Stopping the nodes leaves
@@ -1035,6 +1053,8 @@ const GameAudio = (function () {
     shiftDuck = 0;
     shiftDuckT = 0;
     pullT = 0;
+    overrunT = 0;   // an AudioContext stamp: a rebuilt ctx restarts near 0, and a
+                    // stale future value both silences the crackle and blocks its re-arm
     engineOn = true;
   }
 
@@ -2032,7 +2052,7 @@ const GameAudio = (function () {
     // A PLAYLIST, so no per-source loop: each track hands over to the next when
     // it ends, and the list wraps. (A single looping source could never reach
     // the second song.)
-    src.loop = PLAYLIST.length < 2;
+    src.loop = false;
     src.connect(musicGain);
     src.onended = function () {
       if (src !== musicSrc || token !== musicToken || !musicOn) return;
@@ -2108,7 +2128,6 @@ const GameAudio = (function () {
     try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) { /* stop-before-start is a documented throw; the source is being replaced regardless */ }
     musicSrc = null;
     musicOn = true;
-    currentUrl = url;
     const token = ++musicToken;
     const builtin = !!PLAYLIST[musicIndex].builtin;
     if (ctx.state !== "running") { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
@@ -2158,6 +2177,14 @@ const GameAudio = (function () {
   function setSfxEnabled(b) {
     sfxEnabled = !!b;
     if (sfxBus) sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
+    // setEngine() owns the rev-keyed music duck and stops running the instant
+    // SFX go off (sfxOk()), so release it here the way stopEngine() does.
+    // musicGain hangs off master, not sfxBus: without this the music stayed up
+    // to 25% down for the rest of the race.
+    if (!sfxEnabled && musicGain) {
+      musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL, now(), 0.3);
+      musicGain._apexDuckTgt = null;
+    }
     return sfxEnabled;
   }
   function setMusicVolume(v) {
@@ -2276,7 +2303,6 @@ const GameAudio = (function () {
 
   function stopInternal() {
     musicOn = false;
-    currentUrl = null;
     musicToken++;                                // cancel any in-flight load
     // stop() and disconnect() get their OWN try each. Sharing one meant a throw
     // from stop() (stop-before-start is the documented case) skipped the

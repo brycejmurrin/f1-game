@@ -2338,7 +2338,7 @@ Raw handle to the `F1API` module (the cached Jolpica + OpenF1 client the data hu
 uses); `null` if `F1API` didn't load. All methods return Promises.
 ```js
 await __apex.f1api.schedule();
-await __apex.f1api.lastRace();
+await __apex.f1api.sessionResult();
 ```
 
 ### `openf1(path) → Promise<json>`

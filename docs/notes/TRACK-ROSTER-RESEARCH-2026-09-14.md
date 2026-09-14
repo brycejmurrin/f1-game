@@ -150,10 +150,47 @@ Eleven circuits shipped. What the tiering above got right and wrong:
   1977 Parabolique extension — which is what F1 raced. The bad target is what
   made a good stitch look like a 4% miss.
 
-Still missing after this round: 27 of the 77 venues. The cheapest remaining are
-Mosport, Sebring and Le Mans Bugatti (permanent circuits, mapped, fragmented);
-the expensive ones are every street circuit, which carries no `highway=raceway`
-at all and needs a hand-traced centreline.
+Still missing after this round: 27 of the 77 venues.
+
+## 6. What is left, measured rather than guessed (2026-09-14)
+
+Every remaining venue with a permanent circuit was put through the stitcher to
+find out what OSM can actually give, instead of reasoning about it. The result
+splits cleanly, and not along the line §2 predicted:
+
+| venue | GPs | stitched | vs target | is it the layout F1 raced? |
+|---|---|---|---|---|
+| **Mosport** (Canadian Tire Motorsport Park) | 8 | 3.948 km | −0.24% | **YES — unchanged since the 1967-77 races** |
+| Le Mans Bugatti | 1 | 4.168 km | −0.40% | No. F1 ran 4.430 km in 1967; the circuit is 4.185 km now |
+| Jarama | 9 | 3.910 km | +1.56% | No. F1 ran 3.312 km; the circuit is 3.85 km now |
+| Charade | 4 | 3.943 km | −0.79% | No, and not close — F1 ran the 8.055 km road course |
+| Aintree | 5 | 2.453 km | +0.11% | No. That is the club circuit; F1 used the 4.828 km Grand National perimeter |
+| Sebring | 1 | 5.872 km | −2.45% | No. F1 ran 8.356 km in 1959 |
+| East London (Prince George) | 3 | — | — | Only 5 disconnected ways, no ring |
+| Zeltweg airfield | 1 | 0.606 km | −81% | Nothing usable; the circuit is gone |
+| Adelaide | 11 | — | — | 1 way. A street circuit |
+| Long Beach | 8 | 0.025 km | −99% | 25 metres of tagged raceway. A street circuit |
+
+**The finding: Mosport is the only venue left that is both importable and
+genuinely the circuit Formula One raced.** Eight Grands Prix, a clean 9-way
+stitch inside a quarter of a percent, and a layout unchanged since. It should be
+circuit 52.
+
+Everything else importable is a modern rebuild of a venue whose F1 configuration
+no longer exists — which is a defensible thing to ship (brands_hatch and zolder
+already did) but is a different proposition, and the roster should not pretend
+otherwise. Charade and Aintree are the extreme cases: what OSM holds is half the
+circuit and a different circuit respectively.
+
+The street circuits are closed to this approach entirely. Long Beach carries
+25 m of `highway=raceway` and Adelaide one way; the tarmac is tagged as ordinary
+streets because that is what it is for 51 weeks a year. Those need a centreline
+digitised from historical maps, which the stitcher cannot help with.
+
+Also found: the stitcher could not take a southern-hemisphere bbox in the space
+form at all — cli-args ends a value at a leading `-` so a flag cannot swallow
+the next flag, which is right for the library and wrong for a coordinate. East
+London and Adelaide both failed with "--bbox is required" before that was fixed.
 
 ## 6. Layout variants, not new venues
 

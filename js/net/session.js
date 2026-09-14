@@ -56,9 +56,15 @@ const NetSession = (function () {
     // could inject on the state channel) choosing t0 chose our RTT and clock
     // offset — the number every one of its timestamps is converted through.
     // Now a PONG counts only if it names an outstanding ping AND carries that
-    // ping's original t0; each is answered once. Eight is more than the
-    // sync-cadence burst a slow link can have in flight.
-    const SENT_PINGS_MAX = 8;
+    // ping's original t0; each is answered once. A ping is HELD FOR AS LONG AS
+    // A REPLY COULD PLAUSIBLY ARRIVE (MAX_PLAUSIBLE_RTT_MS, the same ceiling
+    // addSample accepts) — an eight-deep window was only 8 × syncPingEveryMs =
+    // 800 ms wide during the pre-sync burst, so on any slower link every PONG
+    // named a ping already evicted, takePing rejected it, no sample was ever
+    // taken and the session never synced: "connected, no rival", with
+    // lastHeardAt kept fresh so the timeout never fired either. The count is
+    // now only a memory bound, well past 4000 / 100 pings in flight.
+    const SENT_PINGS_MAX = 64;
     const sentPings = [];                // [{ id, t0 }], oldest first
     function takePing(id, t0) {
       for (let i = 0; i < sentPings.length; i++) {
@@ -192,7 +198,8 @@ const NetSession = (function () {
         lastPingAt = now;
         const id = (++pingId) >>> 0;
         sentPings.push({ id, t0: now });
-        if (sentPings.length > SENT_PINGS_MAX) sentPings.shift();
+        while (sentPings.length > SENT_PINGS_MAX ||
+               (sentPings.length > 1 && now - sentPings[0].t0 > MAX_PLAUSIBLE_RTT_MS)) sentPings.shift();
         transport.send(CH_STATE, encodePing(id, now));
       }
       // Only start the death clock once we have actually heard from them, so

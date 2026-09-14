@@ -303,7 +303,12 @@ test("TLX decal programs share a material map reference, not the first car's tex
   const fx = read("js/render/three/tsl-fx.js");
   assert.match(fx, /materialReference\("map", "texture"\)/);
   assert.match(fx, /m\.map = tex/);
-  assert.match(fx, /const _decalGraph = \[null, null\]/);
+  // One graph PER GLOW VALUE, not one shared graph: a TSL uniform node lives in
+  // the shared graph, so a single per-draw uniform would retroactively restyle
+  // every decal material already built from it (2026-09 survey, tsl-fx.js:212).
+  // decalCache and the program key are already keyed per glow; the graph now is too.
+  assert.match(fx, /const _decalGraph = new Map\(\)/);
+  assert.match(fx, /_decalGraph\.get\(glow\)/);
   assert.doesNotMatch(fx, /const smp = texture\(tex\)/,
     "a per-texture node cannot sit behind the shared tlx-fx-decal program key");
 });
@@ -1568,13 +1573,30 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*ldrRT\b/);
 });
 
-test("TLX WebGPU begin() remaps GL projections with Z01 like WGX", () => {
+test("TLX WebGPU remaps the RASTER projection with Z01, but hands post the GL invProj", () => {
   const tlx = code("js/render/three/tlx.js");
+  // Rasterisation: three's WebGPU backend wants z in [0,1], same as WGX.
   assert.match(tlx, /const Z01 = new Float32Array\(\[1,0,0,0,\s*0,1,0,0,\s*0,0,0\.5,0,\s*0,0,0\.5,1\]\)/);
-  assert.match(tlx, /const Z01INV = new Float32Array/);
   assert.match(tlx, /_mul4Col\(_projGpu, Z01, frame\.proj\)/);
-  assert.match(tlx, /_mul4Col\(_invProjGpu, frame\.invProj, Z01INV\)/);
   assert.match(fnBody(tlx, "begin"), /renderer\.backend\.isWebGPUBackend/);
+
+  // Post is the OTHER convention, and the split is real, not an oversight.
+  // This test used to assert `_mul4Col(_invProjGpu, frame.invProj, Z01INV)` —
+  // inv(Z01·P), the partner for RAW [0,1] depth. But TLX's consumers do the
+  // remap themselves: tsl-post.js's ssaoViewPosFromD builds its NDC z with
+  // `d.mul(2.0).sub(1.0)`, so by the time invProj is applied the z is already
+  // GL-convention and a second remap reconstructed every SSAO/SSR sample at
+  // roughly half depth. The WGSL port is the control: its ssaoViewPosFromD
+  // feeds raw `d` ("depth already 0..1") and therefore DOES want inv(Z01·P).
+  // Same depth texture on both (0.5*z_gl+0.5), different shader entry point.
+  // Fixed 2026-09 survey (tlx.js:2937); Z01INV/_invProjGpu had no other reader.
+  assert.match(tlx, /_postF\.invProj = \(frame && frame\.invProj\) \|\| null/);
+  assert.doesNotMatch(tlx, /Z01INV/,
+    "inv(Z01·P) is the WGSL partner; feeding it to tsl-post double-remaps the depth");
+
+  const tslPost = read("js/render/three/tsl-post.js");
+  assert.match(tslPost, /d\.mul\(2\.0\)\.sub\(1\.0\)/,
+    "if tsl-post stops remapping depth itself, TLX must go back to inv(Z01·P)");
 });
 
 test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => {

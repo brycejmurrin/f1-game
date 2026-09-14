@@ -443,7 +443,7 @@ struct FrameU {
   lightVP    : mat4x4<f32>,   // off 224  sun light-space view-proj (shadow, Phase 3)
   params2    : vec4<f32>,     // off 288  (shadowOn, shadowStrength, shadowTexel, shadowBias)
   params3    : vec4<f32>,     // off 304  (bounceK, fogTint, groundMist, mistHeight) — live tuner knobs
-  params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, carReflect, ssrStrength) — Phase-4 deferred knobs
+  params4    : vec4<f32>,     // off 320  (pcssPen, shadowTintAmt, reserved, reserved) — zw unread: SSR is same-frame in COMPOSITE, car reflection is analytic-sky / params5.x
   params5    : vec4<f32>,     // off 336  (envProbeStr, cloudSpeed, cloudShadowDim, mistShare) — env-cube probe strength (0 = analytic sky only), cloud-shadow drift rate, cloud-shadow depth, ground-mist share of the lamp-fog glow
   shadowCtr  : vec4<f32>,     // off 352  (xyz unsnapped shadow-box anchor — fade origin; w shadowRange = box half-size m)
   params6    : vec4<f32>,     // off 368  (wetDark, carShadowOn, carSparkle, fogSunCore) — wet darkening + car-shadow arm flag + pure-look sparkle/fog knobs (zw always packed; WGSL reads them directly)
@@ -1047,6 +1047,10 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // pearl coat tints what is under it. Mixing at 0.75 turned a Ferrari mint.
     albedo = albedo * mix(vec3<f32>(1.0), 0.60 + 0.80 * shift,
                           vec3<f32>(smoothstep(0.30, 0.92, fres) * 0.40));
+  }
+  // Repair patches read glossier: fold the patch mask into roughness (max
+  // +-0.08) before the specular AA below widens it (GLX glsl-lit.js parity).
+  if (detail > 0.0) {
     rough = clamp(rough + (patchM - 0.5) * 0.16 * min(detail * 4.0, 1.0), 0.04, 1.0);
   }
   applyMaterial(i32(vMatId + 0.5), &albedo, &rough, vDist, in.wpos, in.nrm, fwWpos, litPack, packOn);
@@ -1439,7 +1443,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     color = color * mix(1.0 - 0.12 * F.params9.x, 1.0, ao);
   }
 
-  // [Block 8] SSR consumption (F.params4.w = ssrStrength). On up-facing WET ground
+  // [Block 8] SSR consumption — NOT in LIT (see the closing note). On up-facing WET ground
   // blend in the screen-space-reflection result (computed by the Phase-4 post pass,
   // wgsl-post.js) scaled by wetness * ssrStrength — a real mirror where puddles pool.
   // Screen uv comes from the fragment framebuffer position / SSR texture size
@@ -1525,7 +1529,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       let band = exp(-lowH * (0.09 / mh));
       let mp = in.wpos.xz * 0.020 + vec2<f32>(F.params0.z * 0.010, F.params0.z * 0.006);
       let dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
-      let mistAmt = mistK * band * smoothstep(0.35, 0.72, fbm(mp)) * dRamp;
+      let mistAmt = mistK * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
       // MIST GLOW SHARE knob (F.params5.w; GLX uMistShare parity, def 1.5).
       let mistCol = mix(F.fogColor.xyz, F.sunColor.xyz, pow(sunAmt, 3.0)) + lampFogC * F.params5.w;
       color = mix(color, mistCol, clamp(mistAmt, 0.0, 0.45));
@@ -1780,9 +1784,11 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // covRay: cloud coverage seen along this ray, hoisted for the star-occlusion
   // term below (GLX parity — stars fade out behind the deck).
   var covRay = 0.0;
+  var thickRay = 0.0;   // deck thickness along this ray (GLX cityThick), for the city-skyglow pickup
   if (cloud > 0.001 && up > 0.012) {
     let cp = dir.xz / up * 0.42;
     let cT = time * cloudSpeed;
+    let evo = cT * 0.00035;   // very slow warp of the second octave: cloud SHAPE evolves, not just drifts
     let cp1 = cp + vec2<f32>(cT * 0.0028, cT * 0.0011);
     let cp2 = cp + vec2<f32>(cT * 0.0017, cT * 0.0023);
     let f = fbm(cp1);
@@ -1805,7 +1811,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       cov = mix(cov, smoothstep(0.18, 0.82, cov), cloudRich * 0.5);
     }
     covRay = cov;
-    let thick = clamp(fbm(cp2 * 0.55 + vec2<f32>(3.1, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
+    let thick = clamp(fbm(cp2 * 0.55 + vec2<f32>(3.1 + evo, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
+    thickRay = thick;
     let sl = pow(sd, 2.0);
     let sunBright = max(sunColor.r, max(sunColor.g, sunColor.b));
     // Deck shading = GLX SKY_FS, term for term. Before this port the deck
@@ -1851,7 +1858,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   // uStars/nightSky is a uniform, so the branch is uniform control flow.
   if (nightSky < 0.5) {
     let golden = 1.0 - smoothstep(0.0, 0.45, sunE);
-    let coronaDamp = 1.0 - nightSky;
+    let coronaDamp = (1.0 - overcast * 0.92) * (1.0 - nightSky);   // overcast <= 1 keeps the first factor >= 0.08
     let sunWarm = mix(sunColor, sunColor * vec3<f32>(1.18, 0.52, 0.24), golden);
     c = c + sunWarm * pow(sd, mix(20.0, 8.0, golden)) * (0.55 + golden * 0.55) * coronaDamp * coronaAureole;   // SUN AUREOLE knob
     c = c + sunWarm * pow(sd, 300.0) * 0.95 * sunCorona * coronaDamp;   // SUN CORONA RING knob
@@ -1900,6 +1907,11 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   if (U.cityGlow.x + U.cityGlow.y + U.cityGlow.z > 0.001) {
     let horiz = pow(clamp(1.0 - max(dir.y, 0.0) * 2.4, 0.0, 1.0), 3.0 * cityGlowReach);   // CITY GLOW REACH knob
     c = c + U.cityGlow.xyz * horiz;
+    // Cloud pickup (GLX glsl-sky.js): the cloud deck over a lit city glows from
+    // BELOW — thick bellies catch the most uplight, easing off toward the zenith.
+    // Kept subtle (x0.45) so heavy cover reads as a warm overcast lid, not banding.
+    let pickup = covRay * (0.35 + 0.65 * thickRay) * clamp(1.0 - dir.y * 1.6, 0.0, 1.0);
+    c = c + U.cityGlow.xyz * pickup * 0.45;
   }
 
   // ~1/255 interleaved-gradient dither on the dome output (GLX SKY_FS parity):

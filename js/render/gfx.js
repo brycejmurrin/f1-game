@@ -85,9 +85,13 @@
  *     GLX and WGX do not prime these depth targets, so an unwritten map reads
  *     fully SHADOWED under a LEQUAL compare and an early arm paints black.
  *     TLX does prime, and keeps the same guard for parity.
- *     There is deliberately NO lampShadowKeep — see the note at the lamp pass in
- *     js/game.js: that snap test compares a SLOT into a per-frame re-sorted
- *     array, and the lamp map rasterises cars.
+ *   lampShadowKeep(lightIdx)  the lamp-map twin of carShadowKeep, under the same
+ *     cadence-vs-stop and ORDERING rules and the same arms>0 guard. It takes the
+ *     slot because frame.lights is re-sorted every frame: the index is RE-STATED,
+ *     not remembered, and names THIS frame's slot for a lamp the caller has
+ *     already proved unchanged. That proof is a CONTENT key — the lamp's world
+ *     position plus a quantised key over the cars cast into it — so the lamp map
+ *     rasterising cars is covered by the key, not a reason to omit the call.
  *   carShadowState()/lampShadowState() -> {enabled, arms, armed[, idx]}
  *     `arms` is a lifetime rasterisation count and stays true straight through a
  *     strobe; `armed` is the frame-live flag the lit pass actually reads. Assert
@@ -108,7 +112,7 @@
  *     slot — shades the whole screen for nothing and is a parity BUG, not a
  *     free choice.
  *   drawShadow(model, w, l) / drawMark(model, w, l) / drawSkidBatch(verts,n,dirty)
- *   drawDrivingLine(verts, n, dirty, {speed, cornersOnly, str}) → bool
+ *   drawDrivingLine(verts, n, dirty, {speed, cornersOnly, palette, opacity}) → bool
  *     The suggested-line ribbon (js/render/shared/driving-line.js) on all
  *     three backends; false means the pass is unavailable (fx not ready).
  *   drawGlow(lights, str) / drawDecal(mesh, model, tex, opts)

@@ -1812,8 +1812,8 @@ const AgentView = (function () {
         }
       }
       // savedInput is captured BEFORE the o.input write so a rollout is fully
-      // side-effect-free: a POLICY's last per-tick decision must not stay
-      // latched as the live loop's input after the rollout returns.
+      // side-effect-free: neither a POLICY's per-tick decision nor an open-loop
+      // `input` may stay latched after it returns, so the restore is unconditional.
       const savedPayload = lastPayload, savedSeq = lastSeq, savedCounter = seq, savedInput = G._testInput;
       if (o.input !== undefined) G._testInput = o.input || null;
 
@@ -1835,7 +1835,7 @@ const AgentView = (function () {
           try { inp = policy(world({ detail: "brief" })); }
           catch (e) {
             lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter;
-            if (policy) G._testInput = savedInput;
+            G._testInput = savedInput;
             return fail("PolicyError", "the policy function threw: " + (e && e.message),
                         "fix the policy; it receives world({detail:'brief'}) and "
                         + "must return {steer,throttle,brake} or null");
@@ -1897,7 +1897,7 @@ const AgentView = (function () {
       }
 
       lastPayload = savedPayload; lastSeq = savedSeq; seq = savedCounter;
-      if (policy) G._testInput = savedInput;
+      G._testInput = savedInput;
 
       const elapsed = (G.raceT || 0) - startT;
       const lapsDone = (p.lap || 0) - startLap;
