@@ -87,6 +87,7 @@ const HERO = {
   mont_tremblant: [0.01, "dawn"],   // the paddock straight, the one clearing in the pines
   montreal:     [0.96,  "day"],     // the Wall of Champions
   monza:        [0.172, "dawn"],    // the gateway into Curva Grande
+  mosport:      [0.010, "day"],     // off the line into the Turn 1 plunge
   mugello:      [0.52,  "day"],     // the Arrabbiate climb
   nurburgring:  [0.05,  "dawn"],    // the Mercedes-Arena
   okayama:      [0.32,  "day"],     // the hairpin cut into the clay bank
