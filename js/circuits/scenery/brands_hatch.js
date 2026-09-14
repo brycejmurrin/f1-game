@@ -119,31 +119,41 @@
       /*    Rows 0.005/-1 (18 m) and 0.014/-1 (12 m).                       */
       /* ---------------------------------------------------------------- */
 
+      // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
+      // startFrac) because the grid had been laid through a 136 m corner, and
+      // sceneryStartFrac holds the rest of this file on its real corners —
+      // Druids, Westfield, Dingle Dell and the woods must not travel with the
+      // line. At THIS circuit the frontage, the pits and the Paddock Hill
+      // structures are one complex around the line, so they move together;
+      // block 1's open grass banking stays in the authoring frame.
+      const SL = 0.1635;                       // = 1 - def._sceneryShift
+      const sl = (f) => (f + SL) % 1;
+
       // Main grandstand run down Brabham Straight.
-      grandstandEx(0.988, -1, 18, 118, null, null);
+      grandstandEx(sl(0.988), -1, 18, 118, null, null);
       // Paddock Hill Grandstand — end of the row, on the lip of the drop.
       // The single most-photographed viewpoint at the circuit.
-      grandstandEx(0.016, -1, 12, 62, null, null);
+      grandstandEx(sl(0.016), -1, 12, 62, null, null);
 
       // Merchandise / retail units BEHIND the stands: a solid frontage, not
       // isolated boxes. Shallow units butted together along the straight.
       for (let s = 0.960; s < 1.026; s += 0.0075) {
-        const k = K(s);
+        const k = K(sl(s));
         const h = hash(k * 53);
         building(k, -1, 34, 11, 5.0 + h * 1.6, 13, {});
       }
       // Hospitality / office block anchoring the top of the retail row.
-      building(K(0.972), -1, 50, 22, 9, 18, {});
-      building(K(0.006), -1, 49, 18, 8, 16, {});
+      building(K(sl(0.972)), -1, 50, 22, 9, 18, {});
+      building(K(sl(0.006)), -1, 49, 18, 8, 16, {});
 
       // The Paddock Hill Bar, set INTO the grass bank at the bottom of the dip
       // (row 0.025/-1: bank + bar building, standing crowd on grass, no shell).
-      building(K(0.026), -1, 13, 16, 5.5, 12, {});
-      building(K(0.036), -1, 16, 12, 4.5, 10, {});
+      building(K(sl(0.026)), -1, 13, 16, 5.5, 12, {});
+      building(K(sl(0.036)), -1, 16, 12, 4.5, 10, {});
 
       // Crowd furniture on the open bank: flag poles and a scatter of marquees.
       for (const s of [0.020, 0.034, 0.048, 0.190, 0.900, 0.930]) {
-        place(K(s), -1, 24, [3.0, 3.0, 3.0], CHALK);
+        place(K(sl(s)), -1, 24, [3.0, 3.0, 3.0], CHALK);
       }
 
       /* ---------------------------------------------------------------- */
@@ -155,24 +165,24 @@
 
       // Pit garages — a continuous run of bays down the inside of the straight.
       for (let s = 0.938; s < 1.032; s += 0.0068) {
-        building(K(s), 1, 14, 9, 6.5, 15, {});
+        building(K(sl(s)), 1, 14, 9, 6.5, 15, {});
       }
       // Pit-lane rear wall / team offices above the bays.
       for (let s = 0.944; s < 1.026; s += 0.014) {
-        building(K(s), 1, 27, 14, 8.5, 12, {});
+        building(K(sl(s)), 1, 27, 14, 8.5, 12, {});
       }
 
       // Race control / timing building, and the start gantry over the line.
-      building(K(0.960), 1, 25, 20, 12, 17, {});
-      tower(K(0.966), 1, 25, 5.5, 17, {});
-      gantry(0.0, 7.2, STEEL);
-      gantry(0.972, 6.8, DKGREY);
+      building(K(sl(0.960)), 1, 25, 20, 12, 17, {});
+      tower(K(sl(0.966)), 1, 25, 5.5, 17, {});
+      gantry(sl(0.0), 7.2, STEEL);
+      gantry(sl(0.972), 6.8, DKGREY);
 
       // The KENTAGON — the circuit's bar/clubhouse, directly opposite the
       // Paddock Hill grandstand. A named landmark in its own right, so it gets
       // a real footprint and a roof lantern rather than a generic box.
-      building(K(0.014), 1, 20, 19, 8.5, 19, {});
-      tower(K(0.014), 1, 20, 4.0, 12.5, {});
+      building(K(sl(0.014)), 1, 20, 19, 8.5, 19, {});
+      tower(K(sl(0.014)), 1, 20, 4.0, 12.5, {});
       building(K(0.024), 1, 22, 13, 5.0, 12, {});
 
       // Paddock / team area, stepping down the hill behind the pits:

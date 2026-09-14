@@ -69,24 +69,33 @@
         tree(k, side, dist, h, hash(k * 7 + dist) < 0.5 ? OLIVE : OLIVE_D);
 
       // ---------------------------------------------------------------
+      // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
+      // startFrac) because the grid had been laid through a 43 m corner, and
+      // sceneryStartFrac holds the rest of this file on its real corners —
+      // Dry Sack and the stadium section must not travel with the line. The
+      // pit complex and its terracing belong AT the line, so these two blocks
+      // alone are shifted; sl(f) is the authored frac that lands at the line.
+      const SL = 0.1264;                       // = 1 - def._sceneryShift
+      const sl = (f) => (f + SL) % 1;
+
       // 2. MAIN START/FINISH TERRACING  (0.005, -1, 20)
       //    A long pale-concrete run facing the pit lane, ROOFLESS for most of
       //    its length with one covered centre bay over the line; hoarding
       //    along the full base, armco at the track edge, a camera mast at
       //    each end.
       // ---------------------------------------------------------------
-      grandstandEx(0.0000, -1, 20, 130, null, null,
+      grandstandEx(sl(0.0000), -1, 20, 130, null, null,
         { roof: "flat", roofCol: CONC, fasciaCol: CONC_ALT, tiers: 2, h: 14 });
-      grandstandEx(0.9600, -1, 20, 110, null, null,
+      grandstandEx(sl(0.9600), -1, 20, 110, null, null,
         { roof: "none", fasciaCol: CONC_ALT, h: 12 });
-      grandstandEx(0.0340, -1, 20, 110, null, null,
+      grandstandEx(sl(0.0340), -1, 20, 110, null, null,
         { roof: "none", fasciaCol: CONC_ALT, h: 12 });
-      terrace(0.9180, 0.9520, -1, 19, TERR);
-      sponsorHoarding(0.9350, 0.0620, -1, 13);
-      guardrail(0.9300, 0.0700, -1, 10, ARMCO);
-      cameraTower(K(0.9430), -1, 17);
-      cameraTower(K(0.0560), -1, 17);
-      groundPatch(K(0.0050), -1, 15, slab(26, 150), OCHRE_PALE);
+      terrace(sl(0.9180), sl(0.9520), -1, 19, TERR);
+      sponsorHoarding(sl(0.9350), sl(0.0620), -1, 13);
+      guardrail(sl(0.9300), sl(0.0700), -1, 10, ARMCO);
+      cameraTower(K(sl(0.9430)), -1, 17);
+      cameraTower(K(sl(0.0560)), -1, 17);
+      groundPatch(K(sl(0.0050)), -1, 15, slab(26, 150), OCHRE_PALE);
 
       // ---------------------------------------------------------------
       // 3. PIT + PADDOCK BLOCK  (0.010, +1, 8)
@@ -94,24 +103,24 @@
       //    row, the taller control tower above the grid, motorhome rows
       //    behind, armco on the pit-wall line.
       // ---------------------------------------------------------------
-      guardrail(0.9300, 0.0720, 1, 8, ARMCO);
-      groundPatch(K(0.0050), 1, 10, slab(44, 200), TARMAC);
+      guardrail(sl(0.9300), sl(0.0720), 1, 8, ARMCO);
+      groundPatch(K(sl(0.0050)), 1, 10, slab(44, 200), TARMAC);
       for (let i = 0; i < 10; i++) {                        // garage row
-        const s = 0.9540 + i * 0.0080;
+        const s = sl(0.9540 + i * 0.0080);
         building(K(s), 1, 11, 20, 7.5, 14,
           { wall: WHITEWASH, roof: [0.62, 0.60, 0.57] });
       }
-      building(K(0.0120), 1, 12, 24, 16, 16,
+      building(K(sl(0.0120)), 1, 12, 24, 16, 16,
         { wall: CONC, roof: [0.55, 0.54, 0.52] });          // control tower
-      tower(K(0.0100), 1, 36, 6, 24);
+      tower(K(sl(0.0100)), 1, 36, 6, 24);
       for (let i = 0; i < 8; i++)                           // paddock motorhomes
         motorhome(K(0.9530 + i * 0.0092), 1, 34, 11, 4.4, 17,
           { wall: [0.86 + hash(i * 13) * 0.08, 0.86, 0.88] });
       for (let i = 0; i < 6; i++)
         motorhome(K(0.9610 + i * 0.0092), 1, 54, 10, 4.2, 15,
           { wall: [0.80 + hash(i * 29) * 0.12, 0.80, 0.82] });
-      fence(0.9380, 0.0620, 1, 74, 3, CONC_ALT);
-      groundPatch(K(0.0050), 1, 28, slab(46, 190), DUST);
+      fence(sl(0.9380), sl(0.0620), 1, 74, 3, CONC_ALT);
+      groundPatch(K(sl(0.0050)), 1, 28, slab(46, 190), DUST);
 
       // ---------------------------------------------------------------
       // 4. EXPO '92 BRAKING ZONE  (0.045, -1, 32)

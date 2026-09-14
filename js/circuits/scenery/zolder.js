@@ -140,28 +140,37 @@
         marshalPost(K(s), s < 0.5 ? -1 : 1, 13);
       }
 
+      // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
+      // startFrac) because the grid had been laid through a 176 m corner, and
+      // sceneryStartFrac holds the rest of this file on its real corners — the
+      // chicanes, the Villeneuve memorial and the pine sections must not travel
+      // with the line. The pit block and main stand belong AT the line, so
+      // these two blocks alone are shifted.
+      const SL = 0.1562;                       // = 1 - def._sceneryShift
+      const sl = (f) => (f + SL) % 1;
+
       // === 1. s 0.005 +1 14 — PIT LANE AND GARAGES =======================
       // A long low run of flat-roofed boxes. Plain white/grey. Functional.
       for (let i = 0; i < 13; i++) {
-        const s = 0.958 + i * 0.0068;
+        const s = sl(0.958 + i * 0.0068);
         const h = hash(i * 41 + 9);
         building(K(s), 1, 14, 11, 4.6 + (h > 0.7 ? 1.6 : 0), 9.5,
           { wall: h < 0.55 ? WHITE : GREY });
       }
       // Team offices over the middle of the pit block.
-      building(K(0.012), 1, 26, 34, 8.5, 14, { wall: WHITE });
-      building(K(0.034), 1, 27, 22, 7.0, 13, { wall: GREY });
+      building(K(sl(0.012)), 1, 26, 34, 8.5, 14, { wall: WHITE });
+      building(K(sl(0.034)), 1, 27, 22, 7.0, 13, { wall: GREY });
       // Continuous sponsor band along the pit wall.
-      sponsorHoarding(0.955, 0.060, 1, 11.5);
+      sponsorHoarding(sl(0.955), sl(0.060), 1, 11.5);
       // Pit exit marshal.
-      marshalPost(K(0.058), 1, 13);
-      marshalPost(K(0.985), 1, 13);
+      marshalPost(K(sl(0.058)), 1, 13);
+      marshalPost(K(sl(0.985)), 1, 13);
       // Pale apron in front of the garages.
-      groundPatch(K(0.005), 1, 4.0, [17, 0.15, 34], CONCRETE);
+      groundPatch(K(sl(0.005)), 1, 4.0, [17, 0.15, 34], CONCRETE);
 
       // === 2. s 0.015 -1 12 — MAIN STRAIGHT GRANDSTAND ===================
-      grandstandEx(0.012, -1, 12, 150, null, null);
-      cameraTower(K(0.0), -1, 15);
+      grandstandEx(sl(0.012), -1, 12, 150, null, null);
+      cameraTower(K(sl(0.0)), -1, 15);
       // A rank of billboards behind the stand.
       for (let i = 0; i < 5; i++) {
         billboard(K(0.968 + i * 0.011), -1, 34, 11, 4.2,
