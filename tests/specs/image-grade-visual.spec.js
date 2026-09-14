@@ -86,7 +86,14 @@ async function boot(page, {
   await page.evaluate(({ frac }) => {
     window.__apex.park(frac);
     window.__apex.hud(false);
-    window.__apex.eyeAt(frac, 0.2, 1.35);
+    // The pose from eyeAt(), re-installed through view() with fog: 1. A debug
+    // camera is an INSPECTION camera, so js/game.js thins its fog to 0.15x
+    // unless the camera carries its own `fog` — and a suite whose five
+    // REPRESENTATIVE_CONDITIONS tests assert that a night, an overcast and a
+    // RAIN scene "retain broad tonal range" must photograph the atmosphere the
+    // player gets, not 15 % of it. Same pose, same fov, only the fog restored.
+    const _v = window.__apex.eyeAt(frac, 0.2, 1.35);
+    if (_v) window.__apex.view({ eye: _v.eye, target: _v.target, fov: 60, far: 6000, fog: 1 });
     document.body.classList.add("hud-hidden");
     document.getElementById("hud-restore")?.style.setProperty("display", "none", "important");
   }, { frac });

@@ -1853,3 +1853,55 @@ Two specs used the helper with a debug camera — `image-grade-visual` and
 `lighting-ab`, the two that have supplied this file's knob-independent deltas.
 Every other `snapCam()` in the suite is an explicit call by a spec that wants the
 game camera, and is untouched.
+
+### 2026-09-14 (same day) — what preserving the camera ALSO changed, and the fog it cost
+
+A debug camera is not just a viewpoint. `js/game.js` treats `dbgCam` as an
+INSPECTION camera and changes the frame with it: `frame.fogDensity` is scaled by
+`dbgCam.fog ?? 0.15`, `frame.cullDist` goes to 0 (no radial cull on desktop), the
+env-probe pass is gated off, `camRoll` is forced to 0, and `cockpitRigOnly` turns
+off. So keeping the camera alive through every capture — the fix above — did not
+merely stop the viewpoint moving; it thinned the fog in the two specs that use it.
+
+That matters for exactly one test, `lighting-ab` "night fog GLOWS around lamps",
+which samples the band where the fog factor (and so the glow's share of a pixel)
+is largest. MEASURED here, singapore night fog, the spec's own band, knobs
+alternated off/on/off/on, against the test's `on > off * 1.03` floor:
+
+| camera at the capture | on/off, pair 1 | pair 2 | headroom over 1.03 |
+|---|---|---|---|
+| debug cam, fog at the 0.15x default | 1.0627 | 1.0651 | +3.2 % / +3.4 % |
+| chase cam (what the old helper restored) | 1.4379 | 1.4167 | +39.6 % / +37.5 % |
+| **debug cam with `fog: 1`** | **1.6753** | **1.6485** | **+62.7 % / +60.1 %** |
+
+The test PASSED in all three, so a pass was never the question — the margin was.
+The fix as first committed cut the headroom about sevenfold; `fog: 1` restores it
+and then some, beating even the chase camera, because a debug camera also drops
+the radial cull and so puts MORE distant lamp-lit facades in the sampled band.
+Both specs therefore take the pose from `eyeAt()` and re-install it through
+`view({..., fog: 1})`: the frame stability the suite needs, with the atmosphere
+the player actually gets. For `image-grade-visual` that is a correctness point in
+its own right — five of its tests assert a night, an overcast and a RAIN scene
+"retain broad tonal range", which is not a claim you can make about 15 % of the
+fog.
+
+Three things an adversarial review corrected, recorded because each is a trap:
+
+- `eyeAt(frac, 0.2, 1.35)` is **not** a car-free road-level view. `park()` puts
+  the car on the centreline at that frac and the eye lands 0.2 m right of and
+  1.35 m above it — the driver's head. And `cockpitRigOnly` being false under a
+  debug camera means MORE car geometry is drawn, not less: the full external body
+  mesh and wheels render around the eye instead of the cockpit rig alone. The
+  near-black bodywork feeding the `[2,30]` population survives the change.
+- The fog term saturates (`f = 1 - exp(-fd*fd)`), and singapore night fog is
+  thick, so 0.15x is not a 44x collapse of the fog wall — it still reads f ~ 0.93
+  at 500 m. The signal thinned; it did not vanish. The table above is the honest
+  size of it.
+- `rangeChanges()` selects its pixel set from the BEFORE frame only. For
+  independent per-pixel noise that bias is negligible AND of the wrong sign — it
+  cannot produce the +9.7 that was observed — but for any spatially CORRELATED
+  residual (a sub-pixel shift, a slightly softer image) it is large and always
+  positive. That is why a 34 px yaw read as "+9.7 brighter" rather than as noise,
+  and it means this metric has well under a pixel of geometric headroom: the
+  camera has to be pinned exactly, not approximately. `eyeAt()`/`view()` write a
+  static object, so it is.

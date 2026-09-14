@@ -59,7 +59,22 @@ async function boot(page, track, tod, wx, frac, { headless = false } = {}) {
   if (frac != null) {
     await page.evaluate((f) => window.__apex.park(f), frac);
     await page.waitForTimeout(2200);
-    await page.evaluate((f) => window.__apex.eyeAt(f, 0.2, 1.35), frac);
+    // eyeAt() for the POSE, then re-install that same pose through view() with
+    // fog: 1. A debug camera is a free-cam for INSPECTING a scene, so js/game.js
+    // thins its fog — `frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog
+    // : 0.15)`. eyeAt() sets no fog key, so it takes the 0.15 default, and the
+    // "night fog GLOWS" test below then measures a lamp glow through 15 % of the
+    // fog it was written against. MEASURED on this box, singapore night fog,
+    // same band, knobs off/on alternated twice: fog 0.15x reads on/off
+    // 1.063 / 1.065 against the test's 1.03 floor; this pose with fog: 1 reads
+    // 1.675 / 1.649. (The chase camera the capture helper used to restore read
+    // 1.438 / 1.417 — full fog but fewer distant lamps, since a debug camera
+    // also drops the radial cull.) So the fixed camera is kept, for the frame
+    // stability this suite needs, and the fog it measures is the game's.
+    await page.evaluate((f) => {
+      const v = window.__apex.eyeAt(f, 0.2, 1.35);
+      if (v) window.__apex.view({ eye: v.eye, target: v.target, fov: 60, far: 6000, fog: 1 });
+    }, frac);
     await page.waitForTimeout(1100);
   }
 }
