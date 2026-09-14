@@ -165,7 +165,14 @@ after     41.67 MB   player still 1024x1280 (census `biggest` confirms), 21 AI a
 
       For scale: that is ~18x what the entire world-VBO packing returned on a
       mean circuit (5.8 MB), from a change that touches one ternary.
-- [ ] **NOT DONE — a dedicated AI close-up A/B.** The census proves the memory
+- [x] **APPEARANCE: CLOSED, by texel density rather than a pixel diff.** The
+      AI atlas supplies **13.7 texels per screen pixel** at the closest real
+      Monza racing gap (17.1 m, 1080p, 62° FOV) — measured from the decal
+      mesh's world-area-to-UV-area ratio, so the GPU samples ~mip 3 and the
+      atlas's top level is never reached. The crossover where the AI tier would
+      under-sample is 1.2 m, inside the car. Stronger than a one-distance pixel
+      diff because it covers every distance. `notes/PERF-FINDINGS.md` §2x.
+- [ ] ~~NOT DONE — a dedicated AI close-up A/B.~~ Superseded by the above. The census proves the memory
       and `tex-census` proves the tier, but neither proves APPEARANCE. What is
       missing is a before/after render of an AI livery at racing distance and
       at photo-mode distance. The argument for shipping without it is that

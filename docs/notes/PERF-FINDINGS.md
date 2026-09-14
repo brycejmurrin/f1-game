@@ -4654,3 +4654,51 @@ twice first and find out what the spread is that day. This entry exists because
 that discipline nearly did not happen: the number looked like a regression in a
 change that could not have caused one, and the honest next step was a control
 run rather than an explanation.
+
+
+## 2x. The AI livery downshift is invisible, and the proof is texel density (2026-09-14)
+
+§2v halved the AI livery atlases (147 MB of VRAM → 42). The open question was
+APPEARANCE: `meanLuma` cannot see a softer texture, and the plan shipped the
+change with "no AI close-up A/B" written down as the unverified part.
+
+A pixel diff at one distance would not have settled it either. What settles it
+is texels per screen pixel, because that is what decides which MIP the GPU
+samples — and if mip 0 is never reached, the top of the chain cannot be seen
+whatever resolution it is.
+
+Measured from the real decal mesh (`CarMesh.carDecalData`, 70 triangles, world
+area against UV area per triangle):
+
+| decal region | texels/m, full atlas | texels/m, **AI tier** |
+|---|---|---|
+| densest | 1552 | **776** |
+| p90 | 1439 | 719 |
+| median | 702 | 351 |
+
+And the real gaps, from a settled Monza race (`prog` deltas after 600 steps):
+the nearest AI cars sit at **17.1, 30.3, 45.9 m**. At 1080p with the shipped
+62° vertical FOV:
+
+| nearest AI car | screen px/m | **AI-tier texels/px** |
+|---|---|---|
+| 17.1 m | 52.6 | **13.7** |
+| 30.3 m | 29.7 | 24.3 |
+| 45.9 m | 19.6 | 36.7 |
+
+Thirteen texels per pixel at the closest car anyone races against. The GPU is
+sampling somewhere around mip 3; the atlas's top level is not reached and its
+resolution is not what limits the image. Even the MEDIAN decal density gives
+6.7 texels/px there.
+
+The crossover — where the AI tier would finally supply less than one texel per
+pixel — is at **1.2 m** (1080p) or 1.5 m (1440p). That is inside the car.
+
+So the downshift cannot add softness at any distance a car is raced at, and the
+one context that does get closer, photo mode, takes the full tier by an explicit
+exemption. This closes the appearance question §2v left open.
+
+**It also says the tier could go further.** The mobile step (÷4, 388 texels/m)
+would still be 7.4 texels/px at 17 m and would free roughly another 27 MB. Not
+taken: the arithmetic permits it, and "the maths allows it" is how a look gets
+degraded by a spreadsheet. That one wants a real A/B before anyone moves it.
