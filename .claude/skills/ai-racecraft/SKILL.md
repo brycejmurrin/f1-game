@@ -37,5 +37,6 @@ node tools/ci/test-bg.mjs collisions   # racecraft lives in the contact specs
 node tools/check/ai-race.mjs pace  [--track monza] [--diff normal]
 node tools/check/ai-race.mjs field [--track monza] [--seconds 240] [--runs 5]
 node tools/check/ai-race.mjs line  [--track monza]
+node tools/check/ai-race.mjs human [--track monza] [--runs 3]   # vs a PLAYER, not itself
 # Direct: ai-pace.mjs / ai-field.mjs / ai-line.mjs (same @skill).
 ```
