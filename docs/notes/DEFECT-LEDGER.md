@@ -11,29 +11,38 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
-**2026-09-14 — `tools/check/quick-validate.mjs` fails on a CLEAN tree.** Found
-while building the tyre/pit phases; **not caused by them** — confirmed by
-stashing the whole working tree and re-running, which fails identically.
+**2026-09-14 — `tools/check/quick-validate.mjs` was red on a CLEAN tree. FIXED.**
+Found while building the tyre/pit phases and confirmed not caused by them (the
+whole working tree was stashed and it failed identically). It reported:
 
 ```
 QUICK-VALIDATE FAIL:
   probe() invalid after race+step
 ```
 
-What was observed, and only that: after `__apex.race("monza")`, `jump()` and
-`step()`, `__apex.probe()` returns `null` and `__apex.info()` still reports
-`state: "menu"`, `track: null`. No console error and no page error is raised, so
-the tool reports one terse line with nothing behind it. `__apex.race()` calls
-`startRace()` — which is `async` — and returns without awaiting it, so the
-probe runs against a session that has not armed; whether that is the whole
-mechanism was NOT established, and nobody should take the async call as the
-confirmed root cause without reproducing it.
+with no console error and no page error behind it.
 
-Why it went unnoticed: `quick-validate` is a browser tool and only its pure
-helpers (`tests/unit/quick-validate.test.mjs`) are in `test:tooling-fast`, so no
-gate runs the browser half. The file's own header calls itself the "fast refactor
-gate"; right now it cannot be one, and an agent reaching for it on a change of
-their own will read a red line that has nothing to do with them.
+**Root cause, and it was unconditional — the tool had never worked.**
+`__apex.race()` starts `startRace()` and does not await it. `startRace`'s very
+first statement is `await ensureScenery(trackIdx)`, so it yields and the race
+arms in a later task. `evaluateLiveProbe` ran race() / jump() / step() / probe()
+in ONE synchronous pass inside a single `page.evaluate`, and a synchronous pass
+never lets a microtask land — so the session was still in the menu
+(`info().state === "menu"`, `track: null`), `probe()` returned null, and the
+helper blamed the physics.
+
+**Fix**: `evaluateLiveProbe` is async and polls `info().state` until the race is
+`race` or `count` before touching the physics (180 s, matching the 11-33 s
+SwiftShader track builds this box measures). `probeFailures` reports a race that
+never armed as its own failure and stops there, because everything downstream of
+it is unmeasured rather than failing — reporting both as `probe() invalid after
+race+step` is what made the one red line useless.
+
+It now passes, which makes it a working gate for the first time. Note it is
+still browser-only and no gate runs it: `tests/unit/quick-validate.test.mjs`
+covers the pure helpers (and now pins the arming wait), but the browser half is
+run by hand.
+
 
 **2026-09-10 — whole-tree audit, six slices, FIXED in one pass.** Seven
 read-only agents audited the tree (game/physics, renderers, track engine and
