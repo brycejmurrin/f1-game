@@ -598,7 +598,30 @@ const api = {
       regen: +G.regenFor(G.player).toFixed(4),
       otTime: +G.otTimeFor(G.player).toFixed(2),
       otCool: +G.otCoolFor(G.player).toFixed(2),
+      // TYRES (js/physics/tyre-model.js). All four are exactly at their fresh
+      // values while TYRE WEAR is off, so a spec can assert the no-op.
+      tyreCompound: G.player.tyre ? G.player.tyre.id : null,
+      tyreWear: +G.tyres.spent(G.player).toFixed(4),
+      tyreGrip: +G.tyres.gripMul(G.player).toFixed(4),
+      tyreLoad: +(G.player._tyreLoad || 0).toFixed(3),
     };
+  },
+  // The whole tyre picture for one car (default: the player) — compound, life
+  // in laps at THIS race distance, wear, the grip it costs and the load that
+  // caused it. `field: true` returns the same record for every car, which is
+  // how a strategy spec reads the AI's stints.
+  tyres(arg) {
+    if (!G.tyres) return null;
+    const o = arg && typeof arg === "object" ? arg : {};
+    // `level` sets the TYRE WEAR setting AND the live model together, so a spec
+    // can turn wear on without the settings sheet and have it survive the next
+    // gridUp (which re-reads the setting, not the model).
+    if (o.level != null && TyreModel.isLevel(o.level)) { G.raceTyreWear = o.level; G.tyres.setLevel(o.level); }
+    if (o.field) {
+      return (G.cars || []).map((c) => Object.assign({ driver: c.driverId, code: c.code }, G.tyres.info(c)));
+    }
+    const c = o.car != null ? (G.cars || [])[o.car] : G.player;
+    return G.tyres.info(c);
   },
   wallStats() {
     if (!G.track || !G.track.barR) return null;

@@ -148,6 +148,7 @@ const FULL = [
   "js/career/career.js",
   "js/career/season-cal.js",
   "js/race/reliability.js",
+  "js/physics/tyre-model.js",
   "js/physics/ai-drive.js",
   "js/camera/offsets.js",
   "js/garage/setup-tune.js",
@@ -440,6 +441,8 @@ const HARD_EDGES = [
   ["js/car/parts.js", "js/race/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
   ["js/race/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval
   ["js/core/mat4.js", "js/physics/ai-drive.js"],         // AiDrive binds M4.clamp/lerp at eval
+  ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
+  ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval

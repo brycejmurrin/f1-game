@@ -12,6 +12,7 @@ const els = {
   hud: $("hud"), pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"),
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
+  tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
@@ -407,6 +408,11 @@ let difficulty = store.get("difficulty", "normal");
 // save, so OFF is the only default that does not silently start retiring cars
 // in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
+// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). Ships OFF for
+// exactly RELIABILITY's reason, plus one of its own: OFF is a true no-op through
+// the grip seam, so tests/specs/physics-characterization.spec.js stays
+// bit-identical until somebody turns this on.
+let raceTyreWear = store.get("tyreWear", "off");
 // ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
 // "auto". Inside an activation zone X-mode has no cost or downside, so the
 // optimal play is unconditionally on — which is what the AI does in one line.
@@ -415,6 +421,7 @@ let raceReliability = store.get("reliability", "off");
 // AI's deal. Stays opt-in because pressing the button is the mechanic.
 let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
+if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "off";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
@@ -856,6 +863,7 @@ let launchT0 = 0;
 // pz, head or (s, x). The five below are thin passes through to it, kept as
 // hoisted function declarations so the G façade below can name them directly.
 let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
+let tyres = null;     // TyreModel.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
 function applyCaution(d) { return raceCtl.apply(d); }
@@ -1668,6 +1676,11 @@ function makeCars() {
         tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),
         // Tread class for gripMult(c); null on an AI car means "fits the right tyre".
         tread: (isP || mate) ? (resolvedParts.options.tyres.wetTread || 0) : null,
+        // The fitted catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md
+        // §6) — one axis, not a compound axis multiplied by an upgrade tier.
+        // gridUp fits a fresh set from it; an AI car gets one from its class draw.
+        tyreOpt: (isP || mate) ? resolvedParts.options.tyres : null,
+        tyre: null, tyreWear: 0, tyreLap0: 0, tyreStints: 0,
         fuelId: resolvedParts.ids.fuel,
         fuelVisual: resolvedParts.visual.fuel,
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
@@ -1810,6 +1823,10 @@ function gridUp(preOrder) {
     }
     return o;
   })();
+  // TYRE WEAR is a property of the session, so it is set at the one funnel every
+  // armed race goes through rather than at each caller. A time trial is a lap
+  // against the clock on a set nobody is asked to manage, so it is always off.
+  tyres.setLevel(isTimeTrial() ? "off" : raceTyreWear);
   order.forEach((c, i) => {
     // Where this car STARTED — the only record: `order` is discarded here and the
     // flag classification is built from finishing times. Career's "out-qualify
@@ -1841,6 +1858,12 @@ function gridUp(preOrder) {
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
     c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536;
     c.tyreClass = c.human ? null : AiDrive.tyreClass(((h >>> 8) & 0xffff) / 65536, lapsTarget);   // the compound IS the strategy
+    // A fresh set for the start. The player's comes from the fitted catalog row
+    // (the row IS the compound); an AI car's from the class it just drew. No RNG
+    // here — `h` is already the per-car race hash, so arming costs the sim
+    // stream nothing, exactly as Reliability's retirement draw does.
+    c.tyreStints = 0;
+    tyres.fit(c, c.tyreOpt ? tyres.optionRecord(c.tyreOpt) : tyres.classRecord(c.tyreClass));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
   // physics tick (the `c.px == null` init in update()). The chase rig has two
@@ -2644,6 +2667,13 @@ const G = {
     raceReliability = v; store.set("reliability", v);
   },
   armReliability: (field) => armReliability(field || cars),
+  // TYRE WEAR: the race setting and the live model (js/physics/tyre-model.js).
+  get raceTyreWear() { return raceTyreWear; },
+  set raceTyreWear(v) {
+    if (!TyreModel.isLevel(v)) return;
+    raceTyreWear = v; store.set("tyreWear", v);
+  },
+  get tyres() { return tyres; },
   retireCar: (c, reason) => retireCar(c, reason),
   get ranked() { return ranked; },
   get sectorLast() { return sectorLast; },
@@ -2920,6 +2950,9 @@ const G = {
 ltStore = LightStore.create(G);
 // Race control: the caution flag state machine (js/race/race-control.js).
 raceCtl = RaceControl.create(G);
+// Tyre wear, the grip it costs and the fuel that argues with it
+// (js/physics/tyre-model.js). Created before the first gridUp fits a compound.
+tyres = TyreModel.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -3001,6 +3034,7 @@ raceSettings = RaceSettings.create({
   getDifficulty: () => difficulty, setDifficulty: (v) => { difficulty = v; },
   getRaceGrid: () => raceGrid, setRaceGrid: (v) => { raceGrid = v; },
   getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
+  getRaceTyreWear: () => raceTyreWear, setRaceTyreWear: (v) => { G.raceTyreWear = v; },
   getRaceCtl: () => raceCtl,
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
   openQuali, startRace, enableTilt, getSteerMode: () => steerMode,
@@ -3563,6 +3597,13 @@ function updateCar(c, dt, ranked) {
   // never reach the branches that use it; the neutral fallback only guards a
   // human car whose setup failed to resolve.
   const mods = c.mods || NEUTRAL_MODS;
+  // TYRE WEAR (js/physics/tyre-model.js) is integrated ONCE per car per tick,
+  // here, so every consumer below reads one consistent value for this frame.
+  // `perfMul` is the longitudinal half — worn rubber and a full tank both cost
+  // acceleration — and it is exactly 1 while the setting is off, which is what
+  // keeps the characterization baseline bit-identical.
+  tyres.update(c, dt);
+  const perfMul = tyres.tractionMul(c) * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
 
@@ -3611,7 +3652,19 @@ function updateCar(c, dt, ranked) {
   const aiT = c.human ? null : AiDrive.traits(c);
   if (!c.human) vmax *= AiDrive.pacePhase(raceT, aiT.consistency, c.phaseRoll);   // a stint drifts; lockstep never passes
   if (!c.human && AiDrive.mistakePhase(c.errT) === 2) vmax *= AiDrive.mistakeGatherMul();   // gathering it up after a mistake
-  if (!c.human && c.tyreClass) vmax *= AiDrive.tyrePace(c.tyreClass, c.lap);                  // softs fade, hards last
+  // TYRES. With TYRE WEAR off this is the shipped AiDrive fudge, untouched — a
+  // ground-speed scale on an AI-only deg curve. With it on, the AI's pace comes
+  // off the SAME wear model the player is driving (js/physics/tyre-model.js), so
+  // a strategy fight is fought on one curve; the compound's own pace offset
+  // stays separate because the player's already lives in mods.cornering.
+  if (!c.human && c.tyreClass) {
+    vmax *= tyres.on() ? (1 + (c.tyre ? c.tyre.off : 0)) * tyres.tractionMul(c)
+                       : AiDrive.tyrePace(c.tyreClass, c.lap);
+  }
+  // FUEL BURN, the counterweight that gives a stint its shape: the car gets
+  // lighter and faster while the tyre goes off and gets slower, and where those
+  // two cross is the pit window. Exactly 1 when the setting is off.
+  vmax *= tyres.fuelVmaxMul(c);
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
@@ -3985,7 +4038,7 @@ function updateCar(c, dt, ranked) {
   if (braking) {
     if (c.speed > 0) {
       // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md).
-      c.speed = Math.max(0, c.speed - BRAKE * (c.human ? mods.braking * brakeLvl * (gripMult(c) / gripMult()) : brakeLvl) * dt);
+      c.speed = Math.max(0, c.speed - BRAKE * tyres.tractionMul(c) * (c.human ? mods.braking * brakeLvl * (gripMult(c) / gripMult()) : brakeLvl) * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -4006,7 +4059,7 @@ function updateCar(c, dt, ranked) {
     // 8 m pitch to T1 — see the start test in ai-racecraft-vm.
     const launch = c.launchOn ? AiDrive.launchMul(raceT - launchT0, c.launch) : 1;
     if (c.launchOn && AiDrive.launchDone(raceT - launchT0, c.launch)) c.launchOn = false;
-    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     if (!c.human) c.accSm = damp(c.accSm ?? 0, a, 6, dt);   // what this car is pulling — AiDrive.otWant reads it on the blocker
     // A ceiling that drops under the car (VSC vmax cut, limiter downshift) bleeds
     // at coast drag; it used to scrub 25 m/s in one step.
@@ -4537,9 +4590,9 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE * brakeLvl * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
+    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
       : (onThrottle
-          ? ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
+          ? ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
@@ -4568,7 +4621,7 @@ function updateCar(c, dt, ranked) {
     // THR_ELLIPSE, so planting the throttle mid-corner spends grip even when
     // speed-limited. Braking still costs more (BRAKE > ACCEL·THR_ELLIPSE).
     const axThrDemand = onThrottle
-      ? (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * gearMult) * THR_ELLIPSE + Math.max(0, deploy)
+      ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * gearMult) * THR_ELLIPSE + Math.max(0, deploy)
       : 0;
     const axUsed = Math.max(Math.abs(c.axEstSm ?? 0), axThrDemand);
     const axFrac = Math.min(1, axUsed / (LONG_GRIP * gripMult(c)));
@@ -4603,6 +4656,12 @@ function updateCar(c, dt, ranked) {
     // the car; it is a pure function of deterministic marble positions and returns
     // 1.0 (a true no-op) off-path. Subtle by construction (≤7% via MARBLE_GRIP_MIN).
     const marbleMu = DebrisWorld.active() ? DebrisWorld.marbleGrip(c) : 1;
+    // TYRE WEAR (js/physics/tyre-model.js), fed in at the same seam and on the
+    // same terms as marbleMu above: an external grip scalar, a pure function of
+    // deterministic per-car state, exactly 1.0 when the setting is off — which
+    // is what keeps tests/specs/physics-characterization.spec.js honest. It is
+    // NOT arc-derived: wear integrates the forces this car actually made.
+    const tyreMu = tyres.gripMul(c);
     // BRAKE BIAS spends the friction ellipse per AXLE: under braking the front
     // spends bb/BB_REF of the longitudinal budget and the rear (1−bb)/(1−BB_REF)
     // — forward bias uses up the front's circle (entry understeer), rearward
@@ -4624,7 +4683,7 @@ function updateCar(c, dt, ranked) {
     const afF = bb ? Math.min(1, axFrac * bb.f) : 0, afR = bb ? Math.min(1, axFrac * bb.r) : 0;
     const bbSlipF = bb ? Math.sqrt(Math.max(0, 1 - afF * afF)) : 1;
     const bbSlipR = bb ? Math.sqrt(Math.max(0, 1 - afR * afR)) : 1;
-    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu;
+    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu * tyreMu;
     const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP);
     const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
