@@ -528,6 +528,42 @@ assertion (STANDARD is no longer the middle bundle on that axis, deliberately),
 or give RELAX `steerRate: 2` so the ladder is monotonic again. Which one is a
 design call about the owner's profile, not a test fix.
 
+### The pre-existing red, fixed — and the one that is not
+
+A follow-up pass took the 19 pre-existing failures apart. **Eighteen are fixed.**
+Not one needed a change to shipped behaviour except the RELAX preset, which was
+a real product bug.
+
+| Cluster | Root cause | Fix |
+|---|---|---|
+| `steering` ×9 | Not contention — reproduced at `--workers=1` on an idle box. A `locator.click()` on a rendering page waits for actionability, and Playwright polls that on **rAF**, which collapses to ~2 frames/s under SwiftShader while the track and twenty cars build. `#rs-go` resolved instantly and then burned the whole 60 s `actionTimeout`. | DOM `.click()` through `page.evaluate`, the idiom six other specs already use, each step still waiting for the screen it asked for. Plus a declared per-file budget: the work genuinely measures 80–343 s here. |
+| `sliders` ×2 (OVERALL SPEED) | Held full throttle at a hardcoded `frac 0.1`. With steer at zero the car runs wide of the bend there inside each one-second block, onto grass and `OFF_GRIP`, so it plateaued near half of `vTop` and reported gear 5 against an expected 8. A statement about where on Monza the test stood, not about the powertrain. | Ask the track for its straightest point and run there. |
+| `sliders` ×2 (simplified controls) | Stale against the 2026-09-08 re-centring: asserted `easy → steerRate 4`, code says 2. | Assertion updated to the shipped ladder. |
+| `presets` ×1 | **A real product bug.** RELAX was the straggler of that same re-centring — left at `steerRate 4 / steerSpeed 4` while `STEER_LEVELS.easy` moved to 2 / 5. So clicking RELAX left the STEERING row reading CUSTOM, and the ladder stopped being monotonic (RELAX's rack became *quicker* than STANDARD's). | RELAX aligned with `easy` exactly. Fixes both specs at once. |
+| `gamepad` ×2 (triggers) | The pedals are deliberately zeroed while a nav layer is open, and the title screen is one. These two never left it, so they read 0 throttle and called it a regression. A sibling test had already been given the race-start boilerplate inline. | Extracted that boilerplate as `startRaceForPad` and used it in all three. |
+| `gamepad` ×2 (timeouts) | Same rAF-actionability stall, plus a genuinely heavy case (eleven `page.evaluate`s at ~15 s each). | Focus-and-activate in one evaluate for the HUD-button case — focus is what that test actually guards — and a declared budget for the file. |
+
+**`camera-tuner` CORNER LEAD is NOT fixed**, and the diagnosis is worth keeping
+so the next attempt does not repeat it. Three plausible causes were tested and
+eliminated: the hardcoded `frac 0.24` is no longer a corner (fixing that moved
+the failure to a later assertion, so it was real but not sufficient); the
+"scales with the knob" assertions measure from `shipped` (lead 0.54) rather than
+from `flat` (lead 0), which makes `mHalf > 0.1` unsatisfiable when the half
+sample is 0.04 away from its own baseline; and the car's lateral position
+carried over between samples, which is how `reset` failed to reproduce `shipped`
+by 128 m of world X.
+What remains is that **the shipped default lead does not appear to reach the rig
+at all under this harness**: `shipped` and `flat` differ by 0.0022 m, and that
+number is *identical* to four significant figures whether the corner is chosen
+by curvature or by the knob's own measured travel — so it does not depend on the
+corner. A separate probe that compared explicit lead 0 against lead 1 did show
+movement (0.05–1.17 m), but with no pattern across corners, which reads as
+camera-history noise rather than the feature working. The next step is to
+establish whether `extra.carPos` is populated on the `freeze` + `jump` +
+`snapCam` path at all — if it is not, the free-world chase branch that owns
+CORNER LEAD never runs there and the test's whole method is invalid.
+Speculative edits were reverted rather than left in a still-red test.
+
 **A guard came out of this.** `#ios-install` shipped with `display: flex`, which
 outranks the UA's `[hidden] { display: none }` — an author rule always beats a
 UA rule — so the attribute could not hide it. `tests/unit/css-layers.test.mjs`

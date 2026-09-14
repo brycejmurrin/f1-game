@@ -16,13 +16,46 @@
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { forgetStored } from "../helpers/shared-page.js";
 
+/* DOM CLICKS, NOT locator.click(), AND THE REASON IS THE FRAME CLOCK.
+   Playwright's actionability poll ticks on requestAnimationFrame, and this
+   page's rAF collapses to ~2 frames/s under SwiftShader while the track and
+   twenty cars build (playwright.config.js records the same measurement from
+   the other direction). A locator click on #rs-go therefore spent its whole
+   60 s actionTimeout waiting for "stable" on a button that had been ready from
+   the moment it appeared -- every test in this file failed that way, and the
+   call log says only "locator resolved to <button id=rs-go>" with no assertion
+   to point at. Reproduced at --workers=1 on an idle box, so it is not
+   contention; it is the frame clock the poll rides on.
+   `.click()` through page.evaluate dispatches the same activation without the
+   actionability wait. It is the idiom the rest of the suite already uses
+   (gamepad, menu-keyboard, menu-baseline, quali, ui-redesign, shared-page), and
+   each step still WAITS for the screen it asked for, so nothing races. */
+/* ONE BOOT PER WORKER, not one per test. Each test here needs a live race, and
+   paying the menu walk plus twenty car builds thirteen times is what pushed
+   every test in this file past the 120 s budget on a SwiftShader box — the
+   measured cost is ~20 s per page.evaluate and 30-90 s for the build alone
+   (docs/TESTING.md: "CI has been measured taking 94 s just to boot a race on a
+   starved runner"). sharedTest keeps one page per worker and resets input,
+   camera and freeze between tests, which is all the isolation a spec that
+   re-places the car with jump() on every run actually needs. */
 async function startLiveRace(page) {
+  const live = await page.evaluate(() => {
+    try { return !!(window.__apex && window.__apex.info().track != null); } catch (_) { return false; }
+  });
+  if (live) { await page.evaluate(() => window.__apex.go()); return; }
   await page.goto("/");
-  await page.locator("#mb-race").click();
-  await page.locator("#sel-go").click();
-  await page.locator("#rs-go").click();
+  const show = (id) => page.waitForFunction(
+    (n) => { const el = document.getElementById(n); return !!el && !el.hidden; },
+    id, { polling: 100, timeout: 30_000 }
+  );
+  await page.evaluate(() => document.getElementById("mb-race").click());
+  await show("select");
+  await page.evaluate(() => document.getElementById("sel-go").click());
+  await show("race-settings");
+  await page.evaluate(() => document.getElementById("rs-go").click());
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(
     () => window.__apex && window.__apex.info().track != null,
@@ -30,6 +63,24 @@ async function startLiveRace(page) {
   );
   await page.evaluate(() => window.__apex.go());
 }
+
+/* THIS FILE COSTS MORE THAN THE PROJECT DEFAULT ALLOWS, and says so here
+   rather than letting every test report "Test timeout of 120000ms exceeded"
+   with no clue which step was slow.
+   Every test needs a LIVE race - the real sim, twenty cars built, the physics
+   stepped - and under SwiftShader a single page.evaluate against it measures
+   20-28 s while the build alone takes 30-90 s. Measured on this container:
+   80-190 s per test, with the work genuinely progressing throughout (the one
+   test that fits inside 120 s returns a real assertion result, not a hang).
+   playwright.config.js's own note asks that a case needing materially more
+   than the shared budget declare it at its own site; this is that declaration.
+   It does NOT paper over a hang: the actionability stall these tests used to
+   suffer was a locator-click problem and is fixed in startLiveRace above, and
+   actionTimeout stays 60 s, so a stuck locator still fails in a minute and
+   names itself. Only genuinely slow WORK reaches this budget.
+   480 s because the heaviest case here - road-follow, which drives four full
+   cornering runs - measured 343.5 s; the rest land between 80 s and 210 s. */
+test.describe.configure({ timeout: 480_000 });
 
 const probe = (page) => page.evaluate(() => window.__apex.probe());
 
@@ -245,7 +296,21 @@ test.describe("Apex 26 — steering", () => {
 
   test("racing-line assist off by default", async ({ page }) => {
     await startLiveRace(page);
-    // No slider interaction; store is empty, so the assist must be 0.
+    /* ESTABLISH THE DEFAULT, do not assume it. On a worker-scoped page an
+       earlier test's setRaceLine() is still in the store, so "the store is
+       empty" stopped being true the moment this file started sharing a boot.
+       Assert the two halves separately and honestly:
+         1. with the key GONE (forgetStored drops it AND GameStore's cached
+            copy - a bare removeItem leaves the game answering from memory)
+            the stored default really is 0; and
+         2. the LIVE assist is 0, which is what the physics below depends on.
+       game.js keeps applySteerTuning in its own closure, so the only way to
+       push a store value into the running sim is the slider's own handler,
+       which is what setRaceLine is. */
+    await forgetStored(page, ["raceLine"]);
+    const storedDefault = await page.evaluate(() => GameStore.store.get("raceLine", 0));
+    expect(storedDefault).toBe(0);
+    await setRaceLine(page, 0);
     const assist = await page.evaluate(() => window.__apex.tuning().raceLineAssist);
     expect(assist).toBe(0);
     // ...and with the assist explicitly off, the car's line through a corner is

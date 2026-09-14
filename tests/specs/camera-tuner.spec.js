@@ -6,6 +6,16 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
+/* Two cases here outrun the project's shared 120 s budget, and say so rather
+   than reporting a bare "Test timeout exceeded".
+   Each drives the LIVE camera - jump, freeze, snapCam, read camState - once per
+   sample, against a rendering page where a single page.evaluate measures 15-28 s
+   under SwiftShader. The panel case walks the tuner UI on top of that and
+   measured 136 s here; it passes comfortably on an idle box and fails only when
+   it shares the machine. actionTimeout stays 60 s, so a genuinely stuck locator
+   still fails in a minute and names itself. */
+test.describe.configure({ timeout: 300_000 });
+
 async function loadMonza(page) {
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto("/");

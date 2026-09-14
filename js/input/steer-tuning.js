@@ -185,8 +185,20 @@ const PRESETS = {
   rookie:   { tiltDeg: 4, steerSmooth: 9, steerRate: 2,
               steerExpo: 4, steerLock: 5, steerSpeed: 4, drivingHelp: 9, raceLine: 4,
               adaptiveButtons: 9, brakeCue: 9 },
-  relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 4,
-              steerExpo: 4, steerLock: 5, steerSpeed: 4, drivingHelp: 8, raceLine: 2,
+  /* RELAX WAS THE STRAGGLER OF THE 2026-09-08 RE-CENTRING. That pass moved
+     STANDARD and PRO onto the owner's profile and re-centred STEER_LEVELS with
+     them — but left RELAX at the old steerRate 4 / steerSpeed 4, which matches
+     no named FEEL level any more. Two visible consequences:
+       - clicking RELAX left the STEERING row reading CUSTOM, i.e. a preset that
+         does not light up its own simplified control (sliders.spec.js);
+       - the ladder stopped being monotonic — RELAX's rack (3.80 m) became
+         QUICKER than STANDARD's (4.20 m), so "STANDARD sits between RELAX and
+         PRO" was false by construction (presets.spec.js).
+     Aligned with STEER_LEVELS.easy exactly, which is what "the easiest bundle"
+     was always meant to be: the same calm rack STANDARD uses, with less lock
+     and an earlier speed taper. */
+  relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 2,
+              steerExpo: 4, steerLock: 5, steerSpeed: 5, drivingHelp: 8, raceLine: 2,
               adaptiveButtons: 8, brakeCue: 8 },
   // STANDARD is the SHIPPED car, so it must equal the store fallbacks in
   // applySteerTuning() exactly — activePreset() compares the two and a fresh
