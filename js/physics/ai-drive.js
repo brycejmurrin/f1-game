@@ -620,15 +620,37 @@ const AiDrive = (function () {
     if (ctx.blocker || !ctx.chaser || (ctx.chaserGap || 99) >= 12) return 0;
     if ((ctx.chaserSpeed || 0) <= (ctx.speed || 0) - 3) return 0;
     const kA = ctx.kA || 0;
-    if (Math.abs(kA) <= 0.004) return 0;
-    const coverSide = -Math.sign(kA);
+    // COVER SIDE. Into a corner the inside is the thing worth having, so the
+    // side comes from curvature. On a STRAIGHT kA is ~0 and -Math.sign(kA) is
+    // not a direction, which is why this used to `return 0` outright — and that
+    // made the whole straight undefendable: no covering the line into turn 1,
+    // no breaking the tow. It also left defendOnce's "one defensive move per
+    // straight" limiter (game.js, beside this call) with nothing it could ever
+    // limit, since the braking zone resets the side anyway.
+    // A straight has its own answer: cover the side the attacker is lining up
+    // on. dx is the chaser's lateral offset from us, +x = right, so the side to
+    // take IS its sign. Dead behind is not yet a move to cover — hold the line
+    // and let defendOnce spend the move when they commit.
+    let coverSide, straight = false;
+    if (Math.abs(kA) > 0.004) {
+      coverSide = -Math.sign(kA);
+    } else {
+      const ox = ctx.other && Number.isFinite(ctx.other.x) ? ctx.other.x : 0;
+      const dx = ox - (ctx.x || 0);
+      if (Math.abs(dx) < 0.35) return 0;
+      coverSide = dx > 0 ? 1 : -1;
+      straight = true;
+    }
     const coverRoom = coverSide > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
     if (ctx.street && coverRoom < 2.2) return 0;
     const mag = lerp(0.2, 1.1, ctx.traits.craft)
       * clamp(1 - ctx.chaserGap / 12, 0, 1) * clamp(coverRoom / 2, 0, 1)
       * houseMulCtx(ctx, 0.90, 1.12, "hold")
       * ordersMul(ctx.team, ctx.seat, ctx.other, "defend");
-    return coverSide * (ctx.street ? mag * 0.45 : mag);
+    // A straight cover is a lane move, not a chop: three fifths of the corner
+    // pull, and defendOnce still spends it once per straight.
+    const scale = (ctx.street ? 0.45 : 1) * (straight ? 0.6 : 1);
+    return coverSide * mag * scale;
   }
 
   function wallHitLoss(street) {
