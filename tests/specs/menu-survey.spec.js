@@ -107,25 +107,31 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
   test("34 settings menu — SOUND + MUSIC OFF", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page);
-    // BOTH switches now live in the MUSIC & SOUND panel — the pause menu's
-    // duplicate SOUND toggle was removed, since it was the master mute while
-    // the panel's switch is the effects bus and the two read as one control.
     await page.evaluate(() => document.getElementById("pm-audio").click());
-    // WAIT FOR THE PANEL, do not sleep at it. A flat 120 ms was enough on a
-    // quiet box and not on a loaded one: at the deployed commit this threw
-    // "Cannot read properties of null (reading 'click')" because #as-music-off
-    // did not exist yet. SettingsNav renders the audio panel on demand, so the
-    // honest wait is for the control itself.
-    await page.waitForFunction(() => document.getElementById("as-music-off") != null
-      && document.getElementById("as-sound-off") != null, null, { polling: 50, timeout: BOOT_MS });
-    await page.evaluate(() => document.getElementById("as-music-off").click());
-    await page.evaluate(() => document.getElementById("as-sound-off").click());
-    // The OFF half of each switch must now carry the selected ("active") ring —
-    // game.js toggles it in the audio-sheet sync; AriaState mirrors it to aria-pressed.
+    // #as-music-off / #as-sound-off DO NOT EXIST, and had not for some time:
+    // this test drove the old pair of ON/OFF buttons, and the audio panel is
+    // setting ROWS now (js/ui/setting-row.js — `#<id>-sel` is a native select
+    // whose options are the values), the same shape every other test in this
+    // file already drives through cycleTo.
+    //
+    // It failed as `Cannot read properties of null (reading 'click')` after a
+    // flat 120 ms sleep, which reads like a race and is not one. Replacing the
+    // sleep with an honest wait for the control is what proved it: the wait ran
+    // the full BOOT_MS and the element still never appeared. A superseded
+    // design, not a timing bug — the third one found in this suite today.
+    await page.waitForFunction(() => document.getElementById("as-music-sel") != null
+      && document.getElementById("as-sound-sel") != null, null, { polling: 50, timeout: BOOT_MS });
+    const music = await cycleTo(page, "as-music", "OFF");
+    const sound = await cycleTo(page, "as-sound", "OFF");
+    // Assert what the player is told, in the terms the panel now uses: both
+    // rows READ off, and the collapsed summaries agree, since those are what
+    // you see with the folds shut.
+    expect(music.toUpperCase()).toContain("OFF");
+    expect(sound.toUpperCase()).toContain("OFF");
     expect(await page.evaluate(() => ({
-      music: document.getElementById("as-music-off").classList.contains("active"),
-      sound: document.getElementById("as-sound-off").classList.contains("active"),
-    }))).toEqual({ music: true, sound: true });
+      music: document.getElementById("as-music-sum").textContent.toUpperCase(),
+      sound: document.getElementById("as-sound-sum").textContent.toUpperCase(),
+    }))).toEqual({ music: expect.stringContaining("OFF"), sound: expect.stringContaining("OFF") });
     await page.waitForTimeout(120);
     await shot(page, "portrait-34-settings-sound-music-off");
   });
