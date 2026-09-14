@@ -150,6 +150,13 @@ try {
       const a = window.__apex;
       a.go(); a.park((frac + 0.5) % 1); a.freeze(true);
       if (a.hud) a.hud(false);
+      // The DRIVING LINE is an assist painted on the road, not part of the
+      // circuit, and the hero shot is the PLACE. Turn it off explicitly rather
+      // than relying on the session default: the first 40 stills were shot
+      // when that default was OFF and are clean, the eleven shot 2026-09-14
+      // came out with green arrows down every one of them because the default
+      // had since moved. An asset generator must not inherit a preference.
+      if (a.drivingLine) a.drivingLine("off");
       // TV camera: 42 m behind the section, a touch to the right, 11 degrees
       // up, looking down the road so the shape of the section reads. A free
       // cam sets G.dbgCam directly — never snapCam() after it (that clears it).
