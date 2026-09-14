@@ -134,8 +134,19 @@ function adaptLabel(v) { return v <= 1 ? "OFF" : String(v); }
 // PRO sharpens response and frees up the slide for skilled play. PACE is left
 // out — it's a race-wide setting, not a handling feel.
 const PRESETS = {
-  relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 4,
-              steerExpo: 4, steerLock: 5, steerSpeed: 4, drivingHelp: 8, raceLine: 2,
+  // RELAX must equal STEER_LEVELS.easy field for field, exactly as STANDARD
+  // equals `normal` and PRO equals `sim` — matchSteerLevel() compares the live
+  // sliders against STEER_LEVELS, so a bundle that lands between two of them
+  // lights up CUSTOM instead of its own name. It did: the 2026-09-08
+  // re-centring moved STANDARD and PRO onto the owner's profile and left RELAX
+  // on the old one (RATE 4 / SPEED 4 against easy's 2 / 5), so clicking RELAX
+  // read CUSTOM, and — because wheelbase comes off RATE — gave RELAX a SNAPPIER
+  // rack than STANDARD, inverting the one thing the bundle exists to do.
+  // Brought onto the new profile 2026-09-14: one calm rack, and the ladder
+  // differentiates on LOCK and the speed taper, which is what the block above
+  // says the levels now do.
+  relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 2,
+              steerExpo: 4, steerLock: 5, steerSpeed: 5, drivingHelp: 8, raceLine: 2,
               adaptiveButtons: 8, brakeCue: 8 },
   // STANDARD is the SHIPPED car, so it must equal the store fallbacks in
   // applySteerTuning() exactly — activePreset() compares the two and a fresh

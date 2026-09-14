@@ -373,17 +373,30 @@ const num = async (page, key) => Number(await stored(page, key));
 
 test.describe("Apex 26 — simplified controls", () => {
   test("STEERING levels fan out to the cornering keys and mirror active state", async ({ page }) => {
+    // WHAT FANS OUT changed on 2026-09-08 and this spec did not follow, which
+    // left it red for a week. The ladder used to differentiate on RATE; it now
+    // runs ONE CALM RACK across easy/assist/normal and differentiates on LOCK
+    // and the speed taper, with SIM the single step that also quickens the rack
+    // (js/input/steer-tuning.js STEER_LEVELS says exactly this). So assert the
+    // ladder that exists rather than the numbers the old one happened to have.
     await load(page);
     await pick(page, "pm-feel", "sim");
-    expect(await num(page, "steerRate")).toBe(7);
+    expect(await num(page, "steerRate")).toBe(7);    // SIM alone quickens the rack
     expect(await num(page, "steerLock")).toBe(7);
     expect(await num(page, "steerSpeed")).toBe(7);
     expect(await picked(page, "pm-feel")).toBe("sim");
 
     await pick(page, "pm-feel", "easy");
-    expect(await num(page, "steerRate")).toBe(4);
-    expect(await num(page, "steerSpeed")).toBe(4);
+    expect(await num(page, "steerRate")).toBe(2);    // ...the other three share it
+    expect(await num(page, "steerLock")).toBe(5);    // and fan out on LOCK
+    expect(await num(page, "steerSpeed")).toBe(5);   // and the speed taper
     expect(await picked(page, "pm-feel")).toBe("easy");
+
+    await pick(page, "pm-feel", "normal");
+    expect(await num(page, "steerRate")).toBe(2);
+    expect(await num(page, "steerLock")).toBe(7);    // monotonic easy -> normal
+    expect(await num(page, "steerSpeed")).toBe(7);
+    expect(await picked(page, "pm-feel")).toBe("normal");
   });
 
   test("TILT SENSITIVITY macro drives tiltDeg / maxTilt", async ({ page }) => {
