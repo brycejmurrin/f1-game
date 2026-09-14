@@ -196,9 +196,24 @@
 /* A FIXED SLOT FOR THE DIGITS. tabular-nums makes every digit the same width
    but not every NUMBER: "99" -> "100" is a whole digit, and this block is
    centred in its column, so each crossing of 100 km/h (several a lap) shifted
-   the figure and KM/H sideways by half a digit. 3ch is three tabular digits;
-   right-aligned so the units digit never moves. */
-#hud-speed-n { display: inline-block; min-width: 3ch; text-align: right; }
+   the figure and KM/H sideways by half a digit. Right-aligned so the units
+   digit never moves.
+
+   NOT 3ch, WHICH IS WHAT THIS SAID AND WHAT IT IS NOT. `ch` is the advance of
+   "0" and the browser takes the PROPORTIONAL one, ignoring the tabular-nums
+   above it — measured on this element: 1ch = 0.4161em against a rendered
+   tabular digit of 0.4577em, so `3ch` came up 9.1 % short and the box still
+   jumped 3.5 px at 100 km/h, which is the exact defect this slot exists to
+   prevent. It survived unnoticed under Rajdhani because there the same gap was
+   1.1 % (3ch 1608/1000 em against "888" 1626) — small enough to look fixed.
+
+   1.373em is three TABULAR advances: Barlow's tnum zero is 498/1000, times the
+   91.9 % size-adjust on its @font-face = 0.4577em, times three. Synthetic bold
+   (the HUD asks 800, the face ships 700) does not move it — measured 0.4576em
+   rendered against 0.4577 derived. tests/unit/font-digits.test.mjs re-derives
+   this from the measured ledger, so a font swap that changes the advance fails
+   there rather than silently shortening the slot again. */
+#hud-speed-n { display: inline-block; min-width: 1.373em; text-align: right; }
 .hud-unit { font-size: var(--fs-micro); color: var(--dim); margin-left: calc(var(--gap) / 3); }
 #hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: calc(var(--gap) / 6); background: rgba(8,8,14,0.6); border: 1px solid var(--card-line); border-radius: var(--r-md); padding: 5px 8px; }
 #hud-gear {

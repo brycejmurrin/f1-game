@@ -1,8 +1,11 @@
-# The HUD's tabular figures are inert, and the obvious fix does not fit
+# The HUD's tabular figures were inert, and the obvious fix did not fit
 
-*Measured 2026-09-14. Investigated, fixed, measured again, and then **not
-shipped** — the fix works and the HUD has no room for it. This note exists so
-the next attempt starts from the measurements instead of repeating them.*
+*Measured 2026-09-14. **RESOLVED the same day, on the third attempt** — see
+"Third attempt" at the end, which is the one that shipped. The two failed
+attempts above it are kept deliberately: both were correct fixes that the HUD
+had no room for, and the reason the third one fits is the whole lesson. Read
+this before touching the HUD face again; the measurements are here so nobody
+repeats them.*
 
 ## The defect
 
@@ -244,3 +247,85 @@ payloads apart from the one pair above. Those 16 are not this change and were
 not investigated. The `.hud-top+.hud-gaps` finding is a *differential* against
 that same red baseline, which is why it is trustworthy and the absolute
 pass/fail count is not.
+
+---
+
+## Third attempt, 2026-09-14 — SHIPPED. Change the whole face, not the digits
+
+Both attempts above kept Rajdhani for the letters and swapped only the numerals
+in. That is what made them too wide: the composite face bought uniform digits
+and paid **+5.0px** on `.hud-top`, and the pair it collided with has no slack at
+667×375. Holding Rajdhani's letters was never a requirement — it was an
+assumption, carried from the first attempt into the second.
+
+Dropping it is what fits. `--font-hud` now leads with **Barlow Condensed**,
+`size-adjust: 91.9%`, and the ~36 `tabular-nums` declarations became correct.
+
+### Why Barlow and not the other three
+
+Measured with fontTools against Rajdhani on the two strings that decide it —
+`.hud-top`'s populated worst case, which is the width the fit pass fights over,
+and `"888"`:
+
+| face | tnum | uniform | `.hud-top` | `"888"` |
+|---|---|---|---|---|
+| Rajdhani (was) | no | no | — | — |
+| Archivo Narrow | yes | yes | −1.9% | −15.9% |
+| **Barlow Condensed** | yes | yes | **−5.0%** | −8.1% |
+| Fira Sans Condensed | yes | yes | **+3.1%** | −7.0% |
+| Roboto Condensed | yes | yes | **+4.5%** | −6.8% |
+
+**Two of the four are wider on `.hud-top`.** The table in "A better option than
+the composite face" ranks these faces by whether they *have* tabular figures,
+which is necessary and not sufficient — a wider face would have reproduced the
++5px failure by another route. Rank candidates on `.hud-top`, not on `tnum`.
+
+### The size-adjust is derived, and it is CAP HEIGHT
+
+`0.643 / 0.700 = 91.86%` — Rajdhani's cap height over Barlow's. At a shared
+`font-size` Barlow renders 8.9% taller, and every HUD box measured against the
+old face would be wrong. Chromium agrees: `"H"` at 700/34px is **21px in both**.
+
+Cap height, not em and not x-height, because the HUD is uppercase and digits.
+This is the re-derivation the earlier `size-adjust: 96.79%` note asked for, and
+it lands on a different quantity for a different reason — that constant matched
+digit WIDTH for a digits-only face; this one matches HEIGHT for a whole face.
+The next swap should re-derive again rather than inherit either number.
+
+Net effect on the pair that blocked attempt two: `.hud-top`'s populated string
+goes **206.2 → 169.2px** at 14px, −18%. The fix that was too wide is now the fix
+with the most slack anyone has measured here.
+
+### The defect, before and after, in a browser
+
+Three-digit strings at `#hud-speed`'s 34px, widest minus narrowest:
+
+| | tnum off | tnum on |
+|---|---|---|
+| Rajdhani | 21.22px | **21.22px** — the declaration did nothing |
+| Barlow Condensed | 20.94px | **0** |
+
+And in the shipped HUD rather than a synthetic string: live Monza race, chase
+camera, `#hud-speed` reading `257KM/H` at 28px/800 — all ten three-digit values
+measure **38.4px exactly**.
+
+**That probe was vacuous on its first run** and the trap is worth keeping: it
+reported spread 0 with every width ALSO zero, because the default camera is
+cockpit and `body.cockpit-cam` hides `#hud-speed`. A zero-width box trivially
+has zero spread. Measure with `camera("chase")`, and refuse to measure a box
+with no width — the same shape as the inert declaration this whole note is about.
+
+### What is now guarded
+
+`tests/unit/font-digits.test.mjs` was rewritten from pinning the defect to
+enforcing the rule this note proposed: every shipped face must have uniform
+digit advances either natively or after `tnum` substitution, checked on the
+SUBSTITUTED advances rather than the tag — because the tag is not enough, and
+Exo 2 above is the counter-example. It also pins `size-adjust` to its derivation.
+
+### Still open, and deliberately not done
+
+The fixed-slot work in "What the next attempt needs" was NOT done and is no
+longer urgent: with the face 18% narrower the transient has room it never had.
+Per-digit slots or the grid-stacked worst case remain the way to make
+`.hud-top` stop resizing at all, if that ever matters again.
