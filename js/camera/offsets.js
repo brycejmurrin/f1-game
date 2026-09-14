@@ -7,9 +7,13 @@ const KEY = "camTune";
 const DEG = Math.PI / 180;
 const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 
-// The six knobs, in panel order. `def` is 0 for all of them by construction:
-// zero MUST mean "the framing js/camera/vantage.js shipped", so RESET is exact
-// and a value only ever needs storing when the player actually moved it.
+// The knobs, in panel order. `def` is what the mode ships with, and set() stores
+// a knob only while it differs from that — so RESET is exact and an untouched
+// install carries nothing. For the six GEOMETRIC offsets below that def is 0,
+// because each is a DELTA on the rig js/camera/vantage.js solved: zero means
+// "shipped framing". CORNER LEAD is the exception and its def is the shipped
+// amount itself (0.54), because it is an ABSOLUTE blend, not a delta — see the
+// note above it for what defaulting it to 0 cost.
 const CAM_TUNE_DEFS = [
   { id: "height", label: "HEIGHT",   min: -6,  max: 10, step: 0.025, def: 0, unit: "m",
     help: "Raise or lower the camera eye. The aim stays on the car, so raising it looks further down over the nose." },
@@ -30,8 +34,16 @@ const CAM_TUNE_DEFS = [
   // and swings INTO turns. 0 = locked to the car (the shipped free-world rig);
   // 1 = the old corner-following chase. Only chase/far read it — `modes` gates
   // which cameras show the slider.
-  { id: "cornerLead", label: "CORNER LEAD", min: 0, max: 1, step: 0.02, def: 0, unit: "", modes: ["chase", "far"],
-    help: "Let the chase camera lead and swing INTO corners like the classic chase. Shipped chase/far use a small default lead; 0 on the slider locks flat behind the car; higher follows the bend. Purely visual — never affects the car." },
+  // def MUST equal CHASE_CORNER_LEAD_DEFAULT in js/camera/vantage.js (0.54), and
+  // tests/unit/camera-defaults.test.mjs holds the two together. This is not cosmetic:
+  // set() DELETES a knob whose value equals its def, and an unstored cornerLead
+  // means "use the shipped default". With def 0 the two readings of zero
+  // collided — dragging the slider to 0 deleted the key, so the rig fell back to
+  // 0.54 and the ONE END OF THE RANGE THE HELP TEXT PROMISES ("0 locks flat
+  // behind the car") was the one value unreachable. Defaulting to the shipped
+  // amount also stops the panel opening on a lying 0 while 0.54 is live.
+  { id: "cornerLead", label: "CORNER LEAD", min: 0, max: 1, step: 0.02, def: 0.54, unit: "", modes: ["chase", "far"],
+    help: "Let the chase camera lead and swing INTO corners like the classic chase. Chase/far ship at 0.54; 0 locks the rig flat behind the car; 1 is the full corner-following chase. Purely visual — never affects the car." },
 ];
 const DEF_BY_ID = {};
 for (const d of CAM_TUNE_DEFS) DEF_BY_ID[d.id] = d;

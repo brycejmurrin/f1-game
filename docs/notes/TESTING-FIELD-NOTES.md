@@ -1781,3 +1781,38 @@ the gate. It remains a different job from covering the renderer.
 
 Reproduce the table: `maxDeclaredTimeout(f)` from `tools/ci/select-specs.mjs`
 over `tests/specs/*.spec.js`, and `pick(["<dir>/x.js"])` for the routing.
+
+## 2026-09-14 — a 60 s timeout is a SIGNATURE, not a diagnosis
+
+This file documents the rAF-actionability stall at length and the entries are
+right: `steering` ×9 and `gamepad` ×2 really were it, and the DOM-click and
+`headless(true)` fixes really do clear it. The cost of that being well
+documented is that every 60 s timeout now *looks* like it, and four in
+`ui-button-touch.spec.js` were written off twice — once in an audit table, once
+in a commit message — as "the same actionability stall, pre-existing". None of
+them was.
+
+**Two were a wrong option value.** `selectOption("button")` against a select
+whose values are `tilt|buttons|touch` (`STEER_MODES`, js/game.js). Playwright
+matches a bare string against the option's VALUE and RETRIES when nothing
+matches, so it spends the entire `actionTimeout` and reports a timeout — never
+"no such option". `{ force: true }` made it airtight: force suppresses the
+actionability checks, so the one diagnostic that would have separated "cannot
+interact" from "nothing to select" was switched off at the call site.
+
+**Two were asserting a design that shipped out from under them.** `#sel-tracks`
+became a sideways-panning strip on 2026-09-09; the cases still asked for
+`overflow-y: auto` and a vertical overflow, and measured
+`scrollHeight === clientHeight === 84`. That one at least fails fast — but it
+had been sitting in the same "pre-existing" bucket as the other two, which is
+how a stale test and a typo travelled together for a week.
+
+**The rule.** Before filing a timeout as the stall, get ONE positive signal that
+the element is actually uninteractable — `page.evaluate` finding it present and
+sized while the locator cannot, or the stall clearing under
+`__apex.headless(true)`. Absent that, a timeout means only that something was
+retried until the budget ran out, and "what was it retrying for?" is a different
+question from "why was it slow?". Where a helper selects by value, assert the
+value EXISTS first; `cycleToPauseSteerMode` in that spec now does, and a
+mismatch fails in a second naming the options that do exist. The four went from
+four 60 s timeouts to 4 passed in 2.3 min.
