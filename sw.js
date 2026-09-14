@@ -169,6 +169,7 @@ async function precacheAssetLists() {
     "js/circuits/scenery/dijon.js",
     "js/circuits/scenery/buddh.js",
     "js/circuits/scenery/mont_tremblant.js",
+    "js/circuits/scenery/mosport.js",
     // LAZY_DATA — the data hub bundle behind the DATA button
     "js/data/api.js",
     "js/data/telemetry.js",

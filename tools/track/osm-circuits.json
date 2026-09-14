@@ -1,5 +1,5 @@
 {
-  "_doc": "Provenance for every circuit whose centreline came from OpenStreetMap rather than bacinger/f1-circuits (which the game exhausted at 40 features). One row per circuit: the bbox queried, the researched lap length that picks the right cycle, and any per-circuit flags. `node tools/track/stitch-osm-ring.mjs <id>` reads its row from here, so a stitch is one command and re-derivable by anyone. `target` is the REAL lap length of the configuration Formula One raced, in metres, from the circuit's Wikipedia infobox — it is the tool's only ground truth, so a wrong number here silently selects a wrong layout. `gp` records which years that configuration was used, because several of these venues have since been rebuilt — where the current layout is NOT the one F1 raced, the note says so and `target` is the CURRENT length, since a target the ground no longer matches selects nothing.",
+  "_doc": "Provenance for every circuit whose centreline came from OpenStreetMap rather than bacinger/f1-circuits (which the game exhausted at 40 features). One row per circuit: the bbox queried, the researched lap length that picks the right cycle, and any per-circuit flags. `node tools/track/stitch-osm-ring.mjs <id>` reads its row from here, so a stitch is one command and re-derivable by anyone. `target` is the REAL lap length of the configuration Formula One raced, in metres, from the circuit's Wikipedia infobox \u2014 it is the tool's only ground truth, so a wrong number here silently selects a wrong layout. `gp` records which years that configuration was used, because several of these venues have since been rebuilt \u2014 where the current layout is NOT the one F1 raced, the note says so and `target` is the CURRENT length, since a target the ground no longer matches selects nothing.",
   "circuits": {
     "fuji": {
       "name": "Fuji Speedway",
@@ -168,6 +168,19 @@
         "40"
       ],
       "gp": "Canadian GP 1968 and 1970"
+    },
+    "mosport": {
+      "name": "Mosport International Raceway",
+      "location": "Bowmanville, Ontario",
+      "country": "Canada",
+      "bbox": [
+        44.0331,
+        -78.6922,
+        44.0691,
+        -78.6562
+      ],
+      "target": 3957,
+      "gp": "Canadian GP 1967, 1969, 1971-1974, 1976-1977. The layout is UNCHANGED from the F1 era \u2014 the circuit's own infobox reads 'Clockwise Grand Prix Circuit (1961-present)' and the 2001 work was a resurface and widening to 13 m with the corner geometry deliberately preserved. Unlike brands_hatch and zolder this trace IS the configuration Formula One raced. Published lengths disagree (racingcircuits.info says 4.102 km, a transposed digit); the 3.948 km stitch settles it at 3.957."
     }
   }
 }
