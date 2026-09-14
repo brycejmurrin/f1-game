@@ -80,6 +80,41 @@
     background: var(--panel);
   }
 }
+/* AND THE HEIGHT AXIS, which this mode block reclaimed for the car but never
+   for the editor itself. MEASURED with the garage open on LIVERY and the paint
+   editor up, UI SIZE default:
+     852x393  head 84 + tabs 65 = 149px of chrome over a 142px editor pane
+     393x852  head 221 + tabs 58 = 279px of chrome over a 170px editor pane
+   In both the chrome above the editor is TALLER THAN THE EDITOR, which holds
+   4109 / 4901px of content — a paint job edited through a porthole. Portrait is
+   the worse one and gets no help today, because it classifies `data-density:
+   normal` (the sheet is 580px tall; it is the HEAD that is fat, not the sheet
+   that is short) so none of the compact-tier head trims below apply.
+   The three things hidden here are not merely low value while painting, they
+   are INERT:
+     - #cs-tabs picks a part CATEGORY, and category cannot change mid-edit; the
+       editor carries its own CANCEL and SAVE & FIT (js/garage/setup-sheet.js),
+       so this is not the way out of the editor and hiding it strands nobody.
+       It also takes the strip out of the focus order, which is correct — those
+       tabs do nothing while a draft is open.
+     - #cs-budget-wrap and #cs-stats-inner describe PARTS: cost against the cap,
+       and the aero/grip deltas a part would move. Paint spends no budget and
+       shifts no stat, so both read as a frozen readout for another screen.
+   Unconditional, like the width rule above it, and for the same reason: this is
+   a MODE, not a size. On a sheet with room to spare the reclaim is simply spent
+   on showing more of the editor, which is the screen's whole subject while the
+   draft is open. Everything returns the moment CANCEL or SAVE & FIT closes it.
+
+   `#cs-inner` is in these selectors for WEIGHT, not for reach — it changes no
+   match. The compact tier sets the strip with
+   `#cs-inner[data-pair][data-density][data-shape] #cs-tabs` (two ids, three
+   attributes); without the extra id this rule is two ids and one class and
+   SILENTLY LOSES to it, which is exactly how the first attempt here left the
+   65px strip on screen while the head trims took. Same trap the note further
+   down this file records for the container-query rules. */
+#carsetup:has(.cs-liv-editor) #cs-inner #cs-tabs,
+#carsetup:has(.cs-liv-editor) #cs-inner #cs-budget-wrap,
+#carsetup:has(.cs-liv-editor) #cs-inner #cs-stats-inner { display: none; }
 #cs-inner {
   pointer-events: auto;
   /* Never wider than the safe box; the formula above decides the rest. */

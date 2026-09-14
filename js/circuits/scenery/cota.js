@@ -494,7 +494,7 @@
       along(0.94, 0.06, 80, (k) => {
         for (const side of [-1, 1]) {
           const pa = anchor(k, side, 5);
-          if (onTrack(pa.c[0], pa.c[2], 1)) return;
+          if (onTrack(pa.c[0], pa.c[2], 1)) continue;
           addCyl(out, pa.c, 0.18, 10, lampPost, 5, [pa.r, pa.u, pa.t]);
           addBox(out, vadd(pa.c, pa.u, 9.5), [0.14, 0.14, 2.8], lampPost, [pa.r, pa.u, pa.t]);
           addBox(out, vadd(vadd(pa.c, pa.t, -side * 1.2), pa.u, 9.0),

@@ -3,6 +3,23 @@ const ApexApi = (function () {
   "use strict";
 
 function create(G) {
+// race()/tt() hand back a descriptor that is ALSO awaitable. startRace() awaits
+// ensureScenery() — the scenery closure is LAZY_SCENERY and Tracks.build is
+// synchronous — so firing it unawaited made the hook claim success while the
+// PREVIOUS track was still built. Measured 2026-09-14: booted on bahrain,
+// `race("monaco")` returned {track:"monaco"} and wallStats() then reported
+// n=1346 / street=false, bahrain's numbers, and waiting did not help because
+// nothing re-read it. Five tracks-walls street assertions failed on this, on
+// the deploy branch too. Thenable, not a Promise, so the ~70 existing call
+// sites are unchanged (`r.track` still reads synchronously); a caller needing
+// the track BUILT writes `await __apex.race(id)`. The resolved value drops
+// `then` so a second await cannot recurse.
+function settled(promise, out) {
+  const value = Object.assign({}, out);
+  return Object.assign({}, out, {
+    then: (res, rej) => Promise.resolve(promise).then(() => res(value), rej),
+  });
+}
 // The four audio hooks share one precondition. `null` when GameAudio is there,
 // so each hook reads `return noAudio() || <the real answer>` rather than
 // repeating a three-line guard four times.
@@ -598,7 +615,44 @@ const api = {
       regen: +G.regenFor(G.player).toFixed(4),
       otTime: +G.otTimeFor(G.player).toFixed(2),
       otCool: +G.otCoolFor(G.player).toFixed(2),
+      // TYRES (js/physics/tyre-model.js). All four are exactly at their fresh
+      // values while TYRE WEAR is off, so a spec can assert the no-op.
+      tyreCompound: G.player.tyre ? G.player.tyre.id : null,
+      tyreWear: +G.tyres.spent(G.player).toFixed(4),
+      tyreGrip: +G.tyres.gripMul(G.player).toFixed(4),
+      tyreLoad: +(G.player._tyreLoad || 0).toFixed(3),
     };
+  },
+  // The pit lane (js/race/pit-lane.js): the resolved geometry, the limit, and
+  // this car's state in it. `arm` calls the stop (or cancels it) exactly as the
+  // PIT control does, which is how a spec drives a stop without an input device.
+  pit(arg) {
+    if (!G.pits) return null;
+    const o = arg && typeof arg === "object" ? arg : {};
+    const c = o.car != null ? (G.cars || [])[o.car] : G.player;
+    if (o.arm != null) G.pits.arm(c, !!o.arm);
+    const out = G.pits.info(c);
+    // The AI's strategy, when it has one: what it plans to do and why it last
+    // deviated. Null for the player, who plans their own race.
+    if (out && c) { out.plan = c.pitPlan || null; out.why = c.pitWhy || ""; }
+    return out;
+  },
+  // The whole tyre picture for one car (default: the player) — compound, life
+  // in laps at THIS race distance, wear, the grip it costs and the load that
+  // caused it. `field: true` returns the same record for every car, which is
+  // how a strategy spec reads the AI's stints.
+  tyres(arg) {
+    if (!G.tyres) return null;
+    const o = arg && typeof arg === "object" ? arg : {};
+    // `level` sets the TYRE WEAR setting AND the live model together, so a spec
+    // can turn wear on without the settings sheet and have it survive the next
+    // gridUp (which re-reads the setting, not the model).
+    if (o.level != null && TyreModel.isLevel(o.level)) { G.raceTyreWear = o.level; G.tyres.setLevel(o.level); }
+    if (o.field) {
+      return (G.cars || []).map((c) => Object.assign({ driver: c.driverId, code: c.code }, G.tyres.info(c)));
+    }
+    const c = o.car != null ? (G.cars || [])[o.car] : G.player;
+    return G.tyres.info(c);
   },
   wallStats() {
     if (!G.track || !G.track.barR) return null;
@@ -1070,8 +1124,8 @@ const api = {
     G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
-    startRace();
-    return { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather };
+    return settled(startRace(),
+      { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather });
   },
   tt(trackRef, timeOfDay) {
     const i = typeof trackRef === "number"
@@ -1084,8 +1138,7 @@ const api = {
     G.raceLaps = TT_LAPS;
     G.raceWeather = "dry";
     G.raceTimeOfDay = timeOfDay || "default";
-    startRace();
-    return { track: Tracks.LIST[i].id, timeTrial: true };
+    return settled(startRace(), { track: Tracks.LIST[i].id, timeTrial: true });
   },
   career(opts) {
     if (opts === undefined) return Career.data();
@@ -1206,6 +1259,23 @@ const api = {
     await Assets.load(tier ? { tier } : {});
     return Assets.state();
   },
+  // texCensus() — RESIDENT texture bytes, by kind, from the active backend.
+  //
+  // The hook the 2026-09-14 texture-memory plan turns on. Its whole reason for
+  // existing is that the biggest texture number in the game was arithmetic:
+  // ~147 MB of livery atlases, about ten times the packed world geometry, with
+  // nothing able to confirm or refute it. Read it on a full grid before
+  // touching any resolution policy.
+  //
+  // `excludes` is not decoration — it names what the census does NOT count
+  // (render targets: shadow maps, post chain, env cube), so a total can never
+  // be mistaken for the whole picture. `supported:false` means the active
+  // backend has no census (WGX/TLX); that is a normal state, not an error, and
+  // it reads as such rather than as a measured zero.
+  texCensus: () => (gfx && gfx.texCensus
+    ? gfx.texCensus()
+    : { supported: false, bytes: null, count: null,
+        error: "the active backend has no texture census (GLX only)" }),
   matTex(v) {
     if (v !== undefined) {
       setLightTune("matTexMix", Math.max(0, Math.min(1, +v || 0)));

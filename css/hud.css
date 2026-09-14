@@ -372,10 +372,48 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
   position: relative; overflow: hidden;
   margin-bottom: calc(var(--gap) * 2 / 3);
 }
-#hud-energy-fill { height: 100%; width: 100%; background: linear-gradient(90deg in oklab, #00c853, #aeea00); }
+#hud-energy-fill, #hud-tyre-fill { height: 100%; width: 100%; background: linear-gradient(90deg in oklab, #00c853, #aeea00); }
+/* TYRES. The compound letter sits OUTSIDE the bar rather than centred in it:
+   unlike ENERGY this readout carries two independent facts (which compound, how
+   much is left) and stacking them made neither legible at phone width. The fill
+   is tinted by WEAR, not by compound, because "how worn" is what a driver has
+   to react to — and the three states are mixed from --faster/--slower rather
+   than written as new literals, so the bar cannot drift from the delta colours
+   the HUD already uses for good and bad. */
+/* updateHud in js/ui/hud.js drives this with `els.tyre.hidden = !tyreOn`, and the
+   `display: flex` below outranks the UA rule that attribute relies on — an
+   author rule always beats a UA one — so the widget painted whether or not the
+   session has tyre wear on. Same trap as #lights, #nogl and the dock groups;
+   caught at merge by the guard in tests/unit/css-layers.test.mjs. */
+#hud-tyre[hidden] { display: none; }
+#hud-tyre { width: 130px; display: flex; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3); }
+#hud-tyre-bar {
+  flex: 1; height: 14px;
+  background: var(--plate-opaque);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  position: relative; overflow: hidden;
+}
+#hud-tyre-fill { transition: width 0.2s linear; }
+#hud-tyre[data-wear="warn"] #hud-tyre-fill {
+  background: linear-gradient(90deg in oklab,
+    color-mix(in oklab, var(--faster) 40%, var(--slower)),
+    color-mix(in oklab, var(--faster) 60%, var(--slower)));
+}
+#hud-tyre[data-wear="gone"] #hud-tyre-fill {
+  background: linear-gradient(90deg in oklab, var(--slower), color-mix(in oklab, var(--slower) 70%, var(--text)));
+  animation: pulse var(--hud-pulse) infinite;
+}
+body.hud-met-timing #hud-tyre,
+body.hud-met-compact #hud-tyre { display: none !important; }
 /* Light ink with the HUD's dark halo (the #hud-speed / .sec-val recipe) reads on
    both halves of the bar — over the fill and over the plate — where the old
    dark-on-fill ink only read while the bar was full. */
+#hud-tyre-code {
+  font-size: var(--fs-micro); font-weight: 800; font-style: italic;
+  min-width: 1.1em; text-align: center;
+  color: var(--text); text-shadow: var(--hud-halo);
+}
 .hud-energy-label { position: absolute; inset: 0; font-size: var(--fs-micro); letter-spacing: 0.2em; display: flex; align-items: center; justify-content: center; color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
 #hud-ot {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;

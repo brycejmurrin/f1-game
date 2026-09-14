@@ -15,7 +15,7 @@ static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 > [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md).
 
 Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
-**engine** — shared spline/mesh/scenery code), `js/circuits/` (the 40 circuit
+**engine** — shared spline/mesh/scenery code), `js/circuits/` (the 51 circuit
 **data** files), `js/car/` (car geometry, liveries, parts, teams), `js/data/`
 (API clients + data hub), `js/game/` (game subsystems), with `js/core/mat4.js` and
 the `js/game.js` entry at the root.
@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_167 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_171 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -105,6 +105,7 @@ _167 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `post-common.js` | `PostCommon` | tag | PostCommon: backend-neutral post-chain helpers that were cloned verbatim into glx/post.js, wgx.js and tlx-post.js. |
 | `lamp-chunks.js` | `LampChunks` | tag | shared per-chunk lamp table bake (LampChunks). |
 | `frustum.js` | `Frustum` | tag | shared frustum cull math (Frustum). |
+| `vertex-pack.js` | `VertexPack` | tag | packed world vertex channels. |
 | `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
@@ -208,12 +209,25 @@ _167 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `<id>.js × 40` | `TrackDefs` | tag | 40 circuit definitions (data only), one file per id in `Tracks.LIST` order — see the "js/circuits/<id>.js" section |
+| `<id>.js × 51` | `TrackDefs` | tag | 51 circuit definitions (data only), one file per id in `Tracks.LIST` order — see the "js/circuits/<id>.js" section |
+
+**`js/race/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `pit-lane.js` | `PitLane` | tag | PIT LANE: the other half of the sentence js/physics/tyre-model.js opened. |
+| `reliability.js` | `Reliability` | tag | RELIABILITY: whether a car reaches the flag at all. |
+| `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
+| `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
+| `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
+| `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
+| `race-settings.js` | `RaceSettings` | tag | RACE SETTINGS sheet: lap ladder, weather, grid rule, GO/cancel. |
 
 **`js/track/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
+| `circuit-elevations.js` | `—` | tag | surveyed circuit elevation profiles (metres relative to the start/finish line, 64 samples by arc-fraction around the lap). |
 | `tracks.js` | `Tracks` | tag | track engine: circuit defs (js/circuits/) → splines, meshes, scenery(api). |
 
 **`js/car/`**
@@ -253,6 +267,7 @@ _167 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `consts.js` | `PhysicsConsts` | tag | PhysicsConsts — the driving model's immutable numbers, moved out of js/game.js with the rationale that tunes them. |
 | `body-attitude.js` | `BodyAttitude` | tag | C2 visual suspension: cosmetic body attitude (pitch / roll / heave). |
+| `tyre-model.js` | `TyreModel` | tag | TYRE MODEL: wear, the grip it costs, and the fuel burn that argues with it. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `aero-zones.js` | `AeroZones` | tag | AeroZones: the ACTIVE AERO activation zones for the loaded circuit. |
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
@@ -290,17 +305,6 @@ _167 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
-
-**`js/race/`**
-
-| File | Global | Loaded | Purpose (header, first sentence) |
-|---|---|---|---|
-| `reliability.js` | `Reliability` | tag | RELIABILITY: whether a car reaches the flag at all. |
-| `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
-| `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
-| `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
-| `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
-| `race-settings.js` | `RaceSettings` | tag | RACE SETTINGS sheet: lap ladder, weather, grid rule, GO/cancel. |
 
 **`js/camera/`**
 
@@ -359,7 +363,7 @@ _167 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `<id>.js × 40` | `TrackScenery` | LAZY_SCENERY | 40 bespoke `scenery(api)` closures, one per circuit, fetched when that circuit is built |
+| `<id>.js × 51` | `TrackScenery` | LAZY_SCENERY | 51 bespoke `scenery(api)` closures, one per circuit, fetched when that circuit is built |
 
 **`js/net/`**
 
@@ -816,7 +820,7 @@ road/terrain meshes through `TrackMesh`/`TrackSurface`, props through the four
 scenery modules.
 
 ```
-Tracks.LIST -> [ trackDef, ... ]   // 40 circuits. LIST order == the `<script>` load
+Tracks.LIST -> [ trackDef, ... ]   // 51 circuits. LIST order == the `<script>` load
                                    // order in index.html (each circuits/<id>.js registers
                                    // itself as it loads) — it is NOT the real F1 calendar
                                    // order. Check tools/manifest.cjs / index.html.
@@ -976,7 +980,6 @@ network error: serve stale cache if present, else reject. Never auto-poll.
 F1API.schedule()              -> [{round, name, circuit, locality, country, date, time, hasSprint}]
 F1API.driverStandings()       -> [{pos, points, wins, name, code, number, team}]
 F1API.constructorStandings()  -> [{pos, points, wins, name}]
-F1API.lastRace()              -> {name, round, date, results:[{pos, name, code, team, grid, points, status, time}]}
 F1API.latestSession()         -> {sessionKey, name, type, circuit, country, dateStart} | null
 F1API.weather(sessionKey)     -> {airT, trackT, humidity, rainfall, windSpeed} | null
 F1API.positions(sessionKey)   -> [{num, pos}] | null      // folded latest per driver

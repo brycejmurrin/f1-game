@@ -58,6 +58,36 @@ export const LADDER = Object.freeze({
   SAMPLES: 20000,        // weight vectors per category; lambda is exact, not sampled
 });
 
+// FOUR AXES, AND `life` IS DELIBERATELY NOT A FIFTH.
+//
+// js/physics/tyre-model.js gave every tyre a `life` — how much of a race
+// distance the compound survives — and the obvious move was to score it here as
+// a fifth axis. It was tried, measured, and is wrong twice over:
+//
+//  1. IT IS NOT A PURCHASE-TIME VALUE. The four stats are multipliers on lap
+//     time and are worth the same whatever you do with the car. Life is worth
+//     NOTHING over 3 laps and decides the race over 53 — and race length is a
+//     session parameter, not a taste. The weight vector cannot express it, so
+//     scoring life here asks the model a question it has no way to answer.
+//  2. IT COLLAPSES THE LADDER. Life trends against cornering, so a fifth axis
+//     anti-correlated with the fourth cancels much of cornering's benefit and
+//     flattens the value ladder until its interior rungs are near-collinear.
+//     Measured: the never-optimal list went 2 -> 8 (soft, compound_c3/c5,
+//     supersoft, sprint_soft, qualigum join the two wet rows), no repricing on
+//     5-credit steps fixed it, and the exact-valued solutions that did were
+//     one-credit windows — a guard pinned to those breaks on the next edit.
+//     Giving life independent per-row variation did not help either: the rows
+//     that die are squeezed between a cheaper near-equal and a dearer much
+//     better one, which is catalog density and not a life problem.
+//
+// `traps` stayed 0 throughout — no paid row is ever DOMINATED — so the hard
+// invariant this file exists for is unaffected either way.
+//
+// What guards life instead: tests/unit/tyre-model.test.mjs, which asserts the
+// things life actually has to satisfy — that it trends against grip across the
+// catalog, that every row is inside the model's clamp, and that the spread is a
+// usable strategy range at real race distances. Those are the right questions
+// for a durability axis, and none of them is a convex-hull question.
 const STATS = ["speed", "accel", "cornering", "braking"];
 const statOf = (opt, k) => (opt && opt[k] !== undefined ? opt[k] : 1);
 // log, so twelve multiplied categories are twelve added terms.

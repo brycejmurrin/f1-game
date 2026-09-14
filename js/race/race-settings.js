@@ -10,6 +10,10 @@ const RaceSettings = (function () {
   const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
   const RS_ONOFF = [["off", "OFF"], ["on", "ON"]];
   const RS_RELIAB = [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]];
+  // TYRE WEAR (js/physics/tyre-model.js). Same three-rung shape as RELIABILITY
+  // and for the same reason — OFF is the shipped default, and the middle rung
+  // exists so a player can have the mechanic without it deciding the race.
+  const RS_TYRES = [["off", "OFF"], ["light", "LIGHT"], ["real", "REAL"]];
   const RS_LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
 
   function create(hooks) {
@@ -19,8 +23,9 @@ const RaceSettings = (function () {
       isTimeTrial, isChampionship, SeasonCal, setCautionEnabled,
       getTrackIdx, getRaceLaps, setRaceLaps, getRaceWeather, setRaceWeather,
       getRaceTimeOfDay, setRaceTimeOfDay, getRaceChangeable, setRaceChangeable,
-      getWxArcPlan, setWxArcPlan, getDifficulty, setDifficulty,
+      setWxArcPlan, getDifficulty, setDifficulty,
       getRaceGrid, setRaceGrid, getRaceReliability, setRaceReliability,
+      getRaceTyreWear, setRaceTyreWear,
       getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace,
       enableTilt, getSteerMode, getNetLobby, buildSelect, els, openGarage,
     } = hooks;
@@ -63,6 +68,10 @@ const RaceSettings = (function () {
       SettingRow.paint("rs-caution", getRaceCtl().enabled ? "on" : "off", RS_ONOFF);
       $("rs-reliab").hidden = tt;
       SettingRow.paint("rs-reliab", getRaceReliability(), RS_RELIAB);
+      // Hidden in a time trial for the same reason the model forces it off
+      // there: a lap against the clock is not a set anybody is asked to manage.
+      $("rs-tyres").hidden = tt;
+      SettingRow.paint("rs-tyres", getRaceTyreWear(), RS_TYRES);
       SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
     }
 
@@ -84,6 +93,7 @@ const RaceSettings = (function () {
       wire("rs-quali", getRaceGrid, (v) => { setRaceGrid(v); store.set("raceGrid", v); });
       wire("rs-caution", () => (getRaceCtl().enabled ? "on" : "off"), (v) => setCautionEnabled(v === "on"));
       wire("rs-reliab", getRaceReliability, (v) => { setRaceReliability(v); store.set("reliability", v); });
+      wire("rs-tyres", getRaceTyreWear, (v) => setRaceTyreWear(v));
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
     }
 

@@ -2,15 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
 // ── iOS DOUBLE-TAP / GESTURE ZOOM ────────────────────────────────────────────
-// CSS `touch-action: manipulation` plus `maximum-scale=1` is not enough:
-// Safari ignores the viewport cap (a11y, since iOS 10), and `pan-y` / `pan-x`
+// CSS `touch-action: manipulation` is not enough on its own: `pan-y` / `pan-x`
 // on scroll panes override the * reset — WebKit still double-tap-zooms those.
-// No `user-scalable=no`: Safari ignored it anyway, and Android Chrome honours
-// it — which blocked pinch-zoom for low-vision players (WCAG 1.4.4). The
-// touchend canceller below is what actually does the iOS work.
+// The touchend canceller below is what actually does the iOS work.
+//
+// NO ZOOM CAP IN THE VIEWPORT META, and that is two decisions, not one.
+// `user-scalable=no` went first: Safari ignored it anyway, and Android Chrome
+// honours it — which blocked pinch-zoom for low-vision players (WCAG 1.4.4).
+// `maximum-scale=1` went for EXACTLY THE SAME REASON and was simply missed at
+// the time: W3C ACT rule b4f0c3 fails any `maximum-scale` under 2 against the
+// same SC 1.4.4, iOS has ignored it since iOS 10, and Chrome Android honours
+// it by default (its "Force enable zoom" is an opt-in buried in accessibility
+// settings). Keeping one zoom cap while removing the other for an a11y reason
+// was a contradiction that only ever bit Android users.
+// It also contradicted our own CSS: `#game` sets `touch-action: none` so
+// DRIVING owns its gestures, and the rule right under it says menus "retain
+// native pan, selection and pinch zoom" — the meta tag was overriding that
+// intent one layer up. html/body stay `manipulation`, which drops double-tap
+// zoom and keeps pinch, and the in-race HUD chrome stays `none` so a second
+// thumb cannot pinch mid-corner. Nothing here relaxes the driving surface.
 // A second tap on the same spot within 350 ms is the zoom gesture; cancel it.
 // A second tap on a DIFFERENT control (rapid menu work) is left alone.
 // Another finger still down is driving (GAS+steer), not a double-tap.
@@ -404,6 +417,11 @@
       </div>
       <div id="hud-speed"><span id="hud-speed-n">0</span><span class="hud-unit">KM/H</span></div>
       <div id="hud-energy"><div id="hud-energy-fill"></div><div class="hud-energy-label">ENERGY</div></div>
+      <!-- TYRES. Sibling of ENERGY on purpose: the two resources a driver
+           spends, one over seconds and one over laps. Hidden whenever TYRE WEAR
+           is off, which is the shipped default, so the bar costs nothing to a
+           player who never turns it on. -->
+      <div id="hud-tyre" hidden><span id="hud-tyre-code">M</span><div id="hud-tyre-bar"><div id="hud-tyre-fill"></div></div></div>
       <div id="hud-ot" class="ot-off">OVERTAKE</div>
       <div id="hud-aero" class="ax-off">Z-MODE</div>
     </div>
@@ -412,7 +430,12 @@
   <canvas id="minimap" width="140" height="140" role="img" aria-label="Track map"></canvas>
   <div id="hud-sectors"></div>
   <div id="hud-limits" hidden>LIMITS <span class="limits-dots"></span></div>
-  <div id="hud-flag" role="status" aria-live="assertive" hidden></div>
+  <!-- role="alert", not role="status" + aria-live="assertive": status carries an
+       implicit POLITE live region, so the pair was a mismatch the explicit
+       aria-live had to override. alert is the canonical interrupting role and
+       needs no override. A flag change is the one HUD event that earns an
+       interruption; #vs-status stays status+polite. -->
+  <div id="hud-flag" role="alert" hidden></div>
 </div>
 
 <div id="lights" hidden>
@@ -438,8 +461,10 @@
      the width runs out, which produced a DN button above its own UP. These four
      groups each have a fixed shape — pedals and shifts are vertical pairs
      (brake over gas, up over down, as every car has them), and the taps are a
-     3-tall COLUMN standing beside them — so a dock can only ever place whole
-     groups, and a pair cannot come apart or invert. layoutDocks() in js/game.js
+     COLUMN standing beside them — so a dock can only ever place whole
+     groups, and a pair cannot come apart or invert. The tap column is 3 tall by
+     default and 4 with TYRE WEAR on (PIT appears only when there is something
+     to change tyres for), which the flex column takes without a count anywhere. layoutDocks() in js/game.js
      moves the GROUPS between docks; the buttons never move again. -->
 <div id="grp-pedals" class="dock-grp col">
   <button id="btn-brake" class="touchbtn pedal" hidden aria-label="Brake">BRAKE</button>
@@ -460,6 +485,7 @@
   <!-- HELD, not tapped (Input wires it with wireHold): the mirror is only up
        while the thumb is down, which is what a glance over the shoulder is. -->
   <button id="btn-look" class="touchbtn" hidden aria-label="Look back">LOOK</button>
+  <button id="btn-pit" class="touchbtn" hidden aria-label="Pit in">PIT</button>
 </div>
 
 <button id="btn-cam" hidden aria-label="Camera">CHASE</button>
@@ -1743,6 +1769,14 @@
           <button id="rs-line-next" type="button" data-step="1" aria-label="Next driving line">&rsaquo;</button>
         </div>
       </div>
+      <div id="rs-tyres" class="set-row" role="group" aria-labelledby="rs-tyres-label">
+        <span class="tune-label" id="rs-tyres-label">TYRE WEAR</span>
+        <div>
+          <button id="rs-tyres-prev" type="button" data-step="-1" aria-label="Previous tyre wear">&lsaquo;</button>
+          <select id="rs-tyres-sel" aria-labelledby="rs-tyres-label"></select>
+          <button id="rs-tyres-next" type="button" data-step="1" aria-label="Next tyre wear">&rsaquo;</button>
+        </div>
+      </div>
       <div id="rs-reliab" class="set-row" role="group" aria-labelledby="rs-reliab-label">
         <span class="tune-label" id="rs-reliab-label">RELIABILITY</span>
         <div>
@@ -2315,6 +2349,7 @@
 <script defer crossorigin="anonymous" src="js/render/glx/shadow.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/lamp-chunks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/frustum.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/vertex-pack.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/chunked.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/glx.js?v=dev"></script>
 <!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
@@ -2390,6 +2425,19 @@
 <script defer crossorigin="anonymous" src="js/circuits/indianapolis.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/fuji.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/okayama.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/korea.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/jerez.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/donington.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/anderstorp.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/brands_hatch.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/zolder.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/dijon.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/buddh.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/mont_tremblant.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/pit-lane.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/track/circuit-elevations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/track-maps.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>
@@ -2422,6 +2470,7 @@
 <script defer crossorigin="anonymous" src="js/career/career.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-cal.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>

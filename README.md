@@ -12,7 +12,7 @@ zero-dependency philosophy, this time in true 3D.
 
 Race the full **2026 grid** — 11 teams, 22 cars, real drivers and liveries —
 across the **24-round 2026 calendar** recreated as low-poly 3D tracks — plus 16
-retired classics, 40 circuits in all: Bahrain, Monaco,
+retired classics, 51 circuits in all: Bahrain, Monaco,
 Silverstone, Spa, Monza, Suzuka, Singapore, COTA, Interlagos, Las Vegas, the
 brand-new Madrid Madring (with its 24%-banked Monumental curve), Zandvoort in
 its farewell year, Imola, Baku, Jeddah, Albert Park, Shanghai, Miami, Mexico
@@ -135,7 +135,7 @@ sensors require a secure context.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module contract.
 Plain script-tag IIFE modules, grouped by domain: `js/render/` (WebGL2/WebGPU
 renderers + shaders), `js/track/` (the spline → mesh track engine),
-`js/circuits/` (the 40 circuit data files: 24 season rounds + 16 retired), `js/car/` (procedural car geometry,
+`js/circuits/` (the 51 circuit data files: 24 season rounds + 27 retired), `js/car/` (procedural car geometry,
 liveries, the 12-category upgrade catalog, the 2026 grid), `js/data/`
 (Jolpica/OpenF1 clients + the data hub UI), `js/game/` (input, audio, HUD,
 cameras, lighting, …), with `js/game.js` as the entry (loop, physics, AI, race
@@ -143,7 +143,7 @@ logic). Load order is defined in `tools/manifest.cjs`.
 
 ## Testing & development
 
-The project ships a **Playwright test suite** — 116 Playwright specs — plus
+The project ships a **Playwright test suite** — 117 Playwright specs — plus
 200+ `node --test` unit suites, covering rendering, physics, UI across screens,
 multiplayer, career and visual regression. The whole thing is ~40
 minutes of software rendering, so the workflow is: ask which groups a change
@@ -160,7 +160,7 @@ npm run test:physics-core                    # the driving model (browser; ~35 t
 npm run test:collisions                      # car-to-car + wall contact (browser; ~32 tests, the slowest set)
 npm run test:aero                            # aero-zones, active-aero, drift, understeer (browser; ~37 tests)
 npm test -- tests/specs/autopilot.spec.js          # single file
-node tools/track/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
+node tools/track/verify-track.cjs --all            # headless build check, all 51 circuits (no browser)
 ```
 
 `docs/TESTING.md` is the full reference: every group, every spec, the fixtures

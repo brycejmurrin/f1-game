@@ -369,10 +369,12 @@ test("all current track mesh buffers are finite and structurally indexable", () 
   } finally {
     harness.observe(null);
   }
-  // 24 championship rounds + 16 retired/off-calendar circuits. Asserting both
+  // 24 championship rounds + 27 retired/off-calendar circuits. Asserting both
   // halves is what actually matters: a classic leaking into SEASON would silently
   // lengthen the championship, and that is the failure mode worth catching.
-  assert.equal(Tracks.LIST.length, 40);
+  // 40 -> 51 when eleven circuits were recovered from OpenStreetMap, the
+  // bacinger/f1-circuits file having run out of features (tools/track/osm-circuits.json).
+  assert.equal(Tracks.LIST.length, 51);
   assert.equal(Tracks.SEASON.length, 24);
   assert.ok(Tracks.SEASON.every((t) => !t.classic));
   assert.deepEqual(issues, []);

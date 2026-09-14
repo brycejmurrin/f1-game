@@ -36,7 +36,7 @@ const NetLobby = (function () {
       screen: $("vsfriend"),
       pick: $("vs-pick"), hosting: $("vs-hosting"), joining: $("vs-joining"),
       room: $("vs-room"), roomStep: $("vs-room"),
-      code: $("vs-code"), codeEntry: $("vs-code-entry"),
+      code: $("vs-code"),
       codeHead: $("vs-code-head"), codeHint: $("vs-code-hint"),
       codeShow: $("vs-code-show"), codeValue: $("vs-code-value"),
       codeInputWrap: $("vs-code-input"), codeIn: $("vs-code-in"),
@@ -55,7 +55,7 @@ const NetLobby = (function () {
 
     function say(msg, isError) {
       statusText = msg || "";
-      // Direct lookup: els() rebuilds a 36-element map per call, and say()
+      // Direct lookup: els() rebuilds a 35-element map per call, and say()
       // fires from 4 Hz polls and 1 Hz relay ticks during every connect.
       const e = document.getElementById("vs-status");
       if (!e) return;

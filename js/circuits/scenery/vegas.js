@@ -220,7 +220,7 @@
           // spires on the taller landmark towers
           if (h > 0.55) {
             addCyl(out, [mx, pyMin + bh, mz], 0.4, 6 + h * 16, [0.5, 0.5, 0.56], 4);
-            addBox(out, [mx, pyMin + bh + 6 + h * 16, mz], [1.2, 1.2, 1.2], [3.2, 0.4, 0.3]);  // beacon
+            addBox(out, [mx, pyMin + bh + 6 + h * 16, mz], [1.2, 1.2, 1.2], RED);  // beacon
           }
         }
       }

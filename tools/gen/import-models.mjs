@@ -32,6 +32,11 @@ import path from "node:path";
 import zlib from "node:zlib";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+// ONE writer for the AX26 model format, shared with assets.mjs bake-model and
+// bake-synthetic-models. This file used to carry its own copy; a v2 packing
+// that landed in one of three writers would have shipped a pack whose models
+// disagreed about their own layout.
+import { writeAX26 } from "./assets.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const PACK = process.env.APEX_PACK_DIR ? path.resolve(process.env.APEX_PACK_DIR)
@@ -259,19 +264,6 @@ function importFile(file, opts) {
            sizeM: [+((mxx - mnx) * s).toFixed(2), +(rawH * s).toFixed(2), +((mxz - mnz) * s).toFixed(2)] };
 }
 
-function writeAX26(mesh, matId) {
-  const nv = mesh.pos.length / 3, ni = mesh.idx.length;
-  const buf = Buffer.alloc(20 + nv * 36 + nv * 4 + ni * 4);
-  buf.write("AX26", 0, "ascii");
-  buf.writeUInt32LE(1, 4); buf.writeUInt32LE(nv, 8); buf.writeUInt32LE(ni, 12); buf.writeUInt32LE(0, 16);
-  let o = 20;
-  Buffer.from(Float32Array.from(mesh.pos).buffer).copy(buf, o); o += nv * 12;
-  Buffer.from(Float32Array.from(mesh.nrm).buffer).copy(buf, o); o += nv * 12;
-  Buffer.from(Float32Array.from(mesh.col).buffer).copy(buf, o); o += nv * 12;
-  Buffer.from(new Float32Array(nv).fill(matId).buffer).copy(buf, o); o += nv * 4;
-  Buffer.from(Uint32Array.from(mesh.idx).buffer).copy(buf, o);
-  return buf;
-}
 
 function walkDir(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

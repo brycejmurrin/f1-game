@@ -11,6 +11,39 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-14 — `tools/check/quick-validate.mjs` was red on a CLEAN tree. FIXED.**
+Found while building the tyre/pit phases and confirmed not caused by them (the
+whole working tree was stashed and it failed identically). It reported:
+
+```
+QUICK-VALIDATE FAIL:
+  probe() invalid after race+step
+```
+
+with no console error and no page error behind it.
+
+**Root cause, and it was unconditional — the tool had never worked.**
+`__apex.race()` starts `startRace()` and does not await it. `startRace`'s very
+first statement is `await ensureScenery(trackIdx)`, so it yields and the race
+arms in a later task. `evaluateLiveProbe` ran race() / jump() / step() / probe()
+in ONE synchronous pass inside a single `page.evaluate`, and a synchronous pass
+never lets a microtask land — so the session was still in the menu
+(`info().state === "menu"`, `track: null`), `probe()` returned null, and the
+helper blamed the physics.
+
+**Fix**: `evaluateLiveProbe` is async and polls `info().state` until the race is
+`race` or `count` before touching the physics (180 s, matching the 11-33 s
+SwiftShader track builds this box measures). `probeFailures` reports a race that
+never armed as its own failure and stops there, because everything downstream of
+it is unmeasured rather than failing — reporting both as `probe() invalid after
+race+step` is what made the one red line useless.
+
+It now passes, which makes it a working gate for the first time. Note it is
+still browser-only and no gate runs it: `tests/unit/quick-validate.test.mjs`
+covers the pure helpers (and now pins the arming wait), but the browser half is
+run by hand.
+
+
 **2026-09-10 — whole-tree audit, six slices, FIXED in one pass.** Seven
 read-only agents audited the tree (game/physics, renderers, track engine and
 all 80 circuit files, UI/data/PWA, multiplayer and the worker, tooling/CI, and

@@ -26,7 +26,7 @@
       { kinds: ["city", "foliage"], s0: 0.97, s1: 0.08, side: 1 },
       { kind: "lamps", s0: 0.855, s1: 0.895 },
     ],
-    pal: { horizon: [0.32, 0.16, 0.08], zenith: [0.10, 0.06, 0.24], sunColor: [0.90, 0.68, 0.38], ambientSky: [0.36, 0.28, 0.24], ambientGround: [0.32, 0.20, 0.12], fogColor: [0.22, 0.12, 0.06], fogDensity: 0.0020, sunDir: [0.55, 0.15, 0.32], concrete: [0.28, 0.27, 0.26], runoff: [0.24, 0.23, 0.22], grass: [0.20, 0.18, 0.14] },
+    pal: { horizon: [0.32, 0.16, 0.08], zenith: [0.10, 0.06, 0.24], sunColor: [0.90, 0.68, 0.38], ambientSky: [0.36, 0.28, 0.24], ambientGround: [0.32, 0.20, 0.12], fogColor: [0.22, 0.12, 0.06], fogDensity: 0.0020, sunDir: [0.55, 0.15, 0.32], runoff: [0.24, 0.23, 0.22], grass: [0.20, 0.18, 0.14] },
     bankZones: [
       { frac: 0.0425, angleDeg: 3.0, widthM: 180 },   // T1 opening right
       { frac: 0.1509, angleDeg: 3.0, widthM: 120 },   // T2 left

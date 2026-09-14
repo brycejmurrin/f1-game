@@ -23,7 +23,7 @@
     ],
     lengthKm: 6.2,
     baseHW: 6,
-    pal: { horizon: [0.10, 0.08, 0.16], zenith: [0.05, 0.05, 0.15], sunColor: [0.65, 0.68, 0.82], ambientSky: [0.22, 0.22, 0.32], ambientGround: [0.20, 0.18, 0.24], fogColor: [0.08, 0.08, 0.14], fogDensity: 0.0018, concrete: [0.28, 0.27, 0.26], runoff: [0.25, 0.24, 0.22], grass: [0.2, 0.18, 0.14] },
+    pal: { horizon: [0.10, 0.08, 0.16], zenith: [0.05, 0.05, 0.15], sunColor: [0.65, 0.68, 0.82], ambientSky: [0.22, 0.22, 0.32], ambientGround: [0.20, 0.18, 0.24], fogColor: [0.08, 0.08, 0.14], fogDensity: 0.0018, runoff: [0.25, 0.24, 0.22], grass: [0.2, 0.18, 0.14] },
     bankZones: [
       { frac: 0.1825, angleDeg: 3.0, widthM: 90 },
       { frac: 0.2662, angleDeg: 3.0, widthM: 160 },

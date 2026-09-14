@@ -549,8 +549,21 @@ const NetPlay = (function () {
     const armedPeers = new Set();
     const allArmed = () => armedPeers.size >= Math.max(1, remotes.size);
 
+    // CLAMP THE WIRE MOMENT TOO. `atPeerMs` is peer-supplied and reaches
+    // game.js as `netStart.at` in `(COUNTDOWN_S + hold) - (at - now())/1000`:
+    // a non-numeric `at` makes countT NaN and an absurd one makes it hugely
+    // negative, so no lamp ever lights and the end-of-sequence test never
+    // passes — the same permanent grid hang the clamped `hold` guards against,
+    // and awaitingStart's HOLD_MAX_MS backstop cannot reach it once netStart
+    // is set. A moment we cannot count down to is no moment at all: ignore it
+    // and let that backstop start us alone.
     function armStart(atPeerMs, hold) {
-      const at = session ? session.peerToLocal(atPeerMs) : atPeerMs;
+      const peerAt = Number(atPeerMs);
+      if (!Number.isFinite(peerAt)) return;
+      const at = session ? session.peerToLocal(peerAt) : peerAt;
+      // Generous both ways: the host's own lead is a countdown plus SETTLE_MS,
+      // and a late ARMED is told a moment already up to ARM_WAIT_MS past.
+      if (!Number.isFinite(at) || Math.abs(at - nowMs()) > HOLD_MAX_MS) return;
       G.netStart = { at, hold, now: nowMs };
     }
 

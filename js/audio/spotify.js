@@ -697,9 +697,6 @@ window.SpotifyMusic = (function () {
     api("/me/player/repeat?state=" + next +
         (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(afterCommand);
   }
-  function cycleRepeat() {
-    setRepeat(repeatMode === "off" ? "context" : repeatMode === "context" ? "track" : "off");
-  }
   function setDeviceVolume(pct) {
     if (!BACKEND.active() || mode() !== "remote") return;
     const v = Math.max(0, Math.min(100, Math.round(pct)));
@@ -858,8 +855,16 @@ window.SpotifyMusic = (function () {
           : "No Spotify session on this device. Press CONNECT to sign in.");
         return { ok: false, reason: retained ? "refresh-failed" : "no-token", debug: d };
       }
-      return fetch(API + "/me", { headers: { Authorization: "Bearer " + t } })
-        .then((r) => r.json().then((j) => ({ code: r.status, j }), () => ({ code: r.status, j: {} })))
+      // The same FETCH_TIMEOUT_MS cap api() applies: a hung /me otherwise left
+      // the panel on its last status ("…checking why…" on the auth-error path)
+      // and never settled this promise.
+      const ac = typeof AbortController !== "undefined" ? new AbortController() : null;
+      const o = { headers: { Authorization: "Bearer " + t } };
+      if (ac) o.signal = ac.signal;
+      const timer = ac ? setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS) : null;
+      const done = () => { if (timer) clearTimeout(timer); };
+      return fetch(API + "/me", o)
+        .then((r) => { done(); return r.json().then((j) => ({ code: r.status, j }), () => ({ code: r.status, j: {} })); })
         .then(({ code, j }) => {
           const out = { ok: false, httpStatus: code, product: j.product || null,
             account: j.display_name || j.id || null, debug: debug() };
@@ -893,6 +898,7 @@ window.SpotifyMusic = (function () {
           return out;
         })
         .catch(() => {
+          done();
           setStatus("error", "Could not reach Spotify's API — offline, or blocked.");
           return { ok: false, reason: "network", debug: d };
         });
@@ -1186,7 +1192,7 @@ window.SpotifyMusic = (function () {
       render();
       if (BACKEND.active()) { pollNowPlaying(); loadDevices(); }
     },
-    prev, toggle, setShuffle, cycleRepeat, setDeviceVolume, searchPlaylists, playUri,
+    prev, toggle, setShuffle, setDeviceVolume, searchPlaylists, playUri,
     useAsMusic, inUse,
     backend() { return BACKEND; },
     redirectUri, handleRedirect,

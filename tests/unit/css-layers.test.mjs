@@ -81,11 +81,28 @@ for (const file of files) {
       `every layer in the project.`);
 
     assert.ok(closedAt !== null, `${file} never closes its @layer block`);
-    assert.strictEqual(closedAt, lastContent,
-      `${file} closes its @layer at line ${closedAt} but has rules through line ` +
-      `${lastContent}. Those ${lastContent - closedAt} trailing lines are UNLAYERED ` +
-      `and therefore beat every layered rule in the project regardless of ` +
-      `specificity. Move them inside the layer (or, if the closing brace is a ` +
+
+    // A file may open MORE THAN ONE top-level @layer — tuner.css carries a
+    // second `@layer hud` block because layer ORDER beats specificity, so a
+    // #pc-toggle override that must outrank hud.css cannot live in components,
+    // and nesting it would only make a components-ranked sub-layer. What is
+    // never allowed is content at depth 0 that is not itself opening a layer:
+    // that is unlayered and outranks every layer in the project. Scanning for
+    // it directly also still catches the stray `}` this test was written for —
+    // the rules after it land at depth 0 and are named here by line.
+    const bare = [];
+    let d = 0;
+    lines.forEach((line, idx) => {
+      const t = line.trim();
+      if (t && d === 0 && !/^@layer\s+[\w-]+\s*\{/.test(t) && !t.startsWith("}"))
+        bare.push(`${idx + 1}: ${t.slice(0, 60)}`);
+      d += (line.match(/\{/g) || []).length;
+      d -= (line.match(/\}/g) || []).length;
+    });
+    assert.deepStrictEqual(bare, [],
+      `${file} has content outside any @layer. Those lines are UNLAYERED and ` +
+      `therefore beat every layered rule in the project regardless of ` +
+      `specificity. Move them inside a layer (or, if a closing brace is a ` +
       `stray, delete it).`);
   });
 }

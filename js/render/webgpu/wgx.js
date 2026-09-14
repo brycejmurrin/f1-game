@@ -181,14 +181,34 @@ const WGX = (function () {
   // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
   // SwiftShader-Dawn — including 4095-vert pieces. mat+trk live in the
   // group-2 world-XZ LUT; fs reconstructs (s, x, hw) from wpos.
-  const VERTEX_STRIDE = 36;
-  const VERTEX_FLOATS = 9;
+  //
+  // PACKED, 28 bytes a vertex against the 36 three float32x3s cost. Position
+  // keeps full float32 (world coordinates run to ~7 km); the normal becomes a
+  // signed short (0.001 deg, two orders finer than a byte) and the colour a
+  // half float — NOT a unorm byte, because emissive colour reaches 3.4 and a
+  // unorm would clamp it to white. Quantisers: js/render/shared/vertex-pack.js,
+  // the same ones GLX and TLX use, so the three backends cannot disagree about
+  // what a colour means.
+  //
+  // The WGSL is UNTOUCHED. It declares aNrm/aCol as vec3<f32> and WebGPU lets a
+  // wider vertex format feed a narrower shader input, dropping the extra
+  // component — so snorm16x4 and float16x4 read as the same vec3 they always
+  // did. That is also why they are x4 and not x3: WebGPU has no 3-wide 16-bit
+  // vertex format, and this widens an EXISTING attribute rather than adding a
+  // fourth, which is the thing Dawn zeroes on this adapter.
+  //
+  // The float stride stays a whole number of words (28 = 7 x 4), and position
+  // stays at word 0, so _expandPull's word-wise copy, the piece slicing in
+  // createMesh and the chunked bucket loop's centroid reads all keep working
+  // unchanged against a Float32Array view.
+  const VERTEX_STRIDE = 28;
+  const VERTEX_FLOATS = VERTEX_STRIDE >> 2;   // 7 — the stride in float32 WORDS
   const VERTEX_POS_LAYOUT = {
     arrayStride: VERTEX_STRIDE,
     attributes: [
       { shaderLocation: 0, offset: 0,  format: "float32x3" },
-      { shaderLocation: 1, offset: 12, format: "float32x3" },
-      { shaderLocation: 2, offset: 24, format: "float32x3" },
+      { shaderLocation: 1, offset: 12, format: "snorm16x4" },
+      { shaderLocation: 2, offset: 20, format: "float16x4" },
     ],
   };
   const INSTANCE_STRIDE = 80;   // mat4 + color3 + pad
@@ -667,7 +687,6 @@ const WGX = (function () {
     let softPresentTex = null, softPresentView = null;
     let _softW = 0, _softH = 0;
     let _softImg = null; // pooled ImageData for soft-present CPU blit
-    let _softBlitGen = 0;
     let _softBlitSeq = 0;
     let _softBlitShown = 0;
     let _softDisplayPending = false, _softDisplayEpoch = 0;
@@ -1054,7 +1073,8 @@ const WGX = (function () {
     let trackLightSBO, chunkIdxSBO;   // per-chunk lamps: full baked set + concat index table
     let frameBindGroup, drawBindGroup, skyBindGroup;
     let skyPipeline, blitPipeline, linearSampler, envCubeSamp;
-    const _litPipelines = new Map();
+    const _litPipelines = new Map();   // depthBias constant -> slope -> packed flags -> pipeline
+    const _litPipelineKeys = [];       // one readable "blend|dbl|noAW|samples|dbC|dbS|decal" per minted variant (litPipelineStats)
     // Size of the variant cache at the first present() — the boundary between
     // "built during boot" and "built while driving".
     let _pipeAtFirstPresent = -1;
@@ -1063,7 +1083,6 @@ const WGX = (function () {
     let shadowTex = null, shadowView = null, shadowSampler = null;
     let envCubeView = null, ssrView = null;   // env-probe cube + SSR placeholders until their passes run
     let _ssrReady = false;   // SSR flips true once its pass runs (env reflection is analytic-sky — no probe gate needed)
-    let _frameReflect = 0;   // wet-road SSR strength (== GLX present opts.reflect). Still packed into next begin() for debug; consume is same-frame in COMPOSITE.
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
     const ENV_SIZE = 64;
@@ -1085,7 +1104,7 @@ const WGX = (function () {
     let envDepthTex = null, envDepthView = null;
     let _envFrameBG = null;                    // frame group with binding4 = placeholder (used WHILE rendering the cube)
     let _activeFrameBG = null;                 // frame group draw()/drawChunked bind (main = real cube once live; env = placeholder)
-    let _envProbeLive = false, _envFacesMask = 0, _envStr = 0;   // _envStr = carEnvCube once a full cycle is captured
+    let _envProbeLive = false, _envFacesMask = 0;
     let _envEncoder = null;                    // the env face's own command encoder (submitted in envFaceEnd)
     // Saved game-frame fields while a probe face is open (GLX envFaceBegin/End).
     let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -1116,7 +1135,7 @@ const WGX = (function () {
     let lampShadowTex = null, lampShadowView = null, lampShadowUBO = null, lampShadowG0BindGroup = null;
     let _lampShadowArmed = false, _lampArms = 0, _lampIdx = -1;
     const lampShadowLVPData = new Float32Array(16);
-    let matPlaceTex = null, matPlaceView = null;
+    let matPlaceTex = null;
     let matAlbedoView = null, matNormalView = null, matArraySamp = null;
     // Placeholder views stay alive for the device lifetime; pack tokens in
     // _matOwned* are destroyed on replace/unload (GLX deleteTexture parity).
@@ -1944,12 +1963,18 @@ const WGX = (function () {
       const db = (opts && opts.depthBias && opts.depthBias.length >= 2) ? opts.depthBias : null;
       const dbC = db ? Math.round(db[0]) : 0;
       const dbS = db ? Math.round(db[1]) : 0;
-      // String key. The packed-int key truncated the bias with |0 and gave
-      // (bias + 32) an 8-bit lane, so any |bias| >= 32 wrapped into its
-      // neighbour's lane and two biases could share one pipeline.
-      const key = (blend ? 1 : 0) + "|" + (dbl ? 1 : 0) + "|" + (noAW ? 1 : 0) + "|" + samples
-                + "|" + dbC + "|" + dbS + "|" + (decal ? 1 : 0);
-      let p = _litPipelines.get(key);
+      // NESTED key: dbC -> dbS -> packed flags. A single packed int truncated
+      // the bias with |0 and gave (bias + 32) an 8-bit lane, so any |bias| >= 32
+      // wrapped into its neighbour's lane and two biases could share one
+      // pipeline; a Map level per bias cannot collide at any value. The string
+      // key that fixed that was rebuilt and discarded on every one of the ~320
+      // draws in a frame — the leaf lookup here allocates nothing on a hit.
+      const flags = (blend ? 1 : 0) | (dbl ? 2 : 0) | (noAW ? 4 : 0) | (decal ? 8 : 0) | (samples << 4);
+      let byS = _litPipelines.get(dbC);
+      if (!byS) { byS = new Map(); _litPipelines.set(dbC, byS); }
+      let byF = byS.get(dbS);
+      if (!byF) { byF = new Map(); byS.set(dbS, byF); }
+      let p = byF.get(flags);
       if (p) return p;
       const target = {
         format: SCENE_FORMAT,
@@ -1991,7 +2016,11 @@ const WGX = (function () {
         depthStencil,
         multisample: { count: samples },
       });
-      _litPipelines.set(key, p);
+      byF.set(flags, p);
+      // Readable variant list for litPipelineStats, built on the MISS path only
+      // (nine of these exist for the life of the device).
+      _litPipelineKeys.push((blend ? 1 : 0) + "|" + (dbl ? 1 : 0) + "|" + (noAW ? 1 : 0) + "|" + samples
+                          + "|" + dbC + "|" + dbS + "|" + (decal ? 1 : 0));
       return p;
     }
 
@@ -2139,7 +2168,6 @@ const WGX = (function () {
     }
     function _softBlitNotify(seq) {
       _softBlitShown = seq;
-      _softBlitGen = seq;
       const keep = [];
       const ws = _softPresentWaiters.splice(0);
       for (let i = 0; i < ws.length; i++) {
@@ -2178,7 +2206,7 @@ const WGX = (function () {
       };
     }
     function awaitSoftPresent(timeoutMs) {
-      if (!_softGpu || !_displayCtx) return Promise.resolve(_softBlitGen);
+      if (!_softGpu || !_displayCtx) return Promise.resolve(_softBlitShown);
       // A waiter needs a blit encoded at/after the current scene generation
       // (bumped by snapCam), not a second encode after that blit. Requiring
       // seq > _softBlitSeq timed out when the chase map was already in flight.
@@ -2771,18 +2799,31 @@ const WGX = (function () {
       }
       const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
       const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
-      const inter = new Float32Array(vCount * VERTEX_FLOATS);
+      // One packed buffer, three views over it — see VERTEX_POS_LAYOUT.
+      // `inter` stays a Float32Array so every downstream consumer (the piece
+      // slicing, _expandPull, the chunked centroid loop) keeps indexing in
+      // whole words; the quantised lanes are written through the short views.
+      const buf = new ArrayBuffer(vCount * VERTEX_STRIDE);
+      const inter = new Float32Array(buf);
+      const i16 = new Int16Array(buf), u16 = new Uint16Array(buf);
       const attr = new Float32Array(vCount * 4);
+      const SW = VERTEX_STRIDE >> 1;            // stride in 16-bit lanes
       for (let i = 0; i < vCount; i++) {
-        const o = i * VERTEX_FLOATS;
+        const o = i * VERTEX_FLOATS, h = i * SW;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
-        inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
+        i16[h + 6] = VertexPack.snorm16(nrm[i*3]);
+        i16[h + 7] = VertexPack.snorm16(nrm[i*3+1]);
+        i16[h + 8] = VertexPack.snorm16(nrm[i*3+2]);
+        i16[h + 9] = 0;                          // pad — keeps the colour 4-byte aligned
+        // Half float, and still RAW RGB — the quantisation changes the WIDTH of
+        // the colour lane, never what is in it.
         // Raw RGB. Packing MAT into col.x interpolates 16→0 and sawtooths.
         // Dawn zeros a 4th attr (and pos) even on piece VBOs — asphalt vs
         // verge is classified from the LUT (abs(x) < hw - 0.45).
-        inter[o + 6] = col[i * 3];
-        inter[o + 7] = col[i * 3 + 1];
-        inter[o + 8] = col[i * 3 + 2];
+        u16[h + 10] = VertexPack.toHalf(col[i * 3]);
+        u16[h + 11] = VertexPack.toHalf(col[i * 3 + 1]);
+        u16[h + 12] = VertexPack.toHalf(col[i * 3 + 2]);
+        u16[h + 13] = 0;
         attr[i * 4] = mat ? mat[i] : 0;
         if (trk) {
           attr[i * 4 + 1] = trk[i * 3];
@@ -2820,7 +2861,13 @@ const WGX = (function () {
     // matches the storage buffer 1:1.
     function _expandPull(vert, attr, idx) {
       const n = idx.length;
-      const ev = new Float32Array(n * VERTEX_FLOATS);
+      const evBuf = new ArrayBuffer(n * VERTEX_STRIDE);
+      const ev = new Float32Array(evBuf);
+      // Integer views for the copy itself: half the words now hold quantised
+      // lanes whose bits can spell a NaN, and a float32 read-then-write is
+      // allowed to canonicalise a NaN payload. A u32 copy is bit-exact.
+      const evW = new Uint32Array(evBuf);
+      const srcW = new Uint32Array(vert.buffer, vert.byteOffset, vert.length);
       const ea = new Float32Array(n * 4);
       for (let i = 0; i < n; i++) {
         // Swap each triangle's last two verts so the ribbon fills under
@@ -2829,7 +2876,7 @@ const WGX = (function () {
         // negate on road draws so the tops do not light as the underside.
         const flip = (i % 3 === 1) ? 1 : (i % 3 === 2) ? -1 : 0;
         const v = idx[i + flip], so = v * VERTEX_FLOATS, sao = v * 4, o = i * VERTEX_FLOATS, ao = i * 4;
-        for (let k = 0; k < VERTEX_FLOATS; k++) ev[o + k] = vert[so + k];
+        for (let k = 0; k < VERTEX_FLOATS; k++) evW[o + k] = srcW[so + k];
         ea[ao] = attr[sao]; ea[ao + 1] = attr[sao + 1];
         ea[ao + 2] = attr[sao + 2]; ea[ao + 3] = attr[sao + 3];
       }
@@ -2932,7 +2979,11 @@ const WGX = (function () {
               let n = Math.min(PIECE, pulled.count - off);
               n -= n % 3;
               if (n <= 0) continue;
-              const vert = pulled.vert.slice(off * VERTEX_FLOATS, (off + n) * VERTEX_FLOATS);
+              // Byte slice, not a Float32Array element copy: the packed lanes
+              // can spell a NaN and TypedArray.slice is specified as get/set,
+              // which may canonicalise a NaN payload.
+              const vert = new Float32Array(pulled.vert.buffer.slice(
+                off * VERTEX_STRIDE, (off + n) * VERTEX_STRIDE));
               const attr = pulled.attr.slice(off * 4, (off + n) * 4);
               // Own authored (mat,s,x,hw) — do not share the LUT bind group.
               // vertex_index is 0..n-1 on the expanded piece; dashes need
@@ -3018,6 +3069,9 @@ const WGX = (function () {
         const lut = _makeRoadLUT(data.pos, data.trk, data.mat);
         const buckets = new Map();
         const pv = pulled.vert, VF = VERTEX_FLOATS;
+        // Float view for the centroid reads (position is still float32 at word
+        // 0), integer view for the gather copy below — see _expandPull.
+        const pvW = new Uint32Array(pv.buffer, pv.byteOffset, pv.length);
         for (let t = 0; t < pulled.count; t += 3) {
           const ao = t * VF, bo = (t + 1) * VF, co = (t + 2) * VF;
           const ax = pv[ao], ay = pv[ao + 1], az = pv[ao + 2];
@@ -3059,10 +3113,12 @@ const WGX = (function () {
               let n = Math.min(PIECE, nAll - off);
               n -= n % 3;
               if (n <= 0) continue;
-              const vert = new Float32Array(n * VF);
+              const vertBuf = new ArrayBuffer(n * VERTEX_STRIDE);
+              const vert = new Float32Array(vertBuf);
+              const vertW = new Uint32Array(vertBuf);
               for (let j = 0; j < n; j++) {
                 const src = bk.idx[off + j] * VF;
-                for (let k = 0; k < VF; k++) vert[j * VF + k] = pv[src + k];
+                for (let k = 0; k < VF; k++) vertW[j * VF + k] = pvW[src + k];
               }
               device.queue.writeBuffer(cv, first * VF * 4, vert);
               chunks.push({
@@ -3384,18 +3440,16 @@ const WGX = (function () {
       // so mist is 0 unless the frame actually requests it, not an absolute knob.
       d[78] = (f.groundMist != null ? f.groundMist : 0) * (T && T.mistDensity != null ? T.mistDensity : 1);
       d[79] = (T && T.mistHeight  != null) ? T.mistHeight  : 0.30;  // MIST HEIGHT
-      // params4 (floats 80..83): pcssPen, shadowTintAmt, carReflect, ssrStrength.
-      // ssrStrength is GATED on the SSR pass having bound real resources
-      // (_ssrReady below); until then the frame group holds a 1×1 placeholder
-      // and it reads 0. carReflect needs no such gate — its reflection term is
-      // analytic-sky (no probe resource to wait for).
+      // params4 (floats 80..83): pcssPen, shadowTintAmt, then TWO RESERVED lanes.
+      // .z (carReflect) and .w (ssrStrength) stay 0 and are not packed: SSR is
+      // consumed SAME-FRAME in COMPOSITE (wgsl-post.js) and the car reflection is
+      // analytic-sky / the env cube (params5.x), so no WGSL reads params4.zw.
+      // Do not re-pack either without a shader that actually samples it.
       // pcssPen is the GLX PENUMBRA-RATE knob (default 80). WGSL findBlocker
       // uses the same `clamp((refD-zb)*params4.x,0,1)` as GLX sampleShadow —
       // pack the raw knob, do not remap.
       d[80] = (T && T.pcssPen != null) ? T.pcssPen : 80;
       d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
-      d[82] = (T && T.carReflect != null) ? T.carReflect : 0.0;
-      d[83] = _ssrReady ? _frameReflect : 0.0;   // wet-road SSR strength = present opts.reflect (GLX), 0 until the SSR pass is ready
       // params5 (floats 84..87): envProbeStr — the REAL cube probe's strength, live only
       // after a full 6-face capture (_envProbeLive) and driven by the CAR ENV REFLECTION
       // tuner (carEnvCube). 0 keeps Block 7 on the cheap analytic-sky reflection.
@@ -4205,6 +4259,11 @@ const WGX = (function () {
       // SSR already honour on LITE. Desktop keeps the live mirror.
       if (_lost || WGX_MINIMAL || WGX_LITE || _envInitFailed || !skyPipeline) return null;
       if (!envCubeTex) envInit();
+      // envInit() LATCHES and returns normally on an allocation failure, so
+      // re-check before anything is mutated: falling through handed a null
+      // face view to beginRenderPass, and the throw escaped past envFaceEnd —
+      // leaving frame.viewProj/eye/cullDist on the probe camera for good.
+      if (!envFaceViews) return null;
       _passSamples = 1;
       const F = ENV_FACES[face];
       _envTgt[0] = eye[0] + F[0][0]; _envTgt[1] = eye[1] + F[0][1]; _envTgt[2] = eye[2] + F[0][2];
@@ -4415,7 +4474,7 @@ const WGX = (function () {
     function present(opts) {
       // Snapshot the variant cache at the FIRST present: everything after this
       // was compiled while the player was watching. See litPipelineStats.
-      if (_pipeAtFirstPresent < 0) _pipeAtFirstPresent = _litPipelines.size;
+      if (_pipeAtFirstPresent < 0) _pipeAtFirstPresent = _litPipelineKeys.length;
       // Car / lamp shadow maps must be re-armed by a fresh *Begin every frame
       // (GLX parity: SH.lampArmed is snapshotted then cleared in glx/post.js
       // present). LIT already consumed the flags in this frame's _writeFrame;
@@ -4491,10 +4550,6 @@ const WGX = (function () {
         } catch (_) { /* SSAO then samples uncleared resolved depth; AO stays white */ }
       }
       _passSamples = 1;
-      // Capture wet-road SSR strength (game.js po.reflect). COMPOSITE consumes
-      // this frame's ssrTex in the same present(); _frameReflect still feeds
-      // next begin() params4.w for anything that still reads the LIT lane.
-      _frameReflect = (o.reflect != null ? o.reflect : 0);
       const exposure = o.exposure != null ? o.exposure : 1.0;
 
       // Fallback: post disabled / targets absent -> tonemap blit.
@@ -5354,8 +5409,9 @@ const WGX = (function () {
       const sc = batch.srcColors;
       let n = 0;
       for (let ci = 0; ci < kN; ci++) {
-        const c = cs[ks[ci]];
-        for (const i of c.idx) {
+        const idx = cs[ks[ci]].idx;
+        for (let j = 0, jn = idx.length; j < jn; j++) {
+          const i = idx[j];
           // No src.subarray — per-instance views were GC on Vegas-scale batches.
           const so = i * 16, dOff = n * 20;
           for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
@@ -5593,7 +5649,7 @@ const WGX = (function () {
       _lineU.set(frameVPGpu, 0);
       _lineU[16] = (opts && opts.speed) || 0;
       _lineU[17] = opts && opts.cornersOnly ? 1 : 0;
-      _lineU[18] = (opts && opts.str) || 1.6;
+      _lineU[18] = 1.6;                     // emissive strength: a constant, no producer sends one
       _lineU[19] = opts && opts.palette ? 1 : 0;   // colour-blind palette (params.w)
       _lineU[20] = (opts && opts.opacity) || 1;    // LINE OPACITY (params2.x)
       device.queue.writeBuffer(lineUBO, 0, _lineU);
@@ -6049,6 +6105,13 @@ const WGX = (function () {
       freeMesh,
       freeChunkedMesh,
       freeTexture,
+      // texCensus: GLX-only. Declared ABSENT rather than left off, because
+      // game.js installs a backend by descriptor-copy onto GLX and an absent
+      // NAME would keep GLX's own function — which would then run against a
+      // null gl. This makes `if (gfx.texCensus)` answer honestly, and
+      // __apex.texCensus() report supported:false instead of a measured zero.
+      // Implementing it here is follow-up work, not a silencer to remove.
+      texCensus: undefined,
 
       begin,
       present,
@@ -6182,8 +6245,8 @@ const WGX = (function () {
       // without re-running it. The three other candidates and their numbers:
       // docs/PERF-FINDINGS.md §2x.
       litPipelineStats: () => ({
-        count: _litPipelines.size,
-        keys: [..._litPipelines.keys()],
+        count: _litPipelineKeys.length,
+        keys: _litPipelineKeys.slice(),
         firstFrameCount: _pipeAtFirstPresent,
       }),
       softPresent: () => !!_softGpu,

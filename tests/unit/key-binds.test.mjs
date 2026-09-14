@@ -78,6 +78,7 @@ test("the defaults are the keys the game always had", () => {
     left: ["ArrowLeft", "KeyA"], right: ["ArrowRight", "KeyD"], throttle: ["ArrowUp", "KeyW"], brake: ["ArrowDown", "KeyS"],
     boost: ["Space", null], overtake: ["KeyX", null], aero: ["KeyZ", null], shiftUp: ["KeyE", null],
     shiftDown: ["KeyQ", "ShiftLeft"], camera: ["KeyC", null],
+    pit: ["KeyV", null],
     // LOOK BACK and RECOVER are standard racing binds we lacked; PAUSE stopped
     // being a reserved literal so it can be moved (XAG 107 asks that every
     // control be remappable, the Esc/pause key included).
@@ -89,11 +90,17 @@ test("the defaults are the keys the game always had", () => {
 test("a rebind moves the action to the new key and the old key stops answering", () => {
   const { Input, key } = boot();
   key("Space", true); assert.equal(Input.consumeBoostToggle(), true, "Space boosts by default");
-  // A key no action holds — B stopped being one when LOOK BACK took it.
-  const r = Input.setKeyBinding("boost", 0, "KeyV");
+  /* DERIVE a key no action holds, rather than naming one. This test wants any
+     unbound key; it has now been broken twice by a new action claiming the
+     literal it picked (B went to LOOK BACK, V to PIT IN). Asking the live table
+     which letters are free cannot go stale. */
+  const taken = new Set(Input.keyBindings().flatMap((a) => a.codes).filter(Boolean));
+  const free = "GHJKLMNTUYIO".split("").map((c) => "Key" + c).find((c) => !taken.has(c));
+  assert.ok(free, "the alphabet has run out of unbound keys — pick a different probe");
+  const r = Input.setKeyBinding("boost", 0, free);
   assert.deepEqual(plain(r), { ok: true, conflict: null });
   key("Space", true); assert.equal(Input.consumeBoostToggle(), false, "Space is unbound now");
-  key("KeyV", true); assert.equal(Input.consumeBoostToggle(), true, "V boosts");
+  key(free, true); assert.equal(Input.consumeBoostToggle(), true, `${free} boosts`);
   assert.equal(Input.keysAreDefault(), false);
   Input.resetKeys();
   key("Space", true); assert.equal(Input.consumeBoostToggle(), true, "reset restores Space");
@@ -171,10 +178,11 @@ test("controller defaults are the standard layout the game always had", () => {
   assert.deepEqual(plain(Input.getPadMap()), {
     throttle: [7, 0], brake: [6, 1], boost: [2, null], overtake: [3, null],
     aero: [12, null], shiftUp: [5, null], shiftDown: [4, null], camera: [8, null],
+    pit: [13, null],
     lookBack: [11, null], recover: [10, null], pause: [9, null],
   });
   assert.equal(Input.padsAreDefault(), true);
-  assert.deepEqual(plain(Input.padBindings()).map((a) => a.id), ["throttle", "brake", "boost", "overtake", "aero", "shiftUp", "shiftDown", "camera", "lookBack", "recover", "pause"]);
+  assert.deepEqual(plain(Input.padBindings()).map((a) => a.id), ["throttle", "brake", "boost", "overtake", "aero", "pit", "shiftUp", "shiftDown", "camera", "lookBack", "recover", "pause"]);
 });
 
 test("a rebound button drives and the old one stops answering", () => {
