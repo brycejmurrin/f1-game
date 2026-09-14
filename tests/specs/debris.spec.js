@@ -8,6 +8,24 @@ import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function boot(page) {
+  // RAISE THE RESOURCE-TIMING BUFFER BEFORE THE FIRST BYTE. Chrome keeps 250
+  // `resource` entries by default and then DROPS every later one silently (a
+  // `resourcetimingbufferfull` event nobody here listens for). This page loads
+  // the whole script roster plus the baked asset pack — MEASURED at exactly 250
+  // entries, the cap, by the time the lazy rapier import lands ~42 s in — so
+  // `getEntriesByType("resource")` never contained rapier.mjs and the
+  // `rapierFetches > 0` assertion below was reading the BUFFER, not the fetch.
+  // It failed here 3 runs out of 3 with stepped=30 and live=36, i.e. with the
+  // side-world working perfectly; and the sibling test's `rapierFetches === 0`
+  // ("no rapier fetch when disabled") passed for the same wrong reason, which
+  // made the one assertion that test exists for unfalsifiable. MEASURED with the
+  // buffer raised: 260 entries total, rapier.mjs among them — the page overflows
+  // the 250 cap by TEN, which is why this was historically flaky (3/5 solo)
+  // rather than always red: whether it tipped over depended on which optional
+  // assets loaded. 1000 is ~4x that, so both directions mean what they say again.
+  await page.addInitScript(() => {
+    try { performance.setResourceTimingBufferSize(1000); } catch (_) { /* harness */ }
+  });
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
