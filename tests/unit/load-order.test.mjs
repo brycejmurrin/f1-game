@@ -91,12 +91,27 @@ test("__APEX_BUILD is derived, not a stale literal", () => {
     "index.html must not hardcode window.__APEX_BUILD = <number> (the ?v= bump sed does not touch it)");
 });
 
-test("shell locks scale and cancels iOS double-tap / gesture zoom", () => {
+test("shell leaves pinch-zoom to the user and cancels iOS double-tap / gesture zoom", () => {
+  // The viewport meta carries NO zoom cap — neither `user-scalable=no` nor
+  // `maximum-scale`. Both fail WCAG 1.4.4 (Resize text) the same way: W3C ACT
+  // rule b4f0c3 fails any `maximum-scale` under 2, iOS has ignored it since
+  // iOS 10, and Chrome Android honours it unless the player has dug out the
+  // "Force enable zoom" accessibility opt-in. `user-scalable=no` was dropped
+  // first; `maximum-scale=1` survived by oversight and only ever cost Android
+  // low-vision players their pinch. Nothing about the DRIVING surface changed:
+  // `#game` and the in-race HUD chrome set `touch-action: none` in CSS, and the
+  // two cancellers below kill double-tap and iOS GestureEvents page-wide. If a
+  // zoom cap ever comes back, it needs an a11y argument in index.html, not a
+  // relaxed assertion here.
   const m = indexHtml.match(/<meta\s+name="viewport"\s+content="([^"]+)"/);
   console.log("[load-order] viewport content:", m ? m[1] : "NOT FOUND");
   assert.ok(m, "index.html must declare a viewport");
-  assert.match(m[1], /maximum-scale=1/, "viewport must cap scale");
-  assert.doesNotMatch(m[1], /user-scalable=no/, "viewport must leave pinch-zoom to the user (WCAG 1.4.4; docs/PLATFORM.md)");
+  assert.match(m[1], /width=device-width/, "viewport must map the layout viewport to the device");
+  assert.doesNotMatch(m[1], /user-scalable\s*=\s*no/,
+    "viewport must leave pinch-zoom to the user (WCAG 1.4.4; docs/PLATFORM.md)");
+  assert.doesNotMatch(m[1], /maximum-scale/,
+    "viewport must not cap zoom at all (W3C ACT b4f0c3 / WCAG 1.4.4) — see the " +
+    "rationale comment at the top of index.html");
   const hasGesture = /addEventListener\("gesturestart"/.test(indexHtml);
   const hasTouchEnd = /addEventListener\("touchend"/.test(indexHtml);
   console.log("[load-order] gesturestart listener present:", hasGesture);
@@ -105,6 +120,11 @@ test("shell locks scale and cancels iOS double-tap / gesture zoom", () => {
     "shell must cancel iOS GestureEvents (page pinch-zoom)");
   assert.match(indexHtml, /addEventListener\("touchend"/,
     "shell must cancel same-spot double-tap zoom");
+  // The driving surface opts out in CSS, not in the meta tag — that is what
+  // makes dropping the cap safe, so pin it here too.
+  const tokens = readFileSync(join(ROOT, "css/tokens.css"), "utf8");
+  assert.match(tokens, /#game\s*\{[^}]*touch-action:\s*none/,
+    "#game must keep `touch-action: none` — driving owns its gestures");
   console.log("[load-order] iOS zoom cancel: OK");
 });
 

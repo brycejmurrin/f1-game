@@ -216,10 +216,19 @@ test("double-tap zoom is refused on every layer, and driving owns its gestures",
   const html = read("index.html");
   const meta = /<meta name="viewport" content="([^"]+)">/.exec(html);
   assert.ok(meta, "index.html has a viewport meta");
-  for (const part of ["maximum-scale=1", "viewport-fit=cover"]) assert.ok(meta[1].includes(part), `viewport meta carries ${part}`);
-  // Safari ignored it; Android Chrome honoured it and blocked pinch-zoom for
-  // low-vision players (WCAG 1.4.4). The touchend canceller does the work.
+  for (const part of ["width=device-width", "viewport-fit=cover"]) assert.ok(meta[1].includes(part), `viewport meta carries ${part}`);
+  // NO ZOOM CAP IN THE META, and that is two decisions taken for one reason.
+  // `user-scalable=no` went first: Safari ignored it, Android Chrome honoured
+  // it and blocked pinch-zoom for low-vision players (WCAG 1.4.4).
+  // `maximum-scale=1` was the same bug and was simply missed — W3C ACT rule
+  // b4f0c3 fails any maximum-scale under 2 against that same SC, iOS has
+  // ignored it since iOS 10, and Chrome Android honours it unless the player
+  // has found the "Force enable zoom" opt-in. Keeping one cap while dropping
+  // the other for an a11y reason only ever cost Android users their pinch.
+  // Nothing about DRIVING relaxed: #game and .touchbtn stay touch-action:none
+  // below, and the two cancellers kill double-tap and iOS gestures page-wide.
   assert.ok(!meta[1].includes("user-scalable=no"), "viewport meta must not disable user scaling (docs/PLATFORM.md)");
+  assert.ok(!/maximum-scale/.test(meta[1]), "viewport meta must not cap zoom at all (W3C ACT b4f0c3 / WCAG 1.4.4)");
   assert.match(html, /addEventListener\("gesturestart"/, "iOS pinch GestureEvents are cancelled");
   assert.match(html, /addEventListener\("touchend", function/, "the same-spot second tap is cancelled");
   const tk = css("css/tokens.css");
