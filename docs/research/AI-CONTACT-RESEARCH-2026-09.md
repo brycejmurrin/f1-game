@@ -231,6 +231,38 @@ physics-characterization + collisions + collision-ai-fixes 18/18 — the
 characterization gate did NOT move, because a clean driving trace never yaws
 the player past the blend floor.
 
+### #7, second bullet (braking-aware net extrapolation) — BUILT
+
+`F_BRAKE` was encoded, decoded into the view, and then read by nothing:
+`advance()` moved `s` at a flat `st.speed`. A remote car standing on the brakes
+was predicted to keep coming at the speed it had when the packet left.
+
+Worse than the entry suggests: `predict()` is `sample(now + delayMs)`, so it
+extrapolates on EVERY frame, not only during a stall. The follower's predicted
+contact pose — `c._nProg` / `c._nSpd`, what the collision solver actually reads
+— overshot continuously, which is the last-millisecond-brake asymmetry the
+netcode lens cited.
+
+The rate is OBSERVED from the last two packets, not taken from a constant. A
+literal here would be a second copy of `BRAKE` to keep in step with the physics
+and re-derive against `PACE` — the coupling `aStd` exists to prevent — and the
+wire already carries the answer correctly scaled. Gated on the flag, so a
+momentary dip between two packets is not extrapolated as if sustained; clamped
+so the prediction never runs past a stop, never reverses, and never sheds more
+than a third of the speed however absurd a jittery packet pair implies.
+
+Speed follows `s` out of `advance()`, because they are one claim about one car:
+a pose that slowed with a speed that did not is two predictions that disagree,
+and the contact solver reads both.
+
+Determinism is untouched — this changes only each peer's own local guess, no
+cross-peer bit-exactness is claimed or required, and no new trig.
+
+Verified: net-snapshot 25/25 (5 new), test:net-unit 203/203, test:tooling-fast
+187/187, test:guards 178/178, and in the browser multiplayer-session +
+multiplayer-npeer 24/24. The primary new test fails with the fix neutered, so it
+is pinning the behaviour rather than the arithmetic.
+
 ### #7, first bullet (publish `_vLimNow`, compare corner-entry limits) — REVERTED
 
 Built exactly as described — `c._vLimNow = br.vLim` stashed beside `_vmaxNow`,
