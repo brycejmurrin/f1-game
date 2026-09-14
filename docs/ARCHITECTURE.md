@@ -15,7 +15,7 @@ static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 > [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md).
 
 Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
-**engine** — shared spline/mesh/scenery code), `js/circuits/` (the 40 circuit
+**engine** — shared spline/mesh/scenery code), `js/circuits/` (the 51 circuit
 **data** files), `js/car/` (car geometry, liveries, parts, teams), `js/data/`
 (API clients + data hub), `js/game/` (game subsystems), with `js/core/mat4.js` and
 the `js/game.js` entry at the root.
@@ -208,7 +208,7 @@ _167 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `<id>.js × 40` | `TrackDefs` | tag | 40 circuit definitions (data only), one file per id in `Tracks.LIST` order — see the "js/circuits/<id>.js" section |
+| `<id>.js × 51` | `TrackDefs` | tag | 51 circuit definitions (data only), one file per id in `Tracks.LIST` order — see the "js/circuits/<id>.js" section |
 
 **`js/track/`**
 
@@ -359,7 +359,7 @@ _167 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `<id>.js × 40` | `TrackScenery` | LAZY_SCENERY | 40 bespoke `scenery(api)` closures, one per circuit, fetched when that circuit is built |
+| `<id>.js × 51` | `TrackScenery` | LAZY_SCENERY | 51 bespoke `scenery(api)` closures, one per circuit, fetched when that circuit is built |
 
 **`js/net/`**
 
@@ -816,7 +816,7 @@ road/terrain meshes through `TrackMesh`/`TrackSurface`, props through the four
 scenery modules.
 
 ```
-Tracks.LIST -> [ trackDef, ... ]   // 40 circuits. LIST order == the `<script>` load
+Tracks.LIST -> [ trackDef, ... ]   // 51 circuits. LIST order == the `<script>` load
                                    // order in index.html (each circuits/<id>.js registers
                                    // itself as it loads) — it is NOT the real F1 calendar
                                    // order. Check tools/manifest.cjs / index.html.

@@ -13,7 +13,7 @@
 // Directory map (post-reorg):
 //   js/render/    renderer: gfx façade, GLX (WebGL2), shaders, WebGPU backend
 //   js/track/     track ENGINE + infra (geometry, surface, scenery kits)
-//   js/circuits/  the 40 circuit DEFINITIONS (24 season + 16 classic; one file each)
+//   js/circuits/  the 51 circuit DEFINITIONS (24 season + 27 classic; one file each)
 //   js/car/       car model, liveries, parts, ghost, teams
 //   js/data/      data hub (api client + tab modules + shell)
 //   js/game/      game-support modules extracted from / loaded before game.js
@@ -50,6 +50,10 @@ const CIRCUITS = [
   "paul_ricard", "portimao", "sochi", "mugello", "magny_cours",
   "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
   "jacarepagua",
+  // ── recovered from OpenStreetMap (tools/track/osm-circuits.json) — the
+  //    bacinger/f1-circuits file the 40 above come from has no more features ──
+  "fuji", "okayama", "korea", "jerez", "donington", "anderstorp",
+  "brands_hatch", "zolder", "dijon", "buddh", "mont_tremblant",
 ];
 
 const CIRCUITS_DIR = "js/circuits";

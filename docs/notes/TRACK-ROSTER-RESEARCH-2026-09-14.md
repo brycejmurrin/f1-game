@@ -11,11 +11,18 @@ Enumerate them from `tools/manifest.cjs`, never from a list in a doc.
 
 **The upstream trace dataset is exhausted.** `tools/track/import-circuit-path.mjs`
 projects `bacinger/f1-circuits`; that GeoJSON carries exactly 40 features and the
-game has all 40 (`COMMITTED` + `CLASSICS` in that tool == the whole file, verified
+game had all 40 (`COMMITTED` + `CLASSICS` in that tool == the whole file, verified
 by diffing the fetched feature ids on 2026-09-14). Every circuit added from here
 needs a trace from somewhere else — see §4.
 
-## 2. The gap: 38 World Championship venues are not in the game
+> **Acted on, same day.** `tools/track/stitch-osm-ring.mjs` now recovers a
+> centreline from OpenStreetMap directly, and **eleven of the circuits below
+> shipped**: `fuji`, `okayama`, `korea`, `jerez`, `donington`, `anderstorp`,
+> `brands_hatch`, `zolder`, `dijon`, `buddh`, `mont_tremblant`. The roster is 51.
+> The table in §2 is left as it was measured — it is the gap as it stood before
+> that work — and §5 records what the eleven cost in practice.
+
+## 2. The gap as measured: 38 World Championship venues were not in the game
 
 Wikipedia's [List of Formula One circuits] carries 78 rows: 77 venues that have
 hosted a WC race, plus the Madring which had not yet raced when the table was
@@ -119,18 +126,34 @@ every street circuit whose roads still exist but carry ordinary highway tags
 Pedralbes, Boavista, Monsanto, Ain-Diab, Rouen). These need the centreline
 digitised from historical maps or traced along the public roads by hand.
 
-## 5. Where the value is
+## 5. Where the value went — outcome, 2026-09-14
 
-Ranked by GPs held × how cheap the trace is:
+Eleven circuits shipped. What the tiering above got right and wrong:
 
-1. **Brands Hatch** (14 GPs, Tier B) — the biggest single hole in the roster, and
-   the GP circuit is unchanged since 1976. Worth building the way-stitcher for.
-2. **Fuji Speedway** (4 GPs, Tier A) — cheapest real addition on the board.
-3. **Zolder** (10) and **Jerez** (7), both Tier B and both intact.
-4. **Long Beach** and **Adelaide** (Tier D, 11 and 8 GPs) — the two street
-   circuits with real recognition value; both cost a hand-traced centreline.
-5. **Korea** and **Buddh** — cheap, and they fill the only two decades-old holes
-   in the modern-Tilke set the game otherwise covers completely.
+- **Tier A was right and cheap.** Fuji, Okayama and Korea are one OSM way each
+  and needed nothing but the projection.
+- **Tier B was right about the mechanism and wrong about the difficulty.** The
+  cycle search is ~100 lines and lands inside 0.5% on every fragmented circuit
+  — including Silverstone, which was never a candidate and was used as the gate.
+- **The filter, not the search, was the hard part.** Twice a name filter deleted
+  a real piece of the lap: `/pit/` took Silverstone's National Pit Straight and
+  `/paddock/` took Brands Hatch's Paddock Hill Bend, each time collapsing the
+  best ring to under half a lap. The judgement belongs in OSM tags
+  (`sport`, `surface`), not names.
+- **Tier C's real obstacle was not the data.** Brands Hatch and Zolder stitch
+  cleanly; what they cannot give is the layout Formula One raced, because the
+  venue was rebuilt. Brands Hatch ran 4.207 km and is 3.908 km today; Zolder ran
+  4.262 km from 1975 to 1985 and has been 4.010 km since 2002. Both ship as the
+  modern configuration, said so in the def header and the circuit brief.
+- **One entry in §2 was simply wrong.** Dijon is listed at 3.886 km there, from
+  the Wikipedia circuit list. The circuit is 3.801 km and has been since the
+  1977 Parabolique extension — which is what F1 raced. The bad target is what
+  made a good stitch look like a 4% miss.
+
+Still missing after this round: 27 of the 77 venues. The cheapest remaining are
+Mosport, Sebring and Le Mans Bugatti (permanent circuits, mapped, fragmented);
+the expensive ones are every street circuit, which carries no `highway=raceway`
+at all and needs a hand-traced centreline.
 
 ## 6. Layout variants, not new venues
 

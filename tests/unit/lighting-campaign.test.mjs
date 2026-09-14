@@ -58,11 +58,11 @@ async function importCaptureModule() {
 
 test("lighting campaign enumerates the complete unique matrix", () => {
   const rows = enumerateConditions();
-  assert.equal(TRACKS.length, 40);
+  assert.equal(TRACKS.length, 51);
   assert.deepEqual(TODS, ["dawn", "day", "dusk", "night"]);
   assert.deepEqual(WEATHERS, ["dry", "wet", "rain", "fog", "overcast"]);
-  assert.equal(rows.length, 800);
-  assert.equal(new Set(rows.map((row) => row.key)).size, 800);
+  assert.equal(rows.length, 1020);
+  assert.equal(new Set(rows.map((row) => row.key)).size, 1020);
   assert.equal(rows.filter((row) => row.track === "monaco").length, 20);
   assert.deepEqual(
     rows.map((row) => row.key),
@@ -78,13 +78,14 @@ test("lighting campaign enumerates the complete unique matrix", () => {
     "abudhabi|day|dry",
   ]);
   // Last in TRACKS is the final classic circuit, not the final season one.
+  // Was jacarepagua until eleven OSM-recovered circuits were appended after it.
   assert.deepEqual(rows.slice(-6).map((row) => row.key), [
-    "jacarepagua|dusk|overcast",
-    "jacarepagua|night|dry",
-    "jacarepagua|night|wet",
-    "jacarepagua|night|rain",
-    "jacarepagua|night|fog",
-    "jacarepagua|night|overcast",
+    "mont_tremblant|dusk|overcast",
+    "mont_tremblant|night|dry",
+    "mont_tremblant|night|wet",
+    "mont_tremblant|night|rain",
+    "mont_tremblant|night|fog",
+    "mont_tremblant|night|overcast",
   ]);
 });
 
@@ -95,7 +96,7 @@ test("every track has exactly three legal camera fractions and one shard", () =>
     assert.ok(CAMERA_FRACTIONS[track].every((v) => v >= 0 && v < 1));
     assert.equal(SHARDS.filter((ids) => ids.includes(track)).length, 1);
   }
-  assert.equal(new Set(SHARDS.flat()).size, 40);
+  assert.equal(new Set(SHARDS.flat()).size, 51);
 });
 
 test("validation rejects unknown, duplicate, missing, and illegal config entries", async () => {
@@ -284,11 +285,11 @@ test("record merge requires one unique complete matrix record per key", () => {
   }));
   const result = mergeRecords(rows.slice().reverse(), TEST_TUNE_DEFS);
   const keys = Object.keys(result.presets);
-  assert.equal(keys.length, 800);
+  assert.equal(keys.length, 1020);
   assert.deepEqual(keys, keys.slice().sort());
-  assert.equal(result.records.length, 800);
-  assert.equal(result.summary.totalRecords, 800);
-  assert.equal(result.summary.totalConditions, 800);
+  assert.equal(result.records.length, 1020);
+  assert.equal(result.summary.totalRecords, 1020);
+  assert.equal(result.summary.totalConditions, 1020);
   assert.equal(result.summary.missingConditions, 0);
   assert.throws(() => mergeRecords([...rows, rows[0]], TEST_TUNE_DEFS), /duplicate condition/i);
   assert.throws(() => mergeRecords(rows.slice(1), TEST_TUNE_DEFS), /missing condition/i);
