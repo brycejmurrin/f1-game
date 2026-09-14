@@ -337,6 +337,14 @@ test.describe("rendered image grade", () => {
     expect(cap1.gen, "the changed capture is not a newer present than the baseline: " + premise).toBeGreaterThan(cap0.gen);
     expect(JSON.stringify(cap1.env), "the env probe changed state between the two captures — reflections, not the grade: " + premise).toBe(JSON.stringify(cap0.env));
     expect(JSON.stringify(cap1.cam), "the camera moved between the two captures — two viewpoints, not the grade: " + premise).toBe(JSON.stringify(cap0.cam));
+    // AND the spec must still OWN the camera. boot() asserts camState().debug
+    // before the first capture; this asserts it is still true at one, which is
+    // the part that was false for this file's whole history. Deliberate belt and
+    // braces: the equality above only catches a lost camera if the chase camera
+    // then MOVES between two captures, which it does on a 20-40 fps GPU and does
+    // NOT on ~1 fps SwiftShader — so without this line a re-regression is once
+    // again invisible everywhere except the nightly Metal job.
+    expect(cap0.cam.debug, "the spec no longer owns the camera — something cleared the eyeAt() free-cam and the live chase camera is framing these captures: " + premise).toBe(true);
     return { baseline, changed, cap0, tier0, premise };
   }
 
