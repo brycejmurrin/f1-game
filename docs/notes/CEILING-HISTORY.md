@@ -2941,3 +2941,23 @@ read as `undefined` at every one of them — silently, because the model's
 fallback is a legitimate 1.0, so all seven simply behaved like the median.
 `tests/unit/circuit-def-fields.test.mjs` caught it, which is exactly the trap
 that guard was written for and the seventh time it has bitten.
+
+## 2026-09-14 — the pit cue: a gesture nobody can see is not a control
+
+`(tree) shellNodes` 1478 → 1481 (+3) and `js/game.js` +1 line / +1 codeLine.
+
+Removing the pit button left the stop called by STEERING INTO THE ENTRY — at a
+lane that is 450 m of arc with nothing drawn on it, on a side with no marking.
+The commitment dwell already filled the compound chip, but that only says the
+gesture is registering, not where or which way to try; the control was
+undiscoverable. `#hud-pit` + its arrow and text span are those three nodes, and
+the one game.js line is their `els` entry.
+
+The rules live in `PitLane.cue()`, not here: when to appear at all (a used set,
+the wrong tread, or a free stop under a caution — never every lap, or it becomes
+wallpaper), the countdown, and the four phases. The HUD only paints what it
+returns, which is why three nodes and one line is the whole cost.
+
+Zero added to `rawSpacing` / `rawColor` / `rawColorDistinct`, all three of which
+carry `slack: 0`: the rule uses `var(--gap)`, `var(--you)`, `var(--text)` and
+`var(--fs-micro)` throughout and defines no literal of its own.

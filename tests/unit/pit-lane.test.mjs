@@ -226,7 +226,10 @@ function commitSession({ hw = 7, vTop = 60 } = {}) {
   const pits = Pl.create({
     track, vTop: () => vTop, lapsTarget: 25, raceWeather: "dry",
     announce: (m) => said.push(m),
-    tyres: { on: () => true, spent: () => 0, fit: () => {},
+    // spent() reads the CAR, not a constant: the cue's whole job is to stay
+    // quiet on a fresh set and speak on a used one, and a stub that always
+    // says 0 would let a broken cue pass every test below.
+    tyres: { on: () => true, spent: (car) => (car && car.tyreWear) || 0, fit: () => {},
              classRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
              optionRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }) },
     cautionInfo: () => ({ level: 0 }),
@@ -326,4 +329,86 @@ test("info() reports the dwell, so a HUD can show the commitment filling", () =>
   const half = pits.info(c).commit;
   assert.ok(half > 0.3 && half < 0.8, `the dwell should read about half way, got ${half}`);
   assert.equal(pits.info(c).side, P.PIT_SIDE);
+});
+
+// ── The cue ─────────────────────────────────────────────────────────────────
+// Removing the button made a stop a GESTURE, and a gesture nobody can see is
+// not a control: the lane it asks you to aim at is 450 m of arc with nothing
+// drawn on it. So the cue is load-bearing, and the thing it must get right is
+// not "appear" but WHEN NOT TO — a PIT prompt on every lap is wallpaper, and a
+// driver stops reading wallpaper.
+
+test("the cue stays QUIET on a fresh set — it is not a permanent PIT sign", () => {
+  const { pits, zone, car } = commitSession();
+  const c = car(0);                       // on the racing line, not committing
+  c.s = zone.sIn - 300;                   // approaching the window
+  c.pitState = "none";
+  assert.equal(pits.cue(c), null, "a car on a fresh set was told to box");
+});
+
+test("…and speaks once the set is used, counting the entry down in metres", () => {
+  const { pits, zone, car, Pl } = commitSession();
+  const c = car(0);
+  c.s = zone.sIn - 300;
+  c.tyreWear = 0.9;
+  const cue = pits.cue(c);
+  assert.ok(cue, "a used set got no cue at all");
+  assert.equal(cue.phase, "near");
+  assert.match(cue.text, /^PIT \d+m$/, `expected a metre countdown, got ${cue.text}`);
+  assert.ok(cue.dist > 250 && cue.dist < 350, `countdown should be ~300 m, got ${cue.dist}`);
+});
+
+test("it says ENTRY at the entry, and only while the entry road lasts", () => {
+  const { pits, zone, car, Pl } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9;
+  c.s = zone.sIn + 20;                    // inside the entry road
+  assert.equal(pits.cue(c).phase, "enter");
+  assert.equal(pits.cue(c).text, "PIT ENTRY");
+  c.s = zone.sIn + Pl.COMMIT_M + 60;      // past it, racing the straight
+  assert.equal(pits.cue(c), null, "the cue outlived the entry road it points at");
+});
+
+test("it follows the car through the stop: armed, lane, box, then silence", () => {
+  const { pits, zone, car } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9; c.s = zone.sIn + 20;
+  c.pitArmed = true;
+  assert.equal(pits.cue(c).phase, "armed");
+  c.pitArmed = false; c.pitState = "lane";
+  const lane = pits.cue(c);
+  assert.equal(lane.phase, "lane");
+  assert.match(lane.text, /LIMIT/, "the lane phase must show the limit the driver is being held to");
+  c.pitState = "box";
+  assert.equal(pits.cue(c).phase, "box");
+  c.pitState = "out";
+  assert.equal(pits.cue(c), null, "the cue kept talking after the stop was served");
+});
+
+test("a fresh slick in the dry has nothing to say, used or not", () => {
+  const { pits, zone, car } = commitSession();
+  const c = car(0);
+  c.s = zone.sIn - 200; c.tyreWear = 0;
+  assert.equal(pits.cue(c), null, "dry weather, fresh slick: nothing to say");
+  // …and the threshold is a real one, not "anything above zero".
+  c.tyreWear = 0.2;
+  assert.equal(pits.cue(c), null, "a barely-used set is not a reason to box");
+});
+
+test("only the LOCAL player gets a cue — nobody else has a HUD", () => {
+  const { pits, zone, car } = commitSession();
+  for (const who of [{ local: false, human: false }, { local: false, human: true }]) {
+    const c = Object.assign(car(0), who);
+    c.tyreWear = 0.9; c.s = zone.sIn - 200;
+    assert.equal(pits.cue(c), null, "a non-local car was given a pit cue");
+  }
+});
+
+test("the arrow has a side to point at, and it is the side you must steer to", () => {
+  // The arrow IS the instruction — it is the only thing telling a driver which
+  // way the lane they cannot see is.
+  const { pits, zone, car, Pl } = commitSession();
+  const c = car(0);
+  assert.equal(pits.info(c).side, Pl.PIT_SIDE);
+  assert.ok(Pl.PIT_SIDE === 1 || Pl.PIT_SIDE === -1, "the side must be a direction, not a magnitude");
 });

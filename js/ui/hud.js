@@ -645,6 +645,21 @@ function updateHud(force) {
                          : pit.commitFrac(player) > 0 ? "commit" : "") : "";
     if (state) els.tyre.dataset.pit = state; else delete els.tyre.dataset.pit;
     if (state === "commit") hStyle(els.tyre, "--pit-commit", pit.commitFrac(player).toFixed(2));
+    // THE PIT CUE. The chip above says the gesture is REGISTERING; this says
+    // where and which way — without it the steer-in control is undiscoverable,
+    // because the lane it asks you to aim at is 450 m of arc with nothing drawn
+    // on it. PitLane.cue owns the rules (including when to stay quiet); this
+    // only paints what it returns.
+    const c = pit && pit.cue(player);
+    if (els.pitCue) {
+      els.pitCue.hidden = !c;
+      if (c) {
+        hText(els.pitCueText, c.text);
+        els.pitCue.dataset.phase = c.phase;
+        // The arrow points to the PIT SIDE, which is the whole instruction.
+        hText(els.pitCueArrow, (pit.info(player) || {}).side === -1 ? "\u25C0" : "\u25B6");
+      }
+    }
   }
   // gear + tachometer
   hText(els.gear, "" + player.gear);
