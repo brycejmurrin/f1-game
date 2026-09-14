@@ -2,15 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
 // ── iOS DOUBLE-TAP / GESTURE ZOOM ────────────────────────────────────────────
-// CSS `touch-action: manipulation` plus `maximum-scale=1` is not enough:
-// Safari ignores the viewport cap (a11y, since iOS 10), and `pan-y` / `pan-x`
+// CSS `touch-action: manipulation` is not enough on its own: `pan-y` / `pan-x`
 // on scroll panes override the * reset — WebKit still double-tap-zooms those.
-// No `user-scalable=no`: Safari ignored it anyway, and Android Chrome honours
-// it — which blocked pinch-zoom for low-vision players (WCAG 1.4.4). The
-// touchend canceller below is what actually does the iOS work.
+// The touchend canceller below is what actually does the iOS work.
+//
+// NO ZOOM CAP IN THE VIEWPORT META, and that is two decisions, not one.
+// `user-scalable=no` went first: Safari ignored it anyway, and Android Chrome
+// honours it — which blocked pinch-zoom for low-vision players (WCAG 1.4.4).
+// `maximum-scale=1` went for EXACTLY THE SAME REASON and was simply missed at
+// the time: W3C ACT rule b4f0c3 fails any `maximum-scale` under 2 against the
+// same SC 1.4.4, iOS has ignored it since iOS 10, and Chrome Android honours
+// it by default (its "Force enable zoom" is an opt-in buried in accessibility
+// settings). Keeping one zoom cap while removing the other for an a11y reason
+// was a contradiction that only ever bit Android users.
+// It also contradicted our own CSS: `#game` sets `touch-action: none` so
+// DRIVING owns its gestures, and the rule right under it says menus "retain
+// native pan, selection and pinch zoom" — the meta tag was overriding that
+// intent one layer up. html/body stay `manipulation`, which drops double-tap
+// zoom and keeps pinch, and the in-race HUD chrome stays `none` so a second
+// thumb cannot pinch mid-corner. Nothing here relaxes the driving surface.
 // A second tap on the same spot within 350 ms is the zoom gesture; cancel it.
 // A second tap on a DIFFERENT control (rapid menu work) is left alone.
 // Another finger still down is driving (GAS+steer), not a double-tap.
@@ -412,7 +425,12 @@
   <canvas id="minimap" width="140" height="140" role="img" aria-label="Track map"></canvas>
   <div id="hud-sectors"></div>
   <div id="hud-limits" hidden>LIMITS <span class="limits-dots"></span></div>
-  <div id="hud-flag" role="status" aria-live="assertive" hidden></div>
+  <!-- role="alert", not role="status" + aria-live="assertive": status carries an
+       implicit POLITE live region, so the pair was a mismatch the explicit
+       aria-live had to override. alert is the canonical interrupting role and
+       needs no override. A flag change is the one HUD event that earns an
+       interruption; #vs-status stays status+polite. -->
+  <div id="hud-flag" role="alert" hidden></div>
 </div>
 
 <div id="lights" hidden>
