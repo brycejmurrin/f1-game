@@ -75,7 +75,6 @@ async function installPickerApi(page, options = {}) {
     F1API.schedule = () => Promise.resolve([]);
     F1API.driverStandings = () => Promise.resolve([]);
     F1API.constructorStandings = () => Promise.resolve([]);
-    F1API.lastRace = () => Promise.resolve(null);
     F1API.sessionResult = () => Promise.resolve([]);
     F1API.latestSession = () => Promise.resolve(sessions[0]);
     F1API.meetings = (year) => {

@@ -976,7 +976,6 @@ network error: serve stale cache if present, else reject. Never auto-poll.
 F1API.schedule()              -> [{round, name, circuit, locality, country, date, time, hasSprint}]
 F1API.driverStandings()       -> [{pos, points, wins, name, code, number, team}]
 F1API.constructorStandings()  -> [{pos, points, wins, name}]
-F1API.lastRace()              -> {name, round, date, results:[{pos, name, code, team, grid, points, status, time}]}
 F1API.latestSession()         -> {sessionKey, name, type, circuit, country, dateStart} | null
 F1API.weather(sessionKey)     -> {airT, trackT, humidity, rainfall, windSpeed} | null
 F1API.positions(sessionKey)   -> [{num, pos}] | null      // folded latest per driver
