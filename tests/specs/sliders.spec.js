@@ -174,12 +174,21 @@ test.describe("Apex 26 — steering sliders", () => {
     // the off-track floor, and different every run. Both pace settings returned the
     // same pinned speed and the test failed regardless of the slider. Shove the
     // field out of the way (park() does exactly this) and give the car clear road.
-    const playerTop = (paceSlider) => page.evaluate((sv) => {
+    // ...and ask the track for the straight, like the two cases below. This stood
+    // at a hardcoded frac 0.0 long after straightFrac() landed for exactly this
+    // reason: un-steered, a car planted on a bend runs wide inside the first
+    // second and settles on the off-track floor, so the number is about where
+    // the test stood rather than the powertrain. It passed anyway because it
+    // only compares fast against slow and running wide costs both samples about
+    // equally — a latent version of the bug the comment at the top of this file
+    // describes, not an absent one.
+    const FS = await straightFrac(page);
+    const playerTop = (paceSlider) => page.evaluate(({ sv, fs }) => {
       const el = document.getElementById("pm-pace");
       el.value = String(sv); el.dispatchEvent(new Event("input", { bubbles: true }));
-      window.__apex.park(0.0);            // clears the field, freezes
+      window.__apex.park(fs);             // clears the field, freezes
       window.__apex.freeze(false);        // ...but we want to drive
-      window.__apex.jump(0.0, 0, 0);
+      window.__apex.jump(fs, 0, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
       // PEAK speed, not the final one. Un-steered, the car eventually leaves the
       // road and settles at the off-track floor (10.8 m/s) — which erased whatever
@@ -193,7 +202,7 @@ test.describe("Apex 26 — steering sliders", () => {
       }
       window.__apex.clearInput();
       return peak;
-    }, paceSlider);
+    }, { sv: paceSlider, fs: FS });
     // Notches 6 and 18 on the 19-notch geometric grid: pace 0.627 vs 1.262, the
     // same two paces this asserted against on the old 1..10 grid (notches 2 and
     // 9). What is under test is that the slider moves ground speed at all, so

@@ -18,9 +18,22 @@
     // negated by the projection, so it mirrors handedness. Calibrated against
     // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
     reverse: false,
-    // v0 sits mid the longest straight, placed by the stitcher. Not yet checked
-    // against the real start/finish line — see docs/tracks/START-LINES.md.
-    startFrac: 0.0000,
+    // MEASURED, not assumed. The stitcher was supposed to leave v0 mid-straight
+    // and did not: the 182 m of starting grid behind v0 ran through a corner of
+    // 28 m radius, so the grid was laid round a bend. This moves the line to the
+    // nearest section holding R >= 1500 m across the whole grid zone.
+    //
+    // startFrac is an INDEX fraction into the control points, NOT an arc
+    // fraction, and the points are not arc-uniform — the first attempt at this
+    // fix converted the arc target straight to a fraction and landed Donington
+    // back on a 31 m radius. The value below is the control-point index whose
+    // cumulative arc length reaches the target.
+    //
+    // sceneryStartFrac records that every prop, landmark and corner board was
+    // authored against the OLD origin, so the dressed world stays on its real
+    // corners while only the line and grid move.
+    startFrac: 0.9072,
+    sceneryStartFrac: 0.0000,
     name: "DONINGTON",
     gp: "European GP",
     country: "UK",
@@ -50,7 +63,7 @@
     // turns: the 11 strongest curvature peaks of THIS centreline in lap order,
     // 11 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
-    turns: [0.0663, 0.1698, 0.3212, 0.3342, 0.4552, 0.5162, 0.5713, 0.6803, 0.7592, 0.7887, 0.9437],
+    turns: [0.0410, 0.1636, 0.2671, 0.4185, 0.4315, 0.5525, 0.6135, 0.6686, 0.7776, 0.8565, 0.8860],
     furniture: { tree: "broad", fol: [0.20, 0.38, 0.18], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["steel", "concrete", "darkSteel"],
