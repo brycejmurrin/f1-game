@@ -2909,3 +2909,35 @@ the module's header argues it should be.
 
 Also lowered in the same pass: `js/track/tracks.js` 2442 → 2432, banked from an
 earlier change rather than paid for by this one.
+
+## 2026-09-14 — P5: the race engineer, the stint strip and tyre allocation
+
+`js/game.js` lines 8637 → 8650 (+13), codeLines 4614 → 4619 (+5), topLets 144 →
+145 (+1). The new `let engineer` is the topLet; the rest is the module's three
+call sites (`create`, the per-tick `update`, the `reset` beside `pits.reset`)
+plus the arm announcement now naming the compound the crew has ready, and the
+`closeStints` sweep in `endRace` so a retired car's strip ends where the CAR
+stopped rather than where the leader is. `gMembers` is UNCHANGED at 245: the
+engineer reads `announce`, `tyres`, `pits`, `cautionInfo`, `weatherArc` and
+`raceWeather`, all of which the façade already carried — a module that needed
+new façade members would have been the wrong shape.
+
+Everything else lives in `js/race/engineer.js`, which is not ratcheted, and the
+allocation logic in `js/race/pit-lane.js`, which is not either.
+
+`(tree) cssClasses` 547 → 549 (+2): `.res-stints` and `.res-stint`, the results
+stint strip. It is a proportional butted bar rather than a row of gapped chips,
+which is both the better read (one long segment is a car that went to the end;
+three short ones is a car that could not) and the reason it adds ZERO to
+`rawSpacing` and `rawColor` — no gap, no padding, and the segment colours are
+the compound's own band written inline from the tyre record, so they cannot
+drift from the HUD's. Those three counts carry `slack: 0` and are untouched at
+295 / 315 / 175.
+
+`js/track/tracks.js` 2432 → 2439 (+7) in the same pass: `tyreSeverity` joins the
+family of fields that are READ OFF THE COPIED DEF and so have to be copied onto
+it, plus the six comment lines saying so. It was authored on seven circuits and
+read as `undefined` at every one of them — silently, because the model's
+fallback is a legitimate 1.0, so all seven simply behaved like the median.
+`tests/unit/circuit-def-fields.test.mjs` caught it, which is exactly the trap
+that guard was written for and the seventh time it has bitten.

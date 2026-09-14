@@ -864,6 +864,7 @@ let launchT0 = 0;
 let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
 let tyres = null;     // TyreModel.create(G), same deferral
 let pits = null;      // PitLane.create(G), same deferral
+let engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
 function applyCaution(d) { return raceCtl.apply(d); }
@@ -1862,8 +1863,8 @@ function gridUp(preOrder) {
     // (the row IS the compound); an AI car's from the class it just drew. No RNG
     // here — `h` is already the per-car race hash, so arming costs the sim
     // stream nothing, exactly as Reliability's retirement draw does.
-    c.tyreStints = 0;
-    pits.reset(c);
+    c.tyreStints = 0; c.tyreLog = null;   // a new race is a new strip, not an appended one
+    pits.reset(c); engineer.reset(c);
     // STRATEGY (js/physics/ai-drive.js stintPlan). Drawn ONCE here, from the
     // same per-car race hash the launch plan and the pace phase come from, so
     // arming a race consumes nothing from the sim RNG stream — the contract
@@ -2554,6 +2555,10 @@ function endRace(forcedOrder) {
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
   raceCtl.reset(); weatherArc = null; endChangeable();   // an arc that outlives the race would override the next race's weather
+  // Close every car's open stint so the results strip has an end lap. Done here
+  // rather than in the sheet: a retired car stopped laps ago and its last stint
+  // must end where the CAR did, not where the leader is when the flag falls.
+  cars.forEach((c) => tyres.closeStints(c));
   // The flag can fall while the player is PAUSED — a networked guest is ended
   // by the host's RESULT, not by their own input. Leaving `paused` set stranded
   // the pause dialog on top of the results with a RESUME that resolves to
@@ -2971,6 +2976,9 @@ tyres = TyreModel.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
 pits = PitLane.create(G);
+// The race engineer (js/race/engineer.js): the voice that makes all of the
+// above legible to a driver who never opens a menu. Reads both, so it is last.
+engineer = RaceEngineer.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -3624,6 +3632,7 @@ function updateCar(c, dt, ranked) {
   // keeps the characterization baseline bit-identical.
   tyres.update(c, dt);
   pits.update(c, dt);
+  engineer.update(c, dt);   // local player only; the module gates on c.local
   const perfMul = tyres.tractionMul(c) * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
@@ -4014,7 +4023,11 @@ function updateCar(c, dt, ranked) {
     // working entirely (tests/unit/active-aero-vm.test.mjs, 7 red).
     if (c.local && Input.consumePitToggle()) {
       const on = pits.arm(c);
-      announce(on ? "BOX THIS LAP" : "STAYING OUT", 1.4, "race");
+      // Name the set the crew has ready. The choice is made from what the
+      // player OWNS and what the race needs (PitLane.pickFor), so saying it out
+      // loud is the only place that decision becomes visible to them.
+      const next = on ? pits.pickFor(c) : null;
+      announce(on ? "BOX THIS LAP" + (next ? " — " + next.code : "") : "STAYING OUT", 1.4, "race");
     }
   } else {
     // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch

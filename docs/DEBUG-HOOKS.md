@@ -2234,8 +2234,8 @@ have to call both.
 | `wear` | 0 fresh, 1 spent, up to 2 past the cliff |
 | `wearF` / `wearR` | The same number per axle. Their MEAN is exactly `wear`, always — braking loads the front and traction the rear, and brake bias moves the braking half |
 | `lapsOn` / `stints` | Laps on this set, and how many sets this car has used |
+| `severity` | The circuit's own tyre-severity scale, 1.0 at the median — what the SURFACE does, multiplied onto what the layout already does |
 | `load` | How hard the car worked the tyre on the last tick, ~1.0 for a clean racing lap |
-| `severity` | The circuit's own tyre-severity scale, 1.0 at the median |
 | `tempS` / `tempB` | Surface and bulk (carcass) temperature, °C. The surface follows the driving on a ~9 s constant, the bulk on ~35 s — that gap is what tells graining from blistering |
 | `tempOpt` / `tempWindow` | The fitted compound's optimum and the half-width of its window, °C. Softer compounds work cooler, so the optimum is derived from `life` |
 | `ambient` | Track/air temperature for the current weather, °C (dry 30 → rain 13) |

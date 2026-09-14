@@ -445,6 +445,35 @@ const TyreModel = (function () {
       c.tyreGrain = 0; c.tyreBlister = 0;
       c.tyreLap0 = c.lap || 0;
       c.tyreStints = (c.tyreStints || 0) + 1;
+      // THE STINT LOG, which is what the results sheet draws. Recorded HERE
+      // because fit() is the only place a set is ever changed, so the log and
+      // the car can never disagree about what was on it — the alternative,
+      // reconstructing stints from the pit events afterwards, loses the grid
+      // set entirely (nobody pits for it) and gets the lap numbers off by one
+      // whenever a stop straddles the line. `lap1` stays null on the set the
+      // car is on; closeStints() at the flag fills the last one in.
+      const log = c.tyreLog || (c.tyreLog = []);
+      const last = log[log.length - 1];
+      if (last && last.lap1 == null) last.lap1 = c.lap || 0;
+      log.push({ code: c.tyre.code, id: c.tyre.id, colour: c.tyre.colour,
+                 lap0: c.lap || 0, lap1: null });
+    }
+    /** Close the open stint at the flag, so the results strip has an end lap. */
+    function closeStints(c) {
+      const log = c && c.tyreLog;
+      if (!log || !log.length) return;
+      const last = log[log.length - 1];
+      if (last.lap1 == null) last.lap1 = c.lap || 0;
+    }
+    /** The stint strip for one car: [{code, colour, lap0, lap1, laps}, …]. */
+    function stints(c) {
+      if (!c || !c.tyreLog) return [];
+      const end = c.lap || 0;
+      return c.tyreLog.map(function (e) {
+        const lap1 = e.lap1 == null ? end : e.lap1;
+        return { code: e.code, id: e.id, colour: e.colour,
+                 lap0: e.lap0, lap1, laps: Math.max(0, lap1 - e.lap0) };
+      });
     }
 
     // The circuit's own tyre severity, 1.0 at the median. Authored per circuit
@@ -575,6 +604,7 @@ const TyreModel = (function () {
 
     return {
       fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
+      stints, closeStints,
       lapsOn, spent, info, severity,
       level: () => level, setLevel, on,
       classRecord, optionRecord,

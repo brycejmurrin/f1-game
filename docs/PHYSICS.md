@@ -666,6 +666,33 @@ it on. `js/race/reliability.js` ships off for the same reason.
   opposite answers, which is what makes a gone tyre something you can drive
   around. `axleSplit` is a RATIO against `gripMul` because `muBase` already
   carries the shared drop.
+- **Circuit severity is what the SURFACE does, on top of what the layout does.**
+  The emergent load already says how hard a LAYOUT works a tyre — it falls out
+  of the forces the car made, with no authoring. `tyreSeverity` says what the
+  abrasiveness, the tarmac age and the track temperature do on top, none of
+  which geometry can know, and the two multiply. That decomposition is what
+  lets the model say something one number could not: Monaco's layout works the
+  tyre hard (1.221 emergent) while its surface and speeds work it gently, which
+  is how one of the sport's most demanding layouts is one of its LOWEST deg
+  circuits (0.050 s/lap against Austria's 0.097). Authored on the seven
+  circuits with a measured 2026 rate; the other forty-four stay at 1.0 rather
+  than guessed (`docs/research/TYRE-STRATEGY-DESIGN.md` §5.5).
+- **The player is told, in words they can act on** (`js/race/engineer.js`).
+  Every line names something to DO: graining says ease off and clean them up
+  because it heals, blistering says the set is done because it does not, and
+  the axle split says brake earlier or ease on the throttle. It ADVISES and
+  never decides — nothing it says arms a stop. That is §11 decision 1 ("live,
+  not pre-planned") made good: the AI has a plan and `PitLane.think` executes
+  it; the player has an engineer.
+- **A stop fits what you OWN.** Real F1 allocates 13 sets a weekend and Apex has
+  no practice sessions to allocate across — but career already tracks which
+  parts you own, so `PitLane.pickFor` fits the fastest owned compound that still
+  reaches the flag, and the career economy becomes the allocation rule with no
+  new system (§6). Tread comes first and is not a preference: a save that owns
+  no wet tyre still gets one from the class ladder, because the alternative is a
+  player who cannot respond to the weather. This also fixed a real defect — a
+  player stopping in the rain used to refit their garage slick, the exact loop
+  the AI's weather rule exists to prevent.
 - **The weather recourse now exists.** This section used to warn that a
   `dry→rain` arc "punishes a slick with no recourse… the first thing to revisit
   if rain feels unfair". Pitting IS the recourse. Acting on it automatically is

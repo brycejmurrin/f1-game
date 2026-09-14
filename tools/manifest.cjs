@@ -160,6 +160,7 @@ const FULL = [
   "js/race/reliability.js",
   "js/physics/tyre-model.js",
   "js/physics/ai-drive.js",
+  "js/race/engineer.js",
   "js/camera/offsets.js",
   "js/garage/setup-tune.js",
   "js/garage/setup-sheet.js",
@@ -460,6 +461,8 @@ const HARD_EDGES = [
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
   ["js/core/mat4.js", "js/race/pit-lane.js"],            // PitLane binds M4.clamp at eval
   ["js/race/pit-lane.js", "js/game.js"],                 // game.js calls PitLane.create(G) at eval
+  ["js/core/mat4.js", "js/race/engineer.js"],            // RaceEngineer binds M4.clamp at eval
+  ["js/race/engineer.js", "js/game.js"],                 // game.js calls RaceEngineer.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval

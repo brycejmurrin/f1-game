@@ -406,6 +406,52 @@ test("OFF: the axle split is exactly 1/1, and a stop resets both axles", () => {
   assert.equal(c.tyreWearR, 0);
 });
 
+// ── 3c. The stint log ──────────────────────────────────────────────────────
+
+test("every set fitted opens a stint, and the previous one closes at that lap", () => {
+  // Recorded at fit() because that is the ONLY place a set changes — the
+  // alternative, reconstructing stints from pit events afterwards, loses the
+  // grid set entirely (nobody pits for it).
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const c = freshCar(s, 0.5);
+  c.lap = 0;
+  const set = (code, life) => s.fit(c, { id: code, code, life, off: 0, tread: 0, colour: [1, 1, 1] });
+  c.lap = 8; set("M", 0.88);
+  c.lap = 15; set("H", 1.05);
+  c.lap = 20;
+  s.closeStints(c);
+  const st = s.stints(c);
+  assert.deepEqual([...st.map((e) => e.code)], ["M", "M", "H"], "the GRID set is a stint too");
+  assert.deepEqual([...st.map((e) => e.laps)], [8, 7, 5]);
+  assert.equal(st.reduce((n, e) => n + e.laps, 0), 20, "the strip does not add up to the race");
+});
+
+test("the set the car is ON runs to the current lap, with no end recorded yet", () => {
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const c = freshCar(s, 0.5);   // freshCar already fits the grid set, at lap 0
+  c.lap = 6;
+  assert.equal(s.stints(c)[0].laps, 6, "an open stint must still be drawable mid-race");
+  assert.equal(c.tyreLog[0].lap1, null, "an open stint must not claim an end lap");
+});
+
+test("closeStints ends the last stint where the CAR stopped, not where the leader is", () => {
+  // A retired car stopped laps ago. Its strip has to show the race it ran.
+  const s = ctxFor({ laps: 50 }); s.setLevel("real");
+  const c = freshCar(s, 0.5);
+  c.lap = 3; c.retired = true;
+  s.closeStints(c);
+  assert.equal(s.stints(c)[0].lap1, 3);
+  assert.equal(s.stints(c)[0].laps, 3);
+});
+
+test("closeStints is idempotent, and a car that never ran has an empty strip", () => {
+  const s = ctxFor({ laps: 10 }); s.setLevel("real");
+  const c = freshCar(s, 0.5);
+  c.lap = 4; s.closeStints(c); s.closeStints(c); c.lap = 9; s.closeStints(c);
+  assert.equal(s.stints(c)[0].lap1, 4, "a second close moved an already-closed stint");
+  assert.deepEqual([...s.stints({})], [], "a car with no log must not throw");
+});
+
 // ── 4. Load ────────────────────────────────────────────────────────────────
 
 test("a tidy lap is materially cheaper than a scrappy one", () => {

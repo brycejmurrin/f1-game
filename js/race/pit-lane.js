@@ -224,10 +224,67 @@ const PitLane = (function () {
       }
     }
 
+    // ── ALLOCATION ───────────────────────────────────────────────────────────
+    // §6's opportunity, and it needs no new system: real F1 gives each driver
+    // 13 sets to allocate across a weekend, Apex has no practice sessions to
+    // allocate across — but career already tracks WHICH PARTS YOU OWN. So a
+    // stop may fit any compound the player owns, and the career economy becomes
+    // the allocation rule for free. A player who bought only hypersofts has a
+    // fast car and no strategy; one who owns a hard and a soft has a choice.
+
+    /** The tyre rows this car may fit: everything, or what career says it owns. */
+    function ownedTyres() {
+      const cat = Parts.CATALOG.find(function (x) { return x.id === "tyres"; });
+      const opts = (cat && cat.options) || [];
+      const team = G.player && G.player.team;
+      // Career.owned() is null outside a career, and null for another team's
+      // car, so this is already the quick-race answer: every row is available.
+      const own = team && typeof Career !== "undefined" && Career.owned
+        ? Career.owned(team.id) : null;
+      return own ? opts.filter(function (o) { return own.has(o.id); }) : opts;
+    }
+
+    /** The set a stop should fit for this car — a TyreModel record, or null. */
+    function pickFor(c) {
+      const tyres = G.tyres;
+      if (!tyres || !c) return null;
+      const want = TyreModel.treadFor(G.raceWeather);
+      const list = ownedTyres().map(function (o) { return tyres.optionRecord(o); });
+      // TREAD FIRST, and it is not a preference. The wrong tread costs whole
+      // seconds a lap and no compound choice makes that up. A career save that
+      // owns no wet tyre still gets one, from the class ladder: the alternative
+      // is a player who literally cannot respond to the weather, which is the
+      // "no recourse" docs/PHYSICS.md warned about, reintroduced by an economy.
+      const right = list.filter(function (r) { return (r.tread || 0) === want; });
+      if (!right.length) {
+        const cls = TyreModel.classForTread(want);
+        return cls ? tyres.classRecord(cls) : (list[0] || null);
+      }
+      // Then the strategist's rule: the FASTEST set that still reaches the
+      // flag. Softer is faster and shorter-lived, so among the sets that go the
+      // distance take the shortest-lived one; if nothing reaches, take the set
+      // that gets closest and accept that there is another stop coming.
+      const lapsLeft = Math.max(1, G.lapsTarget - (c.lap || 0));
+      const lasts = right.filter(function (r) {
+        return TyreModel.lifeLaps(r.life, G.lapsTarget) >= lapsLeft;
+      });
+      const pool = lasts.length ? lasts : right;
+      return pool.reduce(function (best, r) {
+        if (!best) return r;
+        return lasts.length ? (r.life < best.life ? r : best)
+                            : (r.life > best.life ? r : best);
+      }, null);
+    }
+
     // What a stop actually does. One place, so a player stop, an AI stop and a
     // test-driven stop cannot diverge.
     function serviceCar(c) {
-      const next = c.pitNext || null;
+      // An AI car's next set was chosen by its plan (setNext); a PLAYER's is
+      // chosen here, from what they own and what the race needs. Refitting
+      // c.tyreOpt unconditionally — which is what this did — meant a player who
+      // stopped in the rain bolted on another slick, the exact loop the AI's
+      // weather rule exists to prevent.
+      const next = c.pitNext || (c.local ? pickFor(c) : null);
       G.tyres.fit(c, next || (c.tyreOpt ? G.tyres.optionRecord(c.tyreOpt) : G.tyres.classRecord(c.tyreClass || "medium")));
       c.pitNext = null;
       if (c.isPlayer && G.announce) G.announce("TYRES ON — GO GO GO", 1.6, "race");
@@ -328,7 +385,8 @@ const PitLane = (function () {
     }
 
     return { zoneOf: () => z(), limit, toBox, approachV, inLane, inWindow: inWindowOf,
-             arm, update, reset, info, setNext, serviceCar, planFor, think };
+             arm, update, reset, info, setNext, serviceCar, planFor, think,
+             pickFor, ownedTyres };
   }
 
   return { create, zoneOf, inWindow, throughM,

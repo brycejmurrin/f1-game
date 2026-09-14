@@ -2244,6 +2244,13 @@ const Tracks = (function () {
       // This trap has bitten before and was fixed for ONE field only (see the
       // `pal` note in js/lighting/atmosphere.js); nobody swept the rest. The guard
       // in tests/unit/circuit-def-fields.test.mjs is what stops the sixth.
+      // READ OFF THE COPIED DEF by js/physics/tyre-model.js severity(), so it
+      // joins the family above. Omitted, it failed their exact silent way: the
+      // model's fallback is a legitimate 1.0, so all seven authored circuits
+      // simply behaved like the median and nothing anywhere said otherwise.
+      // Caught by tests/unit/circuit-def-fields.test.mjs, which is what that
+      // guard is for.
+      tyreSeverity: d.tyreSeverity,
       sunAzimBias: d.sunAzimBias,
       sceneryTheme: d.sceneryTheme,
       sceneryThemeOverrides: d.sceneryThemeOverrides || null,

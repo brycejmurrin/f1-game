@@ -11,6 +11,37 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-14 — `debris.spec.js › enabled by default` fails on `rapierFetches`. OPEN.**
+Found while gating the tyre thermal layer; **pre-existing**, and proven so
+rather than assumed — the same single spec fails identically on a worktree at
+the parent commit `a28b77d`, on the same assertion line.
+
+```
+tests/specs/debris.spec.js:76
+  expect(r.rapierFetches).toBeGreaterThan(0);
+  Expected: > 0   Received: 0
+```
+
+**What is NOT wrong.** The three assertions above it pass: `active`, `enabled`,
+`ready`, `stepped > 0` and `live > 0`. So Rapier loaded, the side-world ran, and
+the seeded burst spawned debris — the physics under test is fine. What fails is
+only the test's attempt to OBSERVE the load, via
+`performance.getEntriesByType("resource")` filtered on `rapier`.
+
+So the likely cause is in the observation, not the subsystem: a resource served
+from the service-worker precache (or the bfcache) produces no Resource Timing
+entry, and a slow boot on a loaded box can overflow the default 250-entry
+resource buffer before the assertion reads it — this box takes ~80 s for the
+test. Either would leave a working side-world with an empty fetch list.
+
+**The fix is a test fix, not a source fix**, and it should assert the thing it
+means: that Rapier is loaded (`ready` already says so) rather than that a
+network entry was recorded. If the fetch really must be observed, the page needs
+`performance.setResourceTimingBufferSize()` raised at boot and a
+cache-state-independent probe. Not attempted here — it is nothing to do with
+tyres, and a speculative edit to a spec this session cannot re-run cheaply
+would be worse than the honest record.
+
 **2026-09-14 — `tools/check/quick-validate.mjs` was red on a CLEAN tree. FIXED.**
 Found while building the tyre/pit phases and confirmed not caused by them (the
 whole working tree was stashed and it failed identically). It reported:
