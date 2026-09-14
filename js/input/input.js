@@ -34,7 +34,6 @@ const Input = (function () {
   let overtakePressed = false;
   let boostTogglePressed = false;
   let aeroTogglePressed = false;
-  let pitTogglePressed = false;
   // edge-triggered gear shifts (manual mode)
   let shiftUpPressed = false;
   let shiftDownPressed = false;
@@ -420,11 +419,6 @@ const Input = (function () {
     { id: "boost",     label: "BOOST",       def: ["Space", null] },
     { id: "overtake",  label: "OVERTAKE",    def: ["KeyX", null] },
     { id: "aero",      label: "ACTIVE AERO", def: ["KeyZ", null] },
-    // NOT KeyP (reserved below for pause/back) and not KeyB (the rebind guard's
-    // own "a free key" target — taking it would make that test assert a
-    // conflict that is not the thing it is testing). V is free and unreserved;
-    // on touch the PIT button is the primary control anyway.
-    { id: "pit",       label: "PIT IN",      def: ["KeyV", null] },
     { id: "shiftUp",   label: "SHIFT UP",    def: ["KeyE", null] },
     { id: "shiftDown", label: "SHIFT DOWN",  def: ["KeyQ", "ShiftLeft"] },
     { id: "camera",    label: "CAMERA",      def: ["KeyC", null] },
@@ -564,7 +558,6 @@ const Input = (function () {
     { id: "boost",     label: "BOOST",       def: [2, null] },
     { id: "overtake",  label: "OVERTAKE",    def: [3, null] },
     { id: "aero",      label: "ACTIVE AERO", def: [12, null] },
-    { id: "pit",       label: "PIT IN",      def: [13, null] },
     { id: "shiftUp",   label: "SHIFT UP",    def: [5, null] },
     { id: "shiftDown", label: "SHIFT DOWN",  def: [4, null] },
     { id: "camera",    label: "CAMERA",      def: [8, null] },
@@ -893,7 +886,6 @@ const Input = (function () {
       case "boost": if (edge) boostTogglePressed = true; e.preventDefault(); break;
       case "overtake": if (edge) overtakePressed = true; break;
       case "aero": if (edge) aeroTogglePressed = true; break;
-      case "pit": if (edge) pitTogglePressed = true; break;
       case "shiftUp": if (edge) shiftUpPressed = true; break;
       case "shiftDown": if (edge) shiftDownPressed = true; break;
       case "camera": if (edge) cameraCyclePressed = true; break;
@@ -1722,15 +1714,6 @@ const Input = (function () {
     return v;
   }
 
-  // PIT IN is an ARM, not a turn-in — the same shape as OVERTAKE's arm and
-  // X-mode's, and the right one for a phone: you tap once on the approach and
-  // then drive the lane, rather than needing a precise input at a precise metre.
-  function consumePitToggle() {
-    const v = pitTogglePressed;
-    pitTogglePressed = false;
-    return v;
-  }
-
   function consumeShiftUp() {
     const v = shiftUpPressed;
     shiftUpPressed = false;
@@ -1985,7 +1968,6 @@ const Input = (function () {
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
-    wireTap("btn-pit", function () { pitTogglePressed = true; });
     wireTap("shift-up", function () { shiftUpPressed = true; });
     wireTap("shift-down", function () { shiftDownPressed = true; });
     wireHold("btn-steer-left", function (v) { btnSteerLeft = v; if (!v) btnSteerLeftVal = 0; },
@@ -2184,7 +2166,6 @@ const Input = (function () {
     consumeBoostToggle,
     consumeOvertake,
     consumeAeroToggle,
-    consumePitToggle,
     consumeShiftUp,
     consumeShiftDown,
     consumeCameraCycle,

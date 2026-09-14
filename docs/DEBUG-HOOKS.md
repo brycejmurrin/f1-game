@@ -2180,9 +2180,15 @@ const h = __apex.lapHistory();
 ### `pit({car, arm}?) → pitInfo | null`
 
 The pit lane (`js/race/pit-lane.js`): its resolved geometry, the speed limit,
-and this car's state in it. `{arm: true}` calls the stop and `{arm: false}`
-cancels it — exactly what the PIT control does — which is how a spec drives a
-stop with no input device.
+and this car's state in it.
+
+**THERE IS NO PIT CONTROL.** A driver calls a stop the way a real one does — by
+putting the car on the pit side at the entry and holding it there — so there is
+no button, no key and no gamepad bind to press. `{arm: true}` calls the stop
+directly and `{arm: false}` cancels it, which is how a spec skips the gesture;
+to exercise the gesture itself, put the car past `COMMIT_FRAC` of the
+half-width toward `side` within `COMMIT_M` of the entry and hold it for
+`COMMIT_S`.
 
 | Field | Meaning |
 |---|---|
@@ -2196,6 +2202,8 @@ stop with no input device.
 | `state` | `none` / `approach` / `lane` / `box` / `out` |
 | `inWindow` | Inside the arc window at all (true for every car passing the pits) |
 | `stops` | Stops this car has made |
+| `commit` | How far through the commitment dwell this car is, 0-1 — 0 unless it is holding the line into the pits right now. With no button, this is the whole input, and the HUD's compound chip fills with it |
+| `side` | Which way "in" is: `+1` right (where `js/track/tracks.js` places the pit building), `-1` left. Overridable per circuit via `def.pitZone.side` |
 
 **The lane is a STATE, not a place.** There is no lateral lane to drive into:
 a driveable one was built and measured badly twice (a forced boundary went
@@ -2235,10 +2243,17 @@ have to call both.
 | `life` | How much of the SCHEDULED race distance this compound survives, as a fraction — not a lap count. See below |
 | `lifeLaps` | …and what that works out to in laps at *this* race distance, after the stint floor |
 | `wear` | 0 fresh, 1 spent, up to 2 past the cliff |
+| `wearF` / `wearR` | The same number per axle. Their MEAN is exactly `wear`, always — braking loads the front and traction the rear, and brake bias moves the braking half |
 | `lapsOn` / `stints` | Laps on this set, and how many sets this car has used |
+| `severity` | The circuit's own tyre-severity scale, 1.0 at the median — what the SURFACE does, multiplied onto what the layout already does |
 | `load` | How hard the car worked the tyre on the last tick, ~1.0 for a clean racing lap |
-| `severity` | The circuit's own tyre-severity scale, 1.0 at the median |
+| `tempS` / `tempB` | Surface and bulk (carcass) temperature, °C. The surface follows the driving on a ~9 s constant, the bulk on ~35 s — that gap is what tells graining from blistering |
+| `tempOpt` / `tempWindow` | The fitted compound's optimum and the half-width of its window, °C. Softer compounds work cooler, so the optimum is derived from `life` |
+| `ambient` | Track/air temperature for the current weather, °C (dry 30 → rain 13) |
+| `grain` / `blister` | The two surface defects, 0-1. Graining accumulates on a COLD, SLIDING tyre and **heals** once it is warm; blistering accumulates on an over-heated CORE and **never** does |
+| `tempGrip` / `defectGrip` | What those two cost, as multipliers |
 | `grip` / `traction` | The lateral and longitudinal multipliers the driving model is reading right now |
+| `axleF` / `axleR` | The front/rear grip split, **relative** to `grip` (which already carries the shared drop). 1/1 on an even set; only the player's bicycle model consumes it |
 | `fuel` | Fuel remaining as a fraction of the start load — 1 on the grid, 0 at the flag |
 
 **`life` is a fraction of the distance you selected, not a lap count**, and that
@@ -2247,6 +2262,11 @@ is the single most surprising thing about the model. Real degradation over a
 real rates would mean no stop was ever worth making at any distance this game
 offers (`docs/research/TYRE-STRATEGY-DESIGN.md` §4). A 0.5-life compound is
 spent halfway through a 5-lap race and halfway through a 50-lap race alike.
+
+**A fresh set comes out of blankets at 70 °C, BELOW its window** — that is the
+out-lap, and it is the counterweight that stops an undercut being free and
+therefore always correct. Watch `tempS` climb toward `tempOpt` over the first
+lap; a soft switches on in about a lap and a hard takes two or three.
 
 `{level: "off" | "light" | "real"}` sets the race setting **and** the live model
 together, so a spec can turn wear on without the settings sheet and have it
