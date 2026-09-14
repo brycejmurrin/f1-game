@@ -16,6 +16,11 @@
     night: false,
     theme: "modern",
     lengthKm: 5.4,
+    // TYRE SEVERITY: what the SURFACE and the speeds do to a tyre, on top of the
+    // work the LAYOUT already makes it do (js/physics/tyre-model.js derives that
+    // emergently from the forces the car made). Real 2026 rate / the 0.0493 s/lap
+    // mean of the seven measured circuits — docs/research/TYRE-STRATEGY-DESIGN.md §5.5.
+    tyreSeverity: 1.22,  // Miami 0.060 s/lap
     baseHW: 7,
     sceneryCoordinates: "racing",
     flatTerrain: true,

@@ -208,6 +208,162 @@ const TyreModel = (function () {
   }
   function longFor(wear) { return 1 - (1 - gripFor(wear)) * LONG_SHARE; }
 
+  // ── PER-AXLE ──────────────────────────────────────────────────────
+  // One wear number makes every set go off the same way, and that is not how a
+  // driver experiences a tyre: fronts going means the car stops turning in,
+  // rears going means it steps out on exit. Those are opposite complaints with
+  // opposite answers — brake earlier vs. get on the throttle later — so the
+  // split is what turns "the tyres are done" into something you can drive
+  // around (docs/research/TYRE-STRATEGY-DESIGN.md §5.4).
+  //
+  // It is a BIAS ON THE SAME INTEGRATION, not a second model. The two shares
+  // average to exactly 1, so c.tyreWear — the number the strategy planner, the
+  // AI, the HUD and the pit call all read — is untouched, and what differs is
+  // only the grip each axle sees. Braking loads the front and brake bias says
+  // how much; traction loads the rear; the resting split leans slightly front
+  // because a car set up for a race is understeer-limited on purpose.
+  //
+  // Only the PLAYER consumes it: game.js runs the per-axle bicycle model for
+  // human cars alone (muF/muR), so an AI car accumulates the two numbers for
+  // telemetry and drives on the mean. Same asymmetry the load model documents.
+  const AXLE_LONG = 0.55;   // a full-effort brake or traction event tips this far
+  const AXLE_REST = 0.06;   // the front's tilt on a neutral, purely lateral lap
+  const AXLE_BB = 1.8;      // brake bias authority over the braking tilt
+  const BB_REF = PhysicsConsts.BB_REF;   // 0.56 — the split with no front/rear tilt
+
+  /** Signed longitudinal effort: -1 full braking .. +1 full traction. */
+  function longSigned(c, aTop) {
+    if (c.human) return ((c.axEstSm || 0) < 0 ? -1 : 1) * clamp(c.axFrac || 0, 0, 1);
+    return clamp((c.accSm || 0) / Math.max(1, aTop), -1, 1);
+  }
+  /** [frontShare, rearShare] for this tick. Averages to exactly 1, by construction. */
+  function axleShare(c, aTop) {
+    const lng = longSigned(c, aTop);
+    const bb = c.brakeBias != null && isFinite(c.brakeBias) ? c.brakeBias : BB_REF;
+    // One expression for both directions: braking is lng < 0, so -lng tilts
+    // front, and traction is lng > 0, so -lng tilts rear. Brake bias only gets
+    // a say over the braking half — it does not move a traction event.
+    const bias = lng < 0 ? clamp(1 + AXLE_BB * (bb - BB_REF), 0.3, 1.7) : 1;
+    const d = clamp(AXLE_REST - lng * AXLE_LONG * bias, -0.9, 0.9);
+    return [1 + d, 1 - d];
+  }
+  const AXLE_EVEN = Object.freeze({ f: 1, r: 1 });
+
+  // ── TEMPERATURE ───────────────────────────────────────────────────────────
+  // TWO STATES, and the second one is not decoration. Real tyres fail in two
+  // opposite ways that a single temperature cannot tell apart
+  // (docs/research/TYRE-STRATEGY-DESIGN.md §2.2): GRAINING is SURFACE damage
+  // from cold or sliding rubber, costs 0.1-0.3 s/lap, and drives itself clean
+  // again; BLISTERING is BULK damage from a core that got too hot, costs
+  // 1 s/lap or more, and never recovers. One state gives you one failure and
+  // therefore no decision — with two, backing off is a real move.
+  //
+  // What this buys, in the order it matters:
+  //   1. THE OUT-LAP. A fresh set leaves the pits at blanket temperature and is
+  //      worth ~0.4-0.6 s less than a warm one for a lap or so. That is the
+  //      counterweight the undercut needs: without it a stop is free and always
+  //      correct, which is a worse game than the one with the trade in it.
+  //   2. PUSH VS MANAGE. Overheat a set and it goes off NOW and comes back if
+  //      you ease — the one tyre decision a 5-lap race can contain.
+  //   3. COMPOUND CHARACTER. Softs switch on in about a lap, hards take two or
+  //      three, so the compound choice reaches the out-lap too.
+  //
+  // Degrees Celsius, because that is the unit the research is in and the unit a
+  // HUD can show. Everything is 0/no-op while the setting is off.
+  const T_AMBIENT = { dry: 30, overcast: 22, fog: 18, wet: 16, rain: 13 };
+  const T_BLANKET = 70;      // FIA max blanket temperature; where a fresh set starts
+  // Optimum window, per compound. Real slicks want 90-140 C by compound and the
+  // usable band between "too cold to grip" and "too hot to survive" is only
+  // 15-20 C wide. Softer compounds work cooler, so the optimum is derived from
+  // `life` — the same number the whole model is keyed on — rather than authored
+  // twice. Soft (0.48) lands ~91 C, medium (0.88) 105 C, hard (1.05) ~111 C.
+  const T_OPT_MID = 105, T_OPT_SPAN = 35, T_WINDOW = 18;
+  function optTemp(life) { return T_OPT_MID + T_OPT_SPAN * ((life == null ? LIFE_MID : life) - LIFE_MID); }
+
+  // Heating is slip power: how hard the tyre is working times how fast the car
+  // is going. Cooling is airflow, so it rises with speed too — which is why a
+  // tyre cools on a straight and heats in a corner rather than simply tracking
+  // pace. Calibrated so a clean racing lap settles inside the window from a
+  // 30 C ambient, and a blanket-warm set reaches it in about a lap.
+  // Calibrated so a car at racing load settles INSIDE its window and a cruising
+  // one sits below it. COOL_V is deliberately small: cooling rises with airflow,
+  // but heating rises with speed too, and a large COOL_V makes them cancel until
+  // temperature stops depending on pace at all. At 1.5 a flat-out lap equilibrated
+  // at 144 C against a 100 C optimum — measured, and the reason both this and
+  // HEAT_K came down.
+  const HEAT_K = 7.8, COOL_K = 0.06, COOL_V = 0.8;
+  // The carcass follows the surface slowly and sheds heat slowly: a ~35 s time
+  // constant against the surface's ~9 s. That gap IS the graining/blistering
+  // distinction — the surface can be cold while the core is fine, and the core
+  // can be cooking while the surface reads normal.
+  const EXCH = 0.020, COOL_B = 0.008;
+  // Softer compounds switch on faster (about a lap against two or three).
+  function warmRate(life) { return clamp(1.35 - 0.4 * ((life == null ? LIFE_MID : life) / LIFE_MID), 0.7, 1.5); }
+
+  // EACH COMPOUND EQUILIBRATES NEAR ITS OWN WINDOW at racing load, and that has
+  // to be built in rather than hoped for. Scaling only the HEAT by warmRate made
+  // a soft both heat faster AND want less heat, so it settled 19 C ABOVE its
+  // window and was permanently overheating — measured at 128 C against a 91 C
+  // optimum. Cooling is therefore solved for: given the reference lap below,
+  // pick the cooling coefficient that puts equilibrium on the optimum. What
+  // still differs between compounds is the TIME CONSTANT (both terms scale
+  // together), which is exactly the "softs switch on in a lap, hards in three"
+  // the research describes.
+  //
+  // The reference AMBIENT is fixed at dry on purpose: solving against the live
+  // ambient would put every compound on its optimum in every weather, and a
+  // cold track is supposed to give you a cold tyre.
+  const T_REF_LOAD = 1.10, T_REF_V = 0.95;
+  function coolFor(life) {
+    const rise = Math.max(20, optTemp(life) - T_AMBIENT.dry);
+    return HEAT_K * warmRate(life) * T_REF_LOAD * T_REF_V / ((1 + COOL_V * T_REF_V) * rise);
+  }
+
+  /** One tick of the two-state thermal model. Returns [surface, bulk] in C. */
+  function stepTemp(ts, tb, { load, vFrac, amb, life, dt }) {
+    const w = warmRate(life);
+    const heat = HEAT_K * w * Math.max(0, load) * clamp(vFrac, 0, 1);
+    const cool = coolFor(life) * (1 + COOL_V * clamp(vFrac, 0, 1)) * (ts - amb);
+    const ns = ts + (heat - cool - EXCH * (ts - tb)) * dt;
+    const nb = tb + (EXCH * (ts - tb) - COOL_B * (tb - amb)) * dt;
+    // Clamped well outside anything the model produces, purely so a pathological
+    // dt can never NaN a car's grip.
+    return [clamp(ns, -40, 400), clamp(nb, -40, 400)];
+  }
+
+  // Grip against the window. Quadratic either side so the edges are forgiving
+  // and the extremes are not; TEMP_FLOOR stops a stone-cold set from being
+  // undriveable rather than merely slow.
+  const COLD_PEN = 0.12, HOT_PEN = 0.12, TEMP_SPAN = 40, TEMP_FLOOR = 0.80;
+  function tempGrip(ts, life) {
+    if (ts == null) return 1;
+    const opt = optTemp(life);
+    const cold = Math.max(0, (opt - T_WINDOW) - ts) / TEMP_SPAN;
+    const hot = Math.max(0, ts - (opt + T_WINDOW)) / TEMP_SPAN;
+    return clamp(1 - COLD_PEN * cold * cold - HOT_PEN * hot * hot, TEMP_FLOOR, 1);
+  }
+
+  // GRAINING accumulates when the SURFACE is below its window and the tyre is
+  // sliding — cold rubber tears rather than keys into the road — and heals once
+  // the surface is back in the window. Recoverable by construction.
+  // BLISTERING accumulates when the BULK is over its limit and never heals.
+  const GRAIN_RATE = 0.055, GRAIN_HEAL = 0.02, GRAIN_GRIP = 0.05;
+  const BLIST_OVER = 35, BLIST_RATE = 0.0012, BLIST_GRIP = 0.14;
+  function stepGrain(grain, { ts, life, slide, dt }) {
+    const opt = optTemp(life);
+    const cold = clamp(((opt - T_WINDOW) - ts) / TEMP_SPAN, 0, 1);
+    const g = (grain || 0) + (cold > 0 ? GRAIN_RATE * cold * clamp(slide, 0, 1) : -GRAIN_HEAL) * dt;
+    return clamp(g, 0, 1);
+  }
+  function stepBlister(blister, { tb, life, dt }) {
+    const over = tb - (optTemp(life) + T_WINDOW + BLIST_OVER);
+    return clamp((blister || 0) + (over > 0 ? BLIST_RATE * over * dt : 0), 0, 1);
+  }
+  /** The two surface defects, as one grip multiplier. */
+  function defectGrip(grain, blister) {
+    return clamp(1 - GRAIN_GRIP * clamp(grain || 0, 0, 1) - BLIST_GRIP * clamp(blister || 0, 0, 1), 0.6, 1);
+  }
+
   // ── FUEL ──────────────────────────────────────────────────────────────────
   // The counterweight, and the reason a stint has a SHAPE rather than a slope.
   // The car burns off fuel and gets faster while the tyre goes off and gets
@@ -280,13 +436,55 @@ const TyreModel = (function () {
       if (!c) return;
       c.tyre = record || classRecord("medium");
       c.tyreWear = 0;
+      c.tyreWearF = 0; c.tyreWearR = 0;
+      // A FRESH SET COMES OUT OF BLANKETS, not up to temperature. This one line
+      // is the out-lap: the set is below its window for a lap or so and worth
+      // ~0.4-0.6 s less, which is the counterweight that stops an undercut from
+      // being free and therefore always correct.
+      c.tyreTs = T_BLANKET; c.tyreTb = T_BLANKET;
+      c.tyreGrain = 0; c.tyreBlister = 0;
       c.tyreLap0 = c.lap || 0;
       c.tyreStints = (c.tyreStints || 0) + 1;
+      // THE STINT LOG, which is what the results sheet draws. Recorded HERE
+      // because fit() is the only place a set is ever changed, so the log and
+      // the car can never disagree about what was on it — the alternative,
+      // reconstructing stints from the pit events afterwards, loses the grid
+      // set entirely (nobody pits for it) and gets the lap numbers off by one
+      // whenever a stop straddles the line. `lap1` stays null on the set the
+      // car is on; closeStints() at the flag fills the last one in.
+      const log = c.tyreLog || (c.tyreLog = []);
+      const last = log[log.length - 1];
+      if (last && last.lap1 == null) last.lap1 = c.lap || 0;
+      log.push({ code: c.tyre.code, id: c.tyre.id, colour: c.tyre.colour,
+                 lap0: c.lap || 0, lap1: null });
+    }
+    /** Close the open stint at the flag, so the results strip has an end lap. */
+    function closeStints(c) {
+      const log = c && c.tyreLog;
+      if (!log || !log.length) return;
+      const last = log[log.length - 1];
+      if (last.lap1 == null) last.lap1 = c.lap || 0;
+    }
+    /** The stint strip for one car: [{code, colour, lap0, lap1, laps}, …]. */
+    function stints(c) {
+      if (!c || !c.tyreLog) return [];
+      const end = c.lap || 0;
+      return c.tyreLog.map(function (e) {
+        const lap1 = e.lap1 == null ? end : e.lap1;
+        return { code: e.code, id: e.id, colour: e.colour,
+                 lap0: e.lap0, lap1, laps: Math.max(0, lap1 - e.lap0) };
+      });
     }
 
     // The circuit's own tyre severity, 1.0 at the median. Authored per circuit
     // in js/circuits/<id>.js beside the other per-circuit tables; the real
     // spread is 0.022-0.097 s/lap (Austria highest, China lowest), normalised.
+    /** Track/air temperature for the current conditions. */
+    function ambient() {
+      const t = T_AMBIENT[G.raceWeather];
+      return t == null ? T_AMBIENT.dry : t;
+    }
+
     function severity() {
       const def = G.track && G.track.def;
       const v = def && def.tyreSeverity;
@@ -301,19 +499,62 @@ const TyreModel = (function () {
       const track = G.track;
       if (!track || !(track.total > 0) || !(dt > 0)) return;
       if (!c.tyre) fit(c, classRecord("medium"));
-      const lapFrac = Math.abs(c.speed || 0) * dt / track.total;
-      if (!(lapFrac > 0)) return;
       const load = (c.human ? humanLoad(c, G.LAT_MAX) : aiLoad(c, G.aTop()))
         * fuelLoadMul(c, G.lapsTarget);
-      const laps = lifeLaps(c.tyre.life, G.lapsTarget);
-      c.tyreWear = (c.tyreWear || 0) + lapFrac * load * severity() * LEVELS[level] / laps;
       c._tyreLoad = load;    // debug/telemetry only — see __apex.tyres()
+      // TEMPERATURE FIRST, and on the CLOCK rather than on distance. Heat is a
+      // rate: a car held in its pit box at zero speed must cool, and a car
+      // parked on the grid must not stay at blanket temperature forever. This
+      // ran after the distance early-return at first, which meant a stationary
+      // car's tyres never changed temperature at all — measured.
+      const amb = ambient();
+      if (c.tyreTs == null) { c.tyreTs = amb; c.tyreTb = amb; }
+      const vFrac = Math.abs(c.speed || 0) / Math.max(1, G.vTop());
+      const t = stepTemp(c.tyreTs, c.tyreTb, { load, vFrac, amb, life: c.tyre.life, dt });
+      c.tyreTs = t[0]; c.tyreTb = t[1];
+      // Graining needs a measured slide, which only human cars have (the same
+      // asymmetry the load model documents). An AI car still heats, cools and
+      // blisters; it just never grains, and the field is scored on one curve
+      // either way because blistering is the bulk-temperature failure.
+      const slide = c.human ? (c.skidIntensity || 0) : 0;
+      c.tyreGrain = stepGrain(c.tyreGrain, { ts: c.tyreTs, life: c.tyre.life, slide, dt });
+      c.tyreBlister = stepBlister(c.tyreBlister, { tb: c.tyreTb, life: c.tyre.life, dt });
+      // WEAR is distance, so it stops when the car does.
+      const lapFrac = Math.abs(c.speed || 0) * dt / track.total;
+      if (!(lapFrac > 0)) return;
+      const laps = lifeLaps(c.tyre.life, G.lapsTarget);
+      const dw = lapFrac * load * severity() * LEVELS[level] / laps;
+      c.tyreWear = (c.tyreWear || 0) + dw;
+      const sh = axleShare(c, G.aTop());
+      c.tyreWearF = (c.tyreWearF || 0) + dw * sh[0];
+      c.tyreWearR = (c.tyreWearR || 0) + dw * sh[1];
     }
 
     // The three multipliers game.js reads. Each is EXACTLY 1 when the setting is
     // off, which is what keeps the characterization baseline honest.
-    function gripMul(c) { return on() && c ? gripFor(c.tyreWear) : 1; }
-    function tractionMul(c) { return on() && c ? longFor(c.tyreWear) : 1; }
+    // The three things that cost grip, multiplied: how worn the set is, how far
+    // it is from its window, and what the surface and core have done to it.
+    function gripMul(c) {
+      if (!on() || !c) return 1;
+      const life = c.tyre ? c.tyre.life : null;
+      return gripFor(c.tyreWear) * tempGrip(c.tyreTs, life) * defectGrip(c.tyreGrain, c.tyreBlister);
+    }
+    // Traction and braking take the same SHARE of the whole drop that wear alone
+    // used to take — a cold set is down on traction too, not only on cornering.
+    function tractionMul(c) {
+      if (!on() || !c) return 1;
+      return 1 - (1 - gripMul(c)) * LONG_SHARE;
+    }
+    // The FRONT/REAR grip split, RELATIVE to gripMul. game.js already carries
+    // the shared part in muBase, so handing it absolute axle grip would count
+    // wear twice; a ratio is what the per-axle seam actually wants, and it
+    // cancels the temperature and defect terms (both axles share them) down to
+    // the one thing that really differs. Exactly 1/1 while the setting is off.
+    function axleSplit(c) {
+      if (!on() || !c || c.tyreWearF == null) return AXLE_EVEN;
+      const base = gripFor(c.tyreWear);
+      return { f: gripFor(c.tyreWearF) / base, r: gripFor(c.tyreWearR) / base };
+    }
     function fuelAccelMul(c) {
       return on() && c ? 1 / (1 + FUEL_ACCEL * fuelFrac(c, G.lapsTarget)) : 1;
     }
@@ -337,18 +578,33 @@ const TyreModel = (function () {
         life: t ? t.life : null,
         lifeLaps: t ? +lifeLaps(t.life, G.lapsTarget).toFixed(2) : null,
         wear: +spent(c).toFixed(4),
+        wearF: c.tyreWearF != null ? +c.tyreWearF.toFixed(4) : null,
+        wearR: c.tyreWearR != null ? +c.tyreWearR.toFixed(4) : null,
         lapsOn: lapsOn(c),
         stints: c.tyreStints || 0,
         load: +(c._tyreLoad || 0).toFixed(3),
         severity: +severity().toFixed(3),
+        // Temperature and the two surface defects (see the TEMPERATURE block).
+        tempS: c.tyreTs != null ? +c.tyreTs.toFixed(1) : null,
+        tempB: c.tyreTb != null ? +c.tyreTb.toFixed(1) : null,
+        tempOpt: t ? +optTemp(t.life).toFixed(1) : null,
+        tempWindow: T_WINDOW,
+        ambient: ambient(),
+        grain: +(c.tyreGrain || 0).toFixed(4),
+        blister: +(c.tyreBlister || 0).toFixed(4),
+        tempGrip: +tempGrip(c.tyreTs, t ? t.life : null).toFixed(4),
+        defectGrip: +defectGrip(c.tyreGrain, c.tyreBlister).toFixed(4),
         grip: +gripMul(c).toFixed(4),
         traction: +tractionMul(c).toFixed(4),
+        axleF: +axleSplit(c).f.toFixed(4),
+        axleR: +axleSplit(c).r.toFixed(4),
         fuel: +fuelFrac(c, G.lapsTarget).toFixed(3),
       };
     }
 
     return {
-      fit, update, gripMul, tractionMul, fuelAccelMul, fuelVmaxMul,
+      fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
+      stints, closeStints,
       lapsOn, spent, info, severity,
       level: () => level, setLevel, on,
       classRecord, optionRecord,
@@ -358,6 +614,10 @@ const TyreModel = (function () {
   return {
     LEVELS, isLevel, deriveLife, lifeOf, lifeLaps, MIN_LIFE_LAPS,
     gripFor, longFor, humanLoad, aiLoad, fuelFrac,
+    optTemp, warmRate, coolFor, stepTemp, tempGrip, stepGrain, stepBlister, defectGrip,
+    axleShare, longSigned, AXLE_LONG, AXLE_REST, BB_REF,
+    T_AMBIENT, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
+    GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
     classRecord, optionRecord, AI_CLASS, treadFor, classForTread,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,

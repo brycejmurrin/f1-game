@@ -630,14 +630,78 @@ it on. `js/race/reliability.js` ships off for the same reason.
   scale — `LOAD_REF` is measured off driven laps, not guessed.
 - **`tyreMu` enters at `muBase`, beside `marbleMu`** — the same external-scalar
   seam, on the same terms. Traction and braking take a smaller share of the drop.
-- **Pit loss is EMERGENT, not a constant.** The lane is driven: it is a real
-  stretch of tarmac beyond `hw`, inside the runoff that was already there, with
-  the driving boundary forced open across the window (`PitLane.openBarrier`, the
-  track engine's only job here — `hw` never moves). So the loss is lane length
-  over the limiter against racing the same stretch, plus the box time. Measured
-  **23.6 s at Monza**, inside the real 20-25 s band. Change the lane and the
-  strategy changes with it, which is what lets it vary by circuit the way real
-  strategy does.
+- **There is no pit button.** A stop is called the way a driver calls one: put
+  the car on the pit side at the entry and hold it there. A control made the
+  stop a MODE you toggle on the approach; the real thing is a LINE you take.
+  Telling that apart from a car that merely ran wide at the entry is the same
+  discrimination the half-plane `inLane` failed at, and four conditions do it —
+  only in the first 120 m of the window, past 0.70 of the half-width, held for
+  0.55 s, and moving forward on the road. The last one refuses the spun or
+  beached car by construction. The HUD's compound chip fills with the dwell,
+  because a gesture needs the feedback a button gave for free.
+- **The stop is a STATE, not a place.** The first cut opened the driving
+  boundary across the pit window so the lane was real tarmac. It measured well
+  and broke two other things: lap distance jumped 250 m at Monaco, and a beached
+  car stopped reading as off-track and so was never rescued. The lane is
+  therefore longitudinal — arm a stop, and the limiter, the box and the release
+  are keyed to `pitState` and arc distance, with no geometry mutation at all
+  (`docs/research/TYRE-STRATEGY-DESIGN.md` §5.2 erratum). **Pit loss is still
+  emergent**: window length over the limiter against racing the same stretch,
+  plus the box. Measured **23.6 s at Monza**, inside the real 20-25 s band, and
+  it varies by circuit the way real strategy does.
+- **Temperature is TWO states, and the second one is not decoration.** A real
+  tyre fails in two opposite ways a single temperature cannot tell apart:
+  **graining** is SURFACE damage from cold or sliding rubber, costs a couple of
+  tenths, and drives itself clean again; **blistering** is BULK damage from a
+  core that got too hot, costs a second or more, and never recovers. One state
+  gives you one failure and therefore no decision — with two, backing off is a
+  real move. The carcass follows the surface on a ~35 s constant against the
+  surface's ~9 s, and that gap *is* the distinction. Optimum window is derived
+  from `life` rather than authored twice (soft ~91 °C, hard ~111 °C), and the
+  cooling coefficient is *solved* so each compound equilibrates near its own
+  window — scaling only the heating made a soft both warm faster and want less
+  heat, so it sat 19 °C above its window permanently. What still differs
+  between compounds is the time constant: softs switch on in about a lap, hards
+  in two or three.
+- **A fresh set comes out of blankets at 70 °C, below its window.** That is the
+  out-lap, and it is the counterweight the undercut needs — without it a stop is
+  free and therefore always correct, which is a worse game than the one with the
+  trade in it.
+- **Wear is per-axle, as a bias on one integration.** Braking loads the front
+  (and brake bias says how much), traction loads the rear; the two shares
+  average to exactly 1, so `c.tyreWear` — what the planner, the AI, the HUD and
+  the pit call all read — is untouched and only `muF`/`muR` differ. Worn fronts
+  stop the car turning in, worn rears let it step out: opposite complaints with
+  opposite answers, which is what makes a gone tyre something you can drive
+  around. `axleSplit` is a RATIO against `gripMul` because `muBase` already
+  carries the shared drop.
+- **Circuit severity is what the SURFACE does, on top of what the layout does.**
+  The emergent load already says how hard a LAYOUT works a tyre — it falls out
+  of the forces the car made, with no authoring. `tyreSeverity` says what the
+  abrasiveness, the tarmac age and the track temperature do on top, none of
+  which geometry can know, and the two multiply. That decomposition is what
+  lets the model say something one number could not: Monaco's layout works the
+  tyre hard (1.221 emergent) while its surface and speeds work it gently, which
+  is how one of the sport's most demanding layouts is one of its LOWEST deg
+  circuits (0.050 s/lap against Austria's 0.097). Authored on the seven
+  circuits with a measured 2026 rate; the other forty-four stay at 1.0 rather
+  than guessed (`docs/research/TYRE-STRATEGY-DESIGN.md` §5.5).
+- **The player is told, in words they can act on** (`js/race/engineer.js`).
+  Every line names something to DO: graining says ease off and clean them up
+  because it heals, blistering says the set is done because it does not, and
+  the axle split says brake earlier or ease on the throttle. It ADVISES and
+  never decides — nothing it says arms a stop. That is §11 decision 1 ("live,
+  not pre-planned") made good: the AI has a plan and `PitLane.think` executes
+  it; the player has an engineer.
+- **A stop fits what you OWN.** Real F1 allocates 13 sets a weekend and Apex has
+  no practice sessions to allocate across — but career already tracks which
+  parts you own, so `PitLane.pickFor` fits the fastest owned compound that still
+  reaches the flag, and the career economy becomes the allocation rule with no
+  new system (§6). Tread comes first and is not a preference: a save that owns
+  no wet tyre still gets one from the class ladder, because the alternative is a
+  player who cannot respond to the weather. This also fixed a real defect — a
+  player stopping in the rain used to refit their garage slick, the exact loop
+  the AI's weather rule exists to prevent.
 - **The weather recourse now exists.** This section used to warn that a
   `dry→rain` arc "punishes a slick with no recourse… the first thing to revisit
   if rain feels unfair". Pitting IS the recourse. Acting on it automatically is

@@ -182,8 +182,16 @@ const PRESETS = {
      way Asphalt players wish theirs had. The one thing it adds beyond RELAX is
      auto-throttle (js/game.js owns that key), which is XAG 107's answer to a
      held accelerator over a long race. */
+  // steerSpeed 5, not 4: ROOKIE is "RELAX plus auto-throttle" by its own note
+  // above, and it was derived from the PRE-fix RELAX — the rate was updated to
+  // the new calm rack and the speed taper was not. One field off STEER_LEVELS.easy
+  // is enough for matchSteerLevel() to return null, so picking ROOKIE painted
+  // CUSTOM in the STEERING row: the exact defect the block below this one
+  // exists to explain, reintroduced by the preset added in the same pass.
+  // tests/unit/steer-presets.test.mjs now asserts it over EVERY bundle rather
+  // than the three that were named, which is what caught this.
   rookie:   { tiltDeg: 4, steerSmooth: 9, steerRate: 2,
-              steerExpo: 4, steerLock: 5, steerSpeed: 4, drivingHelp: 9, raceLine: 4,
+              steerExpo: 4, steerLock: 5, steerSpeed: 5, drivingHelp: 9, raceLine: 4,
               adaptiveButtons: 9, brakeCue: 9 },
   /* RELAX WAS THE STRAGGLER OF THE 2026-09-08 RE-CENTRING. That pass moved
      STANDARD and PRO onto the owner's profile and re-centred STEER_LEVELS with
