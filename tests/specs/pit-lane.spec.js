@@ -122,7 +122,14 @@ test.describe("pit lane", () => {
         const ps = A.physState();
         const togo = p.inWindow ? p.boxM - p.atM : 1e9;
         const want = togo > 0 ? Math.min(p.limitKph / 3.6, Math.sqrt(2 * 5 * togo)) : 0;
-        A.setInput({ steer: 0, throttle: ps.speed < want, brake: ps.speed > want * 1.05 });
+        // AND HOLD THE LANE, which means STEERING — the entry at Monza opens in
+        // Parabolica, and a car given no steering input does not hold a lateral
+        // position through a corner any more than a real one would. Measured:
+        // starting in the lane and steering zero for 40 s drifts 6.4 m -> 0.7 m
+        // and misses the box. That is the car being right, not the lane being
+        // wrong, so the test drives the gesture instead of teleporting into it.
+        A.setInput({ steer: Math.max(-1, Math.min(1, (laneX - ps.x) * 0.35)),
+                     throttle: ps.speed < want, brake: ps.speed > want * 1.05 });
         A.step(1 / 60, 1);
         if (A.pit().state === "box") { sawBox = true; boxTicks++; }
         if (A.pit().state === "out") break;
@@ -148,35 +155,47 @@ test.describe("pit lane", () => {
     // but halts on the racing line has not reached its box, because the crew is
     // not standing there. Before the lane was painted there was nowhere else to
     // be, and a stopped car sat in the middle of the road while the field went
-    // around it. This is the assertion that stops that coming back.
+    // around it.
+    //
+    // ONLY the refusal is asserted here. The positive case — the same drive,
+    // held in the lane, serviced — is the test above, and running both in one
+    // page left the second starting from a car parked stationary at the box:
+    // it ended up off the road on the far side (x -8.0, rescue firing) and
+    // failed for a reason that had nothing to do with the lane. A test that can
+    // fail for the wrong reason is worse than one that covers less.
+    //
+    // So this pins the refusal AND that it was refused for the RIGHT reason:
+    // the car really did arrive at the box, really did stop there, and really
+    // was outside the lane. Without those three it would pass just as happily
+    // for a car that never got to the pits at all.
     await armedAt(page);
     const out = await page.evaluate(() => {
       const A = window.__apex;
-      // Inside the window, where laneX has an answer — see the note in the
-      // stop test above for why 0.93 does not.
-      A.jump(0.99, 30, 0);
-      const lane = A.pit().laneX;
-      const drive = (x) => {
-        A.jump(0.93, 30, x); A.aim(0);
-        A.pit({ arm: true });
-        for (let i = 0; i < 60 * 40; i++) {
-          const p = A.pit();
-          const ps = A.physState();
-          const togo = p.inWindow ? p.boxM - p.atM : 1e9;
-          const want = togo > 0 ? Math.min(p.limitKph / 3.6, Math.sqrt(2 * 5 * togo)) : 0;
-          A.setInput({ steer: 0, throttle: ps.speed < want, brake: ps.speed > want * 1.05 });
-          A.step(1 / 60, 1);
-          if (A.pit().state === "out") break;
-        }
-        return A.pit();
-      };
-      const onLine = drive(0);
-      const inLane = drive(lane);
-      return { lane, onLine, inLane };
+      A.jump(0.93, 30, 0); A.aim(0);
+      A.pit({ arm: true });
+      for (let i = 0; i < 60 * 40; i++) {
+        const p = A.pit();
+        const ps = A.physState();
+        const togo = p.inWindow ? p.boxM - p.atM : 1e9;
+        const want = togo > 0 ? Math.min(p.limitKph / 3.6, Math.sqrt(2 * 5 * togo)) : 0;
+        // Hold the racing line, steering — see the note in the stop test: an
+        // unsteered car does not hold ANY lateral position through Parabolica,
+        // so "steer: 0" would not be a car on the racing line, just a loose one.
+        A.setInput({ steer: Math.max(-1, Math.min(1, (0 - ps.x) * 0.35)),
+                     throttle: ps.speed < want, brake: ps.speed > want * 1.05 });
+        A.step(1 / 60, 1);
+        if (A.pit().state === "out") break;
+      }
+      return { pit: A.pit(), x: A.physState().x, v: A.physState().speed };
     });
-    expect(out.lane, "the lane must resolve to a position to aim at").toBeTruthy();
-    expect(out.onLine.stops, "a car stopped on the racing line was serviced").toBe(0);
-    expect(out.inLane.stops, "the same car stopped IN the lane was not serviced").toBe(1);
+    // It arrived, and it stopped: without these the refusal proves nothing.
+    expect(out.pit.inWindow, "the car never reached the pit window").toBe(true);
+    expect(out.pit.atM, "the car never reached the box").toBeGreaterThan(out.pit.boxM - 10);
+    expect(Math.abs(out.v), "the car never actually stopped at the box").toBeLessThan(1);
+    // It was on the racing line, not in the lane…
+    expect(out.pit.inLaneLat, "the car drifted into the lane — the refusal proves nothing").toBe(false);
+    // …and so it was not serviced.
+    expect(out.pit.stops, "a car stopped on the racing line was serviced").toBe(0);
   });
 
   test("blowing through the box misses the stop", async ({ page }) => {
