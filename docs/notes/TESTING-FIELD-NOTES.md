@@ -729,6 +729,10 @@ bisect a red run. The tree passed on the first run (montreal, 90 frames,
 
 ### 2026-09-03 — `image-grade-visual` is threshold-marginal on a real GPU
 
+**SUPERSEDED — see the 2026-09-14 entry at the end of this file.** The diagnosis
+below is wrong: the mechanism was not the render clock, it was the capture helper
+clearing the spec's camera on every screenshot.
+
 `ci.yml` run 33762205584 (dispatch, `renderer_macos: true`, tip 905ad6c): the
 Metal renderer job failed ONE spec — `image-grade-visual.spec.js › highlights
 predominantly change bright pixels`, bright/dark delta ratio 1.86 against the
@@ -1781,3 +1785,71 @@ the gate. It remains a different job from covering the renderer.
 
 Reproduce the table: `maxDeclaredTimeout(f)` from `tools/ci/select-specs.mjs`
 over `tests/specs/*.spec.js`, and `pick(["<dir>/x.js"])` for the routing.
+
+## 2026-09-14 — `image-grade-visual` was never threshold-marginal: the capture helper moved the camera
+
+Nightly `ci.yml` 3623 failed one job — the Metal renderer one — on one spec:
+`image-grade-visual.spec.js › blacks visibly change the deepest image detail`,
+`crushed.signed` **+9.69** against a required **< −1**. Crushing BLACKS read as
+making the image nearly ten levels BRIGHTER. Not a regression from that commit:
+`f4ccd160` passed the nightly on the 11th (3536) and the 13th (3540) and failed
+it on the 12th (3539) with the same spec and the same assertion.
+
+The job attaches its frames, so the measurement was reproduced OFFLINE: decode
+the three attachments through the same path the spec uses (`img.decode()` →
+canvas → `getImageData`) and the numbers come back to three decimals — raised
+`+3.314` (CI `+3.321`), crushed `+9.702` (CI `+9.694`). Everything below is from
+those frames, not from a hypothesis.
+
+1. **The grade works.** Whole-frame percentiles under `blacks −0.6`: p01 4 → **1**,
+   p05 7.08 → **2.93**; under `+0.6`, 4 → **12.0** and 7.08 → **12.9**. Mean luma
+   76.58 → 75.50 crushed, → 77.52 raised. Correct in both directions.
+2. **The crushed frame is not a tone curve.** Bin pixels by BASELINE luma and
+   measure the spread of the output: the raised frame is a clean per-pixel
+   function (sd **0.86–3.15** per bin); the crushed frame is not (sd **22–48**,
+   one input luma landing anywhere in 0–166). No per-pixel grade can do that.
+3. **It is the same scene from a different camera.** Best-fit offset between
+   baseline and crushed is a uniform **dx −34 px, dy 0**, dropping the mean
+   absolute difference 22.4 → 10.8 — and it is the SAME −34 for the far scenery
+   and for the near cockpit, so there is no parallax: the camera rotated, the
+   image did not translate. (The first search was capped at ±12 px and pinned to
+   its boundary, which reads as "not a shift"; widening it found the answer.)
+4. **When.** The trace's 78 screencast frames date it to one discrete event:
+   every frame to t=155091 matches the baseline (MAD 1.87), five frames from
+   t=155158 are a completely different, panned view, and from t=155326 to the end
+   of the test it sits at the −34 state. A switch, not a drift.
+
+**Cause.** `tests/helpers/soft-capture.js` called `window.__apex.snapCam()` on
+every capture. `snapCam()` does two things: it arms an on-demand soft blit —
+which is what a capture needs — and it does `G.dbgCam = null`, documented in
+`js/agent/apex.js` as clearing any free-cam override, which is what a
+`park()`/`jump()` caller needs. So every capture in this file DESTROYED the fixed
+`eyeAt()` camera `boot()` had set and handed the frame to the live, DAMPED chase
+camera, whose pose depends on frame timing. Reproduced locally in one page load:
+`camState()` before a `pageScreenshot` is the spec's camera (fov 60, target
+[81.9, 1.04, 16.0]); after it, fov 64, target [54.6, 0.59, 31.2], `debug: false`.
+
+SwiftShader never showed it because at ~1 fps the chase camera settles before
+every capture; the Metal runner (19–40 fps in this run) does not. It is also why
+the earlier stabilisation passes did not converge — freeze physics, pin the
+render clock, wait for the asset pack, pin the scale, hold the tier, record the
+env probe each removed a real variable and left this one, because `camState()`
+was asserted once in `boot()`, BEFORE the first capture, and was already false by
+the time any frame was read.
+
+**Fix.** The helper asks first: a spec that owns the camera
+(`camState().debug === true`) gets `GLX.invalidateSoftPresent()` — the blit
+arming alone, the half `snapCam()` was wanted for here — and every other caller
+is unchanged. The camera is now part of the premise `captureState()` records, and
+the THIRD capture (crushed) is held to the whole premise instead of `post` alone,
+which is how a broken premise produced a tonal number at all.
+
+**This supersedes the 2026-09-03 entry above**, which read the same spec's
+failures as "threshold-marginal on a real GPU" and prescribed pinning
+`renderClock` before each capture pair. That pin landed and the spec kept
+failing, because the mechanism was never the clock.
+
+Two specs used the helper with a debug camera — `image-grade-visual` and
+`lighting-ab`, the two that have supplied this file's knob-independent deltas.
+Every other `snapCam()` in the suite is an explicit call by a spec that wants the
+game camera, and is untouched.
