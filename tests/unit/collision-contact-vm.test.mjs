@@ -29,6 +29,10 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+const ROOT_C = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
@@ -121,4 +125,60 @@ test("a rear-end is a bump: the closing speed is gone after one frame of contact
   // And the car ahead was punted, not stopped: it gained, the player lost.
   assert.ok(c.speed > 40.5, `the car ahead did not move on the bump: ${c.speed.toFixed(1)}`);
   assert.ok(p.speed < 50, "the player kept every m/s through a bump");
+});
+
+/* ── the contact NORMAL is extent-scaled, not raw least penetration ────────
+ *
+ * Pure arithmetic — no boot. pairContact's classification is a function of
+ * (dProg, dX) and the two extents, so the defect and the fix are both a table.
+ *
+ * Raw `penLat < penLong` is the minimum-translation rule. MTV is the right
+ * answer to "which way do I push to separate with least movement" and the
+ * WRONG answer to "which face did we hit" on a 4.8 x 2.0 box: it expands to
+ * |dProg| < 2.8 + |dX|, so nose-to-tail at 2.5 m with zero lateral offset read
+ * as a SIDE rub. Scaling each penetration by its own extent makes the test
+ * |dX| > (WCAR/LCAR) * |dProg| — the contact bearing against the car's own
+ * aspect ratio.
+ */
+const LCAR_T = 4.8, WCAR_T = 2.0;
+const rawSide  = (dProg, dX) => (WCAR_T - Math.abs(dX)) < (LCAR_T - Math.abs(dProg));
+const scaled   = (dProg, dX) => (WCAR_T - Math.abs(dX)) * LCAR_T < (LCAR_T - Math.abs(dProg)) * WCAR_T;
+
+test("nose-to-tail is never a side contact, at any following distance", () => {
+  for (const dProg of [0.5, 1.0, 2.0, 2.5, 3.0, 4.0, 4.7]) {
+    assert.equal(scaled(dProg, 0), false,
+      `dProg ${dProg} with zero lateral offset must be a REAR contact`);
+  }
+  // and the rule it replaced got most of those wrong
+  assert.equal(rawSide(2.5, 0), true, "the old rule called 2.5 m directly behind a side rub");
+  assert.equal(rawSide(1.0, 0), true, "and 1.0 m too");
+});
+
+test("genuine side-by-side still classifies as a side contact", () => {
+  for (const [dProg, dX] of [[0, 0.5], [0.2, 0.1], [0.5, 1.8], [1.0, 1.5]]) {
+    assert.equal(scaled(dProg, dX), true, `dProg ${dProg} dX ${dX} is alongside`);
+  }
+});
+
+test("the boundary is the car's own aspect ratio", () => {
+  const k = WCAR_T / LCAR_T;                 // 0.41666...
+  for (const dProg of [1, 2, 3, 4]) {
+    assert.equal(scaled(dProg, k * dProg + 0.01), true,  "just outside the ratio => side");
+    assert.equal(scaled(dProg, k * dProg - 0.01), false, "just inside  the ratio => rear");
+  }
+});
+
+test("sgn-of-zero is unreachable: a side contact always has a real dX to sign", () => {
+  // `sgn = dX >= 0 ? 1 : -1` is only meaningful when dX is genuinely non-zero.
+  // Under the scaled rule a side contact requires |dX| > k*|dProg| >= 0, and at
+  // dProg = 0 it requires |dX| > 0 strictly, so dX == 0 can never enter it.
+  assert.equal(scaled(0, 0), false);
+  for (const dProg of [0, 0.5, 2.5]) assert.equal(scaled(dProg, 0), false);
+});
+
+test("the shipped rule is the scaled one", () => {
+  const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
+  assert.match(src, /_ct\.sideContact = \(penLat \* LCAR < penLong \* WCAR\)/);
+  assert.doesNotMatch(src, /_ct\.sideContact = penLat < penLong/,
+    "raw least-penetration misclassifies nose-to-tail on a 2.4:1 box");
 });

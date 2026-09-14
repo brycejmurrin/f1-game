@@ -295,8 +295,21 @@ const IncidentSim = (function () {
           if (fin(wr) && tf.x > wr) tf.x = wr;
           if (fin(wl) && tf.x < -wl) tf.x = -wl;
         }
-        const vHoriz = Math.hypot(pose.vx || 0, pose.vz || 0);
-        const speed = fin(vHoriz) ? vHoriz : (lg ? lg.speed : 0);
+        // INVERT the promote, do not approximate it. startIncident maps
+        // (speed, vLat) into the world with `vWx = spd*fx + vLat*fz;
+        // vWz = spd*fz - vLat*fx` — the matrix [[fx,fz],[fz,-fx]], whose
+        // determinant is -1 and which is therefore its OWN inverse. So the
+        // same two lines read back, against the body's NEW heading, return
+        // exactly what went in. hypot() is not that: it is unsigned, so a car
+        // that spun came back driving FORWARD at the speed it was travelling
+        // backwards, and it folded the lateral component into forward motion
+        // while `vLat = 0` threw that component away twice over.
+        const vWx = pose.vx || 0, vWz = pose.vz || 0;
+        const fxh = Math.sin(head), fzh = Math.cos(head);
+        const vFwd = vWx * fxh + vWz * fzh;     // signed: negative IS facing-backwards
+        const vSide = vWx * fzh - vWz * fxh;    // + = sliding right, the c.vLat convention
+        const vHoriz = Math.hypot(vWx, vWz);    // magnitude only — the settle band below wants it
+        const speed = fin(vFwd) ? vFwd : (lg ? lg.speed : 0);
         let wx = px, wz = pz;
         if (G.worldFromTrack) {
           try {
@@ -312,7 +325,7 @@ const IncidentSim = (function () {
         let ds = tf.s - c.s; ds = ((ds + L / 2) % L + L) % L - L / 2;
         if (fin(ds)) { c.prog += ds; _lapCross(c, ds, tf.s, L); }
         c.s = tf.s; c.x = tf.x; c.speed = speed; c.head = head;
-        c.px = wx; c.pz = wz; c.vLat = 0;   // a stale vLat is not Rapier's
+        c.px = wx; c.pz = wz; c.vLat = fin(vSide) ? vSide : 0;   // Rapier's, inverted — not a stale one, and not discarded
         // Advance the last-good snapshot to this validated pose.
         inc.good.set(i, snapOf(c));
         // Settle detection: sleeping OR both velocities below the settle bands.

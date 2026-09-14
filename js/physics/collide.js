@@ -141,13 +141,25 @@ const Collide = (() => {
       _ct.dProg = dProg; _ct.dX = dX; _ct.penLong = penLong; _ct.penLat = penLat;
       _ct.iA = iA; _ct.iB = iB; _ct.iSum = iSum; _ct.sA = sA; _ct.sB = sB;
       _ct.aSp = aSp; _ct.bSp = bSp;
-      _ct.sideContact = penLat < penLong && !forceRear;
+      // Least penetration is the MTV rule, and the MTV is not the contact FACE
+      // on a box that is 2.4x longer than it is wide. Raw `penLat < penLong`
+      // expands to |dProg| < 2.8 + |dX|, so a car 2.5 m DIRECTLY BEHIND another
+      // under braking — |dX| = 0, no lateral overlap to speak of — classified as
+      // a side rub and got squirted sideways by `sgn = dX >= 0 ? 1 : -1`, which
+      // at dX = 0 is not a direction, just the sign of zero. Scale each
+      // penetration by its own extent first (penLat/WCAR vs penLong/LCAR, here
+      // cross-multiplied to dodge the divides): the test becomes
+      // |dX| > (WCAR/LCAR)*|dProg|, i.e. the contact bearing against the car's
+      // own aspect ratio. Nose-to-tail is now unreachable as a side contact, so
+      // the sgn-of-zero case cannot be entered at all.
+      _ct.sideContact = (penLat * LCAR < penLong * WCAR) && !forceRear;
       return _ct;
     }
 
     // Frenet-frame collisions: (prog, x) is treated as a 2D plane. Each car is a
-    // capsule ~4.8 m long and ~2.0 m wide (combined extents). We pick the axis of
-    // least penetration as the contact normal — lateral penetration => a side rub
+    // capsule ~4.8 m long and ~2.0 m wide (combined extents). We pick the contact
+    // normal by EXTENT-SCALED penetration, not raw least penetration — see
+    // pairContact — lateral penetration => a side rub
     // (separate on x, scrub speed); longitudinal => a rear-end (separate along the
     // track, transfer speed rear->front). Mass-weighted, several relaxation passes
     // to settle clusters, then a hard min-separation pass so cars can never render

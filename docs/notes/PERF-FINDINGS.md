@@ -4702,3 +4702,59 @@ exemption. This closes the appearance question §2v left open.
 would still be 7.4 texels/px at 17 m and would free roughly another 27 MB. Not
 taken: the arithmetic permits it, and "the maths allows it" is how a look gets
 degraded by a spreadsheet. That one wants a real A/B before anyone moves it.
+
+### 2026-09-14 — a 2.9 with the probe NEVER STARTED (runs 101/102/104)
+
+The 2026-09-09 entry above pins the black WebGPU world on the env cube, by
+within-leg A/B: probe on 2.9 / `envProbeOff=1` 39.2, and every recorded 2.9
+carried `envReady=true`. Three runs today break that pairing.
+
+| run | tree | force | webgpu | webgl2 | glx | wgx |
+|---|---|---|---|---|---|---|
+| 101 | `24a88d2`, no survey fixes | — | 46.5 | 64.1 | 72 | 79.3 |
+| 102 | `dfe71af`, survey fixes | **1** | **2.9** | 64.0 | 72 | 79.3 |
+| 104 | `712897b`, survey fixes | — | 47.2 | 63.7 | 72 | 79.3 |
+
+All three, macos-latest, montreal, and **all three report `envReady=false`
+with `env: mask=0 begins=0 ends=0 ready=false badProbes=0`**. The probe never
+began in any of them, including the 2.9. That combination is new: it is the
+first 2.9 on record without a latched cube, and the documented mechanism
+predicts ~39-47 here, which is exactly what the two controls read.
+
+**The survey diff is not the cause**, on three independent grounds:
+- `tsl-post.js:186-192` — `const res = float(1.0).toVar()` then
+  `If(d.lessThan(0.99999), …)`, so sky and far pixels leave SSAO at exactly
+  1.0 whatever `invProj` holds. A daytime montreal frame at 2.9 has a black
+  SKY; no invProj value reaches those pixels. The one full-screen volumetric
+  pass reads `invVP`, which the diff never touches.
+- the TLX WebGL2 control moved 64.1 -> 64.0 across the same pair, and three of
+  the four other TLX hunks are backend-agnostic and would have moved it.
+- 2.9 is recorded three times (runs 69, 75, 76) on trees that predate the
+  survey commit and still carry the old `Z01INV` convention.
+
+**What is NOT established: the trigger.** 102 and 104 differ in exactly one
+thing — `apex26.tlxForceHw=1` — because those two commits differ only in
+`.github/gpu-census-request.json`; the game code is byte-identical. That makes
+force the only controlled variable, and it is the reason this entry exists.
+But the code says it should be inert here: `tlx.js:614`
+`function softContent(part) { return softwareGL && !_forceHw.has(part); }` is
+consumed only under `softwareGL`, false on Metal by design, and the census
+applies the same `--ls` to BOTH TLX legs while the WebGL2 one held still. So
+either force has a Metal-only effect this read misses, or 2.9 is a bimodal
+outcome of this leg that force did not cause. One run each cannot choose.
+
+Locally, `--tlx-webgpu --lavapipe montreal` reads 45.9 stock and **54.6** with
+`tlxForceHw=1` — brighter, not black. Software cannot reproduce it either way.
+
+**The instrument is the finding.** The Verdict step does not gate on
+appearance, deliberately (a brightness floor goes flaky and then gets widened,
+which AGENTS.md forbids), so both 2.9 runs passed GREEN. A census whose headline
+number swings 16x with nothing gating it will keep being read as "fine" unless
+whoever reads it fetches a baseline by hand. That is what happened here: the
+green tick was believed first and the number questioned second.
+
+**Next test, cheapest first.** One census leg at `force: "1"` repeated on an
+unchanged tree: a second 2.9 makes force the trigger, a 47 makes it bimodal and
+force innocent. Then `force: "1"` plus `ls: apex26.envProbeOff=1` — if 2.9
+survives with the probe already never starting, the cube is exonerated for this
+mode and the cause is something else on the forced path.
