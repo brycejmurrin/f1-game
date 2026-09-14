@@ -493,8 +493,11 @@ the slider range, and are applied inside `vantage()` — so the live camera,
 ground clamp after tuning.
 
 ```js
-__apex.camTune();                                  // → {defs:[…], tuned:{chase:{…}}}
-__apex.camTune("chase");                           // → {height:0, dist:0, side:0, pitch:0, yaw:0, fov:0}
+__apex.camTune();                                  // → {defs:[{id,min,max,def,unit},…], tuned:{chase:{…}}}
+// Every knob resolved, defaults filled in — so cornerLead reads the shipped
+// 0.54, not 0. Compare against each knob's `def` from defs[] to tell an
+// untouched knob from one deliberately tuned to its default's value.
+__apex.camTune("chase");                           // → {height:0, dist:0, side:0, pitch:0, yaw:0, fov:0, cornerLead:0.54}
 __apex.camTune("chase", { height: 0.6, dist: 2, fov: -4 });   // apply + persist + re-snap
 __apex.camTune("chase", null);                     // reset this camera to shipped framing
 ```
