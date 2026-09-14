@@ -53,6 +53,34 @@ async function enableDebris(page) {
 }
 
 test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
+  // THIS FILE IS LEGITIMATELY SLOW, and it was one loaded runner from red.
+  //
+  // Every test here pays its own full boot — and has to: two of them set
+  // apex26.debris / apex26.debrisCap through addInitScript, which is only
+  // readable BEFORE any page script runs, so they cannot share a booted page
+  // the way parts-liveries.spec.js does. On top of that each one builds a track
+  // (a SwiftShader boot measures 11-33 s per the comment above; the CI log for
+  // the run that caught this shows `25461ms [car] info: build mclaren`) and
+  // then waits on a WASM import.
+  //
+  // Measured solo on an idle box, 2026-09-14: 58.3 / 70.7 / 85.9 / 91.2 /
+  // 100.3 s. Against the 120 s default that is ~20 % headroom, which no shared
+  // CI runner reliably provides — and on 2026-09-14 the same three tests timed
+  // out at 150-185 s on ci.yml across THREE different sessions' commits, while
+  // passing 5/5 locally and passing on a re-run of one of the very same SHAs.
+  //
+  // So this is not a tolerance being widened to make an assertion pass — every
+  // assertion here is unchanged and still has to hold. It is a BUDGET being
+  // sized to a measurement it was never sized against. test.slow() is
+  // Playwright's own marker for exactly that (it triples the timeout to 360 s,
+  // ~3.6x the slowest measured run), and it keeps the number in one place
+  // rather than sprinkling setTimeout calls.
+  //
+  // The real cure is fewer boots. It needs the two config-driven tests split
+  // off so the other three can share a page; that is a restructure of someone
+  // else's spec and is not this change.
+  test.slow();
+
 
   test("enabled by default: rapier loads and the side-world runs", async ({ page }) => {
     await boot(page);
