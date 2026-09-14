@@ -7,6 +7,11 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
+// How long rapier's WASM takes to load and initialise. Its own number, because
+// it is not a boot — see enableDebris for the measurements and the honest
+// limits of them.
+const RAPIER_MS = 60000;
+
 async function boot(page) {
   // RAISE THE RESOURCE-TIMING BUFFER BEFORE ANYTHING LOADS. Two tests here read
   // performance.getEntriesByType("resource") to prove rapier was (or was not)
@@ -22,7 +27,13 @@ async function boot(page) {
   // can be set — by the time a test evaluates, the buffer has long since
   // filled. Test-side on purpose: the game has no reason to carry a bigger
   // buffer for a spec's benefit.
-  await page.addInitScript(() => performance.setResourceTimingBufferSize(3000));
+  // try/catch because addInitScript runs in EVERY frame — about:blank included —
+  // before any page script, and an uncaught throw there breaks page setup rather
+  // than just this call. Not hypothetical: `performance` is not guaranteed on
+  // every execution context Playwright injects into.
+  await page.addInitScript(() => {
+    try { performance.setResourceTimingBufferSize(3000); } catch (_) {}
+  });
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
@@ -44,10 +55,36 @@ async function startTT(page, id) {
 // Fails fast (with the module's own error string) if the import rejects.
 async function enableDebris(page) {
   await page.evaluate(() => window.__apex.debris(true));
+  // RAPIER_MS, and deliberately NOT BOOT_MS — fixtures.js says in as many words
+  // that the boot budgets are not to be reached for to cover a slow assertion,
+  // and this is a slow assertion: a WASM DOWNLOAD plus init, which is nothing
+  // like a page boot.
+  //
+  // MEASURED on an idle container, three cold runs (scratchpad harness):
+  //
+  //   window.__apex != null     2.6 / 2.7 / 3.7 s
+  //   debris().ready           10.8 / 15.4 / 11.1 s   worst 15.4
+  //
+  // So rapier is ~4x the boot on an idle box. The hand-rolled 30 s that was
+  // here looked generous against 15 s and was not: on the CI runner that
+  // exposed it, BOOT alone took 52 s — a ~17x multiplier on this box's 3 s —
+  // and three tests timed out at exactly 30000 ms with rapier still loading.
+  // 60 s is ~4x the worst idle measurement and fits inside the CI job's own
+  // 180 s per-test budget with room for the boot and the test body — a bigger
+  // number would only turn this timeout into that one.
+  //
+  // WHAT I DO NOT KNOW, stated rather than papered over: there is no CI-side
+  // measurement here, only that 30 s was not enough there. BOOT_MS's 1.8x
+  // margin over its worst idle case would have given 28 s, i.e. roughly what
+  // already failed, so the idle box is not predictive for this path. rapier is
+  // VENDORED (vendor/rapier-0.19.3, 2.2 MB served by the dev server), so this
+  // is a local fetch plus a large WASM compile on a contended runner, not a
+  // network hang — a timeout is the right instrument. If 60 s also proves
+  // short, MEASURE IT ON CI rather than doubling again.
   await page.waitForFunction(() => {
     const st = window.__apex.debris();
     return st.ready || st.loadState === -1;
-  }, null, { polling: 100, timeout: 30000 });
+  }, null, { polling: 100, timeout: RAPIER_MS });
   const st = await page.evaluate(() => window.__apex.debris());
   if (!st.ready) throw new Error("rapier load failed: " + st.error);
 }

@@ -175,7 +175,17 @@ test("sector splits carry ★/▼/▲ against sectorBests, timing-screen colours
 
 test("the speed digits, energy bar and sector red are set up to be read at a glance", () => {
   const rules = cssRules(read("css/hud.css"));
-  assert.equal(decl(rules, "#hud-speed-n", "min-width"), "3ch", "three tabular digits: 99 -> 100 must not move the figure");
+  // The slot must hold three TABULAR digits so 99 -> 100 does not move the
+  // figure. It said `3ch` and that was wrong: `ch` is the advance of "0" and the
+  // browser takes the PROPORTIONAL one, ignoring the tabular-nums on the same
+  // element — measured 9.1% short on the current face, a 3.5px jump at 100 km/h.
+  // Only the UNIT is asserted here; the exact em figure is re-derived from the
+  // measured font ledger in tests/unit/font-digits.test.mjs, so a font swap has
+  // one place to update rather than two.
+  const slot = decl(rules, "#hud-speed-n", "min-width");
+  assert.match(slot, /^[\d.]+em$/,
+    `#hud-speed-n reserves "${slot}". It must be an em multiple of the tabular ` +
+    `advance — \`ch\` does not follow tabular-nums and silently under-reserves`);
   assert.equal(decl(rules, "#hud-speed-n", "text-align"), "right", "the units digit stays put");
   assert.equal(decl(rules, "#hud-speed-n", "display"), "inline-block", "min-width needs a box on the inline span");
 
