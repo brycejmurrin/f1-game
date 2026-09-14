@@ -483,7 +483,7 @@ the camera counterpart of `lightTune()`. Six knobs per mode, all defaulting to
 | `pitch` | ° | tilt the aim up (+) / down (−) |
 | `yaw` | ° | pan the aim right (+) / left (−) |
 | `fov` | ° | widen (+) / tighten (−) on top of the mode's own speed-scaled FOV |
-| `cornerLead` | 0–1 | **chase/far only** — blend the rig toward the classic road-frame chase so the camera leads/swings INTO corners. 0 = locked behind the car (default); 1 = the old corner-following chase. Purely visual; never touches the car |
+| `cornerLead` | 0–1 | **chase/far only** — blend the rig toward the classic road-frame chase so the camera leads/swings INTO corners. **Ships at 0.54**, which is also its registry default; 0 = locked flat behind the car; 1 = the old corner-following chase. Unlike the six geometric knobs it is an ABSOLUTE blend, not an offset, so its default is not 0. Purely visual; never touches the car |
 
 Translation knobs move the eye only, then `pitch`/`yaw` rotate the aim about it,
 so the car can't fall out of frame. Values are stored **per mode** (a tuned
