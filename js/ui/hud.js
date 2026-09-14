@@ -307,6 +307,23 @@ function fitHud() {
   // without the row count the published height stayed at the empty box's for
   // the whole 3 s same-key backoff. childElementCount costs no layout.
   const secRows = els.hudSectors ? els.hudSectors.childElementCount : 0;
+  // The four fit handles are resolved HERE rather than after the key, because
+  // topLen below reads one of them: resolving them later left the first tick
+  // keying on 0 and re-fitting a tick later for no reason. They never change
+  // identity, so this stays a one-time query.
+  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
+  // AND THE TOP BAND'S OWN TEXT, for the mirror of the reason gapLen is here.
+  // `.hud-top` is CENTRED, so when its readouts populate — "POS-/22 LAP1/3
+  // TIME- BEST-" becoming "POS22/22 LAP1/3 TIME0:00.17 BEST-" as the race
+  // starts — it grows LEFTWARD, into the gap strip, and the strip's fit was
+  // decided against the narrow spelling. Measured at 667x375, hud-scale 1,
+  // frozen so both readings carry identical strings: `.hud-gaps` right edge
+  // 202.8 against `.hud-top` left edge 175.5 — a 27px overlap that fitHud had
+  // already declared clear, because nothing in the key had changed since it
+  // last looked. hud-layout.spec.js does not catch it: it measures ~300ms in,
+  // while the band is still sparse.
+  // textContent.length is layout-free, exactly as gapLen is.
+  const topLen = _hudTop ? _hudTop.textContent.length : 0;
   // BUTTON SIZE is a second slider on the same layer, so it belongs in the key:
   // moving it changes the dock's intrinsic height and nothing else here does.
   // INLINE first (the player set BUTTON SIZE), else the inherited default. That
@@ -321,7 +338,7 @@ function fitHud() {
   const mult = typeof getComputedStyle === "function"
     ? (+getComputedStyle(root).getPropertyValue("--hud-btn-mult") || 1) : 1;
   const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale * mult;
-  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "|" + document.body.className;
+  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "~" + topLen + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
@@ -344,7 +361,6 @@ function fitHud() {
     }
     return hi > lo ? (hi - lo) / (el.currentCSSZoom || 1) : wide(el);
   };
-  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
   const top = wide(_hudTop);
   // menu layer: nothing laid out, measure again next tick — but BOUNDED: an
   // unlatched key re-ran this whole rect pass (and drawMinimap's layout reads)

@@ -17,31 +17,7 @@
    Titillium Web is the family the real F1 site uses (menus/body); Rajdhani is a
    condensed technical face for the numeric HUD/timing. `font-display: swap` so
    the system-font fallback paints instantly and never blocks first render.
-   @font-face is layer-insensitive, so these sit outside the layer blocks.
-   Immutable vendored assets → NO ?v= cache-buster (same as vendor/three-*). */
-@font-face {
-  font-family: "Titillium Web"; font-style: normal; font-weight: 400;
-  font-display: swap;
-  src: url("../assets/fonts/titillium-web-latin-400-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Titillium Web"; font-style: normal; font-weight: 600;
-  font-display: swap;
-  src: url("../assets/fonts/titillium-web-latin-600-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Titillium Web"; font-style: normal; font-weight: 700;
-  font-display: swap;
-  src: url("../assets/fonts/titillium-web-latin-700-normal.woff2") format("woff2");
-}
-@font-face {
-  /* One italic face (700) covers the italic headings/labels; the browser
-     synth-bolds it for the 800 weights the design uses. */
-  font-family: "Titillium Web"; font-style: italic; font-weight: 700;
-  font-display: swap;
-  src: url("../assets/fonts/titillium-web-latin-700-italic.woff2") format("woff2");
-}
-@font-face {
+   @font-face {
   font-family: "Rajdhani"; font-style: normal; font-weight: 500;
   font-display: swap;
   src: url("../assets/fonts/rajdhani-latin-500-normal.woff2") format("woff2");

@@ -177,6 +177,56 @@ Do **not** re-derive the font metrics: they are in the tables above, measured
 with `document.fonts.load()` + `check()` first (a first reading was taken
 before Rajdhani had loaded and showed a 3.75px spread — wrong by 2x).
 
+## Second attempt, 2026-09-14 — and the real obstacle, now measured
+
+The `--hud-scale` correction (1.24 -> 1, see the `(pointer: coarse)` note in
+css/tokens.css) shrank every readout in that zoom group by 24%, so the fix was
+re-applied on the theory that the room now existed. It does not, and the reason
+is sharper than "no slack":
+
+**`.hud-top` vs `.hud-gaps` already overlap by 27px at 667x375, without any font
+change at all** — but only once the readouts POPULATE. A/B'd on one frozen page
+(`__apex.freeze(true)`, both readings carrying byte-identical strings):
+
+| | `.hud-top` left | `.hud-gaps` right | overlap |
+|---|---|---|---|
+| Apex Digits | 168.9 | 200.4 | 31.5px |
+| Rajdhani only | 175.5 | 202.8 | **27.3px** |
+
+So the digits face costs 4.2px on a pair that is already 27px into each other.
+That is why it is reverted a second time: it is not the cause, and it is not
+free either.
+
+### Why hud-layout.spec.js is green anyway
+
+It measures ~300ms after `go()`, while the band still reads
+`POS-/22 LAP1/3 TIME- BEST-`. Populated it reads `POS22/22 LAP1/3 TIME0:00.08
+BEST-` and, being CENTRED, grows LEFTWARD into the strip. The spec never sees
+the wide state. **Its green is a timing artefact on this pair.** Anyone working
+here should freeze a populated race rather than trust the suite.
+
+### What was fixed, and what is still open
+
+`fitHud`'s re-run key gained the top band's own `textContent.length`. The key
+already carried the GAP chip's length for precisely this reason — a recorded
+bug where "a mid-window growth overlapped the POS tile until the next forced
+read" — and the same argument applies symmetrically to the band that grows
+toward it. That is correct by construction and is kept.
+
+**It is not sufficient, and the remaining cause is not yet found.** With the key
+fix in place, `data-gap-drop` and `data-gap-short` both still read false in the
+populated state, so `capFor()` is concluding the strip fits when the measured
+boxes say it does not. `capFor(l) = min((half - sal) / (l + top/2), ...)`; at
+667x375 with `top` = 329.1 and `l` ~= 208 that evaluates to ~0.89, which is
+below `scale` and SHOULD have set `_gapTight`. Either `top` is not the width
+measured above when the comparison runs, or the rung is being computed from a
+spelling that is not on screen. The next session should instrument `capLong` /
+`capShort` / `top` directly rather than infer them.
+
+Note the strings here are a backmarker's: `+84.3s` at P22. A normal racing gap
+(`+0.3s`) is much narrower, which is why this is content-dependent and why it
+has survived unreported.
+
 ## Caveat on the surrounding spec run
 
 `hud-layout.spec.js` is **16/32 red on this container regardless** — the same
