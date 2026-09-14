@@ -511,8 +511,8 @@ deliberately changed.
 | `gamepad` face/shoulder edge-triggered | fail | fail | pre-existing |
 | `gamepad` keyboard driving after a HUD button | fail | fail | pre-existing |
 | `gamepad` trigger travel is analog | fail | fail | pre-existing |
-| `camera-tuner` CORNER LEAD | fail | fail | pre-existing |
-| `presets` STANDARD sits between RELAX and PRO | fail | fail | pre-existing |
+| `camera-tuner` CORNER LEAD | fail | fail | pre-existing — **fixed 2026-09-14, a real product bug; see below** |
+| `presets` STANDARD sits between RELAX and PRO | fail | fail | pre-existing — **green once RELAX took `steerRate: 2`; no test change** |
 | `steering` ×9, `sliders` ×4 | fail | fail | pre-existing |
 | `touch-steer` + `tilt-pipeline` + `steer-migration` | — | **47/47 pass** | the specs closest to this change |
 
@@ -527,6 +527,11 @@ false by construction. The same retune is the likely cause of the two
 assertion (STANDARD is no longer the middle bundle on that axis, deliberately),
 or give RELAX `steerRate: 2` so the ladder is monotonic again. Which one is a
 design call about the owner's profile, not a test fix.
+**Resolved:** the second. RELAX was realigned onto `STEER_LEVELS.easy`
+(`steerRate: 2`) as part of this branch's preset work, which restored the
+monotonic ladder and turned the spec green with NO change to the assertion —
+the ordering it guards is a real product invariant and was worth keeping. Both
+`simplified controls` failures cleared with it, as predicted here.
 
 ### The pre-existing red, fixed — and the one that is not
 
@@ -543,26 +548,43 @@ a real product bug.
 | `gamepad` ×2 (triggers) | The pedals are deliberately zeroed while a nav layer is open, and the title screen is one. These two never left it, so they read 0 throttle and called it a regression. A sibling test had already been given the race-start boilerplate inline. | Extracted that boilerplate as `startRaceForPad` and used it in all three. |
 | `gamepad` ×2 (timeouts) | Same rAF-actionability stall, plus a genuinely heavy case (eleven `page.evaluate`s at ~15 s each). | Focus-and-activate in one evaluate for the HUD-button case — focus is what that test actually guards — and a declared budget for the file. |
 
-**`camera-tuner` CORNER LEAD is NOT fixed**, and the diagnosis is worth keeping
-so the next attempt does not repeat it. Three plausible causes were tested and
-eliminated: the hardcoded `frac 0.24` is no longer a corner (fixing that moved
-the failure to a later assertion, so it was real but not sufficient); the
-"scales with the knob" assertions measure from `shipped` (lead 0.54) rather than
-from `flat` (lead 0), which makes `mHalf > 0.1` unsatisfiable when the half
-sample is 0.04 away from its own baseline; and the car's lateral position
-carried over between samples, which is how `reset` failed to reproduce `shipped`
-by 128 m of world X.
-What remains is that **the shipped default lead does not appear to reach the rig
-at all under this harness**: `shipped` and `flat` differ by 0.0022 m, and that
-number is *identical* to four significant figures whether the corner is chosen
-by curvature or by the knob's own measured travel — so it does not depend on the
-corner. A separate probe that compared explicit lead 0 against lead 1 did show
-movement (0.05–1.17 m), but with no pattern across corners, which reads as
-camera-history noise rather than the feature working. The next step is to
-establish whether `extra.carPos` is populated on the `freeze` + `jump` +
-`snapCam` path at all — if it is not, the free-world chase branch that owns
-CORNER LEAD never runs there and the test's whole method is invalid.
-Speculative edits were reverted rather than left in a still-red test.
+**`camera-tuner` CORNER LEAD — RESOLVED 2026-09-14, and it was a PRODUCT bug.**
+The three harness faults named here were all real and all fixed, but none of
+them was the cause. The cause was that **the slider's off switch never worked**:
+
+`CamTune.set()` deletes a knob whose value equals its registry `def`, and an
+absent key means "use the shipped default" — `js/camera/vantage.js` reads
+`CHASE_CORNER_LEAD_DEFAULT` (0.54) whenever `CamTune.cornerLead()` returns null.
+`cornerLead`'s `def` was **0** while the shipped lead is **0.54**, so the two
+readings of zero collided: `set(…, 0)` deleted the key, `stored()` went false,
+and the rig went straight back to 0.54. Dragging CORNER LEAD to zero gave you
+the shipped lead, silently. The one end of the range the help text explicitly
+promised ("0 locks flat behind the car") was the single unreachable value.
+
+That is exactly why `shipped` and `flat` differed by 0.0022 m *independently of
+the corner* — the observation recorded above and correctly flagged as the thing
+left to explain. `flat` was never flat; both samples were the same 0.54 lead and
+the residue was re-jump noise.
+
+**The `extra.carPos` hypothesis above was wrong** and is left here as a warning:
+`jump()` calls `placeFromTrack()`, which sets `px`/`pz`, so `carPos` is
+populated and the free-world chase branch does run on that path. Chasing it
+would have cost another session. The cheaper move — and the one that found this
+in minutes — was to read the store's own write path rather than probe the
+camera: the knob that "does nothing" was never reaching the renderer at all.
+
+Fix: `def` is now the shipped amount (0.54), because CORNER LEAD is an ABSOLUTE
+blend, not a delta like the six geometric offsets whose zero legitimately means
+"shipped framing". The registry's header comment claimed `def` was 0 "for all of
+them by construction", which is what made the bug look deliberate.
+`tests/unit/camera-defaults.test.mjs` now drives the store in a VM and holds the
+two numbers together — it fails on `def: 0` and passes on the fix, confirmed
+both ways. `__apex.camTune()` also now reports each knob's `def`, without which
+a caller cannot tell "untuned" from "tuned to zero": the very distinction whose
+collapse caused this.
+
+Verified green: the CORNER LEAD spec, the rest of `camera-tuner.spec.js`, and
+`presets.spec.js`. Guards 178/178, tooling-fast 183/183.
 
 **A guard came out of this.** `#ios-install` shipped with `display: flex`, which
 outranks the UA's `[hidden] { display: none }` — an author rule always beats a

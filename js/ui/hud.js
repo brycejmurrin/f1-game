@@ -630,10 +630,16 @@ function updateHud(force) {
     hText(els.tyreCode, (player.tyre && player.tyre.code) || "-");
     hStyle(els.tyreFill, "width", (clamp(1 - spent, 0, 1) * 100).toFixed(0) + "%");
     els.tyre.dataset.wear = spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok";
-    // The PIT button carries its own state the way BOOST/OT/AERO do: armed while
-    // the stop is called, on while the car is actually in the lane.
-    hToggle(els.btnPit, "armed", !!player.pitArmed && player.pitState !== "box");
-    hToggle(els.btnPit, "on", player.pitState === "lane" || player.pitState === "box");
+    // THE PIT CUE, and it replaces a button rather than decorating one. A stop
+    // is called by holding the car on the pit side at the entry, so the dwell
+    // has to be visible: without it a driver cannot tell the gesture is
+    // registering and will give up on it half a second in. The compound chip
+    // fills as the commitment runs, then stays lit through the lane and the box.
+    const pit = G.pits;
+    const state = pit ? (player.pitState === "lane" || player.pitState === "box" ? player.pitState
+                         : pit.commitFrac(player) > 0 ? "commit" : "") : "";
+    if (state) els.tyre.dataset.pit = state; else delete els.tyre.dataset.pit;
+    if (state === "commit") hStyle(els.tyre, "--pit-commit", pit.commitFrac(player).toFixed(2));
   }
   // gear + tachometer
   hText(els.gear, "" + player.gear);

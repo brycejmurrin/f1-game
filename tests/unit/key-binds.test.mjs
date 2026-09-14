@@ -78,10 +78,11 @@ test("the defaults are the keys the game always had", () => {
     left: ["ArrowLeft", "KeyA"], right: ["ArrowRight", "KeyD"], throttle: ["ArrowUp", "KeyW"], brake: ["ArrowDown", "KeyS"],
     boost: ["Space", null], overtake: ["KeyX", null], aero: ["KeyZ", null], shiftUp: ["KeyE", null],
     shiftDown: ["KeyQ", "ShiftLeft"], camera: ["KeyC", null],
-    pit: ["KeyV", null],
     // LOOK BACK and RECOVER are standard racing binds we lacked; PAUSE stopped
     // being a reserved literal so it can be moved (XAG 107 asks that every
     // control be remappable, the Esc/pause key included).
+    // PIT is deliberately absent: a stop is called by steering into the pit
+    // entry now, not by a key (js/race/pit-lane.js COMMIT_*).
     lookBack: ["KeyB", null], recover: ["KeyR", null], pause: ["KeyP", null],
   });
   assert.equal(Input.keysAreDefault(), true);
@@ -178,11 +179,10 @@ test("controller defaults are the standard layout the game always had", () => {
   assert.deepEqual(plain(Input.getPadMap()), {
     throttle: [7, 0], brake: [6, 1], boost: [2, null], overtake: [3, null],
     aero: [12, null], shiftUp: [5, null], shiftDown: [4, null], camera: [8, null],
-    pit: [13, null],
     lookBack: [11, null], recover: [10, null], pause: [9, null],
   });
   assert.equal(Input.padsAreDefault(), true);
-  assert.deepEqual(plain(Input.padBindings()).map((a) => a.id), ["throttle", "brake", "boost", "overtake", "aero", "pit", "shiftUp", "shiftDown", "camera", "lookBack", "recover", "pause"]);
+  assert.deepEqual(plain(Input.padBindings()).map((a) => a.id), ["throttle", "brake", "boost", "overtake", "aero", "shiftUp", "shiftDown", "camera", "lookBack", "recover", "pause"]);
 });
 
 test("a rebound button drives and the old one stops answering", () => {
