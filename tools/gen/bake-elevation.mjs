@@ -1,6 +1,7 @@
 // @doc Offline elevation baker — precomputes per-track elevation profiles into a `CircuitElevations` global.
 // @skill new-track
-// DORMANT: no js/track/circuit-elevations.js ships today — wire output or leave unused.
+// Bakes js/track/circuit-elevations.js, which SHIPS: the engine reads it via
+// hasRealElevation(id) and a circuit listed there ignores its authored bumps.
 /* Apex 26 — offline elevation baker.
  *
  * Produces js/track/circuit-elevations.js: a `CircuitElevations` global mapping each
@@ -9,23 +10,39 @@
  * file is loaded before js/track/tracks.js, the engine uses the REAL surveyed
  * elevation for those circuits and ignores their authored `elevations` bumps.
  *
- * Data sources:
- *   - layout/lat-lng : bacinger/f1-circuits (ODbL) GeoJSON LineStrings
+ * Data sources, in this order per circuit:
+ *   - layout/lat-lng : bacinger/f1-circuits (ODbL) GeoJSON LineStrings, for the
+ *                      24 circuits in MAP below;
+ *                      else the OSM ring for any id in tools/track/osm-circuits.json,
+ *                      stitched by tools/track/stitch-osm-ring.mjs (also ODbL).
+ *                      The OSM path is what the eleven circuits recovered in
+ *                      2026-09 use — they have no bacinger feature at all.
  *   - elevation      : Open Topo Data public API (SRTM 30 m), api.opentopodata.org
  *
- * Network note: api.opentopodata.org must be reachable (it is firewalled in the
- * Claude Code web sandbox, so this is meant to be run on an unrestricted
- * machine). The public API allows ~1 request/sec, ≤100 locations/request,
- * ≤1000/day — well within one full bake of the calendar.
+ * Network note: api.opentopodata.org allows ~1 request/sec, ≤100 locations per
+ * request and ≤1000/day — well within one full bake of the roster. It IS
+ * reachable from the Claude Code web sandbox through the agent proxy; this
+ * header claimed the opposite until 2026-09-14, when Mosport's profile was
+ * measured from it, and that claim had discouraged the one measurement that
+ * works. If it ever does fail, the failure is per-circuit and named, not silent.
+ *
+ * WHICH IDS TO PASS. A circuit named here OVERRIDES its authored `elevations`
+ * (tracks.js: `elevations: hasRealElevation(d.id) ? null : d.elevations`). So
+ * baking a circuit that already has hand-tuned bumps is a geometry change to a
+ * shipped circuit, not an addition — bake those deliberately, one at a time,
+ * with the scenery re-checked. Baking a circuit with NO authored elevations
+ * only ever adds relief where there was a flat plane.
  *
  * Usage:
- *   node tools/gen/bake-elevation.mjs            # bake every circuit
+ *   node tools/gen/bake-elevation.mjs            # bake every circuit in MAP
  *   node tools/gen/bake-elevation.mjs spa cota   # bake a subset
+ *   node tools/gen/bake-elevation.mjs fuji       # an OSM circuit (auto-stitches)
  * Then add to index.html, before js/track/tracks.js:
  *   <script src="js/track/circuit-elevations.js?v=NN"></script>
  */
 
-import { writeFileSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -99,19 +116,68 @@ function toProfile(coords, ele) {
   return prof;
 }
 
+// The eleven circuits recovered from OpenStreetMap in 2026-09 have no bacinger
+// feature, so their lat/lng comes from the stitched ring instead. Reading the
+// stitcher's own output (rather than re-deriving a lap here) keeps ONE
+// definition of "which cycle is the lap" — the target lengths in
+// osm-circuits.json — so the elevation is sampled along exactly the centreline
+// the circuit def was built from, not a second opinion about it.
+const RINGS = join(ROOT, "artifacts/osm-rings.geojson");
+const osmTable = JSON.parse(readFileSync(join(ROOT, "tools/track/osm-circuits.json"), "utf8")).circuits;
+
+function ringFor(id) {
+  if (!existsSync(RINGS)) return null;
+  const fc = JSON.parse(readFileSync(RINGS, "utf8"));
+  const f = (fc.features || []).find((x) => x.properties && x.properties.id === id);
+  return f ? f.geometry.coordinates.map((c) => [c[0], c[1]]) : null;
+}
+
+// artifacts/ is regenerable and uncommitted, so a fresh clone has no rings.
+// Stitch on demand rather than failing with "run this other command first".
+function osmCoords(id) {
+  let ring = ringFor(id);
+  if (ring) return ring;
+  process.stdout.write("stitching … ");
+  execFileSync(process.execPath, [join(ROOT, "tools/track/stitch-osm-ring.mjs"), id],
+    { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
+  ring = ringFor(id);
+  if (!ring) throw new Error(`stitch produced no ring for "${id}"`);
+  return ring;
+}
+
 async function bake(ids) {
   const result = {};
   for (const id of ids) {
     const gid = MAP[id];
-    if (!gid) { console.warn(`! no mapping for ${id}, skipping`); continue; }
-    process.stdout.write(`${id} (${gid}) … `);
+    const osm = !gid && osmTable[id];
+    if (!gid && !osm) { console.warn(`! no mapping for ${id}, skipping`); continue; }
+    process.stdout.write(`${id} (${gid || "OSM"}) … `);
     try {
-      const geo = await fetchJSON(GEO(gid));
-      const line = geo.features.find((f) => f.geometry.type === "LineString");
-      const coords = line.geometry.coordinates.map((c) => [c[0], c[1]]);
+      let coords;
+      if (osm) {
+        coords = osmCoords(id);
+      } else {
+        const geo = await fetchJSON(GEO(gid));
+        const line = geo.features.find((f) => f.geometry.type === "LineString");
+        coords = line.geometry.coordinates.map((c) => [c[0], c[1]]);
+      }
       const ele = await elevations(coords);
-      result[id] = toProfile(coords, ele);
-      const lo = Math.min(...result[id]), hi = Math.max(...result[id]);
+      const prof = toProfile(coords, ele);
+      const lo = Math.min(...prof), hi = Math.max(...prof);
+      // A DEAD-FLAT profile is not a measurement, it is missing data, and it is
+      // worse than no entry at all: listing the circuit makes hasRealElevation
+      // true, which nulls out its authored `elevations` for ever after. Korea
+      // is the case that found this — SRTM flew in Feb 2000 and the Yeongam
+      // circuit stands on land reclaimed a decade later, so every one of its
+      // 103 samples reads exactly 0.0 m. Real terrain is never that tidy:
+      // Anderstorp is the flattest circuit that genuinely measures, and it
+      // still moves 4.8 m over 44 distinct values.
+      if (hi - lo < 0.5) {
+        console.log(`SKIPPED: range ${(hi - lo).toFixed(2)} m over ${coords.length} pts ` +
+          `— SRTM has no surface here (reclaimed or re-graded land), not a flat circuit`);
+        continue;
+      }
+      result[id] = prof;
       console.log(`${coords.length} pts, range ${(hi - lo).toFixed(1)} m`);
       await sleep(1100); // be polite between circuits
     } catch (e) {

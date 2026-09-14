@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_170 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_171 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -227,6 +227,7 @@ _170 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
+| `circuit-elevations.js` | `—` | tag | surveyed circuit elevation profiles (metres relative to the start/finish line, 64 samples by arc-fraction around the lap). |
 | `tracks.js` | `Tracks` | tag | track engine: circuit defs (js/circuits/) → splines, meshes, scenery(api). |
 
 **`js/car/`**
