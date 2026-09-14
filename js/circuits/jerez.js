@@ -18,9 +18,22 @@
     // negated by the projection, so it mirrors handedness. Calibrated against
     // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
     reverse: false,
-    // v0 sits mid the longest straight, placed by the stitcher. Not yet checked
-    // against the real start/finish line — see docs/tracks/START-LINES.md.
-    startFrac: 0.0000,
+    // MEASURED, not assumed. The stitcher was supposed to leave v0 mid-straight
+    // and did not: the 182 m of starting grid behind v0 ran through a corner of
+    // 43 m radius, so the grid was laid round a bend. This moves the line to the
+    // nearest section holding R >= 1500 m across the whole grid zone.
+    //
+    // startFrac is an INDEX fraction into the control points, NOT an arc
+    // fraction, and the points are not arc-uniform — the first attempt at this
+    // fix converted the arc target straight to a fraction and landed Donington
+    // back on a 31 m radius. The value below is the control-point index whose
+    // cumulative arc length reaches the target.
+    //
+    // sceneryStartFrac records that every prop, landmark and corner board was
+    // authored against the OLD origin, so the dressed world stays on its real
+    // corners while only the line and grid move.
+    startFrac: 0.1220,
+    sceneryStartFrac: 0.0000,
     name: "JEREZ",
     gp: "Spanish GP",
     country: "Spain",
@@ -50,7 +63,7 @@
     // turns: the 13 strongest curvature peaks of THIS centreline in lap order,
     // 13 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
-    turns: [0.0663, 0.1447, 0.1568, 0.3043, 0.3563, 0.3842, 0.5228, 0.5573, 0.7123, 0.8317, 0.8417, 0.9177, 0.9517],
+    turns: [0.0183, 0.0304, 0.1779, 0.2299, 0.2578, 0.3964, 0.4309, 0.5859, 0.7053, 0.7153, 0.7913, 0.8253, 0.9399],
     furniture: { tree: "palm", fol: [0.30, 0.38, 0.20], lamp: "none", sparse: true },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["sandstone", "concrete", "steel"],
