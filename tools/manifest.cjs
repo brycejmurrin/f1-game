@@ -86,6 +86,7 @@ const FULL = [
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
   "js/render/shared/frustum.js",
+  "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",
   // NB: js/render/webgpu/* and js/render/three/* are NOT here — they are
@@ -262,6 +263,7 @@ const CARVIEW = [
   "js/render/glx/shadow.js",
   "js/render/shared/lamp-chunks.js",
   "js/render/shared/frustum.js",
+  "js/render/shared/vertex-pack.js",   // VertexPack: the ONE definition of how a world vertex channel is quantised — GLX's interleaved layout plus the snorm/half primitives WGX and TLX pack with
   "js/render/glx/chunked.js",
   "js/render/glx/glx.js",
   "js/data/teams.js",
@@ -356,6 +358,8 @@ const HARD_EDGES = [
   ["js/render/glx/shaders/glsl-chunks.js", "js/render/glx/shaders/glsl-fx.js"],
   ["js/render/glx/shaders/glsl-chunks.js", "js/render/glx/shaders/glsl-post.js"],
   // every shader file before glx.js (it destructures GLXShaders at eval)
+  ["js/render/shared/vertex-pack.js", "js/render/glx/glx.js"],           // glx packs world VBOs through VertexPack
+  ["js/render/shared/vertex-pack.js", "js/render/glx/chunked.js"],       // …and so does the chunked path
   ["js/render/glx/shaders/glsl-lit.js", "js/render/glx/glx.js"],
   ["js/render/glx/shaders/glsl-sky.js", "js/render/glx/glx.js"],
   ["js/render/glx/shaders/glsl-fx.js", "js/render/glx/glx.js"],

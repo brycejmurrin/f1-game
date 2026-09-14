@@ -7,7 +7,8 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = new URL("../..", import.meta.url);
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
 const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, FRUSTUM_SOURCE, WGX_SOURCE,
-       LIGHT_BUDGET_SOURCE, POST_COMMON_SOURCE, KNOBS_SOURCE] = await Promise.all([
+       LIGHT_BUDGET_SOURCE, POST_COMMON_SOURCE, KNOBS_SOURCE,
+       VERTEX_PACK_SOURCE] = await Promise.all([
   readFile(new URL(P.WGSL_CHUNKS, ROOT), "utf8"),
   readFile(new URL(P.WGSL_POST, ROOT), "utf8"),
   readFile(new URL("js/render/webgpu/wgsl-fx.js", ROOT), "utf8"),
@@ -16,6 +17,10 @@ const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, FRUSTUM_SOURCE, WGX_SOURCE,
   readFile(new URL("js/render/shared/light-budget.js", ROOT), "utf8"),
   readFile(new URL("js/render/shared/post-common.js", ROOT), "utf8"),
   readFile(new URL("js/lighting/knobs.js", ROOT), "utf8"),
+  // WGX packs its vertex buffer through the shared quantisers. The REAL module,
+  // not a stub: a scale that drifted between the three backends should fail
+  // here, in three seconds, rather than on somebody's GPU.
+  readFile(new URL("js/render/shared/vertex-pack.js", ROOT), "utf8"),
 ]);
 
 // The light storage buffer's size, DERIVED from the same constants WGX derives
@@ -300,6 +305,7 @@ function makeGpuHarness(opts = {}) {
   vm.runInContext(`${LIGHT_BUDGET_SOURCE.replace(/^const\b/gm, "var")}\nwindow.LightBudget = LightBudget;`, context);
   vm.runInContext(`${KNOBS_SOURCE.replace(/^const\b/gm, "var")}\nwindow.LightKnobs = LightKnobs;`, context);
   vm.runInContext(`${POST_COMMON_SOURCE.replace(/^const\b/gm, "var")}\nwindow.PostCommon = PostCommon;`, context);
+  vm.runInContext(`${VERTEX_PACK_SOURCE.replace(/^const\b/gm, "var")}\nwindow.VertexPack = VertexPack;`, context);
   vm.runInContext(`${WGX_SOURCE}\nwindow.WGX = WGX;`, context);
 
   return {
@@ -1034,9 +1040,28 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(WGX_SOURCE, /_makeRoadLUT/);
   assert.match(WGX_SOURCE, /_roadLutBG/);
   assert.match(WGX_SOURCE, /out\[0\] = 12345/);
-  assert.match(WGX_SOURCE, /VERTEX_STRIDE = 36/);
-  assert.match(WGX_SOURCE, /shaderLocation: 0/);
+  // The world vertex buffer is PACKED — 28 bytes, not the 36 three float32x3s
+  // cost. What must hold is the Dawn constraint, which is about the NUMBER of
+  // attributes, not their width: this adapter zeroes a fourth attribute (and
+  // breaks the position fetch with it), so mat and trk live in the group-2
+  // storage buffer. Widening an existing attribute is fine and is what the
+  // packing does — WebGPU lets a 4-component format feed a vec3 shader input.
+  assert.match(WGX_SOURCE, /VERTEX_STRIDE = 28/);
+  assert.match(WGX_SOURCE, /shaderLocation: 0, offset: 0,\s+format: "float32x3"/,
+    "position must stay full float32 — world coordinates run to ~7 km");
+  assert.match(WGX_SOURCE, /shaderLocation: 1, offset: 12, format: "snorm16x4"/);
+  assert.match(WGX_SOURCE, /shaderLocation: 2, offset: 20, format: "float16x4"/,
+    "colour must be half float, not a unorm byte — emissive reaches 3.4");
   assert.doesNotMatch(WGX_SOURCE, /shaderLocation: 3, offset: 36/);
+  {
+    // Exactly three attributes in the world layout, counted rather than
+    // asserted by absence: a fourth added anywhere in that object is the
+    // regression this whole storage-buffer detour exists to prevent.
+    const lay = WGX_SOURCE.slice(WGX_SOURCE.indexOf("const VERTEX_POS_LAYOUT"),
+                                 WGX_SOURCE.indexOf("const INSTANCE_STRIDE"));
+    assert.equal((lay.match(/shaderLocation:/g) || []).length, 3,
+      "the world vertex layout must carry exactly three attributes");
+  }
   assert.match(WGX_SOURCE, /_expandPull/);
   assert.match(WGX_SOURCE, /hasTrk/);
   // PIECE still bounds each staged piece, but NOT the draw shape any more: on

@@ -1072,43 +1072,25 @@ const GLX = (function () {
       idx = big ? new Uint32Array(idx) : new Uint16Array(idx);
     }
 
-    // Interleaved: [x,y,z, nx,ny,nz, r,g,b (, mat) (, s,x,hw)] per vertex — one
-    // buffer. Optional per-vertex material id (data.mat) adds a 10th float
-    // (attrib 3); meshes without it stay 9-float and aMat reads the generic
-    // default (0=FLAT). Optional track coords (data.trk: arc-length s, signed
-    // lateral offset, half-width — 3 floats, attrib 4) let the ROAD evaluate its
-    // markings analytically in the fragment shader instead of carrying a vertex
-    // column per painted line. Meshes without it read (0,0,0), and the shader
-    // gates on hw > 0 so nothing else can accidentally paint lines on itself.
+    // Packed and interleaved by VertexPack (js/render/shared/vertex-pack.js).
+    // Optional per-vertex material id (data.mat) rides in the alpha of the
+    // colour attribute and so costs nothing; meshes without it encode 0, which
+    // is the same FLAT the old disabled attribute 3 read from its generic
+    // default. Optional track coords (data.trk: arc-length s, signed lateral
+    // offset, half-width — attrib 4) let the ROAD evaluate its markings
+    // analytically in the fragment shader instead of carrying a vertex column
+    // per painted line. Meshes without it read (0,0,0), and the shader gates on
+    // hw > 0 so nothing else can accidentally paint lines on itself.
     const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
     const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
-    const fpv = 9 + (mat ? 1 : 0) + (trk ? 3 : 0);
-    const trkOff = 9 + (mat ? 1 : 0);
-    const interleaved = new Float32Array(vCount * fpv);
-    for (let i = 0; i < vCount; i++) {
-      const o = i * fpv;
-      interleaved[o  ] = pos[i*3  ]; interleaved[o+1] = pos[i*3+1]; interleaved[o+2] = pos[i*3+2];
-      interleaved[o+3] = nrm[i*3  ]; interleaved[o+4] = nrm[i*3+1]; interleaved[o+5] = nrm[i*3+2];
-      interleaved[o+6] = col[i*3  ]; interleaved[o+7] = col[i*3+1]; interleaved[o+8] = col[i*3+2];
-      if (mat) interleaved[o+9] = mat[i];
-      if (trk) {
-        interleaved[o+trkOff  ] = trk[i*3  ];
-        interleaved[o+trkOff+1] = trk[i*3+1];
-        interleaved[o+trkOff+2] = trk[i*3+2];
-      }
-    }
+    const interleaved = VertexPack.pack(vCount, pos, nrm, col, mat, trk);
 
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const vbo = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
-    const stride = fpv * 4;
-    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride,  0);
-    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
-    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
-    if (mat) { gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 36); }
-    if (trk) { gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, stride, trkOff * 4); }
+    VertexPack.bindAttribs(gl, !!trk);
     const ib = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
