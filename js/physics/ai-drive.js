@@ -761,6 +761,39 @@ const AiDrive = (function () {
   function mistakeBrakeMul() { return 1.05; }
   function mistakeGatherMul() { return 0.85; }
 
+  // A HUMAN RUNS NO YIELD PROTOCOL, so electing one is electing nobody.
+  // sideYieldsA picks exactly ONE car of an alongside pair to concede, and only
+  // that car backs off. Between two AI cars that resolves, because both sides
+  // run the rule. Elect the player and neither does: the player has no such
+  // logic (and must not — the arc may not reach the driver), so the AI holds
+  // its racing-line target and leans on a car that was never going to move.
+  //
+  // collide.js already encodes this once metal is touching ("with a HUMAN in
+  // the pair there is no planner to mirror"), but that is the CONTACT layer;
+  // nothing said it at the STEERING layer, where the AI picks where to aim.
+  //
+  // Measured (monza, 240 s, scripted player holding the racing line at racing
+  // pace): of 276 frames alongside inside the clear gap, the rule elected the
+  // HUMAN 276 times and the AI zero. Against another AI the elected car does
+  // concede — 22,524 frames, gap opening +0.169 m/s.
+  //
+  // GRACE, not an exemption. The AI holds its line for this long first, so
+  // racing a player is not a free pass and a clean side-by-side still happens;
+  // only a lean that the player has demonstrably not answered flips the roles.
+  // 0.3 s is about a driver's reaction time and roughly half the shortest
+  // AI-AI alongside episode the bench sees.
+  function humanYieldGrace() { return 0.3; }
+  // The grace timer itself, so the RULE lives here and game.js only carries the
+  // per-car state (the ownership split at the top of this file). Counts only
+  // while we are alongside a human the rule has NOT given us to yield to;
+  // anything else resets, so separating ends it with no special case.
+  function humanYieldT(prevT, close, aiElected, otherHuman, dt) {
+    if (!close) return 0;
+    if (aiElected || !otherHuman) return prevT;
+    return prevT + dt;
+  }
+  function humanYieldTakes(t) { return (t || 0) > humanYieldGrace(); }
+
   const SIDE_LEVEL = 2.4;
   function sideYieldsA(dProg, xA, xB) {
     if (dProg < -SIDE_LEVEL) return true;        // A is behind B
@@ -902,7 +935,7 @@ const AiDrive = (function () {
     defendPull, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
-    otWant, passTarget, passHold, passCooldown, sideYieldsA,
+    otWant, passTarget, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldT, humanYieldTakes,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

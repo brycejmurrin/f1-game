@@ -826,3 +826,44 @@ test("the straight branch respects the gates the corner branch already had", () 
   // no room that side on a street
   assert.equal(A.defendPull({ ...onStraight, street: true, roomR: 1.5, other: { x: 1.4 } }), 0);
 });
+
+/* THE HUMAN-YIELD GRACE.
+ *
+ * sideYieldsA elects exactly ONE car of an alongside pair to concede, and only
+ * the elected car backs off (the rubClamp in js/game.js). Between two AI cars
+ * that resolves, because both run the rule. A human runs no yield logic at all
+ * — and must not, since the arc may not reach the driver — so when the rule
+ * elects the player the pair has NO yielder: the AI keeps aiming at the racing
+ * line through a car that was never going to move.
+ *
+ * Measured before the fix (monza, 240 s, scripted player holding the line at
+ * racing pace): of 276 frames alongside inside the clear gap, the rule elected
+ * the HUMAN 276 times and the AI zero, while AI-AI pairs resolved at
+ * +0.169 m/s over 22,524 frames.
+ *
+ * js/physics/collide.js already encodes this principle at the CONTACT layer
+ * ("with a HUMAN in the pair there is no planner to mirror"); the steering
+ * layer had no equivalent. The grace is what keeps it from becoming a blanket
+ * exemption, so these assertions are about its SHAPE, not just its existence.
+ */
+test("the human-yield grace is a real reaction window, not zero and not a lap", () => {
+  const A = load();
+  const g = A.humanYieldGrace();
+  assert.equal(typeof g, "number");
+  assert.ok(Number.isFinite(g) && g > 0,
+    "a zero or non-finite grace makes the AI an instant pushover against a player");
+  // Long enough to be a genuine side-by-side rather than an instant concession,
+  // short enough that a lean cannot persist. A driver's reaction is ~0.25 s.
+  assert.ok(g >= 0.15 && g <= 0.8, `grace ${g}s is outside the reaction-time band`);
+});
+
+test("the grace does not disturb who the rule elects between two AI cars", () => {
+  const A = load();
+  // The election rule itself is untouched — the grace acts only in game.js, and
+  // only when the elected car is a human. Pin the three branches so a future
+  // edit to sideYieldsA cannot quietly change AI-vs-AI racing.
+  assert.equal(A.sideYieldsA(-5, 0, 0), true, "behind on arc yields");
+  assert.equal(A.sideYieldsA(5, 0, 0), false, "ahead on arc does not");
+  assert.equal(A.sideYieldsA(0, 3, 1), true, "level: the outer car concedes");
+  assert.equal(A.sideYieldsA(0, 1, 3), false, "level: the inner car holds");
+});
