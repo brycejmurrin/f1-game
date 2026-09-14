@@ -64,20 +64,20 @@
       every(34, (k) => {
         const h = hash(k * 17 + 3);
         for (const side of [-1, 1]) {
-          const g = 13 + h * 9;
+          const g = 5.0 + h * 6;
           const a = anchor(k, side, g + 6);
           if (!a || onTrack(a.c[0], a.c[2], 7)) continue;
-          groundPatch(k, side, g, 16 + h * 14, h < 0.5 ? SAND_PALE : SAND);
+          groundPatch(k, side, g, [10 + h * 10, 0.14, 22 + h * 20], h < 0.5 ? SAND_PALE : SAND);
         }
       });
 
       // 0b. The pine mass. Dark and dense, set back past the sand, thicker on
       //     the outer ring (-1) than on the infield (+1) where the paddock is.
-      every(9, (k) => {
+      every(7, (k) => {
         const h = hash(k * 29 + 7);
         const h2 = hash(k * 53 + 11);
         for (const side of [-1, 1]) {
-          const ranks = side < 0 ? 6 : 3;
+          const ranks = side < 0 ? 7 : 4;
           for (let r = 0; r < ranks; r++) {
             const jitter = hash(k * 7 + r * 131 + (side < 0 ? 0 : 401));
             if (jitter < 0.12) continue;
@@ -111,14 +111,31 @@
         }
       });
 
-      // 0d. Armco all the way round — Zolder is hemmed in, barriers are close.
+      // 0d/0e. THE OUTER RING OF WOOD. Zolder sits inside a pine plantation: the
+      //      -1 side is woodland almost the whole way round, broken only where
+      //      the main-straight grandstand and the Villeneuve viewing bank are.
+      //      forestEdge is what makes it read as a WALL rather than a scatter.
+      //      (0d = outer ring, 0e = infield screen.)
+      forestEdge(0.300, 0.420, -1, 24);
+      forestEdge(0.440, 0.540, -1, 32);
+      forestEdge(0.600, 0.700, -1, 24);
+      forestEdge(0.730, 0.850, -1, 26);
+      forestEdge(0.905, 0.950, -1, 30);
+      // Infield pine: the paddock and service areas are cut out of the same
+      // plantation, so the +1 side is screened too wherever nothing is built.
+      forestEdge(0.100, 0.168, 1, 30);
+      forestEdge(0.206, 0.330, 1, 28);
+      forestEdge(0.580, 0.690, 1, 28);
+      forestEdge(0.760, 0.850, 1, 30);
+
+      // 0f. Armco all the way round — Zolder is hemmed in, barriers are close.
       for (const side of [-1, 1]) guardrail(0.0, 1.0, side, 10.5, RAIL);
 
-      // 0e. Debris fence behind the armco on the spectator side of the loop.
+      // 0g. Debris fence behind the armco on the spectator side of the loop.
       fence(0.08, 0.30, -1, 15, 3.2, [0.58, 0.60, 0.60]);
       fence(0.40, 0.62, -1, 15, 3.2, [0.58, 0.60, 0.60]);
 
-      // 0f. Marshal posts on the half-lap gaps the named rows do not cover.
+      // 0h. Marshal posts on the half-lap gaps the named rows do not cover.
       for (const s of [0.075, 0.145, 0.235, 0.300, 0.395, 0.470, 0.640, 0.780, 0.820]) {
         marshalPost(K(s), s < 0.5 ? -1 : 1, 13);
       }
@@ -129,18 +146,18 @@
         const s = 0.958 + i * 0.0068;
         const h = hash(i * 41 + 9);
         building(K(s), 1, 14, 11, 4.6 + (h > 0.7 ? 1.6 : 0), 9.5,
-          h < 0.55 ? WHITE : GREY);
+          { wall: h < 0.55 ? WHITE : GREY });
       }
       // Team offices over the middle of the pit block.
-      building(K(0.012), 1, 26, 34, 8.5, 14, WHITE);
-      building(K(0.034), 1, 27, 22, 7.0, 13, GREY);
+      building(K(0.012), 1, 26, 34, 8.5, 14, { wall: WHITE });
+      building(K(0.034), 1, 27, 22, 7.0, 13, { wall: GREY });
       // Continuous sponsor band along the pit wall.
       sponsorHoarding(0.955, 0.060, 1, 11.5);
       // Pit exit marshal.
       marshalPost(K(0.058), 1, 13);
       marshalPost(K(0.985), 1, 13);
       // Pale apron in front of the garages.
-      groundPatch(K(0.005), 1, 12, 30, CONCRETE);
+      groundPatch(K(0.005), 1, 4.0, [17, 0.15, 34], CONCRETE);
 
       // === 2. s 0.015 -1 12 — MAIN STRAIGHT GRANDSTAND ===================
       grandstandEx(0.012, -1, 12, 150, null, null);
@@ -159,9 +176,9 @@
 
       // === 3. s 0.035 -1 22 — EARSTE CHICANE (T1) OUTSIDE ================
       // Wide bleached sand run-off, then tyres on armco, then the hill.
-      groundPatch(K(0.0352), -1, 12, 46, SAND_PALE);
-      groundPatch(K(0.0300), -1, 13, 34, SAND_PALE);
-      groundPatch(K(0.0410), -1, 13, 34, SAND);
+      groundPatch(K(0.0352), -1, 6.0, [24, 0.16, 46], SAND_PALE);
+      groundPatch(K(0.0300), -1, 4.0, [18, 0.15, 38], SAND_PALE);
+      groundPatch(K(0.0410), -1, 4.0, [18, 0.15, 38], SAND);
       guardrail(0.026, 0.050, -1, 22, RAIL);
       tyreWall(0.028, 0.048, -1, 21.4, TYRE_CAP);
       spectatorHill(0.026, 0.052, -1, 27);
@@ -172,7 +189,7 @@
       }
 
       // === 4. s 0.042 +1 16 — CHICANE EXIT, INFIELD ======================
-      groundPatch(K(0.042), 1, 14, 24, SAND);
+      groundPatch(K(0.042), 1, 4.0, [14, 0.15, 28], SAND);
       marshalPost(K(0.044), 1, 15);
       guardrail(0.036, 0.052, 1, 16, RAIL);
       // First rank of pine screening the paddock beyond.
@@ -196,7 +213,7 @@
       // === 6. s 0.180 +1 16 — STERRENWACHT (T2) ==========================
       guardrail(0.170, 0.192, 1, 12, RAIL);
       marshalPost(K(0.1802), 1, 16);
-      building(K(0.1802), 1, 30, 10, 6.0, 10, WHITE);   // small square, set back
+      building(K(0.1802), 1, 30, 10, 6.0, 10, { wall: WHITE });   // small square, set back
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 83 + 29);
         pine(K(0.166 + i * 0.0036), 1, 42 + j * 12, 15 + j * 8, pineCol(j));
@@ -205,22 +222,23 @@
       // === 7. s 0.194 -1 20 — KANAALBOCHT (T3) ===========================
       // A low ridge of sandy spoil carries the boundary here.
       {
-        const a = anchor(K(0.1938), -1, 52);
+        const a = anchor(K(0.1938), -1, 62);
         if (a) {
           const y = terrainYAt ? terrainYAt(a.c[0], a.c[2]) : a.c[1];
-          ridge(a.c[0], a.c[2], y, a.r || 0, 150, 20, 5.0, SAND_DUSK);
+          ridge(a.c[0], a.c[2], y, Math.atan2(a.t[2], a.t[0]), 74, 18, 5.0, SAND_DUSK);
         }
       }
       guardrail(0.184, 0.206, -1, 20, RAIL);
       tyreWall(0.188, 0.202, -1, 19.4, TYRE_CAP2);
-      groundPatch(K(0.1938), -1, 12, 28, SAND_PALE);
+      groundPatch(K(0.1938), -1, 4.0, [16, 0.15, 32], SAND_PALE);
       forestEdge(0.180, 0.214, -1, 40);
 
       // === 8. s 0.265 -1 34 — FORESTED MOTORHOME PARK ====================
-      groundPatch(K(0.265), -1, 30, 40, SAND_DUSK);
+      groundPatch(K(0.265), -1, 30, [22, 0.16, 46], SAND_DUSK);
       for (let i = 0; i < 7; i++) {
         const j = hash(i * 59 + 43);
-        motorhome(K(0.244 + i * 0.0072), -1, 33 + j * 14);
+        motorhome(K(0.244 + i * 0.0072), -1, 33 + j * 14, 10, 6.5 + j * 1.5, 13,
+          { wall: [0.88, 0.88, 0.87] });
       }
       for (let i = 0; i < 22; i++) {
         const j = hash(i * 101 + 19);
@@ -234,11 +252,11 @@
       marshalPost(K(0.356), 1, 20);
       billboard(K(0.330), 1, 24, 12, 4.5, [0.84, 0.78, 0.18]);
       billboard(K(0.338), 1, 24, 12, 4.5, [0.14, 0.30, 0.58]);
-      groundPatch(K(0.347), 1, 16, 26, SAND);
+      groundPatch(K(0.347), 1, 4.0, [15, 0.15, 30], SAND);
 
       // === 10. s 0.433 -1 24 — VILLENEUVE CHICANE (T5) ===================
       // Popular viewing on the outside; sand run-off; tyres on armco.
-      groundPatch(K(0.4333), -1, 12, 40, SAND_PALE);
+      groundPatch(K(0.4333), -1, 4.0, [22, 0.16, 46], SAND_PALE);
       guardrail(0.424, 0.446, -1, 18, RAIL);
       tyreWall(0.426, 0.444, -1, 17.4, TYRE_CAP);
       grandstandEx(0.4333, -1, 26, 62, null, null);
@@ -250,15 +268,15 @@
       // --- the memorial. One small low building on a ground patch, set back
       //     from the barrier. Unlit, unsignposted, nothing else. Restraint is
       //     the point: do NOT add lights, flags, billboards or a crowd here.
-      groundPatch(K(0.4368), -1, 30, 9, CONCRETE);
-      building(K(0.4368), -1, 31, 3.0, 2.2, 3.0, [0.80, 0.79, 0.76]);
+      groundPatch(K(0.4368), -1, 30, [8, 0.16, 10], CONCRETE);
+      building(K(0.4368), -1, 31, 3.0, 2.2, 3.0, { wall: [0.80, 0.79, 0.76] });
 
       // === 11. s 0.505 +1 40 — INFIELD SERVICE AREA ======================
-      groundPatch(K(0.505), 1, 34, 44, SAND_PALE);
+      groundPatch(K(0.505), 1, 34, [24, 0.15, 46], SAND_PALE);
       broadcastCompound(K(0.505), 1, 38);
-      motorhome(K(0.492), 1, 40);
-      motorhome(K(0.518), 1, 41);
-      building(K(0.505), 1, 56, 18, 5.0, 12, GREY);
+      motorhome(K(0.492), 1, 40, 11, 7.0, 15, { wall: [0.90, 0.90, 0.89] });
+      motorhome(K(0.518), 1, 41, 11, 7.0, 15, { wall: [0.84, 0.85, 0.86] });
+      building(K(0.505), 1, 56, 18, 5.0, 12, { wall: GREY });
       for (let i = 0; i < 14; i++) {
         const j = hash(i * 79 + 23);
         pine(K(0.480 + i * 0.0040), 1, 66 + j * 14, 15 + j * 8, pineCol(j));
@@ -269,7 +287,7 @@
       guardrail(0.556, 0.580, -1, 14, RAIL);
       tyreWall(0.558, 0.578, -1, 13.4, TYRE_CAP2);
       marshalPost(K(0.5667), -1, 16);
-      groundPatch(K(0.5667), -1, 12, 22, SAND_PALE);
+      groundPatch(K(0.5667), -1, 4.0, [13, 0.15, 26], SAND_PALE);
       for (let i = 0; i < 16; i++) {
         const j = hash(i * 89 + 37);
         pine(K(0.548 + i * 0.0026), -1, 19 + j * 7, 16 + j * 8, pineCol(j));
@@ -284,7 +302,7 @@
       tyreWall(0.702, 0.732, 1, 21.2, TYRE_CAP);
       marshalPost(K(0.730), 1, 24);
       billboard(K(0.694), 1, 24, 12, 4.5, [0.80, 0.26, 0.18]);
-      groundPatch(K(0.7153), -1, 13, 30, SAND_PALE);
+      groundPatch(K(0.7153), -1, 4.0, [17, 0.15, 34], SAND_PALE);
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 43 + 47);
         pine(K(0.690 + i * 0.0042), -1, 24 + j * 14, 16 + j * 8, pineCol(j));
@@ -318,7 +336,11 @@
       for (let i = 0; i < 5; i++) {
         const j = hash(i * 107 + 61);
         building(K(0.906 + i * 0.0086), 1, 22 + j * 6, 14, 5.2, 11,
-          j < 0.5 ? GREY : WHITE);
+          { wall: j < 0.5 ? GREY : WHITE });
       }
-      for (let i = 0; i < 6; i++) motorhome(K(0.908 + i * 0.0072), 1, 40);
+      for (let i = 0; i < 6; i++) {
+        const j = hash(i * 113 + 7);
+        motorhome(K(0.908 + i * 0.0072), 1, 40, 10, 6.4 + j * 1.4, 14,
+          { wall: j < 0.5 ? [0.89, 0.89, 0.88] : [0.80, 0.81, 0.83] });
+      }
   };

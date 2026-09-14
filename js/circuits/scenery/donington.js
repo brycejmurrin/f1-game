@@ -23,7 +23,12 @@
     15  s 0.7887 +1  Melbourne Hairpin
     16  s 0.8700 -1  Melbourne return leg
     17  s 0.9437 +1  Goddards
-    18  parkland scatter + continuous armco + marshal posts (§6, whole lap) */
+    18  whole lap: parkland scatter, estate wood belts, hedgerows,
+        continuous armco, marshal posts (§6)
+
+   Deviation from the brief's distance column: the Collection sits at gap 58,
+   not 34 — the infield is narrow at s 0.048 and anything closer overlapped the
+   tarmac and was guard-dropped. Everything else uses the brief's distance. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["donington"] =
   function (api) {
@@ -85,8 +90,8 @@
       building(K(0.968), 1, 15, 14, 6.5, 108, { col: WALL, roof: ROOF });
       building(K(0.032), 1, 19, 12, 5.5, 34, { col: WALL_2, roof: ROOF });
       // Paddock apron behind the garages.
-      groundPatch(K(0.000), 1, 34, 96, TARMACISH);
-      for (let i = 0; i < 5; i++) motorhome(K(0.975 + i * 0.012), 1, 40, { col: WALL });
+      groundPatch(K(0.000), 1, 34, [40, 0.18, 96], TARMACISH);
+      for (let i = 0; i < 5; i++) motorhome(K(0.975 + i * 0.012), 1, 30, 3.0, 3.2, 11, { wall: WALL });
       broadcastCompound(K(0.020), 1, 30, { col: WALL_2 });
       cameraTower(K(0.004), 1, 20, { h: 11 });
       // Paddock perimeter fencing, not spectator debris fence.
@@ -107,9 +112,10 @@
       //    Long, low, flat-roofed exhibition hall set back behind the paddock,
       //    coach apron in front, hedge screening it from the track.
       // ---------------------------------------------------------------------
-      building(K(0.052), 1, 24, 18, 7.0, 34, { col: WALL, roof: ROOF, flat: true });
+      // gap 58, not the brief's 34: closer than ~55 the hall overlaps tarmac.
+      building(K(0.048), 1, 58, 24, 7.5, 64, { col: WALL, roof: ROOF, flat: true });
       building(K(0.072), 1, 28, 12, 4.8, 18, { col: WALL_2, roof: ROOF, flat: true });
-      groundPatch(K(0.046), 1, 24, 54, TARMACISH);
+      groundPatch(K(0.046), 1, 24, [26, 0.18, 54], TARMACISH);
       hedge(0.034, 0.078, 1, 17, 2.2, HEDGE_C);
       for (let i = 0; i < 4; i++) specimen(K(0.040 + i * 0.011), 1, 60, i * 7);
 
@@ -144,7 +150,7 @@
       for (let i = 0; i < 7; i++) specimen(K(0.200 + i * 0.020), 1, 30 + (i % 3) * 12, 100 + i * 13);
       slopeRidge(K(0.245), 1, 66, 110, 24, 5.5, GRASS);
       slopeRidge(K(0.290), 1, 84, 90, 20, 4.0, ROUGH);
-      groundPatch(K(0.255), 1, 26, 70, GRASS);
+      groundPatch(K(0.255), 1, 26, [30, 0.16, 70], GRASS);
 
       // ---------------------------------------------------------------------
       // 8. s 0.3212 -1 13 — CRANER CURVES: enclosed and dark
@@ -230,8 +236,8 @@
       // ---------------------------------------------------------------------
       hedge(0.820, 0.920, -1, 32, 2.3, HEDGE_C);
       guardrail(0.815, 0.925, -1, 11, ARMCO);
-      groundPatch(K(0.870), -1, 18, 80, ROUGH);
-      groundPatch(K(0.905), -1, 18, 60, ROUGH);
+      groundPatch(K(0.870), -1, 18, [22, 0.16, 80], ROUGH);
+      groundPatch(K(0.905), -1, 18, [22, 0.16, 60], ROUGH);
       for (let i = 0; i < 5; i++) specimen(K(0.828 + i * 0.020), -1, 46, 500 + i * 19);
 
       // ---------------------------------------------------------------------
@@ -251,15 +257,15 @@
       //     Skipped through the Craner fall (0.17–0.33) on the infield so the
       //     drop stays visible from the Hollywood bank.
       // ---------------------------------------------------------------------
-      every(26, (k) => {
+      every(22, (k) => {
         const s = k / n;
         const h = hash(k * 37 + 5);
-        if (h < 0.60) return;
+        if (h < 0.50) return;
         for (const side of [-1, 1]) {
           if (side > 0 && s > 0.16 && s < 0.34) continue;      // keep Craner open
           if (side > 0 && (s > 0.94 || s < 0.09)) continue;    // paddock side
           const g = hash(k * 53 + (side > 0 ? 11 : 3));
-          if (g < 0.35) continue;
+          if (g < 0.30) continue;
           const dist = 26 + g * 26 + (side < 0 ? 6 : 10);
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 10)) continue;
@@ -267,6 +273,30 @@
           if (g > 0.86) bush(k, side, dist - 8, LEAF_D);
         }
       });
+
+      // Parkland woodland blocks: the estate's wood belts, set well back so the
+      // near ground stays open grass. Kept off the Craner fall entirely.
+      forestEdge(0.355, 0.430, 1, 54, { col: LEAF, spacing: 16 });
+      forestEdge(0.480, 0.560, 1, 50, { col: LEAF_D, spacing: 17 });
+      forestEdge(0.590, 0.660, -1, 40, { col: LEAF, spacing: 15 });
+      forestEdge(0.600, 0.665, 1, 46, { col: LEAF_D, spacing: 18 });
+      forestEdge(0.720, 0.760, -1, 38, { col: LEAF, spacing: 16 });
+      forestEdge(0.800, 0.865, 1, 44, { col: LEAF, spacing: 18 });
+      forestEdge(0.930, 1.000, -1, 46, { col: LEAF_D, spacing: 17 });
+
+      // Estate field boundaries: hedgerow with mown verge, the English tell.
+      hedge(0.360, 0.440, 1, 24, 2.0, HEDGE_C);
+      hedge(0.600, 0.668, 1, 26, 2.0, HEDGE_C);
+      hedge(0.700, 0.745, -1, 26, 2.0, HEDGE_C);
+
+      // Debris fence on the public side of the lap.
+      fence(0.545, 0.700, 1, 15, 2.8, FENCE_C);
+      fence(0.780, 0.930, -1, 15, 2.8, FENCE_C);
+
+      // Modest standing banks where the crowd actually gathers.
+      spectatorHill(0.660, 0.700, -1, 20, { h: 5.0, col: GRASS });
+      spectatorHill(0.930, 0.985, -1, 24, { h: 6.5, col: GRASS });
+      terrace(0.940, 0.972, -1, 22, { h: 4.5, col: CONCRETE });
 
       // Continuous armco so the whole edge reads as a circuit, not a lane.
       guardrail(0.0, 1.0, -1, 13.5, ARMCO);

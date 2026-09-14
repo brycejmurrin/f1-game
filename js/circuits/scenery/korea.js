@@ -56,6 +56,7 @@
       const PALE      = [0.84, 0.85, 0.85];  // permanent pit fascia
       const STEEL     = [0.72, 0.74, 0.76];  // pale grey stand steel
       const SEAWALL   = [0.58, 0.57, 0.54];  // concrete embankment
+      const ESTUARY   = [0.38, 0.44, 0.46];  // flat hazy tidal water
 
       // Base ground: alternating bleached grass and bare fill, thinned hard so
       // it reads as patchy reclamation rather than a lawn.
@@ -63,7 +64,8 @@
         const h = hash(k * 17 + 3);
         if (h < 0.42) return;
         const side = h < 0.71 ? -1 : 1;
-        groundPatch(k, side, 16 + h * 26, 26 + h * 30, h < 0.58 ? FILL : SALT);
+        groundPatch(k, side, 16 + h * 26, [26 + h * 30, 0.30, 34 + h * 40],
+          h < 0.58 ? FILL : SALT);
       });
 
       // ---------------------------------------------------------------------
@@ -80,9 +82,9 @@
       //    row racked behind it, a camera tower on the start line. The only
       //    finished architecture on the lap: permanent and tidy.
       // ---------------------------------------------------------------------
-      building(K(0.005), -1, 12, 190, 9.5, 20);
-      building(K(0.055), -1, 12, 60, 7.0, 16);
-      for (let i = 0; i < 6; i++) motorhome(K(0.968 + i * 0.011), -1, 40);
+      building(K(0.005), -1, 12, 20, 9.5, 190);
+      building(K(0.055), -1, 12, 16, 7.0, 60);
+      for (let i = 0; i < 6; i++) motorhome(K(0.968 + i * 0.011), -1, 40, 9, 4.2, 16);
       cameraTower(K(0.0), -1, 15);
       marshalPost(K(0.012), -1, 16);
 
@@ -95,7 +97,7 @@
       // ---------------------------------------------------------------------
       grandstandEx(0.020, 1, 22, 180, null, null);
       sponsorHoarding(0.002, 0.050, 1, 18);
-      waterBand(0.0, 0.10, 1, 300);
+      waterBand(0.0, 0.10, 1, 300, 640, 26, ESTUARY);
       place(K(0.020), 1, 70, [40, 6, 14], STEEL);   // low support shed behind
 
       // ---------------------------------------------------------------------
@@ -116,7 +118,7 @@
       // ---------------------------------------------------------------------
       marshalPost(K(0.083), -1, 15);
       billboard(K(0.092), -1, 20, 14, 6, [0.86, 0.86, 0.84]);
-      groundPatch(K(0.086), -1, 22, 70, SALT);
+      groundPatch(K(0.086), -1, 22, [70, 0.30, 90], SALT);
       for (let i = 0; i < 5; i++) {
         const h = hash(i * 53 + 7);
         bush(K(0.070 + i * 0.009), -1, 17 + h * 16, SCRUB);
@@ -128,10 +130,10 @@
       //    breaking the skyline, water beyond. No stands, no trees, no crowd.
       //    This block is deliberately almost bare.
       // ---------------------------------------------------------------------
-      groundPatch(K(0.175), 1, 45, 130, SALT);
-      groundPatch(K(0.205), 1, 45, 120, FILL);
+      groundPatch(K(0.175), 1, 45, [130, 0.30, 150], SALT);
+      groundPatch(K(0.205), 1, 45, [120, 0.30, 140], FILL);
       tower(K(0.190), 1, 150, 3.2, 58);
-      waterBand(0.13, 0.27, 1, 280);
+      waterBand(0.13, 0.27, 1, 280, 640, 26, ESTUARY);
 
       // ---------------------------------------------------------------------
       // 8. s=0.300 / +1 / 25 — TURN 3, the heavy braking zone ending the long
@@ -152,7 +154,7 @@
       // ---------------------------------------------------------------------
       broadcastCompound(K(0.306), -1, 18);
       marshalPost(K(0.316), -1, 16);
-      groundPatch(K(0.306), -1, 26, 60, FILL);
+      groundPatch(K(0.306), -1, 26, [60, 0.30, 70], FILL);
 
       // ---------------------------------------------------------------------
       // 10. s=0.430 / -1 / 20 — TURNS 4-6 INFIELD: scrub, scattered bush, a
@@ -161,22 +163,25 @@
       // ---------------------------------------------------------------------
       for (const s of [0.395, 0.430, 0.468]) {
         marshalPost(K(s), -1, 18);
-        groundPatch(K(s), -1, 24, 66, SALT);
+        groundPatch(K(s), -1, 24, [66, 0.30, 80], SALT);
       }
       for (let i = 0; i < 8; i++) {
         const h = hash(i * 71 + 19);
         bush(K(0.385 + i * 0.012), -1, 20 + h * 20, SCRUB);
       }
-      backdrop(K(0.430), -1, 300, 140, SHELL_D);
-      backdrop(K(0.470), -1, 340, 120, SHELL_D);
+      backdrop(K(0.430), -1, 300, [150, 34, 26], SHELL_D);
+      backdrop(K(0.470), -1, 340, [120, 30, 24], SHELL_D);
 
       // ---------------------------------------------------------------------
       // 11. s=0.549 / +1 / 35 — TURN 7 OUTSIDE: armco hard against a raised
       //     seawall embankment, open water behind it. Hazy, no far shore.
       // ---------------------------------------------------------------------
       guardrail(0.510, 0.600, 1, 33, RAIL);
-      prop(K(0.549), 1, 38, [12, 3.2, 300], SEAWALL);
-      waterBand(0.49, 0.63, 1, 70);
+      // Segmented so the embankment follows the curve instead of cutting it.
+      for (let i = 0; i < 8; i++) {
+        prop(K(0.513 + i * 0.011), 1, 36, [10, 3.0, 62], SEAWALL);
+      }
+      waterBand(0.49, 0.63, 1, 70, 460, 24, ESTUARY);
 
       // ---------------------------------------------------------------------
       // 12. s=0.589 / -1 / 16 — TURN 8 INFIELD: a small uncovered stand with
@@ -192,7 +197,7 @@
       //     concrete, with a shuttered podium-level building at street height.
       // ---------------------------------------------------------------------
       cityFront(0.630, 0.700, -1, 22);
-      building(K(0.663), -1, 20, 70, 6.5, 14);          // shuttered podium
+      building(K(0.663), -1, 20, 14, 6.5, 70);          // shuttered podium
       place(K(0.645), -1, 46, [22, 34, 20], SHELL);     // blank shell slab
       place(K(0.680), -1, 52, [18, 40, 18], SHELL_D);
       marshalPost(K(0.663), -1, 15);
@@ -203,7 +208,7 @@
       //     post in a cut-out. Sight lines shut down here.
       // ---------------------------------------------------------------------
       guardrail(0.700, 0.752, 1, 6, RAIL);
-      tyreWall(0.700, 0.752, 1, 7.5, [0.20, 0.22, 0.26]);
+      tyreWall(0.700, 0.752, 1, 8.5, [0.20, 0.22, 0.26]);
       marshalPost(K(0.723), 1, 10);
 
       // ---------------------------------------------------------------------
@@ -222,10 +227,10 @@
       //     hoarding running its full length; water glimpsed over the top of
       //     the barrier line.
       // ---------------------------------------------------------------------
-      tyreWall(0.778, 0.818, 1, 10, [0.20, 0.22, 0.26]);
-      sponsorHoarding(0.778, 0.818, 1, 11.5);
+      tyreWall(0.778, 0.818, 1, 11, [0.20, 0.22, 0.26]);
+      sponsorHoarding(0.778, 0.818, 1, 12.5);
       guardrail(0.770, 0.826, 1, 9, RAIL);
-      waterBand(0.75, 0.85, 1, 90);
+      waterBand(0.75, 0.85, 1, 90, 420, 24, ESTUARY);
 
       // ---------------------------------------------------------------------
       // 17. s=0.864 / -1 / 10 — TURN 17, where the wall was moved back for
@@ -244,8 +249,8 @@
       //     run back to the pit straight.
       // ---------------------------------------------------------------------
       gantry(0.885, 8.5, [0.78, 0.79, 0.80]);
-      building(K(0.885), 1, 18, 22, 13, 12);            // stair/lift tower end
-      building(K(0.885), -1, 16, 18, 12, 11);
+      building(K(0.885), 1, 18, 12, 13, 16);            // stair/lift tower end
+      building(K(0.885), -1, 16, 11, 12, 14);
       billboard(K(0.890), 1, 20, 16, 6, PALE);
 
       // ---------------------------------------------------------------------
