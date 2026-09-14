@@ -486,6 +486,18 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // Deliberately BEFORE the ground clamp: a lowered eye must still be caught by
   // the terrain floor, or a −3 m HEIGHT would render the world from inside a hill.
   if (typeof CamTune !== "undefined") fov = CamTune.apply(mode, eye, tgt, fov);
+  /* LOOK BACK — spin the AIM about the eye, never move the eye. Held, not
+     toggled, so it behaves like the mirror glance it stands in for.
+     Placed after CamTune so a player's own YAW/PITCH trim is part of what gets
+     mirrored (otherwise a tuned camera would look somewhere else entirely when
+     they glanced back), and before the ground clamp below because the eye is
+     unchanged and must still be caught by the terrain floor.
+     Rotating the target about the eye keeps the pitch and the eye-to-target
+     distance exactly as they were: only the horizontal bearing flips. */
+  if (typeof Input !== "undefined" && Input.lookingBack && Input.lookingBack()) {
+    const dx = tgt[0] - eye[0], dz = tgt[2] - eye[2];
+    tgt[0] = eye[0] - dx; tgt[2] = eye[2] - dz;
+  }
   // The broadcast framings (heli, cinematic, roadside, low, drift) place the eye
   // by arc offset and lateral distance with no idea what the ground does out
   // there. On a circuit with real relief that puts the camera INSIDE a hillside

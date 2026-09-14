@@ -32,7 +32,7 @@ const els = {
   pmStandings: $("pm-standings"),
   pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), pmsettings: $("pmsettings"), btnCam: $("btn-cam"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
-  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"),
+  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"), btnLook: $("btn-look"),
   btnThrottle: $("btn-throttle"),
   btnSteerLeft: $("btn-steer-left"), btnSteerRight: $("btn-steer-right"),
   shiftUp: $("shift-up"), shiftDown: $("shift-down"),
@@ -477,8 +477,20 @@ function syncMetricsOverlayCompact() {
 function gearsManual() {
   return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded());
 }
-// Auto-throttle: TOUCH mode only (the canvas drag occupies the thumb).
-function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "touch"; }
+/* AUTO-THROTTLE IS AN OPTION NOW, not only a consequence of TOUCH mode.
+   XAG 107's worked example of an input barrier is literally a racing game's
+   held accelerator — "holding down RT to keep the car accelerating throughout
+   a 3-minute race" — and its point is that REMAPPING does not fix fatigue,
+   only a toggle does. Forza ships throttle assist for the same reason.
+   The TOUCH clause stays exactly as it was: there the drag already owns the
+   thumb, so it is not a preference but a fact about the control scheme. */
+let autoThrottleOpt = store.get("autoThrottle", false);
+function autoThrottle() { return autoThrottleOpt || (Input.touchControlsNeeded() && steerMode === "touch"); }
+// Left/right-handed docks. F1 Mobile enumerates both as first-class control
+// schemes rather than hiding a toggle; the whole feature here is which dock
+// each thumb group lands in, so CSS does it (body.mirror-controls).
+let mirrorControls = store.get("mirrorControls", false);
+function applyMirrorControls() { document.body.classList.toggle("mirror-controls", mirrorControls); }
 let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
 function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
 
@@ -2401,6 +2413,7 @@ function showTouchControls(show) {
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
+  if (els.btnLook) els.btnLook.hidden = !t;
   // ON AUTO THE AERO BUTTON IS REMOVED, not greyed. The wing drives itself, so
   // the control has no job at all — and a dock of GROUPS can afford to drop it,
   // because the survivors just close ranks. That was not true of the old
@@ -2769,6 +2782,15 @@ const G = {
   setSetupAero: (on) => setSetupAero(on),
   get setupPreviewXOn() { return setupPreviewXOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
+  // A preset that bundles assists (ROOKIE) may set keys game.js owns —
+  // autoThrottle among them — so it calls this to re-read them and repaint.
+  onAssistBundle() {
+    autoThrottleOpt = store.get("autoThrottle", autoThrottleOpt);
+    SettingRow.paint($("pm-throttlemode"), autoThrottleOpt ? "auto" : "hold");
+    refreshGearsBtn();
+    if (state === "race" || state === "count") showTouchControls(true);
+    announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
+  },
   get musicEnabled() { return musicEnabled; }, set musicEnabled(v) { musicEnabled = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
@@ -3328,6 +3350,18 @@ function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
+  /* MANUAL RECOVER. The auto-rescue only fires on its own terms (held throttle
+     and no movement, wrong way, off-track for long enough), so a car wedged
+     somewhere it considers fine — nose-in against a barrier, facing the right
+     way, technically moving — had no way out but RESTART. R is the near
+     universal bind for this across Forza, PolyTrack and Slow Roads.
+     Race only: there is nothing to recover from during the countdown, and the
+     same call mid-count would hand the player a free re-place on the grid. */
+  if (state === "race" && Input.consumeRecover() && player && !player.retired) {
+    rescuePlayer(player);
+    announce("RECOVERED", 1.5, "coach");
+    Log.info("game", "manual recover");
+  }
   if (state === "count") {
     // In a session the countdown is driven by the SHARED clock rather than by
     // accumulated dt, and the random hold is dictated by the host. Both matter
@@ -3532,7 +3566,7 @@ function collideFx(a, b, impact) {
   // burst at the car's world position (collideFx has no world coords here).
   // Never read by physics — headless runs are unaffected.
   pc.fxSparkI = Math.max(pc.fxSparkI || 0, impact);
-  if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) { void e; } }
+  Input.vibrate(18 + impact * 50);
   Input.rumble(0.4 + impact * 0.6, 120);
 }
 
@@ -4134,7 +4168,7 @@ function updateCar(c, dt, ranked) {
     shake = Math.max(shake, KERB_SHAKE);     // continuous light rumble via shake
     c.kerbSndT = (c.kerbSndT || 0) - dt;
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { void e; } } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
   }
 
   // --- lateral ---
@@ -4675,7 +4709,7 @@ function updateCar(c, dt, ranked) {
         // throw on an out-of-range pattern. A cue the driver may not even feel
         // is not worth interrupting the physics frame for, so it is ignored on
         // purpose — the same call is retried a tenth of a second later anyway.
-        if (navigator.vibrate) { try { navigator.vibrate(10 + (bite * 18) | 0); } catch (e) { /* haptics are advisory */ } }
+        Input.vibrate(10 + (bite * 18) | 0);
         Input.rumble(0.18 + bite * 0.32, 70);
         c.uslipHapT = 0.16 - bite * 0.06;                // firmer slide = tighter pulse
       }
@@ -4858,7 +4892,7 @@ function updateCar(c, dt, ranked) {
         if (track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
           if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
-          if (navigator.vibrate) { try { navigator.vibrate(Math.round(15 + incidence * 35)); } catch (e) {} }
+          Input.vibrate(15 + incidence * 35);
           if (c.isPlayer) Input.rumble(0.35 + incidence * 0.5, 100);
         }
       }
@@ -8266,6 +8300,80 @@ function setSteerMode(mode) {
 }
 SettingRow.wire("pm-steer", { values: SettingRow.labels(STEER_MODES), read: () => steerMode,
   write: (v) => { if (STEER_MODES.indexOf(v) >= 0) setSteerMode(v); } });
+SettingRow.wire("pm-throttlemode", { values: SettingRow.labels(["hold", "auto"]),
+  read: () => (autoThrottleOpt ? "auto" : "hold"),
+  write: (v) => {
+    autoThrottleOpt = v === "auto";
+    store.set("autoThrottle", autoThrottleOpt);
+    refreshGearsBtn();
+    if (state === "race" || state === "count") showTouchControls(true);
+  } });
+SettingRow.wire("pm-mirror", { values: SettingRow.labels(["off", "on"]),
+  read: () => (mirrorControls ? "on" : "off"),
+  write: (v) => { mirrorControls = v === "on"; store.set("mirrorControls", mirrorControls); applyMirrorControls(); } });
+/* FULLSCREEN, AND THE REASON IT EXISTS HERE IS ESCAPE.
+   In fullscreen the browser spends the Escape key on leaving fullscreen, so a
+   pause handler never sees it. navigator.keyboard.lock(['Escape']) is the
+   sanctioned way to claim the key back — and it is only callable while the
+   document is in ELEMENT fullscreen, which this game had no way to enter at
+   all, so the fix had nothing to attach to until now.
+   Chromium honours the lock (the escape hatch is a 2-second Escape hold, so no
+   page can trap anyone); Firefox and Safari ship no Keyboard Lock, and there
+   Escape keeps leaving fullscreen — which is the other half of why PAUSE
+   became a rebindable key rather than staying welded to P.
+   iPhone Safari has no element fullscreen at all, so the row hides itself
+   rather than offering a control that cannot work. */
+const fsOk = () => !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+function paintFullscreenRow() {
+  const row = $("pm-fullscreen");
+  if (!row) return;
+  row.hidden = !fsOk();
+  const note = $("pm-fullscreen-note");
+  if (note) note.hidden = !fsOk();
+  SettingRow.paint(row, document.fullscreenElement ? "on" : "off");
+}
+if ($("pm-fullscreen")) {
+  SettingRow.wire("pm-fullscreen", { values: SettingRow.labels(["off", "on"]),
+    read: () => (document.fullscreenElement ? "on" : "off"),
+    write: (v) => {
+      if (v === "on") {
+        const el = document.documentElement;
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req) Promise.resolve(req.call(el)).then(() => Input.lockEscape()).catch(() => paintFullscreenRow());
+      } else if (document.fullscreenElement) {
+        Input.unlockEscape();
+        if (document.exitFullscreen) document.exitFullscreen().catch(() => { /* already gone */ });
+      }
+    } });
+  // The player can leave fullscreen without us (Esc, F11, the OS), so the row
+  // follows the DOCUMENT rather than remembering what it last asked for.
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) Input.unlockEscape(); paintFullscreenRow(); });
+  paintFullscreenRow();
+}
+/* ADD TO HOME SCREEN IS THE ONLY FULLSCREEN AN iPHONE HAS. Element fullscreen
+   has never shipped on iPhone Safari (iPad only, and there the browser draws an
+   overlay button you cannot remove), so the row above is hidden on iOS and this
+   takes its place. Standalone also gives what a race actually needs: a viewport
+   that does not move, because there are no toolbars to collapse mid-corner.
+   As of iOS 26 every site added to the Home Screen opens as a web app with no
+   manifest metadata required, so this is a one-tap suggestion rather than a
+   setup guide. Shown once, ever. */
+(function iosInstallNudge() {
+  const el = $("ios-install");
+  if (!el) return;
+  const nav = navigator;
+  const ios = /iPad|iPhone|iPod/.test(nav.userAgent) ||
+    (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);   // iPadOS reports as a Mac
+  const standalone = !!(nav.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches));
+  if (!ios || standalone || store.get("iosInstallSeen", false)) return;
+  const dismiss = () => { el.hidden = true; store.set("iosInstallSeen", true); };
+  el.hidden = false;
+  const x = $("ios-install-x");
+  if (x) x.onclick = dismiss;
+  // It is a suggestion, not a gate: the first race dismisses it too.
+  setTimeout(dismiss, 15000);
+})();
+applyMirrorControls();
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/ui/settings-export.js)
@@ -8394,6 +8502,19 @@ Input.init(canvas, { onPause: () => {
     return;
   }
   setPaused(!paused);
+},
+/* A CONTROLLER LEAVING MID-RACE PAUSES THE RACE. Input already zeroes every
+   latch when the last pad goes (so a stale axis snapshot cannot leave the
+   throttle pinned), but the sim kept running — a flat battery at 300 km/h
+   meant watching the car coast into a wall with nothing to press. Pausing is
+   the convention for the same reason console certification tests it.
+   Only while actually racing: a pad unplugged at the title screen is not an
+   interruption, and pausing there would open the pause menu over the menus. */
+onPadLost: () => {
+  if (!UiLayers.inRace() || paused) return;
+  setPaused(true);
+  announce("CONTROLLER DISCONNECTED — RECONNECT OR PRESS RESUME", 4, "coach");
+  Log.info("input", "paused: last gamepad disconnected");
 } });
 // The subtitle is DERIVED on both paths. It used to be hardcoded "24 real
 // circuits" in index.html and rewritten on desktop only, from Tracks.LIST.length

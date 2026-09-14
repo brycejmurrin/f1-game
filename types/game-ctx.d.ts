@@ -430,6 +430,8 @@ interface GameCtx {
 
   // ── Player settings persisted through store ───────────────────────────────
   soundOn: boolean;
+  /** Re-read the assist keys game.js owns (autoThrottle) after a preset bundle in js/input/steer-tuning.js sets them, and repaint the rows that show them. */
+  readonly onAssistBundle: () => void;
   musicEnabled: boolean;
   unlimitedBudget: boolean;
   teamIdx: number;

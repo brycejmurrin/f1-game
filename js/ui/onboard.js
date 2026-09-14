@@ -14,14 +14,43 @@ const Onboard = (function () {
     aero: "you can open it now",
   };
 
-  // The prompt has to name the control this player actually has: the touch
-  // build has no keys and the pad's face buttons are not the keyboard's.
-  // js/input/input.js is the authority (KeyX overtake, pad button 3, #btn-ot).
+  /* THE PROMPT MUST NAME THE CONTROL THIS PLAYER ACTUALLY HAS, and until now
+     it named the control the game shipped with — which is not the same thing,
+     and was not even accurate: the aero mark read "ACTIVE AERO — A" for a
+     control bound to Z, so the one prompt whose whole job is to teach a button
+     taught the wrong one. Rebinding made all three wrong at once, because the
+     strings were literals.
+     Read the live map instead. HOW TO PLAY has been rewritten from
+     Input.keyBindings() since the rebinding UI shipped (js/ui/key-binds.js);
+     this is the same source, so the two can no longer disagree.
+     A PAD is asked for by name too: its face buttons are not the keyboard's,
+     and a player holding one is not looking for a letter. */
+  const ACTION_OF = { brake: "brake", ot: "overtake", aero: "aero" };
+  function codeFor(action) {
+    if (typeof Input === "undefined" || !Input.keyBindings) return null;
+    const row = Input.keyBindings().find((a) => a.id === action);
+    if (!row) return null;
+    const codes = row.codes.filter(Boolean).map((c) => Input.keyLabel(c));
+    return codes.length ? codes.join(" OR ") : null;
+  }
+  function padFor(action) {
+    if (typeof Input === "undefined" || !Input.padBindings) return null;
+    const row = Input.padBindings().find((a) => a.id === action);
+    if (!row) return null;
+    const first = row.codes.find((c) => c != null);
+    return first == null ? null : Input.padLabel(first);
+  }
   function verb(key) {
+    const action = ACTION_OF[key];
     const touch = !!(typeof Input !== "undefined" && Input.touchControlsNeeded && Input.touchControlsNeeded());
-    if (key === "brake") return touch ? "TAP AND HOLD BRAKE" : "BRAKE — S OR DOWN";
-    if (key === "ot") return touch ? "TAP OVERTAKE" : "OVERTAKE — X";
-    return touch ? "TAP AERO" : "ACTIVE AERO — A";
+    const NOUN = { brake: "BRAKE", ot: "OVERTAKE", aero: "ACTIVE AERO" }[key];
+    if (typeof Input !== "undefined" && Input.padPresent && Input.padPresent()) {
+      const b = padFor(action);
+      if (b) return `${NOUN} — ${b}`;
+    }
+    if (touch) return key === "brake" ? "TAP AND HOLD BRAKE" : (key === "ot" ? "TAP OVERTAKE" : "TAP AERO");
+    const k = codeFor(action);
+    return k ? `${NOUN} — ${k}` : NOUN;
   }
 
   function create(G) {

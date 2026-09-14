@@ -680,15 +680,89 @@ function bootInput() {
   return { Input, state, pad, dispatched, keys: () => dispatched.splice(0) };
 }
 
+/* THE D-PAD USED TO TELEPORT TO FULL LOCK. `ax = ±1` assigned straight into
+   padSteer, bypassing digitalStep while every other digital source in the file
+   ramped through it — so at 300 km/h a d-pad tap was an instant full-lock
+   input. XAG 107 asks that the digital path WORK, not merely exist. */
+test("the d-pad ramps to lock like every other digital source", () => {
+  const h = bootInput();
+  const DPAD_RIGHT = 15;
+  h.state.pad = h.pad(0, [DPAD_RIGHT]);
+  h.Input.poll();                       // seeds the ramp clock; dt is 0 here by design
+  h.state.now += 16; h.Input.poll();    // one 60 Hz frame of hold
+  const first = h.Input.steer();
+  assert.ok(first > 0, "it steers");
+  assert.ok(first < 0.5, "but nowhere near full lock after one frame");
+  // Hold it across enough simulated frames and it does reach full lock.
+  for (let i = 0; i < 200; i++) { h.state.now += 16; h.Input.poll(); }
+  assert.ok(h.Input.steer() > 0.95, "a held d-pad still reaches full lock");
+  // Release: it unwinds rather than snapping to centre.
+  h.state.pad = h.pad(0, []); h.state.now += 16; h.Input.poll();
+  const releasing = h.Input.steer();
+  assert.ok(releasing > 0 && releasing < 1, "release unwinds, it does not snap");
+});
+
+test("stick dead zone and saturation are adjustable, and saturation reaches full lock early", () => {
+  const h = bootInput();
+  h.Input.setPadDeadzone(0.20);
+  h.state.pad = h.pad(0.15); h.Input.poll();
+  assert.equal(h.Input.steer(), 0, "a raised dead zone swallows a deflection that used to count");
+  // SATURATION is the answer to a worn stick that can no longer reach 1.0.
+  h.Input.setPadDeadzone(0.05);
+  h.Input.setPadSaturation(0.20);
+  h.state.pad = h.pad(0.80); h.Input.poll();
+  assert.ok(Math.abs(h.Input.steer() - 1) < 1e-9, "0.80 of travel is full lock at 20% saturation");
+  h.Input.setPadSaturation(0);
+  h.state.pad = h.pad(0.80); h.Input.poll();
+  assert.ok(h.Input.steer() < 0.85, "…and is not, without it");
+});
+
+/* ONE CURVE FOR EVERY DEVICE WAS THE DEFECT. game.js raises the unified steer
+   command to STEER_EXPO, so a per-source trim of 1 is the identity — which is
+   what every one of them ships at, so no existing player's car moves. */
+test("the analog curve trim is per device and defaults to the identity", () => {
+  const h = bootInput();
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  const plain = h.Input.steer();
+  h.Input.setAnalogTrim("tilt", 0.5);      // a DIFFERENT source
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  assert.equal(h.Input.steer(), plain, "trimming tilt does not touch the stick");
+  h.Input.setAnalogTrim("pad", 2);
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  assert.ok(h.Input.steer() < plain, "trimming the pad softens it near centre");
+  h.Input.setAnalogTrim("pad", 1);
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  assert.ok(Math.abs(h.Input.steer() - plain) < 1e-12, "1 is exactly the identity");
+});
+
+test("speed-sensitive analog steering is off by default and floors at 40%", () => {
+  const h = bootInput();
+  h.Input.setSpeedStd(90);                 // flat out
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  const off = h.Input.steer();
+  h.Input.setAnalogSpeedMix(1);
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  const on = h.Input.steer();
+  assert.ok(on < off, "at speed it softens the stick");
+  assert.ok(on / off > 0.40, "but never below the 40% floor — no on-centre dead zone at speed");
+  h.Input.setSpeedStd(0);
+  h.state.pad = h.pad(0.5); h.Input.poll();
+  assert.ok(Math.abs(h.Input.steer() - off) < 1e-12, "and does nothing at all at a standstill");
+  h.Input.setAnalogSpeedMix(0);
+});
+
 test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than driving", () => {
   const h = bootInput();
-  // DRIVING: the left stick rescales past a 0.14 centre slop.
-  h.state.pad = h.pad(0.13); h.Input.poll();
-  assert.equal(h.Input.steer(), 0, "0.13 is inside the driving deadzone");
-  h.state.pad = h.pad(0.16); h.Input.poll();
-  assert.ok(h.Input.steer() > 0 && h.Input.steer() < 0.05, "0.16 just clears it and is rescaled from the edge, not stepped");
+  /* DRIVING: the left stick rescales past a SMALL centre slop. The default was
+     0.14, which is between 3x and 7x what racing games ship (F1 defaults every
+     axis to 0, ACC recommends 2-4 %, Forza 5) and discarded exactly the band an
+     F1 car's small corrections live in. It is 0.05 now, and adjustable. */
+  h.state.pad = h.pad(0.04); h.Input.poll();
+  assert.equal(h.Input.steer(), 0, "0.04 is inside the driving deadzone");
+  h.state.pad = h.pad(0.06); h.Input.poll();
+  assert.ok(h.Input.steer() > 0 && h.Input.steer() < 0.02, "0.06 just clears it and is rescaled from the edge, not stepped");
   h.state.pad = h.pad(0.5); h.Input.poll();
-  assert.ok(Math.abs(h.Input.steer() - (0.5 - 0.14) / (1 - 0.14)) < 1e-9, "rescale is (|ax| - dz) / (1 - dz)");
+  assert.ok(Math.abs(h.Input.steer() - (0.5 - 0.05) / (1 - 0.05)) < 1e-9, "rescale is (|ax| - dz) / (1 - dz - sat)");
 
   // MENU OPEN: the FIRST poll seeds focus with one ArrowDown, once per layer.
   h.state.navOpen = true; h.state.top = { id: "select" };

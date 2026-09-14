@@ -35,9 +35,10 @@ Everything attributed to Apex 26 below was then re-read from the tree.
 | **`STEER_EXPO` is one curve shared by every device** | **Confirmed design debt.** Not "no gamma" (we have 2.4, at the top of ACC's pad band) — the defect is that tilt, keys, arrows, drag and stick all get a value that can only be tuned for one of them |
 | **TOUCH mode has no sensitivity knob and `touchRangeFrac` is dead code** | **Confirmed defect.** Declared, read by `touchRangePx()`, never assigned. TILT has three settings, BUTTONS has one, TOUCH has none — and `DRIVING-CONTROLS-RESEARCH.md` already concluded in 2026-08 that it "should be exposed as a slider regardless" |
 | **`js/ui/onboard.js` teaches the wrong key** | **Confirmed defect.** Says `ACTIVE AERO — A`; the bind is `KeyZ`. All three coach marks hardcode defaults and ignore rebinds, while HOW TO PLAY is rewritten from live bindings |
-| **Steer and pause are unrebindable on both devices** | **Confirmed guideline miss.** XAG 107 requires remapping *all* controls "including the Esc key on PC games" |
+| ~~**Steer and pause are unrebindable on both devices**~~ | **Partly wrong, and FIXED.** Keyboard steering was always rebindable (`left`/`right` are ordinary actions) — the audit overstated it. PAUSE genuinely was not, on either device, and is now a binding (`KeyP` / button 9 left the reserved sets). The pad's stick and d-pad steer stay fixed because they are an AXIS, not a button |
 | **No look-back, and no manual reset/recover bind** | **Confirmed gap.** Look-back is standard (FH5 ↓, F1 End, iRacing Z/X) and functional in wheel-to-wheel racing; recover is `R` almost everywhere |
 | **We already ship haptics** — the brief said we did not | **Correction.** `Input.rumble()` + `navigator.vibrate` on crash, kerb, front-axle saturation, brake cue |
+| ~~**ADAPTIVE BUTTONS damps turn-in and countersteer alike**~~ | **Wrong — no change made.** Verified in `digitalStep`: the damped `digitalRateIn()` is used ONLY when building lock; every unwinding path (release, and crossing centre) already runs at the undamped `KEY_RAMP_OUT`. The distinction the research asked for was made deliberately in a previous pass and is documented above that function |
 | **We already ship the mobile P0 platform layer** | **Correction.** `viewport-fit=cover`, safe-area tokens consumed by the dock, non-passive canvas `preventDefault`, orientation-aware tilt axis, rotate prompt, wake lock, `prefers-reduced-motion`/`-contrast`/`-reduced-transparency` |
 | **Pad rumble is dead on iOS and always will be** | **Hard platform limit.** `Gamepad.vibrationActuator` is `false` on Safari iOS; `navigator.vibrate` unsupported. Our graceful degradation is already correct |
 | **Never build traction control or ABS** | **Unchanged** from `DRIVING-CONTROLS-RESEARCH.md` — no longitudinal slip model exists for either to act on |
@@ -76,7 +77,7 @@ careful piece of work and nothing below proposes changing it.
 |---|---|---|---|---|
 | **TILT** | gyro → One-Euro → 2.5° dead → 36° full lock → slew cap | manual GAS + BRAKE | manual allowed | TILT RANGE, SMOOTHING, CALIBRATE, plus a simple combined notch |
 | **BUTTONS** | on-screen arrows through `digitalStep` | manual GAS + BRAKE | forced auto | ADAPTIVE BUTTONS |
-| **TOUCH** | drag from a touch-down anchor, 12 % of the **long** screen edge = full lock | **auto-throttle**, brake only | forced auto | **none** |
+| **TOUCH** | drag from a touch-down anchor, 12 % of the **long** screen edge = full lock | **auto-throttle**, brake only | forced auto | ~~**none**~~ → TOUCH SENSITIVITY, DRAG SMOOTHING, DRAG CURVE |
 
 Default is `"buttons"` — deliberate, and right: a first-time phone player should
 not be handed a tilt control.
@@ -89,11 +90,15 @@ at all, and GRID's equivalent is a separate throttle slider.
 
 ### 1.3 Desktop and pad
 
-Ten rebindable keyboard actions and eight rebindable pad actions, two physical
-slots each, keyed on `e.code` so WASD sits under the same fingers on AZERTY.
+Thirteen rebindable keyboard actions and eleven rebindable pad actions (ten and
+eight before this pass), two physical slots each, keyed on `e.code` so WASD sits
+under the same fingers on AZERTY — with `navigator.keyboard.getLayoutMap()`
+supplying the LABEL where the platform offers it, so an AZERTY player is no
+longer shown a "W" their keyboard prints Z on.
 Defaults: Arrow/WASD steer and pedals, Space boost, X overtake, Z active aero,
-E up / Q or Shift down, C camera, P/Escape pause. Pad: RT/A gas, LT/B brake
-(analog value read), X boost, Y overtake, d-pad-up aero, LB/RB shift, View camera,
+E up / Q or Shift down, C camera, B look back, R recover, P pause; Escape stays
+hardwired as BACK. Pad: RT/A gas, LT/B brake (analog value read), X boost,
+Y overtake, d-pad-up aero, LB/RB shift, View camera, R3 look back, L3 recover,
 Menu pause.
 
 Full gamepad menu navigation is shipped on the settled UWP mapping — d-pad and
@@ -141,6 +146,24 @@ independently:
   maximum duration — so a sustained rumble must be re-issued, not fired once.
 - **The Game Accessibility Guidelines make a haptics slider a *Basic* item**, not
   an advanced one: "Include toggle/slider for any haptics." We have neither.
+
+### 2.3 The assist that was already right
+
+Tier 2 item 9 asked to split ADAPTIVE BUTTONS so it damps turn-in without
+damping countersteer — the distinction good implementations make, because
+damping a correction is damping the recovery.
+
+It is already made. `digitalStep` uses the damped `digitalRateIn()` on exactly
+one path, the one that builds lock; releasing runs at `KEY_RAMP_OUT`, and so
+does crossing centre, with only the leftover time in a frame spent at the build
+rate. The comment above that function records the measurement that drove it
+(full lock to centre took 0.33 s by pressing the other way and 0.125 s by
+letting go, before the fix).
+
+So the finding was wrong, and the code was right. No change was made. Recorded
+here because a "fix" applied to this would have re-introduced the exact bug the
+previous pass removed — which is the cost of acting on an audit without reading
+the function first.
 
 ### 2.2 We already have a steering gamma — that is the problem
 
@@ -406,7 +429,18 @@ both clearing held state, which Emscripten/GLFW and p5.js both have open bugs fo
 
 ## 4. Ranked improvements
 
-Ordered by (player impact × confidence) ÷ cost. Nothing here is committed work.
+Ordered by (player impact × confidence) ÷ cost.
+
+> **All three tiers were implemented on 2026-09-14** (`claude/game-controls-research-i9mr03`).
+> Two items did not survive contact with the code and were NOT built — item 9
+> (the damping was already split correctly; see §2.3) and the "steer is
+> unrebindable" half of item 10. One was scoped down: item 21's coalesced
+> sampling is applied only while a single finger is on the glass, because a
+> Touch identifier and a pointerId are different namespaces and correlating
+> them under multi-touch would be guesswork; the tremor-filtering half shipped
+> in full as DRAG SMOOTHING. Item 16 required adding a fullscreen toggle
+> first — Keyboard Lock is only callable from element fullscreen, which the
+> game had no way to enter.
 
 ### Tier 1 — defects, small, high confidence
 
