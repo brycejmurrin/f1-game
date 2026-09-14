@@ -121,17 +121,57 @@ vertex-packing effort returned per circuit.
 - Modify: `js/car/liverytex.js` (the tier decision), `js/car/car-draw.js`
 - Modify: `tests/unit/team-livery.test.mjs`
 
-- [ ] Decide the policy and WRITE IT DOWN before coding: which cars, what
-      trigger, and what happens when an AI car fills the screen — a mirror, a
-      photo-mode frame, a replay close-up, the podium. A fixed downshift with
-      no upgrade path WILL be visible in photo mode.
-- [ ] Test first: assert the player's atlas is unchanged and an AI atlas is the
-      reduced size, on the desktop tier.
-- [ ] Implement; keep the existing mobile policy untouched.
-- [ ] Re-take the Task 1 census and record before/after.
-- [ ] Visual check that this is NOT a look regression: `playwright-probe` car
-      studio renders of an AI livery at racing distance and at photo-mode
-      distance, before and after.
+- [x] **THE POLICY, decided 2026-09-14 and written down before any code:**
+
+      1. Desktop, in race: the player's car keeps the full 1024×1280 atlas;
+         AI cars upload at 512×640 (`div` 2). Mobile is UNCHANGED — it already
+         runs 512 player / 256 AI and has a tighter jetsam budget than this
+         change is about.
+      2. **Close-up contexts get the full tier for every car.** The garage and
+         setup preview already do, because they pass `usePlayerSetup`. Photo
+         mode is the gap the plan called out, and it is now an explicit
+         exemption: while `G.photoMode` is on, `drawCarDecals` requests the
+         full tier regardless of whose car it is.
+      3. The upgrade is DEMAND-DRIVEN and costs nothing until it is needed.
+         `getCarDecalTexture` is called from the per-drawn-car path, and the
+         resolution tier is already part of the cache key (the `:P` suffix,
+         which exists because a team the player switches to must not reuse a
+         cached AI-resolution atlas). So flying the photo camera up to one car
+         mints ONE full-res atlas, not twenty-one — there is no entry stall,
+         and leaving photo mode falls back to the cached AI atlases.
+      4. Mirrors and replays need nothing: both draw through the same
+         per-car path, so if a close-up context is ever added it inherits
+         the same exemption by passing the flag.
+
+      What this does NOT do: upgrade an AI car that merely happens to be close
+      during normal racing. At racing distance an AI car is a few hundred
+      pixels and 512×640 is ample; buying the last few metres of approach
+      would cost a per-frame distance test in the draw path and mint atlases
+      mid-race, which is the wrong trade against a stutter.
+- [x] Test first — `tests/unit/livery-tier.test.mjs`. Rasterising a livery needs
+      a browser (the boundary `parts-sweep.mjs` draws), so the tier DECISION was
+      extracted as a pure `atlasDiv()` and pinned headlessly instead: exact
+      divisors per tier, mobile asserted UNCHANGED, the grid saving asserted to
+      exceed 90 MB, plus an ordering guard so a swapped ternary cannot pass by
+      rewriting the exact values together.
+- [x] Implement; mobile policy untouched.
+- [x] Re-take the Task 1 census. **MEASURED, montreal, full grid:**
+
+```
+before   146.67 MB   22 atlases, every car at 1024x1280
+after     41.67 MB   player still 1024x1280 (census `biggest` confirms), 21 AI at 512x640
+         -105.00 MB  -71.6 %
+```
+
+      For scale: that is ~18x what the entire world-VBO packing returned on a
+      mean circuit (5.8 MB), from a change that touches one ternary.
+- [ ] **NOT DONE — a dedicated AI close-up A/B.** The census proves the memory
+      and `tex-census` proves the tier, but neither proves APPEARANCE. What is
+      missing is a before/after render of an AI livery at racing distance and
+      at photo-mode distance. The argument for shipping without it is that
+      mobile already ships AI atlases at 256 and this is a gentler step to 512,
+      and that photo mode now takes the full tier — an argument, not a
+      measurement. Capture it before trusting this on a hero shot.
 - [ ] `gpu-census.yml` on `macos-latest` — real hardware, not lavapipe.
 
 **Risk:** this is the one task here that can visibly degrade the game. The

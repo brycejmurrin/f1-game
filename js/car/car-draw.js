@@ -273,7 +273,20 @@ const CarDraw = (function () {
       const rl = cockpit ? null : deps.resolveLivery(team);
       const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id) :
         getCarDecalMesh(state.val, state.parts, legacyBody, team.id, rl.finShape, rl.spineHeight);
-      const tex = getCarDecalTexture(team, num, usePlayerSetup);
+      // PHOTO MODE takes the full-resolution tier for EVERY car, not just the
+      // player's. Desktop AI atlases upload at half size (liverytex atlasDiv) —
+      // ample at racing distance, and the one place that would show is a
+      // close-up, which is exactly what photo mode is for.
+      //
+      // Demand-driven, and that is the whole reason this is affordable: the
+      // tier is part of the decal cache key and this runs per DRAWN car, so
+      // flying the photo camera to one car mints ONE full atlas rather than
+      // rebuilding the grid on entry. Leaving the mode falls back to the
+      // cached AI atlases.
+      //
+      // NOT folded into usePlayerSetup: that argument selects the player's
+      // SETUP for teamDecalState above and means something else entirely.
+      const tex = getCarDecalTexture(team, num, usePlayerSetup || !!G.photoMode);
       if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; G.gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
     }
     // Pooled decal opts — drawCarDecals runs once per drawn car per frame; a fresh
