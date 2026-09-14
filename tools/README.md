@@ -157,6 +157,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/rotate-markings.cjs** | Rotates each circuit's `turns` onto a corrected start line by the scenery's arc shift, then re-sorts them; `--check`. | new-track |
 | **track/startline-probe.cjs** | The two checks that can FAIL a `startFrac`: mean curvature 120 m around s=0, and the first apex hand; `--calibrate`. | agent-view |
 | **track/startline-snap.cjs** | Derives `startFrac` from a real start/finish coordinate: projects into the def's `path`, snaps to the nearest segment. | new-track |
+| **track/stitch-osm-ring.mjs** | Stitches OpenStreetMap `highway=raceway` ways into ONE closed ring for import-circuit-path.mjs. | new-track |
 | **track/survey-track.mjs** | One-command circuit survey: aerial/orbit/driver-eye shots per spot plus a flagged ground-profile probe; `--oblique`. | survey-track |
 | **track/track-accuracy-validator.mjs** | Shape-error maths (`MAX_SHAPE_ERROR`, `signedArea`, …) shared by the circuit-accuracy tests. | new-track |
 | **track/track-verts.cjs** | Per-circuit vertex + model-diagnostics dump for exact before/after diffing (`--diff before.json`). | agent-view |
