@@ -1247,6 +1247,43 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: inherit;
   font-style: italic;
 }
+/* OVERRIDDEN vs INHERITED, borrowed wholesale rather than invented. Unity's
+   editor puts an "override bar" on the left of a modified property's label and
+   bolds that label; VS Code puts a coloured bar left of any setting you have
+   changed; Google Workspace labels each row Inherited or Overridden. All three
+   pair a persistent marker with an in-context way back. The marker is the bar,
+   the way back is the button beside the value.
+
+   Why this matters here more than in most settings screens: BUTTON SIZE has no
+   number of its own until you move it — unset, it FOLLOWS HUD SIZE — so without
+   a marker "100%" and "100%, because it is tracking the slider above" render
+   identically, and a player cannot tell a value they chose from one they
+   inherited. The bar is the only thing that distinguishes them. */
+.pm-group .tune-over > .tune-label,
+.pm-group-h.tune-over {
+  /* The bar's width is a local property so the negative margin that cancels it
+     stays in step, and so this declaration carries no raw px (tools/check
+     ratchets `rawSpacing`: a px literal in a padding/margin/gap is a token that
+     was not used). The row keeps its alignment — the bar hangs outside. */
+  --tune-bar: 2px;
+  border-left: var(--tune-bar) solid var(--accent);
+  padding-left: calc(var(--gap) * 0.4);
+  margin-left: calc(var(--gap) * -0.4 - var(--tune-bar));
+}
+.pm-group .tune-over > .tune-label b, .pm-group-h.tune-over b { font-weight: 900; }
+/* The revert sits in the label row, after the value, and is deliberately quiet:
+   it is an escape hatch, not an action anyone is looking for. Full tap height
+   via the shared ladder — it is a real target on a phone, not a text link. */
+.tune-revert {
+  font: inherit; font-size: var(--fs-micro); font-style: normal;
+  letter-spacing: var(--ls-4); text-transform: uppercase;
+  margin-left: auto; padding: 0 calc(var(--gap) * 0.5);
+  min-height: var(--tap-sm); min-width: var(--tap-sm);
+  color: var(--dim); background: var(--plate); border: 1px solid var(--plate-line);
+  border-radius: var(--r-xs); cursor: pointer;
+  touch-action: manipulation;
+}
+.tune-revert:hover { color: var(--text); background: var(--plate-hover); }
 #pmsettings-inner .pm-doors button {
   width: auto;
   /* A door, not a key/value row. */

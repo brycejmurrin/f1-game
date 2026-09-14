@@ -187,6 +187,73 @@ test.describe("UI scale", () => {
     });
   }
 
+  // OVERRIDDEN vs INHERITED, as the player sees it. The mechanism below proves
+  // the three axes are independent; this proves the screen SAYS SO. BUTTON SIZE
+  // is the one that needs it: unset it follows HUD SIZE, so "100%" and "100%,
+  // because it is tracking the slider above" render identically and a player
+  // cannot tell a value they chose from one they inherited. Unity's editor, VS
+  // Code and Google Workspace all answer this with a persistent override marker
+  // plus an in-context revert, and this is that pair.
+  //
+  // Driven through the actual button, not through __apex.btnScale(null): the
+  // store call is already covered below, and what could break here is the
+  // WIRING — a handler that never attached, or a click swallowed by the <label>
+  // the button sits inside (it calls preventDefault for exactly that reason).
+  test("BUTTON SIZE shows whether it is inherited, and hands itself back", async ({ page }) => {
+    await boot(page);
+    const state = () => page.evaluate(() => {
+      const rev = document.getElementById("pm-btnscale-r");
+      const row = document.getElementById("pm-btnscale").closest(".tune-row");
+      return {
+        over: !!(row && row.classList.contains("tune-over")),
+        revertShown: !!(rev && !rev.hidden),
+        // The RESOLVED axis, not the raw token: unset, --hud-btn-scale is a
+        // calc() that a custom property never reduces, so it reads back as
+        // "calc(0.9 * 1.25)". btnScale().pct is the number the slider and the
+        // dock both act on.
+        btn: window.__apex.btnScale().pct,
+      };
+    });
+
+    // THIS BLOCK IS hasTouch, so `(pointer: coarse)` applies and an UNSET dock is
+    // --hud-scale x 1.25, not x 1 (css/tokens.css: the buttons carry their own
+    // physical-size floor, the readouts do not get a blanket bump). 120 -> 150.
+    //
+    // Asserted FIELD BY FIELD rather than with toEqual on the object, because
+    // these messages are the only thing that survives the reporter — a deep
+    // -equality failure prints "Received + 1" and truncates the contents, which
+    // is the same lesson the clash dumps in hud-layout.spec.js carry.
+    await page.evaluate(() => { window.__apex.hudScale(120); window.__apex.btnScale(null); });
+    let st = await state();
+    expect(st.over, "unset: no override marker").toBe(false);
+    expect(st.revertShown, "unset: no revert button").toBe(false);
+    expect(st.btn, "unset: follows HUD SIZE x the coarse ratio").toBe(150);
+
+    await page.evaluate(() => window.__apex.btnScale(60));
+    st = await state();
+    expect(st.over, "set: the override marker appears").toBe(true);
+    expect(st.revertShown, "set: the revert appears").toBe(true);
+    expect(st.btn, "set: it is its own axis").toBe(60);
+
+    // Dispatched IN-PAGE, for the reason the note above open() gives: the
+    // settings sheet is not on screen in this test, so a locator click waits
+    // 60 s for an actionable element that will never become visible. The
+    // element's own .click() still runs the handler and still bubbles into the
+    // <label> the button sits inside — which is the thing worth exercising,
+    // since a handler that forgot preventDefault would hand the click to the
+    // range input and move the very slider it was meant to reset.
+    await page.evaluate(() => document.getElementById("pm-btnscale-r").click());
+    st = await state();
+    expect(st.btn, "the revert hands the dock back to HUD SIZE").toBe(150);
+    expect(st.over, "and clears its own marker").toBe(false);
+    expect(st.revertShown, "and hides itself").toBe(false);
+
+    // And it is a real revert to INHERITED, not a snap to a constant: moving the
+    // HUD must now carry the dock again.
+    await page.evaluate(() => window.__apex.hudScale(90));
+    expect((await state()).btn, "after reverting, the dock follows the HUD once more").toBe(112.5);
+  });
+
   // The mechanism itself. If these two ever start moving together the sliders
   // are back to being one knob, and every fit result above becomes a statement
   // about a size nobody can actually select.
@@ -212,19 +279,26 @@ test.describe("UI scale", () => {
     // slider must be byte-identical to that. Once set it is independent — which
     // is the whole point: shrinking the pedals is how a player buys the readouts
     // room back on a phone.
-    const btn = () => page.evaluate(() =>
-      getComputedStyle(document.documentElement).getPropertyValue("--hud-btn-scale").trim());
+    // Resolved percentage, not the raw custom property: unset it is a calc()
+    // token that computed-value time does not reduce (see the sibling test).
+    const btn = () => page.evaluate(() => window.__apex.btnScale().pct);
+    // FOLLOWS, not EQUALS. This block runs hasTouch, so `(pointer: coarse)`
+    // applies and an unset dock is --hud-scale x 1.25: the buttons carry their
+    // own physical-size floor (~15mm per XAG 107) while the readouts are left
+    // DPI-correct rather than bumped. Before 2026-09-14 the ratio was 1.4536 on
+    // top of a --hud-scale of 1.24, which put ~34mm pedals on the minimap; these
+    // numbers move with that ratio and are not a property of "following".
     await page.evaluate(() => window.__apex.btnScale(null));
-    expect(await btn(), "unset, the dock follows the HUD").toBe("0.9");
+    expect(await btn(), "unset, the dock follows the HUD").toBe(112.5);
     await page.evaluate(() => window.__apex.hudScale(120));
-    expect(await btn(), "and keeps following it").toBe("1.2");
+    expect(await btn(), "and keeps following it").toBe(150);
     await page.evaluate(() => window.__apex.btnScale(60));
-    expect(await btn(), "set, it is its own axis").toBe("0.6");
+    expect(await btn(), "set, it is its own axis").toBe(60);
     expect(await read(), "and moving it must not move the HUD").toEqual({ ui: "1.5", hud: "1.2" });
     await page.evaluate(() => window.__apex.hudScale(90));
-    expect(await btn(), "nor does the HUD move it back").toBe("0.6");
+    expect(await btn(), "nor does the HUD move it back").toBe(60);
     await page.evaluate(() => window.__apex.btnScale(null));
-    expect(await btn(), "null hands the dock back to the HUD").toBe("0.9");
+    expect(await btn(), "null hands the dock back to the HUD").toBe(112.5);
 
     // Out of range clamps rather than throwing — a stored value from an older
     // build with a wider range must not be able to produce a 4x interface.

@@ -686,7 +686,18 @@ body:not(.desktop) {
    the same query, so first paint and the first JS write agree (the note above);
    tests/unit/scale-defaults.test.mjs holds the two in lockstep. */
 @media (pointer: coarse) {
-  :root { --ui-scale: 1.09; --hud-scale: 1; --hud-btn-scale: calc(var(--hud-scale) * 1.25); }
+  /* --hud-btn-mult is the ratio as a PLAIN NUMBER, and it exists because
+     `calc()` inside a custom property is NOT reduced at computed-value time: a
+     custom property is an untyped token list, so getPropertyValue here returns
+     the literal string "calc(0.9 * 1.25)" and `+value` is NaN. js/ui/hud.js
+     coerces this token to size the dock cap, and while the ratio was a bare
+     `var(--hud-scale)` that happened to work. Publish the factor separately so
+     the unset case stays resolvable in JS as scale * mult. */
+  :root {
+    --ui-scale: 1.09; --hud-scale: 1;
+    --hud-btn-mult: 1.25;
+    --hud-btn-scale: calc(var(--hud-scale) * var(--hud-btn-mult));
+  }
 }
 
 /* VIEWPORT UNITS ARE THE ONE UNIT FAMILY `zoom` GETS WRONG, so inside a zoomed

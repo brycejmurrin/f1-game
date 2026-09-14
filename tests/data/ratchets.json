@@ -35,11 +35,11 @@
   },
   "tree": {
     "cssClasses": {
-      "ceiling": 547,
+      "ceiling": 549,
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1359,
+      "ceiling": 1362,
       "slack": 25
     },
     "bareCatches": {
@@ -52,7 +52,7 @@
     },
     "waitForTimeout": 151,
     "dynamicIdReads": {
-      "ceiling": 53,
+      "ceiling": 54,
       "slack": 5
     },
     "subFloorFontSize": {

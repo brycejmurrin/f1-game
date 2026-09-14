@@ -309,7 +309,15 @@ function fitHud() {
   const secRows = els.hudSectors ? els.hudSectors.childElementCount : 0;
   // BUTTON SIZE is a second slider on the same layer, so it belongs in the key:
   // moving it changes the dock's intrinsic height and nothing else here does.
-  const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale;
+  // INLINE first (the player set BUTTON SIZE), else the inherited default. That
+  // default is `calc(var(--hud-scale) * var(--hud-btn-mult))` on a coarse
+  // pointer, and calc() in a custom property is not reduced at computed-value
+  // time — the token reads back as the literal string and coerces to NaN — so
+  // resolve it from its factors instead of parsing it. Falling through to
+  // `scale` alone (which is what the old `|| scale` did) silently sized the dock
+  // cap 25% small on every touch device the moment the ratio stopped being 1.
+  const btnScale = +root.style.getPropertyValue("--hud-btn-scale")
+    || scale * (+getComputedStyle(root).getPropertyValue("--hud-btn-mult") || 1);
   const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
