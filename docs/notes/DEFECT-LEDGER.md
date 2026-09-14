@@ -18,7 +18,7 @@ partial account is what let the RELAX drift below sit for a week.
 | failures | cause | state |
 |---|---|---|
 | 3 (`sliders`, `presets`) | `PRESETS.relax` left behind by the 2026-09-08 re-centring | **FIXED** — see the entry below |
-| 2 (`sliders › OVERALL SPEED`) | the car reaches gear 5, not 8, flat out | **OPEN**, pre-existing |
+| 2 (`sliders › OVERALL SPEED`) | the car reaches gear 5, not 8, flat out | **FIXED** on the deploy branch — see below |
 | 4 (`gamepad.spec.js`) | the pad reads as absent: `Input.throttle()` false on button 7, analog trigger 0 | **OPEN**, pre-existing |
 | 9 (`steering.spec.js`) | every one 103-142 s against a 120 s test timeout | box, not code |
 | 2 (`camera-hooks`, `camera-tuner`) | 146 s / 44 s | box, not code |
@@ -28,14 +28,19 @@ on a quiet box against the tree and against a worktree at `a28b77d`, and came
 back identical — `gamepad.spec.js` 4 failed / 23 passed on both, the same four
 tests; `OVERALL SPEED` the same two with the same `Expected: 8, Received: 5`.
 
-**The two OPEN ones deserve a look, and neither is a timeout.**
+**`OVERALL SPEED`: RESOLVED by the deploy-branch merge (2026-09-14), and the
+diagnosis is worth keeping.** The spec hardcoded `jump(0.1, …)` as its
+"straight". Nothing steers the car in this test — road-follow and the racing
+line both default to 0 — so on a curved stretch it drove straight off the road,
+hit the grass drag, and settled on the off-track floor: **gear 5 of 8** and
+14.75 m/s where 76.5 was wanted. Not a driving defect at all; the car was on
+the grass. The deploy branch's fix is to locate a real straight first
+(`straightFrac()` walks 60 fractions and takes the lowest |k|), which both
+OVERALL SPEED tests now do. Verified on the merged tree: **4 passed**.
 
-`OVERALL SPEED reaches the full gearbox` is 1200 fixed `__apex.step(1/60, 60)`
-ticks flat out — pure sim time, no wall-clock dependence — and the car tops out
-in **gear 5 of 8** at every pace setting. Its sibling wants > 76.5 m/s in manual
-and measures **14.75**. Something is holding the car far below the envelope from
-a standing start; that is a driving defect, not a test defect, and it is worth a
-session of its own.
+The lesson is the generalisable half: a driving spec that hardcodes a track
+fraction is asserting something about GEOMETRY it never states, and circuit
+geometry moves — the elevations were re-surveyed the same week this went red.
 
 `gamepad.spec.js` fails on the pad being read at all: `Input.throttle()` comes
 back false for button 7 held at 1.0, and the analog trigger reads a flat 0 where
