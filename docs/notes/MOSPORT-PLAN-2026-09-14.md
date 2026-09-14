@@ -71,6 +71,55 @@ universally called Mosport.
   change is real and is the circuit's signature, the same way Craner is
   Donington's.
 
+### Corner positions and elevation — MEASURED, not guessed (2026-09-14)
+
+OSM carries Mosport's corners as individually NAMED ways, which almost no other
+circuit in this round did. Querying them and projecting each onto the stitched
+ring gives the lap fractions directly, with no curvature-peak guessing:
+
+| lap frac | elevation | feature |
+|---|---|---|
+| 0.000 | 336 m | start/finish, on the pit straight — **the highest point of the lap** |
+| 0.185 | 308 m | **Clayton Corner** (T2) |
+| 0.307 | 310 m | **Quebec Corner** (T3) |
+| 0.461 | **291 m** | the low point of the lap |
+| 0.491 | 299 m | **Moss Corner** (T5a/5b) |
+| 0.660 | 322 m | **Mario Andretti Straight** |
+| 0.873 | 335 m | **Esses** (after T8) |
+| 0.937 | 334 m | **Whites Corner** (T10) |
+
+Elevation is SRTM 30 m sampled at all 107 ring vertices from Open Topo Data, the
+same source `tools/gen/bake-elevation.mjs` already uses.
+
+**Total relief 47 m over a 3.95 km lap, and the shape is the circuit's whole
+character.** The line sits at the top; the track falls continuously for the
+first half to 45 m below the start line just before Moss, then climbs without
+relief for the second half all the way back. That is a measured confirmation of
+how the circuit is always described — "a tale of two tracks, an accelerated fast
+descent for the first 2 km followed by an unceasing uphill endurance test back
+to the finish line". The descent measures 1.82 km and the climb 2.13 km.
+
+The steepest single pitch is the drop into Clayton, and the corner the drivers
+talk about, which the ring samples at up to -16.7% over one 30 m step — SRTM at
+30 m posts will overstate a local gradient, so take the 47 m range and the
+half-lap shape as the reliable figures and treat any single step as indicative.
+
+Two caveats worth writing down rather than discovering later:
+
+- The **start/finish fraction is good to about ±50 m.** The nearest ring vertex
+  to the Pit Lane way's centre is 146 m away, because the pit lane runs parallel
+  to and offset from the track. Every other named corner lands within 18-60 m.
+- The **ring's own vertex 0 is not the start line** — it sits at ring fraction
+  0.664. `startFrac` has to carry that, and every fraction in the table above is
+  already expressed in lap coordinates, not ring coordinates.
+
+**A correction to the tooling docs while here:** `bake-elevation.mjs`'s header
+says api.opentopodata.org "is firewalled in the Claude Code web sandbox, so this
+is meant to be run on an unrestricted machine". That is no longer true — it
+answers fine through the agent proxy, which is how the profile above was
+measured. The note should be updated when the baker is next touched, because it
+currently discourages exactly the measurement that works.
+
 ### What else is inside the bbox (and must be filtered out)
 
 - the **Driver Development Centre** (2.9 km),
@@ -116,22 +165,34 @@ Once that row exists the stitch is `node tools/track/stitch-osm-ring.mjs mosport
 with no flags, and anyone can re-derive it.
 
 **b. The def** — `js/circuits/<id>.js` with id `mosport`, matching the eleven just added:
-`classic: true`, `reverse: false`, `startFrac: 0.0000`, `path` from the stitch
+`classic: true`, `reverse: false`, `path` from the stitch
 (`import-circuit-path.mjs` consumes the emitted Feature directly), then `turns`
-= the **10** strongest curvature peaks in lap order, `pal` (12 keys), `elevations`,
+= **10** in lap order, seated against the six NAMED corners in §2 rather than
+taken blind from curvature, `pal` (12 keys), `elevations`,
 `hwZones`, `bankZones`, `theme`, `baseHW`, `furniture.tree`, `kit.rail`,
 `standSet` of 3. No `sectors` — all 27 classics skip them and consumers fall back
 to thirds. Record the −0.24% delta in the header comment: that, not the shape
 test, is the accuracy evidence.
 
 Two things to get right and one trap:
+- **`startFrac` is NOT 0.** The eleven circuits added this round all took
+  `startFrac: 0.0000` because nothing better was known. Here it is measured: the
+  stitched ring's vertex 0 sits at ring fraction 0.664, so the start line is
+  0.664 round the ring, not at its head. Shipping 0 would put the grid on the
+  approach to the Andretti Straight — the lowest-value place on the lap — and
+  would rotate every corner fraction in §2 by two-thirds of a lap.
 - **Winding.** The empirically calibrated rule from this session: a projected
   **CCW** ring is a **clockwise** real circuit. Mosport is clockwise, so expect
   CCW out of the stitcher and `reverse: false`. Verify against the named-corner
   order (Turn One → Moss → Andretti Straightaway → Esses → Whites), do not assume.
-- **Elevation is the circuit.** `elevations` deserves real research rather than a
-  flat default — the drop into turn 2 and the climb out of Moss are what Mosport
-  is known for, the way Craner is Donington's.
+- **Elevation is the circuit, and it is now measured** — §2 has the profile.
+  47 m of relief, the line at the top, a continuous fall to -45 m just before
+  Moss at lap frac 0.461 and an unbroken climb back. Author `elevations` to
+  that shape; do not ship a flat Mosport.
+- **`turns` needs no curvature guessing.** OSM names the corners, so the §2
+  table gives Clayton, Quebec, Moss, the Andretti Straight, the Esses and Whites
+  at real lap fractions. Seat the remaining turns of the 10 from curvature peaks
+  and check them against these six rather than the other way round.
 - `baseHW` should read narrow. 13 m is the *modern* width; in the F1 era it was
   tighter, and the circuit's reputation is built on that.
 
@@ -214,6 +275,11 @@ Read the diagnostics line, not just the exit code.
 
 ## 5. Risks
 
+0. **Published lap lengths disagree, and the measurement breaks the tie.**
+   racingcircuits.info gives 2.549 mi / 4.102 km where Wikipedia and the circuit
+   give 2.459 mi / 3.957 km — a transposed digit in one of them. The stitch
+   measures 3.948 km, which settles it at 3.957 and is why `target` is not taken
+   on trust from a single page.
 1. **The 2-candidate-ring ambiguity.** The DDC (2.9 km) and the old oval
    (0.805 km) are both in the bbox. The −0.24% hit is decisive against a 3.957 km
    target, but if a future OSM edit changes the tagging, a wrong `target` silently
