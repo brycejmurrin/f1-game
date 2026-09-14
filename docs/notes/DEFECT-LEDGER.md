@@ -11,6 +11,41 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-14 — `test:input` was 20 red; 3 are now FIXED, 15 are pre-existing,
+2 remain OPEN as real defects.** The whole group, accounted for, because a
+partial account is what let the RELAX drift below sit for a week.
+
+| failures | cause | state |
+|---|---|---|
+| 3 (`sliders`, `presets`) | `PRESETS.relax` left behind by the 2026-09-08 re-centring | **FIXED** — see the entry below |
+| 2 (`sliders › OVERALL SPEED`) | the car reaches gear 5, not 8, flat out | **OPEN**, pre-existing |
+| 4 (`gamepad.spec.js`) | the pad reads as absent: `Input.throttle()` false on button 7, analog trigger 0 | **OPEN**, pre-existing |
+| 9 (`steering.spec.js`) | every one 103-142 s against a 120 s test timeout | box, not code |
+| 2 (`camera-hooks`, `camera-tuner`) | 146 s / 44 s | box, not code |
+
+Every "pre-existing" above is MEASURED, not assumed: each spec was re-run alone
+on a quiet box against the tree and against a worktree at `a28b77d`, and came
+back identical — `gamepad.spec.js` 4 failed / 23 passed on both, the same four
+tests; `OVERALL SPEED` the same two with the same `Expected: 8, Received: 5`.
+
+**The two OPEN ones deserve a look, and neither is a timeout.**
+
+`OVERALL SPEED reaches the full gearbox` is 1200 fixed `__apex.step(1/60, 60)`
+ticks flat out — pure sim time, no wall-clock dependence — and the car tops out
+in **gear 5 of 8** at every pace setting. Its sibling wants > 76.5 m/s in manual
+and measures **14.75**. Something is holding the car far below the envelope from
+a standing start; that is a driving defect, not a test defect, and it is worth a
+session of its own.
+
+`gamepad.spec.js` fails on the pad being read at all: `Input.throttle()` comes
+back false for button 7 held at 1.0, and the analog trigger reads a flat 0 where
+0.4 was set. The four that fail are the ones that press BUTTONS; the ones that
+only move the sticks pass. So the suspicion is the button path of
+`pollGamepad`, or the synthetic pad the spec installs no longer matching what it
+reads — not the bindings table, which is keyed by action id and cannot be
+shifted by adding or removing an action (checked: removing the PIT bind is not
+the cause).
+
 **2026-09-14 — `career.spec.js` is 14 red and `time-trial.spec.js`'s two ghost
 tests are red, on a CLEAN tree. OPEN.** Found while gating the tyre phases, and
 proven pre-existing rather than assumed: the same specs were run alone on a
