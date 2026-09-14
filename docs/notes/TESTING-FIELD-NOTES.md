@@ -1962,6 +1962,6 @@ is the one fixtures.js already states: measure the slow one and give it its own
 number.
 
 **Verified:** 5/5 with both fixes, where the unmodified spec failed 1/5 and the
-buffer-only tree also failed 1/5 (differently). A repeat run is in flight as this
-is written — the complaint was flakiness, so one green is not evidence against it
-and this line should be updated with the second result, not left standing alone.
+buffer-only tree also failed 1/5 (differently). TWO consecutive green runs of the
+file, not one, because the complaint was flakiness and a single pass is not
+evidence against that: 5/5 at 19:33 and 5/5 at 19:40, one worker, same tree.
