@@ -276,9 +276,21 @@ test.describe("minimal profile", () => {
 
   // And the profile has to earn its name: MINIMAL means fewer widgets, not
   // smaller ones. These four are what it drops (css/hud.css).
+  //
+  // THE CAMERA IS PART OF THE FIXTURE, and leaving it out made this test assert
+  // something false for six days. `race()` without a `cam` boots the DEFAULT
+  // camera, which is COCKPIT — and css/track-detail.css deliberately hides
+  // #hud-speed, #hud-gearbox, #hud-energy, #hud-ot and #hud-aero under
+  // `body.cockpit-cam`, because from inside the car those readouts are on the
+  // steering-wheel LCD and the floating duplicates spoil the view. So "MINIMAL
+  // must keep speed" failed on a rule that has nothing to do with the profile
+  // and is working exactly as intended. Chase is the camera this test means:
+  // the one where the DOM readouts are the only readouts, and dropping one is
+  // therefore the profile's doing. (Its two neighbours above pass a cam for the
+  // same reason — this one was simply missed.)
   test("drops the analysis widgets and keeps what you drive by", async ({ page }) => {
     const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
-    await race(page, "buttons", false, v, { profile: "minimal" });
+    await race(page, "buttons", false, v, { profile: "minimal", cam: "chase" });
     const r = await page.evaluate(() => {
       const w = (sel) => {
         const el = document.querySelector(sel);

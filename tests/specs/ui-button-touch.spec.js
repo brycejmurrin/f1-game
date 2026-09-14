@@ -52,7 +52,18 @@ async function openPauseControls(page) {
 
 async function cycleToPauseSteerMode(page, targetText) {
   // STEERING INPUT is a setting row: pick the mode in its select.
-  await page.locator("#pm-steer-sel").selectOption(targetText.toLowerCase(), { force: true });
+  // Assert the option EXISTS first. selectOption() matches a bare string against
+  // the option's VALUE and simply retries when nothing matches, so a wrong mode
+  // name burns the whole 60 s budget and then reports a bare timeout — which
+  // reads exactly like the SwiftShader actionability stalls elsewhere in this
+  // suite, and is not one. Two cases below asked for "button" when the value has
+  // always been "buttons" (STEER_MODES in js/game.js), and that one character
+  // was twice written off as a pre-existing environmental failure. A list
+  // mismatch now fails in a second, naming the options that do exist.
+  const mode = targetText.toLowerCase();
+  const values = await page.locator("#pm-steer-sel option").evaluateAll((os) => os.map((o) => o.value));
+  expect(values, `#pm-steer-sel has no option "${mode}"`).toContain(mode);
+  await page.locator("#pm-steer-sel").selectOption(mode, { force: true });
   await page.waitForTimeout(300);
 }
 
@@ -336,7 +347,7 @@ test.describe("Pause menu — button mode", () => {
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "button");
+    await cycleToPauseSteerMode(page, "buttons");
     await page.waitForTimeout(200);
     // Disabled, NOT hidden — hiding it reflowed the settings grid so the next
     // tap landed on a different button (see setSteerMode in game.js).
@@ -456,7 +467,7 @@ test.describe("Auto-throttle in button/touch mode", () => {
     await page.goto("/");
     await waitReady(page);
     await openPauseControls(page);
-    await cycleToPauseSteerMode(page, "button");
+    await cycleToPauseSteerMode(page, "buttons");
     await page.locator("#pm-settings-close").click();   // CONTROLS → home
     await page.locator("#pm-settings-close").click();   // home → pause
     await page.locator("#pm-resume").click();
@@ -497,44 +508,60 @@ test.describe("Race settings — portrait layout", () => {
   });
 });
 
+/* #sel-tracks became THE STRIP on 2026-09-09 (css/menus.css): one .track-row
+   per circuit in a single row that pans SIDEWAYS, snapping so a flick settles on
+   whole tiles. These two cases were written against the vertical list it
+   replaced and were not updated with it, so they asserted overflow-y:auto on a
+   box that is now overflow-y:hidden, and a vertical overflow that no longer
+   exists (measured scrollHeight === clientHeight === 84).
+   What they are FOR survives the redesign and is what they check now: the strip
+   owns its own scroll region and keeps a flick inside it, so panning the
+   circuits never scrolls the page behind them. Only the axis changed. */
 test.describe("Selection screen — iOS tablet portrait layout", () => {
   test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true });
 
-  test("track list owns an independent vertical scroll area", async ({ page }) => {
+  test("the track strip owns an independent horizontal scroll area", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
 
     const before = await page.locator("#sel-tracks").evaluate((list) => ({
-      clientHeight: list.clientHeight,
-      scrollHeight: list.scrollHeight,
+      clientWidth: list.clientWidth,
+      scrollWidth: list.scrollWidth,
+      overflowX: getComputedStyle(list).overflowX,
       overflowY: getComputedStyle(list).overflowY,
     }));
-    expect(before.overflowY).toBe("auto");
-    expect(before.scrollHeight).toBeGreaterThan(before.clientHeight);
+    expect(before.overflowX).toBe("auto");
+    // the cross axis is deliberately clipped: the strip is one row tall
+    expect(before.overflowY).toBe("hidden");
+    expect(before.scrollWidth).toBeGreaterThan(before.clientWidth);
 
-    await page.locator("#sel-tracks").evaluate((list) => { list.scrollTop = 120; });
-    await expect.poll(() => page.locator("#sel-tracks").evaluate((list) => list.scrollTop)).toBeGreaterThan(0);
+    await page.locator("#sel-tracks").evaluate((list) => { list.scrollLeft = 120; });
+    await expect.poll(() => page.locator("#sel-tracks").evaluate((list) => list.scrollLeft)).toBeGreaterThan(0);
   });
 });
 
 test.describe("Selection screen — iOS phone portrait touch scrolling", () => {
   test.use({ viewport: PORTRAIT, hasTouch: true });
 
-  test("track list contains vertical scroll gestures", async ({ page }) => {
+  test("the track strip contains horizontal scroll gestures", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
 
     const list = await page.locator("#sel-tracks").evaluate((element) => ({
-      clientHeight: element.clientHeight,
-      scrollHeight: element.scrollHeight,
-      overscrollY: getComputedStyle(element).overscrollBehaviorY,
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      overscrollX: getComputedStyle(element).overscrollBehaviorX,
+      touchAction: getComputedStyle(element).touchAction,
     }));
-    expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
-    expect(list.overscrollY).toBe("contain");
+    expect(list.scrollWidth).toBeGreaterThan(list.clientWidth);
+    // contain + pan-x is what stops a sideways flick from rubber-banding the
+    // whole page on iOS; both halves are load-bearing, so both are asserted.
+    expect(list.overscrollX).toBe("contain");
+    expect(list.touchAction).toBe("pan-x");
   });
 });
 

@@ -6,6 +6,16 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
+/* Two cases here outrun the project's shared 120 s budget, and say so rather
+   than reporting a bare "Test timeout exceeded".
+   Each drives the LIVE camera - jump, freeze, snapCam, read camState - once per
+   sample, against a rendering page where a single page.evaluate measures 15-28 s
+   under SwiftShader. The panel case walks the tuner UI on top of that and
+   measured 136 s here; it passes comfortably on an idle box and fails only when
+   it shares the machine. actionTimeout stays 60 s, so a genuinely stuck locator
+   still fails in a minute and names itself. */
+test.describe.configure({ timeout: 300_000 });
+
 async function loadMonza(page) {
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto("/");
@@ -29,13 +39,21 @@ async function loadMonza(page) {
 // the cheapest honest read of "how would this mode frame the car".
 const frame = (page, mode) => page.evaluate((m) => __apex.previewCam(m, 0.2, 55), mode);
 
-test("camTune() reports the knob registry and defaults to zero everywhere", async ({ page }) => {
+test("camTune() reports the knob registry; the six offsets default to zero", async ({ page }) => {
   await loadMonza(page);
   const all = await page.evaluate(() => __apex.camTune());
   expect(all.defs.map((d) => d.id)).toEqual(["height", "dist", "side", "pitch", "yaw", "fov", "cornerLead"]);
   expect(all.tuned).toEqual({});
   const chase = await page.evaluate(() => __apex.camTune("chase"));
-  for (const v of Object.values(chase)) expect(v).toBe(0);
+  // The six GEOMETRIC knobs are deltas on the solved rig, so their zero means
+  // "shipped framing". CORNER LEAD is not a delta — it is an absolute blend
+  // whose default IS the shipped lead, so an untuned chase reports that amount
+  // rather than 0. Reporting 0 here is what made the flat end of the slider
+  // unreachable (tests/unit/camera-defaults.test.mjs holds the two numbers
+  // together); this asserts the registry's own default rather than a literal.
+  const leadDef = all.defs.find((d) => d.id === "cornerLead").def;
+  expect(leadDef).toBeGreaterThan(0);
+  for (const [id, v] of Object.entries(chase)) expect(v).toBe(id === "cornerLead" ? leadDef : 0);
   expect(await page.evaluate(() => __apex.camTune("nope"))).toBe(false);
 });
 
@@ -45,10 +63,22 @@ test("camTune() reports the knob registry and defaults to zero everywhere", asyn
 const liveCam = (page, mode, frac, cornerLead) => page.evaluate(({ mode, frac, cornerLead }) => {
   __apex.camTune("chase", null);
   if (cornerLead != null) __apex.camTune("chase", { cornerLead });
-  __apex.camera(mode); __apex.jump(frac, 60); __apex.freeze(true); __apex.snapCam();
+  // lateral 0 EXPLICITLY. jump() leaves player.x alone when the argument is
+  // undefined, so every sample used to inherit the lateral offset the previous
+  // one drifted to — which is how "reset reproduces shipped" once missed by
+  // 128 m of world X while the camera code was behaving perfectly.
+  __apex.camera(mode); __apex.jump(frac, 60, 0); __apex.freeze(true); __apex.snapCam();
   const c = __apex.camState();
   return { eye: c.eye.slice(), tgt: c.tgt.slice() };
 }, { mode, frac, cornerLead });
+
+// The TIGHTEST corner on the lap, read from the static profile. A hardcoded frac
+// silently stops being a corner the next time the circuit is re-surveyed, and
+// then this measures a lead with nothing to bend around.
+const tightestCornerFrac = (page) => page.evaluate(() => {
+  const prof = __apex.trackInfo({ what: "profile" }).profile;
+  return prof.reduce((a, b) => (b.radiusM < a.radiusM ? b : a)).frac;
+});
 
 test("CORNER LEAD only applies to chase/far, and leads the chase into corners", async ({ page }) => {
   await loadMonza(page);
@@ -57,21 +87,22 @@ test("CORNER LEAD only applies to chase/far, and leads the chase into corners", 
   expect(def).toBeTruthy();
   expect(def.min).toBe(0); expect(def.max).toBe(1);
 
-  // at a mid-lap corner, cornerLead swings the aim INTO the bend, scaling with
-  // the knob; explicit 0 disables the shipped default lead.
-  const FC = 0.24;
+  const FC = await tightestCornerFrac(page);
+  // FLAT (an explicit 0) is the honest baseline — the rig locked behind the car
+  // with no lead at all — and every distance below is measured from it. The
+  // earlier version measured from `shipped` instead, which cannot work: 0.5 sits
+  // 0.04 from the shipped 0.54, so the half sample barely moved from its own
+  // reference and `mHalf > 0.1` was unsatisfiable by construction.
+  // Storing that 0 at all is what js/camera/offsets.js had to be fixed to allow.
+  const flat = await liveCam(page, "chase", FC, 0);
   const shipped = await liveCam(page, "chase", FC, null);
-  const flat = await page.evaluate(() => {
-    __apex.camTune("chase", { cornerLead: 0 });
-    __apex.camera("chase"); __apex.jump(0.24, 60); __apex.freeze(true); __apex.snapCam();
-    return __apex.camState().tgt.slice();
-  });
-  expect(Math.hypot(flat[0] - shipped.tgt[0], flat[1] - shipped.tgt[1], flat[2] - shipped.tgt[2]))
-    .toBeGreaterThan(0.05);
   const half = await liveCam(page, "chase", FC, 0.5);
   const full = await liveCam(page, "chase", FC, 1);
-  const tgtMove = (v) => Math.hypot(v.tgt[0] - shipped.tgt[0], v.tgt[1] - shipped.tgt[1], v.tgt[2] - shipped.tgt[2]);
-  const mFull = tgtMove(full), mHalf = tgtMove(half);
+  const move = (a, b) => Math.hypot(a.tgt[0] - b.tgt[0], a.tgt[1] - b.tgt[1], a.tgt[2] - b.tgt[2]);
+
+  // the shipped default lead genuinely reaches the rig (0 is not what ships)
+  expect(move(shipped, flat)).toBeGreaterThan(0.05);
+  const mFull = move(full, flat), mHalf = move(half, flat);
   expect(mFull).toBeGreaterThan(0.5);          // the aim genuinely leads into the corner
   expect(mHalf).toBeGreaterThan(0.1);
   expect(mHalf).toBeLessThan(mFull);           // scales with the knob
@@ -81,10 +112,10 @@ test("CORNER LEAD only applies to chase/far, and leads the chase into corners", 
   // cockpit ignores it entirely (free-world onboard branch never reads it)
   const cpBase = await liveCam(page, "cockpit", FC, null);
   await page.evaluate(() => __apex.camTune("chase", { cornerLead: 1 }));
-  const cpWithLead = await page.evaluate(() => {
-    __apex.camera("cockpit"); __apex.jump(0.24, 60); __apex.freeze(true); __apex.snapCam();
+  const cpWithLead = await page.evaluate((frac) => {
+    __apex.camera("cockpit"); __apex.jump(frac, 60, 0); __apex.freeze(true); __apex.snapCam();
     const c = __apex.camState(); return { tgt: c.tgt.slice() };
-  });
+  }, FC);
   expect(cpWithLead.tgt[0]).toBeCloseTo(cpBase.tgt[0], 3);
 });
 
@@ -153,7 +184,10 @@ test("values clamp to the slider range, persist, and reset", async ({ page }) =>
   expect(stored.cockpit.height).toBe(10);
   const base = await frame(page, "cockpit");
   await page.evaluate(() => __apex.camTune("cockpit", null));
-  expect(await page.evaluate(() => __apex.camTune("cockpit"))).toEqual({ height: 0, dist: 0, side: 0, pitch: 0, yaw: 0, fov: 0, cornerLead: 0 });
+  // cornerLead reads its registry default even on a mode that never applies it
+  // (values() fills every knob); chase/far are the only readers.
+  const leadDef = (await page.evaluate(() => __apex.camTune())).defs.find((d) => d.id === "cornerLead").def;
+  expect(await page.evaluate(() => __apex.camTune("cockpit"))).toEqual({ height: 0, dist: 0, side: 0, pitch: 0, yaw: 0, fov: 0, cornerLead: leadDef });
   expect((await frame(page, "cockpit")).eye[1]).toBeLessThan(base.eye[1] - 4);
 });
 

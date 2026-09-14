@@ -770,3 +770,59 @@ test("tyres: sprints start on softs, long races mix; a soft is up and fades, a h
   // The three fresh offsets are zero-mean over a mixed field.
   assert.ok(Math.abs(A.tyrePace("soft", 0) + A.tyrePace("hard", 0) - 2 * A.tyrePace("medium", 0)) < 1e-9);
 });
+
+/* ── a straight is defendable ──────────────────────────────────────────────
+ *
+ * defendPull used to `return 0` whenever |kA| <= 0.004. kA is a lookahead
+ * (game.js samples it 0.7 s / 18-70 m ahead), so that is "no corner soon" —
+ * i.e. a straight, which is precisely where a slipstream pass gets set up. The
+ * guard was there because the cover side came from -Math.sign(kA), and on a
+ * straight that is not a direction. The fix supplies the other direction a
+ * straight has: the side the attacker is lining up on.
+ *
+ * The tell that this was a defect rather than a choice is in game.js beside
+ * the call — "One defensive move per straight (AiDrive.defendOnce); the side
+ * resets in the braking zone" — a limiter that could never limit anything,
+ * because no move could ever be made on a straight.
+ */
+const onStraight = {
+  traits: ace, speed: 62, chaser: true, chaserGap: 6, chaserSpeed: 66,
+  kA: 0, roomL: 3.0, roomR: 3.0, street: false, x: 0,
+};
+
+test("on a straight the AI covers the side the attacker is lining up on", () => {
+  const fromRight = A.defendPull({ ...onStraight, other: { x: 1.4 } });
+  const fromLeft  = A.defendPull({ ...onStraight, other: { x: -1.4 } });
+  assert.ok(fromRight > 0, `attacker on the right (+x) is covered right, got ${fromRight}`);
+  assert.ok(fromLeft < 0, `attacker on the left is covered left, got ${fromLeft}`);
+  assert.ok(Math.abs(fromRight - -fromLeft) < 1e-9, "and symmetrically");
+});
+
+test("dead behind is not a move to cover — hold the line", () => {
+  assert.equal(A.defendPull({ ...onStraight, other: { x: 0 } }), 0);
+  assert.equal(A.defendPull({ ...onStraight, other: { x: 0.2 } }), 0,
+    "still within the same tyre tracks");
+  assert.ok(A.defendPull({ ...onStraight, other: { x: 0.5 } }) > 0,
+    "committed to a side => cover it");
+});
+
+test("a straight cover is a lane move, not a corner chop", () => {
+  const straightPull = Math.abs(A.defendPull({ ...onStraight, other: { x: 1.4 } }));
+  const cornerPull = Math.abs(A.defendPull({
+    ...onStraight, kA: 0.01, other: { x: 1.4 },
+  }));
+  assert.ok(straightPull > 0 && cornerPull > 0);
+  assert.ok(straightPull < cornerPull,
+    `straight cover ${straightPull} must stay under the corner cover ${cornerPull}`);
+});
+
+test("the straight branch respects the gates the corner branch already had", () => {
+  // too far back
+  assert.equal(A.defendPull({ ...onStraight, chaserGap: 20, other: { x: 1.4 } }), 0);
+  // not actually closing
+  assert.equal(A.defendPull({ ...onStraight, chaserSpeed: 55, other: { x: 1.4 } }), 0);
+  // a blocker ahead means this car is not the one defending
+  assert.equal(A.defendPull({ ...onStraight, blocker: {}, other: { x: 1.4 } }), 0);
+  // no room that side on a street
+  assert.equal(A.defendPull({ ...onStraight, street: true, roomR: 1.5, other: { x: 1.4 } }), 0);
+});

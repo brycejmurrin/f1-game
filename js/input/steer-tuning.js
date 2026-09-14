@@ -127,6 +127,44 @@ function lineLabel(v) { return v === 0 ? "OFF" : (v > 0 ? "PULL " + v : "PUSH " 
 function adaptMixFromSlider(v) { return (v - 1) / 9; }   // 0..1, v1 = OFF
 function adaptLabel(v) { return v <= 1 ? "OFF" : String(v); }
 
+/* PER-DEVICE CURVE TRIMS. LINEARITY (pm-expo) is a single exponent applied to
+ * the UNIFIED steer command in game.js, so one number had to serve tilt, a
+ * drag on the glass and a thumbstick at once — tune it for your phone and you
+ * have just re-tuned your gamepad. These three trim it per source.
+ *
+ * MULTIPLICATIVE, and notch 5 is EXACTLY 1.0 by construction: game.js computes
+ * |s|^STEER_EXPO, so a source handing back |raw|^t lands at |raw|^(t·EXPO).
+ * t = 1 is the identity, which is why a player who never opens these rows sees
+ * no change at all and why no physics baseline moves. Same knee-at-the-default
+ * shape as WEIGHT, for the same reason.
+ */
+function curveTrimFromSlider(v) {
+  return v <= 5 ? 0.6 + (1.0 - 0.6) * (v - 1) / 4
+                : 1.0 + (1.7 - 1.0) * (v - 5) / 5;
+}
+// TOUCH SENSITIVITY -> the fraction of the LONG screen edge that is full lock.
+// Inverted: a high slider means a SHORTER drag does more. 0.12 (notch 5) is
+// what the drag mode has always used, so the default is a no-op; the range
+// brackets it either side. Real Racing 3's own players cluster low-to-medium
+// on the equivalent slider, so the travel below centre is the half that gets used.
+function touchRangeFromSlider(v) { return 0.24 + (0.06 - 0.24) * (v - 1) / 9; }
+// DRAG SMOOTHING -> One-Euro min cutoff in Hz. 1 = OFF (bypasses the filter
+// outright, bit-identical to what shipped). Lower Hz = more smoothing, so the
+// slider runs the cutoff DOWN as it goes up.
+function dragCutoffFromSlider(v) { return v <= 1 ? 0 : 6.5 + (1.2 - 6.5) * (v - 2) / 8; }
+function dragSmoothLabel(v) { return v <= 1 ? "OFF" : String(v); }
+// STEER RATE -> KEY_RAMP_IN, steer units/s toward full lock. Notch 5 is the
+// shipped 4/s (250 ms to lock); the range runs 2.5..7/s, i.e. 400 ms to 143 ms.
+// Unity's legacy digital default is 333 ms and the AC gamepad-assist author's
+// note is that a keyboard wants a LOWER rate than a pad, so the slow half is
+// the useful half and gets the room.
+function steerRateFromSlider(v) {
+  return v <= 5 ? 2.5 + (4.0 - 2.5) * (v - 1) / 4
+                : 4.0 + (7.0 - 4.0) * (v - 5) / 5;
+}
+function analogSpeedFromSlider(v) { return (v - 1) / 9; }   // 0..1, v1 = OFF
+function pctLabel(v) { return v + "%"; }
+
 // Three named bundles drive all the handling sliders at once so a player never
 // has to understand the underlying knobs. STANDARD reproduces the original
 // hand-tuned defaults; RELAX stacks every forgiveness lever (on-rails grip,
@@ -134,17 +172,39 @@ function adaptLabel(v) { return v <= 1 ? "OFF" : String(v); }
 // PRO sharpens response and frees up the slide for skilled play. PACE is left
 // out — it's a race-wide setting, not a handling feel.
 const PRESETS = {
-  // RELAX must equal STEER_LEVELS.easy field for field, exactly as STANDARD
-  // equals `normal` and PRO equals `sim` — matchSteerLevel() compares the live
-  // sliders against STEER_LEVELS, so a bundle that lands between two of them
-  // lights up CUSTOM instead of its own name. It did: the 2026-09-08
-  // re-centring moved STANDARD and PRO onto the owner's profile and left RELAX
-  // on the old one (RATE 4 / SPEED 4 against easy's 2 / 5), so clicking RELAX
-  // read CUSTOM, and — because wheelbase comes off RATE — gave RELAX a SNAPPIER
-  // rack than STANDARD, inverting the one thing the bundle exists to do.
-  // Brought onto the new profile 2026-09-14: one calm rack, and the ladder
-  // differentiates on LOCK and the speed taper, which is what the block above
-  // says the levels now do.
+  /* ROOKIE — the named beginner mode, and it is a BUNDLE of things we already
+     shipped rather than a new mechanic. Every ingredient existed (road-follow
+     help, racing-line pull, the brake cue, auto-throttle) as four separate
+     sliders buried in ADVANCED, which is the same as not existing for the
+     player who needs them. Asphalt's TouchDrive is the category's default
+     precisely because one named choice beats four correct knobs nobody finds.
+     It is NOT silent about the trade: applyPreset announces the ceiling, the
+     way Asphalt players wish theirs had. The one thing it adds beyond RELAX is
+     auto-throttle (js/game.js owns that key), which is XAG 107's answer to a
+     held accelerator over a long race. */
+  // steerSpeed 5, not 4: ROOKIE is "RELAX plus auto-throttle" by its own note
+  // above, and it was derived from the PRE-fix RELAX — the rate was updated to
+  // the new calm rack and the speed taper was not. One field off STEER_LEVELS.easy
+  // is enough for matchSteerLevel() to return null, so picking ROOKIE painted
+  // CUSTOM in the STEERING row: the exact defect the block below this one
+  // exists to explain, reintroduced by the preset added in the same pass.
+  // tests/unit/steer-presets.test.mjs now asserts it over EVERY bundle rather
+  // than the three that were named, which is what caught this.
+  rookie:   { tiltDeg: 4, steerSmooth: 9, steerRate: 2,
+              steerExpo: 4, steerLock: 5, steerSpeed: 5, drivingHelp: 9, raceLine: 4,
+              adaptiveButtons: 9, brakeCue: 9 },
+  /* RELAX WAS THE STRAGGLER OF THE 2026-09-08 RE-CENTRING. That pass moved
+     STANDARD and PRO onto the owner's profile and re-centred STEER_LEVELS with
+     them — but left RELAX at the old steerRate 4 / steerSpeed 4, which matches
+     no named FEEL level any more. Two visible consequences:
+       - clicking RELAX left the STEERING row reading CUSTOM, i.e. a preset that
+         does not light up its own simplified control (sliders.spec.js);
+       - the ladder stopped being monotonic — RELAX's rack (3.80 m) became
+         QUICKER than STANDARD's (4.20 m), so "STANDARD sits between RELAX and
+         PRO" was false by construction (presets.spec.js).
+     Aligned with STEER_LEVELS.easy exactly, which is what "the easiest bundle"
+     was always meant to be: the same calm rack STANDARD uses, with less lock
+     and an earlier speed taper. */
   relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 2,
               steerExpo: 4, steerLock: 5, steerSpeed: 5, drivingHelp: 8, raceLine: 2,
               adaptiveButtons: 8, brakeCue: 8 },
@@ -201,6 +261,13 @@ function lineBand() {
   return rl === 0 ? "off" : rl >= 5 ? "full" : "corner";
 }
 
+// Slider + its readout, the pair every row in this panel repeats.
+function paintRow(id, v, label) {
+  const el = $(id), out = $(id + "-v");
+  if (el) el.value = v;
+  if (out) out.textContent = label === undefined ? String(v) : label;
+}
+
 function applyPreset(name) {
   const p = PRESETS[name];
   if (!p) return;
@@ -213,7 +280,7 @@ function applyPreset(name) {
 function clearPreset() { store.set("preset", "custom"); refreshPresetButtons(); }
 function refreshPresetButtons() {
   const active = store.get("preset", "standard");
-  for (const name of ["relax", "standard", "pro"]) {
+  for (const name of ["rookie", "relax", "standard", "pro"]) {
     const btn = $("pm-preset-" + name);
     if (btn) btn.classList.toggle("active", name === active);
   }
@@ -445,6 +512,32 @@ function applySteerTuning() {
   // LINEARITY reaches the digital ramp too: it ramps in SHAPED space so a held
   // button builds road-wheel angle linearly instead of as t^expo.
   if (Input.setSteerExpo) Input.setSteerExpo(G.STEER_EXPO);
+  /* THE NEW DEVICE ROWS. Every one of these defaults to the notch that
+     reproduces exactly what shipped, so applySteerTuning() on a store that has
+     never seen them is a no-op by construction — the rule this file's schema
+     ladder exists to enforce (changing a DEFAULT reaches a fresh install and
+     nobody else; only a migration reaches a store that already has the key,
+     and none of these keys existed before, so no migration is owed). */
+  const tiltCurve   = clamp(store.get("tiltCurve", 5), SLIDER_MIN, SLIDER_MAX);
+  const touchCurve  = clamp(store.get("touchCurve", 5), SLIDER_MIN, SLIDER_MAX);
+  const padCurve    = clamp(store.get("padCurve", 5), SLIDER_MIN, SLIDER_MAX);
+  const touchRange  = clamp(store.get("touchRange", 5), SLIDER_MIN, SLIDER_MAX);
+  const dragSmooth  = clamp(store.get("dragSmooth", 1), SLIDER_MIN, SLIDER_MAX);
+  const steerRate2  = clamp(store.get("digitalRate", 5), SLIDER_MIN, SLIDER_MAX);
+  const analogSpd   = clamp(store.get("analogSpeedSteer", 1), SLIDER_MIN, SLIDER_MAX);
+  const haptics     = clamp(store.get("haptics", 6), SLIDER_MIN, SLIDER_MAX);
+  const padDz       = clamp(store.get("padDeadzone", 5), 0, 30);
+  const padSat      = clamp(store.get("padSaturation", 0), 0, 30);
+  Input.setAnalogTrim("tilt", curveTrimFromSlider(tiltCurve));
+  Input.setAnalogTrim("touch", curveTrimFromSlider(touchCurve));
+  Input.setAnalogTrim("pad", curveTrimFromSlider(padCurve));
+  Input.setTouchRange(touchRangeFromSlider(touchRange));
+  Input.setDragSmoothing(dragCutoffFromSlider(dragSmooth));
+  Input.setKeyRampIn(steerRateFromSlider(steerRate2));
+  Input.setAnalogSpeedMix(analogSpeedFromSlider(analogSpd));
+  Input.setHaptics(haptics <= 1 ? 0 : (haptics - 1) / 9);
+  Input.setPadDeadzone(padDz / 100);
+  Input.setPadSaturation(padSat / 100);
   G.raceLineAssist = line / 5;
   // The stored value is only trusted when it is a NUMBER. clamp compares, and
   // both `v < lo` and `v > hi` are false for a string, so a non-number walks
@@ -467,6 +560,16 @@ function applySteerTuning() {
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
   $("pm-pace").value    = pace;    $("pm-pace-v").textContent    = paceLabel(pace);
   $("pm-line").value    = line;    $("pm-line-v").textContent    = lineLabel(line);
+  paintRow("pm-tiltcurve", tiltCurve);
+  paintRow("pm-touchcurve", touchCurve);
+  paintRow("pm-padcurve", padCurve);
+  paintRow("pm-touchrange", touchRange);
+  paintRow("pm-dragsmooth", dragSmooth, dragSmoothLabel(dragSmooth));
+  paintRow("pm-steerrate", steerRate2);
+  paintRow("pm-analogspeed", analogSpd, adaptLabel(analogSpd));
+  paintRow("pm-haptics", haptics, adaptLabel(haptics));
+  paintRow("pm-paddz", padDz, pctLabel(padDz));
+  paintRow("pm-padsat", padSat, pctLabel(padSat));
   refreshPresetButtons();
   refreshMacros();
 }
@@ -531,9 +634,44 @@ $("pm-line").oninput = (e) => {
   const v = clamp(+e.target.value, LINE_MIN, LINE_MAX); store.set("raceLine", v);
   G.raceLineAssist = v / 5; $("pm-line-v").textContent = lineLabel(v); clearPreset();
 };
+// ROOKIE also turns the throttle over to the car; that key lives in game.js,
+// so set it here and let its setting row read it back.
+if ($("pm-preset-rookie")) $("pm-preset-rookie").onclick = () => {
+  store.set("autoThrottle", true);
+  applyPreset("rookie");
+  if (G.onAssistBundle) G.onAssistBundle();
+  if (G.soundOn) GameAudio.uiSelect();
+};
 $("pm-preset-relax").onclick    = () => { applyPreset("relax");    if (G.soundOn) GameAudio.uiSelect(); };
 $("pm-preset-standard").onclick = () => { applyPreset("standard"); if (G.soundOn) GameAudio.uiSelect(); };
 $("pm-preset-pro").onclick      = () => { applyPreset("pro");      if (G.soundOn) GameAudio.uiSelect(); };
+
+/* One shape for every new row: clamp, store, push to Input, repaint, and drop
+   the preset chip — the same five acts each existing handler performs by hand.
+   Written once because ten more copies of that block is how one of them ends
+   up missing its clearPreset() and the chip starts claiming PRO for settings
+   PRO never chose. */
+function wireTune(id, key, def, lo, hi, push, label) {
+  const el = $(id);
+  if (!el) return;
+  el.oninput = (e) => {
+    const v = clamp(+e.target.value, lo, hi);
+    store.set(key, v);
+    push(v);
+    paintRow(id, v, label ? label(v) : undefined);
+    clearPreset();
+  };
+}
+wireTune("pm-tiltcurve", "tiltCurve", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("tilt", curveTrimFromSlider(v)));
+wireTune("pm-touchcurve", "touchCurve", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("touch", curveTrimFromSlider(v)));
+wireTune("pm-padcurve", "padCurve", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogTrim("pad", curveTrimFromSlider(v)));
+wireTune("pm-touchrange", "touchRange", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setTouchRange(touchRangeFromSlider(v)));
+wireTune("pm-dragsmooth", "dragSmooth", 1, SLIDER_MIN, SLIDER_MAX, (v) => Input.setDragSmoothing(dragCutoffFromSlider(v)), dragSmoothLabel);
+wireTune("pm-steerrate", "digitalRate", 5, SLIDER_MIN, SLIDER_MAX, (v) => Input.setKeyRampIn(steerRateFromSlider(v)));
+wireTune("pm-analogspeed", "analogSpeedSteer", 1, SLIDER_MIN, SLIDER_MAX, (v) => Input.setAnalogSpeedMix(analogSpeedFromSlider(v)), adaptLabel);
+wireTune("pm-haptics", "haptics", 6, SLIDER_MIN, SLIDER_MAX, (v) => Input.setHaptics(v <= 1 ? 0 : (v - 1) / 9), adaptLabel);
+wireTune("pm-paddz", "padDeadzone", 5, 0, 30, (v) => Input.setPadDeadzone(v / 100), pctLabel);
+wireTune("pm-padsat", "padSaturation", 0, 0, 30, (v) => Input.setPadSaturation(v / 100), pctLabel);
 
 $("pm-tiltsimple").oninput = (e) => {
   store.set("tiltDeg", clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX)); clearPreset(); applySteerTuning();

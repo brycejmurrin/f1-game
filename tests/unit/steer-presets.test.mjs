@@ -52,19 +52,39 @@ const STEER_LEVELS = table("STEER_LEVELS");
 const STEER_DEFAULTS = table("STEER_DEFAULTS");
 // The fields the FEEL row is matched on — the four STEER_LEVELS carry.
 const KEYS = ["steerRate", "steerExpo", "steerLock", "steerSpeed"];
-// Which bundle is which level. Stated in the source's own comments; asserted here.
+// Which bundle is which level, where the source names a pairing. Kept as a
+// SEPARATE assertion from the one below, because the two say different things:
+// this one pins the intended mapping, that one refuses ANY bundle that matches
+// nothing. The second is the one with teeth — it is derived from PRESETS rather
+// than from a list here, so a bundle added later cannot escape it by not being
+// in this table. (It nearly did: ROOKIE arrived in the same pass that fixed
+// RELAX and shipped one field off `easy`.)
 const PAIRS = [["relax", "easy"], ["standard", "normal"], ["pro", "sim"]];
 
 test("every preset bundle lands exactly ON its feel level", () => {
-  // The defect this file exists for. A bundle that lands BETWEEN two levels
-  // reads CUSTOM, which is a player clicking RELAX and being told they have a
-  // custom setup.
   for (const [preset, level] of PAIRS) {
     for (const k of KEYS) {
       assert.equal(PRESETS[preset][k], STEER_LEVELS[level][k],
         `PRESETS.${preset}.${k} (${PRESETS[preset][k]}) must equal STEER_LEVELS.${level}.${k} `
         + `(${STEER_LEVELS[level][k]}) — otherwise clicking ${preset.toUpperCase()} reads CUSTOM`);
     }
+  }
+});
+
+test("NO preset — named here or not — can match no level at all", () => {
+  // The defect this file exists for, stated over every bundle that exists
+  // rather than over three the author remembered to list. matchSteerLevel()
+  // walks STEER_LEVELS and returns null when the live sliders match none, and
+  // null is what paints CUSTOM: a player picks a named mode and is told they
+  // have a custom setup.
+  for (const name of Object.keys(PRESETS)) {
+    const hit = Object.keys(STEER_LEVELS).filter((lv) =>
+      KEYS.every((k) => PRESETS[name][k] === STEER_LEVELS[lv][k]));
+    assert.ok(hit.length >= 1,
+      `PRESETS.${name} matches NO steer level, so picking ${name.toUpperCase()} reads CUSTOM. `
+      + `It is ${KEYS.map((k) => `${k} ${PRESETS[name][k]}`).join(", ")}; the nearest levels are `
+      + Object.keys(STEER_LEVELS).map((lv) =>
+          `${lv} [${KEYS.filter((k) => PRESETS[name][k] !== STEER_LEVELS[lv][k]).join(", ") || "exact"}]`).join(" "));
   }
 });
 

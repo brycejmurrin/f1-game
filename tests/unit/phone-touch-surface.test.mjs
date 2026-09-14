@@ -152,7 +152,14 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   // it would either pin a cap that fits or drop one that does not, the moment a
   // player set the two apart.
   assert.match(hud, /set\("--hud-z-dock", capDock, btnScale\)/, "the dock cap is judged against BUTTON SIZE");
-  assert.match(hud, /getPropertyValue\("--hud-btn-scale"\) \|\| scale/, "and falls back to HUD SIZE while unset");
+  // FALLS BACK TO HUD SIZE TIMES THE COARSE RATIO, not to HUD SIZE. Unset, the
+  // dock is `calc(var(--hud-scale) * var(--hud-btn-mult))` — and calc() inside a
+  // custom property is never reduced, so the token reads back as a literal
+  // string and coerces to NaN. A bare `|| scale` therefore sized the cap 25%
+  // small on every touch device from the moment the ratio stopped being 1.
+  assert.match(hud, /getPropertyValue\("--hud-btn-scale"\) \|\| scale \* mult/,
+    "and falls back to HUD SIZE times the button ratio while unset");
+  assert.match(hud, /--hud-btn-mult/, "resolved from the ratio token, not by parsing calc()");
   const capTilt = (H - 3 * air) / tallestTilt;
   assert.ok(capTilt >= 2, `tilt/manual cap (${capTilt.toFixed(2)}) only bites past 200 % on 390px — the raw slider fits every setting`);
   const capButtons = (H - 3 * air) / tallestButtons;

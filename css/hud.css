@@ -380,6 +380,12 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
    to react to — and the three states are mixed from --faster/--slower rather
    than written as new literals, so the bar cannot drift from the delta colours
    the HUD already uses for good and bad. */
+/* updateHud in js/ui/hud.js drives this with `els.tyre.hidden = !tyreOn`, and the
+   `display: flex` below outranks the UA rule that attribute relies on — an
+   author rule always beats a UA one — so the widget painted whether or not the
+   session has tyre wear on. Same trap as #lights, #nogl and the dock groups;
+   caught at merge by the guard in tests/unit/css-layers.test.mjs. */
+#hud-tyre[hidden] { display: none; }
 #hud-tyre { width: 130px; display: flex; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3); }
 #hud-tyre-bar {
   flex: 1; height: 14px;
@@ -585,6 +591,13 @@ body[data-density="compact"] #announce {
 }
 
 /* ---------- start lights ---------- */
+/* The gantry is driven purely by `els.lights.hidden = true/false` in
+   js/game.js, and the `display: flex` below outranks the UA's
+   `[hidden] { display: none }` — an author rule always beats a UA rule — so
+   the attribute the JS sets could not actually hide it. Restated, as
+   #cs-cam-panel and the dock groups already do. Found by the hidden-override
+   guard in tests/unit/css-layers.test.mjs. */
+#lights[hidden] { display: none; }
 #lights {
   position: fixed;
   top: calc((18svh + var(--sat)) / var(--hud-z));

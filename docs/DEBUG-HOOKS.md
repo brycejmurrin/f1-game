@@ -483,7 +483,7 @@ the camera counterpart of `lightTune()`. Six knobs per mode, all defaulting to
 | `pitch` | ° | tilt the aim up (+) / down (−) |
 | `yaw` | ° | pan the aim right (+) / left (−) |
 | `fov` | ° | widen (+) / tighten (−) on top of the mode's own speed-scaled FOV |
-| `cornerLead` | 0–1 | **chase/far only** — blend the rig toward the classic road-frame chase so the camera leads/swings INTO corners. 0 = locked behind the car (default); 1 = the old corner-following chase. Purely visual; never touches the car |
+| `cornerLead` | 0–1 | **chase/far only** — blend the rig toward the classic road-frame chase so the camera leads/swings INTO corners. **Ships at 0.54**, which is also its registry default; 0 = locked flat behind the car; 1 = the old corner-following chase. Unlike the six geometric knobs it is an ABSOLUTE blend, not an offset, so its default is not 0. Purely visual; never touches the car |
 
 Translation knobs move the eye only, then `pitch`/`yaw` rotate the aim about it,
 so the car can't fall out of frame. Values are stored **per mode** (a tuned
@@ -493,8 +493,11 @@ the slider range, and are applied inside `vantage()` — so the live camera,
 ground clamp after tuning.
 
 ```js
-__apex.camTune();                                  // → {defs:[…], tuned:{chase:{…}}}
-__apex.camTune("chase");                           // → {height:0, dist:0, side:0, pitch:0, yaw:0, fov:0}
+__apex.camTune();                                  // → {defs:[{id,min,max,def,unit},…], tuned:{chase:{…}}}
+// Every knob resolved, defaults filled in — so cornerLead reads the shipped
+// 0.54, not 0. Compare against each knob's `def` from defs[] to tell an
+// untouched knob from one deliberately tuned to its default's value.
+__apex.camTune("chase");                           // → {height:0, dist:0, side:0, pitch:0, yaw:0, fov:0, cornerLead:0.54}
 __apex.camTune("chase", { height: 0.6, dist: 2, fov: -4 });   // apply + persist + re-snap
 __apex.camTune("chase", null);                     // reset this camera to shipped framing
 ```

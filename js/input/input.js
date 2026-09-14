@@ -39,6 +39,9 @@ const Input = (function () {
   let shiftDownPressed = false;
   // edge-triggered camera cycle (C key / CAM tap)
   let cameraCyclePressed = false;
+  let recoverPressed = false;   // edge-triggered manual recover / put-me-back
+  let keyLookBack = false;      // HELD: look-back mirror while the key/button is down
+  let padLookBack = false;
 
   // gamepad (W3C Gamepad API, "standard" mapping). Polled once per display
   // frame from poll(). Works on desktop browsers and iOS 14.5+ Safari with a
@@ -49,12 +52,33 @@ const Input = (function () {
   let padPollWarned = false;
   let padMapWarned = false;
   let padSteer = 0;            // -1..1 from left stick / d-pad
+  let padSteerAnalog = false;  // is padSteer a stick DEFLECTION (curve/speed-scale it) or the ramped d-pad?
   let padThrottle = false;
   let padBrake = false;
   let padThrottleVal = 0;
   let padBrakeVal = 0;
   let padPrevButtons = [];     // previous frame's pressed state, for rising edges
-  const PAD_DEADZONE = 0.14;   // driving left-stick centre slop (ignored, then re-scaled)
+  let padDpadVal = 0;          // ramped d-pad steer, -1..1 (see padDpadSteer)
+  let padDpadT = 0;            // last d-pad ramp timestamp, ms
+  /* THE DRIVING DEAD ZONE IS A PLAYER KNOB WITH A SMALL DEFAULT, and the two
+     halves of that sentence are both corrections.
+     It was a fixed 0.14, which is between 3x and 7x what racing games ship:
+     F1's own calibration defaults every axis to 0, ACC recommends 2-4 %, Forza
+     5, and Rocket League's 0.30 default is the one its own players call a bad
+     default. XInput's suggested 0.2395 is the outlier nobody uses for driving.
+     Fourteen per cent of stick travel is exactly the small-correction band an
+     F1 car lives in, and we were discarding it before the physics ever saw it.
+     The other half: a fixed dead zone is the WRONG SHAPE of answer to stick
+     drift. Nearly every pad shipped in the last decade uses a resistive
+     potentiometer whose wiper grooves its track (Nintendo confirmed Switch 2
+     Joy-Cons are still not Hall effect), so drift is wear, not a defect class
+     — and one large constant punishes good hardware to accommodate worn
+     hardware. The shape that works is a SMALL dead zone, a rest-offset
+     captured per pad (calibratePad), and a SATURATION so a stick that can no
+     longer reach 1.0 can still reach full lock. */
+  let padDeadzone = 0.05;      // inner: centre slop, ignored then re-scaled
+  let padSaturation = 0;       // outer: deflection treated as full lock
+  let padRestOffset = 0;       // captured resting position (drift compensation)
   const PAD_NAV_DEADZONE = 0.22; // menu sticks only — larger so a resting stick does not creep
 
   let padNavDir = null;           // held direction while a menu is open, or null
@@ -112,6 +136,7 @@ const Input = (function () {
   let tiltSteerT = 0;         // timestamp of the last tiltSteering() call (ms)
 
   let onPauseCb = null;
+  let onPadLostCb = null;      // fired when the LAST pad disconnects (game.js pauses)
 
   // SIM TIME vs WALL TIME. The steering RAMPS (keyboard, and the tilt slew) are
   // control-loop stages: they belong to the same clock the car is integrated on,
@@ -397,10 +422,27 @@ const Input = (function () {
     { id: "shiftUp",   label: "SHIFT UP",    def: ["KeyE", null] },
     { id: "shiftDown", label: "SHIFT DOWN",  def: ["KeyQ", "ShiftLeft"] },
     { id: "camera",    label: "CAMERA",      def: ["KeyC", null] },
+    // LOOK BACK is a HELD control (the mirror is only useful while you hold
+    // it); RECOVER is an edge. Both are standard racing binds we simply did
+    // not have: Forza Horizon puts look-back on the arrow cluster, F1 on End,
+    // iRacing on Z/X, and R is the near-universal recover/reset key across
+    // Forza, PolyTrack and Slow Roads alike. In a game about defending a
+    // position, not being able to look back is functional, not cosmetic.
+    { id: "lookBack",  label: "LOOK BACK",   def: ["KeyB", null] },
+    { id: "recover",   label: "RECOVER",     def: ["KeyR", null] },
+    /* PAUSE IS A BINDING NOW, not a literal. XAG 107 asks that a player be
+       able to remap ALL of a game's controls "including the Esc key on PC
+       games", and P being permanently off-limits meant a player who wanted
+       pause under a different finger had no path at all — which bites hardest
+       in fullscreen on Firefox and Safari, where Escape is spent exiting
+       fullscreen before it can ever reach us (see lockEscape). Escape itself
+       stays hardwired as BACK: it is the platform's gesture, not ours to
+       hand out. */
+    { id: "pause",     label: "PAUSE",       def: ["KeyP", null] },
   ];
-  // Keys the game already answers to elsewhere: pause/back, the menu walker's
+  // Keys the game already answers to elsewhere: back, the menu walker's
   // confirm, the perf overlay, the OS. Refused by setKeyBinding.
-  const KEY_RESERVED = { Escape: 1, Enter: 1, NumpadEnter: 1, Tab: 1, KeyP: 1, Backquote: 1, F9: 1, MetaLeft: 1, MetaRight: 1, ContextMenu: 1 };
+  const KEY_RESERVED = { Escape: 1, Enter: 1, NumpadEnter: 1, Tab: 1, Backquote: 1, F9: 1, MetaLeft: 1, MetaRight: 1, ContextMenu: 1 };
   const keyMap = {};
   let codeToAction = {};
   // Either Shift / Ctrl / Alt counts as the one key: the default SHIFT DOWN was
@@ -459,12 +501,45 @@ const Input = (function () {
     ShiftLeft: "SHIFT", ControlLeft: "CTRL", AltLeft: "ALT", Comma: ",", Period: ".", Slash: "/", Semicolon: ";",
     Quote: "'", BracketLeft: "[", BracketRight: "]", Backslash: "\\", Minus: "-", Equal: "=", Backspace: "BKSP",
     CapsLock: "CAPS", Insert: "INS", Delete: "DEL", Home: "HOME", End: "END", PageUp: "PGUP", PageDown: "PGDN", IntlBackslash: "\\" };
-  // The name on a key chip: "X", "3", "SHIFT", an arrow. Physical codes, so a
-  // French keyboard's A key still reads A where the game means the WASD slot.
+  /* WHAT IS PRINTED ON THE PLAYER'S KEY, not what the code is called.
+     Binding on e.code is right and stays — it is what keeps WASD under the
+     same three fingers on AZERTY, and MDN recommends exactly that for games.
+     But it made the LABEL a lie: "KeyW" is the physical slot a French keyboard
+     prints Z on, and the rebinding screen confidently showed "W". A player
+     rebinding was reading a key that is not on their keyboard.
+     navigator.keyboard.getLayoutMap() is the API for the other direction.
+     Chromium-only and experimental, so it is a progressive enhancement:
+     resolved once at init, consulted only for the alphanumeric codes whose
+     label actually moves between layouts, and absent everywhere else — where
+     the old behaviour is exactly what remains. */
+  let kbLayout = null;
+  function loadLayoutMap() {
+    const kb = typeof navigator !== "undefined" && navigator.keyboard;
+    if (!kb || typeof kb.getLayoutMap !== "function") return;
+    try {
+      Promise.resolve(kb.getLayoutMap()).then((m) => {
+        kbLayout = m || null;
+        if (kbLayout) { try { Log.info("input", "keyboard layout map available"); } catch (_) { /* Log absent */ } }
+      }).catch(() => { /* SecurityError under Permissions Policy, or unsupported */ });
+    } catch (_) { /* older Chromium shapes */ }
+  }
+  function layoutLabel(code) {
+    if (!kbLayout || typeof kbLayout.get !== "function") return null;
+    let v;
+    try { v = kbLayout.get(code); } catch (_) { return null; }
+    if (typeof v !== "string" || !v) return null;
+    return v.toUpperCase();
+  }
+  // The name on a key chip: "X", "3", "SHIFT", an arrow — in the player's own
+  // layout where the platform will tell us what that is.
   function keyLabel(code) {
     if (!code) return "";
     code = normCode(String(code));
     let m;
+    if (/^(Key[A-Z]|Digit\d|Bracket|Semicolon|Quote|Comma|Period|Slash|Backslash|Minus|Equal|IntlBackslash)/.test(code)) {
+      const l = layoutLabel(code);
+      if (l) return l;
+    }
     if ((m = /^Key([A-Z])$/.exec(code))) return m[1];
     if ((m = /^Digit(\d)$/.exec(code))) return m[1];
     if ((m = /^Numpad(.+)$/.exec(code))) return "NUM " + ({ Add: "+", Subtract: "-", Multiply: "*", Divide: "/", Decimal: "." }[m[1]] || m[1].toUpperCase());
@@ -486,8 +561,13 @@ const Input = (function () {
     { id: "shiftUp",   label: "SHIFT UP",    def: [5, null] },
     { id: "shiftDown", label: "SHIFT DOWN",  def: [4, null] },
     { id: "camera",    label: "CAMERA",      def: [8, null] },
+    { id: "lookBack",  label: "LOOK BACK",   def: [11, null] },
+    { id: "recover",   label: "RECOVER",     def: [10, null] },
+    { id: "pause",     label: "PAUSE",       def: [9, null] },
   ];
-  const PAD_RESERVED = { 9: 1, 14: 1, 15: 1 };   // pause, d-pad steer
+  // The d-pad's left/right are the digital STEER axis, not bindings — the same
+  // reason the stick is not one. Pause left this set when it became a binding.
+  const PAD_RESERVED = { 14: 1, 15: 1 };
   const padMap = {};
   let padCaptureCb = null;   // set while a CONTROLS slot waits for a button
   const padIndexOk = (v) => Number.isInteger(v) && v >= 0 && v < 32;
@@ -543,13 +623,150 @@ const Input = (function () {
   function keyboardSeen() { return kbSeen; }
   const PAD_NAMES_XBOX = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "VIEW", "MENU", "LS", "RS", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "HOME"];
   const PAD_NAMES_PS = ["CROSS", "CIRCLE", "SQUARE", "TRIANGLE", "L1", "R1", "L2", "R2", "SHARE", "OPTIONS", "L3", "R3", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "PS"];
-  // The name on a chip: Xbox names unless the connected pad says PlayStation.
+  // Nintendo's physical A/B and X/Y sit OPPOSITE the Xbox positions, so index 0
+  // — the button the standard mapping calls "bottom of the right cluster" — is
+  // physically labelled B on a Switch Pro. Sniffing cannot always tell, which
+  // is why the override below exists.
+  const PAD_NAMES_NIN = ["B", "A", "Y", "X", "L", "R", "ZL", "ZR", "MINUS", "PLUS", "LS", "RS", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "HOME"];
+  const PAD_NAME_SETS = { xbox: PAD_NAMES_XBOX, ps: PAD_NAMES_PS, nintendo: PAD_NAMES_NIN };
+  /* SNIFFING THE id STRING IS THE STATE OF THE ART, AND IT IS NOT GOOD ENOUGH
+     ALONE. The Gamepad spec says outright that the id format is "left
+     unspecified"; Chrome writes "Name (STANDARD GAMEPAD Vendor: 054c Product:
+     05c4)" but an XInput pad becomes "Xbox 360 Controller (XInput STANDARD
+     GAMEPAD)" with no vendor at all, Firefox writes "054c-05c4-Name", and
+     Safari rewrites the name at the OS layer. Standardising vendorId/productId
+     is still an open W3C issue. So: sniff by default, and let the player say
+     when we get it wrong. */
+  let padLabelMode = "auto";     // "auto" | "xbox" | "ps" | "nintendo"
+  function setPadLabelMode(m) {
+    padLabelMode = PAD_NAME_SETS[m] ? m : "auto";
+  }
+  function padLabelModeOf() { return padLabelMode; }
+  function padBrandAuto() {
+    const pad = activePad();
+    const id = String((pad && pad.id) || "");
+    if (/playstation|dualshock|dualsense|\b054c\b|sony/i.test(id)) return "ps";
+    if (/nintendo|switch\s*pro|joy-?con|\b057e\b/i.test(id)) return "nintendo";
+    return "xbox";
+  }
+  // The name on a chip: the player's override, else what the pad id suggests.
   function padLabel(index) {
     if (index == null) return "";
-    const pad = activePad();
-    const ps = !!pad && /playstation|dualshock|dualsense|054c|sony/i.test(String(pad.id || ""));
-    const names = ps ? PAD_NAMES_PS : PAD_NAMES_XBOX;
+    const brand = padLabelMode === "auto" ? padBrandAuto() : padLabelMode;
+    const names = PAD_NAME_SETS[brand] || PAD_NAMES_XBOX;
     return names[index] || `BTN ${index}`;
+  }
+
+  /* THE WHEEL WIZARD'S ONE PRIMITIVE. Arm it, ask the player to move the
+     control we want, and the first axis that travels far enough from where it
+     was resting when we armed is the answer. Comparing against a REST snapshot
+     rather than against zero is what makes it work on a wheel at all: a pedal
+     axis rests at -1, not 0, so "largest absolute value" would pick an
+     untouched pedal every time. */
+  const AXIS_CAPTURE_MOVE = 0.45;
+  function beginAxisCapture(cb) {
+    axisCaptureCb = typeof cb === "function" ? cb : null;
+    axisCaptureRest = null;
+    if (!axisCaptureCb) return;
+    const pad = activePad();
+    if (pad && pad.axes) axisCaptureRest = Array.prototype.slice.call(pad.axes);
+  }
+  function pollAxisCapture(pad) {
+    if (!axisCaptureCb) return;
+    const axes = pad.axes || [];
+    if (!axisCaptureRest) { axisCaptureRest = Array.prototype.slice.call(axes); return; }
+    let best = -1, bestI = -1;
+    for (let i = 0; i < axes.length; i++) {
+      const rest = typeof axisCaptureRest[i] === "number" ? axisCaptureRest[i] : 0;
+      const d = Math.abs((axes[i] || 0) - rest);
+      if (d > best) { best = d; bestI = i; }
+    }
+    if (bestI < 0 || best < AXIS_CAPTURE_MOVE) return;
+    const cb = axisCaptureCb;
+    const rest = typeof axisCaptureRest[bestI] === "number" ? axisCaptureRest[bestI] : 0;
+    axisCaptureCb = null; axisCaptureRest = null;
+    cb(bestI, Math.sign((axes[bestI] || 0) - rest) || 1);
+  }
+  function setPadAxisMap(saved) {
+    padAxisMap = Object.assign({}, PAD_AXIS_DEF);
+    if (saved && typeof saved === "object") {
+      for (const k of ["steer", "throttle", "brake"]) {
+        const v = saved[k];
+        if (v === null || (Number.isInteger(v) && v >= 0 && v < 32)) padAxisMap[k] = v;
+      }
+      for (const k of ["steerInvert", "pedalInvert"]) {
+        if (saved[k] === -1 || saved[k] === 1) padAxisMap[k] = saved[k];
+      }
+    }
+    return getPadAxisMap();
+  }
+  function getPadAxisMap() { return Object.assign({}, padAxisMap); }
+  function padAxesAreDefault() {
+    return Object.keys(PAD_AXIS_DEF).every((k) => padAxisMap[k] === PAD_AXIS_DEF[k]);
+  }
+  /* Capture where the steering axis RESTS and subtract it forever after. This
+     is the honest answer to stick drift: a worn potentiometer's wiper no longer
+     reads zero at centre, and the alternative — one big dead zone for everyone
+     — makes every good pad worse to spare one bad one. */
+  function calibratePad() {
+    const pad = activePad();
+    if (!pad || !pad.axes) return false;
+    const v = readPadAxis(pad.axes, padAxisMap.steer) * padAxisMap.steerInvert;
+    // A stick genuinely held over cannot be a rest position; refuse rather than
+    // bake a permanent offset that steers the car on its own.
+    if (Math.abs(v) > 0.5) return false;
+    padRestOffset = v;
+    try { Log.info("input", `pad calibrated, rest offset ${v.toFixed(3)}`); } catch (_) { /* Log absent */ }
+    return true;
+  }
+  function padRest() { return padRestOffset; }
+  /* AXIS MAP — the wheel story. A G29/G923/T300/Fanatec enumerates as a
+     Gamepad with `mapping: ""`, because the only standard layout the spec
+     defines is the Xbox-style pad. Its steering axis IS usually axis 0, which
+     is why steering "worked" here by accident; its pedals are NOT buttons 6/7,
+     so throttle and brake did not. Nothing in the Gamepad API says which axis
+     is which, so the only honest answer is to let the player show us —
+     `beginAxisCapture` below is the wizard's one primitive.
+     `steerInvert` exists because half the wheels on the market report the
+     opposite sign, and a game that cannot be told so is unusable on them. */
+  const PAD_AXIS_DEF = { steer: 0, steerInvert: 1, throttle: null, brake: null, pedalInvert: 1 };
+  let padAxisMap = Object.assign({}, PAD_AXIS_DEF);
+  let axisCaptureCb = null;      // armed while the wizard waits for a moved axis
+  let axisCaptureRest = null;    // resting snapshot taken when the wizard armed
+  function readPadAxis(axes, i) {
+    if (i == null) return 0;
+    const v = axes[i];
+    return (typeof v === "number" && isFinite(v)) ? v : 0;
+  }
+  /* Scaled-radial shaping, which on a single axis degenerates to scaled-axial
+     — but the RESCALE is the part that matters and the part we lacked. A bare
+     `if (|x| < dz) x = 0` leaves a step at the boundary: output jumps from 0
+     to dz. Subtracting the dead zone and dividing by the surviving range gives
+     a continuous ramp from 0 at the boundary to 1 at full deflection, and
+     folding saturation into the same divisor means a worn stick that tops out
+     at 0.85 still reaches full lock. */
+  function padAxisShape(raw) {
+    const v = clamp(raw - padRestOffset, -1, 1);
+    const a = Math.abs(v);
+    if (a <= padDeadzone) return 0;
+    const span = Math.max(0.05, 1 - padDeadzone - padSaturation);
+    return clamp(Math.sign(v) * (a - padDeadzone) / span, -1, 1);
+  }
+  // A wheel's pedal axis rests at -1 and travels to +1 (the common convention),
+  // so map it to 0..1. Unmapped pedals return 0 and the trigger path wins.
+  function padPedalAxis(axes, which) {
+    const i = padAxisMap[which];
+    if (i == null) return 0;
+    const v = readPadAxis(axes, i) * padAxisMap.pedalInvert;
+    return clamp((v + 1) / 2, 0, 1);
+  }
+  function padDpadSteer(pad) {
+    const t = nowMs();
+    const dt = (padDpadT ? Math.min(0.1, (t - padDpadT) / 1000) : 0) * timeScale;
+    padDpadT = t;
+    const target = (btnDown(pad, 15) ? 1 : 0) - (btnDown(pad, 14) ? 1 : 0);
+    padDpadVal = digitalStep(padDpadVal, target, dt);
+    return padDpadVal;
   }
   // The largest value across an action's bound buttons (a trigger is analog,
   // a face button reads 0/1) and any rising edge across them.
@@ -594,6 +811,22 @@ const Input = (function () {
     // keyboard); a field does not, because a phone's on-screen keyboard fires
     // there too.
     if (down && e.isTrusted !== false && !(tag === "INPUT" || tag === "TEXTAREA" || (active && active.isContentEditable))) kbSeen = true;
+    /* COMMAND EATS THE KEY-UP, so Command going down is a release-all.
+       On macOS the OS does not deliver key-up to an application while Command
+       is held: press W, tap Cmd, let go of W, and NO keyup ever arrives. The
+       key is then latched on with nothing to clear it — reproduced in Chrome,
+       Firefox and Safari alike, so it is the platform, not an engine bug we
+       can wait out. A stuck throttle is the worst version of this: game.js
+       re-trips the off-track auto-rescue whenever throttle is held and the car
+       is not moving, so the car floors itself off the track and is reset, over
+       and over (the same failure shape the hold-button ghost-pointer nets
+       exist to stop).
+       Meta is in KEY_RESERVED so it can never be a binding, which makes
+       treating it as "let go of everything" free of side effects. Alt gets the
+       same treatment for Alt+Tab on Windows, for the same reason. */
+    if (down && (e.code === "MetaLeft" || e.code === "MetaRight" || e.code === "AltLeft" || e.code === "AltRight")) {
+      keyLeft = keyRight = keyThrottle = keyBrake = false;
+    }
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
        driving gate — but still below the typing check, because P in a text
        field is a letter.
@@ -604,8 +837,9 @@ const Input = (function () {
        LIGHTING TUNER and free camera — the one place its documented
        all-the-way-out behaviour matters most. Reachability should not be a
        side effect of a list being incomplete. */
-    if (down && !e.repeat && (e.code === "KeyP" || e.code === "Escape") && !typing) {
-      if (e.code === "KeyP") {
+    const act = codeToAction[normCode(e.code)] || null;
+    if (down && !e.repeat && (act === "pause" || e.code === "Escape") && !typing) {
+      if (act === "pause") {
         if (onPauseCb) onPauseCb();
         return;
       }
@@ -632,13 +866,13 @@ const Input = (function () {
       }
       return;
     }
-    const act = codeToAction[normCode(e.code)] || null;
     if (menuOverlayOpen() || typing) {
       if (down) return;
       if (act === "left") keyLeft = false;
       else if (act === "right") keyRight = false;
       else if (act === "throttle") keyThrottle = false;
       else if (act === "brake") keyBrake = false;
+      else if (act === "lookBack") keyLookBack = false;
       return;
     }
     const edge = down && !e.repeat;
@@ -655,7 +889,9 @@ const Input = (function () {
       case "shiftUp": if (edge) shiftUpPressed = true; break;
       case "shiftDown": if (edge) shiftDownPressed = true; break;
       case "camera": if (edge) cameraCyclePressed = true; break;
-      // KeyP and Escape are handled ABOVE the driving gate — see the comment
+      case "lookBack": keyLookBack = down; if (down) e.preventDefault(); break;
+      case "recover": if (edge) recoverPressed = true; break;
+      // PAUSE and Escape are handled ABOVE the driving gate — see the comment
       // there. They are commands, and a menu being open must not swallow them.
     }
   }
@@ -682,6 +918,58 @@ const Input = (function () {
     return clamp(Math.sign(dx) * (a - TOUCH_DEAD_PX) / touchRangePx(), -1, 1);
   }
 
+  /* SUB-FRAME TOUCH SAMPLES. Since Chrome 60 the browser holds continuous
+     input events and dispatches them immediately before the rAF callback, so
+     a page sees roughly ONE move event per frame however fast the digitizer
+     actually is — 120 Hz ProMotion included. getCoalescedEvents() hands back
+     the samples that were merged into the one we got.
+     Used narrowly and on purpose: only the freshest position, and only while
+     exactly one finger is down, because a Touch identifier and a pointerId are
+     not the same namespace and correlating them under multi-touch would be
+     guesswork. Two fingers on the glass simply falls back to the touch path,
+     which has always worked. Chromium-only; `in` is the feature test MDN
+     recommends and Safari takes the else branch. */
+  function onCanvasPointerMove(e) {
+    if (steerMode !== "touch" || touches.size !== 1) return;
+    if (!canvasTouchIsDriving()) return;
+    if (typeof e.getCoalescedEvents !== "function") return;
+    let list;
+    try { list = e.getCoalescedEvents(); } catch (_) { return; }
+    if (!list || list.length < 2) return;   // nothing the touch path did not already have
+    const last = list[list.length - 1];
+    if (!last || typeof last.clientX !== "number") return;
+    for (const rec of touches.values()) { rec.x = last.clientX; rec.seq = ++touchSeq; }
+    recomputeTouchSteer();
+  }
+
+  /* A FINGER ON GLASS HAS TREMOR, and the drag mode handed it straight to the
+     steering. Tilt has run through a One-Euro filter since it shipped for
+     exactly this reason; the drag axis never did, so on a straight the car
+     wandered with the thumb. Same filter, its own state, and a gentler beta:
+     a drag is a deliberate gesture and must not feel laggy, so the cutoff sits
+     high enough to pass a flick untouched and only removes the micro-wobble.
+     Zero smoothing (level 0) bypasses it entirely and is bit-identical to what
+     shipped, which is what keeps the default honest. */
+  const DRAG_OE_DCUTOFF = 1.0;
+  let dragMinCutoff = 0;          // 0 = filter OFF (shipped behaviour)
+  let dragOePrev = 0, dragOeDPrev = 0, dragOeInit = false;
+  function setDragSmoothing(hz) {
+    if (typeof hz !== "number" || !isFinite(hz)) return;
+    dragMinCutoff = clamp(hz, 0, 8);
+    if (dragMinCutoff <= 0) dragOeInit = false;
+  }
+  function dragFilter(x, dt) {
+    if (dragMinCutoff <= 0) return x;
+    if (!dragOeInit) { dragOePrev = x; dragOeDPrev = 0; dragOeInit = true; return x; }
+    if (dt <= 0) return dragOePrev;
+    const dx = (x - dragOePrev) / dt;
+    const dxHat = dragOeDPrev + oeAlpha(DRAG_OE_DCUTOFF, dt) * (dx - dragOeDPrev);
+    const cutoff = dragMinCutoff + OE_BETA * Math.abs(dxHat);
+    const xHat = dragOePrev + oeAlpha(cutoff, dt) * (x - dragOePrev);
+    dragOePrev = xHat; dragOeDPrev = dxHat;
+    return xHat;
+  }
+
   // "Most recent steering touch wins" is the rule, and it needs an explicit
   // sequence number to be true. The obvious reading — take the last entry of the
   // Map — is wrong: Map iterates in INSERTION order and `set()` on an existing
@@ -704,11 +992,27 @@ const Input = (function () {
 
   function canvasTouchIsDriving() { return !menuOverlayOpen(); }
 
+  /* Show where the anchor is, briefly. Looked up lazily and cached: the element
+     is optional (a test harness page may not have it) and this runs on the
+     touch path, so it must never throw and never query per event. */
+  let dragMark = undefined;
+  function showDragAnchor(x) {
+    if (steerMode !== "touch") return;
+    if (dragMark === undefined) dragMark = document.getElementById("drag-anchor") || null;
+    if (!dragMark) return;
+    dragMark.style.left = x + "px";
+    dragMark.classList.add("on");
+  }
+  function hideDragAnchor() {
+    if (dragMark) dragMark.classList.remove("on");
+  }
+
   function onTouchStart(e) {
     if (!canvasTouchIsDriving()) return;
     e.preventDefault();
     for (const t of e.changedTouches) {
       touches.set(t.identifier, { anchorX: t.clientX, x: t.clientX, seq: ++touchSeq });
+      showDragAnchor(t.clientX);
     }
     recomputeTouchSteer();
   }
@@ -728,6 +1032,7 @@ const Input = (function () {
     for (const t of e.changedTouches) {
       touches.delete(t.identifier);
     }
+    if (!touches.size) hideDragAnchor();
     recomputeTouchSteer();
   }
 
@@ -735,7 +1040,8 @@ const Input = (function () {
     const t = nowMs();
     const dt = (touchSteerT ? Math.min(0.1, (t - touchSteerT) / 1000) : 0) * timeScale;
     touchSteerT = t;
-    if (touchActive) { touchSteerVal = touchSteer; return touchSteerVal; }
+    if (touchActive) { touchSteerVal = dragFilter(touchSteer, dt > 0 ? dt : 0.016); return touchSteerVal; }
+    dragOeInit = false;   // a fresh press starts from where the finger lands, not from the last lap
     touchSteerVal = moveToward(touchSteerVal, 0, KEY_RAMP_OUT * dt);
     return touchSteerVal;
   }
@@ -984,6 +1290,8 @@ const Input = (function () {
       padConnected = false;
       padSteer = 0; padThrottle = false; padBrake = false;
       padThrottleVal = 0; padBrakeVal = 0;
+      padSteerAnalog = false; padLookBack = false;
+      padDpadVal = 0; padDpadT = 0;
       if (padPrevButtons.length) padPrevButtons.length = 0;
       padNavDir = null;
       padNavSeeded = false;
@@ -998,27 +1306,40 @@ const Input = (function () {
       padMapWarned = true;
       Log.warn("input", `gamepad mapping "${pad.mapping}" is not "standard": button/axis indices may not match`);
     }
-    let ax = (pad.axes && pad.axes.length) ? pad.axes[0] : 0;
-    if (Math.abs(ax) < PAD_DEADZONE) ax = 0;
-    else ax = Math.sign(ax) * (Math.abs(ax) - PAD_DEADZONE) / (1 - PAD_DEADZONE);
-    if (btnDown(pad, 15)) ax = 1;
-    else if (btnDown(pad, 14)) ax = -1;
-    padSteer = clamp(ax, -1, 1);
-    // pedals: analog triggers or the A/B face buttons.
-    padThrottleVal = padActVal(pad, "throttle");
-    padBrakeVal = padActVal(pad, "brake");
+    const axes = pad.axes || [];
+    const stick = padAxisShape(readPadAxis(axes, padAxisMap.steer) * padAxisMap.steerInvert);
+    // THE D-PAD IS A DIGITAL SOURCE AND MUST RAMP LIKE ONE. It used to assign
+    // `ax = ±1` outright — a teleport to full lock, bypassing digitalStep while
+    // every other digital source in this file (arrows, on-screen buttons) went
+    // through it. At 300 km/h a d-pad tap was an instant full-lock input, which
+    // is not a control anyone can drive with; XAG 107 requires the digital path
+    // to WORK, not merely to exist. It now shares the arrows' ramp exactly, so
+    // ADAPTIVE BUTTONS reaches it too.
+    const dpad = padDpadSteer(pad);
+    padSteerAnalog = Math.abs(stick) > 0.001;
+    padSteer = padSteerAnalog ? stick : dpad;
+    // pedals: analog triggers, a wheel's pedal AXES, or the A/B face buttons.
+    padThrottleVal = Math.max(padActVal(pad, "throttle"), padPedalAxis(axes, "throttle"));
+    padBrakeVal = Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake"));
     padThrottle = padThrottleVal > 0.12;
     padBrake = padBrakeVal > 0.12;
-    if (padCaptureCb) {
+    if (axisCaptureCb) {
+      // The wheel wizard owns the frame: turning the wheel to answer "which
+      // axis steers?" must not also steer the car sitting behind the sheet.
+      padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; padSteer = 0;
+      padSteerAnalog = false; padLookBack = false; padNavDir = null;
+      pollAxisCapture(pad);
+    } else if (padCaptureCb) {
       // A CONTROLS slot is waiting for a button: the first rising edge is its
       // answer and the frame ends here — the press must not also walk the
       // menu, pause, or drive. Pedals and steer were latched above; unlatch.
       padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; padSteer = 0;
+      padSteerAnalog = false; padLookBack = false;
       padNavDir = null;
       const nb = pad.buttons ? pad.buttons.length : 0;
       for (let i = 0; i < nb; i++) if (btnEdge(pad, i)) { padCaptureCb(i); break; }
     } else {
-      if (btnEdge(pad, 9) && onPauseCb) onPauseCb();
+      if (padActEdge(pad, "pause") && onPauseCb) onPauseCb();
       // A MENU OPEN MEANS THE PAD DRIVES THE MENU, NOT THE CAR — mirroring
       // menuOverlayOpen() gating the keyboard's own driving keys elsewhere in
       // this file. Only ONE of the two branches below ever fires per poll, so a
@@ -1035,6 +1356,7 @@ const Input = (function () {
         // (tests/unit/ui-improve-pass, "resting stick at 0.18").
         padThrottle = padBrake = false;
         padThrottleVal = padBrakeVal = 0;
+        padLookBack = false;
         padNavPoll(pad);
       } else {
         padNavDir = null;   // fresh hold-timer the next time a menu opens
@@ -1047,6 +1369,8 @@ const Input = (function () {
         if (padActEdge(pad, "shiftUp")) shiftUpPressed = true;
         if (padActEdge(pad, "shiftDown")) shiftDownPressed = true;
         if (padActEdge(pad, "camera")) cameraCyclePressed = true;
+        if (padActEdge(pad, "recover")) recoverPressed = true;
+        padLookBack = padActVal(pad, "lookBack") > 0.5;
       }
     }
     const n = pad.buttons ? pad.buttons.length : 0;
@@ -1242,32 +1566,110 @@ const Input = (function () {
     return padConnected && Math.abs(padSteer) > 0.001;
   }
 
+  /* ONE VOLUME KNOB FOR EVERY HAPTIC. The Game Accessibility Guidelines list
+     "include toggle/slider for any haptics" as a BASIC item, not an advanced
+     one, and we shipped four rumble sites and four navigator.vibrate calls
+     with no way to turn any of them down. Both channels route through here so
+     the slider cannot drift out of sync with one of them.
+     0 is a true off: callers do not have to check. */
+  let hapticScale = 1;
+  function setHaptics(v) {
+    if (typeof v === "number" && isFinite(v)) hapticScale = clamp(v, 0, 1);
+  }
+  // Device vibration, scaled. The try/catch is not optional: Chrome throws if
+  // the page has never been interacted with, and iOS Safari has no vibrate at
+  // all (WebKit has never shipped it and formally opposes it), so every caller
+  // must already survive this doing nothing.
+  function vibrate(ms) {
+    if (hapticScale <= 0) return;
+    if (typeof navigator === "undefined" || !navigator.vibrate) return;
+    const d = Math.round(ms * hapticScale);
+    if (d <= 0) return;
+    try { navigator.vibrate(d); } catch (_) { /* advisory only */ }
+  }
   // Best-effort rumble on the active pad (dual-rumble or generic actuator).
-  // Silently no-ops where unsupported (e.g. most iOS controllers) — callers
-  // already fire navigator.vibrate alongside, so haptics degrade gracefully.
+  // Silently no-ops where unsupported — note this is EVERY iOS browser:
+  // Gamepad.vibrationActuator is false on Safari iOS, so a paired DualSense
+  // cannot rumble from a web page and never will. Callers fire vibrate()
+  // alongside, so haptics degrade to nothing rather than to an error.
   function rumble(intensity, ms) {
+    if (hapticScale <= 0) return;
     if (!padConnected) return;
     const pad = activePad();
     if (!pad) return;
     const a = pad.vibrationActuator;
-    if (!a || typeof a.playEffect !== "function") return;
-    const mag = clamp(intensity, 0, 1);
-    try {
-      a.playEffect("dual-rumble", {
-        duration: Math.max(0, ms | 0),
-        strongMagnitude: mag,
-        weakMagnitude: mag * 0.7,
-      });
-    } catch (e) { /* actuator busy or unsupported effect type */ }
+    const mag = clamp(intensity, 0, 1) * hapticScale;
+    if (a && typeof a.playEffect === "function") {
+      try {
+        a.playEffect("dual-rumble", {
+          duration: Math.max(0, ms | 0),
+          strongMagnitude: mag,
+          weakMagnitude: mag * 0.7,
+        });
+      } catch (e) { /* actuator busy or unsupported effect type */ }
+      return;
+    }
+    // Firefox never shipped playEffect and exposes the older, non-standard
+    // hapticActuators[].pulse() instead — so without this branch every Firefox
+    // player had silent controllers while the code looked like it supported them.
+    const legacy = pad.hapticActuators && pad.hapticActuators[0];
+    if (legacy && typeof legacy.pulse === "function") {
+      try { legacy.pulse(mag, Math.max(0, ms | 0)); } catch (e) { /* same */ }
+    }
+  }
+
+  /* ONE CURVE FOR EVERY DEVICE WAS THE DEFECT, and it is worth being exact
+     about what was wrong, because the curve itself was not.
+     js/game.js raises the unified steer command to STEER_EXPO (the LINEARITY
+     slider, shipped at ~2.4) — which sits at the top of the gamma band ACC
+     recommends for a pad, so the VALUE was defensible. What was not is that
+     tilt, a drag on the glass and a thumbstick all received it, so a player
+     who tuned LINEARITY for their phone had, by the same act, re-tuned their
+     gamepad. digitalStep already had to invert the whole thing every frame
+     just to keep a held button linear in the space that matters.
+     A TRIM, not a second curve: game.js computes |s|^STEER_EXPO, so a source
+     that returns |raw|^t lands at |raw|^(t·STEER_EXPO). t = 1 is the identity
+     and is the default for all three, so nothing moves for anyone who never
+     opens the row. The DIGITAL sources deliberately get no trim — their ramp
+     is linear in road-wheel space by construction, which is the point of
+     digitalStep, and a trim there would mean ramping crookedly on purpose. */
+  const analogTrim = { tilt: 1, touch: 1, pad: 1 };
+  /* Speed-sensitive steering for the ANALOG sources — the half ADAPTIVE
+     BUTTONS never covered. That assist scales the digital RATE, so keys and
+     on-screen arrows got it and a thumb drag at 320 km/h did not, which is
+     where it matters most: the same flick that places the car in a hairpin is
+     a spin at the end of a straight. Pad sim-racers describe this as what
+     makes a thumbstick viable at all, ~20 mm of travel standing in for 900° of
+     rotation, and ACC's own recommended range is 70-80 %.
+     The floor is the guard the same sources warn about: taken too far, speed
+     sensitivity develops a large on-centre dead zone and almost no lock at
+     speed. At full mix this keeps 40 % of static lock, never less.
+     Ships OFF (mix 0). It changes how the car answers, so it is the player's
+     to turn on — a new default that silently re-steers an existing save is the
+     act this file's migration ladder exists to prevent. */
+  const ANALOG_SPEED_FLOOR = 0.40;
+  let analogSpeedMix = 0;
+  function analogSpeedGain() {
+    if (analogSpeedMix <= 0) return 1;
+    const ref = steerSpeedRef > 1 ? steerSpeedRef : 41.7;
+    const v = currentSpeedStd();
+    return 1 - analogSpeedMix * (1 - ANALOG_SPEED_FLOOR) * (v / (v + ref));
+  }
+  function analogShape(v, src) {
+    const t = analogTrim[src] || 1;
+    const shaped = t === 1 ? v : Math.sign(v) * Math.pow(Math.abs(v), t);
+    return clamp(shaped * analogSpeedGain(), -1, 1);
   }
 
   function steer() {
     const k = keyboardSteer();
     if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
-    if (padSteerActive()) return padSteer;
+    // The d-pad half of padSteer is digital and already ramped — it must not
+    // also be curved and speed-scaled as if it were a deflection.
+    if (padSteerActive()) return padSteerAnalog ? analogShape(padSteer, "pad") : padSteer;
     if (steerMode === "buttons") return buttonSteering();
-    if (tiltActive()) return tiltSteering();
-    return touchSteering();
+    if (tiltActive()) return analogShape(tiltSteering(), "tilt");
+    return analogShape(touchSteering(), "touch");
   }
 
   function throttle() {
@@ -1330,6 +1732,39 @@ const Input = (function () {
     return v;
   }
 
+  function consumeRecover() {
+    const v = recoverPressed;
+    recoverPressed = false;
+    return v;
+  }
+  /* HELD, not edged: the mirror is only up while the control is down.
+     KEY AND PAD ONLY. There was an on-screen LOOK button in the tap column too;
+     it was removed on request — the dock had grown to five buttons in one thumb
+     column once PIT landed beside it, and a glance over the shoulder is the
+     control that least deserves a permanent seat there. */
+  function lookingBack() { return keyLookBack || padLookBack; }
+
+  /* ESCAPE IS SPENT ON LEAVING FULLSCREEN unless we ask for it. In fullscreen
+     the UA takes Escape to exit, so our pause handler never sees the key —
+     which is why PAUSE became a binding (a player can move it), but the key
+     they actually reach for should still work. navigator.keyboard.lock() is
+     the sanctioned way to claim it; the escape hatch is a 2-second Escape
+     hold, so a page cannot trap anyone.
+     Chrome 80+ / Chromium only. Firefox and Safari ship no Keyboard Lock at
+     all, so there Escape keeps exiting fullscreen and the bound PAUSE key is
+     the only way out — exactly the reason it stopped being reserved.
+     (The permission prompt Chrome announced for 131 was cancelled, so this
+     needs no gesture beyond the fullscreen request that precedes it.) */
+  function lockEscape() {
+    const kb = typeof navigator !== "undefined" && navigator.keyboard;
+    if (!kb || typeof kb.lock !== "function") return Promise.resolve(false);
+    return Promise.resolve(kb.lock(["Escape"])).then(() => true).catch(() => false);
+  }
+  function unlockEscape() {
+    const kb = typeof navigator !== "undefined" && navigator.keyboard;
+    if (kb && typeof kb.unlock === "function") { try { kb.unlock(); } catch (_) { /* not locked */ } }
+  }
+
   function setSteerMode(m) {
     steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
     try { Log.info("input", `steerMode ${steerMode}`); } catch (_) { /* Log absent in isolated VM */ }
@@ -1345,6 +1780,40 @@ const Input = (function () {
     if (steerMode !== "tilt") detachGyro();
   }
 
+  // TOUCH SENSITIVITY, at last. touchRangeFrac has existed since the drag mode
+  // shipped — declared, read by touchRangePx(), and never assigned by anything,
+  // so the one steer mode with no settings at all had a knob sitting unused in
+  // its own source. docs/research/DRIVING-CONTROLS-RESEARCH.md called for the
+  // slider in 2026-08 ("it should be exposed as a slider regardless") and the
+  // wiring was simply never done. Bounds: 6 % of the long edge is a flick,
+  // 24 % is a deliberate sweep; 12 % is what shipped and stays the default.
+  function setTouchRange(frac) {
+    if (typeof frac === "number" && isFinite(frac)) touchRangeFrac = clamp(frac, 0.06, 0.24);
+  }
+  function setAnalogTrim(src, t) {
+    if (!(src in analogTrim)) return;
+    if (typeof t === "number" && isFinite(t)) analogTrim[src] = clamp(t, 0.4, 2.2);
+  }
+  function setAnalogSpeedMix(v) {
+    if (typeof v === "number" && isFinite(v)) analogSpeedMix = clamp(v, 0, 1);
+  }
+  function setPadDeadzone(v) {
+    if (typeof v === "number" && isFinite(v)) padDeadzone = clamp(v, 0, 0.30);
+  }
+  function setPadSaturation(v) {
+    if (typeof v === "number" && isFinite(v)) padSaturation = clamp(v, 0, 0.30);
+  }
+  // The digital ramp rate — the knob every comparable racer exposes and we did
+  // not. Unity's legacy default is 333 ms to full lock; ours is 250 ms, and the
+  // AC Advanced Gamepad Assist author's note is that a KEYBOARD wants a lower
+  // rate than a controller for stability. The release rate rides with it at the
+  // same 2:1 ratio the file has always used, because unwinding must stay
+  // quicker than building (see digitalStep).
+  function setKeyRampIn(rate) {
+    if (typeof rate !== "number" || !isFinite(rate)) return;
+    KEY_RAMP_IN = clamp(rate, 1.5, 10);
+    KEY_RAMP_OUT = KEY_RAMP_IN * 2;
+  }
   function setAdaptiveButtons(v) {
     if (typeof v === "boolean") { adaptiveMix = v ? 1 : 0; return; }
     if (typeof v === "number" && isFinite(v)) adaptiveMix = clamp(v, 0, 1);
@@ -1438,7 +1907,9 @@ const Input = (function () {
   function init(canvas, opts) {
     Log.info("input", "Input.init");
     onPauseCb = (opts && opts.onPause) || null;
+    onPadLostCb = (opts && opts.onPadLost) || null;
 
+    loadLayoutMap();
     window.addEventListener("keydown", function (e) { onKey(e, true); });
     window.addEventListener("keyup", function (e) { onKey(e, false); });
     window.addEventListener("blur", reset);
@@ -1484,6 +1955,9 @@ const Input = (function () {
       if (e.touches.length === 0) holdReleaseAll();
     }, { capture: true, passive: true });
 
+    // Passive: it only READS positions and never calls preventDefault (the
+    // touch listeners below own that), so the compositor need not wait on it.
+    canvas.addEventListener("pointermove", onCanvasPointerMove, { passive: true });
     canvas.addEventListener("touchstart", onTouchStart, { passive: false });
     canvas.addEventListener("touchmove", onTouchMove, { passive: false });
     canvas.addEventListener("touchend", onTouchEnd, { passive: false });
@@ -1552,17 +2026,28 @@ const Input = (function () {
       try { const gps = navigator.getGamepads ? navigator.getGamepads() : []; for (let i = 0; i < gps.length; i++) if (gps[i] && gps[i].index !== (e.gamepad && e.gamepad.index)) still = true; } catch (_) { /* no API */ }
       padConnected = still; padSteer = 0; padThrottle = padBrake = false;
       padThrottleVal = padBrakeVal = 0;
+      padSteerAnalog = false; padLookBack = false;
+      padDpadVal = 0; padDpadT = 0;
       padPrevButtons.length = 0;
       padNavDir = null;
       padNavSeeded = false;
       padNavSeedLayer = null;
       try { Log.info("input", `gamepad disconnected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
+      /* A PAD LEAVING MID-RACE IS AN EVENT, not just a state change. Zeroing
+         the inputs (above) stops a stale axis snapshot pinning the throttle,
+         which was already right — but the race carried on regardless, so a
+         flat battery at 300 km/h meant watching the car coast into a wall with
+         no way to intervene. Console certification treats disconnect recovery
+         as a tested failure mode for exactly this reason. Only when NO pad is
+         left: swapping one of two pads is not an interruption. */
+      if (!still && onPadLostCb) { try { onPadLostCb(); } catch (_) { /* the game's own handler must not break input teardown */ } }
     });
   }
 
   function reset() {
     touches.clear();
+    hideDragAnchor();
     touchSteer = 0; touchActive = false; touchSteerVal = 0; touchSteerT = 0;
     timeScale = 1;   // the loop re-reports it next frame; never leave it stalled slow
     // Clear the hold buttons THROUGH their closures (ghost-pointer purge), not
@@ -1587,10 +2072,16 @@ const Input = (function () {
     shiftDownPressed = false;
     cameraCyclePressed = false;
     padSteer = 0;
+    padSteerAnalog = false;
     padThrottle = false;
     padBrake = false;
     padThrottleVal = 0;
     padBrakeVal = 0;
+    padLookBack = false;
+    padDpadVal = 0;
+    padDpadT = 0;
+    keyLookBack = false;
+    recoverPressed = false;
     // padPrevButtons is deliberately KEPT: emptying it on a window blur made
     // every button merely held across the blur a rising edge on the next poll
     // (boost toggled, a gear grabbed, the camera cycled). The next poll
@@ -1617,6 +2108,7 @@ const Input = (function () {
     shiftUpPressed = false;
     shiftDownPressed = false;
     cameraCyclePressed = false;
+    recoverPressed = false;
   }
 
   function debugState() {
@@ -1635,6 +2127,18 @@ const Input = (function () {
       touchSteer,
       touchActive,
       touchRangePx: touchRangePx(),
+      touchRangeFrac,
+      dragMinCutoff,
+      analogTrim: Object.assign({}, analogTrim),
+      analogSpeedMix,
+      analogSpeedGain: analogSpeedGain(),
+      padDeadzone,
+      padSaturation,
+      padRestOffset,
+      padSteerAnalog,
+      padAxisMap: getPadAxisMap(),
+      hapticScale,
+      lookingBack: lookingBack(),
       canvasTouches: touches.size,
       holdPointers: holdBtns.map((h) => h.ids.size),   // pressed-pointer count per hold button
       throttle: throttle(),
@@ -1665,6 +2169,9 @@ const Input = (function () {
     consumeShiftUp,
     consumeShiftDown,
     consumeCameraCycle,
+    consumeRecover,
+    lookingBack,
+    lockEscape, unlockEscape,
     tiltActive,
     simTilt,
     simTiltReset,
@@ -1679,6 +2186,17 @@ const Input = (function () {
     setTiltSensitivity,
     setTiltSmoothing,
     setTiltDeadzone,
+    setTouchRange,
+    setDragSmoothing,
+    setAnalogTrim,
+    setAnalogSpeedMix,
+    setPadDeadzone,
+    setPadSaturation,
+    setKeyRampIn,
+    setHaptics,
+    vibrate,
+    setPadLabelMode, padLabelMode: padLabelModeOf,
+    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest,
     touchControlsNeeded,
     onPointerKindChange,
     clearEdges,

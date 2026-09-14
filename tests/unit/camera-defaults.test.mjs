@@ -23,6 +23,67 @@ function loadCockpitOpts(disk) {
   return ctx.exported;
 }
 
+function loadCamTune() {
+  const disk = new Map();
+  const ctx = {
+    GameStore: {
+      store: {
+        get(k, d) { return disk.has(k) ? disk.get(k) : d; },
+        set(k, v) { disk.set(k, v); return true; },
+      },
+    },
+    M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) },
+    Log: { info() {}, debug() {}, enabled() { return false; } },
+  };
+  vm.runInNewContext(
+    fs.readFileSync(path.join(root, "js/camera/offsets.js"), "utf8") + "\nthis.exported = CamTune;",
+    ctx);
+  return ctx.exported;
+}
+
+// CORNER LEAD is the one knob whose def is NOT 0, and it has to stay that way.
+// set() deletes a knob equal to its def, and "not stored" means "use the shipped
+// default" — so while def was 0 the two zeroes collided and the slider's whole
+// flat end was unreachable: dragging to 0 deleted the key and the rig went back
+// to 0.54. That shipped, and the help text promised the opposite.
+test("CORNER LEAD's registry default is the shipped lead, so 0 is storable", () => {
+  const vantage = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
+  const shipped = Number(/CHASE_CORNER_LEAD_DEFAULT\s*=\s*([\d.]+)/.exec(vantage)[1]);
+  const CamTune = loadCamTune();
+  const def = CamTune.CAM_TUNE_DEFS.find((d) => d.id === "cornerLead");
+  assert.equal(def.def, shipped,
+    "the registry def and vantage.js's shipped lead must be the same number");
+
+  // untouched: nothing stored, so vantage.js falls back to its own constant
+  assert.equal(CamTune.cornerLead("chase"), null);
+  assert.equal(CamTune.values("chase").cornerLead, shipped,
+    "the panel must open on the lead that is actually live, not on a 0 it is not using");
+
+  // THE BUG: an explicit 0 has to survive the round trip
+  CamTune.set("chase", "cornerLead", 0);
+  assert.equal(CamTune.stored("chase", "cornerLead"), true,
+    "0 must be stored, not deleted as if it were the default");
+  assert.equal(CamTune.cornerLead("chase"), 0,
+    "0 must reach vantage.js as a real 0 — this is the flat-behind-the-car end of the slider");
+
+  // and setting it back to the shipped amount is what clears it
+  CamTune.set("chase", "cornerLead", shipped);
+  assert.equal(CamTune.stored("chase", "cornerLead"), false);
+  assert.equal(CamTune.cornerLead("chase"), null);
+
+  // non-chase modes never read it, whatever is stored
+  CamTune.set("cockpit", "cornerLead", 1);
+  assert.equal(CamTune.cornerLead("cockpit"), null);
+});
+
+test("the six geometric knobs stay deltas defaulting to 0", () => {
+  const CamTune = loadCamTune();
+  for (const id of ["height", "dist", "side", "pitch", "yaw", "fov"]) {
+    const d = CamTune.CAM_TUNE_DEFS.find((k) => k.id === id);
+    assert.equal(d.def, 0, id + " is an offset on the solved rig; its zero means \"shipped\"");
+  }
+});
+
 test("shipped chase corner lead is baked into vantage.js", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
   // 0.54 since 2026-09-08 — the owner's CAMERA TUNER corner lead became the
