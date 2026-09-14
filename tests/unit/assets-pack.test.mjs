@@ -12,6 +12,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readAX26, ax26Version } from "../helpers/ax26.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -344,7 +345,7 @@ test("bake-synthetic-models replaces Kenney bins with Apex26-Procedural AX26", (
   }
 });
 
-test("bake-model round-trips glTF into the game's own vertex format", () => {
+test("bake-model round-trips glTF into the game's own vertex format", async () => {
   // Exercises the whole model path — the real js/render/shared/gltf.js reader in a VM,
   // the MAT stamping, the AX26 writer — against a hand-built single-triangle
   // .glb. Without this the bake-model command is untested code that would only
@@ -392,20 +393,14 @@ test("bake-model round-trips glTF into the game's own vertex format", () => {
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
     assert.equal(r.status, 0, `bake-model failed: ${r.stderr || r.stdout}`);
 
-    // Parse it exactly the way js/render/shared/assets.js _parseModel does.
-    const b = fs.readFileSync(path.join(dir, "models", "tri.bin"));
-    const buf = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
-    const dv = new DataView(buf);
-    assert.equal(String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)), "AX26");
-    assert.equal(dv.getUint32(4, true), 1, "format version");
-    const nv = dv.getUint32(8, true), ni = dv.getUint32(12, true);
-    assert.equal(nv, 3); assert.equal(ni, 3);
-    let o = 20;
-    const outPos = new Float32Array(buf, o, nv * 3); o += nv * 12;
-    o += nv * 12;                                            // normals
-    const outCol = new Float32Array(buf, o, nv * 3); o += nv * 12;
-    const outMat = new Float32Array(buf, o, nv); o += nv * 4;
-    const outIdx = new Uint32Array(buf, o, ni);
+    // Read it with the GAME'S reader, not a copy of it — see tests/helpers/ax26.mjs.
+    const binPath = path.join(dir, "models", "tri.bin");
+    const hdr = ax26Version(binPath);
+    assert.equal(hdr.version, 2, "a mesh this simple must take the packed layout");
+    assert.equal(hdr.verts, 3); assert.equal(hdr.indices, 3);
+    const got = await readAX26(binPath);
+    assert.ok(got, "the shipped reader must accept what the writer produced");
+    const outPos = got.pos, outCol = got.col, outMat = got.mat, outIdx = got.idx;
     assert.deepEqual([...outPos], [0, 0, 0, 1, 0, 0, 0, 1, 0]);
     assert.deepEqual([...outIdx], [0, 1, 2]);
     // Every vertex carries the MAT id the author asked for — that is what makes

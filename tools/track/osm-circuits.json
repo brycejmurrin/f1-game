@@ -1,0 +1,173 @@
+{
+  "_doc": "Provenance for every circuit whose centreline came from OpenStreetMap rather than bacinger/f1-circuits (which the game exhausted at 40 features). One row per circuit: the bbox queried, the researched lap length that picks the right cycle, and any per-circuit flags. `node tools/track/stitch-osm-ring.mjs <id>` reads its row from here, so a stitch is one command and re-derivable by anyone. `target` is the REAL lap length of the configuration Formula One raced, in metres, from the circuit's Wikipedia infobox — it is the tool's only ground truth, so a wrong number here silently selects a wrong layout. `gp` records which years that configuration was used, because several of these venues have since been rebuilt — where the current layout is NOT the one F1 raced, the note says so and `target` is the CURRENT length, since a target the ground no longer matches selects nothing.",
+  "circuits": {
+    "fuji": {
+      "name": "Fuji Speedway",
+      "location": "Oyama",
+      "country": "Japan",
+      "bbox": [
+        35.3537,
+        138.9087,
+        35.3897,
+        138.9447
+      ],
+      "target": 4563,
+      "gp": "Japanese GP 2007-2008 (the current layout; the 1976-77 races used the old 4.359 km circuit)"
+    },
+    "okayama": {
+      "name": "TI Circuit Aida",
+      "location": "Mimasaka",
+      "country": "Japan",
+      "bbox": [
+        34.8973,
+        134.2026,
+        34.9333,
+        134.2386
+      ],
+      "target": 3703,
+      "gp": "Pacific GP 1994-1995 (now Okayama International Circuit, layout unchanged)"
+    },
+    "korea": {
+      "name": "Korea International Circuit",
+      "location": "Yeongam",
+      "country": "South Korea",
+      "bbox": [
+        34.7153,
+        126.3987,
+        34.7513,
+        126.4347
+      ],
+      "target": 5615,
+      "gp": "Korean GP 2010-2013"
+    },
+    "jerez": {
+      "name": "Circuito de Jerez",
+      "location": "Jerez de la Frontera",
+      "country": "Spain",
+      "bbox": [
+        36.6903,
+        -6.0513,
+        36.7263,
+        -6.0153
+      ],
+      "target": 4428,
+      "gp": "Spanish GP 1986-1990, European GP 1994 and 1997"
+    },
+    "donington": {
+      "name": "Donington Park",
+      "location": "Castle Donington",
+      "country": "UK",
+      "bbox": [
+        52.8126,
+        -1.393,
+        52.8486,
+        -1.357
+      ],
+      "target": 4020,
+      "gp": "European GP 1993 (the Grand Prix layout, still the current one)"
+    },
+    "anderstorp": {
+      "name": "Scandinavian Raceway",
+      "location": "Anderstorp",
+      "country": "Sweden",
+      "bbox": [
+        57.2467,
+        13.5837,
+        57.2827,
+        13.6197
+      ],
+      "target": 4031,
+      "gp": "Swedish GP 1973-1978"
+    },
+    "brands_hatch": {
+      "name": "Brands Hatch",
+      "location": "West Kingsdown",
+      "country": "UK",
+      "bbox": [
+        51.342,
+        0.242,
+        51.378,
+        0.278
+      ],
+      "target": 3908,
+      "flags": [
+        "--multi-start",
+        "--max-edges",
+        "40"
+      ],
+      "gp": "British GP and European GP 1964-1986. LAYOUT DIFFERS FROM THE F1 ERA: F1 raced a 4.207 km Grand Prix loop; the circuit today is 3.908 km and that is what OSM carries, so this trace is the MODERN GP configuration. The corners F1 knew are all still there (Paddock Hill, Druids, Dingle Dell, Clark) and the Indy circuit shares its first three, hence --multi-start."
+    },
+    "zolder": {
+      "name": "Circuit Zolder",
+      "location": "Heusden-Zolder",
+      "country": "Belgium",
+      "bbox": [
+        50.9714,
+        5.2389,
+        51.0074,
+        5.2749
+      ],
+      "target": 4010,
+      "flags": [
+        "--multi-start",
+        "--max-edges",
+        "40"
+      ],
+      "gp": "Belgian GP 1973, 1975-1982, 1984. LAYOUT DIFFERS FROM THE F1 ERA: the 1975-1985 circuit was 4.262 km over 15 turns; it became 4.184 km in 1986 and 4.010 km over 10 turns in 2002, which is what exists today and what OSM carries. This trace is the 2002-present configuration."
+    },
+    "dijon": {
+      "name": "Circuit Dijon-Prenois",
+      "location": "Prenois",
+      "country": "France",
+      "bbox": [
+        47.3445,
+        4.8812,
+        47.3805,
+        4.9172
+      ],
+      "target": 3801,
+      "flags": [
+        "--multi-start",
+        "--max-edges",
+        "40"
+      ],
+      "gp": "French GP and Swiss GP 1974-1984. The 1974 race used the original 3.289 km circuit; the Parabolique extension took it to 3.801 km for 1977 onward and it is unchanged today, so this IS the F1 layout. (The Wikipedia circuit list's 3.886 km disagrees with the circuit's own figure of 3,801 m; 3801 is used here because it is what both the operator and the current survey say.)"
+    },
+    "buddh": {
+      "name": "Buddh International Circuit",
+      "location": "Greater Noida",
+      "country": "India",
+      "bbox": [
+        28.3307,
+        77.5151,
+        28.3667,
+        77.5511
+      ],
+      "target": 5141,
+      "flags": [
+        "--multi-start",
+        "--max-edges",
+        "40"
+      ],
+      "gp": "Indian GP 2011-2013"
+    },
+    "mont_tremblant": {
+      "name": "Circuit Mont-Tremblant",
+      "location": "Mont-Tremblant",
+      "country": "Canada",
+      "bbox": [
+        46.1709,
+        -74.6288,
+        46.2069,
+        -74.5928
+      ],
+      "target": 4265,
+      "flags": [
+        "--multi-start",
+        "--max-edges",
+        "40"
+      ],
+      "gp": "Canadian GP 1968 and 1970"
+    }
+  }
+}

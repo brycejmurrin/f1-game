@@ -616,7 +616,7 @@ whole shape is dropped (`[scenery] ... SUPPRESSED at k=...`). Composite helpers
 same for any new composite (`rejBox(centre,[w,h,d],basis)`), never a single
 `onTrack()` point, which misses a long/deep model swinging over a curving stretch.
 `RAW.*` emissions (crowd spectators) skip the guard for speed — keep them behind a
-shell. `tests/specs/props-over-road.spec.js` audits all 40 circuits and fails on any new
+shell. `tests/specs/props-over-road.spec.js` audits all 51 circuits and fails on any new
 intrusion; measure one with `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs --shots`.
 
 ## Pattern: an encircling mountain range

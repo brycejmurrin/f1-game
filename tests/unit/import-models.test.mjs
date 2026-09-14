@@ -10,6 +10,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readAX26, ax26Version } from "../helpers/ax26.mjs";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -69,7 +70,7 @@ function buildFixture(dir) {
   fs.writeFileSync(path.join(dir, "building.gltf"), JSON.stringify(gltf));
 }
 
-test("import-models bakes gltf+bin+atlas into AX26 with sampled colours", () => {
+test("import-models bakes gltf+bin+atlas into AX26 with sampled colours", async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-"));
   const src = path.join(tmp, "pack"), out = path.join(tmp, "out");
   fs.mkdirSync(src, { recursive: true }); fs.mkdirSync(out, { recursive: true });
@@ -85,19 +86,16 @@ test("import-models bakes gltf+bin+atlas into AX26 with sampled colours", () => 
     assert.equal(man.models.q_building.licence, "CC0");
     assert.ok(man.models.q_building.source, "no source recorded");
 
-    // Parse the .bin exactly as js/render/shared/assets.js _parseModel does.
-    const b = fs.readFileSync(path.join(out, man.models.q_building.file));
-    const buf = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
-    const dv = new DataView(buf);
-    assert.equal(String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)), "AX26");
-    const nv = dv.getUint32(8, true), ni = dv.getUint32(12, true);
+    // Read the .bin with the GAME'S reader, not a copy of it — tests/helpers/ax26.mjs.
+    const binPath = path.join(out, man.models.q_building.file);
+    const hdr = ax26Version(binPath);
     // Two primitives, each copying the 6-vertex POSITION accessor -> 12 verts,
     // 6 indices, 2 triangles. (Primitives do not share a vertex block.)
-    assert.equal(nv, 12); assert.equal(ni, 6);
-    let o = 20;
-    const pos = new Float32Array(buf, o, nv * 3); o += nv * 12; o += nv * 12;
-    const col = new Float32Array(buf, o, nv * 3); o += nv * 12;
-    const mat = new Float32Array(buf, o, nv);
+    assert.equal(hdr.verts, 12); assert.equal(hdr.indices, 6);
+    assert.equal(hdr.version, 2, "an imported low-poly mesh must take the packed layout");
+    const geo = await readAX26(binPath);
+    assert.ok(geo, "the shipped reader must accept what the importer produced");
+    const pos = geo.pos, col = geo.col, mat = geo.mat;
 
     // Height normalised to 12 m, base sitting on y=0.
     let mny = 1e9, mxy = -1e9;
@@ -136,7 +134,7 @@ function pngIndexed(w, h, indices, palette /* RGB triples */) {
     chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 }
 
-test("import-models samples indexed (colour-type 3) Kenney-style colormaps", () => {
+test("import-models samples indexed (colour-type 3) Kenney-style colormaps", async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "apex-imp-idx-"));
   const src = path.join(tmp, "pack"), out = path.join(tmp, "out");
   fs.mkdirSync(path.join(src, "textures"), { recursive: true });
@@ -181,9 +179,9 @@ test("import-models samples indexed (colour-type 3) Kenney-style colormaps", () 
       { env: { ...process.env, APEX_PACK_DIR: out }, encoding: "utf8" });
     assert.equal(r.status, 0, `importer failed:\n${r.stdout}${r.stderr}`);
     const man = JSON.parse(fs.readFileSync(path.join(out, "manifest.json"), "utf8"));
-    const b = fs.readFileSync(path.join(out, man.models.k_barrier.file));
-    const nv = b.readUInt32LE(8);
-    const col = new Float32Array(b.buffer, b.byteOffset + 20 + nv * 24, nv * 3);
+    const geo = await readAX26(path.join(out, man.models.k_barrier.file));
+    assert.ok(geo, "the shipped reader must accept what the importer produced");
+    const col = geo.col;
     // UV 0.25 -> orange cell, UV 0.75 -> blue cell.
     assert.ok(col[0] > 0.7 && col[1] < 0.5, `orange cell, got ${[col[0], col[1], col[2]]}`);
     assert.ok(col[9] < 0.3 && col[11] > 0.6, `blue cell, got ${[col[9], col[10], col[11]]}`);

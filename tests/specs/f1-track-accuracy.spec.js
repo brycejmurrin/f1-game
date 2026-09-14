@@ -54,6 +54,18 @@ const CIRCUIT_MAP = {
   magny_cours: "fr-1960", estoril: "pt-1972", kyalami: "za-1961",
   watkins_glen: "us-1956", indianapolis: "us-1909", buenos_aires: "ar-1952",
   jacarepagua: "br-1977",
+  // Recovered from OpenStreetMap (tools/track/osm-circuits.json) because the
+  // bacinger file carries exactly 40 features and the game had all of them, so
+  // the feature id is just the circuit id. READ THE VERDICT DIFFERENTLY for
+  // these eleven: the other 40 are compared against a survey made independently
+  // of this game's traces, which is real agreement; these share an OSM extract
+  // with the def they are compared to, so a pass only proves the build pipeline
+  // (Catmull-Rom, startFrac, reverse) did not distort the ring it was handed.
+  // The accuracy evidence for them is the stitched-vs-researched length delta
+  // recorded in each def's header.
+  fuji: "fuji", okayama: "okayama", korea: "korea", jerez: "jerez",
+  donington: "donington", anderstorp: "anderstorp", brands_hatch: "brands_hatch",
+  zolder: "zolder", dijon: "dijon", buddh: "buddh", mont_tremblant: "mont_tremblant",
 };
 
 function normalise(pairs) {
@@ -78,7 +90,7 @@ test("every game circuit matches its pinned real-circuit reference", async ({ pa
   await page.goto("/");
   // Each circuit's OSM trace is the `path` key of its def (js/circuits/<id>.js),
   // copied onto the built def; Tracks loads after every circuit file.
-  await page.waitForFunction(() => typeof Tracks !== "undefined" && Tracks.LIST.length === 40, null, { polling: 100 });
+  await page.waitForFunction(() => typeof Tracks !== "undefined" && Tracks.LIST.length === 51, null, { polling: 100 });
   const gameCircuits = await page.evaluate(() =>
     Object.fromEntries(Tracks.LIST.map((definition) => [
       definition.id,

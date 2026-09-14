@@ -8,8 +8,8 @@
       "topLets": 141
     },
     "js/agent/apex.js": {
-      "lines": 2842,
-      "codeLines": 2100
+      "lines": 2875,
+      "codeLines": 2109
     },
     "js/agent/agentview.js": {
       "lines": 2454
@@ -24,7 +24,7 @@
       "lines": 17318
     },
     "js/render/glx/glx.js": {
-      "lines": 2602
+      "lines": 2648
     },
     "js/net/lobby.js": {
       "lines": 1753

@@ -539,27 +539,67 @@ function bakeSynthetic(args) {
   if (args.includes("--models")) bakeSyntheticModels([]);
 }
 
+// The ONE writer for the AX26 model format — assets.mjs bake-model and
+// bake-synthetic-models, and tools/gen/import-models.mjs, all come through here,
+// so a format change cannot land in one producer and not the others.
+// js/render/shared/assets.js _parseModel is the only reader, and documents both
+// layouts.
+//
+// v2 packs a vertex into 22 bytes against v1's 40, and an index into 2 against
+// 4. On the shipped procedural catalogue that is 2.95 MB -> 1.60 MB, and every
+// model is fetched at boot. The quantisation is sized from what the models hold
+// (see the reader), and a mesh that does not FIT is written as v1 rather than
+// silently mangled: an emissive colour past 1.0, a fractional or >255 material
+// id, or more than 65535 vertices (which a u16 index cannot address) all fall
+// back. Imported CC0 packs are not bound by what the procedural catalogue
+// happens to contain, so this is a real path, not a defensive one.
 function writeAX26(mesh, matName) {
-  const mid = MAT[matName] || MAT.CONCRETE;
-  const nv = mesh.pos.length / 3;
+  const mid = typeof matName === "number" ? matName : (MAT[matName] || MAT.CONCRETE);
+  const nv = mesh.pos.length / 3, ni = mesh.idx.length;
   const nrm = mesh.nrm && mesh.nrm.length === nv * 3 ? mesh.nrm : new Float32Array(nv * 3);
   const col = mesh.col && mesh.col.length === nv * 3 ? mesh.col : new Float32Array(nv * 3).fill(0.7);
   const matArr = mesh.mat && mesh.mat.length === nv ? mesh.mat : new Float32Array(nv).fill(mid);
+
+  let fits = nv <= 65535;
+  for (let i = 0; fits && i < col.length; i++) if (col[i] < 0 || col[i] > 1) fits = false;
+  for (let i = 0; fits && i < nv; i++) {
+    const m = matArr[i];
+    if (m !== Math.floor(m) || m < 0 || m > 255) fits = false;
+  }
+
   const head = Buffer.alloc(20);
   head.write("AX26", 0, "ascii");
-  head.writeUInt32LE(1, 4);
+  head.writeUInt32LE(fits ? 2 : 1, 4);
   head.writeUInt32LE(nv, 8);
-  head.writeUInt32LE(mesh.idx.length, 12);
+  head.writeUInt32LE(ni, 12);
   head.writeUInt32LE(0, 16);
+
+  if (!fits) {
+    return Buffer.concat([
+      head,
+      Buffer.from(Float32Array.from(mesh.pos).buffer),
+      Buffer.from(Float32Array.from(nrm).buffer),
+      Buffer.from(Float32Array.from(col).buffer),
+      Buffer.from(Float32Array.from(matArr).buffer),
+      Buffer.from(Uint32Array.from(mesh.idx).buffer),
+    ]);
+  }
+
+  const qn = new Int16Array(nv * 3), qc = new Uint8Array(nv * 3), qm = new Uint8Array(nv);
+  for (let i = 0; i < nv * 3; i++) {
+    const q = Math.round(nrm[i] * 32767);
+    qn[i] = q < -32767 ? -32767 : q > 32767 ? 32767 : q;
+    qc[i] = Math.round(col[i] * 255);
+  }
+  for (let i = 0; i < nv; i++) qm[i] = matArr[i];
   return Buffer.concat([
     head,
     Buffer.from(Float32Array.from(mesh.pos).buffer),
-    Buffer.from(Float32Array.from(nrm).buffer),
-    Buffer.from(Float32Array.from(col).buffer),
-    Buffer.from(Float32Array.from(matArr).buffer),
-    Buffer.from(Uint32Array.from(mesh.idx).buffer),
+    Buffer.from(qn.buffer), Buffer.from(qc.buffer), Buffer.from(qm.buffer),
+    Buffer.from(Uint16Array.from(mesh.idx).buffer),
   ]);
 }
+export { writeAX26 };
 
 // ───────────────────────────── model bake ────────────────────────────────────
 
@@ -606,24 +646,13 @@ async function bakeModel(args) {
   const mid = MAT[matName];
 
   const nv = mesh.pos.length / 3;
-  const nrm = mesh.nrm && mesh.nrm.length === nv * 3 ? mesh.nrm : new Float32Array(nv * 3).fill(0);
-  const col = mesh.col && mesh.col.length === nv * 3 ? mesh.col : new Float32Array(nv * 3).fill(0.7);
-  const matArr = new Float32Array(nv).fill(mid);
-
-  const head = Buffer.alloc(20);
-  head.write("AX26", 0, "ascii");
-  head.writeUInt32LE(1, 4);
-  head.writeUInt32LE(nv, 8);
-  head.writeUInt32LE(mesh.idx.length, 12);
-  head.writeUInt32LE(0, 16);
-  const out = Buffer.concat([
-    head,
-    Buffer.from(Float32Array.from(mesh.pos).buffer),
-    Buffer.from(Float32Array.from(nrm).buffer),
-    Buffer.from(Float32Array.from(col).buffer),
-    Buffer.from(matArr.buffer),
-    Buffer.from(Uint32Array.from(mesh.idx).buffer),
-  ]);
+  // Was a second, hand-inlined copy of the AX26 writer. It drifted the moment
+  // the format changed, which is the whole argument for one writer.
+  // `mat: null` keeps --mat authoritative: writeAX26 honours an incoming
+  // per-vertex material column, and the paragraph above is the reason this
+  // command must not. GLTF.toMesh does not produce one today; this says so on
+  // purpose rather than depending on it.
+  const out = writeAX26({ ...mesh, mat: null }, mid);
 
   const rel = path.join("models", `${id}.bin`);
   fs.mkdirSync(path.join(PACK, "models"), { recursive: true });
