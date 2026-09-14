@@ -147,6 +147,67 @@ Two refinements worth folding in from the game-theory lens: use **two thresholds
 **Determinism.** All deterministic; build order is the existing fixed `ranked` order. Note the two *asymmetries that must survive*: `humanInvMass` makes the player heavier so AI cannot shove them, and `sepShares` gives a network-posed car zero of the correction. Both are ownership policy, not physics, and a naive solver rewrite erases them.
 **Cheapest experiment.** Items 4, 5 and the pre-step restitution snapshot are separable and individually one-liners — do those alone first, with a scripted three-car concertina at fixed speeds asserting order-independent post-impulse speeds. Only if the contact-blame counters from #3 show real per-pass classification churn is the full manifold refactor justified.
 
+## Measured since — two entries above are now settled (2026-09-14)
+
+Both were taken to the experiment this document prescribes for them, and both
+came back NO. Recorded here rather than in a commit message because the list
+above is what the next session reads.
+
+### #6 (latch the priority verdict) — DO NOT BUILD, on its own criterion
+
+The entry sets the bar itself: *"count verdict flips per corner per pair over a
+headless race on the current tree. If the number is small, this is theory and
+should not be built. If it is the 88-crossings shape the pass-latch comment
+records, the latch is justified."*
+
+Counted over 240 s at monza, every pair inside the 5.5 m alongside window,
+`sideYieldsA` re-evaluated per frame:
+
+| | |
+|---|---|
+| alongside episodes (≥ 0.5 s) | 221 |
+| median episode | 2.35 s |
+| **median flips per episode** | **1** |
+| episodes with 3+ flips | 15 of 221 (6.8 %) |
+| **flips per second while alongside** | **0.24** |
+
+The pass latch was justified by ~88 crossings in one 43 s dwell — about 2/s.
+This is 0.24/s, and a median episode flipping ONCE is not flip-flop: it is one
+car completing a pass, which is the verdict correctly changing. The entry called
+itself "the riskiest of the AI entries"; it buys nothing. Left unbuilt.
+
+### #7, first bullet (publish `_vLimNow`, compare corner-entry limits) — REVERTED
+
+Built exactly as described — `c._vLimNow = br.vLim` stashed beside `_vmaxNow`,
+`attackOK` comparing its own limit against the blocker's, as a bounded ±25 %
+multiplier on the attack score, cutting both ways so it damps the attack the car
+was going to abandon at the apex. Human blockers publish nothing, so the
+multiplier is exactly 1 for them.
+
+It does not work, and the interesting part is HOW it looked like it did.
+
+| `ai-field.mjs` | before | after |
+|---|---|---|
+| 5 seeds — oscillationShare | 0.634 [0.549–0.653] | 0.568 [0.489–0.616] |
+| **9 seeds — oscillationShare** | **0.634 [0.457–0.667]** | **0.599 [0.489–0.734]** |
+| 9 seeds — noseToTailPct | 25.6 [23.9–31.8] | 26.8 [22.1–28.0] (worse) |
+| 9 seeds — settledPasses | 32 [22–39] | 38 [18–55] |
+
+At five seeds the target metric fell 10 % and the before-median sat above the
+whole after-range — enough to read as a win. At nine the ranges swallow it, the
+after-range reaches HIGHER than before, and nose-to-tail share moves the wrong
+way. `paceSpreadPct` is identical throughout (1.43), which confirms the change
+touched no pace and that the metric's spread is the race reshuffling.
+
+So: five seeds was not enough for this metric, and `--runs 5` — the number
+ai-field.mjs's own usage line suggests — would have shipped it. For an
+oscillation-share comparison use nine or more, and treat the 5-seed number as a
+smoke test. The entry's claim that this one "needs no argument" is withdrawn: it
+needs the argument, and loses it.
+
+Not re-litigated: the publication of `_vLimNow` alone is free and harmless, but
+an unread field is bloat, so it went out with the consumer.
+
 ## Tempting but wrong
 
 **Ship a learned policy (GT Sophy / Forza 8 Drivatar).** Rejected by three lenses independently. No build step to bake weights into, no training harness, and decisively: the AI field is *kinematic*, so there is no throttle/brake/steer action space for a learned policy to control. Even the clever version — distil to a 32-unit MLP as a `const W = [...]` float array, which genuinely fits the budget at ~2.4 Mflop/s — fails on process fit: a weight blob is the least defensible artefact possible in a codebase where every constant carries the measurement that produced it.
