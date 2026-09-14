@@ -19,6 +19,10 @@ let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
 let _redline = false;         // tach redline latch: on above 92% of MAX_RPM, off again below 89%
+// Where the tyre bar turns amber. 70% of the set's life is the point a stop
+// stops being hypothetical — F1 games teach "pit before 65-75% wear" and it is
+// far enough out that a player still has a lap or two to act on it.
+const TYRE_WARN = 0.70;
 
 const _hudTxt = new WeakMap();   // el -> last textContent
 const _hudSty = new WeakMap();   // el -> { prop: lastVal }
@@ -307,10 +311,38 @@ function fitHud() {
   // without the row count the published height stayed at the empty box's for
   // the whole 3 s same-key backoff. childElementCount costs no layout.
   const secRows = els.hudSectors ? els.hudSectors.childElementCount : 0;
+  // The four fit handles are resolved HERE rather than after the key, because
+  // topLen below reads one of them: resolving them later left the first tick
+  // keying on 0 and re-fitting a tick later for no reason. They never change
+  // identity, so this stays a one-time query.
+  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
+  // AND THE TOP BAND'S OWN TEXT, for the mirror of the reason gapLen is here.
+  // `.hud-top` is CENTRED, so when its readouts populate — "POS-/22 LAP1/3
+  // TIME- BEST-" becoming "POS22/22 LAP1/3 TIME0:00.17 BEST-" as the race
+  // starts — it grows LEFTWARD, into the gap strip, and the strip's fit was
+  // decided against the narrow spelling. Measured at 667x375, hud-scale 1,
+  // frozen so both readings carry identical strings: `.hud-gaps` right edge
+  // 202.8 against `.hud-top` left edge 175.5 — a 27px overlap that fitHud had
+  // already declared clear, because nothing in the key had changed since it
+  // last looked. hud-layout.spec.js does not catch it: it measures ~300ms in,
+  // while the band is still sparse.
+  // textContent.length is layout-free, exactly as gapLen is.
+  const topLen = _hudTop ? _hudTop.textContent.length : 0;
   // BUTTON SIZE is a second slider on the same layer, so it belongs in the key:
   // moving it changes the dock's intrinsic height and nothing else here does.
-  const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale;
-  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "|" + document.body.className;
+  // INLINE first (the player set BUTTON SIZE), else the inherited default. That
+  // default is `calc(var(--hud-scale) * var(--hud-btn-mult))` on a coarse
+  // pointer, and calc() in a custom property is not reduced at computed-value
+  // time — the token reads back as the literal string and coerces to NaN — so
+  // resolve it from its factors instead of parsing it. Falling through to
+  // `scale` alone (which is what the old `|| scale` did) silently sized the dock
+  // cap 25% small on every touch device the moment the ratio stopped being 1.
+  // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
+  // which has no getComputedStyle — the same guard metrics-overlay.js carries.
+  const mult = typeof getComputedStyle === "function"
+    ? (+getComputedStyle(root).getPropertyValue("--hud-btn-mult") || 1) : 1;
+  const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale * mult;
+  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "~" + topLen + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
@@ -333,7 +365,6 @@ function fitHud() {
     }
     return hi > lo ? (hi - lo) / (el.currentCSSZoom || 1) : wide(el);
   };
-  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
   const top = wide(_hudTop);
   // menu layer: nothing laid out, measure again next tick — but BOUNDED: an
   // unlatched key re-ran this whole rect pass (and drawMinimap's layout reads)
@@ -590,6 +621,25 @@ function updateHud(force) {
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
   hText(els.speed, "" + Math.round(G.dashKph(player.speed)));
   hStyle(els.energy, "width", (player.energy * 100).toFixed(0) + "%");
+  // TYRES (js/physics/tyre-model.js). The widget is hidden entirely while the
+  // setting is off — the shipped default — so a player who never turns it on
+  // pays nothing for it, not even a greyed-out bar. `spent` is wear as a
+  // fraction of the compound's life, so the bar reads LIFE REMAINING and the
+  // three colour states are the three things the engineer would say on the
+  // radio: fine, think about a stop, you are past it.
+  const tyres = G.tyres;
+  const tyreOn = !!(tyres && tyres.on());
+  if (els.tyre) els.tyre.hidden = !tyreOn;
+  if (tyreOn) {
+    const spent = tyres.spent(player);
+    hText(els.tyreCode, (player.tyre && player.tyre.code) || "-");
+    hStyle(els.tyreFill, "width", (clamp(1 - spent, 0, 1) * 100).toFixed(0) + "%");
+    els.tyre.dataset.wear = spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok";
+    // The PIT button carries its own state the way BOOST/OT/AERO do: armed while
+    // the stop is called, on while the car is actually in the lane.
+    hToggle(els.btnPit, "armed", !!player.pitArmed && player.pitState !== "box");
+    hToggle(els.btnPit, "on", player.pitState === "lane" || player.pitState === "box");
+  }
   // gear + tachometer
   hText(els.gear, "" + player.gear);
   const rpmFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);

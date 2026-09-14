@@ -24,7 +24,26 @@ function load(opts = {}) {
   const said = [];
   const ctx = vm.createContext({
     Math, console, Object, Array, Number, JSON,
-    Input: { touchControlsNeeded: () => !!opts.touch },
+    // The bind tables the marks now READ, rather than the literals they used to
+    // hardcode. `binds` lets a test move a key and assert the prompt follows —
+    // which is the actual contract, and the one the old string assertions could
+    // not express (they passed while the aero mark named a key it was not on).
+    Input: {
+      touchControlsNeeded: () => !!opts.touch,
+      padPresent: () => !!opts.pad,
+      keyBindings: () => (opts.binds || [
+        { id: "brake", label: "BRAKE", codes: ["KeyS", null] },
+        { id: "overtake", label: "OVERTAKE", codes: ["KeyX", null] },
+        { id: "aero", label: "ACTIVE AERO", codes: ["KeyZ", null] },
+      ]),
+      keyLabel: (c) => String(c || "").replace(/^Key/, ""),
+      padBindings: () => [
+        { id: "brake", label: "BRAKE", codes: [6, 1] },
+        { id: "overtake", label: "OVERTAKE", codes: [3, null] },
+        { id: "aero", label: "ACTIVE AERO", codes: [12, null] },
+      ],
+      padLabel: (i) => `BTN${i}`,
+    },
     BrakeCue: { debug: () => ({ on: true, urgency: opts.urgency != null ? opts.urgency : 0 }) },
   });
   seedLog(ctx);
@@ -51,7 +70,7 @@ test("the brake mark fires once when the cue is genuinely urgent, and is remembe
   const b = load({ urgency: 0.9 });
   step(b.on, 30);
   assert.equal(b.said.length, 1);
-  assert.match(b.said[0][0], /^BRAKE — S OR DOWN — into the corner$/);
+  assert.match(b.said[0][0], /^BRAKE — S — into the corner$/);
   step(b.on, 60 * 30);
   assert.equal(b.said.length, 1, "once, not once a corner");
   assert.equal(b.stored.get("onboarded") & 1, 1, "persisted");
@@ -101,10 +120,35 @@ test("the wording names the control the player actually has", () => {
   assert.match(touch.said[0][0], /^TAP AND HOLD BRAKE/);
   const keys = load({ urgency: 0.9 });
   step(keys.on, 1);
-  assert.match(keys.said[0][0], /S OR DOWN/);
+  assert.match(keys.said[0][0], /BRAKE — S/);
   const t2 = load({ touch: true, aeroArmed: true });
   step(t2.on, 1);
   assert.match(t2.said[0][0], /^TAP AERO/);
+});
+
+// THE REGRESSION THIS FILE MISSED FOR MONTHS: the aero mark said "ACTIVE AERO
+// — A" for a control bound to Z, and no assertion here could see it, because
+// every expected string was written from the same defaults the module was
+// hardcoding. Moving a bind and demanding the prompt follow is the only shape
+// of test that catches it.
+test("a rebound key is what the mark names", () => {
+  const moved = load({
+    aeroArmed: true,
+    binds: [
+      { id: "brake", label: "BRAKE", codes: ["KeyB", null] },
+      { id: "overtake", label: "OVERTAKE", codes: ["KeyO", null] },
+      { id: "aero", label: "ACTIVE AERO", codes: ["KeyN", "KeyM"] },
+    ],
+  });
+  step(moved.on, 1);
+  assert.match(moved.said[0][0], /^ACTIVE AERO — N OR M — /,
+    "both bound slots, in order, from the live table");
+});
+
+test("a controller is named by its buttons, not by a keyboard key", () => {
+  const pad = load({ aeroArmed: true, pad: true });
+  step(pad.on, 1);
+  assert.match(pad.said[0][0], /^ACTIVE AERO — BTN12 — /);
 });
 
 test("the aero mark waits for the ARM, and never fires in auto mode", () => {

@@ -27,6 +27,24 @@ const setSlider = (page, id, value) =>
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }, { id, value });
 const tuning = (page) => page.evaluate(() => window.__apex.tuning());
+/* THE STRAIGHTEST PIECE OF ROAD ON THE CIRCUIT.
+   The two OVERALL SPEED cases below hold full throttle for twenty one-second
+   blocks to prove the gearbox and the dial sweep their whole range. They did it
+   at a hardcoded frac 0.1 — and with steer held at zero, a car re-placed on the
+   centreline still runs wide of any bend inside that second, onto grass and
+   OFF_GRIP, so it plateaued around half of vTop and reported gear 5 where the
+   test wanted 8. That is a statement about where on Monza the test stood, not
+   about the powertrain it means to measure. Ask the track for a straight. */
+const straightFrac = (page) => page.evaluate(() => {
+  let best = 0, bestK = Infinity;
+  for (let i = 0; i < 60; i++) {
+    const f = i / 60;
+    __apex.jump(f, 30, 0);
+    const k = Math.abs(__apex.probe().k);
+    if (k < bestK) { bestK = k; best = f; }
+  }
+  return best;
+});
 const labelText = (page, id) => page.evaluate((id) => document.getElementById(id).textContent, id);
 const stored = (page, key) => page.evaluate((k) => localStorage.getItem("apex26." + k), key);
 
@@ -266,16 +284,17 @@ test.describe("Apex 26 — steering sliders", () => {
   // erased the peak), and setLap keeps the long run from tripping the flag.
   test("OVERALL SPEED reaches the full gearbox and dial at every setting", async ({ page }) => {
     await startRace(page);
-    const flatOut = (paceSlider) => page.evaluate((sv) => {
+    const FS = await straightFrac(page);
+    const flatOut = (paceSlider) => page.evaluate(({ sv, fs }) => {
       const el = document.getElementById("pm-pace");
       el.value = String(sv); el.dispatchEvent(new Event("input", { bubbles: true }));
-      window.__apex.park(0.1); window.__apex.freeze(false);
-      window.__apex.jump(0.1, 0, 0);
+      window.__apex.park(fs); window.__apex.freeze(false);
+      window.__apex.jump(fs, 0, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
       let gear = 1, dash = 0, speed = 0;
       for (let b = 0; b < 20; b++) {
         window.__apex.setLap(1);
-        window.__apex.jump(0.1, window.__apex.probe().speed, 0);
+        window.__apex.jump(fs, window.__apex.probe().speed, 0);
         window.__apex.step(1 / 60, 60);
         const o = window.__apex.obs();
         gear = Math.max(gear, o.gear); dash = Math.max(dash, o.dashKph);
@@ -283,7 +302,7 @@ test.describe("Apex 26 — steering sliders", () => {
       }
       window.__apex.clearInput();
       return { gear, dash, speed };
-    }, paceSlider);
+    }, { sv: paceSlider, fs: FS });
 
     const slow = await flatOut(6);    // 0.627
     const mid  = await flatOut(14);   // 1.000 — the vTop()/vStd() reference
@@ -306,15 +325,16 @@ test.describe("Apex 26 — steering sliders", () => {
   // the auto/AI cars scaled past it. gearHi() tracks pace now.
   test("OVERALL SPEED clears the old top-gear limiter in MANUAL gears", async ({ page }) => {
     await startRace(page);
-    const r = await page.evaluate(() => {
+    const FS = await straightFrac(page);
+    const r = await page.evaluate((fs) => {
       // Desktop viewport => touchControlsNeeded() is false => gearsManual() goes
       // live as soon as the pause-menu toggle flips manualMode on.
       const gears = document.getElementById("pm-gears-sel");
       if (gears.value !== "manual") { gears.value = "manual"; gears.dispatchEvent(new Event("change", { bubbles: true })); }
       const el = document.getElementById("pm-pace");
       el.value = "19"; el.dispatchEvent(new Event("input", { bubbles: true }));   // top of the grid, pace 1.338
-      window.__apex.park(0.1); window.__apex.freeze(false);
-      window.__apex.jump(0.1, 0, 0);
+      window.__apex.park(fs); window.__apex.freeze(false);
+      window.__apex.jump(fs, 0, 0);
       // Shift up to top while STOPPED: in manual the box never picks its own gear,
       // and the limiter would dump a fast car back to first gear's ceiling.
       window.__apex.setInput({ steer: 0, throttle: false });
@@ -324,17 +344,17 @@ test.describe("Apex 26 — steering sliders", () => {
       }
       // Now plant it just above the OLD clamp and hold the throttle. Before the
       // fix (accelCeil, then speedCap) pinned this to 73.5 m/s on the very first tick.
-      window.__apex.jump(0.1, 80, 0);
+      window.__apex.jump(fs, 80, 0);
       window.__apex.setInput({ steer: 0, throttle: true });
       for (let b = 0; b < 6; b++) {
         window.__apex.setLap(1);
-        window.__apex.jump(0.1, window.__apex.probe().speed, 0);
+        window.__apex.jump(fs, window.__apex.probe().speed, 0);
         window.__apex.step(1 / 60, 30);
       }
       const out = { gear: window.__apex.obs().gear, speed: window.__apex.probe().speed };
       window.__apex.clearInput();
       return out;
-    });
+    }, FS);
     expect(r.gear).toBe(8);
     // DERIVED FROM THE PIN IT RETIRES, not a fresh literal. The claim is "no
     // longer pinned at the old clamp", so the bound is the documented 73.5 pin
@@ -380,9 +400,14 @@ test.describe("Apex 26 — simplified controls", () => {
     expect(await num(page, "steerSpeed")).toBe(7);
     expect(await picked(page, "pm-feel")).toBe("sim");
 
+    // EASY shares SIM's rack and differs on lock and the speed taper — the
+    // 2026-09-08 re-centring made one calm rack the ladder's spine, with SIM
+    // the only step that quickens it. This assertion still read the pre-2026-09
+    // numbers (rate 4 / speed 4) and had been failing ever since.
     await pick(page, "pm-feel", "easy");
-    expect(await num(page, "steerRate")).toBe(4);
-    expect(await num(page, "steerSpeed")).toBe(4);
+    expect(await num(page, "steerRate")).toBe(2);
+    expect(await num(page, "steerLock")).toBe(5);
+    expect(await num(page, "steerSpeed")).toBe(5);
     expect(await picked(page, "pm-feel")).toBe("easy");
   });
 

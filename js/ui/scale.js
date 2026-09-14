@@ -46,9 +46,14 @@ const UiScale = (() => {
     // are mirrored here — CSS owns FIRST paint, this owns every write after it,
     // and the two must not disagree. BUTTON SIZE stays a ratio of HUD SIZE so it
     // keeps following that slider while unset.
-    const BTN_OVER_HUD = 1.4536;   // 180.25 / 124
+    // 1.25, corrected 2026-09-14 from 1.4536. See the long note on the
+    // `(pointer: coarse)` block in css/tokens.css: 1.24 x 1.4536 put ~34mm
+    // pedals on a phone and the column covered the minimap and the sector strip.
+    // Target size and readout size are separate floors; this ratio carries the
+    // buttons' physical floor, --hud-scale no longer carries a blanket bump.
+    const BTN_OVER_HUD = 1.25;
     const coarseUi = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
-    const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 124 : 109) : 100);
+    const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : 109) : 100);
     const scaleSnap = (v) => {
       const n = Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
@@ -83,6 +88,18 @@ const UiScale = (() => {
       else document.documentElement.style.removeProperty(prop);
       const input = $(inputId); if (input) input.value = String(pct);
       const out = $(`${inputId}-v`); if (out) out.textContent = scaleLabel(pct);
+      // IS THIS VALUE MINE OR INHERITED? `stored` has always known — null means
+      // "following" — and nothing on screen said so, which is the whole bug class
+      // behind BUTTON SIZE: unset it tracks HUD SIZE, and a player who had never
+      // touched it could not tell that from a coincidence. Unity's editor, VS
+      // Code's settings and Google Workspace's org units all converge on the same
+      // two signifiers, so use theirs rather than invent one: an override bar and
+      // a bolder label while the value is set, and an in-context revert ON THAT
+      // CONTROL rather than a global Reset button (which NN/G argues against —
+      // it sits next to the thing you meant to press and discards work).
+      const row = input && input.closest && input.closest(".tune-row, .pm-group");
+      if (row) row.classList.toggle("tune-over", typeof stored === "number");
+      const rev = $(`${inputId}-r`); if (rev) rev.hidden = typeof stored !== "number";
     }
     let uiScalePreviewRaf = 0;
     function applyUiScale()  {
@@ -119,6 +136,22 @@ const UiScale = (() => {
       store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefaultFor("hudBtnScale")));
       applyBtnScale();
     };
+    // REVERT IS PER-SETTING, and it is the same `store.set(key, null)` that
+    // setScale already exposes: clearing the key drops the inline custom property,
+    // so :root's own declaration takes back over — UI/HUD SIZE return to the
+    // stylesheet default and BUTTON SIZE returns to FOLLOWING HUD SIZE. That is
+    // why its button reads "follow HUD size" and the other two read "reset": they
+    // are the same action but not the same promise, and labelling both "reset"
+    // would have said the button snaps to a number when it snaps to a link.
+    const revert = (key, apply) => (e) => {
+      e.preventDefault(); e.stopPropagation();   // the button sits inside a <label>
+      store.set(key, null);
+      apply();
+    };
+    const uiRev = $("pm-uiscale-r"); if (uiRev) uiRev.onclick = revert("uiScale", applyUiScale);
+    const hudRev = $("pm-hudscale-r"); if (hudRev) hudRev.onclick = revert("hudScale", applyHudScale);
+    const btnRev = $("pm-btnscale-r"); if (btnRev) btnRev.onclick = revert("hudBtnScale", applyBtnScale);
+
     applyUiScale();
     applyHudScale();   // calls applyBtnScale — an unset button slider follows it
     function setScale(key, prop, v) {

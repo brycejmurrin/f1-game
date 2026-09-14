@@ -615,7 +615,44 @@ const api = {
       regen: +G.regenFor(G.player).toFixed(4),
       otTime: +G.otTimeFor(G.player).toFixed(2),
       otCool: +G.otCoolFor(G.player).toFixed(2),
+      // TYRES (js/physics/tyre-model.js). All four are exactly at their fresh
+      // values while TYRE WEAR is off, so a spec can assert the no-op.
+      tyreCompound: G.player.tyre ? G.player.tyre.id : null,
+      tyreWear: +G.tyres.spent(G.player).toFixed(4),
+      tyreGrip: +G.tyres.gripMul(G.player).toFixed(4),
+      tyreLoad: +(G.player._tyreLoad || 0).toFixed(3),
     };
+  },
+  // The pit lane (js/race/pit-lane.js): the resolved geometry, the limit, and
+  // this car's state in it. `arm` calls the stop (or cancels it) exactly as the
+  // PIT control does, which is how a spec drives a stop without an input device.
+  pit(arg) {
+    if (!G.pits) return null;
+    const o = arg && typeof arg === "object" ? arg : {};
+    const c = o.car != null ? (G.cars || [])[o.car] : G.player;
+    if (o.arm != null) G.pits.arm(c, !!o.arm);
+    const out = G.pits.info(c);
+    // The AI's strategy, when it has one: what it plans to do and why it last
+    // deviated. Null for the player, who plans their own race.
+    if (out && c) { out.plan = c.pitPlan || null; out.why = c.pitWhy || ""; }
+    return out;
+  },
+  // The whole tyre picture for one car (default: the player) — compound, life
+  // in laps at THIS race distance, wear, the grip it costs and the load that
+  // caused it. `field: true` returns the same record for every car, which is
+  // how a strategy spec reads the AI's stints.
+  tyres(arg) {
+    if (!G.tyres) return null;
+    const o = arg && typeof arg === "object" ? arg : {};
+    // `level` sets the TYRE WEAR setting AND the live model together, so a spec
+    // can turn wear on without the settings sheet and have it survive the next
+    // gridUp (which re-reads the setting, not the model).
+    if (o.level != null && TyreModel.isLevel(o.level)) { G.raceTyreWear = o.level; G.tyres.setLevel(o.level); }
+    if (o.field) {
+      return (G.cars || []).map((c) => Object.assign({ driver: c.driverId, code: c.code }, G.tyres.info(c)));
+    }
+    const c = o.car != null ? (G.cars || [])[o.car] : G.player;
+    return G.tyres.info(c);
   },
   wallStats() {
     if (!G.track || !G.track.barR) return null;

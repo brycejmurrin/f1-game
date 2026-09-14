@@ -34,6 +34,33 @@ async function poll(page, { axisX = 0, axisY = 0, axisRX = 0, axisRY = 0, button
   );
 }
 
+/* THE DRIVING LATCHES ARE NAV-GATED. Since the menus rounds made the TITLE
+   overlay a nav layer, UiLayers.navOpen() is true on a freshly loaded page and
+   Input.poll() routes the pad to menu navigation — which deliberately zeroes
+   the pedals, so a pad cannot throttle the car through an open menu. Any test
+   that wants the DRIVING surface has to leave the title screen first.
+   One test already carried this boilerplate inline; the two trigger tests did
+   not, and had been failing ever since the gate landed — reading 0 throttle and
+   calling it a regression in the trigger code. */
+async function startRaceForPad(page) {
+  await page.evaluate(() => window.__apex.race("monza"));
+  await page.waitForFunction(() => {
+    try { return window.__apex.info().track === "monza"; } catch (_) { return false; }
+  }, null, { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => { window.__apex.go(); Input.reset(); });
+  expect(await page.evaluate(() => window.UiLayers.navOpen())).toBe(false);
+}
+
+/* Two cases here need more than the project's shared 120 s, and say so rather
+   than reporting a bare "Test timeout exceeded".
+   Every poll() is a page.evaluate against a live, rendering page, which costs
+   ~15 s under SwiftShader; the edge-trigger case makes eleven of them after
+   starting a race, and the HUD-button case pays a real Playwright click (which
+   it needs - a programmatic .click() would not move focus, and focus is what it
+   asserts). Measured 168 s and 166 s on this container. actionTimeout stays
+   60 s, so a genuinely stuck locator still fails in a minute. */
+test.describe.configure({ timeout: 300_000 });
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
@@ -58,19 +85,43 @@ test("left-stick deflection steers, with a centre dead zone", async ({ page }) =
   const right = await poll(page, { axisX: 1 }, () => Input.steer());
   expect(right).toBeGreaterThan(0.9);
 
-  // inside the 0.14 dead zone → no steer
-  const dz = await poll(page, { axisX: 0.1 }, () => Input.steer());
+  // Inside the dead zone -> no steer. It is 0.05 now, not 0.14: the old value
+  // was 3-7x what racing games ship (F1 defaults every axis to 0, ACC 2-4 %,
+  // Forza 5) and threw away the band an F1 car's small corrections live in.
+  const dz = await poll(page, { axisX: 0.03 }, () => Input.steer());
   expect(Math.abs(dz)).toBeLessThan(0.001);
+  // ...and just past it the output RAMPS from zero rather than stepping to the
+  // dead-zone value, which is the whole point of rescaling.
+  const edge = await poll(page, { axisX: 0.07 }, () => Input.steer());
+  expect(Math.abs(edge)).toBeGreaterThan(0);
+  expect(Math.abs(edge)).toBeLessThan(0.05);
 });
 
-test("d-pad gives a digital full-lock override", async ({ page }) => {
-  const right = await poll(page, { buttons: { 15: 1 } }, () => Input.steer());
-  expect(right).toBe(1);
-  const left = await poll(page, { buttons: { 14: 1 } }, () => Input.steer());
-  expect(left).toBe(-1);
+test("the d-pad ramps to full lock instead of teleporting there", async ({ page }) => {
+  // It used to assign ax = +/-1 outright, bypassing the digital ramp every
+  // other digital source goes through - so a d-pad tap at 300 km/h was an
+  // instant full-lock input. One frame of hold is a small angle now; holding
+  // it still reaches the rail.
+  const oneFrame = await poll(page, { buttons: { 15: 1 } }, () => Input.steer());
+  expect(oneFrame).toBeLessThan(0.5);
+  const held = await page.evaluate(() => {
+    const btns = [];
+    for (let i = 0; i < 17; i++) btns.push({ pressed: i === 15, value: i === 15 ? 1 : 0 });
+    navigator.getGamepads = () => [{ connected: true, mapping: "standard", axes: [0, 0, 0, 0], buttons: btns }, null, null, null];
+    return new Promise((res) => {
+      const t0 = performance.now();
+      (function spin() {
+        Input.poll();
+        if (performance.now() - t0 > 700) return res(Input.steer());
+        requestAnimationFrame(spin);
+      })();
+    });
+  });
+  expect(held).toBeGreaterThan(0.9);
 });
 
 test("triggers and face buttons drive throttle / brake", async ({ page }) => {
+  await startRaceForPad(page);
   const rt = await poll(page, { buttons: { 7: 1 } }, () => Input.throttle());
   expect(rt).toBe(true);
   const a = await poll(page, { buttons: { 0: 1 } }, () => Input.throttle());
@@ -83,17 +134,7 @@ test("triggers and face buttons drive throttle / brake", async ({ page }) => {
 });
 
 test("face/shoulder buttons fire edge-triggered actions exactly once", async ({ page }) => {
-  // The driving latches are nav-gated: since the menus rounds made the TITLE
-  // overlay a nav layer, UiLayers.navOpen() is true on a freshly loaded page
-  // and Input.poll() routes pad buttons to menu navigation instead of the
-  // consume* latches. Start a race (same boilerplate as the "drives the car
-  // normally" regression guard below) so the latches are actually reachable.
-  await page.evaluate(() => window.__apex.race("monza"));
-  await page.waitForFunction(() => {
-    try { return window.__apex.info().track === "monza"; } catch (_) { return false; }
-  }, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => { window.__apex.go(); Input.reset(); });
-  expect(await page.evaluate(() => window.UiLayers.navOpen())).toBe(false);
+  await startRaceForPad(page);
   // establish the released baseline so the next poll sees a rising edge
   await poll(page, { buttons: {} }, () => true);
   // press X (boost) — one rising edge
@@ -172,9 +213,24 @@ test("keyboard driving remains active after using a HUD button", async ({ page }
     window.__apex.go();
     Input.reset();
   });
+  /* FOCUS IT AND ACTIVATE IT OURSELVES, rather than through a Playwright click.
+     What this test guards is "a HUD control has FOCUS and the driving keys keep
+     working" — the focus is the whole precondition, the click is just how a
+     player gets there. A real locator click stalls on actionability against a
+     rendering page (measured: the full 60 s actionTimeout on a #btn-cam that
+     resolved immediately; docs/TESTING.md prices a Playwright click at 80-113 s
+     here against 0.3-0.6 s for a DOM one), and a bare .click() would not focus
+     a button — so do both, explicitly, and assert the state that matters. */
   const camera = page.getByRole("button", { name: "Camera" });
-  await expect(camera).toBeVisible();
-  await camera.click();
+  await page.waitForFunction(() => {
+    const b = document.getElementById("btn-cam");
+    return !!b && !b.hidden;
+  }, null, { polling: 100, timeout: 30_000 });
+  await page.evaluate(() => {
+    const b = document.getElementById("btn-cam");
+    b.focus();
+    b.click();
+  });
   await expect(camera).toBeFocused();
 
   await page.keyboard.down("KeyW");
@@ -286,7 +342,10 @@ test.describe("Gamepad menu navigation", () => {
       document.getElementById("select").contains(document.activeElement))).toBe(true);
   });
 
+  // A DRIVING test that happens to live in this describe block: pedal travel
+  // is not menu navigation, so it needs the car, not an open menu.
   test("trigger travel is analog", async ({ page }) => {
+    await startRaceForPad(page);
     const rt = await poll(page, { buttons: { 7: 0.4 } }, () => Input.throttleLevel());
     expect(rt).toBeCloseTo(0.4, 2);
     const lt = await poll(page, { buttons: { 6: 0.55 } }, () => Input.brakeLevel());

@@ -12,6 +12,7 @@ const els = {
   hud: $("hud"), pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"),
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
+  tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
@@ -32,7 +33,8 @@ const els = {
   pmStandings: $("pm-standings"),
   pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), pmsettings: $("pmsettings"), btnCam: $("btn-cam"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
-  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"),
+  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"), btnLook: $("btn-look"),
+  btnPit: $("btn-pit"),
   btnThrottle: $("btn-throttle"),
   btnSteerLeft: $("btn-steer-left"), btnSteerRight: $("btn-steer-right"),
   shiftUp: $("shift-up"), shiftDown: $("shift-down"),
@@ -405,6 +407,11 @@ let difficulty = store.get("difficulty", "normal");
 // save, so OFF is the only default that does not silently start retiring cars
 // in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
+// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). Ships OFF for
+// exactly RELIABILITY's reason, plus one of its own: OFF is a true no-op through
+// the grip seam, so tests/specs/physics-characterization.spec.js stays
+// bit-identical until somebody turns this on.
+let raceTyreWear = store.get("tyreWear", "off");
 // ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
 // "auto". Inside an activation zone X-mode has no cost or downside, so the
 // optimal play is unconditionally on — which is what the AI does in one line.
@@ -413,6 +420,7 @@ let raceReliability = store.get("reliability", "off");
 // AI's deal. Stays opt-in because pressing the button is the mechanic.
 let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
+if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "off";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
@@ -475,8 +483,20 @@ function syncMetricsOverlayCompact() {
 function gearsManual() {
   return manualMode && (steerMode === "tilt" || !Input.touchControlsNeeded());
 }
-// Auto-throttle: TOUCH mode only (the canvas drag occupies the thumb).
-function autoThrottle() { return Input.touchControlsNeeded() && steerMode === "touch"; }
+/* AUTO-THROTTLE IS AN OPTION NOW, not only a consequence of TOUCH mode.
+   XAG 107's worked example of an input barrier is literally a racing game's
+   held accelerator — "holding down RT to keep the car accelerating throughout
+   a 3-minute race" — and its point is that REMAPPING does not fix fatigue,
+   only a toggle does. Forza ships throttle assist for the same reason.
+   The TOUCH clause stays exactly as it was: there the drag already owns the
+   thumb, so it is not a preference but a fact about the control scheme. */
+let autoThrottleOpt = store.get("autoThrottle", false);
+function autoThrottle() { return autoThrottleOpt || (Input.touchControlsNeeded() && steerMode === "touch"); }
+// Left/right-handed docks. F1 Mobile enumerates both as first-class control
+// schemes rather than hiding a toggle; the whole feature here is which dock
+// each thumb group lands in, so CSS does it (body.mirror-controls).
+let mirrorControls = store.get("mirrorControls", false);
+function applyMirrorControls() { document.body.classList.toggle("mirror-controls", mirrorControls); }
 let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPts:{id:n}, driverCodes:{driverId:code}}
 function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
 
@@ -854,6 +874,8 @@ let launchT0 = 0;
 // pz, head or (s, x). The five below are thin passes through to it, kept as
 // hoisted function declarations so the G façade below can name them directly.
 let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
+let tyres = null;     // TyreModel.create(G), same deferral
+let pits = null;      // PitLane.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
 function applyCaution(d) { return raceCtl.apply(d); }
@@ -1666,6 +1688,11 @@ function makeCars() {
         tierV: TIER_V[team.tier] * Career.paceMult(team.id) * (mate ? buildPace(savedParts, factoryParts) : 1),
         // Tread class for gripMult(c); null on an AI car means "fits the right tyre".
         tread: (isP || mate) ? (resolvedParts.options.tyres.wetTread || 0) : null,
+        // The fitted catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md
+        // §6) — one axis, not a compound axis multiplied by an upgrade tier.
+        // gridUp fits a fresh set from it; an AI car gets one from its class draw.
+        tyreOpt: (isP || mate) ? resolvedParts.options.tyres : null,
+        tyre: null, tyreWear: 0, tyreLap0: 0, tyreStints: 0,
         fuelId: resolvedParts.ids.fuel,
         fuelVisual: resolvedParts.visual.fuel,
         s: 0, x: 0, speed: 0, prog: 0, lap: 0,
@@ -1808,6 +1835,10 @@ function gridUp(preOrder) {
     }
     return o;
   })();
+  // TYRE WEAR is a property of the session, so it is set at the one funnel every
+  // armed race goes through rather than at each caller. A time trial is a lap
+  // against the clock on a set nobody is asked to manage, so it is always off.
+  tyres.setLevel(isTimeTrial() ? "off" : raceTyreWear);
   order.forEach((c, i) => {
     // Where this car STARTED — the only record: `order` is discarded here and the
     // flag classification is built from finishing times. Career's "out-qualify
@@ -1839,6 +1870,22 @@ function gridUp(preOrder) {
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
     c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536;
     c.tyreClass = c.human ? null : AiDrive.tyreClass(((h >>> 8) & 0xffff) / 65536, lapsTarget);   // the compound IS the strategy
+    // A fresh set for the start. The player's comes from the fitted catalog row
+    // (the row IS the compound); an AI car's from the class it just drew. No RNG
+    // here — `h` is already the per-car race hash, so arming costs the sim
+    // stream nothing, exactly as Reliability's retirement draw does.
+    c.tyreStints = 0;
+    pits.reset(c);
+    // STRATEGY (js/physics/ai-drive.js stintPlan). Drawn ONCE here, from the
+    // same per-car race hash the launch plan and the pace phase come from, so
+    // arming a race consumes nothing from the sim RNG stream — the contract
+    // js/race/reliability.js holds for retirements, held for strategy too.
+    // An AI car's STARTING compound is the plan's, not the class draw's, when
+    // wear is on; the class draw still stands in for the legacy fudge when it
+    // is off. The player plans their own race.
+    c.pitPlan = (!c.human && tyres.on()) ? pits.planFor((h >>> 24) / 256) : null;
+    if (c.pitPlan) c.tyreClass = c.pitPlan.start;
+    tyres.fit(c, c.tyreOpt ? tyres.optionRecord(c.tyreOpt) : tyres.classRecord(c.tyreClass));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
   // physics tick (the `c.px == null` init in update()). The chase rig has two
@@ -2399,6 +2446,7 @@ function showTouchControls(show) {
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
+  if (els.btnLook) els.btnLook.hidden = !t;
   // ON AUTO THE AERO BUTTON IS REMOVED, not greyed. The wing drives itself, so
   // the control has no job at all — and a dock of GROUPS can afford to drop it,
   // because the survivors just close ranks. That was not true of the old
@@ -2411,6 +2459,10 @@ function showTouchControls(show) {
   // NO AERO ZONE chip beside a faded button says so. Removing it would silently
   // suggest the game has no such feature.
   if (els.btnAero) els.btnAero.hidden = !t || raceAeroMode === "auto";
+  // PIT only exists when there is a reason to use it. With TYRE WEAR off there
+  // is nothing to change tyres for, so the tap column stays the 3-tall shape
+  // index.html describes rather than growing a control that does nothing.
+  if (els.btnPit) els.btnPit.hidden = !t || !tyres.on();
   els.shiftUp.hidden = !(t && manual);
   els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
@@ -2642,6 +2694,14 @@ const G = {
     raceReliability = v; store.set("reliability", v);
   },
   armReliability: (field) => armReliability(field || cars),
+  // TYRE WEAR: the race setting and the live model (js/physics/tyre-model.js).
+  get raceTyreWear() { return raceTyreWear; },
+  set raceTyreWear(v) {
+    if (!TyreModel.isLevel(v)) return;
+    raceTyreWear = v; store.set("tyreWear", v);
+  },
+  get tyres() { return tyres; },
+  get pits() { return pits; },
   retireCar: (c, reason) => retireCar(c, reason),
   get ranked() { return ranked; },
   get sectorLast() { return sectorLast; },
@@ -2767,6 +2827,15 @@ const G = {
   setSetupAero: (on) => setSetupAero(on),
   get setupPreviewXOn() { return setupPreviewXOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
+  // A preset that bundles assists (ROOKIE) may set keys game.js owns —
+  // autoThrottle among them — so it calls this to re-read them and repaint.
+  onAssistBundle() {
+    autoThrottleOpt = store.get("autoThrottle", autoThrottleOpt);
+    SettingRow.paint($("pm-throttlemode"), autoThrottleOpt ? "auto" : "hold");
+    refreshGearsBtn();
+    if (state === "race" || state === "count") showTouchControls(true);
+    announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
+  },
   get musicEnabled() { return musicEnabled; }, set musicEnabled(v) { musicEnabled = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
@@ -2918,6 +2987,12 @@ const G = {
 ltStore = LightStore.create(G);
 // Race control: the caution flag state machine (js/race/race-control.js).
 raceCtl = RaceControl.create(G);
+// Tyre wear, the grip it costs and the fuel that argues with it
+// (js/physics/tyre-model.js). Created before the first gridUp fits a compound.
+tyres = TyreModel.create(G);
+// The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
+// about a worn set. Reads the tyre model, so it is created after it.
+pits = PitLane.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -2999,6 +3074,7 @@ raceSettings = RaceSettings.create({
   getDifficulty: () => difficulty, setDifficulty: (v) => { difficulty = v; },
   getRaceGrid: () => raceGrid, setRaceGrid: (v) => { raceGrid = v; },
   getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
+  getRaceTyreWear: () => raceTyreWear, setRaceTyreWear: (v) => { G.raceTyreWear = v; },
   getRaceCtl: () => raceCtl,
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
   openQuali, startRace, enableTilt, getSteerMode: () => steerMode,
@@ -3328,6 +3404,18 @@ function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
   // lights-out). Edge-triggered via the C key or the CAM button.
   if ((state === "race" || state === "count") && Input.consumeCameraCycle()) cycleCam();
+  /* MANUAL RECOVER. The auto-rescue only fires on its own terms (held throttle
+     and no movement, wrong way, off-track for long enough), so a car wedged
+     somewhere it considers fine — nose-in against a barrier, facing the right
+     way, technically moving — had no way out but RESTART. R is the near
+     universal bind for this across Forza, PolyTrack and Slow Roads.
+     Race only: there is nothing to recover from during the countdown, and the
+     same call mid-count would hand the player a free re-place on the grid. */
+  if (state === "race" && Input.consumeRecover() && player && !player.retired) {
+    rescuePlayer(player);
+    announce("RECOVERED", 1.5, "coach");
+    Log.info("game", "manual recover");
+  }
   if (state === "count") {
     // In a session the countdown is driven by the SHARED clock rather than by
     // accumulated dt, and the random hold is dictated by the host. Both matter
@@ -3532,7 +3620,7 @@ function collideFx(a, b, impact) {
   // burst at the car's world position (collideFx has no world coords here).
   // Never read by physics — headless runs are unaffected.
   pc.fxSparkI = Math.max(pc.fxSparkI || 0, impact);
-  if (navigator.vibrate) { try { navigator.vibrate(Math.round(18 + impact * 50)); } catch (e) { void e; } }
+  Input.vibrate(18 + impact * 50);
   Input.rumble(0.4 + impact * 0.6, 120);
 }
 
@@ -3563,6 +3651,14 @@ function updateCar(c, dt, ranked) {
   // never reach the branches that use it; the neutral fallback only guards a
   // human car whose setup failed to resolve.
   const mods = c.mods || NEUTRAL_MODS;
+  // TYRE WEAR (js/physics/tyre-model.js) is integrated ONCE per car per tick,
+  // here, so every consumer below reads one consistent value for this frame.
+  // `perfMul` is the longitudinal half — worn rubber and a full tank both cost
+  // acceleration — and it is exactly 1 while the setting is off, which is what
+  // keeps the characterization baseline bit-identical.
+  tyres.update(c, dt);
+  pits.update(c, dt);
+  const perfMul = tyres.tractionMul(c) * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
 
@@ -3589,6 +3685,20 @@ function updateCar(c, dt, ranked) {
   // Cautions default ON (RaceControl store default true); a race with them
   // disabled never hits lvl≥2. Fraction of pace-scaled top speed, so it rides
   // OVERALL SPEED like the rest.
+  // PIT LANE SPEED LIMIT. Modelled exactly like the caution cap below — a
+  // ceiling the car is bled toward — because they are the same kind of rule and
+  // a second mechanism would be a second set of bugs. Expressed as a fraction of
+  // vTop() inside PitLane, so it rides OVERALL SPEED and a player's measured pit
+  // loss does not move when they change the pace slider.
+  let pitV = -1;
+  if (pits.inLane(c)) {
+    pitV = pits.limit();
+    // The AI brakes for its own box; a human does that themselves, and a game
+    // that did it for them would be driving the one part of a stop the driver
+    // actually does.
+    if (!c.human) pitV = Math.min(pitV, pits.approachV(c));
+    vmax = Math.min(vmax, pitV);
+  }
   let cautionV = -1;   // the delta pace a caution demands; -1 = green
   if (raceCtl) {
     const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
@@ -3610,8 +3720,21 @@ function updateCar(c, dt, ranked) {
   let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
   const aiT = c.human ? null : AiDrive.traits(c);
   if (!c.human) vmax *= AiDrive.pacePhase(raceT, aiT.consistency, c.phaseRoll);   // a stint drifts; lockstep never passes
+  if (!c.human && tyres.on() && state === "race") pits.think(c);   // strategy: does this car box?
   if (!c.human && AiDrive.mistakePhase(c.errT) === 2) vmax *= AiDrive.mistakeGatherMul();   // gathering it up after a mistake
-  if (!c.human && c.tyreClass) vmax *= AiDrive.tyrePace(c.tyreClass, c.lap);                  // softs fade, hards last
+  // TYRES. With TYRE WEAR off this is the shipped AiDrive fudge, untouched — a
+  // ground-speed scale on an AI-only deg curve. With it on, the AI's pace comes
+  // off the SAME wear model the player is driving (js/physics/tyre-model.js), so
+  // a strategy fight is fought on one curve; the compound's own pace offset
+  // stays separate because the player's already lives in mods.cornering.
+  if (!c.human && c.tyreClass) {
+    vmax *= tyres.on() ? (1 + (c.tyre ? c.tyre.off : 0)) * tyres.tractionMul(c)
+                       : AiDrive.tyrePace(c.tyreClass, c.lap);
+  }
+  // FUEL BURN, the counterweight that gives a stint its shape: the car gets
+  // lighter and faster while the tyre goes off and gets slower, and where those
+  // two cross is the pit window. Exactly 1 when the setting is off.
+  vmax *= tyres.fuelVmaxMul(c);
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
@@ -3918,6 +4041,15 @@ function updateCar(c, dt, ranked) {
   } else if (c.human) {
     if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
     else c.xOn = !!(inp && inp.aero);
+    // PIT IN arms the stop; PitLane takes it from the next entry (js/race/pit-lane.js).
+    // AFTER the if/else above, not between them: sitting in the middle made this
+    // `if` steal that `else`, so any local car that had not pressed PIT had
+    // `c.xOn` overwritten from the raw input and the active-aero toggle stopped
+    // working entirely (tests/unit/active-aero-vm.test.mjs, 7 red).
+    if (c.local && Input.consumePitToggle()) {
+      const on = pits.arm(c);
+      announce(on ? "BOX THIS LAP" : "STAYING OUT", 1.4, "race");
+    }
   } else {
     // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
     // and OT still force the open wing so a pass does not sit in high drag.
@@ -3985,7 +4117,7 @@ function updateCar(c, dt, ranked) {
   if (braking) {
     if (c.speed > 0) {
       // Tread pays braking back in the wet — the ratio is exactly 1 on slicks and in the dry (docs/PHYSICS.md).
-      c.speed = Math.max(0, c.speed - BRAKE * (c.human ? mods.braking * brakeLvl * (gripMult(c) / gripMult()) : brakeLvl) * dt);
+      c.speed = Math.max(0, c.speed - BRAKE * tyres.tractionMul(c) * (c.human ? mods.braking * brakeLvl * (gripMult(c) / gripMult()) : brakeLvl) * dt);
     } else if (c.human && state === "race") {
       // Stopped and still braking: crawl backwards so the player can ease off a
       // wall or re-aim after a spin. Capped slow; throttle drives forward again.
@@ -4006,7 +4138,7 @@ function updateCar(c, dt, ranked) {
     // 8 m pitch to T1 — see the start test in ai-racecraft-vm.
     const launch = c.launchOn ? AiDrive.launchMul(raceT - launchT0, c.launch) : 1;
     if (c.launchOn && AiDrive.launchDone(raceT - launchT0, c.launch)) c.launchOn = false;
-    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    const a = (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     if (!c.human) c.accSm = damp(c.accSm ?? 0, a, 6, dt);   // what this car is pulling — AiDrive.otWant reads it on the blocker
     // A ceiling that drops under the car (VSC vmax cut, limiter downshift) bleeds
     // at coast drag; it used to scrub 25 m/s in one step.
@@ -4036,6 +4168,12 @@ function updateCar(c, dt, ranked) {
   // CAUTION: a cut vmax is only an acceleration ceiling above, so a car above
   // the delta pace bled at coast drag (and never on a descent, which skips the
   // bleed below) and was still rolling at the restart. Brake it down for real.
+  if (pitV >= 0 && c.speed > pitV) c.speed = Math.max(pitV, c.speed - BRAKE * CAUTION_BRAKE * dt);
+  // HELD IN THE BOX. The one moment the pit lane takes the car off the driver:
+  // everything else about a stop is driven. Braking to a stop is the driver's
+  // job (PitLane only latches `box` once the car is genuinely slow there), so
+  // this holds rather than decelerates.
+  if (c.pitState === "box") c.speed = 0;
   if (cautionV >= 0 && c.speed > cautionV) c.speed = Math.max(cautionV, c.speed - BRAKE * CAUTION_BRAKE * dt);
   // Flat / climb: bleed leftover overspeed toward the 6 % margin. Skip on a
   // real descent so gravity-kept ERS/X speed survives the hill.
@@ -4134,7 +4272,7 @@ function updateCar(c, dt, ranked) {
     shake = Math.max(shake, KERB_SHAKE);     // continuous light rumble via shake
     c.kerbSndT = (c.kerbSndT || 0) - dt;
     if (soundOn && c.kerbSndT <= 0) { GameAudio.rumble(); c.kerbSndT = 0.07; }
-    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { if (navigator.vibrate) { try { navigator.vibrate(15); } catch (e) { void e; } } Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
+    if ((c.kerbHapT = (c.kerbHapT || 0) - dt) <= 0) { Input.vibrate(15); Input.rumble(0.25, 90); c.kerbHapT = 0.12; }
   }
 
   // --- lateral ---
@@ -4537,9 +4675,9 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE * brakeLvl * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
+    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
       : (onThrottle
-          ? ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
+          ? ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
     c.axEstSm = damp(c.axEstSm ?? axEstTarget, axEstTarget, 10, dt);
     const wt = clamp(-c.axEstSm / LAT_MAX * WT_LONG, -0.16, 0.18);
@@ -4568,7 +4706,7 @@ function updateCar(c, dt, ranked) {
     // THR_ELLIPSE, so planting the throttle mid-corner spends grip even when
     // speed-limited. Braking still costs more (BRAKE > ACCEL·THR_ELLIPSE).
     const axThrDemand = onThrottle
-      ? (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * gearMult) * THR_ELLIPSE + Math.max(0, deploy)
+      ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * gearMult) * THR_ELLIPSE + Math.max(0, deploy)
       : 0;
     const axUsed = Math.max(Math.abs(c.axEstSm ?? 0), axThrDemand);
     const axFrac = Math.min(1, axUsed / (LONG_GRIP * gripMult(c)));
@@ -4603,6 +4741,12 @@ function updateCar(c, dt, ranked) {
     // the car; it is a pure function of deterministic marble positions and returns
     // 1.0 (a true no-op) off-path. Subtle by construction (≤7% via MARBLE_GRIP_MIN).
     const marbleMu = DebrisWorld.active() ? DebrisWorld.marbleGrip(c) : 1;
+    // TYRE WEAR (js/physics/tyre-model.js), fed in at the same seam and on the
+    // same terms as marbleMu above: an external grip scalar, a pure function of
+    // deterministic per-car state, exactly 1.0 when the setting is off — which
+    // is what keeps tests/specs/physics-characterization.spec.js honest. It is
+    // NOT arc-derived: wear integrates the forces this car actually made.
+    const tyreMu = tyres.gripMul(c);
     // BRAKE BIAS spends the friction ellipse per AXLE: under braking the front
     // spends bb/BB_REF of the longitudinal budget and the rear (1−bb)/(1−BB_REF)
     // — forward bias uses up the front's circle (entry understeer), rearward
@@ -4624,7 +4768,7 @@ function updateCar(c, dt, ranked) {
     const afF = bb ? Math.min(1, axFrac * bb.f) : 0, afR = bb ? Math.min(1, axFrac * bb.r) : 0;
     const bbSlipF = bb ? Math.sqrt(Math.max(0, 1 - afF * afF)) : 1;
     const bbSlipR = bb ? Math.sqrt(Math.max(0, 1 - afR * afR)) : 1;
-    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu;
+    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu * tyreMu;
     const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP);
     const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
@@ -4675,7 +4819,7 @@ function updateCar(c, dt, ranked) {
         // throw on an out-of-range pattern. A cue the driver may not even feel
         // is not worth interrupting the physics frame for, so it is ignored on
         // purpose — the same call is retried a tenth of a second later anyway.
-        if (navigator.vibrate) { try { navigator.vibrate(10 + (bite * 18) | 0); } catch (e) { /* haptics are advisory */ } }
+        Input.vibrate(10 + (bite * 18) | 0);
         Input.rumble(0.18 + bite * 0.32, 70);
         c.uslipHapT = 0.16 - bite * 0.06;                // firmer slide = tighter pulse
       }
@@ -4858,7 +5002,7 @@ function updateCar(c, dt, ranked) {
         if (track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
           if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
-          if (navigator.vibrate) { try { navigator.vibrate(Math.round(15 + incidence * 35)); } catch (e) {} }
+          Input.vibrate(15 + incidence * 35);
           if (c.isPlayer) Input.rumble(0.35 + incidence * 0.5, 100);
         }
       }
@@ -8266,6 +8410,80 @@ function setSteerMode(mode) {
 }
 SettingRow.wire("pm-steer", { values: SettingRow.labels(STEER_MODES), read: () => steerMode,
   write: (v) => { if (STEER_MODES.indexOf(v) >= 0) setSteerMode(v); } });
+SettingRow.wire("pm-throttlemode", { values: SettingRow.labels(["hold", "auto"]),
+  read: () => (autoThrottleOpt ? "auto" : "hold"),
+  write: (v) => {
+    autoThrottleOpt = v === "auto";
+    store.set("autoThrottle", autoThrottleOpt);
+    refreshGearsBtn();
+    if (state === "race" || state === "count") showTouchControls(true);
+  } });
+SettingRow.wire("pm-mirror", { values: SettingRow.labels(["off", "on"]),
+  read: () => (mirrorControls ? "on" : "off"),
+  write: (v) => { mirrorControls = v === "on"; store.set("mirrorControls", mirrorControls); applyMirrorControls(); } });
+/* FULLSCREEN, AND THE REASON IT EXISTS HERE IS ESCAPE.
+   In fullscreen the browser spends the Escape key on leaving fullscreen, so a
+   pause handler never sees it. navigator.keyboard.lock(['Escape']) is the
+   sanctioned way to claim the key back — and it is only callable while the
+   document is in ELEMENT fullscreen, which this game had no way to enter at
+   all, so the fix had nothing to attach to until now.
+   Chromium honours the lock (the escape hatch is a 2-second Escape hold, so no
+   page can trap anyone); Firefox and Safari ship no Keyboard Lock, and there
+   Escape keeps leaving fullscreen — which is the other half of why PAUSE
+   became a rebindable key rather than staying welded to P.
+   iPhone Safari has no element fullscreen at all, so the row hides itself
+   rather than offering a control that cannot work. */
+const fsOk = () => !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+function paintFullscreenRow() {
+  const row = $("pm-fullscreen");
+  if (!row) return;
+  row.hidden = !fsOk();
+  const note = $("pm-fullscreen-note");
+  if (note) note.hidden = !fsOk();
+  SettingRow.paint(row, document.fullscreenElement ? "on" : "off");
+}
+if ($("pm-fullscreen")) {
+  SettingRow.wire("pm-fullscreen", { values: SettingRow.labels(["off", "on"]),
+    read: () => (document.fullscreenElement ? "on" : "off"),
+    write: (v) => {
+      if (v === "on") {
+        const el = document.documentElement;
+        const req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req) Promise.resolve(req.call(el)).then(() => Input.lockEscape()).catch(() => paintFullscreenRow());
+      } else if (document.fullscreenElement) {
+        Input.unlockEscape();
+        if (document.exitFullscreen) document.exitFullscreen().catch(() => { /* already gone */ });
+      }
+    } });
+  // The player can leave fullscreen without us (Esc, F11, the OS), so the row
+  // follows the DOCUMENT rather than remembering what it last asked for.
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) Input.unlockEscape(); paintFullscreenRow(); });
+  paintFullscreenRow();
+}
+/* ADD TO HOME SCREEN IS THE ONLY FULLSCREEN AN iPHONE HAS. Element fullscreen
+   has never shipped on iPhone Safari (iPad only, and there the browser draws an
+   overlay button you cannot remove), so the row above is hidden on iOS and this
+   takes its place. Standalone also gives what a race actually needs: a viewport
+   that does not move, because there are no toolbars to collapse mid-corner.
+   As of iOS 26 every site added to the Home Screen opens as a web app with no
+   manifest metadata required, so this is a one-tap suggestion rather than a
+   setup guide. Shown once, ever. */
+(function iosInstallNudge() {
+  const el = $("ios-install");
+  if (!el) return;
+  const nav = navigator;
+  const ios = /iPad|iPhone|iPod/.test(nav.userAgent) ||
+    (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);   // iPadOS reports as a Mac
+  const standalone = !!(nav.standalone || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches));
+  if (!ios || standalone || store.get("iosInstallSeen", false)) return;
+  const dismiss = () => { el.hidden = true; store.set("iosInstallSeen", true); };
+  el.hidden = false;
+  const x = $("ios-install-x");
+  if (x) x.onclick = dismiss;
+  // It is a suggestion, not a gate: the first race dismisses it too.
+  setTimeout(dismiss, 15000);
+})();
+applyMirrorControls();
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/ui/settings-export.js)
@@ -8394,6 +8612,19 @@ Input.init(canvas, { onPause: () => {
     return;
   }
   setPaused(!paused);
+},
+/* A CONTROLLER LEAVING MID-RACE PAUSES THE RACE. Input already zeroes every
+   latch when the last pad goes (so a stale axis snapshot cannot leave the
+   throttle pinned), but the sim kept running — a flat battery at 300 km/h
+   meant watching the car coast into a wall with nothing to press. Pausing is
+   the convention for the same reason console certification tests it.
+   Only while actually racing: a pad unplugged at the title screen is not an
+   interruption, and pausing there would open the pause menu over the menus. */
+onPadLost: () => {
+  if (!UiLayers.inRace() || paused) return;
+  setPaused(true);
+  announce("CONTROLLER DISCONNECTED — RECONNECT OR PRESS RESUME", 4, "coach");
+  Log.info("input", "paused: last gamepad disconnected");
 } });
 // The subtitle is DERIVED on both paths. It used to be hardcoded "24 real
 // circuits" in index.html and rewritten on desktop only, from Tracks.LIST.length

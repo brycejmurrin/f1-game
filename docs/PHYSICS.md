@@ -451,14 +451,32 @@ the numbers):
   `pathK` and its 85% floor did not change, so the AI's brake model and the
   difficulty scales stay calibrated — the relaxation moves where the cars
   are, not how fast the model lets them corner.
-- **The compound is the strategy** (`AiDrive.tyreClass` / `tyrePace`). There
-  are no pit stops, so each AI car draws a class for the race distance
-  (sprints on softs, long races mixed): a soft starts +0.4% and degrades
-  0.12%/lap, a medium 0 and 0.07%, a hard −0.4% and 0.04%, capped at −2.5%.
-  Soft- and hard-starters cross at lap 10, inside the 10- and 25-lap races
-  hards are drawn for. Zero-mean over a mixed field, so the AI's pace against
-  the player is unchanged on average; the player's own compound stays the
-  static garage choice.
+- **The compound is the strategy** (`AiDrive.tyreClass` / `tyrePace`) — **while
+  TYRE WEAR is off**, which is the shipped default. Each AI car draws a class for
+  the race distance (sprints on softs, long races mixed): a soft starts +0.4% and
+  degrades 0.12%/lap, a medium 0 and 0.07%, a hard −0.4% and 0.04%, capped at
+  −2.5%. Soft- and hard-starters cross at lap 10, inside the 10- and 25-lap races
+  hards are drawn for. Zero-mean over a mixed field, so the AI's pace against the
+  player is unchanged on average. With TYRE WEAR **on**, this fudge is bypassed
+  entirely and the AI's pace comes off the same `TyreModel` curve the player is
+  driving, so a strategy fight is fought on one model (§Wear, and the stop), and
+  the STARTING compound comes from the car's own plan rather than the class draw.
+- **The field races a strategy** (`AiDrive.stintPlan` / `pitNow`, executed by
+  `PitLane.planFor` / `think`), when TYRE WEAR is on. Each car enumerates every
+  0-, 1- and 2-stop plan over the three dry compounds and keeps the cheapest
+  under `Σ stint costs + stops × pit loss` — the formulation strategists
+  actually solve, with pit loss taken from the LANE's own geometry so a circuit
+  that costs more to stop at really does see fewer stops. Two per-car tastes
+  come out of the same race hash the launch plan uses (so arming still costs the
+  sim RNG nothing): one for stopping, one for grip over durability. Both are
+  needed — biasing only the stop count measured as twenty cars on one plan.
+  Strategies MIX because a full tank wears tyres (`FUEL_WEAR`), which is what
+  puts harder rubber early and softer late.
+  Three rules override the plan: the **free stop** under a caution (worth
+  8-12 s, the biggest lever in the sport), the **wrong tyre for the conditions**
+  in either direction, and a **spent set**. The last two ignore the plan's stop
+  budget, because both are about a tyre that cannot do its job rather than about
+  strategy — gating them left every 0-stop car circulating on slicks in the rain.
 - **Mistakes, under pressure most of all** (`AiDrive.mistakeChance`). Once per
   braking point a car may miss it: base 0.4% × (1 + 2 × pressure) × (1.3 −
   consistency), pressure being the share of the last six seconds spent with a
@@ -582,14 +600,54 @@ compound's advantage over a slick in the current conditions. That ratio is
 exactly 1.0 on slicks and 1.0 for everyone in the dry, so slick braking does not
 move — it only hands the wet compounds back the braking their tread earns.
 
-### Two things this does NOT do
+### Wear, and the stop
 
-- **There are no pit stops.** The compound is a pre-race commitment, and weather
-  can still swing mid-race through `startWeatherArc` (`dry→wet→rain` and back).
-  A dry→rain arc punishes a slick with no recourse. That is what gives the
-  choice teeth; it is also the first thing to revisit if rain feels unfair.
+> Until 2026-09-14 this section read "Two things this does NOT do", and the
+> first was **"There are no pit stops. The compound is a pre-race commitment."**
+> That is no longer true. What follows replaces it; the design and the cited
+> numbers behind every constant are in
+> [research/TYRE-STRATEGY-DESIGN.md](research/TYRE-STRATEGY-DESIGN.md).
+
+**`js/physics/tyre-model.js` (`TyreModel`) wears the tyre, and
+`js/race/pit-lane.js` (`PitLane`) lets you do something about it.** Both are
+gated on the TYRE WEAR race setting (`off` / `light` / `real`), which **ships
+`off`** — and `off` is a *true* no-op: `gripMul`, `tractionMul` and the two fuel
+multipliers all return exactly 1, so
+`tests/specs/physics-characterization.spec.js` is untouched until somebody turns
+it on. `js/race/reliability.js` ships off for the same reason.
+
+- **Life is a fraction of the SCHEDULED distance, not a lap count.** Real
+  degradation over a 25-lap stint accumulates ~1.5 s against a ~21 s pit loss,
+  so a literal port of real rates means no stop is ever worth making at any
+  distance the lap ladder offers (3 / 5 / 10 / 25 / FULL). A 0.5-life compound
+  is spent halfway through a 5-lap race and halfway through a 50-lap race alike,
+  and `MIN_LIFE_LAPS` keeps a 3-lap blast off the cliff.
+- **Wear reads the forces the car made, never the arc.** Lateral and
+  longitudinal friction-circle use, body slip, kerbs, off-track — no curvature
+  read anywhere, which is both the rule above and the correct physics (sliding
+  wears tyres; corners do not). The player and the AI are scored differently
+  because only human cars run the full bicycle model, and both land on one ~1.0
+  scale — `LOAD_REF` is measured off driven laps, not guessed.
+- **`tyreMu` enters at `muBase`, beside `marbleMu`** — the same external-scalar
+  seam, on the same terms. Traction and braking take a smaller share of the drop.
+- **Pit loss is EMERGENT, not a constant.** The lane is driven: it is a real
+  stretch of tarmac beyond `hw`, inside the runoff that was already there, with
+  the driving boundary forced open across the window (`PitLane.openBarrier`, the
+  track engine's only job here — `hw` never moves). So the loss is lane length
+  over the limiter against racing the same stretch, plus the box time. Measured
+  **23.6 s at Monza**, inside the real 20-25 s band. Change the lane and the
+  strategy changes with it, which is what lets it vary by circuit the way real
+  strategy does.
+- **The weather recourse now exists.** This section used to warn that a
+  `dry→rain` arc "punishes a slick with no recourse… the first thing to revisit
+  if rain feels unfair". Pitting IS the recourse. Acting on it automatically is
+  the AI strategy phase's job, not the lane's.
+
+Still open:
+
 - **Remote human cars in multiplayer do not replicate their compound** and land
-  on `tread == null`, i.e. the competent-field column.
+  on `tread == null`, i.e. the competent-field column. Wear and stints are not
+  replicated either, so a friend race sees the right cars in the wrong rubber.
 
 ---
 

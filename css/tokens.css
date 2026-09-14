@@ -17,31 +17,7 @@
    Titillium Web is the family the real F1 site uses (menus/body); Rajdhani is a
    condensed technical face for the numeric HUD/timing. `font-display: swap` so
    the system-font fallback paints instantly and never blocks first render.
-   @font-face is layer-insensitive, so these sit outside the layer blocks.
-   Immutable vendored assets → NO ?v= cache-buster (same as vendor/three-*). */
-@font-face {
-  font-family: "Titillium Web"; font-style: normal; font-weight: 400;
-  font-display: swap;
-  src: url("../assets/fonts/titillium-web-latin-400-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Titillium Web"; font-style: normal; font-weight: 600;
-  font-display: swap;
-  src: url("../assets/fonts/titillium-web-latin-600-normal.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Titillium Web"; font-style: normal; font-weight: 700;
-  font-display: swap;
-  src: url("../assets/fonts/titillium-web-latin-700-normal.woff2") format("woff2");
-}
-@font-face {
-  /* One italic face (700) covers the italic headings/labels; the browser
-     synth-bolds it for the 800 weights the design uses. */
-  font-family: "Titillium Web"; font-style: italic; font-weight: 700;
-  font-display: swap;
-  src: url("../assets/fonts/titillium-web-latin-700-italic.woff2") format("woff2");
-}
-@font-face {
+   @font-face {
   font-family: "Rajdhani"; font-style: normal; font-weight: 500;
   font-display: swap;
   src: url("../assets/fonts/rajdhani-latin-500-normal.woff2") format("woff2");
@@ -510,7 +486,38 @@
      delta inks (ghost, gaps, data hub), named so every reader agrees. */
   --faster: #a3e635;
   --slower: #ff3b30;
-  --sec-best: #c084fc;
+  /* The HUD's dark halo — the recipe #hud-speed-n, .sec-val and .hud-energy-label
+     all spell out by hand so light ink stays legible over the live scene. Named
+     here so a new HUD readout can reach for it instead of restating the literal
+     (which is what the rawColor ratchet is counting). */
+  --hud-halo: 0 1px 3px rgba(0, 0, 0, 0.9);
+  /* SESSION BEST WAS THE HARDEST OF THE THREE TO READ, which is the wrong way
+     round: it marks the best lap you can set, on a 14px readout, at 300 km/h.
+     Measured in APCA (the contrast model that actually works on dark UI — WCAG
+     2 contrast "overstates contrast for dark colors to the point that 4.5:1 can
+     be functionally unreadable" and ignores font weight entirely):
+
+       --faster    #a3e635   Lc 79.4
+       --sec-slow  #f6d200   Lc 80.4
+       --sec-best  #c084fc   Lc 50.4   <- 30 Lc below its own siblings
+
+     APCA's ladder asks Lc 75 for 14px/700 body and Lc 60 for non-body, so the
+     two siblings clear the bar and the purple sat under both.
+
+     Lifted to Lc 65.1 with the HUE AND CHROMA DIRECTION UNTOUCHED — the OKLab
+     a and b are byte-identical, only L moves (0.722 -> 0.795), so it is the
+     same purple, lighter. It deliberately does NOT go all the way to its
+     siblings' ~79: that costs 38 % of the chroma (#fbbeff) and starts reading
+     PINK, and purple-means-session-best is a motorsport convention worth more
+     than the last 14 Lc. At 65 it keeps 80 % of the chroma.
+
+     CAVEAT ON THE NUMBERS: .sec-val carries the --hud-halo shadow declared just
+     above, and a dark halo raises effective contrast for light ink,
+     so these Lc values are a FLOOR rather than what the eye gets. All three
+     colours carry the same halo, which is why the 30 Lc gap between them is the
+     robust part and the absolute figures are not. tests/unit/apca-timing.test.mjs
+     pins the family relationship for that reason, not an absolute threshold. */
+  --sec-best: #dfa3ff;
   --sec-slow: #f6d200;
   /* The livery list's two-verb palette: DELETE is the warm danger family,
      EDIT the cool info family. Ink is the light readable tint, fill the
@@ -642,15 +649,62 @@ body:not(.desktop) {
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
   --ui-compact-text: calc(var(--ui-scale) / var(--ui-compact-scale));
 }
-/* THE TOUCH-ONLY DEFAULT this block was reserved for, filled in 2026-09-08 from
-   the owner's own phone: menus a touch larger, the HUD larger still, and the
-   driving buttons about 45 % over the HUD — kept as a RATIO of --hud-scale, not
-   an absolute, so moving HUD SIZE still carries the buttons with it the way an
-   unset BUTTON SIZE always has. scaleDefault()/scaleDefaultFor() in
-   js/ui/scale.js return the same three numbers under the same query, so first
-   paint and the first JS write still agree (the note above). */
+/* THE TOUCH-ONLY DEFAULT this block was reserved for. Filled in 2026-09-08 from
+   the owner's own phone — HUD 1.24 and buttons 1.4536x that, i.e. 1.80 — and
+   CORRECTED 2026-09-14, because those numbers put the driving controls on top of
+   the readouts on every phone.
+
+   WHAT WENT WRONG. The pedals rendered 130px = ~34mm: 2.3x Microsoft's suggested
+   MINIMUM touch target for phones (15mm) and past their minimum for TABLETS
+   (24mm), with the stacked column eating 58% of a 393px short edge. #btn-brake
+   covered 119x53px of #minimap and #btn-boost covered 59x84px of #hud-sectors,
+   at both 852x393 and 667x375. tests/specs/hud-layout.spec.js had been red on
+   those cases ever since, unnoticed because test:ui is not in the fast tier.
+
+   WHY A SINGLE BRANCH WAS THE MISTAKE. The standards treat two things as
+   SEPARATE requirements with different justifications: interactive TARGET SIZE
+   has a physical floor (~15mm phone / 24mm tablet per XAG 107; 0.96cm per the
+   Game Accessibility Guidelines; 48dp per Android), while READOUT size has a
+   legibility floor expressed in px-at-DPI (XAG 101). One `(pointer: coarse)`
+   rule raised both, so the controls grew into the readouts.
+
+   Note also what XAG's mobile numbers actually are: 18px @100 DPI, 36px @200,
+   72px @400, "scale linearly as DPI increases". That is a DPI correction holding
+   PHYSICAL size constant — not a "touch devices get a bigger UI" rule. No
+   published guidance prescribes a numeric coarse-pointer scale multiplier at
+   all; 1.24/1.80 had no standard behind it.
+
+   THE RULE NOW: the DEFAULT is a floor, the RANGE is generous. XAG 101 calls its
+   sizes "the minimum default size ... upon game launch" and asks for scaling
+   "larger or smaller at the player's discretion"; the Game Accessibility
+   Guidelines say "ensuring a good default size should always be the first port
+   of call". So --hud-scale sits at 1 and the readouts are DPI-correct rather
+   than bumped, while the buttons keep a modest ratio over it that satisfies the
+   physical floor: 1.25 renders the pedals at ~90px (~24mm, the GAG ideal) and
+   the secondary column at ~68px (~18mm, over the 15mm floor). 1.80 is still
+   reachable — it is a slider, and a player who wants the old size has it.
+
+   --ui-scale stays 1.09. It is menus only, nothing there overlaps at any scale
+   this ships, and moving it would be a look change with no defect behind it.
+
+   BUTTON SIZE stays a RATIO of --hud-scale, not an absolute, so moving HUD SIZE
+   still carries the buttons with it the way an unset BUTTON SIZE always has.
+   scaleDefault()/scaleDefaultFor() in js/ui/scale.js mirror these numbers under
+   the same query, so first paint and the first JS write agree (the note above);
+   tests/unit/scale-defaults.test.mjs holds the two in lockstep. */
 @media (pointer: coarse) {
-  :root { --ui-scale: 1.09; --hud-scale: 1.24; --hud-btn-scale: calc(var(--hud-scale) * 1.4536); }
+  /* --hud-btn-mult is the ratio as a PLAIN NUMBER, and it exists because
+     `calc()` inside a custom property is NOT reduced at computed-value time: a
+     custom property is an untyped token list, so getPropertyValue here returns
+     the literal string "calc(0.9 * 1.25)" and `+value` is NaN. js/ui/hud.js
+     coerces this token to size the dock cap, and while the ratio was a bare
+     `var(--hud-scale)` that happened to work. Publish the factor separately so
+     the unset case stays resolvable in JS as scale * mult. */
+  :root {
+    --ui-scale: 1.09; --hud-scale: 1;
+    --hud-btn-mult: 1.25;
+    --hud-btn-scale: calc(var(--hud-scale) * var(--hud-btn-mult));
+  }
 }
 
 /* VIEWPORT UNITS ARE THE ONE UNIT FAMILY `zoom` GETS WRONG, so inside a zoomed
@@ -669,6 +723,27 @@ body:not(.desktop) {
    right edge 17.5px off screen; at 150 %, 78.8px off. The CSS width never
    changed — 306.5px at every setting — which is exactly why it does not read as
    a sizing bug when you look at the stylesheet.
+
+   THE SECOND TRAP IS IN JAVASCRIPT, and it has no CSS symptom at all. The
+   standardised `zoom` (CSS Viewport L1) says getBoundingClientRect and friends
+   "must return rects with SCALED lengths", while computed-style APIs report
+   non-auto, non-percentage lengths UNSCALED. So inside a zoomed subtree a
+   rect's width and the same element's computed width are two different
+   coordinate spaces, and any code that compares one to the other is wrong by
+   exactly the zoom factor — silently, and only for players who moved the
+   slider off 100 %.
+   Audited 2026-09-14: six files read both, but every computed read is a
+   NON-LENGTH (visibility, z-index, overflow-y, display, a custom property) and
+   the one site that does compare lengths — metrics-overlay.js's fitsWide(),
+   which measures a ch probe with a rect and compares it against the computed
+   width and padding of its panel — lives on #game-metrics,
+   which is not in any zoom group. Correct today by luck of placement rather than
+   by construction, so: if you ever put a length comparison inside `.sheet`,
+   `#overlay > *`, a HUD cluster or `.dock`, measure BOTH sides with rects.
+   (Chrome 128 also widened what `zoom` inherits into — it now applies to every
+   inherited length property, not just font-size — so a layout tuned before it
+   can render differently now. caniuse's support cells do not distinguish the
+   legacy implementation from the standardised one.)
 
    `100 * var(--vwz)` is "100vw, as rendered". Use it for ANY viewport-unit
    length inside a `.sheet`, `#overlay > *`, a HUD cluster or `.dock`; use the

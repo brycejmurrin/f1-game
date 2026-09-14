@@ -288,3 +288,53 @@ test("a dialog styled from a winning position restates its closed state", () => 
     "named file, as the data hub and telemetry popup rules already do:\n  " +
     offenders.join("\n  "));
 });
+
+/* AN ELEMENT THAT SHIPS `hidden` MUST STAY HIDDEN.
+ *
+ * `[hidden] { display: none }` is a UA rule, and a UA rule loses to ANY author
+ * rule that sets display — so `#foo { display: flex }` silently disables the
+ * attribute. The element then paints on every platform, and because it is
+ * usually an overlay, it eats the clicks meant for whatever is underneath.
+ *
+ * This has now bitten the tree twice. `.dock-grp` carries a restatement with a
+ * comment explaining why; `#ios-install` did not, and shipped a bottom-centre
+ * banner that covered #mb-race / #sel-go / #rs-go — every click in
+ * steering.spec.js timed out, with no assertion failure to point at the cause.
+ * A guard is cheaper than diagnosing that a third time.
+ *
+ * Scope: ids the SHELL marks hidden, against `display` set on a bare `#id`
+ * selector. A rule with any other qualifier (a body-state class, a media
+ * query's own selector) is out of scope — those are deliberate and the
+ * attribute is not what is driving them.
+ */
+test("an element that ships the hidden attribute is not un-hidden by a display rule", () => {
+  const shell = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const hiddenIds = new Set();
+  for (const m of shell.matchAll(/<[a-z][^>]*\bid="([\w-]+)"[^>]*>/gi)) {
+    if (/\shidden(?=[\s/>])/i.test(m[0])) hiddenIds.add(m[1]);
+  }
+  assert.ok(hiddenIds.size > 10, "the shell should mark plenty of overlays hidden");
+
+  const offenders = [];
+  for (const f of fs.readdirSync(CSS_DIR).filter((x) => x.endsWith(".css"))) {
+    const src = stripComments(fs.readFileSync(path.join(CSS_DIR, f), "utf8"));
+    for (const id of hiddenIds) {
+      // `#id { ... display: <not none> ... }` — the bare selector only.
+      const rule = new RegExp(`(^|[,{}])\\s*#${id}\\s*\\{([^{}]*)\\}`, "g");
+      let sets = false;
+      for (const m of src.matchAll(rule)) {
+        const d = /(?:^|;)\s*display\s*:\s*([^;]+)/.exec(m[2]);
+        if (d && d[1].trim().split(/\s/)[0] !== "none") sets = true;
+      }
+      if (!sets) continue;
+      // …is only safe if some file restates the attribute for that id.
+      const restated = fs.readdirSync(CSS_DIR)
+        .filter((x) => x.endsWith(".css"))
+        .some((g) => new RegExp(`#${id}\\[hidden\\]`).test(stripComments(fs.readFileSync(path.join(CSS_DIR, g), "utf8"))));
+      if (!restated) offenders.push(`${f}: #${id} sets display but nothing restates #${id}[hidden]`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    "a shell element marked hidden is painted anyway — add `#<id>[hidden] { display: none; }`:\n  " +
+    offenders.join("\n  "));
+});

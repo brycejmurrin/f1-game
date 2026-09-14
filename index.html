@@ -417,6 +417,11 @@
       </div>
       <div id="hud-speed"><span id="hud-speed-n">0</span><span class="hud-unit">KM/H</span></div>
       <div id="hud-energy"><div id="hud-energy-fill"></div><div class="hud-energy-label">ENERGY</div></div>
+      <!-- TYRES. Sibling of ENERGY on purpose: the two resources a driver
+           spends, one over seconds and one over laps. Hidden whenever TYRE WEAR
+           is off, which is the shipped default, so the bar costs nothing to a
+           player who never turns it on. -->
+      <div id="hud-tyre" hidden><span id="hud-tyre-code">M</span><div id="hud-tyre-bar"><div id="hud-tyre-fill"></div></div></div>
       <div id="hud-ot" class="ot-off">OVERTAKE</div>
       <div id="hud-aero" class="ax-off">Z-MODE</div>
     </div>
@@ -439,13 +444,27 @@
 
 <div id="announce" role="status" hidden></div>
 
+<!-- TOUCH-mode drag affordance: a ring at the point the finger went down, so
+     the anchor of an otherwise invisible control is visible for a moment.
+     Positioned and faded by js/input/input.js; never takes a pointer event. -->
+<div id="drag-anchor" aria-hidden="true"></div>
+
+<!-- iOS: Add to Home Screen is the only real fullscreen this platform has.
+     Shown once, dismissible, and only where it applies (js/game.js). -->
+<div id="ios-install" role="note" hidden>
+  <span>Add Apex 26 to your Home Screen for a full-screen race with no browser bars &mdash; tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>
+  <button id="ios-install-x" type="button" aria-label="Dismiss">&times;</button>
+</div>
+
 <!-- touch controls -->
 <!-- Grouped, not a flat list. A dock holding loose buttons wraps them wherever
      the width runs out, which produced a DN button above its own UP. These four
      groups each have a fixed shape — pedals and shifts are vertical pairs
      (brake over gas, up over down, as every car has them), and the taps are a
-     3-tall COLUMN standing beside them — so a dock can only ever place whole
-     groups, and a pair cannot come apart or invert. layoutDocks() in js/game.js
+     COLUMN standing beside them — so a dock can only ever place whole
+     groups, and a pair cannot come apart or invert. The tap column is 3 tall by
+     default and 4 with TYRE WEAR on (PIT appears only when there is something
+     to change tyres for), which the flex column takes without a count anywhere. layoutDocks() in js/game.js
      moves the GROUPS between docks; the buttons never move again. -->
 <div id="grp-pedals" class="dock-grp col">
   <button id="btn-brake" class="touchbtn pedal" hidden aria-label="Brake">BRAKE</button>
@@ -463,6 +482,10 @@
   <button id="btn-boost" class="touchbtn" hidden aria-label="Boost">BOOST</button>
   <button id="btn-ot" class="touchbtn" hidden aria-label="Overtake">OT</button>
   <button id="btn-aero" class="touchbtn" hidden aria-label="Active aero">AERO</button>
+  <!-- HELD, not tapped (Input wires it with wireHold): the mirror is only up
+       while the thumb is down, which is what a glance over the shoulder is. -->
+  <button id="btn-look" class="touchbtn" hidden aria-label="Look back">LOOK</button>
+  <button id="btn-pit" class="touchbtn" hidden aria-label="Pit in">PIT</button>
 </div>
 
 <button id="btn-cam" hidden aria-label="Camera">CHASE</button>
@@ -546,6 +569,24 @@
             </div>
             <p id="pm-steer-note" class="adv-help">TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.</p>
           </div>
+          <div id="pm-throttlemode" class="set-row" role="group" aria-labelledby="pm-throttlemode-label">
+            <span class="tune-label" id="pm-throttlemode-label">THROTTLE</span>
+            <div>
+              <button id="pm-throttlemode-prev" type="button" data-step="-1" aria-label="Previous throttle mode">&lsaquo;</button>
+              <select id="pm-throttlemode-sel" aria-labelledby="pm-throttlemode-label"></select>
+              <button id="pm-throttlemode-next" type="button" data-step="1" aria-label="Next throttle mode">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help">AUTO drives the throttle for you so you only steer and brake &mdash; less tiring over a long race, and the way TOUCH steering has always worked.</p>
+          <div id="pm-mirror" class="set-row" role="group" aria-labelledby="pm-mirror-label">
+            <span class="tune-label" id="pm-mirror-label">LEFT-HANDED</span>
+            <div>
+              <button id="pm-mirror-prev" type="button" data-step="-1" aria-label="Previous handedness">&lsaquo;</button>
+              <select id="pm-mirror-sel" aria-labelledby="pm-mirror-label"></select>
+              <button id="pm-mirror-next" type="button" data-step="1" aria-label="Next handedness">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help">Swaps the two on-screen thumb groups, so the pedals and the steering change hands.</p>
           <button id="pm-calib">RECALIBRATE TILT</button>
           <div id="pm-gears" class="set-row" role="group" aria-labelledby="pm-gears-label">
             <span class="tune-label" id="pm-gears-label">GEARS</span>
@@ -592,8 +633,22 @@
           <div id="pm-pad-section" hidden>
             <h3 class="pm-group-h">CONTROLLER</h3>
             <div id="pm-pad"></div>
-            <p id="pm-pad-note" class="adv-help">Tap a slot, then press a button on the controller. Esc cancels. The stick and D&#8209;pad steer; MENU / START pauses.</p>
-            <button id="pm-pad-reset" type="button">RESET CONTROLLER</button>
+            <p id="pm-pad-note" class="adv-help">Tap a slot, then press a button on the controller. Esc cancels. The stick and D&#8209;pad steer.</p>
+            <div id="pm-padbrand" class="set-row" role="group" aria-labelledby="pm-padbrand-label">
+              <span class="tune-label" id="pm-padbrand-label">BUTTON NAMES</span>
+              <div>
+                <button id="pm-padbrand-prev" type="button" data-step="-1" aria-label="Previous button names">&lsaquo;</button>
+                <select id="pm-padbrand-sel" aria-labelledby="pm-padbrand-label"></select>
+                <button id="pm-padbrand-next" type="button" data-step="1" aria-label="Next button names">&rsaquo;</button>
+              </div>
+            </div>
+            <p class="adv-help">AUTO reads the name the controller reports, which not every pad gives us &mdash; pick your own if the prompts name the wrong buttons. A Switch&#8209;style pad swaps A/B and X/Y against Xbox positions.</p>
+            <div class="pm-pad-tools">
+              <button id="pm-pad-calib" type="button">CALIBRATE STICK</button>
+              <button id="pm-pad-wheel" type="button">SET UP A WHEEL</button>
+              <button id="pm-pad-reset" type="button">RESET CONTROLLER</button>
+            </div>
+            <p id="pm-pad-calib-note" class="adv-help">CALIBRATE STICK: let go of the stick, then press it &mdash; where it rests is subtracted from then on, which is the fix for a drifting stick that does not cost you fine steering. SET UP A WHEEL asks you to turn the wheel and press each pedal, for wheels the browser cannot map on its own.</p>
           </div>
         </section>
         <section id="pm-panel-display" class="pm-group" role="region"
@@ -606,7 +661,7 @@
                overshot those edges; step 1 still jumped past a threshold while
                dragging on a short phone track. Half-percent keeps the hunt tight.
                applyScale() clamps to SCALE_MIN/MAX and snaps to 0.5. -->
-          <h3 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">100%</b></h3>
+          <h3 class="pm-group-h" id="pm-uiscale-h">UI SIZE <b id="pm-uiscale-v">100%</b><button type="button" id="pm-uiscale-r" class="tune-revert" hidden>reset</button></h3>
           <label class="tune-row">
             <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
           <details id="pm-hud-details" class="pm-hud-sub">
@@ -686,7 +741,7 @@
                 </div>
               </div>
               <p class="adv-help">A click that repeats faster the further over the line's speed you are, and becomes continuous when it turns red. The rate is the signal, not the pitch. Works with the DRIVING LINE off.</p>
-              <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
+              <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b><button type="button" id="pm-hudscale-r" class="tune-revert" hidden>reset</button></span>
                 <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
               <!-- BUTTON SIZE is its own knob because the dock and the readouts
                    compete for the same edges: shrinking the pedals is how a
@@ -694,7 +749,7 @@
                    trade both at once. Unset it FOLLOWS HUD SIZE (css/tokens.css
                    declares --hud-btn-scale as var(--hud-scale)), so an untouched
                    slider changes nothing. -->
-              <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b></span>
+              <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b><button type="button" id="pm-btnscale-r" class="tune-revert" hidden>follow HUD size</button></span>
                 <input id="pm-btnscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Touch button size"></label>
               <!-- The slider's effect was invisible: css/hud.css hides every real
                    HUD cluster while a .dim screen is open, and from the title
@@ -717,6 +772,15 @@
                   <button id="pm-res-next" type="button" data-step="1" aria-label="Next resolution">&rsaquo;</button>
                 </div>
               </div>
+              <div id="pm-fullscreen" class="set-row" role="group" aria-labelledby="pm-fullscreen-label">
+                <span class="tune-label" id="pm-fullscreen-label">FULLSCREEN</span>
+                <div>
+                  <button id="pm-fullscreen-prev" type="button" data-step="-1" aria-label="Previous fullscreen">&lsaquo;</button>
+                  <select id="pm-fullscreen-sel" aria-labelledby="pm-fullscreen-label"></select>
+                  <button id="pm-fullscreen-next" type="button" data-step="1" aria-label="Next fullscreen">&rsaquo;</button>
+                </div>
+              </div>
+              <p id="pm-fullscreen-note" class="adv-help">Fills the screen and, where the browser allows it, keeps Esc as your pause key instead of spending it on leaving fullscreen.</p>
               <div id="pm-upscale" class="set-row" role="group" aria-labelledby="pm-upscale-label">
                 <span class="tune-label" id="pm-upscale-label">UPSCALE</span>
                 <div>
@@ -749,6 +813,7 @@
     <!-- Same shape as DISPLAY: one always-visible primary (presets + pace),
          then closed folds whose summaries carry the live choice. -->
     <div class="preset-row balanced-row">
+      <button id="pm-preset-rookie" class="preset-btn">ROOKIE<small>the car drives with you</small></button>
       <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
       <button id="pm-preset-standard" class="preset-btn">STANDARD<small>balanced default</small></button>
       <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
@@ -815,6 +880,11 @@
         <input id="pm-brakecue" type="range" min="1" max="10" step="1" value="6" aria-label="Brake cue"></label>
       <p class="adv-help">A tick that speeds up when you need to brake for a corner. 1 is OFF. Higher = earlier warning (more lookahead). Takes over nothing.</p>
     </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">HAPTICS <b id="pm-haptics-v">6</b></span>
+        <input id="pm-haptics" type="range" min="1" max="10" step="1" value="6" aria-label="Haptics"></label>
+      <p class="adv-help">Strength of every buzz and rumble: kerbs, contact, losing the front end, and the brake cue. 1 is OFF. Needs a phone that vibrates or a controller that rumbles &mdash; iPhone and iPad do neither from a web page.</p>
+    </div>
     </div>
     </details>
 
@@ -835,6 +905,52 @@
       <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
         <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6" aria-label="Steer smoothing"></label>
       <p class="adv-help">How steady the tilt filter holds the wheel. Higher = smoother and calmer at rest (kills hand jitter) with a touch more lag; lower = more immediate.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">TILT CURVE <b id="pm-tiltcurve-v">5</b></span>
+        <input id="pm-tiltcurve" type="range" min="1" max="10" step="1" value="5" aria-label="Tilt curve"></label>
+      <p class="adv-help">Trims LINEARITY for tilt only. Lower = gentler near level, for fine trim; higher = more direct. 5 leaves LINEARITY exactly as it is.</p>
+    </div>
+
+    <h3 class="adv-sec">TOUCH INPUT <span>dragging on the track (touch mode)</span></h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">TOUCH SENSITIVITY <b id="pm-touchrange-v">5</b></span>
+        <input id="pm-touchrange" type="range" min="1" max="10" step="1" value="5" aria-label="Touch sensitivity"></label>
+      <p class="adv-help">How far you drag for full lock. Higher = a shorter drag turns more (twitchier); lower = a long, deliberate sweep. Measured against the long edge of the screen, so it feels the same in either orientation.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">DRAG SMOOTHING <b id="pm-dragsmooth-v">OFF</b></span>
+        <input id="pm-dragsmooth" type="range" min="1" max="10" step="1" value="1" aria-label="Drag smoothing"></label>
+      <p class="adv-help">Filters thumb tremor out of a drag without dulling a flick. 1 is OFF (exactly as it always was). Raise it if the car wanders on a straight.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">DRAG CURVE <b id="pm-touchcurve-v">5</b></span>
+        <input id="pm-touchcurve" type="range" min="1" max="10" step="1" value="5" aria-label="Drag curve"></label>
+      <p class="adv-help">Trims LINEARITY for a drag only. 5 leaves LINEARITY exactly as it is.</p>
+    </div>
+
+    <h3 class="adv-sec">CONTROLLER <span>stick, d-pad and triggers</span></h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">STICK CURVE <b id="pm-padcurve-v">5</b></span>
+        <input id="pm-padcurve" type="range" min="1" max="10" step="1" value="5" aria-label="Stick curve"></label>
+      <p class="adv-help">Trims LINEARITY for the stick only. Lower = finer control near centre, which is what most pad players want; 5 leaves LINEARITY exactly as it is.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">DEAD ZONE <b id="pm-paddz-v">5%</b></span>
+        <input id="pm-paddz" type="range" min="0" max="30" step="1" value="5" aria-label="Stick dead zone"></label>
+      <p class="adv-help">Stick movement ignored around centre, as a percentage of travel. Raise it only if a resting stick drifts &mdash; every point costs you fine corrections. Use CALIBRATE first.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">SATURATION <b id="pm-padsat-v">0%</b></span>
+        <input id="pm-padsat" type="range" min="0" max="30" step="1" value="0" aria-label="Stick saturation"></label>
+      <p class="adv-help">How much travel short of the rim still counts as full lock. Raise it if a worn stick can no longer reach full steering.</p>
+    </div>
+
+    <h3 class="adv-sec">KEYS &amp; ON-SCREEN ARROWS <span>digital steering</span></h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">STEER RATE <b id="pm-steerrate-v">5</b></span>
+        <input id="pm-steerrate" type="range" min="1" max="10" step="1" value="5" aria-label="Steer rate"></label>
+      <p class="adv-help">How fast a held key or arrow winds on lock. Higher = quicker to full lock and twitchier; lower = steadier and easier to place. Letting go always unwinds at twice the rate you wind on.</p>
     </div>
 
     <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
@@ -862,6 +978,11 @@
       <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">5</b></span>
         <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5" aria-label="Speed steer"></label>
       <p class="adv-help">How much steering you keep at high speed. Higher = sharper and more responsive flat-out; lower = calmer and more stable.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">STEADY AT SPEED <b id="pm-analogspeed-v">OFF</b></span>
+        <input id="pm-analogspeed" type="range" min="1" max="10" step="1" value="1" aria-label="Steady at speed"></label>
+      <p class="adv-help">Softens tilt, a drag and the stick as you go faster, so the flick that places the car in a hairpin is not a spin at the end of a straight. 1 is OFF; full keeps 40% of your steering flat out. ADAPTIVE BUTTONS already does this for keys and arrows.</p>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">WEIGHT <b id="pm-weight-v">5</b></span>
@@ -1648,6 +1769,14 @@
           <button id="rs-line-next" type="button" data-step="1" aria-label="Next driving line">&rsaquo;</button>
         </div>
       </div>
+      <div id="rs-tyres" class="set-row" role="group" aria-labelledby="rs-tyres-label">
+        <span class="tune-label" id="rs-tyres-label">TYRE WEAR</span>
+        <div>
+          <button id="rs-tyres-prev" type="button" data-step="-1" aria-label="Previous tyre wear">&lsaquo;</button>
+          <select id="rs-tyres-sel" aria-labelledby="rs-tyres-label"></select>
+          <button id="rs-tyres-next" type="button" data-step="1" aria-label="Next tyre wear">&rsaquo;</button>
+        </div>
+      </div>
       <div id="rs-reliab" class="set-row" role="group" aria-labelledby="rs-reliab-label">
         <span class="tune-label" id="rs-reliab-label">RELIABILITY</span>
         <div>
@@ -2307,6 +2436,8 @@
 <script defer crossorigin="anonymous" src="js/circuits/dijon.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/buddh.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/mont_tremblant.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/pit-lane.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/track/circuit-elevations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/track-maps.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>
@@ -2339,6 +2470,7 @@
 <script defer crossorigin="anonymous" src="js/career/career.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-cal.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>

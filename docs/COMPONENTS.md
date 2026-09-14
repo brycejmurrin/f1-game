@@ -125,7 +125,7 @@ not.
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
-`season-`, `pair-`, `build-`, `mb-`) is one file each and needs no map.
+`season-`, `pair-`, `build-`, `mb-`, `mirror-`) is one file each and needs no map.
 
 **A family leaves this list when it leaves `css/`.** The title screen's old
 `.mb-stack` / `.mb-sub` pair was replaced by `#mb-career > span` and

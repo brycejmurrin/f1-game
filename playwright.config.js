@@ -52,12 +52,17 @@ const LAUNCH = {
 // up. These run in the "render" project (cap its workers via
 // `--project=render --workers=4`). Everything NOT in this list is a headless
 // physics/geometry/hook/data spec that scales wide — the "headless" project.
-// Keep this list exhaustive against tests/specs/*.spec.js (a coverage-audit npm script
-// asserts every spec lands in exactly one project).
+// Keep this list exhaustive against tests/specs/*.spec.js. The guard is in
+// tests/unit/test-groups.test.mjs, NOT the coverage audit — that one asserts
+// every spec belongs to a topical `test:*` group and says nothing about which
+// PROJECT it lands in. Three tests there hold this list: a name with no file, a
+// pinned --project that excludes a spec it names, and any spec that captures an
+// image while sitting outside this list (how parts-liveries was found).
 const RENDER_SPECS = [
   "dev-tools", "f1-track-accuracy", "hud-audit", "image-grade-visual",
   "lighting-ab", "lighting-tuner-grade",
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
+  "parts-liveries",
   "ui-audit", "ui-button-touch", "menu-survey", "menu-keyboard",
   "webgl-probes", "camera", "smoke", "season", "time-trial",
   "material-shimmer", "instanced-draw",

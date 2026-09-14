@@ -165,6 +165,67 @@
    control cannot do anything, so it stops inviting taps. */
 .touchbtn.dead { opacity: 0.3; pointer-events: none; }
 
+/* A PRESS STATE YOU CAN SEE PAST YOUR OWN THUMB. Every pressed style here
+   changed the fill INSIDE the button — which is the one part of it a finger is
+   covering at the moment the feedback matters. Apple's game-controls guidance
+   is explicit about this: "a visual press state effect, such as a glow, that
+   they can see even when their finger is covering the control."
+   An outside ring costs no layout (box-shadow draws outside the border box and
+   does not reflow the dock) and reads at a glance in peripheral vision, which
+   is all a driver has to spare. */
+.touchbtn:active { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 0 14px 4px rgba(255, 255, 255, 0.25); }
+@media (prefers-reduced-transparency: reduce) {
+  .touchbtn:active { box-shadow: 0 0 0 3px #fff; }
+}
+
+/* WHERE THE FINGER LANDED, in TOUCH mode. Drag-to-steer is an invisible
+   control: nothing on screen says the anchor is wherever you touched down, and
+   an invisible control is the classic discoverability failure. The affordance
+   that fixes it without permanently occluding the road is a transient mark at
+   the anchor — Mario Kart Tour ships exactly this, as its "Steer/Drift Button
+   Display" option. Fades on its own; never takes a pointer event. */
+#drag-anchor {
+  position: fixed; z-index: 6; top: 50%; left: 0;
+  width: 44px; height: 44px; margin: -22px 0 0 -22px;
+  border-radius: 50%; pointer-events: none;
+  border: 2px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+  opacity: 0; transition: opacity 0.45s ease-out;
+}
+#drag-anchor.on { opacity: 0.55; transition: opacity 0.08s ease-out; }
+@media (prefers-reduced-motion: reduce) { #drag-anchor { transition: none; } }
+
+/* The iOS install nudge. A banner, not a modal: it must never stand between a
+   player and the RACE button, and it is gone for good once dismissed. */
+#ios-install {
+  position: fixed; z-index: 40; left: var(--safe-l); right: var(--safe-r);
+  bottom: var(--safe-b); margin: 0 auto; max-width: 30rem;
+  display: flex; align-items: center; gap: var(--gap);
+  padding: var(--gap); border-radius: 10px;
+  background: rgba(12, 12, 18, 0.92); color: var(--text);
+  font-size: var(--fs-micro); line-height: 1.35;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+#ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; }
+/* `display: flex` above OUTRANKS the UA's `[hidden] { display: none }`, so the
+   attribute stops working and the banner shows on every platform — where it
+   sits bottom-centre and swallows clicks meant for #mb-race / #sel-go / #rs-go.
+   The dock groups carry the same restatement a few rules up for the same
+   reason. Caught by steering.spec.js, whose every click timed out. */
+#ios-install[hidden] { display: none; }
+
+/* LEFT-HANDED LAYOUT. F1 Mobile ships right- and left-handed wheel configs as
+   first-class, separately enumerated control schemes, and mirroring is the
+   single cheapest accessibility win on a touch layout: the dock is two thumb
+   groups, so swapping which group each dock holds is the whole feature.
+   Done in CSS with `flex-direction: row-reverse` on the bar, so the GROUPS
+   swap sides and the buttons inside each keep their own order (brake still
+   above gas, UP still above DN) — mirroring those too would put the pedals
+   upside down, which is not what a left-handed player asked for. */
+body.mirror-controls #hud-dock { flex-direction: row-reverse; }
+body.mirror-controls #dock-left { justify-content: flex-end; }
+body.mirror-controls #dock-right { justify-content: flex-start; }
+
 /* gear shift buttons: right column, stacked (DN bottom, UP above) with 8 px gaps */
 .shiftbtn { flex-direction: column; font-size: 15px; line-height: 1.05; }
 .shiftbtn small { font-size: var(--fs-micro); letter-spacing: var(--ls-4); color: var(--dim); }
@@ -840,6 +901,11 @@ body[data-density="compact"] #campicker {
   font-size: var(--fs-micro);
 }
 
+/* Same trap as #lights: js/game.js only ever sets `.hidden`, and the
+   `display: flex` below would beat the UA rule that attribute relies on — on a
+   full-screen z-index-99 panel, which is the worst element in the tree to have
+   painting unconditionally. */
+#nogl[hidden] { display: none; }
 #nogl {
   position: fixed; inset: 0; z-index: 99;
   display: flex; align-items: center; justify-content: center;
