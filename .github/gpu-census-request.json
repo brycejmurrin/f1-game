@@ -1,6 +1,8 @@
 {
   "images": "macos-latest,windows-latest",
   "track": "montreal",
-  "ls": "apex26.resMode=\"med\" apex26.spatialUpscale=1",
-  "leg": "med-upscale-json"
+  "census_only": false,
+  "force": "1",
+  "ls": "",
+  "leg": "survey-2026-09-renderer-parity"
 }
