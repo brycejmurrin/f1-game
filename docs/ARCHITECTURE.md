@@ -105,6 +105,7 @@ _168 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `post-common.js` | `PostCommon` | tag | PostCommon: backend-neutral post-chain helpers that were cloned verbatim into glx/post.js, wgx.js and tlx-post.js. |
 | `lamp-chunks.js` | `LampChunks` | tag | shared per-chunk lamp table bake (LampChunks). |
 | `frustum.js` | `Frustum` | tag | shared frustum cull math (Frustum). |
+| `vertex-pack.js` | `VertexPack` | tag | packed world vertex channels. |
 | `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 | `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
@@ -116,7 +117,6 @@ _168 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `post.js` | `GLXPost` | tag | GLX post-processing subsystem (split out of js/render/glx/glx.js). |
 | `shadow.js` | `GLXShadow` | tag | GLX shadow subsystem (split out of js/render/glx/glx.js). |
-| `vertex-pack.js` | `GLXVertexPack` | tag | GLX packed world vertex format. |
 | `chunked.js` | `GLXChunked` | tag | GLX chunked-mesh subsystem (split out of js/render/glx/glx.js). |
 | `glx.js` | `GLX` | tag | WebGL2 renderer core: the PBR GGX lit pass (sun + 32 spot lamps, shadow maps, procedural materials, wet road, fog), the procedural sky and the FX passes — ~13… |
 

@@ -1,5 +1,5 @@
-/* glx-vertex-pack.test.mjs — the packed world vertex format is a CONTRACT
- * between two files that cannot see each other: js/render/glx/vertex-pack.js
+/* vertex-pack.test.mjs — the packed world vertex format is a CONTRACT
+ * between two files that cannot see each other: js/render/shared/vertex-pack.js
  * writes the bytes, and LIT_VS in js/render/glx/shaders/glsl-lit.js decodes
  * them in GLSL. Nothing at runtime checks that the two agree — a mismatched
  * scale draws a world that is merely the wrong brightness, or picks the wrong
@@ -21,14 +21,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 
-const PACK_SRC = new URL("../../js/render/glx/vertex-pack.js", import.meta.url);
+const PACK_SRC = new URL("../../js/render/shared/vertex-pack.js", import.meta.url);
 const LIT_SRC = new URL("../../js/render/glx/shaders/glsl-lit.js", import.meta.url);
 
 function loadPack() {
   const ctx = { console };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(PACK_SRC, "utf8") +
-                  "\n;globalThis.__P = GLXVertexPack;", ctx);
+                  "\n;globalThis.__P = VertexPack;", ctx);
   return ctx.__P;
 }
 
@@ -172,6 +172,53 @@ test("the stride and the field offsets are the ones bindAttribs points at", () =
   assert.deepEqual(calls.map((c) => c.idx), [0, 1, 2, 4]);
   assert.equal(calls[3].offset, 28);
   for (const c of calls) assert.equal(c.stride, P.STRIDE_TRK);
+});
+
+// ── the half-float encoder, which WGX and TLX both depend on ───────────────
+// Node has no Math.f16round on this runtime and three exports no converter, so
+// this is ours and has to be tested as arithmetic, not assumed.
+function decodeHalf(h) {
+  const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 0x1f, m = h & 0x3ff;
+  if (e === 0) return s * m * 5.960464477539063e-8;      // sub-normal
+  if (e === 31) return m ? NaN : s * Infinity;
+  return s * Math.pow(2, e - 15) * (1 + m / 1024);
+}
+
+test("toHalf round-trips every whole number a material id can be", () => {
+  // Half float holds integers exactly to 2048; the id space tops out at 32.
+  for (let i = 0; i <= 2048; i++) {
+    assert.equal(decodeHalf(P.toHalf(i)), i, `integer ${i} did not survive`);
+  }
+});
+
+test("toHalf is unbiased, which a truncating encoder is not", () => {
+  // This is the whole reason it rounds rather than truncates. A truncating
+  // mantissa is always-toward-zero, so a whole frame of colours comes back
+  // systematically DARK — measured at -6.5e-4 mean signed bias on the variant
+  // in js/render/three/tlx-chunked.js, against ~0 here.
+  let bias = 0, worst = 0, n = 0;
+  for (let k = 1; k <= 40000; k++) {
+    const v = k / 10000, d = decodeHalf(P.toHalf(v));
+    bias += d - v;
+    worst = Math.max(worst, Math.abs(d - v) / v);
+    n++;
+  }
+  assert.ok(Math.abs(bias / n) < 1e-7, `mean signed bias ${bias / n} — is this truncating?`);
+  // 2^-11 is half float's mantissa; anything worse means a broken exponent.
+  assert.ok(worst <= 1 / 2048 + 1e-9, `worst relative error ${worst} exceeds the format`);
+});
+
+test("toHalf handles the edges rather than wrapping them", () => {
+  assert.equal(decodeHalf(P.toHalf(0)), 0);
+  assert.equal(decodeHalf(P.toHalf(-1)), -1);
+  assert.equal(decodeHalf(P.toHalf(65504)), 65504, "the largest finite half");
+  assert.equal(decodeHalf(P.toHalf(1e9)), Infinity, "overflow saturates, never wraps small");
+  assert.equal(decodeHalf(P.toHalf(-1e9)), -Infinity);
+  assert.ok(Number.isNaN(decodeHalf(P.toHalf(NaN))));
+  // Emissive colour is the reason WGX uses this instead of a unorm byte.
+  assert.ok(Math.abs(decodeHalf(P.toHalf(3.4)) - 3.4) < 1 / 2048 * 3.4);
+  // Sub-normals must not become zero — a tiny colour is still not black.
+  assert.ok(decodeHalf(P.toHalf(1e-6)) > 0);
 });
 
 test("the packed format is materially smaller than the float32 layout it replaced", () => {

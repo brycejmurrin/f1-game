@@ -53,11 +53,11 @@ const GLXChunked = (function () {
       let mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
       const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
       const hasTrk = trk != null;
-      // Packed layout — js/render/glx/vertex-pack.js. 28 bytes a vertex
+      // Packed layout — js/render/shared/vertex-pack.js. 28 bytes a vertex
       // (40 on the road, which carries track coords), against 36-52 when every
       // column was float32: on a street circuit's props this is tens of MB of
       // VBO, and the same fraction off the per-frame vertex fetch.
-      let interleaved = GLXVertexPack.pack(vCount, pos, nrm, col, mat, trk);
+      let interleaved = VertexPack.pack(vCount, pos, nrm, col, mat, trk);
       // Interleave done: normals/colours/materials are now baked into `interleaved`
       // and never read again. Drop them (both the toF32 copies and the source refs)
       // so ~half the source arrays can be GC'd before the bucket index arrays are
@@ -91,7 +91,7 @@ const GLXChunked = (function () {
       gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
       gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
       interleaved = null;   // uploaded to the VBO — drop the CPU copy
-      GLXVertexPack.bindAttribs(gl, hasTrk);
+      VertexPack.bindAttribs(gl, hasTrk);
       const IndexArray = big ? Uint32Array : Uint16Array;
       const indexType = big ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
       const BPI = big ? 4 : 2;                 // bytes per index

@@ -1,11 +1,28 @@
-/* Apex 26 — GLX packed world vertex format. The ONE definition of how a lit world mesh's attributes are laid out in its VBO; glx.js and chunked.js both up… */
+/* Apex 26 — packed world vertex channels. The ONE definition of how a lit world mesh's normal/colour/material are quantised, shared by all three render backends; GLX's own interleaved layout lives here too. */
 "use strict";
 
+// World geometry is the same {pos,nrm,col,mat,idx} in every backend, and in
+// every backend the same three channels do not need 32 bits. What DIFFERS is
+// the layout, because each API allows different things:
+//
+//   GLX   one interleaved VBO; the material id rides in the alpha of the
+//         colour attribute. pack() / bindAttribs() below.
+//   WGX   three vertex attributes; the material id is not one of them — it
+//         lives in the group-2 storage buffer, because Dawn zeroes a fourth
+//         attribute on this adapter (js/render/webgpu/wgx.js).
+//   TLX   separate named three.js BufferAttributes, and three picks the GL /
+//         WebGPU format from the array type (js/render/three/tlx-chunked.js).
+//
+// So this module owns the QUANTISERS, which are the part that must agree, and
+// GLX's layout as well since it has nowhere better to live. A backend that
+// quantises a channel its own way is how two backends end up disagreeing about
+// what colour 2.0 means.
+//
 // Every lit world mesh — road, terrain, props, glass, water, the instanced
 // scenery batches, the garage/car meshes — uploads through pack() below and
 // binds through bindAttribs(). LIT_VS (js/render/glx/shaders/glsl-lit.js) is
-// the only reader; keep its COL_SCALE / MAT_SCALE in step with the constants
-// here (tests/unit/glx-vertex-pack.test.mjs asserts the two files agree).
+// the only reader of THAT layout; keep its COL_SCALE / MAT_SCALE in step with
+// the constants here (tests/unit/vertex-pack.test.mjs asserts they agree).
 //
 //   off  0   FLOAT32 x3   position (metres)
 //   off 12   SHORT   x4   normal, normalized; w is padding
@@ -46,7 +63,7 @@
 // Both quantisers clamp rather than wrap, so a value past the ceiling saturates
 // — visible and debuggable — instead of aliasing a bright neon onto near-black
 // or one material onto an unrelated one.
-const GLXVertexPack = (function () {
+const VertexPack = (function () {
   const COL_SCALE = 15.0, COL_Q = 4369;     // 65535 / 15
   const MAT_SCALE = 85.0, MAT_Q = 771;      // 65535 / 85
   const STRIDE = 28, STRIDE_TRK = 40;
@@ -91,7 +108,34 @@ const GLXVertexPack = (function () {
     if (hasTrk) { gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, stride, 28); }
   }
 
-  return { COL_SCALE, MAT_SCALE, COL_Q, MAT_Q, STRIDE, STRIDE_TRK, pack, bindAttribs };
+  // IEEE-754 binary16. WGX writes `float16x4` vertex buffers and TLX builds
+  // Float16BufferAttributes; both need colours past 1.0 (emissive reaches 3.4),
+  // which a unorm byte or short cannot hold without a scale the shader would
+  // have to know about. Half-float costs two bytes, reads as a plain float in
+  // WGSL and TSL alike, and holds every material id exactly (integers to 2048).
+  // Sub-normals and the exponent clamp are handled: a value past 65504
+  // saturates to Infinity rather than wrapping to a small number.
+  function toHalf(v) {
+    if (!(v === v)) return 0x7e00;                       // NaN -> quiet NaN
+    const sign = v < 0 || Object.is(v, -0) ? 0x8000 : 0;
+    const a = Math.abs(v);
+    if (a === Infinity) return sign | 0x7c00;
+    if (a >= 65520) return sign | 0x7c00;                // rounds to Infinity
+    if (a < 6.103515625e-5) {                            // sub-normal
+      return sign | Math.round(a / 5.960464477539063e-8);
+    }
+    let e = Math.floor(Math.log2(a));
+    let m = a / Math.pow(2, e) - 1;
+    if (m >= 1) { m -= 1; e += 1; }                      // log2 rounding guard
+    let mant = Math.round(m * 1024);
+    if (mant === 1024) { mant = 0; e += 1; }
+    if (e > 15) return sign | 0x7c00;
+    if (e < -14) return sign | Math.round(a / 5.960464477539063e-8);
+    return sign | ((e + 15) << 10) | mant;
+  }
+
+  return { COL_SCALE, MAT_SCALE, COL_Q, MAT_Q, STRIDE, STRIDE_TRK,
+           pack, bindAttribs, snorm16: qs, unorm16col: qc, unorm16mat: qm, toHalf };
 })();
 
-if (typeof window !== "undefined") window.GLXVertexPack = GLXVertexPack;
+if (typeof window !== "undefined") window.VertexPack = VertexPack;

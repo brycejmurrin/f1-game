@@ -1072,7 +1072,7 @@ const GLX = (function () {
       idx = big ? new Uint32Array(idx) : new Uint16Array(idx);
     }
 
-    // Packed and interleaved by GLXVertexPack (js/render/glx/vertex-pack.js).
+    // Packed and interleaved by VertexPack (js/render/shared/vertex-pack.js).
     // Optional per-vertex material id (data.mat) rides in the alpha of the
     // colour attribute and so costs nothing; meshes without it encode 0, which
     // is the same FLAT the old disabled attribute 3 read from its generic
@@ -1083,14 +1083,14 @@ const GLX = (function () {
     // hw > 0 so nothing else can accidentally paint lines on itself.
     const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
     const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
-    const interleaved = GLXVertexPack.pack(vCount, pos, nrm, col, mat, trk);
+    const interleaved = VertexPack.pack(vCount, pos, nrm, col, mat, trk);
 
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const vbo = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
-    GLXVertexPack.bindAttribs(gl, !!trk);
+    VertexPack.bindAttribs(gl, !!trk);
     const ib = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);

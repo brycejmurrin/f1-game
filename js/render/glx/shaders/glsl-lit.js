@@ -28,7 +28,7 @@ layout(location=0) in vec3 aPos;
 // ripple like cloth, and every surfaceId == N test in the FS below is the same
 // kind of comparison. Measured headroom: colour 15.0 against a fleet maximum of
 // 3.4 (nose running lights), material 85.0 against a maximum id of 32.
-// Full rationale: js/render/glx/vertex-pack.js.
+// Full rationale: js/render/shared/vertex-pack.js.
 layout(location=1) in vec4 aNrmP;
 layout(location=2) in vec4 aColMat;
 layout(location=4) in vec3 aTrk;    // road only: (arc-length s, signed lateral x, half-width). (0,0,0) elsewhere.

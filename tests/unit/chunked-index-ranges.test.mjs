@@ -35,7 +35,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedFrustum } from "../helpers/seed-frustum.mjs";
 
 const SRC = new URL("../../js/render/glx/chunked.js", import.meta.url);
-const PACK_SRC = new URL("../../js/render/glx/vertex-pack.js", import.meta.url);
+const PACK_SRC = new URL("../../js/render/shared/vertex-pack.js", import.meta.url);
 
 // ── Stub GL: enough of WebGL2 for createChunkedMesh, and it REMEMBERS the
 // element-array uploads so the assertions can read real bytes back.
@@ -56,7 +56,7 @@ function makeGL() {
       if (target === this.ARRAY_BUFFER) this._array = buf;
     },
     // The VBO upload is a PACKED ArrayBuffer (mixed float32/int16/uint16 —
-    // js/render/glx/vertex-pack.js), so it is recorded as raw bytes and the
+    // js/render/shared/vertex-pack.js), so it is recorded as raw bytes and the
     // assertions build their own views over it, exactly as the GPU would.
     bufferData(target, src) {
       // `instanceof ArrayBuffer` is false across the vm realm boundary — the
@@ -92,7 +92,7 @@ const VP = (() => {
   const ctx = { console };
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(PACK_SRC, "utf8") +
-                  "\n;globalThis.__P = GLXVertexPack;", ctx);
+                  "\n;globalThis.__P = VertexPack;", ctx);
   return ctx.__P;
 })();
 
@@ -105,7 +105,7 @@ function loadChunked(gl) {
   // The REAL vertex packer, not a stand-in: these tests assert the bytes that
   // reach the GPU, so a reimplementation here would only prove itself.
   vm.runInContext(fs.readFileSync(PACK_SRC, "utf8") +
-                  "\n;globalThis.GLXVertexPack = GLXVertexPack;", ctx);
+                  "\n;globalThis.VertexPack = VertexPack;", ctx);
   vm.runInContext(code + "\n;globalThis.__GLXChunked = GLXChunked;", ctx);
   return ctx.__GLXChunked.init({
     gl,
