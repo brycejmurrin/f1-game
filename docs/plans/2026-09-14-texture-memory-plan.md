@@ -80,19 +80,30 @@ three's retained counts on the TLX leg only.
 - Add: a new texture-census suite under `tests/unit/` (this plan creates it;
   it is deliberately not named as a live path until it exists)
 
-- [ ] Write the test first: a stub GL context, three textures of known size,
-      one deleted; assert the census reports the surviving two and the exact
-      byte total including the 1.333 mip factor.
-- [ ] Confirm it fails (no census exists).
-- [ ] Implement the accounting in GLX and the `texCensus()` hook.
-- [ ] Confirm the test passes, and that a census with NO textures reports zero
-      rather than `undefined` — `notes/PERF-FINDINGS.md` §2i/§2j are both about
-      instruments that could not say "I measured nothing".
-- [ ] Take the reading: `node tools/shot/apex-eval.mjs montreal "a.texCensus()"`
-      on a full grid. Record the livery share in `notes/PERF-FINDINGS.md`.
+- [x] Write the test first — `tests/unit/tex-census.test.mjs`, against the REAL
+      glx.js through `tests/helpers/glx-mock.mjs`. Asserts the EXACT mip-chain
+      sum, not `w*h*4*1.333`: that rule assumes a square texture and the livery
+      atlas is 1024×1280, so the test also asserts the rule-of-thumb answer is
+      NOT what the census returns.
+- [x] Confirm it fails (`texCensus is not a function`, 7/7 red).
+- [x] Implement the accounting in GLX and the `texCensus()` hook.
+- [x] Confirm it passes, including: an empty census reports 0 rather than
+      `undefined`, a freed texture leaves the ledger, and a lost context reports
+      nothing resident instead of the last number it held.
+- [x] Declare `texCensus: undefined` in WGX and TLX. Not a silencer — game.js
+      installs a backend by descriptor-copy onto GLX, so an absent NAME would
+      keep GLX's own function and run it against a null `gl`.
+- [x] Take the reading. **CONFIRMED, montreal, full grid, GLX:**
 
-**Done when:** the 147 MB is confirmed, refuted, or replaced by the real
-number, and that number is in the ledger.
+```
+content2D      153,791,000 B   146.67 MB   22 livery atlases, 1024x1280
+materialArray   11,883,816 B    11.33 MB   baked albedo + normal arrays
+                               158.00 MB   total counted
+```
+
+**Done.** The estimate held (147 → 146.67, 11.9 → 11.33) and the liveries are
+**10.6× the packed world VBO** at 13.8 MB on a mean circuit. Recorded in
+`notes/PERF-FINDINGS.md` §2v.
 
 ### Task 2: A desktop AI livery tier — GATED ON TASK 1
 
@@ -100,8 +111,11 @@ Mobile already downshifts (512 for the player, 256 for AI; `liverytex.js`
 ~3041). Desktop gives all 22 cars the full 1024×1280. An AI car at racing
 distance is a few hundred pixels; at 512 its atlas costs a quarter as much.
 
-Indicative only — the real figures come from Task 1: 21 AI cars at 512 plus the
-player at full would be ~42 MB against ~147.
+**Now backed by Task 1's measurement, not an estimate.** 22 atlases really are
+resident and really do cost 146.67 MB. 21 AI cars at 512 plus the player at
+full would be ~42 MB against that — the single largest saving available
+anywhere in the renderer, and roughly TEN TIMES what this session's whole
+vertex-packing effort returned per circuit.
 
 **Files:**
 - Modify: `js/car/liverytex.js` (the tier decision), `js/car/car-draw.js`
@@ -144,8 +158,13 @@ decompress to full RGBA on upload. Block-compressed formats stay compressed in
 VRAM — 4–8× less memory, 4–8× faster upload, and better sampling cache
 behaviour on every textured fragment.
 
-The 17-layer albedo + normal arrays are ~11.9 MB of VRAM at the 256 tier;
-UASTC would take that to ~3 MB.
+The 17-layer albedo + normal arrays measure **11.33 MB** (Task 1); UASTC would
+take that to ~2.8 MB, so the prize is ~8.5 MB.
+
+**Task 1 demoted this, on evidence.** "Compress the textures" is the obvious
+move and it is the SMALL one: the liveries are 13× these arrays. Task 2 is
+worth an order of magnitude more and costs a resolution policy rather than a
+wasm transcoder. Do Task 2 first.
 
 **Why this is a decision and not a task.** It needs an offline encoder in the
 bake pipeline, a Basis transcoder (~300 KB of wasm) at runtime, and compressed

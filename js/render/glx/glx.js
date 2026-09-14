@@ -1133,6 +1133,64 @@ const GLX = (function () {
     return { vao, vbo, ib, count: idx.length, indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
   }
   // Upload a canvas / ImageBitmap / ImageData as an RGBA texture (mipmapped, clamped).
+  // ── texture byte census ────────────────────────────────────────────────────
+  // What is RESIDENT, not what was ever created. Exists because the biggest
+  // texture number in the game had never been measured: the livery atlases were
+  // estimated at ~147 MB from source constants, roughly ten times the packed
+  // world geometry, with no hook that could confirm or refute it
+  // (docs/plans/2026-09-14-texture-memory-plan.md, Task 1).
+  //
+  // Bytes are the EXACT mip chain, not the w*h*4*4/3 rule of thumb. That rule
+  // assumes a square texture and the livery atlas is 1024x1280: once the width
+  // bottoms out at 1 the chain keeps going down the height, and the estimate
+  // drifts. An instrument that is only approximately right is how the wrong
+  // thing gets optimised — which is the point of PERF-FINDINGS §0.
+  //
+  // NOT COUNTED, and the census says so in `excludes` rather than staying
+  // quiet about it: render targets (the shadow maps, the post chain, the env
+  // cube) are created directly against gl in shadow.js / post.js and never come
+  // through here. §2i and §2j are both about instruments that could not say
+  // "I measured nothing"; a total with a silent denominator is the same fault.
+  const _texLedger = new Map();          // texture -> { kind, w, h, layers, bytes }
+  const TEX_EXCLUDES = ["shadow maps", "post chain", "env cube", "non-GLX backends"];
+
+  function _mipBytes(w, h, layers, bytesPerTexel) {
+    let total = 0, mw = w, mh = h;
+    for (;;) {
+      total += mw * mh * layers * bytesPerTexel;
+      if (mw === 1 && mh === 1) return total;
+      mw = Math.max(1, mw >> 1); mh = Math.max(1, mh >> 1);
+    }
+  }
+  function _texNote(tex, kind, w, h, layers) {
+    if (!tex || !(w > 0) || !(h > 0)) return tex;
+    _texLedger.set(tex, { kind, w, h, layers, bytes: _mipBytes(w, h, layers, 4) });
+    return tex;
+  }
+  function _texForget(tex) { if (tex) _texLedger.delete(tex); }
+
+  // { bytes, count, byKind, biggest, excludes } — bytes and count are always
+  // NUMBERS, zero when nothing is resident, never undefined.
+  function texCensus() {
+    // A lost context freed every texture the driver held, whatever this ledger
+    // still remembers. Reporting the last number it happened to hold would be
+    // the §2u fault — an instrument that was blind to the state change and
+    // stayed confident through it.
+    if (ctxGone()) return { bytes: 0, count: 0, mb: 0, byKind: Object.create(null),
+                            biggest: null, contextLost: true, excludes: TEX_EXCLUDES.slice() };
+    const byKind = Object.create(null);
+    let bytes = 0, count = 0, biggest = null;
+    _texLedger.forEach((r) => {
+      bytes += r.bytes; count++;
+      byKind[r.kind] = (byKind[r.kind] || 0) + r.bytes;
+      if (!biggest || r.bytes > biggest.bytes) {
+        biggest = { kind: r.kind, w: r.w, h: r.h, layers: r.layers, bytes: r.bytes };
+      }
+    });
+    return { bytes, count, mb: +(bytes / 1048576).toFixed(2), byKind, biggest,
+             excludes: TEX_EXCLUDES.slice() };
+  }
+
   function createTexture(src) {
     if (ctxGone()) return null;
     const tex = gl.createTexture();
@@ -1154,9 +1212,11 @@ const GLX = (function () {
     // drawDecal) — a bare null unbind here left every later lit draw sampling
     // an empty unit as uShadowMap for one frame. Restore the invariant.
     gl.bindTexture(gl.TEXTURE_2D, (SHD && SHD.enabled && SHD.mapTex) || null);
-    return tex;
+    // Dimensions come off the source the upload just consumed — a canvas,
+    // ImageBitmap or ImageData all carry width/height.
+    return _texNote(tex, "content2D", src && src.width, src && src.height, 1);
   }
-  function freeTexture(t) { if (t) gl.deleteTexture(t); }
+  function freeTexture(t) { if (t) { _texForget(t); gl.deleteTexture(t); } }
 
   // ── Baked PBR material texture arrays ──────────────────────────────────────
   // One TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID, so the lit shader can
@@ -1189,6 +1249,9 @@ const GLX = (function () {
       } catch (_) { /* one bad layer must not sink the pack */ }
     }
     if (!filled) { gl.deleteTexture(tex); gl.bindTexture(gl.TEXTURE_2D_ARRAY, null); return null; }
+    // texStorage3D allocated the whole chain for ALL n layers up front, so the
+    // resident cost is n layers wide whether or not every one was filled.
+    _texNote(tex, "materialArray", size, size, n);
     gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -1207,8 +1270,8 @@ const GLX = (function () {
   // previously-bound arrays so a pack swap — tier change, test teardown — can't
   // leak GPU memory.
   function setMaterialMaps(maps) {
-    if (matAlbedoTex) { gl.deleteTexture(matAlbedoTex); matAlbedoTex = null; }
-    if (matNormalTex) { gl.deleteTexture(matNormalTex); matNormalTex = null; }
+    if (matAlbedoTex) { _texForget(matAlbedoTex); gl.deleteTexture(matAlbedoTex); matAlbedoTex = null; }
+    if (matNormalTex) { _texForget(matNormalTex); gl.deleteTexture(matNormalTex); matNormalTex = null; }
     matTexScales.fill(0);
     if (!maps) return;
     matAlbedoTex = maps.albedo || null;
@@ -2471,6 +2534,7 @@ const GLX = (function () {
       scales: Array.from(matTexScales),
     }),
     freeTexture,
+    texCensus,                    // resident texture bytes — see the ledger above
     drawDecal,
     chunkedTrackCoords: true,
     // Per-chunk lamp support (the LampChunks bake). Capability read, never a

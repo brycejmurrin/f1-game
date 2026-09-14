@@ -1206,6 +1206,23 @@ const api = {
     await Assets.load(tier ? { tier } : {});
     return Assets.state();
   },
+  // texCensus() — RESIDENT texture bytes, by kind, from the active backend.
+  //
+  // The hook the 2026-09-14 texture-memory plan turns on. Its whole reason for
+  // existing is that the biggest texture number in the game was arithmetic:
+  // ~147 MB of livery atlases, about ten times the packed world geometry, with
+  // nothing able to confirm or refute it. Read it on a full grid before
+  // touching any resolution policy.
+  //
+  // `excludes` is not decoration — it names what the census does NOT count
+  // (render targets: shadow maps, post chain, env cube), so a total can never
+  // be mistaken for the whole picture. `supported:false` means the active
+  // backend has no census (WGX/TLX); that is a normal state, not an error, and
+  // it reads as such rather than as a measured zero.
+  texCensus: () => (gfx && gfx.texCensus
+    ? gfx.texCensus()
+    : { supported: false, bytes: null, count: null,
+        error: "the active backend has no texture census (GLX only)" }),
   matTex(v) {
     if (v !== undefined) {
       setLightTune("matTexMix", Math.max(0, Math.min(1, +v || 0)));

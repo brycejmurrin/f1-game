@@ -6097,6 +6097,13 @@ const WGX = (function () {
       freeMesh,
       freeChunkedMesh,
       freeTexture,
+      // texCensus: GLX-only. Declared ABSENT rather than left off, because
+      // game.js installs a backend by descriptor-copy onto GLX and an absent
+      // NAME would keep GLX's own function — which would then run against a
+      // null gl. This makes `if (gfx.texCensus)` answer honestly, and
+      // __apex.texCensus() report supported:false instead of a measured zero.
+      // Implementing it here is follow-up work, not a silencer to remove.
+      texCensus: undefined,
 
       begin,
       present,
