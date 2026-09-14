@@ -56,6 +56,23 @@ const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed"];
 // #hud-limits joined this list after it shipped overlapping #hud-sectors by
 // 8.6px: the clash check only ever looked at elements named here, so a NEW
 // fixed-position HUD element is invisible to it until someone adds it.
+// HOW MUCH ROOM IS LEFT. This file asserts "no overlap", which is a yes/no and
+// says nothing about how close the layout is to failing. Measured across all 12
+// landscape cases (2026-09-14, same pairing as `measure` below, reporting the
+// minimum clearance of every asserted pair instead of asserting zero), the
+// tightest gaps are IDENTICAL in every case and every one of them is a constant
+// the CSS declares, not a near-miss the layout happened to land on:
+//
+//   4.0px   #hud-sectors x #pausebtn   the literal `+ 4px` in css/hud.css's
+//                                      `top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z))`
+//   6.7px   button x button            the dock's own gap, --gap-derived
+//   8.0px   .hud-gaps x #minimap, and the safe-area margin on all four readouts
+//
+// So the budget is 4px, and it belongs to ONE pair. #hud-sectors grows downward
+// from a top that clears #pausebtn by exactly that much, so nothing that makes
+// the pause button taller (--tap is 44 desktop / 52 touch) or the sectors box
+// start higher has anywhere to go — that is the collision this very file caught
+// once already, when the 56 was hard-coded. Everything else has room.
 const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors", "#hud-limits"];
 
 async function race(page, steer, manual, ins, opts) {
