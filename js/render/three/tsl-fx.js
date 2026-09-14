@@ -204,12 +204,16 @@
 
     const decalCache = new Map();      // "texture.id|glow" -> material
     const DECAL_CACHE_CAP = 24;
-    const _decalGraph = [null, null];
+    // Keyed on the GLOW VALUE, not on "is it lit": the graph body closes over
+    // `glow` as a JS constant, so one bucket per truthiness handed every later
+    // non-zero glow the first one's lift (garage 0.62 leaking onto the night
+    // car's 0.35). The callers use a fixed handful of values, and
+    // decalMaterialFor / fxMaterial already key on the same number.
+    const _decalGraph = new Map();
     function sharedDecal(glow) {
-      const gi = glow ? 1 : 0;
-      let packed = _decalGraph[gi];
+      let packed = _decalGraph.get(glow);
       if (!packed) {
-        packed = _decalGraph[gi] = Fn(() => {
+        packed = Fn(() => {
           const t = materialReference("map", "texture").toVar();
           const N = normalize(vec3(normalWorld).toVar());
           const ndl = max(dot(N, U.sunDir), 0.0);
@@ -217,6 +221,7 @@
           const rgb = t.rgb.mul(amb.add(vec3(U.sunColor).mul(ndl))).add(t.rgb.mul(glow));
           return vec4(rgb, t.a);
         })();
+        _decalGraph.set(glow, packed);
       }
       return packed;
     }

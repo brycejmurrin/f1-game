@@ -304,12 +304,12 @@ const SceneryNature = (function () {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
       const spread = opts.spread != null ? Math.max(0.5, Math.min(1.8, opts.spread)) : 1;
-      if (onTrack(a.c[0], a.c[2], h * 0.34 * spread + 0.8)) {
+      if (onTrack(a.c[0], a.c[2], h * 0.50 * spread + 0.8)) {
         ctx.noteSuppressed("broadleafFall", `broadleafFall SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
       ctx.note("broadleafFall", [a.c[0], a.c[1] + h * 0.6, a.c[2]],
-               [h * 0.68 * spread, h, h * 0.68 * spread], { k, side });
+               [h * 1.0 * spread, h, h * 1.0 * spread], { k, side });
       const lobes = Math.max(2, Math.min(5, Math.round(opts.lobes || 3)));
       out._mat = MAT.WOOD;
       addCyl(out, vadd(a.c, a.u, -0.5), 0.22 + h * 0.012, h * 0.42 + 0.5,
@@ -771,7 +771,7 @@ const SceneryNature = (function () {
       if (kind === "palm") return 5.2;                    // frond hub 2.4 + blade spread
       if (kind === "cypress")       return 1.45 * jMax + 0.4;   // narrow column
       if (kind === "stonePine")     return h * 0.44 + 0.6;      // wide flat parasol
-      if (kind === "broadleafFall") return h * 0.34 + 0.8;      // lobed crown
+      if (kind === "broadleafFall") return h * 0.50 + 0.8;      // lobed crown (lobe radial offset + widest lobe radius)
       if (kind === "acacia")        return h * 0.575 + 0.8;     // flat-topped thorn, spread = h*1.15
       if (kind === "plane")         return 4.2 + h * 0.12 + 0.6;  // pollarded avenue crown
       if (kind === "vase")          return (4.0 + h * 0.17) * jMax + 0.4;

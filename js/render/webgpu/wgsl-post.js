@@ -611,7 +611,7 @@ fn colourGrade(c_in : vec3<f32>) -> vec3<f32> {
 
   c = c * vec3<f32>(1.015, 1.008, 0.992);                 // gain
   c = c * (1.0 + c * 0.13) / (1.0 + c * 0.20);            // soft S-curve
-  c = pow(max(c, vec3<f32>(0.0)), vec3<f32>(contrast));   // midtone contrast
+  c = pow(max(c, vec3<f32>(1e-6)), vec3<f32>(contrast));   // midtone contrast; pow(0, n) NaNs on mobile GPUs, black stays black
   // Vibrance: pull dull pixels toward colour more than vivid ones.
   let luma = dot(c, LUMA);
   let mx = max(max(c.r, c.g), c.b);
@@ -1308,7 +1308,12 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
         let hP = ssrViewPos(huv);
         let hdx = ssrViewPos(huv + vec2<f32>(nT.x, 0.0)) - hP;
         let hdy = ssrViewPos(huv + vec2<f32>(0.0, nT.y)) - hP;
-        var hN = normalize(cross(hdx, hdy));
+        // Degenerate basis (both deltas collinear at depth-quantised grazing
+        // distances) must fall back to upVSn, not NaN: a NaN hN fails the
+        // dot() test below, so the reject silently stops firing (GLX parity).
+        let hcr = cross(hdx, hdy);
+        let hcl = length(hcr);
+        var hN = select(upVSn, hcr / hcl, hcl > 1e-6);
         if (hN.z < 0.0) { hN = -hN; }
         if (dot(hN, upVSn) > 0.55) { continue; }
       }

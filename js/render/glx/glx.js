@@ -113,7 +113,7 @@ const GLX = (function () {
   // Null until a pack is loaded — a pack ships in assets/pack and loads at boot
   // (matTexMix def 1.0), but load is async and can fail, so every path below
   // has to survive them staying null and degrade to the procedural look.
-  let matAlbedoTex = null, matNormalTex = null, matDummyArrTex = null;
+  let matAlbedoTex = null, matNormalTex = null, matDummyArrTex = null, _matGen = 0, _matBoundGen = -1;   // _matGen: pack generation; _matBoundGen: what bindMaterialMaps last bound
   const MAT_TEX_LAYERS = 17;                                 // MAT.FLAT(0) … MAT.ASPHALT(16)
   const matTexScales = new Float32Array(MAT_TEX_LAYERS);     // world metres per tile; 0 = absent
   // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
@@ -703,7 +703,7 @@ const GLX = (function () {
     markBatchProg = _ok(markBatchProg); glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex"]);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
-    _clearUf(_litUf); _clearUf(_skyUf);
+    _clearUf(_litUf); _clearUf(_skyUf); _matBoundGen = -1;   // a relink drops uMatTexScale too
 
     // ── GLXCore: the ctx façade handed to the split subsystem modules
     // (js/render/glx/{post,shadow,chunked}.js). Live getters close over this
@@ -1225,6 +1225,7 @@ const GLX = (function () {
   // previously-bound arrays so a pack swap — tier change, test teardown — can't
   // leak GPU memory.
   function setMaterialMaps(maps) {
+    _matGen++;   // bindMaterialMaps rebinds + re-uploads the scales on the next begin()
     if (matAlbedoTex) { gl.deleteTexture(matAlbedoTex); matAlbedoTex = null; }
     if (matNormalTex) { gl.deleteTexture(matNormalTex); matNormalTex = null; }
     matTexScales.fill(0);
@@ -1276,24 +1277,23 @@ const GLX = (function () {
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
   }
 
-  // Per-frame material-map binding. Units 10/11 are free — the lit pass holds 0
-  // (shadow), 5 (decal), 6, 7 (PCSS blocker), 8 (car shadow), 9 (lamp shadow).
+  // Material-map binding, once per PACK. Units 10/11 are free — the lit pass holds 0
+  // (shadow), 5 (decal), 6, 7 (PCSS blocker), 8 (car shadow), 9 (lamp shadow) — and nothing else binds them.
   function bindMaterialMaps(mix) {
     ensureMatDummy();
-    gl.activeTexture(gl.TEXTURE10);
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, matAlbedoTex || matDummyArrTex);
-    ufI(litU.uMatAlbedoTex, _litUf, "u.matAlbedo", 10);
-    gl.activeTexture(gl.TEXTURE11);
-    // No baked normal array → sample the NEUTRAL 128-grey dummy, not the albedo
-    // array. A pack with albedo but no normal is documented-valid ("albedo alone
-    // still helps"); falling back to matAlbedoTex here fed coloured albedo RGB to
-    // applyMaterialTexNormal as a tangent-space normal, warping shading on every
-    // grass/rock/wall layer instead of degrading cleanly.
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, matNormalTex || matDummyArrTex);
-    ufI(litU.uMatNormalTex, _litUf, "u.matNormal", 11);
+    if (_matBoundGen !== _matGen) {   // the binds and the 17 scales are pack-swap state; begin() runs ~8x a game frame
+      _matBoundGen = _matGen; gl.activeTexture(gl.TEXTURE10); gl.bindTexture(gl.TEXTURE_2D_ARRAY, matAlbedoTex || matDummyArrTex);
+      // No baked normal array → sample the NEUTRAL 128-grey dummy, not the albedo
+      // array. A pack with albedo but no normal is documented-valid ("albedo alone
+      // still helps"); falling back to matAlbedoTex here fed coloured albedo RGB to
+      // applyMaterialTexNormal as a tangent-space normal, warping shading on every
+      // grass/rock/wall layer instead of degrading cleanly.
+      gl.activeTexture(gl.TEXTURE11); gl.bindTexture(gl.TEXTURE_2D_ARRAY, matNormalTex || matDummyArrTex);
+      if (litU["uMatTexScale[0]"]) gl.uniform1fv(litU["uMatTexScale[0]"], matTexScales);
+    }
     gl.activeTexture(gl.TEXTURE0);      // leave unit 0 active + bound to the shadow map
+    ufI(litU.uMatAlbedoTex, _litUf, "u.matAlbedo", 10); ufI(litU.uMatNormalTex, _litUf, "u.matNormal", 11);
     uf1(litU.uMatTexMix, _litUf, "matTexMix", matAlbedoTex ? mix : 0);
-    if (litU["uMatTexScale[0]"]) gl.uniform1fv(litU["uMatTexScale[0]"], matTexScales);
   }
   // Draw textured decals over the just-drawn car body: depth test ON, depth write
   // OFF (decals are proud of the panel so they never z-fight), alpha-blended, and
@@ -2332,7 +2332,7 @@ const GLX = (function () {
     gl.uniform1f(lineU.uCornersOnly, opts && opts.cornersOnly ? 1 : 0);
     gl.uniform1f(lineU.uPalette, opts && opts.palette ? 1 : 0);
     gl.uniform1f(lineU.uOpacity, (opts && opts.opacity) || 1);
-    gl.uniform1f(lineU.uStr, (opts && opts.str) || 1.6);
+    gl.uniform1f(lineU.uStr, 1.6);          // emissive strength: a constant, no producer sends one
     setBlend(true);
     setDepthMask(false);
     setPolyOffset(ROAD_BIAS);

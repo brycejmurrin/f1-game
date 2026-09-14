@@ -232,10 +232,9 @@ const Particles = (function () {
     // lineTo each, strokes them, and hands the compositor a second full-screen
     // surface to blend over #game. LT.rainCount is 450-650 across the wet presets.
     //
-    // It also survives the ENTIRE governor ladder: no PerfGov.tier() gate, no
-    // mobileTier gate, so it is still running at full count on a device that has
-    // shed lamp shadows, SSR, god rays and the whole heavy post stack. That is the
-    // wrong shape — the cheapest thing to keep should not be the last thing to go.
+    // The mobileTier cap is the seed-time half of the gate; the governor half is
+    // per-frame in rainDraw (see _rainShown), because the shed level moves long
+    // after a shower is seeded.
     const wetCap = (_gfx && _gfx.mobileTier) ? 140 : Infinity;
     const count = Math.min(wetCap, Math.round(LT.rainCount * (drizzle ? dzCount : 1)));
     _rainDrops = Array.from({ length: count }, () => ({
@@ -245,6 +244,15 @@ const Particles = (function () {
       speed: (380 + Math.random() * 360) * (drizzle ? dzSpeed : 1) * (LT.rainSpeed != null ? LT.rainSpeed : 1),
       opacity: 0.16 + Math.random() * 0.34,
     }));
+  }
+
+  // How many of the seeded drops this frame may draw. Rain is CPU-drawn over a
+  // second full-screen surface, so it sheds WITH the rest of the ladder rather
+  // than outliving it: one in (1 + autoShed) drops once the governor has shed on
+  // its own measurements. Read per frame, so density returns when it recovers.
+  function _rainShown() {
+    const shed = (typeof PerfGov !== "undefined" && PerfGov.autoShed) ? (PerfGov.autoShed() | 0) : 0;
+    return shed > 0 ? Math.ceil(_rainDrops.length / (1 + shed)) : _rainDrops.length;
   }
 
   function rainDraw(dt, speed, raining) {
@@ -273,7 +281,9 @@ const Particles = (function () {
     const wind = LT.rainWind + vk * (LT.rainShearWind != null ? LT.rainShearWind : 0.9);
     const lenMul = 1 + vk * (LT.rainShearLen != null ? LT.rainShearLen : 2);
     _rainCtx.beginPath();
-    for (const d of _rainDrops) {
+    const shown = _rainShown();
+    for (let i = 0; i < shown; i++) {
+      const d = _rainDrops[i];
       d.y += d.speed * dt;
       d.x += d.speed * dt * wind;
       if (d.y - d.len > h || d.x > w || d.x < 0) { d.y = -d.len; d.x = Math.random() * w; }

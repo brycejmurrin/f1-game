@@ -112,7 +112,7 @@
  *     slot — shades the whole screen for nothing and is a parity BUG, not a
  *     free choice.
  *   drawShadow(model, w, l) / drawMark(model, w, l) / drawSkidBatch(verts,n,dirty)
- *   drawDrivingLine(verts, n, dirty, {speed, cornersOnly, str}) → bool
+ *   drawDrivingLine(verts, n, dirty, {speed, cornersOnly, palette, opacity}) → bool
  *     The suggested-line ribbon (js/render/shared/driving-line.js) on all
  *     three backends; false means the pass is unavailable (fx not ready).
  *   drawGlow(lights, str) / drawDecal(mesh, model, tex, opts)

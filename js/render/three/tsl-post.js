@@ -721,7 +721,14 @@
         If(C.sunShaft.greaterThan(0.0).and(C.bloomAmt.greaterThan(0.001)), () => {
           const toSun = C.sunUV.sub(vUV).toVar();
           const dist = length(toSun).toVar();
-          If(dist.greaterThan(0.005), () => {
+          // Outer-reach early-out (glsl-post.js, wgsl-post.js carry the same):
+          // the radial weight below hits an EXACT 0.0 at dist = shaftSpread/2.6,
+          // so past it all eight dependent bloom taps were accumulated and then
+          // added as +0.0 — over half of a day frame at the shipped spread. The
+          // guard is the radial line's own expression, so it cannot drift from
+          // the predicate "radial > 0".
+          If(dist.greaterThan(0.005)
+            .and(dist.mul(float(2.6).div(max(C.shaftSpread, float(1e-3)))).lessThan(1.0)), () => {
             const stp = toSun.div(dist).mul(min(dist, 0.40)).div(8.0).toVar();
             const shaft = vec3(0.0).toVar();
             const ign = ignoise(fragXY);
@@ -776,7 +783,9 @@
 
         c.mulAssign(vec3(1.015, 1.008, 0.992));
         c.assign(c.mul(c.mul(0.13).add(1.0)).div(c.mul(0.20).add(1.0)));
-        c.assign(pow(max(c, vec3(0.0)), vec3(C.contrast)));
+        // pow(0, n) NaNs on mobile GPUs and is -inf through WGSL exp2/log2;
+        // the 1e-6 floor keeps black black (glsl-post.js).
+        c.assign(pow(max(c, vec3(1e-6)), vec3(C.contrast)));
         const luma = dot(c, vec3(0.299, 0.587, 0.114)).toVar();
         const mx = max(max(c.r, c.g), c.b), mn = min(min(c.r, c.g), c.b);
         const sat = mx.sub(mn);
