@@ -46,9 +46,14 @@ const UiScale = (() => {
     // are mirrored here — CSS owns FIRST paint, this owns every write after it,
     // and the two must not disagree. BUTTON SIZE stays a ratio of HUD SIZE so it
     // keeps following that slider while unset.
-    const BTN_OVER_HUD = 1.4536;   // 180.25 / 124
+    // 1.25, corrected 2026-09-14 from 1.4536. See the long note on the
+    // `(pointer: coarse)` block in css/tokens.css: 1.24 x 1.4536 put ~34mm
+    // pedals on a phone and the column covered the minimap and the sector strip.
+    // Target size and readout size are separate floors; this ratio carries the
+    // buttons' physical floor, --hud-scale no longer carries a blanket bump.
+    const BTN_OVER_HUD = 1.25;
     const coarseUi = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
-    const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 124 : 109) : 100);
+    const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 100 : 109) : 100);
     const scaleSnap = (v) => {
       const n = Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;

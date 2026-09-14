@@ -607,7 +607,31 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   align-items: center; border-radius: var(--r-sm);
 }
 .res-row:nth-child(even) { background: rgba(255, 255, 255, 0.03); }
-.res-row.you { color: var(--you); font-weight: 700; background: color-mix(in srgb, var(--you) 8%, transparent); padding-left: 5px; }
+/* YOUR ROW STICKS. A championship table is a COMPARISON surface, and the
+   comparison a player actually makes is "me against the front" — which is the
+   one comparison the table stops supporting the moment your row scrolls out of
+   view. At P17 of 22 you can see the leaders or see yourself, never both.
+   Datawrapper built sticky rows for exactly this question ("Compared to what?"),
+   and it is four declarations here.
+
+   Sticky to BOTH edges: the row pins to the top while you scroll down past it
+   and to the bottom while it is still below the fold, so it is on screen at
+   every scroll position without ever leaving its true rank order.
+
+   THE BACKGROUND MUST BE OPAQUE. A sticky element paints over its siblings, and
+   the 8% tint this used to carry would have let the rows underneath show
+   through it. Composited over --surf-1 rather than left translucent, so it
+   reads identically when parked and when in flow. */
+.res-row.you {
+  color: var(--you); font-weight: 700; padding-left: 5px;
+  background: color-mix(in oklab, var(--you) 8%, var(--surf-1));
+  position: sticky; top: 0; bottom: 0; z-index: 1;
+}
+/* Reduced transparency swaps --surf-1's ground; keep the sticky row opaque over
+   whatever that resolves to rather than re-stating a hex here. */
+@media (prefers-reduced-transparency: reduce) {
+  .res-row.you { background: color-mix(in oklab, var(--you) 8%, var(--surf-3)); }
+}
 /* A podium class already supplies the left rule, so only a non-podium player row
    draws its own — otherwise P1-and-you would stack two borders. */
 .res-row.you:not(.p1):not(.p2):not(.p3) { border-left: 3px solid var(--you); }

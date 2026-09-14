@@ -642,15 +642,51 @@ body:not(.desktop) {
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
   --ui-compact-text: calc(var(--ui-scale) / var(--ui-compact-scale));
 }
-/* THE TOUCH-ONLY DEFAULT this block was reserved for, filled in 2026-09-08 from
-   the owner's own phone: menus a touch larger, the HUD larger still, and the
-   driving buttons about 45 % over the HUD — kept as a RATIO of --hud-scale, not
-   an absolute, so moving HUD SIZE still carries the buttons with it the way an
-   unset BUTTON SIZE always has. scaleDefault()/scaleDefaultFor() in
-   js/ui/scale.js return the same three numbers under the same query, so first
-   paint and the first JS write still agree (the note above). */
+/* THE TOUCH-ONLY DEFAULT this block was reserved for. Filled in 2026-09-08 from
+   the owner's own phone — HUD 1.24 and buttons 1.4536x that, i.e. 1.80 — and
+   CORRECTED 2026-09-14, because those numbers put the driving controls on top of
+   the readouts on every phone.
+
+   WHAT WENT WRONG. The pedals rendered 130px = ~34mm: 2.3x Microsoft's suggested
+   MINIMUM touch target for phones (15mm) and past their minimum for TABLETS
+   (24mm), with the stacked column eating 58% of a 393px short edge. #btn-brake
+   covered 119x53px of #minimap and #btn-boost covered 59x84px of #hud-sectors,
+   at both 852x393 and 667x375. tests/specs/hud-layout.spec.js had been red on
+   those cases ever since, unnoticed because test:ui is not in the fast tier.
+
+   WHY A SINGLE BRANCH WAS THE MISTAKE. The standards treat two things as
+   SEPARATE requirements with different justifications: interactive TARGET SIZE
+   has a physical floor (~15mm phone / 24mm tablet per XAG 107; 0.96cm per the
+   Game Accessibility Guidelines; 48dp per Android), while READOUT size has a
+   legibility floor expressed in px-at-DPI (XAG 101). One `(pointer: coarse)`
+   rule raised both, so the controls grew into the readouts.
+
+   Note also what XAG's mobile numbers actually are: 18px @100 DPI, 36px @200,
+   72px @400, "scale linearly as DPI increases". That is a DPI correction holding
+   PHYSICAL size constant — not a "touch devices get a bigger UI" rule. No
+   published guidance prescribes a numeric coarse-pointer scale multiplier at
+   all; 1.24/1.80 had no standard behind it.
+
+   THE RULE NOW: the DEFAULT is a floor, the RANGE is generous. XAG 101 calls its
+   sizes "the minimum default size ... upon game launch" and asks for scaling
+   "larger or smaller at the player's discretion"; the Game Accessibility
+   Guidelines say "ensuring a good default size should always be the first port
+   of call". So --hud-scale sits at 1 and the readouts are DPI-correct rather
+   than bumped, while the buttons keep a modest ratio over it that satisfies the
+   physical floor: 1.25 renders the pedals at ~90px (~24mm, the GAG ideal) and
+   the secondary column at ~68px (~18mm, over the 15mm floor). 1.80 is still
+   reachable — it is a slider, and a player who wants the old size has it.
+
+   --ui-scale stays 1.09. It is menus only, nothing there overlaps at any scale
+   this ships, and moving it would be a look change with no defect behind it.
+
+   BUTTON SIZE stays a RATIO of --hud-scale, not an absolute, so moving HUD SIZE
+   still carries the buttons with it the way an unset BUTTON SIZE always has.
+   scaleDefault()/scaleDefaultFor() in js/ui/scale.js mirror these numbers under
+   the same query, so first paint and the first JS write agree (the note above);
+   tests/unit/scale-defaults.test.mjs holds the two in lockstep. */
 @media (pointer: coarse) {
-  :root { --ui-scale: 1.09; --hud-scale: 1.24; --hud-btn-scale: calc(var(--hud-scale) * 1.4536); }
+  :root { --ui-scale: 1.09; --hud-scale: 1; --hud-btn-scale: calc(var(--hud-scale) * 1.25); }
 }
 
 /* VIEWPORT UNITS ARE THE ONE UNIT FAMILY `zoom` GETS WRONG, so inside a zoomed
@@ -669,6 +705,27 @@ body:not(.desktop) {
    right edge 17.5px off screen; at 150 %, 78.8px off. The CSS width never
    changed — 306.5px at every setting — which is exactly why it does not read as
    a sizing bug when you look at the stylesheet.
+
+   THE SECOND TRAP IS IN JAVASCRIPT, and it has no CSS symptom at all. The
+   standardised `zoom` (CSS Viewport L1) says getBoundingClientRect and friends
+   "must return rects with SCALED lengths", while computed-style APIs report
+   non-auto, non-percentage lengths UNSCALED. So inside a zoomed subtree a
+   rect's width and the same element's computed width are two different
+   coordinate spaces, and any code that compares one to the other is wrong by
+   exactly the zoom factor — silently, and only for players who moved the
+   slider off 100 %.
+   Audited 2026-09-14: six files read both, but every computed read is a
+   NON-LENGTH (visibility, z-index, overflow-y, display, a custom property) and
+   the one site that does compare lengths — metrics-overlay.js's fitsWide(),
+   which measures a ch probe with a rect and compares it against the computed
+   width and padding of its panel — lives on #game-metrics,
+   which is not in any zoom group. Correct today by luck of placement rather than
+   by construction, so: if you ever put a length comparison inside `.sheet`,
+   `#overlay > *`, a HUD cluster or `.dock`, measure BOTH sides with rects.
+   (Chrome 128 also widened what `zoom` inherits into — it now applies to every
+   inherited length property, not just font-size — so a layout tuned before it
+   can render differently now. caniuse's support cells do not distinguish the
+   legacy implementation from the standardised one.)
 
    `100 * var(--vwz)` is "100vw, as rendered". Use it for ANY viewport-unit
    length inside a `.sheet`, `#overlay > *`, a HUD cluster or `.dock`; use the
