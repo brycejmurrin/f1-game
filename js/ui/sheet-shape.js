@@ -516,6 +516,27 @@ window.SheetShape = (function () {
     const onvv = () => { if (!raf) raf = requestAnimationFrame(apply); };
     vv.addEventListener("resize", onvv, { passive: true });
     vv.addEventListener("scroll", onvv, { passive: true });
+    /* AND THE LAYOUT VIEWPORT, which is the other half of the subtraction.
+       These two were the visualViewport pair alone — every event a keyboard
+       opening or closing produces, and not every event that changes the
+       answer. `window.innerHeight` is the minuend, and ROTATING THE PHONE is
+       the one thing that moves it without necessarily moving vv.height again
+       afterwards.
+       The failure was a latch, not a flicker. A phone rotated out of
+       portrait-with-keyboard delivers a vv resize while the visual viewport
+       has already reported landscape and the layout viewport has not: 844 -
+       390 = 454, past the 15% guard, believed and written. innerHeight then
+       catches up with no vv event behind it, `last` is 454, and so --kb stays
+       454 — spent by css/components.css as padding-bottom on every .screen, in
+       a viewport 390px tall. Nothing short of a reload cleared it.
+       Watching all three inputs is what closes it: whichever half settles LAST
+       fires the delivery that sees both settled, so the final write is always
+       computed from a matched pair. rAF coalescing already collapses the storm
+       these add during the rotation, and apply() early-returns on an unchanged
+       band, so the steady-state cost is one comparison per resize.
+       tests/unit/sheetshape-keyboard.test.mjs drives the sequence. */
+    addEventListener("resize", onvv, { passive: true });
+    addEventListener("orientationchange", onvv, { passive: true });
   }
 
   function init() {
