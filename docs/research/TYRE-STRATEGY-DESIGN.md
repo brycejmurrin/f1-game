@@ -396,7 +396,8 @@ wear += load · rate(compound) · severity(circuit) · dt / (LIFE_REF · lapsTar
   physics.
 - `severity(circuit)` is one number per circuit def (§2.2's 0.022–0.097 spread,
   normalised to 1.0 at the median), authored in `js/circuits/<id>.js` beside the
-  other per-circuit tables.
+  other per-circuit tables. See §5.5 for how it is derived and why it MULTIPLIES
+  the emergent geometric load rather than replacing it.
 
 Grip, piecewise-linear then a knee:
 
@@ -516,7 +517,48 @@ Payoff, in order of how much it matters here:
 This is also the layer that most rewards deferral: it needs the most tuning and
 the least of it is legible on a phone screen.
 
-### 5.5 What we deliberately do not model
+### 5.5 Authoring `tyreSeverity` (Phase 5)
+
+`severity` and the emergent load are **not** two attempts at the same number,
+and authoring one must not quietly cancel the other. The decomposition:
+
+- The **emergent load** (§5.1) captures how much work the LAYOUT makes the tyre
+  do. It falls out of the forces the car actually made, so a circuit with more
+  cornering wears more, with no authoring at all. Measured over three clean laps:
+  monza 0.944, monaco 1.221.
+- **`tyreSeverity`** captures what the SURFACE and the speeds do on top — track
+  abrasiveness, tarmac age, ambient and track temperature, energy through the
+  fast corners. None of that is knowable from geometry, which is exactly why it
+  has to be authored.
+
+Total wear is the product, and that is the point: Monaco's layout works the tyre
+hard (1.221 emergent) while its surface and speeds work it gently, which is how
+one of the most demanding *layouts* on the calendar is one of the LOWEST deg
+circuits in the sport (0.050 s/lap against Austria's 0.097). One number could
+not say both things.
+
+**Derivation.** §2.2's seven measured 2026 circuit rates, each divided by the
+mean of that sample (0.0493 s/lap) so the un-authored default of 1.0 behaves
+like the average measured circuit rather than like an extreme:
+
+| circuit def | real 2026 deg | ÷ 0.0493 | `tyreSeverity` |
+|---|---|---|---|
+| `redbull` (Austria) | 0.097 | 1.97 | **1.97** — the calendar's outlier, and a layout that emerges LOW |
+| `miami` | 0.060 | 1.22 | **1.22** |
+| `monaco` | 0.050 | 1.01 | **1.01** — gentle surface against a punishing layout |
+| `silverstone` (Britain) | 0.044 | 0.89 | **0.89** |
+| `suzuka` (Japan) | 0.042 | 0.85 | **0.85** |
+| `albert_park` (Australia) | 0.030 | 0.61 | **0.61** |
+| `shanghai` (China) | 0.022 | 0.45 | **0.45** |
+
+Every other circuit stays un-authored at 1.0. That is a deliberate refusal to
+guess: a made-up severity on forty-four circuits would look like data and be
+noise, and the model clamps to 0.4–2.0 so a future authored value cannot break
+a race by a typo.
+
+---
+
+### 5.6 What we deliberately do not model
 
 Named so they are not re-litigated: per-corner temperature slices (iRacing NTM
 runs 7–20 across the tread width — not a phone budget), tyre pressures, camber
