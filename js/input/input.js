@@ -108,7 +108,6 @@ const Input = (function () {
   let btnSteerRightVal = 0;
   let btnSteerVal = 0;     // ramped -1..1 (the arrows are a keyboard with fat keys)
   let btnSteerT = 0;       // last ramp timestamp, ms
-  let btnLookBack = false; // on-screen LOOK BACK, held
 
   let tiltRaw = 0;            // latest remapped tilt, degrees (raw, like Neon Drift)
   let tiltZero = 0;           // calibrated neutral
@@ -1755,8 +1754,12 @@ const Input = (function () {
     recoverPressed = false;
     return v;
   }
-  // HELD, not edged: the mirror is only up while the control is down.
-  function lookingBack() { return keyLookBack || padLookBack || btnLookBack; }
+  /* HELD, not edged: the mirror is only up while the control is down.
+     KEY AND PAD ONLY. There was an on-screen LOOK button in the tap column too;
+     it was removed on request — the dock had grown to five buttons in one thumb
+     column once PIT landed beside it, and a glance over the shoulder is the
+     control that least deserves a permanent seat there. */
+  function lookingBack() { return keyLookBack || padLookBack; }
 
   /* ESCAPE IS SPENT ON LEAVING FULLSCREEN unless we ask for it. In fullscreen
      the UA takes Escape to exit, so our pause handler never sees the key —
@@ -1979,7 +1982,6 @@ const Input = (function () {
 
     wireHold("btn-throttle", function (v) { btnThrottle = v; }, function (l) { btnThrottleVal = l; });
     wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; });
-    wireHold("btn-look", function (v) { btnLookBack = v; });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
     wireTap("btn-aero", function () { aeroTogglePressed = true; });
@@ -2074,7 +2076,6 @@ const Input = (function () {
     btnSteerLeft = btnSteerRight = false;
     btnSteerLeftVal = btnSteerRightVal = 0;
     btnSteerVal = 0; btnSteerT = 0;
-    btnLookBack = false;
     speedStdOverride = null;
     keyLeft = keyRight = keyBrake = keyThrottle = false;
     keySteerVal = 0;

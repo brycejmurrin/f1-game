@@ -33,7 +33,7 @@ const els = {
   pmStandings: $("pm-standings"),
   pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), pmsettings: $("pmsettings"), btnCam: $("btn-cam"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
-  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"), btnLook: $("btn-look"),
+  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"),
   btnPit: $("btn-pit"),
   btnThrottle: $("btn-throttle"),
   btnSteerLeft: $("btn-steer-left"), btnSteerRight: $("btn-steer-right"),
@@ -2446,7 +2446,6 @@ function showTouchControls(show) {
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
-  if (els.btnLook) els.btnLook.hidden = !t;
   // ON AUTO THE AERO BUTTON IS REMOVED, not greyed. The wing drives itself, so
   // the control has no job at all — and a dock of GROUPS can afford to drop it,
   // because the survivors just close ranks. That was not true of the old
