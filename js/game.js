@@ -4006,12 +4006,16 @@ function updateCar(c, dt, ranked) {
     c.xOn = c.xArmed;
   } else if (c.human) {
     if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
+    else c.xOn = !!(inp && inp.aero);
     // PIT IN arms the stop; PitLane takes it from the next entry (js/race/pit-lane.js).
+    // AFTER the if/else above, not between them: sitting in the middle made this
+    // `if` steal that `else`, so any local car that had not pressed PIT had
+    // `c.xOn` overwritten from the raw input and the active-aero toggle stopped
+    // working entirely (tests/unit/active-aero-vm.test.mjs, 7 red).
     if (c.local && Input.consumePitToggle()) {
       const on = pits.arm(c);
       announce(on ? "BOX THIS LAP" : "STAYING OUT", 1.4, "race");
     }
-    else c.xOn = !!(inp && inp.aero);
   } else {
     // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
     // and OT still force the open wing so a pass does not sit in high drag.
