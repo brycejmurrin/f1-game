@@ -1,8 +1,8 @@
 {
-  "images": "macos-latest,windows-latest",
+  "images": "macos-latest",
   "track": "montreal",
   "census_only": false,
-  "force": "1",
+  "force": "",
   "ls": "",
-  "leg": "survey-2026-09-renderer-parity"
+  "leg": "survey-2026-09-force-isolation"
 }
