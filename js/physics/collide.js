@@ -10,6 +10,62 @@
 const Collide = (() => {
   const clamp = M4.clamp;   // js/core/mat4.js (eval-time: HARD_EDGES mat4 -> collide)
   const LCAR = 4.8, WCAR = 2.0;
+  // Per-car half extents; LCAR/WCAR above are the COMBINED pair extents.
+  const HL = LCAR / 2, WL = WCAR / 2;          // 2.4 long, 1.0 wide
+
+  // YAW-AWARE EXTENTS — the spun-car hole.
+  //
+  // (prog, x) is a plane and every car was axis-aligned in it: heading relative
+  // to the tangent never entered the contact test. A car crossways is 4.8 m
+  // across the road and the collider gave the PAIR 2.0 m of lateral reach, so a
+  // rival passing at |dX| between 2.0 and 3.4 m drove through bodywork the
+  // renderer was drawing. Measured miss, against a normally-oriented rival:
+  //
+  //     psi   30°    45°    60°    75°    90°
+  //     miss  1.07   1.40   1.58   1.58   1.40  metres
+  //
+  // The peak is 60-75°, the three-quarters-on car — NOT the fully sideways one,
+  // whose LONGITUDINAL extent has shrunk to 3.4 m against the fixed 4.8 m, i.e.
+  // there the old test over-detects. So this both adds and removes contacts.
+  //
+  // WHOSE yaw. Only a car with a REAL heading can be crossways here: AI cars
+  // are driven by a kinematic controller that writes `head = atan2(tangent)`
+  // (game.js — "AI cars still damp, they have no real heading") and their
+  // `yawVis` is a cosmetic lean of up to ~36°, which is presentation, not a
+  // pose. Widening a car because it LOOKS tilted would be the render quietly
+  // entering the physics. A car in a genuine spin is owned by the incident sim,
+  // and pairContact's callers skip Rapier-owned cars outright. So this reads
+  // psi for the player only, every AI car keeps exactly 2.4 x 1.0, and the
+  // reachable half of the hole — an AI driving through a spun PLAYER — closes.
+  //
+  // The 20°→60° blend keeps ordinary cornering out of it: below 20° nothing
+  // changes at all, and the term is only at full strength past where the miss
+  // peaks. A car at psi = 0 measures 2.4 x 1.0 exactly, so an unyawed field is
+  // bit-identical to before this existed.
+  const YAW_LO = 20 * Math.PI / 180, YAW_HI = 60 * Math.PI / 180;
+  function yawMix(psi) {
+    const a = psi < 0 ? -psi : psi;
+    if (!(a > YAW_LO)) return 0;               // NaN-safe: falls to 0
+    if (a >= YAW_HI) return 1;
+    const t = (a - YAW_LO) / (YAW_HI - YAW_LO);
+    return t * t * (3 - 2 * t);                // smoothstep, C1 at both ends
+  }
+  // Support half-widths of one car along the tangent / across it.
+  function extLong(c) {
+    const psi = c.human ? (c.yawVis || 0) : 0;
+    const k = yawMix(psi);
+    return k === 0 ? HL : HL * (1 - k) + k * (HL * Math.abs(Math.cos(psi)) + WL * Math.abs(Math.sin(psi)));
+  }
+  function extLat(c) {
+    const psi = c.human ? (c.yawVis || 0) : 0;
+    const k = yawMix(psi);
+    return k === 0 ? WL : WL * (1 - k) + k * (HL * Math.abs(Math.sin(psi)) + WL * Math.abs(Math.cos(psi)));
+  }
+  // Worst case one car can reach is sqrt(HL^2 + WL^2) = 2.6 (at 22.6° off the
+  // tangent), so the widest contacting PAIR spans 2.6 + 2.4 = 5.0 m — past the
+  // old 4.8 m reject and past the old bucket width. Both must use this or the
+  // broadphase drops the very pair the extents were widened to catch.
+  const LCAR_MAX = 5.0;
   // "This frame actually separated them" is a millimetre, never `corr > 0`: at
   // the slop distance the penetration is `LCAR - |dProg|` with LCAR's own
   // rounding still in it, so corr lands at ~3e-16 — positive, and therefore true
@@ -59,7 +115,7 @@ const Collide = (() => {
     // read-before-next-call contract as _ct / AiDrive.traits.
     // Arc-bucket broadphase for resolveCollisions. Bucket width = LCAR so any
     // contacting pair shares a bucket or sits in adjacent ones (wrap-aware).
-    const COL_BUCKET_M = LCAR;
+    const COL_BUCKET_M = LCAR_MAX;   // was LCAR — see LCAR_MAX: a yawed pair spans 5.0 m
     const _colBuckets = [];   // sparse: bucketId → car[]
     const _colBucketIds = []; // compact list of occupied bucket ids this pass
     let _colShifted = false;  // shiftLong this step — skip idle re-buckets
@@ -126,13 +182,17 @@ const Collide = (() => {
       if (!Number.isFinite(dProg)) return null;
       const L = track.total;
       const adProg = dProg < 0 ? -dProg : dProg;
-      if (adProg > LCAR && adProg < L - LCAR) return null;
+      if (adProg > LCAR_MAX && adProg < L - LCAR_MAX) return null;
       dProg = ((dProg + L / 2) % L + L) % L - L / 2;
-      if (Math.abs(dProg) > LCAR) return null;
+      if (Math.abs(dProg) > LCAR_MAX) return null;
       const dX = aX - bX;
       if (!Number.isFinite(dX)) return null;
-      const penLong = LCAR - Math.abs(dProg);
-      const penLat = WCAR - Math.abs(dX);
+      // Pair extents, yaw-aware (see LCAR_MAX above). Identical to LCAR/WCAR
+      // for any pair that is not yawed past the blend's floor.
+      const eLong = extLong(a) + extLong(b);
+      const eLat = extLat(a) + extLat(b);
+      const penLong = eLong - Math.abs(dProg);
+      const penLat = eLat - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) return null;
       const { iA, iB, iSum, sA, sB } = sepShares(a, b);
       const closing = (dProg >= 0 ? bSp - aSp : aSp - bSp) > 0.5;
@@ -152,7 +212,7 @@ const Collide = (() => {
       // |dX| > (WCAR/LCAR)*|dProg|, i.e. the contact bearing against the car's
       // own aspect ratio. Nose-to-tail is now unreachable as a side contact, so
       // the sgn-of-zero case cannot be entered at all.
-      _ct.sideContact = (penLat * LCAR < penLong * WCAR) && !forceRear;
+      _ct.sideContact = (penLat * eLong < penLong * eLat) && !forceRear;   // the pair's OWN aspect ratio, so a yawed car is judged on the box it presents
       return _ct;
     }
 

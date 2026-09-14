@@ -176,47 +176,60 @@ This is 0.24/s, and a median episode flipping ONCE is not flip-flop: it is one
 car completing a pass, which is the verdict correctly changing. The entry called
 itself "the riskiest of the AI entries"; it buys nothing. Left unbuilt.
 
-### #5 (yaw-aware contact extents) — CONFIRMED and sized, not yet built
+### #5 (yaw-aware contact extents) — BUILT
 
-The hole is real and it is bigger than "a sideways car is a sliver". Per-car
-half extents are 2.4 x 1.0; support half-widths at yaw psi to the tangent are
+The hole was real and bigger than "a sideways car is a sliver". Per-car half
+extents are 2.4 x 1.0; support half-widths at yaw psi to the tangent are
 `eLong = 2.4|cos psi| + 1.0|sin psi|`, `eLat = 2.4|sin psi| + 1.0|cos psi|`.
-Against a normally-oriented rival alongside:
+Against a normally-oriented rival alongside, the pair's lateral reach:
 
-| psi | collider's lateral reach | truth | missed |
-|---|---|---|---|
-| 0° | 2.00 m | 2.00 m | — |
-| 30° | 2.00 m | 3.07 m | +1.07 |
-| 45° | 2.00 m | 3.40 m | +1.40 |
-| **60°** | 2.00 m | 3.58 m | **+1.58** |
-| **75°** | 2.00 m | 3.58 m | **+1.58** |
-| 90° | 2.00 m | 3.40 m | +1.40 |
+| psi | old | geometric truth | **shipped** | hole closed |
+|---|---|---|---|---|
+| 20° | 2.00 m | 2.76 m | 2.00 m | 0 % (the blend floor) |
+| 30° | 2.00 m | 3.07 m | 2.17 m | 16 % |
+| 45° | 2.00 m | 3.40 m | 2.96 m | 68 % |
+| **60°** | 2.00 m | **3.58 m** | **3.58 m** | **100 %** |
+| 75° | 2.00 m | 3.58 m | 3.58 m | 100 % |
+| 90° | 2.00 m | 3.40 m | 3.40 m | 100 % |
 
-So a rival passing a fully spun car at |dx| between 2.0 and 3.4 m drives
-straight through the bodywork the renderer is drawing.
+A rival passing a properly sideways car at |dX| between 2.0 and 3.4 m used to
+drive straight through the bodywork the renderer was drawing. It cannot now.
+Below 60° the closure is deliberately partial — the price of a blend floor that
+keeps ordinary cornering out of the physics entirely.
 
-TWO CORRECTIONS TO THE ENTRY ABOVE, both from this table:
+TWO CORRECTIONS TO THE ENTRY, both from the table:
 
 1. The worst case is **60-75°, not 90°**. The entry frames this as the sideways
-   car; the peak miss is the three-quarter-on one, and a blend that fades in
-   from 20° to 45° reaches full strength just below where the error is largest.
-   Fade to full by ~60°.
+   car and fades the term in from 20° to 45°; the peak miss is the
+   three-quarters-on car, so the blend runs to **60°**.
 2. At 90° the LONGITUDINAL extent shrinks to 3.40 m against the fixed 4.80 m, so
-   there the current code is conservative rather than blind — it over-detects.
-   Making extents yaw-aware therefore REMOVES contacts at high yaw as well as
-   adding them, which the characterization spec will see and which is not a
-   regression.
+   there the old code over-detected. Yaw-aware extents REMOVE contacts at high
+   yaw as well as adding them. That is not a regression.
 
-The companion edit the entry flags is confirmed by the same arithmetic: worst
-case combined longitudinal extent is `2*sqrt(2.4² + 1²)` = **5.20 m** against
-`COL_BUCKET_M = LCAR = 4.8`, so the bucket must grow or the adjacent-bucket walk
-can miss a pair.
+WHOSE YAW, which the entry does not settle and which decides the whole scope.
+`c.yawVis` is the real yaw-to-tangent only for the PLAYER. AI cars are
+kinematic — game.js writes `head = atan2(tangent)` for them and their `yawVis`
+is a cosmetic damped lean reaching ~36°, which is presentation, not a pose;
+widening a car because it LOOKS tilted would be the renderer entering the
+physics. And a car in a genuine spin is owned by the incident sim, which
+`pairContact`'s callers skip outright. So the extents read psi for the player
+only, every AI car keeps exactly 2.4 x 1.0, and an unyawed field is bit-identical
+to before. The reachable half of the hole — an AI driving through a spun PLAYER
+— is the half that closes.
 
-NOT BUILT HERE, deliberately. This is the collision hot path, it moves the
-characterization gate by design, and it needs the brute-force-vs-bucketed
-assertion the entry asks for before the bucket width can be trusted. It wants
-its own session rather than the tail of one — the defect is now measured and
-scoped so that session starts from the table rather than from the question.
+The companion edit was required, exactly as flagged: the widest contacting pair
+is `sqrt(2.4² + 1²) + 2.4` = **5.0 m** against `COL_BUCKET_M = LCAR = 4.8`. The
+bucket walk only compares a bucket with itself and the next, so it is correct
+only while the bucket is at least as wide as the widest pair — widen the extents
+without it and the broadphase silently drops the very pairs the change was made
+to catch. `LCAR_MAX = 5.0` now feeds both the bucket and the cheap reject, and a
+test pins that relationship rather than the number.
+
+Verified: collision-contact-vm 13/13 (5 new), test:game-vm 292/292,
+test:tooling-fast 187/187, test:guards 178/178, and in the browser
+physics-characterization + collisions + collision-ai-fixes 18/18 — the
+characterization gate did NOT move, because a clean driving trace never yaws
+the player past the blend floor.
 
 ### #7, first bullet (publish `_vLimNow`, compare corner-entry limits) — REVERTED
 
