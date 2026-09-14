@@ -180,6 +180,46 @@ test.describe("Liveries — paint finish", () => {
 test.describe("Liveries — creator", () => {
   test.use({ viewport: LANDSCAPE });
 
+  // THE EDITOR MUST GET THE ROOM, not the chrome above it. The paint editor
+  // holds ~4100px of content on a landscape phone, and #cs-options is the
+  // `flex: 1 1 auto` pane it scrolls in — so every pixel #cs-header and
+  // #cs-tabs keep is a pixel of the editor. MEASURED on 844x390 before the
+  // fix: head 84 + tabs 65 = 149px of chrome over a 142px editor pane, with
+  // the editor's own CANCEL / SAVE & FIT buried at the bottom of the scroll.
+  // css/carsetup.css drops the category strip, the budget block and the stat
+  // block while a draft is open — all three are inert then (category cannot
+  // change mid-edit, and paint spends no budget and moves no stat).
+  //
+  // ASSERTED RELATIVELY, never against 260px: the oracle is "the editor
+  // outweighs the chrome above it", which survives a token or font change that
+  // moves every number here. The first attempt at the fix wrote a rule that
+  // MATCHED and then lost on specificity to the compact tier's
+  // `#cs-inner[data-pair][data-density][data-shape] #cs-tabs` — it was present
+  // in the stylesheet and did nothing. That is why this is a rendered-box
+  // assertion and not a grep for the selector.
+  test("the paint editor outweighs the garage chrome above it", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+
+    const h = (sel) => page.evaluate((s) => {
+      const e = document.querySelector(s);
+      return e ? Math.round(e.getBoundingClientRect().height) : 0;
+    }, sel);
+
+    const before = await h("#cs-options");
+    expect(before, "precondition: the option list has a box to grow from").toBeGreaterThan(0);
+
+    await page.locator(".cs-liv-create").click();
+    await expect(page.locator(".cs-liv-editor")).toBeVisible();
+
+    const [opts, tabs, head] = [await h("#cs-options"), await h("#cs-tabs"), await h("#cs-header")];
+    expect(tabs, "the category strip is inert mid-edit and must yield its height").toBe(0);
+    expect(opts, "opening the editor must GROW its pane, not shrink it").toBeGreaterThan(before);
+    expect(opts, `the editor (${opts}px) must outweigh the chrome above it (head ${head} + tabs ${tabs})`)
+      .toBeGreaterThan(head + tabs);
+  });
+
   test("FIN SHAPE none greys out the four fin rows, and a fin brings them back", async ({ page }) => {
     await load(page);
     await openSetup(page);

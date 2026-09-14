@@ -4557,3 +4557,51 @@ source, and the first attempt at that got the cause wrong. All four now reach
 the payload. `tier` alone was never enough: it folds in the crash floor and the
 player's GRAPHICS preset, so only `autoShed` says what the governor shed on its
 own evidence.
+
+## 2v. The biggest texture in the game is the car livery, and it was never measured (2026-09-14)
+
+The vertex-format packing this session (40 → 28 B on GLX, 36 → 28 on WGX,
+40 → 36 on the TLX WebGPU leg) took the fleet's world VBO from 784.8 MB to
+553.3 — a mean circuit 19.6 → 13.8 MB. Real, and one order of magnitude below
+the biggest number in the game.
+
+`__apex.texCensus()` exists because that number was ARITHMETIC. `liverytex.js`
+is `SIZE 1024` × `SIZE_H 1280`, RGBA, mipmapped through `createTexture`, one
+atlas a car — which multiplies out to ~147 MB for a full grid, but nothing in
+the tree could confirm it. `__tlx.memState()` covers three's retained counts on
+the TLX leg only, and §0 is blunt about what estimating instead of measuring
+buys you here.
+
+Measured, montreal, full grid, GLX:
+
+| kind | bytes | MB | what |
+|---|---|---|---|
+| `content2D` | 153,791,000 | **146.67** | 22 livery atlases, 1024×1280 each |
+| `materialArray` | 11,883,816 | **11.33** | the baked albedo + normal arrays |
+| | | **158.00** | total counted |
+
+Against the packed world VBO at 13.8 MB on a mean circuit, **the liveries are
+10.6× the geometry** and 13× the material arrays. Both predictions held (147 →
+146.67, 11.9 → 11.33), which is the part worth noticing: the arithmetic was
+right and it still should not have been acted on, because nothing could tell
+the difference between right arithmetic and confident-wrong arithmetic until
+the hook existed.
+
+**This re-orders the plan on evidence.** KTX2/UASTC on the material arrays —
+the obvious "compress the textures" move — is worth ~8.5 MB and costs a wasm
+transcoder and a bake-time encoder. The AI livery tier is worth an order of
+magnitude more and costs a resolution policy. Do the policy first.
+
+Two things the census deliberately does NOT count, and says so in `excludes`
+rather than staying quiet: render targets (shadow maps, post chain, env cube)
+are created straight against `gl` in `shadow.js`/`post.js` and never come
+through `createTexture`; and WGX/TLX declare `texCensus: undefined` rather than
+inheriting GLX's by descriptor-copy, so `__apex.texCensus()` answers
+`supported:false` there instead of a measured zero (§2i/§2j, again).
+
+Bytes are the exact mip chain, not `w*h*4*4/3`. That rule assumes a square
+texture; the livery atlas is 1024×1280, so once the width bottoms out the chain
+keeps descending the height and the estimate drifts. The unit suite asserts the
+exact sum and asserts the rule-of-thumb answer is NOT what the census returns.
+
+Plan and remaining tasks: `docs/plans/2026-09-14-texture-memory-plan.md`.

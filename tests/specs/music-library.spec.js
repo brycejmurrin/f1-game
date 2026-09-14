@@ -129,10 +129,11 @@ test("a picked audio file joins the playlist as user:<n> and renders a row", asy
 
   // The shipped soundtrack is untouched and still leads the list.
   const all = await page.evaluate(() => GameAudio.tracks());
-  expect(all.slice(0, 5).map((t) => t.id)).toEqual([
+  expect(all.slice(0, 6).map((t) => t.id)).toEqual([
     "builtin:menu", "builtin:song2", "builtin:song3", "builtin:song4", "builtin:song5",
+    "builtin:song6",
   ]);
-  expect(all[5].id).toBe(added[0].id);
+  expect(all[6].id).toBe(added[0].id);
 
   // The row is a real playlist target, not just decoration.
   await page.evaluate(() => GameAudio.init());

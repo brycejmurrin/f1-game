@@ -181,14 +181,34 @@ const WGX = (function () {
   // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
   // SwiftShader-Dawn — including 4095-vert pieces. mat+trk live in the
   // group-2 world-XZ LUT; fs reconstructs (s, x, hw) from wpos.
-  const VERTEX_STRIDE = 36;
-  const VERTEX_FLOATS = 9;
+  //
+  // PACKED, 28 bytes a vertex against the 36 three float32x3s cost. Position
+  // keeps full float32 (world coordinates run to ~7 km); the normal becomes a
+  // signed short (0.001 deg, two orders finer than a byte) and the colour a
+  // half float — NOT a unorm byte, because emissive colour reaches 3.4 and a
+  // unorm would clamp it to white. Quantisers: js/render/shared/vertex-pack.js,
+  // the same ones GLX and TLX use, so the three backends cannot disagree about
+  // what a colour means.
+  //
+  // The WGSL is UNTOUCHED. It declares aNrm/aCol as vec3<f32> and WebGPU lets a
+  // wider vertex format feed a narrower shader input, dropping the extra
+  // component — so snorm16x4 and float16x4 read as the same vec3 they always
+  // did. That is also why they are x4 and not x3: WebGPU has no 3-wide 16-bit
+  // vertex format, and this widens an EXISTING attribute rather than adding a
+  // fourth, which is the thing Dawn zeroes on this adapter.
+  //
+  // The float stride stays a whole number of words (28 = 7 x 4), and position
+  // stays at word 0, so _expandPull's word-wise copy, the piece slicing in
+  // createMesh and the chunked bucket loop's centroid reads all keep working
+  // unchanged against a Float32Array view.
+  const VERTEX_STRIDE = 28;
+  const VERTEX_FLOATS = VERTEX_STRIDE >> 2;   // 7 — the stride in float32 WORDS
   const VERTEX_POS_LAYOUT = {
     arrayStride: VERTEX_STRIDE,
     attributes: [
       { shaderLocation: 0, offset: 0,  format: "float32x3" },
-      { shaderLocation: 1, offset: 12, format: "float32x3" },
-      { shaderLocation: 2, offset: 24, format: "float32x3" },
+      { shaderLocation: 1, offset: 12, format: "snorm16x4" },
+      { shaderLocation: 2, offset: 20, format: "float16x4" },
     ],
   };
   const INSTANCE_STRIDE = 80;   // mat4 + color3 + pad
@@ -2779,18 +2799,31 @@ const WGX = (function () {
       }
       const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
       const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
-      const inter = new Float32Array(vCount * VERTEX_FLOATS);
+      // One packed buffer, three views over it — see VERTEX_POS_LAYOUT.
+      // `inter` stays a Float32Array so every downstream consumer (the piece
+      // slicing, _expandPull, the chunked centroid loop) keeps indexing in
+      // whole words; the quantised lanes are written through the short views.
+      const buf = new ArrayBuffer(vCount * VERTEX_STRIDE);
+      const inter = new Float32Array(buf);
+      const i16 = new Int16Array(buf), u16 = new Uint16Array(buf);
       const attr = new Float32Array(vCount * 4);
+      const SW = VERTEX_STRIDE >> 1;            // stride in 16-bit lanes
       for (let i = 0; i < vCount; i++) {
-        const o = i * VERTEX_FLOATS;
+        const o = i * VERTEX_FLOATS, h = i * SW;
         inter[o]   = pos[i*3];   inter[o+1] = pos[i*3+1]; inter[o+2] = pos[i*3+2];
-        inter[o+3] = nrm[i*3];   inter[o+4] = nrm[i*3+1]; inter[o+5] = nrm[i*3+2];
+        i16[h + 6] = VertexPack.snorm16(nrm[i*3]);
+        i16[h + 7] = VertexPack.snorm16(nrm[i*3+1]);
+        i16[h + 8] = VertexPack.snorm16(nrm[i*3+2]);
+        i16[h + 9] = 0;                          // pad — keeps the colour 4-byte aligned
+        // Half float, and still RAW RGB — the quantisation changes the WIDTH of
+        // the colour lane, never what is in it.
         // Raw RGB. Packing MAT into col.x interpolates 16→0 and sawtooths.
         // Dawn zeros a 4th attr (and pos) even on piece VBOs — asphalt vs
         // verge is classified from the LUT (abs(x) < hw - 0.45).
-        inter[o + 6] = col[i * 3];
-        inter[o + 7] = col[i * 3 + 1];
-        inter[o + 8] = col[i * 3 + 2];
+        u16[h + 10] = VertexPack.toHalf(col[i * 3]);
+        u16[h + 11] = VertexPack.toHalf(col[i * 3 + 1]);
+        u16[h + 12] = VertexPack.toHalf(col[i * 3 + 2]);
+        u16[h + 13] = 0;
         attr[i * 4] = mat ? mat[i] : 0;
         if (trk) {
           attr[i * 4 + 1] = trk[i * 3];
@@ -2828,7 +2861,13 @@ const WGX = (function () {
     // matches the storage buffer 1:1.
     function _expandPull(vert, attr, idx) {
       const n = idx.length;
-      const ev = new Float32Array(n * VERTEX_FLOATS);
+      const evBuf = new ArrayBuffer(n * VERTEX_STRIDE);
+      const ev = new Float32Array(evBuf);
+      // Integer views for the copy itself: half the words now hold quantised
+      // lanes whose bits can spell a NaN, and a float32 read-then-write is
+      // allowed to canonicalise a NaN payload. A u32 copy is bit-exact.
+      const evW = new Uint32Array(evBuf);
+      const srcW = new Uint32Array(vert.buffer, vert.byteOffset, vert.length);
       const ea = new Float32Array(n * 4);
       for (let i = 0; i < n; i++) {
         // Swap each triangle's last two verts so the ribbon fills under
@@ -2837,7 +2876,7 @@ const WGX = (function () {
         // negate on road draws so the tops do not light as the underside.
         const flip = (i % 3 === 1) ? 1 : (i % 3 === 2) ? -1 : 0;
         const v = idx[i + flip], so = v * VERTEX_FLOATS, sao = v * 4, o = i * VERTEX_FLOATS, ao = i * 4;
-        for (let k = 0; k < VERTEX_FLOATS; k++) ev[o + k] = vert[so + k];
+        for (let k = 0; k < VERTEX_FLOATS; k++) evW[o + k] = srcW[so + k];
         ea[ao] = attr[sao]; ea[ao + 1] = attr[sao + 1];
         ea[ao + 2] = attr[sao + 2]; ea[ao + 3] = attr[sao + 3];
       }
@@ -2940,7 +2979,11 @@ const WGX = (function () {
               let n = Math.min(PIECE, pulled.count - off);
               n -= n % 3;
               if (n <= 0) continue;
-              const vert = pulled.vert.slice(off * VERTEX_FLOATS, (off + n) * VERTEX_FLOATS);
+              // Byte slice, not a Float32Array element copy: the packed lanes
+              // can spell a NaN and TypedArray.slice is specified as get/set,
+              // which may canonicalise a NaN payload.
+              const vert = new Float32Array(pulled.vert.buffer.slice(
+                off * VERTEX_STRIDE, (off + n) * VERTEX_STRIDE));
               const attr = pulled.attr.slice(off * 4, (off + n) * 4);
               // Own authored (mat,s,x,hw) — do not share the LUT bind group.
               // vertex_index is 0..n-1 on the expanded piece; dashes need
@@ -3026,6 +3069,9 @@ const WGX = (function () {
         const lut = _makeRoadLUT(data.pos, data.trk, data.mat);
         const buckets = new Map();
         const pv = pulled.vert, VF = VERTEX_FLOATS;
+        // Float view for the centroid reads (position is still float32 at word
+        // 0), integer view for the gather copy below — see _expandPull.
+        const pvW = new Uint32Array(pv.buffer, pv.byteOffset, pv.length);
         for (let t = 0; t < pulled.count; t += 3) {
           const ao = t * VF, bo = (t + 1) * VF, co = (t + 2) * VF;
           const ax = pv[ao], ay = pv[ao + 1], az = pv[ao + 2];
@@ -3067,10 +3113,12 @@ const WGX = (function () {
               let n = Math.min(PIECE, nAll - off);
               n -= n % 3;
               if (n <= 0) continue;
-              const vert = new Float32Array(n * VF);
+              const vertBuf = new ArrayBuffer(n * VERTEX_STRIDE);
+              const vert = new Float32Array(vertBuf);
+              const vertW = new Uint32Array(vertBuf);
               for (let j = 0; j < n; j++) {
                 const src = bk.idx[off + j] * VF;
-                for (let k = 0; k < VF; k++) vert[j * VF + k] = pv[src + k];
+                for (let k = 0; k < VF; k++) vertW[j * VF + k] = pvW[src + k];
               }
               device.queue.writeBuffer(cv, first * VF * 4, vert);
               chunks.push({
@@ -6057,6 +6105,13 @@ const WGX = (function () {
       freeMesh,
       freeChunkedMesh,
       freeTexture,
+      // texCensus: GLX-only. Declared ABSENT rather than left off, because
+      // game.js installs a backend by descriptor-copy onto GLX and an absent
+      // NAME would keep GLX's own function — which would then run against a
+      // null gl. This makes `if (gfx.texCensus)` answer honestly, and
+      // __apex.texCensus() report supported:false instead of a measured zero.
+      // Implementing it here is follow-up work, not a silencer to remove.
+      texCensus: undefined,
 
       begin,
       present,

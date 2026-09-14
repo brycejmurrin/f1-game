@@ -78,7 +78,7 @@ srv.listen(0, "127.0.0.1", async () => {
     console.log("install:", JSON.stringify(installed));
     if (!installed.ok) bad.push("service worker install: " + installed.why);
     else {
-      if (installed.scenery !== 40) bad.push(`only ${installed.scenery}/40 scenery files precached`);
+      if (installed.scenery !== 51) bad.push(`only ${installed.scenery}/51 scenery files precached`);
       if (!installed.presets) bad.push("light-presets.js not precached");
     }
     // Race it ONLINE first and keep the count. That, not the Node number, is

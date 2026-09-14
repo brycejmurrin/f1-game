@@ -369,6 +369,7 @@ const GameAudio = (function () {
     { id: "builtin:song3", name: "song3", url: "assets/music/song3.mp3", builtin: true },
     { id: "builtin:song4", name: "song4", url: "assets/music/song4.mp3", builtin: true },
     { id: "builtin:song5", name: "song5", url: "assets/music/song5.mp3", builtin: true },
+    { id: "builtin:song6", name: "song6", url: "assets/music/song6.mp3", builtin: true },
   ];
   let musicIndex = 0;
   let source = "all";

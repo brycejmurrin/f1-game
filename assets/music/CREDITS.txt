@@ -5,10 +5,11 @@ song2.mp3  — provided by the project owner for this game.
 song3.mp3  — provided by the project owner for this game.
 song4.mp3  — provided by the project owner for this game.
 song5.mp3  — provided by the project owner for this game.
+song6.mp3  — provided by the project owner for this game.
 
-These five are the in-game playlist: they play in sequence in the menu and on
+These six are the in-game playlist: they play in sequence in the menu and on
 through the race, and SKIP TRACK in the pause menu jumps to the next one. Add
-more by dropping files here and listing them in PLAYLIST in js/game/audio.js.
+more by dropping files here and listing them in PLAYLIST in js/audio/engine.js.
 
 Anything in this folder that PLAYLIST does not name is dead weight, not a
 fallback — the Pages workflow stages assets/ wholesale, so it ships to every

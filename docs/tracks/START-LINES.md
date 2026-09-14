@@ -141,6 +141,44 @@ own first vertex.
 0.01, `magny_cours` 0.99 — each within a node or three of v0 and passing both
 checks. Changing them is churn with no measured benefit.
 
+## The eleven OSM-recovered circuits (2026-09-14)
+
+These did not come from the upstream trace file — `tools/track/stitch-osm-ring.mjs`
+recovered them from OpenStreetMap — so there was no "already begins at the line"
+property to inherit. The stitcher instead rotates the ring so vertex 0 sits mid
+the LONGEST STRAIGHT RUN, which is the pit straight on all eleven, and every one
+ships `startFrac: 0.0000`.
+
+That is a placement rule, not a surveyed line. It satisfies the convention's own
+straightness check — mean |curvature| over the 120 m centred on s=0, bar 0.004
+rad/m — on ten of the eleven, and the first apex's hand matches the real Turn 1
+on all eleven:
+
+| circuit | mean \|k\| at s=0 | T1 hand | real T1 |
+|---|---|---|---|
+| fuji | 0.00000 | R | R, the long right at the end of the 1.5 km straight |
+| okayama | 0.00004 | R | R |
+| korea | 0.00001 | L | L — the lap runs anti-clockwise |
+| jerez | 0.00108 | R | R, Expo |
+| donington | 0.00040 | R | R, Redgate |
+| anderstorp | 0.00011 | R | R |
+| brands_hatch | **0.00619** | R | R, Paddock Hill Bend |
+| zolder | 0.00015 | R | R |
+| dijon | 0.00001 | R | R |
+| buddh | 0.00002 | R | R |
+| mont_tremblant | 0.00087 | R | R |
+
+**Brands Hatch is over the bar and that is correct.** Its pit straight genuinely
+curves right as it runs to the rim before the track drops into Paddock Hill —
+there is no 120 m of straight anywhere near the line to find. The real start
+line would fail the same check. Left as measured rather than moved somewhere
+straighter and wrong.
+
+What is still owed on all eleven is the real coordinate: none has been checked
+against a surveyed start/finish position the way the 22 researched circuits
+above were. `tools/track/startline-snap.cjs` is the tool, and it needs a
+`FEATURE` row plus a `START` lat/lon per circuit.
+
 **Already correct:** baku, interlagos, madrid, hockenheim, sochi, watkins_glen,
 buenos_aires, jacarepagua — all 0.0, confirmed by both estimators.
 
