@@ -1493,3 +1493,43 @@ Deferred with reasoning, none lost:
   not the fix**: "still happening, on X not Y" is a bisect the reporter has
   already run for you, and the second cause was found by taking it literally
   rather than re-examining the first.
+
+---
+
+- **The four `gamepad.spec.js` failures logged above as OPEN do not reproduce:
+  the file is 27/27 green (re-measured 2026-09-14, later the same day).** The
+  entry above reads them as a real button-path defect — "the pad reads as
+  absent: `Input.throttle()` false on button 7, analog trigger 0" — and that is
+  the part that does not hold. Measured individually on a quiet box: both
+  trigger cases pass in 2.8 min, the edge-trigger and HUD-button cases in
+  4.2 min, the whole file in 10.4 min.
+
+  The entry is left standing rather than edited, because HOW it went wrong is
+  the useful part. Its own numbers say it: nine `steering` failures at
+  "103-142 s against a 120 s test timeout" and two camera ones at "146 s / 44 s"
+  are all budget, and the four gamepad cases are among the slowest in the group
+  — so a `test:input` GROUP run on a loaded box produces exactly this shape.
+  A group-level red was then attributed to a specific code path, and the
+  attribution came with a plausible mechanism, which is what made it stick.
+
+  **This is the same mistake as the `ui-button-touch` misdiagnosis recorded in
+  TESTING-FIELD-NOTES the same day, pointing the opposite way.** There, four
+  real test bugs (a wrong `selectOption` value, two tests outliving a redesign)
+  were written off as the SwiftShader actionability stall. Here, slow tests were
+  written up as a button-path defect. Both took a failure's SIGNATURE for its
+  CAUSE, and both cost a later session an investigation. A group verdict is
+  evidence about the GROUP; before a failure earns a named mechanism, re-run
+  that spec ALONE.
+
+  One hypothesis was eliminated before measuring, kept so it is not chased
+  again: `pollGamepad()` returns early behind a 60-frame reprobe gate while
+  `padConnected` is false, and the spec's `poll()` helper calls `Input.poll()`
+  exactly once — which would look exactly like an absent pad. It cannot fire:
+  the helper dispatches `gamepadconnected` first, and that listener
+  (`js/input/input.js:2036`) sets `padConnected = true`.
+
+  Still genuinely OPEN from that entry, and untouched here: `sliders › OVERALL
+  SPEED`, where the car tops out in gear 5 of 8 and its sibling measures
+  14.75 m/s against a > 76.5 expectation, over 1200 fixed sim ticks with no
+  wall-clock dependence. That one is not a budget artefact and deserves the
+  session the entry asks for.
