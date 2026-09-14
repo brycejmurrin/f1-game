@@ -155,3 +155,71 @@ test("postStep hands a finished car back instead of tracking it", () => {
   sim.postStep(1 / 60);
   assert.equal(sim.status().owned, 1, "the finished car is released");
 });
+
+/* ── the handback must INVERT the promote, not approximate it ──────────────
+ *
+ * startIncident maps the bespoke (speed, vLat) into Rapier's world with
+ *   vWx = spd*fx + vLat*fz ;  vWz = spd*fz - vLat*fx      (fx=sin h, fz=cos h)
+ * which is the matrix [[fx,fz],[fz,-fx]]. Its determinant is -1 and it is its
+ * own inverse, so reading back with the SAME two lines against the body's new
+ * heading returns the originals exactly.
+ *
+ * The old handback used `Math.hypot(vx, vz)` and `vLat = 0`. hypot is
+ * unsigned, so a car that spun 180 deg during a takeover was handed back
+ * FACING the way it ended up and DRIVING at the speed it had been going
+ * backwards — the wrong way down the road — and its lateral velocity was
+ * discarded. These assert the algebra directly, so they fail if either half
+ * of the pair is edited without the other.
+ */
+const fwd = (spd, vLat, head) => {
+  const fx = Math.sin(head), fz = Math.cos(head);
+  return { vWx: spd * fx + vLat * fz, vWz: spd * fz - vLat * fx };
+};
+const inv = (vWx, vWz, head) => {
+  const fx = Math.sin(head), fz = Math.cos(head);
+  return { speed: vWx * fx + vWz * fz, vLat: vWx * fz - vWz * fx };
+};
+
+test("promote -> handback round-trips speed and vLat, at any heading", () => {
+  for (const head of [0, 0.7, Math.PI / 2, 2.4, Math.PI, -1.3, 5.9]) {
+    for (const [spd, vLat] of [[62, 0], [62, 4.5], [-18, -3], [0, 7], [-40, 0]]) {
+      const w = fwd(spd, vLat, head);
+      const back = inv(w.vWx, w.vWz, head);
+      assert.ok(Math.abs(back.speed - spd) < 1e-9,
+        `speed ${spd} at head ${head} came back ${back.speed}`);
+      assert.ok(Math.abs(back.vLat - vLat) < 1e-9,
+        `vLat ${vLat} at head ${head} came back ${back.vLat}`);
+    }
+  }
+});
+
+test("the old hypot handback loses the sign — the defect this replaced", () => {
+  const head = 1.1, spd = -30, vLat = 0;      // spun: travelling backwards
+  const w = fwd(spd, vLat, head);
+  const hypot = Math.hypot(w.vWx, w.vWz);
+  assert.ok(hypot > 0, "hypot is unsigned by construction");
+  assert.ok(Math.abs(hypot - Math.abs(spd)) < 1e-9, "and equal to the magnitude");
+  // The sign is the whole defect: +30 handed back where -30 went in.
+  assert.ok(Math.sign(hypot) !== Math.sign(spd),
+    "the old path handed a backwards car forward down the road");
+  assert.ok(Math.abs(inv(w.vWx, w.vWz, head).speed - spd) < 1e-9,
+    "the inverse keeps it");
+});
+
+test("a lateral-only promote survives the round trip instead of being zeroed", () => {
+  const head = 0.4, spd = 0, vLat = 6;
+  const w = fwd(spd, vLat, head);
+  assert.ok(Math.abs(Math.hypot(w.vWx, w.vWz) - 6) < 1e-9,
+    "the old path would read this pure slide as 6 m/s of FORWARD speed");
+  const back = inv(w.vWx, w.vWz, head);
+  assert.ok(Math.abs(back.speed) < 1e-9, "forward stays zero");
+  assert.ok(Math.abs(back.vLat - 6) < 1e-9, "and the slide is kept");
+});
+
+test("the shipped handback uses the inverse, not hypot, for speed and vLat", () => {
+  assert.match(SRC, /const vFwd = vWx \* fxh \+ vWz \* fzh/);
+  assert.match(SRC, /const vSide = vWx \* fzh - vWz \* fxh/);
+  assert.match(SRC, /c\.vLat = fin\(vSide\)/);
+  assert.doesNotMatch(SRC, /const speed = fin\(vHoriz\)/,
+    "speed must come from the signed forward component, not the magnitude");
+});
