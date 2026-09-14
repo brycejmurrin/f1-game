@@ -8,8 +8,9 @@
  *   node tools/check/ai-race.mjs pace  [--track monza] [--diff normal] [--json]
  *   node tools/check/ai-race.mjs field [--track monza] [--seconds 240] [--runs 5]
  *   node tools/check/ai-race.mjs line  [--track monza]
+ *   node tools/check/ai-race.mjs human [--track monza] [--runs 3]
  *
- * Direct paths still work (`ai-pace.mjs` / `ai-field.mjs` / `ai-line.mjs`).
+ * Direct paths still work (`ai-pace.mjs` / `ai-field.mjs` / `ai-line.mjs` / `ai-human.mjs`).
  * Not player physics — that is tune-physics.
  */
 import { spawnSync } from "node:child_process";
@@ -23,6 +24,7 @@ const map = {
   pace: "ai-pace.mjs",
   field: "ai-field.mjs",
   line: "ai-line.mjs",
+  human: "ai-human.mjs",
   help: null,
   "--help": null,
   "-h": null,
@@ -34,6 +36,7 @@ if (!cmd || map[cmd] === null || !(cmd in map)) {
   node tools/check/ai-race.mjs pace  [args]   # lap-time median per difficulty
   node tools/check/ai-race.mjs field [args]   # spread / passes / dwell / clumps
   node tools/check/ai-race.mjs line  [args]   # approach offset + apex depth
+  node tools/check/ai-race.mjs human [args]   # how the AI races a PLAYER, not itself
 
 Owned by ai-racecraft (not tune-physics).`);
   process.exit(cmd && map[cmd] === null ? 0 : 2);

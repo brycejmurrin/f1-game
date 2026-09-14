@@ -150,6 +150,37 @@ test("re-enabling sound during a race restarts race music", async ({ page, loadT
 
 test("real GameAudio unlock and engine synthesis run after a user gesture", async ({ page }) => {
   await toMenu(page);
+  // STOP THE RENDER LOOP BEFORE CLICKING THROUGH. #rs-go lives on
+  // #race-settings, which js/game.js calls "the one menu screen that shows the
+  // flyby" — the canvas is live behind that sheet, where it is hidden under the
+  // title and the picker. Playwright's actionability check wants the same
+  // bounding box on two consecutive animation frames, and the flyby keeps
+  // resetting it, so the click retries until the 60 s budget is gone.
+  //
+  // MEASURED, not inferred from the resemblance to the rAF stall — which is the
+  // trap docs/notes/TESTING-FIELD-NOTES.md ("a 60 s timeout is a signature, not
+  // a diagnosis") records. Timing the three clicks below, same box, same build:
+  //
+  //             loop running   loop stopped
+  //   #mb-race       0.2 s         0.1 s      canvas hidden
+  //   #sel-go        0.8 s         1.0 s      canvas hidden
+  //   #rs-go        14.1 s         1.2 s      flyby LIVE
+  //
+  // and rAF was a healthy 40.7 Hz in that run, so this is not the starved-frame
+  // case — the cost is there at a normal frame rate and only on this button.
+  // Without the line this test failed at 60 s both in isolation and in a full
+  // file run; with it, 12.6 s and 4/4.
+  //
+  // It has to be re-armed HERE even though the test above already called it:
+  // sharedTest's per-test reset calls headless(false) to wake the page back up
+  // (tests/helpers/fixtures.js) — deliberately, so a test never inherits a dead
+  // renderer. PROBED rather than read off that comment: headless() is false at
+  // this line in a full-file run.
+  //
+  // Safe for what this test asserts: headlessMode is read in exactly one place
+  // in js/game.js, the early return in render(). update() — and with it the
+  // engine audio this test measures — runs either way.
+  await page.evaluate(() => window.__apex.headless(true));
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
   await page.locator("#rs-go").click();

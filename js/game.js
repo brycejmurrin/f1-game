@@ -1787,7 +1787,7 @@ function redFlagRestart() {
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
-    c.speed = 0; c.accSm = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.lane = c.lanePref;   // as gridUp
+    c.speed = 0; c.accSm = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref;   // as gridUp
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wake = 0; c.wheelLock = 0;
     clearRacingScratch(c);
     // A CAR ON A GRID BOX IS STATIONARY, ALONE AND ON CLEAN TARMAC. This path
@@ -1860,7 +1860,7 @@ function gridUp(preOrder) {
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
-    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0;
     clearRacingScratch(c);
@@ -4478,7 +4478,17 @@ function updateCar(c, dt, ranked) {
     // a full lane off the other on the side it is already on. A hard edge gives
     // the deadzone an error it cannot swallow.
     let rubClamp = false;
-    if (alongO && Math.abs(alongDx) < CLEAR && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x)) {
+    const alongClose = !!alongO && Math.abs(alongDx) < CLEAR;
+    let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x);
+    // ELECTING THE HUMAN IS ELECTING NOBODY — rule and measurement in
+    // AiDrive.humanYieldGrace; this end only carries the per-car timer.
+    // Are WE steering into them (aim vs where we already are), and is there
+    // still room left to concede? Both halves matter — AiDrive.humanYieldT.
+    const intruding = alongClose && Math.abs(alongDx) < CLEAR - AiDrive.humanYieldBand()
+      && (alongDx <= 0 ? desiredX < c.x : desiredX > c.x);
+    c.hYieldT = AiDrive.humanYieldT(c.hYieldT, alongClose, yieldMine, !!(alongO && alongO.human), intruding, dt);
+    if (!yieldMine && AiDrive.humanYieldTakes(c.hYieldT)) yieldMine = true;
+    if (yieldMine) {
       desiredX = alongDx <= 0 ? Math.max(desiredX, alongO.x + CLEAR) : Math.min(desiredX, alongO.x - CLEAR);
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
       rubClamp = true;
