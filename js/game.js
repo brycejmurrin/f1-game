@@ -249,8 +249,7 @@ try {
   // to the renderer, so persisting "webgl2" over the pick on the first armed
   // probe silently retired a working choice forever. The first strike reverts
   // THIS BOOT ONLY and leaves the pick alone; only a SECOND consecutive strike
-  // retires it (bounding a genuinely broken device to two attempts, no reload
-  // loop). The retired pick is remembered so RESET RENDERER can offer it back.
+  // retires it (bounding a genuinely broken device to two attempts, no reload loop).
   const STRIKE_KEY = "apex26.gfxProbeStrikes";
   if (armed && !skipClaim) {
     pref = "webgl2";
@@ -264,7 +263,6 @@ try {
       localStorage.removeItem(PROBE_KEY);
       if (retire) {
         localStorage.setItem("apex26.gfxBackend", "webgl2");
-        localStorage.setItem("apex26.gfxBackendWas", armed);
         localStorage.removeItem(STRIKE_KEY);
       } else localStorage.setItem(STRIKE_KEY, String(strikes));
     } catch (_) { /* the in-memory revert above still holds for this load */ }
@@ -3068,17 +3066,19 @@ DrivingLine.setMode(store.get("drivingLine", "full"));
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
 // reads), plus the same physics numbers the AI's brake targets use, so the
-// braking zones it shows are the ones the field actually brakes in. Rebuilt
-// only when the circuit changes (DrivingLine caches by id).
+// braking zones it shows are the ones the field actually brakes in. Rebuilt on
+// a circuit change AND on a PACE change — DrivingLine caches by circuit id
+// alone, so a new vTop needs the explicit reset() (the brake cue reads that
+// same LUT, and stayed pinned to the pace the line was built at).
 const _dlApi = { id: null, total: 0, track: null, sample: null, curvature: null, latMax: 0, brake: 0, accel: 0, vTop: 0, grip: 1 };
 function drivingLineApi(trk) {
-  if (_dlApi.track !== trk) {
+  if (_dlApi.track !== trk || _dlApi.vTop !== vTop()) {
     _dlApi.id = trk.def.id; _dlApi.total = trk.total; _dlApi.track = trk;
     _dlApi.sample = (s, out) => Tracks.sample(trk, s, out);
     _dlApi.curvature = (s) => Tracks.curvature(trk, s);   // wraps s itself
     _dlApi.lineAt = trk.line ? (s) => TrackLine.at(trk, s) : null;   // the baked racing line the AI drives
     _dlApi.latMax = PhysicsConsts.LAT_MAX; _dlApi.brake = PhysicsConsts.BRAKE; _dlApi.accel = PhysicsConsts.ACCEL;
-    _dlApi.vTop = vTop(); _dlApi.grip = 1;
+    _dlApi.vTop = vTop(); _dlApi.grip = 1; DrivingLine.reset();
   }
   return _dlApi;
 }
@@ -3228,7 +3228,7 @@ function quitToMenu() {
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
-  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true;
+  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annQueue = null;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
@@ -6899,7 +6899,7 @@ function render(dt) {
   const paint = carPaintMat(wet
     ? (night ? PAINT_WET_NIGHT : PAINT_WET_DAY)
     : (night ? PAINT_DRY_NIGHT : PAINT_DRY_DAY));
-  shadowPass.beginFrame();   // accumulate car shadows, flush in one batch after the loop
+  _hazeStr = 0; shadowPass.beginFrame();   // per-frame accumulators: the haze strength is re-recorded by the player block below (the menu flyby breaks before any car, so a stale one warped a fixed world point forever), car shadows flush in one batch after the loop
   carDraw.beginDecals();   // accumulate car decals, flush in one batch after the loop
   for (const c of cars) {
     // The title-screen flyby draws the WORLD, not the last race's grid.
@@ -7048,133 +7048,13 @@ function render(dt) {
     // YAWed axes, so the eye sits at (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in
     // rig space every frame. A road-locked basis made turn-chasing glance
     // the view while the halo and wheel sat still on the tangent.
-    // SKID STAMP BEFORE THE COCKPIT `continue`: it sat after the body draw, so
-    // in cockpit view (CAM_MODES[3], the shipped default) the player never laid
-    // a mark — tlx-probes M6's diag read cam:"cockpit" with every gate term true.
-    // World state (the skidmarks ring buffer), not a draw: camera-independent.
+    // WORLD STATE BEFORE THE COCKPIT `continue` — the skid stamp, the heat-haze
+    // anchor and the particle emitters below. After the body draw, in cockpit view
+    // (CAM_MODES[3], the shipped default) the player laid no mark and emitted no
+    // smoke/sparks/kickup/spray. Camera-independent: none of these is a draw.
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
       skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);
-    }
-    if (c.isPlayer && cockpitRigOnly) {
-      GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP);
-      basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
-      drawCockpitRig(c, _cockMat, dt, paint);
-      continue;
-    }
-    // Body-only mesh + planted wheels for every procedural car. Attitude
-    // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
-    const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
-    if (body) {
-      gfx.draw(body, tmpMat, paint);
-      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer);
-      _wheelOpts.emissive = night ? 0.12 : 0;
-      drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
-    } else {
-      const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
-      gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);
-      queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
-    }
-    // ACTIVE AERO: the moveable upper wing elements, FRONT and REAR, swung
-    // between their Z-mode and X-mode angles by this car's live `aeroX`. The
-    // 2026 car moves both wings together, so both move here — the front is the
-    // one a chase camera actually sees working, the rear is the one a car behind
-    // sees. Drawn for EVERY car, not just the player: a rival's wings opening
-    // down the straight is the single most readable "he is going for it" cue the
-    // sport has, and they are the only parts of the car that move, so faking it
-    // on the HUD alone would be a lie about what the physics is doing.
-    // Skipped in cockpit view (that branch `continue`s well above this) and for
-    // a loaded GLB body, whose wings are somebody else's geometry.
-    // Distance-gated for RIVALS, exactly as the brake rings above are and for
-    // the same reason — a wing element is ~1 m x 0.15 m, and 4 flaps x 21 AI is
-    // ~84 draws a frame, every one a VAO bind + drawElements (each flap is its
-    // own mesh, so the bind never hits the cache). The cue this exists to sell
-    // is the car AHEAD of you opening its wings, not one two straights away.
-    // 150 m is deliberately generous next to the rings' 40 m: the rings are a
-    // glow that genuinely goes sub-pixel, whereas a rear wing swinging is still
-    // legible at distance. The player is never gated — it is the car you are
-    // looking at.
-    if (!carDraw.modelBuf) {
-      let drawFlaps = true;
-      if (!c.isPlayer) {
-        const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
-        drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < 150 * 150;
-      }
-      if (drawFlaps) {
-        const aSt = teamDecalState(c.team, c.isPlayer);
-        drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
-      }
-    }
-    // Rear lights (CarMesh.drawRearLights: the centre RIS light plus the 2026
-    // mirrored light on each rear wing endplate). FIA strobe in the wet (~4 Hz,
-    // 55% duty) and STEADY at night — a car's rear faces receive none of the
-    // downward-aimed floodlight beams, so a car directly ahead at night was a
-    // pitch-black void filling the windscreen; the steady red gives every rear
-    // an anchor light. Brightness still tracks live ERS charge; only the
-    // BRIGHTNESS does, never the on/off — see the strobe note below.
-    // ON THE GRID they strobe whatever the weather: a stationary 2026 car on
-    // full charge shows the "MGU-K recharging" fast flash, which is the blinking
-    // in every real pre-race grid shot.
-    const _ledStrobe = ((raceT * 4.4) % 1) < 0.55;
-    // Once racing, the ONLY thing that flashes is the wet rain light. The
-    // MGU-K pattern is a STATIONARY-car signal — the note above says so — so
-    // strobing it whenever the driver deploys ERS ran it through most of a
-    // racing lap, and the pre-race blinking never appeared to stop. Night dry is
-    // now steady whenever it draws, which is what the comment already claimed.
-    // The 2026 ERS code (CarMesh.ersLightCode) takes the light over whenever
-    // it applies — a short repeating flash at full deploy, a rapid one when a
-    // full battery clips the harvest — and hands back to the weather / night
-    // gate the moment it does not. Not on the grid: that is the recharging
-    // strobe above, and the two must not fight over one lamp.
-    const ersCode = preGrid ? -1 : CarMesh.ersLightCode(c, raceT);
-    if (preGrid ? gridFlash
-                : ersCode >= 0 ? ersCode === 1
-                : ((wet && _ledStrobe) || (!wet && night))) {
-      // Rivals: 40 m gate like brake rings. Player always draws. The grid spans
-      // 22 x 8 m, so pre-race it opens up or the field ahead of you sits dark.
-      const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2];
-      const lGate = preGrid ? 200 : 40;
-      if (c.isPlayer || ldx * ldx + ldy * ldy + ldz * ldz < lGate * lGate) {
-        // Wet, grid and ERS-code lights stay full-bright — a status light must
-        // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
-        drawRearLights(tmpMat, (wet || preGrid || ersCode === 1) ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1)));
-      }
-    }
-    // 2026 amber mirror lamps: under 20 km/h or stopped — the pit lane, the grid,
-    // a spin. Same 40 m rival gate as the rear lights; the player always draws.
-    // Anchors come cached per team from Car3D, so this allocates nothing.
-    // vStd: "crawling" is relative to the car's envelope, so the lamp threshold
-    // scales with the PACE slider like every other speed threshold here.
-    if (!carDraw.modelBuf && c.speed < vStd(5.56)) {
-      const mdx = tmpP[0] - camEye[0], mdy = tmpP[1] - camEye[1], mdz = tmpP[2] - camEye[2];
-      if (c.isPlayer || mdx * mdx + mdy * mdy + mdz * mdz < 40 * 40) {
-        const mSt = teamDecalState(c.team, c.isPlayer);
-        const cm = mSt.parts && mSt.parts._visual && mSt.parts._visual.cockpit;
-        drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(c.team.id, cm && cm.mirror));
-      }
-    }
-    // Electric ERS deployment has a pulsing status strip, never an exhaust flame.
-    if (c.isPlayer && isErsDeploying(c)) {
-      const W = _ringWorld;
-      W.set(tmpMat);
-      W[12] += W[4] * 0.605 - W[8] * 2.615;
-      W[13] += W[5] * 0.605 - W[9] * 2.615;
-      W[14] += W[6] * 0.605 - W[10] * 2.615;
-      _ersLightOpts.alpha = 0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2);
-      gfx.draw(getErsLight(), W, _ersLightOpts);
-    }
-    // Brief fuel-coloured throttle-lift after-fire, visible at any time of day.
-    if ((c.exhaustPop || 0) > 0.05) {   // every car — the transient lasts ~0.2 s
-      const fl = 0.6 + 0.4 * Math.sin(raceT * 41.0 + Math.sin(raceT * 23.0) * 3.0);
-      const W = _ringWorld;
-      W.set(tmpMat);
-      // 3 cm forward of the boost quad in the same clear pocket (see above) —
-      // the old z -2.24 was hidden behind the rain-light housing from chase cam.
-      W[12] += W[4] * 0.40 - W[8] * 2.63;
-      W[13] += W[5] * 0.40 - W[9] * 2.63;
-      W[14] += W[6] * 0.40 - W[10] * 2.63;
-      _flameOpts.alpha = (0.30 + 0.55 * fl) * c.exhaustPop;
-      gfx.draw(getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame), W, _flameOpts);
     }
     // EXHAUST HEAT HAZE: remember the player tailpipe's world position + plume
     // strength for this frame (projected to screen UV just before present()).
@@ -7279,6 +7159,126 @@ function render(dt) {
           }
         }
       }
+    }
+    if (c.isPlayer && cockpitRigOnly) {
+      GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP);
+      basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
+      drawCockpitRig(c, _cockMat, dt, paint);
+      continue;
+    }
+    // Body-only mesh + planted wheels for every procedural car. Attitude
+    // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
+    const body = carDraw.modelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
+    if (body) {
+      gfx.draw(body, tmpMat, paint);
+      queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer);
+      _wheelOpts.emissive = night ? 0.12 : 0;
+      drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
+    } else {
+      const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
+      gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);
+      queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
+    }
+    // ACTIVE AERO: the moveable upper wing elements, FRONT and REAR, swung
+    // between their Z-mode and X-mode angles by this car's live `aeroX`. The
+    // 2026 car moves both wings together, so both move here — the front is the
+    // one a chase camera actually sees working, the rear is the one a car behind
+    // sees. Drawn for EVERY car, not just the player: a rival's wings opening
+    // down the straight is the single most readable "he is going for it" cue the
+    // sport has, and they are the only parts of the car that move, so faking it
+    // on the HUD alone would be a lie about what the physics is doing.
+    // Skipped in cockpit view (that branch `continue`s well above this) and for
+    // a loaded GLB body, whose wings are somebody else's geometry.
+    // Distance-gated for RIVALS, exactly as the brake rings above are and for
+    // the same reason — a wing element is ~1 m x 0.15 m, and 4 flaps x 21 AI is
+    // ~84 draws a frame, every one a VAO bind + drawElements (each flap is its
+    // own mesh, so the bind never hits the cache). The cue this exists to sell
+    // is the car AHEAD of you opening its wings, not one two straights away.
+    // 150 m is deliberately generous next to the rings' 40 m: the rings are a
+    // glow that genuinely goes sub-pixel, whereas a rear wing swinging is still
+    // legible at distance. The player is never gated — it is the car you are
+    // looking at.
+    if (!carDraw.modelBuf) {
+      let drawFlaps = true;
+      if (!c.isPlayer) {
+        const fdx = tmpP[0] - camEye[0], fdy = tmpP[1] - camEye[1], fdz = tmpP[2] - camEye[2];
+        drawFlaps = fdx * fdx + fdy * fdy + fdz * fdz < 150 * 150;
+      }
+      if (drawFlaps) {
+        const aSt = teamDecalState(c.team, c.isPlayer);
+        drawAeroFlaps(c.team, aSt.val, c.aeroX || 0, tmpMat, paint, aSt.aero);
+      }
+    }
+    // Rear lights (CarMesh.drawRearLights: the centre RIS light plus the 2026
+    // mirrored light on each rear wing endplate). FIA strobe in the wet (~4 Hz,
+    // 55% duty) and STEADY at night — a car's rear faces receive none of the
+    // downward-aimed floodlight beams, so a car directly ahead at night was a
+    // pitch-black void filling the windscreen; the steady red gives every rear
+    // an anchor light. Brightness still tracks live ERS charge; only the
+    // BRIGHTNESS does, never the on/off — see the strobe note below.
+    // ON THE GRID they strobe whatever the weather: a stationary 2026 car on
+    // full charge shows the "MGU-K recharging" fast flash, which is the blinking
+    // in every real pre-race grid shot.
+    const _ledStrobe = ((raceT * 4.4) % 1) < 0.55;
+    // Once racing, the ONLY thing that flashes is the wet rain light. The
+    // MGU-K pattern is a STATIONARY-car signal — the note above says so — so
+    // strobing it whenever the driver deploys ERS ran it through most of a
+    // racing lap, and the pre-race blinking never appeared to stop. Night dry is
+    // now steady whenever it draws, which is what the comment already claimed.
+    // The 2026 ERS code (CarMesh.ersLightCode) takes the light over whenever
+    // it applies — a short repeating flash at full deploy, a rapid one when a
+    // full battery clips the harvest — and hands back to the weather / night
+    // gate the moment it does not. Not on the grid: that is the recharging
+    // strobe above, and the two must not fight over one lamp.
+    const ersCode = preGrid ? -1 : CarMesh.ersLightCode(c, raceT);
+    if (preGrid ? gridFlash
+                : ersCode >= 0 ? ersCode === 1
+                : ((wet && _ledStrobe) || (!wet && night))) {
+      // Rivals: 40 m gate like brake rings. Player always draws. The grid spans
+      // 22 x 8 m, so pre-race it opens up or the field ahead of you sits dark.
+      const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2];
+      const lGate = preGrid ? 200 : 40;
+      if (c.isPlayer || ldx * ldx + ldy * ldy + ldz * ldz < lGate * lGate) {
+        // Wet, grid and ERS-code lights stay full-bright — a status light must
+        // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
+        drawRearLights(tmpMat, (wet || preGrid || ersCode === 1) ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1)));
+      }
+    }
+    // 2026 amber mirror lamps: under 20 km/h or stopped — the pit lane, the grid,
+    // a spin. Same 40 m rival gate as the rear lights; the player always draws.
+    // Anchors come cached per team from Car3D, so this allocates nothing.
+    // vStd: "crawling" is relative to the car's envelope, so the lamp threshold
+    // scales with the PACE slider like every other speed threshold here.
+    if (!carDraw.modelBuf && vStd(c.speed) < 5.56) {
+      const mdx = tmpP[0] - camEye[0], mdy = tmpP[1] - camEye[1], mdz = tmpP[2] - camEye[2];
+      if (c.isPlayer || mdx * mdx + mdy * mdy + mdz * mdz < 40 * 40) {
+        const mSt = teamDecalState(c.team, c.isPlayer);
+        const cm = mSt.parts && mSt.parts._visual && mSt.parts._visual.cockpit;
+        drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(c.team.id, cm && cm.mirror));
+      }
+    }
+    // Electric ERS deployment has a pulsing status strip, never an exhaust flame.
+    if (c.isPlayer && isErsDeploying(c)) {
+      const W = _ringWorld;
+      W.set(tmpMat);
+      W[12] += W[4] * 0.605 - W[8] * 2.615;
+      W[13] += W[5] * 0.605 - W[9] * 2.615;
+      W[14] += W[6] * 0.605 - W[10] * 2.615;
+      _ersLightOpts.alpha = 0.5 + 0.5 * (Math.sin(raceT * 28.0) > 0 ? 1 : 0.2);
+      gfx.draw(getErsLight(), W, _ersLightOpts);
+    }
+    // Brief fuel-coloured throttle-lift after-fire, visible at any time of day.
+    if ((c.exhaustPop || 0) > 0.05) {   // every car — the transient lasts ~0.2 s
+      const fl = 0.6 + 0.4 * Math.sin(raceT * 41.0 + Math.sin(raceT * 23.0) * 3.0);
+      const W = _ringWorld;
+      W.set(tmpMat);
+      // 3 cm forward of the boost quad in the same clear pocket (see above) —
+      // the old z -2.24 was hidden behind the rain-light housing from chase cam.
+      W[12] += W[4] * 0.40 - W[8] * 2.63;
+      W[13] += W[5] * 0.40 - W[9] * 2.63;
+      W[14] += W[6] * 0.40 - W[10] * 2.63;
+      _flameOpts.alpha = (0.30 + 0.55 * fl) * c.exhaustPop;
+      gfx.draw(getExhaustFlame(c.fuelVisual && c.fuelVisual.fxFlame), W, _flameOpts);
     }
   }
   // Flush all accumulated car decals in one decal-program block — previously
@@ -8306,7 +8306,7 @@ els.pausebtn.onclick = () => setPaused(true);
 // the only thing left and brings it all back. Session-only — reset on race start.
 function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);
-  paintHudDetailsSummary();   // repaints the HUD row too if (v) { const p = $("campicker"); if (p) p.hidden = true; }
+  paintHudDetailsSummary(); if (v) hideCamPicker();   // repaints the HUD row too; an OPEN picker must not survive the hide (css only display:none's it) and pop back on #hud-restore
 }
 // LINE COLOUR / LINE OPACITY / BRAKE CUE are js/ui/driving-line-opts.js: player
 // PREFERENCES, self-contained, and three ratchet raises on this file in one day

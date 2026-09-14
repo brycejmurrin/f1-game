@@ -715,7 +715,16 @@ function updateHud(force) {
       const t = G.sectorLast[i];
       const pb = t != null && bests && t <= bests[i];
       const sb = pb && field && t <= field[i];   // the FIELD's best — the timing screen's purple
-      hText(_secRows[i], t == null ? "--" : (pb ? "▼" : "▲") + t.toFixed(3));
+      // THREE STATES, THREE GLYPHS. The arrows already carried pb-vs-slower on a
+      // non-colour channel, but SESSION best and PERSONAL best both read "▼" and
+      // separated only as purple vs green — which is the textbook deuteranopia
+      // pair, on the one row where the distinction is the whole point. A player
+      // who cannot split those hues saw "▼" twice and had no way to tell a
+      // session-topping sector from an ordinary personal best.
+      // ★ is the session best, ▼ a personal best, ▲ slower than your own. Same
+      // single-glyph width as before, so the fixed row geometry is untouched,
+      // and the colours stay exactly as they were for everyone reading them.
+      hText(_secRows[i], t == null ? "--" : (sb ? "★" : pb ? "▼" : "▲") + t.toFixed(3));
       // Timing-screen colours: purple session best, green personal best,
       // yellow slower than your own best; no split yet keeps the row's ink.
       hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
@@ -888,11 +897,14 @@ function drawMinimap() {
     const gh = Ghost.at(player.lapTime);
     if (gh) {
       const gp = at(gh.s);   // a persisted ghost is stored input: never trust its s
-      if (!gp) return;
-      mm.fillStyle = "rgba(120, 220, 255, 0.95)";
-      mm.beginPath();
-      mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
-      mm.fill();
+      // Skip only the GHOST dot on a bad s — returning here would take the
+      // player's own white marker (drawn below) down with it for the session.
+      if (gp) {
+        mm.fillStyle = "rgba(120, 220, 255, 0.95)";
+        mm.beginPath();
+        mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
+        mm.fill();
+      }
     }
   }
   const p = at(player.s);

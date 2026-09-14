@@ -23,7 +23,7 @@ const RaceSettings = (function () {
       isTimeTrial, isChampionship, SeasonCal, setCautionEnabled,
       getTrackIdx, getRaceLaps, setRaceLaps, getRaceWeather, setRaceWeather,
       getRaceTimeOfDay, setRaceTimeOfDay, getRaceChangeable, setRaceChangeable,
-      getWxArcPlan, setWxArcPlan, getDifficulty, setDifficulty,
+      setWxArcPlan, getDifficulty, setDifficulty,
       getRaceGrid, setRaceGrid, getRaceReliability, setRaceReliability,
       getRaceTyreWear, setRaceTyreWear,
       getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace,

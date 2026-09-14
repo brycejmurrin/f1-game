@@ -113,7 +113,7 @@ const GLX = (function () {
   // Null until a pack is loaded — a pack ships in assets/pack and loads at boot
   // (matTexMix def 1.0), but load is async and can fail, so every path below
   // has to survive them staying null and degrade to the procedural look.
-  let matAlbedoTex = null, matNormalTex = null, matDummyArrTex = null;
+  let matAlbedoTex = null, matNormalTex = null, matDummyArrTex = null, _matGen = 0, _matBoundGen = -1;   // _matGen: pack generation; _matBoundGen: what bindMaterialMaps last bound
   const MAT_TEX_LAYERS = 17;                                 // MAT.FLAT(0) … MAT.ASPHALT(16)
   const matTexScales = new Float32Array(MAT_TEX_LAYERS);     // world metres per tile; 0 = absent
   // Scratch vec3s for the tuner's ambient multiplier (no per-frame allocation).
@@ -703,7 +703,7 @@ const GLX = (function () {
     markBatchProg = _ok(markBatchProg); glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex"]);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
-    _clearUf(_litUf); _clearUf(_skyUf);
+    _clearUf(_litUf); _clearUf(_skyUf); _matBoundGen = -1;   // a relink drops uMatTexScale too
 
     // ── GLXCore: the ctx façade handed to the split subsystem modules
     // (js/render/glx/{post,shadow,chunked}.js). Live getters close over this
@@ -1072,43 +1072,25 @@ const GLX = (function () {
       idx = big ? new Uint32Array(idx) : new Uint16Array(idx);
     }
 
-    // Interleaved: [x,y,z, nx,ny,nz, r,g,b (, mat) (, s,x,hw)] per vertex — one
-    // buffer. Optional per-vertex material id (data.mat) adds a 10th float
-    // (attrib 3); meshes without it stay 9-float and aMat reads the generic
-    // default (0=FLAT). Optional track coords (data.trk: arc-length s, signed
-    // lateral offset, half-width — 3 floats, attrib 4) let the ROAD evaluate its
-    // markings analytically in the fragment shader instead of carrying a vertex
-    // column per painted line. Meshes without it read (0,0,0), and the shader
-    // gates on hw > 0 so nothing else can accidentally paint lines on itself.
+    // Packed and interleaved by VertexPack (js/render/shared/vertex-pack.js).
+    // Optional per-vertex material id (data.mat) rides in the alpha of the
+    // colour attribute and so costs nothing; meshes without it encode 0, which
+    // is the same FLAT the old disabled attribute 3 read from its generic
+    // default. Optional track coords (data.trk: arc-length s, signed lateral
+    // offset, half-width — attrib 4) let the ROAD evaluate its markings
+    // analytically in the fragment shader instead of carrying a vertex column
+    // per painted line. Meshes without it read (0,0,0), and the shader gates on
+    // hw > 0 so nothing else can accidentally paint lines on itself.
     const mat = data.mat && data.mat.length === vCount ? toF32(data.mat) : null;
     const trk = data.trk && data.trk.length === vCount * 3 ? toF32(data.trk) : null;
-    const fpv = 9 + (mat ? 1 : 0) + (trk ? 3 : 0);
-    const trkOff = 9 + (mat ? 1 : 0);
-    const interleaved = new Float32Array(vCount * fpv);
-    for (let i = 0; i < vCount; i++) {
-      const o = i * fpv;
-      interleaved[o  ] = pos[i*3  ]; interleaved[o+1] = pos[i*3+1]; interleaved[o+2] = pos[i*3+2];
-      interleaved[o+3] = nrm[i*3  ]; interleaved[o+4] = nrm[i*3+1]; interleaved[o+5] = nrm[i*3+2];
-      interleaved[o+6] = col[i*3  ]; interleaved[o+7] = col[i*3+1]; interleaved[o+8] = col[i*3+2];
-      if (mat) interleaved[o+9] = mat[i];
-      if (trk) {
-        interleaved[o+trkOff  ] = trk[i*3  ];
-        interleaved[o+trkOff+1] = trk[i*3+1];
-        interleaved[o+trkOff+2] = trk[i*3+2];
-      }
-    }
+    const interleaved = VertexPack.pack(vCount, pos, nrm, col, mat, trk);
 
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     const vbo = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     gl.bufferData(gl.ARRAY_BUFFER, interleaved, gl.STATIC_DRAW);
-    const stride = fpv * 4;
-    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, stride,  0);
-    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, stride, 12);
-    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, stride, 24);
-    if (mat) { gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, stride, 36); }
-    if (trk) { gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 3, gl.FLOAT, false, stride, trkOff * 4); }
+    VertexPack.bindAttribs(gl, !!trk);
     const ib = gl.createBuffer();
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
@@ -1151,6 +1133,64 @@ const GLX = (function () {
     return { vao, vbo, ib, count: idx.length, indexType: idx instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT };
   }
   // Upload a canvas / ImageBitmap / ImageData as an RGBA texture (mipmapped, clamped).
+  // ── texture byte census ────────────────────────────────────────────────────
+  // What is RESIDENT, not what was ever created. Exists because the biggest
+  // texture number in the game had never been measured: the livery atlases were
+  // estimated at ~147 MB from source constants, roughly ten times the packed
+  // world geometry, with no hook that could confirm or refute it
+  // (docs/plans/2026-09-14-texture-memory-plan.md, Task 1).
+  //
+  // Bytes are the EXACT mip chain, not the w*h*4*4/3 rule of thumb. That rule
+  // assumes a square texture and the livery atlas is 1024x1280: once the width
+  // bottoms out at 1 the chain keeps going down the height, and the estimate
+  // drifts. An instrument that is only approximately right is how the wrong
+  // thing gets optimised — which is the point of PERF-FINDINGS §0.
+  //
+  // NOT COUNTED, and the census says so in `excludes` rather than staying
+  // quiet about it: render targets (the shadow maps, the post chain, the env
+  // cube) are created directly against gl in shadow.js / post.js and never come
+  // through here. §2i and §2j are both about instruments that could not say
+  // "I measured nothing"; a total with a silent denominator is the same fault.
+  const _texLedger = new Map();          // texture -> { kind, w, h, layers, bytes }
+  const TEX_EXCLUDES = ["shadow maps", "post chain", "env cube", "non-GLX backends"];
+
+  function _mipBytes(w, h, layers, bytesPerTexel) {
+    let total = 0, mw = w, mh = h;
+    for (;;) {
+      total += mw * mh * layers * bytesPerTexel;
+      if (mw === 1 && mh === 1) return total;
+      mw = Math.max(1, mw >> 1); mh = Math.max(1, mh >> 1);
+    }
+  }
+  function _texNote(tex, kind, w, h, layers) {
+    if (!tex || !(w > 0) || !(h > 0)) return tex;
+    _texLedger.set(tex, { kind, w, h, layers, bytes: _mipBytes(w, h, layers, 4) });
+    return tex;
+  }
+  function _texForget(tex) { if (tex) _texLedger.delete(tex); }
+
+  // { bytes, count, byKind, biggest, excludes } — bytes and count are always
+  // NUMBERS, zero when nothing is resident, never undefined.
+  function texCensus() {
+    // A lost context freed every texture the driver held, whatever this ledger
+    // still remembers. Reporting the last number it happened to hold would be
+    // the §2u fault — an instrument that was blind to the state change and
+    // stayed confident through it.
+    if (ctxGone()) return { bytes: 0, count: 0, mb: 0, byKind: Object.create(null),
+                            biggest: null, contextLost: true, excludes: TEX_EXCLUDES.slice() };
+    const byKind = Object.create(null);
+    let bytes = 0, count = 0, biggest = null;
+    _texLedger.forEach((r) => {
+      bytes += r.bytes; count++;
+      byKind[r.kind] = (byKind[r.kind] || 0) + r.bytes;
+      if (!biggest || r.bytes > biggest.bytes) {
+        biggest = { kind: r.kind, w: r.w, h: r.h, layers: r.layers, bytes: r.bytes };
+      }
+    });
+    return { bytes, count, mb: +(bytes / 1048576).toFixed(2), byKind, biggest,
+             excludes: TEX_EXCLUDES.slice() };
+  }
+
   function createTexture(src) {
     if (ctxGone()) return null;
     const tex = gl.createTexture();
@@ -1172,9 +1212,11 @@ const GLX = (function () {
     // drawDecal) — a bare null unbind here left every later lit draw sampling
     // an empty unit as uShadowMap for one frame. Restore the invariant.
     gl.bindTexture(gl.TEXTURE_2D, (SHD && SHD.enabled && SHD.mapTex) || null);
-    return tex;
+    // Dimensions come off the source the upload just consumed — a canvas,
+    // ImageBitmap or ImageData all carry width/height.
+    return _texNote(tex, "content2D", src && src.width, src && src.height, 1);
   }
-  function freeTexture(t) { if (t) gl.deleteTexture(t); }
+  function freeTexture(t) { if (t) { _texForget(t); gl.deleteTexture(t); } }
 
   // ── Baked PBR material texture arrays ──────────────────────────────────────
   // One TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID, so the lit shader can
@@ -1207,6 +1249,9 @@ const GLX = (function () {
       } catch (_) { /* one bad layer must not sink the pack */ }
     }
     if (!filled) { gl.deleteTexture(tex); gl.bindTexture(gl.TEXTURE_2D_ARRAY, null); return null; }
+    // texStorage3D allocated the whole chain for ALL n layers up front, so the
+    // resident cost is n layers wide whether or not every one was filled.
+    _texNote(tex, "materialArray", size, size, n);
     gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -1225,8 +1270,9 @@ const GLX = (function () {
   // previously-bound arrays so a pack swap — tier change, test teardown — can't
   // leak GPU memory.
   function setMaterialMaps(maps) {
-    if (matAlbedoTex) { gl.deleteTexture(matAlbedoTex); matAlbedoTex = null; }
-    if (matNormalTex) { gl.deleteTexture(matNormalTex); matNormalTex = null; }
+    _matGen++;   // bindMaterialMaps rebinds + re-uploads the scales on the next begin()
+    if (matAlbedoTex) { _texForget(matAlbedoTex); gl.deleteTexture(matAlbedoTex); matAlbedoTex = null; }
+    if (matNormalTex) { _texForget(matNormalTex); gl.deleteTexture(matNormalTex); matNormalTex = null; }
     matTexScales.fill(0);
     if (!maps) return;
     matAlbedoTex = maps.albedo || null;
@@ -1276,24 +1322,23 @@ const GLX = (function () {
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, null);
   }
 
-  // Per-frame material-map binding. Units 10/11 are free — the lit pass holds 0
-  // (shadow), 5 (decal), 6, 7 (PCSS blocker), 8 (car shadow), 9 (lamp shadow).
+  // Material-map binding, once per PACK. Units 10/11 are free — the lit pass holds 0
+  // (shadow), 5 (decal), 6, 7 (PCSS blocker), 8 (car shadow), 9 (lamp shadow) — and nothing else binds them.
   function bindMaterialMaps(mix) {
     ensureMatDummy();
-    gl.activeTexture(gl.TEXTURE10);
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, matAlbedoTex || matDummyArrTex);
-    ufI(litU.uMatAlbedoTex, _litUf, "u.matAlbedo", 10);
-    gl.activeTexture(gl.TEXTURE11);
-    // No baked normal array → sample the NEUTRAL 128-grey dummy, not the albedo
-    // array. A pack with albedo but no normal is documented-valid ("albedo alone
-    // still helps"); falling back to matAlbedoTex here fed coloured albedo RGB to
-    // applyMaterialTexNormal as a tangent-space normal, warping shading on every
-    // grass/rock/wall layer instead of degrading cleanly.
-    gl.bindTexture(gl.TEXTURE_2D_ARRAY, matNormalTex || matDummyArrTex);
-    ufI(litU.uMatNormalTex, _litUf, "u.matNormal", 11);
+    if (_matBoundGen !== _matGen) {   // the binds and the 17 scales are pack-swap state; begin() runs ~8x a game frame
+      _matBoundGen = _matGen; gl.activeTexture(gl.TEXTURE10); gl.bindTexture(gl.TEXTURE_2D_ARRAY, matAlbedoTex || matDummyArrTex);
+      // No baked normal array → sample the NEUTRAL 128-grey dummy, not the albedo
+      // array. A pack with albedo but no normal is documented-valid ("albedo alone
+      // still helps"); falling back to matAlbedoTex here fed coloured albedo RGB to
+      // applyMaterialTexNormal as a tangent-space normal, warping shading on every
+      // grass/rock/wall layer instead of degrading cleanly.
+      gl.activeTexture(gl.TEXTURE11); gl.bindTexture(gl.TEXTURE_2D_ARRAY, matNormalTex || matDummyArrTex);
+      if (litU["uMatTexScale[0]"]) gl.uniform1fv(litU["uMatTexScale[0]"], matTexScales);
+    }
     gl.activeTexture(gl.TEXTURE0);      // leave unit 0 active + bound to the shadow map
+    ufI(litU.uMatAlbedoTex, _litUf, "u.matAlbedo", 10); ufI(litU.uMatNormalTex, _litUf, "u.matNormal", 11);
     uf1(litU.uMatTexMix, _litUf, "matTexMix", matAlbedoTex ? mix : 0);
-    if (litU["uMatTexScale[0]"]) gl.uniform1fv(litU["uMatTexScale[0]"], matTexScales);
   }
   // Draw textured decals over the just-drawn car body: depth test ON, depth write
   // OFF (decals are proud of the panel so they never z-fight), alpha-blended, and
@@ -2332,7 +2377,7 @@ const GLX = (function () {
     gl.uniform1f(lineU.uCornersOnly, opts && opts.cornersOnly ? 1 : 0);
     gl.uniform1f(lineU.uPalette, opts && opts.palette ? 1 : 0);
     gl.uniform1f(lineU.uOpacity, (opts && opts.opacity) || 1);
-    gl.uniform1f(lineU.uStr, (opts && opts.str) || 1.6);
+    gl.uniform1f(lineU.uStr, 1.6);          // emissive strength: a constant, no producer sends one
     setBlend(true);
     setDepthMask(false);
     setPolyOffset(ROAD_BIAS);
@@ -2489,6 +2534,7 @@ const GLX = (function () {
       scales: Array.from(matTexScales),
     }),
     freeTexture,
+    texCensus,                    // resident texture bytes — see the ledger above
     drawDecal,
     chunkedTrackCoords: true,
     // Per-chunk lamp support (the LampChunks bake). Capability read, never a

@@ -35,21 +35,37 @@ Load from the SKILL.md index when the task needs this detail.
    - **Retired circuits**: set `classic: true` in the def and append after the 24
      season rounds (see the `// ── retired / off-calendar ──` comment in
      `manifest.cjs`).
-   - **Roster is capped at 40 circuits** — `tests/unit/shared-track-foundation-characterization.test.cjs`
-     asserts `Tracks.LIST.length === 40`. Adding a new circuit at 40 means
-     **replacing** an existing `classic: true` one, not "retiring" it further —
-     e.g. `jacarepagua` (`js/circuits/jacarepagua.js`) is **already**
-     `classic: true` (last Brazilian GP 1989), so swapping it out for a new
-     circuit is a **delete**, done in one pass:
-     1. Delete `js/circuits/jacarepagua.js`.
-     2. Remove its `<script>` tag from `index.html`.
-     3. Remove its entry from the `CIRCUITS` array in `tools/manifest.cjs`.
-     (Its centreline, markings and dressing rows are keys of that one file —
-     nothing else in `js/track/` names the circuit.)
-     Then add the new circuit's three matching pieces. Skipping one leaves a
-     dangling reference that `tests/unit/load-order.test.mjs` or the 40-cap
-     test will catch — but don't rely on the test to tell you which file you
-     forgot; delete all three together.
+   - **The roster count is asserted, in two places.**
+     `tests/unit/shared-track-foundation-characterization.test.cjs` and
+     `tests/unit/circuit-def-fields.test.mjs` both pin `Tracks.LIST.length`
+     (51 as of 2026-09-14). It is a forcing function, not a budget — raise it
+     deliberately, in the commit that adds the circuit, and say why. It read 40
+     until eleven circuits were recovered from OpenStreetMap
+     (`tools/track/osm-circuits.json`).
+     Raising it means updating, in the same commit:
+     1. the two `Tracks.LIST.length` assertions (`SEASON.length` stays 24),
+     2. `tests/specs/f1-track-accuracy.spec.js` — the `waitForFunction` count, a
+        `CIRCUIT_MAP` row, AND a matching feature in
+        `tests/data/f1-circuit-reference.geojson`. The spec asserts the game's
+        circuits and the map are the same SET, so a circuit with no reference
+        feature fails outright.
+     3. `tools/check/offline-precache-check.cjs` — the scenery-file count,
+     4. `tests/unit/lighting-campaign.test.mjs` — `TRACKS.length`, `rows.length`
+        (count x 20, in two tests), the unique-key sets, `SHARDS.flat()`, and the
+        `rows.slice(-6)` literal, which pins whichever circuit is LAST and breaks
+        purely from appending,
+     5. `tools/lighting/campaign/config.mjs` — `TRACKS`, one `SHARDS` entry, and
+        three `CAMERA_FRACTIONS`,
+     6. `js/ui/flags.js` if the country is new — `tests/unit/flags.test.mjs`
+        fails on a circuit whose country has no drawn flag,
+     7. the three `tools/track/*-baseline.json` audits at EXACTLY the measured
+        value. A cap above the measurement fails as loudly as one below, and an
+        absent id means a cap of 0 — so omit the row when the circuit measures
+        clean rather than writing a 0.
+     Removing a circuit instead is a FOUR-file pass, not the three this file
+     used to name: `js/circuits/<id>.js`, `js/circuits/scenery/<id>.js`, its
+     `CIRCUITS` entry, and every row above. `index.html` is GENERATED — run
+     `node tools/gen/gen-shell.mjs`, never hand-edit the tag.
    Verify with `__apex.tracks()` that the id appears.
 3. **Headless build guard** — the fast pre-push check that needs no browser:
    ```sh

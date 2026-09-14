@@ -961,19 +961,17 @@ const GLXPost = (function () {
       gl.enable(gl.DEPTH_TEST);
 
       // Headless soft-blit must read the buffer this frame's post chain wrote,
-      // not a stale attachment. FXAA/SGSR resolve away from ldrFBO; reading
-      // ldrFBO after FXAA on SwiftShader returned byte-identical grade captures.
-      if (useUpscale) {
-        _softReadFB = (useFxaa && aaFBO) ? aaFBO : ldrFBO;
-      } else if (useFxaa) {
-        _softReadFB = null;   // FXAA wrote render-size LDR to the default FB
-      } else if (toLdr) {
-        _softReadFB = ldrFBO;
-      } else {
-        _softReadFB = null;
-      }
+      // not a stale attachment — and EVERY path ends at the default framebuffer:
+      // the composite writes it directly when neither FXAA nor SGSR runs (toLdr
+      // is false exactly then), FXAA resolves to it at render size, and SGSR
+      // reconstructs into it at present size. Reading ldrFBO/aaFBO instead
+      // returns a pre-resolve frame (byte-identical grade captures on
+      // SwiftShader) and, under upscale, a RENDER-size attachment that softBlit
+      // then readPixels at present size — the scene in a corner of undefined
+      // pixels, since glx softBlit sizes on the drawing buffer.
+      _softReadFB = null;
       _lastPath = { on: true, fxaa: useFxaa, upscale: useUpscale, toLdr: !!toLdr, bloom: bloomAmt, ao: aoStr,
-        readFb: _softReadFB === null ? "default" : (_softReadFB === ldrFBO ? "ldr" : "aa") };
+        readFb: "default" };
 
       // Discard depth buffers we never read across frames (regenerated every frame
       // by the geometry pass). On tiled mobile GPUs this frees the tiler from
@@ -990,9 +988,9 @@ const GLXPost = (function () {
       core.gpuTimerEnd();
     }
 
-    // Headless soft-present readback: composite often lands in ldrFBO while FXAA
-    // resolves to the default framebuffer asynchronously on SwiftShader — a
-    // readPixels(null) then repeats the previous frame and grade captures go stale.
+    // Headless soft-present readback from _softReadFB — the buffer the last
+    // present() resolved into. SwiftShader resolves asynchronously, so without
+    // the finish() the read repeats the previous frame and grade captures go stale.
     function readbackLdrPixels(buf, w, h) {
       if (!gl || !buf || w < 1 || h < 1) return false;
       try {

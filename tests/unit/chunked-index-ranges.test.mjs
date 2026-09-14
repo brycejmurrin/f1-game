@@ -35,6 +35,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedFrustum } from "../helpers/seed-frustum.mjs";
 
 const SRC = new URL("../../js/render/glx/chunked.js", import.meta.url);
+const PACK_SRC = new URL("../../js/render/shared/vertex-pack.js", import.meta.url);
 
 // ── Stub GL: enough of WebGL2 for createChunkedMesh, and it REMEMBERS the
 // element-array uploads so the assertions can read real bytes back.
@@ -42,20 +43,28 @@ function makeGL() {
   const gl = {
     ARRAY_BUFFER: 0x8892, ELEMENT_ARRAY_BUFFER: 0x8893, STATIC_DRAW: 0x88e4,
     FLOAT: 0x1406, TRIANGLES: 4, UNSIGNED_INT: 0x1405, UNSIGNED_SHORT: 0x1403,
+    SHORT: 0x1402,
     _elem: null,            // the bound element buffer's record
     _array: null,           // the bound ARRAY_BUFFER record (VBO)
     _attribs: [],
     _enabled: new Set(),
     _buffers: [],
     createVertexArray: () => ({}), bindVertexArray: () => {},
-    createBuffer() { const b = { id: this._buffers.length, bytes: null, f32: null }; this._buffers.push(b); return b; },
+    createBuffer() { const b = { id: this._buffers.length, bytes: null, vbo: null }; this._buffers.push(b); return b; },
     bindBuffer(target, buf) {
       if (target === this.ELEMENT_ARRAY_BUFFER) this._elem = buf;
       if (target === this.ARRAY_BUFFER) this._array = buf;
     },
+    // The VBO upload is a PACKED ArrayBuffer (mixed float32/int16/uint16 —
+    // js/render/shared/vertex-pack.js), so it is recorded as raw bytes and the
+    // assertions build their own views over it, exactly as the GPU would.
     bufferData(target, src) {
-      if (target === this.ARRAY_BUFFER && this._array && src && src.length != null) {
-        this._array.f32 = Float32Array.from(src);
+      // `instanceof ArrayBuffer` is false across the vm realm boundary — the
+      // packer allocates inside the sandbox. Brand-check instead, and copy the
+      // bytes into a host buffer so the assertions can view them.
+      if (target === this.ARRAY_BUFFER && this._array &&
+          Object.prototype.toString.call(src) === "[object ArrayBuffer]") {
+        this._array.vbo = Uint8Array.from(new Uint8Array(src)).buffer;
         return;
       }
       if (target !== this.ELEMENT_ARRAY_BUFFER) return;
@@ -70,12 +79,22 @@ function makeGL() {
     },
     enableVertexAttribArray(i) { this._enabled.add(i); },
     vertexAttribPointer(idx, size, type, norm, stride, offset) {
-      this._attribs.push({ idx, size, stride, offset });
+      this._attribs.push({ idx, size, type, norm, stride, offset });
     },
     deleteBuffer: () => {}, deleteVertexArray: () => {},
   };
   return gl;
 }
+
+// The packer's own constants, read from the module rather than copied here —
+// a hardcoded 13107 would keep passing after someone changed the scale.
+const VP = (() => {
+  const ctx = { console };
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(PACK_SRC, "utf8") +
+                  "\n;globalThis.__P = VertexPack;", ctx);
+  return ctx.__P;
+})();
 
 function loadChunked(gl) {
   const code = fs.readFileSync(SRC, "utf8");
@@ -83,6 +102,10 @@ function loadChunked(gl) {
   vm.createContext(ctx);
   seedLog(ctx);
   seedFrustum(ctx);
+  // The REAL vertex packer, not a stand-in: these tests assert the bytes that
+  // reach the GPU, so a reimplementation here would only prove itself.
+  vm.runInContext(fs.readFileSync(PACK_SRC, "utf8") +
+                  "\n;globalThis.VertexPack = VertexPack;", ctx);
   vm.runInContext(code + "\n;globalThis.__GLXChunked = GLXChunked;", ctx);
   return ctx.__GLXChunked.init({
     gl,
@@ -224,19 +247,65 @@ test("a mesh too small to chunk still comes back as a plain mesh", () => {
   assert.equal(m.chunks, null, "a sub-2000-triangle mesh must not be chunked");
 });
 
-test("createChunkedMesh without trk keeps the 9-float layout and leaves attrib 4 off", () => {
+test("createChunkedMesh packs to 28 bytes without trk and leaves attrib 4 off", () => {
   const gl = makeGL();
   const C = loadChunked(gl);
   const mesh = C.createChunkedMesh(makeGrid(6, 6, 30), 72);
   assert.ok(mesh.chunks, "fixture must chunk so the interleaved path runs");
   assert.equal(gl._enabled.has(4), false, "no data.trk → attrib 4 stays generic (0,0,0)");
   assert.equal(gl._attribs.some((a) => a.idx === 4), false);
-  const vbo = gl._buffers.find((b) => b.f32);
-  assert.ok(vbo && vbo.f32, "VBO upload must be recorded");
-  assert.equal(vbo.f32.length, 6 * 6 * 30 * 4 * 9, "pos+nrm+col only");
+  assert.equal(gl._enabled.has(3), false,
+    "attrib 3 is gone for good — the material id rides in the alpha of attrib 2");
+  const vbo = gl._buffers.find((b) => b.vbo);
+  assert.ok(vbo && vbo.vbo, "VBO upload must be recorded");
+  assert.equal(vbo.vbo.byteLength, 6 * 6 * 30 * 4 * 28,
+    "28 bytes a vertex: pos f32x3 + nrm i16x4 + col/mat u16x4");
 });
 
-test("createChunkedMesh interleaves data.trk onto attrib 4 (road markings)", () => {
+test("the packed attribute pointers match the format vertex-pack.js documents", () => {
+  const gl = makeGL();
+  const C = loadChunked(gl);
+  C.createChunkedMesh(makeGrid(6, 6, 30), 72);
+  const at = (i) => gl._attribs.find((a) => a.idx === i);
+  // A wrong type or a dropped `normalized` here is invisible to every other
+  // assertion in this file and draws a black or blown-out world on the GPU.
+  assert.deepEqual(
+    { size: at(0).size, type: at(0).type, norm: at(0).norm, stride: at(0).stride, offset: at(0).offset },
+    { size: 3, type: gl.FLOAT, norm: false, stride: 28, offset: 0 }, "attrib 0 = position");
+  assert.deepEqual(
+    { size: at(1).size, type: at(1).type, norm: at(1).norm, stride: at(1).stride, offset: at(1).offset },
+    { size: 4, type: gl.SHORT, norm: true, stride: 28, offset: 12 }, "attrib 1 = normal");
+  assert.deepEqual(
+    { size: at(2).size, type: at(2).type, norm: at(2).norm, stride: at(2).stride, offset: at(2).offset },
+    { size: 4, type: gl.UNSIGNED_SHORT, norm: true, stride: 28, offset: 20 }, "attrib 2 = colour + material");
+});
+
+test("packed normals, colours and material ids survive the round trip", () => {
+  const gl = makeGL();
+  const C = loadChunked(gl);
+  const src = makeGrid(6, 6, 30);
+  const vCount = src.pos.length / 3;
+  // makeGrid paints (0,1,0) normals and white; overwrite vertex 0 with values
+  // that exercise the signs, the >1 emissive range and a whole material id.
+  src.nrm[0] = -1; src.nrm[1] = 0; src.nrm[2] = 0;
+  src.col[0] = 3.2; src.col[1] = 0.5; src.col[2] = 0;      // 3.2 = the fleet's brightest neon
+  src.mat = new Float32Array(vCount);
+  src.mat[0] = 16;                                          // MAT.ASPHALT, the top of the table
+  src.mat[1] = 15.4;                                        // FLAG id + wave weight
+  C.createChunkedMesh(src, 72);
+  const raw = gl._buffers.find((b) => b.vbo).vbo;
+  const f32 = new Float32Array(raw), i16 = new Int16Array(raw), u16 = new Uint16Array(raw);
+  assert.equal(f32[0], src.pos[0], "position stays exact float32");
+  assert.equal(i16[6] / 32767, -1, "normal x round-trips through the signed short");
+  assert.ok(Math.abs(u16[10] / VP.COL_Q - 3.2) < 1e-3, "emissive colour survives past 1.0");
+  assert.ok(Math.abs(u16[11] / VP.COL_Q - 0.5) < 1e-3);
+  // The exactness the FLAG branch in LIT_VS depends on: a whole id must decode
+  // to ITSELF, or int(aMat + 0.5) picks the wrong material.
+  assert.equal(u16[13] / VP.MAT_Q, 16, "material 16 decodes bit-exactly, not 15.99998");
+  assert.ok(Math.abs(u16[14 + 13] / VP.MAT_Q - 15.4) < 1e-3, "the FLAG wave weight survives");
+});
+
+test("createChunkedMesh widens the stride to 40 and enables attrib 4 for road trk", () => {
   const gl = makeGL();
   const C = loadChunked(gl);
   const src = makeGrid(6, 6, 30);
@@ -254,18 +323,19 @@ test("createChunkedMesh interleaves data.trk onto attrib 4 (road markings)", () 
   const a4 = gl._attribs.find((a) => a.idx === 4);
   assert.ok(a4, "attrib 4 pointer must be set");
   assert.equal(a4.size, 3);
-  assert.equal(a4.stride, 12 * 4, "pos+nrm+col+trk = 12 floats when there is no mat");
-  assert.equal(a4.offset, 9 * 4);
-  const vbo = gl._buffers.find((b) => b.f32);
-  assert.ok(vbo && vbo.f32, "VBO upload must be recorded");
-  assert.equal(vbo.f32.length, vCount * 12);
-  assert.equal(vbo.f32[9], 10);
-  assert.equal(vbo.f32[10], 0.5);
-  assert.equal(vbo.f32[11], 6);
-  assert.equal(vbo.f32[12 + 9], 11);
+  assert.equal(a4.type, gl.FLOAT, "track coords stay float32 — s runs to ~7 km");
+  assert.equal(a4.stride, 40, "28 packed bytes + trk f32x3");
+  assert.equal(a4.offset, 28);
+  const raw = gl._buffers.find((b) => b.vbo).vbo;
+  assert.equal(raw.byteLength, vCount * 40);
+  const f32 = new Float32Array(raw);
+  assert.equal(f32[7], 10);
+  assert.equal(f32[8], 0.5);
+  assert.equal(f32[9], 6);
+  assert.equal(f32[10 + 7], 11, "the next vertex starts one 40-byte stride on");
 });
 
-test("createChunkedMesh places trk after mat when both are present", () => {
+test("a material column costs no extra byte now that it rides in attrib 2", () => {
   const gl = makeGL();
   const C = loadChunked(gl);
   const src = makeGrid(6, 6, 30);
@@ -278,13 +348,12 @@ test("createChunkedMesh places trk after mat when both are present", () => {
   C.createChunkedMesh(src, 72);
   const a4 = gl._attribs.find((a) => a.idx === 4);
   assert.ok(a4);
-  assert.equal(a4.stride, 13 * 4, "pos+nrm+col+mat+trk = 13 floats");
-  assert.equal(a4.offset, 10 * 4, "trk follows the optional mat float");
-  const vbo = gl._buffers.find((b) => b.f32);
-  assert.equal(vbo.f32[9], 3, "mat occupies float 9");
-  assert.equal(vbo.f32[10], 100);
-  assert.equal(vbo.f32[11], -2);
-  assert.equal(vbo.f32[12], 7.5);
+  assert.equal(a4.stride, 40, "mat + trk is the same 40 bytes as trk alone");
+  assert.equal(a4.offset, 28, "trk no longer shifts to make room for a mat float");
+  const raw = gl._buffers.find((b) => b.vbo).vbo;
+  const f32 = new Float32Array(raw), u16 = new Uint16Array(raw);
+  assert.equal(u16[13] / VP.MAT_Q, 3, "material 3 in the alpha of attrib 2");
+  assert.equal(f32[7], 100);
 });
 
 test("production chunking releases render-only source channels but keeps collision/probe positions", () => {

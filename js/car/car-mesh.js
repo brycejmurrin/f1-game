@@ -552,20 +552,26 @@ function getLedStrip(lit) {
   _ledMeshes[lit] = _gfx.createMesh(out);
   return _ledMeshes[lit];
 }
+// 7-seg digit table, shared by the gear and speed LCD readouts.
+const _SEG7 = [
+  [1,1,1,1,1,1,0],[0,1,1,0,0,0,0],[1,1,0,1,1,0,1],[1,1,1,1,0,0,1],[0,1,1,0,0,1,1],
+  [1,0,1,1,0,1,1],[1,0,1,1,1,1,1],[1,1,1,0,0,0,0],[1,1,1,1,1,1,1],[1,1,1,1,0,1,1],
+];
+// The 7 segment boxes (top, upper-right, lower-right, bottom, lower-left,
+// upper-left, middle) as [cy, cx, halfW, halfH], scaled off one digit's h/w/t/q.
+function _seg7Layout(h, w, t, q) {
+  return [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
+           [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
+}
 // 7-seg GEAR digit, wheel-local on the LCD centre (cached per gear).
 const _gearMeshes = {};
 function getGearDigit(g) {
   if (_gearMeshes[g]) return _gearMeshes[g];
-  const SEG7 = [
-    [1,1,1,1,1,1,0],[0,1,1,0,0,0,0],[1,1,0,1,1,0,1],[1,1,1,1,0,0,1],[0,1,1,0,0,1,1],
-    [1,0,1,1,0,1,1],[1,0,1,1,1,1,1],[1,1,1,0,0,0,0],[1,1,1,1,1,1,1],[1,1,1,1,0,1,1],
-  ];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const GRN = [2.2, 0.85, 0.12];   // orange, like the real gear readout
   const h = 0.026, w = h * 0.55, t = h * 0.16, q = h / 4, cy = 0.022, cz = -0.0335;
-  const L = [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
-              [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
-  const seg = SEG7[g % 10];
+  const L = _seg7Layout(h, w, t, q);
+  const seg = _SEG7[g % 10];
   for (let i = 0; i < 7; i++) if (seg[i])
     _rigBox(out, 0.014 + L[i][1], cy + L[i][0], cz, L[i][2], L[i][3], 0.006, GRN);
   _gearMeshes[g] = _gfx.createMesh(out);
@@ -574,16 +580,11 @@ function getGearDigit(g) {
 const _spdMeshes = {};
 function getSpeedDigit(d) {
   if (_spdMeshes[d]) return _spdMeshes[d];
-  const SEG7 = [
-    [1,1,1,1,1,1,0],[0,1,1,0,0,0,0],[1,1,0,1,1,0,1],[1,1,1,1,0,0,1],[0,1,1,0,0,1,1],
-    [1,0,1,1,0,1,1],[1,0,1,1,1,1,1],[1,1,1,0,0,0,0],[1,1,1,1,1,1,1],[1,1,1,1,0,1,1],
-  ];
   const out = { pos: [], nrm: [], col: [], idx: [] };
   const CYN = [0.3, 1.6, 2.0];
   const h = 0.017, w = h * 0.55, t = h * 0.18, q = h / 4;
-  const L = [ [h/2, 0, w, t], [q, w/2, t, h/2], [-q, w/2, t, h/2],
-              [-h/2, 0, w, t], [-q, -w/2, t, h/2], [q, -w/2, t, h/2], [0, 0, w, t] ];
-  const seg = SEG7[d % 10];
+  const L = _seg7Layout(h, w, t, q);
+  const seg = _SEG7[d % 10];
   for (let i = 0; i < 7; i++) if (seg[i])
     _rigBox(out, L[i][1], L[i][0], 0, L[i][2], L[i][3], 0.006, CYN);
   _spdMeshes[d] = _gfx.createMesh(out);

@@ -65,8 +65,11 @@ test.describe("Apex 26 — track boundaries", () => {
 
   for (const id of IDS) {
     test(`${id}: finite, sane driving boundary on both sides`, async ({ page }) => {
-      const s = await page.evaluate((tid) => {
-        window.__apex.race(tid, "day", "dry");
+      const s = await page.evaluate(async (tid) => {
+        // AWAIT the race: startRace() awaits the circuit's lazily-split scenery
+        // before Tracks.build runs, so reading on the next line reports the
+        // PREVIOUS track (see the settled() note in js/agent/apex.js).
+        await window.__apex.race(tid, "day", "dry");
         return window.__apex.wallStats();
       }, id);
       expect(s, `${id} built`).not.toBeNull();
@@ -81,8 +84,8 @@ test.describe("Apex 26 — track boundaries", () => {
   for (const id of STREET) {
     // Street circuits: the WIDEST boundary still hugs the edge (no big runoff).
     test(`${id}: walled tight, as a street circuit`, async ({ page }) => {
-      const r = await page.evaluate((tid) => {
-        const ok = window.__apex.race(tid, "day", "dry");
+      const r = await page.evaluate(async (tid) => {
+        const ok = await window.__apex.race(tid, "day", "dry");
         if (!ok) return { failed: `race("${tid}") returned ${String(ok)}` };
         return { stats: window.__apex.wallStats() };
       }, id);
@@ -95,8 +98,8 @@ test.describe("Apex 26 — track boundaries", () => {
 
   test("full-lap visual barriers register collision boundaries across the wrap", async ({ page }) => {
     // Read-only: race() then wallStats(). Safe on the shared page.
-    const stats = await page.evaluate(() => {
-      window.__apex.race("montreal", "day", "dry");
+    const stats = await page.evaluate(async () => {
+      await window.__apex.race("montreal", "day", "dry");
       return window.__apex.wallStats();
     });
     expect(stats.tightFrac, "Montreal full-lap walls tighten nearly every boundary node").toBeGreaterThan(0.95);
@@ -114,8 +117,8 @@ test.describe("Apex 26 — track boundaries", () => {
     // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     for (const id of ["monaco", "monza", "baku", "spa"]) {
-      const r = await page.evaluate((tid) => {
-        const ok = window.__apex.race(tid, "day", "dry");
+      const r = await page.evaluate(async (tid) => {
+        const ok = await window.__apex.race(tid, "day", "dry");
         if (!ok) return { skip: true, reason: `race("${tid}") returned ${String(ok)}` };
         window.__apex.go();
         window.__apex.setPhysics({ drift: 0.3 });

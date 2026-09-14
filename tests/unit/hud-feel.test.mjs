@@ -130,7 +130,11 @@ test("the OVERTAKE chip spells all four states differently — the lockout count
   assert.equal(els.ot.textContent, "NO OVERTAKE", "the race-wide gate still wins over a cooldown");
 });
 
-test("sector splits carry the banner's ▼/▲ against sectorBests, timing-screen colours", () => {
+test("sector splits carry ★/▼/▲ against sectorBests, timing-screen colours", () => {
+  // THREE glyphs, not two. Session best and personal best used to share "▼"
+  // and separate only as purple vs green — the textbook deuteranopia pair, on
+  // the one row where telling them apart is the entire point. ★ now carries
+  // the session best on a non-colour channel; the colours are unchanged.
   const { els, G, tick } = boot();
   tick();
   const vals = els.hudSectors.children.map((row) => row.children[1]);
@@ -145,8 +149,10 @@ test("sector splits carry the banner's ▼/▲ against sectorBests, timing-scree
   assert.equal(vals[1].textContent, "--");
   assert.equal(vals[1].style.color, "", "no split yet keeps the row's own ink (white)");
 
-  // The field's best too: PURPLE, the timing screen's session best.
+  // The field's best too: PURPLE, the timing screen's session best — and ★,
+  // so it is still distinguishable from the green ▼ above without hue.
   G.fieldSectorBests[0] = 28.431; tick();
+  assert.equal(vals[0].textContent, "★28.431", "topping the session swaps the glyph, not just the hue");
   assert.equal(vals[0].style.color, "var(--sec-best)", "session best reads purple");
 
   // Next lap, slower: the arrow flips and the colour is the timing screen's yellow.
@@ -154,9 +160,17 @@ test("sector splits carry the banner's ▼/▲ against sectorBests, timing-scree
   assert.equal(vals[0].textContent, "▲28.900");
   assert.equal(vals[0].style.color, "var(--sec-slow)", "slower than your own best reads yellow");
 
-  // A slower lap NEVER lowers sectorBests, so a later equal-to-best split is a PB again.
+  // A slower lap NEVER lowers sectorBests, so a later equal-to-best split is a
+  // best again — and fieldSectorBests still holds 28.431 from above, so this
+  // one matches the SESSION best too and reads ★, not ▼.
   G.sectorLast[0] = 28.431; tick();
+  assert.equal(vals[0].textContent, "★28.431");
+  assert.equal(vals[0].style.color, "var(--sec-best)");
+
+  // Personal best but NOT the session's: green ▼, the state the ★ split off.
+  G.fieldSectorBests[0] = 28.0; G.sectorLast[0] = 28.431; tick();
   assert.equal(vals[0].textContent, "▼28.431");
+  assert.equal(vals[0].style.color, "var(--faster)");
 });
 
 test("the speed digits, energy bar and sector red are set up to be read at a glance", () => {

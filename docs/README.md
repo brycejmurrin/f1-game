@@ -68,6 +68,7 @@ anything in here.
 | [notes/ENGINEERING-PRACTICE-NOTES.md](notes/ENGINEERING-PRACTICE-NOTES.md) | Why the game loop's clamps and caps are load-bearing, what `seed()` can and cannot promise given float non-associativity, the characterization-test method, and the state of the no-build bet. |
 | [notes/BUG-HUNT-2026-09-02.md](notes/BUG-HUNT-2026-09-02.md) | Two rounds of read-only bug hunts (UI, GLX, WGX+TLX, memory, race-flow; then track engine, physics/AI, input/audio, net): every CONFIRMED row and what each fix batch landed. |
 | [notes/PERF-HUNT-2026-08-18.md](notes/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. WGX UBO flushes, `LAZY_AGENT`, DebrisWorld asleep-skip. |
+| [notes/TRACK-ROSTER-RESEARCH-2026-09-14.md](notes/TRACK-ROSTER-RESEARCH-2026-09-14.md) | The 38 World Championship venues the game does not carry, why the upstream `bacinger/f1-circuits` trace file can add no more, what each remaining candidate costs to import (Overpass-measured), and the four shipped defs whose `classic` flag the 2027 calendar contradicts. |
 
 ## `research/` — cited from source, not a description of behaviour
 
@@ -107,8 +108,8 @@ ledger lists.
 | Path | What it is |
 |---|---|
 | [archive/ATTIC.md](archive/ATTIC.md) | The attic ledger: one row per record deleted from `docs/` (title, original path, last SHA, one-line summary). |
-| [archive/research/](archive/research/) | Provenance investigations — the 2026-08 audit records, the UI campaign set, the browser-graphics survey, the cleanup sweep and the parallel fleet survey. |
-| [archive/research/raw/](archive/research/raw/) | The four workflows' verbatim per-agent output. Read when a summary's wording is doing too much work. |
+| [archive/research/](archive/research/) | Provenance investigations — the 2026-08 audit records, the UI campaign set, the browser-graphics survey, the cleanup sweep, the parallel fleet survey and the 2026-09 code survey (dead code / bugs / perf). |
+| [archive/research/raw/](archive/research/raw/) | The five workflows' verbatim per-agent output. Read when a summary's wording is doing too much work. |
 | [archive/superpowers/](archive/superpowers/) | The 2026-08 plans and specs (apex-tools MCP weeks 1-4, release safety, audit remediation, perf-hunt fixes). |
 | [archive/slider-effect/](archive/slider-effect/) | 20 before/after slider-effect PNG pairs from the lighting classifier. |
 | [archive/manual-probes/](archive/manual-probes/) | Four single-incident diagnostic instruments (banking, throttle-rescue, skid, act) — bugs resolved, kept as reusable probe patterns. |
