@@ -197,8 +197,8 @@ test("there is no pit control anywhere — the stop is a line you take", () => {
 test("the commitment gesture is deliberate to make and still possible to make", () => {
   assert.ok(P.COMMIT_S >= 0.3, "a shorter hold than this is a wobble, not a decision");
   assert.ok(P.COMMIT_S <= 1.2, "a longer one and the entry is gone before you have committed");
-  assert.ok(P.COMMIT_FRAC >= 0.5, "less than half way over is a drift, not a pit entry");
-  assert.ok(P.COMMIT_FRAC < 1, "a driver must not have to leave the road to pit");
+  assert.ok(P.LANE_W >= 2.5, "a lane narrower than a car is not a lane");
+  assert.ok(P.LANE_W < 7, "the lane must not swallow the racing surface it sits beside");
   const z = P.zoneOf(fakeTrack({}));
   assert.ok(P.COMMIT_M < z.lenM, "the entry road must be shorter than the whole window");
   assert.ok(P.COMMIT_M < P.throughM(z, z.sBox, 5386),
@@ -226,7 +226,10 @@ function commitSession({ hw = 7, vTop = 60 } = {}) {
   const pits = Pl.create({
     track, vTop: () => vTop, lapsTarget: 25, raceWeather: "dry",
     announce: (m) => said.push(m),
-    tyres: { on: () => true, spent: () => 0, fit: () => {},
+    // spent() reads the CAR, not a constant: the cue's whole job is to stay
+    // quiet on a fresh set and speak on a used one, and a stub that always
+    // says 0 would let a broken cue pass every test below.
+    tyres: { on: () => true, spent: (car) => (car && car.tyreWear) || 0, fit: () => {},
              classRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
              optionRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }) },
     cautionInfo: () => ({ level: 0 }),
@@ -326,4 +329,146 @@ test("info() reports the dwell, so a HUD can show the commitment filling", () =>
   const half = pits.info(c).commit;
   assert.ok(half > 0.3 && half < 0.8, `the dwell should read about half way, got ${half}`);
   assert.equal(pits.info(c).side, P.PIT_SIDE);
+});
+
+// ── The cue ─────────────────────────────────────────────────────────────────
+// Removing the button made a stop a GESTURE, and a gesture nobody can see is
+// not a control: the lane it asks you to aim at is 450 m of arc with nothing
+// drawn on it. So the cue is load-bearing, and the thing it must get right is
+// not "appear" but WHEN NOT TO — a PIT prompt on every lap is wallpaper, and a
+// driver stops reading wallpaper.
+
+test("the cue stays QUIET on a fresh set — it is not a permanent PIT sign", () => {
+  const { pits, zone, car } = commitSession();
+  const c = car(0);                       // on the racing line, not committing
+  c.s = zone.sIn - 300;                   // approaching the window
+  c.pitState = "none";
+  assert.equal(pits.cue(c), null, "a car on a fresh set was told to box");
+});
+
+test("…and speaks once the set is used, counting the entry down in metres", () => {
+  const { pits, zone, car, Pl } = commitSession();
+  const c = car(0);
+  c.s = zone.sIn - 300;
+  c.tyreWear = 0.9;
+  const cue = pits.cue(c);
+  assert.ok(cue, "a used set got no cue at all");
+  assert.equal(cue.phase, "near");
+  assert.match(cue.text, /^PIT \d+m$/, `expected a metre countdown, got ${cue.text}`);
+  assert.ok(cue.dist > 250 && cue.dist < 350, `countdown should be ~300 m, got ${cue.dist}`);
+});
+
+test("it says ENTRY at the entry, and only while the entry road lasts", () => {
+  const { pits, zone, car, Pl } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9;
+  c.s = zone.sIn + 20;                    // inside the entry road
+  assert.equal(pits.cue(c).phase, "enter");
+  assert.equal(pits.cue(c).text, "PIT ENTRY");
+  c.s = zone.sIn + Pl.COMMIT_M + 60;      // past it, racing the straight
+  assert.equal(pits.cue(c), null, "the cue outlived the entry road it points at");
+});
+
+test("it follows the car through the stop: armed, lane, box, then silence", () => {
+  const { pits, zone, car } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9; c.s = zone.sIn + 20;
+  c.pitArmed = true;
+  assert.equal(pits.cue(c).phase, "armed");
+  c.pitArmed = false; c.pitState = "lane";
+  const lane = pits.cue(c);
+  assert.equal(lane.phase, "lane");
+  assert.match(lane.text, /LIMIT/, "the lane phase must show the limit the driver is being held to");
+  c.pitState = "box";
+  assert.equal(pits.cue(c).phase, "box");
+  c.pitState = "out";
+  assert.equal(pits.cue(c), null, "the cue kept talking after the stop was served");
+});
+
+test("a fresh slick in the dry has nothing to say, used or not", () => {
+  const { pits, zone, car } = commitSession();
+  const c = car(0);
+  c.s = zone.sIn - 200; c.tyreWear = 0;
+  assert.equal(pits.cue(c), null, "dry weather, fresh slick: nothing to say");
+  // …and the threshold is a real one, not "anything above zero".
+  c.tyreWear = 0.2;
+  assert.equal(pits.cue(c), null, "a barely-used set is not a reason to box");
+});
+
+test("only the LOCAL player gets a cue — nobody else has a HUD", () => {
+  const { pits, zone, car } = commitSession();
+  for (const who of [{ local: false, human: false }, { local: false, human: true }]) {
+    const c = Object.assign(car(0), who);
+    c.tyreWear = 0.9; c.s = zone.sIn - 200;
+    assert.equal(pits.cue(c), null, "a non-local car was given a pit cue");
+  }
+});
+
+test("the arrow has a side to point at, and it is the side you must steer to", () => {
+  // The arrow IS the instruction — it is the only thing telling a driver which
+  // way the lane they cannot see is.
+  const { pits, zone, car, Pl } = commitSession();
+  const c = car(0);
+  assert.equal(pits.info(c).side, Pl.PIT_SIDE);
+  assert.ok(Pl.PIT_SIDE === 1 || Pl.PIT_SIDE === -1, "the side must be a direction, not a magnitude");
+});
+
+// ── The painted lane and the modelled lane are the SAME line ────────────────
+
+test("LANE_W agrees across the model and all three lit shaders", () => {
+  // The lane is PAINTED, not built, so the stripe a driver steers at and the
+  // boundary the commitment test uses live in four different files and four
+  // different languages. If they drift, the game asks you to aim at a line that
+  // is not where the model thinks it is — the worst kind of bug, because it
+  // looks like bad driving. There is no shared constant to import across GLSL,
+  // WGSL and TSL, so this is the thing that holds them together.
+  const FILES = [
+    "js/render/glx/shaders/glsl-lit.js",
+    "js/render/webgpu/wgsl-chunks.js",
+    "js/render/three/tsl-lit.js",
+  ];
+  // All THREE numbers, not just the width: the lane narrows on a tight circuit
+  // (PitLane.laneWidth), so a backend that kept the flat width would paint the
+  // stripe somewhere the model does not think the lane is.
+  const WANT = { PIT_LANE_W: P.LANE_W, PIT_LANE_MIN: P.LANE_MIN, PIT_MIN_RACING: P.MIN_RACING };
+  for (const file of FILES) {
+    const src = readFileSync(join(ROOT, file), "utf8");
+    for (const [name, want] of Object.entries(WANT)) {
+      const m = src.match(new RegExp(`${name}\\s*[:=]\\s*(?:f32\\s*\\(\\s*)?([0-9.]+)`));
+      assert.ok(m, `${file} has no ${name} — the lane is mis-painted on this backend`);
+      assert.equal(Number(m[1]), want,
+        `${file} has ${name} = ${m[1]} but PitLane says ${want} — a driver steering at the `
+        + "stripe would miss the lane the model checks");
+    }
+  }
+});
+
+test("the lane yields to the racing surface, and only where it has to", () => {
+  // Measured across all 51 built circuits: pit-window half-width runs 4.93 m
+  // (Monaco) to 8.0 m. A flat 3.2 m lane leaves Monaco 6.7 m to race on — on
+  // the one circuit where overtaking is already impossible.
+  const road = (hw) => 2 * hw;
+  const left = (hw) => road(hw) - P.laneWidth(hw);
+  assert.ok(left(4.93) >= P.MIN_RACING - 1e-9, `Monaco keeps only ${left(4.93).toFixed(1)} m to race on`);
+  assert.ok(P.laneWidth(4.93) < P.LANE_W, "Monaco's lane must narrow");
+  // …and nowhere else. The next-narrowest circuits measured 6.0 m half-width.
+  for (const hw of [6.0, 6.1, 7.0, 8.0]) {
+    assert.equal(P.laneWidth(hw), P.LANE_W, `hw ${hw} should keep the full lane`);
+    assert.ok(left(hw) > P.MIN_RACING, `hw ${hw} must keep more than the floor`);
+  }
+  // A pathologically narrow road still gets a lane a car can fit in.
+  assert.equal(P.laneWidth(3), P.LANE_MIN);
+  assert.ok(P.LANE_MIN > 2.0, "an F1 car is 2.0 m wide — the lane must exceed it");
+});
+
+test("the lane sits INSIDE the road, and the box sits inside the lane", () => {
+  const hw = 7, side = P.PIT_SIDE;
+  const edge = P.zoneOf(fakeTrack({})) && null;   // zone not needed; geometry is pure
+  const S = commitSession({ hw });
+  const e = S.pits.laneEdge(hw, side), c = S.pits.laneCentre(hw, side);
+  assert.ok(Math.abs(e) < hw, "the painted line must be ON the road, not past its edge");
+  assert.ok(Math.abs(c) < hw, "the lane centre must be on tarmac — that is what keeps the car off the grass");
+  assert.ok(Math.abs(c) > Math.abs(e), "the lane centre is further out than its inner edge");
+  assert.ok(Math.abs(hw - Math.abs(c)) > 1, "the lane centre must not sit on the outside edge line");
+  assert.equal(Math.sign(e), side, "the lane is on the pit side");
 });

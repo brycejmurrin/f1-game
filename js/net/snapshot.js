@@ -134,15 +134,49 @@ const NetSnapshot = (function () {
       return { s: raw - laps * total, laps };
     }
 
-    function advance(st, dtMs, out) {
+    // Extrapolation cannot exceed this share of the car's speed, however hard
+    // the last two packets say it was braking. Two samples a jitter apart can
+    // imply an absurd rate; at a real 22 m/s^2 a car at 70 m/s sheds 8 % over a
+    // 250 ms window and one at 20 m/s sheds 27 %, so a third is generous for
+    // the honest case and still bounds the pathological one.
+    const EXTRAP_SLOW_MAX = 0.35;
+
+    // `decelMs2` is the OBSERVED rate from the last two packets (0 when the car
+    // is not braking, or when there is only one sample). Observed rather than a
+    // constant on purpose: a literal here would be a second copy of BRAKE that
+    // has to be kept in step with the physics AND re-derived against PACE,
+    // which is exactly the coupling `aStd` exists to prevent. The wire already
+    // carries the answer, scaled correctly, for free.
+    function advance(st, dtMs, out, decelMs2) {
       const dt = dtMs / 1000;
-      const w = splitS(st.s + st.speed * dt);
+      // F_BRAKE WAS DECODED AND THROWN AWAY. `braking` rides in every packet
+      // and nothing read it: s advanced at a flat st.speed, so a car standing
+      // on the brakes was predicted to keep coming. predict() extrapolates by
+      // delayMs EVERY frame, not only during a stall, so the follower's
+      // predicted contact pose overshot continuously — the documented
+      // last-millisecond-brake asymmetry from real P2P racing netcode.
+      let v = st.speed, ds;
+      const a = decelMs2 > 0 && v > 0 ? decelMs2 : 0;
+      if (a > 0) {
+        // Never predict past the stop, and never past the cap above.
+        const te = Math.min(dt, v / a, (EXTRAP_SLOW_MAX * v) / a);
+        ds = v * te - 0.5 * a * te * te + Math.max(0, v - a * te) * (dt - te);
+        v = Math.max(0, v - a * te);
+      } else {
+        ds = v * dt;
+      }
+      const w = splitS(st.s + ds);
       // Spread the source rather than re-listing its fields: a packet that
       // grows a field would otherwise silently lose it HERE ONLY, i.e. only
       // while extrapolating — invisible to any test that never stalls the
       // buffer. Only s moves; x is deliberately not extrapolated.
       const o = Object.assign(out || {}, st);
       o.s = w.s;
+      // Speed follows s, because they are one claim about the same car: the
+      // contact solver reads this as _nSpd to decide who is closing on whom,
+      // and a pose that slowed with a speed that did not is a pair of
+      // predictions that disagree.
+      o.speed = v;
       o.lap = Number.isFinite(st.lap) ? st.lap + w.laps : st.lap;
       o.extrapolated = true;
       return o;
@@ -172,7 +206,19 @@ const NetSnapshot = (function () {
       const target = nowMs - delayMs;
       const newest = samples[samples.length - 1];
       if (target >= newest.t) {
-        return advance(newest, Math.min(target - newest.t, maxExtrapMs), out);
+        // Observed deceleration, only while the wire says the brakes are on.
+        // Gating on the flag matters: without it a momentary dip between two
+        // packets would be extrapolated as if it were sustained.
+        let decel = 0;
+        if (newest.braking && samples.length > 1) {
+          const prev = samples[samples.length - 2];
+          const dts = (newest.t - prev.t) / 1000;
+          if (dts > 0.001 && Number.isFinite(prev.speed) && Number.isFinite(newest.speed)) {
+            const d = (prev.speed - newest.speed) / dts;
+            if (d > 0) decel = d;
+          }
+        }
+        return advance(newest, Math.min(target - newest.t, maxExtrapMs), out, decel);
       }
       const oldest = samples[0];
       if (target <= oldest.t) { const o = Object.assign(out || {}, oldest); o.extrapolated = false; return o; }
