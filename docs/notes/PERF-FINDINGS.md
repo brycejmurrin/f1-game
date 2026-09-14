@@ -28,6 +28,8 @@ thing**, which is how this project has lost the most time.
 | Is a frame GPU-bound? | `__apex.gpuTimer()` | **No** — returns `-1` under SwiftShader. Needs Chrome/Android on real hardware. |
 | Did a shader/fill change help? | frame timing | **No.** See §3. |
 | Does an element overlap another? | Playwright capture, **never** an MCP screenshot | see CHROME-DEVTOOLS-MCP.md trap 6 |
+| Did a change move the FRAME RATE? | `gpu-census.yml` `fps` / `frames` / `tier` / `scale` | **No — ±54 % run to run on IDENTICAL code.** §2w. Two runs of the same commit gave 26.9 and 41.4. Never read it against a single before/after. |
+| Did a change move the LOOK? | `gpu-census.yml` `meanLuma` | **Yes** — 72.0 across three runs, two commits and two runners in §2w. The stable channel of the same instrument. |
 
 ### The three instruments that lie here, and how
 
@@ -4605,3 +4607,50 @@ keeps descending the height and the estimate drifts. The unit suite asserts the
 exact sum and asserts the rule-of-thumb answer is NOT what the census returns.
 
 Plan and remaining tasks: `docs/plans/2026-09-14-texture-memory-plan.md`.
+
+
+## 2w. The census reports fps and it varies 54 % on identical code (2026-09-14)
+
+The livery-tier change (§2v, 147 MB of atlases → 42) came back from
+`gpu-census.yml` on `macos-latest` with GLX at **26.9 fps against 37.1** on the
+run before it. A 27 % drop, on the real-GPU gate, from a change that only ever
+REMOVES texture bytes. It reads like a regression and it is not one.
+
+| run | commit | fps | frames | tier | scale | floorMs | **meanLuma** |
+|---|---|---|---|---|---|---|---|
+| 100 | `9e82e2a` before the change | 37.1 | 487 | 0 | 0.8 | 17.3 | **72** |
+| 101 | `24a88d2` after | **26.9** | 313 | 0 | 0.8 | 20.0 | **72** |
+| 103 | `9e24a65` after (+ a merge) | **41.4** | 503 | 1 | 1 | 17.2 | **72** |
+
+Runs 101 and 103 carry the SAME livery code. They differ by **54 %**. Run 101
+was the low sample and nothing more; the governor even picked a different rung
+each time (tier 0 at scale 0.8 against tier 1 at scale 1), which is it adapting
+to how fast the runner happened to be.
+
+Three things in the run-101 data already said "machine", before any control:
+
+- **The two backends moved in OPPOSITE directions.** GLX 37.1 → 26.9 while WGX
+  19.5 → 22.7. No code change does that.
+- **WGX's `scale` fell 1 → 0.8.** The governor shed resolution, which INFLATES
+  the fps it then reports — so WGX's apparent gain is evidence the box was
+  SLOWER, not faster.
+- **Both backends rendered about a third fewer frames** (487 → 313, 403 → 314),
+  and `floorMs` rose 17.3 → 20.0.
+
+And the mechanism does not exist. The only work the change adds is one
+`drawImage` downscale per AI car, and `getCarDecalTexture` caches on
+`if (!(key in _decalTexCache))` — so it is 21 blits ONCE at warm-up, before the
+measurement window. Timed in the browser: **11.7 ms for all 21**, 0.56 ms a car,
+against a ~3.2 s gap. **0.36 % of what it was being blamed for**, and partly
+refunded because `generateMipmap` on 512×640 is cheaper than on 1024×1280.
+
+**`meanLuma` is the channel to trust.** 72.0 in all three runs, across two
+commits and three runners. It is stable enough to catch a real look change and
+it is what caught nothing here — correctly.
+
+So: never read census `fps`, `frames`, `tier` or `scale` as a code signal off a
+single before/after. If the frame rate genuinely matters, run the SAME commit
+twice first and find out what the spread is that day. This entry exists because
+that discipline nearly did not happen: the number looked like a regression in a
+change that could not have caused one, and the honest next step was a control
+run rather than an explanation.

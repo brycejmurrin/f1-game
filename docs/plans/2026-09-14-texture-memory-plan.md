@@ -172,7 +172,12 @@ after     41.67 MB   player still 1024x1280 (census `biggest` confirms), 21 AI a
       mobile already ships AI atlases at 256 and this is a gentler step to 512,
       and that photo mode now takes the full tier — an argument, not a
       measurement. Capture it before trusting this on a hero shot.
-- [ ] `gpu-census.yml` on `macos-latest` — real hardware, not lavapipe.
+- [x] `gpu-census.yml` on `macos-latest` — real hardware, not lavapipe.
+      `ok=true gpuErrors=0`, no FAILED section, and `meanLuma` 72.0 — the same
+      figure as before the change and as the run after it. The `fps` column
+      looked like a 27 % regression and is not one: a control run of the SAME
+      code came back 54 % higher. See `notes/PERF-FINDINGS.md` §2w, which now
+      says never to read census fps off a single before/after.
 
 **Risk:** this is the one task here that can visibly degrade the game. The
 census number is large enough to be worth it; the policy is what decides
