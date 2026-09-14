@@ -630,6 +630,15 @@ it on. `js/race/reliability.js` ships off for the same reason.
   scale — `LOAD_REF` is measured off driven laps, not guessed.
 - **`tyreMu` enters at `muBase`, beside `marbleMu`** — the same external-scalar
   seam, on the same terms. Traction and braking take a smaller share of the drop.
+- **There is no pit button.** A stop is called the way a driver calls one: put
+  the car on the pit side at the entry and hold it there. A control made the
+  stop a MODE you toggle on the approach; the real thing is a LINE you take.
+  Telling that apart from a car that merely ran wide at the entry is the same
+  discrimination the half-plane `inLane` failed at, and four conditions do it —
+  only in the first 120 m of the window, past 0.70 of the half-width, held for
+  0.55 s, and moving forward on the road. The last one refuses the spun or
+  beached car by construction. The HUD's compound chip fills with the dwell,
+  because a gesture needs the feedback a button gave for free.
 - **The stop is a STATE, not a place.** The first cut opened the driving
   boundary across the pit window so the lane was real tarmac. It measured well
   and broke two other things: lap distance jumped 250 m at Monaco, and a beached

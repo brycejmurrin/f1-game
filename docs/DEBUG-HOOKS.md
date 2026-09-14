@@ -2177,9 +2177,15 @@ const h = __apex.lapHistory();
 ### `pit({car, arm}?) → pitInfo | null`
 
 The pit lane (`js/race/pit-lane.js`): its resolved geometry, the speed limit,
-and this car's state in it. `{arm: true}` calls the stop and `{arm: false}`
-cancels it — exactly what the PIT control does — which is how a spec drives a
-stop with no input device.
+and this car's state in it.
+
+**THERE IS NO PIT CONTROL.** A driver calls a stop the way a real one does — by
+putting the car on the pit side at the entry and holding it there — so there is
+no button, no key and no gamepad bind to press. `{arm: true}` calls the stop
+directly and `{arm: false}` cancels it, which is how a spec skips the gesture;
+to exercise the gesture itself, put the car past `COMMIT_FRAC` of the
+half-width toward `side` within `COMMIT_M` of the entry and hold it for
+`COMMIT_S`.
 
 | Field | Meaning |
 |---|---|
@@ -2193,6 +2199,8 @@ stop with no input device.
 | `state` | `none` / `approach` / `lane` / `box` / `out` |
 | `inWindow` | Inside the arc window at all (true for every car passing the pits) |
 | `stops` | Stops this car has made |
+| `commit` | How far through the commitment dwell this car is, 0-1 — 0 unless it is holding the line into the pits right now. With no button, this is the whole input, and the HUD's compound chip fills with it |
+| `side` | Which way "in" is: `+1` right (where `js/track/tracks.js` places the pit building), `-1` left. Overridable per circuit via `def.pitZone.side` |
 
 **The lane is a STATE, not a place.** There is no lateral lane to drive into:
 a driveable one was built and measured badly twice (a forced boundary went

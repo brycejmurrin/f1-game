@@ -398,6 +398,23 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
   background: linear-gradient(90deg in oklab, var(--slower), color-mix(in oklab, var(--slower) 70%, var(--text)));
   animation: pulse var(--hud-pulse) infinite;
 }
+/* PIT COMMITMENT. There is no pit button any more — a stop is called by holding
+   the car on the pit side at the entry (js/race/pit-lane.js) — so the dwell
+   needs somewhere to show, or the driver cannot tell the gesture is registering.
+   The compound chip fills from the left as `--pit-commit` runs 0 -> 1, then
+   stays lit once the stop is called. No new node and no new class: an attribute
+   and a custom property on the widget that is already there, which is also why
+   this adds nothing to the shellNodes or cssClasses ceilings. */
+#hud-tyre[data-pit="commit"] #hud-tyre-code {
+  background: linear-gradient(90deg,
+    color-mix(in oklab, var(--you) 70%, transparent) 0 calc(var(--pit-commit, 0) * 100%),
+    transparent calc(var(--pit-commit, 0) * 100%));
+  border-radius: var(--r-xs);
+}
+#hud-tyre[data-pit="lane"] #hud-tyre-code,
+#hud-tyre[data-pit="box"] #hud-tyre-code {
+  background: var(--you); color: var(--bg); border-radius: var(--r-xs);
+}
 body.hud-met-timing #hud-tyre,
 body.hud-met-compact #hud-tyre { display: none !important; }
 /* Light ink with the HUD's dark halo (the #hud-speed / .sec-val recipe) reads on

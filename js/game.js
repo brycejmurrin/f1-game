@@ -34,7 +34,6 @@ const els = {
   pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), pmsettings: $("pmsettings"), btnCam: $("btn-cam"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
   btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"),
-  btnPit: $("btn-pit"),
   btnThrottle: $("btn-throttle"),
   btnSteerLeft: $("btn-steer-left"), btnSteerRight: $("btn-steer-right"),
   shiftUp: $("shift-up"), shiftDown: $("shift-down"),
@@ -2447,10 +2446,6 @@ function showTouchControls(show) {
   // NO AERO ZONE chip beside a faded button says so. Removing it would silently
   // suggest the game has no such feature.
   if (els.btnAero) els.btnAero.hidden = !t || raceAeroMode === "auto";
-  // PIT only exists when there is a reason to use it. With TYRE WEAR off there
-  // is nothing to change tyres for, so the tap column stays the 3-tall shape
-  // index.html describes rather than growing a control that does nothing.
-  if (els.btnPit) els.btnPit.hidden = !t || !tyres.on();
   els.shiftUp.hidden = !(t && manual);
   els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
@@ -4021,14 +4016,6 @@ function updateCar(c, dt, ranked) {
     // `if` steal that `else`, so any local car that had not pressed PIT had
     // `c.xOn` overwritten from the raw input and the active-aero toggle stopped
     // working entirely (tests/unit/active-aero-vm.test.mjs, 7 red).
-    if (c.local && Input.consumePitToggle()) {
-      const on = pits.arm(c);
-      // Name the set the crew has ready. The choice is made from what the
-      // player OWNS and what the race needs (PitLane.pickFor), so saying it out
-      // loud is the only place that decision becomes visible to them.
-      const next = on ? pits.pickFor(c) : null;
-      announce(on ? "BOX THIS LAP" + (next ? " — " + next.code : "") : "STAYING OUT", 1.4, "race");
-    }
   } else {
     // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
     // and OT still force the open wing so a pass does not sit in high drag.

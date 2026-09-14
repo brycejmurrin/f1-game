@@ -89,6 +89,35 @@ const PitLane = (function () {
   // would be running the one part of a pit stop the driver actually does.
   const BOX_BRAKE = 6;
 
+  // ── COMMITTING TO THE STOP, WITHOUT A BUTTON ──────────────────────────────
+  // THERE IS NO PIT CONTROL. You call a stop the way a driver does — by putting
+  // the car on the pit side at the entry and keeping it there. A button made
+  // the stop a MODE you toggle; this makes it a line you take, which is both
+  // the real gesture and one fewer thing on a phone screen.
+  //
+  // The whole difficulty is telling that apart from a car that merely ran wide
+  // at the entry, which is the exact failure the half-plane `inLane` had (see
+  // the header). Four conditions do it, and each is there for a specific way of
+  // being wrong:
+  //
+  //   COMMIT_M     only at the ENTRY, not anywhere in the window. Past this you
+  //                have gone by the entry road and are racing the straight.
+  //   COMMIT_FRAC  a long way over, not a drift. Deliberate, not a wobble.
+  //   COMMIT_S     HELD. A run-wide is transient; a pit entry is sustained, and
+  //                a dwell is what separates a gesture from a mistake.
+  //   COMMIT_V     and moving, forwards, on the road. A spun or beached car at
+  //                the entry commits to nothing — that is the beached-car case
+  //                the header's failure (1) describes, refused by construction.
+  //
+  // +x is RIGHT, and the generic pit building goes on side +1 (js/track/tracks.js
+  // buildProps places the grandstand at -1 and the pit building at +1), so that
+  // is the default side. A circuit may say otherwise via `def.pitZone.side`.
+  const PIT_SIDE = 1;
+  const COMMIT_FRAC = 0.70;   // of the half-width, toward the pit side
+  const COMMIT_M = 120;       // ...and only this far into the window
+  const COMMIT_S = 0.55;      // held, in seconds
+  const COMMIT_V = 0.10;      // of the speed envelope: a parked car is not pitting
+
   // Resolve the lane for a built track: absolute arc positions, the side, the
   // width and the limit. A circuit def may override any field through
   // `def.pitZone`; none currently does, and the defaults above are deliberately
@@ -111,6 +140,7 @@ const PitLane = (function () {
       limitFrac: z.limitFrac != null ? z.limitFrac
         : (track.def && track.def.street ? LIMIT_FRAC_STREET : LIMIT_FRAC),
       boxS: z.boxS != null ? z.boxS : BOX_S,
+      side: z.side === -1 ? -1 : PIT_SIDE,
     };
     return zone;
   }
@@ -188,6 +218,24 @@ const PitLane = (function () {
       return c.pitArmed;
     }
 
+    // Is this car, RIGHT NOW, holding the line into the pits? Pure apart from
+    // the track sample, and each clause is one way of not meaning it — see the
+    // COMMIT_* block for which. Order matters only for cost: the cheap
+    // rejections come first so the spline sample is reached by almost nobody.
+    const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+    function committing(c, zz, L) {
+      if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
+      if (!((c.speed || 0) > G.vTop() * COMMIT_V)) return false;
+      if (throughM(zz, c.s, L) > COMMIT_M) return false;
+      Tracks.sample(G.track, c.s, _smp);
+      return (c.x || 0) * zz.side >= (_smp.hw || 0) * COMMIT_FRAC;
+    }
+
+    /** How far through the commitment dwell this car is, 0-1. The HUD's cue. */
+    function commitFrac(c) {
+      return c ? clamp((c.pitCommitT || 0) / COMMIT_S, 0, 1) : 0;
+    }
+
     // The state machine, one tick. Deliberately small: ARMED -> LANE (the driver
     // actually put the car out there) -> BOX (held, tyres changed) -> OUT (back
     // on the road). Nothing here MOVES the car — the lane is driven, so entry and
@@ -208,6 +256,22 @@ const PitLane = (function () {
         return;
       }
       if (st === "out") return;                       // serviced; drive away
+      // NO BUTTON: the driver commits by holding the line into the pits. Only
+      // the local player — an AI car is armed by its own strategy (think), and
+      // a networked rival is integrated by its owner, so neither steers itself
+      // into a stop here.
+      if (!c.pitArmed && c.local) {
+        c.pitCommitT = committing(c, zz, L) ? (c.pitCommitT || 0) + dt : 0;
+        if (c.pitCommitT >= COMMIT_S) {
+          c.pitCommitT = 0;
+          arm(c, true);
+          // Say what the crew has ready. With no button to press there is no
+          // other moment where the compound choice becomes visible, and the
+          // limiter coming on wants an explanation the same tick it arrives.
+          const next = pickFor(c);
+          if (G.announce) G.announce("PIT ENTRY — LIMITER ON" + (next ? " — " + next.code : ""), 1.6, "race");
+        }
+      }
       if (!c.pitArmed && !inLane(c)) return;          // not coming in
       // Called the stop and reached the window: the limiter is on from here.
       c.pitState = "lane";
@@ -354,9 +418,12 @@ const PitLane = (function () {
       return why;
     }
 
+    function resetCommit(c) { if (c) c.pitCommitT = 0; }
+
     function reset(c) {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0; c.pitNext = null; c.pitStops = 0; c.pitWhy = "";
+      c.pitCommitT = 0;
     }
 
     function info(c) {
@@ -381,16 +448,20 @@ const PitLane = (function () {
         inLane: !!(car && inLane(car)),
         inWindow: !!(car && inWindowOf(car)),
         stops: (car && car.pitStops) || 0,
+        // How far through the commitment dwell — 0 unless the car is holding
+        // the line into the pits right now. There is no button; this is it.
+        commit: +commitFrac(car).toFixed(3),
+        side: zz.side,
       };
     }
 
     return { zoneOf: () => z(), limit, toBox, approachV, inLane, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
-             pickFor, ownedTyres };
+             pickFor, ownedTyres, committing, commitFrac, resetCommit };
   }
 
   return { create, zoneOf, inWindow, throughM,
            ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
-           BOX_TOL, BOX_BRAKE };
+           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_FRAC, COMMIT_M, COMMIT_S, COMMIT_V };
 })();
 Object.freeze(PitLane);

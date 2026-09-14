@@ -48,7 +48,7 @@ it calls `Ghost.clear/setTrack/startLap/record/finishLap` and reads
 `localStorage` directly — and still fails on `saved.s` with `saved` undefined.
 So the ghost is not being persisted. `storage.persist denied` appears in these
 logs, so a container that refuses persistent storage is the first thing to check
-before touching `js/race/ghost.js`.
+before touching `js/car/ghost.js`.
 
 **The fix is the one already made for `quick-validate.mjs`**: poll for
 `info().state` instead of reading synchronously after `race()`. Not attempted

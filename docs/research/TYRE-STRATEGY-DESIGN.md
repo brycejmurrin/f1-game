@@ -475,6 +475,37 @@ The control is a fourth tap button beside BOOST/OT/AERO: **PIT** arms, and the
 next pit entry takes it. Arming (rather than a hard turn-in) is the mobile-correct
 input, and it mirrors `xArmed`/`otArmed`, which already exist.
 
+**ERRATUM 2 (2026-09-14): there is no pit button.** The stop shipped with a
+control — an on-screen tap, `KeyV`, gamepad 13 — and the control was the wrong
+shape. A button makes a pit stop a MODE you toggle on the approach; the real
+thing is a LINE you take, decided with the steering wheel at the entry. So the
+control is gone from all three input paths and a stop is now called by putting
+the car on the pit side within the entry road and holding it there.
+
+That trades one problem for another, and the one it takes on is the same
+discrimination the half-plane `inLane` failed at in erratum 1: telling a driver
+who meant it from a car that merely ran wide at the entry. Four conditions,
+each answering one way of not meaning it:
+
+| condition | refuses |
+|---|---|
+| `COMMIT_M` — only in the first 120 m of the window | a car hugging the pit wall mid-straight |
+| `COMMIT_FRAC` — 0.70 of the half-width, toward the pit side | a drift rather than a deliberate line |
+| `COMMIT_S` — held 0.55 s | a transient run-wide; a pit entry is sustained |
+| `COMMIT_V` + on-track + forwards | the spun, beached or parked car that broke the auto-rescue last time |
+
+The zone gains a `side`, which is a deliberate and narrow exception to erratum
+1's "no lateral geometry": a side that reads the DRIVER'S STEERING moves no
+boundary and places nothing, and `inLane` is still a state. A lane `width` or a
+`room` measurement would still be the relapse, and the unit guard now asserts
+exactly that distinction rather than the old proxy.
+
+The cost is that the commitment needs feedback a button gave for free, so the
+HUD's compound chip fills with the dwell and the engineer says
+`PIT ENTRY — LIMITER ON` with the compound the crew has ready.
+
+---
+
 ### 5.3 Layer 3 — AI strategy (Phase 3)
 
 Replace `tyreClass`/`tyrePace` with a planner. Keep the determinism contract:
@@ -606,7 +637,14 @@ go off, and a player who wants to plan should be able to.**
   "BOX THIS LAP", "SAFETY CAR — BOX NOW", "RAIN IN 2 LAPS — INTERS READY". §2.11
   says this is the most-requested missing thing in shipped F1 games, and Apex
   already has the banner.
-- **PIT tap** beside BOOST/OT/AERO, arming like them.
+- ~~**PIT tap** beside BOOST/OT/AERO, arming like them.~~ **SUPERSEDED: there is
+  no pit control at all.** Built as a tap, a `KeyV` bind and a gamepad button,
+  and then removed: a button makes the stop a MODE you toggle, when the real
+  gesture is a LINE you take. You now call a stop by putting the car on the pit
+  side at the entry and holding it — which is what a driver does, and one fewer
+  control on a phone screen. The difficulty this trades for is telling a pit
+  entry from a car that merely ran wide there, which is the same discrimination
+  problem the half-plane `inLane` failed at; four conditions do it (§5.2).
 - **Pit-stop moment**: the limiter, the box, the crew, the release. §2.11 says
   this is the part reviewers call exhilarating — it deserves the camera.
 - **Results**: a stint strip per driver, which `js/data/telemetry.js` already
@@ -666,7 +704,7 @@ widget, `__apex.tyres()` and `physState()` fields. **No pit lane.** This alone
 makes the compound choice real at 25+ laps and is independently shippable.
 
 **P2 — the stop.** `pitZone` in the circuit defs and `wallAt`, `js/race/pit-lane.js`,
-the limiter, the PIT control, the box sequence, the camera. Pit loss measured and
+the limiter, the box sequence, the camera. Pit loss measured and
 tuned to 20–24 s.
 
 **P3 — the field races strategy.** The planner replaces `tyreClass`/`tyrePace`;
