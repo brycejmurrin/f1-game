@@ -56,12 +56,18 @@ const fracArg = flag(argv, "--frac", "");
 const HERO = {
   abudhabi:     [0.88,  "default"], // under the Yas Hotel gridshell (night race)
   albert_park:  [0.47,  "dawn"],    // the lakeside run
+  anderstorp:   [0.58,  "day"],     // out onto the runway back straight
   bahrain:      [0.10,  "default"], // the Turn 1 hairpin (night race)
   baku:         [0.44,  "default"], // the Old City castle squeeze (night)
+  brands_hatch: [0.008, "dawn"],    // over the lip into Paddock Hill
+  buddh:        [0.45,  "day"],     // the drop into the Turn 10-11 double-apex
   buenos_aires: [0.06,  "dusk"],
   catalunya:    [0.44,  "day"],     // the Campsa crest
   cota:         [0.10,  "dusk"],    // the Turn 1 climb
+  dijon:        [0.70,  "day"],     // into the Parabolique
+  donington:    [0.18,  "day"],     // Hollywood, looking down the Craner fall
   estoril:      [0.88,  "dawn"],    // into the Parabolica
+  fuji:         [0.27,  "dawn"],    // out of Turn 1 into the tree-lined esses
   hockenheim:   [0.46,  "day"],     // the Spitzkehre
   hungaroring:  [0.04,  "day"],     // the downhill Turn 1
   imola:        [0.12,  "dawn"],    // Tamburello
@@ -70,16 +76,20 @@ const HERO = {
   istanbul:     [0.40,  "day"],     // Turn 8
   jacarepagua:  [0.06,  "day"],
   jeddah:       [0.50,  "default"], // the fast mid-lap sweeps (night race)
+  jerez:        [0.36,  "day"],     // the climb to Curva Dry Sack
+  korea:        [0.26,  "dusk"],    // the full-throttle run into Turn 3
   kyalami:      [0.80,  "dusk"],    // the plunge to the main straight
   madrid:       [0.50,  "day"],     // El Búnker
   magny_cours:  [0.24,  "dawn"],    // Estoril
   mexico:       [0.80,  "dusk"],    // the Foro Sol stadium
   miami:        [0.06,  "day"],
   monaco:       [0.18,  "dusk"],    // the climb to Casino Square
+  mont_tremblant: [0.01, "dawn"],   // the paddock straight, the one clearing in the pines
   montreal:     [0.96,  "day"],     // the Wall of Champions
   monza:        [0.172, "dawn"],    // the gateway into Curva Grande
   mugello:      [0.52,  "day"],     // the Arrabbiate climb
   nurburgring:  [0.05,  "dawn"],    // the Mercedes-Arena
+  okayama:      [0.32,  "day"],     // the hairpin cut into the clay bank
   paul_ricard:  [0.50,  "day"],     // Signes at the end of the Mistral
   portimao:     [0.06,  "dusk"],    // the plunge into Turn 1
   qatar:        [0.12,  "default"], // (night race)
@@ -94,6 +104,7 @@ const HERO = {
   vegas:        [0.60,  "default"], // the Strip (night race)
   watkins_glen: [0.70,  "day"],     // the climb out of the Boot
   zandvoort:    [0.15,  "dawn"],    // the Hugenholtz bowl
+  zolder:       [0.12,  "day"],     // the Scots-pine run away from the chicane
 };
 const heroOf = (id) => {
   const h = HERO[id] || [0.06, "default"];
@@ -139,6 +150,13 @@ try {
       const a = window.__apex;
       a.go(); a.park((frac + 0.5) % 1); a.freeze(true);
       if (a.hud) a.hud(false);
+      // The DRIVING LINE is an assist painted on the road, not part of the
+      // circuit, and the hero shot is the PLACE. Turn it off explicitly rather
+      // than relying on the session default: the first 40 stills were shot
+      // when that default was OFF and are clean, the eleven shot 2026-09-14
+      // came out with green arrows down every one of them because the default
+      // had since moved. An asset generator must not inherit a preference.
+      if (a.drivingLine) a.drivingLine("off");
       // TV camera: 42 m behind the section, a touch to the right, 11 degrees
       // up, looking down the road so the shape of the section reads. A free
       // cam sets G.dbgCam directly — never snapCam() after it (that clears it).
