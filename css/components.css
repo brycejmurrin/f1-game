@@ -1266,7 +1266,15 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
      ratchets `rawSpacing`: a px literal in a padding/margin/gap is a token that
      was not used). The row keeps its alignment — the bar hangs outside. */
   --tune-bar: 2px;
-  border-left: var(--tune-bar) solid var(--accent);
+  /* --text, NOT --accent. This bar is the only thing distinguishing a value you
+     chose from one you inherited, which makes it INFORMATION, and WCAG 1.4.11
+     wants 3:1 of anything that identifies a control's state. --accent is the
+     team skin: racingbulls #1634cb measures 2.21:1 and williams #0f3cc9 2.33:1
+     over --bg, so on those two teams the marker would have been the least
+     visible thing on the row. tests/unit/nontext-contrast.test.mjs caught this
+     — it freezes the --accent consumer list precisely so a new use has to argue
+     it is ornament, and this one could not. */
+  border-left: var(--tune-bar) solid var(--text);
   padding-left: calc(var(--gap) * 0.4);
   margin-left: calc(var(--gap) * -0.4 - var(--tune-bar));
 }
@@ -1283,7 +1291,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   border-radius: var(--r-xs); cursor: pointer;
   touch-action: manipulation;
 }
-.tune-revert:hover { color: var(--text); background: var(--plate-hover); }
+@media (hover: hover) {
+  .tune-revert:hover { color: var(--text); background: var(--plate-hover); }
+}
 #pmsettings-inner .pm-doors button {
   width: auto;
   /* A door, not a key/value row. */

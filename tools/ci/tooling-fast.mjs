@@ -164,6 +164,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/nontext-contrast.test.mjs",
   "tests/unit/scale-defaults.test.mjs",
   "tests/unit/font-digits.test.mjs",
+  "tests/unit/apca-timing.test.mjs",
   "tests/unit/test-groups.test.mjs",
   "tests/unit/pick-tests.test.mjs",
   "tests/unit/test-observed.test.mjs",

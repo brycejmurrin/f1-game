@@ -316,8 +316,11 @@ function fitHud() {
   // resolve it from its factors instead of parsing it. Falling through to
   // `scale` alone (which is what the old `|| scale` did) silently sized the dock
   // cap 25% small on every touch device the moment the ratio stopped being 1.
-  const btnScale = +root.style.getPropertyValue("--hud-btn-scale")
-    || scale * (+getComputedStyle(root).getPropertyValue("--hud-btn-mult") || 1);
+  // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
+  // which has no getComputedStyle — the same guard metrics-overlay.js carries.
+  const mult = typeof getComputedStyle === "function"
+    ? (+getComputedStyle(root).getPropertyValue("--hud-btn-mult") || 1) : 1;
+  const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale * mult;
   const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter

@@ -48,7 +48,9 @@ const MM_PER_PX = 25.4 / 96;
 
 /** The `@media (pointer: coarse)` :root declarations, as {prop: value}. */
 function coarseDefaults() {
-  const m = tokens.match(/@media \(pointer: coarse\)\s*\{\s*:root\s*\{([^}]*)\}/);
+  // Comments and newlines sit between the at-rule and the :root block, so match
+  // lazily across them rather than assuming they are adjacent.
+  const m = tokens.match(/@media \(pointer: coarse\)\s*\{[\s\S]*?:root\s*\{([^}]*)\}/);
   assert.ok(m, "css/tokens.css must declare the (pointer: coarse) :root block");
   const out = {};
   for (const d of m[1].split(";")) {
@@ -61,9 +63,15 @@ function coarseDefaults() {
 test("css/tokens.css and js/ui/scale.js agree on the touch defaults", () => {
   const css = coarseDefaults();
   // --hud-btn-scale is a RATIO of --hud-scale, deliberately, so an unset BUTTON
-  // SIZE keeps following the HUD SIZE slider. Both halves must match the JS.
-  const ratio = css["--hud-btn-scale"].match(/var\(--hud-scale\)\s*\*\s*([\d.]+)/);
-  assert.ok(ratio, `--hud-btn-scale must stay a ratio of --hud-scale, got: ${css["--hud-btn-scale"]}`);
+  // SIZE keeps following the HUD SIZE slider. The multiplier is published
+  // SEPARATELY as --hud-btn-mult because calc() inside a custom property is not
+  // reduced at computed-value time: js/ui/hud.js has to resolve the unset dock
+  // scale from its factors rather than parse "calc(0.9 * 1.25)" out of a token.
+  assert.match(css["--hud-btn-scale"], /var\(--hud-scale\)\s*\*\s*var\(--hud-btn-mult\)/,
+    `--hud-btn-scale must stay --hud-scale times --hud-btn-mult, got: ${css["--hud-btn-scale"]}`);
+  const ratio = [null, css["--hud-btn-mult"]];
+  assert.ok(ratio[1] && Number.isFinite(Number(ratio[1])),
+    `--hud-btn-mult must be a plain number (js/ui/hud.js coerces it), got: ${ratio[1]}`);
   const jsRatio = scaleJs.match(/const BTN_OVER_HUD = ([\d.]+);/);
   assert.ok(jsRatio, "js/ui/scale.js must declare BTN_OVER_HUD");
   assert.equal(Number(ratio[1]), Number(jsRatio[1]),
@@ -86,7 +94,7 @@ test("the touch default puts every driving control over the physical floor", () 
   // secondary column on the small phone. Derived here from the tokens rather
   // than hard-coded, so a change to --btn or the ratio is caught.
   const css = coarseDefaults();
-  const ratio = Number(css["--hud-btn-scale"].match(/\*\s*([\d.]+)/)[1]);
+  const ratio = Number(css["--hud-btn-mult"]);
   const hud = Number(css["--hud-scale"]);
   const overlays = read("css/overlays.css");
   const btn = Number(overlays.match(/--btn:\s*(\d+)px/)[1]);

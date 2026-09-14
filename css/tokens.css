@@ -510,7 +510,33 @@
      delta inks (ghost, gaps, data hub), named so every reader agrees. */
   --faster: #a3e635;
   --slower: #ff3b30;
-  --sec-best: #c084fc;
+  /* SESSION BEST WAS THE HARDEST OF THE THREE TO READ, which is the wrong way
+     round: it marks the best lap you can set, on a 14px readout, at 300 km/h.
+     Measured in APCA (the contrast model that actually works on dark UI — WCAG
+     2 contrast "overstates contrast for dark colors to the point that 4.5:1 can
+     be functionally unreadable" and ignores font weight entirely):
+
+       --faster    #a3e635   Lc 79.4
+       --sec-slow  #f6d200   Lc 80.4
+       --sec-best  #c084fc   Lc 50.4   <- 30 Lc below its own siblings
+
+     APCA's ladder asks Lc 75 for 14px/700 body and Lc 60 for non-body, so the
+     two siblings clear the bar and the purple sat under both.
+
+     Lifted to Lc 65.1 with the HUE AND CHROMA DIRECTION UNTOUCHED — the OKLab
+     a and b are byte-identical, only L moves (0.722 -> 0.795), so it is the
+     same purple, lighter. It deliberately does NOT go all the way to its
+     siblings' ~79: that costs 38 % of the chroma (#fbbeff) and starts reading
+     PINK, and purple-means-session-best is a motorsport convention worth more
+     than the last 14 Lc. At 65 it keeps 80 % of the chroma.
+
+     CAVEAT ON THE NUMBERS: .sec-val carries `text-shadow: 0 1px 3px
+     rgba(0,0,0,0.9)`, and a dark halo raises effective contrast for light ink,
+     so these Lc values are a FLOOR rather than what the eye gets. All three
+     colours carry the same halo, which is why the 30 Lc gap between them is the
+     robust part and the absolute figures are not. tests/unit/apca-timing.test.mjs
+     pins the family relationship for that reason, not an absolute threshold. */
+  --sec-best: #dfa3ff;
   --sec-slow: #f6d200;
   /* The livery list's two-verb palette: DELETE is the warm danger family,
      EDIT the cool info family. Ink is the light readable tint, fill the
