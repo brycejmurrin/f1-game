@@ -3587,6 +3587,9 @@ const _aiBoost = { traits: null, energy: 0, otActive: false, kAhead60: 0, towCar
 const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null, vTop: 0 };
 // AI lateral controller (updateCar, "--- lateral ---"): heading state, not a
 // position P-loop. Tunables, not model numbers — see the block for the why.
+const AI_PASS_LATCH_M = 16;    // m: the pass latch's window, read by BOTH ends. The release always
+                               // dropped the latch past it; the engage had no gap term, so half of all
+                               // engagements began already outside it (docs/notes/AI-FIELD-RESEARCH.md).
 const AI_HEAD_VMIN = 6;        // vStd m/s: below this the position controller drives (dig-out, pit crawl)
 const AI_XTRACK_GAIN = 2.5;    // 1/s: Stanley cross-track gain, ~0.4 s to close an error
 const AI_HEAD_MAX = 0.45;      // rad: the heading a car may hold off the road tangent
@@ -4349,7 +4352,7 @@ function updateCar(c, dt, ranked) {
       let dp = po.prog - c.prog;
       dp = ((dp + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
       const sideRoom = c.passSide > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL);   // the ROAD's room, not the run-off's
-      if (po.finished || po.retired || dp > 16 || !Number.isFinite(dp)) { c.passOf = null; }           // lost it: no penalty
+      if (po.finished || po.retired || dp > AI_PASS_LATCH_M || !Number.isFinite(dp)) { c.passOf = null; }   // lost it: no penalty
       // PAST: done. The pass is complete, and the car we just cleared does not
       // get to counter-attack us on the same stretch — it takes the SAME
       // "threshold endured" lockout an abandoned pass gives its own attacker,
@@ -4406,7 +4409,7 @@ function updateCar(c, dt, ranked) {
       _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.roll = c.phaseRoll || 0.5;
       const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
       const moveOn = !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
-      if (!c.passOf && c.passCool <= 0 && moveOn) {
+      if (!c.passOf && c.passCool <= 0 && moveOn && blockerGap <= AI_PASS_LATCH_M) {
         const side = AiDrive.otSide(_aiOtPull);
         if ((side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
           c.passOf = blocker; c.passSide = side; c.passBest = blockerGap; c.passT = AiDrive.passHold(aiT);

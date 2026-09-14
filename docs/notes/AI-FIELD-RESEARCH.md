@@ -505,3 +505,45 @@ Stopped after one driver pair, deliberately, because the design pre-registered
 "run one pair first and stop if it is flat". It is flat. Sweeping more pairs until
 one looked favourable would be fishing, and this file already carries one entry
 whose headline turned out to be the author's own measurement error.
+
+## 2026-09-14 — the pass latch engaged outside its own release window
+
+`js/game.js` releases the pass latch when the blocker is more than 16 m ahead
+("lost it: no penalty"), but the ENGAGE condition had no gap term at all —
+`if (!c.passOf && c.passCool <= 0 && moveOn)`. So a car could commit to a pass on
+a blocker already outside the window and drop it on the next frame, with no
+cooldown to stop it re-latching the same car immediately. Both ends now read one
+constant, `AI_PASS_LATCH_M`, so they cannot drift apart again.
+
+MEASURED with `scratch/churn-probe2.mjs`, monza, **6 seeds**, 120 s, paired
+against the same tree with the bound stashed:
+
+| | before | after |
+|---|---|---|
+| engagements | 790 | **465** (−41 %) |
+| released as "lost it" | 325 | **20** (−94 %) |
+| started beyond 16 m | 49.7 % | **0** |
+| median engagement duration | 0.58 s | **1.27 s** |
+| under 1 s | 64.6 % | 44.1 % |
+| completed passes | **62** | **51** (−18 %) |
+| completion rate, engagements inside 16 m | 0.116 | 0.110 |
+
+**Read the last two rows before the first four.** The bound does exactly what it
+says structurally — no engagement now starts outside the window, and abandoned
+latches all but vanish — but the per-engagement completion rate is FLAT
+(0.116 → 0.110). This does not make the AI better at passing. It makes it stop
+attempting passes it could never complete, and that costs ~18 % of completions.
+Whether that is a gain depends on the target, and this file's own calibration says
+the field is far too pass-happy (29 settled passes per 240 s against 30.9 per real
+RACE), so fewer attempts and fewer completions is directionally right rather than
+a regression. It is a behaviour change with a real cost, not a free win.
+
+**The n=3 reading was wrong, and in the flattering direction.** At 3 seeds
+completions appeared to RISE (30 → 32) and the change looked free; at 6 seeds they
+fall 18 %. Same instrument, same track, same code. This is the third entry in this
+file to record a result that reversed when the sample grew — the others being the
+pace-spread n=5 section and the straight-line defence above — and the pattern is
+always the same: the small sample flattered the change being tested.
+
+Guards 178/178, ai-drive 57/57, ai-racecraft-vm 4/4. `js/game.js` grew 3 lines /
+1 code line for the named constant; both ceilings raised by exactly that.
