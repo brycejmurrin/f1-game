@@ -57,17 +57,23 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/setup-tune.test.mjs",
   // The tyre model's rules (js/physics/tyre-model.js): OFF is a true no-op,
-  // life is a fraction of the SCHEDULED distance, and the catalog's life
-  // ladder is a usable strategy range. Pure numbers in a VM, ~0.15 s.
+  // life is a fraction of the SCHEDULED distance, the catalog's life ladder
+  // is a usable strategy range, the thermal layer warms/grains/blisters, and
+  // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
   "tests/unit/tyre-model.test.mjs",
   // ...and the pit lane's pure geometry: the window WRAPS the start/finish
-  // line, the lane is metres not a fraction of the lap, and openBarrier
-  // opens the pit side without moving hw. ~0.1 s.
+  // line, the lane is metres not a fraction of the lap, the box is long
+  // enough to stop in, and the COMMITMENT that replaced the pit button tells
+  // a driven pit entry from a car that ran wide there. ~0.2 s.
   "tests/unit/pit-lane.test.mjs",
   // ...and the field's strategy: the plan scales with the distance, a 20-car
   // grid does not converge on one plan, strategies mix, and the reactive
   // rules (free stop, weather, spent set) fire in the right order. ~0.1 s.
   "tests/unit/ai-strategy.test.mjs",
+  // ...and the race engineer's ladder: it ADVISES and never arms a stop,
+  // graining and blistering say different things (one heals, one does not),
+  // the axle call names an end of the car, and it does not nag. ~0.1 s.
+  "tests/unit/engineer.test.mjs",
   "tests/unit/team-livery.test.mjs",
   // 10 s of pure geometry: builds all 297 catalog options and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog
@@ -109,6 +115,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/body-split.test.mjs",
   "tests/unit/helmets.test.mjs",
   "tests/unit/digital-steer.test.mjs",
+  // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
+  // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
+  // in comments and checked by nothing until it drifted for a week. ~0.05 s.
+  "tests/unit/steer-presets.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/settings-export.test.mjs",
   // ...and the garage's SIGNS: no prop mounted within half a metre in front of

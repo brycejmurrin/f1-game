@@ -648,6 +648,17 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    silently. The compact quali/history rules already wrap; this is the base. */
 .res-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .res-pts { width: 62px; text-align: right; white-space: nowrap; font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
+/* TYRE STINT STRIP (js/physics/tyre-model.js stints(), drawn by results-sheet.js
+   and only while TYRE WEAR is on). A PROPORTIONAL bar, not a row of chips: each
+   segment's width is its share of the car's laps, so a glance down the column
+   compares strategies — one long segment is a car that went to the end, three
+   short ones is a car that could not. Butted, with no gap and no padding, which
+   is also why this rule adds no raw spacing to a count that asserts exact
+   equality. The segment COLOURS are the compound's own band, written inline by
+   the sheet from the tyre record, so they stay out of the CSS colour count and
+   cannot drift from the HUD's. */
+.res-stints { display: flex; width: 78px; height: 6px; border-radius: var(--r-pill); overflow: hidden; flex-shrink: 0; }
+.res-stint { height: 100%; min-width: 2px; }
 /* RESULTS SETTLE. The classification lands row by row (18 ms apart, capped at
    the 12th row) instead of appearing; results-sheet.js writes --i per row.
    Scoped to the results table only — #ch-body / #q-body / #standings-body

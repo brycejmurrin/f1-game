@@ -12,11 +12,18 @@
  *    7 km lap does not get a pit lane twice Monaco's;
  *  - a short circuit cannot be swallowed by its own pit lane;
  *  - the lane touches NO geometry. `hw`, both boundaries and the road mesh come
- *    out of `zoneOf` untouched, and the zone carries no width or side at all.
- *    Two earlier cuts did carry them: one forced the pit-side boundary open and
- *    put it through Monaco's buildings (lap distance jumped 250 m when a car ran
- *    wide), the other fitted the lane to existing room and found 2.4 m at Monza
- *    — the scenery's pit WALL — i.e. no lane anywhere. The lane is a state now.
+ *    out of `zoneOf` untouched, and the zone carries no WIDTH and no ROOM.
+ *    Two earlier cuts did: one forced the pit-side boundary open and put it
+ *    through Monaco's buildings (lap distance jumped 250 m when a car ran wide),
+ *    the other fitted the lane to existing room and found 2.4 m at Monza — the
+ *    scenery's pit WALL — i.e. no lane anywhere. The lane is a state now.
+ *
+ *    The zone DOES carry a `side` since the pit button was removed, and that is
+ *    deliberate rather than a relapse. A side used only to read the DRIVER'S
+ *    STEERING at the entry is not a lane in space: it moves no boundary, places
+ *    nothing, and `inLane` is still a state and not a half-plane — which is the
+ *    invariant that actually killed the first attempt, and the one asserted
+ *    below. A `laneW` or a `room` would still be the relapse.
  *
  * Run: node --test tests/unit/pit-lane.test.mjs   (npm run test:tooling-fast)
  */
@@ -127,13 +134,31 @@ test("zoneOf reads the track but never writes it", () => {
   assert.deepEqual([...t.barL], [...lBefore]);
 });
 
-test("the zone carries no lateral geometry at all", () => {
-  // The guard against quietly re-growing a lane in space. If a width or a side
-  // ever comes back, it needs the barrier story that killed the first attempt.
+test("the zone carries no lane WIDTH and no ROOM — the two that killed cut one", () => {
+  // The guard against quietly re-growing a lane in space. A width or a room
+  // measurement is the relapse: the first needs the barrier story (it put
+  // Monaco's boundary through the buildings), the second found 2.4 m at Monza
+  // and therefore no lane anywhere.
   const z = P.zoneOf(fakeTrack({}));
-  for (const k of ["laneW", "side", "room", "ok"]) {
+  for (const k of ["laneW", "room", "ok"]) {
     assert.equal(k in z, false, `zone.${k} is lateral geometry and must not exist`);
   }
+});
+
+test("…but it DOES carry a side, and the side reads the driver rather than the road", () => {
+  // Since the pit button was removed, a stop is called by steering in — so the
+  // module has to know which way "in" is. That is not a lane in space, and this
+  // is the pair of assertions that keeps the difference honest.
+  const z = P.zoneOf(fakeTrack({}));
+  assert.equal(z.side, P.PIT_SIDE, "+1 is where js/track/tracks.js puts the pit building");
+  assert.equal(P.zoneOf(fakeTrack({ def: { pitZone: { side: -1 } } })).side, -1, "a circuit may say otherwise");
+  assert.equal(P.zoneOf(fakeTrack({ def: { pitZone: { side: 7 } } })).side, P.PIT_SIDE, "and nonsense falls back");
+  // The invariant that actually matters: inLane is a STATE. A half-plane test
+  // is what made a beached car read as pitting and broke the auto-rescue.
+  const src = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
+  const inLane = src.slice(src.indexOf("function inLane(c)"));
+  assert.ok(/pitState === "lane"/.test(inLane.slice(0, 200)), "inLane stopped being a state");
+  assert.ok(!/\.hw|_smp/.test(inLane.slice(0, 200)), "inLane grew a lateral test again");
 });
 
 test("the box is a LENGTH of lane, not a point", () => {
@@ -152,4 +177,153 @@ test("the stop needs the car to be genuinely stopped, not merely slow", () => {
   // rides OVERALL SPEED like the limiter.
   assert.ok(P.BOX_SPEED_FRAC > 0 && P.BOX_SPEED_FRAC < P.LIMIT_FRAC,
     "the box threshold must be well under the pit limit, or a car at the limit would 'stop'");
+});
+
+// ── Committing to the stop, without a button ────────────────────────────────
+// There is no pit control: you call a stop by holding the car on the pit side
+// at the entry. The whole difficulty is telling that apart from a car that
+// merely ran wide there — the exact failure the half-plane `inLane` had — so
+// most of what follows is a way of NOT meaning it.
+
+test("there is no pit control anywhere — the stop is a line you take", () => {
+  const input = readFileSync(join(ROOT, "js/input/input.js"), "utf8");
+  assert.ok(!/pitToggle|consumePitToggle|btn-pit/.test(input),
+    "a pit control came back in the input layer");
+  assert.ok(!/btn-pit/.test(readFileSync(join(ROOT, "index.html"), "utf8")),
+    "the on-screen PIT button came back");
+  assert.ok(!/"pit"|'pit'/.test(input), "a PIT keybind or gamepad bind came back");
+});
+
+test("the commitment gesture is deliberate to make and still possible to make", () => {
+  assert.ok(P.COMMIT_S >= 0.3, "a shorter hold than this is a wobble, not a decision");
+  assert.ok(P.COMMIT_S <= 1.2, "a longer one and the entry is gone before you have committed");
+  assert.ok(P.COMMIT_FRAC >= 0.5, "less than half way over is a drift, not a pit entry");
+  assert.ok(P.COMMIT_FRAC < 1, "a driver must not have to leave the road to pit");
+  const z = P.zoneOf(fakeTrack({}));
+  assert.ok(P.COMMIT_M < z.lenM, "the entry road must be shorter than the whole window");
+  assert.ok(P.COMMIT_M < P.throughM(z, z.sBox, 5386),
+    "committing AT the box is too late to have driven in");
+});
+
+// A live session whose track samples a constant half-width. `committing` is the
+// ONE place this module samples the track, so a counting stub proves that too.
+function commitSession({ hw = 7, vTop = 60 } = {}) {
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
+  seedLog(ctx);
+  ctx.window = ctx;
+  let samples = 0;
+  ctx.Tracks = { sample: (t, s2, out) => { samples++; out.hw = hw; return out; } };
+  // Committing picks the set the crew will fit, which reaches both of these at
+  // call time. Minimal stubs: the choice itself is tyre-model.test.mjs's job.
+  ctx.TyreModel = { treadFor: () => 0, classForTread: () => null, lifeLaps: () => 30,
+                    AI_CLASS: { medium: { life: 0.74 } } };
+  ctx.Parts = { CATALOG: [{ id: "tyres", options: [{ id: "medium", cost: 0 }] }] };
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  const Pl = vm.runInContext("PitLane", ctx);
+  const track = { total: 5386, n: 1346, def: {} };
+  const said = [];
+  const pits = Pl.create({
+    track, vTop: () => vTop, lapsTarget: 25, raceWeather: "dry",
+    announce: (m) => said.push(m),
+    tyres: { on: () => true, spent: () => 0, fit: () => {},
+             classRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
+             optionRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }) },
+    cautionInfo: () => ({ level: 0 }),
+  });
+  const zone = Pl.zoneOf(track);
+  // A car in the entry, on the pit side, at racing speed — i.e. committing.
+  const car = (over) => ({
+    local: true, human: true, speed: 40, lap: 3, s: zone.sIn + 20,
+    x: hw * over * zone.side, offroad: false, wrongWay: false, rescueT: 0,
+    tyre: { code: "M", tread: 0 }, pitState: "none",
+  });
+  return { Pl, pits, zone, car, said, hw, samples: () => samples };
+}
+
+test("holding the line into the pits calls the stop", () => {
+  const { pits, car, said } = commitSession();
+  const c = car(0.9);
+  // One tick short of the dwell: not yet committed. A pit stop must not be
+  // something you fall into halfway through a corner-exit drift.
+  pits.update(c, P.COMMIT_S * 0.8);
+  assert.equal(!!c.pitArmed, false, "committed before the dwell elapsed");
+  pits.update(c, P.COMMIT_S * 0.4);
+  assert.equal(c.pitArmed, true, "holding the line did not call the stop");
+  assert.equal(c.pitState, "lane", "the limiter must come on the same tick");
+  assert.ok(said.some((m) => /LIMITER ON/.test(m)),
+    `with no button to press, the limiter needs saying: ${said.join(" | ")}`);
+});
+
+test("a car that merely RUNS WIDE at the entry does not get pitted", () => {
+  // The failure that killed the half-plane test, refused three ways over.
+  const { pits, car } = commitSession();
+  // 1. Not far enough over — a drift, not a line.
+  const drift = car(P.COMMIT_FRAC - 0.15);
+  for (let i = 0; i < 20; i++) pits.update(drift, 0.1);
+  assert.equal(!!drift.pitArmed, false, "a drift toward the pit wall called a stop");
+  // 2. Far enough, but not HELD — the dwell resets the moment the car comes back.
+  const wobble = car(0.9);
+  pits.update(wobble, P.COMMIT_S * 0.8);
+  wobble.x = 0;
+  pits.update(wobble, P.COMMIT_S * 0.8);
+  assert.equal(!!wobble.pitArmed, false, "a transient run-wide called a stop");
+  wobble.x = 0.9 * 7;
+  pits.update(wobble, P.COMMIT_S * 0.8);
+  assert.equal(!!wobble.pitArmed, false, "the dwell did not restart after the car came back");
+  // 3. On the WRONG side. Running wide left is not a pit entry.
+  const other = car(0.9); other.x = -other.x;
+  for (let i = 0; i < 20; i++) pits.update(other, 0.1);
+  assert.equal(!!other.pitArmed, false, "running wide away from the pits called a stop");
+});
+
+test("a spun, beached, reversing or parked car commits to nothing", () => {
+  // The beached-car case from the module header, refused by construction: it is
+  // what broke the auto-rescue when `inLane` was a half-plane.
+  const { pits, car } = commitSession();
+  for (const [name, over] of [["offroad", { offroad: true }], ["wrongWay", { wrongWay: true }],
+                              ["rescuing", { rescueT: 2 }], ["parked", { speed: 0 }],
+                              ["crawling", { speed: 3 }]]) {
+    const c = Object.assign(car(0.95), over);
+    for (let i = 0; i < 20; i++) pits.update(c, 0.1);
+    assert.equal(!!c.pitArmed, false, `a ${name} car called a pit stop`);
+  }
+});
+
+test("you can only commit at the ENTRY, not anywhere in the window", () => {
+  const { pits, zone, car } = commitSession();
+  const late = car(0.95);
+  late.s = zone.sIn + P.COMMIT_M + 30;   // past the entry road, racing the straight
+  for (let i = 0; i < 20; i++) pits.update(late, 0.1);
+  assert.equal(!!late.pitArmed, false, "a car hugging the pit wall mid-window called a stop");
+});
+
+test("only the LOCAL player steers itself in — the AI has a plan, a rival has an owner", () => {
+  const { pits, car } = commitSession();
+  for (const who of [{ local: false, human: false }, { local: false, human: true }]) {
+    const c = Object.assign(car(0.95), who);
+    for (let i = 0; i < 20; i++) pits.update(c, 0.1);
+    assert.equal(!!c.pitArmed, false, "a non-local car steered itself into a stop");
+  }
+});
+
+test("the commitment test is the only thing that samples the track, and reads only hw", () => {
+  const { pits, car, samples } = commitSession();
+  const parked = Object.assign(car(0.95), { speed: 0 });
+  for (let i = 0; i < 10; i++) pits.update(parked, 0.1);
+  assert.equal(samples(), 0, "the cheap rejections must come before the spline sample");
+  const c = car(0.95);
+  pits.update(c, 0.1);
+  assert.ok(samples() > 0, "a committing car must actually measure the road width");
+});
+
+test("info() reports the dwell, so a HUD can show the commitment filling", () => {
+  // With no button there is no pressed state to draw; this is what replaces it.
+  const { pits, car } = commitSession();
+  const c = car(0.95);
+  assert.equal(pits.info(c).commit, 0);
+  pits.update(c, P.COMMIT_S * 0.5);
+  const half = pits.info(c).commit;
+  assert.ok(half > 0.3 && half < 0.8, `the dwell should read about half way, got ${half}`);
+  assert.equal(pits.info(c).side, P.PIT_SIDE);
 });
