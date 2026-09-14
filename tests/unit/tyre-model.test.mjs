@@ -50,6 +50,10 @@ function ctxFor({ laps = 25, total = 5386, severity = null } = {}) {
     track: { total, def: severity == null ? {} : { tyreSeverity: severity } },
     LAT_MAX: 22,
     aTop: () => 7,
+    // The thermal model reads these two: speed as a fraction of the envelope
+    // drives both heating and airflow cooling, and the weather sets ambient.
+    vTop: () => 60,
+    raceWeather: "dry",
   });
 }
 // Drive `n` laps' worth of distance at a given load, in one-second ticks.
@@ -207,6 +211,199 @@ test("fuel runs from a full tank at the start to empty at the flag", () => {
   const full = s.fuelAccelMul(c);
   c.lap = 20;
   assert.ok(s.fuelAccelMul(c) > full, "burning fuel must make the car quicker, not slower");
+});
+
+// ── 3b. Temperature, and the two ways a tyre fails ─────────────────────────
+
+test("a fresh set comes out of blankets BELOW its window — that is the out-lap", () => {
+  // The counterweight the undercut needs. Without it a stop is free and
+  // therefore always correct, which is a worse game than the one with the
+  // trade in it (docs/research/TYRE-STRATEGY-DESIGN.md §2.8).
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const c = freshCar(s, 0.74);
+  assert.equal(c.tyreTs, T.T_BLANKET, "a fresh set starts at blanket temperature");
+  const opt = T.optTemp(0.74);
+  assert.ok(T.T_BLANKET < opt - T.T_WINDOW, "and blanket temperature must be BELOW the window, or there is no out-lap");
+  const cold = s.gripMul(c);
+  assert.ok(cold < 1, "so a fresh set is down on grip");
+  // ...and the size of it is the ~0.4-0.6 s the real thing measures, which at
+  // this model's scale is a couple of percent of grip, not a couple of tenths.
+  assert.ok(cold > 0.95, `the out-lap deficit must be a nuisance, not a cliff (got ${cold.toFixed(3)})`);
+});
+
+test("driving brings a cold set INTO its window, and it then holds there", () => {
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const c = freshCar(s, 0.74, { speed: 60 });
+  const opt = T.optTemp(0.74);
+  for (let i = 0; i < 120; i++) s.update(c, 1);          // ~2 minutes of racing
+  assert.ok(Math.abs(c.tyreTs - opt) < T.T_WINDOW,
+    `a raced set must settle inside its window (${c.tyreTs.toFixed(1)} vs ${opt.toFixed(1)} +/- ${T.T_WINDOW})`);
+  assert.ok(s.gripMul(c) > 0.99 * T.gripFor(c.tyreWear), "and pay no temperature penalty there");
+  // Holds: another two minutes must not run away.
+  const was = c.tyreTs;
+  for (let i = 0; i < 120; i++) s.update(c, 1);
+  assert.ok(Math.abs(c.tyreTs - was) < 8, "an equilibrium that drifts is not an equilibrium");
+});
+
+test("a softer compound switches on faster than a harder one", () => {
+  // Softs in about a lap, hards in two or three — so the compound choice
+  // reaches the out-lap, not just the stint.
+  //
+  // Measured as TIME INTO THE WINDOW, not distance-from-optimum at a fixed
+  // moment: every compound settles at a similar offset above its own optimum,
+  // so a snapshot comparison says nothing about switch-on and this test failed
+  // against a model that was behaving correctly.
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const secsToWindow = (life) => {
+    const c = freshCar(s, life, { speed: 60 });
+    const floor = T.optTemp(life) - T.T_WINDOW;
+    for (let i = 0; i < 600; i++) { s.update(c, 1); if (c.tyreTs >= floor) return i + 1; }
+    return Infinity;
+  };
+  const soft = secsToWindow(0.48), hard = secsToWindow(1.05);
+  assert.ok(soft < hard, `a soft must reach its window sooner (${soft}s vs ${hard}s)`);
+  assert.ok(Number.isFinite(hard), "and a hard must reach its window at all");
+  assert.ok(T.warmRate(0.48) > T.warmRate(1.05), "the rate itself must run the right way");
+});
+
+test("the bulk lags the surface — which is what tells graining from blistering", () => {
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const c = freshCar(s, 0.74, { speed: 60 });
+  for (let i = 0; i < 60; i++) s.update(c, 1);
+  assert.ok(c.tyreTs > c.tyreTb, "the surface must lead the core while heating");
+  // ...and lead it the other way while cooling. A parked car shows it cleanly —
+  // but only while the two are still ABOVE ambient: run it long enough and both
+  // reach ambient and the comparison is noise, which is how this first failed.
+  c.speed = 0;
+  for (let i = 0; i < 30; i++) s.update(c, 1);
+  assert.ok(c.tyreTb > c.tyreTs + 1,
+    `the core must hold heat the surface has shed (${c.tyreTb.toFixed(1)} vs ${c.tyreTs.toFixed(1)})`);
+});
+
+test("a cold, sliding tyre GRAINS, and graining heals once it is warm again", () => {
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const c = freshCar(s, 0.74, { speed: 40, human: true, yawRateCur: 0, axFrac: 0, skidIntensity: 0.8 });
+  c.tyreTs = 40;                                        // stone cold
+  for (let i = 0; i < 30; i++) { c.tyreTs = 40; s.update(c, 1); }   // hold it cold
+  assert.ok(c.tyreGrain > 0, "cold rubber that is sliding must grain");
+  const grained = c.tyreGrain;
+  assert.ok(s.gripMul(c) < T.gripFor(c.tyreWear), "and graining must cost grip");
+  // Warm and settled: it drives itself clean. This is the whole reason graining
+  // is a SURFACE state and blistering is not.
+  c.skidIntensity = 0;
+  for (let i = 0; i < 60; i++) { c.tyreTs = T.optTemp(0.74); s.update(c, 1); }
+  assert.ok(c.tyreGrain < grained, `graining must heal (${grained.toFixed(3)} -> ${c.tyreGrain.toFixed(3)})`);
+});
+
+test("a cooked CORE blisters, and blistering never heals", () => {
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const c = freshCar(s, 0.74, { speed: 60 });
+  c.tyreTb = T.optTemp(0.74) + T.T_WINDOW + T.BLIST_OVER + 60;
+  for (let i = 0; i < 30; i++) { c.tyreTb = T.optTemp(0.74) + T.T_WINDOW + T.BLIST_OVER + 60; s.update(c, 1); }
+  const blistered = c.tyreBlister;
+  assert.ok(blistered > 0, "a core well past its limit must blister");
+  assert.ok(T.BLIST_GRIP > T.GRAIN_GRIP, "and blistering must cost more than graining — 1 s/lap against 0.1-0.3");
+  // Cool it right down and run: the damage stays.
+  c.tyreTb = 20; c.tyreTs = 20;
+  for (let i = 0; i < 120; i++) s.update(c, 1);
+  assert.ok(c.tyreBlister >= blistered, "blistering is bulk damage and must not heal");
+});
+
+test("a stop resets temperature and BOTH defects, because it is a new tyre", () => {
+  const s = ctxFor({ laps: 20 }); s.setLevel("real");
+  const c = freshCar(s, 0.74, { speed: 60 });
+  c.tyreGrain = 0.6; c.tyreBlister = 0.4; c.tyreTs = 160; c.tyreTb = 150;
+  s.fit(c, T.classRecord("soft"));
+  assert.equal(c.tyreGrain, 0);
+  assert.equal(c.tyreBlister, 0);
+  assert.equal(c.tyreTs, T.T_BLANKET);
+  assert.equal(c.tyreTb, T.T_BLANKET);
+});
+
+test("colder weather means a colder tyre", () => {
+  const run = (weather) => {
+    const s = T.create({ lapsTarget: 20, track: { total: 5386, def: {} }, LAT_MAX: 22,
+                         aTop: () => 7, vTop: () => 60, raceWeather: weather });
+    s.setLevel("real");
+    const c = freshCar(s, 0.74, { speed: 60 });
+    for (let i = 0; i < 120; i++) s.update(c, 1);
+    return c.tyreTs;
+  };
+  assert.ok(run("rain") < run("dry"), "a wet track must not run the same tyre temperature as a dry one");
+  assert.ok(T.T_AMBIENT.rain < T.T_AMBIENT.dry);
+});
+
+test("OFF: temperature never costs grip", () => {
+  // The promise the whole staged rollout rests on, restated for the new states.
+  const s = ctxFor({ laps: 20 });
+  const c = freshCar(s, 0.74);
+  c.tyreTs = 10; c.tyreTb = 10; c.tyreGrain = 1; c.tyreBlister = 1; c.tyreWear = 1.5;
+  assert.equal(s.gripMul(c), 1);
+  assert.equal(s.tractionMul(c), 1);
+});
+
+// ── 3b. Per-axle ───────────────────────────────────────────────────────────
+
+test("the two axle shares always average to exactly 1", () => {
+  // The whole design rests on this: c.tyreWear is the mean, so the strategy
+  // planner, the AI and the pit call never see the split at all.
+  for (const c of [{ human: true, axEstSm: -5, axFrac: 1 }, { human: true, axEstSm: 3, axFrac: 1 },
+                   { human: true, axEstSm: 0, axFrac: 0 }, { human: true, axEstSm: -5, axFrac: 1, brakeBias: 0.62 },
+                   { human: false, accSm: -7 }, { human: false, accSm: 7 }, { human: false, accSm: 0 }]) {
+    const [f, r] = T.axleShare(c, 7);
+    assert.ok(Math.abs((f + r) / 2 - 1) < 1e-12, `shares do not average to 1: ${f} / ${r}`);
+  }
+});
+
+test("braking wears the FRONT, traction wears the REAR", () => {
+  const brake = T.axleShare({ human: true, axEstSm: -5, axFrac: 1 }, 7);
+  const drive = T.axleShare({ human: true, axEstSm: 4, axFrac: 1 }, 7);
+  assert.ok(brake[0] > brake[1] + 0.5, `braking did not load the front: ${brake}`);
+  assert.ok(drive[1] > drive[0] + 0.5, `traction did not load the rear: ${drive}`);
+});
+
+test("a forward brake bias moves wear onto the front, a rearward one off it", () => {
+  const at = (bb) => T.axleShare({ human: true, axEstSm: -5, axFrac: 1, brakeBias: bb }, 7)[0];
+  assert.ok(at(0.62) > at(T.BB_REF), "more front bias did not wear the fronts harder");
+  assert.ok(at(0.50) < at(T.BB_REF), "less front bias did not spare the fronts");
+  // …and only under braking. A bias setting must not reach a traction event.
+  const drive = (bb) => T.axleShare({ human: true, axEstSm: 4, axFrac: 1, brakeBias: bb }, 7)[0];
+  assert.equal(drive(0.62), drive(0.50), "brake bias reached a traction event");
+});
+
+test("a braking-heavy stint leaves the fronts more worn than the rears", () => {
+  // End to end through update(), which is the only place the split is integrated.
+  const s = ctxFor({ laps: 10 }); s.setLevel("real");
+  const c = freshCar(s, 0.5, { human: true, axEstSm: -5, axFrac: 0.8, yawRateCur: 0.1, skidIntensity: 0 });
+  run(s, c, 4);
+  assert.ok(c.tyreWearF > c.tyreWearR, `fronts not worn harder: ${c.tyreWearF} vs ${c.tyreWearR}`);
+  const mean = (c.tyreWearF + c.tyreWearR) / 2;
+  assert.ok(Math.abs(mean - c.tyreWear) < 1e-9, "the mean of the axles drifted from c.tyreWear");
+});
+
+test("worn fronts cost front grip and leave the rear alone — that is the point", () => {
+  const s = ctxFor({ laps: 10 }); s.setLevel("real");
+  const c = freshCar(s, 0.5);
+  c.tyreWear = 0.6; c.tyreWearF = 0.9; c.tyreWearR = 0.3;
+  const ax = s.axleSplit(c);
+  assert.ok(ax.f < 1, "worn fronts did not cost front grip");
+  assert.ok(ax.r > 1, "fresher rears did not keep their grip");
+  // The split is RELATIVE, so an even set is exactly neutral and muBase keeps
+  // carrying the whole drop — otherwise game.js would count wear twice.
+  c.tyreWearF = 0.6; c.tyreWearR = 0.6;
+  assert.equal(s.axleSplit(c).f, 1);
+  assert.equal(s.axleSplit(c).r, 1);
+});
+
+test("OFF: the axle split is exactly 1/1, and a stop resets both axles", () => {
+  const s = ctxFor({ laps: 10 });
+  const c = freshCar(s, 0.5);
+  c.tyreWear = 0.6; c.tyreWearF = 1.2; c.tyreWearR = 0.1;
+  assert.equal(s.axleSplit(c).f, 1, "the axle split moved grip with the setting off");
+  assert.equal(s.axleSplit(c).r, 1);
+  s.fit(c, { id: "t", code: "M", life: 0.5, off: 0, tread: 0, colour: [1, 1, 1] });
+  assert.equal(c.tyreWearF, 0);
+  assert.equal(c.tyreWearR, 0);
 });
 
 // ── 4. Load ────────────────────────────────────────────────────────────────

@@ -632,6 +632,15 @@ free stops under caution; weather response. This is the phase where the feature
 becomes *drama* rather than a resource bar.
 
 **P4 — thermal.** Surface and bulk, warm-up, graining recovery, per-axle wear.
+*Shipped 2026-09-14 in full.* Cooling is **solved** per compound rather than
+authored: scaling only the heating by `warmRate` made a soft both warm faster
+and want less heat, so it equilibrated 19 °C above its own window — measured at
+128 °C against a 91 °C optimum. What still varies by compound is the time
+constant, which is exactly the "softs switch on in a lap, hards in three" §2.2
+describes. Per-axle landed as a **bias on one integration** (the two shares
+average to exactly 1) rather than a second model, so nothing downstream of
+`c.tyreWear` changed; `axleSplit` is a ratio against `gripMul` because `muBase`
+already carries the shared drop.
 
 **P5 — depth.** Stint strips in results, engineer suggestions, per-circuit
 severity authored from §2.2's real spread, career tyre allocation via ownership.
@@ -654,7 +663,9 @@ a characterization regeneration. P2–P5 are additive.
    P3 lands and the field races strategy properly. *Recommended: OFF.*
 4. **One scalar or per-axle?** Recommend **one scalar in P1**, per-axle in P4 with
    the thermal layer, since front-limited/rear-limited (§2.4) only means something
-   once temperature exists. *Recommended: scalar.*
+   once temperature exists. *Recommended: scalar.* — **DONE as recommended.**
+   P4's split is a bias on the one scalar rather than a second accumulator, which
+   keeps the strategy planner, the AI, the HUD and the pit call reading one number.
 5. **Pit lane (b) or (c)?** ~~Recommend **(b), the driveable `pitZone`**~~ —
    **SETTLED BY MEASUREMENT: (c).** (b) was built and measured badly on two
    circuits exactly as the fallback clause anticipated; see the errata in §5.2.

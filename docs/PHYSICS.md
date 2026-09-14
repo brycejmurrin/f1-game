@@ -630,14 +630,42 @@ it on. `js/race/reliability.js` ships off for the same reason.
   scale — `LOAD_REF` is measured off driven laps, not guessed.
 - **`tyreMu` enters at `muBase`, beside `marbleMu`** — the same external-scalar
   seam, on the same terms. Traction and braking take a smaller share of the drop.
-- **Pit loss is EMERGENT, not a constant.** The lane is driven: it is a real
-  stretch of tarmac beyond `hw`, inside the runoff that was already there, with
-  the driving boundary forced open across the window (`PitLane.openBarrier`, the
-  track engine's only job here — `hw` never moves). So the loss is lane length
-  over the limiter against racing the same stretch, plus the box time. Measured
-  **23.6 s at Monza**, inside the real 20-25 s band. Change the lane and the
-  strategy changes with it, which is what lets it vary by circuit the way real
-  strategy does.
+- **The stop is a STATE, not a place.** The first cut opened the driving
+  boundary across the pit window so the lane was real tarmac. It measured well
+  and broke two other things: lap distance jumped 250 m at Monaco, and a beached
+  car stopped reading as off-track and so was never rescued. The lane is
+  therefore longitudinal — arm a stop, and the limiter, the box and the release
+  are keyed to `pitState` and arc distance, with no geometry mutation at all
+  (`docs/research/TYRE-STRATEGY-DESIGN.md` §5.2 erratum). **Pit loss is still
+  emergent**: window length over the limiter against racing the same stretch,
+  plus the box. Measured **23.6 s at Monza**, inside the real 20-25 s band, and
+  it varies by circuit the way real strategy does.
+- **Temperature is TWO states, and the second one is not decoration.** A real
+  tyre fails in two opposite ways a single temperature cannot tell apart:
+  **graining** is SURFACE damage from cold or sliding rubber, costs a couple of
+  tenths, and drives itself clean again; **blistering** is BULK damage from a
+  core that got too hot, costs a second or more, and never recovers. One state
+  gives you one failure and therefore no decision — with two, backing off is a
+  real move. The carcass follows the surface on a ~35 s constant against the
+  surface's ~9 s, and that gap *is* the distinction. Optimum window is derived
+  from `life` rather than authored twice (soft ~91 °C, hard ~111 °C), and the
+  cooling coefficient is *solved* so each compound equilibrates near its own
+  window — scaling only the heating made a soft both warm faster and want less
+  heat, so it sat 19 °C above its window permanently. What still differs
+  between compounds is the time constant: softs switch on in about a lap, hards
+  in two or three.
+- **A fresh set comes out of blankets at 70 °C, below its window.** That is the
+  out-lap, and it is the counterweight the undercut needs — without it a stop is
+  free and therefore always correct, which is a worse game than the one with the
+  trade in it.
+- **Wear is per-axle, as a bias on one integration.** Braking loads the front
+  (and brake bias says how much), traction loads the rear; the two shares
+  average to exactly 1, so `c.tyreWear` — what the planner, the AI, the HUD and
+  the pit call all read — is untouched and only `muF`/`muR` differ. Worn fronts
+  stop the car turning in, worn rears let it step out: opposite complaints with
+  opposite answers, which is what makes a gone tyre something you can drive
+  around. `axleSplit` is a RATIO against `gripMul` because `muBase` already
+  carries the shared drop.
 - **The weather recourse now exists.** This section used to warn that a
   `dry→rain` arc "punishes a slick with no recourse… the first thing to revisit
   if rain feels unfair". Pitting IS the recourse. Acting on it automatically is

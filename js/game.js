@@ -4713,6 +4713,10 @@ function updateCar(c, dt, ranked) {
     // is what keeps tests/specs/physics-characterization.spec.js honest. It is
     // NOT arc-derived: wear integrates the forces this car actually made.
     const tyreMu = tyres.gripMul(c);
+    // …and the FRONT/REAR half of it. muBase already carries the shared drop,
+    // so this is the ratio each axle differs by: worn fronts stop the car
+    // turning in, worn rears let it step out. Exactly 1/1 with the setting off.
+    const tyreAx = tyres.axleSplit(c);
     // BRAKE BIAS spends the friction ellipse per AXLE: under braking the front
     // spends bb/BB_REF of the longitudinal budget and the rear (1−bb)/(1−BB_REF)
     // — forward bias uses up the front's circle (entry understeer), rearward
@@ -4735,8 +4739,8 @@ function updateCar(c, dt, ranked) {
     const bbSlipF = bb ? Math.sqrt(Math.max(0, 1 - afF * afF)) : 1;
     const bbSlipR = bb ? Math.sqrt(Math.max(0, 1 - afR * afR)) : 1;
     const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu * tyreMu;
-    const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP);
-    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55));
+    const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP * tyreAx.f);
+    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55) * tyreAx.r);
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays

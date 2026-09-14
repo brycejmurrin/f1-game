@@ -2895,3 +2895,17 @@ restores them. `js/agent/apex.js` +12 lines for the eye → orbit terms.
 Ceilings snapped to the new values with `ratchets.mjs --update` (game.js
 lines 9062 → 9068, codeLines 4745 → 4748; apex.js 2819 → 2831, codeLines
 2093 → 2102).
+
+## 2026-09-14 — P4: per-axle tyre wear reaches the bicycle model
+
+`js/game.js` lines 8633 → 8637 (+4). The tyre model gained a front/rear split
+and the grip seam had to receive it: one `tyres.axleSplit(c)` read beside the
+existing `tyres.gripMul(c)`, three comment lines saying why it is a RATIO
+rather than absolute axle grip, and the two `muF`/`muR` expressions each take
+one more factor. `codeLines` is unchanged at 4614 — the added lines are the
+comment plus the one const, and the two mu lines were edited in place. All of
+the weight is in `js/physics/tyre-model.js`, which is not ratcheted, exactly as
+the module's header argues it should be.
+
+Also lowered in the same pass: `js/track/tracks.js` 2442 → 2432, banked from an
+earlier change rather than paid for by this one.

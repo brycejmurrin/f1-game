@@ -57,12 +57,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/setup-tune.test.mjs",
   // The tyre model's rules (js/physics/tyre-model.js): OFF is a true no-op,
-  // life is a fraction of the SCHEDULED distance, and the catalog's life
-  // ladder is a usable strategy range. Pure numbers in a VM, ~0.15 s.
+  // life is a fraction of the SCHEDULED distance, the catalog's life ladder
+  // is a usable strategy range, the thermal layer warms/grains/blisters, and
+  // the axle shares average to 1. Pure numbers in a VM, ~0.25 s.
   "tests/unit/tyre-model.test.mjs",
   // ...and the pit lane's pure geometry: the window WRAPS the start/finish
-  // line, the lane is metres not a fraction of the lap, and openBarrier
-  // opens the pit side without moving hw. ~0.1 s.
+  // line, the lane is metres not a fraction of the lap, and the box is long
+  // enough to stop in without being a trap. ~0.1 s.
   "tests/unit/pit-lane.test.mjs",
   // ...and the field's strategy: the plan scales with the distance, a 20-car
   // grid does not converge on one plan, strategies mix, and the reactive
