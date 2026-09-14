@@ -7,12 +7,16 @@
 // that blowing through the box misses it, and that with TYRE WEAR off none of
 // it exists.
 //
-// THE LANE IS A STATE, NOT A PLACE. js/race/pit-lane.js records why at length:
-// a driveable lane out beyond the road edge was built and measured badly twice
-// (a forced boundary went through Monaco's buildings; fitting to existing room
-// found 2.4 m at Monza, because the scenery puts a pit WALL there). So there is
-// no lateral lane to assert on — what is asserted is the limiter, the stop, and
-// the fact that neither fires for a car that has not called one.
+// THE LANE IS A STATE, AND NOW ALSO A PLACE TO STOP — but not the place the
+// first two attempts went looking for. js/race/pit-lane.js records why at
+// length: a driveable lane out BEYOND the road edge was built and measured
+// badly twice (a forced boundary went through Monaco's buildings; fitting to
+// existing room found 2.4 m at Monza, because the scenery puts a pit WALL
+// there). The lane that exists is the outermost strip of the ROAD across the
+// window, painted rather than built, so it moves no boundary and costs no
+// geometry. What that buys is the thing this file could not assert before: the
+// box is IN the lane, so a car that stops on the racing line has not stopped in
+// its box. That rule is asserted below, in both directions.
 //
 // It deliberately does NOT re-measure pit loss. That is a lap-time sample
 // costing minutes of SwiftShader per run; it was measured while the lane was
@@ -95,7 +99,20 @@ test.describe("pit lane", () => {
       for (let i = 0; i < 60 * 30; i++) { A.setInput({ steer: 0, throttle: true, brake: false }); A.step(1 / 60, 1); }
       const wornBefore = A.tyres().wear;
 
-      A.jump(0.93, 30, 0); A.aim(0);
+      // INTO THE LANE, not onto the racing line: the box is a place now, and
+      // info().laneX is where it is at this car's own arc position (the lane
+      // centre moves three metres across the calendar, so a literal would be a
+      // Monza-only test).
+      //
+      // READ IT FROM INSIDE THE WINDOW. laneX is null outside it — outside it
+      // there is no lane to be in — and 0.93 of the lap is NOT inside it: the
+      // window opens 320 m before the line, which at Monza is 0.945. 0.99 is
+      // in the window on every circuit in the game (it would take a 32 km lap
+      // for 1% of it to exceed 320 m), and it is the box's own end of the lane,
+      // which is the position whose width actually matters.
+      A.jump(0.99, 30, 0);
+      const laneX = A.pit().laneX;
+      A.jump(0.93, 30, laneX); A.aim(0);
       A.pit({ arm: true });
       let sawBox = false, boxTicks = 0; const states = [];
       for (let i = 0; i < 60 * 60; i++) {
@@ -123,6 +140,43 @@ test.describe("pit lane", () => {
     expect(out.after.wear).toBeLessThan(out.wornBefore);
     expect(out.after.wear).toBeLessThan(0.02);
     expect(out.after.stints).toBe(2);
+  });
+
+  test("stopping on the racing line is not stopping in the box", async ({ page }) => {
+    // The other half of "the box is a place": a car that does everything else
+    // right — calls the stop, takes the limiter, brakes to a halt on the mark —
+    // but halts on the racing line has not reached its box, because the crew is
+    // not standing there. Before the lane was painted there was nowhere else to
+    // be, and a stopped car sat in the middle of the road while the field went
+    // around it. This is the assertion that stops that coming back.
+    await armedAt(page);
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      // Inside the window, where laneX has an answer — see the note in the
+      // stop test above for why 0.93 does not.
+      A.jump(0.99, 30, 0);
+      const lane = A.pit().laneX;
+      const drive = (x) => {
+        A.jump(0.93, 30, x); A.aim(0);
+        A.pit({ arm: true });
+        for (let i = 0; i < 60 * 40; i++) {
+          const p = A.pit();
+          const ps = A.physState();
+          const togo = p.inWindow ? p.boxM - p.atM : 1e9;
+          const want = togo > 0 ? Math.min(p.limitKph / 3.6, Math.sqrt(2 * 5 * togo)) : 0;
+          A.setInput({ steer: 0, throttle: ps.speed < want, brake: ps.speed > want * 1.05 });
+          A.step(1 / 60, 1);
+          if (A.pit().state === "out") break;
+        }
+        return A.pit();
+      };
+      const onLine = drive(0);
+      const inLane = drive(lane);
+      return { lane, onLine, inLane };
+    });
+    expect(out.lane, "the lane must resolve to a position to aim at").toBeTruthy();
+    expect(out.onLine.stops, "a car stopped on the racing line was serviced").toBe(0);
+    expect(out.inLane.stops, "the same car stopped IN the lane was not serviced").toBe(1);
   });
 
   test("blowing through the box misses the stop", async ({ page }) => {

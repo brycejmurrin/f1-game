@@ -4494,6 +4494,10 @@ function updateCar(c, dt, ranked) {
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
       rubClamp = true;
     }
+    // PIT LANE, last so nothing can undo it: a car serving a stop drives the
+    // LANE, not the racing line. pits.laneX returns its argument untouched for
+    // every car that is not in there (PitLane, laneX — and the gap it closes).
+    if (pits) desiredX = pits.laneX(c, hw, desiredX);
     const err = desiredX - c.x;
     const vAbs = Math.abs(c.speed);
     // A contact, a rub clamp or a dig-out is an EMERGENCY: the position loop
