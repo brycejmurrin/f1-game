@@ -596,6 +596,14 @@ Recorded so they are not re-litigated in six months.
   for six years. Add to Home Screen is the answer and is now the default path.
 - **Force feedback as a headline feature.** Chromium-only, per-vendor, and a
   project in itself. The axis-mapping wizard captures most of the value.
+- **An on-screen LOOK BACK button.** The bind stays on the keyboard (B) and the
+  pad (R3) — it is a standard racing control and costs nothing there. The DOCK
+  button was removed on request (2026-09-14) after the deploy merge put it in the
+  same thumb column as another session's PIT, making `#grp-taps` five buttons
+  tall on a phone. Of the five, a glance over the shoulder is the one that least
+  earns a permanent seat: it is momentary, it is not needed to complete a lap,
+  and it competes with BOOST/OT/AERO/PIT, all of which are. If it ever returns,
+  it should be a held gesture or share a slot, not a sixth circle.
 - **A single larger pad deadzone to paper over stick drift.** It punishes good
   hardware to accommodate worn hardware. Calibration plus saturation is the
   shape that works.
