@@ -867,3 +867,40 @@ test("the grace does not disturb who the rule elects between two AI cars", () =>
   assert.equal(A.sideYieldsA(0, 3, 1), true, "level: the outer car concedes");
   assert.equal(A.sideYieldsA(0, 1, 3), false, "level: the inner car holds");
 });
+
+test("the grace arms only when it is OUR aim intruding, and only inside the band", () => {
+  const A = load();
+  const dt = 1 / 60, G = A.humanYieldGrace();
+  // Not alongside at all -> nothing to concede, and the timer is cleared.
+  assert.equal(A.humanYieldT(5, false, false, true, true, dt), 0);
+  // Alongside another AI -> the normal election already covers it.
+  assert.equal(A.humanYieldT(5, true, false, false, true, dt), 0);
+  // The rule already elected US -> we are yielding on the normal path.
+  assert.equal(A.humanYieldT(5, true, true, true, true, dt), 0);
+  // THE REGRESSION collision-contact-vm caught. A player leaning on an AI that
+  // is holding its own line is a RUB, not a free lane: with `intruding` false
+  // the timer holds where it is and never reaches the grace on its own.
+  assert.equal(A.humanYieldT(0, true, false, true, false, dt), 0,
+    "a car that is not steering into anyone must not arm the takeover");
+  // ...and the case the fix is for: alongside a human, not elected, our aim is
+  // going through them. This is the only combination that accumulates.
+  assert.ok(A.humanYieldT(0, true, false, true, true, dt) > 0);
+  // It takes the whole grace, not one frame.
+  let t = 0;
+  for (let i = 0; i < Math.round(G / dt) - 2; i++) t = A.humanYieldT(t, true, false, true, true, dt);
+  assert.equal(A.humanYieldTakes(t), false, `took the role after ${t}s, before the ${G}s grace`);
+  for (let i = 0; i < 4; i++) t = A.humanYieldT(t, true, false, true, true, dt);
+  assert.equal(A.humanYieldTakes(t), true, "never took the role at all");
+});
+
+test("the intrusion band leaves a settled pair settled", () => {
+  const A = load();
+  // The band is why a pair sitting AT the clean gap is not perpetually
+  // re-arming: traced on the start straight, an AI that had already conceded
+  // (x 1.19 -> 0.58, gap exactly on CLEAR) drifted 0.08 m back toward its line
+  // and that read as a fresh intrusion. The band must be a real distance and
+  // must stay under the gap it is measured inside.
+  const band = A.humanYieldBand();
+  assert.ok(band > 0.05 && band < A.minLatGap(5, false),
+    `band ${band} must be a real margin inside the clear gap`);
+});

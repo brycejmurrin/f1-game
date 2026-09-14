@@ -4483,7 +4483,11 @@ function updateCar(c, dt, ranked) {
     let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x);
     // ELECTING THE HUMAN IS ELECTING NOBODY — rule and measurement in
     // AiDrive.humanYieldGrace; this end only carries the per-car timer.
-    c.hYieldT = AiDrive.humanYieldT(c.hYieldT, alongClose, yieldMine, !!(alongO && alongO.human), dt);
+    // Are WE steering into them (aim vs where we already are), and is there
+    // still room left to concede? Both halves matter — AiDrive.humanYieldT.
+    const intruding = alongClose && Math.abs(alongDx) < CLEAR - AiDrive.humanYieldBand()
+      && (alongDx <= 0 ? desiredX < c.x : desiredX > c.x);
+    c.hYieldT = AiDrive.humanYieldT(c.hYieldT, alongClose, yieldMine, !!(alongO && alongO.human), intruding, dt);
     if (!yieldMine && AiDrive.humanYieldTakes(c.hYieldT)) yieldMine = true;
     if (yieldMine) {
       desiredX = alongDx <= 0 ? Math.max(desiredX, alongO.x + CLEAR) : Math.min(desiredX, alongO.x - CLEAR);

@@ -783,13 +783,33 @@ const AiDrive = (function () {
   // 0.3 s is about a driver's reaction time and roughly half the shortest
   // AI-AI alongside episode the bench sees.
   function humanYieldGrace() { return 0.3; }
+  // Metres inside the clear gap before a lean counts as one. Matches the
+  // steering deadzone the rub clamp already works to, so a pair sitting AT
+  // the gap is settled rather than perpetually re-arming.
+  function humanYieldBand() { return 0.3; }
   // The grace timer itself, so the RULE lives here and game.js only carries the
   // per-car state (the ownership split at the top of this file). Counts only
   // while we are alongside a human the rule has NOT given us to yield to;
   // anything else resets, so separating ends it with no special case.
-  function humanYieldT(prevT, close, aiElected, otherHuman, dt) {
-    if (!close) return 0;
-    if (aiElected || !otherHuman) return prevT;
+  // `intruding` is the half that keeps this from being a free lane, and it is
+  // the difference between the two directions of the same geometry:
+  //
+  //   the AI's own target is inside the clear gap   -> IT is leaning on a
+  //     player who has nowhere to go. That is the reported bug, and the AI
+  //     concedes once the grace is up.
+  //   the AI is holding its line and the PLAYER drives into it -> the AI is
+  //     not intruding on anything. It holds, and the result is a rub.
+  //     (collision-contact-vm's "leaning on an AI wheel to wheel is a rub, not
+  //     a brake" pins exactly this, and caught the first cut of this function,
+  //     which conceded in BOTH directions — a player could shove any AI off
+  //     its line by leaning on it for a third of a second.)
+  //
+  // Without it the fix for "the AI drives into my side" silently becomes "the
+  // AI yields to any contact", which is the pushover outcome, not this one.
+  function humanYieldT(prevT, close, aiElected, otherHuman, intruding, dt) {
+    if (!close || !otherHuman) return 0;
+    if (aiElected) return 0;          // the normal path already has it; start clean
+    if (!intruding) return prevT;     // their move, not ours — hold, do not arm
     return prevT + dt;
   }
   function humanYieldTakes(t) { return (t || 0) > humanYieldGrace(); }
@@ -935,7 +955,7 @@ const AiDrive = (function () {
     defendPull, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
-    otWant, passTarget, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldT, humanYieldTakes,
+    otWant, passTarget, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
