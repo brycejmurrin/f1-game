@@ -113,8 +113,37 @@ const PitLane = (function () {
   // buildProps places the grandstand at -1 and the pit building at +1), so that
   // is the default side. A circuit may say otherwise via `def.pitZone.side`.
   const PIT_SIDE = 1;
-  const COMMIT_FRAC = 0.70;   // of the half-width, toward the pit side
-  const COMMIT_M = 120;       // ...and only this far into the window
+  // THE LANE IS THE OUTERMOST STRIP OF THE ROAD across the window, separated
+  // from the racing surface by a painted line. It is not a separate road behind
+  // the wall, and that is a decision rather than a shortcut: this track engine
+  // is one ribbon with one arc coordinate, so a road that branches off and
+  // rejoins cannot be expressed — which is why both earlier attempts died (see
+  // the header). On-road costs no geometry, moves no boundary and leaves the
+  // car on tarmac, so neither failure can return. What it does not give is
+  // garages, a crew, or a lane behind the wall.
+  //
+  // MUST MATCH PIT_LANE_W in the three lit shaders (glsl-lit.js, wgsl-chunks.js,
+  // tsl-lit.js) — the painted line IS the lane edge, and a driver steering at
+  // what they can see has to land inside what the model calls the lane.
+  // tests/unit/pit-lane.test.mjs asserts all four agree.
+  // A FLAT 3.2 m LANE IS WRONG ON THE NARROWEST CIRCUIT, and that was measured
+  // rather than guessed: across all 51 built circuits the pit-window half-width
+  // runs 4.93 m (Monaco) to 8.0 m (Spa/Silverstone/Shanghai). At Monaco a flat
+  // lane takes 32% of a 9.9 m road and leaves 6.7 m to race on — on the one
+  // circuit where overtaking is already impossible. Everywhere else it leaves
+  // 8.8 m or more.
+  //
+  // So the lane yields to the RACING SURFACE rather than the other way round:
+  // never leave less than MIN_RACING, which is two 2 m cars with a metre
+  // between them and a metre either side. Only Monaco is narrowed (to 2.86 m);
+  // every other circuit keeps the full 3.2 m.
+  const LANE_W = 3.2;
+  const LANE_MIN = 2.4;      // a car is 2.0 m — below this it is not a lane
+  const MIN_RACING = 7.0;    // two cars side by side, with room
+  function laneWidth(hw) {
+    return Math.min(LANE_W, Math.max(LANE_MIN, 2 * hw - MIN_RACING));
+  }
+  const COMMIT_M = 120;       // commit only this far into the window
   const COMMIT_S = 0.55;      // held, in seconds
   const COMMIT_V = 0.10;      // of the speed envelope: a parked car is not pitting
 
@@ -190,6 +219,50 @@ const PitLane = (function () {
       return throughM(zz, zz.sBox, t.total) - throughM(zz, c.s, t.total);
     }
 
+    /** Metres from this car FORWARD to the pit entry, 0 once inside the window. */
+    function toEntry(c) {
+      const zz = z(), t = G.track;
+      if (!zz || !t || !c) return -1;
+      if (inWindow(zz, c.s, t.total)) return 0;
+      const d = ((zz.sIn - c.s) % t.total + t.total) % t.total;
+      return d;
+    }
+
+    // THE CUE, because a gesture nobody can see is not a control. With no pit
+    // button, the window has to announce itself: how far to the entry, which way
+    // to go, and what the car is doing once it is in there. Returned as data so
+    // the HUD stays a painter and this stays the one place that knows the rules.
+    //
+    // It is NOT shown every lap. A permanent PIT prompt is wallpaper — the
+    // driver stops reading it, which is worse than no cue. It appears when a
+    // stop is actually worth making: the set is meaningfully used, or the tread
+    // is wrong for the conditions, or a caution is out and a stop is cheap.
+    const CUE_M = 550;          // start counting down this far out
+    const CUE_WEAR = 0.55;      // …or not at all, on a set with life left in it
+    function cue(c) {
+      if (!enabled() || !c || !c.local || c.retired || c.finished) return null;
+      const st = c.pitState || "none";
+      if (st === "box") return { phase: "box", text: "STOP", dist: 0 };
+      if (st === "lane") return { phase: "lane", text: Math.round(limit() * 3.6) + " LIMIT", dist: 0 };
+      if (st === "out") return null;
+      const d = toEntry(c);
+      if (d < 0 || d > CUE_M) return null;
+      // Worth making? Any ONE of: a used set, the wrong tread, a free stop.
+      const wear = G.tyres.spent(c);
+      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather);
+      const caution = G.cautionInfo ? G.cautionInfo() : null;
+      const free = !!caution && caution.level >= 2 && wear >= 0.35;
+      if (!(wear >= CUE_WEAR || wrongTread || free)) return null;
+      if (c.pitArmed) return { phase: "armed", text: "BOX", dist: 0 };
+      // Inside the entry road: say GO, not a distance — the distance is zero and
+      // what the driver needs now is the direction.
+      if (d === 0 && throughM(z(), c.s, G.track.total) <= COMMIT_M) {
+        return { phase: "enter", text: "PIT ENTRY", dist: 0 };
+      }
+      if (d === 0) return null;   // in the window but past the entry road
+      return { phase: "near", text: "PIT " + Math.round(d) + "m", dist: d };
+    }
+
     /** A stopping envelope onto the box: how fast a car may be HERE and still be
      *  stopped by the time it arrives. AI-ONLY by contract — game.js applies it
      *  only to `!c.human`, because braking onto the mark is the player's job. */
@@ -223,12 +296,28 @@ const PitLane = (function () {
     // COMMIT_* block for which. Order matters only for cost: the cheap
     // rejections come first so the spline sample is reached by almost nobody.
     const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+    /** The lane's inner edge — the painted line — as a lateral x. */
+    function laneEdge(hw, side) { return (hw - laneWidth(hw)) * side; }
+    /** The lane's lateral CENTRE: where the box is and where a car in it sits. */
+    function laneCentre(hw, side) { return (hw - laneWidth(hw) * 0.5) * side; }
     function committing(c, zz, L) {
       if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
       if (!((c.speed || 0) > G.vTop() * COMMIT_V)) return false;
       if (throughM(zz, c.s, L) > COMMIT_M) return false;
       Tracks.sample(G.track, c.s, _smp);
-      return (c.x || 0) * zz.side >= (_smp.hw || 0) * COMMIT_FRAC;
+      // INSIDE THE PAINTED LANE, not past an abstract fraction of the road. The
+      // commitment test and the stripe a driver can see are now the same line,
+      // which is the whole point of painting it: before this, the gesture asked
+      // you to aim at nothing.
+      const hw = _smp.hw || 0;
+      return (c.x || 0) * zz.side >= laneEdge(hw, zz.side) * zz.side;
+    }
+
+    /** The four numbers the lit shaders paint the lane from, or null. */
+    function laneUniform() {
+      const zz = z(), t = G.track;
+      if (!enabled() || !zz || !t) return null;
+      return [zz.sIn, zz.lenM, zz.side, t.total];
     }
 
     /** How far through the commitment dwell this car is, 0-1. The HUD's cue. */
@@ -452,16 +541,24 @@ const PitLane = (function () {
         // the line into the pits right now. There is no button; this is it.
         commit: +commitFrac(car).toFixed(3),
         side: zz.side,
+        // The four numbers the lit shaders paint the lane from, exactly as the
+        // frame carries them: (entry s, window length, side, lap length). Null
+        // means no lane is armed and nothing is painted — which is the first
+        // thing to check when the lane is invisible.
+        lane: laneUniform(),
+        laneEdgeX: +laneEdge(7, zz.side).toFixed(2),   // at a nominal 7 m half-width
       };
     }
 
     return { zoneOf: () => z(), limit, toBox, approachV, inLane, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
-             pickFor, ownedTyres, committing, commitFrac, resetCommit };
+             pickFor, ownedTyres, committing, commitFrac, resetCommit, toEntry, cue,
+             laneEdge, laneCentre, laneUniform };
   }
 
   return { create, zoneOf, inWindow, throughM,
            ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
-           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_FRAC, COMMIT_M, COMMIT_S, COMMIT_V };
+           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V,
+           CUE_M: 550, CUE_WEAR: 0.55, LANE_W, LANE_MIN, MIN_RACING, laneWidth };
 })();
 Object.freeze(PitLane);
