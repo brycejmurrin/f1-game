@@ -22,6 +22,11 @@ async function dataReady(page) {
   // the waitForFunction below, three links away from the cause. index.html has
   // always loaded mat4.js before js/data/*, so the app was never affected.
   // The ordering is now asserted: HARD_EDGES carries mat4.js -> telemetry.js.
+  // dom.js is the same trap, one module along: hub.js aliases `const el =
+  // Dom.el` at EVAL time (hub.js:40), so without it hub.js throws and DataHub
+  // is stranded — the identical bare `ReferenceError: DataHub is not defined`.
+  // telemetry-compare's harness has loaded dom.js since that alias landed;
+  // this one was missed, so every test here that calls dataReady() was red.
   // log.js too, same trap as telemetry-compare's harness: hub.js's open() and
   // api.js's warnFetchFail log through the Log global (index.html loads it
   // before everything); this standalone harness threw "Log is not defined"
@@ -30,6 +35,7 @@ async function dataReady(page) {
   await page.addScriptTag({ url: "/js/core/log.js" });
   await page.addScriptTag({ url: "/js/ui/modal.js" });
   await page.addScriptTag({ url: "/js/core/mat4.js" });
+  await page.addScriptTag({ url: "/js/ui/dom.js" });
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.addScriptTag({ url: "/js/data/telemetry.js" });
   await page.addScriptTag({ url: "/js/data/export.js" });
@@ -75,7 +81,6 @@ async function installPickerApi(page, options = {}) {
     F1API.schedule = () => Promise.resolve([]);
     F1API.driverStandings = () => Promise.resolve([]);
     F1API.constructorStandings = () => Promise.resolve([]);
-    F1API.lastRace = () => Promise.resolve(null);
     F1API.sessionResult = () => Promise.resolve([]);
     F1API.latestSession = () => Promise.resolve(sessions[0]);
     F1API.meetings = (year) => {

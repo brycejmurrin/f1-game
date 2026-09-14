@@ -687,7 +687,6 @@ const WGX = (function () {
     let softPresentTex = null, softPresentView = null;
     let _softW = 0, _softH = 0;
     let _softImg = null; // pooled ImageData for soft-present CPU blit
-    let _softBlitGen = 0;
     let _softBlitSeq = 0;
     let _softBlitShown = 0;
     let _softDisplayPending = false, _softDisplayEpoch = 0;
@@ -1074,7 +1073,8 @@ const WGX = (function () {
     let trackLightSBO, chunkIdxSBO;   // per-chunk lamps: full baked set + concat index table
     let frameBindGroup, drawBindGroup, skyBindGroup;
     let skyPipeline, blitPipeline, linearSampler, envCubeSamp;
-    const _litPipelines = new Map();
+    const _litPipelines = new Map();   // depthBias constant -> slope -> packed flags -> pipeline
+    const _litPipelineKeys = [];       // one readable "blend|dbl|noAW|samples|dbC|dbS|decal" per minted variant (litPipelineStats)
     // Size of the variant cache at the first present() — the boundary between
     // "built during boot" and "built while driving".
     let _pipeAtFirstPresent = -1;
@@ -1083,7 +1083,6 @@ const WGX = (function () {
     let shadowTex = null, shadowView = null, shadowSampler = null;
     let envCubeView = null, ssrView = null;   // env-probe cube + SSR placeholders until their passes run
     let _ssrReady = false;   // SSR flips true once its pass runs (env reflection is analytic-sky — no probe gate needed)
-    let _frameReflect = 0;   // wet-road SSR strength (== GLX present opts.reflect). Still packed into next begin() for debug; consume is same-frame in COMPOSITE.
     //   so lacquered car paint mirrors the actual surroundings when the CAR ENV
     //   REFLECTION tuner is on. Off by default (carEnvCube=0 ⇒ analytic sky only). ──
     const ENV_SIZE = 64;
@@ -1105,7 +1104,7 @@ const WGX = (function () {
     let envDepthTex = null, envDepthView = null;
     let _envFrameBG = null;                    // frame group with binding4 = placeholder (used WHILE rendering the cube)
     let _activeFrameBG = null;                 // frame group draw()/drawChunked bind (main = real cube once live; env = placeholder)
-    let _envProbeLive = false, _envFacesMask = 0, _envStr = 0;   // _envStr = carEnvCube once a full cycle is captured
+    let _envProbeLive = false, _envFacesMask = 0;
     let _envEncoder = null;                    // the env face's own command encoder (submitted in envFaceEnd)
     // Saved game-frame fields while a probe face is open (GLX envFaceBegin/End).
     let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -1136,7 +1135,7 @@ const WGX = (function () {
     let lampShadowTex = null, lampShadowView = null, lampShadowUBO = null, lampShadowG0BindGroup = null;
     let _lampShadowArmed = false, _lampArms = 0, _lampIdx = -1;
     const lampShadowLVPData = new Float32Array(16);
-    let matPlaceTex = null, matPlaceView = null;
+    let matPlaceTex = null;
     let matAlbedoView = null, matNormalView = null, matArraySamp = null;
     // Placeholder views stay alive for the device lifetime; pack tokens in
     // _matOwned* are destroyed on replace/unload (GLX deleteTexture parity).
@@ -1964,12 +1963,18 @@ const WGX = (function () {
       const db = (opts && opts.depthBias && opts.depthBias.length >= 2) ? opts.depthBias : null;
       const dbC = db ? Math.round(db[0]) : 0;
       const dbS = db ? Math.round(db[1]) : 0;
-      // String key. The packed-int key truncated the bias with |0 and gave
-      // (bias + 32) an 8-bit lane, so any |bias| >= 32 wrapped into its
-      // neighbour's lane and two biases could share one pipeline.
-      const key = (blend ? 1 : 0) + "|" + (dbl ? 1 : 0) + "|" + (noAW ? 1 : 0) + "|" + samples
-                + "|" + dbC + "|" + dbS + "|" + (decal ? 1 : 0);
-      let p = _litPipelines.get(key);
+      // NESTED key: dbC -> dbS -> packed flags. A single packed int truncated
+      // the bias with |0 and gave (bias + 32) an 8-bit lane, so any |bias| >= 32
+      // wrapped into its neighbour's lane and two biases could share one
+      // pipeline; a Map level per bias cannot collide at any value. The string
+      // key that fixed that was rebuilt and discarded on every one of the ~320
+      // draws in a frame — the leaf lookup here allocates nothing on a hit.
+      const flags = (blend ? 1 : 0) | (dbl ? 2 : 0) | (noAW ? 4 : 0) | (decal ? 8 : 0) | (samples << 4);
+      let byS = _litPipelines.get(dbC);
+      if (!byS) { byS = new Map(); _litPipelines.set(dbC, byS); }
+      let byF = byS.get(dbS);
+      if (!byF) { byF = new Map(); byS.set(dbS, byF); }
+      let p = byF.get(flags);
       if (p) return p;
       const target = {
         format: SCENE_FORMAT,
@@ -2011,7 +2016,11 @@ const WGX = (function () {
         depthStencil,
         multisample: { count: samples },
       });
-      _litPipelines.set(key, p);
+      byF.set(flags, p);
+      // Readable variant list for litPipelineStats, built on the MISS path only
+      // (nine of these exist for the life of the device).
+      _litPipelineKeys.push((blend ? 1 : 0) + "|" + (dbl ? 1 : 0) + "|" + (noAW ? 1 : 0) + "|" + samples
+                          + "|" + dbC + "|" + dbS + "|" + (decal ? 1 : 0));
       return p;
     }
 
@@ -2159,7 +2168,6 @@ const WGX = (function () {
     }
     function _softBlitNotify(seq) {
       _softBlitShown = seq;
-      _softBlitGen = seq;
       const keep = [];
       const ws = _softPresentWaiters.splice(0);
       for (let i = 0; i < ws.length; i++) {
@@ -2198,7 +2206,7 @@ const WGX = (function () {
       };
     }
     function awaitSoftPresent(timeoutMs) {
-      if (!_softGpu || !_displayCtx) return Promise.resolve(_softBlitGen);
+      if (!_softGpu || !_displayCtx) return Promise.resolve(_softBlitShown);
       // A waiter needs a blit encoded at/after the current scene generation
       // (bumped by snapCam), not a second encode after that blit. Requiring
       // seq > _softBlitSeq timed out when the chase map was already in flight.
@@ -3432,18 +3440,16 @@ const WGX = (function () {
       // so mist is 0 unless the frame actually requests it, not an absolute knob.
       d[78] = (f.groundMist != null ? f.groundMist : 0) * (T && T.mistDensity != null ? T.mistDensity : 1);
       d[79] = (T && T.mistHeight  != null) ? T.mistHeight  : 0.30;  // MIST HEIGHT
-      // params4 (floats 80..83): pcssPen, shadowTintAmt, carReflect, ssrStrength.
-      // ssrStrength is GATED on the SSR pass having bound real resources
-      // (_ssrReady below); until then the frame group holds a 1×1 placeholder
-      // and it reads 0. carReflect needs no such gate — its reflection term is
-      // analytic-sky (no probe resource to wait for).
+      // params4 (floats 80..83): pcssPen, shadowTintAmt, then TWO RESERVED lanes.
+      // .z (carReflect) and .w (ssrStrength) stay 0 and are not packed: SSR is
+      // consumed SAME-FRAME in COMPOSITE (wgsl-post.js) and the car reflection is
+      // analytic-sky / the env cube (params5.x), so no WGSL reads params4.zw.
+      // Do not re-pack either without a shader that actually samples it.
       // pcssPen is the GLX PENUMBRA-RATE knob (default 80). WGSL findBlocker
       // uses the same `clamp((refD-zb)*params4.x,0,1)` as GLX sampleShadow —
       // pack the raw knob, do not remap.
       d[80] = (T && T.pcssPen != null) ? T.pcssPen : 80;
       d[81] = (T && T.shadowTintAmt != null) ? T.shadowTintAmt : 0.0;
-      d[82] = (T && T.carReflect != null) ? T.carReflect : 0.0;
-      d[83] = _ssrReady ? _frameReflect : 0.0;   // wet-road SSR strength = present opts.reflect (GLX), 0 until the SSR pass is ready
       // params5 (floats 84..87): envProbeStr — the REAL cube probe's strength, live only
       // after a full 6-face capture (_envProbeLive) and driven by the CAR ENV REFLECTION
       // tuner (carEnvCube). 0 keeps Block 7 on the cheap analytic-sky reflection.
@@ -4253,6 +4259,11 @@ const WGX = (function () {
       // SSR already honour on LITE. Desktop keeps the live mirror.
       if (_lost || WGX_MINIMAL || WGX_LITE || _envInitFailed || !skyPipeline) return null;
       if (!envCubeTex) envInit();
+      // envInit() LATCHES and returns normally on an allocation failure, so
+      // re-check before anything is mutated: falling through handed a null
+      // face view to beginRenderPass, and the throw escaped past envFaceEnd —
+      // leaving frame.viewProj/eye/cullDist on the probe camera for good.
+      if (!envFaceViews) return null;
       _passSamples = 1;
       const F = ENV_FACES[face];
       _envTgt[0] = eye[0] + F[0][0]; _envTgt[1] = eye[1] + F[0][1]; _envTgt[2] = eye[2] + F[0][2];
@@ -4463,7 +4474,7 @@ const WGX = (function () {
     function present(opts) {
       // Snapshot the variant cache at the FIRST present: everything after this
       // was compiled while the player was watching. See litPipelineStats.
-      if (_pipeAtFirstPresent < 0) _pipeAtFirstPresent = _litPipelines.size;
+      if (_pipeAtFirstPresent < 0) _pipeAtFirstPresent = _litPipelineKeys.length;
       // Car / lamp shadow maps must be re-armed by a fresh *Begin every frame
       // (GLX parity: SH.lampArmed is snapshotted then cleared in glx/post.js
       // present). LIT already consumed the flags in this frame's _writeFrame;
@@ -4539,10 +4550,6 @@ const WGX = (function () {
         } catch (_) { /* SSAO then samples uncleared resolved depth; AO stays white */ }
       }
       _passSamples = 1;
-      // Capture wet-road SSR strength (game.js po.reflect). COMPOSITE consumes
-      // this frame's ssrTex in the same present(); _frameReflect still feeds
-      // next begin() params4.w for anything that still reads the LIT lane.
-      _frameReflect = (o.reflect != null ? o.reflect : 0);
       const exposure = o.exposure != null ? o.exposure : 1.0;
 
       // Fallback: post disabled / targets absent -> tonemap blit.
@@ -5402,8 +5409,9 @@ const WGX = (function () {
       const sc = batch.srcColors;
       let n = 0;
       for (let ci = 0; ci < kN; ci++) {
-        const c = cs[ks[ci]];
-        for (const i of c.idx) {
+        const idx = cs[ks[ci]].idx;
+        for (let j = 0, jn = idx.length; j < jn; j++) {
+          const i = idx[j];
           // No src.subarray — per-instance views were GC on Vegas-scale batches.
           const so = i * 16, dOff = n * 20;
           for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
@@ -5641,7 +5649,7 @@ const WGX = (function () {
       _lineU.set(frameVPGpu, 0);
       _lineU[16] = (opts && opts.speed) || 0;
       _lineU[17] = opts && opts.cornersOnly ? 1 : 0;
-      _lineU[18] = (opts && opts.str) || 1.6;
+      _lineU[18] = 1.6;                     // emissive strength: a constant, no producer sends one
       _lineU[19] = opts && opts.palette ? 1 : 0;   // colour-blind palette (params.w)
       _lineU[20] = (opts && opts.opacity) || 1;    // LINE OPACITY (params2.x)
       device.queue.writeBuffer(lineUBO, 0, _lineU);
@@ -6097,6 +6105,13 @@ const WGX = (function () {
       freeMesh,
       freeChunkedMesh,
       freeTexture,
+      // texCensus: GLX-only. Declared ABSENT rather than left off, because
+      // game.js installs a backend by descriptor-copy onto GLX and an absent
+      // NAME would keep GLX's own function — which would then run against a
+      // null gl. This makes `if (gfx.texCensus)` answer honestly, and
+      // __apex.texCensus() report supported:false instead of a measured zero.
+      // Implementing it here is follow-up work, not a silencer to remove.
+      texCensus: undefined,
 
       begin,
       present,
@@ -6230,8 +6245,8 @@ const WGX = (function () {
       // without re-running it. The three other candidates and their numbers:
       // docs/PERF-FINDINGS.md §2x.
       litPipelineStats: () => ({
-        count: _litPipelines.size,
-        keys: [..._litPipelines.keys()],
+        count: _litPipelineKeys.length,
+        keys: _litPipelineKeys.slice(),
         firstFrameCount: _pipeAtFirstPresent,
       }),
       softPresent: () => !!_softGpu,

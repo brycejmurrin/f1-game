@@ -80,19 +80,30 @@ three's retained counts on the TLX leg only.
 - Add: a new texture-census suite under `tests/unit/` (this plan creates it;
   it is deliberately not named as a live path until it exists)
 
-- [ ] Write the test first: a stub GL context, three textures of known size,
-      one deleted; assert the census reports the surviving two and the exact
-      byte total including the 1.333 mip factor.
-- [ ] Confirm it fails (no census exists).
-- [ ] Implement the accounting in GLX and the `texCensus()` hook.
-- [ ] Confirm the test passes, and that a census with NO textures reports zero
-      rather than `undefined` — `notes/PERF-FINDINGS.md` §2i/§2j are both about
-      instruments that could not say "I measured nothing".
-- [ ] Take the reading: `node tools/shot/apex-eval.mjs montreal "a.texCensus()"`
-      on a full grid. Record the livery share in `notes/PERF-FINDINGS.md`.
+- [x] Write the test first — `tests/unit/tex-census.test.mjs`, against the REAL
+      glx.js through `tests/helpers/glx-mock.mjs`. Asserts the EXACT mip-chain
+      sum, not `w*h*4*1.333`: that rule assumes a square texture and the livery
+      atlas is 1024×1280, so the test also asserts the rule-of-thumb answer is
+      NOT what the census returns.
+- [x] Confirm it fails (`texCensus is not a function`, 7/7 red).
+- [x] Implement the accounting in GLX and the `texCensus()` hook.
+- [x] Confirm it passes, including: an empty census reports 0 rather than
+      `undefined`, a freed texture leaves the ledger, and a lost context reports
+      nothing resident instead of the last number it held.
+- [x] Declare `texCensus: undefined` in WGX and TLX. Not a silencer — game.js
+      installs a backend by descriptor-copy onto GLX, so an absent NAME would
+      keep GLX's own function and run it against a null `gl`.
+- [x] Take the reading. **CONFIRMED, montreal, full grid, GLX:**
 
-**Done when:** the 147 MB is confirmed, refuted, or replaced by the real
-number, and that number is in the ledger.
+```
+content2D      153,791,000 B   146.67 MB   22 livery atlases, 1024x1280
+materialArray   11,883,816 B    11.33 MB   baked albedo + normal arrays
+                               158.00 MB   total counted
+```
+
+**Done.** The estimate held (147 → 146.67, 11.9 → 11.33) and the liveries are
+**10.6× the packed world VBO** at 13.8 MB on a mean circuit. Recorded in
+`notes/PERF-FINDINGS.md` §2v.
 
 ### Task 2: A desktop AI livery tier — GATED ON TASK 1
 
@@ -100,25 +111,80 @@ Mobile already downshifts (512 for the player, 256 for AI; `liverytex.js`
 ~3041). Desktop gives all 22 cars the full 1024×1280. An AI car at racing
 distance is a few hundred pixels; at 512 its atlas costs a quarter as much.
 
-Indicative only — the real figures come from Task 1: 21 AI cars at 512 plus the
-player at full would be ~42 MB against ~147.
+**Now backed by Task 1's measurement, not an estimate.** 22 atlases really are
+resident and really do cost 146.67 MB. 21 AI cars at 512 plus the player at
+full would be ~42 MB against that — the single largest saving available
+anywhere in the renderer, and roughly TEN TIMES what this session's whole
+vertex-packing effort returned per circuit.
 
 **Files:**
 - Modify: `js/car/liverytex.js` (the tier decision), `js/car/car-draw.js`
 - Modify: `tests/unit/team-livery.test.mjs`
 
-- [ ] Decide the policy and WRITE IT DOWN before coding: which cars, what
-      trigger, and what happens when an AI car fills the screen — a mirror, a
-      photo-mode frame, a replay close-up, the podium. A fixed downshift with
-      no upgrade path WILL be visible in photo mode.
-- [ ] Test first: assert the player's atlas is unchanged and an AI atlas is the
-      reduced size, on the desktop tier.
-- [ ] Implement; keep the existing mobile policy untouched.
-- [ ] Re-take the Task 1 census and record before/after.
-- [ ] Visual check that this is NOT a look regression: `playwright-probe` car
-      studio renders of an AI livery at racing distance and at photo-mode
-      distance, before and after.
-- [ ] `gpu-census.yml` on `macos-latest` — real hardware, not lavapipe.
+- [x] **THE POLICY, decided 2026-09-14 and written down before any code:**
+
+      1. Desktop, in race: the player's car keeps the full 1024×1280 atlas;
+         AI cars upload at 512×640 (`div` 2). Mobile is UNCHANGED — it already
+         runs 512 player / 256 AI and has a tighter jetsam budget than this
+         change is about.
+      2. **Close-up contexts get the full tier for every car.** The garage and
+         setup preview already do, because they pass `usePlayerSetup`. Photo
+         mode is the gap the plan called out, and it is now an explicit
+         exemption: while `G.photoMode` is on, `drawCarDecals` requests the
+         full tier regardless of whose car it is.
+      3. The upgrade is DEMAND-DRIVEN and costs nothing until it is needed.
+         `getCarDecalTexture` is called from the per-drawn-car path, and the
+         resolution tier is already part of the cache key (the `:P` suffix,
+         which exists because a team the player switches to must not reuse a
+         cached AI-resolution atlas). So flying the photo camera up to one car
+         mints ONE full-res atlas, not twenty-one — there is no entry stall,
+         and leaving photo mode falls back to the cached AI atlases.
+      4. Mirrors and replays need nothing: both draw through the same
+         per-car path, so if a close-up context is ever added it inherits
+         the same exemption by passing the flag.
+
+      What this does NOT do: upgrade an AI car that merely happens to be close
+      during normal racing. At racing distance an AI car is a few hundred
+      pixels and 512×640 is ample; buying the last few metres of approach
+      would cost a per-frame distance test in the draw path and mint atlases
+      mid-race, which is the wrong trade against a stutter.
+- [x] Test first — `tests/unit/livery-tier.test.mjs`. Rasterising a livery needs
+      a browser (the boundary `parts-sweep.mjs` draws), so the tier DECISION was
+      extracted as a pure `atlasDiv()` and pinned headlessly instead: exact
+      divisors per tier, mobile asserted UNCHANGED, the grid saving asserted to
+      exceed 90 MB, plus an ordering guard so a swapped ternary cannot pass by
+      rewriting the exact values together.
+- [x] Implement; mobile policy untouched.
+- [x] Re-take the Task 1 census. **MEASURED, montreal, full grid:**
+
+```
+before   146.67 MB   22 atlases, every car at 1024x1280
+after     41.67 MB   player still 1024x1280 (census `biggest` confirms), 21 AI at 512x640
+         -105.00 MB  -71.6 %
+```
+
+      For scale: that is ~18x what the entire world-VBO packing returned on a
+      mean circuit (5.8 MB), from a change that touches one ternary.
+- [x] **APPEARANCE: CLOSED, by texel density rather than a pixel diff.** The
+      AI atlas supplies **13.7 texels per screen pixel** at the closest real
+      Monza racing gap (17.1 m, 1080p, 62° FOV) — measured from the decal
+      mesh's world-area-to-UV-area ratio, so the GPU samples ~mip 3 and the
+      atlas's top level is never reached. The crossover where the AI tier would
+      under-sample is 1.2 m, inside the car. Stronger than a one-distance pixel
+      diff because it covers every distance. `notes/PERF-FINDINGS.md` §2x.
+- [ ] ~~NOT DONE — a dedicated AI close-up A/B.~~ Superseded by the above. The census proves the memory
+      and `tex-census` proves the tier, but neither proves APPEARANCE. What is
+      missing is a before/after render of an AI livery at racing distance and
+      at photo-mode distance. The argument for shipping without it is that
+      mobile already ships AI atlases at 256 and this is a gentler step to 512,
+      and that photo mode now takes the full tier — an argument, not a
+      measurement. Capture it before trusting this on a hero shot.
+- [x] `gpu-census.yml` on `macos-latest` — real hardware, not lavapipe.
+      `ok=true gpuErrors=0`, no FAILED section, and `meanLuma` 72.0 — the same
+      figure as before the change and as the run after it. The `fps` column
+      looked like a 27 % regression and is not one: a control run of the SAME
+      code came back 54 % higher. See `notes/PERF-FINDINGS.md` §2w, which now
+      says never to read census fps off a single before/after.
 
 **Risk:** this is the one task here that can visibly degrade the game. The
 census number is large enough to be worth it; the policy is what decides
@@ -144,8 +210,13 @@ decompress to full RGBA on upload. Block-compressed formats stay compressed in
 VRAM — 4–8× less memory, 4–8× faster upload, and better sampling cache
 behaviour on every textured fragment.
 
-The 17-layer albedo + normal arrays are ~11.9 MB of VRAM at the 256 tier;
-UASTC would take that to ~3 MB.
+The 17-layer albedo + normal arrays measure **11.33 MB** (Task 1); UASTC would
+take that to ~2.8 MB, so the prize is ~8.5 MB.
+
+**Task 1 demoted this, on evidence.** "Compress the textures" is the obvious
+move and it is the SMALL one: the liveries are 13× these arrays. Task 2 is
+worth an order of magnitude more and costs a resolution policy rather than a
+wasm transcoder. Do Task 2 first.
 
 **Why this is a decision and not a task.** It needs an offline encoder in the
 bake pipeline, a Basis transcoder (~300 KB of wasm) at runtime, and compressed

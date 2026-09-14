@@ -1464,19 +1464,16 @@ const TLX = (function () {
       }
       const meshPool = [];          // every wrapper ever made — the sweep walks this
       const meshByGeo = new Map();  // geometry -> Map(material -> Mesh)
-      let poolUsed = 0;             // acquired THIS batch — diagnostics only, never an index
-      // Batch stamp: bumped wherever the old code reset poolUsed to 0. A mesh
-      // not stamped with the current batch is not being drawn and gets hidden.
+      // Batch stamp: bumped wherever a batch begins. A mesh not stamped with
+      // the current batch is not being drawn and gets hidden.
       let _poolBatch = 0;
       let _pruneLast = 0;
       const _tmpMat4 = new THREE.Matrix4(), _tmpMat4b = new THREE.Matrix4();
       // GL→WebGPU clip depth remap — game.js builds GL projections (NDC z ∈ [-1,1]);
       // three WebGPU rasterises z ∈ [0,1]. Same Z01 as WGX (js/render/webgpu/wgx.js).
       const Z01 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,0.5,0, 0,0,0.5,1]);
-      const Z01INV = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,2,0, 0,0,-1,1]);
       const _projGpu = new Float32Array(16);
       const _vpGpuTlx = new Float32Array(16);
-      const _invProjGpu = new Float32Array(16);
       function _mul4Col(out, a, b) {
         for (let c = 0; c < 4; c++) {
           const b0 = b[c * 4], b1 = b[c * 4 + 1], b2 = b[c * 4 + 2], b3 = b[c * 4 + 3];
@@ -1823,7 +1820,6 @@ const TLX = (function () {
         m.matrixWorld.copy(m.matrix);
         m.matrixWorldNeedsUpdate = false;
         m.visible = true;
-        poolUsed++;
         if (!m.parent) scene.add(m);
         return m;
       }
@@ -2116,6 +2112,22 @@ const TLX = (function () {
         const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
         presentW = Math.max(1, Math.round(cw * dpr));
         presentH = Math.max(1, Math.round(ch * dpr));
+        // Clamp to the WebGPU device's texture ceiling, exactly as WGX resize()
+        // does: requestDevice() asks for no requiredLimits, so
+        // maxTextureDimension2D is the WebGPU DEFAULT 8192, and with dpr capped
+        // at 2 that starts clipping at 4097 CSS px (a 6K panel, or a window
+        // spanned across several 4K monitors). Past it every target alloc and
+        // the swapchain itself fail into a silent per-frame retry. CLAMP
+        // UNIFORMLY — per-axis would change the aspect the projection is built
+        // on, not just the resolution. The WebGL2 backend's ceiling is higher
+        // and is left to the driver.
+        const _gpuDev = (renderer.backend && renderer.backend.isWebGPUBackend && renderer.backend.device) || null;
+        const maxDim = _gpuDev ? ((_gpuDev.limits && _gpuDev.limits.maxTextureDimension2D) || 8192) : 0;
+        if (maxDim && (presentW > maxDim || presentH > maxDim)) {
+          const k = Math.min(maxDim / presentW, maxDim / presentH);
+          presentW = Math.max(1, Math.floor(presentW * k));
+          presentH = Math.max(1, Math.floor(presentH * k));
+        }
         const rw = Math.max(1, Math.round(presentW * renderScale));
         const rh = Math.max(1, Math.round(presentH * renderScale));
         const up = wantSpatialUpscale();
@@ -2406,6 +2418,14 @@ const TLX = (function () {
           if (t && t.tex) { t.tex.dispose(); t.tex = null; return; }
           if (t && t.isTexture) t.dispose();          // a material array (createTextureArray)
         },
+        // texCensus: GLX-only. Declared ABSENT rather than left off, because
+        // game.js installs a backend by descriptor-copy onto GLX and an absent
+        // NAME would keep GLX's own function — which would then run against a
+        // null gl. This makes `if (gfx.texCensus)` answer honestly, and
+        // __apex.texCensus() report supported:false instead of a measured zero.
+        // three tracks its own retained counts through __tlx.memState();
+        // reconciling the two is follow-up work, not a silencer to remove.
+        texCensus: undefined,
 
         // Baked material arrays — the GLX.createTextureArray counterpart
         // `images` is sparse, indexed by MAT id. three needs RAW pixels for a
@@ -2617,7 +2637,7 @@ const TLX = (function () {
             renderer.setRenderTarget(softOutRT());
             drawList.length = 0;
             _dMatUsed = 0;
-            poolUsed = 0; _poolBatch++;
+            _poolBatch++;
             _envActive = false;
             envFacesMask |= 1 << (face & 7); _envEnds++;
             if (envFacesMask === 63) {
@@ -2628,7 +2648,7 @@ const TLX = (function () {
             _restoreEnvFrame();
             return;
           }
-          poolUsed = 0; _poolBatch++;
+          _poolBatch++;
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
@@ -2695,7 +2715,7 @@ const TLX = (function () {
           }
           drawList.length = 0;   // the main pass re-issues its own draws
           _dMatUsed = 0;
-          poolUsed = 0; _poolBatch++;
+          _poolBatch++;
           _envActive = false;
           if (_gpuErrors > _errAtFace) _envFaceErr = true;
           if (faceOk) { envFacesMask |= 1 << (face & 7); _envEnds++; }
@@ -2933,12 +2953,9 @@ const TLX = (function () {
           if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
           frameCullDist = (frame && frame.cullDist) || 0;
           _postF.proj = (frame && frame.proj) || null;
-          if (_wgpu && frame && frame.invProj && frame.invProj.length >= 16) {
-            _mul4Col(_invProjGpu, frame.invProj, Z01INV);
-            _postF.invProj = _invProjGpu;
-          } else {
-            _postF.invProj = (frame && frame.invProj) || null;
-          }
+          // GL convention on BOTH backends: tsl-post reconstructs with d*2-1, and
+          // the depth texture stores 0.5*z_gl+0.5 under WebGPU's Z01 remap too.
+          _postF.invProj = (frame && frame.invProj) || null;
           _postF.invVP = (frame && frame.invViewProj) || null;
           _postF.sunVS = (frame && frame.sunViewDir) || null;
           _postF.upVS = (frame && frame.upViewDir) || null;
@@ -3029,7 +3046,7 @@ const TLX = (function () {
           }
           fx.lineSpeed.value = (opts && opts.speed) || 0;
           fx.lineCorners.value = opts && opts.cornersOnly ? 1 : 0;
-          fx.lineStr.value = (opts && opts.str) || 1.6;
+          fx.lineStr.value = 1.6;           // emissive strength: a constant, no producer sends one
           fx.linePalette.value = opts && opts.palette ? 1 : 0;
           fx.lineOpacity.value = (opts && opts.opacity) || 1;
           drawList.push({ geo: lineStream.geo, m: null, mat: fx.lineMat });
@@ -3095,7 +3112,7 @@ const TLX = (function () {
           _fxFrame.decals++;
         },
         present(opts) {
-          poolUsed = 0; _poolBatch++;
+          _poolBatch++;
           prunePool(typeof performance !== "undefined" ? performance.now() : Date.now());
           // renderOrder = submission index: three sorts opaque and transparent
           // lists by renderOrder first, so caller order (the GLX contract)
@@ -3577,7 +3594,7 @@ const TLX = (function () {
               // evidence a "see-through car" report has never had.
               gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstError,
               gpuRecentErrors: _gpuRecentErrors.map(e => ({ ...e, lastResize: e.lastResize && { ...e.lastResize } })),
-              presents: _presentN, healed: _healTried, gpuErrFrames: _gpuErrFrames,
+              presents: _presentN, healed: _healTried,
               // three refreshes every OBJECT-group uniform per draw (r185
               // NodeManager), so the draw count is the CPU lever on a phone;
               // reported here so the GOV `tlx` row can show it (`dc N`).

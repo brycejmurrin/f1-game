@@ -18,6 +18,34 @@ const LiveryTex = (function () {
   // path the shipped shell takes.
   const IS_MOBILE = typeof GLX !== "undefined" && !!GLX.mobileTier;
 
+  // How much to shrink an atlas before upload. 1 = the authored 1024x1280.
+  //
+  // The livery atlases are the biggest thing on the GPU, and that is MEASURED
+  // rather than assumed: __apex.texCensus() on a full montreal grid reported
+  // 146.67 MB of them against 11.33 MB of baked material arrays and 13.8 MB for
+  // the whole packed world VBO of a mean circuit (notes/PERF-FINDINGS.md §2v).
+  // Ten times the geometry. One atlas with its mip chain is 6.99 MB.
+  //
+  //   tier            player   AI     a full grid
+  //   mobile             2      4        ~37 MB     (unchanged — tighter jetsam budget)
+  //   desktop            1      2        ~44 MB     (was 147: every car at full)
+  //
+  // AI at half is the change. At racing distance an AI car is a few hundred
+  // pixels and 512x640 is ample; what a fixed downshift would cost is the
+  // CLOSE-UP, so photo mode asks for the full tier for every car it draws
+  // (js/car/car-draw.js drawCarDecals). That upgrade is demand-driven — the
+  // tier is part of the decal cache key, and getCarDecalTexture runs per DRAWN
+  // car — so flying the photo camera to one car mints ONE full atlas, not
+  // twenty-one, and there is no stall on entering the mode.
+  //
+  // Pure on purpose: rasterising a livery needs a browser (see the boundary
+  // note in tools/car/parts-sweep.mjs), but the tier DECISION is arithmetic and
+  // tests/unit/livery-tier.test.mjs holds it to these numbers headlessly.
+  function atlasDiv(isPlayer, mobile) {
+    if (mobile) return isPlayer ? 2 : 4;
+    return isPlayer ? 1 : 2;
+  }
+
   // Named atlas regions in CANVAS PIXELS (origin top-left, y down). The 3D side
   // maps panel UVs to these rects. Do NOT change these numbers — the geometry
   // depends on them.
@@ -109,7 +137,7 @@ const LiveryTex = (function () {
     return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
   }
   const INK_DARK = [0.06, 0.06, 0.08], INK_LIGHT = [0.97, 0.97, 0.98];
-  const INK_TARGET = 6.5, INK_FLOOR = 3.0;
+  const INK_TARGET = 6.5;
   function inkOn(bgs) {
     const list = bgs.filter(Boolean);
     // A COPY here too, and tagged: the shared constant would collect whatever
@@ -343,9 +371,6 @@ const LiveryTex = (function () {
   const FLANK_CREST_FILL = 1 - 0.015 * 2;
   const STROKE_MIN = 0.055;    // 1.9 px at 34: below this a limb does not get
                                // thinner, it disappears
-  const GAP_MIN = 0.07;        // 2.4 px at 34, survives one mip level. This is
-                               // the H-versus-red-blob threshold, literally:
-                               // assets/logos/haas.png failed exactly here
   const TEXT_MIN = 0.22;       // 20 px at the mobile-AI cover. Lettering is
                                // banned outright when `bare`, so 34 never
                                // has to carry any
@@ -423,13 +448,13 @@ const LiveryTex = (function () {
   }
 
   // The floor every mark clears against whatever it lands on. 4.2 and not
-  // INK_FLOOR's 3.0 because it is also the bound parts-livery-contrast.spec.js
+  // the general 3.0 ink floor because it is also the bound parts-livery-contrast.spec.js
   // proves for the sponsor inks, and two legibility guards that disagree drift.
   // It is always reachable: the worst field for inkOn() is luminance 0.182,
   // where black and white tie at 4.25.
   const MARK_FLOOR = 4.2;
   // The floor a metre-long BAND clears against the cover it lands on — 2.0,
-  // not INK_FLOOR: these are bands, not lettering, and Red Bull's bull
+  // not the general ink floor: these are bands, not lettering, and Red Bull's bull
   // measures 2.26 against its navy and reads clearly on track
   // (tools/shot/shot.mjs --team). Module-scoped because
   // drawSpineTop asks it too: a band UNDER it is carried by its trim.
@@ -491,13 +516,13 @@ const LiveryTex = (function () {
   }
 
   // Which marks paint their `alt` INSIDE the mark rather than beside it.
-  // Cadillac's eight detail layers land 99.4% of their area on its crest
-  // (measured over a 900x900 sample of the traced paths), so the field is a
-  // surface that alt never touches — and scoring it against the field is how a
-  // gold crest on the garage's dark lightbox came back with GREY inner detail:
-  // brand near-black failed the field test, nothing else in the pool cleared
-  // 2.4, and the grey ramp answered. Haas's ring and the generic monogram's box
-  // DO stand on the field beside their letters, so they stay scored against it.
+  // Empty today: every mark's alt scores against the field it stands on AND
+  // the mark itself — even Cadillac's eight detail layers, whose 99.4% of
+  // area sits on its crest (measured over a 900x900 sample of the traced
+  // paths), still score against the field: nothing in the pool cleared 2.4
+  // there either, so the grey ramp answers regardless. Haas's ring and the
+  // generic monogram's box stand on the field beside their letters, same
+  // scoring, same reason. An entry here would switch a team to mark-only.
   const ALT_INSIDE = {};
 
   // What actually LANDS on the surface behind a crest. A backlit sign picks its
@@ -664,10 +689,7 @@ const LiveryTex = (function () {
     //    that makes this total: no pair of colours is close to all nine.
     // Scored against the primary surface, which is the one alt is asserted on:
     // optimising for a worst case nobody checks just makes alt duller.
-    // An alt drawn INSIDE the mark answers to the mark alone — see ALT_INSIDE.
-    const score = ALT_INSIDE[teamId]
-      ? (c) => contrast(c, mark)
-      : (c) => Math.min(contrast(c, under[0]), contrast(c, mark));
+    const score = (c) => Math.min(contrast(c, under[0]), contrast(c, mark));
     let alt = null, best = -1;
     const pool = [B && B.alt, liv && liv.c2, liv && liv.c1, INK_LIGHT, INK_DARK];
     for (const c of pool) { if (!c) continue; const v = score(c); if (v > best) { best = v; alt = c; } }
@@ -2262,7 +2284,7 @@ const LiveryTex = (function () {
     // when the natural choice fails — where the cover equals the body, which is
     // nine teams, the atlas is byte-identical to before for stock cars (none of
     // which author a BODY STRIPE).
-    // The floor is BAND_ON_COVER (module scope), not INK_FLOOR.
+    // The floor is BAND_ON_COVER (module scope), not the general ink floor.
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     // The three DESIGN picks. Absent = today's atlas, pixel for pixel.
     const tailStyle = colors.finStyle || "team";
@@ -2368,7 +2390,7 @@ const LiveryTex = (function () {
       // painted on the cover flank, and the monocoque is not a surface it touches.
       const sunLockup = markPalette(teamId, colors, [sunC, coverPaint], false, { noPlate: true });
       // The bull's colour comes from flankBullColour, which the SIDE designs
-      // also read — MARK_ON_BODY's floor is DELIBERATELY below INK_FLOOR: this
+      // also read — MARK_ON_BODY's floor is DELIBERATELY below the general ink floor: this
       // is a metre-long brand silhouette that crosses the sun, not lettering,
       // and Red Bull's own red on their own navy scores 2.3. A body the mark
       // would truly vanish on (a red car) still falls through to the ink.
@@ -3038,16 +3060,13 @@ const LiveryTex = (function () {
                     markHalo(LOGOS[teamId], c1, ink), emblemRim);
     } else drawCrest(ctx, teamId, numBadge, { liv: colors, field: [c1, c2], bare: true, palette: lockup });
 
-    // Mobile tier: upload at 512² instead of 1024². All layout stays authored at
-    // SIZE (UVs are FRACTIONS of the atlas — resolution-independent), only the
-    // uploaded texture shrinks: 5.3 MB → 1.3 MB per atlas, ×22 cars ≈ −88 MB —
-    // the single biggest GPU consumer on iOS web apps (tight jetsam budget).
-    // AI cars drop a further step to 256² (−0.98 MB each, ~−20 MB per grid):
-    // they're never seen closer than a few car lengths at mobile DPR, only the
-    // player's own car (and the setup preview) needs the 512² read.
-    if (IS_MOBILE) {
+    // Upload at a fraction of the authored size. All layout stays authored at
+    // SIZE (UVs are FRACTIONS of the atlas — resolution-independent); only the
+    // uploaded texture shrinks. See atlasDiv for the tiers and the measurement
+    // behind them.
+    const div = atlasDiv(!!isPlayer, IS_MOBILE);
+    if (div > 1) {
       const small = document.createElement("canvas");
-      const div = isPlayer ? 2 : 4;
       small.width = SIZE / div; small.height = SIZE_H / div;
       small.getContext("2d").drawImage(canvas, 0, 0, small.width, small.height);
       return small;
@@ -3115,15 +3134,14 @@ const LiveryTex = (function () {
   // contrast/inkOn are exported for the GARAGE crest wall (js/garage/scene.js),
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
-  return { SIZE, SIZE_H, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
-           MARK_FLOOR, INK_FLOOR, numCrestBox, paintTeamMark, paintSwatch,
+  return { SIZE, SIZE_H, atlasDiv, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
+           MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
-           CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
+           CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
-           coverBindOf, finHandoffOf, saddleFill, ridgeFill,
-           FILL_SURFACES, liveFills, fillInert,
-           airboxMeshColour, finContrastBlock, resolveFinPaint,
+           FILL_SURFACES, fillInert,
+           airboxMeshColour, resolveFinPaint,
            hasFlankBull: (teamId) => !!bullPath(teamId) };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

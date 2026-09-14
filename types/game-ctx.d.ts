@@ -239,10 +239,11 @@ interface GameEls {
   best: HTMLElement; speed: HTMLElement; energy: HTMLElement;
   ot: HTMLElement; aero: HTMLElement;
   gapA: HTMLElement; gapB: HTMLElement;
-  hudSectors: HTMLElement;
+  hudSectors: HTMLElement; hudLimits: HTMLElement;
   flag: HTMLElement; minimap: HTMLElement;
   lights: HTMLElement; announce: HTMLElement;
   overlay: HTMLElement; subtitle: HTMLElement; audiostate: HTMLElement;
+  lighting: HTMLElement; camtune: HTMLElement;
   select: HTMLElement; selTitle: HTMLElement; selTeams: HTMLElement;
   selTracks: HTMLElement;
   selPreviewMap: HTMLElement; selPreviewName: HTMLElement;
@@ -275,7 +276,7 @@ type SessionMode = string;
 type Weather = string;
 /** "default" | "day" | "dusk" | "dawn" | "night". */
 type TimeOfDay = string;
-/** "off" | "low" | "normal" | "high" — Reliability.isLevel() gates the setter. */
+/** "off" | "low" | "real" — Reliability.isLevel() gates the setter. */
 type ReliabilityLevel = string;
 /** "manual" | "auto" — the ACTIVE AERO race setting. */
 type AeroMode = string;
@@ -521,7 +522,7 @@ interface GameCtx {
   readonly applyRaceSettings: () => void;
 
   // ── Race flow + the shared physics/energy formulas ────────────────────────
-  readonly announce: (msg: string, dur?: number) => void;
+  readonly announce: (msg: string, dur?: number, kind?: string) => void;
   readonly applyCaution: (d: unknown) => void;
   readonly camVantage: (mode: number, s: number, x: number, spd: number, now: number, extra?: Opaque) => CamVantage;
   readonly endRace: (forcedOrder?: CarState[]) => void;

@@ -609,7 +609,6 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head { margin-bottom: 2px; }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-head h2,
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-head h2 { font-size: 16px; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #pc-toggle { padding: 6px 10px; font-size: var(--fs-micro); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-profile,
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] #ct-profile { font-size: var(--fs-micro); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .lt-preview-row { gap: 3px; margin: 2px 0; }
@@ -700,10 +699,6 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
     #lt-profile, #lt-preview, #ct-profile, .lt-help-toggle
   ) {
     display: none;
-  }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #pc-toggle {
-    min-height: var(--tap-min); padding: 0 var(--gap);
-    font-size: var(--fs-micro);
   }
 
 /* ---------- short AND wide: put the chrome in a rail ----------
@@ -898,7 +893,6 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    the width rather than clipping the FREE CAMERA control. */
 @container sheet (max-width: 220px) {
   #lt-head { flex-wrap: wrap; }
-  #pc-toggle { width: 100%; min-width: 0; }
 }
 /* advanced disclosure — a native <details>/<summary>; the summary keeps the
    look of the button it replaced (tokens.css's base `button` rule does not
@@ -1005,3 +999,24 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 #as-sp-wrap .opt-row { margin-top: calc(var(--gap) * 2 / 3); }
 } /* @layer components */
+
+/* #pc-toggle narrow/compact overrides, OUTSIDE @layer components on purpose:
+   hud.css sets #pc-toggle unconditionally from inside @layer hud, and layer
+   order (tokens.css: reset, base, components, hud, overlays) beats specificity
+   and matched media/container conditions alike, so a components-layer override
+   here can never win. Re-declaring it in the real top-level `hud` layer (this
+   must NOT nest inside the `components` block above — nesting makes a
+   nested hud sub-layer ranked under components, not the real one) puts these
+   in the same layer as hud.css's rule, so specificity (and, for the
+   @container rule below, the :is() prefix that raises it above hud.css's
+   bare #pc-toggle) decides the winner. */
+@layer hud {
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #pc-toggle { padding: 6px 10px; font-size: var(--fs-micro); }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="off"] #pc-toggle {
+    min-height: var(--tap-min); padding: 0 var(--gap);
+    font-size: var(--fs-micro);
+  }
+  @container sheet (max-width: 220px) {
+    :is(#lighting-inner, #camtune-inner) #pc-toggle { width: 100%; min-width: 0; }
+  }
+}

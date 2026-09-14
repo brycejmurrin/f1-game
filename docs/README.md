@@ -107,8 +107,8 @@ ledger lists.
 | Path | What it is |
 |---|---|
 | [archive/ATTIC.md](archive/ATTIC.md) | The attic ledger: one row per record deleted from `docs/` (title, original path, last SHA, one-line summary). |
-| [archive/research/](archive/research/) | Provenance investigations — the 2026-08 audit records, the UI campaign set, the browser-graphics survey, the cleanup sweep and the parallel fleet survey. |
-| [archive/research/raw/](archive/research/raw/) | The four workflows' verbatim per-agent output. Read when a summary's wording is doing too much work. |
+| [archive/research/](archive/research/) | Provenance investigations — the 2026-08 audit records, the UI campaign set, the browser-graphics survey, the cleanup sweep, the parallel fleet survey and the 2026-09 code survey (dead code / bugs / perf). |
+| [archive/research/raw/](archive/research/raw/) | The five workflows' verbatim per-agent output. Read when a summary's wording is doing too much work. |
 | [archive/superpowers/](archive/superpowers/) | The 2026-08 plans and specs (apex-tools MCP weeks 1-4, release safety, audit remediation, perf-hunt fixes). |
 | [archive/slider-effect/](archive/slider-effect/) | 20 before/after slider-effect PNG pairs from the lighting classifier. |
 | [archive/manual-probes/](archive/manual-probes/) | Four single-incident diagnostic instruments (banking, throttle-rescue, skid, act) — bugs resolved, kept as reusable probe patterns. |
