@@ -279,6 +279,21 @@ type TimeOfDay = string;
 type ReliabilityLevel = string;
 /** TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js LEVELS). */
 type TyreLevel = string;
+/** The session-bound half of PitLane — PitLane.create(G)'s return. */
+interface PitSession {
+  zoneOf(): Record<string, number> | null;
+  /** The lane's speed cap in m/s at the CURRENT pace scale. */
+  limit(): number;
+  inLane(c: CarState): boolean;
+  inWindow(c: CarState): boolean;
+  /** Arm (or cancel) the stop; omit `on` to toggle. */
+  arm(c: CarState, on?: boolean): boolean;
+  update(c: CarState, dt: number): void;
+  reset(c: CarState): void;
+  info(c?: CarState): Record<string, unknown> | null;
+  setNext(c: CarState, record: unknown): void;
+  serviceCar(c: CarState): void;
+}
 /** The session-bound half of TyreModel — TyreModel.create(G)'s return. */
 interface TyreSession {
   fit(c: CarState, record: unknown): void;
@@ -347,6 +362,7 @@ interface GameCtx {
   // ── Tyres: the race setting and the live wear model ───────────────────────
   raceTyreWear: TyreLevel;
   readonly tyres: TyreSession;
+  readonly pits: PitSession;
   readonly retireCar: (c: CarState, reason?: string) => void;
   readonly ranked: CarState[];
   readonly sectorLast: [number | null, number | null, number | null];
@@ -674,6 +690,7 @@ declare const AudioPanel: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
 declare const BrakeCue: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;
+declare const PitLane: GameModuleFactory;
 declare const CamModes: GameModuleFactory;
 declare const CamTunerPanel: GameModuleFactory;
 declare const CareerUI: GameModuleFactory;

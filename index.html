@@ -431,8 +431,10 @@
      the width runs out, which produced a DN button above its own UP. These four
      groups each have a fixed shape — pedals and shifts are vertical pairs
      (brake over gas, up over down, as every car has them), and the taps are a
-     3-tall COLUMN standing beside them — so a dock can only ever place whole
-     groups, and a pair cannot come apart or invert. layoutDocks() in js/game.js
+     COLUMN standing beside them — so a dock can only ever place whole
+     groups, and a pair cannot come apart or invert. The tap column is 3 tall by
+     default and 4 with TYRE WEAR on (PIT appears only when there is something
+     to change tyres for), which the flex column takes without a count anywhere. layoutDocks() in js/game.js
      moves the GROUPS between docks; the buttons never move again. -->
 <div id="grp-pedals" class="dock-grp col">
   <button id="btn-brake" class="touchbtn pedal" hidden aria-label="Brake">BRAKE</button>
@@ -450,6 +452,7 @@
   <button id="btn-boost" class="touchbtn" hidden aria-label="Boost">BOOST</button>
   <button id="btn-ot" class="touchbtn" hidden aria-label="Overtake">OT</button>
   <button id="btn-aero" class="touchbtn" hidden aria-label="Active aero">AERO</button>
+  <button id="btn-pit" class="touchbtn" hidden aria-label="Pit in">PIT</button>
 </div>
 
 <button id="btn-cam" hidden aria-label="Camera">CHASE</button>
@@ -2290,6 +2293,7 @@
 <script defer crossorigin="anonymous" src="js/circuits/indianapolis.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/buenos_aires.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/pit-lane.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/track-maps.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>

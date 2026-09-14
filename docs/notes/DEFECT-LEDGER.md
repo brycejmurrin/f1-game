@@ -11,6 +11,30 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-14 — `tools/check/quick-validate.mjs` fails on a CLEAN tree.** Found
+while building the tyre/pit phases; **not caused by them** — confirmed by
+stashing the whole working tree and re-running, which fails identically.
+
+```
+QUICK-VALIDATE FAIL:
+  probe() invalid after race+step
+```
+
+What was observed, and only that: after `__apex.race("monza")`, `jump()` and
+`step()`, `__apex.probe()` returns `null` and `__apex.info()` still reports
+`state: "menu"`, `track: null`. No console error and no page error is raised, so
+the tool reports one terse line with nothing behind it. `__apex.race()` calls
+`startRace()` — which is `async` — and returns without awaiting it, so the
+probe runs against a session that has not armed; whether that is the whole
+mechanism was NOT established, and nobody should take the async call as the
+confirmed root cause without reproducing it.
+
+Why it went unnoticed: `quick-validate` is a browser tool and only its pure
+helpers (`tests/unit/quick-validate.test.mjs`) are in `test:tooling-fast`, so no
+gate runs the browser half. The file's own header calls itself the "fast refactor
+gate"; right now it cannot be one, and an agent reaching for it on a change of
+their own will read a red line that has nothing to do with them.
+
 **2026-09-10 — whole-tree audit, six slices, FIXED in one pass.** Seven
 read-only agents audited the tree (game/physics, renderers, track engine and
 all 80 circuit files, UI/data/PWA, multiplayer and the worker, tooling/CI, and

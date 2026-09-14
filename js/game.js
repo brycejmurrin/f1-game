@@ -34,6 +34,7 @@ const els = {
   pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), pmsettings: $("pmsettings"), btnCam: $("btn-cam"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
   btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"),
+  btnPit: $("btn-pit"),
   btnThrottle: $("btn-throttle"),
   btnSteerLeft: $("btn-steer-left"), btnSteerRight: $("btn-steer-right"),
   shiftUp: $("shift-up"), shiftDown: $("shift-down"),
@@ -864,6 +865,7 @@ let launchT0 = 0;
 // hoisted function declarations so the G façade below can name them directly.
 let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
 let tyres = null;     // TyreModel.create(G), same deferral
+let pits = null;      // PitLane.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
 function applyCaution(d) { return raceCtl.apply(d); }
@@ -1863,6 +1865,7 @@ function gridUp(preOrder) {
     // here — `h` is already the per-car race hash, so arming costs the sim
     // stream nothing, exactly as Reliability's retirement draw does.
     c.tyreStints = 0;
+    pits.reset(c);
     tyres.fit(c, c.tyreOpt ? tyres.optionRecord(c.tyreOpt) : tyres.classRecord(c.tyreClass));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
@@ -2436,6 +2439,10 @@ function showTouchControls(show) {
   // NO AERO ZONE chip beside a faded button says so. Removing it would silently
   // suggest the game has no such feature.
   if (els.btnAero) els.btnAero.hidden = !t || raceAeroMode === "auto";
+  // PIT only exists when there is a reason to use it. With TYRE WEAR off there
+  // is nothing to change tyres for, so the tap column stays the 3-tall shape
+  // index.html describes rather than growing a control that does nothing.
+  if (els.btnPit) els.btnPit.hidden = !t || !tyres.on();
   els.shiftUp.hidden = !(t && manual);
   els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
@@ -2674,6 +2681,7 @@ const G = {
     raceTyreWear = v; store.set("tyreWear", v);
   },
   get tyres() { return tyres; },
+  get pits() { return pits; },
   retireCar: (c, reason) => retireCar(c, reason),
   get ranked() { return ranked; },
   get sectorLast() { return sectorLast; },
@@ -2953,6 +2961,9 @@ raceCtl = RaceControl.create(G);
 // Tyre wear, the grip it costs and the fuel that argues with it
 // (js/physics/tyre-model.js). Created before the first gridUp fits a compound.
 tyres = TyreModel.create(G);
+// The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
+// about a worn set. Reads the tyre model, so it is created after it.
+pits = PitLane.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -3603,6 +3614,7 @@ function updateCar(c, dt, ranked) {
   // acceleration — and it is exactly 1 while the setting is off, which is what
   // keeps the characterization baseline bit-identical.
   tyres.update(c, dt);
+  pits.update(c, dt);
   const perfMul = tyres.tractionMul(c) * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
@@ -3630,6 +3642,13 @@ function updateCar(c, dt, ranked) {
   // Cautions default ON (RaceControl store default true); a race with them
   // disabled never hits lvl≥2. Fraction of pace-scaled top speed, so it rides
   // OVERALL SPEED like the rest.
+  // PIT LANE SPEED LIMIT. Modelled exactly like the caution cap below — a
+  // ceiling the car is bled toward — because they are the same kind of rule and
+  // a second mechanism would be a second set of bugs. Expressed as a fraction of
+  // vTop() inside PitLane, so it rides OVERALL SPEED and a player's measured pit
+  // loss does not move when they change the pace slider.
+  let pitV = -1;
+  if (pits.inLane(c)) { pitV = pits.limit(); vmax = Math.min(vmax, pitV); }
   let cautionV = -1;   // the delta pace a caution demands; -1 = green
   if (raceCtl) {
     const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
@@ -3970,6 +3989,11 @@ function updateCar(c, dt, ranked) {
     c.xOn = c.xArmed;
   } else if (c.human) {
     if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
+    // PIT IN arms the stop; PitLane takes it from the next entry (js/race/pit-lane.js).
+    if (c.local && Input.consumePitToggle()) {
+      const on = pits.arm(c);
+      announce(on ? "BOX THIS LAP" : "STAYING OUT", 1.4, "race");
+    }
     else c.xOn = !!(inp && inp.aero);
   } else {
     // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
@@ -4089,6 +4113,12 @@ function updateCar(c, dt, ranked) {
   // CAUTION: a cut vmax is only an acceleration ceiling above, so a car above
   // the delta pace bled at coast drag (and never on a descent, which skips the
   // bleed below) and was still rolling at the restart. Brake it down for real.
+  if (pitV >= 0 && c.speed > pitV) c.speed = Math.max(pitV, c.speed - BRAKE * CAUTION_BRAKE * dt);
+  // HELD IN THE BOX. The one moment the pit lane takes the car off the driver:
+  // everything else about a stop is driven. Braking to a stop is the driver's
+  // job (PitLane only latches `box` once the car is genuinely slow there), so
+  // this holds rather than decelerates.
+  if (c.pitState === "box") c.speed = 0;
   if (cautionV >= 0 && c.speed > cautionV) c.speed = Math.max(cautionV, c.speed - BRAKE * CAUTION_BRAKE * dt);
   // Flat / climb: bleed leftover overspeed toward the 6 % margin. Skip on a
   // real descent so gravity-kept ERS/X speed survives the hill.

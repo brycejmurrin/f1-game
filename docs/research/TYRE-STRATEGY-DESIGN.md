@@ -430,6 +430,30 @@ Three options were considered:
 | (b) A `pitZone` on the existing ribbon | One frac-keyed def table + a `wallAt` exception | **Recommended** |
 | (c) Abstract trigger + scripted stop | Trivial | Fallback if (b) measures badly |
 
+> **Errata, 2026-09-14 — (b) was built, measured badly, and (c) shipped.** The
+> recommendation below is kept as written because the reasoning still holds; what
+> follows is what happened when it met the tree. (b) failed twice. FORCING the
+> pit-side boundary open so a lane always existed put that boundary through the
+> scenery: at Monaco a car running wide had its lap distance jump 250 m as the
+> projection snapped to the neighbouring leg (`physics-fixes.spec.js` caught it),
+> and a half-plane `inLane` test made a car beached far off the road read as
+> "in the pit lane", breaking the beached-car auto-rescue. FITTING the lane to
+> the room that already exists then gave no lane anywhere: the narrowest
+> pit-side clearance across the window at **Monza is 2.4 m**, because the
+> scenery places a **pit wall** there — which is exactly what a real circuit has,
+> with the lane on its far side and its own entry road. A track that is one
+> ribbon with one arc coordinate cannot express "go around the wall".
+>
+> So the shipped lane is **(c), longitudinal only**: inside the window a car that
+> has CALLED a stop is speed-limited, and at the box it is held. **Pit loss is
+> still emergent and still per-circuit** — window length over the limit, plus the
+> stop — which was the property that made (b) attractive, and it measured
+> **23.6 s at Monza**, inside the real 20-25 s band. What is lost is the picture:
+> no lateral lane, no garages, no crew — and a car held in the box sits on the
+> racing surface, so the field has to go around it. Pulling it off-line needs
+> somewhere to be pulled to, which is the geometry (c) exists because we lack.
+> `js/race/pit-lane.js` carries this as its header.
+
 **(b) in detail.** A circuit def gains `pitZone: { s0, s1, side, laneW, boxFrac }`.
 Inside that arc window, on that side:
 
@@ -631,9 +655,10 @@ a characterization regeneration. P2–P5 are additive.
 4. **One scalar or per-axle?** Recommend **one scalar in P1**, per-axle in P4 with
    the thermal layer, since front-limited/rear-limited (§2.4) only means something
    once temperature exists. *Recommended: scalar.*
-5. **Pit lane (b) or (c)?** Recommend **(b), the driveable `pitZone`** — it makes
-   pit loss emergent and per-circuit, which §2.8 says is what decides strategy.
-   Fall back to (c) if a prototype on two circuits measures badly. *Recommended: (b).*
+5. **Pit lane (b) or (c)?** ~~Recommend **(b), the driveable `pitZone`**~~ —
+   **SETTLED BY MEASUREMENT: (c).** (b) was built and measured badly on two
+   circuits exactly as the fallback clause anticipated; see the errata in §5.2.
+   Pit loss stayed emergent, which was the whole reason (b) was preferred.
 6. **Does the catalog become compounds, or do compounds sit on top of it?**
    Recommend **the fitted row IS the compound**, with a stop able to fit anything
    owned (§6). The alternative — an S/M/H axis multiplied by a catalog tier — is

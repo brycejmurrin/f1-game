@@ -60,6 +60,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // life is a fraction of the SCHEDULED distance, and the catalog's life
   // ladder is a usable strategy range. Pure numbers in a VM, ~0.15 s.
   "tests/unit/tyre-model.test.mjs",
+  // ...and the pit lane's pure geometry: the window WRAPS the start/finish
+  // line, the lane is metres not a fraction of the lap, and openBarrier
+  // opens the pit side without moving hw. ~0.1 s.
+  "tests/unit/pit-lane.test.mjs",
   "tests/unit/team-livery.test.mjs",
   // 10 s of pure geometry: builds all 297 catalog options and hashes each
   // mesh, so a part that stops changing the car is caught where the catalog

@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_168 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_169 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -210,6 +210,18 @@ _168 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `<id>.js × 40` | `TrackDefs` | tag | 40 circuit definitions (data only), one file per id in `Tracks.LIST` order — see the "js/circuits/<id>.js" section |
 
+**`js/race/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `pit-lane.js` | `PitLane` | tag | PIT LANE: the other half of the sentence js/physics/tyre-model.js opened. |
+| `reliability.js` | `Reliability` | tag | RELIABILITY: whether a car reaches the flag at all. |
+| `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
+| `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
+| `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
+| `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
+| `race-settings.js` | `RaceSettings` | tag | RACE SETTINGS sheet: lap ladder, weather, grid rule, GO/cancel. |
+
 **`js/track/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
@@ -291,17 +303,6 @@ _168 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
-
-**`js/race/`**
-
-| File | Global | Loaded | Purpose (header, first sentence) |
-|---|---|---|---|
-| `reliability.js` | `Reliability` | tag | RELIABILITY: whether a car reaches the flag at all. |
-| `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
-| `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
-| `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
-| `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
-| `race-settings.js` | `RaceSettings` | tag | RACE SETTINGS sheet: lap ladder, weather, grid rule, GO/cancel. |
 
 **`js/camera/`**
 

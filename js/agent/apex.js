@@ -606,6 +606,16 @@ const api = {
       tyreLoad: +(G.player._tyreLoad || 0).toFixed(3),
     };
   },
+  // The pit lane (js/race/pit-lane.js): the resolved geometry, the limit, and
+  // this car's state in it. `arm` calls the stop (or cancels it) exactly as the
+  // PIT control does, which is how a spec drives a stop without an input device.
+  pit(arg) {
+    if (!G.pits) return null;
+    const o = arg && typeof arg === "object" ? arg : {};
+    const c = o.car != null ? (G.cars || [])[o.car] : G.player;
+    if (o.arm != null) G.pits.arm(c, !!o.arm);
+    return G.pits.info(c);
+  },
   // The whole tyre picture for one car (default: the player) — compound, life
   // in laps at THIS race distance, wear, the grip it costs and the load that
   // caused it. `field: true` returns the same record for every car, which is

@@ -608,6 +608,10 @@ function updateHud(force) {
     hText(els.tyreCode, (player.tyre && player.tyre.code) || "-");
     hStyle(els.tyreFill, "width", (clamp(1 - spent, 0, 1) * 100).toFixed(0) + "%");
     els.tyre.dataset.wear = spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok";
+    // The PIT button carries its own state the way BOOST/OT/AERO do: armed while
+    // the stop is called, on while the car is actually in the lane.
+    hToggle(els.btnPit, "armed", !!player.pitArmed && player.pitState !== "box");
+    hToggle(els.btnPit, "on", player.pitState === "lane" || player.pitState === "box");
   }
   // gear + tachometer
   hText(els.gear, "" + player.gear);

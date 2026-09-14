@@ -116,6 +116,7 @@ const FULL = [
   "js/track/scenery/city.js",
   "js/track/scenery/identity.js",
   ...circuitFiles,
+  "js/race/pit-lane.js",
   "js/track/tracks.js",
   "js/ui/track-maps.js",
   "js/car/helmets.js",
@@ -443,6 +444,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/physics/ai-drive.js"],         // AiDrive binds M4.clamp/lerp at eval
   ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
+  ["js/race/pit-lane.js", "js/game.js"],                 // game.js calls PitLane.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval

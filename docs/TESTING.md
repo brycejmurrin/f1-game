@@ -1,6 +1,6 @@
 # Testing reference
 
-116 root Playwright spec files (`tests/specs/*.spec.js`) + 200+ `node --test` unit suites
+117 root Playwright spec files (`tests/specs/*.spec.js`) + 200+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1004,6 +1004,7 @@ what it covers.
 | `collisions.spec.js`, `collisions-deep.spec.js` | car-to-car in Frenet space; driver↔AI, driver↔wall, kerbs |
 | `collision-ai-fixes.spec.js` | the June 2026 audit: wrong-way hysteresis, `wallT` on open circuits, rear-end `contactT`, 10-car pack separation, AI banking grip, Jeddah barriers |
 | `offtrack.spec.js` | off-track, reversing, wrong-way, auto-rescue, and the prog↔s seam |
+| `pit-lane.spec.js` | the pit stop, driven: the barrier is open so the car can reach the lane, the lane is tarmac rather than runoff, the limiter holds under full throttle, a stop is held for the box time and fits fresh tyres, and with TYRE WEAR off there is no lane and no limiter at all. Does NOT re-measure pit loss — that is a lap-time sample (23.6 s at Monza when the lane was built) and costs minutes of SwiftShader per run |
 | `audit.spec.js` | edge cases from the codebase audit the other suites missed |
 | `active-aero.spec.js` | X-mode / Z-mode: flap travel, the downforce/drag trade, the 400 ms transition cap |
 | `aero-zones.spec.js` | fixed ACTIVATION ZONES per circuit, Monaco having none, the overtake lap gate driven through a REAL opening lap with the caution layer held OFF (the unsteered car hits the first-chicane barriers and race control would otherwise red-flag it — that rule is race-control.spec.js's), and the X-mode top-speed / downforce trade measured with the field sent 800 m back so the human slipstream cannot move `vmaxNow` |
@@ -1182,6 +1183,7 @@ what it covers.
 | `onboard.test.mjs` | the first-run COACH MARKS in a VM — each mark fires once on its own signal and is remembered across a reload, the 8 s gap keeps two apart, a mark never stomps a race message or speaks outside a race, the wording names the control the player actually has (touch / keys), the two-race cap, and a source assertion that the module reads reports only (no `Tracks`, no curvature, no writes to the car) |
 | `setup-tune.test.mjs` | the SETUP sheet's contract in a VM — the works sheet is identity for every team (mods 1.0, rake 0, brake-bias split 1/1, factory path untouched), bars move the four channels inside the ±5 % clamp, rake adds aero load on top of the wing and clamps, brake bias snaps to the wheel's 0.5 steps and range, a damaged sheet falls back per field |
 | `tyre-model.test.mjs` | the tyre wear model in a VM — OFF is a true no-op through every multiplier the driving model reads (so the characterization baseline holds), compound life is a fraction of the SCHEDULED distance rather than a lap count, the stint floor keeps a 3-lap blast off the cliff, severity orders and clamps, the grip curve is linear then a cliff with traction taking a smaller share, and the catalog's `life` ladder trends against grip, stays inside the clamp and spans a real strategy range (the one guard on it — `tools/car/parts-ladder.mjs` deliberately does not score `life`) |
+| `pit-lane.test.mjs` | the pit lane's pure geometry on every circuit without a browser — the window WRAPS the start/finish line (a naive range test is wrong for every lane in the game), the lane is measured in METRES so a long lap does not get a long pit lane, a short circuit is not swallowed by its own lane, street circuits take the lower limit, and `openBarrier` opens the pit side only — never `hw`, which the racing line, the road mesh and the AI all read |
 | `daily-challenge.test.mjs` | the DAILY CHALLENGE in a VM — the plan is a pure function of the UTC day (same day same plan, a week is not one plan), open() stages the time trial by circuit id with the day's seed, record() keeps the day's best and a streak of consecutive UTC days, the share line's one shape, a damaged save normalises |
 | `career.spec.js` | the save and its six slots, the mode axes, the hub, a settled round, ratings, the R&D garage, MY TEAM, objectives/contracts/rollover, reliability, EXTRA FUNDS never raising the fitted cap, the facility, the hire's contract, sponsors — and that career development never reaches a Grand Prix |
 | `quali.spec.js` | one-lap qualifying: the simulated field and its spread, the sheet's two states, the grid being the qualifying order car-for-car, every round qualifying, and no classification leaking into the race |
