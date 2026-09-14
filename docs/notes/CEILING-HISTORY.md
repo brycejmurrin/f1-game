@@ -2961,3 +2961,24 @@ returns, which is why three nodes and one line is the whole cost.
 Zero added to `rawSpacing` / `rawColor` / `rawColorDistinct`, all three of which
 carry `slack: 0`: the rule uses `var(--gap)`, `var(--you)`, `var(--text)` and
 `var(--fs-micro)` throughout and defines no literal of its own.
+
+## 2026-09-14 — L2: the pit lane is PAINTED, across three shading languages
+
+`js/game.js` 8757 → 8763 (+6 lines, +1 codeLine) and `js/render/glx/glx.js`
+2648 → 2655 (+7). Both are the producer side of one uniform: game.js puts
+`frame.pitLane` (entry s, window length, side, lap length) on the frame, glx.js
+uploads it as `uPitLane`. The rest of the cost is in files that are not
+ratcheted — the three lit shaders, `wgx.js`'s packer and `pit-lane.js`.
+
+The lane is a fragment-shader MARKING, not geometry, and that is the whole
+reason this is cheap. Two earlier attempts built it: one forced the road
+boundary open and put it through Monaco's buildings (lap distance jumped 250 m),
+the other went looking for room beyond the edge and found 2.4 m at Monza,
+because the scenery puts a pit WALL there. Painting `roadMarkings()` from the
+`(s, x, hw)` the road already carries adds no vertices, moves no boundary and
+leaves the car on tarmac, so neither failure can return.
+
+WGX's frame uniform grew with it: `FRAME_UNIFORM_BYTES` 576 → 592 for the
+`pitLane` vec4 at offset 576. That number is pinned by
+`tests/unit/webgpu-lifecycle.test.mjs` in three places, which is exactly the
+guard a fixed-layout buffer should have.

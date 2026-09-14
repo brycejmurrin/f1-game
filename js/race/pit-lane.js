@@ -113,8 +113,21 @@ const PitLane = (function () {
   // buildProps places the grandstand at -1 and the pit building at +1), so that
   // is the default side. A circuit may say otherwise via `def.pitZone.side`.
   const PIT_SIDE = 1;
-  const COMMIT_FRAC = 0.70;   // of the half-width, toward the pit side
-  const COMMIT_M = 120;       // ...and only this far into the window
+  // THE LANE IS THE OUTERMOST STRIP OF THE ROAD across the window, separated
+  // from the racing surface by a painted line. It is not a separate road behind
+  // the wall, and that is a decision rather than a shortcut: this track engine
+  // is one ribbon with one arc coordinate, so a road that branches off and
+  // rejoins cannot be expressed — which is why both earlier attempts died (see
+  // the header). On-road costs no geometry, moves no boundary and leaves the
+  // car on tarmac, so neither failure can return. What it does not give is
+  // garages, a crew, or a lane behind the wall.
+  //
+  // MUST MATCH PIT_LANE_W in the three lit shaders (glsl-lit.js, wgsl-chunks.js,
+  // tsl-lit.js) — the painted line IS the lane edge, and a driver steering at
+  // what they can see has to land inside what the model calls the lane.
+  // tests/unit/pit-lane.test.mjs asserts all four agree.
+  const LANE_W = 3.2;
+  const COMMIT_M = 120;       // commit only this far into the window
   const COMMIT_S = 0.55;      // held, in seconds
   const COMMIT_V = 0.10;      // of the speed envelope: a parked car is not pitting
 
@@ -267,12 +280,28 @@ const PitLane = (function () {
     // COMMIT_* block for which. Order matters only for cost: the cheap
     // rejections come first so the spline sample is reached by almost nobody.
     const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
+    /** The lane's inner edge — the painted line — as a lateral x. */
+    function laneEdge(hw, side) { return (hw - LANE_W) * side; }
+    /** The lane's lateral CENTRE: where the box is and where a car in it sits. */
+    function laneCentre(hw, side) { return (hw - LANE_W * 0.5) * side; }
     function committing(c, zz, L) {
       if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
       if (!((c.speed || 0) > G.vTop() * COMMIT_V)) return false;
       if (throughM(zz, c.s, L) > COMMIT_M) return false;
       Tracks.sample(G.track, c.s, _smp);
-      return (c.x || 0) * zz.side >= (_smp.hw || 0) * COMMIT_FRAC;
+      // INSIDE THE PAINTED LANE, not past an abstract fraction of the road. The
+      // commitment test and the stripe a driver can see are now the same line,
+      // which is the whole point of painting it: before this, the gesture asked
+      // you to aim at nothing.
+      const hw = _smp.hw || 0;
+      return (c.x || 0) * zz.side >= laneEdge(hw, zz.side) * zz.side;
+    }
+
+    /** The four numbers the lit shaders paint the lane from, or null. */
+    function laneUniform() {
+      const zz = z(), t = G.track;
+      if (!enabled() || !zz || !t) return null;
+      return [zz.sIn, zz.lenM, zz.side, t.total];
     }
 
     /** How far through the commitment dwell this car is, 0-1. The HUD's cue. */
@@ -501,12 +530,13 @@ const PitLane = (function () {
 
     return { zoneOf: () => z(), limit, toBox, approachV, inLane, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
-             pickFor, ownedTyres, committing, commitFrac, resetCommit, toEntry, cue };
+             pickFor, ownedTyres, committing, commitFrac, resetCommit, toEntry, cue,
+             laneEdge, laneCentre, laneUniform };
   }
 
   return { create, zoneOf, inWindow, throughM,
            ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
-           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_FRAC, COMMIT_M, COMMIT_S, COMMIT_V,
-           CUE_M: 550, CUE_WEAR: 0.55 };
+           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V,
+           CUE_M: 550, CUE_WEAR: 0.55, LANE_W };
 })();
 Object.freeze(PitLane);

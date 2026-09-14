@@ -155,6 +155,10 @@ uniform vec3 uSkyZenith;
 uniform vec3 uSkyHorizon;
 uniform float uFogHeight;
 uniform float uGroundMist;  // 0..1 low-lying drifting ground mist
+// THE PIT LANE, as four numbers: (entry s, window length, pit side, lap length).
+// The lane is PAINTED, not built — see roadMarkings(). Length <= 0 means no
+// lane, which is every circuit until the tyre setting arms one.
+uniform vec4 uPitLane;
 uniform float uLampFog;     // lamp-glow-in-fog strength (0 = off / day)
 uniform sampler2D uBlockerMap;  // PCSS-lite min-depth blocker map (512sq)
 uniform float uPcss;            // 1 = blocker map valid, 0 = fixed penumbra
@@ -569,6 +573,7 @@ void applyMaterial(int mid, inout vec3 albedo, inout float rough, float vd) {
 // a crisp edge at any distance and any viewing angle, costs no vertices, and
 // cannot alias against the geometry. Gated on half-width so only road geometry
 // paints itself — every other mesh reads aTrk = (0,0,0).
+const float PIT_LANE_W = 3.2;   // lane width, taken off the road's pit side
 void roadMarkings(inout vec3 albedo, inout float rough) {
   float hw = vTrk.z;
   if (hw <= 0.5) return;                     // not road surface (or no trk attribute)
@@ -600,6 +605,37 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
   // knee on the RAW footprint (same 0.10/0.55 as WGX).
   float mip = clamp(1.0 - (fwX - 0.10) / 0.55, 0.0, 1.0);
   float m = max(edge, band * dash) * mip;
+
+  // THE PIT LANE. Painted here rather than built, for the reason the whole
+  // module exists: this track engine is ONE RIBBON WITH ONE ARC COORDINATE, so
+  // a road that branches off and rejoins cannot be expressed. Two earlier cuts
+  // tried — one forced the road boundary open and put it through Monaco's
+  // buildings (lap distance jumped 250 m), the other looked for room beyond the
+  // edge and found 2.4 m at Monza, because the scenery puts a pit WALL there.
+  //
+  // So the lane is the outermost strip of the road itself across the window,
+  // separated from the racing surface by a solid line — which is what the first
+  // stretch of a real pit entry looks like anyway, before it goes behind the
+  // wall. It costs no geometry, moves no boundary, and leaves the car on
+  // tarmac, so none of the failures above can come back.
+  if (uPitLane.y > 0.0) {
+    float L = uPitLane.w;
+    // The window WRAPS the start/finish line on every circuit (it opens 320 m
+    // before it and closes 130 m after), so this is a wrapped-interval test and
+    // not a compare — the same reason PitLane.inWindow is written the way it is.
+    float through = mod(s - uPitLane.x + L, L);
+    if (through <= uPitLane.y) {
+      float side = uPitLane.z;
+      float lx = (hw - PIT_LANE_W) * side;    // the boundary line's lateral position
+      // Solid, and wider than the edge lines: this one is an instruction.
+      float dPit = abs(x - lx);
+      float pit = 1.0 - smoothstep(0.14 - aaX, 0.14 + aaX, dPit);
+      // Fade the line in over the first few metres so it does not switch on as
+      // a hard seam across the road at the window's edge.
+      pit *= smoothstep(0.0, 6.0, through) * smoothstep(0.0, 6.0, uPitLane.y - through);
+      m = max(m, pit * mip);
+    }
+  }
 
   albedo = mix(albedo, paint, m);
   rough = mix(rough, 0.55, m);                // paint is smoother than tarmac

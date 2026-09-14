@@ -809,7 +809,7 @@ const GLX = (function () {
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
       "uCarShadowMap", "uCarLightVP", "uCarShadowOn", "uCarBiasScale",
       "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
-      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uPitLane", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
@@ -1801,6 +1801,13 @@ const GLX = (function () {
     uf1(litU.uFogHeight, _litUf, "fogHeight", T && T.fogHeight != null ? T.fogHeight : (frame.fogHeight != null ? frame.fogHeight : 0.0));
     // GROUND MIST knob: scale the per-condition mist amount (multiplier, def 1).
     uf1(litU.uGroundMist, _litUf, "groundMist", (frame.groundMist != null ? frame.groundMist : 0.0) * (T && T.mistDensity != null ? T.mistDensity : 1));
+    // THE PIT LANE, as (entry s, window length, side, lap length) — painted by
+    // roadMarkings(). A null/absent frame.pitLane means no lane, and the zero
+    // LENGTH is what the shader tests, so nothing is drawn until one is armed.
+    {
+      const pl = frame.pitLane;
+      gl.uniform4f(litU.uPitLane, pl ? pl[0] : 0, pl ? pl[1] : 0, pl ? pl[2] : 1, pl ? pl[3] : 1);
+    }
     uf1(litU.uLampFog, _litUf, "lampFog", frame.lampFog != null ? frame.lampFog : 0.0);
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);
     uf1(litU.uCloudCover, _litUf, "cloudCover", frame.cloud != null ? frame.cloud : 0.0);

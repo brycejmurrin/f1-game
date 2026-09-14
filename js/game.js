@@ -6587,6 +6587,12 @@ function render(dt) {
   // Same cloud-speed knob the SKY uses, so the ground cloud-shadow dapple + the
   // godray shafts freeze/slow in lockstep with the visible sky (0 = frozen sky).
   frame.cloudSpeed = LT.cloudSpeed;
+  // THE PAINTED PIT LANE, as (entry s, window length, side, lap length). The
+  // lane is a fragment-shader marking rather than geometry — one ribbon, one
+  // arc coordinate, so a road that branches and rejoins cannot be built here
+  // (js/race/pit-lane.js says what that cost). null until the tyre setting
+  // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
+  frame.pitLane = pits.laneUniform();
   // Wet-road material (rain): ramp wetness in/out smoothly so the surface
   // darkens and starts mirroring lamps/sky over ~1s rather than popping.
   if (LT.wetness >= 0) {

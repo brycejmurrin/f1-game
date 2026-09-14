@@ -356,7 +356,8 @@ fn applyMaterial(mid: i32, albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<
   *albedo_ptr = albedo;
   *rough_ptr = rough;
 }
-fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, trk: vec3<f32>, fwTrk: vec3<f32>) {
+const PIT_LANE_W = 3.2;   // lane width off the road's pit side — MUST match PitLane.LANE_W
+fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, trk: vec3<f32>, fwTrk: vec3<f32>, pit: vec4<f32>) {
   let hw = trk.z;
   if (hw <= 0.5) { return; }
   let s = trk.x; let x = trk.y;
@@ -378,7 +379,23 @@ fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f
   // Soft knee on the RAW footprint: still gone by ~0.65 m/px, but a saturated
   // AA clamp (fwX==0.30) keeps ~64% amplitude instead of erasing the paint.
   let mip = clamp(1.0 - (fwX - 0.10) / 0.55, 0.0, 1.0);
-  let m = max(edge, band * dash) * mip;
+  var m = max(edge, band * dash) * mip;
+  // THE PIT LANE (mirror of GLX roadMarkings): the outermost strip of the road
+  // across the window, separated by a solid line. Painted rather than built —
+  // this engine is one ribbon with one arc coordinate, so a road that branches
+  // and rejoins cannot be expressed. The window WRAPS the start/finish line, so
+  // this is a wrapped-interval test.
+  if (pit.y > 0.0) {
+    let L = pit.w;
+    let through = (s - pit.x + L) % L;
+    if (through <= pit.y) {
+      let lx = (hw - PIT_LANE_W) * pit.z;
+      let dPit = abs(x - lx);
+      var pitM = 1.0 - smoothstep(0.14 - aaX, 0.14 + aaX, dPit);
+      pitM = pitM * smoothstep(0.0, 6.0, through) * smoothstep(0.0, 6.0, pit.y - through);
+      m = max(m, pitM * mip);
+    }
+  }
   *albedo_ptr = mix(*albedo_ptr, paint, m);
   *rough_ptr = mix(*rough_ptr, 0.55, m);
 }
@@ -454,7 +471,9 @@ struct FrameU {
   params9    : vec4<f32>,     // off 544  (ambContactDark, lampWallSpill, windowSunFlash, skyRimGlow)
   params10   : vec4<f32>,     // off 560  (chunkShadowIdx — ABSOLUTE index of the armed shadow
                               //           lamp in the baked trackLights array, -1 unarmed; yzw pad)
-};                            // size 576
+  pitLane    : vec4<f32>,     // off 576  (entry s, window length, pit side, lap length) — the
+                              //           PAINTED pit lane; length 0 = no lane (roadMarkings)
+};                            // size 592
 struct Light {
   posRad   : vec4<f32>,       // xyz pos, w radius
   colBleed : vec4<f32>,       // xyz colour*intensity, w out-of-beam bleed
@@ -1055,7 +1074,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
   applyMaterial(i32(vMatId + 0.5), &albedo, &rough, vDist, in.wpos, in.nrm, fwWpos, litPack, packOn);
   if (i32(vMatId + 0.5) == 16) {
-    roadMarkings(&albedo, &rough, vTrk, fwTrk);
+    roadMarkings(&albedo, &rough, vTrk, fwTrk, U.pitLane);
   }
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
@@ -1941,7 +1960,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     SKY_UNIFORM_BYTES: 240,
     // Lit-pipeline uniform block sizes (see the LIT struct comments; the JS-side
     // writers in wgx.js MUST agree with these).
-    FRAME_UNIFORM_BYTES: 576,   // FrameU + lampLightVP + params8..10 (params10 = chunk shadow idx)
+    FRAME_UNIFORM_BYTES: 592,   // FrameU + lampLightVP + params8..10 + pitLane (the painted lane)
     SHADOW_LVP_BYTES: 64,       // ShadowU (lightVP mat4)
     SHADOW_MODEL_BYTES: 64,     // ShadowModel (model mat4), dynamic-offset stride 256
     LIGHT_STRIDE_BYTES: 64,     // one Light

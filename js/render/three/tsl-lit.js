@@ -150,6 +150,10 @@
       fogDensity:  uniform(0.0),      // frame.fogDensity * tune.fogDensityMul (def 1)
       fogHeight:   uniform(0.0),      // tune.fogHeight ?? frame.fogHeight (TUNE def 0.018; frame-driven)
       groundMist:  uniform(0.0),      // frame.groundMist * tune.mistDensity (def 1)
+      // THE PAINTED PIT LANE: (entry s, window length, pit side, lap length).
+      // Length 0 = no lane, which is what roadMarkings tests. Mirror of GLX
+      // uPitLane / WGX U.pitLane.
+      pitLane:     uniform(new THREE.Vector4(0, 0, 1, 1)),
       lampFog:     uniform(0.0),      // frame.lampFog (0 = day/off)
       wetness:     uniform(0.0),
       time:        uniform(0.0),      // frame.time — drives FLAG wave + cloud drift (deterministic with the game clock)
@@ -255,6 +259,10 @@
       uf1(U.fogHeight, T && T.fogHeight != null ? T.fogHeight
         : (frame.fogHeight != null ? frame.fogHeight : 0.0));
       U.groundMist.value = (frame.groundMist != null ? frame.groundMist : 0) * k("mistDensity", 1);
+      {
+        const pl = frame.pitLane;
+        U.pitLane.value.set(pl ? pl[0] : 0, pl ? pl[1] : 0, pl ? pl[2] : 1, pl ? pl[3] : 1);
+      }
       U.lampFog.value = frame.lampFog != null ? frame.lampFog : 0;
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
       U.time.value = frame.time != null ? frame.time : 0;
@@ -753,6 +761,7 @@
      * fallback. For the same reason the body uses select()/arithmetic
      * throughout instead of If().
      * Returns vec4(albedo, rough), matching applyMaterial's packing. */
+    const PIT_LANE_W = 3.2;   // lane width off the road's pit side — MUST match PitLane.LANE_W
     const roadMarkings = Fn(([trkIn, albedoIn, roughIn]) => {
       const s = float(trkIn.x).toVar();
       const x = float(trkIn.y).toVar();
@@ -782,7 +791,26 @@
       // hw > 0.5 marks road SURFACE; every other mesh reads trk = (0,0,0), and
       // the kerb ribbon / edge skirt push hw 0 so they are skipped too.
       const onRoad = select(hw.greaterThan(0.5), float(1.0), float(0.0)).toVar();
-      const m = max(edge, band.mul(dash)).mul(mip).mul(onRoad).toVar();
+      const base = max(edge, band.mul(dash)).toVar();
+
+      // THE PIT LANE (mirror of GLX/WGX roadMarkings): the outermost strip of
+      // the road across the window, separated by a solid line. Written as
+      // ARITHMETIC AND select(), not a branch, for the same reason the whole
+      // function is — a derivative inside non-uniform control flow is a hard
+      // WGSL compile error, reported asynchronously, so the backend boots clean
+      // and then draws wrong. `through` uses the wrapped interval because the
+      // window straddles the start/finish line on every circuit.
+      const L = float(U.pitLane.w).toVar();
+      const lenM = float(U.pitLane.y).toVar();
+      const through = mod(s.sub(U.pitLane.x).add(L), L).toVar();
+      const lx = hw.sub(PIT_LANE_W).mul(U.pitLane.z).toVar();
+      const pitBand = smoothstep(aaX.mul(-1.0).add(0.14), aaX.add(0.14), abs(x.sub(lx))).oneMinus().toVar();
+      const fade = smoothstep(0.0, 6.0, through).mul(smoothstep(0.0, 6.0, lenM.sub(through))).toVar();
+      const hasLane = select(lenM.greaterThan(0.0), float(1.0), float(0.0)).toVar();
+      const inWin = select(through.lessThanEqual(lenM), float(1.0), float(0.0)).toVar();
+      const pitM = pitBand.mul(fade).mul(hasLane).mul(inWin).toVar();
+
+      const m = max(base, pitM).mul(mip).mul(onRoad).toVar();
 
       albedo.assign(mix(albedo, vec3(0.95, 0.95, 0.97), m));
       rough.assign(mix(rough, 0.55, m));    // paint is smoother than tarmac

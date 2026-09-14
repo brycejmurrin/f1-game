@@ -197,8 +197,8 @@ test("there is no pit control anywhere — the stop is a line you take", () => {
 test("the commitment gesture is deliberate to make and still possible to make", () => {
   assert.ok(P.COMMIT_S >= 0.3, "a shorter hold than this is a wobble, not a decision");
   assert.ok(P.COMMIT_S <= 1.2, "a longer one and the entry is gone before you have committed");
-  assert.ok(P.COMMIT_FRAC >= 0.5, "less than half way over is a drift, not a pit entry");
-  assert.ok(P.COMMIT_FRAC < 1, "a driver must not have to leave the road to pit");
+  assert.ok(P.LANE_W >= 2.5, "a lane narrower than a car is not a lane");
+  assert.ok(P.LANE_W < 7, "the lane must not swallow the racing surface it sits beside");
   const z = P.zoneOf(fakeTrack({}));
   assert.ok(P.COMMIT_M < z.lenM, "the entry road must be shorter than the whole window");
   assert.ok(P.COMMIT_M < P.throughM(z, z.sBox, 5386),
@@ -411,4 +411,40 @@ test("the arrow has a side to point at, and it is the side you must steer to", (
   const c = car(0);
   assert.equal(pits.info(c).side, Pl.PIT_SIDE);
   assert.ok(Pl.PIT_SIDE === 1 || Pl.PIT_SIDE === -1, "the side must be a direction, not a magnitude");
+});
+
+// ── The painted lane and the modelled lane are the SAME line ────────────────
+
+test("LANE_W agrees across the model and all three lit shaders", () => {
+  // The lane is PAINTED, not built, so the stripe a driver steers at and the
+  // boundary the commitment test uses live in four different files and four
+  // different languages. If they drift, the game asks you to aim at a line that
+  // is not where the model thinks it is — the worst kind of bug, because it
+  // looks like bad driving. There is no shared constant to import across GLSL,
+  // WGSL and TSL, so this is the thing that holds them together.
+  const SHADERS = [
+    ["js/render/glx/shaders/glsl-lit.js", /PIT_LANE_W\s*=\s*([0-9.]+)/],
+    ["js/render/webgpu/wgsl-chunks.js",   /PIT_LANE_W\s*[:=]\s*(?:f32\s*\(\s*)?([0-9.]+)/],
+    ["js/render/three/tsl-lit.js",        /PIT_LANE_W\s*=\s*([0-9.]+)/],
+  ];
+  for (const [file, re] of SHADERS) {
+    const src = readFileSync(join(ROOT, file), "utf8");
+    const m = src.match(re);
+    assert.ok(m, `${file} has no PIT_LANE_W — the lane is unpainted on this backend`);
+    assert.equal(Number(m[1]), P.LANE_W,
+      `${file} paints the lane edge at ${m[1]} m but PitLane.LANE_W is ${P.LANE_W} — `
+      + "a driver steering at the stripe would miss the lane the model checks");
+  }
+});
+
+test("the lane sits INSIDE the road, and the box sits inside the lane", () => {
+  const hw = 7, side = P.PIT_SIDE;
+  const edge = P.zoneOf(fakeTrack({})) && null;   // zone not needed; geometry is pure
+  const S = commitSession({ hw });
+  const e = S.pits.laneEdge(hw, side), c = S.pits.laneCentre(hw, side);
+  assert.ok(Math.abs(e) < hw, "the painted line must be ON the road, not past its edge");
+  assert.ok(Math.abs(c) < hw, "the lane centre must be on tarmac — that is what keeps the car off the grass");
+  assert.ok(Math.abs(c) > Math.abs(e), "the lane centre is further out than its inner edge");
+  assert.ok(Math.abs(hw - Math.abs(c)) > 1, "the lane centre must not sit on the outside edge line");
+  assert.equal(Math.sign(e), side, "the lane is on the pit side");
 });
