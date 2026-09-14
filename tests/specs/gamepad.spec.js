@@ -58,16 +58,39 @@ test("left-stick deflection steers, with a centre dead zone", async ({ page }) =
   const right = await poll(page, { axisX: 1 }, () => Input.steer());
   expect(right).toBeGreaterThan(0.9);
 
-  // inside the 0.14 dead zone → no steer
-  const dz = await poll(page, { axisX: 0.1 }, () => Input.steer());
+  // Inside the dead zone -> no steer. It is 0.05 now, not 0.14: the old value
+  // was 3-7x what racing games ship (F1 defaults every axis to 0, ACC 2-4 %,
+  // Forza 5) and threw away the band an F1 car's small corrections live in.
+  const dz = await poll(page, { axisX: 0.03 }, () => Input.steer());
   expect(Math.abs(dz)).toBeLessThan(0.001);
+  // ...and just past it the output RAMPS from zero rather than stepping to the
+  // dead-zone value, which is the whole point of rescaling.
+  const edge = await poll(page, { axisX: 0.07 }, () => Input.steer());
+  expect(Math.abs(edge)).toBeGreaterThan(0);
+  expect(Math.abs(edge)).toBeLessThan(0.05);
 });
 
-test("d-pad gives a digital full-lock override", async ({ page }) => {
-  const right = await poll(page, { buttons: { 15: 1 } }, () => Input.steer());
-  expect(right).toBe(1);
-  const left = await poll(page, { buttons: { 14: 1 } }, () => Input.steer());
-  expect(left).toBe(-1);
+test("the d-pad ramps to full lock instead of teleporting there", async ({ page }) => {
+  // It used to assign ax = +/-1 outright, bypassing the digital ramp every
+  // other digital source goes through - so a d-pad tap at 300 km/h was an
+  // instant full-lock input. One frame of hold is a small angle now; holding
+  // it still reaches the rail.
+  const oneFrame = await poll(page, { buttons: { 15: 1 } }, () => Input.steer());
+  expect(oneFrame).toBeLessThan(0.5);
+  const held = await page.evaluate(() => {
+    const btns = [];
+    for (let i = 0; i < 17; i++) btns.push({ pressed: i === 15, value: i === 15 ? 1 : 0 });
+    navigator.getGamepads = () => [{ connected: true, mapping: "standard", axes: [0, 0, 0, 0], buttons: btns }, null, null, null];
+    return new Promise((res) => {
+      const t0 = performance.now();
+      (function spin() {
+        Input.poll();
+        if (performance.now() - t0 > 700) return res(Input.steer());
+        requestAnimationFrame(spin);
+      })();
+    });
+  });
+  expect(held).toBeGreaterThan(0.9);
 });
 
 test("triggers and face buttons drive throttle / brake", async ({ page }) => {

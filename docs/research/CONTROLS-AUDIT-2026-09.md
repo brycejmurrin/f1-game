@@ -496,6 +496,49 @@ Ordered by (player impact × confidence) ÷ cost.
 
 ---
 
+## 4a. Verification, and the pre-existing red it uncovered
+
+Every browser failure on the implementation tree was compared against the base
+commit in a worktree. **Every one of them also fails on base**, except two that
+were mine and are now fixed by updating the specs to the behaviour this pass
+deliberately changed.
+
+| Spec | Base | After | Whose |
+|---|---|---|---|
+| `gamepad` left-stick centre dead zone | pass | **fixed spec** | mine — 0.14 → 0.05 |
+| `gamepad` d-pad full-lock override | pass | **fixed spec** | mine — it ramps now |
+| `gamepad` triggers and face buttons | fail | fail | pre-existing |
+| `gamepad` face/shoulder edge-triggered | fail | fail | pre-existing |
+| `gamepad` keyboard driving after a HUD button | fail | fail | pre-existing |
+| `gamepad` trigger travel is analog | fail | fail | pre-existing |
+| `camera-tuner` CORNER LEAD | fail | fail | pre-existing |
+| `presets` STANDARD sits between RELAX and PRO | fail | fail | pre-existing |
+| `steering` ×9, `sliders` ×4 | fail | fail | pre-existing |
+| `touch-steer` + `tilt-pipeline` + `steer-migration` | — | **47/47 pass** | the specs closest to this change |
+
+**The presets failure is arithmetic, and worth naming.** `STANDARD sits between
+RELAX and PRO on every feel axis` asserts `std.wheelbase <= relax.wheelbase`.
+The 2026-09-08 re-centring made STANDARD "a long, lazy rack (RATE 2)" while
+RELAX kept RATE 4, so the wheelbases are 4.20 m and 3.80 m and the assertion is
+false by construction. The same retune is the likely cause of the two
+`simplified controls` failures (RELAX's `steerRate: 4` matches no entry in
+`STEER_LEVELS`, so the FEEL row reads CUSTOM rather than a named step).
+**Proposed patch, not applied here:** either drop the wheelbase ordering
+assertion (STANDARD is no longer the middle bundle on that axis, deliberately),
+or give RELAX `steerRate: 2` so the ladder is monotonic again. Which one is a
+design call about the owner's profile, not a test fix.
+
+**A guard came out of this.** `#ios-install` shipped with `display: flex`, which
+outranks the UA's `[hidden] { display: none }` — an author rule always beats a
+UA rule — so the attribute could not hide it. `tests/unit/css-layers.test.mjs`
+now fails on any shell element that ships `hidden` and is given a bare `#id`
+display rule with no `#id[hidden]` restatement. It immediately found two
+long-standing instances, `#lights` and `#nogl`, both driven purely by
+`.hidden = true/false` from `js/game.js` — `#nogl` being a full-screen
+`z-index: 99` panel. Both now restate the attribute.
+
+---
+
 ## 5. Negative decisions — do not build these
 
 Recorded so they are not re-litigated in six months.

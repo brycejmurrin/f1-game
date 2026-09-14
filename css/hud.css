@@ -536,6 +536,13 @@ body[data-density="compact"] #announce {
 }
 
 /* ---------- start lights ---------- */
+/* The gantry is driven purely by `els.lights.hidden = true/false` in
+   js/game.js, and the `display: flex` below outranks the UA's
+   `[hidden] { display: none }` — an author rule always beats a UA rule — so
+   the attribute the JS sets could not actually hide it. Restated, as
+   #cs-cam-panel and the dock groups already do. Found by the hidden-override
+   guard in tests/unit/css-layers.test.mjs. */
+#lights[hidden] { display: none; }
 #lights {
   position: fixed;
   top: calc((18svh + var(--sat)) / var(--hud-z));

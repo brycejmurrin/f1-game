@@ -207,6 +207,12 @@
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
 }
 #ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; }
+/* `display: flex` above OUTRANKS the UA's `[hidden] { display: none }`, so the
+   attribute stops working and the banner shows on every platform — where it
+   sits bottom-centre and swallows clicks meant for #mb-race / #sel-go / #rs-go.
+   The dock groups carry the same restatement a few rules up for the same
+   reason. Caught by steering.spec.js, whose every click timed out. */
+#ios-install[hidden] { display: none; }
 
 /* LEFT-HANDED LAYOUT. F1 Mobile ships right- and left-handed wheel configs as
    first-class, separately enumerated control schemes, and mirroring is the
@@ -895,6 +901,11 @@ body[data-density="compact"] #campicker {
   font-size: var(--fs-micro);
 }
 
+/* Same trap as #lights: js/game.js only ever sets `.hidden`, and the
+   `display: flex` below would beat the UA rule that attribute relies on — on a
+   full-screen z-index-99 panel, which is the worst element in the tree to have
+   painting unconditionally. */
+#nogl[hidden] { display: none; }
 #nogl {
   position: fixed; inset: 0; z-index: 99;
   display: flex; align-items: center; justify-content: center;
