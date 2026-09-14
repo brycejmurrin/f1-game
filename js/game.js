@@ -4009,13 +4009,12 @@ function updateCar(c, dt, ranked) {
     // Same rule the AI runs: take every zone the circuit offers.
     c.xOn = c.xArmed;
   } else if (c.human) {
-    if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
-    else c.xOn = !!(inp && inp.aero);
-    // PIT IN arms the stop; PitLane takes it from the next entry (js/race/pit-lane.js).
-    // AFTER the if/else above, not between them: sitting in the middle made this
-    // `if` steal that `else`, so any local car that had not pressed PIT had
+    // Nothing may sit BETWEEN these two: a statement here once stole the `else`,
+    // so any local car that had not pressed the (since removed) PIT key had
     // `c.xOn` overwritten from the raw input and the active-aero toggle stopped
     // working entirely (tests/unit/active-aero-vm.test.mjs, 7 red).
+    if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
+    else c.xOn = !!(inp && inp.aero);
   } else {
     // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
     // and OT still force the open wing so a pass does not sit in high drag.
