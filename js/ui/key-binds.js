@@ -53,6 +53,14 @@ function create(G) {
     // controller section takes only Escape from the keyboard (cancel).
     function onKey(e) {
       if (!armed || !e.isTrusted) return;
+      /* AN IME IS TYPING, NOT BINDING. While a composition is active the
+         browser reports keyCode 229 and a `key` of "Process" instead of the
+         real key, so a player with a CJK input method active captured garbage
+         into their control map — and `isComposing` alone is not enough,
+         because compositionstart can fire AFTER the first keydown, leaving it
+         false mid-composition. The 229 check is what covers that gap, and is
+         the pairing MDN recommends. */
+      if (e.isComposing || e.keyCode === 229) return;
       if (dev.keys || e.code === "Escape") { e.preventDefault(); e.stopPropagation(); }
       if (e.repeat) return;
       if (e.code === "Escape") { disarm(); return; }
@@ -178,6 +186,7 @@ function create(G) {
       ["Steer", ["left", "right"]], ["Gas", ["throttle"]], ["Brake", ["brake"]],
       ["Boost", ["boost"], "tap to toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],
       ["Camera", ["camera"], "cycles"], ["Shift up", ["shiftUp"]], ["Shift down", ["shiftDown"], "when GEARS: MANUAL"],
+      ["Look back", ["lookBack"], "hold"], ["Recover", ["recover"]], ["Pause", ["pause"]],
     ],
   });
   pad = section({
@@ -188,12 +197,13 @@ function create(G) {
     // A desktop always shows it (a pad may be plugged in later); a phone only
     // once a pad has been seen, or when the map is already customised.
     show: () => Input.padPresent() || desktop() || !Input.padsAreDefault(),
-    idle: "Tap a slot, then press a button on the controller. Esc cancels. The stick and D‑pad steer; MENU / START pauses.",
+    idle: "Tap a slot, then press a button on the controller. Esc cancels. The stick and D‑pad steer.",
     armedNote: "Press a controller button… (Esc cancels)", resetNote: "Controller reset to the defaults.",
     groups: [
       ["Steer", "left stick / D‑pad"], ["Gas", ["throttle"]], ["Brake", ["brake"], "(triggers are analog)"],
       ["Boost", ["boost"], "toggle"], ["Overtake", ["overtake"]], ["Active aero", ["aero"]],
-      ["Camera", ["camera"], "cycles"], ["Shift up", ["shiftUp"]], ["Shift down", ["shiftDown"]], ["Pause", "MENU / START"],
+      ["Camera", ["camera"], "cycles"], ["Shift up", ["shiftUp"]], ["Shift down", ["shiftDown"]],
+      ["Look back", ["lookBack"], "hold"], ["Recover", ["recover"]], ["Pause", ["pause"]],
     ],
   });
   // A pad that appears mid-session (gamepadconnected fires on its first press)
@@ -216,6 +226,107 @@ function create(G) {
   if (Input.onPointerKindChange) Input.onPointerKindChange(rerender);
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", rerender, { once: true });
   else rerender();
+  /* BUTTON NAMES — the manual override for a guess that cannot always be
+     right. Sniffing gamepad.id is genuinely the state of the art (the spec
+     leaves the id format "unspecified" and standardising vendorId/productId is
+     still an open W3C issue), but it mislabels a Switch-style pad, an 8BitDo
+     in Nintendo mode, and anything Safari renames at the OS layer. */
+  const BRANDS = [["auto", "AUTO"], ["xbox", "XBOX"], ["ps", "PLAYSTATION"], ["nintendo", "NINTENDO"]];
+  // SettingRow is optional here on purpose: this module is booted in a bare VM
+  // by tests/unit/key-binds.test.mjs, which supplies Input and a DOM and
+  // nothing else. Every other global it touches is already guarded the same
+  // way; an unguarded reference took the whole CONTROLS page down with it.
+  if ($("pm-padbrand") && Input.setPadLabelMode && window.SettingRow) {
+    Input.setPadLabelMode(store.get("padLabels", "auto"));
+    SettingRow.wire("pm-padbrand", {
+      values: BRANDS,
+      read: () => Input.padLabelMode(),
+      write: (v) => {
+        Input.setPadLabelMode(v);
+        store.set("padLabels", v);
+        tick();
+        if (pad) pad.render();       // every chip is renamed by this
+      },
+    });
+    SettingRow.paint($("pm-padbrand"), Input.padLabelMode(), BRANDS);
+  }
+
+  const calibNote = $("pm-pad-calib-note");
+  const say = (t) => { if (calibNote) calibNote.textContent = t; };
+  const calibBtn = $("pm-pad-calib");
+  if (calibBtn && Input.calibratePad) calibBtn.onclick = () => {
+    if (!Input.padPresent()) { say("No controller detected. Press a button on it first — a browser hides a pad until you do."); return; }
+    // The press that ran this button is not the stick, so sample on the next
+    // turn of the loop rather than the instant of the click.
+    say("Let go of the stick…");
+    setTimeout(() => {
+      if (Input.calibratePad()) {
+        say(`Centre captured (offset ${(Input.padRest() * 100).toFixed(1)}%). If the car still pulls, raise DEAD ZONE a point or two.`);
+        tick();
+      } else {
+        say("The stick was not resting — let go of it completely, then press CALIBRATE STICK again.");
+      }
+    }, 450);
+  };
+
+  /* THE WHEEL WIZARD. A wheel enumerates as a Gamepad with mapping "" — the
+     only standard layout the spec defines is the Xbox-style pad — so its
+     steering axis is a guess and its pedals are certainly not buttons 6/7.
+     Nothing in the API says which axis is which, so the honest design is to
+     ask: move the control, and whichever axis travels furthest from where it
+     was resting is the answer. Sequential, one prompt at a time, and
+     abandonable — a half-finished wizard leaves the previous map alone. */
+  const wheelBtn = $("pm-pad-wheel");
+  if (wheelBtn && Input.beginAxisCapture) {
+    const STEPS = [
+      { key: "steer", ask: "Turn the wheel LEFT and hold it…", done: "Steering found." },
+      { key: "throttle", ask: "Now press the THROTTLE pedal all the way…", done: "Throttle found." },
+      { key: "brake", ask: "Now press the BRAKE pedal all the way…", done: "Brake found." },
+    ];
+    let running = false;
+    const finish = (map, msg) => {
+      running = false;
+      Input.setPadAxisMap(map);
+      store.set("padAxes", Input.getPadAxisMap());
+      wheelBtn.textContent = "SET UP A WHEEL";
+      say(msg);
+      tick();
+    };
+    wheelBtn.onclick = () => {
+      if (running) {   // a second press abandons it and puts everything back
+        running = false;
+        Input.beginAxisCapture(null);
+        wheelBtn.textContent = "SET UP A WHEEL";
+        say("Wheel setup cancelled — nothing changed.");
+        return;
+      }
+      if (!Input.padPresent()) { say("No wheel or controller detected. Turn the wheel or press a button on it first."); return; }
+      running = true;
+      wheelBtn.textContent = "CANCEL";
+      const map = Object.assign(Input.getPadAxisMap(), { throttle: null, brake: null });
+      let i = 0;
+      const step = () => {
+        if (!running) return;
+        if (i >= STEPS.length) { finish(map, "Wheel set up. Steering, throttle and brake are mapped to the axes you moved."); return; }
+        say(STEPS[i].ask);
+        Input.beginAxisCapture((axis, dir) => {
+          if (!running) return;
+          const st = STEPS[i];
+          map[st.key] = axis;
+          // The steering sign is whatever the wheel reports for LEFT; we asked
+          // for left, so a POSITIVE reading means this wheel is inverted.
+          if (st.key === "steer") map.steerInvert = dir > 0 ? -1 : 1;
+          else if (st.key === "throttle") map.pedalInvert = dir > 0 ? 1 : -1;
+          i++;
+          tick();
+          setTimeout(step, 600);   // let the pedal come back up before listening again
+        });
+      };
+      step();
+    };
+  }
+  if (Input.setPadAxisMap) Input.setPadAxisMap(store.get("padAxes", null));
+
   if (keys || pad) Log.info("ui", "KeyBinds.create");
   return { render() { for (const s of sections) s.render(); } };
 }

@@ -79,6 +79,10 @@ test("the defaults are the keys the game always had", () => {
     boost: ["Space", null], overtake: ["KeyX", null], aero: ["KeyZ", null], shiftUp: ["KeyE", null],
     shiftDown: ["KeyQ", "ShiftLeft"], camera: ["KeyC", null],
     pit: ["KeyV", null],
+    // LOOK BACK and RECOVER are standard racing binds we lacked; PAUSE stopped
+    // being a reserved literal so it can be moved (XAG 107 asks that every
+    // control be remappable, the Esc/pause key included).
+    lookBack: ["KeyB", null], recover: ["KeyR", null], pause: ["KeyP", null],
   });
   assert.equal(Input.keysAreDefault(), true);
 });
@@ -86,10 +90,17 @@ test("the defaults are the keys the game always had", () => {
 test("a rebind moves the action to the new key and the old key stops answering", () => {
   const { Input, key } = boot();
   key("Space", true); assert.equal(Input.consumeBoostToggle(), true, "Space boosts by default");
-  const r = Input.setKeyBinding("boost", 0, "KeyB");
+  /* DERIVE a key no action holds, rather than naming one. This test wants any
+     unbound key; it has now been broken twice by a new action claiming the
+     literal it picked (B went to LOOK BACK, V to PIT IN). Asking the live table
+     which letters are free cannot go stale. */
+  const taken = new Set(Input.keyBindings().flatMap((a) => a.codes).filter(Boolean));
+  const free = "GHJKLMNTUYIO".split("").map((c) => "Key" + c).find((c) => !taken.has(c));
+  assert.ok(free, "the alphabet has run out of unbound keys — pick a different probe");
+  const r = Input.setKeyBinding("boost", 0, free);
   assert.deepEqual(plain(r), { ok: true, conflict: null });
   key("Space", true); assert.equal(Input.consumeBoostToggle(), false, "Space is unbound now");
-  key("KeyB", true); assert.equal(Input.consumeBoostToggle(), true, "B boosts");
+  key(free, true); assert.equal(Input.consumeBoostToggle(), true, `${free} boosts`);
   assert.equal(Input.keysAreDefault(), false);
   Input.resetKeys();
   key("Space", true); assert.equal(Input.consumeBoostToggle(), true, "reset restores Space");
@@ -108,9 +119,14 @@ test("a key another action held is taken from it, and the caller is told", () =>
 
 test("reserved and malformed keys are refused; either Shift is one key", () => {
   const { Input, key } = boot();
-  for (const c of ["Escape", "Enter", "Tab", "KeyP", "F9", "Backquote"]) {
+  for (const c of ["Escape", "Enter", "Tab", "F9", "Backquote"]) {
     assert.deepEqual(plain(Input.setKeyBinding("boost", 1, c)), { ok: false, reason: "reserved" }, c);
   }
+  // P LEFT THE RESERVED SET. It is PAUSE's default binding now, so asking for
+  // it is an ordinary conflict — the action that had it gives it up — and not
+  // a refusal. Escape stays reserved: that one is the platform's gesture.
+  assert.deepEqual(plain(Input.setKeyBinding("boost", 1, "KeyP")), { ok: true, conflict: "pause" });
+  Input.resetKeys();
   assert.equal(Input.setKeyBinding("nope", 0, "KeyB").ok, false);
   assert.equal(Input.setKeyBinding("boost", 2, "KeyB").ok, false);
   key("ShiftRight", true);
@@ -163,9 +179,10 @@ test("controller defaults are the standard layout the game always had", () => {
     throttle: [7, 0], brake: [6, 1], boost: [2, null], overtake: [3, null],
     aero: [12, null], shiftUp: [5, null], shiftDown: [4, null], camera: [8, null],
     pit: [13, null],
+    lookBack: [11, null], recover: [10, null], pause: [9, null],
   });
   assert.equal(Input.padsAreDefault(), true);
-  assert.deepEqual(plain(Input.padBindings()).map((a) => a.id), ["throttle", "brake", "boost", "overtake", "aero", "pit", "shiftUp", "shiftDown", "camera"]);
+  assert.deepEqual(plain(Input.padBindings()).map((a) => a.id), ["throttle", "brake", "boost", "overtake", "aero", "pit", "shiftUp", "shiftDown", "camera", "lookBack", "recover", "pause"]);
 });
 
 test("a rebound button drives and the old one stops answering", () => {
@@ -175,14 +192,14 @@ test("a rebound button drives and the old one stops answering", () => {
   assert.equal(Input.debugState().pad.throttle, true, "RT is gas by default");
   assert.ok(Math.abs(Input.throttleLevel() - 0.8) < 1e-9, "a trigger is analog");
   release(7);
-  assert.deepEqual(plain(Input.setPadBinding("throttle", 0, 10)), { ok: true, conflict: null });
+  assert.deepEqual(plain(Input.setPadBinding("throttle", 0, 10)), { ok: true, conflict: "recover" });
   press(7, 0.8); Input.poll();
   assert.equal(Input.debugState().pad.throttle, false, "RT no longer means gas");
   release(7); press(10); Input.poll();
   assert.equal(Input.debugState().pad.throttle, true, "LS does now");
   // an edge action
   release(10);
-  assert.deepEqual(plain(Input.setPadBinding("boost", 0, 11)), { ok: true, conflict: null });
+  assert.deepEqual(plain(Input.setPadBinding("boost", 0, 11)), { ok: true, conflict: "lookBack" });
   press(2); Input.poll();
   assert.equal(Input.consumeBoostToggle(), false, "X was unbound from BOOST");
   release(2); press(11); Input.poll();
@@ -205,7 +222,11 @@ test("a button another action held is taken from it, and the caller is told", ()
 
 test("pause, the d-pad steer buttons and nonsense are refused", () => {
   const { Input } = boot();
-  for (const b of [9, 14, 15]) assert.deepEqual(plain(Input.setPadBinding("boost", 1, b)), { ok: false, reason: "reserved" }, "button " + b);
+  // 9 (Menu/Start) is PAUSE's binding now, so only the d-pad's steering axis
+  // stays reserved — it is an axis, like the stick, not a bindable button.
+  for (const b of [14, 15]) assert.deepEqual(plain(Input.setPadBinding("boost", 1, b)), { ok: false, reason: "reserved" }, "button " + b);
+  assert.deepEqual(plain(Input.setPadBinding("boost", 1, 9)), { ok: true, conflict: "pause" });
+  Input.resetPad();
   for (const b of [-1, 40, "x", 1.5, null]) assert.equal(Input.setPadBinding("boost", 1, b).ok, false, "button " + b);
   assert.equal(Input.setPadBinding("nope", 0, 2).ok, false);
   assert.deepEqual(plain(Input.getPadMap().boost), [2, null], "nothing changed");
@@ -235,7 +256,10 @@ test("a saved controller map round-trips; garbage in it falls back per action", 
   const fresh = boot();
   fresh.Input.setPadMap(saved);
   assert.deepEqual(plain(fresh.Input.getPadMap()), plain(saved));
-  const m = boot().Input.setPadMap({ throttle: [9, "7"], brake: "x", boost: [2, 2], camera: [99, null], aero: [13, 13] });
+  // 9 is PAUSE's default now rather than a reserved index, so it is ACCEPTED
+  // here — and PAUSE loses it, which the seen-set below enforces. 14 is the
+  // d-pad's steering axis and is still refused.
+  const m = boot().Input.setPadMap({ throttle: [14, "7"], brake: "x", boost: [2, 2], camera: [99, null], aero: [13, 13] });
   assert.deepEqual(plain(m.throttle), [null, 7], "reserved slot cleared, a numeric string accepted");
   assert.deepEqual(plain(m.brake), [6, 1], "a non-array entry keeps the default");
   assert.deepEqual(plain(m.boost), [2, null], "a duplicate within one action collapses");
