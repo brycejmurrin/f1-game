@@ -154,7 +154,6 @@ const Tracks = (function () {
     // The taper matters more than the width. A step in `hw` is a step in the
     // road mesh, the kerb line and the racing-line LUT all at once, so the
     // window opens and closes over PIT_TAPER metres.
-    pitWiden(track);
     TrackLine.bake(track);   // the racing line LUT (track.line / lineW / lineCorners), from curv + hw
     track.bankP = bankingProfile(track);
     return track;
@@ -186,34 +185,23 @@ const Tracks = (function () {
     return { entryM, exitM: Math.min(PIT_EXIT_M, cap * 0.3) };
   }
 
-  /** Widen the road across the pit window so the lane is tarmac beyond the old
-   *  edge rather than a bite out of the racing surface. */
-  function pitWiden(track) {
-    const L = track.total, n = track.n, ds = L / n;
-    const w = pitWindow(track);
-    const lenM = w.entryM + w.exitM;
-    if (!(lenM > 0) || !(L > lenM + 2 * PIT_TAPER)) return;   // too short to widen safely
-    // THE LANE YIELDS TO THE CIRCUIT, the same rule PitLane.laneWidth follows.
-    // A street circuit authors its barriers hard against the road — that is what
-    // makes it a street circuit — so barL/barR do NOT follow a widened hw there
-    // and the road would end up past its own wall. Measured: widening pushed
-    // baku to -1.07 m, vegas to -0.26 and singapore to -0.22 of clearance (baku
-    // and vegas were already negative before this change). Everywhere else the
-    // barrier is the default runoff, derived from hw, and moves out with it.
-    //
-    // So a street circuit keeps the painted-on-road lane. That is also the
-    // honest answer for Monaco, whose real pit lane is famously cramped.
-    if (track.street) return;
-    const sIn = ((-w.entryM) % L + L) % L;
-    for (let k = 0; k < n; k++) {
-      const through = ((k * ds - sIn) % L + L) % L;
-      if (through > lenM) continue;
-      // Ramp in and out so no single node steps the mesh, the kerbs or the line.
-      const t = Math.min(1, through / PIT_TAPER, (lenM - through) / PIT_TAPER);
-      track.hw[k] += PIT_LANE_W * Math.max(0, t);
-    }
-    track.pitW = { entryM: w.entryM, exitM: w.exitM, laneW: PIT_LANE_W, taper: PIT_TAPER };
-  }
+  // NO WIDENING. It was built, measured and REVERTED, and the measurement is
+  // the point: widening by the lane's width pushed the road through scenery on
+  // a dozen circuits — prop interpenetration grew on anderstorp, brands_hatch,
+  // catalunya, dijon, fuji, hungaroring, imola, jacarepagua, miami and more, and
+  // coplanar faces grew on fuji, hungaroring and silverstone. tests/unit/
+  // coplanar-faces.test.mjs and the prop sweep caught it; npm run test:sweeps is
+  // the gate, and it is the one a geometry change has to clear.
+  //
+  // WHAT THAT SETTLES. js/race/pit-lane.js's header says fitting a lane beyond
+  // the road edge finds no room because the scenery is standing in it. Room to
+  // the DRIVING BOUNDARY (barL/barR) is plentiful — 8.99 m at Monza, the most on
+  // the calendar — and that is the number that misleads: the props sit in it.
+  // The header was measuring the right thing.
+  //
+  // A real lane out there still needs the scenery MOVED first, per circuit. That
+  // is a scenery project, not a track-engine one, and pitWindow() below is what
+  // it would build on.
 
   function build(def, opts) {
     Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
