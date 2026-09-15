@@ -48,6 +48,12 @@ async function boot(page) {
   // can be set — by the time a test evaluates, the buffer has long since
   // filled. Test-side on purpose: the game has no reason to carry a bigger
   // buffer for a spec's benefit.
+  // Independently measured on a SECOND, slower container the same day: the page
+  // reaches exactly 250 entries — the cap — by the time the lazy import lands,
+  // and 260 with the buffer raised. It overflows by TEN, which is why this read
+  // as flaky (3/5 solo) rather than always red: whether it tipped over depended
+  // on which optional assets loaded that run. rapier ready measured 27.9-28.9 s
+  // there against 15.4 s here, so 60000 covers both boxes; 55000 did not, by much.
   // try/catch because addInitScript runs in EVERY frame — about:blank included —
   // before any page script, and an uncaught throw there breaks page setup rather
   // than just this call. Not hypothetical: `performance` is not guaranteed on

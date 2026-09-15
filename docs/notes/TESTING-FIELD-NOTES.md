@@ -729,6 +729,10 @@ bisect a red run. The tree passed on the first run (montreal, 90 frames,
 
 ### 2026-09-03 — `image-grade-visual` is threshold-marginal on a real GPU
 
+**SUPERSEDED — see the 2026-09-14 entry at the end of this file.** The diagnosis
+below is wrong: the mechanism was not the render clock, it was the capture helper
+clearing the spec's camera on every screenshot.
+
 `ci.yml` run 33762205584 (dispatch, `renderer_macos: true`, tip 905ad6c): the
 Metal renderer job failed ONE spec — `image-grade-visual.spec.js › highlights
 predominantly change bright pixels`, bright/dark delta ratio 1.86 against the
@@ -1782,6 +1786,185 @@ the gate. It remains a different job from covering the renderer.
 Reproduce the table: `maxDeclaredTimeout(f)` from `tools/ci/select-specs.mjs`
 over `tests/specs/*.spec.js`, and `pick(["<dir>/x.js"])` for the routing.
 
+## 2026-09-14 — `image-grade-visual` was never threshold-marginal: the capture helper moved the camera
+
+Nightly `ci.yml` 3623 failed one job — the Metal renderer one — on one spec:
+`image-grade-visual.spec.js › blacks visibly change the deepest image detail`,
+`crushed.signed` **+9.69** against a required **< −1**. Crushing BLACKS read as
+making the image nearly ten levels BRIGHTER. Not a regression from that commit:
+`f4ccd160` passed the nightly on the 11th (3536) and the 13th (3540) and failed
+it on the 12th (3539) with the same spec and the same assertion.
+
+The job attaches its frames, so the measurement was reproduced OFFLINE: decode
+the three attachments through the same path the spec uses (`img.decode()` →
+canvas → `getImageData`) and the numbers come back to three decimals — raised
+`+3.314` (CI `+3.321`), crushed `+9.702` (CI `+9.694`). Everything below is from
+those frames, not from a hypothesis.
+
+1. **The grade works.** Whole-frame percentiles under `blacks −0.6`: p01 4 → **1**,
+   p05 7.08 → **2.93**; under `+0.6`, 4 → **12.0** and 7.08 → **12.9**. Mean luma
+   76.58 → 75.50 crushed, → 77.52 raised. Correct in both directions.
+2. **The crushed frame is not a tone curve.** Bin pixels by BASELINE luma and
+   measure the spread of the output: the raised frame is a clean per-pixel
+   function (sd **0.86–3.15** per bin); the crushed frame is not (sd **22–48**,
+   one input luma landing anywhere in 0–166). No per-pixel grade can do that.
+3. **It is the same scene from a different camera.** Best-fit offset between
+   baseline and crushed is a uniform **dx −34 px, dy 0**, dropping the mean
+   absolute difference 22.4 → 10.8 — and it is the SAME −34 for the far scenery
+   and for the near cockpit, so there is no parallax: the camera rotated, the
+   image did not translate. (The first search was capped at ±12 px and pinned to
+   its boundary, which reads as "not a shift"; widening it found the answer.)
+4. **When.** The trace's 78 screencast frames date it to one discrete event:
+   every frame to t=155091 matches the baseline (MAD 1.87), five frames from
+   t=155158 are a completely different, panned view, and from t=155326 to the end
+   of the test it sits at the −34 state. A switch, not a drift.
+
+**Cause.** `tests/helpers/soft-capture.js` called `window.__apex.snapCam()` on
+every capture. `snapCam()` does two things: it arms an on-demand soft blit —
+which is what a capture needs — and it does `G.dbgCam = null`, documented in
+`js/agent/apex.js` as clearing any free-cam override, which is what a
+`park()`/`jump()` caller needs. So every capture in this file DESTROYED the fixed
+`eyeAt()` camera `boot()` had set and handed the frame to the live, DAMPED chase
+camera, whose pose depends on frame timing. Reproduced locally in one page load:
+`camState()` before a `pageScreenshot` is the spec's camera (fov 60, target
+[81.9, 1.04, 16.0]); after it, fov 64, target [54.6, 0.59, 31.2], `debug: false`.
+
+SwiftShader never showed it because at ~1 fps the chase camera settles before
+every capture; the Metal runner (19–40 fps in this run) does not. It is also why
+the earlier stabilisation passes did not converge — freeze physics, pin the
+render clock, wait for the asset pack, pin the scale, hold the tier, record the
+env probe each removed a real variable and left this one, because `camState()`
+was asserted once in `boot()`, BEFORE the first capture, and was already false by
+the time any frame was read.
+
+**Fix.** The helper asks first: a spec that owns the camera
+(`camState().debug === true`) gets `GLX.invalidateSoftPresent()` — the blit
+arming alone, the half `snapCam()` was wanted for here — and every other caller
+is unchanged. The camera is now part of the premise `captureState()` records, and
+the THIRD capture (crushed) is held to the whole premise instead of `post` alone,
+which is how a broken premise produced a tonal number at all.
+
+**This supersedes the 2026-09-03 entry above**, which read the same spec's
+failures as "threshold-marginal on a real GPU" and prescribed pinning
+`renderClock` before each capture pair. That pin landed and the spec kept
+failing, because the mechanism was never the clock.
+
+Two specs used the helper with a debug camera — `image-grade-visual` and
+`lighting-ab`, the two that have supplied this file's knob-independent deltas.
+Every other `snapCam()` in the suite is an explicit call by a spec that wants the
+game camera, and is untouched.
+
+### 2026-09-14 (same day) — what preserving the camera ALSO changed, and the fog it cost
+
+A debug camera is not just a viewpoint. `js/game.js` treats `dbgCam` as an
+INSPECTION camera and changes the frame with it: `frame.fogDensity` is scaled by
+`dbgCam.fog ?? 0.15`, `frame.cullDist` goes to 0 (no radial cull on desktop), the
+env-probe pass is gated off, `camRoll` is forced to 0, and `cockpitRigOnly` turns
+off. So keeping the camera alive through every capture — the fix above — did not
+merely stop the viewpoint moving; it thinned the fog in the two specs that use it.
+
+That matters for exactly one test, `lighting-ab` "night fog GLOWS around lamps",
+which samples the band where the fog factor (and so the glow's share of a pixel)
+is largest. MEASURED here, singapore night fog, the spec's own band, knobs
+alternated off/on/off/on, against the test's `on > off * 1.03` floor:
+
+| camera at the capture | on/off, pair 1 | pair 2 | headroom over 1.03 |
+|---|---|---|---|
+| debug cam, fog at the 0.15x default | 1.0627 | 1.0651 | +3.2 % / +3.4 % |
+| chase cam (what the old helper restored) | 1.4379 | 1.4167 | +39.6 % / +37.5 % |
+| **debug cam with `fog: 1`** | **1.6753** | **1.6485** | **+62.7 % / +60.1 %** |
+
+The test PASSED in all three, so a pass was never the question — the margin was.
+The fix as first committed cut the headroom about sevenfold; `fog: 1` restores it
+and then some, beating even the chase camera, because a debug camera also drops
+the radial cull and so puts MORE distant lamp-lit facades in the sampled band.
+Both specs therefore take the pose from `eyeAt()` and re-install it through
+`view({..., fog: 1})`: the frame stability the suite needs, with the atmosphere
+the player actually gets. For `image-grade-visual` that is a correctness point in
+its own right — five of its tests assert a night, an overcast and a RAIN scene
+"retain broad tonal range", which is not a claim you can make about 15 % of the
+fog.
+
+Three things an adversarial review corrected, recorded because each is a trap:
+
+- `eyeAt(frac, 0.2, 1.35)` is **not** a car-free road-level view. `park()` puts
+  the car on the centreline at that frac and the eye lands 0.2 m right of and
+  1.35 m above it — the driver's head. And `cockpitRigOnly` being false under a
+  debug camera means MORE car geometry is drawn, not less: the full external body
+  mesh and wheels render around the eye instead of the cockpit rig alone. The
+  near-black bodywork feeding the `[2,30]` population survives the change.
+- The fog term saturates (`f = 1 - exp(-fd*fd)`), and singapore night fog is
+  thick, so 0.15x is not a 44x collapse of the fog wall — it still reads f ~ 0.93
+  at 500 m. The signal thinned; it did not vanish. The table above is the honest
+  size of it.
+- `rangeChanges()` selects its pixel set from the BEFORE frame only. For
+  independent per-pixel noise that bias is negligible AND of the wrong sign — it
+  cannot produce the +9.7 that was observed — but for any spatially CORRELATED
+  residual (a sub-pixel shift, a slightly softer image) it is large and always
+  positive. That is why a 34 px yaw read as "+9.7 brighter" rather than as noise,
+  and it means this metric has well under a pixel of geometric headroom: the
+  camera has to be pinned exactly, not approximately. `eyeAt()`/`view()` write a
+  static object, so it is.
+
+## 2026-09-14 — `debris.spec` had TWO defects that alternated, and neither was the one on record
+
+The spec was carried as "red at base for environment reasons: the Rapier WASM
+fetch takes 40 s against a 30 s `waitForFunction` budget". Half right, and the
+half that was wrong sent the first fix attempt at the wrong target. A BASELINE
+run of the unmodified spec is what settled it, and running one before patching is
+the whole lesson here.
+
+**Defect 1 — the assertion measured a full buffer, not a fetch.** The baseline
+run FINISHED in 94.4 s of its 120 s budget and failed an ASSERTION, and the
+30 s wait it was supposed to blow took 16.4 s and succeeded (the log even carries
+`DebrisWorld.buildWorld cars=22` at 42033 ms). Probing what actually returns
+zero, three runs out of three:
+
+    active:true enabled:true ready:true  stepped:30  live:36
+    rapierFetches:0   resourceEntries:250
+
+`stepped` and `live` are healthy — the side-world works. The zero is
+`rapierFetches`, and `resourceEntries` is exactly **250**: Chrome's default
+resource-timing buffer, full. Once it fills, later entries are dropped silently
+(`resourcetimingbufferfull`, which nothing here listens for) — and rapier.mjs is
+imported LAZILY ~42 s in, long after the script roster and the baked asset pack
+have filled it. With the buffer raised the page measures **260** entries with
+rapier.mjs among them: it overflows the cap by TEN, which is why this read as
+flaky rather than always red. Whether it tipped over depended on which optional
+assets loaded that run.
+
+The sibling test is the better catch. "can be disabled … inert, **no rapier
+fetch**" asserts `rapierFetches === 0`, and with the buffer full that assertion
+CANNOT FAIL. The one thing that test exists to prove had been unfalsifiable.
+`performance.setResourceTimingBufferSize` in an init script fixes both directions
+at once.
+
+**Defect 2 — the budget had no margin, and only appeared once defect 1 was
+fixed.** The very next run failed differently: `Timeout 30000ms exceeded`, the
+wait measured at 34.1 s. The lazy rapier import is a 2.24 MB vendored module
+parsed and instantiated after boot on a page already rendering a race. MEASURED,
+four fresh contexts on an IDLE box, from `__apex.debris(true)` to `st.ready`:
+
+    27.9 / 28.8 / 28.8 / 28.9 s     worst 28.9
+
+1.1 s under the hand-rolled 30 s on an idle box — the same shape as the budgets
+the BOOT_MS note above was written about. `RAPIER_MS = 55000` (~1.9x worst idle,
+matching BOOT_MS's own 1.8x) with the measurements in its comment.
+
+The file timeout had to move with it or the fix relocates the failure a third
+time: the failing test measured 104.3 s while dying EARLY at 30 s, so letting the
+wait run its measured length pushes it past the config's 120 s default. 240 s,
+alongside the existing per-file caps on image-grade-visual (480 s) and
+lighting-ab (420 s).
+
+No assertion tolerance was touched. Both are load budgets, and the rule for those
+is the one fixtures.js already states: measure the slow one and give it its own
+number.
+
+**Verified:** 5/5 with both fixes, where the unmodified spec failed 1/5 and the
+buffer-only tree also failed 1/5 (differently). TWO consecutive green runs of the
+file, not one, because the complaint was flakiness and a single pass is not
+evidence against that: 5/5 at 19:33 and 5/5 at 19:40, one worker, same tree.
 ## 2026-09-14 — a 60 s timeout is a SIGNATURE, not a diagnosis
 
 This file documents the rAF-actionability stall at length and the entries are
