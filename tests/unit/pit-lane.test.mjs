@@ -207,7 +207,7 @@ test("the commitment gesture is deliberate to make and still possible to make", 
 
 // A live session whose track samples a constant half-width. `committing` is the
 // ONE place this module samples the track, so a counting stub proves that too.
-function commitSession({ hw = 7, vTop = 60 } = {}) {
+function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
   seedLog(ctx);
   ctx.window = ctx;
@@ -218,10 +218,16 @@ function commitSession({ hw = 7, vTop = 60 } = {}) {
   ctx.TyreModel = { treadFor: () => 0, classForTread: () => null, lifeLaps: () => 30,
                     AI_CLASS: { medium: { life: 0.74 } } };
   ctx.Parts = { CATALOG: [{ id: "tyres", options: [{ id: "medium", cost: 0 }] }] };
+  // The garage row order. Real Teams.LIST is 12 entries; the count is what sets
+  // how wide the row is, so the stub carries the same number rather than a
+  // convenient few — a row that fits at 4 teams and not at 12 is the bug.
+  ctx.Teams = { LIST: ["mercedes", "ferrari", "mclaren", "redbull", "alpine",
+                       "racingbulls", "haas", "williams", "audi", "astonmartin",
+                       "cadillac", "custom"].map((id) => ({ id })) };
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
   const Pl = vm.runInContext("PitLane", ctx);
-  const track = { total: 5386, n: 1346, def: {} };
+  const track = { total, n: 1346, def: {} };
   const said = [];
   const pits = Pl.create({
     track, vTop: () => vTop, lapsTarget: 25, raceWeather: "dry",
@@ -363,13 +369,17 @@ test("…and speaks once the set is used, counting the entry down in metres", ()
   assert.ok(cue.dist > 250 && cue.dist < 350, `countdown should be ~300 m, got ${cue.dist}`);
 });
 
-test("it says ENTRY at the entry, and only while the entry road lasts", () => {
+test("it says what to DO at the entry, and only while the entry road lasts", () => {
+  // It used to read "PIT ENTRY", which names a place and assumes you already
+  // know the gesture — and the gesture is the one thing nobody can guess,
+  // because removing the button left nothing to find. The cue has to carry the
+  // instruction instead.
   const { pits, zone, car, Pl } = commitSession();
   const c = car(0);
   c.tyreWear = 0.9;
   c.s = zone.sIn + 20;                    // inside the entry road
   assert.equal(pits.cue(c).phase, "enter");
-  assert.equal(pits.cue(c).text, "PIT ENTRY");
+  assert.match(pits.cue(c).text, /LANE/, "the entry cue must say what to do, not just where you are");
   c.s = zone.sIn + Pl.COMMIT_M + 60;      // past it, racing the straight
   assert.equal(pits.cue(c), null, "the cue outlived the entry road it points at");
 });
@@ -601,7 +611,12 @@ test("the cue says which way when the box is coming and the car is not in the la
   });
   assert.equal(at(0).text, zone.side > 0 ? "KEEP RIGHT" : "KEEP LEFT");
   assert.equal(at(0).phase, "keep");
-  assert.ok(/LIMIT/.test(at(0.95).text), "a car already in the lane should be told the limit");
+  // IN the lane and closing: the one number a driver cannot work out is where
+  // their own box is — there is no mark on the road, and each team's box sits
+  // at its own place in the row, so it is not even a fixed distance from the
+  // line. The speed limit is the thing they can already read off the HUD.
+  assert.match(at(0.95).text, /BOX \d+m/, `a car in the lane must be told where its box is: ${at(0.95).text}`);
+  assert.equal(at(0.95).phase, "near-box");
   // Far from the box it is the limit that matters, not the line — a KEEP sign
   // for 300 m is the wallpaper the cue exists to avoid.
   const early = pits.cue({
@@ -609,4 +624,194 @@ test("the cue says which way when the box is coming and the car is not in the la
     tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
   });
   assert.ok(/LIMIT/.test(early.text), `an early KEEP sign is wallpaper: ${early.text}`);
+});
+
+// ── A row of boxes, not one point ───────────────────────────────────────────
+// Every car used to stop at the same arc position — and since the lane became a
+// place, the same lateral one — so two cars pitting on the same lap shared a
+// patch of tarmac.
+
+test("each team has its own box, and teammates share one", () => {
+  const { pits } = commitSession();
+  const car = (team) => ({ team, s: 0, x: 0 });
+  const mer = pits.boxThroughFor(car("mercedes"));
+  const fer = pits.boxThroughFor(car("ferrari"));
+  const mer2 = pits.boxThroughFor(car({ id: "mercedes" }));   // object form too
+  assert.notEqual(mer, fer, "two teams were given the same box");
+  assert.equal(Math.round(Math.abs(fer - mer)), P.BOX_PITCH, "boxes are one garage pitch apart");
+  assert.equal(mer2, mer, "a team object and a team id must resolve to the same box");
+  // A REAL TEAM HAS ONE BOX. Teammates sharing it is the thing that makes
+  // stacking two cars in one window expensive, not a limitation to fix.
+  assert.equal(pits.boxThroughFor(car("ferrari")), fer);
+});
+
+test("a car with no team gets the row's anchor — the old behaviour", () => {
+  // Synthetic and stubbed cars are everywhere (these tests, a net rival before
+  // its team arrives). They must land somewhere sane rather than in row 0.
+  const { pits, zone } = commitSession();
+  const anchor = P.throughM(zone, zone.sBox, 5386);
+  assert.equal(pits.boxThroughFor({ s: 0, x: 0 }), anchor);
+  assert.equal(pits.boxThroughFor({ team: "nosuchteam", s: 0, x: 0 }), anchor,
+    "an unknown team must fall back to the anchor, not to row 0");
+  assert.equal(P.teamRow({ team: "nosuchteam" }), -1);
+});
+
+test("the whole row fits inside the window, at both ends", () => {
+  // The earliest box must be past the entry road or it could never be committed
+  // to; the latest must be short of the exit or it could never be reached. With
+  // 12 teams at a 14 m pitch that is 154 m of boxes to fit.
+  const { pits, zone } = commitSession();
+  const ids = ["mercedes", "ferrari", "mclaren", "redbull", "alpine", "racingbulls",
+               "haas", "williams", "audi", "astonmartin", "cadillac", "custom"];
+  const at = ids.map((id) => pits.boxThroughFor({ team: id, s: 0, x: 0 }));
+  for (const a of at) {
+    assert.ok(a > P.COMMIT_M, `a box at ${a} m sits inside the entry road`);
+    assert.ok(a < zone.lenM - P.BOX_TOL, `a box at ${a} m sits past the window exit`);
+  }
+  // …and the row straddles the anchor rather than growing off one end of it.
+  const anchor = P.throughM(zone, zone.sBox, 5386);
+  const mid = (Math.min(...at) + Math.max(...at)) / 2;
+  assert.ok(Math.abs(mid - anchor) < 1, `the row is off-centre: mid ${mid} vs anchor ${anchor}`);
+});
+
+test("a short circuit cannot have its row spill out of its own window", () => {
+  // The window is capped at a third of the lap, so on a short track the row has
+  // to compress into whatever is left rather than run past the exit.
+  const { pits, zone } = commitSession({ total: 900 });
+  const ids = ["mercedes", "cadillac", "custom"];
+  for (const id of ids) {
+    const a = pits.boxThroughFor({ team: id, s: 0, x: 0 });
+    assert.ok(a > 0 && a < zone.lenM, `box at ${a} m is outside a ${zone.lenM} m window`);
+  }
+});
+
+test("moving a team's garage does not move its pit loss", () => {
+  // The box position changes where you STOP. The distance through the window at
+  // the limiter is unchanged, so what the stop costs is unchanged — which is
+  // what keeps this a fidelity fix rather than a balance change.
+  const { pits, zone } = commitSession();
+  const a = pits.boxThroughFor({ team: "mercedes", s: 0, x: 0 });
+  const b = pits.boxThroughFor({ team: "custom", s: 0, x: 0 });
+  assert.notEqual(a, b, "the two ends of the row must actually differ");
+  assert.equal(zone.lenM, P.zoneOf(fakeTrack({})).lenM, "the window length must not depend on a car");
+});
+
+// ── Where the lane opens is a property of the circuit ────────────────────────
+// A flat 320 m was circuit-blind and measurably wrong: at Monza it put the
+// entry inside Parabolica, where the commit gesture asks a driver to hold a
+// lateral line mid-corner. entryRunM walks back from the line to where the last
+// corner lets go. Curvature channel: surface (docs/PHYSICS.md).
+
+/** A track whose curvature is 0 on the last `straightM` before the line and
+ *  hard cornering before that — i.e. a pit straight of a known length. */
+function trackWithStraight(straightM, total = 5386) {
+  return { total, n: 1346, def: {},
+           _straightM: straightM,
+           hw: new Float32Array(1346).fill(7) };
+}
+function curvatureStub(track) {
+  return (t, s) => {
+    const L = t.total, v = ((s % L) + L) % L;
+    const before = L - v;                       // metres back from the line
+    return before <= t._straightM ? 0 : 0.02;   // straight, then a real corner
+  };
+}
+/** PitLane in a VM whose Tracks.curvature describes one straight before the line. */
+function laneOn(straightM, total = 5386) {
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
+  seedLog(ctx);
+  ctx.window = ctx;
+  const track = trackWithStraight(straightM, total);
+  ctx.Tracks = { sample: () => { throw new Error("entry geometry must not sample"); },
+                 curvature: curvatureStub(track) };
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  const Pl = vm.runInContext("PitLane", ctx);
+  return { Pl, track, entry: Pl.entryRunM(track), zone: Pl.zoneOf(track) };
+}
+
+test("the lane opens where the last corner lets go, not at a fixed distance", () => {
+  // The whole point: two circuits with different run-ins get different lanes.
+  const short = laneOn(200), long = laneOn(600);
+  assert.notEqual(short.entry, long.entry, "every circuit still gets the same entry");
+  assert.ok(Math.abs(short.entry - 200) <= 8 + 1, `a 200 m straight gave a ${short.entry} m entry`);
+  assert.equal(long.entry, P.ENTRY_M, "a long straight must cap at the longest a lane may be");
+});
+
+test("…and it never opens inside a corner, which is what this replaced", () => {
+  // Sampled back from the line, every metre of the entry run must be road the
+  // arc calls quiet. This is the assertion that would have caught Parabolica.
+  const { track, entry } = laneOn(300);
+  const k = curvatureStub(track);
+  for (let d = 0; d < entry; d += 8) {
+    assert.ok(Math.abs(k(track, ((-(d + 4)) % track.total + track.total) % track.total)) <= P.PIT_K,
+      `the window opens ${d} m back, which is inside a corner`);
+  }
+});
+
+test("a circuit with no straight still gets a lane, floored not vanished", () => {
+  // Monaco's problem. A 40 m run-in must not give a 40 m pit lane — below a
+  // floor it stops being a lane at all and the stop stops costing anything.
+  const { entry, zone } = laneOn(40);
+  assert.equal(entry, P.ENTRY_MIN, "a cornering run-in must floor at the shortest real lane");
+  assert.ok(zone.lenM > P.ENTRY_MIN, "the window is the entry plus the exit");
+});
+
+test("pit loss now VARIES by circuit, which is the reason the lane is driven", () => {
+  // The design's whole justification over a hardcoded penalty: real pit loss
+  // runs 18-30 s and that spread decides one stop against two. With a flat
+  // 320 m entry every circuit had the SAME lane and the spread did not exist.
+  const lens = [120, 250, 400, 600].map((m) => laneOn(m).zone.lenM);
+  assert.equal(new Set(lens).size > 1, true, `every circuit still has the same lane: ${lens}`);
+  assert.ok(Math.max(...lens) - Math.min(...lens) > 100,
+    `the spread is too small to change a strategy: ${lens}`);
+  // …and it is monotone: a longer run-in is never a shorter lane.
+  for (let i = 1; i < lens.length; i++) assert.ok(lens[i] >= lens[i - 1], `not monotone: ${lens}`);
+});
+
+test("a circuit may still override the entry by hand", () => {
+  // The derived value is a DEFAULT. Authored per-circuit geometry (real lane
+  // lengths) must still win, because the arc cannot know where a real pit lane
+  // diverges — only where the road stops turning.
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
+  seedLog(ctx);
+  ctx.window = ctx;
+  const track = trackWithStraight(600);
+  track.def = { pitZone: { entryM: 275 } };
+  ctx.Tracks = { sample: () => { throw new Error("no"); }, curvature: curvatureStub(track) };
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  const Pl = vm.runInContext("PitLane", ctx);
+  assert.equal(Pl.zoneOf(track).lenM, 275 + P.EXIT_M, "an authored entryM was ignored");
+});
+
+test("the entry read is the ONLY curvature this module does", () => {
+  // Curvature channel: surface. It may decide WHERE the lane is, once per
+  // circuit, and must never reach a driving car — so it belongs in zone
+  // resolution and nowhere near update(), committing() or the box.
+  const src = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
+  // CALLS, not mentions: the availability guard (`!Tracks.curvature`) names it
+  // without reading it, and counting that as a read would make this assertion
+  // about spelling rather than about the contract.
+  const reads = src.split("\n").filter((l) => /Tracks\.curvature\s*\(/.test(l) && !/^\s*(\/\/|\*)/.test(l));
+  assert.equal(reads.length, 1, `curvature is CALLED ${reads.length} times, not once: ${reads.join(" | ")}`);
+  const fn = src.slice(src.indexOf("function entryRunM"), src.indexOf("function zoneOf"));
+  assert.ok(/Tracks\.curvature/.test(fn), "the one read must be the entry scan");
+});
+
+test("the cue counts the box down and then says STOP HERE on it", () => {
+  // The last instruction of the sequence, and the only one with no second
+  // chance: miss the box and the stop does not happen at all.
+  const { pits, zone, hw } = commitSession();
+  const at = (m) => pits.cue({
+    local: true, s: zone.sBox - m, x: hw * 0.95 * zone.side, speed: 6,
+    pitState: "lane", tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
+  });
+  const far = at(70), near = at(20), on = at(0);
+  assert.match(far.text, /BOX 7\dm/, `expected a countdown, got ${far.text}`);
+  assert.match(near.text, /BOX 2\dm/, `expected a countdown, got ${near.text}`);
+  assert.equal(on.text, "STOP HERE");
+  assert.equal(on.phase, "stop");
+  // …and it counts DOWN: a number that grows as you approach is worse than none.
+  assert.ok(far.dist > near.dist, `the countdown ran backwards: ${far.dist} -> ${near.dist}`);
 });

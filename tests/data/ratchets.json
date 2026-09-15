@@ -3,7 +3,7 @@
   "files": {
     "js/game.js": {
       "lines": 8772,
-      "codeLines": 4739,
+      "codeLines": 4740,
       "gMembers": 250,
       "topLets": 149
     },
@@ -18,13 +18,13 @@
       "lines": 4137
     },
     "js/track/tracks.js": {
-      "lines": 2452
+      "lines": 2518
     },
     "js/lighting/presets.js": {
       "lines": 17318
     },
     "js/render/glx/glx.js": {
-      "lines": 2655
+      "lines": 2657
     },
     "js/net/lobby.js": {
       "lines": 1753
@@ -38,10 +38,7 @@
       "ceiling": 555,
       "slack": 5
     },
-    "shellNodes": {
-      "ceiling": 1498,
-      "slack": 25
-    },
+    "shellNodes": 1602,
     "bareCatches": {
       "ceiling": 42,
       "slack": 15

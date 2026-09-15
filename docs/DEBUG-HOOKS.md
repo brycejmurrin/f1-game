@@ -2194,7 +2194,7 @@ half-width toward `side` within `COMMIT_M` of the entry and hold it for
 |---|---|
 | `enabled` | The lane only exists while TYRE WEAR is on; with it off there is nothing to stop for |
 | `lenM` | How long the pit window is along the lap |
-| `boxM` / `atM` | Where the box is, and how far this car has come — both measured from the entry, so `boxM - atM` is the distance to the stop |
+| `boxM` / `atM` | Where THIS CAR's box is, and how far it has come — both measured from the entry, so `boxM - atM` is the distance to its stop. A pit lane is a ROW of garages: each team's box is offset from the row anchor by its `Teams.LIST` position at a 14 m pitch, so `boxM` differs per team and teammates share one (which is why stacking two cars in one window is expensive). A car with no team gets the anchor |
 | `limitKph` | The limiter, at the CURRENT pace scale — it is stored as a fraction of the speed envelope, so it rides OVERALL SPEED |
 | `boxS` | How long the car is held in the box (deterministic — a random stop time would make a strategy call a coin flip) |
 | `armed` | The stop is called and the next entry will take it |

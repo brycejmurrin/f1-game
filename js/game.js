@@ -4408,7 +4408,7 @@ function updateCar(c, dt, ranked) {
       _aiOtPull.street = !!track.street; _aiOtPull.traits = aiT; _aiOtPull.speed = c.speed;
       _aiOtPull.team = c.team; _aiOtPull.seat = c.seat; _aiOtPull.stats = c.houseStats;
       _aiOtPull.blockerSpeed = blocker.speed; _aiOtPull.blockerGap = blockerGap;
-      _aiOtPull.roomL = roomL; _aiOtPull.roomR = roomR; _aiOtPull.other = blocker;
+      _aiOtPull.roomL = roomL; _aiOtPull.roomR = roomR; _aiOtPull.other = blocker; _aiOtPull.roadL = roadL; _aiOtPull.roadR = roadR;
       // Side-pick + incentive inputs. kA is the same AI-only curvature read the
       // racing line above already makes — the arc reaches the AI's choice of
       // side, never the driver. blockerVmax is the car's PACE, not its speed
@@ -4419,23 +4419,22 @@ function updateCar(c, dt, ranked) {
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0); _aiOtPull.vTop = vTop();
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
-      // Engage: a clear lane on the chosen side, and no cooldown from a pass we
-      // just gave up on this same stretch.
+      // Engage only with a reachable lane and no cooldown on this stretch.
       // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
       // attack zone at its baked quality), and not on a car we just gave up on.
       _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.roll = c.phaseRoll || 0.5;
       const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
       const moveOn = !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
       if (!c.passOf && c.passCool <= 0 && moveOn && blockerGap <= AI_PASS_LATCH_M) {
-        const side = AiDrive.otSide(_aiOtPull);
-        if ((side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
+        const side = AiCorridor.choose(_aiOtPull, c, blocker, cars, track.total, CLEAR, c.passPlan || (c.passPlan = {})).side;
+        if (side && (side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
           c.passOf = blocker; c.passSide = side; c.passBest = blockerGap; c.passT = AiDrive.passHold(aiT);
         }
       }
       // Not on: FOLLOW, do not hang half alongside — the bias without the
       // commitment is what parked pairs side by side at monaco (standoffs
       // 0 -> 6 in the bench with the zone gate alone).
-      if (!c.passOf) overtake = moveOn ? AiDrive.otPull(_aiOtPull) : 0;
+      if (!c.passOf) overtake = moveOn && (!c.passPlan || c.passPlan.side) ? AiDrive.otPull(_aiOtPull) : 0;
     }
     if (c.passOf) overtake = AiDrive.passTarget(c.passOf.x, c.passSide, CLEAR, hw) - targetX;
     // LET PASS moves aside instead of defending; the `!letPass` below is what
@@ -6596,6 +6595,7 @@ function render(dt) {
   // (js/race/pit-lane.js says what that cost). null until the tyre setting
   // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
   frame.pitLane = pits.laneUniform();
+  frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
   // Wet-road material (rain): ramp wetness in/out smoothly so the surface
   // darkens and starts mirroring lamps/sky over ~1s rather than popping.
   if (LT.wetness >= 0) {

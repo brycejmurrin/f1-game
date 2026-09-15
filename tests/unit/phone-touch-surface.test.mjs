@@ -38,10 +38,10 @@
  *     which carries no user activation, so `requestPermission()` rejects and
  *     the store flips to BUTTONS. The label fix above makes the next real tap
  *     on STEER recover cleanly; the auto-flip itself is unchanged.
- *   - the index.html double-tap killer cancels the CLICK of a second tap on
+ *   - RESOLVED 2026-09-15: the old index.html guard cancelled the CLICK on
  *     the same spot within 350 ms (preventDefault on touchend), so a fast
- *     double press of one menu stepper registers once. Out of this change's
- *     territory; a device check is listed in docs/TESTING.md.
+ *     double press registered once. Controls now retain both native clicks;
+ *     the Driving zoom matrix checks repeated steppers and BACK by touch.
  *
  * Run: node --test tests/unit/phone-touch-surface.test.mjs   (npm run test:tooling-fast)
  */

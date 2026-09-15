@@ -454,7 +454,12 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
 #hud-pit-arrow { color: var(--you); }
 #hud-pit[data-phase="enter"] #hud-pit-arrow,
 #hud-pit[data-phase="armed"] #hud-pit-arrow { animation: pulse var(--hud-pulse) infinite; }
-#hud-pit[data-phase="box"] { color: var(--you); }
+#hud-pit[data-phase="box"],
+/* STOP HERE is the last instruction of the whole sequence and the only one with
+   no second chance: miss it and the stop does not happen. Same token as the box
+   phase it runs into, so the cue does not change colour at the moment it
+   matters most. */
+#hud-pit[data-phase="stop"] { color: var(--you); }
 /* KEEP LEFT/RIGHT — the loudest thing the cue ever says, and it earns it: the
    driver has committed, the limiter is on, the box is 90 m away and the stop is
    about to silently NOT happen because the car is on the racing line.
@@ -890,13 +895,13 @@ body:has(.screen.dim:not([hidden])) #campicker { display: none; }
    scrims still show POS/LAP/CHASE/BOOST through the wash. A HUD that is
    already hidden at menu time is a no-op under visibility. */
 body:has(.screen:not([hidden])) :is(
-  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #btn-cam, .dock, #pausebtn
+  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #lights, #announce, #btn-cam, .dock, #pausebtn
 ) {
   visibility: hidden;
 }
 /* DISPLAY settings: keep the live HUD (tower / map / gaps) so LAYOUT/MAP/GAPS
    toggles can be seen without closing the sheet. */
-body:has(#pmsettings:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
+body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
   visibility: visible;
 }
 #photo-controls > * { pointer-events: auto; }

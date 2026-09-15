@@ -132,10 +132,76 @@ const Tracks = (function () {
     // it — findCorners/bankingProfile call curvature(), which now indexes this.
     track.curv = new Float32Array(n);
     { const cds = total / n; for (let k = 0; k < n; k++) track.curv[k] = curvatureRaw(track, k * cds); }
+    // ── THE PIT LANE IS REAL TARMAC, NOT A STRIP CARVED OUT OF THE ROAD ──────
+    // Until now the lane was painted INSIDE the racing surface: the road kept
+    // its width and the lane ate 3.2 m of it, which on a narrow circuit meant
+    // racing on less road because a pit lane existed. Widen the road across the
+    // pit window instead, by exactly the lane's width, so the racing surface is
+    // untouched and the lane is new tarmac beyond where the edge used to be.
+    //
+    // WHY HERE: the curvature LUT is baked two lines up and the mesh is not
+    // built until build(), so this is the one seam where the window can be
+    // derived from the arc AND still reach the road, the kerbs and the banking.
+    //
+    // WHY SYMMETRIC: `hw` is ONE half-width per node and every consumer — mesh,
+    // kerbs, banking, sampling, projection — builds from +/-hw about the
+    // centreline. A one-sided widening needs a centreline-offset array threaded
+    // through all of them, which is a different change. Widening both sides is
+    // what this engine can express, and it is not a fudge: real pit straights
+    // ARE wide, and the extra room on the far side is the start/finish straight
+    // getting the width it should have had.
+    //
+    // The taper matters more than the width. A step in `hw` is a step in the
+    // road mesh, the kerb line and the racing-line LUT all at once, so the
+    // window opens and closes over PIT_TAPER metres.
     TrackLine.bake(track);   // the racing line LUT (track.line / lineW / lineCorners), from curv + hw
     track.bankP = bankingProfile(track);
     return track;
   }
+
+  // Where the pit lane lives, in metres before/after the start/finish line, and
+  // how much road it needs. OWNED HERE rather than in js/race/pit-lane.js
+  // because it is now ROAD GEOMETRY: tracks.js loads first, so PitLane reads
+  // these back through Tracks.pitWindow() instead of keeping a second copy that
+  // could drift from the tarmac it describes.
+  const PIT_ENTRY_MAX = 400, PIT_ENTRY_MIN = 150, PIT_EXIT_M = 130;
+  const PIT_K = 0.0035;      // "not actively cornering" — see docs/PHYSICS.md
+  const PIT_STEP = 8;
+  const PIT_LANE_W = 3.2;    // must match PitLane.LANE_W
+  const PIT_TAPER = 40;      // metres of ramp at each end of the widening
+
+  /** The pit window for a built centreline: how far before the line it opens,
+   *  how far after it closes. Pure, static, once per circuit. */
+  function pitWindow(track) {
+    const L = track.total;
+    if (!(L > 0)) return { entryM: PIT_ENTRY_MAX, exitM: PIT_EXIT_M };
+    let d = 0;
+    for (; d < PIT_ENTRY_MAX; d += PIT_STEP) {
+      const s = ((-(d + PIT_STEP / 2)) % L + L) % L;
+      if (Math.abs(curvature(track, s)) > PIT_K) break;
+    }
+    const cap = L / 3;
+    const entryM = Math.min(Math.max(d, PIT_ENTRY_MIN), PIT_ENTRY_MAX, cap * 0.7);
+    return { entryM, exitM: Math.min(PIT_EXIT_M, cap * 0.3) };
+  }
+
+  // NO WIDENING. It was built, measured and REVERTED, and the measurement is
+  // the point: widening by the lane's width pushed the road through scenery on
+  // a dozen circuits — prop interpenetration grew on anderstorp, brands_hatch,
+  // catalunya, dijon, fuji, hungaroring, imola, jacarepagua, miami and more, and
+  // coplanar faces grew on fuji, hungaroring and silverstone. tests/unit/
+  // coplanar-faces.test.mjs and the prop sweep caught it; npm run test:sweeps is
+  // the gate, and it is the one a geometry change has to clear.
+  //
+  // WHAT THAT SETTLES. js/race/pit-lane.js's header says fitting a lane beyond
+  // the road edge finds no room because the scenery is standing in it. Room to
+  // the DRIVING BOUNDARY (barL/barR) is plentiful — 8.99 m at Monza, the most on
+  // the calendar — and that is the number that misleads: the props sit in it.
+  // The header was measuring the right thing.
+  //
+  // A real lane out there still needs the scenery MOVED first, per circuit. That
+  // is a scenery project, not a track-engine one, and pitWindow() below is what
+  // it would build on.
 
   function build(def, opts) {
     Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
@@ -2447,5 +2513,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry };
+  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry, pitWindow };
 })();

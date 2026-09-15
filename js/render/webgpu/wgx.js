@@ -3539,6 +3539,11 @@ const WGX = (function () {
         const pl = f.pitLane;
         d[144] = pl ? pl[0] : 0; d[145] = pl ? pl[1] : 0;
         d[146] = pl ? pl[2] : 1; d[147] = pl ? pl[3] : 1;
+        // pitBox (floats 148..151, off 592): YOUR box — how far into the window
+        // it sits and half its length. A zero halfLen is "no box", the same
+        // length-0-means-absent convention pitLane's y uses one slot up.
+        const pb = f.pitBox;
+        d[148] = pb ? pb[0] : 0; d[149] = pb ? pb[1] : 0; d[150] = 0; d[151] = 0;
       }
       device.queue.writeBuffer(frameUBO, 0, frameData);
 

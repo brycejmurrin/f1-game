@@ -39,7 +39,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["donington"] =
   function (api) {
-      const { n, hash, every, anchor, onTrack, out, terrainYAt,
+      const { mountain, n, hash, every, anchor, onTrack, out, terrainYAt,
         tree, bush, hedge, forestEdge,
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
@@ -537,4 +537,29 @@
         if (s > 0.30 && s < 0.40) continue;
         marshalPost(K(s), 1, 17);
       }
+        // ---------------------------------------------------------------- FAR HORIZON
+      // A 2026-09-15 visual pass found this circuit's road rising and falling
+      // through a pancake-flat green plane that met the sky at a hard edge —
+      // the lap had relief and the WORLD had none, which is part of why the
+      // elevation read as exaggerated: the road moved and nothing behind it did.
+      // These are gentle Leicestershire farmland. The park sits in the Trent valley's
+      // shallow rise — the horizon is hedgerow and low ridge, deliberately the
+      // softest of the four, because that is what is actually there.
+      // Placed off the lap by anchor() so they follow the circuit's own frame,
+      // and seated on terrainYAt so they rise out of the ground rather than
+      // float on it.
+      const farHill = (frac, side, dist, w, h, dy) => {
+        const a = anchor(K(frac), side, dist).c;
+        const y = terrainYAt(a[0], a[2]);
+        // snowline ABOVE the summit: the default is 0.62, which put snow and
+        // rock on the top 38% of hills this size — Leicestershire hedgerow and pasture
+        // carries neither.
+        mountain(a[0], a[2], (y === null ? a[1] : y) + dy, w, h,
+          { rough: 0.18, snowline: 2, forest: [0.20, 0.34, 0.20] });
+      };
+      farHill(0.08, 1, 1178, 1886, 54, -25);
+      farHill(0.28, -1, 1240, 1722, 47, -22);
+      farHill(0.52, 1, 1364, 2050, 61, -27);
+      farHill(0.72, -1, 1147, 1558, 44, -21);
+      farHill(0.9, 1, 1271, 1804, 51, -23);
   };

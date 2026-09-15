@@ -7,7 +7,7 @@
 // physics block, so load order matters (a HARD_EDGES entry in
 // tools/manifest.cjs).
 window.PhysicsConsts = {
-  REVISION: "2026-09-coherence-1", // increment when comparable lap physics changes
+  REVISION: "2026-09-racing-depth-1", // increment when comparable lap physics changes
   VMAX: 72,            // m/s base (~259 km/h) — F1 race pace; scales all speeds
                        //   (PACE and the vTop()/vStd() normalisers live in game.js)
   ACCEL: 7,            // m/s^2 at low speed

@@ -159,6 +159,10 @@ uniform float uGroundMist;  // 0..1 low-lying drifting ground mist
 // The lane is PAINTED, not built — see roadMarkings(). Length <= 0 means no
 // lane, which is every circuit until the tyre setting arms one.
 uniform vec4 uPitLane;
+// YOUR PIT BOX: (how far into the window it sits, half its length, 0, 0).
+// A zero y means no box to draw — the same "length 0 = absent" convention
+// uPitLane uses, so one test covers both.
+uniform vec4 uPitBox;
 uniform float uLampFog;     // lamp-glow-in-fog strength (0 = off / day)
 uniform sampler2D uBlockerMap;  // PCSS-lite min-depth blocker map (512sq)
 uniform float uPcss;            // 1 = blocker map valid, 0 = fixed penumbra
@@ -586,6 +590,15 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
   if (hw <= 0.5) return;                     // not road surface (or no trk attribute)
   float s = vTrk.x, x = vTrk.y;
   const vec3 paint = vec3(0.95, 0.95, 0.97);
+  // THE PIT LANE IS NOT A TRACK MARKING, so it must not be painted like one.
+  // The first cut drew its boundary in the same white as the edge lines, 3 m
+  // inboard of one — and it read as a DOUBLED EDGE LINE, not as a lane. That is
+  // a real failure and it was measured rather than guessed: an A/B against the
+  // lane switched off moved 0.3% of a top-down frame, all of it inside a 15 px
+  // band. Blue is the colour the eye already files under "pit", and the floor
+  // tint is what makes the strip a PLACE instead of the gap between two lines.
+  const vec3 pitPaint = vec3(0.10, 0.36, 0.86);
+  const vec3 pitFloor = vec3(0.15, 0.16, 0.19);
 
   // Lateral filter width. Clamped for the SDF band: at a grazing angle
   // fwidth explodes and an unclamped band would smear the line into a
@@ -625,27 +638,61 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
   // stretch of a real pit entry looks like anyway, before it goes behind the
   // wall. It costs no geometry, moves no boundary, and leaves the car on
   // tarmac, so none of the failures above can come back.
+  float pitLine = 0.0, pitFill = 0.0;
   if (uPitLane.y > 0.0) {
     float L = uPitLane.w;
-    // The window WRAPS the start/finish line on every circuit (it opens 320 m
-    // before it and closes 130 m after), so this is a wrapped-interval test and
-    // not a compare — the same reason PitLane.inWindow is written the way it is.
+    // The window WRAPS the start/finish line on every circuit (it opens a few
+    // hundred metres before it and closes after), so this is a wrapped-interval
+    // test and not a compare — the same reason PitLane.inWindow is written the
+    // way it is.
     float through = mod(s - uPitLane.x + L, L);
     if (through <= uPitLane.y) {
       float side = uPitLane.z;
-      float lx = (hw - pitLaneWidth(hw)) * side;   // the boundary line's lateral position
-      // Solid, and wider than the edge lines: this one is an instruction.
-      float dPit = abs(x - lx);
-      float pit = 1.0 - smoothstep(0.14 - aaX, 0.14 + aaX, dPit);
-      // Fade the line in over the first few metres so it does not switch on as
-      // a hard seam across the road at the window's edge.
-      pit *= smoothstep(0.0, 6.0, through) * smoothstep(0.0, 6.0, uPitLane.y - through);
-      m = max(m, pit * mip);
+      float lw = pitLaneWidth(hw);
+      float lx = (hw - lw) * side;              // the boundary line's lateral position
+      // Ends: fade the LINE in quickly (2 m — long enough not to be a seam
+      // across the road, short enough that the mouth is still a mouth) and out
+      // slowly at the exit.
+      float fadeIn = smoothstep(0.0, 2.0, through);
+      float fadeOut = smoothstep(0.0, 6.0, uPitLane.y - through);
+      // Inside the lane: everything on the pit side of the boundary.
+      float inLane = step(0.0, (x - lx) * side);
+      // The boundary. WIDER than an edge line (0.20 against 0.10): this one is
+      // an instruction, not a hint about where the tarmac stops.
+      float line = (1.0 - smoothstep(0.20 - aaX, 0.20 + aaX, abs(x - lx))) * fadeIn;
+      // THE ENTRANCE, which is the thing a driver actually has to find. Without
+      // a mark the lane simply begins somewhere in a long straight and the only
+      // cue is the HUD. A bar across the mouth of the lane gives it a threshold
+      // you can see and aim at — it is deliberately NOT gated by fadeIn, since
+      // fading in the very mark that says "it starts here" is self-defeating.
+      float bar = (smoothstep(0.4, 1.0, through) - smoothstep(2.4, 3.0, through)) * inLane;
+      // YOUR BOX. The HUD counts the distance down, but a number is not a place
+      // — a driver braking at the pit limit needs something on the road to aim
+      // at. Drawn as a box outline across the lane: two transverse ends and two
+      // rails, so it reads as a bay you park IN rather than a line you cross.
+      float box = 0.0;
+      if (uPitBox.y > 0.0) {
+        float dBox = abs(through - uPitBox.x);
+        float ends = 1.0 - smoothstep(0.12, 0.30, abs(dBox - uPitBox.y));
+        float span = 1.0 - step(uPitBox.y, dBox);            // within its length
+        float dIn = abs(x - lx), dOut = abs(abs(x) - hw);
+        float rails = max(1.0 - smoothstep(0.12, 0.30, dIn),
+                          1.0 - smoothstep(0.12, 0.30, dOut));
+        box = max(ends * inLane, span * rails * inLane);
+      }
+      pitLine = max(max(line, bar), box) * fadeOut * mip;
+      pitFill = inLane * fadeIn * fadeOut;
     }
   }
 
   albedo = mix(albedo, paint, m);
   rough = mix(rough, 0.55, m);                // paint is smoother than tarmac
+  // The lane SURFACE, under its own markings: a place, not a gap between lines.
+  // Light-handed (0.35) because it must read as tarmac that happens to be the
+  // pit lane, not as a painted box.
+  albedo = mix(albedo, pitFloor, pitFill * 0.35);
+  albedo = mix(albedo, pitPaint, pitLine);
+  rough = mix(rough, 0.55, pitLine);
 }
 // Cloud cover at a world point: project the point up the sun direction to the
 // cloud deck and sample a drifting FBM — gives moving dappled cloud SHADOWS on

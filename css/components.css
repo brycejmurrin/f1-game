@@ -1245,6 +1245,30 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   text-align: center;
   white-space: nowrap;
 }
+/* Driving actions carry complete instructions at narrow widths and high zoom.
+   The shared preference rows retain their own compact control geometry. */
+#pmsettings-inner #pm-panel-driving :is(#pm-practice-set, #pm-practice-retry, #pm-driving-trace) {
+  height: auto;
+  min-height: var(--tap);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-block: calc(var(--gap) * 0.35);
+}
+/* Driving has one coach readout and optional tasks. Full-width folds retain
+   native disclosure visibility; only their content gets vertical spacing. */
+#pm-panel-driving > :is(details, #pm-coach-status, #pm-coach-tip) {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+#pm-panel-driving details > :not(summary) { margin-block: calc(var(--gap) * 0.5); }
+#pm-panel-driving :is(#pm-coach-tip, #pm-incident-log, #pm-ai-decisions) {
+  font-size: var(--fs-micro);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+#pm-coach-tip { color: var(--text); padding-bottom: calc(var(--gap) * 0.5); }
+#pm-panel-driving :is(#pm-incident-log, #pm-ai-decisions) { padding-inline-start: 1.5em; }
+
 /* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE
    used to be the two plain-grey labels on a sheet of steel italics. */
 #pmsettings-inner .pm-group .tune-label {
@@ -1715,8 +1739,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
 }
-#pmsettings-inner #advanced-inner details > summary,
-#pmsettings-inner #advanced-inner details > summary:active {
+#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary,
+#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary:active {
   color: var(--steel);
   font-style: italic;
   opacity: 1;
@@ -1730,7 +1754,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   box-shadow: none;
 }
 @media (hover: hover) {
-  #pmsettings-inner #advanced-inner details > summary:hover {
+  #pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary:hover {
     color: var(--text);
     background-color: transparent;
     background-image: var(--grad-rule);
@@ -1741,10 +1765,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     box-shadow: none;
   }
 }
-#pmsettings-inner #advanced-inner details > summary::after { content: none; }
-#pmsettings-inner #advanced-inner details > summary::before { content: "\25BE"; }
-#pmsettings-inner #advanced-inner details[open] > summary::before { content: "\25B4"; }
-#pmsettings-inner #advanced-inner details > summary {
+#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary::after { content: none; }
+#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary::before { content: "\25BE"; }
+#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details[open] > summary::before { content: "\25B4"; }
+#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary {
   height: auto;
   min-height: var(--chip-h);
   flex-wrap: wrap;

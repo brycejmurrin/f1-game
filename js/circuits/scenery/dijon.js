@@ -31,7 +31,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["dijon"] =
   function (api) {
-      const { n, hash, every, anchor, onTrack, terrainYAt,
+      const { mountain, n, hash, every, anchor, onTrack, terrainYAt,
         tree, bush, hedge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower,
         billboard, sponsorHoarding, motorhome, groundPatch, ridge } = api;
@@ -616,4 +616,29 @@
       outcrop(0.472,  1,  70, 1.20, 48, 12, 4.0, LIME);
       outcrop(0.700,  1,  74, 0.40, 52, 12, 4.2, LIME2);
  
+        // ---------------------------------------------------------------- FAR HORIZON
+      // A 2026-09-15 visual pass found this circuit's road rising and falling
+      // through a pancake-flat green plane that met the sky at a hard edge —
+      // the lap had relief and the WORLD had none, which is part of why the
+      // elevation read as exaggerated: the road moved and nothing behind it did.
+      // These are the Burgundy plateau. Prenois is cut into the escarpment above the
+      // Ouche: the tallest horizon of the four, and the one with a defined
+      // shoulder rather than a smooth swell.
+      // Placed off the lap by anchor() so they follow the circuit's own frame,
+      // and seated on terrainYAt so they rise out of the ground rather than
+      // float on it.
+      const farHill = (frac, side, dist, w, h, dy) => {
+        const a = anchor(K(frac), side, dist).c;
+        const y = terrainYAt(a[0], a[2]);
+        // snowline ABOVE the summit: the default is 0.62, which put snow and
+        // rock on the top 38% of hills this size — dry Burgundy plateau scrub
+        // carries neither.
+        mountain(a[0], a[2], (y === null ? a[1] : y) + dy, w, h,
+          { rough: 0.24, snowline: 2, forest: [0.24, 0.33, 0.19] });
+      };
+      farHill(0.12, 1, 1116, 1804, 84, -37);
+      farHill(0.34, -1, 1209, 1640, 69, -32);
+      farHill(0.58, 1, 1302, 1967, 92, -40);
+      farHill(0.8, -1, 1085, 1517, 63, -30);
+      farHill(0.95, 1, 1178, 1722, 75, -35);
   };

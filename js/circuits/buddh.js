@@ -25,7 +25,13 @@
     gp: "Indian GP",
     country: "India",
     night: false,
-    theme: "modern",
+    // "green", NOT "modern" — same reason as korea.js, and the same 2026-09-15
+    // visual pass. This file's scenery() carries a RURAL DEPTH band (brick
+    // kilns, a pylon line, bunded fields, a village) written specifically to own
+    // the far distance; reading that comment alone suggested the generic
+    // skyline had been displaced, and the render showed it had not. The Greater
+    // Noida plain is farmland and brickfields, not a downtown.
+    theme: "green",
     lengthKm: 5.138,
     baseHW: 8,
     sceneryCoordinates: "racing",

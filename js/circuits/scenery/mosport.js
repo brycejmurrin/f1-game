@@ -52,7 +52,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["mosport"] =
   function (api) {
-      const { n, hash, every, anchor, onTrack, out, terrainYAt,
+      const { mountain, n, hash, every, anchor, onTrack, out, terrainYAt,
         tree, bush, hedge, forestEdge,
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
@@ -430,4 +430,29 @@
         if (s > 0.43 && s < 0.56) continue;
         marshalPost(K(s), 1, 18);
       }
+        // ---------------------------------------------------------------- FAR HORIZON
+      // A 2026-09-15 visual pass found this circuit's road rising and falling
+      // through a pancake-flat green plane that met the sky at a hard edge —
+      // the lap had relief and the WORLD had none, which is part of why the
+      // elevation read as exaggerated: the road moved and nothing behind it did.
+      // These are the Oak Ridges moraine — low WOODED RIDGES, not peaks. Mosport sits in
+      // rolling Durham-County drumlin country: nothing sharp, nothing alpine,
+      // just a soft horizon a few hundred feet up.
+      // Placed off the lap by anchor() so they follow the circuit's own frame,
+      // and seated on terrainYAt so they rise out of the ground rather than
+      // float on it.
+      const farHill = (frac, side, dist, w, h, dy) => {
+        const a = anchor(K(frac), side, dist).c;
+        const y = terrainYAt(a[0], a[2]);
+        // snowline ABOVE the summit: the default is 0.62, which put snow and
+        // rock on the top 38% of hills this size — Oak Ridges moraine, mixed Ontario bush
+        // carries neither.
+        mountain(a[0], a[2], (y === null ? a[1] : y) + dy, w, h,
+          { rough: 0.20, snowline: 2, forest: [0.16, 0.30, 0.18] });
+      };
+      farHill(0.1, 1, 1178, 1967, 68, -32);
+      farHill(0.3, -1, 1302, 1640, 58, -30);
+      farHill(0.55, 1, 1426, 2132, 77, -35);
+      farHill(0.78, -1, 1116, 1558, 52, -27);
+      farHill(0.92, 1, 1240, 1804, 62, -31);
   };

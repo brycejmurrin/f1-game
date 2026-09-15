@@ -142,6 +142,7 @@ const FULL = [
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/race/session-records.js",
+  "js/race/race-insights.js",
   "js/race/driving-coach.js",
   "js/physics/consts.js",
   "js/lighting/knobs.js",
@@ -162,6 +163,7 @@ const FULL = [
   "js/race/reliability.js",
   "js/physics/tyre-model.js",
   "js/physics/ai-drive.js",
+  "js/physics/ai-corridor.js",
   "js/race/engineer.js",
   "js/camera/offsets.js",
   "js/garage/setup-tune.js",
@@ -212,6 +214,7 @@ const FULL = [
   "js/ui/onboard.js",
   "js/physics/debris-world.js",
   "js/physics/incident-sim.js",
+  "js/physics/contact-geometry.js", // oriented overlap, linear sweep and inelastic contact impulse
   "js/physics/collide.js",   // car-car contact resolver (Collide.create(G, collideFx)), extracted from game.js
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).

@@ -8,6 +8,7 @@ const SettingsNav = (function () {
   const TITLES = {
     home: "SETTINGS",
     controls: "CONTROLS",
+    driving: "DRIVING",
     display: "DISPLAY",
     advanced: "STEERING",
     audio: "MUSIC & SOUND",
@@ -19,6 +20,7 @@ const SettingsNav = (function () {
   function panels() {
     return {
       controls: document.getElementById("pm-panel-controls"),
+      driving: document.getElementById("pm-panel-driving"),
       display: document.getElementById("pm-panel-display"),
       advanced: document.getElementById("advanced"),
       audio: document.getElementById("audioset"),
@@ -65,6 +67,10 @@ const SettingsNav = (function () {
     const openControls = document.getElementById("pm-open-controls");
     if (openControls) openControls.onclick = () => {
       show("controls", false); if (onSelect) onSelect("controls");
+    };
+    const openDriving = document.getElementById("pm-open-driving");
+    if (openDriving) openDriving.onclick = () => {
+      show("driving", false); if (onSelect) onSelect("driving");
     };
     const openDisplay = document.getElementById("pm-open-display");
     if (openDisplay) openDisplay.onclick = () => {

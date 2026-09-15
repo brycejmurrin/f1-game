@@ -542,7 +542,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   assert.match(CHUNKS_SOURCE, /params6\s*:\s*vec4<f32>.*off 368/);
   assert.match(CHUNKS_SOURCE, /params7\s*:\s*vec4<f32>.*off 448/);
   assert.match(CHUNKS_SOURCE, /params9\s*:\s*vec4<f32>.*ambContactDark/);
-  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*592/);   // 576 + 16: pitLane (off 576), the painted pit lane
+  assert.match(CHUNKS_SOURCE, /FRAME_UNIFORM_BYTES:\s*608/);   // 592 + 16: pitBox (off 592), YOUR box in the lane
   assert.match(POST_SOURCE, /COMPOSITE_UNIFORM_BYTES:\s*256/);
   assert.match(POST_SOURCE, /SSR_UNIFORM_BYTES:\s*208/,
     "SsrU must keep the carGloss vec4 (192 was the pre-streak layout)");
@@ -553,7 +553,7 @@ test("WebGPU packed uniforms expose tuner defaults, offsets, and extreme uploads
   gfx.resize();
   assert.equal(gfx.begin({ tune: {}, shadowCtr: [11, 22, 33] }), true);
   gfx.present({ tune: {} });
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 592);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 608);
   const compositeBuffer = h.buffers.find((buffer) => buffer.desc.size === 256);
   let frame = h.writes.filter((write) => write.buffer === frameBuffer).at(-1).values;
   assert.deepEqual(frame.slice(88, 92), [11, 22, 33, 80], "shadowCtr must occupy floats 88..91");
@@ -773,7 +773,7 @@ test("lamp shadow arm does not leak into the next frame", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
   gfx.resize();
-  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 592);
+  const frameBuffer = h.buffers.find((buffer) => buffer.desc.size === 608);
   gfx.lampShadowBegin(new Float32Array([
     1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
   ]), 2);
@@ -1619,7 +1619,14 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
                     /let fwTrkAttr = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
                     /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn\);/,
-                    /roadMarkings\(&albedo, &rough, vTrk, fwTrk, U\.pitLane\);/,
+                    // F, not U. This pin was written against the shipped text and so
+                    // FROZE a compile error: `U` is the SKY program's binding, and this
+                    // call sits in LIT, which binds `F : FrameU`. Dawn rejected the whole
+                    // lit shader — "unresolved value 'U'" — and this assertion was holding
+                    // the defect in place. A pin copied from the source proves only that
+                    // nobody changed it. tests/unit/wgsl-bindings.test.mjs now checks the
+                    // property instead: no program may name another program's binding.
+                    /roadMarkings\(&albedo, &rough, vTrk, fwTrk, F\.pitLane, F\.pitBox\);/,
                     // The one the first fix missed: this sits behind `if (detail
                     // > 0.001)`, so it must READ the hoisted footprint.
                     /let mnFpAbs = max\(fwWpos\.x, fwWpos\.z\);/]) {
