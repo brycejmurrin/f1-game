@@ -64,7 +64,7 @@ test('controlled braking drill finishes once, scores stopping distance and recor
   assert.equal(last.clean, true); assert.equal(last.score, 10); assert.match(last.text, /stopped 10 m after braking from 144 km\/h/);
   const entry = saves.get('circuitMastery').entries[0]; assert.equal(entry.completed, 1); assert.equal(entry.best, 10);
   assert.equal(announcements.length, 1); assert.match(announcements[0][0], /PRACTICE DONE — STOPPED 10 M.*NEW BEST/);
-  assert.equal(announcements[0][2], 'info');
+  assert.equal(announcements[0][2], 'practice', 'a drill verdict is its own announce tier, not a record announcement');
   const summary = api.summary(); summary.lastDrill.clean = false; assert.equal(api.summary().lastDrill.clean, true);
 });
 test('a brake tap followed by a coast to a stop is not a controlled stop', () => {

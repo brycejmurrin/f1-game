@@ -1098,7 +1098,7 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0;
-const ANN_PRI = { coach: 1, info: 2, "penalty-warn": 2, race: 4, "penalty-hit": 5 };
+const ANN_PRI = { coach: 1, practice: 2, info: 2, "penalty-warn": 2, race: 4, "penalty-hit": 5 };
 let _annPri = 0, _annQueue = null;
 function showAnnounce(msg, dur, kind) {
   kind = kind || "race";

@@ -30,9 +30,9 @@ const RaceInsights = (function () {
       const c = G.player;
       if (!c) return false;
       if (["braking", "trail"].includes(mode) && Math.abs(c.speed) < G.vTop() * .3) {
-        G.announce("BUILD SPEED BEFORE SETTING THIS DRILL", 2, "info"); return false;
+        G.announce("BUILD SPEED BEFORE SETTING THIS DRILL", 2, "practice"); return false;
       }
-      if (mode === "launch" && Math.abs(c.speed) > 1) { G.announce("STOP THE CAR BEFORE SETTING THIS DRILL", 2, "info"); return false; }
+      if (mode === "launch" && Math.abs(c.speed) > 1) { G.announce("STOP THE CAR BEFORE SETTING THIS DRILL", 2, "practice"); return false; }
       previous = sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false;
       drill = { mode, time: G.raceT, sector: G.sectorIdx, startProg: c.prog, lap: c.lap,
         changes: 0, side: 0, brakeSeen: false, brakeProg: c.prog, brakeSpeed: 0, slowing: 0, held: 0, turnSeen: false,
@@ -81,7 +81,7 @@ const RaceInsights = (function () {
       event("practice", (drill.clean ? "Completed: " : "Retry suggested: ") + DRILLS[mode] + " · " + (drill.clean ? text : drill.reason + " · " + text));
       // The verdict goes on screen where the drive happened, not only in the pause menu.
       G.announce(drill.clean ? "PRACTICE DONE — " + text.toUpperCase() + (improved ? " · NEW BEST" : "")
-        : "PRACTICE — TRY AGAIN: " + drill.reason.toUpperCase(), 3, "info");
+        : "PRACTICE — TRY AGAIN: " + drill.reason.toUpperCase(), 3, "practice");
     }
     function observeDrill(c, current) {
       if (!drill || drill.done) return;
@@ -101,7 +101,7 @@ const RaceInsights = (function () {
       if (current.lap > drill.lap) {
         drill.lap = current.lap;
         if (drill.lapStart != null) drill.lapDone = true;
-        else { drill.lapStart = now; if (drill.mode === "lap") { event("practice", "Lap timing started at the line"); G.announce("LAP TIMING STARTED", 1.5, "info"); } }
+        else { drill.lapStart = now; if (drill.mode === "lap") { event("practice", "Lap timing started at the line"); G.announce("LAP TIMING STARTED", 1.5, "practice"); } }
       } else if (current.lap < drill.lap) { drill.lap = current.lap; failDrill("crossed the line backwards"); }
       if (drill.mode === "sector") {
         if (current.sector !== drill.sector && current.prog - drill.startProg > 10) finishDrill(current, c);

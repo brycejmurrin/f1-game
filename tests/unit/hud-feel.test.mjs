@@ -289,6 +289,32 @@ test("tiered announce styles stay smaller than the race banner", () => {
   assert.match(hud, /#announce\[data-kind="penalty-hit"\][\s\S]*?font-size:\s*clamp\(26px/);
 });
 
+test("coach and practice are the smallest announce tier, and practice is its own kind", () => {
+  const hud = read("css/hud.css");
+  // The advisory tier: sentences, not announcements. It must OVERRIDE the info
+  // rule it shares an anchor with, so it has to come after it in the sheet.
+  const tier = hud.indexOf('#announce[data-kind="coach"],\n#announce[data-kind="practice"],\n');
+  assert.ok(tier > hud.indexOf('#announce[data-kind="info"]'), "the smaller tier follows the info rule it narrows");
+  assert.ok(tier > hud.indexOf('body[data-density="compact"] #announce {'), "…and the compact rule it also has to outrank");
+  assert.match(hud.slice(tier), /^[\s\S]*?font-size:\s*clamp\(16px, calc\(3\.2 \* var\(--vwzh\)\), 26px\)/);
+  // The compact override scores a type selector higher than a bare
+  // #announce[data-kind], so the tier must name it or short viewports — every
+  // landscape phone — keep the 40px banner this tier exists to shrink.
+  for (const kind of ["coach", "practice"])
+    assert.ok(hud.slice(tier, tier + 400).includes(`body[data-density="compact"] #announce[data-kind="${kind}"]`), kind + " is capped in compact density too");
+  // Every px literal in this tier stays at or above --fs-micro, or the
+  // sub-floor font guard (tools/check/tree-counts.mjs) counts it.
+  const floor = parseFloat(read("css/tokens.css").match(/--fs-micro:\s*([0-9.]+)px/)[1]);
+  for (const m of hud.slice(tier, tier + 200).matchAll(/([0-9.]+)px/g)) assert.ok(parseFloat(m[1]) >= floor, m[1] + "px is below the micro floor");
+  // A practice verdict must not be sized, or prioritised, as a record message.
+  const g = read("js/game.js");
+  const pri = g.match(/const ANN_PRI = \{([^}]*)\}/)[1];
+  assert.match(pri, /practice: 2/);
+  assert.match(pri, /coach: 1/, "a coach tip still yields to everything else");
+  for (const file of ["js/race/race-insights.js", "js/race/driving-coach.js"])
+    assert.doesNotMatch(read(file), /G\.announce\([^)]*"info"\)/, file + " routes its messages to the practice tier");
+});
+
 test("sector flash, limits chip, and announce queue are wired in source", () => {
   const g = read("js/game.js");
   assert.doesNotMatch(g, /announce\(sign \+ \(prevSector \+ 1\)/);

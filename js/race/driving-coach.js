@@ -114,7 +114,7 @@ const DrivingCoach = (function () {
       for (const k of ["tyre", "tyreLog", "pitNext"]) objects[k] = c[k] == null ? c[k] : JSON.parse(JSON.stringify(c[k]));
       checkpoint = { fields, objects, mode: drillMode };
       practice = true; G.records.invalidate();
-      G.announce("PRACTICE: " + goal() + " — LAPS NOT SAVED", 3, "info");
+      G.announce("PRACTICE: " + goal() + " — LAPS NOT SAVED", 3, "practice");
       return true;
     }
     function retry() {
@@ -132,7 +132,7 @@ const DrivingCoach = (function () {
       G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
       drillMode = checkpoint.mode;
       insights.startDrill(drillMode);
-      G.announce("TRY AGAIN: " + goal(), 2, "info");
+      G.announce("TRY AGAIN: " + goal(), 2, "practice");
       return true;
     }
     function reset() {

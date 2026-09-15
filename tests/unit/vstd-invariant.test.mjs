@@ -216,7 +216,7 @@ const ALLOWED = [
   {
     file: "js/race/race-insights.js",
     expr: "Math.abs(c.speed) > 1",
-    code: 'if (mode === "launch" && Math.abs(c.speed) > 1) { G.announce("STOP THE CAR BEFORE SETTING THIS DRILL", 2, "info"); return false; }',
+    code: 'if (mode === "launch" && Math.abs(c.speed) > 1) { G.announce("STOP THE CAR BEFORE SETTING THIS DRILL", 2, "practice"); return false; }',
     // A standing start is a standing start at every OVERALL SPEED setting: the
     // gate asks "is the car still?", the same 1 m/s floor the braking goal's
     // stop test uses, not a fraction of what the car can do.
