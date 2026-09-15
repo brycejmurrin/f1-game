@@ -9,6 +9,11 @@ const DrivingCoach = (function () {
     rearCoast: { label: "Rear grip while coasting", text: "REAR SLIDING — KEEP INPUTS SMOOTH", detail: "The rear tyres are near their grip limit. Avoid sudden steering or pedal changes while the car settles.", dwell: 0.5 },
     front: { label: "Front grip", text: "FRONTS SLIDING — UNWIND SOME STEERING", detail: "The front tyres are near their grip limit. Ease some steering instead of turning harder.", dwell: 0.6 }
   });
+  // Braking effort against the brake ceiling, the same scalar the engine's own
+  // brakeFade/brakeYawDamp use. NOT c.axFrac: that is the friction-circle share,
+  // and full braking in the dry plateaus at BRAKE/LONG_GRIP ≈ 0.64 (measured),
+  // so an axFrac > 0.8 gate meant the braking tip could only ever fire in the wet.
+  const brakeUse = c => Math.min(1, Math.max(0, -(c.axEstSm || 0) / PhysicsConsts.BRAKE));
   function create(G) {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
@@ -38,7 +43,7 @@ const DrivingCoach = (function () {
         throttle: c.throttleDemand || 0, command: c.steerCommand || 0,
         slipFront: c.slipFront || 0, slipRear: c.slipRear || 0, frontUtil: c.frontUtil || 0, rearUtil: c.rearUtil || 0,
         forceFront: c.forceFront || 0, forceRear: c.forceRear || 0, lateralAccel: c.lateralAccel || 0,
-        longitudinalUse: c.axFrac || 0, yawRate: c.yawRateCur || 0, energy: c.energy,
+        longitudinalUse: c.axFrac || 0, brakeUse: brakeUse(c), yawRate: c.yawRateCur || 0, energy: c.energy,
         wetness: G.roadWetness(), practice, enabled, coach: feedback(), insights: insights.summary(),
         ghostSpeedDelta: ghostSpeed == null ? null : c.speed - ghostSpeed };
     }
@@ -52,7 +57,7 @@ const DrivingCoach = (function () {
       const rearSliding = (c.rearUtil || 0) > 0.9 && Math.abs(c.slipRear || 0) > 0.06
         && (c.rearUtil || 0) > (c.frontUtil || 0) + 0.08;
       if (rearSliding) return brake > 0.1 ? "rearBrake" : throttle > 0.1 ? "power" : "rearCoast";
-      if (brake > 0.1 && (c.axFrac || 0) > 0.8 && Math.abs(c.steerAngle || 0) > 0.025) return "trail";
+      if (brake > 0.1 && brakeUse(c) > 0.8 && Math.abs(c.steerAngle || 0) > 0.025) return "trail";
       if ((c.frontUtil || 0) > 0.9 && Math.abs(c.slipFront || 0) > 0.06 && Math.abs(c.steerAngle || 0) > 0.025) return "front";
       return "";
     }
@@ -152,11 +157,12 @@ const DrivingCoach = (function () {
       const drillInfo = $("pm-drill-status"), summary = insights.summary();
       if (drillInfo) {
         const guide = { free: "Repeat any section at your own pace.", sector: "Finish the next sector without contact or leaving the track.",
-          braking: "Build speed before saving, then brake firmly to a stop.", trail: "Build speed before saving. Brake firmly, ease the brake while turning, then release it.",
-          slalom: "Make six direction changes while moving. Stay on the track and avoid contact." };
+          braking: "Build speed before saving, then brake firmly and keep braking until the car stops. Coasting to a stop does not count.",
+          trail: "Build speed before saving. Brake firmly, keep some brake on as the car turns in, then release it while the car is still turning.",
+          slalom: "Make six direction changes while moving: the car must change direction, not just the stick. Stay on the track and avoid contact." };
         const last = summary.lastDrill;
         drillInfo.textContent = guide[drillMode] + (last && last.mode === drillMode
-          ? " Last attempt: " + (last.clean ? "completed" : "retry suggested") + " · " + last.seconds.toFixed(1) + "s." : "");
+          ? " Last attempt: " + (last.clean ? "completed · " + last.text : "retry suggested · " + last.reason) + "." : "");
       }
       const f = insights.forecast(), strategy = $("pm-stint-forecast");
       if (strategy) strategy.textContent = !G.tyres.on() ? "Enable tyre wear for stint forecasts." : !f || f.remainingLaps == null ? "Drive at least half a lap on this set for a tyre-life estimate."

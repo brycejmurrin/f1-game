@@ -15,7 +15,8 @@ function fixture() {
     pits: { ownedTyres: () => [], choices: () => [] }, announce: (...args) => announcements.push(args) };
   const ctx = vm.createContext({
     RaceInsights: { create: () => ({ update() {}, reset() {}, summary: () => ({}), journal: () => [], forecast: () => null, network: () => null, startDrill: () => true }), DRILLS: { free: {} } },
-    SettingRow: { paint() {}, disable() {}, wire() {} }, Ghost: {}, IncidentSim: { reset() {} }, DebrisWorld: { reset() {} }
+    SettingRow: { paint() {}, disable() {}, wire() {} }, Ghost: {}, IncidentSim: { reset() {} }, DebrisWorld: { reset() {} },
+    PhysicsConsts: { BRAKE: 22, REVISION: 'test' }
   });
   vm.runInContext(readFileSync(new URL('../../js/race/driving-coach.js', import.meta.url), 'utf8'), ctx);
   const coach = vm.runInContext('DrivingCoach', ctx).create(G);
@@ -26,7 +27,7 @@ function fixture() {
   const enable = () => coach.toggle();
   return { coach, G, c, nodes, saved, announcements, tick, enable };
 }
-const braking = { brakeDemand: 1, throttleDemand: 1, axFrac: .9, steerAngle: .1 };
+const braking = { brakeDemand: 1, throttleDemand: 1, axEstSm: -21.7, axFrac: .64, steerAngle: .1 };   // full brake, dry: the measured plateau
 const rear = { rearUtil: .97, frontUtil: .6, slipRear: .12 };
 
 test('coach defaults off, saves the choice, and paints understandable empty feedback', () => {
@@ -48,6 +49,9 @@ test('six recommendations use actual inputs and axle slip without changing car s
   assert.match(advice({ ...rear, brakeDemand: 1, throttleDemand: 1 }), /EASE THE BRAKE GENTLY/);
   assert.match(advice(rear), /KEEP INPUTS SMOOTH/);
   assert.match(advice({ frontUtil: .97, slipFront: .12, steerAngle: .1 }), /UNWIND/);
+  assert.equal(advice({ brakeDemand: 1, axEstSm: -8, axFrac: .24, steerAngle: .1 }), '', 'a trailed brake at a third of the ceiling is the technique, not the mistake');
+  assert.equal(advice({ brakeDemand: 0, axEstSm: -21.7, axFrac: .64, steerAngle: .1 }), '', 'deceleration without the pedal is not a braking tip');
+  assert.ok(coach.status().brakeUse >= 0 && coach.status().brakeUse <= 1);
   assert.equal(advice({ rearUtil: .99, frontUtil: .6, throttleDemand: 1 }), '', 'load alone does not establish a slide');
   assert.equal(advice({ throttleDemand: 1, brakeDemand: 1 }), '', 'normal auto-throttle with braking is not a mistake');
   assert.equal(advice({ ...rear, throttleDemand: 1, speed: 4 }), '');

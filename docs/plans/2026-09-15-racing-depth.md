@@ -94,6 +94,41 @@ unscored session. Data export and AI reasoning sit in SESSION REVIEW. The guide
 has a DRIVING contents link with matching labels, usage steps, coach-tip meanings,
 practice goals, pit strategy and data export. No new dialog or CSS system exists.
 
+## Validation follow-up: the coach and the drills judged the wrong signals
+
+The user reported that the coach "doesn't really work" and that practice
+"doesn't check what you did". Driving the real `js/game.js` in the node VM
+(`tools/lib/game-vm.cjs`) reproduced both:
+
+- The braking-into-turn tip gated on `axFrac > 0.8`, the friction-circle share.
+  Full braking in the dry plateaus at `BRAKE / LONG_GRIP` = 22 / 34 = 0.64
+  (measured 0.64 from 55 m/s on monza), so the tip could only fire in the wet.
+  It now reads braking effort against the brake ceiling (`-axEstSm / BRAKE`,
+  the engine's own `brakeFade` scalar): 0.99 under a full dry brake.
+- The trail and slalom drills read the shaped stick command. A pad deflection
+  of 0.35 reads 0.11 after `STEER_EXPO` (measured), under both the 0.15 and 0.2
+  gates, while the car pulled 7.2 m/s² of lateral acceleration and changed
+  direction eleven times in eight seconds. Drills now count the car's lateral
+  acceleration (3 m/s² arms a side), and the trail drill no longer needs a
+  partial pedal, which a keyboard cannot produce.
+- The braking drill completed on any brake sample above 0.5 followed by any
+  stop: a three-frame tap and a ten-second coast passed as "Completed" and
+  banked mastery. The stop now needs the brake held on 80 % of the slowing
+  samples, is scored by stopping distance from the first firm brake (which
+  repeats from a restored checkpoint), and a stop without firm braking or with
+  the brake released early fails with that reason.
+- A finished drill wrote only to the journal; the driver saw nothing until they
+  opened the pause menu. The verdict now announces on screen with the measured
+  result, and the pause menu shows the reason for a failed attempt.
+
+Evidence: `tests/unit/race-insights.test.mjs` (signal semantics, reasons,
+announcements), `tests/unit/driving-coach.test.mjs` (the dry-brake plateau
+fires the tip; a trailed brake at a third of the ceiling does not) and
+`tests/unit/mechanics-integration-vm.test.mjs` (the real car: coast fails,
+held brake scores 0.9–1.6× v²/2a, pad slalom completes, the tip fires on
+tarmac). The VM cannot expire an announcement (the timer decays in a render
+frame the stubbed renderer faults on), so the tip test boots its own instance.
+
 ## Technical references
 
 - https://box2d.org/documentation/md_collision.html — separating axes and swept

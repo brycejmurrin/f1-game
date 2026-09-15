@@ -77,7 +77,66 @@ test("driving trace reads actual brake demand and feedback remains observational
   const p=g.G.player, status=g.G.coach.status();
   assert.equal(status.brake,1);assert.equal(status.throttle,0);
   const before=JSON.stringify(p);
-  const message=g.G.coach.advice({...p,offroad:false,speed:g.G.vTop()*.6,brakeDemand:1,axFrac:.9,steerAngle:.1});
+  const message=g.G.coach.advice({...p,offroad:false,speed:g.G.vTop()*.6,brakeDemand:1,axEstSm:-21,steerAngle:.1});
   assert.match(message,/EASE THE BRAKE/);
   assert.equal(JSON.stringify(p),before);
+});
+
+// Drive the real car through each drill. The judgements below are about what
+// the car did (lateral acceleration, deceleration, distance), which is why a
+// pad-sized steer that never reaches an input threshold still passes the slalom.
+const drive=(input,frames,onFrame)=>{for(let i=0;i<frames;i++){g.apex.act(typeof input==="function"?input(i):input,1/60,1);if(onFrame)onFrame(i);}};
+const straight={throttle:true,brake:false,steer:0};
+async function armed(mode,speed){await tt();g.apex.reset(.02,speed,0);g.apex.go();drive(straight,5);assert.equal(g.G.coach.insights.startDrill(mode),true);return g.G.coach.insights;}
+
+test("braking drill: a tap and a coast fails with its reason; a held brake passes and scores the stopping distance",async()=>{
+  let ins=await armed("braking",50);
+  drive(i=>({throttle:false,brake:i<3,steer:0}),60*40,()=>{});
+  let last=ins.summary().lastDrill;
+  assert.ok(last,"the coast reached a stop");assert.equal(last.clean,false);assert.equal(last.reason,"brake released before the stop");
+  assert.equal(g.G.store.get("circuitMastery",null),null);
+  ins=await armed("braking",50);
+  drive({throttle:false,brake:true,steer:0},60*6);
+  last=ins.summary().lastDrill;
+  assert.equal(last.clean,true);
+  const ideal=50*50/(2*vm.runInContext("PhysicsConsts",g.ctx).BRAKE);   // v²/2a from the physics constant, before the smoothing lag
+  assert.ok(last.score>ideal*.9&&last.score<ideal*1.6,`stopping distance ${last.score} m near v²/2a=${ideal.toFixed(0)} m`);
+  assert.equal(g.G.store.get("circuitMastery").entries.at(-1).completed,1);
+  assert.match(ins.journal().at(-1).text,/Completed: Brake to a controlled stop · stopped \d+ m after braking/);
+});
+
+test("slalom drill: a pad-sized steer the stick threshold never saw completes on the car's real direction changes",async()=>{
+  const ins=await armed("slalom",40);
+  let maxCommand=0;
+  drive(i=>({throttle:true,brake:false,steer:Math.sin(i/60*2*Math.PI*1.1)>0?.35:-.35}),60*8,()=>{maxCommand=Math.max(maxCommand,Math.abs(g.G.player.steerCommand||0));});
+  assert.ok(maxCommand<.2,`shaped command ${maxCommand.toFixed(3)} stays under the old stick gate`);
+  const last=ins.summary().lastDrill;
+  assert.ok(last&&last.mode==="slalom","six changes were counted");
+  assert.equal(last.clean,true,"stayed on the track: "+JSON.stringify(last));
+});
+
+test("the braking-into-turn tip fires from a full dry-track brake, which the friction-circle gate never reached",async()=>{
+  // Own instance: the announce timer only decays in a render frame, which the VM
+  // cannot run, so the medal the record test above seeded would hold the shared
+  // game's coach in "waiting" forever.
+  const h=await createGame({track:"monza"});
+  try {
+    h.G.daily.stop();h.G.timeTrial=true;h.G.raceWeather="dry";await h.G.startRace();h.apex.go();h.apex.headless(true);
+    const coach=h.G.coach; if(!coach.feedback().enabled)coach.toggle();
+    coach.reset();h.apex.reset(.02,45,0);h.apex.go();
+    for(let i=0;i<5;i++)h.apex.act(straight,1/60,1);
+    assert.equal(h.G.announceBusy,false,"nothing on screen before the brake");
+    let fired=null,seen=null;
+    for(let i=0;i<60*2&&!fired;i++){
+      h.apex.act({throttle:false,brake:true,steer:.5},1/60,1);
+      const f=coach.feedback(),p=h.G.player;
+      seen={state:f.state,speed:p.speed,brakeUse:coach.status().brakeUse,steerAngle:p.steerAngle,off:p.offroad};
+      if(f.latest)fired={...f.latest,axFrac:p.axFrac,brakeUse:coach.status().brakeUse,off:p.offroad};
+    }
+    assert.ok(fired,"a tip fired: "+JSON.stringify(seen));assert.equal(fired.id,"trail");
+    assert.ok(fired.axFrac<.8,`axFrac ${fired.axFrac} never clears the old 0.8 gate in the dry`);
+    assert.ok(fired.brakeUse>.8);
+    assert.equal(fired.off,false,"the tip came on the tarmac, not as an off-track recovery");
+    assert.match(h.sandbox.document.getElementById("announce").textContent,/EASE THE BRAKE AS YOU TURN/);
+  } finally { h.close(); }
 });

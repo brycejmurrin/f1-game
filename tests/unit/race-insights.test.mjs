@@ -5,15 +5,16 @@ import { readFileSync } from 'node:fs';
 function fixture() {
   const ctx = vm.createContext({});
   vm.runInContext(readFileSync(new URL('../../js/race/race-insights.js', import.meta.url), 'utf8'), ctx);
-  const saves = new Map();
+  const saves = new Map(), announcements = [];
   const c = { prog: 0, lap: 1, speed: 40, energy: 1, tyreWear: 0, tyreStints: 0, tyre: { id: 'soft' } };
   const G = { player: c, raceT: 0, sectorIdx: 0, state: 'race', track: { total: 300 }, lapsTarget: 5,
     vTop: () => 100, tyres: { on: () => true }, pits: { estimate: () => ({ lossS: 20 }) }, roadWetness: () => 0,
-    records: { key: () => 'class' }, store: { get: (k,d) => saves.get(k) ?? d, set: (k,v) => saves.set(k,v) }, announce() {} };
+    records: { key: () => 'class' }, store: { get: (k,d) => saves.get(k) ?? d, set: (k,v) => saves.set(k,v) },
+    announce: (...args) => announcements.push(args) };
   const api = vm.runInContext('RaceInsights', ctx).create(G);
   const tick = (fields = {}, seconds = 1) => { Object.assign(c, fields); G.raceT += seconds; api.update(c); };
   api.update(c);
-  return { api, c, G, saves, tick };
+  return { api, c, G, saves, tick, announcements };
 }
 test('race journal records event edges in order without repeating sustained contact', () => {
   const { api, tick } = fixture();
@@ -53,20 +54,40 @@ test('teleports cannot create tyre history or clean sector mastery', () => {
   assert.equal(api.summary().lastDrill.clean, false);
   assert.equal(saves.has('circuitMastery'), false);
 });
-test('controlled braking drill finishes once and records bounded separate mastery', () => {
-  const { api, tick, saves } = fixture();
-  saves.set('circuitMastery', { version: 1, entries: [{ key: 'class:braking:all', best: 10, completed: '999' }] });
+test('controlled braking drill finishes once, scores stopping distance and records bounded separate mastery', () => {
+  const { api, tick, saves, announcements } = fixture();
+  saves.set('circuitMastery', { version: 1, entries: [{ key: 'class:braking:all', best: 12, completed: '999' }] });
   assert.equal(api.startDrill('braking'), true);
   tick({ prog: 20, brakeDemand: 1 }); tick({ prog: 30, speed: .5 }); tick({ speed: 0 });
-  assert.equal(api.summary().lastDrill.clean, true);
-  const entry = saves.get('circuitMastery').entries[0]; assert.equal(entry.completed, 1); assert.equal(entry.best, 2);
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, true); assert.equal(last.score, 10); assert.match(last.text, /stopped 10 m after braking/);
+  const entry = saves.get('circuitMastery').entries[0]; assert.equal(entry.completed, 1); assert.equal(entry.best, 10);
+  assert.equal(announcements.length, 1); assert.match(announcements[0][0], /PRACTICE DONE — STOPPED 10 M.*NEW BEST/);
+  assert.equal(announcements[0][2], 'info');
   const summary = api.summary(); summary.lastDrill.clean = false; assert.equal(api.summary().lastDrill.clean, true);
 });
-test('a contact marks the drill dirty; retry clears observation history', () => {
+test('a brake tap followed by a coast to a stop is not a controlled stop', () => {
+  const { api, tick, saves, announcements } = fixture();
+  api.startDrill('braking'); tick({ prog: 20, brakeDemand: 1 });
+  for (let i = 1; i <= 8; i++) tick({ prog: 20 + i * 10, brakeDemand: 0, speed: 40 - i * 4.5 });
+  tick({ prog: 110, speed: .5 });
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, false); assert.equal(last.reason, 'brake released before the stop');
+  assert.equal(saves.has('circuitMastery'), false);
+  assert.match(announcements.at(-1)[0], /TRY AGAIN: BRAKE RELEASED BEFORE THE STOP/);
+  assert.match(api.journal().at(-1).text, /Retry suggested.*brake released/);
+});
+test('stopping without ever braking firmly fails the braking drill with its reason', () => {
+  const { api, tick } = fixture();
+  api.startDrill('braking'); tick({ prog: 20, brakeDemand: .2 }); tick({ prog: 30, speed: .5, brakeDemand: .2 });
+  assert.equal(api.summary().lastDrill.clean, false);
+  assert.equal(api.summary().lastDrill.reason, 'stopped without firm braking');
+});
+test('a contact marks the drill dirty with the first reason; retry clears observation history', () => {
   const { api, tick, saves } = fixture();
-  api.startDrill('braking'); tick({ prog: 20, contactT: 1, brakeDemand: 1 }); tick({ prog: 30, speed: .5 });
-  assert.equal(api.summary().lastDrill.clean, false); assert.equal(saves.size, 0);
-  tick({ speed: 40, contactT: 0 }); api.startDrill('braking'); tick({ prog: 50, brakeDemand: 1 }); tick({ prog: 60, speed: .5 });
+  api.startDrill('braking'); tick({ prog: 20, contactT: 1, brakeDemand: 1, offroad: true }); tick({ prog: 30, speed: .5 });
+  assert.equal(api.summary().lastDrill.clean, false); assert.equal(api.summary().lastDrill.reason, 'car contact'); assert.equal(saves.size, 0);
+  tick({ speed: 40, contactT: 0, offroad: false }); api.startDrill('braking'); tick({ prog: 50, brakeDemand: 1 }); tick({ prog: 60, speed: .5 });
   assert.equal(api.summary().lastDrill.clean, true);
 });
 for (const mode of ['braking', 'trail']) test(`rejected ${mode} start preserves the active attempt and measured forecasts`, () => {
@@ -104,23 +125,51 @@ for (const [name, field, dirty, clear] of [['contact', 'contactT', 1, 0], ['offr
     assert.equal(saves.has('circuitMastery'), false);
   });
 }
-test('trail braking observes the first brake input before the turning and release phases', () => {
+test('trail braking needs the car turning while braking and at the release, on a digital brake too', () => {
   const { api, c, tick } = fixture();
   c.speed = 30;
   assert.equal(api.startDrill('trail'), true);
   tick({ prog: 10, brakeDemand: 1 });
-  tick({ prog: 20, brakeDemand: .3, steerCommand: .3 });
+  tick({ prog: 20, brakeDemand: 1, steerCommand: .3 });        // stick alone: the car is not turning yet
   tick({ prog: 30, brakeDemand: 0 });
+  assert.equal(api.summary().lastDrill, null);
+  tick({ prog: 40, brakeDemand: 1, lateralAccel: 6 });         // keyboard brake stays at 1 while the car turns in
+  tick({ prog: 50, brakeDemand: 0, lateralAccel: 0 });         // released on a straight: not a trail release
+  assert.equal(api.summary().lastDrill, null);
+  tick({ prog: 60, brakeDemand: 0, lateralAccel: 5 });
   assert.equal(api.summary().lastDrill.mode, 'trail');
   assert.equal(api.summary().lastDrill.clean, true);
 });
-test('slalom counts six changes after the first steering observation', () => {
-  const { api, tick } = fixture();
+test('trail braking that ends in a stop is a failed attempt', () => {
+  const { api, c, tick } = fixture();
+  c.speed = 30; api.startDrill('trail');
+  tick({ prog: 10, brakeDemand: 1, lateralAccel: 5 }); tick({ prog: 20, brakeDemand: 1, speed: .5 });
+  assert.equal(api.summary().lastDrill.clean, false);
+  assert.equal(api.summary().lastDrill.reason, 'stopped before releasing the brake');
+});
+test('slalom counts direction changes of the car, not of the stick', () => {
+  const { api, tick, announcements } = fixture();
   api.startDrill('slalom');
-  tick({ prog: 10, steerCommand: .4 });
-  for (let i = 1; i <= 6; i++) tick({ prog: 10 + i * 10, steerCommand: i % 2 ? -.4 : .4 });
+  for (let i = 0; i <= 8; i++) tick({ prog: 10 + i * 10, steerCommand: i % 2 ? -.4 : .4 });
+  assert.equal(api.summary().drill.changes, 0, 'stick wiggle without lateral acceleration is not a direction change');
+  tick({ prog: 100, lateralAccel: 5 });
+  for (let i = 1; i <= 5; i++) tick({ prog: 100 + i * 10, lateralAccel: i % 2 ? -5 : 5 });
+  tick({ prog: 160, lateralAccel: 1 });                        // a straight between changes does not count either way
+  assert.equal(api.summary().drill.changes, 5); assert.equal(api.summary().lastDrill, null);
+  tick({ prog: 170, lateralAccel: -5 });                       // same side as before the straight: still 5
+  assert.equal(api.summary().lastDrill, null);
+  tick({ prog: 180, lateralAccel: 5 });
   assert.equal(api.summary().lastDrill.changes, 6);
   assert.equal(api.summary().lastDrill.clean, true);
+  assert.match(announcements.at(-1)[0], /PRACTICE DONE — .*6 DIRECTION CHANGES/);
+});
+test('a sector drill announces its time and a stationary slow car is not a direction change', () => {
+  const { api, G, tick, announcements } = fixture();
+  api.startDrill('sector'); tick({ prog: 20, lateralAccel: 5, speed: 5 }); tick({ prog: 25, lateralAccel: -5, speed: 5 });
+  assert.equal(api.summary().drill.changes, 0);
+  G.sectorIdx = 1; tick({ prog: 40, speed: 40 });
+  assert.equal(api.summary().lastDrill.clean, true); assert.equal(api.summary().lastDrill.score, 3);
+  assert.match(announcements.at(-1)[0], /PRACTICE DONE — 3\.0S/);
 });
 test('network status reports measured values and clear disconnected guidance', () => {
   const { api, G } = fixture(); assert.equal(api.network(), null);
