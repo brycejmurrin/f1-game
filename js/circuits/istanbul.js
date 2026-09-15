@@ -1,12 +1,12 @@
 /* Apex 26 — INTERCITY ISTANBUL PARK circuit definition (data only).
-   Retired circuit (`classic: true`): last Turkish GP 2021.
+   SEASON circuit: last Turkish GP 2021, returning from 2027 and contracted
+   through 2031 (five-year agreement announced 2026-04-24).
    Geometry from the OSM trace in `path` below. */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "istanbul",
-    classic: true,
     reverse: false,
     // The trace's first vertex is the start line, on the pit straight ahead of
     // the Turn 1 plunge.
