@@ -992,6 +992,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   h.nav.show("audio", false);
   assert.equal(h.panel("audio").hidden, false);
   assert.equal(h.title().textContent, "MUSIC & SOUND");
+  h.door("driving").onclick();
+  assert.equal(h.panel("driving").hidden, false);
+  assert.equal(h.title().textContent, "DRIVING");
+  assert.equal(h.panel("audio").hidden, true);
   h.nav.show("display", false);
   assert.equal(h.nav.back(), false, "BACK on a page pops to home");
   assert.equal(h.index().hidden, false);
