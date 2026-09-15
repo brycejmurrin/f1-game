@@ -241,7 +241,21 @@ const PitLane = (function () {
   // limiter does not, so where a team's garage sits changes where you stop and
   // nothing about what the stop is worth.
   const BOX_PITCH = 14;
-  const COMMIT_M = 120;       // commit only this far into the window
+  // Where POLE sits, in metres before the start/finish line. Mirrors
+  // TrackMesh.gridSlot's own 14 m; a second copy is the lesser evil here
+  // because js/track/ loads first and has no business knowing what a pit box is.
+  const GRID_POLE_M = 14;
+  const COMMIT_M = 120;       // the entry road, for the cue's "PIT ENTRY" phase
+  // How much lane a car needs in front of it for a commitment to mean anything:
+  // arm the limiter closer than this to your own box and there is no room left
+  // to slow down for it.
+  const COMMIT_CLEAR = 25;
+  // The room left ahead of pole's slot for the first box. It is DERIVED from
+  // COMMIT_CLEAR rather than picked: a gap smaller than the run-up a commitment
+  // needs anchors the row somewhere pole cannot legally call a stop from, which
+  // is the whole failure this anchoring exists to fix. The extra 15 m is one
+  // car's braking slop on top of the bare minimum.
+  const GRID_CLEAR = COMMIT_CLEAR + 15;
   const COMMIT_S = 0.55;      // held, in seconds
   const COMMIT_V = 0.10;      // of the speed envelope: a parked car is not pitting
 
@@ -329,12 +343,28 @@ const PitLane = (function () {
      *  reached. On a short circuit the window is capped at a third of the lap,
      *  so this is what stops the row spilling out of it. */
     function boxThroughFor(c, zz, L) {
-      const base = throughM(zz, zz.sBox, L);
       const row = teamRow(c);
-      if (row < 0) return base;
-      const n = Teams.LIST.length;
-      const at = base + (row - (n - 1) / 2) * BOX_PITCH;
-      return clamp(at, COMMIT_M + 20, Math.max(COMMIT_M + 20, zz.lenM - 30));
+      const n = row < 0 ? 1 : Teams.LIST.length;
+      const span = (n - 1) * BOX_PITCH;
+      // THE ROW HAS TO START PAST THE GRID, or a stop on lap 1 is reachable only
+      // by whoever happens to drive the right team. The grid sits INSIDE the pit
+      // window — TrackMesh.gridSlot puts P1 14 m before the line and each slot
+      // 8 m further back — so a car on pole begins at through (entryM - 14),
+      // which at Monza is 386 m into a 530 m window. With the row anchored at
+      // BOX_M before the line it ran 283-437, so pole started past eight of the
+      // eleven boxes and had to complete a whole lap to reach them.
+      //
+      // Anchor the row's FIRST box just past pole's slot instead. The clamp
+      // still wins where the window cannot hold the whole row — on a short
+      // entry the row compresses toward the exit rather than spilling out of
+      // it — so this raises lap-1 reachability as far as the geometry allows
+      // without ever putting a box somewhere it cannot be driven to.
+      const poleS = ((-GRID_POLE_M % L) + L) % L;
+      const wantFirst = throughM(zz, poleS, L) + GRID_CLEAR;
+      const lo = COMMIT_M + 20, hi = Math.max(lo, zz.lenM - 30 - span);
+      const first = clamp(Math.max(wantFirst, throughM(zz, zz.sBox, L) - span / 2), lo, hi);
+      if (row < 0) return first + span / 2;     // no team: the row's own middle
+      return first + row * BOX_PITCH;
     }
 
     // Estimate the lane's net time cost. The road-speed estimate is explicit;
@@ -527,7 +557,23 @@ const PitLane = (function () {
     function committing(c, zz, L) {
       if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
       if (!((c.speed || 0) > G.vTop() * COMMIT_V)) return false;
-      if (throughM(zz, c.s, L) > COMMIT_M) return false;
+      // ANYWHERE FROM THE WINDOW OPENING UP TO YOUR OWN BOX. It used to be the
+      // first COMMIT_M metres only — "past this you have gone by the entry road
+      // and are racing the straight" — and that made a stop at the START of a
+      // lap impossible on half the calendar: the GRID SITS INSIDE THE WINDOW
+      // (pole 14 m before the line), so on a long-entry circuit every car begins
+      // past the entry road. Measured: at Monza and Hungaroring pole starts at
+      // through 386 and the back of the grid at 218, against a 0-120 commit
+      // zone. Nobody could call a stop from the grid at all.
+      //
+      // Committing after your own box is still refused, because there is
+      // nothing left to commit TO. What stops a car that merely ran wide from
+      // calling a stop is the other three conditions, which are untouched: far
+      // over the painted line, HELD for COMMIT_S, and moving forwards on the
+      // road. Those are what carry the guard; the arc limit never did much
+      // beyond excluding the grid.
+      const at = throughM(zz, c.s, L);
+      if (at > boxThroughFor(c, zz, L) - COMMIT_CLEAR) return false;
       Tracks.sample(G.track, c.s, _smp);
       // INSIDE THE PAINTED LANE, not past an abstract fraction of the road. The
       // commitment test and the stripe a driver can see are now the same line,
@@ -820,7 +866,8 @@ const PitLane = (function () {
 
   return { create, zoneOf, inWindow, throughM,
            ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
-           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V,
+           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V, COMMIT_CLEAR,
+           GRID_POLE_M,
            CUE_M: 550, CUE_WEAR: 0.55, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
            BOX_PITCH, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
 })();
