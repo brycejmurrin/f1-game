@@ -1,0 +1,36 @@
+name: assemble-pit-lane
+on:
+  push:
+    branches: [pit-lane-ribbon-boxes]
+    paths:
+      - "tools/_assemble/**"
+      - ".github/workflows/assemble-pit-lane.yml"
+permissions:
+  contents: write
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Concatenate parts into engine files
+        run: |
+          set -euo pipefail
+          mkdir -p js/track/core js/race tests/unit
+          cat tools/_assemble/mesh.js.part* > js/track/core/mesh.js
+          cat tools/_assemble/tracks.js.part* > js/track/tracks.js
+          cat tools/_assemble/pit-lane.js.part* > js/race/pit-lane.js
+          cat tools/_assemble/pit-ribbon.test.mjs.part* > tests/unit/pit-ribbon.test.mjs
+          wc -c js/track/core/mesh.js js/track/tracks.js js/race/pit-lane.js tests/unit/pit-ribbon.test.mjs
+      - name: Commit assembled files
+        run: |
+          git config user.name "pit-lane-assemble"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add js/track/core/mesh.js js/track/tracks.js js/race/pit-lane.js tests/unit/pit-ribbon.test.mjs
+          if git diff --staged --quiet; then
+            echo "no change"
+            exit 0
+          fi
+          git commit -m "fix(pits): assemble peeled ribbon, tarmac apron, no doubled paint"
+          git push
