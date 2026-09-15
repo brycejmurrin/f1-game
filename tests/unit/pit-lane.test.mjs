@@ -207,7 +207,7 @@ test("the commitment gesture is deliberate to make and still possible to make", 
 
 // A live session whose track samples a constant half-width. `committing` is the
 // ONE place this module samples the track, so a counting stub proves that too.
-function commitSession({ hw = 7, vTop = 60 } = {}) {
+function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
   seedLog(ctx);
   ctx.window = ctx;
@@ -218,10 +218,16 @@ function commitSession({ hw = 7, vTop = 60 } = {}) {
   ctx.TyreModel = { treadFor: () => 0, classForTread: () => null, lifeLaps: () => 30,
                     AI_CLASS: { medium: { life: 0.74 } } };
   ctx.Parts = { CATALOG: [{ id: "tyres", options: [{ id: "medium", cost: 0 }] }] };
+  // The garage row order. Real Teams.LIST is 12 entries; the count is what sets
+  // how wide the row is, so the stub carries the same number rather than a
+  // convenient few — a row that fits at 4 teams and not at 12 is the bug.
+  ctx.Teams = { LIST: ["mercedes", "ferrari", "mclaren", "redbull", "alpine",
+                       "racingbulls", "haas", "williams", "audi", "astonmartin",
+                       "cadillac", "custom"].map((id) => ({ id })) };
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
   const Pl = vm.runInContext("PitLane", ctx);
-  const track = { total: 5386, n: 1346, def: {} };
+  const track = { total, n: 1346, def: {} };
   const said = [];
   const pits = Pl.create({
     track, vTop: () => vTop, lapsTarget: 25, raceWeather: "dry",
@@ -609,4 +615,74 @@ test("the cue says which way when the box is coming and the car is not in the la
     tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
   });
   assert.ok(/LIMIT/.test(early.text), `an early KEEP sign is wallpaper: ${early.text}`);
+});
+
+// ── A row of boxes, not one point ───────────────────────────────────────────
+// Every car used to stop at the same arc position — and since the lane became a
+// place, the same lateral one — so two cars pitting on the same lap shared a
+// patch of tarmac.
+
+test("each team has its own box, and teammates share one", () => {
+  const { pits } = commitSession();
+  const car = (team) => ({ team, s: 0, x: 0 });
+  const mer = pits.boxThroughFor(car("mercedes"));
+  const fer = pits.boxThroughFor(car("ferrari"));
+  const mer2 = pits.boxThroughFor(car({ id: "mercedes" }));   // object form too
+  assert.notEqual(mer, fer, "two teams were given the same box");
+  assert.equal(Math.round(Math.abs(fer - mer)), P.BOX_PITCH, "boxes are one garage pitch apart");
+  assert.equal(mer2, mer, "a team object and a team id must resolve to the same box");
+  // A REAL TEAM HAS ONE BOX. Teammates sharing it is the thing that makes
+  // stacking two cars in one window expensive, not a limitation to fix.
+  assert.equal(pits.boxThroughFor(car("ferrari")), fer);
+});
+
+test("a car with no team gets the row's anchor — the old behaviour", () => {
+  // Synthetic and stubbed cars are everywhere (these tests, a net rival before
+  // its team arrives). They must land somewhere sane rather than in row 0.
+  const { pits, zone } = commitSession();
+  const anchor = P.throughM(zone, zone.sBox, 5386);
+  assert.equal(pits.boxThroughFor({ s: 0, x: 0 }), anchor);
+  assert.equal(pits.boxThroughFor({ team: "nosuchteam", s: 0, x: 0 }), anchor,
+    "an unknown team must fall back to the anchor, not to row 0");
+  assert.equal(P.teamRow({ team: "nosuchteam" }), -1);
+});
+
+test("the whole row fits inside the window, at both ends", () => {
+  // The earliest box must be past the entry road or it could never be committed
+  // to; the latest must be short of the exit or it could never be reached. With
+  // 12 teams at a 14 m pitch that is 154 m of boxes to fit.
+  const { pits, zone } = commitSession();
+  const ids = ["mercedes", "ferrari", "mclaren", "redbull", "alpine", "racingbulls",
+               "haas", "williams", "audi", "astonmartin", "cadillac", "custom"];
+  const at = ids.map((id) => pits.boxThroughFor({ team: id, s: 0, x: 0 }));
+  for (const a of at) {
+    assert.ok(a > P.COMMIT_M, `a box at ${a} m sits inside the entry road`);
+    assert.ok(a < zone.lenM - P.BOX_TOL, `a box at ${a} m sits past the window exit`);
+  }
+  // …and the row straddles the anchor rather than growing off one end of it.
+  const anchor = P.throughM(zone, zone.sBox, 5386);
+  const mid = (Math.min(...at) + Math.max(...at)) / 2;
+  assert.ok(Math.abs(mid - anchor) < 1, `the row is off-centre: mid ${mid} vs anchor ${anchor}`);
+});
+
+test("a short circuit cannot have its row spill out of its own window", () => {
+  // The window is capped at a third of the lap, so on a short track the row has
+  // to compress into whatever is left rather than run past the exit.
+  const { pits, zone } = commitSession({ total: 900 });
+  const ids = ["mercedes", "cadillac", "custom"];
+  for (const id of ids) {
+    const a = pits.boxThroughFor({ team: id, s: 0, x: 0 });
+    assert.ok(a > 0 && a < zone.lenM, `box at ${a} m is outside a ${zone.lenM} m window`);
+  }
+});
+
+test("moving a team's garage does not move its pit loss", () => {
+  // The box position changes where you STOP. The distance through the window at
+  // the limiter is unchanged, so what the stop costs is unchanged — which is
+  // what keeps this a fidelity fix rather than a balance change.
+  const { pits, zone } = commitSession();
+  const a = pits.boxThroughFor({ team: "mercedes", s: 0, x: 0 });
+  const b = pits.boxThroughFor({ team: "custom", s: 0, x: 0 });
+  assert.notEqual(a, b, "the two ends of the row must actually differ");
+  assert.equal(zone.lenM, P.zoneOf(fakeTrack({})).lenM, "the window length must not depend on a car");
 });
