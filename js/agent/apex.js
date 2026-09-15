@@ -36,7 +36,16 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "kerbSndT", "kerbHapT",
   // 2026-09-15: five the guard had been red on. The last three need a STREET
   // circuit with real contact to appear — sweep tracks, not just monza.
-  "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI"];
+  "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI",
+  // 2026-09-15 (second pass): the tyre-force model (js/physics/tyre-model.js)
+  // and the smoothed control-demand fields (game.js "--- lateral ---") joined
+  // the sim after this list was last extended, every one already read with a
+  // `|| 0` / Number.isFinite fallback for the cold-car case (tyre-model.js:599,
+  // collide.js:371-372, apex.js:626) — undefined was always a tolerated input,
+  // just never actually reached because nothing cleared it between episodes.
+  "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
+  "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
+  "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
 // off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
 function apiHook(base, path, fix) {
