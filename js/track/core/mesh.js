@@ -987,13 +987,19 @@ const TrackMesh = (function () {
     const side = lane.side;
     // One node's four lateral offsets, ordered ASCENDING in r so the winding
     // below is the same on either side of the road.
+    // Five rails: road edge → inner (tarmac apron over the old grass gap) →
+    // blue sep → white edge → outer. At the tapers `r` → 0 so inner meets the
+    // road and the lane peels on/off instead of sitting on grass.
     const ring = (k) => {
       const w = lane.w[k];
       if (!(w > 0.01)) return null;
-      const inner = side * (hw[k] + lane.gap), outer = side * (hw[k] + lane.gap + w);
-      const sep = side * (hw[k] + lane.gap + PIT_SEP_W);
-      const edge = side * (hw[k] + lane.gap + w - PIT_EDGE_W);
-      return side > 0 ? [inner, sep, edge, outer] : [outer, edge, sep, inner];
+      const r = lane.laneW > 0.01 ? Math.min(1, w / lane.laneW) : 1;
+      const road = side * hw[k];
+      const inner = side * (hw[k] + lane.gap * r);
+      const outer = side * (hw[k] + lane.gap * r + w);
+      const sep = side * (hw[k] + lane.gap * r + Math.min(PIT_SEP_W, w * 0.3));
+      const edge = side * (hw[k] + lane.gap * r + w - Math.min(PIT_EDGE_W, w * 0.2));
+      return side > 0 ? [road, inner, sep, edge, outer] : [outer, edge, sep, inner, road];
     };
     const at = (k, o) => {
       const u = upOf(track, k);
@@ -1007,20 +1013,18 @@ const TrackMesh = (function () {
       const a = ring(k), b = ring(k2);
       if (!a || !b) continue;
       const ua = upOf(track, k), ub = upOf(track, k2);
-      for (let i = 0; i < 3; i++) {
-        // Ascending order puts the blue stripe against the road on the right and
-        // the white line against the road on the left, so pick the colour from
-        // which END of the ring this strip touches, not from its index.
-        const c = i === (side > 0 ? 0 : 2) ? PIT_SEP_COL
-                : i === (side > 0 ? 2 : 0) ? white : PIT_TARMAC;
+      for (let i = 0; i < 4; i++) {
+        if (Math.abs(a[i] - a[i + 1]) < 0.02 && Math.abs(b[i] - b[i + 1]) < 0.02) continue;
+        const roadIdx = side > 0 ? 0 : 3;
+        const blueIdx = side > 0 ? 1 : 2;
+        const whiteIdx = side > 0 ? 3 : 0;
+        const c = i === blueIdx ? PIT_SEP_COL : i === whiteIdx ? white : PIT_TARMAC;
         const base = out.pos.length / 3;
         const vert = (P, u) => {
           out.pos.push(P[0], P[1], P[2]);
           out.nrm.push(u[0], u[1], u[2]);
           out.col.push(c[0], c[1], c[2]);
         };
-        // Same CCW winding as the road, buildStartLine and buildGridBoxes: the
-        // lateral pair first, then the same pair one node further along.
         vert(at(k, a[i]), ua); vert(at(k, a[i + 1]), ua);
         vert(at(k2, b[i]), ub); vert(at(k2, b[i + 1]), ub);
         out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
@@ -1029,9 +1033,104 @@ const TrackMesh = (function () {
     return out;
   }
 
+  const PIT_TEAMS = [
+    { short: "MER", col: [0.00, 0.83, 0.87] },
+    { short: "FER", col: [1.00, 0.11, 0.18] },
+    { short: "MCL", col: [1.00, 0.50, 0.00] },
+    { short: "RBR", col: [0.14, 0.22, 0.55] },
+    { short: "ALP", col: [0.00, 0.35, 0.72] },
+    { short: "RB",  col: [0.40, 0.62, 0.90] },
+    { short: "HAA", col: [0.72, 0.10, 0.16] },
+    { short: "WIL", col: [0.02, 0.22, 0.55] },
+    { short: "AUD", col: [0.90, 0.10, 0.12] },
+    { short: "AMR", col: [0.00, 0.44, 0.30] },
+  ];
+  function pitTeamList() {
+    if (typeof Teams !== "undefined" && Teams.ORDER) {
+      const rows = [];
+      for (const t of Teams.ORDER) {
+        if (t.custom) continue;
+        rows.push({ short: (t.short || t.id || "?").slice(0, 3).toUpperCase(),
+                    col: t.primary || t.color || t.col || [0.8, 0.8, 0.8] });
+        if (rows.length >= 10) break;
+      }
+      if (rows.length) return rows;
+    }
+    return PIT_TEAMS;
+  }
+
+  function buildPitBoxes(track, out) {
+    const lane = track.pitLane;
+    if (!lane || !lane.w) return out;
+    const teams = pitTeamList();
+    const L = track.total, n = track.n;
+    const span = Math.max(0, lane.lenM - 80);
+    if (!(span > 40)) return out;
+    const s0 = (lane.sIn + 40) % L, pitch = span / teams.length;
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
+    for (let i = 0; i < teams.length; i++) {
+      const s = (s0 + (i + 0.5) * pitch) % L;
+      const k = ((Math.round((s / L) * n) % n) + n) % n;
+      const w = lane.w[k];
+      if (!(w > 1.2)) continue;
+      const rRamp = lane.laneW > 0.01 ? Math.min(1, w / lane.laneW) : 1;
+      const xMid = lane.side * (track.hw[k] + lane.gap * rRamp + w * 0.5);
+      TrackSpline.sample(track, s, smp);
+      const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t);
+      const uu = TrackGeom.norm(cross(rr, tt));
+      const at = (lon, lat) => [
+        smp.p[0] + rr[0] * lat + tt[0] * lon + uu[0] * PIT_LIFT,
+        smp.p[1] + rr[1] * lat + tt[1] * lon + uu[1] * PIT_LIFT,
+        smp.p[2] + rr[2] * lat + tt[2] * lon + uu[2] * PIT_LIFT,
+      ];
+      const quad = (A, B, C, D, col) => {
+        const base = out.pos.length / 3;
+        const push = (P) => { out.pos.push(P[0], P[1], P[2]); out.nrm.push(uu[0], uu[1], uu[2]); out.col.push(col[0], col[1], col[2]); };
+        push(A); push(B); push(C); push(D);
+        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      };
+      const x0 = xMid - 1.4, x1 = xMid + 1.4, boxLen = 6, paint = 0.16;
+      quad(at(boxLen / 2, x0), at(boxLen / 2, x1), at(boxLen / 2 - paint, x0), at(boxLen / 2 - paint, x1), white);
+      quad(at(-boxLen / 2, x0), at(boxLen / 2, x0), at(-boxLen / 2, x0 + paint), at(boxLen / 2, x0 + paint), white);
+      quad(at(-boxLen / 2, x1 - paint), at(boxLen / 2, x1 - paint), at(-boxLen / 2, x1), at(boxLen / 2, x1), white);
+      quad(at(boxLen / 2 + 0.25, x0), at(boxLen / 2 + 0.25, x1), at(boxLen / 2 + 0.55, x0), at(boxLen / 2 + 0.55, x1), teams[i].col);
+    }
+    return out;
+  }
+
+  function buildPitGarages(track, out) {
+    if (!out || !out.pos || typeof out.pos.push !== "function") return out;
+    const lane = track.pitLane;
+    if (!lane || !lane.w) return out;
+    const teams = pitTeamList();
+    const L = track.total, n = track.n;
+    const span = Math.max(0, lane.lenM - 80);
+    if (!(span > 40)) return out;
+    const s0 = (lane.sIn + 40) % L, pitch = span / teams.length;
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    for (let i = 0; i < teams.length; i++) {
+      const s = (s0 + (i + 0.5) * pitch) % L;
+      const k = ((Math.round((s / L) * n) % n) + n) % n;
+      const w = lane.w[k];
+      if (!(w > 1.2)) continue;
+      const rRamp = lane.laneW > 0.01 ? Math.min(1, w / lane.laneW) : 1;
+      const xOuter = lane.side * (track.hw[k] + lane.gap * rRamp + w + 3.2);
+      TrackSpline.sample(track, s, smp);
+      const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t);
+      const uu = TrackGeom.norm(cross(rr, tt));
+      const c = [smp.p[0] + rr[0] * xOuter + uu[0] * 2.2,
+                 smp.p[1] + rr[1] * xOuter + uu[1] * 2.2,
+                 smp.p[2] + rr[2] * xOuter + uu[2] * 2.2];
+      const body = [teams[i].col[0] * 0.35, teams[i].col[1] * 0.35, teams[i].col[2] * 0.35];
+      TrackGeom.addBox(out, c, [6.4, 4.4, Math.min(pitch * 0.72, 12)], body, [rr, uu, tt]);
+    }
+    return out;
+  }
+
   // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
   return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
            nodeGrid, buildRoad, buildTerrain, buildFloor, gridSlot, buildGridBoxes,
-           buildPitLane, GRID_SLOTS };
+           buildPitLane, buildPitBoxes, buildPitGarages, GRID_SLOTS };
 })();
 Object.freeze(TrackMesh);
