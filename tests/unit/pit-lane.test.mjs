@@ -686,3 +686,106 @@ test("moving a team's garage does not move its pit loss", () => {
   assert.notEqual(a, b, "the two ends of the row must actually differ");
   assert.equal(zone.lenM, P.zoneOf(fakeTrack({})).lenM, "the window length must not depend on a car");
 });
+
+// ── Where the lane opens is a property of the circuit ────────────────────────
+// A flat 320 m was circuit-blind and measurably wrong: at Monza it put the
+// entry inside Parabolica, where the commit gesture asks a driver to hold a
+// lateral line mid-corner. entryRunM walks back from the line to where the last
+// corner lets go. Curvature channel: surface (docs/PHYSICS.md).
+
+/** A track whose curvature is 0 on the last `straightM` before the line and
+ *  hard cornering before that — i.e. a pit straight of a known length. */
+function trackWithStraight(straightM, total = 5386) {
+  return { total, n: 1346, def: {},
+           _straightM: straightM,
+           hw: new Float32Array(1346).fill(7) };
+}
+function curvatureStub(track) {
+  return (t, s) => {
+    const L = t.total, v = ((s % L) + L) % L;
+    const before = L - v;                       // metres back from the line
+    return before <= t._straightM ? 0 : 0.02;   // straight, then a real corner
+  };
+}
+/** PitLane in a VM whose Tracks.curvature describes one straight before the line. */
+function laneOn(straightM, total = 5386) {
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
+  seedLog(ctx);
+  ctx.window = ctx;
+  const track = trackWithStraight(straightM, total);
+  ctx.Tracks = { sample: () => { throw new Error("entry geometry must not sample"); },
+                 curvature: curvatureStub(track) };
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  const Pl = vm.runInContext("PitLane", ctx);
+  return { Pl, track, entry: Pl.entryRunM(track), zone: Pl.zoneOf(track) };
+}
+
+test("the lane opens where the last corner lets go, not at a fixed distance", () => {
+  // The whole point: two circuits with different run-ins get different lanes.
+  const short = laneOn(200), long = laneOn(600);
+  assert.notEqual(short.entry, long.entry, "every circuit still gets the same entry");
+  assert.ok(Math.abs(short.entry - 200) <= 8 + 1, `a 200 m straight gave a ${short.entry} m entry`);
+  assert.equal(long.entry, P.ENTRY_M, "a long straight must cap at the longest a lane may be");
+});
+
+test("…and it never opens inside a corner, which is what this replaced", () => {
+  // Sampled back from the line, every metre of the entry run must be road the
+  // arc calls quiet. This is the assertion that would have caught Parabolica.
+  const { track, entry } = laneOn(300);
+  const k = curvatureStub(track);
+  for (let d = 0; d < entry; d += 8) {
+    assert.ok(Math.abs(k(track, ((-(d + 4)) % track.total + track.total) % track.total)) <= P.PIT_K,
+      `the window opens ${d} m back, which is inside a corner`);
+  }
+});
+
+test("a circuit with no straight still gets a lane, floored not vanished", () => {
+  // Monaco's problem. A 40 m run-in must not give a 40 m pit lane — below a
+  // floor it stops being a lane at all and the stop stops costing anything.
+  const { entry, zone } = laneOn(40);
+  assert.equal(entry, P.ENTRY_MIN, "a cornering run-in must floor at the shortest real lane");
+  assert.ok(zone.lenM > P.ENTRY_MIN, "the window is the entry plus the exit");
+});
+
+test("pit loss now VARIES by circuit, which is the reason the lane is driven", () => {
+  // The design's whole justification over a hardcoded penalty: real pit loss
+  // runs 18-30 s and that spread decides one stop against two. With a flat
+  // 320 m entry every circuit had the SAME lane and the spread did not exist.
+  const lens = [120, 250, 400, 600].map((m) => laneOn(m).zone.lenM);
+  assert.equal(new Set(lens).size > 1, true, `every circuit still has the same lane: ${lens}`);
+  assert.ok(Math.max(...lens) - Math.min(...lens) > 100,
+    `the spread is too small to change a strategy: ${lens}`);
+  // …and it is monotone: a longer run-in is never a shorter lane.
+  for (let i = 1; i < lens.length; i++) assert.ok(lens[i] >= lens[i - 1], `not monotone: ${lens}`);
+});
+
+test("a circuit may still override the entry by hand", () => {
+  // The derived value is a DEFAULT. Authored per-circuit geometry (real lane
+  // lengths) must still win, because the arc cannot know where a real pit lane
+  // diverges — only where the road stops turning.
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
+  seedLog(ctx);
+  ctx.window = ctx;
+  const track = trackWithStraight(600);
+  track.def = { pitZone: { entryM: 275 } };
+  ctx.Tracks = { sample: () => { throw new Error("no"); }, curvature: curvatureStub(track) };
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
+  const Pl = vm.runInContext("PitLane", ctx);
+  assert.equal(Pl.zoneOf(track).lenM, 275 + P.EXIT_M, "an authored entryM was ignored");
+});
+
+test("the entry read is the ONLY curvature this module does", () => {
+  // Curvature channel: surface. It may decide WHERE the lane is, once per
+  // circuit, and must never reach a driving car — so it belongs in zone
+  // resolution and nowhere near update(), committing() or the box.
+  const src = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
+  // CALLS, not mentions: the availability guard (`!Tracks.curvature`) names it
+  // without reading it, and counting that as a read would make this assertion
+  // about spelling rather than about the contract.
+  const reads = src.split("\n").filter((l) => /Tracks\.curvature\s*\(/.test(l) && !/^\s*(\/\/|\*)/.test(l));
+  assert.equal(reads.length, 1, `curvature is CALLED ${reads.length} times, not once: ${reads.join(" | ")}`);
+  const fn = src.slice(src.indexOf("function entryRunM"), src.indexOf("function zoneOf"));
+  assert.ok(/Tracks\.curvature/.test(fn), "the one read must be the entry scan");
+});

@@ -65,9 +65,52 @@ const PitLane = (function () {
   // backwards — a pit lane is a building, not a share of a circuit. Measured
   // from the start/finish line, which is where every circuit's pit straight is
   // (racing coordinates put the line at s = 0; see TrackSpace).
-  const ENTRY_M = 320;     // where the lane opens, before the line
-  const EXIT_M = 130;      // ...and closes, after it
+  const ENTRY_M = 400;     // the LONGEST the lane may open before the line
+  const ENTRY_MIN = 150;   // ...and the shortest that is still a lane
+  const EXIT_M = 130;      // where it closes, after the line
   const BOX_M = 40;        // the stop, this far before the line
+
+  // ── WHERE THE LANE OPENS IS A PROPERTY OF THE CIRCUIT ─────────────────────
+  // It used to be a flat 320 m on all 52, which is circuit-blind and measurably
+  // wrong: at Monza that lands the entry INSIDE PARABOLICA. The gesture that
+  // calls a stop is "hold the car on the pit side and keep it there", and a car
+  // holding any lateral line through a corner is doing the hard part of driving
+  // — traced, a car entering the old window and steering zero drifted 6.4 m to
+  // 0.74 m and missed its box. Asking for the pit side mid-corner asks the
+  // wrong thing.
+  //
+  // So walk BACK from the start/finish line and open the window where the last
+  // corner lets go. Real pit entries are on the pit straight for this exact
+  // reason.
+  //
+  // CURVATURE CHANNEL: **surface**, and classified in docs/PHYSICS.md before it
+  // landed. This is the aero-zones pattern exactly — fixed zones computed ONCE
+  // per circuit from the static arc, gating a driver-INITIATED action (there
+  // the X button, here calling a stop) identically for every car, with no force
+  // path and nothing read per frame. The arc decides WHERE the pit lane is, the
+  // same way it decides where a kerb is; it never reaches a driving car.
+  //
+  // THE THRESHOLD IS LOOSER THAN A DRS ZONE'S ON PURPOSE. aero-zones uses
+  // 0.0014 (r >= ~700 m) because a zone must be a PROPER straight — at a slacker
+  // bar Monaco sprouted four of them. A pit entry needs much less: not "straight"
+  // but "not actively cornering", i.e. road where holding a line is not itself
+  // the challenge. 0.0035 is r ~= 285 m, which a car at the pit limit takes
+  // without noticing.
+  const PIT_K = 0.0035;
+  const PIT_STEP = 8;      // m between samples, as aero-zones uses
+
+  /** How far before the line the pit straight starts, clamped to a length that
+   *  is still a pit lane. Pure, static, once per circuit. */
+  function entryRunM(track) {
+    const L = track.total;
+    if (!(L > 0) || typeof Tracks === "undefined" || !Tracks.curvature) return ENTRY_M;
+    let d = 0;
+    for (; d < ENTRY_M; d += PIT_STEP) {
+      const s = ((-(d + PIT_STEP / 2)) % L + L) % L;
+      if (Math.abs(Tracks.curvature(track, s)) > PIT_K) break;   // the corner
+    }
+    return clamp(d, ENTRY_MIN, ENTRY_M);
+  }
 
   // The speed limit, as a fraction of the speed ENVELOPE rather than a literal
   // m/s. 80 km/h against a 259 km/h car is the real ratio (FIA 2025 Sporting
@@ -204,7 +247,7 @@ const PitLane = (function () {
     const L = track.total;
     const z = (track.def && track.def.pitZone) || {};
     const wrap = (v) => ((v % L) + L) % L;
-    const entryM = z.entryM != null ? z.entryM : ENTRY_M;
+    const entryM = z.entryM != null ? z.entryM : entryRunM(track);
     const exitM = z.exitM != null ? z.exitM : EXIT_M;
     // A very short circuit cannot carry a 450 m lane: cap the window at a third
     // of the lap so the lane can never swallow the whole track.
@@ -696,6 +739,6 @@ const PitLane = (function () {
            ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
            BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V,
            CUE_M: 550, CUE_WEAR: 0.55, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
-           BOX_PITCH, laneWidth, teamRow };
+           BOX_PITCH, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
 })();
 Object.freeze(PitLane);
