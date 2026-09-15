@@ -80,7 +80,7 @@ const RaceEngineer = (function () {
       // §11 "live, not pre-planned" call made good. So nothing below arms a
       // stop — every one of these is a sentence.
       if (s.wrongTread) return [s.wet ? "RAIN — BOX FOR WETS" : "TRACK IS DRY — BOX FOR SLICKS", "tread"];
-      if (s.freeStop) return ["SAFETY CAR — BOX NOW, FREE STOP", "caution"];
+      if (s.freeStop) return ["CAUTION — CHEAPER STOP" + (s.pitLoss != null ? ", ABOUT " + Math.round(s.pitLoss) + "s LOST" : " — CONSIDER BOXING"), "caution"];
       if (s.rainInLaps != null) {
         return ["RAIN IN " + s.rainInLaps + (s.rainInLaps === 1 ? " LAP" : " LAPS") + " — BE READY", "rain"];
       }
@@ -122,8 +122,9 @@ const RaceEngineer = (function () {
       // The wrong tread in EITHER direction — slicks in the rain and wets on a
       // drying track — read exactly as PitLane.think reads it for an AI car, so
       // the advice the player gets and the call the field makes cannot diverge.
-      const wantTread = TyreModel.treadFor(G.raceWeather);
+      const wantTread = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
       const caution = G.cautionInfo ? G.cautionInfo() : null;
+      const pit = G.pits && G.pits.estimate(c);
       const armed = !!c.pitArmed || (c.pitState && c.pitState !== "none");
       // "Rain in N laps" needs a lap estimate and the arc is in SECONDS. The
       // driver's own last lap is the only honest converter: a fixed guess would
@@ -145,11 +146,11 @@ const RaceEngineer = (function () {
         // Nothing about stopping is worth saying to a driver who has already
         // called one — the banner said BOX THIS LAP when they pressed it.
         wrongTread: !armed && (c.tyre.tread || 0) !== wantTread,
-        // A free stop is only free if there is something to gain: under a
-        // caution with a set that is actually part-used. Calling it on lap one
-        // would be advice to throw a tyre away.
-        freeStop: !armed && !!caution && caution.level >= 2 && wear >= 0.35,
-        wet: WET.indexOf(G.raceWeather) >= 0,
+        // A discounted stop needs something to gain: a part-used set.
+        // The estimate includes lane travel and stationary service time.
+        pitLoss: pit ? pit.lossS : null,
+        freeStop: !armed && !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35,
+        wet: wantTread > 0,
         rainInLaps: !armed && arc && WET.indexOf(arc.to) >= 0 && lapS > 0 && left > 0
           ? Math.max(1, Math.round(left / lapS)) : null,
       };

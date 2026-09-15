@@ -426,3 +426,124 @@ Monza's numbers were byte-identical at `1 ×` and `2 ×` the cooldown: after a
 pass on that layout the pair separates for longer than either timer anyway, so
 the constant only bites at Monaco. `2 ×` was kept to match the existing
 lunge-abandon branch rather than introduce a second constant.
+
+## 2026-09-14 — the straight-line defence: a real defect fixed, and NO measurable benefit
+
+`e9a9f56ca` shipped a fix to `AiDrive.defendPull` and said so in its own subject:
+"the effect is UNPROVEN". This is the measurement that closes that, and the
+answer is **no measurable benefit**.
+
+**The defect was real.** On a straight the function derived the side to cover
+from curvature (`coverSide = -Math.sign(kA)`), and on a straight `kA ≈ 0`, so
+`-Math.sign(0)` is not a direction and the function returned 0. The AI never
+defended a straight at all — no covering the line into turn 1, no breaking the
+tow — and `defendOnce`'s "one defensive move per straight" limiter had nothing it
+could ever limit. The fix covers the side the attacker is lining up on.
+
+**Why the obvious experiment is worthless here, measured.** Before running
+anything real I calibrated the chaos floor: a SHAM arm — the pre-change guard
+plus a `(1 + 1e-3)` multiplier on the *corner* pull, ≤ 0.6 mm of lateral target
+on a pull that maxes at 0.635 m — against the unmodified tree, monza, seed 1,
+240 s:
+
+| | finishing order | straight-episode pass rate | lead prog |
+|---|---|---|---|
+| off | RUS, PIA, ANT, LEC, GAS … | 0.2994 | 11747.3 m |
+| sham (0.6 mm) | VER, LEC, PIA, ANT, RUS … | 0.2743 | 11735.5 m |
+
+A physically meaningless perturbation reshuffles the finish and moves the pass
+rate by **0.025**. The real change moved it by 0.054 and 0.013 on two piloted
+seeds. **The treatment effect at one seed is the size of a perturbation with no
+physical meaning**, so "run races with and without and count overtakes" cannot
+answer this question on any number of seeds this box can afford. (At `eps = 1e-9`
+the runs stayed byte-identical over 120 s, so the divergence has a threshold —
+`1e-3` is the calibration knob, `1e-9` is not.)
+
+**The instrument that can answer it.** `tools/check/defend-duel.mjs`: every other car
+retired, two AI cars staged on an auto-detected straight (the whole 18–70 m
+lookahead window under `defendPull`'s own `|kA| ≤ 0.004` for 380 m), 8 s per cell,
+**both arms run back-to-back on the same cell inside one session**, so a
+difference is the branch and not the session. The same cell reproduces to the
+digit — there is no chaos to average over.
+
+**Result — monza, drivers 0/1, 1260 cells (6 fracs × 7 gaps × 10 lateral offsets
+× 3 closing speeds):**
+
+| | ON | OFF |
+|---|---|---|
+| straight-defend samples (anti-vacuity) | **105 516** | **0** |
+| passes completed | 253 / 1260 | 259 / 1260 |
+| median defender advance per 8 s | 472.2 m | 467.7 m |
+
+| outcome flips | |
+|---|---|
+| cells changed | 28 of 1260 (2.2 %) |
+| held where it previously failed | **17** |
+| lost where it previously held | **11** |
+| one-sided binomial vs a fair coin | **p = 0.172** |
+
+Conditioning on the 469 cells where the cover actually moved the car — i.e.
+where the treatment did something — sharpens it rather than rescuing it:
+
+| | |
+|---|---|
+| flipped to defended / to passed | 11 / 7 (p = 0.240) |
+| median Δ end gap | **+0.000 m**, 154 up / 150 down |
+| median Δ defender advance | +1.10 m |
+
+**The pre-registered rule** (declared before the run: PROVEN needs ≥ 20 cells
+changed AND ≥ 4:1 toward defended, p < 0.01) is **not met** — 28 cells, 1.55:1,
+p = 0.172. The end-gap split of 154/150 is a coin.
+
+**What this licenses saying.** The branch is live and fires hard, the defect it
+fixed was real, and the cover costs the defender nothing (+1.1 m advance, +0.000 m
+gap — it is not a self-inflicted time loss). It does **not** measurably improve
+pass resistance. Keep it as a correctness fix; do not claim it as a racecraft
+improvement.
+
+Stopped after one driver pair, deliberately, because the design pre-registered
+"run one pair first and stop if it is flat". It is flat. Sweeping more pairs until
+one looked favourable would be fishing, and this file already carries one entry
+whose headline turned out to be the author's own measurement error.
+
+## 2026-09-14 — the pass latch engaged outside its own release window
+
+`js/game.js` releases the pass latch when the blocker is more than 16 m ahead
+("lost it: no penalty"), but the ENGAGE condition had no gap term at all —
+`if (!c.passOf && c.passCool <= 0 && moveOn)`. So a car could commit to a pass on
+a blocker already outside the window and drop it on the next frame, with no
+cooldown to stop it re-latching the same car immediately. Both ends now read one
+constant, `AI_PASS_LATCH_M`, so they cannot drift apart again.
+
+MEASURED with `scratch/churn-probe2.mjs`, monza, **6 seeds**, 120 s, paired
+against the same tree with the bound stashed:
+
+| | before | after |
+|---|---|---|
+| engagements | 790 | **465** (−41 %) |
+| released as "lost it" | 325 | **20** (−94 %) |
+| started beyond 16 m | 49.7 % | **0** |
+| median engagement duration | 0.58 s | **1.27 s** |
+| under 1 s | 64.6 % | 44.1 % |
+| completed passes | **62** | **51** (−18 %) |
+| completion rate, engagements inside 16 m | 0.116 | 0.110 |
+
+**Read the last two rows before the first four.** The bound does exactly what it
+says structurally — no engagement now starts outside the window, and abandoned
+latches all but vanish — but the per-engagement completion rate is FLAT
+(0.116 → 0.110). This does not make the AI better at passing. It makes it stop
+attempting passes it could never complete, and that costs ~18 % of completions.
+Whether that is a gain depends on the target, and this file's own calibration says
+the field is far too pass-happy (29 settled passes per 240 s against 30.9 per real
+RACE), so fewer attempts and fewer completions is directionally right rather than
+a regression. It is a behaviour change with a real cost, not a free win.
+
+**The n=3 reading was wrong, and in the flattering direction.** At 3 seeds
+completions appeared to RISE (30 → 32) and the change looked free; at 6 seeds they
+fall 18 %. Same instrument, same track, same code. This is the third entry in this
+file to record a result that reversed when the sample grew — the others being the
+pace-spread n=5 section and the straight-line defence above — and the pattern is
+always the same: the small sample flattered the change being tested.
+
+Guards 178/178, ai-drive 57/57, ai-racecraft-vm 4/4. `js/game.js` grew 3 lines /
+1 code line for the named constant; both ceilings raised by exactly that.

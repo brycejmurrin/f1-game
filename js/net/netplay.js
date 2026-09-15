@@ -7,6 +7,7 @@ const NetPlay = (function () {
   const INTERP_DELAY_MS = 100;            // how far in the past rivals are drawn
 
   const EV = {
+    MODEL: "model", STRATEGY: "strategy", // versioned reliable compatibility + tyre/pit state
     HELLO: "hello",                       // profile exchange — re-sent on every change
     SETTINGS: "settings",                 // host -> guest race setup (live, in the room)
     READY: "ready",                       // either way: I am done choosing
@@ -109,8 +110,43 @@ const NetPlay = (function () {
     };
   }
 
+  const STRATEGY_VERSION = 1;
+  let epochSerial = 0;
+  const modelRevision = () => typeof PhysicsConsts !== "undefined" ? PhysicsConsts.REVISION : "2026-09-coherence-1";
+  const STRATEGY_FIELDS = { tyreWear: [0, 3], tyreWearF: [0, 3], tyreWearR: [0, 3], tyreTs: [0, 250], tyreTb: [0, 250],
+    tyreGrain: [0, 1], tyreBlister: [0, 1], tyreLap0: [0, 1000], tyreStints: [0, 1000], pitStops: [0, 1000], pitT: [0, 30] };
+  function strategyState(c, wire, track) {
+    const fields = {};
+    for (const k of Object.keys(STRATEGY_FIELDS)) if (Number.isFinite(c[k])) fields[k] = c[k];
+    return { version: STRATEGY_VERSION, physics: modelRevision(), wire, track, fields,
+      tyre: c.tyre || null, tread: c.tread, pitState: c.pitState || "none", pitArmed: !!c.pitArmed };
+  }
+  function applyStrategy(c, d) {
+    if (!c || !d || d.version !== STRATEGY_VERSION || d.physics !== modelRevision() || !d.fields) return false;
+    if (d.tyre && typeof d.tyre.id === "string" && Number.isInteger(d.tyre.tread) && d.tyre.tread >= 0 && d.tyre.tread <= 2
+        && Number.isFinite(d.tyre.life) && d.tyre.life >= 0.3 && d.tyre.life <= 1.2) {
+      c.tyre = { id: d.tyre.id.slice(0, 64), code: String(d.tyre.code || "?").slice(0, 4), life: d.tyre.life,
+        tread: d.tyre.tread, off: Number.isFinite(d.tyre.off) ? Math.max(-0.2, Math.min(0.2, d.tyre.off)) : 0,
+        colour: Array.isArray(d.tyre.colour) && d.tyre.colour.length === 3 ? d.tyre.colour.map(v => Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5) : [0.5, 0.5, 0.5] };
+      c.tread = c.tyre.tread;
+    } else if (Number.isInteger(d.tread) && d.tread >= 0 && d.tread <= 2) c.tread = d.tread;
+    for (const [k, range] of Object.entries(STRATEGY_FIELDS)) {
+      if (Number.isFinite(d.fields[k])) c[k] = Math.max(range[0], Math.min(range[1], d.fields[k]));
+    }
+    if (["none", "lane", "box", "out"].includes(d.pitState)) c.pitState = d.pitState;
+    c.pitArmed = d.pitArmed === true;
+    return true;
+  }
+
   function create(G) {
-    const sessions = new Map();
+    const sessions = new Map(), peerEpochs = new Map();
+    let epoch = null;
+    function broadcastStrategy(data) {
+      for (const [id, s] of sessions) {
+        const to = peerEpochs.get(id);
+        if (to) { try { s.sendEvent(EV.STRATEGY, { ...data, epoch: to }); } catch (e) { /* peer closed */ } }
+      }
+    }
     const sessionList = () => [...sessions.values()];
     const _pumpBuf = [];               // tick()'s per-frame snapshot, refilled in place
     const PEER_ONE = "peer";
@@ -127,7 +163,7 @@ const NetPlay = (function () {
     let localCar = null;
     const remotes = new Map();
     const remoteList = () => [...remotes.values()];
-    let lastPublish = -Infinity;
+    let lastPublish = -Infinity, lastStrategy = -Infinity, lastStrategyPhase = null;
     let peerProfile = null;
     let lastReason = null;
     let lastSlotFallback = null;
@@ -296,7 +332,7 @@ const NetPlay = (function () {
       for (const entry of pkt.cars) {
         if (ownOnly != null && entry.id !== ownOnly) continue;
         const r = remotes.get(entry.id);
-        if (r) r.interp.push(t, entry);
+        if (r) r.interp.push(t, entry, G.netNow);
       }
     }
 
@@ -340,6 +376,23 @@ const NetPlay = (function () {
         s.onEvent(name, (d) => {
           eventLog.push({ type: name, data: d, from: id });
           if (eventLog.length > 32) eventLog.shift();
+          if (name === EV.MODEL) {
+            if (!d || d.physics !== modelRevision() || d.strategy !== STRATEGY_VERSION) {
+              if (G.announce) G.announce("GAME VERSIONS DIFFER — RELOAD BOTH GAMES", 4, "info");
+              stop("incompatible_physics"); return;
+            }
+            if (typeof d.epoch === "string" && d.epoch.length <= 64) {
+              peerEpochs.set(id, d.epoch); lastStrategy = -Infinity;
+              if (!d.ack) s.sendEvent(EV.MODEL, { physics: modelRevision(), strategy: STRATEGY_VERSION, epoch, ack: true });
+            }
+          }
+          // Each receiver names a fresh race epoch. A queued pit event from a
+          // previous race on the same circuit cannot change this race's tyres.
+          if (name === EV.STRATEGY && d && d.epoch === epoch && G.track && G.track.def && d.track === G.track.def.id) {
+            const r = remotes.get(d.wire);
+            const authorized = role === "guest" || remoteFor(id) === d.wire;
+            if (r && authorized && applyStrategy(r.car, d) && role === "host") broadcastStrategy(strategyState(r.car, d.wire, d.track));
+          }
           if (name === EV.BYE) {
             lastReason = "bye";
             // A clean leave is one rival, not the session — same as onClose.
@@ -442,7 +495,8 @@ const NetPlay = (function () {
 
       role = opts.role === "host" ? "host" : "guest";
       peerProfile = opts.peerProfile || null;
-      sessions.clear();
+      sessions.clear(); peerEpochs.clear();
+      epoch = Date.now().toString(36) + "-" + (++epochSerial);
       const incoming = opts.sessions
         || (opts.session ? [{ id: PEER_ONE, session: opts.session }] : null)
         || [{ id: PEER_ONE, session: NetSession.create({ transport: opts.transport }) }];
@@ -481,6 +535,7 @@ const NetPlay = (function () {
           interp: NetSnapshot.createInterp({
             total: G.track.total,
             delayMs: opts.interpDelayMs != null ? opts.interpDelayMs : INTERP_DELAY_MS,
+            adaptive: opts.interpDelayMs == null,
           }),
         });
       }
@@ -514,7 +569,7 @@ const NetPlay = (function () {
       session = sessionList()[0] || null;
       separateGrid();
 
-      lastPublish = -Infinity;
+      lastPublish = -Infinity; lastStrategy = -Infinity; lastStrategyPhase = null;
       lastReason = null;
       armedPeers.clear();
       armDeadline = 0;
@@ -522,6 +577,7 @@ const NetPlay = (function () {
       holdUntil = 0;
       G.netNow = null;
       active = true;
+      broadcast(EV.MODEL, { physics: modelRevision(), strategy: STRATEGY_VERSION, epoch });
       if (role === "guest") { try { broadcast(EV.ARMED, {}); } catch (e) { /* a dead session must not stop start() */ } }
       Log.info("net", "play start " + role + " n=" + remotes.size);
       const ids = remoteList().map((r) => G.cars.indexOf(r.car));
@@ -645,7 +701,7 @@ const NetPlay = (function () {
       // Every connection, not just the first — a host leaving must not strand
       // two guests holding open sockets to a race that has ended.
       for (const s of sessionList()) { try { s.close(); } catch (e) { /* already gone */ } }
-      sessions.clear();
+      sessions.clear(); peerEpochs.clear();
       peerCar.clear();
       session = null;
       armDeadline = 0;
@@ -723,6 +779,11 @@ const NetPlay = (function () {
         }
       }
 
+      const strategyPhase = localCar && [localCar.tyreStints, localCar.pitState, localCar.pitArmed].join(":");
+      if (localCar && G.track && G.track.def && (now - lastStrategy >= 1000 || lastStrategyPhase !== strategyPhase)) {
+        lastStrategy = now; lastStrategyPhase = strategyPhase;
+        broadcastStrategy(strategyState(localCar, G.wireId(localCar), G.track.def.id));
+      }
       if (localCar && now - lastPublish >= PUBLISH_MS) {
         lastPublish = now;
         const entries = [{ id: G.wireId(localCar), car: localCar }];
@@ -779,7 +840,7 @@ const NetPlay = (function () {
         remoteId: remoteList().length ? G.cars.indexOf(remoteList()[0].car) : -1,
         remotes: remoteList().map((r) => ({
           id: G.cars.indexOf(r.car), wire: G.wireId(r.car),
-          driverId: r.car.driverId, buffered: r.interp.size(),
+          driverId: r.car.driverId, buffered: r.interp.size(), timing: r.interp.timing ? r.interp.timing() : null,
         })),
         slotFallback: lastSlotFallback,
         net: session ? session.stats() : null,
@@ -793,7 +854,7 @@ const NetPlay = (function () {
     };
   }
 
-  return { create, EV, PUBLISH_HZ, INTERP_DELAY_MS,
+  return { create, EV, PUBLISH_HZ, INTERP_DELAY_MS, strategyState, applyStrategy, STRATEGY_VERSION,
     clampWire, validQuali, validQualiLive, bindQuali, qualiReporters, QUALI_MIN_S, QUALI_MAX_S };
 })();
 Object.freeze(NetPlay);

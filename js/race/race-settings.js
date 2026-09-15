@@ -144,6 +144,10 @@ const RaceSettings = (function () {
           return;
         }
         if (getSteerMode() === "tilt") enableTilt();
+        // Same gesture, same reason: Chromium needs user activation before
+        // navigator.vibrate will fire and no longer accepts touchstart as one,
+        // so arm it from this click or the first in-race brake cue is dropped.
+        if (window.Input && Input.primeHaptics) Input.primeHaptics();
         const season = getSeason();
         if ((isChampionship() && SeasonCal.qualiNext(season) && !qualiResults()) ||
             (!isChampionship() && gridFromQuali() && !qualiResults())) openQuali();

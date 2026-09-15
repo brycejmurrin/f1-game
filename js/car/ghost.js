@@ -21,7 +21,7 @@ const Ghost = (function () {
     } catch { /* storage disabled — nothing to migrate */ }
   })();
 
-  let trackId = null;
+  let trackId = null, context = null, storageId = null;
   let best = null;               // { time, t:[], s:[], x:[] } for current track
   let rec = null;                // in-progress lap: { t:[], s:[], x:[] }
   let lastSampleT = -1;
@@ -58,10 +58,24 @@ const Ghost = (function () {
     } catch { Log.warn("car", "ghost save fail"); }
   }
 
-  function setTrack(id) {
-    trackId = id;
-    const g = loadStore()[id];
-    best = (g && g.s && g.s.length >= MIN_SAMPLES) ? g : null;
+  // Canonical JSON is collision-free and stable across object insertion order.
+  function contextKey(value) {
+    const stable = (v) => Array.isArray(v) ? v.map(stable) : v && typeof v === "object"
+      ? Object.fromEntries(Object.keys(v).sort().map(k => [k, stable(v[k])])) : v;
+    return JSON.stringify(stable(value));
+  }
+  function valid(g) {
+    if (!g || !(g.time > 0) || !Number.isFinite(g.time)) return false;
+    const { t, s, x } = g;
+    if (!Array.isArray(t) || !Array.isArray(s) || !Array.isArray(x) || s.length < MIN_SAMPLES || t.length !== s.length || x.length !== s.length) return false;
+    return t.every((v, i) => Number.isFinite(v) && Number.isFinite(s[i]) && Number.isFinite(x[i])
+      && v >= 0 && (i === 0 || (v >= t[i - 1] && s[i] >= s[i - 1])));
+  }
+  function setTrack(id, eventContext = null) {
+    trackId = id; context = eventContext;
+    storageId = context == null ? id : "v2:" + id + ":" + context;
+    const g = loadStore()[storageId];
+    best = valid(g) ? g : null;
     rec = null;
     lastSampleT = -1;
     Log.info("car", `ghost load ${id}${best ? " ok" : " none"}`);
@@ -95,10 +109,10 @@ const Ghost = (function () {
   // circuit's ghost (~40 KB each) and finishLap runs inside updateCar on the
   // lap-line frame of a new record — the one-frame hitch PERF-FINDINGS §2 records.
   function scheduleSave(id, snap) {
+    loadStore()[id] = snap;   // immediately visible if another class is selected before idle
     const write = () => {
       try {
         const store = loadStore();
-        store[id] = snap;
         saveStore(store);
         Log.info("car", `ghost save ${id}`);
       } catch { Log.warn("car", "ghost save fail"); }
@@ -119,7 +133,7 @@ const Ghost = (function () {
     if (lapTime >= bestTime()) return false;
     best = { time: round(lapTime, 3), t: done.t, s: done.s, x: done.x };
     if (meta && typeof meta === "object") best.meta = meta;
-    if (trackId != null) scheduleSave(trackId, best);
+    if (storageId != null) scheduleSave(storageId, best);
     return true;
   }
 
@@ -178,13 +192,14 @@ const Ghost = (function () {
       return;
     }
     const store = loadStore();
-    delete store[id];
+    delete store[context != null && id === trackId ? storageId : id];
     saveStore(store);
     if (id === trackId) best = null;
   }
 
   return {
-    setTrack, startLap, record, finishLap, at, timeAt,
+    setTrack, startLap, record, finishLap, at, timeAt, contextKey,
+    context: () => context, track: () => trackId,
     hasGhost, bestTime, meta, medal, clear,
   };
 })();

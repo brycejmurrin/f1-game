@@ -503,6 +503,17 @@
     <div class="sheet-body pane stack">
       <button id="pm-resume" autofocus>RESUME</button>
       <button id="pm-restart">RESTART RACE</button>
+      <details><summary>DRIVING &amp; PRACTICE</summary>
+        <div class="stack">
+          <button id="pm-coach" type="button" aria-pressed="false">DRIVING COACH: OFF</button>
+          <button id="pm-driving-trace" type="button" disabled>DOWNLOAD DRIVING TRACE</button>
+          <button id="pm-practice-set" type="button">SET PRACTICE CHECKPOINT</button>
+          <button id="pm-practice-retry" type="button" disabled>RETRY CHECKPOINT</button>
+          <p class="adv-help">Checkpoints are for solo time trials. Practice laps are not saved. Restart to return to timed laps.</p>
+          <label>Next pit stop <select id="pm-pit-choice" aria-label="Next pit stop compound"><option value="auto">AUTOMATIC COMPOUND</option></select></label>
+          <p id="pm-pit-estimate" class="adv-help"></p>
+        </div>
+      </details>
       <button id="pm-settings">SETTINGS&hellip;</button>
       <button id="pm-howto">HOW TO PLAY&hellip;</button>
       <button id="pm-standings" hidden>STANDINGS</button>
@@ -881,7 +892,7 @@
         <input id="pm-brakecue" type="range" min="1" max="10" step="1" value="6" aria-label="Brake cue"></label>
       <p class="adv-help">A tick that speeds up when you need to brake for a corner. 1 is OFF. Higher = earlier warning (more lookahead). Takes over nothing.</p>
     </div>
-    <div class="adv-item">
+    <div class="adv-item" id="pm-haptics-item">
       <label class="tune-row"><span class="tune-label">HAPTICS <b id="pm-haptics-v">6</b></span>
         <input id="pm-haptics" type="range" min="1" max="10" step="1" value="6" aria-label="Haptics"></label>
       <p class="adv-help">Strength of every buzz and rumble: kerbs, contact, losing the front end, and the brake cue. 1 is OFF. Needs a phone that vibrates or a controller that rumbles &mdash; iPhone and iPad do neither from a web page.</p>
@@ -2455,6 +2466,8 @@
 <script defer crossorigin="anonymous" src="js/car/crest-paths.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/session-records.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/driving-coach.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/consts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/knobs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/track-lights.js?v=dev"></script>

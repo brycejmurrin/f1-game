@@ -125,7 +125,14 @@ const Input = (function () {
   // meaning for every existing reader.
   let gyroHardDenied = false;
   // single source of truth for how the player steers: "tilt" | "buttons" | "touch"
-  let steerMode = "tilt";
+  // BUTTONS, not tilt, so this module's pre-boot value matches the shipped
+  // default (js/game.js reads store "steerMode" defaulting to "buttons" and
+  // pushes it here at boot). They disagreed, harmlessly — game.js always wins
+  // before a player sees anything — but the disagreement made the file read as
+  // though we default to a motion control, which WCAG 2.2 SC 2.5.4 would fail:
+  // motion-operated functionality must also be operable by UI components. We
+  // pass, and now the code says so without needing game.js to prove it.
+  let steerMode = "buttons";
   let tiltSmoothed = 0;       // One-Euro-filtered tilt angle (deg)
   let lastOrientMs = 0;
   let OE_MIN_CUTOFF = 1.2;    // Hz — THE smoothing knob (set by the SMOOTHING slider)
@@ -1580,6 +1587,33 @@ const Input = (function () {
   // the page has never been interacted with, and iOS Safari has no vibrate at
   // all (WebKit has never shipped it and formally opposes it), so every caller
   // must already survive this doing nothing.
+  // Can this device produce ANY haptic? navigator.vibrate is absent from every
+  // WebKit (so every iOS browser), and Gamepad.vibrationActuator is false there
+  // too — an iPhone can do neither from a web page. The HAPTICS slider says so
+  // in its help text, but a control that cannot do anything is better hidden
+  // than explained, so steer-tuning.js gates the row on this. Re-read on
+  // gamepadconnected: a pad arriving later can make it true.
+  function hapticsSupported() {
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    if (nav && typeof nav.vibrate === "function") return true;
+    const pad = activePad();
+    return !!(pad && pad.vibrationActuator);
+  }
+
+  // PRIME the vibrator from a real click. Chromium requires user activation for
+  // navigator.vibrate and no longer counts `touchstart` as one — so the first
+  // in-race buzz of a session is dropped with a console intervention and every
+  // later one works, which reads as "haptics are flaky" rather than "haptics
+  // were never armed". One zero-length call from the GO/START click arms it for
+  // the frame's lifetime. Safe everywhere: a no-op where vibrate is absent.
+  let hapticPrimed = false;
+  function primeHaptics() {
+    if (hapticPrimed) return;
+    hapticPrimed = true;
+    if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    try { navigator.vibrate(1); } catch (_) { /* advisory only */ }
+  }
+
   function vibrate(ms) {
     if (hapticScale <= 0) return;
     if (typeof navigator === "undefined" || !navigator.vibrate) return;
@@ -2195,6 +2229,8 @@ const Input = (function () {
     setKeyRampIn,
     setHaptics,
     vibrate,
+    hapticsSupported,
+    primeHaptics,
     setPadLabelMode, padLabelMode: padLabelModeOf,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest,
     touchControlsNeeded,

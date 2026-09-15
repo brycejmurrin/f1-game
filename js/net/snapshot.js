@@ -109,12 +109,24 @@ const NetSnapshot = (function () {
   function createInterp(opts) {
     opts = opts || {};
     const total = opts.total || 1;         // track length, for wrap-aware s
-    const delayMs = opts.delayMs != null ? opts.delayMs : 100;
+    let delayMs = opts.delayMs != null ? opts.delayMs : 100;
+    const baseDelay = delayMs;
+    let jitter = 0, lastArrival = null, lastTick = null, presentedAt = -Infinity;
     const maxExtrapMs = opts.maxExtrapMs != null ? opts.maxExtrapMs : 250;
     const keep = opts.keep || 32;
     let samples = [];                      // ascending by t
 
-    function push(t, st) {
+    function push(t, st, arrivalMs) {
+      if (!Number.isFinite(t)) return false;
+      if (opts.adaptive && Number.isFinite(arrivalMs) && (lastTick == null || t > lastTick)) {
+        if (lastArrival != null) {
+          const deviation = Math.min(200, Math.abs((arrivalMs - lastArrival) - (t - lastTick)));
+          jitter += (deviation - jitter) * 0.1;
+          const target = Math.min(180, baseDelay + jitter * 2);
+          delayMs += (target - delayMs) * 0.08;
+        }
+        lastArrival = arrivalMs; lastTick = t;
+      }
       const rec = Object.assign({ t }, st);
       // Fast path: the normal case is strictly newer than everything held.
       if (!samples.length || t > samples[samples.length - 1].t) {
@@ -201,9 +213,8 @@ const NetSnapshot = (function () {
     // returns a fresh object exactly as before. Assign-over-scratch relies on
     // the packet shape being stable within a session (it is; the protocol is
     // versioned) — fields never vanish mid-session, so no stale-key sweep.
-    function sample(nowMs, out) {
+    function at(target, out) {
       if (!samples.length) return null;
-      const target = nowMs - delayMs;
       const newest = samples[samples.length - 1];
       if (target >= newest.t) {
         // Observed deceleration, only while the wire says the brakes are on.
@@ -232,6 +243,13 @@ const NetSnapshot = (function () {
       const o = Object.assign(out || {}, newest); o.extrapolated = false; return o;
     }
 
+    function sample(nowMs, out) {
+      const target = nowMs - delayMs;
+      // Increasing the buffer during a burst may hold a pose, never rewind it.
+      presentedAt = opts.adaptive ? Math.max(presentedAt, target) : target;
+      return at(presentedAt, out);
+    }
+
     return {
       push, sample,
       // Where the rival actually IS, as opposed to where it is DRAWN. Contact
@@ -240,11 +258,12 @@ const NetSnapshot = (function () {
       // phantom collision at one end and a missed one at the other. Same code
       // path, just without the delay — so it extrapolates along the road and is
       // bounded exactly as sample() is.
-      predict: (nowMs, out) => sample(nowMs + delayMs, out),
+      predict: (nowMs, out) => at(nowMs, out),
       size: () => samples.length,
       newest: () => (samples.length ? samples[samples.length - 1] : null),
       oldest: () => (samples.length ? samples[0] : null),
-      clear: () => { samples = []; },
+      timing: () => ({ delayMs, jitterMs: jitter, adaptive: !!opts.adaptive }),
+      clear: () => { samples = []; delayMs = baseDelay; jitter = 0; lastArrival = null; lastTick = null; presentedAt = -Infinity; },
     };
   }
 

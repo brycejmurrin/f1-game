@@ -55,8 +55,12 @@ export const TRACKS = createRequire(import.meta.url)("../../tools/manifest.cjs")
 //   const bank = Tracks.banking(bankTrack, frac * bankTrack.total, lat);
 //   y = node.y + (bank ? bank.dy : 0);
 // Centreline `node.y` is not the tarmac at |lat| > 0 inside a bankZone.
-// Monza / Spa / Zandvoort foundation specs use this; `__apex.groundY` still
-// reports the raw centreline gap (durable overRoad is open).
+// Spa / Zandvoort use this for their node-corridor scans, where the lateral
+// offsets are derived from measured half-widths rather than probed at a frac.
+// For a PROBE, don't rebuild it: `__apex.groundY(frac, lat)` now returns
+// `roadSurfaceY`/`overRoad` with the banking already applied (2026-09-15).
+// `gap` is still the raw centreline reading, kept so existing specs do not
+// shift underneath themselves — new code should read `overRoad`.
 export function auditTracks() {
   if (!process.env.TRACK) return TRACKS;
   return process.env.TRACK.split(",").map((t) => t.trim()).filter(Boolean);

@@ -33,7 +33,10 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0",
   "_lapTimeAtLine", "incidentInvalidLap", "passSide", "passBest", "offroad",
   "towing", "wake", "axFrac", "slipFactor", "flatSpot", "_aeroGrip", "skidIntensity",
-  "kerbSndT", "kerbHapT"];
+  "kerbSndT", "kerbHapT",
+  // 2026-09-15: five the guard had been red on. The last three need a STREET
+  // circuit with real contact to appear — sweep tracks, not just monza.
+  "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
 // off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
 function apiHook(base, path, fix) {
@@ -597,7 +600,7 @@ const api = {
       wrongWay: !!G.player.wrongWay, rescueT: G.player.rescueT || 0, lap: G.player.lap,
       axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac: +axFrac.toFixed(3),
-      slipFactor: +slipFactor.toFixed(3),
+      slipFactor: +slipFactor.toFixed(3), driving: G.coach.status(),
       brakeBias: G.player.brakeBias != null ? +G.player.brakeBias.toFixed(3) : null,   // the SETUP sheet's split (null = BB_REF)
       aeroX: +(G.player.aeroX || 0).toFixed(3),
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
@@ -695,6 +698,7 @@ const api = {
   },
   setPhysics(o) {
     o = o || {};
+    if (G.records && Object.keys(o).length) G.records.invalidate();
     // Floors: pace<0 drove the cap negative, expo≤0 made pow(0,expo) NaN — and
     // a NaN reaches every field of the car with nothing to heal it.
     const fl = (v, lo) => (Number.isFinite(v) ? Math.max(lo, v) : null);
@@ -983,12 +987,21 @@ const api = {
     return shots;
   },
 
+  // `overRoad` is the number you want; `gap` is the trap it replaces — inside a
+  // bankZone the tarmac is not the centreline plane (Lesmo 1 lifts the outer
+  // edge 0.66 m), so terrain correctly tucked UNDER the road reads as proud of
+  // it. roadY/gap keep the raw-centreline meaning so nothing silently changes.
   groundY(f, lat = 0) {
     if (!G.track) return false;
-    Tracks.sample(G.track, ((f % 1) + 1) % 1 * G.track.total, smp);
+    const s = ((f % 1) + 1) % 1 * G.track.total;
+    Tracks.sample(G.track, s, smp);
     const x = smp.p[0] + smp.r[0] * lat, z = smp.p[2] + smp.r[2] * lat;
-    const ty = Tracks.terrainY(G.track, x, z);
-    return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: +smp.p[1].toFixed(3), terrainY: ty == null ? null : +ty.toFixed(3), gap: ty == null ? null : +(ty - smp.p[1]).toFixed(3) };
+    const ty = Tracks.terrainY(G.track, x, z), r3 = (v) => +v.toFixed(3);
+    const bank = Tracks.banking ? Tracks.banking(G.track, s, lat) : null;
+    const dy = bank && typeof bank.dy === "number" ? bank.dy : 0, surf = smp.p[1] + dy;
+    return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: r3(smp.p[1]), bankDy: r3(dy),
+      roadSurfaceY: r3(surf), terrainY: ty == null ? null : r3(ty),
+      gap: ty == null ? null : r3(ty - smp.p[1]), overRoad: ty == null ? null : r3(ty - surf) };
   },
   // Controlled side-by-side test: race state, two AI cars placed dead-even at a
   // mid-track straight with overlapping lateral positions and equal speed; every
@@ -1671,7 +1684,7 @@ const api = {
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
   },
@@ -1774,7 +1787,7 @@ const api = {
       // combined-slip physics
       axEstSm:    +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac:     +axFrac.toFixed(3),
-      slipFactor: +slipFactor.toFixed(3),
+      slipFactor: +slipFactor.toFixed(3), driving: G.coach.status(),
       slipDeg:    +(slip * 180 / Math.PI).toFixed(2),
 
       // track context at player position

@@ -111,8 +111,8 @@ test("the wrong tread outranks everything — it is the one that costs whole sec
   assert.match(line({ wrongTread: true, wet: false }), /BOX FOR SLICKS/);
 });
 
-test("a free stop under the safety car outranks every complaint about the tyre", () => {
-  assert.match(line({ freeStop: true, wear: 0.9, graining: 1, axle: 1 }), /FREE STOP/);
+test("a reduced-cost stop under caution outranks tyre complaints without promising a free stop", () => {
+  assert.match(line({ freeStop: true, wear: 0.9, graining: 1, axle: 1 }), /CHEAPER STOP/);
 });
 
 test("graining and blistering say DIFFERENT things, and that is the point", () => {
