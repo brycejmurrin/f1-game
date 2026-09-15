@@ -987,12 +987,21 @@ const api = {
     return shots;
   },
 
+  // `overRoad` is the number you want; `gap` is the trap it replaces — inside a
+  // bankZone the tarmac is not the centreline plane (Lesmo 1 lifts the outer
+  // edge 0.66 m), so terrain correctly tucked UNDER the road reads as proud of
+  // it. roadY/gap keep the raw-centreline meaning so nothing silently changes.
   groundY(f, lat = 0) {
     if (!G.track) return false;
-    Tracks.sample(G.track, ((f % 1) + 1) % 1 * G.track.total, smp);
+    const s = ((f % 1) + 1) % 1 * G.track.total;
+    Tracks.sample(G.track, s, smp);
     const x = smp.p[0] + smp.r[0] * lat, z = smp.p[2] + smp.r[2] * lat;
-    const ty = Tracks.terrainY(G.track, x, z);
-    return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: +smp.p[1].toFixed(3), terrainY: ty == null ? null : +ty.toFixed(3), gap: ty == null ? null : +(ty - smp.p[1]).toFixed(3) };
+    const ty = Tracks.terrainY(G.track, x, z), r3 = (v) => +v.toFixed(3);
+    const bank = Tracks.banking ? Tracks.banking(G.track, s, lat) : null;
+    const dy = bank && typeof bank.dy === "number" ? bank.dy : 0, surf = smp.p[1] + dy;
+    return { x: +x.toFixed(2), z: +z.toFixed(2), roadY: r3(smp.p[1]), bankDy: r3(dy),
+      roadSurfaceY: r3(surf), terrainY: ty == null ? null : r3(ty),
+      gap: ty == null ? null : r3(ty - smp.p[1]), overRoad: ty == null ? null : r3(ty - surf) };
   },
   // Controlled side-by-side test: race state, two AI cars placed dead-even at a
   // mid-track straight with overlapping lateral positions and equal speed; every
