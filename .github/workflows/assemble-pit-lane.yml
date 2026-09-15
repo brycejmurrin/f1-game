@@ -1,9 +1,9 @@
 name: assemble-pit-lane
 on:
+  workflow_dispatch:
   push:
     branches: [pit-lane-ribbon-boxes]
     paths:
-      - "tools/_assemble/**"
       - ".github/workflows/assemble-pit-lane.yml"
 permissions:
   contents: write
@@ -13,24 +13,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Concatenate parts into engine files
+      - name: Restore mesh.js and drop garage boxes
         run: |
           set -euo pipefail
-          mkdir -p js/track/core js/race tests/unit
-          cat tools/_assemble/mesh.js.part* > js/track/core/mesh.js
-          cat tools/_assemble/tracks.js.part* > js/track/tracks.js
-          cat tools/_assemble/pit-lane.js.part* > js/race/pit-lane.js
-          cat tools/_assemble/pit-ribbon.test.mjs.part* > tests/unit/pit-ribbon.test.mjs
-          wc -c js/track/core/mesh.js js/track/tracks.js js/race/pit-lane.js tests/unit/pit-ribbon.test.mjs
-      - name: Commit assembled files
+          git show a251b02098f3113b19026ba76545008f099a7ec1:js/track/core/mesh.js > js/track/core/mesh.js
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+          p = Path('js/track/core/mesh.js')
+          t = p.read_text()
+          t2, n = re.subn(
+              r'  function buildPitGarages\(track, out\) \{.*?\n  \}\n\n  // buildKerbs',
+              '  function buildPitGarages(track, out) {\n    return out;\n  }\n\n  // buildKerbs',
+              t, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit(f'garage patch count={n}')
+          if 'TrackGeom.addBox(out, c, [6.4' in t2:
+              raise SystemExit('garage addBox still present')
+          p.write_text(t2)
+          tp = Path('js/track/tracks.js')
+          tt = tp.read_text()
+          needle = '      if (track.pitLane && TrackMesh.buildPitGarages) TrackMesh.buildPitGarages(track, _props.out);\n'
+          tp.write_text(tt.replace(needle, ''))
+          print('mesh', p.stat().st_size)
+          PY
+      - name: Commit restored engine files
         run: |
           git config user.name "pit-lane-assemble"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add js/track/core/mesh.js js/track/tracks.js js/race/pit-lane.js tests/unit/pit-ribbon.test.mjs
+          git add js/track/core/mesh.js js/track/tracks.js
           if git diff --staged --quiet; then
-            echo "no change"
+            echo no change
             exit 0
           fi
-          git commit -m "fix(pits): assemble peeled ribbon, tarmac apron, no doubled paint"
+          git commit -m "fix(pits): restore mesh.js, drop clipping garage boxes"
           git push
