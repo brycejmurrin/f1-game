@@ -1,4 +1,4 @@
-# TLX per-chunk lamps are inert — one grid, many chunked records
+# TLX per-chunk lamps were inert — one grid, many chunked records (FIXED)
 
 Measured 2026-09-15. `apex26.gfxBackend=three`, singapore (night by default —
 `__apex.race()` resolves `timeOfDay || "default"` and the circuit carries
@@ -80,3 +80,50 @@ readback to agree with the knob. The third capture gives the noise floor.
 Item 6 is worth more than the shader fix: if the shipped `lampCull` default
 never saturates the slot budget, per-chunk lamps solve a problem the shipped
 configuration does not have.
+
+
+## FIXED — verified 2026-09-15
+
+The bake is hoisted out of the per-record draw loop and unions every chunked
+record's chunks into one grid. The readback confirms the diagnosis exactly:
+
+| | before | after |
+|---|--------|-------|
+| chunks in grid | 122 | **567** (= `chunkState().total`) |
+| chunked records | — | **3** |
+| index entries | 1192 | 5429 |
+| grid extent | 22x14 | 45x44 |
+
+Three chunked records; only the last one's 122 chunks were ever in the grid.
+
+The shader now consumes it. Comparing WITHIN one run (the only valid
+comparison — the noise floor itself varies run to run, 0.59 in the pre-fix
+run against 0.14 here, so cross-run means prove nothing):
+
+| region | signal mean | noise mean | ratio |
+|--------|-------------|-----------|-------|
+| whole frame   | 0.38 | 0.14 | 2.7x |
+| scenery left  | 0.34 | 0.10 | 3.4x |
+| scenery right | 0.33 | 0.09 | 3.7x |
+| scenery upper | 0.49 | 0.25 | 2.0x |
+| far road      | 0.35 | 0.10 | 3.5x |
+
+Consistent in every region, and a FLIP: before the fix the noise mean (0.59)
+EXCEEDED the signal (0.30). The `>8/255` pixel counts stay at noise level
+because the change is many small differences rather than a few large ones.
+
+So: the path is live and measurable, and the effect at this camera position
+is visually imperceptible (mean 0.38/255). Two reasons to expect that, both
+by design rather than defect:
+
+- `LightBudget.CHUNK` is 24, so a chunk binds at most 24 lamps against the
+  global set's 48. The win is LOCALITY, not count — each chunk gets lamps that
+  reach IT rather than the 48 nearest the camera. Where the global set already
+  covers what is on screen, the two agree.
+- singapore parked at s=0.35 may simply not be lamp-starved. The documented
+  symptom is the far road going dark on a DENSE night circuit.
+
+What is NOT yet shown: a position where per-chunk lamps visibly beat the
+global set. Finding one means a scene where the 48 nearest-the-camera lamps
+demonstrably fail to reach the road ahead — and see item 6 above, because the
+shipped `lampCull` of 40 makes that harder still.
