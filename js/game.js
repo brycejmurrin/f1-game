@@ -407,11 +407,22 @@ let difficulty = store.get("difficulty", "normal");
 // save, so OFF is the only default that does not silently start retiring cars
 // in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
-// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). Ships OFF for
-// exactly RELIABILITY's reason, plus one of its own: OFF is a true no-op through
-// the grip seam, so tests/specs/physics-characterization.spec.js stays
-// bit-identical until somebody turns this on.
-let raceTyreWear = store.get("tyreWear", "off");
+// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). SHIPS LIGHT.
+//
+// It shipped OFF, and off is not a quiet default here the way RELIABILITY's is:
+// it gates the ENTIRE pit feature — no lane, no box, no stop, no prompt, and the
+// AI never pits either — so a player who never opened SETTINGS had a pit lane
+// built into every circuit and no way to discover any of it existed.
+//
+// LIGHT rather than REAL: sets last roughly twice as long, so a stop is a choice
+// rather than a schedule. REAL is one click, OFF is still there, and a stored
+// preference beats this default, so nobody who already chose is overridden.
+//
+// OFF's other job was being a true no-op through the grip seam, which kept
+// tests/specs/physics-characterization.spec.js bit-identical. That is pinned
+// where it belongs now: tests/helpers/fixtures.js sets this key "off" for every
+// spec, so the baselines measure the DRIVING MODEL, not the current default.
+let raceTyreWear = store.get("tyreWear", "light");
 // ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
 // "auto". Inside an activation zone X-mode has no cost or downside, so the
 // optimal play is unconditionally on — which is what the AI does in one line.
@@ -420,7 +431,7 @@ let raceTyreWear = store.get("tyreWear", "off");
 // AI's deal. Stays opt-in because pressing the button is the mechanic.
 let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
-if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "off";
+if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "light";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
@@ -1087,7 +1098,7 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0;
-const ANN_PRI = { coach: 1, info: 2, warning: 3, "penalty-warn": 3, race: 4, "penalty-hit": 5 };
+const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, race: 4, "penalty-hit": 5 };
 let _annPri = 0, _annQueue = null;
 function showAnnounce(msg, dur, kind) {
   kind = kind || "race";
@@ -3433,8 +3444,8 @@ function update(dt) {
      Race only: there is nothing to recover from during the countdown, and the
      same call mid-count would hand the player a free re-place on the grid. */
   if (state === "race" && Input.consumeRecover() && player && !player.retired) {
-    rescuePlayer(player);
-    announce("RECOVERED", 1.5, "coach");
+    // A saved practice checkpoint makes RECOVER the driver's TRY AGAIN; coach.retry() is false everywhere else.
+    if (!coach.retry()) { rescuePlayer(player); announce("RECOVERED", 1.5, "coach"); }
     Log.info("game", "manual recover");
   }
   if (state === "count") {
@@ -4221,7 +4232,14 @@ function updateCar(c, dt, ranked) {
   c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
 
   // --- offroad ---
-  c.offroad = Math.abs(c.x) > hw && !c.onKerb;
+  // THE PIT LANE IS ROAD. On the 34 circuits that have room for a separate
+  // ribbon it sits beyond `hw`, so without this every car that drove into it
+  // would pick up grass drag, a cut count and eventually a rescue — i.e. the
+  // lane would be paint you get penalised for using. Tracks.inPitLane is the
+  // same fit the ribbon is built from, so the surface a driver can see and the
+  // surface the physics grants are the same strip by construction.
+  c.inPitLane = Math.abs(c.x) > hw && Tracks.inPitLane(track, c.s, c.x);
+  c.offroad = Math.abs(c.x) > hw && !c.onKerb && !c.inPitLane;
   if (c.offroad) {
     const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
     // Grass DRAG: slows you toward a crawl, and never speeds you up. The floor

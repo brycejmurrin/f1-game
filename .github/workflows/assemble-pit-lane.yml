@@ -1,0 +1,11 @@
+name: assemble-pit-lane
+# Manual only. mesh.js is already restored on this branch (7bfc268).
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "mesh.js is already on the branch; do not rewrite it"

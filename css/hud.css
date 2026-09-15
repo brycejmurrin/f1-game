@@ -684,12 +684,32 @@ body[data-density="compact"] #announce {
   text-align: center;
   text-wrap: balance;
 }
-#announce[data-kind="info"],
-#announce[data-kind="coach"] {
+#announce[data-kind="info"] {
   font-size: clamp(22px, calc(5 * var(--vwzh)), 40px);
   font-style: normal;
   top: calc(22svh / var(--hud-z));
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.85);
+}
+/* The COACH and PRACTICE tiers are the smallest banners on the HUD, and they
+   are their own tier for a reason the other kinds do not share: they are
+   advisory SENTENCES rather than announcements. "TRACK LIMITS — KEEP THE CAR
+   INSIDE THE WHITE LINES" is 50 characters and a practice verdict runs to 66,
+   against an info tier sized for "GOLD MEDAL" — measured at 852x344, four
+   lines covering 53% of the screen height, over the corner the tip is about.
+   Same anchor and shadow as info above (no second colour literal); only the
+   type shrinks.
+   THE COMPACT PAIR IS NOT DUPLICATION. `body[data-density="compact"]
+   #announce` below scores one type selector higher than a bare
+   `#announce[data-kind]`, so without these two selectors the short-viewport
+   rule — i.e. every landscape phone, the one shape this tier exists for —
+   silently restored 40px. Measured: 40px in compact against 16px one pixel
+   the other side of the density switch. */
+#announce[data-kind="coach"],
+#announce[data-kind="practice"],
+body[data-density="compact"] #announce[data-kind="coach"],
+body[data-density="compact"] #announce[data-kind="practice"] {
+  font-size: clamp(16px, calc(3.2 * var(--vwzh)), 26px);
+  font-weight: 700;
 }
 #announce[data-kind="warning"],
 #announce[data-kind="penalty-warn"] {

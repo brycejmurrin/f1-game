@@ -98,6 +98,11 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // (9757946). That is the silverstone 16 -> 15 outcome again and it is the right
 // one — the raise buys time, the geometry fix is the answer.
 //
+// montreal 11 -> 9, suzuka 8 -> 6, bahrain 3 -> 2 (2026-09-15): pit-lane
+// ribbon + one-hall kit dropped two spots each on Montreal/Suzuka and one
+// on Bahrain. Lowered to the measured counts so the stale-entry ratchet
+// cannot hide a later regression back up to the old cap.
+//
 // monaco 25 -> 24, bahrain 4 -> 3 (2026-09-02): the same commit's suppression
 // fixes REMOVED overlaps on these two. Lowered and STAYED lowered — the
 // stale-entry test is right that a cap above the measured count silently

@@ -405,7 +405,9 @@ test("CircuitKit accepts bounded maximum repeated counts", () => {
     const { calls, kit } = circuitHarness();
     assert.equal(kit[method](circuitSpec(method, { [field]: maximum })), true, method);
     assert.equal(calls.groups.length, 1, method);
-    assert.ok(calls.boxes.length + calls.landmarks.length <= maximum + 4, method);
+    // One-hall pit facade: door + lintel + pillar per bay, plus hall/glass/canopy/roof.
+    const cap = method === "pitBuilding" ? maximum * 3 + 8 : maximum + 4;
+    assert.ok(calls.boxes.length + calls.landmarks.length <= cap, method);
   }
 });
 

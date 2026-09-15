@@ -241,7 +241,21 @@ const PitLane = (function () {
   // limiter does not, so where a team's garage sits changes where you stop and
   // nothing about what the stop is worth.
   const BOX_PITCH = 14;
-  const COMMIT_M = 120;       // commit only this far into the window
+  // Where POLE sits, in metres before the start/finish line. Mirrors
+  // TrackMesh.gridSlot's own 14 m; a second copy is the lesser evil here
+  // because js/track/ loads first and has no business knowing what a pit box is.
+  const GRID_POLE_M = 14;
+  const COMMIT_M = 120;       // the entry road, for the cue's "PIT ENTRY" phase
+  // How much lane a car needs in front of it for a commitment to mean anything:
+  // arm the limiter closer than this to your own box and there is no room left
+  // to slow down for it.
+  const COMMIT_CLEAR = 25;
+  // The room left ahead of pole's slot for the first box. It is DERIVED from
+  // COMMIT_CLEAR rather than picked: a gap smaller than the run-up a commitment
+  // needs anchors the row somewhere pole cannot legally call a stop from, which
+  // is the whole failure this anchoring exists to fix. The extra 15 m is one
+  // car's braking slop on top of the bare minimum.
+  const GRID_CLEAR = COMMIT_CLEAR + 15;
   const COMMIT_S = 0.55;      // held, in seconds
   const COMMIT_V = 0.10;      // of the speed envelope: a parked car is not pitting
 
@@ -328,13 +342,47 @@ const PitLane = (function () {
      *  road could not be committed to, and one past the exit could not be
      *  reached. On a short circuit the window is capped at a third of the lap,
      *  so this is what stops the row spilling out of it. */
+    /** The ribbon's extent in THIS WINDOW's through-metres, or null where the
+     *  circuit has no separate lane and the painted one covers the whole window. */
+    function ribbonRange(zz, L) {
+      if (typeof Tracks === "undefined" || !Tracks.pitLaneSpan || !G.track) return null;
+      const sp = Tracks.pitLaneSpan(G.track);
+      if (!sp) return null;
+      const a = throughM(zz, sp.sIn, L);
+      return { a, b: a + sp.lenM };
+    }
     function boxThroughFor(c, zz, L) {
-      const base = throughM(zz, zz.sBox, L);
       const row = teamRow(c);
-      if (row < 0) return base;
-      const n = Teams.LIST.length;
-      const at = base + (row - (n - 1) / 2) * BOX_PITCH;
-      return clamp(at, COMMIT_M + 20, Math.max(COMMIT_M + 20, zz.lenM - 30));
+      const n = row < 0 ? 1 : Teams.LIST.length;
+      const span = (n - 1) * BOX_PITCH;
+      // THE ROW HAS TO START PAST THE GRID, or a stop on lap 1 is reachable only
+      // by whoever happens to drive the right team. The grid sits INSIDE the pit
+      // window — TrackMesh.gridSlot puts P1 14 m before the line and each slot
+      // 8 m further back — so a car on pole begins at through (entryM - 14),
+      // which at Monza is 386 m into a 530 m window. With the row anchored at
+      // BOX_M before the line it ran 283-437, so pole started past eight of the
+      // eleven boxes and had to complete a whole lap to reach them.
+      //
+      // Anchor the row's FIRST box just past pole's slot instead. The clamp
+      // still wins where the window cannot hold the whole row — on a short
+      // entry the row compresses toward the exit rather than spilling out of
+      // it — so this raises lap-1 reachability as far as the geometry allows
+      // without ever putting a box somewhere it cannot be driven to.
+      const poleS = ((-GRID_POLE_M % L) + L) % L;
+      const wantFirst = throughM(zz, poleS, L) + GRID_CLEAR;
+      // THE ROW IS LAID OUT INSIDE THE LANE, not inside the window, wherever a
+      // separate ribbon exists. The two used to be the same stretch of road, so
+      // the window served; once the ribbon could be trimmed short of a pinch it
+      // stopped serving, and the last teams' boxes sat past the end of the
+      // tarmac on five circuits. The floor also drops to the ribbon's own start
+      // rather than COMMIT_M: that constant was the old entry-road commit cap,
+      // and boxes nearer the entry are strictly better for reaching one on lap 1.
+      const rib = ribbonRange(zz, L);
+      const lo = rib ? rib.a + 20 : COMMIT_M + 20;
+      const hi = Math.max(lo, (rib ? rib.b : zz.lenM) - 30 - span);
+      const first = clamp(Math.max(wantFirst, throughM(zz, zz.sBox, L) - span / 2), lo, hi);
+      if (row < 0) return first + span / 2;     // no team: the row's own middle
+      return first + row * BOX_PITCH;
     }
 
     // Estimate the lane's net time cost. The road-speed estimate is explicit;
@@ -493,8 +541,27 @@ const PitLane = (function () {
      *  track this lands exactly where the road edge USED to be, which is what
      *  makes the racing surface unchanged and the lane genuinely new road. */
     function laneEdge(hw, side) { return (hw - lw(hw)) * side; }
+    /** THE SEPARATE RIBBON at this arc position, or null. On the 34 circuits
+     *  whose walls leave room, Tracks builds a second road beside the racing
+     *  surface and this is where it is; everywhere else there is only paint.
+     *
+     *  TWO THINGS MOVE ONTO IT AND ONE DOES NOT. Where a car serving a stop
+     *  SITS, and where its box is, are the ribbon — that is the point of
+     *  building one. The COMMITMENT stays on the painted line inside the road,
+     *  because that line is the entry: a real driver takes the painted lane on
+     *  the track and it delivers them onto the pit road. Moving the commitment
+     *  out to the ribbon would ask a driver at racing speed to already be on a
+     *  surface they reach by committing, which is the "aim at nothing" failure
+     *  the painted line was drawn to end. */
+    function ribbonAt(s) {
+      if (typeof Tracks === "undefined" || !Tracks.pitLaneAt || !G.track || s == null) return null;
+      return Tracks.pitLaneAt(G.track, s);
+    }
     /** The lane's lateral CENTRE: where the box is and where a car in it sits. */
-    function laneCentre(hw, side) { return (hw - lw(hw) * 0.5) * side; }
+    function laneCentre(hw, side, s) {
+      const rib = ribbonAt(s);
+      return rib ? rib.centre : (hw - lw(hw) * 0.5) * side;
+    }
     /** Is this car laterally IN the lane (within BOX_LAT of it)? Written in
      *  "toward the pit side" coordinates — x * side — so one comparison serves
      *  both sides and there is no sign to get wrong.
@@ -508,6 +575,13 @@ const PitLane = (function () {
      *  never show up as a failing test on the 51 that exist today. Half a car
      *  is the least that can honestly be called "off the racing line". */
     function inLaneLat(c, hw, side) {
+      const rib = ribbonAt(c && c.s);
+      // On a ribbon the threshold is its INNER EDGE less the same tolerance: a
+      // car whose centre is BOX_LAT inside the stripe still has most of itself
+      // on the pit road. No floor is needed here — the ribbon's inner edge is
+      // always outside `hw`, so the racing line can never satisfy it, which is
+      // exactly what the floor below exists to guarantee on a painted lane.
+      if (rib) return (c.x || 0) * side >= rib.inner * side - BOX_LAT;
       return (c.x || 0) * side >= Math.max(1, hw - lw(hw) - BOX_LAT);
     }
     /** Where a car SERVING A STOP should be laterally — the lane's centre — or
@@ -522,12 +596,28 @@ const PitLane = (function () {
      *  happen, exactly as it would not in the real thing. */
     function laneX(c, hw, want) {
       const zz = z();
-      return zz && inLane(c) ? laneCentre(hw, zz.side) : want;
+      return zz && inLane(c) ? laneCentre(hw, zz.side, c && c.s) : want;
     }
     function committing(c, zz, L) {
       if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
       if (!((c.speed || 0) > G.vTop() * COMMIT_V)) return false;
-      if (throughM(zz, c.s, L) > COMMIT_M) return false;
+      // ANYWHERE FROM THE WINDOW OPENING UP TO YOUR OWN BOX. It used to be the
+      // first COMMIT_M metres only — "past this you have gone by the entry road
+      // and are racing the straight" — and that made a stop at the START of a
+      // lap impossible on half the calendar: the GRID SITS INSIDE THE WINDOW
+      // (pole 14 m before the line), so on a long-entry circuit every car begins
+      // past the entry road. Measured: at Monza and Hungaroring pole starts at
+      // through 386 and the back of the grid at 218, against a 0-120 commit
+      // zone. Nobody could call a stop from the grid at all.
+      //
+      // Committing after your own box is still refused, because there is
+      // nothing left to commit TO. What stops a car that merely ran wide from
+      // calling a stop is the other three conditions, which are untouched: far
+      // over the painted line, HELD for COMMIT_S, and moving forwards on the
+      // road. Those are what carry the guard; the arc limit never did much
+      // beyond excluding the grid.
+      const at = throughM(zz, c.s, L);
+      if (at > boxThroughFor(c, zz, L) - COMMIT_CLEAR) return false;
       Tracks.sample(G.track, c.s, _smp);
       // INSIDE THE PAINTED LANE, not past an abstract fraction of the road. The
       // commitment test and the stripe a driver can see are now the same line,
@@ -548,6 +638,7 @@ const PitLane = (function () {
     function boxUniform() {
       const zz = z(), t = G.track, car = G.player;
       if (!enabled() || !zz || !t || !car) return null;
+      if (t.pitLane) return null;
       return [boxThroughFor(car, zz, t.total), BOX_TOL * 0.75];
     }
 
@@ -555,6 +646,7 @@ const PitLane = (function () {
     function laneUniform() {
       const zz = z(), t = G.track;
       if (!enabled() || !zz || !t) return null;
+      if (t.pitLane) return null;
       return [zz.sIn, zz.lenM, zz.side, t.total];
     }
 
@@ -795,7 +887,7 @@ const PitLane = (function () {
         // over three metres across the calendar). Both are null/false outside
         // the window, where there is no answer and no sample worth paying for.
         inLaneLat: lat ? inLaneLat(car, lat.hw, zz.side) : false,
-        laneX: lat ? +laneCentre(lat.hw, zz.side).toFixed(2) : null,
+        laneX: lat ? +laneCentre(lat.hw, zz.side, car && car.s).toFixed(2) : null,
         inWindow: !!(car && inWindowOf(car)),
         stops: (car && car.pitStops) || 0,
         // How far through the commitment dwell — 0 unless the car is holding
@@ -820,7 +912,8 @@ const PitLane = (function () {
 
   return { create, zoneOf, inWindow, throughM,
            ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
-           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V,
+           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V, COMMIT_CLEAR,
+           GRID_POLE_M,
            CUE_M: 550, CUE_WEAR: 0.55, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
            BOX_PITCH, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
 })();

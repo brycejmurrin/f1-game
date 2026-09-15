@@ -2158,9 +2158,9 @@
         <!-- PIT STOPS came from the deploy branch while this branch restructured
              the sheet around it. The nav above links #htp-pits, so the section is
              carried over rather than lost to the restructure. -->
-        <dt id="htp-pits">PIT STOPS &mdash; TURN THEM ON FIRST</dt>
-        <dd><span class="key">SETTINGS &rarr; TYRE WEAR</span> ships <span class="key">OFF</span>, and with it off <b>there is no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either.
-          <br><span class="key">REAL</span> wears tyres at the rate the compounds are built around, so a set will not reach the flag and a stop is part of the race. <span class="key">LIGHT</span> wears them at a little over half that: sets last roughly twice as long and stopping becomes optional. Both switch the pit lane on; only OFF hides it</dd>
+        <dt id="htp-pits">PIT STOPS &mdash; TYRE WEAR RUNS THEM</dt>
+        <dd><span class="key">SETTINGS &rarr; TYRE WEAR</span> ships on <span class="key">LIGHT</span>: tyres wear at a little over half the rate the compounds are built around, so a set lasts roughly twice as long and stopping is a choice rather than a schedule. <span class="key">REAL</span> wears them at the full rate &mdash; a set will not reach the flag and a stop is part of the race.
+          <br>Turn it to <span class="key">OFF</span> and <b>there is no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either</dd>
         <dt>THERE IS NO PIT BUTTON</dt>
         <dd>You call a stop the way a driver does: put the car <b>in the pit lane at the entry and keep it there</b> for about half a second. The limiter comes on by itself and the crew tells you which set is ready. A car that merely runs wide at the entry, or is spun or stopped there, calls nothing &mdash; it has to be deliberate and held</dd>
         <dt>FINDING THE LANE</dt>
@@ -2179,16 +2179,19 @@
       <dd><b>Braking into a turn:</b> release the brake gradually as you add steering.
         <br><b>Front tyres sliding:</b> reduce steering angle to help the tyres regain grip.
         <br><b>Rear tyres sliding:</b> the coach distinguishes accelerating, braking and coasting, so the suggested correction matches your inputs.
-        <br><b>Off the track:</b> ease your inputs and rejoin carefully. The coach does not know whether there is a safe gap in traffic.</dd>
+        <br><b>Off the track:</b> ease your inputs and rejoin carefully. The coach does not know whether there is a safe gap in traffic.
+        <br><b>Coasting:</b> neither pedal was used at speed for over a second. Be on the brake or the throttle.
+        <br><b>X-mode in corners:</b> the active aero was open while cornering hard. Close it before you turn in.
+        <br><b>Track limits:</b> a warning was recorded for leaving the track. Four in a row cost five seconds.</dd>
       <dt>PRACTICE A SECTION</dt>
-      <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>SETTINGS &rarr; DRIVING</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b> restores the saved position, speed, car state and practice goal; it does not rewind the race clock.
+      <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>SETTINGS &rarr; DRIVING</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b>, or your <b>RECOVER</b> key (<b>R</b> by default) while driving, restores the saved position, speed, car state and practice goal; it does not rewind the race clock.
         <br><b>This makes the session unscored.</b> Laps and ghosts will not be saved after a starting point is set. Restart the session to set records again. Checkpoints are unavailable in races, daily challenges and multiplayer.</dd>
       <dt>PRACTICE GOALS</dt>
-      <dd><b>Free practice:</b> repeat any section. <b>Sector:</b> cross the next sector line cleanly. <b>Braking:</b> build speed before saving, then brake to a stop. <b>Trail braking:</b> brake firmly, ease the brake while turning, then release it. <b>Slalom:</b> make six direction changes while moving. Contact or leaving the track marks an attempt for retry; clean completions are saved separately from lap records.</dd>
+      <dd><b>Free practice:</b> repeat any section. <b>Sector:</b> cross the next sector line cleanly. <b>Corner:</b> drive through the next corner; the result shows your time, minimum speed and exit speed. <b>Full lap:</b> cross the line to start timing, then complete a clean lap; practice laps are never saved, so this is how to time one. <b>Braking:</b> build speed before saving, then brake firmly and keep braking until the car stops; a tap followed by coasting does not count, and the result is your stopping distance, plus how many metres of it were spent below the hardest braking the car managed on that attempt. <b>Trail braking:</b> brake firmly, keep some brake on as the car turns in, then release it while the car is still turning. <b>Slalom:</b> make six direction changes while moving; the car must change direction, not just the stick. <b>Launch:</b> stop the car before saving, then launch to racing speed, timed from your first throttle. Each goal judges what the car did and shows the result on screen when it ends. Contact or leaving the track marks an attempt for retry; clean completions are saved separately from lap records, and the DRIVING page shows this session's attempts and your saved best.</dd>
       <dt>PIT STRATEGY</dt>
       <dd>With tyre wear enabled, <b>SETTINGS &rarr; DRIVING &rarr; PIT STRATEGY &rarr; NEXT TYRES</b> selects the compound fitted at your next stop; AUTO lets the game choose. Enter the pit lane yourself. Pit loss, tyre life and energy use are estimates based on the circuit and recent driving. More clean sectors and laps improve the available data.</dd>
       <dt>SESSION REVIEW</dt>
-      <dd>Review coaching tip counts, recent incidents and penalties after a run. <b>TECHNICAL DATA</b> contains the optional <b>DOWNLOAD SESSION DATA</b> JSON file and AI passing decisions. You do not need these tools to use the coach.</dd>
+      <dd>Review coaching tip counts, recent incidents and penalties after a run. Tips are listed most-repeated first and grouped by the turn they happened at, so one corner earning most of them is easy to see; when the same mistake comes up three times the review names the practice goal that drills it. Circuits without curated turn numbers simply show no location. <b>TECHNICAL DATA</b> contains the optional <b>DOWNLOAD SESSION DATA</b> JSON file and AI passing decisions. You do not need these tools to use the coach.</dd>
         <dt>TRACK LIMITS</dt>
         <dd>Repeatedly leaving the track gives three warnings, then a +5 s penalty on the fourth cut. The warning count then resets. The HUD shows warnings in every driving camera.</dd>
         <dt id="htp-setup">CAMERA</dt>

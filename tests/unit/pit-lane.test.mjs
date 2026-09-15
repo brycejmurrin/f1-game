@@ -299,12 +299,62 @@ test("a spun, beached, reversing or parked car commits to nothing", () => {
   }
 });
 
-test("you can only commit at the ENTRY, not anywhere in the window", () => {
+test("you can commit anywhere UP TO YOUR OWN BOX — the grid included", () => {
+  // The rule used to be "the first COMMIT_M metres only": past the entry road
+  // you were deemed to be racing the straight. That made a stop from a STANDING
+  // START impossible, because the grid sits inside the window — TrackMesh puts
+  // pole GRID_POLE_M before the line, so on any circuit whose entry runs longer
+  // than that every car begins past the entry road. The bound is now your own
+  // box, which is the only place the commitment has anything to mean.
   const { pits, zone, car } = commitSession();
+  const L = 5386;
+  const wrap = (v) => ((v % L) + L) % L;
+  const boxAt = pits.boxThroughFor(car(0.95));
+
+  // 1. Mid-window, well past the old entry road, with lane left in front.
+  const mid = car(0.95);
+  mid.s = wrap(zone.sIn + P.COMMIT_M + 30);
+  for (let i = 0; i < 20; i++) pits.update(mid, 0.1);
+  assert.equal(mid.pitArmed, true, "holding the line mid-window did not call the stop");
+
+  // 2. From POLE. This is the case the old rule refused outright, and the one
+  //    the anchoring in boxThroughFor exists to make reachable.
+  const pole = car(0.95);
+  pole.s = wrap(-P.GRID_POLE_M);
+  const poleAt = P.throughM(zone, pole.s, L);
+  assert.ok(poleAt > P.COMMIT_M,
+    `the fixture must put the grid past the OLD entry road or this proves nothing (${poleAt})`);
+  assert.ok(boxAt - poleAt >= P.COMMIT_CLEAR,
+    `pole must have a commitment's run-up to its box: box ${boxAt}, pole ${poleAt}`);
+  for (let i = 0; i < 20; i++) pits.update(pole, 0.1);
+  assert.equal(pole.pitArmed, true, "a car on pole could not call a stop on lap 1");
+
+  // 3. Past your own box there is nothing left to commit TO, so it is refused —
+  //    and that refusal is what still keeps a car racing the straight out of the
+  //    lane, together with the three guards above (far over the line, HELD, and
+  //    moving forwards on the road), which this change did not touch.
   const late = car(0.95);
-  late.s = zone.sIn + P.COMMIT_M + 30;   // past the entry road, racing the straight
+  late.s = wrap(zone.sIn + boxAt + 5);
   for (let i = 0; i < 20; i++) pits.update(late, 0.1);
-  assert.equal(!!late.pitArmed, false, "a car hugging the pit wall mid-window called a stop");
+  assert.equal(!!late.pitArmed, false, "a car already past its own box called a stop");
+});
+
+test("the box row sits as far forward as the window can hold it", () => {
+  // What the user-visible ask reduces to: start further BACK on the grid and you
+  // must still be able to call a stop on lap 1. The back of a 22-car grid is
+  // GRID_POLE_M + 21 * 8 m before the line, which is the deepest any car starts
+  // inside the window; every team's box has to be reachable from there.
+  const { pits, zone, car } = commitSession();
+  const L = 5386;
+  const wrap = (v) => ((v % L) + L) % L;
+  const backAt = P.throughM(zone, wrap(-(P.GRID_POLE_M + 21 * 8)), L);
+  for (const t of ["mercedes", "haas", "custom"]) {
+    const c = car(0.95); c.team = t;
+    const boxAt = pits.boxThroughFor(c);
+    assert.ok(boxAt - backAt >= P.COMMIT_CLEAR,
+      `${t}'s box is unreachable from the back of the grid: box ${boxAt}, car ${backAt}`);
+    assert.ok(boxAt <= zone.lenM - 20, `${t}'s box spilled out of the window: ${boxAt}`);
+  }
 });
 
 test("only the LOCAL player steers itself in — the AI has a plan, a rival has an owner", () => {
@@ -518,8 +568,11 @@ test("the box will not latch on the racing line", () => {
   // its box — the crew is not standing there — so the stop does not happen.
   const mk = (over) => {
     const { pits, zone, hw } = commitSession();
+    // AT ITS OWN BOX. zone.sBox is only the row's anchor INPUT now — the row is
+    // positioned past the grid, so a car sitting on sBox is not at any box.
     const c = { local: true, human: true, pitArmed: true, pitState: "lane", speed: 0,
-                s: zone.sBox, x: hw * over * zone.side, lap: 3, tyre: { code: "M", tread: 0 } };
+                x: hw * over * zone.side, lap: 3, tyre: { code: "M", tread: 0 } };
+    c.s = ((zone.sIn + pits.boxThroughFor(c)) % 5386 + 5386) % 5386;
     pits.update(c, 0.1);
     return c;
   };
@@ -605,8 +658,15 @@ test("the cue says which way when the box is coming and the car is not in the la
   // A stop that silently does not happen is the cruellest thing this module
   // could ship: the driver did everything else right and gets no reason.
   const { pits, zone, hw } = commitSession();
+  // 40 m short of THIS CAR'S box, not of zone.sBox. The nominal box is one
+  // number for the whole field; where a car actually stops is its team's place
+  // in the row, and the cue fires off that. Pinning the fixture to the nominal
+  // one made this test a hostage of wherever the row happened to be anchored.
+  const L = 5386;
+  const boxAt = pits.boxThroughFor({ s: 0, x: 0 });
+  const sAt = (((zone.sIn + boxAt - 40) % L) + L) % L;
   const at = (over) => pits.cue({
-    local: true, s: zone.sBox - 40, x: hw * over * zone.side, speed: 20,
+    local: true, s: sAt, x: hw * over * zone.side, speed: 20,
     pitState: "lane", tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
   });
   assert.equal(at(0).text, zone.side > 0 ? "KEEP RIGHT" : "KEEP LEFT");
@@ -645,14 +705,19 @@ test("each team has its own box, and teammates share one", () => {
   assert.equal(pits.boxThroughFor(car("ferrari")), fer);
 });
 
-test("a car with no team gets the row's anchor — the old behaviour", () => {
+test("a car with no team still gets a reachable box, not row 0's", () => {
   // Synthetic and stubbed cars are everywhere (these tests, a net rival before
-  // its team arrives). They must land somewhere sane rather than in row 0.
+  // its team arrives). They must land somewhere driveable rather than in the
+  // first garage on the list. "Equals the old anchor" used to be the assertion;
+  // since the row moved past the grid, REACHABLE is the property that matters.
   const { pits, zone } = commitSession();
-  const anchor = P.throughM(zone, zone.sBox, 5386);
-  assert.equal(pits.boxThroughFor({ s: 0, x: 0 }), anchor);
-  assert.equal(pits.boxThroughFor({ team: "nosuchteam", s: 0, x: 0 }), anchor,
-    "an unknown team must fall back to the anchor, not to row 0");
+  const none = pits.boxThroughFor({ s: 0, x: 0 });
+  const unknown = pits.boxThroughFor({ team: "nosuchteam", s: 0, x: 0 });
+  assert.equal(none, unknown, "an unknown team and no team must agree");
+  assert.notEqual(none, pits.boxThroughFor({ team: "mercedes", s: 0, x: 0 }),
+    "a teamless car must not be parked in row 0's garage");
+  assert.ok(none > P.COMMIT_M && none < zone.lenM - P.BOX_TOL,
+    `a teamless box at ${none} is outside the window`);
   assert.equal(P.teamRow({ team: "nosuchteam" }), -1);
 });
 
@@ -668,10 +733,18 @@ test("the whole row fits inside the window, at both ends", () => {
     assert.ok(a > P.COMMIT_M, `a box at ${a} m sits inside the entry road`);
     assert.ok(a < zone.lenM - P.BOX_TOL, `a box at ${a} m sits past the window exit`);
   }
-  // …and the row straddles the anchor rather than growing off one end of it.
+  // …and it starts PAST THE GRID rather than straddling the old anchor, which
+  // is the whole change: the grid sits inside the window (pole 14 m before the
+  // line), so a row centred on the anchor left pole starting beyond most of it.
+  const first = Math.min(...at);
+  const poleThrough = P.throughM(zone, ((-14 % 5386) + 5386) % 5386, 5386);
+  assert.ok(first > P.COMMIT_M + 20 - 1, `the row starts inside the entry road: ${first}`);
+  // It cannot always clear pole — the window is only so long — but it must get
+  // as close as the clamp allows rather than sitting centred on the anchor.
   const anchor = P.throughM(zone, zone.sBox, 5386);
-  const mid = (Math.min(...at) + Math.max(...at)) / 2;
-  assert.ok(Math.abs(mid - anchor) < 1, `the row is off-centre: mid ${mid} vs anchor ${anchor}`);
+  assert.ok(first > anchor - (at.length - 1) * P.BOX_PITCH / 2,
+    `the row did not move forward at all: first ${first}, old first ${anchor - (at.length - 1) * P.BOX_PITCH / 2}`);
+  assert.ok(poleThrough > 0, "pole must sit inside the window for this to be the right fix");
 });
 
 test("a short circuit cannot have its row spill out of its own window", () => {
@@ -803,8 +876,10 @@ test("the cue counts the box down and then says STOP HERE on it", () => {
   // The last instruction of the sequence, and the only one with no second
   // chance: miss the box and the stop does not happen at all.
   const { pits, zone, hw } = commitSession();
+  const boxAt = pits.boxThroughFor({ local: true });
   const at = (m) => pits.cue({
-    local: true, s: zone.sBox - m, x: hw * 0.95 * zone.side, speed: 6,
+    local: true, s: ((zone.sIn + boxAt - m) % 5386 + 5386) % 5386,
+    x: hw * 0.95 * zone.side, speed: 6,
     pitState: "lane", tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
   });
   const far = at(70), near = at(20), on = at(0);
