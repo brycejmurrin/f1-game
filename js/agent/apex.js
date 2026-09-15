@@ -33,7 +33,10 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0",
   "_lapTimeAtLine", "incidentInvalidLap", "passSide", "passBest", "offroad",
   "towing", "wake", "axFrac", "slipFactor", "flatSpot", "_aeroGrip", "skidIntensity",
-  "kerbSndT", "kerbHapT"];
+  "kerbSndT", "kerbHapT",
+  // 2026-09-15: five the guard had been red on. The last three need a STREET
+  // circuit with real contact to appear — sweep tracks, not just monza.
+  "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
 // off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
 function apiHook(base, path, fix) {
