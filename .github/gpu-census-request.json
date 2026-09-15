@@ -4,5 +4,5 @@
   "census_only": false,
   "force": "",
   "ls": "apex26.perChunkLights=1",
-  "leg": "tlx-per-chunk-lamps-2026-09-15"
+  "leg": "tlx-per-chunk-lamps-2026-09-15-b-wgsl-fixed"
 }
