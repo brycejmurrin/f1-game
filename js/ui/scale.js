@@ -121,6 +121,37 @@ const UiScale = (() => {
     // this safe: the :root declaration keeps the two locked together until the
     // player moves this slider, and only then do they part.
     function applyBtnScale() { applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale"); }
+    // BUTTON OPACITY has its OWN clamp and does not reuse applyScale: that
+    // helper snaps to SCALE_MIN..SCALE_MAX (40..200), which is meaningless for a
+    // 0-100 % control and would both forbid a faint dock and allow a 200 % one.
+    // Reusing a helper whose bounds are wrong for the new use is how a control
+    // ends up unable to reach one end of its own range.
+    const OPACITY_MIN = 20, OPACITY_MAX = 100;   // floor: a dock you cannot see is a dock you cannot aim at
+    const opacityPct = () => {
+      const v = store.get("hudBtnOpacity", null);
+      return typeof v === "number" ? Math.max(OPACITY_MIN, Math.min(OPACITY_MAX, Math.round(v))) : 100;
+    };
+    function applyBtnOpacity() {
+      const stored = store.get("hudBtnOpacity", null);
+      const pct = opacityPct();
+      if (typeof stored === "number") document.documentElement.style.setProperty("--hud-btn-opacity", pct / 100);
+      else document.documentElement.style.removeProperty("--hud-btn-opacity");
+      const input = $("pm-btnopacity"); if (input) input.value = String(pct);
+      const out = $("pm-btnopacity-v"); if (out) out.textContent = pct + "%";
+      const row = input && input.closest && input.closest(".tune-row, .pm-group");
+      if (row) row.classList.toggle("tune-over", typeof stored === "number");
+      const rev = $("pm-btnopacity-r"); if (rev) rev.hidden = typeof stored !== "number";
+    }
+    {
+      const el = $("pm-btnopacity");
+      if (el) el.oninput = (e) => {
+        const n = +e.target.value;
+        store.set("hudBtnOpacity", Math.max(OPACITY_MIN, Math.min(OPACITY_MAX, Math.round(isFinite(n) ? n : 100))));
+        applyBtnOpacity();
+      };
+      const rev = $("pm-btnopacity-r");
+      if (rev) rev.onclick = () => { store.set("hudBtnOpacity", null); applyBtnOpacity(); };
+    }
     const uiEl = $("pm-uiscale");
     if (uiEl) uiEl.oninput = (e) => {
       store.set("uiScale", scaleSnap(+e.target.value || scaleDefaultFor("uiScale")));
@@ -131,6 +162,7 @@ const UiScale = (() => {
       store.set("hudScale", scaleSnap(+e.target.value || scaleDefaultFor("hudScale")));
       applyHudScale();
     };
+    applyBtnOpacity();
     const btnEl = $("pm-btnscale");
     if (btnEl) btnEl.oninput = (e) => {
       store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefaultFor("hudBtnScale")));
@@ -216,7 +248,7 @@ const UiScale = (() => {
       },
     });
 
-    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale, applyUpscale, upscaleOn };
+    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale, applyBtnOpacity, applyUpscale, upscaleOn };
   }
   return { create };
 })();

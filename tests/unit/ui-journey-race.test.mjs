@@ -150,7 +150,11 @@ test("the five action buttons share one transparency and the arrows keep theirs"
   // The rungs that mean "this is live NOW" are the fully opaque ones — the
   // behaviour the reporter singled out as correct on OT, generalised.
   for (const sel of ["#btn-boost.on", "#btn-ot.armed", "#btn-ot.on",
-    "#btn-aero.armed", "#btn-aero.on", "#btn-throttle:active", "#btn-brake:active"]) {
+    "#btn-aero.armed", "#btn-aero.on", "#btn-throttle:active", "#btn-brake:active",
+    // THROTTLE = LATCH added a rung that no finger is explaining: `.on` is the
+    // pedal held down by the setting rather than by a thumb, so it is the one
+    // live state a player can leave the screen and come back to.
+    "#btn-throttle.on"]) {
     const rule = css.match(new RegExp(`${sel.replace(/[.#]/g, "\\$&")}\\s*\\{([^}]*)\\}`));
     assert.ok(rule && /opacity:\s*1\b/.test(rule[1]),
       `${sel} is a live state and must restore full opacity over --btn-a`);

@@ -82,6 +82,26 @@ the expensive mistake is rebuilding something we have.
 Ranked. The first two were named INDEPENDENTLY by more than one pass, which is
 the strongest signal in this document.
 
+**SHIPPED since this document was written (2026-09-15)** — read this before
+re-proposing anything below. The first pass of this research wasted a working
+day on six recommendations that were already in the tree, so the state goes
+here, next to the recommendation, rather than in a register somewhere else:
+
+- **1 handedness mirror** — shipped earlier; LEFT-HANDED in SETTINGS.
+- **2, opacity third** — BUTTON OPACITY (20-100 %), on the dock groups.
+  Resize shipped earlier. REPOSITION is still open and is the session-sized
+  one of the three.
+- **3 latch** — THROTTLE is HOLD / LATCH / AUTO. AUTO was already unbundled
+  from ROOKIE before this pass; the LATCH is the new rung.
+  (`tests/unit/throttle-latch.test.mjs`)
+- **4 comfort** — `prefers-reduced-motion` reaches the camera shake. FOV,
+  blur and speed lines are still not individually adjustable.
+- **5 DOM controls** — the dock buttons were already real `<button>`s with
+  accessible names; nothing to do.
+
+Still open below: 2 (reposition), 6 (per-scheme profiles), 7, and everything
+in §3's Pointer Events migration and portrait support.
+
 1. **Handedness mirror** (competitive + accessibility passes). Swap which side
    carries throttle/brake. GRID ships "Mirrored Mode"; GAG lists left-hand mode
    as common practice. Cheapest one-handed/motor win available to us.
