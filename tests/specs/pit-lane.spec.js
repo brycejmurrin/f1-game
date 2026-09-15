@@ -27,14 +27,16 @@
 // nothing here looks at a pixel.
 import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 
-async function armedAt(page, track = "monza", { rivals = false } = {}) {
+async function armedAt(page, { track = "monza", solo = false, rivals = false } = {}) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate((t) => window.__apex.race(t, "day", "dry", { laps: 25 }), track);
+  await page.evaluate(({ track, solo }) => solo
+    ? window.__apex.tt(track, "day")
+    : window.__apex.race(track, "day", "dry", { laps: 25 }), { track, solo });
   await awaitTrackBuild(page);
-  // The field is cleared for the PLAYER tests — a rival alongside changes the
-  // line the car can take and none of them are about racecraft. The AI test
-  // below needs the field, so it keeps it.
+  // Move rivals away for the player tests. This does not remove them; the
+  // stationary refusal test uses solo mode so traffic cannot reach it again.
+  // The AI test keeps the field in place.
   await page.evaluate((keep) => {
     window.__apex.headless(true);
     window.__apex.go();
@@ -171,11 +173,17 @@ test.describe("pit lane", () => {
     // the car really did arrive at the box, really did stop there, and really
     // was outside the lane. Without those three it would pass just as happily
     // for a car that never got to the pits at all.
-    await armedAt(page);
+    // rivals([]) only moves the field back; it does not remove it. In a GP
+    // the AI catches this stationary car and can push it into the lane before
+    // the final assertion. Time Trial exercises the same human pit model with
+    // one car, so this test measures lane eligibility rather than traffic.
+    await armedAt(page, { solo: true });
+    expect(await page.evaluate(() => window.__apex.fieldState().length)).toBe(1);
     const out = await page.evaluate(() => {
       const A = window.__apex;
       A.jump(0.93, 30, 0); A.aim(0);
       A.pit({ arm: true });
+      let stoppedOutsideTicks = 0;
       for (let i = 0; i < 60 * 40; i++) {
         const p = A.pit();
         const ps = A.physState();
@@ -187,14 +195,19 @@ test.describe("pit lane", () => {
         A.setInput({ steer: Math.max(-1, Math.min(1, (0 - ps.x) * 0.35)),
                      throttle: ps.speed < want, brake: ps.speed > want * 1.05 });
         A.step(1 / 60, 1);
+        const after = A.pit(), speed = A.physState().speed;
+        if (after.inWindow && Math.abs(after.atM - after.boxM) < 10
+          && Math.abs(speed) < 1 && !after.inLaneLat) stoppedOutsideTicks++;
         if (A.pit().state === "out") break;
       }
-      return { pit: A.pit(), x: A.physState().x, v: A.physState().speed };
+      return { pit: A.pit(), x: A.physState().x, v: A.physState().speed, stoppedOutsideTicks };
     });
     // It arrived, and it stopped: without these the refusal proves nothing.
     expect(out.pit.inWindow, "the car never reached the pit window").toBe(true);
     expect(out.pit.atM, "the car never reached the box").toBeGreaterThan(out.pit.boxM - 10);
+    expect(out.pit.atM, "the car overshot the box").toBeLessThan(out.pit.boxM + 10);
     expect(Math.abs(out.v), "the car never actually stopped at the box").toBeLessThan(1);
+    expect(out.stoppedOutsideTicks, "the refusal must last at least a full service time").toBeGreaterThanOrEqual(out.pit.boxS * 60);
     // It was on the racing line, not in the lane…
     expect(out.pit.inLaneLat, "the car drifted into the lane — the refusal proves nothing").toBe(false);
     // …and so it was not serviced.
@@ -255,7 +268,7 @@ test.describe("pit lane", () => {
     // game.js's lateral chain, where a unit test of the pure function cannot
     // reach it. Without this, the half that cost a ratchet raise had no
     // integration evidence at all.
-    await armedAt(page, "monza", { rivals: true });
+    await armedAt(page, { rivals: true });
     const out = await page.evaluate(() => {
       const A = window.__apex;
       // Find a car that is NOT the player. field().id is the car's own id and
