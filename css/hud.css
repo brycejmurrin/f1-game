@@ -890,13 +890,13 @@ body:has(.screen.dim:not([hidden])) #campicker { display: none; }
    scrims still show POS/LAP/CHASE/BOOST through the wash. A HUD that is
    already hidden at menu time is a no-op under visibility. */
 body:has(.screen:not([hidden])) :is(
-  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #btn-cam, .dock, #pausebtn
+  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #lights, #announce, #btn-cam, .dock, #pausebtn
 ) {
   visibility: hidden;
 }
 /* DISPLAY settings: keep the live HUD (tower / map / gaps) so LAYOUT/MAP/GAPS
    toggles can be seen without closing the sheet. */
-body:has(#pmsettings:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
+body:has(#pmsettings:not([hidden]) #pm-panel-display:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
   visibility: visible;
 }
 #photo-controls > * { pointer-events: auto; }
