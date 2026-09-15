@@ -393,6 +393,8 @@ const PitLane = (function () {
     // driver stops reading it, which is worse than no cue. It appears when a
     // stop is actually worth making: the set is meaningfully used, or the tread
     // is wrong for the conditions, or a caution is out and a stop is cheap.
+    // Once per session: the entry cue spells the gesture out the first time.
+    let _saidEnter = false;
     const CUE_M = 550;          // start counting down this far out
     const BOX_CUE_M = 90;       // …and start asking for the lane this far from the box
     const CUE_WEAR = 0.55;      // …or not at all, on a set with life left in it
@@ -411,6 +413,15 @@ const PitLane = (function () {
           if (!inLaneLat(c, _smp.hw || 0, zz.side)) {
             return { phase: "keep", text: zz.side > 0 ? "KEEP RIGHT" : "KEEP LEFT", dist: 0 };
           }
+          // WHERE THE BOX IS. This distance was already being computed here and
+          // thrown away to show the speed limit instead — so the one number a
+          // driver cannot possibly work out was the one the HUD withheld. There
+          // is no mark on the road, and since each team's box sits at its own
+          // place in the row, a player cannot even learn a fixed distance from
+          // the line: it depends which car they are in.
+          return togo <= BOX_TOL
+            ? { phase: "stop", text: "STOP HERE", dist: 0 }
+            : { phase: "near-box", text: "BOX " + Math.round(togo) + "m", dist: togo };
         }
         return { phase: "lane", text: Math.round(limit() * 3.6) + " LIMIT", dist: 0 };
       }
@@ -427,7 +438,16 @@ const PitLane = (function () {
       // Inside the entry road: say GO, not a distance — the distance is zero and
       // what the driver needs now is the direction.
       if (d === 0 && throughM(z(), c.s, G.track.total) <= COMMIT_M) {
-        return { phase: "enter", text: "PIT ENTRY", dist: 0 };
+        // SAY WHAT TO DO, not just where you are. "PIT ENTRY" names the place
+        // and assumes you already know the gesture — and the gesture is the one
+        // thing nobody can guess, because there is no button to find. The first
+        // time in a session it spells it out; after that the short form, since
+        // by then the instruction is noise.
+        if (!_saidEnter) {
+          _saidEnter = true;
+          if (G.announce) G.announce("PIT ENTRY — HOLD THE BLUE LANE TO BOX", 2.2, "race");
+        }
+        return { phase: "enter", text: "HOLD THE LANE", dist: 0 };
       }
       if (d === 0) return null;   // in the window but past the entry road
       return { phase: "near", text: "PIT " + Math.round(d) + "m", dist: d };

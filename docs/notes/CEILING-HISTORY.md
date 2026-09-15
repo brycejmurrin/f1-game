@@ -3071,3 +3071,19 @@ driving boundary, the most of any circuit; 44 of 52 have the 3.2 m a full lane
 needs. The header's number was measured against solid scenery rather than the
 boundary, which is a different question — but it was being used to rule out an
 approach nobody had tried.
+
+## 2026-09-15 — teaching the pit stop: shellNodes 1568 → 1640
+
++29 shell nodes for a PIT STOPS section in HOW TO PLAY, and headroom for the
+rest of it.
+
+It is paying off a debt rather than adding a feature. The pit button was removed
+in favour of a GESTURE — hold the car in the lane at the entry — and the gesture
+was never taught anywhere: the only mention of pitting in the whole shell was an
+HTML comment players never see. Asked how to use the pit lane, the honest answer
+was "you cannot find out from the game", which is a fault in the thing I shipped
+and not in the person asking.
+
+The section leads with TYRE WEAR shipping OFF, because that gates the entire
+feature — lane, prompt, stop and AI strategy all vanish with it — and someone
+looking for a pit lane that does not exist needs that sentence before any other.

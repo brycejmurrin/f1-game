@@ -369,13 +369,17 @@ test("…and speaks once the set is used, counting the entry down in metres", ()
   assert.ok(cue.dist > 250 && cue.dist < 350, `countdown should be ~300 m, got ${cue.dist}`);
 });
 
-test("it says ENTRY at the entry, and only while the entry road lasts", () => {
+test("it says what to DO at the entry, and only while the entry road lasts", () => {
+  // It used to read "PIT ENTRY", which names a place and assumes you already
+  // know the gesture — and the gesture is the one thing nobody can guess,
+  // because removing the button left nothing to find. The cue has to carry the
+  // instruction instead.
   const { pits, zone, car, Pl } = commitSession();
   const c = car(0);
   c.tyreWear = 0.9;
   c.s = zone.sIn + 20;                    // inside the entry road
   assert.equal(pits.cue(c).phase, "enter");
-  assert.equal(pits.cue(c).text, "PIT ENTRY");
+  assert.match(pits.cue(c).text, /LANE/, "the entry cue must say what to do, not just where you are");
   c.s = zone.sIn + Pl.COMMIT_M + 60;      // past it, racing the straight
   assert.equal(pits.cue(c), null, "the cue outlived the entry road it points at");
 });
@@ -607,7 +611,12 @@ test("the cue says which way when the box is coming and the car is not in the la
   });
   assert.equal(at(0).text, zone.side > 0 ? "KEEP RIGHT" : "KEEP LEFT");
   assert.equal(at(0).phase, "keep");
-  assert.ok(/LIMIT/.test(at(0.95).text), "a car already in the lane should be told the limit");
+  // IN the lane and closing: the one number a driver cannot work out is where
+  // their own box is — there is no mark on the road, and each team's box sits
+  // at its own place in the row, so it is not even a fixed distance from the
+  // line. The speed limit is the thing they can already read off the HUD.
+  assert.match(at(0.95).text, /BOX \d+m/, `a car in the lane must be told where its box is: ${at(0.95).text}`);
+  assert.equal(at(0.95).phase, "near-box");
   // Far from the box it is the limit that matters, not the line — a KEEP sign
   // for 300 m is the wallpaper the cue exists to avoid.
   const early = pits.cue({
@@ -788,4 +797,21 @@ test("the entry read is the ONLY curvature this module does", () => {
   assert.equal(reads.length, 1, `curvature is CALLED ${reads.length} times, not once: ${reads.join(" | ")}`);
   const fn = src.slice(src.indexOf("function entryRunM"), src.indexOf("function zoneOf"));
   assert.ok(/Tracks\.curvature/.test(fn), "the one read must be the entry scan");
+});
+
+test("the cue counts the box down and then says STOP HERE on it", () => {
+  // The last instruction of the sequence, and the only one with no second
+  // chance: miss the box and the stop does not happen at all.
+  const { pits, zone, hw } = commitSession();
+  const at = (m) => pits.cue({
+    local: true, s: zone.sBox - m, x: hw * 0.95 * zone.side, speed: 6,
+    pitState: "lane", tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
+  });
+  const far = at(70), near = at(20), on = at(0);
+  assert.match(far.text, /BOX 7\dm/, `expected a countdown, got ${far.text}`);
+  assert.match(near.text, /BOX 2\dm/, `expected a countdown, got ${near.text}`);
+  assert.equal(on.text, "STOP HERE");
+  assert.equal(on.phase, "stop");
+  // …and it counts DOWN: a number that grows as you approach is worse than none.
+  assert.ok(far.dist > near.dist, `the countdown ran backwards: ${far.dist} -> ${near.dist}`);
 });
