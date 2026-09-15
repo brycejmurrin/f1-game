@@ -107,7 +107,7 @@ Focused validation logs:
 - `artifacts/logs/coherence-gate-repair.log`: 152/152 focused guards and integration checks after fixing the first gate's five metadata/UI-contract failures.
 - Final full fast gate: **188/188 test files passed**; cache consistent. `artifacts/logs/coherence-verify-final.json` is partial only because deferred groups were not run.
 - Precommit guards: **178/178 tests passed** (`artifacts/logs/coherence-guards.log`).
-- Upstream `9e5fafdd` merged cleanly; its only change from the surveyed baseline is an unrelated debris browser test. The runtime source is the source that passed the final fast gate.
+- Publication follow-up: upstream `693cef10` added physical pit-lane placement and lamp rendering changes. The pit API merge preserves both its lane-position exports and this change’s strategy controls. Combined structural ceilings retain both branches’ exact additions. The original 188-file verdict predates this follow-up; merged-tree verification is recorded in `artifacts/logs/coherence-upstream-verify.json`.
 
 Rendered validation was blocked. Cloud Browser rejected the local URL
 `http://127.0.0.1:3456` with `ERR_BLOCKED_BY_CLIENT`. The repository's Chromium

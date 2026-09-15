@@ -35,6 +35,13 @@
 // a UA default action a synthetic event does not get.
 import { test, expect, BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
 
+// Every "this menu panel is revealed" wait below reads BOOT_MS, not a
+// hand-picked 10 s. Same predicate shape as menu-keyboard.spec.js and
+// gamepad.spec.js, same starved SwiftShader main thread behind it; the sibling
+// suite proved what that costs when menu-survey's "36 lighting tuner" died on
+// an 8 s wait at 0e8bbdaeb with the apex log showing its panel opening at
+// 35,980 ms. BOOT_MS carries the measured 11-33 s boot.
+
 const DESKTOP = { width: 1280, height: 800 };
 
 // A standard-mapping pad the page's navigator reports as the only one.
@@ -181,7 +188,7 @@ test.describe("Menu traversal — keyboard and controller", () => {
     await boot(page);
     const open = async () => {
       await click(page, "#mb-race");
-      await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: BOOT_MS });
       await page.waitForTimeout(400);
     };
     await open();
@@ -195,9 +202,9 @@ test.describe("Menu traversal — keyboard and controller", () => {
     await boot(page);
     const open = async () => {
       await click(page, "#mb-race");
-      await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: BOOT_MS });
       await click(page, "#sel-go");
-      await page.waitForFunction(() => !document.getElementById("race-settings").hidden, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => !document.getElementById("race-settings").hidden, null, { polling: 100, timeout: BOOT_MS });
       await page.waitForTimeout(300);
     };
     await open();
@@ -265,7 +272,7 @@ test.describe("Menu traversal — keyboard and controller", () => {
     // seconds a keypress and none of it is what this asserts.
     await page.evaluate(() => window.__apex.headless(true));
     await click(page, "#mb-race");
-    await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: BOOT_MS });
     await click(page, "#sel-car");
     await page.waitForFunction(() => !document.getElementById("carsetup").hidden, null, { polling: 100, timeout: 30_000 });
     await page.waitForTimeout(600);
@@ -299,7 +306,7 @@ test.describe("Menu traversal — keyboard and controller", () => {
     const openPause = async () => {
       await closeAll();
       await page.keyboard.press("Escape");
-      await page.waitForFunction(() => !document.getElementById("pausemenu").hidden, null, { polling: 100, timeout: 10_000 });
+      await page.waitForFunction(() => !document.getElementById("pausemenu").hidden, null, { polling: 100, timeout: BOOT_MS });
       await page.waitForTimeout(200);
     };
     await openPause();

@@ -1512,6 +1512,9 @@ const api = {
       // nothing on my machine" was undiagnosable from outside. perChunkHeld
       // names the gate when the knob is up but the frame resolved to 0.
       perChunkLights: G.frame.perChunkLights || 0,
+      // TLX only (null elsewhere): three resolves lamps per FRAGMENT from baked
+      // textures, and `on` is the only outside proof that path is live.
+      tlxLampGrid: (gfx && typeof gfx.lampGridState === "function") ? gfx.lampGridState() : null,
       roadChunkLamps: G.frame.roadChunkLamps || 0,
       perChunkHeld: (() => {
         if (!(+LT.perChunkLights > 0)) return null;          // player has it off

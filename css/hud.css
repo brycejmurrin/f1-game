@@ -438,9 +438,10 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
 }
 /* PIT CUE (js/race/pit-lane.js cue()). With no pit button, the entry has to
    announce itself — the arrow IS the instruction, because the thing it points
-   at is 450 m of arc with nothing painted on it. Four phases: counting down to
-   the entry, at the entry, committed, and in the lane. It stays hidden unless a
-   stop is worth making, so it never becomes wallpaper. */
+   at is 450 m of arc with nothing painted on it. Phases: counting down to the
+   entry, at the entry, committed, in the lane, being asked back INTO the lane
+   before the box, and stopped. It stays hidden unless a stop is worth making,
+   so it never becomes wallpaper. */
 /* …and the restatement the shell needs: an author `display` beats the UA's
    `[hidden] { display: none }`, so without this the cue paints while hidden.
    tests/unit/css-layers.test.mjs caught exactly that. */
@@ -454,6 +455,18 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
 #hud-pit[data-phase="enter"] #hud-pit-arrow,
 #hud-pit[data-phase="armed"] #hud-pit-arrow { animation: pulse var(--hud-pulse) infinite; }
 #hud-pit[data-phase="box"] { color: var(--you); }
+/* KEEP LEFT/RIGHT — the loudest thing the cue ever says, and it earns it: the
+   driver has committed, the limiter is on, the box is 90 m away and the stop is
+   about to silently NOT happen because the car is on the racing line.
+   --you, the same token the box phase uses, and NOT --accent: an accent that
+   carries state is a WCAG 1.4.11 failure on the dark team skins (racingbulls
+   2.21:1 over --bg), which is what nontext-contrast.test.mjs exists to catch —
+   it caught this exact line. The URGENCY is carried by the second channel
+   instead: the whole cue pulses, where the earlier phases pulse only the arrow.
+   A static sign is the one a driver at the pit limit reads last. */
+#hud-pit[data-phase="keep"] {
+  color: var(--you); animation: pulse var(--hud-pulse) infinite;
+}
 body.hud-met-timing #hud-pit,
 body.hud-met-compact #hud-pit { display: none !important; }
 body.hud-met-timing #hud-tyre,
