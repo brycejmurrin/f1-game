@@ -282,7 +282,11 @@ for (const device of [
       await expect(page).toHaveTitle(/Apex 26/i);
       await page.evaluate(()=>{window.__apex.go();window.__apex.tyres({level:"light"});});
       await page.getByRole("button",{name:"Pause",exact:true}).click();
-      await press("#pm-driving");
+      // DRIVING is reached through SETTINGS now — the pause root's own DRIVING
+      // button is gone, and its handler had only ever clicked SETTINGS and
+      // navigated to this same sheet.
+      await press("#pm-settings");
+      await press("#pm-open-driving");
       await expect(page.locator("#dlg-settings")).toHaveText("DRIVING");
       await expect(page.locator("#pausemenu")).toBeHidden();
       for (const selector of ['#announce', '#lights', '.hud-top', '#minimap'])
