@@ -264,40 +264,58 @@ test.describe("Time Trial — results panel", () => {
 });
 
 
-for (const viewport of [{width:1280,height:800}, LANDSCAPE]) {
-  test.describe(`Practice controls at ${viewport.width}x${viewport.height}`, () => {
-    test.use({viewport});
+for (const device of [
+  { viewport:{width:1280,height:800}, touch:false, scale:100 },
+  { viewport:LANDSCAPE, touch:true, scale:100 },
+  { viewport:LANDSCAPE, touch:true, scale:200 },
+]) {
+  const {viewport,touch,scale}=device;
+  test.describe(`Practice controls at ${viewport.width}x${viewport.height} ${scale}%`, () => {
+    test.use({viewport,hasTouch:touch,isMobile:touch});
     test("coach, unscored checkpoint and compound selection work through the pause menu", async ({page}, info) => {
       const errors=[]; page.on("pageerror", e=>errors.push(e.message));
+      const press = async selector => touch ? page.locator(selector).tap() : page.locator(selector).click();
       await enterTT(page);
       // Match menu-keyboard's pause test: skip only the 3D render loop so
       // locator actionability can settle; DOM controls and physics stay live.
-      await page.evaluate(()=>window.__apex.headless(true));
+      await page.evaluate(pct=>{window.__apex.headless(true);window.__apex.uiScale(pct);},scale);
       await expect(page).toHaveTitle(/Apex 26/i);
       await page.evaluate(()=>{window.__apex.go();window.__apex.tyres({level:"light"});});
       await page.getByRole("button",{name:"Pause",exact:true}).click();
-      await page.locator("#pm-driving").click();
+      await press("#pm-driving");
       await expect(page.locator("#dlg-settings")).toHaveText("DRIVING");
       await expect(page.locator("#pausemenu")).toBeHidden();
-      await expect(page.locator("#pm-coach-help")).toContainText("occasional text tips");
+      await expect(page.locator("#pm-coach-help")).toContainText("short text tips");
       await page.locator("#pm-coach-sel").selectOption("on");
       await expect(page.locator("#pm-coach-sel")).toHaveValue("on");
-      await page.locator("#pm-practice-set").click();
+      await page.locator("#pm-drill-sel").selectOption("sector");
+      await expect(page.locator("#pm-drill-status")).toContainText("Finish the next sector");
+      await press("#pm-practice-set");
+      await page.locator("#pm-drill-sel").selectOption("slalom");
+      await expect(page.locator("#pm-drill-status")).toContainText("six direction changes");
       await expect(page.locator("#pm-practice-retry")).toBeEnabled();
-      await page.locator("#pm-practice-retry").click();
+      await press("#pm-practice-retry");
+      await expect(page.locator("#pm-drill-sel")).toHaveValue("sector");
+      await expect(page.locator("#pm-drill-status")).toContainText("Finish the next sector");
       const driving=await page.evaluate(()=>window.__apex.physState().driving);
       expect(driving.practice).toBe(true);
+      expect(driving.insights.drill.mode).toBe("sector");
       const select=page.locator("#pm-pit-choice-sel");
       await expect(select).toBeEnabled();
       const value=await select.locator("option").nth(1).getAttribute("value");
       await select.selectOption(value);
       await expect(select).toHaveValue(value);
+      const compound=await select.locator('option:checked').innerText();
+      await expect(page.locator("#pm-pit-help")).toContainText(compound.split(" · ")[1]);
+      await expect(page.locator("#pm-pit-help")).toContainText("Choosing tyres does not call you into the pits");
       await expect(page.locator("#pm-pit-estimate")).toContainText("Estimated pit loss:");
       await page.screenshot({path:info.outputPath("practice-controls.png")});
-      await page.locator("#pm-settings-close").click();
+      await select.scrollIntoViewIfNeeded();
+      await page.screenshot({path:info.outputPath("pit-controls.png")});
+      await press("#pm-settings-close");
       await expect(page.locator("#pm-settings-index")).toBeVisible();
-      await page.locator("#pm-settings-close").click();
-      await page.locator("#pm-howto").click();
+      await press("#pm-settings-close");
+      await press("#pm-howto");
       await page.locator('#htp-contents a[href="#htp-driving"]').click();
       await expect(page.locator("#htp-driving")).toBeInViewport();
       await expect(page.locator("#howtoplay")).toContainText("Short text tips appear");
@@ -306,3 +324,90 @@ for (const viewport of [{width:1280,height:800}, LANDSCAPE]) {
     });
   });
 }
+
+// Same sheet, real routes and real preference writes at every supported scale.
+// Screenshot geometry alone cannot prove that a control can be reached by touch.
+const drivingDevices = [
+  { name: 'small-phone', viewport: { width: 320, height: 568 }, touch: true, safe: [0,0,0,0] },
+  { name: 'phone-portrait', viewport: { width: 393, height: 659 }, touch: true, safe: [59,0,34,0] },
+  { name: 'phone-browser-landscape', viewport: { width: 852, height: 344 }, touch: true, safe: [0,59,21,59] },
+  { name: 'tablet', viewport: { width: 834, height: 1194 }, touch: true, safe: [0,0,0,0] },
+  { name: 'desktop', viewport: { width: 1280, height: 800 }, touch: false, safe: [0,0,0,0] },
+];
+for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device.name}`, () => {
+  test.use({ viewport: device.viewport, hasTouch: device.touch, isMobile: device.touch, deviceScaleFactor: 1 });
+  test('settings, help and Back remain readable and reachable', async ({page}, info) => {
+    const errors = []; page.on('pageerror', e => errors.push(e.message));
+    await page.goto('/');
+    await page.waitForFunction(() => !!window.__apex, null, {polling:100, timeout:BOOT_MS});
+    await page.evaluate(async safe => {
+      window.__apex.headless(true);
+      document.getElementById('game').style.visibility = 'hidden';
+      for (const [i,k] of ['--sat','--sar','--sab','--sal'].entries()) document.documentElement.style.setProperty(k,safe[i]+'px');
+      await document.fonts.ready;
+    }, device.safe);
+    const press = async selector => device.touch ? page.locator(selector).tap() : page.locator(selector).click();
+    const rows = [];
+
+    try {
+      for (const pct of [40,80,100,130,150,200]) {
+        await press('#mb-settings'); await press('#pm-open-display');
+        await page.locator('#pm-uiscale').evaluate((e,n) => { e.value=String(n); e.dispatchEvent(new Event('input',{bubbles:true})); }, pct);
+        await expect(page.locator('#pm-uiscale')).toHaveValue(String(pct));
+        await press('#pm-settings-close'); await press('#pm-open-driving');
+        await expect(page.locator('#pm-panel-driving')).toBeVisible();
+        await page.waitForFunction(() => document.getElementById('pmsettings-inner').dataset.shape, null, {polling:100});
+        await press('#pm-coach-next'); await expect(page.locator('#pm-coach-sel')).toHaveValue('on');
+        await press('#pm-coach-next'); await expect(page.locator('#pm-coach-sel')).toHaveValue('off');
+        await press('#pm-coach-next'); await expect(page.locator('#pm-coach-sel')).toHaveValue('on');
+        await press('#pm-coach-prev'); await expect(page.locator('#pm-coach-sel')).toHaveValue('off');
+        await expect(page.locator('#pm-practice-set')).toBeDisabled();
+        await expect(page.locator('#pm-practice-state')).toContainText('solo Time Trial');
+        const measure = async root => page.evaluate(selector => {
+          const e=document.querySelector(selector), sheet=e.querySelector('.sheet'), pane=e.querySelector('.pane');
+          const r=sheet.getBoundingClientRect(), pr=pane.getBoundingClientRect();
+          const zoom=sheet.currentCSSZoom || 1;
+          const focusables=[...e.querySelectorAll('select,button,summary,a[href]')].filter(n => n.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}));
+          const overflow=focusables.filter(n => { const b=n.getBoundingClientRect(); return b.left < pr.left-1 || b.right > pr.right+1; })
+            .filter(n=>!n.closest('.sheet-foot')).map(n=>n.id || n.tagName);
+          return { root:selector,zoom,shape:sheet.dataset.shape,density:sheet.dataset.density,
+            sheet:{x:r.x,y:r.y,w:r.width,h:r.height},paneHeight:pr.height,
+            shortHelpChips:selector === '#howtoplay' && sheet.dataset.density === 'compact'
+              ? [...e.querySelectorAll('#htp-contents a')].filter(n=>n.getBoundingClientRect().height<43.5).map(n=>n.textContent) : [],
+            smallTargets:focusables.filter(n=>{const b=n.getBoundingClientRect();return b.width<23.5||b.height<23.5;}).map(n=>n.id||n.tagName),
+            overflow,docOverflow:document.documentElement.scrollWidth-innerWidth,
+            paneOverflow:pane.scrollWidth-pane.clientWidth };
+        },root);
+        rows.push({pct,...await measure('#pmsettings')});
+        const m=rows[rows.length-1];
+        expect(m.smallTargets).toEqual([]);
+        expect(m.overflow,`${device.name} at ${pct}%`).toEqual([]);
+        expect(m.docOverflow).toBeLessThanOrEqual(1); expect(m.paneOverflow).toBeLessThanOrEqual(1);
+        expect(m.paneHeight).toBeGreaterThan(70);
+        if ([100,150,200].includes(pct)) await page.screenshot({path:info.outputPath(`driving-${pct}.png`)});
+        if (await page.locator('#pm-session-review').getAttribute('open') === null) await press('#pm-session-review > summary');
+        await expect(page.locator('#pm-session-review')).toHaveAttribute('open','');
+        await page.locator('#pm-driving-trace').scrollIntoViewIfNeeded();
+        const action=await page.locator('#pm-driving-trace').evaluate(e=>({w:e.clientWidth,sw:e.scrollWidth,h:e.clientHeight,sh:e.scrollHeight}));
+        expect(action.sw).toBeLessThanOrEqual(action.w+1); expect(action.sh).toBeLessThanOrEqual(action.h+1);
+        await press('#pm-settings-close'); await expect(page.locator('#pm-settings-index')).toBeVisible();
+        await press('#pm-settings-close'); await expect(page.locator('#pmsettings')).toBeHidden(); await press('#mb-help');
+        await press('#htp-contents a[href="#htp-driving"]');
+        await expect(page.locator('#htp-driving')).toBeInViewport();
+        await expect(page.locator('#htp-contents a[href="#htp-driving"]')).toHaveAttribute('aria-current','true');
+        rows.push({pct,...await measure('#howtoplay')});
+        const h=rows[rows.length-1]; expect(h.docOverflow).toBeLessThanOrEqual(1); expect(h.paneOverflow).toBeLessThanOrEqual(1);
+        expect(h.smallTargets).toEqual([]);
+        expect(h.shortHelpChips).toEqual([]);
+        expect(h.paneHeight).toBeGreaterThan(70);
+        const paragraph=await page.locator('#htp-driving + dd').evaluate(e=>({w:e.getBoundingClientRect().width,body:e.parentElement.getBoundingClientRect().width}));
+        expect(paragraph.w/paragraph.body,'instructions need at least half the reading pane').toBeGreaterThan(.5);
+        if ([100,150,200].includes(pct)) await page.screenshot({path:info.outputPath(`help-${pct}.png`)});
+        await press('#htp-close'); await expect(page.locator('#overlay')).toBeVisible();
+      }
+    } finally {
+      await info.attach('zoom-measurements.json',{body:JSON.stringify(rows,null,2),contentType:'application/json'});
+    }
+    expect(errors).toEqual([]);
+  });
+});

@@ -25,7 +25,8 @@
 // zoom and keeps pinch, and the in-race HUD chrome stays `none` so a second
 // thumb cannot pinch mid-corner. Nothing here relaxes the driving surface.
 // A second tap on the same spot within 350 ms is the zoom gesture; cancel it.
-// A second tap on a DIFFERENT control (rapid menu work) is left alone.
+// Control taps always keep their native click: BACK and steppers must accept
+// repeated presses. CSS manipulation already disables their double-tap zoom.
 // Another finger still down is driving (GAS+steer), not a double-tap.
 // iOS GestureEvents are the pinch-page path; the garage car viewer uses
 // TouchEvents, so cancelling gesture* does not steal that.
@@ -38,6 +39,7 @@
   document.addEventListener("gestureend", kill, { capture: true, passive: false });
   document.addEventListener("dblclick", kill, { capture: true });
   document.addEventListener("touchend", function (e) {
+    if (e.target.closest && e.target.closest("button, a[href], input, select, textarea, summary, [role=button]")) { lastT = 0; return; }
     if (e.touches && e.touches.length) return;
     var t = e.changedTouches && e.changedTouches[0];
     if (!t) return;
@@ -655,7 +657,6 @@
           </div>
         </section>
         <section id="pm-panel-driving" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
-          <h3 class="pm-group-h">LEARN AS YOU DRIVE</h3>
           <div id="pm-coach" class="set-row" role="group" aria-labelledby="pm-coach-label">
             <span class="tune-label" id="pm-coach-label">DRIVING COACH</span>
             <div>
@@ -664,8 +665,8 @@
               <button id="pm-coach-next" type="button" data-step="1" aria-label="Next driving coach">&rsaquo;</button>
             </div>
           </div>
-          <p id="pm-coach-help" class="adv-help">Shows occasional text tips on screen while you drive, based on your braking, steering and tyre grip. You keep full control of the car. Your ON/OFF choice is saved.</p>
-          <p class="adv-help">For example, “Ease the brake as you turn” means gradually release the brake while steering into a corner. Tips pause while flags and race messages are showing.</p>
+          <p id="pm-coach-help" class="adv-help">Shows short text tips on screen about braking and tyre grip as you drive. You control the car. Your ON/OFF choice is saved.</p>
+          <p class="adv-help">Example: “Ease the brake as you turn” means release the brake gradually while steering. Tips wait for flags and race messages.</p>
           <h3 class="pm-group-h">PRACTICE A SECTION</h3>
           <p id="pm-practice-help" class="adv-help">In a solo Time Trial, drive to the start of a section, pause and save your starting point. Drive it, then choose TRY AGAIN to return with the same speed and car state.</p>
           <div id="pm-drill" class="set-row" role="group" aria-labelledby="pm-drill-label">
@@ -2144,7 +2145,7 @@
         <br><b>Fronts sliding &mdash; unwind some steering:</b> reduce the steering angle so the front tyres can grip again.
         <br><b>Rear sliding &mdash; ease the throttle:</b> use less accelerator to help settle the back of the car.</dd>
       <dt>PRACTICE A SECTION</dt>
-      <dd>Start a solo <span class="key">TIME TRIAL</span>. Drive to a useful starting point, open <span class="key">PAUSE &rarr; DRIVING</span>, choose a <span class="key">PRACTICE GOAL</span>, then <span class="key">SAVE STARTING POINT</span>. Resume and drive the section. <span class="key">TRY AGAIN</span> restores the saved position, speed and car state; it does not rewind the race clock.
+      <dd>Start a solo <span class="key">TIME TRIAL</span>. Drive to a useful starting point, open <span class="key">PAUSE &rarr; DRIVING</span>, choose a <span class="key">PRACTICE GOAL</span>, then <span class="key">SAVE STARTING POINT</span>. Resume and drive the section. <span class="key">TRY AGAIN</span> restores the saved position, speed, car state and practice goal; it does not rewind the race clock.
         <br><b>This makes the session unscored.</b> Laps and ghosts will not be saved after a starting point is set. Restart the session to set records again. Checkpoints are unavailable in races, daily challenges and multiplayer.</dd>
       <dt>PRACTICE GOALS</dt>
       <dd><b>Free practice:</b> repeat any section. <b>Sector:</b> cross the next sector line cleanly. <b>Braking:</b> build speed before saving, then brake to a stop. <b>Trail braking:</b> brake firmly, ease the brake while turning, then release it. <b>Slalom:</b> make six direction changes while moving. Contact or leaving the track marks an attempt for retry; clean completions are saved separately from lap records.</dd>

@@ -1332,7 +1332,7 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
   assert.equal(decl(components, ".sheet-foot .bigbtn:only-child", "flex"), "0 1 auto");
   assert.equal(decl(components, ".pm-group .tune-row .tune-label", "position"), "static");
   assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="region"] button', "white-space"), "normal");
-  assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 360px)")));
+  assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 600px)")));
   assert.equal(decl(css("css/career.css"), ".cr-cheats .sel-chip", "min-width"), "0");
 });
 

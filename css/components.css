@@ -1245,6 +1245,15 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   text-align: center;
   white-space: nowrap;
 }
+/* Driving actions carry complete instructions at narrow widths and high zoom.
+   The shared preference rows retain their own compact control geometry. */
+#pmsettings-inner #pm-panel-driving :is(#pm-practice-set, #pm-practice-retry, #pm-driving-trace) {
+  height: auto;
+  min-height: var(--tap);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-block: calc(var(--gap) * 0.35);
+}
 /* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE
    used to be the two plain-grey labels on a sheet of steel italics. */
 #pmsettings-inner .pm-group .tune-label {

@@ -64,7 +64,8 @@ const DrivingCoach = (function () {
       G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;
       G.player.rPrevHead = G.player.head; G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;
       G.records.invalidate(); trace = []; quiet = 2;
-      insights.startDrill(checkpoint.mode);
+      drillMode = checkpoint.mode;
+      insights.startDrill(drillMode);
       G.announce("CHECKPOINT RESTORED — PRACTICE", 2, "info");
       return true;
     }
@@ -90,14 +91,17 @@ const DrivingCoach = (function () {
       const practiceState = $("pm-practice-state");
       if (practiceState) practiceState.textContent = !canPractice()
         ? "Checkpoints are available in solo Time Trial. Start one from the main menu; races, daily challenges and multiplayer do not support checkpoints."
-        : practice ? "Practice active: laps and ghosts will not be saved. TRY AGAIN restores your saved car state. Restart the session to set records again."
+        : practice ? "Practice active: laps and ghosts will not be saved. TRY AGAIN restores your saved car state and practice goal. Restart the session to set records again."
           : "Saving a starting point makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again.";
       const drillInfo = $("pm-drill-status"), summary = insights.summary();
-      if (drillInfo) drillInfo.textContent = summary.lastDrill
-        ? (summary.lastDrill.clean ? "Completed" : "Retry suggested") + " · " + summary.lastDrill.seconds.toFixed(1) + "s · " + RaceInsights.DRILLS[summary.lastDrill.mode]
-        : ({ free: "Repeat any section at your own pace.", sector: "Finish the next sector without contact or leaving the track.",
+      if (drillInfo) {
+        const guide = { free: "Repeat any section at your own pace.", sector: "Finish the next sector without contact or leaving the track.",
           braking: "Build speed before saving, then brake firmly to a stop.", trail: "Build speed before saving. Brake firmly, ease the brake while turning, then release it.",
-          slalom: "Make six direction changes while moving. Stay on the track and avoid contact." })[drillMode];
+          slalom: "Make six direction changes while moving. Stay on the track and avoid contact." };
+        const last = summary.lastDrill;
+        drillInfo.textContent = guide[drillMode] + (last && last.mode === drillMode
+          ? " Last attempt: " + (last.clean ? "completed" : "retry suggested") + " · " + last.seconds.toFixed(1) + "s." : "");
+      }
       const f = insights.forecast(), strategy = $("pm-stint-forecast");
       if (strategy) strategy.textContent = !G.tyres.on() ? "Enable tyre wear for stint forecasts." : !f || f.remainingLaps == null ? "Drive at least half a lap on this set for a tyre-life estimate."
         : "Tyre life ≈ " + f.remainingLaps.toFixed(1) + " laps · " + (f.reachesFinish ? "projected to reach the finish" : "another stop may be needed")
@@ -122,8 +126,14 @@ const DrivingCoach = (function () {
         }
       }
       const note = $("pm-pit-estimate");
+      const names = new Map(G.pits.ownedTyres().map(o => [o.id, o.label]));
+      const compoundName = id => names.get(id) || id.replace(/_/g, " ");
+      const selected = G.player && G.player.pitNext;
+      const pitHelp = $("pm-pit-help");
+      if (pitHelp) pitHelp.textContent = (selected ? "Next stop: " + compoundName(selected.id) + " (" + selected.code + "). " : "AUTO lets the game choose your next tyres. ")
+        + "Drive into the pit entry to stop. Choosing tyres does not call you into the pits. Requires tyre wear to be enabled.";
       SettingRow.paint($("pm-pit-choice"), G.player && G.player.pitNext ? G.player.pitNext.id : "auto",
-        [["auto", "AUTO"], ...G.pits.choices(G.player).map(r => [r.id, r.code + " · " + r.id.replace(/_/g, " ")])]);
+        [["auto", "AUTO"], ...G.pits.choices(G.player).map(r => [r.id, r.code + " · " + compoundName(r.id)])]);
       SettingRow.disable($("pm-pit-choice"), !(G.player && G.tyres.on() && G.state === "race") || G.player.pitState === "box");
       if (note) {
         const e = G.player && G.tyres.on() && G.pits.estimate(G.player);
