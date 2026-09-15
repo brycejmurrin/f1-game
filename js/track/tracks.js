@@ -287,6 +287,24 @@ const Tracks = (function () {
     return { side, sIn, lenM, gap, laneW, w };
   }
 
+  /** Opt-in local barrier setback in the pit window. Streets do not use this. */
+  function applyPitCorridor(track) {
+    const c = track.def && track.def.pitCorridor;
+    if (!c || !(c.setback > 0) || !track.barL || !track.barR) return;
+    const side = c.side === -1 ? -1 : 1;
+    const bar = side > 0 ? track.barR : track.barL;
+    const win = pitWindow(track);
+    const L = track.total, n = track.n, ds = L / n;
+    const sIn = ((-win.entryM % L) + L) % L;
+    const winM = win.entryM + win.exitM;
+    for (let i = 0; i * ds <= winM; i++) {
+      const k = ((Math.round((sIn + i * ds) / ds) % n) + n) % n;
+      const d = i * ds;
+      const ramp = Math.min(1, Math.min(d, winM - d) / PIT_TAPER);
+      bar[k] += c.setback * Math.max(0, ramp);
+    }
+  }
+
   /** WHERE the separate lane is at one arc position, in the same lateral frame
    *  the car's own `x` lives in: { side, inner, outer, centre, w }, signed, or
    *  null where there is no ribbon.
@@ -303,8 +321,9 @@ const Tracks = (function () {
     const w = lane.w[k];
     if (!(w > 0.01)) return null;
     const side = lane.side;
-    const inner = side * (track.hw[k] + lane.gap);
-    const outer = side * (track.hw[k] + lane.gap + w);
+    const r = lane.laneW > 0.01 ? Math.min(1, w / lane.laneW) : 1;
+    const inner = side * (track.hw[k] + lane.gap * r);
+    const outer = side * (track.hw[k] + lane.gap * r + w);
     return { side, w, inner, outer, centre: (inner + outer) / 2 };
   }
 
@@ -381,8 +400,9 @@ const Tracks = (function () {
       // AFTER buildProps, and it has to be: the driving boundary this fit reads
       // is not tightened until the scenery has been placed, and the whole
       // question is how much room the scenery left.
+      applyPitCorridor(track);
       track.pitLane = pitLaneFit(track, PIT_SIDE);
-      const propsGeo = safe("props", _props.out);
+      const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
       track.meshes.props = G.createChunkedMesh ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
@@ -2241,7 +2261,7 @@ const Tracks = (function () {
       delete rec._m;
     }
     Log.info("track", "buildProps done " + def.id + " verts=" + (out.pos.length / 3));
-    return { out: TrackModels.sealGeometry(out), glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
+    return { out, glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
   }
 
   function buildGate(track) {
@@ -2309,6 +2329,7 @@ const Tracks = (function () {
     // last thing appended so a reader can slice it off without knowing what
     // came before.
     TrackMesh.buildPitLane(track, out);
+    TrackMesh.buildPitBoxes(track, out);
     TrackMesh.buildGridBoxes(track, out);   // …and the grid stays the tail
     return out;
   }
@@ -2471,6 +2492,7 @@ const Tracks = (function () {
       sceneryTheme: d.sceneryTheme,
       sceneryThemeOverrides: d.sceneryThemeOverrides || null,
       ownPitStraight: !!d.ownPitStraight,
+      pitCorridor: d.pitCorridor || null,
       undulate: d.undulate,
       // bespoke per-circuit scenery (js/circuits/<id>.js); run by buildProps
       scenery: d.scenery || null,

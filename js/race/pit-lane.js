@@ -638,6 +638,7 @@ const PitLane = (function () {
     function boxUniform() {
       const zz = z(), t = G.track, car = G.player;
       if (!enabled() || !zz || !t || !car) return null;
+      if (t.pitLane) return null;
       return [boxThroughFor(car, zz, t.total), BOX_TOL * 0.75];
     }
 
@@ -645,6 +646,7 @@ const PitLane = (function () {
     function laneUniform() {
       const zz = z(), t = G.track;
       if (!enabled() || !zz || !t) return null;
+      if (t.pitLane) return null;
       return [zz.sIn, zz.lenM, zz.side, t.total];
     }
 

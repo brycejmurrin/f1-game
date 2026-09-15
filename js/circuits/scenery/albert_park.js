@@ -396,12 +396,30 @@
           const aG = anchor(k(0.0), 1, 12), bG = [aG.r, aG.u, aG.t];
           stage._mat = MAT.CONCRETE;
           addBox(stage, vadd(aG.c, aG.u, 3.6), [14, 7.2, 180], [0.88, 0.89, 0.91], bG);
-          // Roller-door rhythm along the pit lane — 26 garages, the AGP count.
+          // Roller-door rhythm. The 1995 AGP hall is one shed with ~26 bays
+          // (the 2028 rebuild drops to 14). Blue columns + grey doors match
+          // the standing facade; team lintels mark the ten constructors.
           const aD = anchor(k(0.0), 1, 5.4), bD = [aD.r, aD.u, aD.t];
-          for (let i = 0; i < 26; i++) {
-            const off = (i - 12.5) * 6.6;
+          const AP_TEAMS = [
+            [0.00, 0.83, 0.87], [1.00, 0.11, 0.18], [1.00, 0.50, 0.00],
+            [0.14, 0.22, 0.55], [0.00, 0.35, 0.72], [0.40, 0.62, 0.90],
+            [0.72, 0.10, 0.16], [0.02, 0.22, 0.55], [0.90, 0.10, 0.12],
+            [0.00, 0.44, 0.30],
+          ];
+          const BAYS = 26, PITCH = 6.6;
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(aD.c, aD.u, 4.55), [1.6, 0.18, BAYS * PITCH + 2],
+                 [0.78, 0.80, 0.83], bD);
+          for (let i = 0; i < BAYS; i++) {
+            const off = (i - (BAYS - 1) / 2) * PITCH;
             addBox(stage, vadd(vadd(aD.c, aD.u, 2.3), aD.t, off),
                    [0.5, 4.2, 4.4], [0.22, 0.24, 0.28], bD);
+            addBox(stage, vadd(vadd(aD.c, aD.u, 2.4), aD.t, off + PITCH * 0.5),
+                   [0.55, 4.6, 0.55], [0.10, 0.28, 0.55], bD);
+            if (i >= 4 && i < 24) {
+              addBox(stage, vadd(vadd(aD.c, aD.u, 4.55), aD.t, off),
+                     [0.45, 0.28, 4.0], AP_TEAMS[Math.floor((i - 4) / 2) % AP_TEAMS.length], bD);
+            }
           }
           // Glazed media / team-office storey, set back above the garage roof.
           stage._mat = 0;

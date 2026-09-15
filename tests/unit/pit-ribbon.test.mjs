@@ -34,6 +34,7 @@ const WIDE = "silverstone", TIGHT = "spa", NONE = "monaco";
 // for it; magny_cours is pinched in the MIDDLE and keeps the longer of the two
 // runs either side.
 const TRIMMED = "monza";
+const CORRIDOR = "albert_park";
 
 const ctxOnce = (() => { let c = null; return () => (c || (c = buildContext())); })();
 const tracksOnce = () => ctxOnce().Tracks;
@@ -53,6 +54,33 @@ test("a circuit with room gets a lane; one whose walls are at the road edge does
   assert.ok(wide.pitLane, `${WIDE} has metres of room and must get a ribbon`);
   assert.equal(none.pitLane, null,
     `${NONE}'s walls sit at the road edge for the whole window — a lane there is the mistake this refuses`);
+});
+
+test("albert park's authored S/F corridor makes a ribbon without moving hw", () => {
+  const t = buildOnce(CORRIDOR);
+  assert.ok(t.pitLane, "albert_park pitCorridor must open enough room at S/F for a ribbon");
+  assert.ok(t.pitLane.lenM >= 150, `ribbon too short: ${t.pitLane && t.pitLane.lenM}`);
+  const T = tracksOnce();
+  const raw = T.buildCenterline(T.LIST.find((d) => d.id === CORRIDOR));
+  assert.equal(t.n, raw.n);
+  for (let k = 0; k < raw.n; k++) assert.equal(t.hw[k], raw.hw[k], `hw moved at node ${k}`);
+});
+
+test("entry and exit peel off the road edge instead of floating on grass", () => {
+  const T = tracksOnce();
+  const t = buildOnce(WIDE), l = t.pitLane;
+  const taper = [];
+  for (let k = 0; k < t.n; k++) {
+    if (l.w[k] > 0.05 && l.w[k] < l.laneW * 0.35) taper.push(k);
+  }
+  assert.ok(taper.length > 4, "expected taper nodes at the peel");
+  for (const k of taper) {
+    const at = T.pitLaneAt(t, (k / t.n) * t.total);
+    assert.ok(at);
+    const road = l.side * t.hw[k];
+    assert.ok(Math.abs(at.inner - road) < Math.abs(l.side * (t.hw[k] + l.gap) - road) * 0.8 + 0.2,
+      `taper node ${k}: inner ${at.inner.toFixed(2)} still sits at full gap instead of peeling to the road`);
+  }
 });
 
 test("the lane never moves the road — hw and both boundaries are untouched", () => {
