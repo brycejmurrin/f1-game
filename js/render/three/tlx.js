@@ -3190,6 +3190,81 @@ const TLX = (function () {
           // survives its z-sort in BOTH lists. Opaques still render before
           // the transparent FX as a group — strictly safer than GLX's inline
           // order because FX never write depth.
+          // PER-CHUNK LAMPS: ONE grid for the WHOLE draw list, baked on change.
+          //
+          // This used to bake inside the loop below, per chunked record, and the
+          // feature was INERT because of it: _lgKey/_lgSrc and the grid uniforms
+          // are a SINGLE shared set, so every record overwrote the previous
+          // one's grid and only the last survived. Every other record's
+          // fragments then looked up a grid built for chunks that were not
+          // theirs, missed, and took the documented fallback to the global lamp
+          // set - silently, and pixel-identically. Measured 2026-09-15 on
+          // singapore: chunkState() drew 567 chunks while the grid covered 122,
+          // and toggling the knob moved the frame less than its own noise floor
+          // (docs/notes/TLX-PER-CHUNK-LAMPS-INERT.md).
+          //
+          // A cell's lamp set is a property of WORLD POSITION, not of which
+          // record's geometry occupies it, so the union is not merely cheaper
+          // than a grid per record - it is the correct object. Two records
+          // sharing a cell want the same lamps.
+          if (lit && lit.setLampGrid) {
+            const AL = frameAllLights;
+            const knob = framePerChunk;
+            let total = 0, nrec = 0, cell = 0, cellSplit = false, first = null;
+            for (let k = 0; k < drawList.length; k++) {
+              const ck = drawList[k].chunked;
+              if (!ck || !ck.chunks || !ck.chunks.length) continue;
+              if (!first) first = ck.chunks;
+              nrec++; total += ck.chunks.length;
+              const c = ck.cellSize > 0 ? ck.cellSize : 72;
+              if (cell && c !== cell) cellSplit = true;
+              cell = c;
+            }
+            // One lgCell uniform serves every chunk, and gx/gz were binned with
+            // each record's own cell - records that disagree cannot share a
+            // grid. Refuse rather than build a silently wrong one.
+            if (!AL || !(knob > 0) || !total || cellSplit) {
+              if (_lgKey !== "off") { lit.setLampGrid(null); _lgKey = "off"; }
+              _lampGridState = { on: false, lamps: AL ? (AL.length / 15) | 0 : 0,
+                                 chunks: total, idx: 0,
+                                 why: cellSplit ? "chunked records disagree on cellSize"
+                                    : !(knob > 0) ? "knob is 0"
+                                    : !AL ? "no baked lamp set" : "no chunked geometry" };
+            } else {
+              // `first` stands in for chunk-array identity; a track reload also
+              // replaces frameAllLights, which _lgSrc already catches.
+              const key = knob + "|" + total + "|" + nrec + "|" + cell;
+              if (_lgKey !== key || _lgSrc !== AL || _lgChunks !== first) {
+                let note;
+                try {
+                  const chs = [];
+                  for (let k = 0; k < drawList.length; k++) {
+                    const ck = drawList[k].chunked;
+                    if (!ck || !ck.chunks || !ck.chunks.length) continue;
+                    for (let j = 0; j < ck.chunks.length; j++) chs.push(ck.chunks[j]);
+                  }
+                  const table = LampChunks.resolve(AL, chs, knob);
+                  const grid = LampChunks.buildGrid(table, chs);
+                  const okG = lit.setLampGrid({ lights: AL, table, grid, cell });
+                  _lampGridState = { on: !!okG, lamps: (AL.length / 15) | 0,
+                                     chunks: chs.length, recs: nrec, idx: table.concat.length,
+                                     gw: grid.gw, gh: grid.gh, cell,
+                                     why: okG ? null : "does not fit the fixed textures" };
+                  note = "TLX per-chunk lamps " + (okG ? "ON" : "REFUSED")
+                    + " lamps=" + _lampGridState.lamps + " chunks=" + chs.length
+                    + " recs=" + nrec + " idx=" + table.concat.length
+                    + " grid=" + grid.gw + "x" + grid.gh;
+                } catch (e) {
+                  lit.setLampGrid(null);
+                  _lampGridState = { on: false, why: String(e).slice(0, 120) };
+                  note = "TLX per-chunk lamp bake failed - " + e;
+                }
+                try { Log.info("gfx", note); } catch (_) {}
+                _lgKey = key; _lgSrc = AL; _lgChunks = first;
+              }
+            }
+          }
+
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
@@ -3197,62 +3272,11 @@ const TLX = (function () {
               continue;
             }
             if (rec.chunked) {
-              // PER-CHUNK LAMPS: bake on CHANGE, never per frame. LampChunks is
-              // built on the premise that lamps are baked per track and chunk
-              // bounds never move, so the key is (lights array identity, chunks
-              // array identity, knob) — the same invalidation GLX uses. A knob
-              // drag re-keys only when capFor() actually moves, which is why
-              // resolve() takes the raw knob.
-              if (lit && lit.setLampGrid) {
-                const AL = frameAllLights;
-                const knob = framePerChunk;
-                const chs = rec.chunked.chunks;
-                if (!AL || !(knob > 0) || !chs || !chs.length) {
-                  // Report the OFF state too. This branch used to leave
-                  // _lampGridState holding the last successful bake, so
-                  // __apex.lightState().tlxLampGrid answered {on:true, lamps:249,
-                  // ...} with the knob at 0 and the path shut down — the hook
-                  // that exists to prove this feature is live was the one thing
-                  // that could not be trusted about it. Measured 2026-09-15:
-                  // three captures in one session (0, 1, 0) all read on:true.
-                  if (_lgKey !== "off") { lit.setLampGrid(null); _lgKey = "off"; }
-                  _lampGridState = { on: false, lamps: AL ? (AL.length / 15) | 0 : 0,
-                                     chunks: (chs && chs.length) | 0, idx: 0,
-                                     why: !(knob > 0) ? "knob is 0"
-                                        : !AL ? "no baked lamp set"
-                                        : "no chunked geometry" };
-                } else {
-                  const key = knob + "|" + (chs.length | 0);
-                  if (_lgKey !== key || _lgSrc !== AL || _lgChunks !== chs) {
-                    // ONE line per bake, not per frame, because the only way to
-                    // know this path is live on a player's machine is to read it
-                    // back: no software adapter can show it
-                    // (docs/ARCHITECTURE.md §Boot evidence). A throw here must
-                    // not take the frame down — setLampGrid(null) is the
-                    // documented fallback to the global lamp set.
-                    let note;
-                    try {
-                      const table = LampChunks.resolve(AL, chs, knob);
-                      const grid = LampChunks.buildGrid(table, chs);
-                      const okG = lit.setLampGrid({ lights: AL, table, grid,
-                                                    cell: rec.chunked.cellSize });
-                      _lampGridState = { on: !!okG, lamps: (AL.length / 15) | 0,
-                                         chunks: chs.length, idx: table.concat.length,
-                                         gw: grid.gw, gh: grid.gh, cell: rec.chunked.cellSize,
-                                         why: okG ? null : "does not fit the fixed textures" };
-                      note = "TLX per-chunk lamps " + (okG ? "ON" : "REFUSED")
-                        + " lamps=" + _lampGridState.lamps + " chunks=" + chs.length
-                        + " idx=" + table.concat.length + " grid=" + grid.gw + "x" + grid.gh;
-                    } catch (e) {
-                      lit.setLampGrid(null);
-                      _lampGridState = { on: false, why: String(e).slice(0, 120) };
-                      note = "TLX per-chunk lamp bake failed — " + e;
-                    }
-                    try { Log.info("gfx", note); } catch (_) {}
-                    _lgKey = key; _lgSrc = AL; _lgChunks = chs;
-                  }
-                }
-              }
+              // PER-CHUNK LAMPS are baked ONCE for the whole draw list, above
+              // this loop — see _bakeLampGrid(). Baking here, per record, is
+              // what made the feature inert: the grid is a SINGLE shared
+              // uniform set, so each chunked record overwrote the previous
+              // one's grid and only the last survived.
               const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist);
               const vis = chunkedSys.visList;
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
