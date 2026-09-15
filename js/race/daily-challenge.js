@@ -49,28 +49,38 @@ const DailyChallenge = (function () {
 
     // Stage the plan as a TIME TRIAL and start it. The seed is set BEFORE
     // startRace so the one grid draw and the start hold are the day's.
-    function open(day) {
+    function open(day, mode = "standard") {
       const p = plan(day);
       const idx = Tracks.LIST.findIndex((t) => t.id === p.trackId);
       if (idx < 0) return null;
+      if (G.records) G.records.restoreDaily();
       G.flow = "gp"; G.timeTrial = true;
       G.trackIdx = idx;
       G.raceWeather = p.weather; G.raceTimeOfDay = p.tod;
       G.raceLaps = G.ttDistance;
       G.seed = p.seed;
       active = p;
+      p.class = mode === "standard" && G.records ? "standard" : "open";
+      if (p.class === "standard") G.records.prepareDaily();
       Log.info("game", "DailyChallenge.open " + p.day + " " + p.trackId + " " + p.weather + " " + p.tod);
       G.startRace();
       return p;
     }
 
     // Called from onTTLap for every valid lap of an active daily session.
-    function record(lapTime) {
-      if (!active || !(lapTime > 0)) return null;
+    function record(lapTime, context = null) {
+      if (!active || !(lapTime > 0) || !Number.isFinite(lapTime)) return null;
       const d = data();
       const day = active.day;
       const e = d.days[day] || (d.days[day] = { best: null, laps: 0 });
       e.laps++;
+      if (context != null) {
+        if (!e.classes || typeof e.classes !== "object" || Array.isArray(e.classes)) e.classes = {};
+        const cls = e.classes[context] || { best: null, laps: 0 };
+        cls.laps++;
+        if (cls.best == null || lapTime < cls.best) cls.best = +lapTime.toFixed(3);
+        e.classes[context] = cls;
+      }
       if (e.best == null || lapTime < e.best) e.best = +lapTime.toFixed(3);
       // Streak: consecutive UTC days with at least one lap.
       if (d.streak.last !== day) {
@@ -84,16 +94,19 @@ const DailyChallenge = (function () {
     // "APEX 26 DAILY 2026-09-03 · MONZA · 1:21.345 · GOLD · STREAK 4"
     function shareText(medal) {
       const p = active || plan();
-      const e = data().days[p.day];
+      const day = data().days[p.day];
+      const context = G.records && G.records.key();
+      const e = context ? day && day.classes && day.classes[context] : day;
       const st = data().streak;
       const parts = ["APEX 26 DAILY " + p.day, p.trackName.toUpperCase(),
         e && e.best != null ? G.fmtTime(e.best) : "NO LAP"];
+      if (context) parts.push((p.class === "standard" ? "STANDARD CLASS " : "OPEN CLASS ") + Hash32.fnv1a(context).toString(16));
       if (medal) parts.push(medal.toUpperCase());
       if (st.last === p.day && st.count > 0) parts.push("STREAK " + st.count);
       return parts.join(" · ");
     }
 
-    function stop() { active = null; }
+    function stop() { if (G.records) G.records.restoreDaily(); active = null; }
     function isActive() { return !!active; }
     function current() { return active; }
     return { plan, dayKey, open, record, shareText, stop, isActive, current, data, today };

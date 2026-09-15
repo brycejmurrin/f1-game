@@ -147,7 +147,13 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page, "singapore", "night", "dry");
     await clickId(page, "pm-lighting");
-    await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { polling: 100, timeout: 8_000 });
+    // BOOT_MS, not 8 s — the SECOND tight wait in this file and the one I missed
+    // when the helper's was raised. It opens the TUNER over a running singapore
+    // NIGHT race, which is the heaviest fixture here, and it failed on CI at
+    // 0e8bbdaeb with the apex log showing the panel opening at 35,980 ms: the
+    // sheet was never broken, the budget was. Sibling waits on this fixture all
+    // read BOOT_MS, which carries the 11-33 s SwiftShader boot measurement.
+    await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { polling: 100, timeout: BOOT_MS });
     await page.waitForTimeout(400);
     // The tuner actually built its TUNE_DEFS slider rows, not just an empty shell.
     expect(await page.evaluate(() =>

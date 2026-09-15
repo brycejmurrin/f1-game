@@ -112,11 +112,26 @@ test.describe("Apex 26 — track boundaries", () => {
      drift would leak into every later test on the same worker and quietly
      change what "bounded" means for them. A virgin page costs one boot and
      removes the whole question. */
-  freshTest("driving hard into either edge stops bounded and recovers (sampled tracks)", async ({ page }) => {
+  /* ONE PER SAMPLED CIRCUIT, for the reason at the top of this file.
+     This was the last sweep left here: four circuits — four full builds and
+     3200 physics steps — inside ONE test against the 180 s budget. It fit on a
+     quiet box (120.8 s measured locally, 2026-09-15) and did not on a shared
+     runner: CI run 3716 spent 68.0 + 64.1 + 39.3 s in three of the four
+     page.evaluate legs and timed out with nothing asserted false. That is the
+     same failure the header describes, with the same wrong obvious fix waiting
+     (a bigger budget), and the same right one: split it. Each circuit is a
+     boot plus one build, well inside the DEFAULT budget; a failure names the
+     circuit; the four run across workers instead of serialising; and a timeout
+     can no longer silently skip the circuits behind it.
+     Still freshTest per circuit, not sharedTest: the setPhysics({ drift })
+     leak argued below is per-page, so sharing one page across the four would
+     reintroduce exactly what the fresh page exists to prevent. */
+  for (const circuitId of ["monaco", "monza", "baku", "spa"]) {
+  freshTest(`${circuitId}: driving hard into either edge stops bounded and recovers`, async ({ page }) => {
     await page.goto("/");
     // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    for (const id of ["monaco", "monza", "baku", "spa"]) {
+    for (const id of [circuitId]) {
       const r = await page.evaluate(async (tid) => {
         const ok = await window.__apex.race(tid, "day", "dry");
         if (!ok) return { skip: true, reason: `race("${tid}") returned ${String(ok)}` };
@@ -146,4 +161,5 @@ test.describe("Apex 26 — track boundaries", () => {
       expect(r.maxAbsX, `${id} bounded`).toBeLessThan(60);
     }
   });
+  }
 });

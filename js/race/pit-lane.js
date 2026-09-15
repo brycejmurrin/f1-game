@@ -323,6 +323,36 @@ const PitLane = (function () {
       return clamp(at, COMMIT_M + 20, Math.max(COMMIT_M + 20, zz.lenM - 30));
     }
 
+    // Estimate the lane's net time cost. The road-speed estimate is explicit;
+    // it is advice, not a promise of a free stop or a guaranteed rejoin place.
+    function estimate(c) {
+      const zz = z();
+      if (!zz) return null;
+      const flag = G.cautionInfo ? G.cautionInfo().level : 0;
+      if (flag >= 4) return null;
+      const normal = G.vTop() * 0.75;
+      const roadSpeed = Math.max(1, Math.min(normal, G.vTop() * (flag === 3 ? 0.45 : flag === 2 ? 0.6 : 1)));
+      const lossS = Math.max(zz.boxS, zz.lenM / Math.max(1, limit()) + zz.boxS - zz.lenM / roadSpeed);
+      const behind = (G.cars || []).filter(o => o !== c && !o.retired && !o.finished && o.prog < c.prog)
+        .sort((a, b) => b.prog - a.prog)[0];
+      const gapS = behind ? (c.prog - behind.prog) / Math.max(1, behind.speed || roadSpeed) : null;
+      return { lossS, gapS, marginS: gapS == null ? null : gapS - lossS, caution: flag >= 2, estimated: true };
+    }
+    function choices(c) {
+      if (!G.tyres) return [];
+      const list = ownedTyres().map(o => G.tyres.optionRecord(o));
+      const automatic = pickFor(c);
+      if (automatic && !list.some(r => r.id === automatic.id)) list.push(automatic);
+      return list;
+    }
+    function selectNext(c, id) {
+      if (!c || !c.local || c.pitState === "box") return false;
+      if (id == null || id === "auto") { c.pitNext = null; return true; }
+      const record = choices(c).find(r => r.id === id);
+      if (!record) return false;
+      setNext(c, record); return true;
+    }
+
     /** How far this car still has to go to reach its box, in metres (-1 when it
      *  is not in the window, and negative once it is past). */
     function toBox(c) {
@@ -375,9 +405,9 @@ const PitLane = (function () {
       if (d < 0 || d > CUE_M) return null;
       // Worth making? Any ONE of: a used set, the wrong tread, a free stop.
       const wear = G.tyres.spent(c);
-      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather);
+      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
       const caution = G.cautionInfo ? G.cautionInfo() : null;
-      const free = !!caution && caution.level >= 2 && wear >= 0.35;
+      const free = !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35;
       if (!(wear >= CUE_WEAR || wrongTread || free)) return null;
       if (c.pitArmed) return { phase: "armed", text: "BOX", dist: 0 };
       // Inside the entry road: say GO, not a distance — the distance is zero and
@@ -563,7 +593,7 @@ const PitLane = (function () {
     function pickFor(c) {
       const tyres = G.tyres;
       if (!tyres || !c) return null;
-      const want = TyreModel.treadFor(G.raceWeather);
+      const want = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
       const list = ownedTyres().map(function (o) { return tyres.optionRecord(o); });
       // TREAD FIRST, and it is not a preference. The wrong tread costs whole
       // seconds a lap and no compound choice makes that up. A career save that
@@ -643,7 +673,7 @@ const PitLane = (function () {
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
       // AND wets on a drying track. This is the recourse docs/PHYSICS.md said a
       // dry->rain arc did not have.
-      const wantTread = TyreModel.treadFor(G.raceWeather);
+      const wantTread = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
       const caution = G.cautionInfo ? G.cautionInfo() : null;
       const why = AiDrive.pitNow({
@@ -730,7 +760,7 @@ const PitLane = (function () {
 
     return { zoneOf: () => z(), limit, toBox, approachV, inLane, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
-             pickFor, ownedTyres, committing, commitFrac, resetCommit, toEntry, cue,
+             pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
              laneEdge, laneCentre, laneUniform, laneX, inLaneLat,
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }

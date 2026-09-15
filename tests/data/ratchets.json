@@ -4,12 +4,12 @@
     "js/game.js": {
       "lines": 9000,
       "codeLines": 4900,
-      "gMembers": 246,
+      "gMembers": 250,
       "topLets": 147
     },
     "js/agent/apex.js": {
-      "lines": 2912,
-      "codeLines": 2132
+      "lines": 2919,
+      "codeLines": 2135
     },
     "js/agent/agentview.js": {
       "lines": 2454
@@ -39,20 +39,20 @@
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1481,
+      "ceiling": 1493,
       "slack": 25
     },
     "bareCatches": {
-      "ceiling": 41,
+      "ceiling": 42,
       "slack": 15
     },
     "waitNoPolling": {
       "ceiling": 55,
       "slack": 39
     },
-    "waitForTimeout": 151,
+    "waitForTimeout": 150,
     "dynamicIdReads": {
-      "ceiling": 57,
+      "ceiling": 58,
       "slack": 5
     },
     "subFloorFontSize": {

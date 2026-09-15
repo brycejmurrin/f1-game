@@ -1074,6 +1074,43 @@ const TLX = (function () {
         matMaps = { albedo: matPlaceAlbedo, normal: matPlaceNormal };
       } catch (_) { matMaps = null; matPlaceAlbedo = matPlaceNormal = null; }
 
+      /* PER-CHUNK LAMPS: three fixed-size float textures, allocated ONCE and
+       * re-filled per track bake. Fixed size is the point — a track change must
+       * never mint a new node graph (the r184 program-cache-key trap above), so
+       * the extents travel as uniforms and the storage never moves.
+       *
+       *   lampGridLampTex  4 x LG_LAMPS  RGBA32F — (pos,rad) (col,-) (dir,-) (geo)
+       *   lampGridIdxTex   256 x 256     R32F    — LampChunks.concat, unwrapped
+       *   lampGridGridTex  LG_G x LG_G   RG32F   — (offset, count) per cell
+       *
+       * Ceilings, and what happens past them: more track lamps than LG_LAMPS,
+       * more indices than 65536, or a circuit wider than LG_G cells all leave
+       * lgOn at 0, and every fragment keeps the global lamp set — the picture
+       * TLX draws today. Degrading to the status quo is the whole safety story
+       * here, since none of this can be seen from a software adapter.
+       * 1024 lamps: montreal bakes 235 (__apex.lightState). 65536 indices:
+       * chunks x cap, and the cap is 24 (LightBudget.CHUNK), so ~2700 chunks.
+       * 256 cells at the 72 m default is an 18 km span. */
+      const LG_LAMPS = 1024, LG_IDX = 256, LG_G = 256;
+      let lampGrid = null;
+      try {
+        const f32 = (n) => new Float32Array(n);
+        const mk = (data, w, h, fmt) => {
+          const t = new THREE.DataTexture(data, w, h, fmt, THREE.FloatType);
+          t.minFilter = t.magFilter = THREE.NearestFilter;
+          t.generateMipmaps = false;
+          t.colorSpace = THREE.NoColorSpace;
+          t.needsUpdate = true;
+          return t;
+        };
+        lampGrid = {
+          lampTex: mk(f32(4 * LG_LAMPS * 4), 4, LG_LAMPS, THREE.RGBAFormat),
+          idxTex:  mk(f32(LG_IDX * LG_IDX), LG_IDX, LG_IDX, THREE.RedFormat),
+          gridTex: mk(f32(LG_G * LG_G * 2), LG_G, LG_G, THREE.RGFormat),
+          LAMPS: LG_LAMPS, IDXW: LG_IDX, G: LG_G,
+        };
+      } catch (_) { lampGrid = null; }
+
       // M3: the TSL lit core (tsl-chunks.js + tsl-lit.js factories)
       // Guarded: a missing/broken factory keeps the unlit material — the
       // backend must still boot (Gfx.create's never-throw contract).
@@ -1085,7 +1122,7 @@ const TLX = (function () {
           // the lit shader fails to LINK on iOS Safari and every lit surface
           // draws nothing. Same _liteGpu gate as samples/outputType above.
           lit = TLXShaders.lit(THREE, TSL, { chunks, shadow: shadowSys, ssrTag: !!post,
-            envCube: envRT ? envRT.texture : null, matMaps,
+            envCube: envRT ? envRT.texture : null, matMaps, lampGrid,
             maxLights: _liteGpu ? LightBudget.LITE : LightBudget.MAX });
         }
       } catch (e) {
@@ -1551,6 +1588,17 @@ const TLX = (function () {
       let frameEye = null;          // frame.eye — the glow near-field fade origin
       const _frameVP = new Float32Array(16);
       let frameCullDist = 0;        // frame.cullDist — the radial draw cap (0 = off)
+      // PER-CHUNK LAMPS, latched the way frameEye/frameCullDist are: the frame
+      // object is read in begin(), the chunk draw happens in present().
+      let frameAllLights = null;    // frame.allLights — the full baked track set
+      let framePerChunk = 0;        // frame.perChunkLights — the 0..1 knob
+      let _lgKey = null, _lgSrc = null, _lgChunks = null;   // bake-once cache
+      // READ-BACK, not a log line. docs/ARCHITECTURE.md §Boot evidence: a unit
+      // test of a renderer backend is not evidence that it RUNS, and no
+      // software adapter can show whether this path looks right — so the one
+      // thing that must be observable from outside is whether it is live.
+      // __apex.lightState().tlxLampGrid surfaces this.
+      let _lampGridState = null;
       const _postF = {
         proj: null, invProj: null, invVP: null, sunVS: null, upVS: null,
         skyHi: null, skyLo: null, viewProj: null, sunDir: null, sunColor: null,
@@ -2369,12 +2417,31 @@ const TLX = (function () {
 
         // resources
         chunkedTrackCoords: false, // chunked TSL variant deliberately omits road `trk` / markings
-        // MUST be an explicit false, not an absence: game.js installs backends
-        // by descriptor-copy onto GLX, so a missing name would inherit GLX's
-        // `true` and the game would feed TLX a per-chunk bake it cannot bind
-        // (shared node-material uniforms — per-chunk sets would mint a program
-        // per chunk, the pinProgram lesson).
-        hasPerChunkLights: false,
+        // MUST be an explicit value, not an absence: game.js installs backends
+        // by descriptor-copy onto GLX, so a missing name would inherit GLX's.
+        //
+        // WAS false, and the reasoning was sound for the design it described:
+        // "shared node-material uniforms — per-chunk sets would mint a program
+        // per chunk, the pinProgram lesson". That is still true of a per-DRAW
+        // binding, which is what GLX and WGX do and what three cannot.
+        //
+        // TLX now takes a different route to the same bake. The chunks are a
+        // regular XZ grid, so the FRAGMENT finds its own cell from
+        // positionWorld and reads LampChunks' table out of three textures
+        // (LampChunks.buildGrid -> tsl-lit setLampGrid). One material, one
+        // program, no per-chunk uniform — so the objection above does not
+        // apply. Turning this on is what lets game.js's `frame.perChunkLights`
+        // assignment pass a non-zero knob (it reads gfx.hasPerChunkLights), which
+        // is in turn what makes frame-lights.js fill frame.allLights at all.
+        //
+        // A refused bake (more lamps/indices/cells than the fixed textures
+        // hold) leaves lgOn 0 and every fragment on the global set — the
+        // picture TLX drew before any of this — so the honest answer to "can
+        // this backend do it" is yes, with a runtime floor.
+        hasPerChunkLights: true,
+        /** The last per-chunk lamp bake: {on, lamps, chunks, idx, gw, gh, why}
+         *  or null before the first chunked draw. Read by __apex.lightState(). */
+        lampGridState() { return _lampGridState; },
         createMesh(data) {
           if (!data || !data.pos || !data.pos.length) return noopMesh();
           _meshMade.mesh++;
@@ -2952,6 +3019,10 @@ const TLX = (function () {
           // M7: latch the cull frustum + radial cap for present()'s chunk cull.
           if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
           frameCullDist = (frame && frame.cullDist) || 0;
+          // frame-lights.js fills allLights only while the knob is on, so a null
+          // here is the feature being OFF rather than data going missing.
+          frameAllLights = (frame && frame.allLights) || null;
+          framePerChunk = +(frame && frame.perChunkLights) || 0;
           _postF.proj = (frame && frame.proj) || null;
           // GL convention on BOTH backends: tsl-post reconstructs with d*2-1, and
           // the depth texture stores 0.5*z_gl+0.5 under WebGPU's Z01 remap too.
@@ -3126,6 +3197,50 @@ const TLX = (function () {
               continue;
             }
             if (rec.chunked) {
+              // PER-CHUNK LAMPS: bake on CHANGE, never per frame. LampChunks is
+              // built on the premise that lamps are baked per track and chunk
+              // bounds never move, so the key is (lights array identity, chunks
+              // array identity, knob) — the same invalidation GLX uses. A knob
+              // drag re-keys only when capFor() actually moves, which is why
+              // resolve() takes the raw knob.
+              if (lit && lit.setLampGrid) {
+                const AL = frameAllLights;
+                const knob = framePerChunk;
+                const chs = rec.chunked.chunks;
+                if (!AL || !(knob > 0) || !chs || !chs.length) {
+                  if (_lgKey !== "off") { lit.setLampGrid(null); _lgKey = "off"; }
+                } else {
+                  const key = knob + "|" + (chs.length | 0);
+                  if (_lgKey !== key || _lgSrc !== AL || _lgChunks !== chs) {
+                    // ONE line per bake, not per frame, because the only way to
+                    // know this path is live on a player's machine is to read it
+                    // back: no software adapter can show it
+                    // (docs/ARCHITECTURE.md §Boot evidence). A throw here must
+                    // not take the frame down — setLampGrid(null) is the
+                    // documented fallback to the global lamp set.
+                    let note;
+                    try {
+                      const table = LampChunks.resolve(AL, chs, knob);
+                      const grid = LampChunks.buildGrid(table, chs);
+                      const okG = lit.setLampGrid({ lights: AL, table, grid,
+                                                    cell: rec.chunked.cellSize });
+                      _lampGridState = { on: !!okG, lamps: (AL.length / 15) | 0,
+                                         chunks: chs.length, idx: table.concat.length,
+                                         gw: grid.gw, gh: grid.gh, cell: rec.chunked.cellSize,
+                                         why: okG ? null : "does not fit the fixed textures" };
+                      note = "TLX per-chunk lamps " + (okG ? "ON" : "REFUSED")
+                        + " lamps=" + _lampGridState.lamps + " chunks=" + chs.length
+                        + " idx=" + table.concat.length + " grid=" + grid.gw + "x" + grid.gh;
+                    } catch (e) {
+                      lit.setLampGrid(null);
+                      _lampGridState = { on: false, why: String(e).slice(0, 120) };
+                      note = "TLX per-chunk lamp bake failed — " + e;
+                    }
+                    try { Log.info("gfx", note); } catch (_) {}
+                    _lgKey = key; _lgSrc = AL; _lgChunks = chs;
+                  }
+                }
+              }
               const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist);
               const vis = chunkedSys.visList;
               for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;

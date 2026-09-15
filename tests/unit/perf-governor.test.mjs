@@ -986,3 +986,14 @@ test("init() reconciles the boot tier with the resolved preset", () => {
   delete globalThis.GLX;
   delete globalThis.localStorage;
 });
+
+test("raw frame percentiles retain hitches and report discarded simulation time", () => {
+  const { PerfGov: p } = makeGov();
+  p.resetFrameStats();
+  for (let i=0;i<100;i++) p.tick(i===99?180:16);
+  p.recordSimulation(5,.12);
+  const s=p.frameStats();
+  assert.equal(s.frames,100);assert.equal(s.p50,16);assert.equal(s.p95,16);assert.equal(s.p99,180);
+  assert.equal(s.physicsSteps,5);assert.equal(s.droppedSimS,.12);
+  p.resetFrameStats();assert.equal(p.frameStats().frames,0);assert.equal(p.frameStats().droppedSimS,0);
+});

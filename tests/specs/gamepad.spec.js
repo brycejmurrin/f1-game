@@ -296,9 +296,13 @@ test("document becoming hidden releases held keyboard, pointer, and touch input"
  * ------------------------------------------------------------------------- */
 
 async function openSelectForPad(page) {
+  // BOOT_MS on both — this is a copy of menu-keyboard.spec.js's openSelect and
+  // inherited its two unmeasured 8 s budgets. Same predicate, same starved
+  // SwiftShader main thread, same fix; every other wait in this file already
+  // reads BOOT_MS.
   await page.evaluate(() => document.getElementById("mb-race").click());
-  await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: 8_000 });
-  await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 5, null, { polling: 100, timeout: 8_000 });
+  await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: BOOT_MS });
+  await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 5, null, { polling: 100, timeout: BOOT_MS });
 }
 
 // test.beforeEach (top of file) already did page.goto + Input.reset for every
