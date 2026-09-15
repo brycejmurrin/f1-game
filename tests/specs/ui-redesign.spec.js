@@ -317,7 +317,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const nav = document.getElementById("pm-settings-index");
     const doors = [...nav.querySelectorAll("button")];
     return {
-      doorCount: doors.length,
+      doorIds: doors.map((d) => d.id),
       allPainted: doors.every((d) => {
         const r = d.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
@@ -325,7 +325,21 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       overflowX: document.documentElement.scrollWidth - innerWidth,
     };
   });
-  expect(settings.doorCount).toBe(6);
+  // The SETTINGS doors, NAMED rather than counted. This used to be
+  // `toBe(6)`, and two shipped features walked past it: b8aa0b6 added the
+  // DRIVING door and nothing here moved, so the spec sat red on the deploy
+  // branch until an unrelated change happened to select it. A bare count
+  // fails with "expected 6, received 7", which says a door appeared but not
+  // WHICH — so the next session has to go and find it. This list says it.
+  // FIVE on this branch, not the trunk's seven: LIGHTING TUNER and CAMERA TUNER
+  // moved OUT of the index and under DISPLAY -> ADVANCED VISUALS. They are
+  // relocated, not removed — tests/unit/ui-sheets-audit.test.mjs asserts both
+  // ids still exist nested under #pm-panel-display, and this list is the same
+  // one it pins, so the two files cannot drift apart.
+  expect(settings.doorIds).toEqual([
+    "pm-open-controls", "pm-open-driving", "pm-open-display",
+    "pm-advanced", "pm-audio",
+  ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
   await page.evaluate(() => {
@@ -541,14 +555,25 @@ test("How to Play contents rail jumps within its single scroller", async ({ page
     const body = document.querySelector("#howtoplay .sheet-body").getBoundingClientRect();
     const first = document.querySelector("#htp-contents a").getBoundingClientRect();
     return {
-      links: document.querySelectorAll("#htp-contents a").length,
+      links: [...document.querySelectorAll("#htp-contents a")].map((a) => a.getAttribute("href")),
       navAboveBody: nav.bottom <= body.top + 1,
       bodyOverflow: getComputedStyle(document.querySelector("#howtoplay .sheet-body")).overflowY,
       firstReachable: first.left >= nav.left - 1 && first.right <= nav.right + 1,
       navBelowSafeArea: nav.top >= 59,
+      linkTargetsExist: [...document.querySelectorAll("#htp-contents a")]
+        .every((a) => document.querySelector(a.getAttribute("href"))),
     };
   });
-  expect(before.links).toBe(5);
+  // Named for the same reason as the SETTINGS doors above: this was `toBe(5)`
+  // and went red when 9e14f5f added PIT STOPS and b8aa0b6 added DRIVING.
+  // Every href here must also EXIST in the sheet — a rail entry pointing at a
+  // removed section is a dead link, which is how a restructure loses a
+  // section without anything failing.
+  expect(before.links).toEqual([
+    "#htp-controls", "#htp-racing", "#htp-pits",
+    "#htp-driving", "#htp-setup", "#htp-modes", "#htp-friends",
+  ]);
+  expect(before.linkTargetsExist).toBe(true);
   expect(before.navAboveBody).toBe(true);
   expect(["auto", "scroll", "overlay"]).toContain(before.bodyOverflow);
   expect(before.firstReachable).toBe(true);
@@ -717,6 +742,13 @@ test("balanced control rows derive their shape from local room", async ({ page }
   await page.waitForSelector("#pmsettings:not([hidden])");
   const settings = await report("#pm-settings-index");
   expect(settings.display).toBe("flex");
-  expect(settings.rowCounts.reduce((n, c) => n + c, 0)).toBe(6);
+  // DERIVED, not a literal. What this line is for is "every door is laid out,
+  // none dropped into a sliver" — so it asks the DOM how many doors there are
+  // rather than restating a number that has to be edited every time SETTINGS
+  // gains one. The literal 6 here went stale the same day the two above did.
+  const doorTotal = await page.evaluate(
+    () => document.querySelectorAll("#pm-settings-index button").length);
+  expect(doorTotal).toBeGreaterThan(0);
+  expect(settings.rowCounts.reduce((n, c) => n + c, 0)).toBe(doorTotal);
   expect(settings.lastFill).toBeGreaterThan(0.9);
 });
