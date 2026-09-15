@@ -7959,7 +7959,7 @@ function openSettings() {
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }
-function closeSettings() { els.pmsettings.hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }
+function closeSettings() { els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free
 $("pm-settings").onclick = openSettings;
 $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings(); };
 // The same settings screen from the TITLE menu, so steering, audio and the
