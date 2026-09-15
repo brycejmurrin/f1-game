@@ -155,6 +155,9 @@
       // Length 0 = no lane, which is what roadMarkings tests. Mirror of GLX
       // uPitLane / WGX U.pitLane.
       pitLane:     uniform(new THREE.Vector4(0, 0, 1, 1)),
+      // YOUR box: (through, halfLen, 0, 0). Zero halfLen = no box, the same
+      // length-0-means-absent convention pitLane.y uses.
+      pitBox:      uniform(new THREE.Vector4(0, 0, 0, 0)),
       lampFog:     uniform(0.0),      // frame.lampFog (0 = day/off)
       wetness:     uniform(0.0),
       time:        uniform(0.0),      // frame.time — drives FLAG wave + cloud drift (deterministic with the game clock)
@@ -279,6 +282,8 @@
       {
         const pl = frame.pitLane;
         U.pitLane.value.set(pl ? pl[0] : 0, pl ? pl[1] : 0, pl ? pl[2] : 1, pl ? pl[3] : 1);
+        const pb = frame.pitBox;
+        U.pitBox.value.set(pb ? pb[0] : 0, pb ? pb[1] : 0, 0, 0);
       }
       U.lampFog.value = frame.lampFog != null ? frame.lampFog : 0;
       U.wetness.value = frame.wetness != null ? frame.wetness : 0;
@@ -924,7 +929,18 @@
       // THE ENTRANCE bar. NOT gated by fadeIn, for the GLX reason: fading in
       // the very mark that says "the lane starts here" defeats the mark.
       const bar = smoothstep(0.4, 1.0, through).sub(smoothstep(2.4, 3.0, through)).mul(inLane).toVar();
-      const pitLine = max(pitBand.mul(fadeIn), bar).mul(fadeOut).mul(gate).mul(mip).mul(onRoad).toVar();
+      // YOUR BOX, mirroring GLX and WGX: two transverse ends and two rails, so
+      // it reads as a bay you park IN. Branchless throughout — select(), never
+      // step(), because step is not in this file's TSL destructure and a missing
+      // symbol here fails ASYNCHRONOUSLY (boots clean, draws wrong).
+      const hasBox = select(float(U.pitBox.y).greaterThan(0.0), float(1.0), float(0.0)).toVar();
+      const dBox = abs(through.sub(U.pitBox.x)).toVar();
+      const bEnds = smoothstep(0.12, 0.30, abs(dBox.sub(U.pitBox.y))).oneMinus().toVar();
+      const bSpan = select(dBox.lessThan(float(U.pitBox.y)), float(1.0), float(0.0)).toVar();
+      const bRails = max(smoothstep(0.12, 0.30, abs(x.sub(lx))).oneMinus(),
+                         smoothstep(0.12, 0.30, abs(abs(x).sub(hw))).oneMinus()).toVar();
+      const boxM = max(bEnds, bSpan.mul(bRails)).mul(inLane).mul(hasBox).toVar();
+      const pitLine = max(max(pitBand.mul(fadeIn), bar), boxM).mul(fadeOut).mul(gate).mul(mip).mul(onRoad).toVar();
       const pitFill = inLane.mul(fadeIn).mul(fadeOut).mul(gate).mul(onRoad).toVar();
 
       const m = base.mul(mip).mul(onRoad).toVar();

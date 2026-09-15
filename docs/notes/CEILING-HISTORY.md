@@ -3014,6 +3014,30 @@ omission: the lane is driven (PitLane's COMMIT block), so the car is never taken
 off you. What asks the player for the lane is the box's own condition — stop on
 the racing line and the stop does not happen.
 
+## 2026-09-15 — `js/game.js` 8764 → 8772: REDUCE MOTION, then THROTTLE = LATCH
+
+Two raises on the same file on the same day, which is worth saying out loud
+because that is the pattern the ratchet exists to catch. Both are settings, and
+a setting in this tree costs game.js the same four things every time: the `let`
+that holds it, the `store.get` at boot, the `SettingRow.wire` block, and the
+re-read in `onAssistBundle`. That is the floor, not the feature.
+
+- REDUCE MOTION (+10, tightened twice from +15): `prefers-reduced-motion` now
+  zeroes the camera OFFSET at speed. Moving it to `js/ui/scale.js` or a new
+  comfort IIFE was considered and rejected — scale.js is about UI scale, and a
+  new module plus manifest entry plus `gen-shell` run for seven lines is worse
+  than the ten lines.
+- THROTTLE = LATCH (+8, `topLets` +1): the middle rung between HOLD and AUTO
+  that XAG 107 names for the fatigue case. The BEHAVIOUR is entirely in
+  `js/input/input.js`, which is not ratcheted — the toggle, the full-travel
+  read, the drop on the everything-off path and the `.on` / `aria-pressed`
+  paint are all there. What game.js pays for is the setting itself: the option,
+  the store round-trip, the three-value row, and telling Input at boot and on an
+  assist-bundle change. No third value could be cheaper than that.
+
+If a third setting lands in game.js before an extraction does, the right answer
+is the extraction: a `js/ui/settings-*.js` that owns the `let` + store + wire
+triple for the comfort options would take all of this back out.
 ## 2026-09-15 — a deliberate headroom raise, at the owner's direction
 
 `js/game.js` 8777 → 9000 lines and 4729 → 4900 codeLines; `js/render/glx/glx.js`
@@ -3075,3 +3099,19 @@ driving boundary, the most of any circuit; 44 of 52 have the 3.2 m a full lane
 needs. The header's number was measured against solid scenery rather than the
 boundary, which is a different question — but it was being used to rule out an
 approach nobody had tried.
+
+## 2026-09-15 — teaching the pit stop: shellNodes 1568 → 1640
+
++29 shell nodes for a PIT STOPS section in HOW TO PLAY, and headroom for the
+rest of it.
+
+It is paying off a debt rather than adding a feature. The pit button was removed
+in favour of a GESTURE — hold the car in the lane at the entry — and the gesture
+was never taught anywhere: the only mention of pitting in the whole shell was an
+HTML comment players never see. Asked how to use the pit lane, the honest answer
+was "you cannot find out from the game", which is a fault in the thing I shipped
+and not in the person asking.
+
+The section leads with TYRE WEAR shipping OFF, because that gates the entire
+feature — lane, prompt, stop and AI strategy all vanish with it — and someone
+looking for a pit lane that does not exist needs that sentence before any other.

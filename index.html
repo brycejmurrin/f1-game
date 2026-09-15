@@ -579,7 +579,7 @@
               <button id="pm-throttlemode-next" type="button" data-step="1" aria-label="Next throttle mode">&rsaquo;</button>
             </div>
           </div>
-          <p class="adv-help">AUTO drives the throttle for you so you only steer and brake &mdash; less tiring over a long race, and the way TOUCH steering has always worked.</p>
+          <p class="adv-help">HOLD keeps your thumb on GAS. LATCH makes GAS a switch &mdash; tap once for full throttle, tap again to lift. AUTO drives the throttle for you so you only steer and brake &mdash; less tiring over a long race, and the way TOUCH steering has always worked.</p>
           <div id="pm-mirror" class="set-row" role="group" aria-labelledby="pm-mirror-label">
             <span class="tune-label" id="pm-mirror-label">LEFT-HANDED</span>
             <div>
@@ -810,6 +810,13 @@
                    slider changes nothing. -->
               <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b><button type="button" id="pm-btnscale-r" class="tune-revert" hidden>follow HUD size</button></span>
                 <input id="pm-btnscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Touch button size"></label>
+              <!-- BUTTON OPACITY. XAG 104 asks for an adjustable backing behind
+                   anything read over live gameplay, and the dock sits over a
+                   bright, moving 3D scene. Its own 20-100 range, not the size
+                   slider's 40-200: 20 % is the floor because a dock you cannot
+                   see is a dock you cannot aim at. -->
+              <label class="tune-row"><span class="tune-label">BUTTON OPACITY <b id="pm-btnopacity-v">100%</b><button type="button" id="pm-btnopacity-r" class="tune-revert" hidden>reset</button></span>
+                <input id="pm-btnopacity" type="range" min="20" max="100" step="5" value="100" aria-label="Touch button opacity"></label>
               <!-- The slider's effect was invisible: css/hud.css hides every real
                    HUD cluster while a .dim screen is open, and from the title
                    there is no HUD at all — players dragged, saw nothing, and
@@ -2107,6 +2114,7 @@
     <nav id="htp-contents" aria-label="How to play sections">
       <a href="#htp-controls">CONTROLS</a>
       <a href="#htp-racing">RACING</a>
+      <a href="#htp-pits">PIT STOPS</a>
       <a href="#htp-driving">DRIVING</a>
       <a href="#htp-setup">SETUP</a>
       <a href="#htp-modes">MODES</a>
@@ -2147,6 +2155,23 @@
         <dd>Follow within one second to arm it, then activate for four seconds of electric power. The HUD explains when it is unavailable: the opening lap, a caution or the cooldown. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
         <dt>GEARS</dt>
         <dd>Choose SETTINGS › CONTROLS › GEARS: MANUAL to shift yourself. Shift up near the redline and down before slow corners. Manual gears work on desktop and with TILT on a phone; BUTTONS and TOUCH keep gears automatic.</dd>
+        <!-- PIT STOPS came from the deploy branch while this branch restructured
+             the sheet around it. The nav above links #htp-pits, so the section is
+             carried over rather than lost to the restructure. -->
+        <dt id="htp-pits">PIT STOPS &mdash; TURN THEM ON FIRST</dt>
+        <dd><span class="key">SETTINGS &rarr; TYRE WEAR</span> ships <span class="key">OFF</span>, and with it off <b>there is no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either.
+          <br><span class="key">REAL</span> wears tyres at the rate the compounds are built around, so a set will not reach the flag and a stop is part of the race. <span class="key">LIGHT</span> wears them at a little over half that: sets last roughly twice as long and stopping becomes optional. Both switch the pit lane on; only OFF hides it</dd>
+        <dt>THERE IS NO PIT BUTTON</dt>
+        <dd>You call a stop the way a driver does: put the car <b>in the pit lane at the entry and keep it there</b> for about half a second. The limiter comes on by itself and the crew tells you which set is ready. A car that merely runs wide at the entry, or is spun or stopped there, calls nothing &mdash; it has to be deliberate and held</dd>
+        <dt>FINDING THE LANE</dt>
+        <dd>The lane is the strip of road on the pit side with the <b>blue line</b> along its inner edge, and it exists only for the last few hundred metres before the start/finish line. <b>A blue bar across its mouth</b> marks where it begins &mdash; that is what you steer into.
+          <br>The HUD counts it down for you &mdash; <span class="key">PIT 340m</span> with an arrow to the pit side, then <span class="key">PIT ENTRY</span> once you are on the entry road. It deliberately stays quiet until a stop is worth making, so on a fresh set you will see nothing at all</dd>
+        <dt>THE LANE AND THE BOX</dt>
+        <dd>Inside the lane you are limited to 80 km/h (60 on a street circuit) &mdash; the limiter is automatic, you do not switch it on. Drive down to <b>your team&rsquo;s box</b> and stop there: each team has its own, spread along the lane, and team-mates share one.
+          <br><b>You have to stop IN the lane.</b> Halt on the racing line and the stop does not happen &mdash; the crew is not standing there. Coming up to the box the HUD says <span class="key">KEEP RIGHT</span> (or LEFT) if you have drifted out. Blowing through at the limit misses it too: you have to actually stop.
+          <br>The stop itself is 2.4 s, then <span class="key">TYRES ON &mdash; GO GO GO</span></dd>
+        <dt>WHAT IT COSTS</dt>
+        <dd>The whole lap through the pits, against racing the same stretch, plus the time stood still &mdash; which is why it is worth different amounts at different circuits rather than a fixed penalty. A long pit straight costs more than a short one. That difference is what decides one stop against two</dd>
       <dt id="htp-driving">DRIVING COACH</dt>
       <dd>Open <b>SETTINGS &rarr; DRIVING</b> and turn the coach ON. Short text tips appear in the race-message area while you drive. The coach watches sustained braking, steering and tyre-slip conditions; it never changes your controls. Your ON/OFF choice is saved.
         <br>It waits during flags, other race messages and pit stops, and spaces tips out so brief corrections do not cause a stream of messages. Reopen DRIVING to read the latest tip and its explanation. SESSION REVIEW counts the tips recorded this session; those counts are not a driving score.</dd>

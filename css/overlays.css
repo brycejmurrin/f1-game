@@ -34,6 +34,14 @@
      rather than as a fill alpha so it can never touch a label's contrast. */
   --btn-a: 0.68;
 }
+/* PLAYER BUTTON OPACITY rides the dock GROUPS, never the buttons. The ladder
+   inside (--btn-a idle, opacity 1 for live states, .dead below idle) is a
+   designed set of rungs that tests/unit/ui-journey-race.test.mjs pins as
+   literals — scaling --btn-a or overriding .touchbtn flattens the three into
+   each other, and a disabled button can end up brighter than a live one.
+   Group opacity COMPOSITES with each child's own, so every rung keeps its
+   relative order and the whole dock simply fades together. */
+.dock-grp { opacity: var(--hud-btn-opacity, 1); }
 .touchbtn {
   position: fixed;
   z-index: 12;
@@ -90,7 +98,15 @@
    as a darker flat colour, which is why they looked like the SOLID pair next to
    OT and AERO rather than the transparent one. */
 #btn-throttle { left: calc(16px + var(--sal)); bottom: calc(16px + var(--sab)); background: rgba(0, 170, 70, 0.85); }
-#btn-throttle:active { background: rgba(0, 210, 90, 0.95); opacity: 1; }
+#btn-throttle:active { background: var(--gas-lit); opacity: 1; }
+/* .on is the LATCH (js/input/input.js paintLatch). Same fill as :active and its
+   own rule rather than a grouped selector, because :active follows the THUMB and
+   the latch outlives it — both have to read as pressed, and ui-journey-race.test
+   pins each live rung separately. The RING is what tells them apart: a latch is
+   the one pressed state nobody's finger is explaining. `.on` is the same class
+   BOOST, OT and AERO already use for "engaged". */
+#btn-throttle.on { background: var(--gas-lit); opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 55%, transparent); }
 #btn-brake    { left: calc(16px + var(--sal)); bottom: calc(16px + var(--btn-pitch) + var(--sab)); background: rgba(180, 35, 35, 0.85); }
 #btn-brake:active { background: rgba(230, 45, 45, 0.95); opacity: 1; }
 

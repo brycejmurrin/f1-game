@@ -53,6 +53,11 @@ const Input = (function () {
   let padMapWarned = false;
   let padSteer = 0;            // -1..1 from left stick / d-pad
   let padSteerAnalog = false;  // is padSteer a stick DEFLECTION (curve/speed-scale it) or the ramped d-pad?
+  // THROTTLE LATCH (tap on, tap off). XAG 107's Duration guidance names our exact
+  // case — holding accelerate for a whole race is a fatigue barrier — and lists
+  // toggles as the fix, between HOLD and full AUTO. `throttleLatch` is the mode,
+  // `throttleLatched` the state it keeps.
+  let throttleLatch = false, throttleLatched = false;
   let padThrottle = false;
   let padBrake = false;
   let padThrottleVal = 0;
@@ -1108,7 +1113,22 @@ const Input = (function () {
       if (h.ids.delete(pointerId) && h.ids.size === 0) { h.apply(false); h.level && h.level(0); }
     }
   }
+  // The pedal's pressed look is `#btn-throttle:active`, which follows the THUMB.
+  // A latch outlives the thumb, so the class carries it instead; aria-pressed
+  // exists only in latch mode, where the pedal really is a toggle button.
+  function paintLatch() {
+    const el = typeof document !== "undefined" && document.getElementById("btn-throttle");
+    if (!el) return;
+    el.classList.toggle("on", throttleLatch && throttleLatched);
+    if (throttleLatch) el.setAttribute("aria-pressed", throttleLatched ? "true" : "false");
+    else el.removeAttribute("aria-pressed");
+  }
   function holdReleaseAll() {
+    // A LATCH DROPS HERE. This is the everything-off path (window blur, page
+    // hidden, last touch up, Input.reset), and a latched throttle surviving a
+    // blur means the car accelerates while the player is not looking at it.
+    throttleLatched = false;
+    paintLatch();
     for (const h of holdBtns) {
       h.ids.clear();
       h.anchors && h.anchors.clear();
@@ -1750,7 +1770,7 @@ const Input = (function () {
   // a stray pad axis.
   function throttleLevel() {
     if (keyThrottle) return 1;
-    if (btnThrottle) return btnThrottleVal;
+    if (btnThrottle) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
     return padThrottleVal > 0.12 ? padThrottleVal : 0;
   }
   function brakeLevel() {
@@ -2029,7 +2049,13 @@ const Input = (function () {
     canvas.addEventListener("touchend", onTouchEnd, { passive: false });
     canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
 
-    wireHold("btn-throttle", function (v) { btnThrottle = v; }, function (l) { btnThrottleVal = l; });
+    wireHold("btn-throttle", function (v) {
+      // Toggle on the DOWN edge only: the matching up-edge must not undo it, and
+      // holdReleaseAll()'s apply(false) must not either — that path CLEARS the
+      // latch outright rather than toggling it (see holdReleaseAll).
+      if (throttleLatch) { if (v) { throttleLatched = !throttleLatched; paintLatch(); } btnThrottle = throttleLatched; }
+      else btnThrottle = v;
+    }, function (l) { btnThrottleVal = l; });
     wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
@@ -2262,6 +2288,8 @@ const Input = (function () {
     setHaptics,
     vibrate,
     hapticsSupported,
+    setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
+    throttleLatched: () => throttleLatch && throttleLatched,
     primeHaptics,
     setPadLabelMode, padLabelMode: padLabelModeOf,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest,
