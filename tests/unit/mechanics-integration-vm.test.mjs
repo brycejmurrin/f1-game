@@ -140,3 +140,43 @@ test("the braking-into-turn tip fires from a full dry-track brake, which the fri
     assert.match(h.sandbox.document.getElementById("announce").textContent,/EASE THE BRAKE AS YOU TURN/);
   } finally { h.close(); }
 });
+
+test("launch drill: a standing start is timed from the first throttle to half of top speed",async()=>{
+  await tt();g.apex.reset(.02,0,0);g.apex.go();
+  const ins=g.G.coach.insights;
+  assert.equal(ins.startDrill("launch"),true);
+  drive({throttle:false,brake:false,steer:0},30);            // sitting still is not timed
+  drive(straight,60*12);
+  const last=ins.summary().lastDrill;
+  assert.ok(last&&last.mode==="launch",JSON.stringify(ins.summary()));
+  assert.equal(last.clean,true,JSON.stringify(last));
+  assert.ok(last.score>1&&last.score<8,`launch ${last.score}s`);
+  assert.match(last.text,/^0 to \d+ km\/h in \d\.\d\ds$/);
+});
+
+test("corner drill: a pure-pursuit test driver through Curva Grande completes with minimum and exit speeds",async()=>{
+  await tt();g.apex.reset(.285,35,0);g.apex.go();drive(straight,5);
+  const ins=g.G.coach.insights, Tracks=vm.runInContext("Tracks",g.ctx), smp={p:[0,0,0],t:[0,0,1],r:[1,0,0],hw:7};
+  // Test-side driver only: aim at the centreline a speed-scaled distance ahead. Positive steer is a right turn.
+  const pursue=()=>{const p=g.G.player,look=Math.max(15,p.speed*.9);Tracks.sample(g.G.track,(p.s+look)%g.G.track.total,smp);
+    let err=Math.atan2(smp.p[0]-p.px,smp.p[2]-p.pz)-p.head;while(err>Math.PI)err-=2*Math.PI;while(err<-Math.PI)err+=2*Math.PI;
+    return {steer:Math.max(-1,Math.min(1,-err*2.5)),throttle:p.speed<36,brake:p.speed>39};};
+  assert.equal(ins.startDrill("corner"),true);
+  drive(pursue,60*12);
+  const last=ins.summary().lastDrill;
+  assert.ok(last&&last.mode==="corner","the corner closed: "+JSON.stringify(ins.summary()));
+  assert.equal(last.clean,true,JSON.stringify(last));
+  assert.match(last.text,/^\d+\.\ds · min \d+ km\/h · exit \d+ km\/h$/);
+  assert.ok(g.G.store.get("circuitMastery").entries.some(e=>/:corner:all$/.test(e.key)));
+});
+
+test("the recover key restores the practice checkpoint instead of rescuing the car",async()=>{
+  await tt();g.apex.reset(.1,35,0);g.apex.go();g.step(2);
+  assert.equal(g.G.coach.mark(),true);
+  const s0=g.G.player.s; g.step(60); assert.ok(g.G.player.s>s0+20);
+  for(const type of ["keydown","keyup"])g.sandbox.dispatchEvent(vm.runInContext(`new KeyboardEvent(${JSON.stringify(type)},{code:"KeyR",key:"r"})`,g.ctx));
+  g.step(1);
+  assert.ok(Math.abs(g.G.player.s-s0)<2,`restored to ${g.G.player.s} from ${s0}`);
+  assert.equal(g.G.coach.practiceActive(),true);
+  assert.match(g.G.coach.insights.journal().at(-1).text,/Free practice — unscored/);
+});

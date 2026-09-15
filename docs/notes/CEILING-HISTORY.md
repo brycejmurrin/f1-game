@@ -3111,3 +3111,12 @@ and not in the person asking.
 The section leads with TYRE WEAR shipping OFF, because that gates the entire
 feature — lane, prompt, stop and AI strategy all vanish with it — and someone
 looking for a pit lane that does not exist needs that sentence before any other.
+
+## 2026-09-15 — teaching the practice goals: shellNodes 1602 → 1613
+
++11 shell nodes in HOW TO PLAY: three new coach tips (coasting, X-mode in a
+corner, track limits) in WHAT THE TIPS MEAN, three new practice goals (corner,
+full lap, launch) in PRACTICE GOALS, and the RECOVER key named as TRY AGAIN.
+Text only — `<b>`, `<br>` and `<span class="key">` inside the existing lists; no
+new control, screen or class. The DRIVING page itself is unchanged because
+SettingRow fills the goal list from js/race/driving-coach.js.

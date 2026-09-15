@@ -7,7 +7,10 @@ const DrivingCoach = (function () {
     power: { label: "Rear grip on power", text: "REAR SLIDING — EASE THE THROTTLE", detail: "The rear tyres are near their grip limit while you accelerate. Ease the throttle gradually.", dwell: 0.5 },
     rearBrake: { label: "Rear grip under braking", text: "REAR SLIDING — EASE THE BRAKE GENTLY", detail: "The rear tyres are near their grip limit under braking. Release some brake pressure smoothly.", dwell: 0.5 },
     rearCoast: { label: "Rear grip while coasting", text: "REAR SLIDING — KEEP INPUTS SMOOTH", detail: "The rear tyres are near their grip limit. Avoid sudden steering or pedal changes while the car settles.", dwell: 0.5 },
-    front: { label: "Front grip", text: "FRONTS SLIDING — UNWIND SOME STEERING", detail: "The front tyres are near their grip limit. Ease some steering instead of turning harder.", dwell: 0.6 }
+    front: { label: "Front grip", text: "FRONTS SLIDING — UNWIND SOME STEERING", detail: "The front tyres are near their grip limit. Ease some steering instead of turning harder.", dwell: 0.6 },
+    xmode: { label: "X-mode in corners", text: "CLOSE THE WING — X-MODE LOSES GRIP IN CORNERS", detail: "The active aero was open while the car was cornering hard. X-mode trades downforce for straight-line speed; close it before you turn in.", dwell: 0.5 },
+    coasting: { label: "Coasting", text: "COASTING — BE ON THE BRAKE OR THE THROTTLE", detail: "Neither pedal was used at speed for over a second. A racing car is either braking or accelerating; coasting gives time away.", dwell: 1.2 },
+    limits: { label: "Track limits", text: "TRACK LIMITS — KEEP THE CAR INSIDE THE WHITE LINES", detail: "A track-limits warning was recorded. Four warnings in a row add a five-second penalty; the count resets after a penalty.", dwell: 0 }
   });
   // Braking effort against the brake ceiling, the same scalar the engine's own
   // brakeFade/brakeYawDamp use. NOT c.axFrac: that is the friction-circle share,
@@ -18,7 +21,7 @@ const DrivingCoach = (function () {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
     let trace = [], checkpoint = null, practice = false, drillMode = "free";
-    let clock = 0, candidate = "", held = 0, latest = null;
+    let clock = 0, candidate = "", held = 0, latest = null, warnSeen = null, edge = null;
     const lastTip = new Map(), tipCounts = new Map();
     function coachState() {
       if (!enabled) return "off";
@@ -59,6 +62,10 @@ const DrivingCoach = (function () {
       if (rearSliding) return brake > 0.1 ? "rearBrake" : throttle > 0.1 ? "power" : "rearCoast";
       if (brake > 0.1 && brakeUse(c) > 0.8 && Math.abs(c.steerAngle || 0) > 0.025) return "trail";
       if ((c.frontUtil || 0) > 0.9 && Math.abs(c.slipFront || 0) > 0.06 && Math.abs(c.steerAngle || 0) > 0.025) return "front";
+      // Open flaps cost downforce exactly where the car is leaning on it (game.js
+      // aeroGrip); auto aero closes them itself, so this only reaches a manual driver.
+      if ((c.aeroX || 0) > 0.5 && Math.abs(c.lateralAccel || 0) > 6 && c.speed > G.vTop() * 0.4) return "xmode";
+      if (brake <= 0.02 && throttle <= 0.02 && c.speed > G.vTop() * 0.4) return "coasting";
       return "";
     }
     function advice(c) { const id = tipFor(c); return id ? TIPS[id].text : ""; }
@@ -75,17 +82,26 @@ const DrivingCoach = (function () {
           if (s) { trace.push(s); if (trace.length > 600) trace.shift(); }
         }
       }
+      // Track limits is an EVENT, not a sustained state: the game only announces
+      // the warning ladder in the broadcast HUD, so the coach explains it here.
+      // Held for 3 s so a race message can clear first; the first sighting and
+      // the reset after a penalty (already announced) are not new warnings.
+      const warn = G.player ? (G.player.cutWarn || 0) : 0;
+      if (warnSeen == null || warn < warnSeen) warnSeen = warn;
+      else if (warn > warnSeen) { warnSeen = warn; edge = { id: "limits", t: 3 }; }
+      if (edge && (edge.t -= step) <= 0) edge = null;
       if (coachState() !== "watching" || quiet) { clearCandidate(); return; }
-      const id = tipFor(G.player);
-      if (!id || clock - (lastTip.get(id) ?? -Infinity) < 30) { clearCandidate(); return; }
+      const id = edge ? edge.id : tipFor(G.player);
+      if (!id || clock - (lastTip.get(id) ?? -Infinity) < 30) { clearCandidate(); edge = null; return; }
       if (candidate !== id) { candidate = id; held = 0; }
       held += step;
       if (held + 1e-9 < TIPS[id].dwell) return;
       const tip = TIPS[id];
       latest = { id, text: tip.text, detail: tip.detail, time: G.raceT };
       tipCounts.set(id, (tipCounts.get(id) || 0) + 1); lastTip.set(id, clock);
-      G.announce(tip.text, 2.5, "coach"); quiet = 8; clearCandidate();
+      G.announce(tip.text, 2.5, "coach"); quiet = 8; clearCandidate(); edge = null;
     }
+    const goal = () => RaceInsights.DRILLS[drillMode].toUpperCase();
     function canPractice() { return !!(G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && G.player && G.state === "race"); }
     function mark() {
       if (!canPractice()) return false;
@@ -98,7 +114,7 @@ const DrivingCoach = (function () {
       for (const k of ["tyre", "tyreLog", "pitNext"]) objects[k] = c[k] == null ? c[k] : JSON.parse(JSON.stringify(c[k]));
       checkpoint = { fields, objects, mode: drillMode };
       practice = true; G.records.invalidate();
-      G.announce("PRACTICE CHECKPOINT — LAPS WILL NOT BE SAVED", 3, "info");
+      G.announce("PRACTICE: " + goal() + " — LAPS NOT SAVED", 3, "info");
       return true;
     }
     function retry() {
@@ -116,11 +132,11 @@ const DrivingCoach = (function () {
       G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
       drillMode = checkpoint.mode;
       insights.startDrill(drillMode);
-      G.announce("CHECKPOINT RESTORED — PRACTICE", 2, "info");
+      G.announce("TRY AGAIN: " + goal(), 2, "info");
       return true;
     }
     function reset() {
-      checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0;
+      checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
       clock = 0; latest = null; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
     }
     function downloadTrace() {
@@ -152,17 +168,24 @@ const DrivingCoach = (function () {
       const practiceState = $("pm-practice-state");
       if (practiceState) practiceState.textContent = !canPractice()
         ? "Checkpoints are available in solo Time Trial. Start one from the main menu; races, daily challenges and multiplayer do not support checkpoints."
-        : practice ? "Practice active: laps and ghosts will not be saved. TRY AGAIN restores your saved car state and practice goal. Restart the session to set records again."
+        : practice ? "Practice active: laps and ghosts will not be saved. TRY AGAIN, or the RECOVER key while driving, restores your saved car state and practice goal. Restart the session to set records again."
           : "Saving a starting point makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again.";
       const drillInfo = $("pm-drill-status"), summary = insights.summary();
       if (drillInfo) {
         const guide = { free: "Repeat any section at your own pace.", sector: "Finish the next sector without contact or leaving the track.",
+          corner: "Drive through the next corner and out the other side. The result shows your time, minimum speed and exit speed.",
+          lap: "Cross the start line to begin timing, then complete one full lap without contact or leaving the track. Practice laps are not saved, so this is how to time one.",
           braking: "Build speed before saving, then brake firmly and keep braking until the car stops. Coasting to a stop does not count.",
           trail: "Build speed before saving. Brake firmly, keep some brake on as the car turns in, then release it while the car is still turning.",
-          slalom: "Make six direction changes while moving: the car must change direction, not just the stick. Stay on the track and avoid contact." };
-        const last = summary.lastDrill;
-        drillInfo.textContent = guide[drillMode] + (last && last.mode === drillMode
-          ? " Last attempt: " + (last.clean ? "completed · " + last.text : "retry suggested · " + last.reason) + "." : "");
+          slalom: "Make six direction changes while moving: the car must change direction, not just the stick. Stay on the track and avoid contact.",
+          launch: "Stop the car before saving, then launch to racing speed. Timed from your first throttle." };
+        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m" : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s" : s.toFixed(1) + "s";
+        const last = summary.lastDrill, tries = insights.attempts(drillMode), clean = tries.filter(a => a.clean), saved = insights.mastery(drillMode);
+        drillInfo.textContent = guide[drillMode]
+          + (last && last.mode === drillMode ? " Last attempt: " + (last.clean ? "completed · " + last.text : "retry suggested · " + last.reason) + "." : "")
+          + (tries.length ? " This session: " + tries.length + " attempt" + (tries.length === 1 ? "" : "s") + ", " + clean.length + " clean"
+            + (clean.length ? ", best " + fmt(drillMode, Math.min(...clean.map(a => a.score))) : "") + "." : "")
+          + (saved ? " Saved best: " + fmt(drillMode, saved.best) + " over " + saved.completed + " clean run" + (saved.completed === 1 ? "" : "s") + "." : "");
       }
       const f = insights.forecast(), strategy = $("pm-stint-forecast");
       if (strategy) strategy.textContent = !G.tyres.on() ? "Enable tyre wear for stint forecasts." : !f || f.remainingLaps == null ? "Drive at least half a lap on this set for a tyre-life estimate."
@@ -207,7 +230,8 @@ const DrivingCoach = (function () {
     bind("pm-practice-set", mark); bind("pm-practice-retry", retry);
     SettingRow.wire($("pm-coach"), { values: [["off", "OFF"], ["on", "ON"]],
       read: () => enabled ? "on" : "off", write: v => { if ((v === "on") !== !!enabled) toggle(); } });
-    SettingRow.wire($("pm-drill"), { values: [["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"]],
+    SettingRow.wire($("pm-drill"), { values: [["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"],
+        ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"]],
       read: () => drillMode, write: v => { if (Object.hasOwn(RaceInsights.DRILLS, v)) drillMode = v; paint(); } });
     SettingRow.wire($("pm-pit-choice"), { read: () => G.player && G.player.pitNext ? G.player.pitNext.id : "auto",
       write: v => { G.pits.selectNext(G.player, v); paint(); } });

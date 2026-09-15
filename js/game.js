@@ -3444,8 +3444,8 @@ function update(dt) {
      Race only: there is nothing to recover from during the countdown, and the
      same call mid-count would hand the player a free re-place on the grid. */
   if (state === "race" && Input.consumeRecover() && player && !player.retired) {
-    rescuePlayer(player);
-    announce("RECOVERED", 1.5, "coach");
+    // A saved practice checkpoint makes RECOVER the driver's TRY AGAIN; coach.retry() is false everywhere else.
+    if (!coach.retry()) { rescuePlayer(player); announce("RECOVERED", 1.5, "coach"); }
     Log.info("game", "manual recover");
   }
   if (state === "count") {

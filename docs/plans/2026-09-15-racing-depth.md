@@ -129,6 +129,32 @@ held brake scores 0.9–1.6× v²/2a, pad slalom completes, the tip fires on
 tarmac). The VM cannot expire an announcement (the timer decays in a render
 frame the stubbed renderer faults on), so the tip test boots its own instance.
 
+### Second pass: more goals, more tips, less menu
+
+- Three more practice goals, each scored by the number the driver can act on:
+  CORNER (opens after 0.3 s of sustained cornering, closes after 0.5 s without
+  it so a chicane's flip stays one corner; reports time, minimum and exit
+  speed), FULL LAP (timed line to line from the exact `_lapTimeAtLine` the
+  crossing keeps, since practice laps never enter the records) and LAUNCH
+  (must start stopped; timed from the first throttle to half of top speed).
+- Every attempt is kept per goal for the session and the DRIVING page shows
+  the count, how many were clean, the session best and the saved best with
+  its completion count; checkpoint messages name the goal.
+- The RECOVER key (R by default) is TRY AGAIN while a practice checkpoint is
+  saved, so a retry no longer needs the pause menu; elsewhere it rescues as
+  before (`js/game.js`, one merged line).
+- Three more coach tips: COASTING (no pedal at speed for 1.2 s), X-MODE in a
+  corner (flaps open above 6 m/s² of lateral load; auto aero never reaches
+  it) and TRACK LIMITS, which is an event: the game only announces the
+  warning ladder in the broadcast HUD, so the coach explains a new warning
+  within 3 s, ignoring the count it first saw and the reset after a penalty.
+
+Evidence: the same three files. The VM test for the corner goal drives Curva
+Grande with a test-side pure-pursuit driver (positive steer turns right); the
+driving-help assist alone cannot hold the car through a corner at speed, so
+the assist is not a stand-in for a driver in tests. shellNodes rose 1602 → 1613
+for the help text (`docs/notes/CEILING-HISTORY.md`).
+
 ## Technical references
 
 - https://box2d.org/documentation/md_collision.html — separating axes and swept
