@@ -28,6 +28,9 @@ const DrivingCoach = (function () {
   // 350 m at Spa and 170 m at Monaco, so the same rule would file a tip from
   // the middle of a straight under a turn on one track and not on another.
   const TURN_WINDOW_M = 150;
+  // A corner has to cost this much before the lap report names it. Below it the
+  // difference is noise in the reference lap, and naming it is nagging.
+  const MIN_LOSS_S = 0.2;
   // The practice goals as the picker names them, so the review can point at a
   // goal by the label the driver will actually look for. One list, two readers.
   const GOALS = Object.freeze([["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"],
@@ -39,6 +42,71 @@ const DrivingCoach = (function () {
     let clock = 0, candidate = "", held = 0, latest = null, warnSeen = null, edge = null;
     const lastTip = new Map(), tipCounts = new Map();
     let log = [];   // one row per tip: which tip, which turn, when — the session's map
+    // --- where the lap went, against your own best lap ---------------------
+    // The coach's tips answer "is the car at its limit"; they cannot answer
+    // "where am I slow", which is the question that actually moves lap times.
+    // This does, by differencing your elapsed time against the ghost's at the
+    // same ARC POSITION — the game knows where the car is on the road, so it
+    // sidesteps the distance-alignment error that GPS-based tools correct for
+    // (a tighter line reads as less distance driven and the deltas stop summing).
+    let bounds = null, boundKey = "", prevS = null, lastMark = null;
+    let segs = [], lapReport = null;
+    // Segment i runs from turn i's apex to the NEXT apex, so it carries the
+    // corner AND the straight after it. That is deliberate: exit speed
+    // propagates down the following straight, so attributing that straight to
+    // the corner that caused it is the only honest split. Naive apex-to-apex
+    // windows credit the straight and hide the exit that paid for it.
+    function cornerBounds() {
+      const t = G.track, turns = t && t.def && t.def.turns;
+      if (!turns || turns.length < 2 || !(t.total > 0)) return null;
+      const key = (t.def.id || "") + ":" + t.total + ":" + turns.length;
+      if (boundKey !== key) {
+        boundKey = key;
+        bounds = turns.map((f, i) => ({ turn: i + 1, s: ((((f % 1) + 1) % 1)) * t.total }));
+      }
+      return bounds;
+    }
+    // Did the car pass `x` going forwards between `a` and `b`? Wrap-safe.
+    const crossed = (a, b, x) => b >= a ? (x > a && x <= b) : (x > a || x <= b);
+    function closeLapReport() {
+      const rows = segs; segs = [];
+      if (rows.length < 2) return;
+      const worst = rows.reduce((m, r) => r.lost > m.lost ? r : m);
+      lapReport = { total: rows.reduce((n, r) => n + r.lost, 0), worst: { ...worst },
+        segments: rows.slice().sort((a, b) => b.lost - a.lost).map(r => ({ ...r })) };
+      // ONE corner, after the lap, never a live bar: a delta the driver chases
+      // mid-corner competes with looking ahead, which is the skill every coach
+      // teaches first.
+      if (enabled && worst.lost >= MIN_LOSS_S && coachState() !== "off" && !G.paused)
+        G.announce("TURN " + worst.turn + " COST " + worst.lost.toFixed(2) + "S", 3, "coach");
+    }
+    function trackLap(c) {
+      const bs = cornerBounds();
+      if (!bs || !c || !Ghost.timeAt) { prevS = c ? c.s : null; return; }
+      const s = c.s, a = prevS, total = G.track.total;
+      prevS = s;
+      if (a == null || !Number.isFinite(s)) return;
+      // A practice retry, a rescue or an incident takeover moves the car along
+      // the arc without driving it. Forward-of-half-a-lap in one frame is that,
+      // not a lap: measuring across it would invent a segment worth minutes.
+      if ((((s - a) % total) + total) % total > total * 0.5) { lastMark = null; segs = []; return; }
+      for (const b of bs) {
+        if (!crossed(a, s, b.s)) continue;
+        const g = Ghost.timeAt(b.s), now = { turn: b.turn, t: G.raceT, g };
+        if (lastMark && lastMark.g != null && g != null && now.t > lastMark.t) {
+          // The ghost's clock restarts at the line, so a segment spanning it
+          // reads negative until the reference lap is added back.
+          let ref = g - lastMark.g;
+          if (ref < 0) ref += Ghost.bestTime ? Ghost.bestTime() : 0;
+          if (ref > 0) segs.push({ turn: lastMark.turn, lost: (now.t - lastMark.t) - ref });
+        }
+        lastMark = now;
+        // A lap is turn 1 to turn 1, NOT line to line: anchoring on the first
+        // apex is what keeps the segment that spans the start line — usually
+        // the last corner's exit onto the main straight — in the report.
+        if (b.turn === 1) closeLapReport();
+      }
+    }
     // The curated FIA turn number the car is at, or null. def.turns holds apex
     // positions as RACING-LAP fractions in driving order, the same frame
     // sectorAt() reads def.sectors in, and it is read raw exactly as
@@ -93,6 +161,7 @@ const DrivingCoach = (function () {
         forceFront: c.forceFront || 0, forceRear: c.forceRear || 0, lateralAccel: c.lateralAccel || 0,
         longitudinalUse: c.axFrac || 0, brakeUse: brakeUse(c), yawRate: c.yawRateCur || 0, energy: c.energy,
         wetness: G.roadWetness(), practice, enabled, coach: feedback(), insights: insights.summary(),
+        lapReport: lapReport && { ...lapReport, worst: { ...lapReport.worst }, segments: lapReport.segments.map(r => ({ ...r })) },
         ghostSpeedDelta: ghostSpeed == null ? null : c.speed - ghostSpeed };
     }
     function tipFor(c) {
@@ -119,6 +188,9 @@ const DrivingCoach = (function () {
       // A suspended frame is not sustained driving evidence.
       const step = Math.min(dt, 0.1);
       clock += step; elapsed += step; quiet = Math.max(0, quiet - step);
+      // Every frame, not every sample: a boundary crossing is an edge, and at
+      // racing speed a 0.1 s sample step steps over 7 m of road.
+      if (G.state === "race" && G.player) trackLap(G.player); else prevS = null;
       if (elapsed >= 0.1) {
         elapsed %= 0.1;
         insights.update(G.player);
@@ -184,6 +256,7 @@ const DrivingCoach = (function () {
     function reset() {
       checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
       clock = 0; latest = null; log = []; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
+      prevS = null; lastMark = null; segs = []; lapReport = null;
     }
     function downloadTrace() {
       const blob = new Blob([JSON.stringify({ physics: PhysicsConsts.REVISION, configuration: G.records.config(), rows: trace,
@@ -204,6 +277,15 @@ const DrivingCoach = (function () {
       if (coachTip) coachTip.textContent = coaching.latest
         ? (coaching.latest.turn ? "Turn " + coaching.latest.turn + ": " : "") + coaching.latest.text + ". " + coaching.latest.detail
         : "Your next tip will appear here after you drive.";
+      const lapLine = $("pm-lap-report");
+      if (lapLine) lapLine.textContent = !lapReport
+        ? "Drive a lap with a saved best on this circuit to see where the time went."
+        // Two corners, never the whole list: changing many things at once is how
+        // a driver improves nothing.
+        : "Last lap: " + (lapReport.total >= 0 ? lapReport.total.toFixed(2) + "s slower than" : Math.abs(lapReport.total).toFixed(2) + "s faster than")
+          + " your best, measured corner by corner. "
+          + lapReport.segments.slice(0, 2).map(r => "Turn " + r.turn + " " + (r.lost >= 0 ? "+" : "") + r.lost.toFixed(2) + "s").join(", ")
+          + ". Each figure covers the corner and the straight after it, because exit speed is paid for at the apex.";
       if (coachSummary) coachSummary.textContent = coaching.total ? coaching.total + " tip" + (coaching.total === 1 ? "" : "s")
         + " recorded this session. " + coaching.counts.map(r => r.label + ": " + r.count).join(" · ") + "."
         // Where they cluster is the part a count alone cannot tell you: one

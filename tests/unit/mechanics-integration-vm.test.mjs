@@ -213,3 +213,37 @@ test("the recover key restores the practice checkpoint instead of rescuing the c
   assert.equal(g.G.coach.practiceActive(),true);
   assert.match(g.G.coach.insights.journal().at(-1).text,/Free practice — unscored/);
 });
+
+test("the lap report runs on a real circuit's turns and a real recorded ghost",async()=>{
+  const h=await createGame({track:"monza"});
+  try {
+    h.G.daily.stop();h.G.timeTrial=true;h.G.raceWeather="dry";await h.G.startRace();h.apex.go();h.apex.headless(true);
+    const coach=h.G.coach, Ghost=vm.runInContext("Ghost",h.ctx), total=h.G.track.total, turns=h.G.track.def.turns;
+    if(!coach.feedback().enabled)coach.toggle();
+    coach.reset();
+    // A reference lap at a constant 50 m/s around the real arc.
+    const LAP=total/50;
+    Ghost.startLap();
+    for(let i=0;i<=400;i++)Ghost.record(i/400*LAP, i/400*total, 0);
+    Ghost.finishLap(LAP,{});
+    assert.ok(Ghost.hasGhost(),"the reference lap stored");
+    // Walk the player around the same arc at the same pace, losing 1.5 s inside
+    // turn 4's segment alone. Scripted motion, real module, real turn table.
+    const p=h.G.player;
+    let t=0;
+    const lossFrom=turns[3]*total, lossTo=turns[4]*total;
+    for(let i=0;i<=2000;i++){
+      const s=i/2000*total;
+      t=s/50+(s>=lossFrom?Math.min(1.5,(s-lossFrom)/(lossTo-lossFrom)*1.5):0);
+      p.s=s;h.G.raceT=t;coach.update(1/60);
+    }
+    p.s=turns[0]*total+5;h.G.raceT=t+LAP*turns[0];coach.update(1/60);   // back to turn 1: the lap closes
+    const report=coach.status().lapReport;
+    assert.ok(report,"a lap closed on real geometry");
+    assert.equal(report.segments.length,turns.length,"one segment per curated turn");
+    assert.equal(report.worst.turn,4,"the loss was inside turn 4's segment: "+JSON.stringify(report.segments.slice(0,3)));
+    assert.ok(Math.abs(report.worst.lost-1.5)<.3,`turn 4 lost ${report.worst.lost}`);
+    const others=report.segments.filter(r=>r.turn!==4);
+    assert.ok(others.every(r=>Math.abs(r.lost)<.3),"every other segment is on the reference pace: "+JSON.stringify(others));
+  } finally { h.close(); }
+});
