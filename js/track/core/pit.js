@@ -1,0 +1,236 @@
+/* Apex 26 — TrackPit: the PIT COMPLEX as one model every consumer reads.
+   The lane ribbon (TrackMesh.buildPitLane), the painted boxes, the stop row
+   (js/race/pit-lane.js), the wall, the garages (js/track/scenery/pits.js) and
+   the GARAGE screen's frontage (js/garage/scene.js) all derive from THIS —
+   there is no second copy of a width, a pitch or a position anywhere. Pure:
+   reads a built centreline, writes a record; Teams is read at CALL time so the
+   Node VM builds without it. docs/research/PIT-LANE-REDESIGN-2026-09.md. */
+const TrackPit = (function () {
+  "use strict";
+
+  // ── THE BANDS, in metres from the racing-surface EDGE outward ─────────────
+  // Appendix O 2026 §7.9: a Grade 1 pit lane is >= 12 m wide, separated from
+  // the start straight by a pit wall and signalling platform. F1 SR B1.7 / FIM
+  // §9.1: the FAST LANE (<= 3.5 m, by the wall), a >= 1 m CORRIDOR, then the
+  // INNER lane where the work happens. FIM §9.2: 2 m verge, >= 1.5 m platform.
+  //   verge → platform+wall → fast lane → corridor → working lane → garage line
+  const BANDS = { verge: 2.0, platform: 2.0, fast: 3.5, corridor: 1.0, work: 5.5 };
+  // A street circuit (Monaco's 480 m lane at 60 km/h is the worked example):
+  // the same bands at the numbers a temporary lane between walls can hold —
+  // no platform, a bare kerb of verge, 7.6 m in all.
+  const NARROW = { verge: 0.6, platform: 0.0, fast: 3.0, corridor: 0.6, work: 3.4 };
+
+  // ONE BAY = the setup screen's room (js/garage/scene-prims.js reads these at
+  // eval): 10.8 m of frontage — inside the 10-15 m a real team takes (2-3
+  // units of 4-7 m) — 12.8 m deep, 5 m to the ceiling. Neighbouring bays sit
+  // 0.2 m apart so two inward-wound party walls never share a plane.
+  const BAY = { w: 10.8, gap: 0.2, depth: 12.8, h: 5.0, doorW: 5.4, doorH: 4.8 };
+  const PITCH = BAY.w + BAY.gap;          // 11.0 m: the ONE pitch (paint, stop, door)
+  const BOX_LEN = 8;                      // the FIA grid slot, and a real box's frontage
+
+  // Along the arc. The LIMITER window (entry line → exit line) is the old
+  // pitWindow: it walks back from the line to where the last corner lets go
+  // (docs/PHYSICS.md — the surface channel) and closes EXIT_M after it. The
+  // ENTRY ROAD peels off the racing surface before the entry line and the EXIT
+  // ROAD blends back after the exit line; the wall GROWS between the lane and
+  // the track over the last WALL_GROW metres of the entry road, and shrinks
+  // over the first WALL_GROW of the exit road, so the lane is reachable from
+  // the track exactly where it should be and nowhere else.
+  const ENTRY_MAX = 400, ENTRY_MIN = 150, EXIT_M = 130;
+  const PIT_K = 0.0035, STEP = 8;         // "not actively cornering" — see docs/PHYSICS.md
+  const ENTRY_ROAD = 70, EXIT_ROAD = 90, WALL_GROW = 30;
+  const LIMIT_KPH = 80, LIMIT_KPH_STREET = 60;   // F1 SR 2026 B1.7.3(a); Monaco / Melbourne
+  // The row starts past POLE's grid slot (14 m before the line, TrackMesh.gridSlot)
+  // plus the run-up a commitment needs, and ends ROW_END short of the exit line.
+  const GRID_POLE_M = 14, GRID_CLEAR = 40, ROW_END = 30;
+
+  const wrap = (v, L) => ((v % L) + L) % L;
+  const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
+  /** Resolve a def's pit choices: side, mode, limit and the band set. */
+  function resolve(def) {
+    const p = (def && def.pit) || {};
+    const street = !!(def && def.street);
+    const mode = p.mode === "narrow" || p.mode === "full" ? p.mode : (street ? "narrow" : "full");
+    const b = Object.assign({}, mode === "narrow" ? NARROW : BANDS, p.bands || {});
+    const off = {
+      fastIn: b.verge + b.platform,
+      fastOut: b.verge + b.platform + b.fast,
+      corrOut: b.verge + b.platform + b.fast + b.corridor,
+      workOut: b.verge + b.platform + b.fast + b.corridor + b.work,   // the garage line
+    };
+    off.outer = off.workOut;
+    return {
+      side: p.side === -1 ? -1 : 1,
+      mode,
+      limitKph: Number.isFinite(p.limitKph) ? p.limitKph : (street ? LIMIT_KPH_STREET : LIMIT_KPH),
+      bands: b, off,
+      // A STREET circuit has no room beside the road — its walls stand at the
+      // edge (Monaco, Baku, Vegas, Singapore, Jeddah) — so its lane is PAINTED
+      // on the racing surface by the lit shaders (PitLane.laneUniform), the
+      // way Monaco's real lane is a strip between the barriers. No ribbon, no
+      // wall, no garages, and nothing kept out of a complex that is not there.
+      painted: mode === "narrow",
+      hasWall: mode === "full" && b.platform > 0,
+      hasBays: mode === "full" && p.bays !== false,
+    };
+  }
+
+  /** The limiter window: how far before the line it opens, how far after it
+   *  closes. `curvature(track, s)` is injected so this file owns no spline. */
+  function window(track, curvature) {
+    const L = track.total;
+    if (!(L > 0)) return { entryM: ENTRY_MAX, exitM: EXIT_M };
+    let d = 0;
+    if (typeof curvature === "function") {
+      for (; d < ENTRY_MAX; d += STEP) {
+        if (Math.abs(curvature(track, wrap(-(d + STEP / 2), L))) > PIT_K) break;
+      }
+    } else d = ENTRY_MAX;
+    const cap = L / 3;
+    const entryM = Math.min(Math.max(d, ENTRY_MIN), ENTRY_MAX, cap * 0.7);
+    return { entryM, exitM: Math.min(EXIT_M, cap * 0.3) };
+  }
+
+  /** The garage row: one bay per team in Teams.LIST order (the order a real
+   *  lane is allocated in), plus the MY TEAM bay at the end. Without Teams (a
+   *  bare VM) the row is twelve unnamed bays, so geometry never depends on it. */
+  function row() {
+    const out = [];
+    const T = typeof Teams !== "undefined" ? Teams : null;
+    const list = T && Array.isArray(T.LIST) ? T.LIST : [];
+    for (const t of list) out.push({ team: t.id, name: t.name || t.id, col: t.color || [0.6, 0.6, 0.65], col2: t.color2 || [0.9, 0.9, 0.9] });
+    const custom = T && T.DEFAULT_CUSTOM;
+    out.push({ team: custom ? custom.id : "custom", name: custom ? custom.name : "MY TEAM",
+               col: (custom && custom.color) || [0.55, 0.55, 0.6], col2: (custom && custom.color2) || [0.9, 0.9, 0.9] });
+    while (out.length < 12) out.push({ team: "row" + out.length, name: "ROW " + out.length, col: [0.6, 0.6, 0.65], col2: [0.9, 0.9, 0.9] });
+    return out;
+  }
+
+  /** Build the model for a built centreline. Called ONCE by Tracks.build,
+   *  before the terrain profile and the scenery, both of which read it. */
+  function build(track, def, curvature) {
+    const n = track.n, L = track.total;
+    if (!(n > 0) || !(L > 0)) return null;
+    const r = resolve(def);
+    const win = window(track, curvature);
+    const ds = L / n;
+    const sIn = wrap(-win.entryM, L), sOut = wrap(win.exitM, L);
+    const lenM = win.entryM + win.exitM;
+    // The entry road may not open inside a corner either: walk it back only
+    // while the road is still straight enough, never shorter than 30 m.
+    let entryRoadM = 30;
+    if (typeof curvature === "function") {
+      for (; entryRoadM < ENTRY_ROAD; entryRoadM += STEP) {
+        if (Math.abs(curvature(track, wrap(sIn - entryRoadM - STEP / 2, L))) > PIT_K) break;
+      }
+    } else entryRoadM = ENTRY_ROAD;
+    entryRoadM = Math.min(entryRoadM, ENTRY_ROAD, Math.max(30, (L / 3 - lenM) * 0.4));
+    const exitRoadM = Math.min(EXIT_ROAD, Math.max(30, (L / 3 - lenM) * 0.4));
+    const sA = wrap(sIn - entryRoadM, L), sB = wrap(sOut + exitRoadM, L);
+    const grow = Math.min(WALL_GROW, entryRoadM * 0.5, exitRoadM * 0.5);
+
+    const w = new Float32Array(n), v = new Float32Array(n), keep = new Float32Array(n);
+    const rows = row();
+    // Through-window metres: 0 at the entry line, lenM at the exit line.
+    const through = (s) => wrap(s - sIn, L);
+    // THE ROW. Anchored just past pole's slot so a lap-1 stop is reachable by
+    // every team, clamped so the last box is short of the exit line; a short
+    // window compresses the pitch rather than spilling the row off the tarmac.
+    const count = rows.length;
+    const lo = grow + 20, hi = Math.max(lo, lenM - ROW_END);
+    let pitch = PITCH;
+    if ((count - 1) * pitch > hi - lo) pitch = Math.max(BOX_LEN + 1, (hi - lo) / (count - 1));
+    const span = (count - 1) * pitch;
+    const poleT = through(wrap(-GRID_POLE_M, L));
+    const first = Math.min(Math.max(poleT + GRID_CLEAR, lo), Math.max(lo, hi - span));
+    const boxes = rows.map((row_, i) => {
+      const t = first + i * pitch;
+      return Object.assign({}, row_, { through: t, s: wrap(sIn + t, L), k: Math.round(wrap(sIn + t, L) / ds) % n });
+    });
+    const rowS0 = wrap(sIn + first - pitch / 2, L), rowS1 = wrap(sIn + first + span + pitch / 2, L);
+    const inArc = (s, a, b) => (a <= b ? (s >= a && s <= b) : (s >= a || s <= b));
+    for (let k = 0; k < n; k++) {
+      if (r.painted) break;                          // a painted lane has no ribbon and keeps nothing out
+      const s = k * ds;
+      let wk = 0, vk = 0;
+      if (inArc(s, sA, sIn)) {                       // the entry road
+        const d = wrap(s - sA, L);
+        wk = smooth(d / Math.max(1, entryRoadM - grow));
+        vk = smooth((d - (entryRoadM - grow)) / grow);
+      } else if (inArc(s, sIn, sOut)) {              // the lane proper
+        wk = 1; vk = 1;
+      } else if (inArc(s, sOut, sB)) {               // the exit road
+        const d = wrap(s - sOut, L);
+        vk = 1 - smooth(d / grow);
+        wk = 1 - smooth((d - grow) / Math.max(1, exitRoadM - grow));
+      }
+      w[k] = wk; v[k] = vk;
+      if (wk > 0) {
+        keep[k] = r.off.outer * wk + 1.0;
+        if (r.hasBays && inArc(s, rowS0, rowS1)) keep[k] += BAY.depth + 3.0;
+      }
+    }
+    return {
+      side: r.side, mode: r.mode, limitKph: r.limitKph, bands: r.bands, off: r.off,
+      painted: r.painted, hasWall: r.hasWall, hasBays: r.hasBays,
+      sA, sIn, sOut, sB, entryM: win.entryM, exitM: win.exitM, lenM, entryRoadM, exitRoadM, grow,
+      w, v, keep,
+      row: { pitch, boxLen: BOX_LEN, first, count, boxes, s0: rowS0, s1: rowS1 },
+      bay: BAY,
+    };
+  }
+
+  /** The lane at one arc position, in the car's own lateral frame (signed,
+   *  +x right): null outside the complex. `inner` is the lane's track-side
+   *  edge (the wall line once the wall has grown, the road edge on the entry
+   *  road), `outer` the garage line, `centre` the fast lane's middle and
+   *  `workCentre` the working lane's — where a box is and where a stop sits. */
+  function at(track, s) {
+    const p = track && track.pit;
+    if (!p) return null;
+    const n = track.n, L = track.total;
+    const k = ((Math.round((s / L) * n) % n) + n) % n;
+    const wk = p.w[k];
+    if (!(wk > 0.01)) return null;
+    const vk = p.v[k], sd = p.side, h = track.hw[k], o = p.off;
+    const fastIn = h + o.fastIn * vk;
+    const fastOut = h + o.fastOut * wk;
+    const corrOut = h + o.corrOut * wk;
+    const workOut = h + o.workOut * wk;
+    return {
+      side: sd, w: wk, v: vk,
+      inner: sd * fastIn, outer: sd * workOut,
+      centre: sd * (fastIn + Math.max(fastIn, fastOut)) / 2,
+      fastOut: sd * fastOut, workIn: sd * corrOut,
+      workCentre: sd * (corrOut + workOut) / 2,
+      width: Math.max(0, workOut - fastIn),
+    };
+  }
+
+  /** Push the driving boundary out to the complex's far edge across the
+   *  window, so the barrier clamp (Tracks.wallAt) lets a car onto the lane. */
+  function openBoundary(track) {
+    const p = track && track.pit;
+    if (!p || !track.barL || !track.barR) return;
+    const bar = p.side > 0 ? track.barR : track.barL;
+    for (let k = 0; k < track.n; k++) {
+      if (!(p.keep[k] > 0)) continue;
+      const lim = track.hw[k] + p.off.outer * p.w[k] + 1.5;
+      if (bar[k] < lim) bar[k] = lim;
+    }
+  }
+
+  /** The row index of a team id (teammates share a box); -1 when unknown. */
+  function rowOf(pit, teamId) {
+    if (!pit || !teamId) return -1;
+    const boxes = pit.row.boxes;
+    for (let i = 0; i < boxes.length; i++) if (boxes[i].team === teamId) return i;
+    return -1;
+  }
+
+  return { BANDS, NARROW, BAY, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, WALL_GROW,
+           ENTRY_MAX, ENTRY_MIN, EXIT_M, PIT_K, LIMIT_KPH, LIMIT_KPH_STREET, GRID_POLE_M, GRID_CLEAR,
+           resolve, window, row, build, at, openBoundary, rowOf };
+})();
+Object.freeze(TrackPit);

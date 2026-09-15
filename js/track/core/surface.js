@@ -77,10 +77,25 @@ const TrackSurface = (function () {
 
     const p = {
       outerW, rails, street, flat, pyMin, floorY, ground,
-      heightAt(k, lateralDistance) {
+      heightAt(k, lateralDistance, side) {
         const i = ((Math.round(k) % n) + n) % n;
         const dist = Math.max(0, Math.abs(Number(lateralDistance) || 0));
         const base = ground[i];
+        // FLAT UNDER THE PIT COMPLEX. The lane, the apron and the garages sit
+        // on the road plane, so on the pit side the ground holds level out to
+        // the complex's edge and eases down to the normal profile over 8 m
+        // beyond it — otherwise the apron floats over a slope that has fallen
+        // half a metre by the garage line. `side` is the caller's lateral sign;
+        // a call without one is the symmetric cross-section it always was.
+        const pit = track && track.pit;
+        if (pit && side === pit.side && pit.keep[i] > 0) {
+          const edge = pit.keep[i];
+          if (dist <= edge) return base - 0.03;
+          if (dist < edge + 8) {
+            const t = (dist - edge) / 8, e = t * t * (3 - 2 * t);
+            return lerp(base - 0.03, p.heightAt(k, dist, 0), e);
+          }
+        }
         if (dist >= outerW) return floorY;
         if (flat || street) {
           const shelf = base - 0.12 - dist * 0.004;

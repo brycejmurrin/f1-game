@@ -159,188 +159,44 @@ const Tracks = (function () {
     return track;
   }
 
-  // Where the pit lane lives, in metres before/after the start/finish line, and
-  // how much road it needs. OWNED HERE rather than in js/race/pit-lane.js
-  // because it is now ROAD GEOMETRY: tracks.js loads first, so PitLane reads
-  // these back through Tracks.pitWindow() instead of keeping a second copy that
-  // could drift from the tarmac it describes.
-  const PIT_ENTRY_MAX = 400, PIT_ENTRY_MIN = 150, PIT_EXIT_M = 130;
-  const PIT_K = 0.0035;      // "not actively cornering" — see docs/PHYSICS.md
-  const PIT_STEP = 8;
-  const PIT_LANE_W = 3.2;    // must match PitLane.LANE_W
-  const PIT_TAPER = 40;      // metres of ramp at each end of the widening
+  // THE PIT COMPLEX IS ONE MODEL — js/track/core/pit.js (TrackPit), built once
+  // per track in build() before the terrain profile and the scenery, both of
+  // which read it. The window, the lane, the wall, the row of boxes and the
+  // garages are all derived from that record; nothing below keeps a second
+  // copy of a width or a position (docs/research/PIT-LANE-REDESIGN-2026-09.md).
 
-  /** The pit window for a built centreline: how far before the line it opens,
-   *  how far after it closes. Pure, static, once per circuit. */
+  /** The limiter window: how far before the line it opens, how far after it
+   *  closes. Off the model once built; the same arithmetic before. */
   function pitWindow(track) {
-    const L = track.total;
-    if (!(L > 0)) return { entryM: PIT_ENTRY_MAX, exitM: PIT_EXIT_M };
-    let d = 0;
-    for (; d < PIT_ENTRY_MAX; d += PIT_STEP) {
-      const s = ((-(d + PIT_STEP / 2)) % L + L) % L;
-      if (Math.abs(curvature(track, s)) > PIT_K) break;
-    }
-    const cap = L / 3;
-    const entryM = Math.min(Math.max(d, PIT_ENTRY_MIN), PIT_ENTRY_MAX, cap * 0.7);
-    return { entryM, exitM: Math.min(PIT_EXIT_M, cap * 0.3) };
+    if (track && track.pit) return { entryM: track.pit.entryM, exitM: track.pit.exitM };
+    return TrackPit.window(track, curvature);
   }
 
-  // STILL NO WIDENING, and the reason is worth keeping: widening `hw` by the
-  // lane's width pushed the ROAD through the scenery on a dozen circuits — prop
-  // interpenetration grew on anderstorp, brands_hatch, catalunya, dijon, fuji,
-  // hungaroring, imola, jacarepagua, miami and more, and coplanar faces grew on
-  // fuji, hungaroring and silverstone. `npm run test:sweeps` is the gate that
-  // caught it, and it is the one a geometry change has to clear.
-  //
-  // The lane below is the OTHER shape of the same want, and it is not that
-  // change. `hw` never moves: the racing line, the road mesh, the kerbs, the
-  // banking and every sampler still see exactly the road they saw before. The
-  // lane is a SECOND ribbon beside it, built only where the circuit measurably
-  // has the room, and absent — with the painted-on-road lane carrying on as
-  // before — where it does not.
-  //
-  // WHAT THE MEASUREMENT ACTUALLY SAID. js/race/pit-lane.js's header found
-  // "2.4 m at Monza" and read it as no lane anywhere. That is the MINIMUM over
-  // the window, and at Monza it is 9 nodes out of 132: the other 123 carry 5-9 m.
-  // A lane fitted per node, tapered, and refused outright on a circuit that
-  // cannot hold a continuous one is a different question from a lane fitted to
-  // the worst node on the lap. Monaco, Baku, Vegas and Singapore genuinely have
-  // no room — their walls sit AT or inside the road edge for the whole window —
-  // and those circuits get no ribbon.
+  // THE ROAD NEVER MOVES. The complex is a second ribbon beside the racing
+  // surface — `hw`, the racing line, the kerbs and every sampler see exactly
+  // the road they saw before — and the SCENERY yields to it: onRoadHit /
+  // onTrack in buildProps treat the complex's footprint as road on the pit
+  // side, and the driving boundary is opened across it afterwards
+  // (TrackPit.openBoundary). The widening of `hw` that pushed the road through
+  // the scenery on a dozen circuits, and the fit-to-whatever-room-is-left that
+  // gave a 3.2 m strip, are both gone.
 
-  // The lane's own numbers. PIT_LANE_GAP is the sliver of verge between the road
-  // edge and the lane's inner edge: it is what the wall stripe is painted on, and
-  // it is deliberately thin because every centimetre here is one the lane does
-  // not get on the circuits that are tight.
-  const PIT_SIDE = 1;         // must match PitLane.PIT_SIDE — right of the centreline
-  // The verge between the racing surface and the lane. It is what makes the
-  // ribbon read as a SEPARATE ROAD rather than a coloured shoulder, so it takes
-  // as much of the spare room as the circuit can give: at 0.3 m the lane looked
-  // like trim on the edge of the track, at 2.5 m it is plainly its own thing.
-  const PIT_LANE_GAP_MIN = 0.3, PIT_LANE_GAP_MAX = 2.5;
-  const PIT_LANE_MIN = 2.4;   // must match PitLane.LANE_MIN — narrower is not a lane
-  const PIT_LANE_RUN_MIN = 150;   // metres — shorter than this is a lay-by, not a lane
+  /** WHERE the lane is at one arc position, in the same lateral frame the
+   *  car's own `x` lives in — { side, inner, outer, centre, workCentre, … },
+   *  signed, or null outside the complex. Everything that has to agree about
+   *  the lane reads THIS: the physics exemption, PitLane's box and the AI's
+   *  lane line. The mesh is built from the same profile. */
+  function pitLaneAt(track, s) { return TrackPit.at(track, s); }
 
-  /** Fit a separate pit ribbon to a built centreline, or refuse.
-   *
-   *  Returns null — meaning "this circuit keeps the painted on-road lane" — or
-   *  { side, sIn, lenM, gap, w } where `w` is a per-node width, zero outside the
-   *  window and tapered to zero at both ends so the ribbon closes instead of
-   *  ending in a step.
-   *
-   *  PURE and READ-ONLY: it reads hw and the driving boundary and writes
-   *  nothing. Every geometry consumer downstream takes the returned record, so
-   *  there is no second copy of the fit to drift. */
-  function pitLaneFit(track, side) {
-    const n = track.n, L = track.total;
-    if (!(L > 0) || !(n > 0) || !track.barL || !track.barR) return null;
-    const win = pitWindow(track);
-    const winM = win.entryM + win.exitM;
-    const sIn0 = ((-win.entryM % L) + L) % L;
-    const ds = L / n;
-    const bar = side > 0 ? track.barR : track.barL;
-    const need = PIT_LANE_GAP_MIN + PIT_LANE_MIN;
-    // The window's nodes in order, each marked with the room it has.
-    const ks = [], room = [];
-    for (let i = 0; i * ds <= winM; i++) {
-      const k = ((Math.round((sIn0 + i * ds) / ds) % n) + n) % n;
-      ks.push(k); room.push(bar[k] - track.hw[k]);
-    }
-    if (ks.length < 2) return null;
-    // THE LONGEST CONTINUOUS RUN THAT HAS ROOM, not the whole window or nothing.
-    // Refusing on the worst node in the window threw away four circuits that are
-    // pinched only at ONE END of it — Monza's last 34 m of 530, jerez's last 54
-    // of 354, mexico's first 32 of 314 — while their other 90-odd per cent
-    // carried 5-9 m. A shorter ribbon is still a ribbon; a pinched one is not.
-    // A pinch in the MIDDLE (magny_cours, abudhabi) still costs the circuit its
-    // lane, because splitting the ribbon in two is not a road.
-    let bi = 0, bn = 0, i = 0;
-    while (i < ks.length) {
-      if (!(room[i] >= need)) { i++; continue; }
-      let j = i;
-      while (j < ks.length && room[j] >= need) j++;
-      if (j - i > bn) { bn = j - i; bi = i; }
-      i = j;
-    }
-    // A lane has to be long enough to enter, slow down in and stop in. Below
-    // this it is a lay-by, and the painted lane serves the circuit better.
-    const lenM = (bn - 1) * ds;
-    if (!(lenM >= PIT_LANE_RUN_MIN)) return null;
-    // ONE ROOM FIGURE FOR THE WHOLE LANE — the tightest node in the run. Fitting
-    // per node instead gave a lane that widened and narrowed along its length,
-    // which snakes: a road runs parallel to the road it is beside, and a driver
-    // at the limiter cannot see a wall creeping inward. The worst node in the
-    // run is also the only one that can hurt anybody.
-    let fit = Infinity;
-    for (let m = bi; m < bi + bn; m++) if (room[m] < fit) fit = room[m];
-    const gap = Math.min(PIT_LANE_GAP_MAX, Math.max(PIT_LANE_GAP_MIN, fit - PIT_LANE_W));
-    const laneW = Math.min(PIT_LANE_W, Math.max(PIT_LANE_MIN, fit - gap));
-    const sIn = ((sIn0 + bi * ds) % L + L) % L;
-    const w = new Float32Array(n);
-    for (let m = 0; m < bn; m++) {
-      // Taper both ends to zero. A step in the ribbon is a step the car can hit
-      // side-on; the ramp is the same PIT_TAPER the reverted widening used.
-      const d = m * ds;
-      const ramp = Math.min(1, Math.min(d, lenM - d) / PIT_TAPER);
-      w[ks[bi + m]] = laneW * Math.max(0, ramp);
-    }
-    return { side, sIn, lenM, gap, laneW, w };
-  }
-
-  /** Opt-in local barrier setback in the pit window. Streets do not use this. */
-  function applyPitCorridor(track) {
-    const c = track.def && track.def.pitCorridor;
-    if (!c || !(c.setback > 0) || !track.barL || !track.barR) return;
-    const side = c.side === -1 ? -1 : 1;
-    const bar = side > 0 ? track.barR : track.barL;
-    const win = pitWindow(track);
-    const L = track.total, n = track.n, ds = L / n;
-    const sIn = ((-win.entryM % L) + L) % L;
-    const winM = win.entryM + win.exitM;
-    for (let i = 0; i * ds <= winM; i++) {
-      const k = ((Math.round((sIn + i * ds) / ds) % n) + n) % n;
-      const d = i * ds;
-      const ramp = Math.min(1, Math.min(d, winM - d) / PIT_TAPER);
-      bar[k] += c.setback * Math.max(0, ramp);
-    }
-  }
-
-  /** WHERE the separate lane is at one arc position, in the same lateral frame
-   *  the car's own `x` lives in: { side, inner, outer, centre, w }, signed, or
-   *  null where there is no ribbon.
-   *
-   *  Everything that has to agree about the lane reads THIS — the physics
-   *  exemption, PitLane's commitment test and its box — so a lane a driver can
-   *  see and a lane a driver can be in cannot drift apart. The mesh is built
-   *  from the same `w`. */
-  function pitLaneAt(track, s) {
-    const lane = track && track.pitLane;
-    if (!lane) return null;
-    const n = track.n, L = track.total;
-    const k = ((Math.round((s / L) * n) % n) + n) % n;
-    const w = lane.w[k];
-    if (!(w > 0.01)) return null;
-    const side = lane.side;
-    const r = lane.laneW > 0.01 ? Math.min(1, w / lane.laneW) : 1;
-    const inner = side * (track.hw[k] + lane.gap * r);
-    const outer = side * (track.hw[k] + lane.gap * r + w);
-    return { side, w, inner, outer, centre: (inner + outer) / 2 };
-  }
-
-  /** The ribbon's EXTENT: { sIn, lenM, side } or null. Where pitLaneAt answers
-   *  "is there lane here", this answers "how much lane is there at all" — which
-   *  is what a row of boxes has to be laid out inside. They are different
-   *  questions and the box row got them confused: it was laid out against the
-   *  pit WINDOW, and once the ribbon could be shorter than the window the last
-   *  teams' boxes sat past the end of the tarmac, on grass. */
+  /** The lane's EXTENT between the entry line and the exit line, or null. */
   function pitLaneSpan(track) {
-    const lane = track && track.pitLane;
-    return lane ? { sIn: lane.sIn, lenM: lane.lenM, side: lane.side } : null;
+    const p = track && track.pit;
+    return p ? { sIn: p.sIn, lenM: p.lenM, side: p.side } : null;
   }
 
-  /** Is this car's lateral position inside the separate ribbon? A TOLERANCE of
-   *  half a car is allowed at the inner edge, because the alternative is a car
-   *  whose inside wheels are over the stripe reading as beached on the grass. */
+  /** Is this car's lateral position inside the lane? A TOLERANCE of half a
+   *  car is allowed at the inner edge, because the alternative is a car whose
+   *  inside wheels are over the line reading as beached on the grass. */
   function inPitLane(track, s, x) {
     const l = pitLaneAt(track, s);
     if (!l) return false;
@@ -352,6 +208,9 @@ const Tracks = (function () {
   function build(def, opts) {
     Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
     const track = buildCenterline(def);
+    // The pit complex FIRST: the terrain profile flattens under it and the
+    // scenery keeps out of it, so both need the model before they run.
+    track.pit = TrackPit.build(track, def, curvature);
     track.surface = TrackSurface.profile(def, track);
     track._night = opts && opts.night != null ? !!opts.night : !!def.night;
     // Façade wiring: the active renderer backend flows in through opts.gfx
@@ -397,11 +256,9 @@ const Tracks = (function () {
       const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
       track.terrainGeo = terrainSafe; buildRibbon(terrainSafe, "terrain"); // raw geometry kept for groundY/debug
       const _props = buildProps(track);
-      // AFTER buildProps, and it has to be: the driving boundary this fit reads
-      // is not tightened until the scenery has been placed, and the whole
-      // question is how much room the scenery left.
-      applyPitCorridor(track);
-      track.pitLane = pitLaneFit(track, PIT_SIDE);
+      // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so
+      // opening the driving boundary across it puts nothing in a car's path.
+      TrackPit.openBoundary(track);
       const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
@@ -618,14 +475,19 @@ const Tracks = (function () {
     // chase camera or wall off the track. Sub-grade slabs (water, the universal
     // ground floor) sit below road level and are exempt via the topY check.
     let _culled = 0;
-    const _suppressed = Object.create(null);
+    const _suppressed = Object.create(null), _superseded = Object.create(null);
     const noteSuppressed = (kind, msg) => {
-      _suppressed[kind] = (_suppressed[kind] || 0) + 1;
+      // A drop the PIT COMPLEX caused is not the guard margin's: the prop stood
+      // where the engine now builds the lane, the wall or the garages. It goes
+      // on its own counter so the guard suites keep measuring the guard.
+      const bag = _pitReject ? _superseded : _suppressed;
+      bag[kind] = (bag[kind] || 0) + 1;
       if (Log.enabled("scenery", Log.DEBUG)) Log.debug("scenery", msg);
     };
     const diagnostics = track.modelDiagnostics = {
       emitted: [], suppressed: [], invalid: [], unsafe: [],
       suppressedCounts: _suppressed,   // per-kind guard drops (tests/unit/scenery-guards)
+      supersededByPit: _superseded,    // per-kind drops the pit complex caused (js/track/core/pit.js)
     };
 
     // Everything buildProps places goes straight into vertex buffers and is then
@@ -766,14 +628,50 @@ const Tracks = (function () {
     };
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
     const _hitCand = new Array(n), _trkCand = new Array(n);   // reusable query scratch
+    // THE PIT COMPLEX IS ROAD to the guards: on the pit side, across the
+    // window, a node's half-width grows by the complex's footprint, so no prop
+    // — a tree, a hull, a kit building — can be placed on the lane, the wall,
+    // the apron or the garages. The complex's own furniture (SceneryPits) uses
+    // the RAW emitters and never asks.
+    const pitKeep = track.pit ? track.pit.keep : null, pitSide = track.pit ? track.pit.side : 0;
+    const pitV = track.pit ? track.pit.v : null, pitVerge = track.pit ? track.pit.bands.verge : 0;
+    const pitMax = (() => { let m = 0; if (pitKeep) for (let k = 0; k < n; k++) if (pitKeep[k] > m) m = pitKeep[k]; return m; })();
+    // The complex's footprint at node k as a lateral RANGE on the pit side,
+    // [beyond the verge, its far edge]: the verge itself stays placeable, so a
+    // gantry leg or a marshal post can still stand between the track and the
+    // wall exactly as it does on a real pit straight.
+    const pitFastIn = track.pit ? track.pit.off.fastIn : 0;
+    const inPitFootprint = (k, lat, halfLat) => {
+      if (!pitKeep || !(pitKeep[k] > 0)) return false;
+      // The verge AND the platform stay placeable (a gantry leg, a post, a
+      // marshal stand on a real pit straight); the lane tarmac onward is the
+      // complex's alone.
+      const a0 = hw[k] + Math.max(pitVerge, pitFastIn * pitV[k]) + 0.3, a1 = hw[k] + pitKeep[k];
+      const c = lat * pitSide;
+      return c + halfLat > a0 && c - halfLat < a1;
+    };
+    // Set by onRoadHit when the hit was the PIT COMPLEX rather than the road,
+    // so a rejected model can be recorded as superseded rather than as a
+    // failure: a circuit's hand-placed pit block, tower or bay now stands
+    // where the engine builds the complex, and dropping it is the intent.
+    let _pitReject = false;
     const onRoadHit = (cx, cz, topY, rad, arx, arz, afx, afz, hx, hz) => {
-      const mh = grid.maxHw;
+      const mh = grid.maxHw + pitMax;
       const R = (rad > 0 ? rad + mh : __M.hypot(hx + mh, hz + mh)) + 2;
       const _cn = grid.query(cx, cz, R, _hitCand, false);
       for (let _ci = 0; _ci < _cn; _ci++) {
         const k = _hitCand[_ci];
         if (topY < py[k] - 0.3) continue;                 // sits below road here
         const w = hw[k];
+        if (pitKeep && pitKeep[k] > 0) {
+          // The pit complex: the footprint's lateral reach at this node against
+          // the complex's range, provided the node lies along the footprint.
+          const lat = (cx - px[k]) * track.rx[k] + (cz - pz[k]) * track.rz[k];
+          const along = (cx - px[k]) * track.tx[k] + (cz - pz[k]) * track.tz[k];
+          const halfLat = rad > 0 ? rad : __M.abs(arx * track.rx[k] + arz * track.rz[k]) * hx + __M.abs(afx * track.rx[k] + afz * track.rz[k]) * hz;
+          const halfAlong = rad > 0 ? rad : __M.abs(arx * track.tx[k] + arz * track.tz[k]) * hx + __M.abs(afx * track.tx[k] + afz * track.tz[k]) * hz;
+          if (__M.abs(along) <= halfAlong + ds && inPitFootprint(k, lat, halfLat)) { _pitReject = true; return true; }
+        }
         const dxc = px[k] - cx, dzc = pz[k] - cz;
         // Reach to the farthest footprint point: an oriented box can extend to its
         // half-DIAGONAL, not just max(hx,hz), so the prefilter must use the diagonal
@@ -797,11 +695,13 @@ const Tracks = (function () {
       return false;
     };
     const rejBox = (c, sz, basis) => {
+      _pitReject = false;
       const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
       const topY = c[1] + __M.abs(sz[0] / 2 * r[1]) + __M.abs(sz[1] / 2 * u[1]) + __M.abs(sz[2] / 2 * f[1]);
       return onRoadHit(c[0], c[2], topY, 0, r[0], r[2], f[0], f[2], sz[0] / 2, sz[2] / 2);
     };
     const rejRad = (c, rad, h, basis) => {
+      _pitReject = false;
       const u = basis ? basis[1] : [0, 1, 0];
       const topY = c[1] + __M.max(0, h * u[1]) + rad;     // generous top estimate
       return onRoadHit(c[0], c[2], topY, rad, 0, 0, 0, 0, 0, 0);
@@ -939,8 +839,8 @@ const Tracks = (function () {
     let pyMin = Infinity;
     for (let i = 0; i < n; i++) if (py[i] < pyMin) pyMin = py[i];
     const surface = track.surface || TrackSurface.profile(track.def, track);
-    const groundYAt = (k, dist) => {
-      return surface.heightAt(k, dist);
+    const groundYAt = (k, dist, side) => {
+      return surface.heightAt(k, dist, side);
     };
     // Universal ground floor: one big flat slab at the lap's low point, sized to
     // reach well past the farthest scenery. The terrain ribbon only extends ~120 m
@@ -960,7 +860,8 @@ const Tracks = (function () {
              [gc[0] * 0.9, gc[1] * 0.9, gc[2] * 0.9]);
     }
     const onTrack = (x, z, margin) => {
-      const R = grid.maxHw + margin + ds + 1;
+      _pitReject = false;
+      const R = grid.maxHw + pitMax + margin + ds + 1;
       const _cn = grid.query(x, z, R, _trkCand, false);
       for (let _ci = 0; _ci < _cn; _ci++) {
         const i = _trkCand[_ci];
@@ -973,6 +874,13 @@ const Tracks = (function () {
         const lat = Math.hypot(x - cx, z - cz);
         const hwt = hw[i] + (hw[j] - hw[i]) * t;
         if (lat < hwt + margin) return true;
+        if (pitKeep && pitKeep[i] > 0) {
+          // The POINT against the complex — not the point plus the road
+          // margin, which is a clearance from the racing surface and would
+          // push a gantry leg or a post off the verge it belongs on.
+          const sl = (x - px[i]) * track.rx[i] + (z - pz[i]) * track.rz[i];   // signed lateral
+          if (inPitFootprint(i, sl, 0)) { _pitReject = true; return true; }
+        }
       }
       return false;
     };
@@ -988,7 +896,9 @@ const Tracks = (function () {
     };
     const models = TrackModels.create({
       out, water: waterBuf, diagnostics, n,
-      preflight: (bounds) => !rejBox(bounds.center, bounds.size, bounds.basis),
+      // true = clear; false = on the road; "pit" = inside the pit complex, which
+      // modelGroup records as superseded rather than as a required failure.
+      preflight: (bounds) => (!rejBox(bounds.center, bounds.size, bounds.basis) ? true : (_pitReject ? "pit" : false)),
       emitBox: (buf, c, size, col, basis) => RAW.addBox(buf, c, size, col, basis),
       frameAt,
       supportClear: (frame, spec) => {
@@ -1003,7 +913,10 @@ const Tracks = (function () {
             frame.c[1] + frame.r[1] * o + frame.u[1] * height / 2,
             frame.c[2] + frame.r[2] * o + frame.u[2] * height / 2,
           ];
-          if (rejBox(c, [width, height, spec.depth || 1.4], [frame.r, frame.u, frame.t])) return false;
+          // A leg on the pit complex is tolerated: a gantry or a bridge over
+          // the pit straight has to stand somewhere, and a pier on the apron
+          // is what a real one does.
+          if (rejBox(c, [width, height, spec.depth || 1.4], [frame.r, frame.u, frame.t]) && !_pitReject) return false;
         }
         return true;
       },
@@ -1043,6 +956,9 @@ const Tracks = (function () {
         circuitKit = CircuitKit.create({
           models, landmarks: landmarkKit, theme: sceneryTheme,
           frameAt, groundHeight: groundYAt, hash,
+          // The engine builds the garages from track.pit now; a circuit's
+          // kit.pitBuilding() call is honoured as a no-op so nothing lands twice.
+          pitBuilt: !!(track.pit && track.pit.hasBays),
         });
       }
     } catch (_) {
@@ -2246,6 +2162,8 @@ const Tracks = (function () {
     {
       const sk = Object.keys(_suppressed);
       if (sk.length) Log.warn("scenery", def.id + ": suppressed " + sk.map((k) => k + "=" + _suppressed[k]).join(" "));
+      const pk = Object.keys(_superseded);
+      if (pk.length) Log.info("scenery", def.id + ": superseded by the pit complex " + pk.map((k) => k + "=" + _superseded[k]).join(" "));
       if (_culled) Log.info("track", `${def.id}: culled ${_culled} on-track primitive(s)`);
     }
     flushAsm();          // the last anonymous run has no successor to close it
@@ -2261,6 +2179,13 @@ const Tracks = (function () {
       delete rec._m;
     }
     Log.info("track", "buildProps done " + def.id + " verts=" + (out.pos.length / 3));
+    // THE PIT COMPLEX, last — after the bespoke scenery and the generic
+    // dressing have been kept out of it. Platform, wall, boards, lights and
+    // the row of garages, every position off track.pit (js/track/scenery/pits.js).
+    if (typeof SceneryPits !== "undefined" && track.pit) {
+      const pits = SceneryPits.build({ track, out, rawBox: RAW.addBox, upOf, bankOffsetAt });
+      Log.info("track", `pits ${track.def.id}: ${pits.bays} bays, wall ${pits.wall}`);
+    }
     return { out, glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
   }
 
@@ -2492,7 +2417,7 @@ const Tracks = (function () {
       sceneryTheme: d.sceneryTheme,
       sceneryThemeOverrides: d.sceneryThemeOverrides || null,
       ownPitStraight: !!d.ownPitStraight,
-      pitCorridor: d.pitCorridor || null,
+      pit: d.pit || null,          // the pit complex's authored choices (TrackPit.resolve): side, mode, limitKph, bands, bays
       undulate: d.undulate,
       // bespoke per-circuit scenery (js/circuits/<id>.js); run by buildProps
       scenery: d.scenery || null,

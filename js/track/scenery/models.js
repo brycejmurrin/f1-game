@@ -211,8 +211,14 @@ const TrackModels = (function () {
         diagnostics.invalid.push({ id: id || "(unnamed)", required, reason: "invalid bounds" });
         return false;
       }
-      if (!preflight(Object.assign({ id }, bounds))) {
-        diagnostics.suppressed.push({ id, required, reason: "footprint rejected" });
+      // preflight answers true (clear), false (on the road) or "pit": inside
+      // the pit complex the engine now builds. A model the complex supersedes
+      // is recorded as such and never counts as a required failure — the
+      // circuit's hand-placed pit block is exactly what the complex replaces.
+      const verdict = preflight(Object.assign({ id }, bounds));
+      if (verdict !== true) {
+        const pit = verdict === "pit";
+        diagnostics.suppressed.push({ id, required: pit ? false : required, reason: pit ? "superseded by the pit complex" : "footprint rejected" });
         return false;
       }
       const stage = emptyBuffer();
@@ -267,8 +273,10 @@ const TrackModels = (function () {
           .push(Object.assign({ id, required, kind, vertices }, escaped));
       }
       const actual = emittedBox(stage, bounds);
-      if (actual && !preflight(Object.assign({ id }, actual))) {
-        diagnostics.suppressed.push({ id, required, reason: "emitted footprint rejected" });
+      const emitted = actual ? preflight(Object.assign({ id }, actual)) : true;
+      if (emitted !== true) {
+        const pit = emitted === "pit";
+        diagnostics.suppressed.push({ id, required: pit ? false : required, reason: pit ? "emitted footprint superseded by the pit complex" : "emitted footprint rejected" });
         return false;
       }
       appendBuffer(out, stage, id);

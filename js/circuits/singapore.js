@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "singapore",
+    pit: { side: -1 },   // the pit complex (TrackPit): a street lane, left of the main straight
     name: "SINGAPORE",
     // Start/finish line. Snapped to the real one: coord 6.8 m off centreline; = trace vertex 0.
     // Was 0.5075, which put the line inside a corner — a start line is

@@ -77,8 +77,12 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   // Ratchet: this number moving means the guard's behaviour moved. That is
   // allowed, but it must be a deliberate edit with a rendered look behind it,
   // not a side effect. Raise or lower it in the same commit that changes it.
-  assert.equal(c.backdrop, 53,
-    `spa backdrop drops = ${c.backdrop}, expected 53 — if you changed the ` +
+  // 53 -> 51 on 2026-09-15: two of Spa's backdrops stand inside the pit
+  // complex the engine now builds on the pit side of the start straight, and
+  // a drop the complex causes is counted on `supersededByPit`, not here — this
+  // counter is the guard MARGIN's, and the margin did not move.
+  assert.equal(c.backdrop, 51,
+    `spa backdrop drops = ${c.backdrop}, expected 51 — if you changed the ` +
     `guard, re-measure and update this with the reason`);
   // And the pre-check must not have changed what redbull SHIPS: it skips the
   // 295 calls the engine refused, and only those (graph-parity proved it).

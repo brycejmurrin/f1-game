@@ -1,7 +1,12 @@
 # Pit lane redesign — research and design (2026-09-15)
 
-> Research + design, NOT a plan of record. Nothing here is implemented. §4 is
-> the proposal, §5 the phased route, §6 the decisions still open. Screenshots
+> Research + design. **Implemented 2026-09-15** as `js/track/core/pit.js`
+> (`TrackPit`, the model) and `js/track/scenery/pits.js` (`SceneryPits`, the
+> furniture), with the decisions in §6 taken as recommended: the bay's pitch
+> (11.0 m with the 0.2 m party gap), a 5.5 m working lane, `narrow` mode on
+> street circuits, no equipment in the trackside bays, side +1 until a circuit
+> authors `def.pit.side`. `tests/unit/pit-complex.test.mjs` is the gate. §1–§3
+> are the evidence, §4 the design as built, §5 the route it took. Screenshots
 > that motivated it: `scratch/captures/pit-lane/albert_park/` (regenerable with
 > `node tools/shot/pit-shots.mjs albert_park`).
 
