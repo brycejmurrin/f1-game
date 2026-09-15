@@ -67,6 +67,41 @@ test('controlled braking drill finishes once, scores stopping distance and recor
   assert.equal(announcements[0][2], 'practice', 'a drill verdict is its own announce tier, not a record announcement');
   const summary = api.summary(); summary.lastDrill.clean = false; assert.equal(api.summary().lastDrill.clean, true);
 });
+test("the braking verdict measures how much distance went below the car's own hardest braking", () => {
+  const { api, tick } = fixture();
+  api.startDrill('braking');
+  // Enters at 40 m/s and peaks at 8 m/s²: v²/2a = 100 m. The stop runs 125 m
+  // because the driver eased to 4 m/s² after the first bite. Steps stay inside
+  // the teleport guard (ds <= max(20, 2·speed·dt)) or the attempt reads as a jump.
+  tick({ prog: 10, brakeDemand: 1, speed: 40, axEstSm: -8 });
+  tick({ prog: 45, brakeDemand: 1, speed: 30, axEstSm: -8 });
+  tick({ prog: 80, brakeDemand: 1, speed: 25, axEstSm: -4 });
+  tick({ prog: 115, brakeDemand: 1, speed: 20, axEstSm: -4 });
+  tick({ prog: 135, brakeDemand: 1, speed: .5, axEstSm: -4 });
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, true, last.reason); assert.equal(last.score, 125);
+  assert.equal(last.limit, 100); assert.equal(last.slack, 25);
+  assert.match(last.text, /stopped 125 m after braking from 144 km\/h · 25 m of it below your hardest braking/);
+});
+test('a stop held at the peak the whole way reports no slack, and a stop with no braking evidence reports none either', () => {
+  const { api, tick } = fixture();
+  api.startDrill('braking');
+  tick({ prog: 10, brakeDemand: 1, speed: 40, axEstSm: -10 });    // 10 m/s² held to the stop:
+  tick({ prog: 45, brakeDemand: 1, speed: 25, axEstSm: -10 });
+  tick({ prog: 75, brakeDemand: 1, speed: 15, axEstSm: -10 });
+  tick({ prog: 90, brakeDemand: 1, speed: .5, axEstSm: -10 });    // …80 m, exactly v²/2a
+  const held = api.summary().lastDrill;
+  assert.equal(held.clean, true, held.reason);
+  assert.equal(held.limit, 80); assert.equal(held.slack, 0);
+  assert.doesNotMatch(held.text, /below your hardest/);
+  tick({ speed: 40, brakeDemand: 0, axEstSm: 0 });
+  api.startDrill('braking');
+  tick({ prog: 125, brakeDemand: 1, speed: 40 });                 // no deceleration reported at all
+  tick({ prog: 145, brakeDemand: 1, speed: .5 });
+  const bare = api.summary().lastDrill;
+  assert.equal(bare.limit, null); assert.equal(bare.slack, null);
+  assert.match(bare.text, /^stopped 20 m after braking from 144 km\/h$/);
+});
 test('a brake tap followed by a coast to a stop is not a controlled stop', () => {
   const { api, tick, saves, announcements } = fixture();
   api.startDrill('braking'); tick({ prog: 20, brakeDemand: 1 });

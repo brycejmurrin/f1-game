@@ -155,6 +155,46 @@ driving-help assist alone cannot hold the car through a corner at speed, so
 the assist is not a stand-in for a driver in tests. shellNodes rose 1602 → 1613
 for the help text (`docs/notes/CEILING-HISTORY.md`).
 
+### Third pass: where, how far off, and what to practise
+
+The first two passes made the feedback correct and specific. It still could not
+answer the two questions a driver actually asks: *where am I losing it* and
+*what do I do about it*.
+
+- **Tips are filed under a turn.** Each tip records the curated FIA turn it
+  happened at, read from `def.turns` — authored apex positions in racing-lap
+  fractions, the same frame `sectorAt()` reads `def.sectors` in, and read raw
+  exactly as `js/ui/track-maps.js` and `js/agent/agentview.js` read it. This is
+  authored data, not a `Tracks.curvature()` read, so it adds no row to the
+  physics table; nothing but a sentence consumes it. The review lists the top
+  locations, and a circuit without curated turns simply shows none.
+- **The review ranks and prescribes.** Counts sort most-repeated first, and a
+  tip earned three times names the practice goal that drills it (braking tips →
+  trail braking, front-grip → corner, track limits → sector, and so on). That
+  is the first link from the coach to the drills; they were two features in one
+  panel before.
+- **The braking drill reports what modulation cost.** It now records the hardest
+  deceleration the car actually produced during the attempt and reports
+  `v²/2a` at that figure against the real stopping distance: "stopped 125 m from
+  144 km/h · 25 m of it below your hardest braking". The reference is measured,
+  not modelled, so tyres, weather, car mods and surface are already in it and it
+  cannot drift from the sim the way a constant would.
+
+Evidence: unit tests for turn labelling (including the wrap across the start
+line, a tip on a straight naming no turn, and a circuit with no curated turns),
+the ranking, the suggestion threshold, and the braking slack in three cases
+(eased, held at the peak, and no deceleration data at all). The frame is proven
+on real geometry rather than a fixture in
+`tests/unit/mechanics-integration-vm.test.mjs`: monza's curated apexes are
+cross-checked against independently detected curvature peaks, and a real
+coasting tip on the approach to turn 4 is filed as Turn 4.
+
+A harness note worth keeping: `announceT` is a lexical `let` inside `js/game.js`,
+so a VM test cannot clear it from the context — only a render frame decays it,
+and the stubbed renderer faults on one. Any VM test that needs a SECOND coach
+tip therefore needs its own `createGame` instance, because the first tip's
+message holds the coach in `waiting` forever.
+
 ## Technical references
 
 - https://box2d.org/documentation/md_collision.html — separating axes and swept

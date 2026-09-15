@@ -36,7 +36,7 @@ const RaceInsights = (function () {
       previous = sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false;
       drill = { mode, time: G.raceT, sector: G.sectorIdx, startProg: c.prog, lap: c.lap,
         changes: 0, side: 0, brakeSeen: false, brakeProg: c.prog, brakeSpeed: 0, slowing: 0, held: 0, turnSeen: false,
-        phase: 0, turnRun: 0, straightRun: 0, minSpeed: Infinity, exitSpeed: 0, launchT: null, lapStart: null, lapDone: false,
+        phase: 0, turnRun: 0, straightRun: 0, minSpeed: Infinity, exitSpeed: 0, peakDecel: 0, launchT: null, lapStart: null, lapDone: false,
         clean: true, reason: "", done: false };
       event("practice", DRILLS[mode] + " — unscored");
       return true;
@@ -62,12 +62,21 @@ const RaceInsights = (function () {
       // even though practice laps never enter the records); the rest by time.
       const lapTime = Number.isFinite(c._lapTimeAtLine) && c._lapTimeAtLine > 0 ? c._lapTimeAtLine : drill.lapStart == null ? seconds : G.raceT - drill.lapStart;
       const score = mode === "braking" ? stop : mode === "launch" && drill.launchT != null ? G.raceT - drill.launchT : mode === "lap" ? lapTime : seconds;
+      // v²/2a at the hardest deceleration the car actually produced: the distance
+      // this stop WOULD have taken had the driver held that from the first brake.
+      // The gap is what modulation cost, in metres, and it is the one number a
+      // braking drill can give that a stopwatch cannot.
+      const limit = mode === "braking" && drill.peakDecel > 1 && drill.brakeSpeed > 1
+        ? (drill.brakeSpeed * drill.brakeSpeed) / (2 * drill.peakDecel) : null;
+      const slack = limit == null ? null : Math.max(0, stop - limit);
       const text = mode === "braking" ? "stopped " + stop.toFixed(0) + " m after braking from " + kmh(drill.brakeSpeed) + " km/h"
+          + (slack >= 1 ? " · " + slack.toFixed(0) + " m of it below your hardest braking" : "")
         : mode === "slalom" ? seconds.toFixed(1) + "s · " + drill.changes + " direction changes"
         : mode === "corner" ? seconds.toFixed(1) + "s · min " + kmh(drill.minSpeed) + " km/h · exit " + kmh(drill.exitSpeed) + " km/h"
         : mode === "launch" ? "0 to " + kmh(G.vTop() * .5) + " km/h in " + score.toFixed(2) + "s"
         : mode === "lap" ? "lap " + G.fmtTime(score) : seconds.toFixed(1) + "s";
-      lastDrill = { mode, seconds, clean: drill.clean, changes: drill.changes, reason: drill.reason, score, text };
+      lastDrill = { mode, seconds, clean: drill.clean, changes: drill.changes, reason: drill.reason, score, text,
+        limit: limit == null ? null : +limit.toFixed(1), slack: slack == null ? null : +slack.toFixed(1) };
       boundedPush(attempts[mode] || (attempts[mode] = []), { time: G.raceT, clean: drill.clean, score, text, reason: drill.reason }, 10);
       let improved = false;
       if (drill.clean && mode !== "free") {
@@ -91,7 +100,13 @@ const RaceInsights = (function () {
       const v = Math.abs(c.speed), brake = c.brakeDemand || 0, throttle = c.throttleDemand || 0, lat = c.lateralAccel || 0;
       const turning = Math.abs(lat) > TURN_ACCEL, moving = v > G.vTop() * .15, now = G.raceT;
       if (brake > FIRM_BRAKE && v > 1 && !drill.brakeSeen) { drill.brakeSeen = true; drill.brakeProg = current.prog; drill.brakeSpeed = v; }
-      if (drill.brakeSeen && v > 1) { drill.slowing++; if (brake > FIRM_BRAKE) drill.held++; }
+      if (drill.brakeSeen && v > 1) {
+        drill.slowing++; if (brake > FIRM_BRAKE) drill.held++;
+        // The car's OWN hardest braking this attempt, measured rather than
+        // modelled: tyres, weather, car mods and the surface are all already in
+        // it, so the reference needs no constant and cannot drift from the sim.
+        if (brake > FIRM_BRAKE) drill.peakDecel = Math.max(drill.peakDecel, -(c.axEstSm || 0));
+      }
       if (drill.brakeSeen && brake > .05 && turning) drill.turnSeen = true;
       if (turning && moving) { const side = Math.sign(lat); if (drill.side && side !== drill.side) drill.changes++; drill.side = side; }
       if (turning) { drill.turnRun++; drill.straightRun = 0; } else { drill.straightRun++; drill.turnRun = 0; }

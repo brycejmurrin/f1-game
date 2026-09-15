@@ -17,12 +17,39 @@ const DrivingCoach = (function () {
   // and full braking in the dry plateaus at BRAKE/LONG_GRIP ≈ 0.64 (measured),
   // so an axFrac > 0.8 gate meant the braking tip could only ever fire in the wet.
   const brakeUse = c => Math.min(1, Math.max(0, -(c.axEstSm || 0) / PhysicsConsts.BRAKE));
+  // Which practice goal trains the mistake behind each tip. A tip the driver
+  // keeps earning is the one worth rehearsing, and the drill is the only part
+  // of this feature that can actually be practised on purpose.
+  const TRAINS = Object.freeze({ trail: "trail", rearBrake: "trail", front: "corner", power: "corner",
+    rearCoast: "slalom", limits: "sector", coasting: "braking" });
+  const SUGGEST_AT = 3;        // repeats of one tip before the goal is worth naming
+  const TURN_WINDOW = 0.05;    // lap fractions either side of an apex that still count as that turn
   function create(G) {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
     let trace = [], checkpoint = null, practice = false, drillMode = "free";
     let clock = 0, candidate = "", held = 0, latest = null, warnSeen = null, edge = null;
     const lastTip = new Map(), tipCounts = new Map();
+    let log = [];   // one row per tip: which tip, which turn, when — the session's map
+    // The curated FIA turn number the car is at, or null. def.turns holds apex
+    // positions as RACING-LAP fractions in driving order, the same frame
+    // sectorAt() reads def.sectors in, and it is read raw exactly as
+    // js/ui/track-maps.js and js/agent/agentview.js read it (the _sceneryShift
+    // that dressing tables need is a SCENERY frame, not this one). Authored
+    // data, never a curvature read: this says where a tip happened and is read
+    // only to write a sentence — no car, assist or force path sees it.
+    function turnAt() {
+      const t = G.track, turns = t && t.def && t.def.turns, c = G.player;
+      if (!turns || !turns.length || !c || !(t.total > 0)) return null;
+      const f = (((c.s / t.total) % 1) + 1) % 1;
+      let best = null, bestD = Infinity;
+      for (let i = 0; i < turns.length; i++) {
+        const raw = (((f - turns[i]) % 1) + 1) % 1;           // 0..1 ahead of the apex
+        const d = Math.abs(raw > 0.5 ? raw - 1 : raw);        // …as a shortest-way distance
+        if (d < bestD) { bestD = d; best = i + 1; }
+      }
+      return bestD <= TURN_WINDOW ? best : null;
+    }
     function coachState() {
       if (!enabled) return "off";
       if (!G.player || G.state !== "race") return "ready";
@@ -33,9 +60,18 @@ const DrivingCoach = (function () {
       return "watching";
     }
     function feedback() {
-      const counts = Array.from(tipCounts, ([id, count]) => ({ id, label: TIPS[id].label, count }));
+      // Most-repeated first: the ranking IS the advice, so the panel does not
+      // ask the driver to compare numbers themselves.
+      const counts = Array.from(tipCounts, ([id, count]) => ({ id, label: TIPS[id].label, count }))
+        .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+      const spots = new Map();
+      for (const row of log) if (row.turn != null) spots.set(row.turn, (spots.get(row.turn) || 0) + 1);
+      const repeated = counts.find(r => r.count >= SUGGEST_AT && TRAINS[r.id]);
       return { enabled: !!enabled, state: coachState(), latest: latest && { ...latest }, counts,
-        total: counts.reduce((n, row) => n + row.count, 0) };
+        total: counts.reduce((n, row) => n + row.count, 0),
+        turns: Array.from(spots, ([turn, count]) => ({ turn, count })).sort((a, b) => b.count - a.count || a.turn - b.turn),
+        suggest: repeated ? { id: repeated.id, label: repeated.label, mode: TRAINS[repeated.id],
+          goal: RaceInsights.DRILLS[TRAINS[repeated.id]] } : null };
     }
     function clearCandidate() { candidate = ""; held = 0; }
     function status() {
@@ -96,9 +132,10 @@ const DrivingCoach = (function () {
       if (candidate !== id) { candidate = id; held = 0; }
       held += step;
       if (held + 1e-9 < TIPS[id].dwell) return;
-      const tip = TIPS[id];
-      latest = { id, text: tip.text, detail: tip.detail, time: G.raceT };
+      const tip = TIPS[id], turn = turnAt();
+      latest = { id, text: tip.text, detail: tip.detail, time: G.raceT, turn };
       tipCounts.set(id, (tipCounts.get(id) || 0) + 1); lastTip.set(id, clock);
+      log.push({ id, turn, time: G.raceT }); if (log.length > 200) log.shift();
       G.announce(tip.text, 2.5, "coach"); quiet = 8; clearCandidate(); edge = null;
     }
     const goal = () => RaceInsights.DRILLS[drillMode].toUpperCase();
@@ -137,7 +174,7 @@ const DrivingCoach = (function () {
     }
     function reset() {
       checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
-      clock = 0; latest = null; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
+      clock = 0; latest = null; log = []; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
     }
     function downloadTrace() {
       const blob = new Blob([JSON.stringify({ physics: PhysicsConsts.REVISION, configuration: G.records.config(), rows: trace,
@@ -155,9 +192,17 @@ const DrivingCoach = (function () {
       if (coachStatus) coachStatus.textContent = { off: "Coach off. Turn it on for driving tips.", ready: "Ready for your next drive.",
         paused: "Coach paused with the game.", waiting: "Waiting for flags, traffic incidents and race messages to clear.",
         pit: "Tips resume after you leave the pits.", complete: "Session complete. Your latest tip is below.", watching: "Watching your driving. Tips appear only when needed." }[coaching.state];
-      if (coachTip) coachTip.textContent = coaching.latest ? coaching.latest.text + ". " + coaching.latest.detail : "Your next tip will appear here after you drive.";
+      if (coachTip) coachTip.textContent = coaching.latest
+        ? (coaching.latest.turn ? "Turn " + coaching.latest.turn + ": " : "") + coaching.latest.text + ". " + coaching.latest.detail
+        : "Your next tip will appear here after you drive.";
       if (coachSummary) coachSummary.textContent = coaching.total ? coaching.total + " tip" + (coaching.total === 1 ? "" : "s")
-        + " recorded this session. " + coaching.counts.map(r => r.label + ": " + r.count).join(" · ") + ". These are reminders, not a driving score."
+        + " recorded this session. " + coaching.counts.map(r => r.label + ": " + r.count).join(" · ") + "."
+        // Where they cluster is the part a count alone cannot tell you: one
+        // corner earning half the session's tips is a corner to practise.
+        + (coaching.turns.length ? " Most at " + coaching.turns.slice(0, 3).map(r => "Turn " + r.turn + " (" + r.count + ")").join(", ") + "." : "")
+        + (coaching.suggest ? " " + coaching.suggest.label + " came up " + coaching.counts.find(r => r.id === coaching.suggest.id).count
+          + " times — the " + coaching.suggest.goal.toLowerCase() + " practice goal drills it." : "")
+        + " These are reminders, not a driving score."
         : "No tips recorded this session. This is a reminder count, not a driving score.";
       const download = $("pm-driving-trace"); if (download) download.disabled = trace.length === 0 && insights.journal().length === 0;
       const markBtn = $("pm-practice-set"), retryBtn = $("pm-practice-retry");

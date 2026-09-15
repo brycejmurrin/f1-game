@@ -138,6 +138,39 @@ test("the braking-into-turn tip fires from a full dry-track brake, which the fri
     assert.ok(fired.brakeUse>.8);
     assert.equal(fired.off,false,"the tip came on the tarmac, not as an off-track recovery");
     assert.match(h.sandbox.document.getElementById("announce").textContent,/EASE THE BRAKE AS YOU TURN/);
+
+  } finally { h.close(); }
+});
+
+test("a tip is filed under the curated turn it happened at, on real circuit geometry",async()=>{
+  // Its own instance for the same reason as the test above: one tip announces,
+  // and announceT is a lexical `let` inside game.js that only a render frame
+  // decays — so a second tip in the same boot would wait forever.
+  const h=await createGame({track:"monza"});
+  try {
+    h.G.daily.stop();h.G.timeTrial=true;h.G.raceWeather="dry";await h.G.startRace();h.apex.go();h.apex.headless(true);
+    const coach=h.G.coach; if(!coach.feedback().enabled)coach.toggle();
+    coach.reset();
+    // def.turns is a frac-keyed def table, and AGENTS.md's trap is that reading
+    // one in the wrong frame lands 2/3 of a lap away. A synthetic fixture cannot
+    // catch that; only a real circuit can.
+    const turns=h.G.track.def.turns;
+    assert.ok(turns&&turns.length>=8,"monza carries curated turns");
+    // Frame check: curvature peaks are found independently by __apex.corners(),
+    // so agreement is evidence these fractions need no shift. A shifted frame
+    // would put essentially none of them on a peak.
+    const peaks=h.apex.corners(), near=t=>Math.min(...peaks.map(p=>{const d=(((t-p)%1)+1)%1;return Math.abs(d>.5?d-1:d);}));
+    const aligned=turns.filter(t=>near(t)<.01).length;
+    assert.ok(aligned>=Math.ceil(turns.length/2),`only ${aligned}/${turns.length} curated turns sit on a curvature peak`);
+    // Placed on the APPROACH to turn 4, not on its apex: a car left at an apex
+    // with no steering drives off the road, and that is a different tip.
+    h.apex.reset(turns[3]-.015,45,0);h.apex.go();
+    for(let i=0;i<60*3&&!coach.feedback().latest;i++)h.apex.act({throttle:false,brake:false,steer:0},1/60,1);
+    const at=coach.feedback().latest;
+    assert.ok(at,"a coasting tip fired on the approach");assert.equal(at.id,"coasting");
+    assert.equal(at.turn,4,"the fourth curated apex is Turn 4");
+    assert.equal(h.G.player.offroad,false,"…and it was a coasting tip, not an off-track one");
+    assert.equal(JSON.stringify(coach.feedback().turns),'[{"turn":4,"count":1}]');
   } finally { h.close(); }
 });
 

@@ -8,7 +8,10 @@ function fixture() {
   const saved = new Map(), announcements = [];
   // Throttle held: the default car is driving, not coasting (a coasting tip is its own test).
   const c = { speed: 60, lapTime: 0, brakeDemand: 0, throttleDemand: 1 };
-  const G = { player: c, state: 'race', raceT: 0, paused: false, announceBusy: false,
+  // A 1000 m lap with curated apexes at 100 m, 500 m and 980 m — the last one
+  // sits just before the line so the wrap is exercised.
+  const G = { player: c, track: { total: 1000, def: { turns: [0.10, 0.50, 0.98] } },
+    state: 'race', raceT: 0, paused: false, announceBusy: false,
     vTop: () => 100, roadWetness: () => 0, cautionInfo: () => ({ level: 0 }),
     fmtTime: t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); },
     store: { get: (key, fallback) => saved.get(key) ?? fallback, set: (key, value) => saved.set(key, value) },
@@ -18,7 +21,9 @@ function fixture() {
   const ins = { update() {}, reset() {}, summary: () => ({}), journal: () => [], forecast: () => null, network: () => null,
     startDrill: () => true, attempts: () => [], mastery: () => null };
   const ctx = vm.createContext({
-    RaceInsights: { create: () => ins, DRILLS: { free: 'Free practice', sector: 'Finish this sector cleanly', braking: 'Brake to a controlled stop' } },
+    RaceInsights: { create: () => ins, DRILLS: { free: 'Free practice', sector: 'Finish this sector cleanly',
+      corner: 'Drive through the next corner', braking: 'Brake to a controlled stop', trail: 'Release the brake into a turn',
+      slalom: 'Six clean direction changes' } },
     SettingRow: { paint() {}, disable() {}, wire() {} }, Ghost: {}, IncidentSim: { reset() {} }, DebrisWorld: { reset() {} },
     PhysicsConsts: { BRAKE: 22, REVISION: 'test' }
   });
@@ -91,6 +96,51 @@ test('a track-limits warning is coached at once, but not the count the coach fir
   G.announceBusy = true; c.cutWarn = 2; tick(3.2); G.announceBusy = false; tick(.5);
   assert.equal(announcements.length, 2, 'a warning older than three seconds is stale');
   assert.equal(coach.feedback().counts.find(r => r.id === 'limits').count, 2);
+});
+
+test('a tip records the curated turn it happened at, wrapping across the start line', () => {
+  const { coach, c, G, tick, enable } = fixture(); enable();
+  c.s = 100; tick(.5, braking);                       // the apex itself
+  assert.equal(coach.feedback().latest.turn, 1);
+  c.s = 975; tick(31);                                // 5 m before Turn 3's apex, and past the cooldown
+  assert.equal(coach.feedback().latest.turn, 3);
+  c.s = 5; tick(31);                                  // 25 m PAST that apex, over the line — still Turn 3
+  assert.equal(coach.feedback().latest.turn, 3);
+  c.s = 300; tick(31);                                // mid-straight, nearest apex 200 m away
+  assert.equal(coach.feedback().latest.turn, null, 'a tip on a straight names no turn');
+  assert.equal(JSON.stringify(coach.feedback().turns.map(r => [r.turn, r.count])), '[[3,2],[1,1]]');
+  const view = coach.feedback(); view.turns[0].count = 99;
+  assert.equal(coach.feedback().turns[0].count, 2, 'the review is a copy');
+  G.track = null; c.s = 100; tick(31);
+  assert.equal(coach.feedback().latest.turn, null, 'a circuit with no curated turns simply has no location');
+});
+
+test('a repeated tip names the practice goal that drills it, and the review reads as advice', () => {
+  const { coach, c, tick, enable, nodes } = fixture(); enable();
+  c.s = 100;
+  tick(.5, braking); assert.equal(coach.feedback().suggest, null, 'one tip is not a pattern');
+  tick(31); assert.equal(coach.feedback().suggest, null);
+  tick(31);
+  const suggest = coach.feedback().suggest;
+  assert.equal(suggest.id, 'trail'); assert.equal(suggest.mode, 'trail');
+  assert.equal(suggest.goal, 'Release the brake into a turn');
+  coach.paint();
+  const summary = nodes.get('pm-coach-summary').textContent;
+  assert.match(summary, /3 tips recorded this session/);
+  assert.match(summary, /Most at Turn 1 \(3\)/);
+  assert.match(summary, /Braking into turns came up 3 times — the release the brake into a turn practice goal drills it/);
+  assert.match(summary, /not a driving score/);
+  coach.reset();
+  assert.equal(coach.feedback().suggest, null); assert.equal(coach.feedback().turns.length, 0);
+});
+
+test('counts rank the most repeated tip first so the panel does not ask the driver to compare numbers', () => {
+  const { coach, c, tick, enable } = fixture(); enable();
+  c.s = 300;
+  tick(.5, braking); tick(31); tick(31);                                  // three trail tips
+  tick(10, { ...rear, brakeDemand: 0, throttleDemand: 1, axEstSm: 0 });   // …and one on power, after the 8 s quiet window
+  const counts = coach.feedback().counts;
+  assert.equal(JSON.stringify(counts.map(r => [r.id, r.count])), '[["trail",3],["power",1]]');
 });
 
 test('checkpoint messages name the practice goal, and the pause menu lists attempts and the saved best', () => {
