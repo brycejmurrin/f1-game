@@ -5,7 +5,9 @@
 // without touching git. plan()/main() need the network and are not run here.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts } from "../../tools/ci/deploy.mjs";
@@ -28,6 +30,38 @@ test("touchedCircuits reads circuit and scenery ids out of a diff", () => {
   const ids = touchedCircuits("HEAD~1");
   assert.ok(Array.isArray(ids));
   for (const id of ids) assert.match(id, /^[a-z_]+$/);
+});
+
+/* THE TWO-DOT TRAP. touchedCircuits() used `git diff base HEAD`, the two-way
+ * difference — so on a DIVERGED branch it reported circuits the OTHER side had
+ * touched as though they were ours. Measured 2026-09-15: a --plan promised
+ * verify-track over 12 circuits our commits never went near, while the run
+ * (which reads it after the merge, where the two forms agree) correctly
+ * verified none. The shape assertion above cannot catch that, so this builds a
+ * real diverged history and checks the semantics. */
+test("touchedCircuits reports OUR side only on a diverged history", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-touched-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
+  try {
+    g("init", "-q", "-b", "main");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    fs.mkdirSync(path.join(dir, "js", "circuits"), { recursive: true });
+    const write = (id, body) => fs.writeFileSync(path.join(dir, "js/circuits", id + ".js"), body);
+    write("shared", "// base\n"); g("add", "-A"); g("commit", "-qm", "base");
+    g("checkout", "-q", "-b", "theirs");
+    write("theirside", "// theirs\n"); g("add", "-A"); g("commit", "-qm", "theirs");
+    g("checkout", "-q", "main");
+    write("ourside", "// ours\n"); g("add", "-A"); g("commit", "-qm", "ours");
+
+    // git() pins cwd to the repo ROOT at module load, so chdir cannot reach it —
+    // touchedCircuits takes an explicit cwd for exactly this.
+    const ids = touchedCircuits("theirs", dir);
+    assert.ok(ids.includes("ourside"), "our own circuit edit must be listed");
+    assert.ok(!ids.includes("theirside"),
+      "a circuit only the OTHER side touched must NOT be reported as ours — that is the two-dot bug");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("preflight returns a list of refusals, never throws", () => {
