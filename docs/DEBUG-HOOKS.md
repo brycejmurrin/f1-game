@@ -1366,13 +1366,15 @@ const near = __apex.nodesNear(0, 0, 4);
 console.log(near.map(n => `[${n.i}] ${(n.frac*100).toFixed(1)}% @ (${n.x},${n.z})`));
 ```
 
-### `wallStats() → {minB, maxB, minOverHw, anyNaN, tightFrac, street, n} | null`
+### `wallStats() → {minB, maxB, minOverHw, anyNaN, tightFrac, pitSides, street, n} | null`
 Driving-boundary stats for the current track (both sides, all nodes): tightest
 (`minB`) / widest (`maxB`) lateral limit, the closest a barrier sits to the road
 edge (`minOverHw`), an `anyNaN` guard, and `tightFrac` (fraction of left/right
 node boundaries tightened from default runoff), plus the `street` flag and node
-count `n`. For verifying every track keeps the car off the models and is
-recoverable.
+count `n`. The sides the pit complex owns (its keep-out on the pit side, where
+`TrackPit.openBoundary` widens the limit to the garages) are counted in
+`pitSides` and left out of `tightFrac`. For verifying every track keeps the car
+off the models and is recoverable.
 
 ### `modelDiagnostics() → {emitted, suppressed, invalid, unsafe} | null`
 Atomic scenery outcomes for the loaded track. Entries include model `id`,

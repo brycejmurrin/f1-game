@@ -659,16 +659,19 @@ const api = {
   },
   wallStats() {
     if (!G.track || !G.track.barR) return null;
-    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false, tightSides = 0;
+    // Sides the PIT COMPLEX owns (TrackPit.openBoundary widens them to the garages after the scenery)
+    // count as `pitSides`, not as loose: Montreal's lap-long walls read 92.8 % with them in, floor 95 %.
+    const pit = G.track.pit, keep = pit && pit.keep;
+    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false, tightSides = 0, pitSides = 0;
     for (let k = 0; k < G.track.n; k++) {
-      const r = G.track.barR[k], l = G.track.barL[k];
+      const r = G.track.barR[k], l = G.track.barL[k], own = keep && keep[k] > 0 ? pit.side : 0;
       if (!Number.isFinite(r) || !Number.isFinite(l)) anyNaN = true;
       minB = Math.min(minB, r, l); maxB = Math.max(maxB, r, l);
       minOverHw = Math.min(minOverHw, r - G.track.hw[k], l - G.track.hw[k]);
-      if (r < G.track.hw[k] + 8.99) tightSides++;
-      if (l < G.track.hw[k] + 8.99) tightSides++;
+      if (own > 0) pitSides++; else if (r < G.track.hw[k] + 8.99) tightSides++;
+      if (own < 0) pitSides++; else if (l < G.track.hw[k] + 8.99) tightSides++;
     }
-    return { minB, maxB, minOverHw, anyNaN, tightFrac: tightSides / (G.track.n * 2), street: !!G.track.street, n: G.track.n };
+    return { minB, maxB, minOverHw, anyNaN, tightFrac: tightSides / Math.max(1, G.track.n * 2 - pitSides), pitSides, street: !!G.track.street, n: G.track.n };
   },
   modelDiagnostics() {
     if (!G.track || !G.track.modelDiagnostics) return null;
