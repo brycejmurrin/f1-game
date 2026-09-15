@@ -3,6 +3,6 @@
   "track": "singapore",
   "census_only": false,
   "force": "",
-  "ls": "apex26.lightTune={\"perChunkLights\":1}",
-  "leg": "tlx-per-chunk-lamps-2026-09-15-d-REAL-knob-ON"
+  "ls": "apex26.lightTune={\"perChunkLights\":0}",
+  "leg": "tlx-per-chunk-lamps-2026-09-15-e-REAL-knob-OFF"
 }
