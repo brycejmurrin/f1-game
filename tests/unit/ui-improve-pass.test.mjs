@@ -1085,7 +1085,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "min-height"), "var(--chip-h)",
     "RENDERER summary matches the HUD / METRICS chip row");
-  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner #pm-display-adv > summary", "#pmsettings-inner #advanced-inner details > summary"]) {
+  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner #pm-display-adv > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
     assert.equal(decl(css("css/components.css"), sel, "height"), "auto", "fold summaries wrap instead of clipping their readout at 150%");
     assert.equal(decl(css("css/components.css"), sel, "flex-wrap"), "wrap");
   }
@@ -1136,9 +1136,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
   assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#advanced-inner, #pm-panel-driving\) details > summary/, "color"), "var(--steel)",
     "STEERING folds use the same disclosure chrome as DISPLAY");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary::after/, "content"), "none");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
   assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
     /25BE/,
     "MUSIC fold chevron sits on the left");

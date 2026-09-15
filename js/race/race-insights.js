@@ -15,10 +15,10 @@ const RaceInsights = (function () {
       if (!Object.hasOwn(DRILLS, mode)) mode = "free";
       const c = G.player;
       if (!c) return false;
-      previous = sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false;
       if (["braking", "trail"].includes(mode) && Math.abs(c.speed) < G.vTop() * .3) {
         G.announce("BUILD SPEED BEFORE SETTING THIS DRILL", 2, "info"); return false;
       }
+      previous = sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false;
       drill = { mode, time: G.raceT, sector: G.sectorIdx, startProg: c.prog, speed: Math.abs(c.speed),
         changes: 0, sign: 0, brakeSeen: false, turnSeen: false, clean: true, done: false };
       event("practice", DRILLS[mode] + " — unscored");
@@ -37,6 +37,21 @@ const RaceInsights = (function () {
       const best = found && Number.isFinite(found.best) ? Math.min(found.best, lastDrill.seconds) : lastDrill.seconds;
       G.store.set("circuitMastery", { version: 1, entries: entries.filter(e => e.key !== key).concat({ key, best, completed: Math.min(9999, (found && Number.isFinite(found.completed) ? Math.max(0, Math.floor(found.completed)) : 0) + 1) }) });
     }
+    function observeDrill(c, current, now) {
+      if (!drill || drill.done) return;
+      if (current.contact || current.off || current.retired) drill.clean = false;
+      const v = Math.abs(c.speed), steer = c.steerCommand || 0, brake = c.brakeDemand || 0;
+      if (brake > .5) drill.brakeSeen = true;
+      if (drill.brakeSeen && brake > .05 && brake < .5 && Math.abs(steer) > .15) drill.turnSeen = true;
+      if (Math.abs(steer) > .2 && v > G.vTop() * .15) {
+        const sign = Math.sign(steer); if (drill.sign && sign !== drill.sign) drill.changes++; drill.sign = sign;
+      }
+      const elapsed = now - drill.time;
+      if ((drill.mode === "sector" && current.sector !== drill.sector && current.prog - drill.startProg > 10)
+        || (drill.mode === "braking" && drill.speed >= G.vTop() * .3 && drill.brakeSeen && v < 1)
+        || (drill.mode === "trail" && drill.turnSeen && brake < .05 && elapsed > 2 && v > G.vTop() * .15)
+        || (drill.mode === "slalom" && drill.changes >= 6)) finishDrill();
+    }
     function update(c) {
       if (!c || !G.track || G.state !== "race") return;
       const now = G.raceT, current = { time: now, prog: c.prog, lap: c.lap, sector: G.sectorIdx,
@@ -44,7 +59,12 @@ const RaceInsights = (function () {
         penalty: c.penalty || 0, warnings: c.cutWarn || 0, invalid: !!c.incidentInvalidLap,
         pit: !c.pitState || c.pitState === "none" ? "track" : c.pitState, contact: (c.contactT || 0) > 0, off: !!c.offroad, retired: !!c.retired };
       if (previous && (now < previous.time || current.prog < previous.prog - 10)) { previous = null; sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false; if (drill) drill.clean = false; }
-      if (!previous) { previous = current; tyreStart = current; sector = { ...current, valid: false }; return; }
+      if (!previous) {
+        previous = current; tyreStart = current; sector = { ...current, valid: false };
+        // The first sample cannot measure a sector, but its inputs and contact
+        // still belong to the attempt; discarding it could award dirty mastery.
+        observeDrill(c, current, now); return;
+      }
       const wet = G.roadWetness ? G.roadWetness() : 0;
       if (weather != null && Math.abs(wet - weather) > .05) { laps = []; energy = [[], [], []]; sector.valid = false; weather = wet; }
       if (weather == null) weather = wet;
@@ -72,20 +92,7 @@ const RaceInsights = (function () {
         if (lapClean && c.lastLap > 0) boundedPush(laps, { seconds: c.lastLap, wear: current.wear, stint: current.stint }, 12);
         lapClean = !current.invalid && !current.off && current.pit === "track";
       }
-      if (drill && !drill.done) {
-        if (current.contact || current.off || current.retired) drill.clean = false;
-        const v = Math.abs(c.speed), steer = c.steerCommand || 0, brake = c.brakeDemand || 0;
-        if (brake > .5) drill.brakeSeen = true;
-        if (drill.brakeSeen && brake > .05 && brake < .5 && Math.abs(steer) > .15) drill.turnSeen = true;
-        if (Math.abs(steer) > .2 && v > G.vTop() * .15) {
-          const sign = Math.sign(steer); if (drill.sign && sign !== drill.sign) drill.changes++; drill.sign = sign;
-        }
-        const elapsed = now - drill.time;
-        if ((drill.mode === "sector" && current.sector !== drill.sector && current.prog - drill.startProg > 10)
-          || (drill.mode === "braking" && drill.speed > G.vTop() * .3 && drill.brakeSeen && v < 1)
-          || (drill.mode === "trail" && drill.turnSeen && brake < .05 && elapsed > 2 && v > G.vTop() * .15)
-          || (drill.mode === "slalom" && drill.changes >= 6)) finishDrill();
-      }
+      observeDrill(c, current, now);
       previous = current;
     }
     function forecast() {

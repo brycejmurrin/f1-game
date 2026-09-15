@@ -285,9 +285,24 @@ for (const device of [
       await press("#pm-driving");
       await expect(page.locator("#dlg-settings")).toHaveText("DRIVING");
       await expect(page.locator("#pausemenu")).toBeHidden();
-      await expect(page.locator("#pm-coach-help")).toContainText("short text tips");
+      for (const selector of ['#announce', '#lights', '.hud-top', '#minimap'])
+        await expect(page.locator(selector)).toHaveCSS('visibility', 'hidden');
+      await expect(page.locator("#pm-coach-help")).toContainText(/text tips/i);
+      for (const id of ["pm-practice-panel", "pm-pit-panel", "pm-session-review"])
+        await expect(page.locator("#" + id)).not.toHaveAttribute("open", "");
+      await expect(page.locator("#pm-drill-sel")).toBeHidden();
+      await expect(page.locator("#pm-pit-choice-sel")).toBeHidden();
       await page.locator("#pm-coach-sel").selectOption("on");
       await expect(page.locator("#pm-coach-sel")).toHaveValue("on");
+      const initialCoach = await page.evaluate(() => window.__apex.physState().driving.coach);
+      expect(initialCoach.enabled).toBe(true);
+      expect(initialCoach.state).toBe("paused");
+      await expect(page.locator("#pm-coach-status")).toContainText(/paused/i);
+      expect(initialCoach.latest).toBeNull();
+      expect(initialCoach.total).toBe(0);
+      await expect(page.locator("#pm-coach-tip")).toContainText(/next tip.*after you drive/i);
+      await press("#pm-practice-panel > summary");
+      await expect(page.locator("#pm-drill-sel")).toBeVisible();
       await page.locator("#pm-drill-sel").selectOption("sector");
       await expect(page.locator("#pm-drill-status")).toContainText("Finish the next sector");
       await press("#pm-practice-set");
@@ -300,6 +315,9 @@ for (const device of [
       const driving=await page.evaluate(()=>window.__apex.physState().driving);
       expect(driving.practice).toBe(true);
       expect(driving.insights.drill.mode).toBe("sector");
+      await press("#pm-practice-panel > summary");
+      await expect(page.locator("#pm-practice-set")).toBeHidden();
+      await press("#pm-pit-panel > summary");
       const select=page.locator("#pm-pit-choice-sel");
       await expect(select).toBeEnabled();
       const value=await select.locator("option").nth(1).getAttribute("value");
@@ -309,9 +327,18 @@ for (const device of [
       await expect(page.locator("#pm-pit-help")).toContainText(compound.split(" · ")[1]);
       await expect(page.locator("#pm-pit-help")).toContainText("Choosing tyres does not call you into the pits");
       await expect(page.locator("#pm-pit-estimate")).toContainText("Estimated pit loss:");
+      await press("#pm-pit-panel > summary");
+      await press("#pm-practice-panel > summary");
+      await page.locator("#pm-practice-retry").scrollIntoViewIfNeeded();
       await page.screenshot({path:info.outputPath("practice-controls.png")});
+      await press("#pm-practice-panel > summary");
+      await press("#pm-pit-panel > summary");
       await select.scrollIntoViewIfNeeded();
       await page.screenshot({path:info.outputPath("pit-controls.png")});
+      await press("#pm-pit-panel > summary");
+      await press("#pm-session-review > summary");
+      await expect(page.locator("#pm-coach-summary")).toContainText(/no tips|0 tips/i);
+      await press("#pm-session-review > summary");
       await press("#pm-settings-close");
       await expect(page.locator("#pm-settings-index")).toBeVisible();
       await press("#pm-settings-close");
@@ -361,8 +388,12 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await press('#pm-coach-next'); await expect(page.locator('#pm-coach-sel')).toHaveValue('off');
         await press('#pm-coach-next'); await expect(page.locator('#pm-coach-sel')).toHaveValue('on');
         await press('#pm-coach-prev'); await expect(page.locator('#pm-coach-sel')).toHaveValue('off');
-        await expect(page.locator('#pm-practice-set')).toBeDisabled();
-        await expect(page.locator('#pm-practice-state')).toContainText('solo Time Trial');
+        await expect(page.locator('#pm-coach-status')).toContainText(/coach off/i);
+        await expect(page.locator('#pm-coach-tip')).toContainText(/next tip.*after you drive/i);
+        for (const id of ['pm-practice-panel','pm-pit-panel','pm-session-review'])
+          await expect(page.locator('#'+id)).not.toHaveAttribute('open','');
+        await expect(page.locator('#pm-practice-set')).toBeHidden();
+        await expect(page.locator('#pm-pit-choice-sel')).toBeHidden();
         const measure = async root => page.evaluate(selector => {
           const e=document.querySelector(selector), sheet=e.querySelector('.sheet'), pane=e.querySelector('.pane');
           const r=sheet.getBoundingClientRect(), pr=pane.getBoundingClientRect();
@@ -385,11 +416,42 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         expect(m.docOverflow).toBeLessThanOrEqual(1); expect(m.paneOverflow).toBeLessThanOrEqual(1);
         expect(m.paneHeight).toBeGreaterThan(70);
         if ([100,150,200].includes(pct)) await page.screenshot({path:info.outputPath(`driving-${pct}.png`)});
-        if (await page.locator('#pm-session-review').getAttribute('open') === null) await press('#pm-session-review > summary');
+        // Open the simplified sections by touch, so hidden content cannot make
+        // an overflow measurement or disabled-control assertion pass vacuously.
+        for (const id of ['pm-practice-panel','pm-pit-panel']) {
+          await press('#'+id+' > summary');
+          await expect(page.locator('#'+id)).toHaveAttribute('open','');
+          if (id === 'pm-practice-panel') {
+            await expect(page.locator('#pm-practice-set')).toBeVisible();
+            await expect(page.locator('#pm-practice-set')).toBeDisabled();
+            await expect(page.locator('#pm-practice-state')).toContainText('solo Time Trial');
+            await page.locator('#pm-practice-state').scrollIntoViewIfNeeded();
+          } else {
+            await expect(page.locator('#pm-pit-choice-sel')).toBeVisible();
+            await expect(page.locator('#pm-pit-choice-sel')).toBeDisabled();
+            await page.locator('#pm-pit-help').scrollIntoViewIfNeeded();
+          }
+          const expanded=await measure('#pmsettings');
+          expect(expanded.overflow,`${id} at ${pct}%`).toEqual([]);
+          expect(expanded.smallTargets,`${id} at ${pct}%`).toEqual([]);
+          expect(expanded.paneOverflow).toBeLessThanOrEqual(1);
+          await press('#'+id+' > summary');
+          await expect(page.locator('#'+id)).not.toHaveAttribute('open','');
+        }
+        await press('#pm-session-review > summary');
+        await expect(page.locator('#pm-coach-summary')).toContainText(/no tips|0 tips/i);
         await expect(page.locator('#pm-session-review')).toHaveAttribute('open','');
+        await expect(page.locator('#pm-driving-trace')).toBeHidden();
+        await expect(page.locator('#pm-technical-data')).not.toHaveAttribute('open','');
+        await press('#pm-technical-data > summary');
+        await expect(page.locator('#pm-driving-trace')).toBeVisible();
         await page.locator('#pm-driving-trace').scrollIntoViewIfNeeded();
         const action=await page.locator('#pm-driving-trace').evaluate(e=>({w:e.clientWidth,sw:e.scrollWidth,h:e.clientHeight,sh:e.scrollHeight}));
         expect(action.sw).toBeLessThanOrEqual(action.w+1); expect(action.sh).toBeLessThanOrEqual(action.h+1);
+        await press('#pm-technical-data > summary');
+        await expect(page.locator('#pm-driving-trace')).toBeHidden();
+        await press('#pm-session-review > summary');
+        await expect(page.locator('#pm-driving-trace')).toBeHidden();
         await press('#pm-settings-close'); await expect(page.locator('#pm-settings-index')).toBeVisible();
         await press('#pm-settings-close'); await expect(page.locator('#pmsettings')).toBeHidden(); await press('#mb-help');
         await press('#htp-contents a[href="#htp-driving"]');

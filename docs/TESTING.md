@@ -1272,6 +1272,7 @@ what it covers.
 | `collision-ai-fixes-vm.test.mjs` | Node twin of `collision-ai-fixes.spec.js` (~7 s): all 14 tests — wrong-way thresholds and hysteresis, the pushIn wall scrub with its control run, throttle-gated rescue and its cooldown reset, rear-end `contactT`, the 10-car separation window, zandvoort AI banking grip, the jeddah barrier face. Nothing left in the browser |
 | `contact-geometry.test.mjs` | Rotated SAT, continuous contact, impulse energy and ownership invariants |
 | `race-insights.test.mjs` | Clean-sector energy, stint estimates, drills, mastery, journal and ghost speed |
+| `driving-coach.test.mjs` | Six input-aware tips, sustained evidence, cooldowns, race-message suppression, coach status and isolated session history |
 | `ai-corridor.test.mjs` | Reachable passing lanes, approaching traffic, blocked roads and lap seams |
 | `mechanics-coherence.test.mjs` | Rotated contact extent, AI feasible grip, setup axle balance, ghost identity/cache, bounded strategic state and adaptive interpolation |
 | `mechanics-integration-vm.test.mjs` | Ready-car record identity, continuous weather, daily standard/open physics and unscored practice checkpoint/telemetry through the actual game VM |

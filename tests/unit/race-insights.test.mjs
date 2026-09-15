@@ -69,6 +69,59 @@ test('a contact marks the drill dirty; retry clears observation history', () => 
   tick({ speed: 40, contactT: 0 }); api.startDrill('braking'); tick({ prog: 50, brakeDemand: 1 }); tick({ prog: 60, speed: .5 });
   assert.equal(api.summary().lastDrill.clean, true);
 });
+for (const mode of ['braking', 'trail']) test(`rejected ${mode} start preserves the active attempt and measured forecasts`, () => {
+  const { api, c, G, tick } = fixture();
+  api.startDrill('free'); tick({ prog: 20 });
+  G.sectorIdx = 1; tick({ prog: 60, energy: .9, tyreWear: .02 }, 2);
+  G.sectorIdx = 2; tick({ prog: 150, energy: .8, tyreWear: .05 }, 3);
+  G.sectorIdx = 0; tick({ prog: 240, energy: .7, tyreWear: .08 }, 3);
+  G.sectorIdx = 1; tick({ prog: 330, energy: .6, tyreWear: .11 }, 3);
+  c.speed = 29.9;
+  const forecast = api.forecast(), summary = api.summary(), journal = api.journal();
+  assert.ok(forecast.energyPerLap > 0);
+  assert.ok(forecast.remainingLaps > 0);
+  assert.equal(api.startDrill(mode), false);
+  assert.deepEqual(api.forecast(), forecast);
+  assert.deepEqual(api.summary(), summary);
+  assert.deepEqual(api.journal(), journal);
+});
+test('a braking drill admitted at the minimum speed can finish using its first brake sample', () => {
+  const { api, c, tick, saves } = fixture();
+  c.speed = 30;
+  assert.equal(api.startDrill('braking'), true);
+  tick({ prog: 10, brakeDemand: 1 });
+  tick({ prog: 15, speed: .5, brakeDemand: 0 });
+  assert.equal(api.summary().lastDrill.clean, true);
+  assert.equal(saves.get('circuitMastery').entries[0].completed, 1);
+});
+for (const [name, field, dirty, clear] of [['contact', 'contactT', 1, 0], ['offroad', 'offroad', true, false], ['retirement', 'retired', true, false]]) {
+  test(`a transient ${name} on the first drill sample prevents clean mastery`, () => {
+    const { api, tick, saves } = fixture();
+    api.startDrill('braking');
+    tick({ prog: 10, brakeDemand: 1, [field]: dirty });
+    tick({ prog: 15, speed: .5, brakeDemand: 0, [field]: clear });
+    assert.equal(api.summary().lastDrill.clean, false);
+    assert.equal(saves.has('circuitMastery'), false);
+  });
+}
+test('trail braking observes the first brake input before the turning and release phases', () => {
+  const { api, c, tick } = fixture();
+  c.speed = 30;
+  assert.equal(api.startDrill('trail'), true);
+  tick({ prog: 10, brakeDemand: 1 });
+  tick({ prog: 20, brakeDemand: .3, steerCommand: .3 });
+  tick({ prog: 30, brakeDemand: 0 });
+  assert.equal(api.summary().lastDrill.mode, 'trail');
+  assert.equal(api.summary().lastDrill.clean, true);
+});
+test('slalom counts six changes after the first steering observation', () => {
+  const { api, tick } = fixture();
+  api.startDrill('slalom');
+  tick({ prog: 10, steerCommand: .4 });
+  for (let i = 1; i <= 6; i++) tick({ prog: 10 + i * 10, steerCommand: i % 2 ? -.4 : .4 });
+  assert.equal(api.summary().lastDrill.changes, 6);
+  assert.equal(api.summary().lastDrill.clean, true);
+});
 test('network status reports measured values and clear disconnected guidance', () => {
   const { api, G } = fixture(); assert.equal(api.network(), null);
   G.netPlay = { status: () => ({ active: true, net: { alive: true, rtt: 60 }, remotes: [{ timing: { delayMs: 130 } }] }) };

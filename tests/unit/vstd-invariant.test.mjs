@@ -80,6 +80,11 @@ const ALLOWED = [
 
   // ── sign tests: direction, not magnitude ──
   {
+    file: "js/race/driving-coach.js", expr: "c.speed <= 0",
+    code: 'if (!c || c.finished || c.retired || (c.pitState && c.pitState !== "none") || c.speed <= 0) return "";',
+    why: "sign test — driving advice applies only while moving forwards; zero and reverse are excluded at every pace",
+  },
+  {
     file: "js/game.js", expr: "c.speed > 0", code: "if (c.speed > 0) {",
     why: "sign test — braking forwards vs. dropping into the reverse crawl",
   },
