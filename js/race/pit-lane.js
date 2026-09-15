@@ -196,6 +196,14 @@ const PitLane = (function () {
   function laneWidth(hw) {
     return Math.min(LANE_W, Math.max(LANE_MIN, 2 * hw - MIN_RACING));
   }
+  /** The lane's width on a track whose road was WIDENED for it. There the lane
+   *  is the added tarmac, so it is the full LANE_W and the racing surface keeps
+   *  every metre it had — which is the whole point of widening rather than
+   *  carving. A track that was not widened (a street circuit, or a centreline
+   *  built by hand in a test) falls back to yielding, as before. */
+  function laneWidthOn(track, hw) {
+    return track && track.pitW ? track.pitW.laneW : laneWidth(hw);
+  }
   /** This car's row in the pit lane, or -1 when it has no team. Teams.LIST
    *  order is the garage order, which is how a real lane is laid out and is
    *  stable for a season. Defensive about Teams for the same reason pickFor is
@@ -247,7 +255,13 @@ const PitLane = (function () {
     const L = track.total;
     const z = (track.def && track.def.pitZone) || {};
     const wrap = (v) => ((v % L) + L) % L;
-    const entryM = z.entryM != null ? z.entryM : entryRunM(track);
+    // THE ENGINE OWNS THE WINDOW NOW, because it is road geometry: tracks.js
+    // widens the tarmac across it (pitWiden), so a second copy of the arithmetic
+    // here could drift from the road it describes. entryRunM stays as the
+    // fallback for a track built without it (the VM tests build centrelines by
+    // hand) and as the place the reasoning is written down.
+    const eng = typeof Tracks !== "undefined" && Tracks.pitWindow ? Tracks.pitWindow(track) : null;
+    const entryM = z.entryM != null ? z.entryM : (eng ? eng.entryM : entryRunM(track));
     const exitM = z.exitM != null ? z.exitM : EXIT_M;
     // A very short circuit cannot carry a 450 m lane: cap the window at a third
     // of the lap so the lane can never swallow the whole track.
@@ -452,10 +466,15 @@ const PitLane = (function () {
     // COMMIT_* block for which. Order matters only for cost: the cheap
     // rejections come first so the spline sample is reached by almost nobody.
     const _smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
-    /** The lane's inner edge — the painted line — as a lateral x. */
-    function laneEdge(hw, side) { return (hw - laneWidth(hw)) * side; }
+    /** How wide the lane is here — the full width on a widened track (the lane
+     *  IS the added tarmac), the yielding width on one that was not. */
+    function lw(hw) { return laneWidthOn(G.track, hw); }
+    /** The lane's inner edge — the painted line — as a lateral x. On a widened
+     *  track this lands exactly where the road edge USED to be, which is what
+     *  makes the racing surface unchanged and the lane genuinely new road. */
+    function laneEdge(hw, side) { return (hw - lw(hw)) * side; }
     /** The lane's lateral CENTRE: where the box is and where a car in it sits. */
-    function laneCentre(hw, side) { return (hw - laneWidth(hw) * 0.5) * side; }
+    function laneCentre(hw, side) { return (hw - lw(hw) * 0.5) * side; }
     /** Is this car laterally IN the lane (within BOX_LAT of it)? Written in
      *  "toward the pit side" coordinates — x * side — so one comparison serves
      *  both sides and there is no sign to get wrong.
@@ -469,7 +488,7 @@ const PitLane = (function () {
      *  never show up as a failing test on the 51 that exist today. Half a car
      *  is the least that can honestly be called "off the racing line". */
     function inLaneLat(c, hw, side) {
-      return (c.x || 0) * side >= Math.max(1, hw - laneWidth(hw) - BOX_LAT);
+      return (c.x || 0) * side >= Math.max(1, hw - lw(hw) - BOX_LAT);
     }
     /** Where a car SERVING A STOP should be laterally — the lane's centre — or
      *  `want` unchanged for every other car. game.js hands its finished

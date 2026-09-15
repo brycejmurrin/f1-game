@@ -3038,3 +3038,36 @@ THE LEVER THAT ACTUALLY BUYS ROOM is still an extraction: pull a subsystem out
 and `ratchets.mjs --update` lowers the ceiling to match, locking the win in.
 `updateCar`'s lateral-control chain is the standing candidate — a few hundred
 lines with one clean seam, which is where L3's own hook had to go.
+
+## 2026-09-15 — the pit lane becomes real tarmac: js/track/tracks.js 2452 → 2600
+
++78 lines (mostly the reasoning), for `pitWindow()` and `pitWiden()`: the road is
+now WIDENED by the lane's width across the pit window, so the lane is tarmac
+beyond where the edge used to be instead of 3.2 m bitten out of the racing
+surface. On a narrow circuit that meant racing on less road because a pit lane
+existed; now the racing surface is untouched and the painted line lands exactly
+on the old edge.
+
+It has to live here. `hw` is ONE symmetric half-width per node and the mesh,
+kerbs, banking, sampling and projection all build from ±hw — so the widening has
+to happen at the seam in `buildCenterline` where the curvature LUT is already
+baked (the window is derived from the arc) but the mesh is not yet built. That
+is also why the widening is symmetric: a one-sided one needs a centreline-offset
+array threaded through every one of those consumers, which is a different and
+much larger change. Real pit straights are wide, so the extra room on the far
+side reads as the start/finish straight getting the width it should have had.
+
+STREET CIRCUITS ARE EXEMPT and keep the painted-on-road lane. They author their
+barriers hard against the road — that is what makes them street circuits — so
+barL/barR do not follow a widened hw there. Measured: widening pushed baku to
+-1.07 m of clearance, vegas to -0.26 and singapore to -0.22 (baku and vegas were
+already negative beforehand). With the exemption, 0 of 47 widened circuits have
+road past a barrier.
+
+The measurement that started this corrected a claim carried in pit-lane.js's
+header and repeated for most of a session: that fitting a lane beyond the road
+edge "gives no lane anywhere — 2.4 m at Monza". Monza actually has 8.99 m to its
+driving boundary, the most of any circuit; 44 of 52 have the 3.2 m a full lane
+needs. The header's number was measured against solid scenery rather than the
+boundary, which is a different question — but it was being used to rule out an
+approach nobody had tried.
