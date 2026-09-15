@@ -38,6 +38,20 @@ the expensive mistake is rebuilding something we have.
   player" test. The claim that few presets beat many sliders on cognitive load is
   UNEVIDENCED — only forum opinion exists.
 
+- **Handedness MIRROR — already shipped.** `mirrorControls` (js/game.js:497,
+  `body.mirror-controls`) with a LEFT-HANDED row in the pause menu. This was the
+  single item named INDEPENDENTLY by both the competitive and accessibility
+  passes, i.e. the strongest signal in the whole document — and we had it.
+- **AUTO-THROTTLE is already independent of ROOKIE.** `pm-throttlemode` is its
+  own HOLD/AUTO setting row (js/game.js:8425) backed by `store "autoThrottle"`.
+  **This one is my fault:** I briefed the accessibility pass with "we ship
+  auto-throttle only in ROOKIE", which was false, and it built a well-sourced
+  recommendation on my bad context. The genuine gap that survives is the THIRD
+  state — a tap-on/tap-off LATCH between hold and auto.
+- **`prefers-reduced-motion` is honoured in CSS** (components.css, carsetup.css,
+  and the select-screen view transitions). It does NOT reach game-world motion —
+  camera shake at 300 km/h is unaffected. That half is real and open.
+
 ## 1. Defects in what we ship
 
 - **The HAPTICS slider is a dead control on every iPhone.** `navigator.vibrate`
@@ -52,13 +66,16 @@ the expensive mistake is rebuilding something we have.
   `touchstart` no longer counts — it wants a click. An unprimed in-race cue is
   silently blocked with a console intervention. **Fix: one throwaway
   `vibrate(1)` from the GO/START click.**
-- **Tilt is our DEFAULT** (`steerMode = "tilt"`). WCAG 2.2 SC 2.5.4 Motion
-  Actuation (Level A) requires motion functionality to also be operable by UI
-  components AND to be disableable; the "Essential" exception cannot apply
-  because BUTTONS demonstrably works. Our permission-refusal fallback only fires
-  on refusal. Game Accessibility Guidelines are stricter — complex input
-  "included only as supplementary". **This is a first-run product decision, not a
-  code detail: it changes what every new player gets.**
+- ~~**Tilt is our DEFAULT.**~~ **WRONG — CORRECTED 2026-09-15. We already default
+  to BUTTONS and already satisfy WCAG 2.5.4.** `js/game.js:429` is the line that
+  decides — `store.get("steerMode", "buttons")` — and `js/game.js:8668` pushes it
+  into Input at boot, unconditionally, at module top level. The `"tilt"` I read
+  was `js/input/input.js`'s pre-boot initialiser, overwritten before any player
+  sees anything. I checked the module initialiser and never checked whether the
+  caller overrode it, then reported it as verified. **The lesson is the same one
+  this session keeps paying for: a value's declaration is not its behaviour.**
+  The two have since been aligned so the file no longer reads as though we
+  default to a motion control.
 
 ## 2. Highest-value additions
 
