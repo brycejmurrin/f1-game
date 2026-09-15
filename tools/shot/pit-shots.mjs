@@ -10,12 +10,12 @@
 // FAST BY DEFAULT. Every frame is a full SwiftShader render plus a readback,
 // and at 1600x900 on the governor's top tier that was ~40 s a frame (Albert
 // Park: 17 frames, 13 min, a 29 s boot). The default now renders at half
-// scale (gfx.setRenderScale 0.5 — the overlay still presents full size),
-// holds the governor at tier 4 (no post stack, no shadow passes), uses a
-// 1280x720 viewport and waits for ONE presented frame. `--full` is the old
-// look for a sign-off frame; `--no-models` skips the asset pack on boot
-// (the engine's pit complex needs none of it; a circuit's bakedModel dressing
-// will be missing).
+// scale (gfx.setRenderScale 0.5 — the presented frame is half the viewport,
+// 800x450 from the 1600x900 default), holds the governor at tier 4 (no post
+// stack, no shadow passes) and waits for ONE presented frame: 6-9 s a frame,
+// measured on Suzuka. `--full` is the old look at full size for a sign-off
+// frame; `--no-models` skips the asset pack on boot (the engine's pit complex
+// needs none of it; a circuit's bakedModel dressing will be missing).
 //
 // ONE BOOT PER CIRCUIT. shot.mjs launches a browser per frame and a cold boot
 // is ~45 s on this container; a pit set is 15+ frames. Everything here is
@@ -75,7 +75,7 @@ const PLAN = has("--plan");
 const SHOW_HUD = has("--hud");
 const FULL = has("--full");
 const NO_MODELS = has("--no-models");
-const [VW, VH] = String(flag("--viewport", FULL ? "1600x900" : "1280x720")).split("x").map((n) => parseInt(n, 10) || 0);
+const [VW, VH] = String(flag("--viewport", "1600x900")).split("x").map((n) => parseInt(n, 10) || 0);
 const OUT_ROOT = flag("--out", null)
   ? resolve(flag("--out", null))
   : resolveRepoDefault(ROOT, "scratch", "captures", "pit-lane");

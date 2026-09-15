@@ -270,22 +270,40 @@ test("a RAW landform yields to the complex chord by chord, and says so", () => {
   assert.equal(d.suppressedCounts.groundedSegments, undefined, "not on the guard's");
 });
 
-test("a crown may reach over the complex's edge; a footing may not", () => {
+test("a tree is one object: a crown that would reach the complex takes its trunk with it", () => {
   // The keep-out tested every primitive of a tree on its own: the wide middle
   // tier of a crown standing just outside the complex reached in and was
   // dropped, the narrower top tier cleared, and the float sweep reported the
-  // top tier on thirty circuits. Monza's poplar 45 m out at the row's end
-  // (frac ~0.002) is the worked example: trunk, then FOUR tiers, the lowest
-  // 16 m wide. Boxes get no such exemption — a superseded building must not
-  // leave its upper storey behind.
+  // top tier on thirty circuits; then the crown exemption let Monza's poplars
+  // behind the garages grow through the bay roofs. Now a tree is decided
+  // WHOLE at its base — the crown's radius from the complex — and a footing
+  // the complex keeps out ends the object. The worked example is the poplar
+  // 45 m out at the end of Monza's row (frac ~0.002): trunk 16 m, four tiers
+  // to 42 m, the lowest 16 m wide. Its crown reached the service road, so
+  // none of it stands; and no tier anywhere reaches over the bays.
   const env = ctxOnce();
+  // env.prims is the VM's whole capture — every circuit this file has built
+  // so far — so take only what THIS build emits.
+  const first = env.prims.length;
   const T = env.Tracks, t = T.build(T.LIST.find((d) => d.id === "monza"));
-  void t;
+  const prims = env.prims.slice(first);
+  const p = t.pit, L = t.total, n = t.n, ds = L / n;
   const x = 536.5, z = -217.5;
-  const near = env.prims.filter((q) => q.minX - 3 <= x && q.maxX + 3 >= x && q.minZ - 3 <= z && q.maxZ + 3 >= z);
-  const cones = near.filter((q) => q.name === "addCone").sort((a, b) => a.minY - b.minY);
-  const trunk = near.find((q) => q.name === "addCyl");
-  assert.ok(trunk, "the poplar's trunk stands");
-  assert.ok(cones.length >= 4, `the poplar keeps every tier (${cones.length})`);
-  assert.ok(cones[0].minY <= trunk.maxY + 1, `the lowest tier (${cones[0].minY.toFixed(1)}) meets the trunk (${trunk.maxY.toFixed(1)})`);
+  const there = prims.filter((q) => q.minX - 3 <= x && q.maxX + 3 >= x && q.minZ - 3 <= z && q.maxZ + 3 >= z && q.maxY - q.minY > 3);
+  assert.equal(there.filter((q) => q.name === "addCone").length, 0, "the poplar's crown is gone");
+  assert.equal(there.filter((q) => q.name === "addCyl").length, 0, "…and so is its trunk: no orphan either way");
+  const inArc = (s, a, b) => (a <= b ? (s >= a && s <= b) : (s >= a || s <= b));
+  let over = 0, tiers = 0;
+  for (const q of prims) {
+    if ((q.name !== "addCone" && q.name !== "addFrustum") || q.minY > 10) continue;
+    const cx = (q.minX + q.maxX) / 2, cz = (q.minZ + q.maxZ) / 2;
+    let k = 0, bd = Infinity;
+    for (let i = 0; i < n; i++) { const d = (t.px[i] - cx) ** 2 + (t.pz[i] - cz) ** 2; if (d < bd) { bd = d; k = i; } }
+    if (!inArc(k * ds, p.row.s0, p.row.s1)) continue;
+    tiers++;
+    const lat = ((cx - t.px[k]) * t.rx[k] + (cz - t.pz[k]) * t.rz[k]) * p.side - t.hw[k], r = (q.maxX - q.minX) / 2;
+    if (lat - r < p.off.outer + p.bay.depth && lat + r > p.off.outer) over++;
+  }
+  assert.ok(tiers > 0, "there are crown tiers along the row to test");
+  assert.equal(over, 0, `${over} crown tier(s) reach over the bays`);
 });

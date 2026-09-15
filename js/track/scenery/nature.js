@@ -83,10 +83,13 @@ const SceneryNature = (function () {
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      // 0.5 from the pit complex: the trunk is tested as a circle of that
-      // radius, and a base that passed as a point 0.3 m outside the edge
-      // shipped a crown with no trunk under it.
-      if (onTrack(a.c[0], a.c[2], 3, 0.5)) {
+      // The CROWN's radius from the pit complex, not the trunk's: crown tiers
+      // may overhang the complex (js/track/tracks.js onRoadHit), so a pine a
+      // def plants just behind the garages — Monza's poplars at the row —
+      // grew through the bay roofs. A tree is one object: if its crown would
+      // reach in, none of it stands. (clearTreeDist plants with the same
+      // margin; this is the guard for a direct call.)
+      if (onTrack(a.c[0], a.c[2], 3, Math.max(0.5, h * 0.225))) {
         ctx.noteSuppressed("pine", `pine SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
@@ -128,7 +131,7 @@ const SceneryNature = (function () {
       const crown = (opts && opts.crown) || "round";
       const sp = (opts && opts.spread) || 1;
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
-      if (onTrack(a.c[0], a.c[2], 4, 0.5)) {   // 0.5 from the pit complex — see pine()
+      if (onTrack(a.c[0], a.c[2], 4, Math.max(0.5, h * 0.3 * sp))) {   // the crown's radius from the pit complex — see pine()
         ctx.noteSuppressed("tree", `tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
       }
