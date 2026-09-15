@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 function fixture() {
-  const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status'].map(id => [id, { textContent: '' }]));
+  const nodes = new Map(['pm-coach-status', 'pm-coach-tip', 'pm-coach-summary', 'pm-drill-status', 'pm-lap-report'].map(id => [id, { textContent: '' }]));
   const saved = new Map(), announcements = [];
   // Throttle held: the default car is driving, not coasting (a coasting tip is its own test).
   const c = { speed: 60, lapTime: 0, brakeDemand: 0, throttleDemand: 1 };
@@ -24,7 +24,11 @@ function fixture() {
     RaceInsights: { create: () => ins, DRILLS: { free: 'Free practice', sector: 'Finish this sector cleanly',
       corner: 'Drive through the next corner', braking: 'Brake to a controlled stop', trail: 'Release the brake into a turn',
       slalom: 'Six clean direction changes' } },
-    SettingRow: { paint() {}, disable() {}, wire() {} }, Ghost: {}, IncidentSim: { reset() {} }, DebrisWorld: { reset() {} },
+    // A reference lap of 60 s that reaches each apex at an even 20 s: the
+    // arithmetic below is then readable by eye.
+    SettingRow: { paint() {}, disable() {}, wire() {} },
+    Ghost: { timeAt: s => ({ 100: 0, 500: 20, 980: 40 })[Math.round(s)] ?? null, bestTime: () => 60 },
+    IncidentSim: { reset() {} }, DebrisWorld: { reset() {} },
     PhysicsConsts: { BRAKE: 22, REVISION: 'test' }
   });
   vm.runInContext(readFileSync(new URL('../../js/race/driving-coach.js', import.meta.url), 'utf8'), ctx);
@@ -152,6 +156,66 @@ test('counts rank the most repeated tip first so the panel does not ask the driv
   tick(10, { ...rear, brakeDemand: 0, throttleDemand: 1, axEstSm: 0 });   // …and one on power, after the 8 s quiet window
   const counts = coach.feedback().counts;
   assert.equal(JSON.stringify(counts.map(r => [r.id, r.count])), '[["trail",3],["power",1]]');
+});
+
+// The reference lap reaches T1 at 0 s, T2 at 20 s, T3 at 40 s and the line at
+// 60 s — so every ghost segment is worth exactly 20 s and the arithmetic reads
+// by eye. `at` drives the car to an apex and returns the segment just closed.
+function lapDriver({ c, G, tick }) {
+  return (s, hold) => { if (hold) tick(hold); c.s = s; tick(.05); return G.raceT; };
+}
+
+test('the lap report differences your time against the reference at each apex, and names the worst corner', () => {
+  const { coach, c, G, tick, enable, announcements } = fixture(); enable();
+  const at = lapDriver({ c, G, tick });
+  c.s = 0; tick(.05);
+  at(105);              // T1: the anchor. Five metres past the apex, where a frame actually lands
+  at(505, 21);          // T1 -> T2 took ~21s against the reference 20s
+  at(985, 20);          // T2 -> T3 on the reference's pace
+  at(105, 23);          // T3 -> T1, across the start line, ~3s lost — and this closes the lap
+  const report = coach.status().lapReport;
+  assert.ok(report, 'a lap closed');
+  const by = Object.fromEntries(report.segments.map(r => [r.turn, r.lost]));
+  assert.ok(Math.abs(by[1] - 1) < .2, `T1 segment ${by[1]} ~ 1s`);
+  assert.ok(Math.abs(by[2]) < .2, `T2 segment ${by[2]} ~ 0s`);
+  assert.ok(Math.abs(by[3] - 3) < .2, `T3 segment ${by[3]} ~ 3s — the segment spanning the line is measured, not dropped`);
+  assert.equal(report.worst.turn, 3, 'the worst corner is named');
+  assert.ok(Math.abs(report.total - 4) < .3, `lap total ${report.total} ~ 4s`);
+  assert.equal(report.segments[0].turn, 3, 'segments are ranked worst first');
+  assert.match(announcements.at(-1)[0], /^TURN 3 COST 3\.\d\dS$/);
+  assert.equal(announcements.at(-1)[2], 'coach', 'the lap report is an advisory, not a race message');
+});
+
+test('a lap report is a copy, clears on reset, and needs a reference lap to exist at all', () => {
+  const { coach, c, G, tick, enable, nodes } = fixture(); enable();
+  const at = lapDriver({ c, G, tick });
+  coach.paint();
+  assert.match(nodes.get('pm-lap-report').textContent, /saved best on this circuit/);
+  c.s = 0; tick(.05); at(105); at(505, 21); at(985, 20); at(105, 23);
+  coach.paint();
+  const text = nodes.get('pm-lap-report').textContent;
+  assert.match(text, /Last lap: 4\.\d\ds slower than your best/);
+  assert.match(text, /Turn 3 \+3\.\d\ds, Turn 1 \+1\.\d\ds/, 'two corners, worst first');
+  assert.match(text, /exit speed is paid for at the apex/);
+  const view = coach.status().lapReport; view.worst.turn = 99;
+  assert.equal(coach.status().lapReport.worst.turn, 3, 'the report handed out is a copy');
+  coach.reset();
+  assert.equal(coach.status().lapReport, null);
+});
+
+test('a teleport cannot invent a segment, and a faster lap reads as faster', () => {
+  const { coach, c, G, tick, enable, announcements } = fixture(); enable();
+  const at = lapDriver({ c, G, tick });
+  c.s = 0; tick(.05); at(105);
+  tick(5); c.s = 905; tick(.05);        // a practice retry: 800 m of arc in one frame
+  at(105, 21);
+  assert.equal(coach.status().lapReport, null, 'the jumped lap produced no report');
+  // …and the next clean lap reports normally, faster than the reference this time.
+  at(505, 19); at(985, 19); at(105, 19);
+  const report = coach.status().lapReport;
+  assert.ok(report, 'the lap after the teleport is measured');
+  assert.ok(report.total < 0, `total ${report.total} is a gain`);
+  assert.equal(announcements.filter(a => /COST/.test(a[0])).length, 0, 'nothing is announced when no corner cost 0.2s');
 });
 
 test('checkpoint messages name the practice goal, and the pause menu lists attempts and the saved best', () => {
