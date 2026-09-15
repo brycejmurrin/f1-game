@@ -1,9 +1,13 @@
-/* Apex 26 — ZANDVOORT circuit definition (data only). */
+/* Apex 26 — ZANDVOORT circuit definition (data only).
+   Retired after 2026 (`classic: true`): F1 and the promoter announced on
+   2024-12-04 a one-year extension through 2026 and the promoter's decision
+   not to continue beyond it. The 2026 Dutch GP was the final running. */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "zandvoort",
+    classic: true,
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
     // Start/finish line. Snapped to the real one: coord 0.4 m off centreline; = trace vertex 0 (timing line).
     // Was 0.3275. That already measured straight (mean |k| 0.00356 over

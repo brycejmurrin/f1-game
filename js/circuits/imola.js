@@ -1,9 +1,13 @@
-/* Apex 26 — IMOLA circuit definition (data only). */
+/* Apex 26 — IMOLA circuit definition (data only).
+   Retired (`classic: true`): dropped from the calendar when Madrid joined for
+   2026, and not among the venues contracted for 2027. Press mentions of Imola
+   are as a contingency venue only, which is not a calendar slot. */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "imola",
+    classic: true,
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
     // Start/finish line. Snapped to the real one: coord 6.3 m off centreline; = trace vertex 0 (timing line).
     // Was 0.4950, which put the line inside a corner — a start line is

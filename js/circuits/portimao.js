@@ -1,12 +1,13 @@
 /* Apex 26 — AUTÓDROMO INTERNACIONAL DO ALGARVE (PORTIMÃO) definition (data only).
-   Retired circuit (`classic: true`): hosted the Portuguese GP in 2020 and 2021.
+   SEASON circuit: hosted the Portuguese GP in 2020 and 2021, and returns for
+   2027-2028 under a two-year deal announced 2025-12-16 — F1's named
+   replacement for the departing Dutch GP.
    Geometry from the OSM trace in `path` below. */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "portimao",
-    classic: true,
     // Upstream pt-2008 already runs clockwise, matching the racing direction.
     reverse: false,
     // The pit straight opens the trace, and its first vertex is the line.
