@@ -3208,7 +3208,19 @@ const TLX = (function () {
                 const knob = framePerChunk;
                 const chs = rec.chunked.chunks;
                 if (!AL || !(knob > 0) || !chs || !chs.length) {
+                  // Report the OFF state too. This branch used to leave
+                  // _lampGridState holding the last successful bake, so
+                  // __apex.lightState().tlxLampGrid answered {on:true, lamps:249,
+                  // ...} with the knob at 0 and the path shut down — the hook
+                  // that exists to prove this feature is live was the one thing
+                  // that could not be trusted about it. Measured 2026-09-15:
+                  // three captures in one session (0, 1, 0) all read on:true.
                   if (_lgKey !== "off") { lit.setLampGrid(null); _lgKey = "off"; }
+                  _lampGridState = { on: false, lamps: AL ? (AL.length / 15) | 0 : 0,
+                                     chunks: (chs && chs.length) | 0, idx: 0,
+                                     why: !(knob > 0) ? "knob is 0"
+                                        : !AL ? "no baked lamp set"
+                                        : "no chunked geometry" };
                 } else {
                   const key = knob + "|" + (chs.length | 0);
                   if (_lgKey !== key || _lgSrc !== AL || _lgChunks !== chs) {
