@@ -5,6 +5,17 @@
 //
 //   node tools/shot/pit-shots.mjs [trackId ...] [--out DIR] [--tod day|dusk|dawn|night]
 //     [--teams all|none|mercedes,ferrari] [--wait S] [--viewport WxH] [--plan]
+//     [--full] [--no-models]
+//
+// FAST BY DEFAULT. Every frame is a full SwiftShader render plus a readback,
+// and at 1600x900 on the governor's top tier that was ~40 s a frame (Albert
+// Park: 17 frames, 13 min, a 29 s boot). The default now renders at half
+// scale (gfx.setRenderScale 0.5 — the overlay still presents full size),
+// holds the governor at tier 4 (no post stack, no shadow passes), uses a
+// 1280x720 viewport and waits for ONE presented frame. `--full` is the old
+// look for a sign-off frame; `--no-models` skips the asset pack on boot
+// (the engine's pit complex needs none of it; a circuit's bakedModel dressing
+// will be missing).
 //
 // ONE BOOT PER CIRCUIT. shot.mjs launches a browser per frame and a cold boot
 // is ~45 s on this container; a pit set is 15+ frames. Everything here is
@@ -49,7 +60,7 @@ const has = (name) => argv.includes(name);
 const positionals = [];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i].startsWith("--")) {
-    if (!/^--(plan|hud)$/.test(argv[i]) && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
+    if (!/^--(plan|hud|full|no-models)$/.test(argv[i]) && i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
     continue;
   }
   positionals.push(argv[i]);
@@ -62,7 +73,9 @@ const TEAMS = flag("--teams", "all");
 const WAIT_MS = Math.max(5, parseFloat(flag("--wait", "150"))) * 1000;
 const PLAN = has("--plan");
 const SHOW_HUD = has("--hud");
-const [VW, VH] = String(flag("--viewport", "1600x900")).split("x").map((n) => parseInt(n, 10) || 0);
+const FULL = has("--full");
+const NO_MODELS = has("--no-models");
+const [VW, VH] = String(flag("--viewport", FULL ? "1600x900" : "1280x720")).split("x").map((n) => parseInt(n, 10) || 0);
 const OUT_ROOT = flag("--out", null)
   ? resolve(flag("--out", null))
   : resolveRepoDefault(ROOT, "scratch", "captures", "pit-lane");
@@ -149,10 +162,18 @@ function framings(g) {
  *  side, and one box per team. `atM` is how far through the window the parked
  *  car is, so `s - atM` is the entry with no constant copied out of
  *  js/race/pit-lane.js. */
-async function pitGeometry(page, tod, showHud) {
-  return page.evaluate(({ tod, showHud }) => {
+async function pitGeometry(page, tod, showHud, full) {
+  return page.evaluate(({ tod, showHud, full }) => {
     const a = window.__apex;
     a.go();
+    if (!full) {
+      // Half-scale raster, lowest governor tier, held there: the frame is a
+      // review still, not a benchmark, and this is 4x fewer pixels and no
+      // post stack per present.
+      try { if (a.renderScale) a.renderScale(0.5); } catch (_) { /* older build */ }
+      try { if (typeof PerfGov !== "undefined" && PerfGov.setUserTier) PerfGov.setUserTier(4); } catch (_) { /* harness */ }
+      try { if (a.govHold) a.govHold(true); } catch (_) { /* older build */ }
+    }
     if (a.tyres) a.tyres({ level: "real" });     // arms the lane (PitLane.enabled)
     if (a.setTimeOfDay) a.setTimeOfDay(tod);
     if (a.hud) a.hud(!!showHud);
@@ -179,7 +200,7 @@ async function pitGeometry(page, tod, showHud) {
       limitKph: p.limitKph, enabled: p.enabled,
       lane: p.lane, ribbon: p.lane === null, rows,
     };
-  }, { tod, showHud });
+  }, { tod, showHud, full });
 }
 
 /** Stage one framing. Returns the lane centre actually used, so the manifest
@@ -239,7 +260,7 @@ try {
       await page.waitForFunction(() => window.__apex != null, null, { timeout: WAIT_MS, polling: 100 });
       // Models resident BEFORE the build, so scenery()'s bakedModel() emits —
       // the pit buildings are exactly the kind of prop that goes missing here.
-      const models = await page.evaluate(async () => {
+      const models = NO_MODELS ? 0 : await page.evaluate(async () => {
         if (typeof Assets === "undefined" || !Assets.loadModels) return 0;
         try { return await Assets.loadModels(); } catch (_) { return 0; }
       });
@@ -248,7 +269,7 @@ try {
         { timeout: WAIT_MS, polling: 100 });
       await sleep(1200);
 
-      const g = await pitGeometry(page, TOD, SHOW_HUD);
+      const g = await pitGeometry(page, TOD, SHOW_HUD, FULL);
       if (g.err) throw new Error(g.err);
       console.log(`[${trackId}] boot ${((Date.now() - t0) / 1000).toFixed(1)}s  models=${models}  ` +
         `window ${g.lenM} m  side ${g.side > 0 ? "right" : "left"}  limit ${g.limitKph} km/h  ` +
@@ -256,13 +277,14 @@ try {
 
       const shots = [];
       for (const spec of framings(g)) {
+        const tf = Date.now();
         const staged = await stage(page, spec, g);
-        // Two presented frames, not one: the soft-present blit can hand back
-        // the frame staged BEFORE this camera moved (07 came out as 06).
-        await sleep(400);
+        // One presented frame, armed AFTER the camera moved (stage() steps the
+        // sim, so the next present is this camera's); `--full` waits for a
+        // second one, which is what caught 07 coming out as 06 at top tier.
+        await sleep(FULL ? 400 : 150);
         await awaitPresentedFrame(page);
-        await sleep(400);
-        await awaitPresentedFrame(page);
+        if (FULL) { await sleep(400); await awaitPresentedFrame(page); }
         const file = join(outDir, `${spec.name}.png`);
         const shot = await screenshotPresentedCanvas(page, { path: file, skipAwait: true, timeout: 60000 })
           .catch(async () => {
@@ -271,7 +293,7 @@ try {
           });
         const blank = shot.bytes < 5000;
         shots.push({ ...spec, file, bytes: shot.bytes, via: shot.via, ...staged, blank });
-        console.log(`  ${blank ? "⚠" : "·"} ${spec.name.padEnd(28)} ${(shot.bytes / 1024).toFixed(0).padStart(4)} KB` +
+        console.log(`  ${blank ? "⚠" : "·"} ${spec.name.padEnd(28)} ${(shot.bytes / 1024).toFixed(0).padStart(4)} KB  ${((Date.now() - tf) / 1000).toFixed(1).padStart(5)}s` +
           `${staged.dbgCamActive ? "" : "   ⚠ free-cam inactive"}${blank ? "   ⚠ looks blank" : ""}`);
       }
       const manifest = { track: trackId, tod: TOD, geometry: g, shots, viewport: { w: VW, h: VH } };
