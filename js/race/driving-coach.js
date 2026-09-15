@@ -205,7 +205,6 @@ const DrivingCoach = (function () {
       read: () => drillMode, write: v => { if (Object.hasOwn(RaceInsights.DRILLS, v)) drillMode = v; paint(); } });
     SettingRow.wire($("pm-pit-choice"), { read: () => G.player && G.player.pitNext ? G.player.pitNext.id : "auto",
       write: v => { G.pits.selectNext(G.player, v); paint(); } });
-    bind("pm-driving", () => { $("pm-settings").click(); SettingsNav.show("driving", false); });
     const menu = $("pmsettings"), panel = $("pm-panel-driving");
     if (menu && panel && typeof MutationObserver === "function") {
       const observer = new MutationObserver(() => { if (!menu.hidden && !panel.hidden) paint(); });
