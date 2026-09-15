@@ -402,7 +402,6 @@ const Tracks = (function () {
       // question is how much room the scenery left.
       applyPitCorridor(track);
       track.pitLane = pitLaneFit(track, PIT_SIDE);
-      if (track.pitLane && TrackMesh.buildPitGarages) TrackMesh.buildPitGarages(track, _props.out);
       const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
