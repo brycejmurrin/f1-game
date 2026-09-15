@@ -33,7 +33,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["brands_hatch"] =
   function (api) {
-      const { n, hash, every, anchor, onTrack, out,
+      const { n, hash, every, anchor, onTrack, out, terrainYAt, mountain,
         tree, pine, bush, hedge, forestEdge, conifer, broadleafFall,
         building, house, motorhome, tower, grandstandEx, spectatorHill,
         terrace, bleacher,
@@ -744,4 +744,25 @@
       ]) {
         treeBelt(ID, s0, s1, side, d0, 90, 9, 151 + Math.round(s0 * 100), 12);
       }
+        // ---------------------------------------------------------------- FAR HORIZON
+      // Brands Hatch is a NATURAL AMPHITHEATRE cut into the Kent North Downs —
+      // the bowl is the venue, and a 2026-09-15 visual pass found it opening
+      // onto a flat green plane with a hard edge at the sky. Of the four
+      // circuits given a horizon this is the one where its absence was the
+      // biggest lie: wooded chalk downland, close in and higher than the others,
+      // so the lap reads as sunk into ground rather than laid on it.
+      const farHill = (frac, side, dist, w, h, dy) => {
+        const a = anchor(K(frac), side, dist).c;
+        const y = terrainYAt(a[0], a[2]);
+        // snowline ABOVE the summit: the default is 0.62, which put snow and
+        // rock on the top 38% of hills this size — North Downs chalk woodland
+        // carries neither.
+        mountain(a[0], a[2], (y === null ? a[1] : y) + dy, w, h,
+          { rough: 0.22, snowline: 2, forest: [0.17, 0.31, 0.19] });
+      };
+      farHill(0.06, 1, 990, 1722, 86, -35);
+      farHill(0.24, -1, 1080, 1599, 73, -31);
+      farHill(0.46, 1, 1140, 1886, 96, -37);
+      farHill(0.68, -1, 1020, 1517, 67, -30);
+      farHill(0.88, 1, 1050, 1640, 80, -33);
   };

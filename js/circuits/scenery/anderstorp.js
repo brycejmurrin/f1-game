@@ -129,7 +129,14 @@
       // colonnade. SEVEN ranks now — the far ones cool towards the sky so the
       // wall of green has depth instead of being a flat curtain. The runway
       // corridor is cut out of every one of them.
-      every(5, (k) => {
+      // every(11), not every(5), and the near rank at 26 m rather than 13 m.
+      // A 2026-09-15 visual pass found the circuit INVISIBLE from every roadside
+      // view: a pine every 20 m on both sides, up to five ranks deep starting
+      // 13 m off the edge, is not a treeline, it is a fence. Anderstorp is built
+      // on an AIRFIELD — the defining feature is open ground, a runway used as a
+      // straight, and forest at the perimeter. The depth ranks below are kept;
+      // it is the pitch and the near band that were wrong.
+      every(11, (k) => {
         const s = k / n;
         const h = hash(k * 37);
         const h2 = hash(k * 71 + 5);
@@ -138,16 +145,20 @@
           // Runway: no pine on the apron side at all, and the far-side
           // treeline is pushed a long way out (block 14 handles it).
           if (onRunway(s)) continue;
-          const near = 13 + h * 5;
+          const near = 26 + h * 6;
           if (h > 0.18) {
             const a = anchor(k, side, near);
             if (!onTrack(a.c[0], a.c[2], 7)) {
               pine(k, side, near, 17 + h * 9, pick(h, NEAR_PINE));
             }
           }
-          if (h2 > 0.24) pine(k, side, 22 + h2 * 7, 15 + h2 * 10, pick(h2, MID_PINE));
+          // 36 m, not 22: this row and the 16 m one below both sat CLOSER than
+          // the "near" rank above them, which is why pushing that one out alone
+          // changed nothing on screen. The airfield keeps open ground to ~26 m
+          // and the wood stacks behind it.
+          if (h2 > 0.24) pine(k, side, 36 + h2 * 9, 15 + h2 * 10, pick(h2, MID_PINE));
           if (h2 < 0.58) {
-            const d = 16 + h2 * 4;
+            const d = 29 + h2 * 5;
             if (clear(k, side, d, 8)) pine(k, side, d, 16 + h2 * 11, pick(h2, NEAR_PINE));
           }
           if (h2 > 0.62) farPine(k, side, 32 + h * 9, 14 + h * 9, pick(h, FAR_PINE));
@@ -164,11 +175,11 @@
       });
 
       // Bulk treeline behind the ranks, everywhere but the runway.
-      forestEdge(0.875, 1.0, -1, 26, { col: PINE_D });
-      forestEdge(0.0, 0.545, -1, 24, { col: PINE_D });
-      forestEdge(0.875, 1.0, 1, 30, { col: PINE_D });
-      forestEdge(0.0, 0.070, 1, 34, { col: PINE_D });
-      forestEdge(0.210, 0.545, 1, 34, { col: PINE_D });
+      forestEdge(0.875, 1.0, -1, 26, { col: PINE_D, spacing: 12 });
+      forestEdge(0.0, 0.545, -1, 24, { col: PINE_D, spacing: 12 });
+      forestEdge(0.875, 1.0, 1, 30, { col: PINE_D, spacing: 14 });
+      forestEdge(0.0, 0.070, 1, 34, { col: PINE_D, spacing: 14 });
+      forestEdge(0.210, 0.545, 1, 34, { col: PINE_D, spacing: 14 });
 
       // Armco. Continuous and close everywhere except the runway, where it
       // pulls right back and the whole corridor opens.
@@ -228,13 +239,13 @@
       for (let i = 0; i < 22; i++) {
         const s = 0.965 + i * 0.0042;
         const k = K(s);
-        pine(k, -1, 11 + hash(k * 13) * 3, 18 + hash(k * 17) * 8, PINE);
+        pine(k, -1, 24 + hash(k * 13) * 4, 18 + hash(k * 17) * 8, PINE);
       }
       for (let i = 0; i < 18; i++) {
         const s = 0.962 + i * 0.0050;
         const k = K(s);
         const h = hash(k * 53 + 9);
-        pine(k, -1, 18 + h * 7, 16 + h * 9, h < 0.4 ? SPRUCE : PINE_D);
+        pine(k, -1, 30 + h * 7, 16 + h * 9, h < 0.4 ? SPRUCE : PINE_D);
         if (h > 0.78) tree(k, -1, 14 + h * 4, 10 + h * 3, BIRCH);
       }
       sponsorHoarding(0.028, 0.056, -1, 11, {});
@@ -260,7 +271,7 @@
         place(K(0.066 + i * 0.0030), -1, 22, [1.8, 1.4, 1.8], TYRE_K);
       }
       boards(0.045, -1, 12, 0.0124);
-      forestEdge(0.030, 0.095, -1, 22, { col: PINE });
+      forestEdge(0.030, 0.095, -1, 22, { col: PINE, spacing: 12 });
 
       // ---------------------------------------------------------------- 5.
       // 0.095 +1 — INFIELD PADDOCK. A low corrugated rank in faded blue and
@@ -309,8 +320,8 @@
         const s = 0.130 + i * 0.0028;
         const k = K(s);
         const h = hash(k * 29 + 3);
-        pine(k, -1, 10.5 + h * 2.5, 19 + h * 9, h < 0.5 ? PINE : PINE_L);
-        if (h > 0.45) pine(k, -1, 17 + h * 4, 16 + h * 8, PINE_D);
+        pine(k, -1, 25 + h * 4, 19 + h * 9, h < 0.5 ? PINE : PINE_L);
+        if (h > 0.45) pine(k, -1, 33 + h * 5, 16 + h * 8, PINE_D);
         if (h > 0.30) farPine(k, -1, 27 + h * 8, 15 + h * 9, SPRUCE);
         if (h > 0.70) farPine(k, -1, 42 + h * 12, 15 + h * 8, PINE_B);
       }
@@ -354,7 +365,7 @@
       // 0.245 -1 — BACK INTO THE TREES. A small wooden flag/timing hut, a
       // woodpile and a gravel access track are the only human marks; the
       // forest does the rest of the work.
-      forestEdge(0.225, 0.300, -1, 16, { col: PINE });
+      forestEdge(0.225, 0.300, -1, 16, { col: PINE, spacing: 12 });
       building(K(0.245), -1, 16, 5, 4.0, 7, { col: TIMBER });
       building(K(0.268), -1, 18, 4, 3.2, 5, { col: FALU });
       place(K(0.256), -1, 17, [2.0, 1.6, 6.0], TIMBER);        // stacked cordwood
@@ -367,7 +378,7 @@
         const s = 0.222 + i * 0.0050;
         const k = K(s);
         const h = hash(k * 67 + 31);
-        pine(k, -1, 13 + h * 5, 18 + h * 9, h < 0.45 ? PINE : PINE_O);
+        pine(k, -1, 27 + h * 5, 18 + h * 9, h < 0.45 ? PINE : PINE_O);
         if (h > 0.55) farPine(k, -1, 24 + h * 9, 16 + h * 9, SPRUCE);
       }
 
@@ -393,7 +404,7 @@
       }
       billboard(K(0.366), -1, 16, 8, 3.2, [0.82, 0.76, 0.34]);
       boards(0.328, -1, 12, 0.0124);
-      forestEdge(0.300, 0.380, -1, 30, { col: PINE_D });
+      forestEdge(0.300, 0.380, -1, 30, { col: PINE_D, spacing: 14 });
 
       // --------------------------------------------------------------- 10.
       // 0.400 +1 — INFIELD SCRUB between the loops. Sandy grass, scattered
@@ -447,7 +458,7 @@
         if (h > 0.35) farPine(k, -1, 21 + h * 7, 16 + h * 9, SPRUCE);
         if (h > 0.66) farPine(k, -1, 36 + h * 12, 15 + h * 9, PINE_B);
       }
-      forestEdge(0.440, 0.545, -1, 20, { col: PINE });
+      forestEdge(0.440, 0.545, -1, 20, { col: PINE, spacing: 12 });
 
       // --------------------------------------------------------------- 12.
       // 0.556 +1 — TURN 6, ONTO THE RUNWAY. The identifying feature of the
@@ -599,7 +610,7 @@
         farPine(k, -1, 128 + h * 40, 16 + h * 9, PINE_B);
         if (h > 0.40) farPine(k, -1, 176 + h * 60, 17 + h * 8, PINE_F);
       }
-      forestEdge(RW0, RW1, -1, 96, { col: PINE_D });
+      forestEdge(RW0, RW1, -1, 96, { col: PINE_D, spacing: 20 });
       fence(RW0 + 0.010, RW1 - 0.010, -1, 60, 1.4, [0.56, 0.58, 0.55]);
       building(K(0.762), -1, 122, 16, 8, 26, { col: FALU });    // field barn
       building(K(0.780), -1, 124, 8, 5, 12, { col: FALU_D });
@@ -654,8 +665,8 @@
         const s = 0.872 + i * 0.0022;
         const k = K(s);
         const h = hash(k * 41 + 2);
-        pine(k, -1, 20 + h * 6, 18 + h * 9, h < 0.5 ? PINE : PINE_L);
-        pine(k, 1, 18 + h * 8, 17 + h * 8, PINE_D);
+        pine(k, -1, 31 + h * 6, 18 + h * 9, h < 0.5 ? PINE : PINE_L);
+        pine(k, 1, 30 + h * 8, 17 + h * 8, PINE_D);
         if (h > 0.35) farPine(k, -1, 33 + h * 10, 16 + h * 9, SPRUCE);
         if (h > 0.55) farPine(k, 1, 31 + h * 11, 16 + h * 9, SPRUCE);
         if (h > 0.70) farPine(k, -1, 50 + h * 16, 15 + h * 9, PINE_B);
@@ -700,5 +711,5 @@
         farPine(k, -1, 56 + h * 20, 16 + h * 9, PINE_B);
         if (h > 0.50) farPine(k, -1, 84 + h * 28, 16 + h * 8, PINE_F);
       }
-      forestEdge(0.895, 0.995, -1, 40, { col: PINE_D });
+      forestEdge(0.895, 0.995, -1, 40, { col: PINE_D, spacing: 14 });
   };
