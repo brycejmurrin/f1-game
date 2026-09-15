@@ -955,20 +955,23 @@ function bootSettingsNav() {
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const index = dom.byId("pm-settings-index");
-  for (const id of ["pm-open-controls", "pm-open-display", "pm-advanced", "pm-lighting", "pm-camtune", "pm-audio"])
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-advanced", "pm-audio"])
     index.appendChild(dom.byId(id));
   const stale = dom.document.createElement("button");
   stale.hidden = true;
   const steer = dom.document.createElement("button");
   const controls = dom.byId("pm-panel-controls");
   controls.appendChild(stale); controls.appendChild(steer);
+  const driving = dom.byId("pm-panel-driving");
+  const drivingFirst = dom.document.createElement("button");
+  driving.appendChild(drivingFirst);
   const audioFirst = dom.document.createElement("summary");
   dom.byId("audioset").appendChild(audioFirst);
   let selected = 0;
   const nav = sb.SettingsNav.create({ get: (_k, d) => d, set() {} }, () => selected++);
   return {
     dom, nav, selected: () => selected,
-    firstControl: steer, audioFirst,
+    firstControl: steer, drivingFirst, audioFirst,
     index: () => dom.byId("pm-settings-index"),
     panel: (id) => dom.byId(({ advanced: "advanced", audio: "audioset" })[id] || ("pm-panel-" + id)),
     door: (id) => dom.byId("pm-open-" + id),
@@ -1008,6 +1011,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(h.panel("audio").hidden, false);
   assert.equal(h.title().textContent, "MUSIC & SOUND");
   assert.equal(h.dom.document.activeElement, h.audioFirst, "audio can land on its visible disclosure door");
+  h.door("driving").click();
+  assert.equal(h.panel("driving").hidden, false);
+  assert.equal(h.title().textContent, "DRIVING");
+  assert.equal(h.panel("audio").hidden, true);
+  assert.equal(h.dom.document.activeElement, h.drivingFirst, "driving focuses its first visible control");
   h.nav.show("display", false);
   assert.equal(h.nav.back(), false, "BACK on a page pops to home");
   assert.equal(h.index().hidden, false);
@@ -1097,7 +1105,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "min-height"), "var(--chip-h)",
     "RENDERER summary matches the HUD / METRICS chip row");
-  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner #pm-display-adv > summary", "#pmsettings-inner #advanced-inner details > summary"]) {
+  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner #pm-display-adv > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
     assert.equal(decl(css("css/components.css"), sel, "height"), "auto", "fold summaries wrap instead of clipping their readout at 150%");
     assert.equal(decl(css("css/components.css"), sel, "flex-wrap"), "wrap");
   }
@@ -1148,9 +1156,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
   assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#advanced-inner, #pm-panel-driving\) details > summary/, "color"), "var(--steel)",
     "STEERING folds use the same disclosure chrome as DISPLAY");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary::after/, "content"), "none");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
   assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
     /25BE/,
     "MUSIC fold chevron sits on the left");
@@ -1291,6 +1299,13 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
   assert.match(shell, /id="pm-advanced">STEERING &amp; ASSISTS/, "settings door is STEERING & ASSISTS");
+  const settingsIndex = shell.slice(shell.indexOf('id="pm-settings-index"'), shell.indexOf("</nav>", shell.indexOf('id="pm-settings-index"')));
+  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|advanced|audio))"/g)].map((m) => m[1]),
+    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-advanced", "pm-audio"],
+    "Settings home has the five primary doors in order");
+  const pause = shell.slice(shell.indexOf('id="pausemenu"'), shell.indexOf("</dialog>", shell.indexOf('id="pausemenu"')));
+  assert.doesNotMatch(pause, /<button id="pm-driving"/, "DRIVING is a Settings page, not a pause shortcut");
+  assert.match(shell, /id="pm-panel-driving"/, "DRIVING has a dedicated Settings page");
   assert.match(shell, /id="cz-cancel"[^>]*>BACK</, "customize cancel is BACK beside SAVE");
   assert.match(shell, /id="lt-close"[^>]*class="bigbtn"/, "lighting tuner DONE stays a live-commit primary");
   assert.doesNotMatch(shell, /id="lt-close"[^>]*class="bigbtn alt"/);
@@ -1344,7 +1359,7 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
   assert.equal(decl(components, ".sheet-foot .bigbtn:only-child", "flex"), "0 1 auto");
   assert.equal(decl(components, ".pm-group .tune-row .tune-label", "position"), "static");
   assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="region"] button', "white-space"), "normal");
-  assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 360px)")));
+  assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 600px)")));
   assert.equal(decl(css("css/career.css"), ".cr-cheats .sel-chip", "min-width"), "0");
 });
 

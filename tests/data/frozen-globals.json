@@ -96,7 +96,10 @@
   "RaceControl",
   "SessionRecords",
   "DrivingCoach",
-  "PerfGov"
+  "PerfGov",
+  "ContactGeometry",
+  "RaceInsights",
+  "AiCorridor"
  ],
  "mutable": [
   "GLX",

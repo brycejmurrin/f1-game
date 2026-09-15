@@ -508,18 +508,6 @@
       <button id="pm-settings">SETTINGS&hellip;</button>
       <button id="pm-howto">HOW TO PLAY&hellip;</button>
       <button id="pm-standings" hidden>STANDINGS</button>
-      <details id="pm-pit-strategy"><summary class="adv-more-btn">PIT STRATEGY</summary>
-        <div class="stack">
-          <label>Next pit stop <select id="pm-pit-choice" aria-label="Next pit stop compound"><option value="auto">AUTOMATIC COMPOUND</option></select></label>
-          <p id="pm-pit-estimate" class="adv-help"></p>
-        </div>
-      </details>
-      <details id="pm-diagnostics"><summary class="adv-more-btn">DIAGNOSTICS</summary>
-        <div class="stack">
-          <p class="adv-help">Download recent driving data recorded while the coach or practice mode is active.</p>
-          <button id="pm-driving-trace" type="button" disabled>DOWNLOAD DRIVING TRACE</button>
-        </div>
-      </details>
       <button id="pm-quit">QUIT TO MENU</button>
       <!-- NOW PLAYING — shown only while music is actually playing
            (js/audio/panel.js paints it and sets hidden): the same card as
@@ -557,8 +545,9 @@
     <div id="pm-settings-body" class="sheet-body pane">
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
         <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
+        <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice &amp; strategy</small></button>
         <button id="pm-open-display" type="button">DISPLAY&hellip;<small>UI, HUD &amp; graphics</small></button>
-        <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, coach &amp; practice</small></button>
+        <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Playback, effects &amp; volume</small></button>
       </nav>
       <div class="pm-groups">
@@ -663,6 +652,63 @@
             </div>
             <p id="pm-pad-calib-note" class="adv-help">CALIBRATE STICK: let go of the stick, then press it &mdash; where it rests is subtracted from then on, which is the fix for a drifting stick that does not cost you fine steering. SET UP A WHEEL asks you to turn the wheel and press each pedal, for wheels the browser cannot map on its own.</p>
           </div>
+        </section>
+        <section id="pm-panel-driving" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
+          <div id="pm-coach" class="set-row" role="group" aria-labelledby="pm-coach-label">
+            <span class="tune-label" id="pm-coach-label">DRIVING COACH</span>
+            <div>
+              <button id="pm-coach-prev" type="button" data-step="-1" aria-label="Previous driving coach">&lsaquo;</button>
+              <select id="pm-coach-sel" aria-labelledby="pm-coach-label" aria-describedby="pm-coach-help"></select>
+              <button id="pm-coach-next" type="button" data-step="1" aria-label="Next driving coach">&rsaquo;</button>
+            </div>
+          </div>
+          <p id="pm-coach-help" class="adv-help">Short text tips while you drive. You stay in control.</p>
+          <p id="pm-coach-status" class="adv-help" role="status">Turn on the coach to get driving tips.</p>
+          <p id="pm-coach-tip">Your next tip will appear here after you drive.</p>
+          <details id="pm-practice-panel">
+            <summary class="adv-more-btn">PRACTICE A SECTION</summary>
+            <p id="pm-practice-help" class="adv-help">In solo Time Trial: choose a goal, save your starting point, then resume. TRY AGAIN restores that point and goal.</p>
+            <div id="pm-drill" class="set-row" role="group" aria-labelledby="pm-drill-label">
+              <span class="tune-label" id="pm-drill-label">PRACTICE GOAL</span>
+              <div>
+                <button id="pm-drill-prev" type="button" data-step="-1" aria-label="Previous practice goal">&lsaquo;</button>
+                <select id="pm-drill-sel" aria-labelledby="pm-drill-label" aria-describedby="pm-drill-status"></select>
+                <button id="pm-drill-next" type="button" data-step="1" aria-label="Next practice goal">&rsaquo;</button>
+              </div>
+            </div>
+            <p id="pm-drill-status" class="adv-help"></p>
+            <button id="pm-practice-set" type="button" aria-describedby="pm-practice-state">SAVE STARTING POINT</button>
+            <button id="pm-practice-retry" type="button" aria-describedby="pm-practice-state" disabled>TRY AGAIN</button>
+            <p id="pm-practice-state" class="adv-help">Available in solo Time Trial. Saving a starting point makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again.</p>
+          </details>
+          <details id="pm-pit-panel">
+            <summary class="adv-more-btn">PIT STRATEGY</summary>
+            <div id="pm-pit-choice" class="set-row" role="group" aria-labelledby="pm-pit-choice-label">
+              <span class="tune-label" id="pm-pit-choice-label">NEXT TYRES</span>
+              <div>
+                <button id="pm-pit-choice-prev" type="button" data-step="-1" aria-label="Previous next tyres">&lsaquo;</button>
+                <select id="pm-pit-choice-sel" aria-labelledby="pm-pit-choice-label" aria-describedby="pm-pit-help"></select>
+                <button id="pm-pit-choice-next" type="button" data-step="1" aria-label="Next next tyres">&rsaquo;</button>
+              </div>
+            </div>
+            <p id="pm-pit-help" class="adv-help">Choose the tyres to fit at your next stop. AUTO lets the game choose. Drive into the pit entry to stop; this choice does not call you into the pits. Requires tyre wear to be enabled.</p>
+            <p id="pm-pit-estimate" class="adv-help"></p>
+            <p id="pm-stint-forecast" class="adv-help"></p>
+            <p id="pm-energy-forecast" class="adv-help"></p>
+          </details>
+          <details id="pm-session-review">
+            <summary class="adv-more-btn">SESSION REVIEW</summary>
+            <p id="pm-coach-summary" class="adv-help">No coaching tips recorded this session.</p>
+            <p id="pm-connection" class="adv-help" hidden></p>
+            <ol id="pm-incident-log"></ol>
+            <details id="pm-technical-data">
+              <summary class="adv-more-btn">TECHNICAL DATA</summary>
+              <p class="adv-help">Optional JSON download: recent driving samples, race events and estimates. Driving samples are recorded while coach or practice is active.</p>
+              <button id="pm-driving-trace" type="button" disabled>DOWNLOAD SESSION DATA</button>
+              <p class="adv-help">AI passing decisions: each rival’s latest choice. An earlier commitment may still be active.</p>
+              <ol id="pm-ai-decisions"></ol>
+            </details>
+          </details>
         </section>
         <section id="pm-panel-display" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -841,17 +887,6 @@
     <h3 class="pm-group-h" id="pm-pace-h">OVERALL SPEED <b id="pm-pace-v">84%</b></h3>
     <label class="tune-row">
       <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed"></label>
-
-      <details id="pm-driving"><summary class="adv-more-btn">DRIVING &amp; PRACTICE</summary>
-        <div class="stack">
-          <button id="pm-coach" type="button" aria-pressed="false" aria-describedby="pm-coach-help">DRIVING COACH: OFF</button>
-          <p id="pm-coach-help" class="adv-help">Tips about braking, steering and traction. The coach gives advice; you control the car.</p>
-          <p id="pm-coach-last" class="adv-help"></p>
-          <button id="pm-practice-set" type="button">SET PRACTICE CHECKPOINT</button>
-          <button id="pm-practice-retry" type="button" disabled>RETRY CHECKPOINT</button>
-          <p class="adv-help">Checkpoints are available in solo time trials, outside Daily Challenge. Practice laps are not saved. Restart to return to timed laps.</p>
-        </div>
-      </details>
 
     <details id="adv-feel-details">
     <summary id="adv-feel-sum" class="adv-more-btn">FEEL · NORMAL</summary>
@@ -2072,6 +2107,7 @@
     <nav id="htp-contents" aria-label="How to play sections">
       <a href="#htp-controls">CONTROLS</a>
       <a href="#htp-racing">RACING</a>
+      <a href="#htp-driving">DRIVING</a>
       <a href="#htp-setup">SETUP</a>
       <a href="#htp-modes">MODES</a>
       <a href="#htp-friends">FRIENDS</a>
@@ -2111,12 +2147,23 @@
         <dd>Follow within one second to arm it, then activate for four seconds of electric power. The HUD explains when it is unavailable: the opening lap, a caution or the cooldown. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
         <dt>GEARS</dt>
         <dd>Choose SETTINGS › CONTROLS › GEARS: MANUAL to shift yourself. Shift up near the redline and down before slow corners. Manual gears work on desktop and with TILT on a phone; BUTTONS and TOUCH keep gears automatic.</dd>
-        <dt>DRIVING COACH</dt>
-        <dd>SETTINGS › STEERING &amp; ASSISTS › DRIVING &amp; PRACTICE enables braking, steering and traction tips. The coach gives advice; you control the car. Return there to read the last tip and why it helps.</dd>
-        <dt>PRACTICE CHECKPOINTS</dt>
-        <dd>In a solo time trial, SETTINGS › STEERING &amp; ASSISTS › DRIVING &amp; PRACTICE lets you save a checkpoint and retry a corner. Practice laps do not count toward records. Restart to return to timed laps. Checkpoints are unavailable in Daily Challenge and multiplayer.</dd>
-        <dt>PIT STRATEGY</dt>
-        <dd>With tyre wear enabled, PAUSE › PIT STRATEGY selects the next compound and shows the estimated time lost in the pits.</dd>
+      <dt id="htp-driving">DRIVING COACH</dt>
+      <dd>Open <b>SETTINGS &rarr; DRIVING</b> and turn the coach ON. Short text tips appear in the race-message area while you drive. The coach watches sustained braking, steering and tyre-slip conditions; it never changes your controls. Your ON/OFF choice is saved.
+        <br>It waits during flags, other race messages and pit stops, and spaces tips out so brief corrections do not cause a stream of messages. Reopen DRIVING to read the latest tip and its explanation. SESSION REVIEW counts the tips recorded this session; those counts are not a driving score.</dd>
+      <dt>WHAT THE TIPS MEAN</dt>
+      <dd><b>Braking into a turn:</b> release the brake gradually as you add steering.
+        <br><b>Front tyres sliding:</b> reduce steering angle to help the tyres regain grip.
+        <br><b>Rear tyres sliding:</b> the coach distinguishes accelerating, braking and coasting, so the suggested correction matches your inputs.
+        <br><b>Off the track:</b> ease your inputs and rejoin carefully. The coach does not know whether there is a safe gap in traffic.</dd>
+      <dt>PRACTICE A SECTION</dt>
+      <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>SETTINGS &rarr; DRIVING</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b> restores the saved position, speed, car state and practice goal; it does not rewind the race clock.
+        <br><b>This makes the session unscored.</b> Laps and ghosts will not be saved after a starting point is set. Restart the session to set records again. Checkpoints are unavailable in races, daily challenges and multiplayer.</dd>
+      <dt>PRACTICE GOALS</dt>
+      <dd><b>Free practice:</b> repeat any section. <b>Sector:</b> cross the next sector line cleanly. <b>Braking:</b> build speed before saving, then brake to a stop. <b>Trail braking:</b> brake firmly, ease the brake while turning, then release it. <b>Slalom:</b> make six direction changes while moving. Contact or leaving the track marks an attempt for retry; clean completions are saved separately from lap records.</dd>
+      <dt>PIT STRATEGY</dt>
+      <dd>With tyre wear enabled, <b>SETTINGS &rarr; DRIVING &rarr; PIT STRATEGY &rarr; NEXT TYRES</b> selects the compound fitted at your next stop; AUTO lets the game choose. Enter the pit lane yourself. Pit loss, tyre life and energy use are estimates based on the circuit and recent driving. More clean sectors and laps improve the available data.</dd>
+      <dt>SESSION REVIEW</dt>
+      <dd>Review coaching tip counts, recent incidents and penalties after a run. <b>TECHNICAL DATA</b> contains the optional <b>DOWNLOAD SESSION DATA</b> JSON file and AI passing decisions. You do not need these tools to use the coach.</dd>
         <dt>TRACK LIMITS</dt>
         <dd>Repeatedly leaving the track gives three warnings, then a +5 s penalty on the fourth cut. The warning count then resets. The HUD shows warnings in every driving camera.</dd>
         <dt id="htp-setup">CAMERA</dt>
@@ -2478,6 +2525,7 @@
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/session-records.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/race-insights.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/driving-coach.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/consts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/knobs.js?v=dev"></script>
@@ -2498,6 +2546,7 @@
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/tyre-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/ai-corridor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>
@@ -2548,6 +2597,7 @@
 <script defer crossorigin="anonymous" src="js/ui/onboard.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/debris-world.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/incident-sim.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/contact-geometry.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/collide.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/shadow-pass.js?v=dev"></script>

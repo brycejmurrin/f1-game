@@ -1,5 +1,5 @@
 /* SettingsNav — page stack for the pause/title Settings sheet.
-   Home is a door index; CONTROLS, DISPLAY, STEERING & ASSISTS and MUSIC are pages.
+   Home opens CONTROLS, DRIVING, DISPLAY, STEERING & ASSISTS and MUSIC pages.
    Lighting / camera tuners stay as their own docks. BACK pops.
    Decisions: docs/research/PAUSE-SETTINGS-IA.md.
    game.js still owns availability and all individual controls. */
@@ -8,6 +8,7 @@ const SettingsNav = (function () {
   const TITLES = {
     home: "SETTINGS",
     controls: "CONTROLS",
+    driving: "DRIVING",
     display: "DISPLAY",
     advanced: "STEERING & ASSISTS",
     audio: "MUSIC & SOUND",
@@ -19,6 +20,7 @@ const SettingsNav = (function () {
   function panels() {
     return {
       controls: document.getElementById("pm-panel-controls"),
+      driving: document.getElementById("pm-panel-driving"),
       display: document.getElementById("pm-panel-display"),
       advanced: document.getElementById("advanced"),
       audio: document.getElementById("audioset"),
@@ -107,6 +109,11 @@ const SettingsNav = (function () {
     if (openControls) openControls.onclick = () => {
       originDoor = openControls;
       show("controls", true, () => { if (onSelect) onSelect("controls"); });
+    };
+    const openDriving = document.getElementById("pm-open-driving");
+    if (openDriving) openDriving.onclick = () => {
+      originDoor = openDriving;
+      show("driving", true, () => { if (onSelect) onSelect("driving"); });
     };
     const openDisplay = document.getElementById("pm-open-display");
     if (openDisplay) openDisplay.onclick = () => {

@@ -468,17 +468,22 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   // The NOW PLAYING card's transport (pm-prev / pm-play / pm-skip) sits after
   // QUIT and only while music is live; it is not a menu action.
   const ids = [...pause.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]).filter((id) => !/^pm-(prev|play|skip)$/.test(id));
-  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-howto", "pm-standings", "pm-driving-trace", "pm-quit"]);
-  const advanced = html.slice(html.indexOf('id="advanced"'), html.indexOf("</section>", html.indexOf('id="advanced"')));
-  const practiceIds = ["pm-driving", "pm-coach", "pm-coach-last", "pm-practice-set", "pm-practice-retry"];
+  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-howto", "pm-standings", "pm-quit"]);
+  const settingsIndex = html.slice(html.indexOf('id="pm-settings-index"'), html.indexOf("</nav>", html.indexOf('id="pm-settings-index"')));
+  const doors = [...settingsIndex.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(doors, ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-advanced", "pm-audio"],
+    "SETTINGS has the five top-level doors in task order");
+  assert.match(settingsIndex, /id="pm-advanced"[^>]*>STEERING &amp; ASSISTS/);
+  const driving = html.slice(html.indexOf('id="pm-panel-driving"'), html.indexOf("</section>", html.indexOf('id="pm-panel-driving"')));
+  const practiceIds = ["pm-coach", "pm-practice-panel", "pm-practice-set", "pm-practice-retry", "pm-session-review"];
   for (const id of practiceIds) {
-    assert.match(advanced, new RegExp(`id="${id}"`), `${id} lives in STEERING & ASSISTS`);
+    assert.match(driving, new RegExp(`id="${id}"`), `${id} lives on the dedicated DRIVING sheet`);
     assert.doesNotMatch(pause, new RegExp(`id="${id}"`), `${id} is not a pause-menu action`);
   }
-  assert.ok(advanced.indexOf('id="pm-driving"') < advanced.indexOf('id="adv-feel-details"'),
-    "DRIVING & PRACTICE comes before FEEL in STEERING & ASSISTS");
-  assert.match(pause, /<div class="sheet-head"><h2 id="dlg-pause">PAUSED<\/h2><button id="pm-resume" autofocus>/,
-    "RESUME is pinned in the sheet header, above the scrolling pause body");
+  assert.doesNotMatch(pause, /id="pm-driving"/, "pause opens SETTINGS; it has no DRIVING shortcut");
+  const display = html.slice(html.indexOf('id="pm-panel-display"'), html.indexOf("</section>", html.indexOf('id="pm-panel-display"')));
+  for (const id of ["pm-visual-tuners", "pm-lighting", "pm-camtune"])
+    assert.match(display, new RegExp(`id="${id}"`), `${id} is nested under DISPLAY`);
   assert.match(pause, /<div id="pm-now-card" class="as-now-card" hidden>/, "the pause NOW PLAYING card starts hidden; panel.js shows it while music plays");
   assert.match(pause, /id="pm-resume" autofocus/);
 });

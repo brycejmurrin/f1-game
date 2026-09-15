@@ -133,11 +133,15 @@
 
       // 0b. The pine mass. Dark and dense, set back past the sand, thicker on
       //     the outer ring (-1) than on the infield (+1) where the paddock is.
-      every(7, (k) => {
+      // every(13) and four ranks, not every(7) and seven. Same 2026-09-15 pass:
+      // Zolder's forest closed over the track completely. It IS a forest circuit
+      // in the Bosbergen woods, but you can see the Belgian trees from the
+      // Belgian track.
+      every(13, (k) => {
         const h = hash(k * 29 + 7);
         const h2 = hash(k * 53 + 11);
         for (const side of [-1, 1]) {
-          const ranks = side < 0 ? 7 : 4;
+          const ranks = side < 0 ? 4 : 3;
           for (let r = 0; r < ranks; r++) {
             const jitter = hash(k * 7 + r * 131 + (side < 0 ? 0 : 401));
             if (jitter < 0.12) continue;
@@ -178,32 +182,32 @@
       //      the main-straight grandstand and the Villeneuve viewing bank are.
       //      forestEdge is what makes it read as a WALL rather than a scatter.
       //      (0d = outer ring, 0e = infield screen.)
-      forestEdge(0.300, 0.420, -1, 24);
-      forestEdge(0.440, 0.540, -1, 32);
-      forestEdge(0.600, 0.700, -1, 24);
-      forestEdge(0.730, 0.850, -1, 26);
-      forestEdge(0.905, 0.950, -1, 30);
+      forestEdge(0.300, 0.420, -1, 24, { spacing: 11 });
+      forestEdge(0.440, 0.540, -1, 32, { spacing: 13 });
+      forestEdge(0.600, 0.700, -1, 24, { spacing: 11 });
+      forestEdge(0.730, 0.850, -1, 26, { spacing: 11 });
+      forestEdge(0.905, 0.950, -1, 30, { spacing: 13 });
       // Infield pine: the paddock and service areas are cut out of the same
       // plantation, so the +1 side is screened too wherever nothing is built.
-      forestEdge(0.100, 0.168, 1, 30);
-      forestEdge(0.206, 0.330, 1, 28);
-      forestEdge(0.580, 0.690, 1, 28);
-      forestEdge(0.760, 0.850, 1, 30);
+      forestEdge(0.100, 0.168, 1, 30, { spacing: 13 });
+      forestEdge(0.206, 0.330, 1, 28, { spacing: 13 });
+      forestEdge(0.580, 0.690, 1, 28, { spacing: 13 });
+      forestEdge(0.760, 0.850, 1, 30, { spacing: 13 });
 
       // 0d2. A SECOND CANOPY LINE behind each edge. One forestEdge is a
       //      facade: it has a front and nothing behind it, and at the speed the
       //      back section is taken you see straight past the ends of it. A
       //      second line set 30 m further back closes those sightlines and
       //      gives the wood a roof that carries on going.
-      forestEdge(0.302, 0.418, -1, 56);
-      forestEdge(0.442, 0.538, -1, 64);
-      forestEdge(0.602, 0.698, -1, 56);
-      forestEdge(0.732, 0.848, -1, 58);
-      forestEdge(0.906, 0.948, -1, 62);
-      forestEdge(0.102, 0.166, 1, 62);
-      forestEdge(0.208, 0.328, 1, 60);
-      forestEdge(0.582, 0.688, 1, 60);
-      forestEdge(0.762, 0.848, 1, 62);
+      forestEdge(0.302, 0.418, -1, 56, { spacing: 18 });
+      forestEdge(0.442, 0.538, -1, 64, { spacing: 18 });
+      forestEdge(0.602, 0.698, -1, 56, { spacing: 18 });
+      forestEdge(0.732, 0.848, -1, 58, { spacing: 18 });
+      forestEdge(0.906, 0.948, -1, 62, { spacing: 18 });
+      forestEdge(0.102, 0.166, 1, 62, { spacing: 18 });
+      forestEdge(0.208, 0.328, 1, 60, { spacing: 18 });
+      forestEdge(0.582, 0.688, 1, 60, { spacing: 18 });
+      forestEdge(0.762, 0.848, 1, 62, { spacing: 18 });
 
       // 0f. Armco all the way round — Zolder is hemmed in, barriers are close.
       for (const side of [-1, 1]) guardrail(0.0, 1.0, side, 10.5, RAIL);
@@ -418,8 +422,8 @@
       // The dominant wall of the outer loop: trunks bare to head height,
       // canopy flat on top. Three depths of trunk, because a single rank at a
       // single distance is exactly what reads as wallpaper from the cockpit.
-      forestEdge(0.062, 0.176, -1, 26);
-      forestEdge(0.066, 0.172, -1, 54);
+      forestEdge(0.062, 0.176, -1, 26, { spacing: 11 });
+      forestEdge(0.066, 0.172, -1, 54, { spacing: 18 });
       for (let i = 0; i < 34; i++) {
         const s = 0.064 + i * 0.0033;
         const j = hash(i * 37 + 3);
@@ -457,7 +461,7 @@
       tyreWall(0.188, 0.202, -1, 19.4, TYRE_CAP2);
       groundPatch(K(0.1938), -1, 4.0, [16, 0.15, 32], SAND_PALE);
       groundPatch(K(0.1938), -1, 15.0, [12, 0.14, 34], SAND);
-      forestEdge(0.180, 0.214, -1, 40);
+      forestEdge(0.180, 0.214, -1, 40, { spacing: 13 });
       // The spoil is old coal ground: scrub takes it before the pine does.
       for (let i = 0; i < 8; i++) {
         const j = hash(i * 167 + 23);
@@ -475,7 +479,7 @@
         const j = hash(i * 101 + 19);
         pine(K(0.236 + i * 0.0032), -1, 30 + j * 26, 15 + j * 9, pineCol(j));
       }
-      forestEdge(0.222, 0.300, -1, 22);
+      forestEdge(0.222, 0.300, -1, 22, { spacing: 11 });
       // The sand track in to the park, and a second row of vans under the pine.
       if (clear(K(0.258), -1, 62, 46, 10, 11)) {
         groundPatch(K(0.258), -1, 62, [46, 0.13, 10], SAND_DUSK);
@@ -566,8 +570,8 @@
         if (j > 0.5) pine(K(0.548 + i * 0.0026), -1, 31 + j * 8, 17 + j * 6, pineCol(1 - j));
         pine(K(0.548 + i * 0.0026), -1, 44 + j * 16, 18 + j * 8, farCol(j));
       }
-      forestEdge(0.540, 0.600, -1, 18);
-      forestEdge(0.544, 0.596, -1, 40);
+      forestEdge(0.540, 0.600, -1, 18, { spacing: 11 });
+      forestEdge(0.544, 0.596, -1, 40, { spacing: 13 });
       // Infield side is pine to the kerb as well — this corner is a slot.
       for (let i = 0; i < 12; i++) {
         const j = hash(i * 149 + 67);
@@ -620,7 +624,7 @@
           i % 2 ? [0.15, 0.32, 0.56] : [0.86, 0.84, 0.22]);
       }
       groundPatch(K(0.8792), -1, 14.0, [10, 0.14, 34], SAND_PALE);
-      forestEdge(0.850, 0.910, -1, 38);
+      forestEdge(0.850, 0.910, -1, 38, { spacing: 13 });
       for (let i = 0; i < 14; i++) {
         const j = hash(i * 73 + 53);
         pine(K(0.848 + i * 0.0044), -1, 40 + j * 14, 16 + j * 8, pineCol(j));
@@ -677,6 +681,6 @@
           if (j2 > 0.93) tree(K(s), 1, 22 + j * 8, 9 + j * 5, BIRCH);
         }
       }
-      forestEdge(0.604, 0.686, 1, 46);
-      forestEdge(0.750, 0.834, -1, 48);
+      forestEdge(0.604, 0.686, 1, 46, { spacing: 13 });
+      forestEdge(0.750, 0.834, -1, 48, { spacing: 13 });
   };

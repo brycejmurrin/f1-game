@@ -784,9 +784,9 @@ body[data-density="compact"] #campicker {
 }
 
 /* ---------- how to play ---------- */
-/* Five landmarks turn a very long reference into something browsable. On a
+/* Section landmarks turn a very long reference into something browsable. On a
    tall sheet the rail is a horizontal strip under the title; on a wide sheet
-   it becomes a left contents rail. The <dl> owns the one vertical scroller
+   it becomes a left contents rail. The body owns the one vertical scroller
    either way. Links never wrap into a second row of chrome. */
 #howtoplay-inner {
   --fit-at: 200px;
@@ -847,12 +847,21 @@ body[data-density="compact"] #campicker {
   padding: 0 var(--pad) calc(var(--gap) * 0.35);
   border-right: none;
 }
+/* Keep the section strip touchable without letting zoom spend most of a short
+   phone's reading height on chips. Text still scales; the hit floor is 44px. */
+#howtoplay-inner[data-density="compact"] #htp-contents a {
+  min-height: max(calc(44px / var(--sheet-scale, var(--ui-scale))), 1lh);
+  padding-block: calc(var(--gap) * 0.1);
+}
 #howtoplay-inner[data-density="compact"] > .sheet-head,
 #howtoplay-inner[data-density="compact"] > .sheet-body,
 #howtoplay-inner[data-density="compact"] > .sheet-foot {
   grid-column: auto; grid-row: auto;
 }
 #howtoplay .sheet-body {
+  /* Keep the scroll thumb in a grid row: its negative right margin creates
+     scrollable overflow in block layout after Quick Start wraps the <dl>. */
+  display: grid; grid-template-columns: minmax(0, 1fr); align-content: start;
   font-size: var(--fs-micro); line-height: 1.45;
 }
 #htp-controls { scroll-margin-block-start: var(--gap); }
@@ -861,7 +870,7 @@ body[data-density="compact"] #campicker {
 #htp-inputs p { margin-block: calc(var(--gap) * 0.5); }
 #howtoplay dl {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: minmax(0, 0.3fr) minmax(0, 1fr);
   column-gap: calc(var(--gap) * 1.5);
   align-items: start;
 }
@@ -884,20 +893,12 @@ body[data-density="compact"] #campicker {
    blank block under its short neighbour (BOOST), and both descriptions became
    narrow newspaper columns. The pinned contents rail makes raw document depth
    manageable without sacrificing reading order or measure. */
-/* TOO NARROW FOR TWO COLUMNS AT ALL — stack each term above its description.
-   A `max-content` term column plus a description column has a minimum width the
-   sheet cannot always give it, and `.sheet-body` scrolls on Y only
-   (`overflow-x: hidden`), so the surplus is not reachable: it is cut. Measured
-   at 393x852 with UI SIZE at 150%, where the sheet is 246 CSS px — the pair
-   wanted 367px inside a 235px scroller and took 31 `.key` chips off the right
-   edge with it, the worst by 38px. Floors on the tracks cannot help once the
-   content's own minimum exceeds the box; the SHAPE has to change.
-   360px, not 400: portrait @115 is ~342 local px and still two-col with
-   clipped `.key` chips; 100% portrait is 369px and stays two-col. */
-@container sheet (max-width: 360px) {
+/* Keep a readable description measure: the longest term must never size the
+   whole left column. On phone-sized sheets, put the term above its description.
+   At 80% a 393px phone offers ~460 own px, yet max-content headings previously
+   left only ~170px for every paragraph. UI zoom changes the sheet's own width. */
+@container sheet (max-width: 600px) {
   #howtoplay dl { grid-template-columns: minmax(0, 1fr); }
-  /* Stacked, a rule on BOTH halves draws a line through the middle of an entry;
-     the divider belongs to the term that starts it. */
   #howtoplay dd { border-top: none; padding-top: 0; }
 }
 .key {

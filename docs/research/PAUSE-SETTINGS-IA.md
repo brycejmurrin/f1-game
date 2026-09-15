@@ -27,21 +27,22 @@ destinations are peers you bounce between).
 
 **Pause keeps RESUME in the fixed header.** RESTART | SETTINGS share the
 first scrolling row. HOW TO PLAY stays one tap away; STANDINGS is
-championship-only. PIT STRATEGY and DIAGNOSTICS have separate disclosures.
-DRIVING & PRACTICE lives in Settings › Steering & Assists. Each pause disclosure spans
-the full body width, so expanding it cannot stretch an adjacent button.
+championship-only. Driving tools live together in Settings › Driving: coach,
+practice goals, pit strategy and session review. Pause has no duplicate Driving
+shortcut or practice controls.
 QUIT stays the final destructive action, followed by playback and build info.
 
 **Settings is a drill-down stack, not tabs, not one long scroll.**
 
-Pages: `home` | `controls` | `display` | `advanced` | `audio`.
+Pages: `home` | `controls` | `driving` | `display` | `advanced` | `audio`.
 
 Settings home (`#pm-settings-index`, `.pm-doors`) is a door list:
 
 1. CONTROLS… — input, pedals and bindings.
-2. DISPLAY… — interface, HUD and graphics.
-3. STEERING & ASSISTS… — presets, coach and practice.
-4. MUSIC & SOUND… — playback, effects and volume.
+2. DRIVING… — coach, practice and strategy.
+3. DISPLAY… — interface, HUD and graphics.
+4. STEERING & ASSISTS… — presets, response and aids.
+5. MUSIC & SOUND… — playback, effects and volume.
 
 STEERING & ASSISTS and MUSIC are in-sheet pages, with the same chrome as
 DISPLAY (`#advanced` / `#audioset` inside `.pm-groups`). Lighting and camera
@@ -55,17 +56,22 @@ Each settings visit starts at home. Entering a page focuses its first visible,
 enabled control after page updates. Hidden input sections and controls inside
 closed disclosures are skipped; the disclosure summary itself is reachable.
 
-**STEERING & ASSISTS is presets + OVERALL SPEED, then four stacked folds.** Presets
+**STEERING & ASSISTS is presets + OVERALL SPEED, then three stacked folds.** Presets
 are the always-visible primary (set everything). PACE is the field-wide
 slider, same heading + bare range as UI SIZE — it is not a handling feel
 and does not live inside a fold. FEEL holds tilt sensitivity and the
 four-way STEERING steps. AIDS holds driving help, racing line, adaptive
 buttons, and brake cue. ADVANCED stays the granular knobs (`#adv-extra`).
-DRIVING & PRACTICE groups the advisory coach, latest tip and solo checkpoint
-actions. Opening Settings refreshes their availability, including from title.
 Folds start closed. Summaries are disclosures (steel + rule + left
 chevron) and carry the live choice (`FEEL · NORMAL · TILT 6`). No intro
 paragraph — How to Play already covers this. Control ids stay.
+
+**DRIVING starts with the coach setting and its latest tip.** PRACTICE A SECTION
+groups the goal picker, saved starting point and retry action. PIT STRATEGY
+contains next tyres and stint/energy estimates. SESSION REVIEW groups tip counts
+and incidents; TECHNICAL DATA is a nested optional disclosure. The page refreshes
+availability on entry, including from title. Practice stays limited to solo Time
+Trial and marks the session unscored after saving a starting point.
 
 **MUSIC is five closed folds.** MUSIC / SOUND / ENGINE TONE / YOUR TRACKS
 / SPOTIFY. Summaries carry state (`MUSIC · ON · ALL`). ON/OFF lives
@@ -118,7 +124,7 @@ plate + `…`. Heading = steel + `--grad-rule`, not clickable. Disclosure
 = steel + rule + left chevron. Picker = `‹ value ›`.
 
 **No new class families.** Index reuses `.pm-doors`. Panels stay
-`.pm-group`. Sheet `h2#dlg-settings` reads SETTINGS / CONTROLS / DISPLAY /
+`.pm-group`. Sheet `h2#dlg-settings` reads SETTINGS / CONTROLS / DRIVING / DISPLAY /
 STEERING & ASSISTS / MUSIC & SOUND so the first-child `.pm-group-h` on those pages
 stays hidden.
 
@@ -139,7 +145,7 @@ Keyboard and controller prompts come from the same live binding tables as
 CONTROLS, including references within the racing and settings help.
 
 The driving coach explains its advisory role and shows its latest tip with a
-reason under SETTINGS › STEERING & ASSISTS › DRIVING & PRACTICE. It never changes steering, throttle or brakes. Track-limit
+reason under SETTINGS › DRIVING. It never changes steering, throttle or brakes. Track-limit
 warnings and WRONG WAY remain visible across driving camera modes. Overtake
 reports the reason it cannot activate; automatic aero has an explicit HUD state.
 

@@ -7,6 +7,10 @@ Every raise and lower was recorded as a comment beside its number; those comment
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
 
+2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
+under Settings, removing duplicate pause controls and simplifying Help markup.
+The newer practice goals and session review remain. Shell slack is tightened to 25.
+
 ## Why a ratchet (the original header)
 
 ```
@@ -3009,3 +3013,65 @@ The player is NOT steered, and that asymmetry is the design rather than an
 omission: the lane is driven (PitLane's COMMIT block), so the car is never taken
 off you. What asks the player for the lane is the box's own condition — stop on
 the racing line and the stop does not happen.
+
+## 2026-09-15 — a deliberate headroom raise, at the owner's direction
+
+`js/game.js` 8777 → 9000 lines and 4729 → 4900 codeLines; `js/render/glx/glx.js`
+2655 → 2750 lines.
+
+THIS ONE IS NOT PAID FOR BY A CHANGE, and that is the honest thing to record.
+Every other entry above was a specific diff buying a specific number of lines.
+This is a policy decision: the owner asked for headroom after L3 needed a raise
+for a single statement. So a future reader comparing a ceiling against the git
+history will not find a commit that "earned" these lines — there isn't one.
+
+WHAT IS AND IS NOT RAISED. The two SIZE metrics, plus glx.js because it is the
+producer side of any new frame uniform and the deferred pit-box marking needs
+one. `gMembers` (246) and `topLets` (147) are deliberately left AT their
+ceilings: they are not size, they are coupling surface — every G member is a new
+thing a module may reach for, and every top-level `let` is closure state an
+extraction has to move. Those two are what make game.js hard to carve up, and
+cheap growth there is the kind that cannot be undone later.
+
+The headroom is bounded by the slack rule itself, which is the point: a ceiling
+more than max(60, 4%) above its value reads as LOOSE and must be lowered. So
+this banks ~220 lines, not an open licence — the ratchet keeps ratcheting, just
+from a higher floor.
+
+THE LEVER THAT ACTUALLY BUYS ROOM is still an extraction: pull a subsystem out
+and `ratchets.mjs --update` lowers the ceiling to match, locking the win in.
+`updateCar`'s lateral-control chain is the standing candidate — a few hundred
+lines with one clean seam, which is where L3's own hook had to go.
+
+## 2026-09-15 — the pit lane becomes real tarmac: js/track/tracks.js 2452 → 2600
+
++78 lines (mostly the reasoning), for `pitWindow()` and `pitWiden()`: the road is
+now WIDENED by the lane's width across the pit window, so the lane is tarmac
+beyond where the edge used to be instead of 3.2 m bitten out of the racing
+surface. On a narrow circuit that meant racing on less road because a pit lane
+existed; now the racing surface is untouched and the painted line lands exactly
+on the old edge.
+
+It has to live here. `hw` is ONE symmetric half-width per node and the mesh,
+kerbs, banking, sampling and projection all build from ±hw — so the widening has
+to happen at the seam in `buildCenterline` where the curvature LUT is already
+baked (the window is derived from the arc) but the mesh is not yet built. That
+is also why the widening is symmetric: a one-sided one needs a centreline-offset
+array threaded through every one of those consumers, which is a different and
+much larger change. Real pit straights are wide, so the extra room on the far
+side reads as the start/finish straight getting the width it should have had.
+
+STREET CIRCUITS ARE EXEMPT and keep the painted-on-road lane. They author their
+barriers hard against the road — that is what makes them street circuits — so
+barL/barR do not follow a widened hw there. Measured: widening pushed baku to
+-1.07 m of clearance, vegas to -0.26 and singapore to -0.22 (baku and vegas were
+already negative beforehand). With the exemption, 0 of 47 widened circuits have
+road past a barrier.
+
+The measurement that started this corrected a claim carried in pit-lane.js's
+header and repeated for most of a session: that fitting a lane beyond the road
+edge "gives no lane anywhere — 2.4 m at Monza". Monza actually has 8.99 m to its
+driving boundary, the most of any circuit; 44 of 52 have the 3.2 m a full lane
+needs. The header's number was measured against solid scenery rather than the
+boundary, which is a different question — but it was being used to rule out an
+approach nobody had tried.
