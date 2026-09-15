@@ -537,6 +537,20 @@ const PitLane = (function () {
       return (c.x || 0) * zz.side >= laneEdge(hw, zz.side) * zz.side;
     }
 
+    /** The numbers the lit shaders paint THIS CAR's BOX from: how far into the
+     *  window it sits, and how long it is. Null when there is no lane, or no
+     *  car with a team to have a box in the row.
+     *
+     *  It is the PLAYER's box and not the whole row on purpose. A real lane is a
+     *  row of garages and drawing all twelve would be more faithful — but the
+     *  question a driver is actually asking at 80 km/h is "which one is mine",
+     *  and eleven boxes that are not theirs answer it worse than one that is. */
+    function boxUniform() {
+      const zz = z(), t = G.track, car = G.player;
+      if (!enabled() || !zz || !t || !car) return null;
+      return [boxThroughFor(car, zz, t.total), BOX_TOL * 0.75];
+    }
+
     /** The four numbers the lit shaders paint the lane from, or null. */
     function laneUniform() {
       const zz = z(), t = G.track;
@@ -800,7 +814,7 @@ const PitLane = (function () {
     return { zoneOf: () => z(), limit, toBox, approachV, inLane, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
-             laneEdge, laneCentre, laneUniform, laneX, inLaneLat,
+             laneEdge, laneCentre, laneUniform, boxUniform, laneX, inLaneLat,
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }
 

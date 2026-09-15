@@ -159,6 +159,10 @@ uniform float uGroundMist;  // 0..1 low-lying drifting ground mist
 // The lane is PAINTED, not built — see roadMarkings(). Length <= 0 means no
 // lane, which is every circuit until the tyre setting arms one.
 uniform vec4 uPitLane;
+// YOUR PIT BOX: (how far into the window it sits, half its length, 0, 0).
+// A zero y means no box to draw — the same "length 0 = absent" convention
+// uPitLane uses, so one test covers both.
+uniform vec4 uPitBox;
 uniform float uLampFog;     // lamp-glow-in-fog strength (0 = off / day)
 uniform sampler2D uBlockerMap;  // PCSS-lite min-depth blocker map (512sq)
 uniform float uPcss;            // 1 = blocker map valid, 0 = fixed penumbra
@@ -662,7 +666,21 @@ void roadMarkings(inout vec3 albedo, inout float rough) {
       // you can see and aim at — it is deliberately NOT gated by fadeIn, since
       // fading in the very mark that says "it starts here" is self-defeating.
       float bar = (smoothstep(0.4, 1.0, through) - smoothstep(2.4, 3.0, through)) * inLane;
-      pitLine = max(line, bar) * fadeOut * mip;
+      // YOUR BOX. The HUD counts the distance down, but a number is not a place
+      // — a driver braking at the pit limit needs something on the road to aim
+      // at. Drawn as a box outline across the lane: two transverse ends and two
+      // rails, so it reads as a bay you park IN rather than a line you cross.
+      float box = 0.0;
+      if (uPitBox.y > 0.0) {
+        float dBox = abs(through - uPitBox.x);
+        float ends = 1.0 - smoothstep(0.12, 0.30, abs(dBox - uPitBox.y));
+        float span = 1.0 - step(uPitBox.y, dBox);            // within its length
+        float dIn = abs(x - lx), dOut = abs(abs(x) - hw);
+        float rails = max(1.0 - smoothstep(0.12, 0.30, dIn),
+                          1.0 - smoothstep(0.12, 0.30, dOut));
+        box = max(ends * inLane, span * rails * inLane);
+      }
+      pitLine = max(max(line, bar), box) * fadeOut * mip;
       pitFill = inLane * fadeIn * fadeOut;
     }
   }

@@ -6592,6 +6592,7 @@ function render(dt) {
   // (js/race/pit-lane.js says what that cost). null until the tyre setting
   // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
   frame.pitLane = pits.laneUniform();
+  frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
   // Wet-road material (rain): ramp wetness in/out smoothly so the surface
   // darkens and starts mirroring lamps/sky over ~1s rather than popping.
   if (LT.wetness >= 0) {

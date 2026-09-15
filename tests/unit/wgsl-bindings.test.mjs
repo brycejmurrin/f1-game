@@ -119,8 +119,11 @@ test("the programs really do declare bindings, so the check is not vacuous", () 
 test("the guard fires on the real defect, rather than being asserted to", () => {
   const chunks = loadChunks();
   // The exact edit 9f2c6dc83 shipped, reapplied to today's LIT.
-  const broken = chunks.LIT.replace("roadMarkings(&albedo, &rough, vTrk, fwTrk, F.pitLane);",
-    "roadMarkings(&albedo, &rough, vTrk, fwTrk, U.pitLane);");
+  // The call site has since grown a second argument (F.pitBox, the painted pit
+  // box), so the reconstruction tracks it rather than pinning the old spelling —
+  // the defect being reproduced is the WRONG STRUCT NAME, not the arity.
+  const broken = chunks.LIT.replace("roadMarkings(&albedo, &rough, vTrk, fwTrk, F.pitLane, F.pitBox);",
+    "roadMarkings(&albedo, &rough, vTrk, fwTrk, U.pitLane, F.pitBox);");
   assert.notEqual(broken, chunks.LIT, "the call site still looks the way the fix left it");
   const bad = crossProgramRefs({ LIT: broken, SKY: chunks.SKY });
   assert.equal(bad.length, 1, "exactly the one bad reference");
