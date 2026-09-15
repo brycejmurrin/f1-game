@@ -7,7 +7,60 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
+// How long rapier's WASM takes to load and initialise. Its OWN number, and
+// deliberately NOT BOOT_MS — tests/helpers/fixtures.js says in as many words
+// that the boot budgets are not to be reached for to cover a slow assertion,
+// and this is a slow assertion: a WASM load plus init, nothing like a boot.
+//
+// MEASURED on an idle container, three cold runs:
+//
+//   window.__apex != null     2.6 / 2.7 / 3.7 s
+//   debris().ready           10.8 / 15.4 / 11.1 s    worst 15.4
+//
+// So rapier is ~4x the boot here. The hand-rolled 30 s this replaces looked
+// generous against 15 s and was not: on the CI runner that exposed it, BOOT
+// ALONE took 52 s. 60 s is ~4x the worst idle measurement and fits inside the
+// CI job's own 180 s per-test budget with room for the boot and the test body
+// — a bigger number would only convert this timeout into that one.
+//
+// WHAT I DO NOT KNOW, stated rather than papered over: there is no CI-side
+// measurement, only that 30 s was not enough there. BOOT_MS's own 1.8x margin
+// over its worst idle case would have produced 28 s — roughly what already
+// failed — so the idle box is not predictive for this path. rapier is VENDORED
+// (vendor/rapier-0.19.3, 2.2 MB off the dev server), so this is a local fetch
+// plus a large WASM compile on a contended runner, not a network hang, which is
+// why a timeout is the right instrument at all. If 60 s proves short, MEASURE
+// IT ON CI rather than doubling again.
+const RAPIER_MS = 60000;
+
 async function boot(page) {
+  // RAISE THE RESOURCE-TIMING BUFFER BEFORE ANYTHING LOADS. Two tests here read
+  // performance.getEntriesByType("resource") to prove rapier was (or was not)
+  // fetched, and that buffer defaults to 250 ENTRIES and simply STOPS RECORDING
+  // when full — it does not evict. A full boot loads the shell, every module,
+  // the asset pack and its textures, so on a slow boot rapier's own entry can
+  // arrive after the buffer has closed and be missing from a page that fetched
+  // and ran it perfectly well. That is exactly how the positive assertion
+  // failed: `ready`, `stepped` and `live` all passed and only the FETCH RECORD
+  // was absent.
+  //
+  // addInitScript runs before any page script, which is the only moment this
+  // can be set — by the time a test evaluates, the buffer has long since
+  // filled. Test-side on purpose: the game has no reason to carry a bigger
+  // buffer for a spec's benefit.
+  // Independently measured on a SECOND, slower container the same day: the page
+  // reaches exactly 250 entries — the cap — by the time the lazy import lands,
+  // and 260 with the buffer raised. It overflows by TEN, which is why this read
+  // as flaky (3/5 solo) rather than always red: whether it tipped over depended
+  // on which optional assets loaded that run. rapier ready measured 27.9-28.9 s
+  // there against 15.4 s here, so 60000 covers both boxes; 55000 did not, by much.
+  // try/catch because addInitScript runs in EVERY frame — about:blank included —
+  // before any page script, and an uncaught throw there breaks page setup rather
+  // than just this call. Not hypothetical: `performance` is not guaranteed on
+  // every execution context Playwright injects into.
+  await page.addInitScript(() => {
+    try { performance.setResourceTimingBufferSize(3000); } catch (_) {}
+  });
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
@@ -25,29 +78,63 @@ async function startTT(page, id) {
   await page.evaluate(() => window.__apex.go());
 }
 
+// Wait for rapier's WASM to be ready (or to have failed). ONE copy, because it
+// existed twice — in enableDebris and inline in the default-on test — and
+// raising only the first left the second failing at exactly 30000 ms on CI
+// while its three siblings went green. A duplicated timeout is a timeout that
+// will be wrong half the time.
+async function awaitRapier(page) {
+  await page.waitForFunction(() => {
+    const st = window.__apex.debris();
+    return st.ready || st.loadState === -1;
+  }, null, { polling: 100, timeout: RAPIER_MS });
+}
+
 // Enable the side-world and wait for the lazy rapier import + WASM init.
 // Fails fast (with the module's own error string) if the import rejects.
 async function enableDebris(page) {
   await page.evaluate(() => window.__apex.debris(true));
-  await page.waitForFunction(() => {
-    const st = window.__apex.debris();
-    return st.ready || st.loadState === -1;
-  }, null, { polling: 100, timeout: 30000 });
+  await awaitRapier(page);
   const st = await page.evaluate(() => window.__apex.debris());
   if (!st.ready) throw new Error("rapier load failed: " + st.error);
 }
 
 test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
+  // THIS FILE IS LEGITIMATELY SLOW, and it was one loaded runner from red.
+  //
+  // Every test here pays its own full boot — and has to: two of them set
+  // apex26.debris / apex26.debrisCap through addInitScript, which is only
+  // readable BEFORE any page script runs, so they cannot share a booted page
+  // the way parts-liveries.spec.js does. On top of that each one builds a track
+  // (a SwiftShader boot measures 11-33 s per the comment above; the CI log for
+  // the run that caught this shows `25461ms [car] info: build mclaren`) and
+  // then waits on a WASM import.
+  //
+  // Measured solo on an idle box, 2026-09-14: 58.3 / 70.7 / 85.9 / 91.2 /
+  // 100.3 s. Against the 120 s default that is ~20 % headroom, which no shared
+  // CI runner reliably provides — and on 2026-09-14 the same three tests timed
+  // out at 150-185 s on ci.yml across THREE different sessions' commits, while
+  // passing 5/5 locally and passing on a re-run of one of the very same SHAs.
+  //
+  // So this is not a tolerance being widened to make an assertion pass — every
+  // assertion here is unchanged and still has to hold. It is a BUDGET being
+  // sized to a measurement it was never sized against. test.slow() is
+  // Playwright's own marker for exactly that (it triples the timeout to 360 s,
+  // ~3.6x the slowest measured run), and it keeps the number in one place
+  // rather than sprinkling setTimeout calls.
+  //
+  // The real cure is fewer boots. It needs the two config-driven tests split
+  // off so the other three can share a page; that is a restructure of someone
+  // else's spec and is not this change.
+  test.slow();
+
 
   test("enabled by default: rapier loads and the side-world runs", async ({ page }) => {
     await boot(page);
     await startRace(page, "monza");
     // Default-on: create() enables at boot; the lazy rapier import resolves
     // shortly after. Wait for it (or a load failure) rather than a fixed sleep.
-    await page.waitForFunction(() => {
-      const st = window.__apex.debris();
-      return st.ready || st.loadState === -1;
-    }, null, { polling: 100, timeout: 30000 });
+    await awaitRapier(page);
     const r = await page.evaluate(() => {
       window.__apex.jump(0.1, 40, 0);
       // The world runs the WASM solve only when something dynamic is in play
@@ -65,6 +152,9 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
         live: st.live,
         rapierFetches: performance.getEntriesByType("resource")
           .filter((e) => e.name.includes("rapier")).length,
+        // For the failure message: a resource-timing buffer that FILLED is the
+        // difference between "rapier never loaded" and "we stopped watching".
+        resourceCount: performance.getEntriesByType("resource").length,
       };
     });
     if (!r.ready) throw new Error("rapier load failed: " + r.error);
@@ -73,7 +163,10 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
     expect(r.ready).toBe(true);
     expect(r.stepped).toBeGreaterThan(0);   // the burst made the side-world step
     expect(r.live).toBeGreaterThan(0);      // and spawn debris
-    expect(r.rapierFetches).toBeGreaterThan(0);
+    expect(r.rapierFetches,
+      `no rapier resource entry among ${r.resourceCount} recorded — if that number is at the `
+      + "buffer cap the entry was dropped, not the fetch (boot() raises it to 3000)")
+      .toBeGreaterThan(0);
   });
 
   test("can be disabled via apex26.debris='0': inert, no rapier fetch", async ({ page }) => {

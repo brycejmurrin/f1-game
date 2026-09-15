@@ -422,6 +422,11 @@
            is off, which is the shipped default, so the bar costs nothing to a
            player who never turns it on. -->
       <div id="hud-tyre" hidden><span id="hud-tyre-code">M</span><div id="hud-tyre-bar"><div id="hud-tyre-fill"></div></div></div>
+      <!-- PIT ENTRY. There is no pit button — a stop is called by steering into
+           the entry (js/race/pit-lane.js) — so the window has to announce
+           itself, or the gesture is undiscoverable. Shows the distance to the
+           entry and which way to go, and only while a stop is worth making. -->
+      <div id="hud-pit" hidden><span id="hud-pit-arrow">&#9654;</span><span id="hud-pit-text">PIT</span></div>
       <div id="hud-ot" class="ot-off">OVERTAKE</div>
       <div id="hud-aero" class="ax-off">Z-MODE</div>
     </div>
@@ -498,6 +503,17 @@
     <div class="sheet-body pane stack">
       <button id="pm-resume" autofocus>RESUME</button>
       <button id="pm-restart">RESTART RACE</button>
+      <details><summary>DRIVING &amp; PRACTICE</summary>
+        <div class="stack">
+          <button id="pm-coach" type="button" aria-pressed="false">DRIVING COACH: OFF</button>
+          <button id="pm-driving-trace" type="button" disabled>DOWNLOAD DRIVING TRACE</button>
+          <button id="pm-practice-set" type="button">SET PRACTICE CHECKPOINT</button>
+          <button id="pm-practice-retry" type="button" disabled>RETRY CHECKPOINT</button>
+          <p class="adv-help">Checkpoints are for solo time trials. Practice laps are not saved. Restart to return to timed laps.</p>
+          <label>Next pit stop <select id="pm-pit-choice" aria-label="Next pit stop compound"><option value="auto">AUTOMATIC COMPOUND</option></select></label>
+          <p id="pm-pit-estimate" class="adv-help"></p>
+        </div>
+      </details>
       <button id="pm-settings">SETTINGS&hellip;</button>
       <button id="pm-howto">HOW TO PLAY&hellip;</button>
       <button id="pm-standings" hidden>STANDINGS</button>
@@ -2432,6 +2448,7 @@
 <script defer crossorigin="anonymous" src="js/circuits/dijon.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/buddh.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/mont_tremblant.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/circuits/mosport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/pit-lane.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/circuit-elevations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
@@ -2449,6 +2466,8 @@
 <script defer crossorigin="anonymous" src="js/car/crest-paths.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/session-records.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/driving-coach.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/consts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/knobs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/track-lights.js?v=dev"></script>

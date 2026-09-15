@@ -243,7 +243,16 @@ function setTrackFilter(id, focus) {
   if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
   vt(() => {
     buildSelect(); tickUi();
-    if (focus) els.selTracks.querySelector('[data-filter="' + id + '"]')?.focus();
+    // THE BAR IS NOT INSIDE THE STRIP. mountToolbar puts it on the SHELF, as a
+    // sibling of #sel-tracks and not a child, precisely so it does not scroll
+    // sideways with the tiles — and this read searched the strip, found
+    // nothing, and the `?.` swallowed it. Every arrow press therefore rebuilt
+    // the bar and left focus on <body>: the filter changed, the keyboard user
+    // lost their place, and the next arrow key had nothing to act on. Measured
+    // before the fix: aria-pressed moved to "season" while document.activeElement
+    // was BODY. Red since the assertion was written (menu-keyboard.spec.js,
+    // "circuit filter tabs ... expose distinct semantics").
+    if (focus) mountedToolbar()?.querySelector('[data-filter="' + id + '"]')?.focus();
   });
 }
 
@@ -287,15 +296,20 @@ function trackFilterBar() {
     b.className = "sel-chip";
     b.id = "sel-daily";
     const extraBits = [p.weather.toUpperCase(), p.tod.toUpperCase()];
-    if (done && done.best != null) extraBits.push("★ " + fmtTime(done.best));
-    b.textContent = "TODAY · " + p.trackName.toUpperCase();
+    if (done && done.best != null) extraBits.push("ALL SETUPS ★ " + fmtTime(done.best));
+    b.textContent = "DAILY STANDARD · " + p.trackName.toUpperCase();
     const extra = document.createElement("span");
     extra.textContent = " · " + extraBits.join(" · ");
     b.appendChild(extra);
     b.setAttribute("aria-label", "Today: " + p.trackName + " · " + extraBits.join(" · "));
-    b.title = "Today's challenge (" + p.day + " UTC): the same circuit and conditions for everyone";
+    b.title = "Today's challenge (" + p.day + " UTC): fixed McLaren works build and physics; input assists are recorded separately";
     b.onclick = (e) => { e.stopPropagation(); tickUi(); G.daily.open(); };
     bar.insertBefore(b, bar.firstChild);
+    const open = document.createElement("button");
+    open.type = "button"; open.className = "sel-chip"; open.textContent = "DAILY OPEN";
+    open.title = "Today’s circuit and weather with your own car and setup; records stay in matching classes";
+    open.onclick = (e) => { e.stopPropagation(); tickUi(); G.daily.open(undefined, "open"); };
+    bar.appendChild(open);
   }
   const search = document.createElement("input");
   search.id = "sel-track-search";
@@ -346,6 +360,11 @@ function trackTile(t, i, opts) {
 
 // The toolbar lives on the SHELF, before the strip — a sibling of #sel-tracks,
 // not a child, because the strip scrolls sideways and the filter must not.
+/** The live toolbar, wherever mountToolbar put it — see setTrackFilter. */
+function mountedToolbar() {
+  return els.selTracks.parentNode.querySelector("#sel-track-filter");
+}
+
 function mountToolbar(bar) {
   const shelf = els.selTracks.parentNode;
   const old = shelf.querySelector("#sel-track-filter");
@@ -454,7 +473,7 @@ function buildSelect() {
         const board = ttBoard(t.id);
         const rec = board.length ? board[0].t : Infinity;
         const recEl = document.createElement("span");
-        recEl.className = "track-row-rec";
+        recEl.className = "track-row-rec"; recEl.title = "Best across setups and conditions";
         recEl.textContent = isFinite(rec) ? "★ " + fmtTime(rec) : "—";
         row.appendChild(recEl);
       }
@@ -694,7 +713,7 @@ function updateTrackPreview() {
   } else {
     const board = ttBoard(t.id);
     const rec = board.length ? board[0].t : Infinity;
-    els.selPreviewRec.textContent = isFinite(rec) ? "Lap record  ★ " + fmtTime(rec)
+    els.selPreviewRec.textContent = isFinite(rec) ? "Best across setups  ★ " + fmtTime(rec)
       : G.timeTrial ? "No time set" : "";
   }
   showStill(t);

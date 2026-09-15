@@ -18,9 +18,21 @@
     // negated by the projection, so it mirrors handedness. Calibrated against
     // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
     reverse: false,
-    // v0 sits mid the longest straight, placed by the stitcher. Not yet checked
-    // against the real start/finish line — see docs/tracks/START-LINES.md.
-    startFrac: 0.0000,
+    // MEASURED, not assumed. The stitcher was supposed to leave v0 mid-straight
+    // and did not: the 182 m of starting grid behind v0 ran through a corner of
+    // 136 m radius, so the grid was laid round a bend. Now 6482 m.
+    //
+    // startFrac is an INDEX fraction into the control points, NOT an arc
+    // fraction. The points are not arc-uniform, so this value comes from
+    // projecting each control point onto the spline the grid is measured on and
+    // taking the nearest node that holds R >= 1500 m across the whole zone.
+    // Scaling a polyline length instead put this circuit on a 35 m radius.
+    //
+    // sceneryStartFrac records that every prop, landmark and corner board was
+    // authored against the OLD origin, so the dressed world stays on its real
+    // corners while only the line and grid move.
+    startFrac: 0.1226,
+    sceneryStartFrac: 0.0000,
     name: "BRANDS HATCH",
     gp: "British GP",
     country: "UK",
@@ -50,7 +62,7 @@
     // turns: the 11 strongest curvature peaks of THIS centreline in lap order,
     // 11 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
-    turns: [0.0143, 0.0762, 0.1903, 0.3782, 0.4612, 0.4748, 0.5323, 0.6362, 0.8323, 0.8448, 0.9137],
+    turns: [0.0268, 0.2147, 0.2977, 0.3113, 0.3688, 0.4727, 0.6688, 0.6813, 0.7502, 0.8508, 0.9127],
     furniture: { tree: "broad", fol: [0.20, 0.38, 0.18], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["steel", "concrete", "darkSteel"],

@@ -13,6 +13,7 @@ const els = {
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
   tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"),
+  pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
@@ -372,7 +373,7 @@ function initRainDrops() {
 // ---------- settings ----------
 // Persistence lives in js/core/store.js (GameStore): the cached localStorage
 // wrapper, the TT leaderboard, season identity/migration, hex<->rgb.
-const { store, ttBoard, ttBoardAdd, hexToRgb, rgbToHex, seasonDriverId } = GameStore;
+const { store, ttBoard, hexToRgb, rgbToHex, seasonDriverId } = GameStore;
 
 const { DEFAULT_CUSTOM, TIER_V } = Teams;   // the custom-team seed + the tier pace ladder (js/data/teams.js)
 let teamIdx = store.get("team", 2);          // default McLaren
@@ -818,7 +819,8 @@ function isWetRoad() { return raceWeather === "wet" || raceWeather === "rain"; }
 function isRaining() { return raceWeather === "rain"; }
 // Road grip by weather AND fitted tyre (table WET_GRIP) — see docs/PHYSICS.md
 // "Weather and tyres". No car => the slick column: the old value, untouched.
-function gripMult(c) { const r = WET_GRIP[raceWeather]; return !r ? 1 : r[c ? (c.tread == null ? 2 : c.tread) : 0]; }
+function roadWetness() { return TyreModel.wetness(raceWeather, weatherArc); }
+function gripMult(c) { return TyreModel.weatherGrip(c ? (c.tread == null ? 2 : c.tread) : 0, roadWetness()); }
 
 // DIRTY AIR. Before this model, the tow was strictly and only BENEFICIAL:
 // it gave +4.5 % of top speed and cost nothing at all. With a
@@ -1568,13 +1570,14 @@ function swapGridSlots(a, b) {
 
 function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
-  const setup = getTeamParts(team.id);
-  playerMods = modsFor(team, setup, SetupTune.mods(team.id));   // the local sheet, here and in makeCars only
-  if (player) { player.mods = playerMods; player.tread = Parts.tread(setup, team); player.brakeBias = SetupTune.brakeBias(team.id); }
+  const standard = daily.isActive() && daily.current().class === "standard";
+  const setup = standard ? Parts.getFactorySetup(team) : getTeamParts(team.id);
+  playerMods = modsFor(team, setup, standard ? undefined : SetupTune.mods(team.id));   // the local sheet, here and in makeCars only
+  if (player) { player.mods = playerMods; player.tread = Parts.tread(setup, team); player.brakeBias = standard ? SetupTune.BB_REF : SetupTune.brakeBias(team.id); player.rollBalance = standard ? 0 : SetupTune.balance(team.id); }
   // How much wing this car is carrying (0..1), which sets how much active aero
   // trades — see X_VMAX_GAIN_LO/HI. Cached here rather than resolved per physics
   // step: it only changes when the parts do.
-  playerAeroLoad = Parts.aeroLoad(setup, team, SetupTune.aero(team.id));   // wing + the sheet's rake
+  playerAeroLoad = Parts.aeroLoad(setup, team, standard ? undefined : SetupTune.aero(team.id));   // wing + the sheet's rake
   if (player) player.aeroLoad = playerAeroLoad;
   // The ERS part's two axes — deployment and recovery — which run the battery
   // and the overtake window (see drainFor/regenFor/otTimeFor).
@@ -1642,7 +1645,7 @@ function makeCars() {
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
     const factoryParts = Parts.resolveSetup(Parts.getFactorySetup(team), team);
-    const savedParts = ti === teamIdx ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
+    const savedParts = ti === teamIdx && !(daily.isActive() && daily.current().class === "standard") ? Parts.resolveSetup(getTeamParts(team.id), team) : factoryParts;
     // MY TEAM enters TWO cars — you and the driver you hired — where the custom
     // team ships with one. gridDrivers() returns team.drivers unchanged in every
     // other case, so free play and driver careers are untouched.
@@ -1684,6 +1687,7 @@ function makeCars() {
         mods: isP ? modsFor(team, getTeamParts(team.id), SetupTune.mods(team.id)) : null,
         // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
         // MY TEAM + hire share the saved build; everyone else uses factory.
+        rollBalance: isP ? SetupTune.balance(team.id) : 0,
         aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, SetupTune.aero(team.id)) : Parts.aeroLoad(factoryParts.setup, team),
         ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
         ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
@@ -2342,7 +2346,7 @@ async function startRace() {
   // RaceControl can fly a caution for debris nobody produced this race.
   DebrisWorld.reset();
   loadTrack(trackIdx);
-  makeCars();
+  makeCars(); coach.reset(); PerfGov.resetFrameStats();
   // Qualifying keeps the full field for simulation, then drives one standing lap.
   if (isQuali()) {
     qualiField = cars;
@@ -2351,8 +2355,6 @@ async function startRace() {
   } else if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
     lapsTarget = raceLaps;
-    const board = ttBoard(track.def.id);
-    ttRecord = board.length ? board[0].t : Infinity;
     ttNewRecord = false;
     ttLaps = [];
     ttSessionTs = Date.now();
@@ -2372,6 +2374,7 @@ async function startRace() {
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
   startChangeable();
   recomputePlayerMods();
+  if (isTimeTrial()) { records.begin(); Ghost.startLap(); }
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
   // js/game.js held ZERO Log calls before this one, despite `game` being the
@@ -2685,8 +2688,11 @@ const G = {
   // quali.js reads this so a non-career season's qualifying execution draw varies
   // round to round instead of being frozen at a hardcoded 0.
   get seasonRound() { return isChampionship() && season ? season.round : raceIndex; },
-  get ttNewRecord() { return ttNewRecord; },
+  get ttNewRecord() { return ttNewRecord; }, set ttNewRecord(v) { ttNewRecord = v; },
   get ttSessionTs() { return ttSessionTs; },
+  get records() { return records; },
+  get coach() { return coach; },
+  recordControls: () => ({ autoThrottle: autoThrottle(), gearsManual: gearsManual(), steerMode, aero: raceAeroMode }),
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
   set timeTrial(v) { session = v ? "tt" : "race"; },
@@ -2920,7 +2926,7 @@ const G = {
   vTop: () => vTop(),
   aTop: () => aTop(),
   applyRaceSettings: () => applyRaceSettings(),   // const initialised below — defer
-  announce, applyCaution, camVantage, endRace, gridUp, gripMult, isErsDeploying, cautionInfo,
+  announce, applyCaution, camVantage, endRace, gridUp, gripMult, roadWetness, isErsDeploying, cautionInfo,
   aeroDfMult, xVmaxGain, xDfLoss, drainFor, regenFor, otTimeFor, otCoolFor,
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
@@ -3002,6 +3008,8 @@ pits = PitLane.create(G);
 // The race engineer (js/race/engineer.js): the voice that makes all of the
 // above legible to a driver who never opens a menu. Reads both, so it is last.
 engineer = RaceEngineer.create(G);
+const records = SessionRecords.create(G);
+const coach = DrivingCoach.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -3332,6 +3340,7 @@ function setTimeOfDay(tod) {
 }
 function weather(w) {
   if (w === undefined) return raceWeather;
+  weatherArc = null;
   return setWeatherLive(w);
 }
 
@@ -3536,7 +3545,7 @@ function update(dt) {
 
   // B1 — debris caution: consume hazards() and drive the local-yellow / VSC / SC
   // flag state (READ-ONLY; never slows or moves a car). Self-guarding + throttled.
-  updateCaution(dt);
+  updateCaution(dt); coach.update(dt);
 
   // Race-control owns the finish policy as well as neutralisation rules. In a
   // human race an AI/other player crossing first must NOT start a 3.5 s result
@@ -3596,6 +3605,9 @@ const _aiBoost = { traits: null, energy: 0, otActive: false, kAhead60: 0, towCar
 const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null, vTop: 0 };
 // AI lateral controller (updateCar, "--- lateral ---"): heading state, not a
 // position P-loop. Tunables, not model numbers — see the block for the why.
+const AI_PASS_LATCH_M = 16;    // m: the pass latch's window, read by BOTH ends. The release always
+                               // dropped the latch past it; the engage had no gap term, so half of all
+                               // engagements began already outside it (docs/notes/AI-FIELD-RESEARCH.md).
 const AI_HEAD_VMIN = 6;        // vStd m/s: below this the position controller drives (dig-out, pit crawl)
 const AI_XTRACK_GAIN = 2.5;    // 1/s: Stanley cross-track gain, ~0.4 s to close an error
 const AI_HEAD_MAX = 0.45;      // rad: the heading a car may hold off the road tangent
@@ -3973,8 +3985,8 @@ function updateCar(c, dt, ranked) {
       AiDrive.pushLook(d, onLine ? TrackLine.pathK(track, ss) : kk, Math.abs(Tracks.bankAngle(track, ss)));
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX;
-    _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE;
-    _aiBr.grip = gripMult(c) * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
+    _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * tyres.tractionMul(c); _aiBr.pace = PACE; _aiBr.vmax = VMAX;
+    _aiBr.grip = gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
     _aiBr.blockerSpeed = blocker ? blocker.speed : 0;
     _aiBr.roomL = roomL; _aiBr.roomR = roomR; _aiBr.team = c.team; _aiBr.seat = c.seat; _aiBr.stats = c.houseStats;
@@ -4354,7 +4366,7 @@ function updateCar(c, dt, ranked) {
       let dp = po.prog - c.prog;
       dp = ((dp + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
       const sideRoom = c.passSide > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL);   // the ROAD's room, not the run-off's
-      if (po.finished || po.retired || dp > 16 || !Number.isFinite(dp)) { c.passOf = null; }           // lost it: no penalty
+      if (po.finished || po.retired || dp > AI_PASS_LATCH_M || !Number.isFinite(dp)) { c.passOf = null; }   // lost it: no penalty
       // PAST: done. The pass is complete, and the car we just cleared does not
       // get to counter-attack us on the same stretch — it takes the SAME
       // "threshold endured" lockout an abandoned pass gives its own attacker,
@@ -4411,7 +4423,7 @@ function updateCar(c, dt, ranked) {
       _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.roll = c.phaseRoll || 0.5;
       const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
       const moveOn = !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
-      if (!c.passOf && c.passCool <= 0 && moveOn) {
+      if (!c.passOf && c.passCool <= 0 && moveOn && blockerGap <= AI_PASS_LATCH_M) {
         const side = AiDrive.otSide(_aiOtPull);
         if ((side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
           c.passOf = blocker; c.passSide = side; c.passBest = blockerGap; c.passT = AiDrive.passHold(aiT);
@@ -4500,6 +4512,10 @@ function updateCar(c, dt, ranked) {
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
       rubClamp = true;
     }
+    // PIT LANE, last so nothing can undo it: a car serving a stop drives the
+    // LANE, not the racing line. pits.laneX returns its argument untouched for
+    // every car that is not in there (PitLane, laneX — and the gap it closes).
+    if (pits) desiredX = pits.laneX(c, hw, desiredX);
     const err = desiredX - c.x;
     const vAbs = Math.abs(c.speed);
     // A contact, a rub clamp or a dig-out is an EMERGENCY: the position loop
@@ -4535,10 +4551,10 @@ function updateCar(c, dt, ranked) {
       // full-lock authority, so every existing multiplier on the step below
       // (grip taper, kerb, contact give, off-track fade) still applies.
       const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX);
-      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * gripMult(c) / vAbs);
+      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX) / vAbs);
       const head0 = c.aiHead || 0;
       c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
-      steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1), 1), -1, 1);
+      steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1) * AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX), 1), -1, 1);
       c.steerSm = steer;
     }
   }
@@ -4547,7 +4563,7 @@ function updateCar(c, dt, ranked) {
   // longer slides you around. Full authority by ~65 km/h.
   // At high speed, grip tapers off slightly to model understeer.
   const latFac = clamp(vStd(Math.abs(c.speed)) / 18, 0, 1);
-  const gripScale = 1 - clamp((vStd(c.speed) - 20) / (VMAX - 20), 0, 1) * 0.28;
+  const gripScale = AiDrive.lateralScale(c.speed, c.aeroLoad, gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed), PACE, VMAX);
   // Riding a kerb loses a little grip — damped continuous instead of a binary
   // 1↔0.7 flip: the raw flag flickers at the ~4 m node rate at speed, and a
   // 30% lateral-grip square wave at ~20 Hz was genuine yaw dither in the
@@ -4766,21 +4782,8 @@ function updateCar(c, dt, ranked) {
     // so this is the ratio each axle differs by: worn fronts stop the car
     // turning in, worn rears let it step out. Exactly 1/1 with the setting off.
     const tyreAx = tyres.axleSplit(c);
-    // BRAKE BIAS spends the friction ellipse per AXLE: under braking the front
-    // spends bb/BB_REF of the longitudinal budget and the rear (1−bb)/(1−BB_REF)
-    // — forward bias uses up the front's circle (entry understeer), rearward
-    // lightens the rear (rotation). At BB_REF both scales are exactly 1 and
-    // this is the single slipFactor it always was; AI and remote cars carry no
-    // brakeBias and read BB_REF. Throttle and coast are unsplit.
-    // Bit-identical when the split is off: muBase keeps slipFactor and the
-    // per-axle factors are exactly 1 (the characterization spec pins this).
-    // Gated on the SMOOTHED longitudinal accel alone, never on `braking`.
-    // `braking` flips in one frame while axEstSm is damped at rate 10 (see the
-    // weight-transfer note above), so releasing the pedal used to swap the
-    // per-axle split for the shared one in a single tick — a step of several
-    // points of front grip at a forward bias, exactly the discontinuity the
-    // damping exists to avoid. Off-throttle coasting has axEstSm < 0 too and
-    // is served by the same split, which is what a real bias does.
+    // Brake bias splits the ellipse by axle, gated on smoothed deceleration
+    // so pedal release is continuous. BB_REF retains the shared ellipse.
     const bbOn = (c.axEstSm ?? 0) < 0 && c.brakeBias != null && c.brakeBias !== SetupTune.BB_REF;
     const bb = bbOn ? SetupTune.bbScales(c.brakeBias) : null;
     // (bbSlip*, not slipF/slipR — those names are the axles' SLIP ANGLES below.)
@@ -4788,8 +4791,9 @@ function updateCar(c, dt, ranked) {
     const bbSlipF = bb ? Math.sqrt(Math.max(0, 1 - afF * afF)) : 1;
     const bbSlipR = bb ? Math.sqrt(Math.max(0, 1 - afR * afR)) : 1;
     const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu * tyreMu;
-    const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP * tyreAx.f);
-    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55) * tyreAx.r);
+    const rollAx = SetupTune.axleGrip(c.rollBalance, c.lateralAccel || 0, loadF);
+    const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP * tyreAx.f * rollAx.f);
+    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
@@ -4822,13 +4826,7 @@ function updateCar(c, dt, ranked) {
     const Fyf = _tyreSat(CS_FRONT, slipF, muF) * sp;
     const Fyr = _tyreSat(csR, slipR, muR) * sp;
     const cosD = Math.cos(delta);
-    // --- UNDERSTEER CUE. Washing wide is the car's defining failure mode and
-    // its only feedback (nose, squeal) arrives AFTER the corner is lost; a real
-    // wheel goes LIGHT as the front lets go, and neither a phone nor a pad has
-    // one. SIGNALLING, NOT SIMULATING: no self-aligning torque is modelled, the
-    // player is told front-tyre saturation. `sat` is how far the front slip sits
-    // past the tanh knee (1 = the friction limit). Gated on the LOCAL human, on
-    // asking for steering, and rate-limited like the kerb haptic.
+    // Front saturation cue: feedback only; never writes the driving state.
     if (c.isPlayer && !c.offroad && sp > 0.5) {
       const sat = Math.abs(CS_FRONT * slipF) / Math.max(muF, 1e-3);
       const asking = Math.abs(steer) > 0.15;
@@ -4845,6 +4843,10 @@ function updateCar(c, dt, ranked) {
     }
     // --- rigid-body equations of motion (per unit mass). kz2 = yaw inertia/mass.
     const ay = Fyf * cosD + Fyr;                         // body lateral accel
+    c.lateralAccel = ay;
+    c.slipFront = slipF; c.slipRear = slipR; c.steerAngle = delta;
+    c.gripFront = muF; c.gripRear = muR; c.forceFront = Fyf; c.forceRear = Fyr;
+    c.frontUtil = Math.abs(Fyf) / muF; c.rearUtil = Math.abs(Fyr) / muR;
     // Floored: setPhysics({yawInertia:0}) would otherwise make the rdot below
     // divide by zero and NaN the whole car state.
     const kz2 = Math.max(1e-3, af * ar * YAW_INERTIA);   // yaw inertia / mass (scaled)
@@ -4906,7 +4908,7 @@ function updateCar(c, dt, ranked) {
     // so the pull it computes could never be applied. Floored while
     // unstuckActive ONLY (AiDrive.unstuckLatFloor); slow running is untouched.
     const aiLat = unstuckActive ? Math.max(latFac, AiDrive.unstuckLatFloor(!!track.street)) : latFac;
-    c.x += steer * STEER_VMAX * aiLat * gripScale * kerbGrip * gripMult(c) * bankMu * give * aiSurfMu * dt;
+    c.x += steer * STEER_VMAX * aiLat * gripScale * kerbGrip * bankMu * give * aiSurfMu * dt;
     // Debris side-world (A2): AI cars don't run the slip model, so estimate a
     // slide from lateral-g demand (|k|·v²/g) and treat hard braking at speed as
     // lock-up. READ-ONLY, cosmetic — matches the player marble hook.
@@ -5067,6 +5069,7 @@ function updateCar(c, dt, ranked) {
   } else {
     Tracks.sample(track, c.s, smp);              // yawVis below needs the tangent
   }
+  c.brakeDemand = braking ? brakeLvl : 0; c.throttleDemand = onThrottle ? throttleLvl : 0; c.steerCommand = steer;
   c.steerVis = damp(c.steerVis, steer, 10, dt);
   // Visual nose yaw. The player uses its REAL heading relative to the track
   // tangent, so the body visibly points where the car is actually aimed (turn-in,
@@ -5219,7 +5222,7 @@ function updateCar(c, dt, ranked) {
     // A takeover (R2/R3/C1) during this lap invalidates it EXPLICITLY: the car
     // was moved by Rapier, so it is not a timed lap — no personal best, no
     // stored ghost. The flag is set by IncidentSim and cleared here at the line.
-    const lapValid = !c.incidentInvalidLap;
+    const lapValid = !c.incidentInvalidLap && !(c.isPlayer && coach.practiceActive());
     // The flag: the distance, or the leader already home (RaceControl.flagOut —
     // a lapped car is flagged at its next crossing, not after the full count).
     const flagged = c.lap > lapsTarget || (c.lap > 1 && RaceControl.flagOut(cars));
@@ -5271,7 +5274,7 @@ function updateCar(c, dt, ranked) {
   }
   // Skip ghost recording while the current lap is incident-invalidated (a
   // takeover jumps s/x — recording it would corrupt the ghost trace).
-  if (isTimeTrial() && c.isPlayer && !c.incidentInvalidLap) Ghost.record(c.lapTime, c.s, c.x);
+  if (isTimeTrial() && c.isPlayer) records.sample(c);
 
   // --- wrong-way + auto-rescue (player only) ---
   if (c.human && state === "race" && !c.finished) {
@@ -5467,30 +5470,8 @@ function checkRetirements() {
   }
 }
 
-// Record a completed time-trial lap: add it to the track's leaderboard tagged
-// with the car used, and flag a new record if it takes provisional pole. The
-// board persists, so it survives quitting and reloads.
-function onTTLap(lapTime) {
-  ttLaps.push(lapTime);
-  ttBoardAdd(track.def.id, {
-    t: lapTime, teamId: player.team.id, code: player.code, name: player.name, ts: Date.now(),
-  });
-  // MEDAL against the model's pole for this circuit at this pace and difficulty
-  // (Quali.referencePole): the meta rides with the ghost lap, so a medal is
-  // only ever the ghost lap's medal and says what pace it was earned at.
-  const pole = quali.referencePole();
-  const medal = Quali.medalFor(lapTime, pole);
-  const held = Ghost.medal();
-  const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), pace: PACE, difficulty, weather: raceWeather });
-  Ghost.startLap();
-  if (up && medal && medal !== held) announce(medal.toUpperCase() + " MEDAL", 2, "info");
-  if (daily.isActive()) daily.record(lapTime);
-  if (lapTime < ttRecord) {
-    ttRecord = lapTime;
-    ttNewRecord = true;
-    announce("NEW RECORD " + fmtTime(lapTime), 2, "info");
-  }
-}
+// Results, ghosts and matching-class records share one settlement path.
+function onTTLap(lapTime) { records.finish(lapTime, ttLaps, quali.referencePole()); }
 
 function coast(c, dt) {
   // Same shape as the grass-drag floor (see updateCar): a bare Math.max(24, …)
@@ -6606,6 +6587,12 @@ function render(dt) {
   // Same cloud-speed knob the SKY uses, so the ground cloud-shadow dapple + the
   // godray shafts freeze/slow in lockstep with the visible sky (0 = frozen sky).
   frame.cloudSpeed = LT.cloudSpeed;
+  // THE PAINTED PIT LANE, as (entry s, window length, side, lap length). The
+  // lane is a fragment-shader marking rather than geometry — one ribbon, one
+  // arc coordinate, so a road that branches and rejoins cannot be built here
+  // (js/race/pit-lane.js says what that cost). null until the tyre setting
+  // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
+  frame.pitLane = pits.laneUniform();
   // Wet-road material (rain): ramp wetness in/out smoothly so the surface
   // darkens and starts mirroring lamps/sky over ~1s rather than popping.
   if (LT.wetness >= 0) {
@@ -6613,7 +6600,7 @@ function render(dt) {
     // saturates a few seconds after a weather flip — rate 0.8/s below).
     frame.wetness = LT.wetness;
   } else {
-    const wetTarget = isWetRoad() ? 1.0 : 0.0;
+    const wetTarget = roadWetness();
     const cur = frame.wetness || 0;
     frame.wetness = cur + (wetTarget - cur) * Math.min(1, dt * 0.8);
   }
@@ -7718,6 +7705,7 @@ function tickBody(now) {
       }
       update(PHYS_DT); physAcc -= PHYS_DT; steps++;
     }
+    PerfGov.recordSimulation(steps, steps === 5 ? physAcc : 0);
     if (steps === 5) physAcc = 0;             // fell badly behind — drop the backlog
   }
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp

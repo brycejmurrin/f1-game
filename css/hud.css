@@ -196,9 +196,24 @@
 /* A FIXED SLOT FOR THE DIGITS. tabular-nums makes every digit the same width
    but not every NUMBER: "99" -> "100" is a whole digit, and this block is
    centred in its column, so each crossing of 100 km/h (several a lap) shifted
-   the figure and KM/H sideways by half a digit. 3ch is three tabular digits;
-   right-aligned so the units digit never moves. */
-#hud-speed-n { display: inline-block; min-width: 3ch; text-align: right; }
+   the figure and KM/H sideways by half a digit. Right-aligned so the units
+   digit never moves.
+
+   NOT 3ch, WHICH IS WHAT THIS SAID AND WHAT IT IS NOT. `ch` is the advance of
+   "0" and the browser takes the PROPORTIONAL one, ignoring the tabular-nums
+   above it — measured on this element: 1ch = 0.4161em against a rendered
+   tabular digit of 0.4577em, so `3ch` came up 9.1 % short and the box still
+   jumped 3.5 px at 100 km/h, which is the exact defect this slot exists to
+   prevent. It survived unnoticed under Rajdhani because there the same gap was
+   1.1 % (3ch 1608/1000 em against "888" 1626) — small enough to look fixed.
+
+   1.373em is three TABULAR advances: Barlow's tnum zero is 498/1000, times the
+   91.9 % size-adjust on its @font-face = 0.4577em, times three. Synthetic bold
+   (the HUD asks 800, the face ships 700) does not move it — measured 0.4576em
+   rendered against 0.4577 derived. tests/unit/font-digits.test.mjs re-derives
+   this from the measured ledger, so a font swap that changes the advance fails
+   there rather than silently shortening the slot again. */
+#hud-speed-n { display: inline-block; min-width: 1.373em; text-align: right; }
 .hud-unit { font-size: var(--fs-micro); color: var(--dim); margin-left: calc(var(--gap) / 3); }
 #hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: calc(var(--gap) / 6); background: rgba(8,8,14,0.6); border: 1px solid var(--card-line); border-radius: var(--r-md); padding: 5px 8px; }
 #hud-gear {
@@ -421,6 +436,39 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
 #hud-tyre[data-pit="box"] #hud-tyre-code {
   background: var(--you); color: var(--bg); border-radius: var(--r-xs);
 }
+/* PIT CUE (js/race/pit-lane.js cue()). With no pit button, the entry has to
+   announce itself — the arrow IS the instruction, because the thing it points
+   at is 450 m of arc with nothing painted on it. Phases: counting down to the
+   entry, at the entry, committed, in the lane, being asked back INTO the lane
+   before the box, and stopped. It stays hidden unless a stop is worth making,
+   so it never becomes wallpaper. */
+/* …and the restatement the shell needs: an author `display` beats the UA's
+   `[hidden] { display: none }`, so without this the cue paints while hidden.
+   tests/unit/css-layers.test.mjs caught exactly that. */
+#hud-pit[hidden] { display: none; }
+#hud-pit {
+  display: flex; align-items: center; gap: calc(var(--gap) / 3);
+  font-family: var(--font-hud); font-size: var(--fs-micro); font-weight: 800;
+  letter-spacing: 0.08em; color: var(--text); text-shadow: var(--hud-halo);
+}
+#hud-pit-arrow { color: var(--you); }
+#hud-pit[data-phase="enter"] #hud-pit-arrow,
+#hud-pit[data-phase="armed"] #hud-pit-arrow { animation: pulse var(--hud-pulse) infinite; }
+#hud-pit[data-phase="box"] { color: var(--you); }
+/* KEEP LEFT/RIGHT — the loudest thing the cue ever says, and it earns it: the
+   driver has committed, the limiter is on, the box is 90 m away and the stop is
+   about to silently NOT happen because the car is on the racing line.
+   --you, the same token the box phase uses, and NOT --accent: an accent that
+   carries state is a WCAG 1.4.11 failure on the dark team skins (racingbulls
+   2.21:1 over --bg), which is what nontext-contrast.test.mjs exists to catch —
+   it caught this exact line. The URGENCY is carried by the second channel
+   instead: the whole cue pulses, where the earlier phases pulse only the arrow.
+   A static sign is the one a driver at the pit limit reads last. */
+#hud-pit[data-phase="keep"] {
+  color: var(--you); animation: pulse var(--hud-pulse) infinite;
+}
+body.hud-met-timing #hud-pit,
+body.hud-met-compact #hud-pit { display: none !important; }
 body.hud-met-timing #hud-tyre,
 body.hud-met-compact #hud-tyre { display: none !important; }
 /* Light ink with the HUD's dark halo (the #hud-speed / .sec-val recipe) reads on

@@ -10,6 +10,60 @@
 const Collide = (() => {
   const clamp = M4.clamp;   // js/core/mat4.js (eval-time: HARD_EDGES mat4 -> collide)
   const LCAR = 4.8, WCAR = 2.0;
+  // Per-car half extents; LCAR/WCAR above are the COMBINED pair extents.
+  const HL = LCAR / 2, WL = WCAR / 2;          // 2.4 long, 1.0 wide
+
+  // YAW-AWARE EXTENTS — the spun-car hole.
+  //
+  // (prog, x) is a plane and every car was axis-aligned in it: heading relative
+  // to the tangent never entered the contact test. A car crossways is 4.8 m
+  // across the road and the collider gave the PAIR 2.0 m of lateral reach, so a
+  // rival passing at |dX| between 2.0 and 3.4 m drove through bodywork the
+  // renderer was drawing. Measured miss, against a normally-oriented rival:
+  //
+  //     psi   30°    45°    60°    75°    90°
+  //     miss  1.07   1.40   1.58   1.58   1.40  metres
+  //
+  // The peak is 60-75°, the three-quarters-on car — NOT the fully sideways one,
+  // whose LONGITUDINAL extent has shrunk to 3.4 m against the fixed 4.8 m, i.e.
+  // there the old test over-detects. So this both adds and removes contacts.
+  //
+  // WHOSE yaw. Only a car with a REAL heading can be crossways here: AI cars
+  // are driven by a kinematic controller that writes `head = atan2(tangent)`
+  // (game.js — "AI cars still damp, they have no real heading") and their
+  // `yawVis` is a cosmetic lean of up to ~36°, which is presentation, not a
+  // pose. Widening a car because it LOOKS tilted would be the render quietly
+  // entering the physics. A car in a genuine spin is owned by the incident sim,
+  // and pairContact's callers skip Rapier-owned cars outright. So this reads
+  // psi for the player only, every AI car keeps exactly 2.4 x 1.0, and the
+  // reachable half of the hole — an AI driving through a spun PLAYER — closes.
+  //
+  // The 20°→60° blend keeps ordinary cornering out of it: below 20° nothing
+  // changes at all, and the term is only at full strength past where the miss
+  // peaks. A car at psi = 0 measures 2.4 x 1.0 exactly, so an unyawed field is
+  // bit-identical to before this existed.
+  const YAW_LO = 20 * Math.PI / 180, YAW_HI = 60 * Math.PI / 180;
+  function yawMix(psi) {
+    const a = psi < 0 ? -psi : psi;
+    if (!(a > YAW_LO)) return 0;               // NaN-safe: falls to 0
+    if (a >= YAW_HI) return 1;
+    const t = (a - YAW_LO) / (YAW_HI - YAW_LO);
+    return t * t * (3 - 2 * t);                // smoothstep, C1 at both ends
+  }
+  // Support half-widths of one car along the tangent / across it.
+  function extLong(c) {
+    const psi = c.human ? (c.yawVis || 0) : 0;
+    const k = yawMix(psi);
+    return k === 0 ? HL : HL * (1 - k) + k * (HL * Math.abs(Math.cos(psi)) + WL * Math.abs(Math.sin(psi)));
+  }
+  function extLat(c) {
+    const psi = c.human ? (c.yawVis || 0) : 0;
+    const k = yawMix(psi);
+    return k === 0 ? WL : WL * (1 - k) + k * (HL * Math.abs(Math.sin(psi)) + WL * Math.abs(Math.cos(psi)));
+  }
+  // Both cars can be human and rotated: each support is bounded by its
+  // half-diagonal. Use the pair bound for rejection AND arc buckets.
+  const LCAR_MAX = 2 * Math.hypot(HL, WL);
   // "This frame actually separated them" is a millimetre, never `corr > 0`: at
   // the slop distance the penetration is `LCAR - |dProg|` with LCAR's own
   // rounding still in it, so corr lands at ~3e-16 — positive, and therefore true
@@ -59,7 +113,7 @@ const Collide = (() => {
     // read-before-next-call contract as _ct / AiDrive.traits.
     // Arc-bucket broadphase for resolveCollisions. Bucket width = LCAR so any
     // contacting pair shares a bucket or sits in adjacent ones (wrap-aware).
-    const COL_BUCKET_M = LCAR;
+    const COL_BUCKET_M = LCAR_MAX;   // was LCAR — see LCAR_MAX: two yawed cars can span 5.2 m
     const _colBuckets = [];   // sparse: bucketId → car[]
     const _colBucketIds = []; // compact list of occupied bucket ids this pass
     let _colShifted = false;  // shiftLong this step — skip idle re-buckets
@@ -126,13 +180,17 @@ const Collide = (() => {
       if (!Number.isFinite(dProg)) return null;
       const L = track.total;
       const adProg = dProg < 0 ? -dProg : dProg;
-      if (adProg > LCAR && adProg < L - LCAR) return null;
+      if (adProg > LCAR_MAX && adProg < L - LCAR_MAX) return null;
       dProg = ((dProg + L / 2) % L + L) % L - L / 2;
-      if (Math.abs(dProg) > LCAR) return null;
+      if (Math.abs(dProg) > LCAR_MAX) return null;
       const dX = aX - bX;
       if (!Number.isFinite(dX)) return null;
-      const penLong = LCAR - Math.abs(dProg);
-      const penLat = WCAR - Math.abs(dX);
+      // Pair extents, yaw-aware (see LCAR_MAX above). Identical to LCAR/WCAR
+      // for any pair that is not yawed past the blend's floor.
+      const eLong = extLong(a) + extLong(b);
+      const eLat = extLat(a) + extLat(b);
+      const penLong = eLong - Math.abs(dProg);
+      const penLat = eLat - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) return null;
       const { iA, iB, iSum, sA, sB } = sepShares(a, b);
       const closing = (dProg >= 0 ? bSp - aSp : aSp - bSp) > 0.5;
@@ -152,7 +210,7 @@ const Collide = (() => {
       // |dX| > (WCAR/LCAR)*|dProg|, i.e. the contact bearing against the car's
       // own aspect ratio. Nose-to-tail is now unreachable as a side contact, so
       // the sgn-of-zero case cannot be entered at all.
-      _ct.sideContact = (penLat * LCAR < penLong * WCAR) && !forceRear;
+      _ct.sideContact = (penLat * eLong < penLong * eLat) && !forceRear;   // the pair's OWN aspect ratio, so a yawed car is judged on the box it presents
       return _ct;
     }
 
@@ -227,7 +285,12 @@ const Collide = (() => {
             // near-inelastic at racing speeds (COR ~0.1 above ~7 m/s); below 1 m/s
             // closing the contact is resting and e is 0 (Box2D's velocity
             // threshold), so a following car does not jitter off a bumper.
-            const e = AiDrive.bumpRestitution(relV);
+            // ...and the coefficient off the pre-step reference, so the same
+            // pair bounces the same way whoever else is in the queue.
+            const aSp0 = Number.isFinite(a._preColSpd) ? a._preColSpd : aSp;
+            const bSp0 = Number.isFinite(b._preColSpd) ? b._preColSpd : bSp;
+            const relV0 = sgn >= 0 ? bSp0 - aSp0 : aSp0 - bSp0;
+            const e = AiDrive.bumpRestitution(relV0 > 0 ? relV0 : relV);
             const jImp = (1 + e) * relV / iSum;
             // The car in front takes the punt in full — that is the kick you feel
             // and see. A HUMAN in front is capped: an AI misjudging a braking zone
@@ -278,8 +341,22 @@ const Collide = (() => {
     // Walk each occupied bucket against itself and the next bucket (mod nB).
     // Bucket width = LCAR → any contacting pair is co-bucketed or adjacent.
     // Each unordered pair is visited once (within-bucket i<j; across only b→b+1).
-    function _colForBucketPairs(nB, fn) {
-      for (let bi = 0; bi < _colBucketIds.length; bi++) {
+    // `fwd` alternates the SWEEP DIRECTION, and its absence here was a real
+    // asymmetry between the two paths. Relaxation is Gauss-Seidel: each pair is
+    // resolved against positions already moved by the pairs before it, so the
+    // result carries a bias in the direction of the sweep. The all-pairs branch
+    // has always cancelled that by reversing on odd passes (`fwd = (pass & 1)
+    // === 0`) — and the BUCKET branch, which is the one every race over twelve
+    // cars actually takes, always walked the buckets forward. So the small
+    // field got the symmetrised solver and the full grid did not.
+    // Same pair SET either way (each undirected edge is still visited exactly
+    // once, via the forward-neighbour rule below) — only the order changes,
+    // which is the whole point. Omitted (the separation pass, which runs once)
+    // it stays forward, exactly as before.
+    function _colForBucketPairs(nB, fn, fwd) {
+      const nIds = _colBucketIds.length;
+      for (let k = 0; k < nIds; k++) {
+        const bi = fwd === false ? nIds - 1 - k : k;
         const id = _colBucketIds[bi];
         const A = _colBuckets[id];
         if (!A || !A.length) continue;
@@ -309,6 +386,18 @@ const Collide = (() => {
       // AI cars mirrored their world pose BEFORE this pass (updateCar's tail), so a
       // shove rendered one step late; snapshot so the clamp loop can re-mirror.
       for (const c of ranked) if (!c.human) { c._preColS = c.s; c._preColX = c.x; }
+      // PRE-STEP CLOSING SPEED, for the restitution reference only. aSp/bSp are
+      // read LIVE, and _colResolvePair mutates .speed as it goes, so in a
+      // concertina a car that was already bumped earlier in the same pass
+      // presents a different closing speed to its next pair — and
+      // bumpRestitution is a RAMP over closing speed (0 under 1 m/s, 0.1 above
+      // 3), so how bouncy your bump is depended on who happened to be behind
+      // you and in what order the solver reached them. The impulse itself keeps
+      // the live relative velocity: that is momentum, and it must see the state
+      // it is actually correcting. Only `e` moves to the snapshot.
+      // Mirrors aSp/bSp for a net-owned car, whose predicted speed is the
+      // reference and is not ours to mutate.
+      for (const c of ranked) c._preColSpd = c._nOk ? c._nSpd : c.speed;
       // Side-rub speed loss for this step, in m/s: a deceleration (AiDrive.rubDecel)
       // times the step, so the headless harness's arbitrary dt scrubs per second.
       const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || 1 / 60);
@@ -326,7 +415,7 @@ const Collide = (() => {
           // Re-bucket only when shiftLong moved someone — idle passes keep the grid.
           if (pass > 0 && _colShifted) { nB = _colFillBuckets(ranked); _colShifted = false; }
           _colCbLast = last; _colCbRub = rubScrub;
-          _colForBucketPairs(nB, _colResolveCB);
+          _colForBucketPairs(nB, _colResolveCB, (pass & 1) === 0);
         } else {
           const fwd = (pass & 1) === 0;
           for (let ii = 0; ii < ranked.length; ii++) {

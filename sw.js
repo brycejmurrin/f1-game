@@ -98,9 +98,9 @@ async function precacheAssetLists() {
     "assets/fonts/titillium-web-latin-600-normal.woff2",
     "assets/fonts/titillium-web-latin-700-normal.woff2",
     "assets/fonts/titillium-web-latin-700-italic.woff2",
-    "assets/fonts/rajdhani-latin-500-normal.woff2",
-    "assets/fonts/rajdhani-latin-600-normal.woff2",
-    "assets/fonts/rajdhani-latin-700-normal.woff2",
+    "assets/fonts/barlow-condensed-latin-500-normal.woff2",
+    "assets/fonts/barlow-condensed-latin-600-normal.woff2",
+    "assets/fonts/barlow-condensed-latin-700-normal.woff2",
     // @gen-shell:sw-optional
     // DEFERRED renderer backends (no <script> tag; injected on opt-in)
     "js/render/webgpu/wgsl-chunks.js",
@@ -169,6 +169,7 @@ async function precacheAssetLists() {
     "js/circuits/scenery/dijon.js",
     "js/circuits/scenery/buddh.js",
     "js/circuits/scenery/mont_tremblant.js",
+    "js/circuits/scenery/mosport.js",
     // LAZY_DATA — the data hub bundle behind the DATA button
     "js/data/api.js",
     "js/data/telemetry.js",

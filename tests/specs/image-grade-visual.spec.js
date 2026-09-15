@@ -86,7 +86,14 @@ async function boot(page, {
   await page.evaluate(({ frac }) => {
     window.__apex.park(frac);
     window.__apex.hud(false);
-    window.__apex.eyeAt(frac, 0.2, 1.35);
+    // The pose from eyeAt(), re-installed through view() with fog: 1. A debug
+    // camera is an INSPECTION camera, so js/game.js thins its fog to 0.15x
+    // unless the camera carries its own `fog` — and a suite whose five
+    // REPRESENTATIVE_CONDITIONS tests assert that a night, an overcast and a
+    // RAIN scene "retain broad tonal range" must photograph the atmosphere the
+    // player gets, not 15 % of it. Same pose, same fov, only the fog restored.
+    const _v = window.__apex.eyeAt(frac, 0.2, 1.35);
+    if (_v) window.__apex.view({ eye: _v.eye, target: _v.target, fov: 60, far: 6000, fog: 1 });
     document.body.classList.add("hud-hidden");
     document.getElementById("hud-restore")?.style.setProperty("display", "none", "important");
   }, { frac });
@@ -181,7 +188,15 @@ async function captureState(page) {
     // between two captures is a knob-independent delta in exactly the dark
     // range "blacks" reads. SwiftShader clears the faces, so never here.
     const env = { ready: typeof GLX.envProbeReady === "function" ? GLX.envProbeReady() : null };
-    return { gen: sp.gen, post: sp.post, env, frozen: window.__apex.freeze(), state: window.__apex.info().state,
+    // THE CAMERA, which outranks every other premise here: a different viewpoint
+    // is a different picture, and the tonal delta of a different picture is not
+    // the grade. boot() sets a FIXED camera with eyeAt(), so this must be
+    // byte-identical at every capture of a test — and `debug` must stay true,
+    // because false means the spec no longer owns the camera and the live,
+    // damped chase camera is framing the shot (which is what the capture helper
+    // used to cause on every single capture; see tests/helpers/soft-capture.js).
+    const cam = window.__apex.camState();
+    return { gen: sp.gen, post: sp.post, env, cam, frozen: window.__apex.freeze(), state: window.__apex.info().state,
       pack: { uploaded: a.uploaded, layers: a.layers, error: a.error, matTexMix: window.__apex.lightTune().matTexMix } };
   });
 }
@@ -328,7 +343,16 @@ test.describe("rendered image grade", () => {
     expect(JSON.stringify(cap1.post), "the post chain took a different path for the two captures — two pipelines, not the grade: " + premise).toBe(JSON.stringify(cap0.post));
     expect(cap1.gen, "the changed capture is not a newer present than the baseline: " + premise).toBeGreaterThan(cap0.gen);
     expect(JSON.stringify(cap1.env), "the env probe changed state between the two captures — reflections, not the grade: " + premise).toBe(JSON.stringify(cap0.env));
-    return { baseline, changed, cap0, premise };
+    expect(JSON.stringify(cap1.cam), "the camera moved between the two captures — two viewpoints, not the grade: " + premise).toBe(JSON.stringify(cap0.cam));
+    // AND the spec must still OWN the camera. boot() asserts camState().debug
+    // before the first capture; this asserts it is still true at one, which is
+    // the part that was false for this file's whole history. Deliberate belt and
+    // braces: the equality above only catches a lost camera if the chase camera
+    // then MOVES between two captures, which it does on a 20-40 fps GPU and does
+    // NOT on ~1 fps SwiftShader — so without this line a re-regression is once
+    // again invisible everywhere except the nightly Metal job.
+    expect(cap0.cam.debug, "the spec no longer owns the camera — something cleared the eyeAt() free-cam and the live chase camera is framing these captures: " + premise).toBe(true);
+    return { baseline, changed, cap0, tier0, premise };
   }
 
   test("blacks visibly change the deepest image detail", async ({ page }) => {
@@ -339,14 +363,25 @@ test.describe("rendered image grade", () => {
     });
     expect(b.max, "BLACKS has no positive travel — this test would be vacuous").toBeGreaterThan(0);
     expect(b.min, "BLACKS has no negative travel — this test would be vacuous").toBeLessThan(0);
-    const { baseline, changed: raisedPx, cap0, premise } = await capturePair(page, "blacks-raised", { blacks: b.max });
+    const { baseline, changed: raisedPx, cap0, tier0, premise } = await capturePair(page, "blacks-raised", { blacks: b.max });
     const raised = rangeChanges(baseline, raisedPx, 2, 30);
-    // The third capture (crushed) holds to the same premise as the pair.
+    // The third capture (crushed) holds to the same premise as the pair — ALL of
+    // it, not just the post chain. It used to check `post` alone, and that is how
+    // CI 3623 reported "crushing blacks made the image 9.7 BRIGHTER": the capture
+    // was of a camera yawed ~34 px from the baseline's, which every other guard
+    // in this file would have caught at the pair. A premise checked for two
+    // captures and not for the third is not checked.
     await setTune(page, { blacks: b.min });
     const crushedPx = await pixels(page);
     await test.info().attach("blacks-crushed.jpg", { body: _lastCapture, contentType: "image/jpeg" });
     const cap2 = await captureState(page);
-    expect(JSON.stringify(cap2.post), "the post chain took a different path for the crushed capture: " + JSON.stringify({ cap0, cap2 })).toBe(JSON.stringify(cap0.post));
+    const tier2 = await tierAt(page);
+    const p2 = JSON.stringify({ tier: [tier0, tier2], cap0, cap2 });
+    expect(tier2, "governor tier moved before the crushed capture — a tier shed, not the grade: " + p2).toBe(tier0);
+    expect(JSON.stringify(cap2.post), "the post chain took a different path for the crushed capture: " + p2).toBe(JSON.stringify(cap0.post));
+    expect(JSON.stringify(cap2.env), "the env probe changed state before the crushed capture — reflections, not the grade: " + p2).toBe(JSON.stringify(cap0.env));
+    expect(JSON.stringify(cap2.cam), "the camera moved before the crushed capture — a different viewpoint, not the grade: " + p2).toBe(JSON.stringify(cap0.cam));
+    expect(cap2.gen, "the crushed capture is not a newer present than the baseline: " + p2).toBeGreaterThan(cap0.gen);
     const crushed = rangeChanges(baseline, crushedPx, 2, 30);
     const diag = JSON.stringify({
       px: [baseline.length / 4, raisedPx.length / 4, crushedPx.length / 4],

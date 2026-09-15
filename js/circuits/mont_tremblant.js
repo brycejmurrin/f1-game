@@ -18,9 +18,22 @@
     // negated by the projection, so it mirrors handedness. Calibrated against
     // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
     reverse: false,
-    // v0 sits mid the longest straight, placed by the stitcher. Not yet checked
-    // against the real start/finish line — see docs/tracks/START-LINES.md.
-    startFrac: 0.0000,
+    // MEASURED, not assumed. The stitcher was supposed to leave v0 mid-straight
+    // and did not: the 182 m of starting grid behind v0 ran through a corner of
+    // 104 m radius, so the grid was laid round a bend. This moves the line to the
+    // nearest section holding R >= 1500 m across the whole grid zone.
+    //
+    // startFrac is an INDEX fraction into the control points, NOT an arc
+    // fraction, and the points are not arc-uniform — the first attempt at this
+    // fix converted the arc target straight to a fraction and landed Donington
+    // back on a 31 m radius. The value below is the control-point index whose
+    // cumulative arc length reaches the target.
+    //
+    // sceneryStartFrac records that every prop, landmark and corner board was
+    // authored against the OLD origin, so the dressed world stays on its real
+    // corners while only the line and grid move.
+    startFrac: 0.6465,
+    sceneryStartFrac: 0.0000,
     name: "MONT-TREMBLANT",
     gp: "Canadian GP",
     country: "Canada",
@@ -50,7 +63,7 @@
     // turns: the 15 strongest curvature peaks of THIS centreline in lap order,
     // 15 being the researched real turn count. No researched sectors — consumers
     // fall back to thirds.
-    turns: [0.1807, 0.1978, 0.2147, 0.4118, 0.4557, 0.5028, 0.5417, 0.6152, 0.6258, 0.6577, 0.7758, 0.8357, 0.8668, 0.8792, 0.8972],
+    turns: [0.0592, 0.1191, 0.1502, 0.1626, 0.1806, 0.4641, 0.4812, 0.4981, 0.6952, 0.7391, 0.7862, 0.8251, 0.8986, 0.9092, 0.9411],
     furniture: { tree: "pine", fol: [0.14, 0.30, 0.17], lamp: "none" },
     kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
     standSet: ["concrete", "steel", "darkSteel"],

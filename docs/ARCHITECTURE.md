@@ -15,7 +15,7 @@ static files (GitHub Pages). Every JS file is an IIFE that assigns ONE global.
 > [notes/ARCHITECTURE-REVIEW.md](notes/ARCHITECTURE-REVIEW.md).
 
 Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
-**engine** — shared spline/mesh/scenery code), `js/circuits/` (the 51 circuit
+**engine** — shared spline/mesh/scenery code), `js/circuits/` (the 52 circuit
 **data** files), `js/car/` (car geometry, liveries, parts, teams), `js/data/`
 (API clients + data hub), `js/game/` (game subsystems), with `js/core/mat4.js` and
 the `js/game.js` entry at the root.
@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_172 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_174 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -209,13 +209,15 @@ _172 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `<id>.js × 51` | `TrackDefs` | tag | 51 circuit definitions (data only), one file per id in `Tracks.LIST` order — see the "js/circuits/<id>.js" section |
+| `<id>.js × 52` | `TrackDefs` | tag | 52 circuit definitions (data only), one file per id in `Tracks.LIST` order — see the "js/circuits/<id>.js" section |
 
 **`js/race/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `pit-lane.js` | `PitLane` | tag | PIT LANE: the other half of the sentence js/physics/tyre-model.js opened. |
+| `session-records.js` | `SessionRecords` | tag | Comparable time-trial classes and lap configuration continuity. |
+| `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
 | `reliability.js` | `Reliability` | tag | RELIABILITY: whether a car reaches the flag at all. |
 | `engineer.js` | `RaceEngineer` | tag | RACE ENGINEER: the voice that makes the tyre model legible. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
@@ -364,7 +366,7 @@ _172 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `<id>.js × 51` | `TrackScenery` | LAZY_SCENERY | 51 bespoke `scenery(api)` closures, one per circuit, fetched when that circuit is built |
+| `<id>.js × 52` | `TrackScenery` | LAZY_SCENERY | 52 bespoke `scenery(api)` closures, one per circuit, fetched when that circuit is built |
 
 **`js/net/`**
 
@@ -821,7 +823,7 @@ road/terrain meshes through `TrackMesh`/`TrackSurface`, props through the four
 scenery modules.
 
 ```
-Tracks.LIST -> [ trackDef, ... ]   // 51 circuits. LIST order == the `<script>` load
+Tracks.LIST -> [ trackDef, ... ]   // 52 circuits. LIST order == the `<script>` load
                                    // order in index.html (each circuits/<id>.js registers
                                    // itself as it loads) — it is NOT the real F1 calendar
                                    // order. Check tools/manifest.cjs / index.html.

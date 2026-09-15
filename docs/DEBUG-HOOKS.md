@@ -2204,15 +2204,27 @@ half-width toward `side` within `COMMIT_M` of the entry and hold it for
 | `stops` | Stops this car has made |
 | `commit` | How far through the commitment dwell this car is, 0-1 — 0 unless it is holding the line into the pits right now. With no button, this is the whole input, and the HUD's compound chip fills with it |
 | `side` | Which way "in" is: `+1` right (where `js/track/tracks.js` places the pit building), `-1` left. Overridable per circuit via `def.pitZone.side` |
+| `lane` | The four numbers the lit shaders paint the lane from, exactly as the frame carries them: `[entry s, window length, side, lap length]`. **`null` means no lane is armed and nothing is painted** — the first thing to check when the lane is invisible |
+| `laneEdgeX` | Where the painted boundary sits laterally at a nominal 7 m half-width. The real line is at `(hw − 3.2) × side`, so it tracks the road's actual width |
+| `inLaneLat` | This car is laterally IN the painted strip. DIFFERENT from `inLane`, and the difference is the one that bites: `inLane` is the state machine, this is the position, and **a stop that will not latch is always this one**. `false` outside the window |
+| `laneX` | The lane's centre at THIS car's arc position — the number to aim at. `null` outside the window. Use it rather than a literal: the pit-window half-width runs 4.93 m (Monaco) to 8.0 m (Spa), so the lane centre moves over three metres across the calendar |
 
-**The lane is a STATE, not a place.** There is no lateral lane to drive into:
-a driveable one was built and measured badly twice (a forced boundary went
-through Monaco's buildings; fitting to existing room found 2.4 m at Monza,
-because the scenery puts a pit WALL there, and a real lane sits on its far side).
-`js/race/pit-lane.js` records both measurements. So the limiter applies to a car
-that has CALLED a stop and is in the window, and the box holds it — meaning an
-unarmed car never sees a speed cap, and a car beached off the road never reads
-as pitting.
+**The lane is a STATE, and also a PLACE TO STOP — but not the place two earlier
+attempts went looking for.** A driveable lane out BEYOND the road edge was built
+and measured badly twice (a forced boundary went through Monaco's buildings;
+fitting to existing room found 2.4 m at Monza, because the scenery puts a pit
+WALL there, and a real lane sits on its far side). `js/race/pit-lane.js` records
+both measurements. The lane that exists is the outermost strip of the ROAD
+across the window, painted rather than built.
+
+So the limiter applies to a car that has CALLED a stop and is in the window —
+an unarmed car never sees a speed cap, and a car beached off the road never
+reads as pitting. The BOX additionally requires being in the strip: an AI is
+steered there, and a player is not (the lane is driven, so the car is never
+taken off you) — which means **a player who halts on the racing line is not
+serviced**, and `pit().inLaneLat` is how you see why. Garages, a crew and a lane
+behind the pit wall are still missing; those need a road that branches, which
+this one-ribbon engine cannot express.
 
 **Pit loss is still emergent**: window length over the limit, against racing the
 same stretch, plus the stop. That is the property that made the driveable lane

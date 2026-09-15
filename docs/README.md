@@ -144,3 +144,8 @@ read here — follow the link.
 
 For day-to-day workflows, see the **skills** in `.claude/skills/`
 (`.claude/skills/README.md`) and the **tools** in `tools/` (`tools/README.md`).
+
+## Mechanics survey and implementation
+
+- [Mechanics opportunity survey](research/MECHANICS-OPPORTUNITY-SURVEY-2026-09-14.md): code survey, primary research and priorities.
+- [Mechanics coherence implementation](plans/2026-09-14-mechanics-coherence.md): completed behavior, validation and remaining opportunities.

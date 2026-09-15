@@ -2941,3 +2941,71 @@ read as `undefined` at every one of them — silently, because the model's
 fallback is a legitimate 1.0, so all seven simply behaved like the median.
 `tests/unit/circuit-def-fields.test.mjs` caught it, which is exactly the trap
 that guard was written for and the seventh time it has bitten.
+
+## 2026-09-14 — the pit cue: a gesture nobody can see is not a control
+
+`(tree) shellNodes` 1478 → 1481 (+3) and `js/game.js` +1 line / +1 codeLine.
+
+Removing the pit button left the stop called by STEERING INTO THE ENTRY — at a
+lane that is 450 m of arc with nothing drawn on it, on a side with no marking.
+The commitment dwell already filled the compound chip, but that only says the
+gesture is registering, not where or which way to try; the control was
+undiscoverable. `#hud-pit` + its arrow and text span are those three nodes, and
+the one game.js line is their `els` entry.
+
+The rules live in `PitLane.cue()`, not here: when to appear at all (a used set,
+the wrong tread, or a free stop under a caution — never every lap, or it becomes
+wallpaper), the countdown, and the four phases. The HUD only paints what it
+returns, which is why three nodes and one line is the whole cost.
+
+Zero added to `rawSpacing` / `rawColor` / `rawColorDistinct`, all three of which
+carry `slack: 0`: the rule uses `var(--gap)`, `var(--you)`, `var(--text)` and
+`var(--fs-micro)` throughout and defines no literal of its own.
+
+## 2026-09-14 — L2: the pit lane is PAINTED, across three shading languages
+
+`js/game.js` 8757 → 8763 (+6 lines, +1 codeLine) and `js/render/glx/glx.js`
+2648 → 2655 (+7). Both are the producer side of one uniform: game.js puts
+`frame.pitLane` (entry s, window length, side, lap length) on the frame, glx.js
+uploads it as `uPitLane`. The rest of the cost is in files that are not
+ratcheted — the three lit shaders, `wgx.js`'s packer and `pit-lane.js`.
+
+The lane is a fragment-shader MARKING, not geometry, and that is the whole
+reason this is cheap. Two earlier attempts built it: one forced the road
+boundary open and put it through Monaco's buildings (lap distance jumped 250 m),
+the other went looking for room beyond the edge and found 2.4 m at Monza,
+because the scenery puts a pit WALL there. Painting `roadMarkings()` from the
+`(s, x, hw)` the road already carries adds no vertices, moves no boundary and
+leaves the car on tarmac, so neither failure can return.
+
+WGX's frame uniform grew with it: `FRAME_UNIFORM_BYTES` 576 → 592 for the
+`pitLane` vec4 at offset 576. That number is pinned by
+`tests/unit/webgpu-lifecycle.test.mjs` in three places, which is exactly the
+guard a fixed-layout buffer should have.
+
+## 2026-09-14 — L3: the lane becomes a PLACE to stop, not only a state
+
+`js/game.js` 8773 → 8777 (+4 lines, +1 codeLine). One statement, at the very end
+of the AI's lateral chain:
+
+```js
+if (pits) desiredX = pits.laneX(c, hw, desiredX);
+```
+
+It is LAST on purpose. `desiredX` is the accumulated racing line plus overtake,
+defence, separation, hold-line and yield biases, and any of those would
+otherwise pull a car that is serving a stop back across the painted line with
+the limiter on. `laneX` returns its argument untouched for every car that is not
+in the lane, so the racing field pays one null call.
+
+This closes the KNOWN GAP `js/race/pit-lane.js` has carried since P2: a car held
+in the box sat on the racing surface, because there was nowhere to put it.
+Painting the lane (L2, above) made somewhere — 2.4-3.2 m of real tarmac on the
+pit side — so the AI is steered into it and the box will not latch outside it.
+Everything else is in `pit-lane.js`, which is not ratcheted: `laneX`,
+`inLaneLat`, the box's new lateral condition and the cue's KEEP LEFT/RIGHT.
+
+The player is NOT steered, and that asymmetry is the design rather than an
+omission: the lane is driven (PitLane's COMMIT block), so the car is never taken
+off you. What asks the player for the lane is the box's own condition — stop on
+the racing line and the stop does not happen.
