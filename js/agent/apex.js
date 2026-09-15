@@ -40,9 +40,10 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   // 2026-09-15 (second pass): the tyre-force model (js/physics/tyre-model.js)
   // and the smoothed control-demand fields (game.js "--- lateral ---") joined
   // the sim after this list was last extended, every one already read with a
-  // `|| 0` / Number.isFinite fallback for the cold-car case (tyre-model.js:599,
-  // collide.js:371-372, apex.js:626) — undefined was always a tolerated input,
-  // just never actually reached because nothing cleared it between episodes.
+  // `|| 0` / Number.isFinite fallback for the cold-car case (tyre-model.js's
+  // telemetry getter, collide.js's pre-collision speed read, and this file's
+  // own tyres() hook) — undefined was always a tolerated input, just never
+  // actually reached because nothing cleared it between episodes.
   "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
   "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane"];
