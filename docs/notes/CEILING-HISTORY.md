@@ -2982,3 +2982,30 @@ WGX's frame uniform grew with it: `FRAME_UNIFORM_BYTES` 576 → 592 for the
 `pitLane` vec4 at offset 576. That number is pinned by
 `tests/unit/webgpu-lifecycle.test.mjs` in three places, which is exactly the
 guard a fixed-layout buffer should have.
+
+## 2026-09-14 — L3: the lane becomes a PLACE to stop, not only a state
+
+`js/game.js` 8773 → 8777 (+4 lines, +1 codeLine). One statement, at the very end
+of the AI's lateral chain:
+
+```js
+if (pits) desiredX = pits.laneX(c, hw, desiredX);
+```
+
+It is LAST on purpose. `desiredX` is the accumulated racing line plus overtake,
+defence, separation, hold-line and yield biases, and any of those would
+otherwise pull a car that is serving a stop back across the painted line with
+the limiter on. `laneX` returns its argument untouched for every car that is not
+in the lane, so the racing field pays one null call.
+
+This closes the KNOWN GAP `js/race/pit-lane.js` has carried since P2: a car held
+in the box sat on the racing surface, because there was nowhere to put it.
+Painting the lane (L2, above) made somewhere — 2.4-3.2 m of real tarmac on the
+pit side — so the AI is steered into it and the box will not latch outside it.
+Everything else is in `pit-lane.js`, which is not ratcheted: `laneX`,
+`inLaneLat`, the box's new lateral condition and the cue's KEEP LEFT/RIGHT.
+
+The player is NOT steered, and that asymmetry is the design rather than an
+omission: the lane is driven (PitLane's COMMIT block), so the car is never taken
+off you. What asks the player for the lane is the box's own condition — stop on
+the racing line and the stop does not happen.
