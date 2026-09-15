@@ -108,7 +108,9 @@ test("driving onto grass and back recovers (slowed off, speeds up on return)", a
     a.clearInput();
     return speed;
   };
-  const offSpeed = leg(14);   // way off in the grass
+  // Negative laterals: +x at Monza's line is the pit side, and the engine's
+  // pit complex (TrackPit) lays lane tarmac there, not grass.
+  const offSpeed = leg(-14);  // way off in the grass
   const onSpeed = leg(0);     // same launch, on the tarmac
   lt(offSpeed, 0.75 * LAUNCH);
   gt(onSpeed, offSpeed + 5);
@@ -138,7 +140,7 @@ test("auto-rescue: a car beached deep off-track is recovered", async () => {
   const a = g.apex;
   a.setPhysics({ drift: 0 });
   let onTrack = false;
-  a.jump(0.0, 0, 16);            // beached in the grass, stopped
+  a.jump(0.0, 0, -16);           // beached in the grass, stopped (the left: +x is the pit complex)
   for (let i = 0; i < 320; i++) {
     a.setInput({ steer: 0, throttle: false });
     a.step(1 / 60, 1);

@@ -96,7 +96,10 @@ test("driver↔wall: player is stopped at the barrier and loses speed", async ()
   a.setPhysics({ drift: 0 });
   const hw = a.probe().hw;
   a.jump(0.0, 60, 0);
-  a.setInput({ steer: 1, throttle: true });
+  // LEFT (steer -1): the right of Monza's start straight is the pit side,
+  // where the engine's pit complex (TrackPit) opens the driving boundary out
+  // to the garages — there is no wall to hit there any more.
+  a.setInput({ steer: -1, throttle: true });
   let maxAbsX = 0;
   for (let i = 0; i < 120; i++) {
     a.step(1 / 60, 1);
