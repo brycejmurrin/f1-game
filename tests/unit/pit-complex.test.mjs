@@ -215,3 +215,77 @@ test("the garages are the setup screen's bay, and the build says so", () => {
   assert.ok(bay.pos.length / 3 > 1500 && bay.pos.length / 3 < 6000, `a static bay is ${bay.pos.length / 3} verts`);
   assert.equal(bay.mat.length, bay.pos.length / 3, "one material id per vertex, as the garage suite demands");
 });
+
+test("neither end of the complex lies in a corner: the exit closes before the first turn-in", () => {
+  // Six circuits turn in within 90 m of the line (Mosport 24 m, Nürburgring
+  // 84 m). The first build closed every exit 130 m after the line and blended
+  // the exit road back over the 90 m after that, which put the Nürburgring's
+  // last garages, its race control and its whole exit road in Turn 1.
+  const T = tracksOnce(), P = ctxOnce().TrackPit;
+  {
+    const t = buildOnce("nurburgring"), p = t.pit;
+    assert.ok(p.exitM < P.EXIT_M && p.exitM >= P.EXIT_MIN, `exitM ${p.exitM}`);
+    // From the line to the end of the exit road, not a node is cornering.
+    for (let s = 0; s < p.sB; s += 4)
+      assert.ok(Math.abs(T.curvature(t, s)) <= P.PIT_K, `nurburgring: cornering at s=${s | 0} (sB ${p.sB | 0})`);
+  }
+  // Where the straight cannot hold even the minimum (Mosport 24 m, Jerez 48 m)
+  // the exit sits on the floor, not at 130. (The ENTRY is clamped to
+  // ENTRY_MIN the same way and may still open in a corner on such a circuit.)
+  for (const id of ["mosport", "jerez"]) assert.equal(buildOnce(id).pit.exitM, P.EXIT_MIN, id);
+  // A long straight keeps the full exit — the rule only bites where a corner does.
+  assert.equal(buildOnce("monza").pit.exitM, P.EXIT_M);
+});
+
+test("race control stands past the last bay, inside the row's keep-out, on a bending straight too", () => {
+  // Placed 14.5 m of arc past the last bay at the garage line, the Nürburgring's
+  // race control (whose row ran into T1) stood 7 m inside the last bay: on a
+  // bend, arc at the garage line is a shorter step in the world. It is now
+  // offset along the last bay's own tangent, and the keep-out's ROW_TAIL keeps
+  // trees out of it (Mugello and Portimão grew canopies through it).
+  const P = ctxOnce().TrackPit;
+  for (const id of ["nurburgring", FULL, "mugello"]) {
+    const t = buildOnce(id), p = t.pit, L = t.total, ds = L / t.n;
+    const kEnd = Math.round(((p.row.s1 + P.ROW_TAIL - 1 + L) % L) / ds) % t.n;
+    const kPast = Math.round(((p.row.s1 + P.ROW_TAIL + 8) % L) / ds) % t.n;
+    assert.ok(p.keep[kEnd] > p.off.outer + P.BAY.depth, `${id}: the tail is kept out (${p.keep[kEnd].toFixed(1)})`);
+    assert.ok(p.keep[kPast] < p.off.outer + 1, `${id}: past the tail only the lane is (${p.keep[kPast].toFixed(1)})`);
+  }
+});
+
+test("a RAW landform yields to the complex chord by chord, and says so", () => {
+  // Portimão's pit-straight cutting (groundedSegments, 9 m wide, 5.5 m tall,
+  // 20 m out) ran straight through the garages: RAW emitters never pass the
+  // footprint guard. They now ask `inPit` per chord and record the drop as
+  // superseded, not as a guard suppression.
+  const t = buildOnce("portimao");
+  const d = t.modelDiagnostics;
+  const cut = d.suppressed.filter((e) => /^portimao-cut-/.test(e.id));
+  assert.ok(cut.length >= 1, "a cut is recorded");
+  for (const e of cut) {
+    assert.equal(e.required, false);
+    assert.match(e.reason, /superseded by the pit complex/);
+  }
+  assert.ok((d.supersededByPit.groundedSegments || 0) > 0, "counted on the pit's own counter");
+  assert.equal(d.suppressedCounts.groundedSegments, undefined, "not on the guard's");
+});
+
+test("a crown may reach over the complex's edge; a footing may not", () => {
+  // The keep-out tested every primitive of a tree on its own: the wide middle
+  // tier of a crown standing just outside the complex reached in and was
+  // dropped, the narrower top tier cleared, and the float sweep reported the
+  // top tier on thirty circuits. Monza's poplar 45 m out at the row's end
+  // (frac ~0.002) is the worked example: trunk, then FOUR tiers, the lowest
+  // 16 m wide. Boxes get no such exemption — a superseded building must not
+  // leave its upper storey behind.
+  const env = ctxOnce();
+  const T = env.Tracks, t = T.build(T.LIST.find((d) => d.id === "monza"));
+  void t;
+  const x = 536.5, z = -217.5;
+  const near = env.prims.filter((q) => q.minX - 3 <= x && q.maxX + 3 >= x && q.minZ - 3 <= z && q.maxZ + 3 >= z);
+  const cones = near.filter((q) => q.name === "addCone").sort((a, b) => a.minY - b.minY);
+  const trunk = near.find((q) => q.name === "addCyl");
+  assert.ok(trunk, "the poplar's trunk stands");
+  assert.ok(cones.length >= 4, `the poplar keeps every tier (${cones.length})`);
+  assert.ok(cones[0].minY <= trunk.maxY + 1, `the lowest tier (${cones[0].minY.toFixed(1)}) meets the trunk (${trunk.maxY.toFixed(1)})`);
+});

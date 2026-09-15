@@ -30,19 +30,25 @@ const TrackPit = (function () {
 
   // Along the arc. The LIMITER window (entry line → exit line) is the old
   // pitWindow: it walks back from the line to where the last corner lets go
-  // (docs/PHYSICS.md — the surface channel) and closes EXIT_M after it. The
-  // ENTRY ROAD peels off the racing surface before the entry line and the EXIT
-  // ROAD blends back after the exit line; the wall GROWS between the lane and
-  // the track over the last WALL_GROW metres of the entry road, and shrinks
-  // over the first WALL_GROW of the exit road, so the lane is reachable from
-  // the track exactly where it should be and nowhere else.
-  const ENTRY_MAX = 400, ENTRY_MIN = 150, EXIT_M = 130;
+  // (docs/PHYSICS.md — the surface channel) and closes EXIT_M after it, or
+  // sooner where the first corner starts before that — six circuits turn in
+  // within 90 m of the line (Mosport 24 m, Jerez 48 m … Nürburgring 84 m), and
+  // a lane that ran on into the corner put its last garages and its exit
+  // road in the bend. The ENTRY ROAD peels off the racing surface before the
+  // entry line and the EXIT ROAD blends back after the exit line, each only
+  // while the road is still straight; the wall GROWS between the lane and the
+  // track over the last WALL_GROW metres of the entry road, and shrinks over
+  // the first WALL_GROW of the exit road, so the lane is reachable from the
+  // track exactly where it should be and nowhere else.
+  const ENTRY_MAX = 400, ENTRY_MIN = 150, EXIT_M = 130, EXIT_MIN = 40;
   const PIT_K = 0.0035, STEP = 8;         // "not actively cornering" — see docs/PHYSICS.md
-  const ENTRY_ROAD = 70, EXIT_ROAD = 90, WALL_GROW = 30;
+  const ENTRY_ROAD = 70, EXIT_ROAD = 90, ROAD_MIN = 30, WALL_GROW = 30;
   const LIMIT_KPH = 80, LIMIT_KPH_STREET = 60;   // F1 SR 2026 B1.7.3(a); Monaco / Melbourne
   // The row starts past POLE's grid slot (14 m before the line, TrackMesh.gridSlot)
   // plus the run-up a commitment needs, and ends ROW_END short of the exit line.
-  const GRID_POLE_M = 14, GRID_CLEAR = 40, ROW_END = 30;
+  // Race control stands ROW_TAIL past the last bay (SceneryPits), inside the
+  // same keep-out.
+  const GRID_POLE_M = 14, GRID_CLEAR = 40, ROW_END = 30, ROW_TAIL = 16;
 
   const wrap = (v, L) => ((v % L) + L) % L;
   const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
@@ -78,18 +84,29 @@ const TrackPit = (function () {
 
   /** The limiter window: how far before the line it opens, how far after it
    *  closes. `curvature(track, s)` is injected so this file owns no spline. */
+  /** How far the road stays straight from arc `s0` in direction `dir`
+   *  (±1), up to `max`; `max` itself without a curvature function. */
+  function straightRun(track, curvature, s0, dir, max) {
+    if (typeof curvature !== "function") return max;
+    const L = track.total;
+    let d = 0;
+    for (; d < max; d += STEP) {
+      if (Math.abs(curvature(track, wrap(s0 + dir * (d + STEP / 2), L))) > PIT_K) break;
+    }
+    return d;
+  }
+
   function window(track, curvature) {
     const L = track.total;
     if (!(L > 0)) return { entryM: ENTRY_MAX, exitM: EXIT_M };
-    let d = 0;
-    if (typeof curvature === "function") {
-      for (; d < ENTRY_MAX; d += STEP) {
-        if (Math.abs(curvature(track, wrap(-(d + STEP / 2), L))) > PIT_K) break;
-      }
-    } else d = ENTRY_MAX;
     const cap = L / 3;
-    const entryM = Math.min(Math.max(d, ENTRY_MIN), ENTRY_MAX, cap * 0.7);
-    return { entryM, exitM: Math.min(EXIT_M, cap * 0.3) };
+    const back = straightRun(track, curvature, 0, -1, ENTRY_MAX);
+    const entryM = Math.min(Math.max(back, ENTRY_MIN), ENTRY_MAX, cap * 0.7);
+    // The exit line closes before the first corner, leaving the exit road its
+    // minimum run to blend back on the straight.
+    const fwd = straightRun(track, curvature, 0, 1, EXIT_M + ROAD_MIN);
+    const exitM = Math.min(EXIT_M, cap * 0.3, Math.max(EXIT_MIN, fwd - ROAD_MIN));
+    return { entryM, exitM };
   }
 
   /** The garage row: one bay per team in Teams.LIST order (the order a real
@@ -117,16 +134,13 @@ const TrackPit = (function () {
     const ds = L / n;
     const sIn = wrap(-win.entryM, L), sOut = wrap(win.exitM, L);
     const lenM = win.entryM + win.exitM;
-    // The entry road may not open inside a corner either: walk it back only
-    // while the road is still straight enough, never shorter than 30 m.
-    let entryRoadM = 30;
-    if (typeof curvature === "function") {
-      for (; entryRoadM < ENTRY_ROAD; entryRoadM += STEP) {
-        if (Math.abs(curvature(track, wrap(sIn - entryRoadM - STEP / 2, L))) > PIT_K) break;
-      }
-    } else entryRoadM = ENTRY_ROAD;
-    entryRoadM = Math.min(entryRoadM, ENTRY_ROAD, Math.max(30, (L / 3 - lenM) * 0.4));
-    const exitRoadM = Math.min(EXIT_ROAD, Math.max(30, (L / 3 - lenM) * 0.4));
+    // Neither road may open or close inside a corner: each runs only while
+    // the road is still straight enough, never shorter than ROAD_MIN.
+    const room = Math.max(ROAD_MIN, (L / 3 - lenM) * 0.4);
+    const entryRoadM = Math.min(ENTRY_ROAD, room,
+      Math.max(ROAD_MIN, straightRun(track, curvature, sIn, -1, ENTRY_ROAD)));
+    const exitRoadM = Math.min(EXIT_ROAD, room,
+      Math.max(ROAD_MIN, straightRun(track, curvature, sOut, 1, EXIT_ROAD)));
     const sA = wrap(sIn - entryRoadM, L), sB = wrap(sOut + exitRoadM, L);
     const grow = Math.min(WALL_GROW, entryRoadM * 0.5, exitRoadM * 0.5);
 
@@ -149,6 +163,7 @@ const TrackPit = (function () {
       return Object.assign({}, row_, { through: t, s: wrap(sIn + t, L), k: Math.round(wrap(sIn + t, L) / ds) % n });
     });
     const rowS0 = wrap(sIn + first - pitch / 2, L), rowS1 = wrap(sIn + first + span + pitch / 2, L);
+    const rowKeepS1 = wrap(sIn + first + span + pitch / 2 + ROW_TAIL, L);   // …and race control behind it
     const inArc = (s, a, b) => (a <= b ? (s >= a && s <= b) : (s >= a || s <= b));
     for (let k = 0; k < n; k++) {
       if (r.painted) break;                          // a painted lane has no ribbon and keeps nothing out
@@ -167,8 +182,12 @@ const TrackPit = (function () {
       }
       w[k] = wk; v[k] = vk;
       if (wk > 0) {
-        keep[k] = r.off.outer * wk + 1.0;
-        if (r.hasBays && inArc(s, rowS0, rowS1)) keep[k] += BAY.depth + 3.0;
+        // The keep-out reaches the garage line plus its own kerb: a landmark
+        // may stand AT the lane's edge (Yas Marina's hotel legs stand 14.5 m
+        // out, straddling track and lane alike); a metre of margin superseded
+        // them. Behind the row the bays need their depth and a service road.
+        keep[k] = r.off.outer * wk + 0.3;
+        if (r.hasBays && inArc(s, rowS0, rowKeepS1)) keep[k] += BAY.depth + 3.0;
       }
     }
     return {
@@ -176,7 +195,7 @@ const TrackPit = (function () {
       painted: r.painted, hasWall: r.hasWall, hasBays: r.hasBays,
       sA, sIn, sOut, sB, entryM: win.entryM, exitM: win.exitM, lenM, entryRoadM, exitRoadM, grow,
       w, v, keep,
-      row: { pitch, boxLen: BOX_LEN, first, count, boxes, s0: rowS0, s1: rowS1 },
+      row: { pitch, boxLen: BOX_LEN, first, count, boxes, s0: rowS0, s1: rowS1, tail: ROW_TAIL },
       bay: BAY,
     };
   }
@@ -229,8 +248,9 @@ const TrackPit = (function () {
     return -1;
   }
 
-  return { BANDS, NARROW, BAY, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, WALL_GROW,
-           ENTRY_MAX, ENTRY_MIN, EXIT_M, PIT_K, LIMIT_KPH, LIMIT_KPH_STREET, GRID_POLE_M, GRID_CLEAR,
+  return { BANDS, NARROW, BAY, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, WALL_GROW,
+           ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, LIMIT_KPH, LIMIT_KPH_STREET, GRID_POLE_M, GRID_CLEAR,
+           ROW_END, ROW_TAIL,
            resolve, window, row, build, at, openBoundary, rowOf };
 })();
 Object.freeze(TrackPit);

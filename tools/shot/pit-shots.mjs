@@ -69,9 +69,11 @@ const OUT_ROOT = flag("--out", null)
 
 // ── The framings ────────────────────────────────────────────────────────────
 // Offsets are METRES through the pit window (0 = the entry, `lenM` = the exit);
-// `lat` is "lane" (the lane centre at that point, read live), "out" (outside
-// the lane, pit side) or "opp" (across the track). A shot is either an eye+look
-// pair or an orbit about the centreline.
+// `lat` is "drive" (the FAST lane's centre — where a car transits, read live),
+// "lane" (the working lane's centre, where a stop happens), "out" (outside the
+// lane, pit side) or "opp" (across the track). Eyes stand in the fast lane:
+// the working lane is where the car and the crews are, and a metre further
+// out is the garage door. A shot is either an eye+look pair or an orbit.
 const OUT_GAP = 12;     // metres beyond the lane centre, pit side
 const OPP_GAP = 14;     // metres beyond the lane centre, across the track
 
@@ -86,15 +88,15 @@ function framings(g) {
     name: "01-entry-outside",
     note: "the pit entry from across the circuit — does the lane peel off the racing surface cleanly",
     car: -20,
-    eye: { m: -115, lat: "opp", h: 13 },
+    eye: { m: -115, lat: "opp", h: 22 },   // above a 13 m pine on a parkland circuit
     look: { m: 20, lat: "lane", h: 1.2 },
   });
   out.push({
     name: "02-entry-lane",
     note: "driver's eye entering the lane",
     car: 8,
-    eye: { m: -30, lat: "lane", h: 1.9 },
-    look: { m: 75, lat: "lane", h: 1.3 },
+    eye: { m: -30, lat: "drive", h: 1.9 },
+    look: { m: 75, lat: "drive", h: 1.3 },
   });
   out.push({
     name: "03-lane-aerial",
@@ -104,9 +106,9 @@ function framings(g) {
   });
   out.push({
     name: "04-box-row",
-    note: "along the row — garage frontage, working boxes, lane markings",
+    note: "along the row from the fast lane — garage frontage, working boxes, lane markings",
     car: mid,
-    eye: { m: first - 50, lat: "out", h: 6.5 },
+    eye: { m: first - 40, lat: "drive", h: 4.5 },
     look: { m: last, lat: "lane", h: 1.5 },
   });
 
@@ -119,8 +121,8 @@ function framings(g) {
       note: `${b.name} box at ${b.boxM} m through the window`,
       team: b.team,
       car: b.boxM,
-      eye: { m: b.boxM - 19, lat: "out", h: 4.2 },
-      look: { m: b.boxM + 7, lat: "lane", h: 1.0 },
+      eye: { m: b.boxM - 16, lat: "drive", h: 3.0 },
+      look: { m: b.boxM + 2, lat: "lane", h: 1.0 },
     });
   });
 
@@ -128,15 +130,15 @@ function framings(g) {
     name: "06-exit-lane",
     note: "driver's eye at the merge — where the lane hands back to the circuit",
     car: g.lenM - 70,
-    eye: { m: g.lenM - 95, lat: "lane", h: 1.9 },
+    eye: { m: g.lenM - 95, lat: "drive", h: 1.9 },
     look: { m: g.lenM + 45, lat: 0, h: 1.3 },
   });
   out.push({
     name: "07-exit-outside",
     note: "the exit from across the circuit — blend angle and the end of the ribbon",
     car: g.lenM - 25,
-    eye: { m: g.lenM + 60, lat: "opp", h: 11 },
-    look: { m: g.lenM - 50, lat: "lane", h: 1.2 },
+    eye: { m: g.lenM + 60, lat: "opp", h: 22 },
+    look: { m: g.lenM - 50, lat: "drive", h: 1.2 },
   });
   return out;
 }
@@ -173,7 +175,8 @@ async function pitGeometry(page, tod, showHud) {
     rows.sort((x, y) => x.boxM - y.boxM);
     return {
       L: +L.toFixed(1), sIn: +sIn.toFixed(1), lenM: p.lenM, side: p.side,
-      laneX: p.laneX, limitKph: p.limitKph, enabled: p.enabled,
+      laneX: p.laneX, driveX: p.driveX != null ? p.driveX : p.laneX,
+      limitKph: p.limitKph, enabled: p.enabled,
       lane: p.lane, ribbon: p.lane === null, rows,
     };
   }, { tod, showHud });
@@ -192,18 +195,20 @@ async function stage(page, spec, g) {
     a.jump(fr(s.car), 0, 0);
     const p = a.pit();
     const laneX = p && p.laneX != null ? p.laneX : g.laneX;
+    const driveX = p && p.driveX != null ? p.driveX : g.driveX;
     a.jump(fr(s.car), 0, laneX);
     const abs = Math.abs(laneX), sd = g.side;
     const lat = (v) => v === "lane" ? laneX
-      : v === "out" ? sd * (abs + outGap)
-        : v === "opp" ? -sd * (abs + oppGap) : v;
+      : v === "drive" ? driveX
+        : v === "out" ? sd * (abs + outGap)
+          : v === "opp" ? -sd * (abs + oppGap) : v;
     if (s.orbit) a.orbit(fr(s.orbit.m), s.orbit.az, s.orbit.el, s.orbit.dist);
     else a.eyeAt(fr(s.eye.m), lat(s.eye.lat), s.eye.h, fr(s.look.m), lat(s.look.lat), s.look.h);
     if (a.step) a.step(1 / 60, 3);
     const vs = a.viewState ? a.viewState() : null;
     const cs = a.camState ? a.camState() : null;
     return {
-      laneX: +laneX.toFixed(2),
+      laneX: +laneX.toFixed(2), driveX: +driveX.toFixed(2),
       carFrac: +fr(s.car).toFixed(5),
       dbgCamActive: !!(vs && vs.dbgCamActive) || !!(cs && cs.debug),
     };
@@ -252,7 +257,11 @@ try {
       const shots = [];
       for (const spec of framings(g)) {
         const staged = await stage(page, spec, g);
-        await sleep(250);
+        // Two presented frames, not one: the soft-present blit can hand back
+        // the frame staged BEFORE this camera moved (07 came out as 06).
+        await sleep(400);
+        await awaitPresentedFrame(page);
+        await sleep(400);
         await awaitPresentedFrame(page);
         const file = join(outDir, `${spec.name}.png`);
         const shot = await screenshotPresentedCanvas(page, { path: file, skipAwait: true, timeout: 60000 })

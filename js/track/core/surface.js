@@ -6,12 +6,12 @@ const TrackSurface = (function () {
   const clamp01 = (v) => M4.clamp(v, 0, 1);
   const lerp = M4.lerp;
 
-  function monotonicRails(def, outerW, street, flat) {
-    const seeds = street
+  function monotonicRails(def, outerW, street, flat, extra) {
+    const seeds = (street
       ? [5, 10, 16, 22, outerW]
       : flat
         ? [2.2, outerW * 0.3, outerW * 0.55, outerW * 0.8, outerW]
-        : [2.2, 7, 14, 48, outerW];
+        : [2.2, 7, 14, 48, outerW]).concat(extra || []).sort((x, y) => x - y);
     const clipped = [];
     for (const value of seeds) {
       const v = Math.max(0.25, Math.min(outerW, value));
@@ -36,7 +36,16 @@ const TrackSurface = (function () {
     const street = !!def.street;
     const flat = !!def.flatTerrain;
     const outerW = Math.max(0.5, Number(def.terrainOuter) || (street ? 28 : 120));
-    const rails = monotonicRails(def, outerW, street, flat);
+    // The ribbon samples heightAt() only at its rails, and is linear between
+    // them. The pit complex flattens the ground to its keep-out edge and eases
+    // it back over 8 m (heightAt below), so the edges are rails too: sampled
+    // at 14 and 25 m only, a circuit that falls 3 m beside its pit straight
+    // (Catalunya) drew the ease as one chord and every prop grounded on the
+    // closed form beside it floated 2 m over the mesh.
+    const pit = track && track.pit && !track.pit.painted ? track.pit : null;
+    const pitRails = pit ? [pit.off.outer + 0.3, pit.off.outer + 8.3,
+                            pit.off.outer + 0.3 + pit.bay.depth + 3, pit.off.outer + 8.3 + pit.bay.depth + 3] : null;
+    const rails = monotonicRails(def, outerW, street, flat, pitRails);
     const n = track.n;
     // pyMin must be the lowest point of the ROAD SURFACE, not of the centreline.
     // Banking pivots about the centre, so a banked node's low edge sits lift/2
@@ -87,13 +96,18 @@ const TrackSurface = (function () {
         // beyond it — otherwise the apron floats over a slope that has fallen
         // half a metre by the garage line. `side` is the caller's lateral sign;
         // a call without one is the symmetric cross-section it always was.
+        // Along the track it eases with the lane itself (`w`, 0 at the peel,
+        // 1 in the window): a flattening that began at full depth on the
+        // first node of the entry road stepped 3 m in one node at Catalunya,
+        // and a hedge across that step floated over the far half of it.
         const pit = track && track.pit;
         if (pit && side === pit.side && pit.keep[i] > 0) {
-          const edge = pit.keep[i];
-          if (dist <= edge) return base - 0.03;
+          const edge = pit.keep[i], wk = pit.w[i], ew = wk * wk * (3 - 2 * wk);
+          const flat = (d) => lerp(p.heightAt(k, d, 0), base - 0.03, ew);
+          if (dist <= edge) return flat(dist);
           if (dist < edge + 8) {
             const t = (dist - edge) / 8, e = t * t * (3 - 2 * t);
-            return lerp(base - 0.03, p.heightAt(k, dist, 0), e);
+            return lerp(flat(dist), p.heightAt(k, dist, 0), e);
           }
         }
         if (dist >= outerW) return floorY;

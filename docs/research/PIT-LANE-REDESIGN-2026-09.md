@@ -205,6 +205,15 @@ Keep the ribbon (§3), change the profile:
 - Entry and exit roads are the same ribbon with `x` easing — no branch, no
   second `s`. The physics exemption, `throughM`, `laneX`, `inPitLane` all keep
   working because they read the same profile the mesh was built from.
+- Neither end of the complex may lie in a corner. The entry line walks back
+  from the start line to where the last corner lets go (the old `pitWindow`);
+  the exit line closes 130 m after the line **or** `ROAD_MIN` before the first
+  corner, whichever is sooner (`EXIT_MIN` 40 m) — six circuits turn in within
+  90 m of the line (Mosport 24 m, Jerez 48, Mont-Tremblant 68, Brands Hatch
+  72, Zolder 76, Nürburgring 84) and the first build put their last garages,
+  race control and the whole exit road in the bend. Each road then runs only
+  while the road is straight (`straightRun`), never shorter than 30 m; a short
+  exit pushes the row back alongside the grid, where real garages stand.
 - Where a circuit cannot hold 14 m (street), `def.pit.mode = "narrow"` scales
   `work` down and drops `platform`, but the bands, the row and the lines are
   the same model at smaller numbers — Monaco's 480 m, 60 km/h lane is the
@@ -218,6 +227,59 @@ Keep the ribbon (§3), change the profile:
 reads the boundary, so the trees and hulls that stood on the lane move out
 by construction. `pitCorridor` in a def becomes an *extra* setback, not the
 only one.
+
+**As built (2026-09-15) — the keep-out, `TrackPit.build`'s `keep[k]` and
+`inPitFootprint` in tracks.js.** The measurements that shaped it, each one a
+sweep that went red first:
+
+- The keep-out reaches the garage line plus 0.3 m (the lane's own kerb), and
+  behind the row the bay depth plus a 3 m service road plus `ROW_TAIL` (race
+  control). A metre of margin superseded Yas Marina's hotel legs at 14.5 m;
+  the tower's 18 m base is now anchored 33 m out instead of 30 (it stood 2 m
+  inside the working lane).
+- The inner edge is the verge, or the platform once the wall has grown: a
+  gantry leg, a post, a marshal belong there.
+- The point test (`onTrack`) is bounded ALONG the track to the node it is
+  asked at: the query radius spans the whole complex width, and without that
+  bound a post 40 m past the exit road read as inside the last easing node.
+- A **footing** is kept out; a **crown** is not. A radial primitive (a tree's
+  canopy tier) whose underside is 2.5 m above the road may reach over the
+  edge; a box never may (a building's upper storey over the complex with its
+  ground floor superseded is the same float from the other side). Testing
+  every tier of a tree dropped the middle and kept the top on thirty circuits.
+- A tree keeps its **crown radius** from the outer edge (`clearTreeDist` asks
+  `onTrack` with it as the pit clearance). Every other caller's road margin
+  counts on the outer edge too, capped at 3 m: a hedge asks with its
+  half-width and then emits a box of that width, and a base that passed as a
+  point 15 cm outside the edge shipped the lump on top of a box the guard
+  dropped. The cap keeps a lake's or a backdrop's half-width from superseding
+  a required model whole (Shanghai's lake did, uncapped).
+- An object is kept or dropped **whole**: a replayed instance (a pine, a
+  mast) ends at the first cylinder the complex kept out, recording culled
+  verdicts for the rest so the verdict replay agrees; the hand-built species
+  return after a rejected trunk. Only cones and frustums (crown tiers) get
+  the overhang exemption — a cylinder is a post whose head must not outlive
+  it.
+- The flattening eases ALONG the track with the lane presence `w` as well as
+  across it (a full-depth start on the first entry-road node stepped 3 m at
+  Catalunya).
+- Residue after all of that, ratcheted in `float-baseline.json` with this
+  note as the reason: one cluster each at Albert Park, Buenos Aires,
+  Catalunya, Estoril, Imola and Jerez — a def-built prop or a tree whose
+  parts straddle the keep-out edge, and a hut roof at Jerez (frac 0.67) that
+  the denser terrain rails now measure against a slightly different mesh.
+  The base commit had none; the first build of the complex had 100+ on 31
+  circuits.
+- RAW landform emitters (`groundedSegments`) ask `ctx.inPit` chord by chord
+  and record the drop as superseded (Portimão's pit-straight cutting ran
+  through the garages).
+- The terrain ribbon carries rails at the keep-out edge and 8 m beyond it on
+  both keep-out widths, so the mesh draws the same ease `heightAt` computes;
+  `float-audit`'s closed-form fallback passes the side for the same reason.
+- A circuit whose own garages stand on the left declares `pit: { side: -1 }`
+  (Bahrain, Miami, Montreal, Spa, Suzuka, Singapore, Hungaroring,
+  Indianapolis, Qatar, Zandvoort): the engine's complex and the def's art
+  must be on the same side, or the def's pit building floats on the other.
 
 ### 4.4 Garages — the bay we already have
 

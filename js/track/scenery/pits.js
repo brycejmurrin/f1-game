@@ -46,6 +46,22 @@ const SceneryPits = (function () {
       return [px[k] + rx[k] * lat + u[0] * by, py[k] + ry[k] * lat + u[1] * by, pz[k] + rz[k] * lat + u[2] * by];
     };
     const basisAt = (k) => [[sd * rx[k], sd * ry[k], sd * rz[k]], upOf(track, k), [tx[k], ty[k], tz[k]]];
+    // The row is laid out at EXACT arc positions (the box the car stops in),
+    // not at the nearest node: nodes are ~4 m apart, and a bay snapped to one
+    // lands up to 2 m off its pitch — neighbouring roof slices overlapped by
+    // metres and the doors did not stand behind their boxes.
+    const _smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    const frameAtS = (s) => {
+      TrackSpline.sample(track, wrap(s), _smp);
+      const r = TrackGeom.norm(_smp.r), t = TrackGeom.norm(_smp.t);
+      const u = TrackGeom.norm(TrackGeom.cross(r, t));
+      return { p: [_smp.p[0], _smp.p[1], _smp.p[2]], r, t, u, hw: _smp.hw,
+               basis: [[sd * r[0], sd * r[1], sd * r[2]], u, t] };
+    };
+    const atF = (f, lat, y, k) => {
+      const by = bankOffsetAt(track, k, lat) + y;
+      return [f.p[0] + f.r[0] * lat + f.u[0] * by, f.p[1] + f.r[1] * lat + f.u[1] * by, f.p[2] + f.r[2] * lat + f.u[2] * by];
+    };
     const pushMat = (count, m) => { if (out.mat) for (let i = 0; i < count; i++) out.mat.push(m); };
 
     // ── 1. The platform, the wall and the lane-side barrier ────────────────
@@ -135,19 +151,27 @@ const SceneryPits = (function () {
       const B = p.bay, doorW = B.doorW || 5.4, doorH = B.doorH || 4.8;
       const garage = o.workOut;                 // the garage line, beyond the road edge
       const boxes = p.row.boxes, count = boxes.length;
-      // Each bay's slice of roof / back wall, a hair SHORT of the pitch: two
-      // slices that overlapped shared a plane on top, which is the z-fighting
-      // the coplanar sweep ratchets; a 2 cm seam is invisible from the lane.
-      const seg = p.row.pitch - 0.02;
+      // Each bay's slice of roof / back wall, SHORT of the pitch: two slices
+      // that overlapped shared a plane on top, which is the z-fighting the
+      // coplanar sweep ratchets. The seam is 10 cm, not 2: TrackSpline.sample
+      // walks the arc by node fraction, and the nodes are not quite evenly
+      // spaced, so 11 m of arc lands anywhere from 10.92 to 11.08 m away in
+      // the world (measured on Madrid's straight, ±8.5 cm). Invisible from
+      // the lane, 27 m off.
+      const seg = p.row.pitch - 0.10;
+      // …measured at the CENTRELINE. A slice 27 m out on the inside of a
+      // gently curving pit straight (Madrid, R ~ 500 m) is 0.7 m too long for
+      // its pitch there and overlaps its neighbour's back wall on one plane,
+      // so every slice is scaled by the arc's own factor at its lateral.
+      const segAt = (kap, lat) => seg * Math.max(0.5, 1 + kap * lat);
       for (let i = 0; i < count; i++) {
         const box = boxes[i], k = box.k;
-        const bs = basisAt(k);
+        const f = frameAtS(box.s), bs = f.basis, h = f.hw;
         const mesh = bayMesh(box);
         // Bay local +Z is the door end; it must point at the TRACK. addMesh
         // yaws about Y only, which a pit straight can afford.
-        const fwd = [-sd * rx[k], -sd * rz[k]];
-        const rotY = Math.atan2(fwd[0], fwd[1]);
-        const c = at(k, sd * (hw[k] + garage + B.depth / 2), 0.02);
+        const rotY = Math.atan2(-sd * f.r[0], -sd * f.r[2]);
+        const c = atF(f, sd * (h + garage + B.depth / 2), 0.02, k);
         if (mesh) {
           if (TrackGeom.addMesh(out, mesh, { x: c[0], y: c[1], z: c[2], rotY })) bays++;
         }
@@ -155,42 +179,54 @@ const SceneryPits = (function () {
         // The skin the inward-wound bay does not have: jambs and a team lintel
         // in front of the door plane, a back wall, a roof slab, the glazed
         // hospitality storey and its roof — one slice per bay so the building
-        // follows a gently curving pit straight instead of chording it.
-        const front = sd * (hw[k] + garage - 0.13);
+        // follows a gently curving pit straight instead of chording it. Every
+        // other slice sits 6 mm higher: two slices on ONE plane are what the
+        // coplanar sweep ratchets, and 6 mm is invisible from the lane.
+        // …and the VERTICAL faces get the same 6 mm sideways: on a gently
+        // curving row two back walls stand end to end on one plane too.
+        const lift = (i & 1) ? 0.006 : 0, bump = sd * lift;
+        const kap = ctx.curvature ? ctx.curvature(box.s) : 0;   // +k = left turn; lateral +x right
+        const front = sd * (h + garage - 0.13) - bump;
         const jamb = (B.w - doorW) / 2;
         for (const side of [-1, 1]) {
-          const cj = at(k, front, B.h / 2);
+          const cj = atF(f, front, B.h / 2, k);
           rawBox(out, [cj[0] + bs[2][0] * side * (B.w / 2 - jamb / 2), cj[1] + bs[2][1] * side * (B.w / 2 - jamb / 2), cj[2] + bs[2][2] * side * (B.w / 2 - jamb / 2)],
                  [0.25, B.h, jamb], SHELL, bs);
         }
         const lintH = B.h - doorH + 0.6;
-        const cl = at(k, front, doorH + lintH / 2);
+        const cl = atF(f, sd * (h + garage - 0.14) - bump, doorH + lintH / 2, k);   // a centimetre proud of the jambs
         rawBox(out, cl, [0.25, lintH, doorW], box.col, bs);
-        const cr = at(k, sd * (hw[k] + garage + B.depth / 2), B.h + 0.05 + 0.175);
-        rawBox(out, cr, [B.depth + 0.5, 0.35, seg], ROOF, bs);
-        const cb = at(k, sd * (hw[k] + garage + B.depth + 0.2), (B.h + 0.4) / 2);
-        rawBox(out, cb, [0.3, B.h + 0.4, seg], SHELL, bs);
-        const ch = at(k, sd * (hw[k] + garage + B.depth / 2 + 0.6), B.h + 0.4 + 1.7);
-        rawBox(out, ch, [B.depth - 1.0, 3.4, seg], GLASS, bs);
-        const ct = at(k, sd * (hw[k] + garage + B.depth / 2 + 0.6), B.h + 0.4 + 3.4 + 0.2);
-        rawBox(out, ct, [B.depth - 0.4, 0.4, seg], ROOF, bs);
+        const cr = atF(f, sd * (h + garage + B.depth / 2), B.h + 0.05 + 0.175 + lift, k);
+        rawBox(out, cr, [B.depth + 0.5, 0.35, segAt(kap, sd * (h + garage + B.depth / 2))], ROOF, bs);
+        const cb = atF(f, sd * (h + garage + B.depth + 0.2) + bump, (B.h + 0.4) / 2 + lift, k);
+        rawBox(out, cb, [0.3, B.h + 0.4, segAt(kap, sd * (h + garage + B.depth + 0.2))], SHELL, bs);
+        const ch = atF(f, sd * (h + garage + B.depth / 2 + 0.6), B.h + 0.4 + 1.7 + lift, k);
+        rawBox(out, ch, [B.depth - 1.0, 3.4, segAt(kap, sd * (h + garage + B.depth / 2 + 0.6))], GLASS, bs);
+        const ct = atF(f, sd * (h + garage + B.depth / 2 + 0.6), B.h + 0.4 + 3.4 + 0.2 + lift, k);
+        rawBox(out, ct, [B.depth - 0.4, 0.4, segAt(kap, sd * (h + garage + B.depth / 2 + 0.6))], ROOF, bs);
         if (i === 0 || i === count - 1) {
-          const ce = at(k, sd * (hw[k] + garage + B.depth / 2), (B.h + 0.4) / 2);
+          const ce = atF(f, sd * (h + garage + B.depth / 2), (B.h + 0.38) / 2, k);   // 2 cm under the roof line
           const along = (i === 0 ? -1 : 1) * (seg / 2 + 0.15);
           rawBox(out, [ce[0] + bs[2][0] * along, ce[1] + bs[2][1] * along, ce[2] + bs[2][2] * along],
-                 [B.depth + 0.5, B.h + 0.4, 0.3], SHELL, bs);
+                 [B.depth + 0.5, B.h + 0.38, 0.3], SHELL, bs);
         }
       }
-      // Race control, stepped up at the exit end of the row.
-      const last = boxes[count - 1], kr = kOf(last.s + p.row.pitch / 2 + 9);
+      // Race control, stepped up at the exit end of the row: 12 m square,
+      // its near face 3 m past the last bay's end wall, inside the row's
+      // keep-out tail (TrackPit ROW_TAIL). Offset along the LAST BAY's own
+      // tangent, not re-sampled at its arc position: where the row runs into
+      // a bend, 14.5 m of arc at the garage line is a shorter step in the
+      // world, and the building stood 7 m inside the last bay.
+      const last = boxes[count - 1], sR = wrap(last.s + p.row.pitch / 2 + 9), kr = kOf(sR);
       if (p.w[kr] > 0.98) {
-        const bs = basisAt(kr);
-        const c0 = at(kr, sd * (hw[kr] + garage + 7), 7);
-        rawBox(out, c0, [12, 14, 12], SHELL, bs);
-        const c1 = at(kr, sd * (hw[kr] + garage + 7 - 6.2), 11.5);
-        rawBox(out, c1, [0.3, 3.0, 11], GLASS, bs);
-        const c2 = at(kr, sd * (hw[kr] + garage + 7), 14.3);
-        rawBox(out, c2, [13, 0.6, 13], ROOF, bs);
+        const f = frameAtS(last.s), bs = f.basis, h = f.hw, step = p.row.pitch / 2 + 9;
+        const off = (lat, y) => {
+          const c = atF(f, sd * (h + garage + lat), y, last.k);
+          return [c[0] + f.t[0] * step, c[1] + f.t[1] * step, c[2] + f.t[2] * step];
+        };
+        rawBox(out, off(7, 7), [12, 14, 12], SHELL, bs);
+        rawBox(out, off(7 - 6.2, 11.5), [0.3, 3.0, 11], GLASS, bs);
+        rawBox(out, off(7, 14.3), [13, 0.6, 13], ROOF, bs);
       }
     }
     if (p.row) p.row.placed = placed;

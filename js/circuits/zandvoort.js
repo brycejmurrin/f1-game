@@ -7,6 +7,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "zandvoort",
+    pit: { side: -1 },   // the pit complex (TrackPit): this circuit's own garages stand on the left of the main straight
     classic: true,
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
     // Start/finish line. Snapped to the real one: coord 0.4 m off centreline; = trace vertex 0 (timing line).

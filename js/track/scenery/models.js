@@ -420,7 +420,13 @@ const TrackModels = (function () {
       // start line — drew one box the full width of the circuit (hungaroring's
       // pit trim read 5 m over the racing line 1 km away).
       const TARGET = 10, MAXSUB = 16;
-      let emitted = 0;
+      // The pit complex owns its footprint. These boxes are RAW (no footprint
+      // guard), so a cutting or a wall that runs through the complex yields
+      // there chord by chord — Portimão's pit-straight earthwork stood inside
+      // the garages — and the drop is recorded as superseded, not as a guard
+      // suppression.
+      const inPit = ctx.inPit || (() => false);
+      let emitted = 0, superseded = 0;
       for (let i = 0; i < spec.points.length - 1; i++) {
         const a = spec.points[i], b = spec.points[i + 1];
         const pa = ground(a.k, a.side, a.dist), pb = ground(b.k, b.side, b.dist);
@@ -430,17 +436,21 @@ const TrackModels = (function () {
         let dk = b.k - a.k;
         if (ctx.n && Math.abs(dk) > ctx.n / 2) dk -= Math.sign(dk) * ctx.n;
         let prev = pa;
+        let prevIn = inPit(a.k, a.side || 1, a.dist || 0, width / 2);
         for (let j = 1; j <= sub; j++) {
           const t = j / sub;
-          const p = j === sub ? pb : (ground(
-            a.k + dk * t,
-            t < 0.5 ? (a.side || 1) : (b.side || 1),
-            (a.dist || 0) + ((b.dist || 0) - (a.dist || 0)) * t,
-          ) || pb);
-          if (emitBox(prev, p)) emitted++;
-          prev = p;
+          const kk = a.k + dk * t, sd = t < 0.5 ? (a.side || 1) : (b.side || 1);
+          const dd = (a.dist || 0) + ((b.dist || 0) - (a.dist || 0)) * t;
+          const p = j === sub ? pb : (ground(kk, sd, dd) || pb);
+          const pIn = inPit(kk, sd, dd, width / 2);
+          if (prevIn || pIn) superseded++;
+          else if (emitBox(prev, p)) emitted++;
+          prev = p; prevIn = pIn;
         }
       }
+      if (superseded && spec.id)
+        diagnostics.suppressed.push({ id: spec.id, required: false,
+          reason: superseded + " chord(s) superseded by the pit complex" });
       if (!emitted) return false;
       // Real vertex count (buffer delta) — see groundPatch above.
       diagnostics.emitted.push({ id: spec.id || "grounded-segments", vertices: (out.pos.length - posBefore) / 3, groundedSegments: true });
