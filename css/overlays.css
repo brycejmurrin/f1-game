@@ -34,6 +34,14 @@
      rather than as a fill alpha so it can never touch a label's contrast. */
   --btn-a: 0.68;
 }
+/* PLAYER BUTTON OPACITY rides the dock GROUPS, never the buttons. The ladder
+   inside (--btn-a idle, opacity 1 for live states, .dead below idle) is a
+   designed set of rungs that tests/unit/ui-journey-race.test.mjs pins as
+   literals — scaling --btn-a or overriding .touchbtn flattens the three into
+   each other, and a disabled button can end up brighter than a live one.
+   Group opacity COMPOSITES with each child's own, so every rung keeps its
+   relative order and the whole dock simply fades together. */
+.dock-grp { opacity: var(--hud-btn-opacity, 1); }
 .touchbtn {
   position: fixed;
   z-index: 12;

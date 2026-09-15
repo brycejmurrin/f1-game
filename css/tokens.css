@@ -714,6 +714,11 @@ body:not(.desktop) {
      old behaviour; js/ui/scale.js only writes an inline value once the player
      moves it, exactly as the other two do. */
   --hud-btn-scale: var(--hud-scale);
+  /* TOUCH BUTTON OPACITY (XAG 104 asks for an adjustable 0-100 % backing behind
+     anything read over live gameplay). 1 = unchanged, so an untouched slider
+     costs nothing; js/ui/scale.js only sets the property once the player moves
+     it, exactly as --hud-btn-scale works. */
+  --hud-btn-opacity: 1;
   --ui-compact-brand-scale: min(var(--ui-scale), 1);
   --ui-compact-scale: min(var(--ui-scale), 1.25);
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
