@@ -62,8 +62,16 @@ export function preflight() {
   return problems;
 }
 
-export function touchedCircuits(base) {
-  const out = git(["diff", "--name-only", base, "HEAD"]).out;
+// THREE dots, not two. `diff base HEAD` is the two-way difference, so before the
+// merge it reports circuits THEY changed as though we had touched them — a
+// --plan that promised verify-track over 12 circuits our commits never went
+// near, against a run that (correctly) verified none. `base...HEAD` diffs from
+// the merge-base, i.e. OUR side only, which is what both callers want: the plan
+// reads it pre-merge and the run reads it post-merge, where the two forms agree
+// because the tip is an ancestor by then. Same idiom `theirDiffstat` already
+// uses in the other direction.
+export function touchedCircuits(base, cwd) {
+  const out = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {}).out;
   return [...new Set(out.split("\n")
     .map((f) => /^js\/circuits\/(?:scenery\/)?([a-z_]+)\.js$/.exec(f))
     .filter(Boolean).map((m) => m[1]))];
