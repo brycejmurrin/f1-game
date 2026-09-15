@@ -75,6 +75,9 @@ async function ghostSaved(page, trackId) {
   test("records only one monotonic flying lap in the persisted ghost", async ({ page }) => {
     await enterTT(page);
     const result = await page.evaluate(() => {
+      // This checks persisted samples, not pixels. Keep SwiftShader from
+      // starving the deferred save and the storage polling on CI.
+      window.__apex.headless(true);
       localStorage.removeItem("apex26.ghost.v1");
 
       // Run the real countdown from the grid, then cross once to begin the
@@ -267,6 +270,9 @@ for (const viewport of [{width:1280,height:800}, LANDSCAPE]) {
     test("coach, unscored checkpoint and compound selection work through the pause menu", async ({page}, info) => {
       const errors=[]; page.on("pageerror", e=>errors.push(e.message));
       await enterTT(page);
+      // Match menu-keyboard's pause test: skip only the 3D render loop so
+      // locator actionability can settle; DOM controls and physics stay live.
+      await page.evaluate(()=>window.__apex.headless(true));
       await expect(page).toHaveTitle(/Apex 26/i);
       await page.evaluate(()=>{window.__apex.go();window.__apex.tyres({level:"light"});});
       await page.getByRole("button",{name:"Pause",exact:true}).click();
