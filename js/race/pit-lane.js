@@ -41,9 +41,19 @@
  * boundaries and the road mesh are untouched, so nothing downstream can break
  * the way (1) did.
  *
- * KNOWN GAP: a car held in the box sits on the racing surface, so the field has
- * to go around it. Pulling it off-line needs somewhere to be pulled to, which is
- * the geometry this fallback exists because we do not have.
+ * THE GAP THAT WAS HERE IS CLOSED. It read: a car held in the box sits on the
+ * racing surface, so the field has to go around it — and pulling it off-line
+ * needs somewhere to be pulled to, which is the geometry we do not have.
+ * PAINTING the lane gave us somewhere: a 2.4-3.2 m strip of real tarmac on the
+ * pit side, inside the road, with a line a driver can see. So the stop happens
+ * IN it (laneX, and the box's lateral condition below). The ribbon is still one
+ * ribbon and no boundary moved — what changed is that the strip now means
+ * something to the cars as well as to the eye.
+ *
+ * WHAT IS STILL MISSING, stated rather than quietly dropped: garages, a crew,
+ * and a lane BEHIND the pit wall. Those need a road that branches, which is the
+ * thing this engine cannot express — so they are not a to-do, they are a
+ * different track engine.
  */
 const PitLane = (function () {
   "use strict";
@@ -143,6 +153,13 @@ const PitLane = (function () {
   function laneWidth(hw) {
     return Math.min(LANE_W, Math.max(LANE_MIN, 2 * hw - MIN_RACING));
   }
+  // HOW FAR OUT OF THE LANE A CAR MAY BE AND STILL STOP. The painted line is the
+  // lane's INNER EDGE, so a 2.0 m car parked with its centre exactly on it is
+  // half in; asking for the centre would be asking for a metre of precision the
+  // camera cannot show. A metre of tolerance means "most of the car is in the
+  // lane" and nothing looser: at Monaco's narrowed 2.86 m lane it still refuses
+  // a car sitting on the racing line.
+  const BOX_LAT = 1.0;
   const COMMIT_M = 120;       // commit only this far into the window
   const COMMIT_S = 0.55;      // held, in seconds
   const COMMIT_V = 0.10;      // of the speed envelope: a parked car is not pitting
@@ -211,6 +228,36 @@ const PitLane = (function () {
       return zz ? G.vTop() * zz.limitFrac : Infinity;
     }
 
+    // Estimate the lane's net time cost. The road-speed estimate is explicit;
+    // it is advice, not a promise of a free stop or a guaranteed rejoin place.
+    function estimate(c) {
+      const zz = z();
+      if (!zz) return null;
+      const flag = G.cautionInfo ? G.cautionInfo().level : 0;
+      if (flag >= 4) return null;
+      const normal = G.vTop() * 0.75;
+      const roadSpeed = Math.max(1, Math.min(normal, G.vTop() * (flag === 3 ? 0.45 : flag === 2 ? 0.6 : 1)));
+      const lossS = Math.max(zz.boxS, zz.lenM / Math.max(1, limit()) + zz.boxS - zz.lenM / roadSpeed);
+      const behind = (G.cars || []).filter(o => o !== c && !o.retired && !o.finished && o.prog < c.prog)
+        .sort((a, b) => b.prog - a.prog)[0];
+      const gapS = behind ? (c.prog - behind.prog) / Math.max(1, behind.speed || roadSpeed) : null;
+      return { lossS, gapS, marginS: gapS == null ? null : gapS - lossS, caution: flag >= 2, estimated: true };
+    }
+    function choices(c) {
+      if (!G.tyres) return [];
+      const list = ownedTyres().map(o => G.tyres.optionRecord(o));
+      const automatic = pickFor(c);
+      if (automatic && !list.some(r => r.id === automatic.id)) list.push(automatic);
+      return list;
+    }
+    function selectNext(c, id) {
+      if (!c || !c.local || c.pitState === "box") return false;
+      if (id == null || id === "auto") { c.pitNext = null; return true; }
+      const record = choices(c).find(r => r.id === id);
+      if (!record) return false;
+      setNext(c, record); return true;
+    }
+
     /** How far this car still has to go to reach its box, in metres (-1 when it
      *  is not in the window, and negative once it is past). */
     function toBox(c) {
@@ -238,20 +285,34 @@ const PitLane = (function () {
     // stop is actually worth making: the set is meaningfully used, or the tread
     // is wrong for the conditions, or a caution is out and a stop is cheap.
     const CUE_M = 550;          // start counting down this far out
+    const BOX_CUE_M = 90;       // …and start asking for the lane this far from the box
     const CUE_WEAR = 0.55;      // …or not at all, on a set with life left in it
     function cue(c) {
       if (!enabled() || !c || !c.local || c.retired || c.finished) return null;
       const st = c.pitState || "none";
       if (st === "box") return { phase: "box", text: "STOP", dist: 0 };
-      if (st === "lane") return { phase: "lane", text: Math.round(limit() * 3.6) + " LIMIT", dist: 0 };
+      if (st === "lane") {
+        // APPROACHING THE BOX AND NOT IN THE LANE: say which way. A stop that
+        // silently does not happen is the cruellest thing this module could
+        // ship — the driver did everything else right and gets no reason.
+        const togo = toBox(c);
+        if (togo > -BOX_TOL && togo < BOX_CUE_M) {
+          Tracks.sample(G.track, c.s, _smp);
+          const zz = z();
+          if (!inLaneLat(c, _smp.hw || 0, zz.side)) {
+            return { phase: "keep", text: zz.side > 0 ? "KEEP RIGHT" : "KEEP LEFT", dist: 0 };
+          }
+        }
+        return { phase: "lane", text: Math.round(limit() * 3.6) + " LIMIT", dist: 0 };
+      }
       if (st === "out") return null;
       const d = toEntry(c);
       if (d < 0 || d > CUE_M) return null;
       // Worth making? Any ONE of: a used set, the wrong tread, a free stop.
       const wear = G.tyres.spent(c);
-      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather);
+      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
       const caution = G.cautionInfo ? G.cautionInfo() : null;
-      const free = !!caution && caution.level >= 2 && wear >= 0.35;
+      const free = !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35;
       if (!(wear >= CUE_WEAR || wrongTread || free)) return null;
       if (c.pitArmed) return { phase: "armed", text: "BOX", dist: 0 };
       // Inside the entry road: say GO, not a distance — the distance is zero and
@@ -300,6 +361,35 @@ const PitLane = (function () {
     function laneEdge(hw, side) { return (hw - laneWidth(hw)) * side; }
     /** The lane's lateral CENTRE: where the box is and where a car in it sits. */
     function laneCentre(hw, side) { return (hw - laneWidth(hw) * 0.5) * side; }
+    /** Is this car laterally IN the lane (within BOX_LAT of it)? Written in
+     *  "toward the pit side" coordinates — x * side — so one comparison serves
+     *  both sides and there is no sign to get wrong.
+     *
+     *  THE FLOOR IS NOT DECORATION. On a road narrow enough that the lane plus
+     *  its tolerance spans the whole width, the threshold goes negative, the
+     *  RACING LINE counts as the pit box, and the stop becomes free wherever you
+     *  happen to halt. No built circuit is that narrow — Monaco, the narrowest
+     *  at hw 4.93, still leaves 1.07 m — so this is a guard against a circuit
+     *  authored later, which is exactly the kind of quiet reversal that would
+     *  never show up as a failing test on the 51 that exist today. Half a car
+     *  is the least that can honestly be called "off the racing line". */
+    function inLaneLat(c, hw, side) {
+      return (c.x || 0) * side >= Math.max(1, hw - laneWidth(hw) - BOX_LAT);
+    }
+    /** Where a car SERVING A STOP should be laterally — the lane's centre — or
+     *  `want` unchanged for every other car. game.js hands its finished
+     *  racing-line target through this, so the override is one expression at the
+     *  end of the AI's lateral chain rather than a branch inside it, and no
+     *  bias, defence or hold-line can pull a limited car back onto the racing
+     *  surface. AI-ONLY BY CONSTRUCTION: the human car never reaches that line,
+     *  and that is deliberate — the lane is DRIVEN (see the COMMIT block), so
+     *  the car is never taken off you. What the player gets instead is the box's
+     *  own lateral condition: stop on the racing line and the stop does not
+     *  happen, exactly as it would not in the real thing. */
+    function laneX(c, hw, want) {
+      const zz = z();
+      return zz && inLane(c) ? laneCentre(hw, zz.side) : want;
+    }
     function committing(c, zz, L) {
       if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
       if (!((c.speed || 0) > G.vTop() * COMMIT_V)) return false;
@@ -369,6 +459,13 @@ const PitLane = (function () {
       // the limit misses the stop, exactly as it would in the real thing.
       const at = throughM(zz, c.s, L), boxAt = throughM(zz, zz.sBox, L);
       if (at >= boxAt - BOX_TOL && Math.abs(c.speed) < G.vTop() * BOX_SPEED_FRAC) {
+        // AND IN THE LANE. Sampled only here, after the two cheap tests, so the
+        // spline read costs one car for one tick per stop. A car stopped on the
+        // racing line has not reached its box — the crew is not standing there
+        // — which is also what makes the stop cost the lateral move rather than
+        // handing it over for free.
+        Tracks.sample(G.track, c.s, _smp);
+        if (!inLaneLat(c, _smp.hw || 0, zz.side)) return;
         c.pitState = "box";
         c.pitT = zz.boxS;
         c.pitArmed = false;
@@ -401,7 +498,7 @@ const PitLane = (function () {
     function pickFor(c) {
       const tyres = G.tyres;
       if (!tyres || !c) return null;
-      const want = TyreModel.treadFor(G.raceWeather);
+      const want = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
       const list = ownedTyres().map(function (o) { return tyres.optionRecord(o); });
       // TREAD FIRST, and it is not a preference. The wrong tread costs whole
       // seconds a lap and no compound choice makes that up. A career save that
@@ -481,7 +578,7 @@ const PitLane = (function () {
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
       // AND wets on a drying track. This is the recourse docs/PHYSICS.md said a
       // dry->rain arc did not have.
-      const wantTread = TyreModel.treadFor(G.raceWeather);
+      const wantTread = TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
       const caution = G.cautionInfo ? G.cautionInfo() : null;
       const why = AiDrive.pitNow({
@@ -521,6 +618,11 @@ const PitLane = (function () {
       const car = c || G.player;
       const L = G.track ? G.track.total : 0;
       const at = car && L ? throughM(zz, car.s, L) : -1;
+      // ONE sample for both lateral answers below, and only inside the window:
+      // info() is a per-frame HUD read, so an unconditional spline sample here
+      // would be a lap's worth of them for every car on the circuit.
+      let lat = null;
+      if (car && inWindowOf(car)) { Tracks.sample(G.track, car.s, _smp); lat = { hw: _smp.hw || 0 }; }
       return {
         enabled: enabled(),
         lenM: +zz.lenM.toFixed(1),
@@ -535,6 +637,17 @@ const PitLane = (function () {
         armed: !!(car && car.pitArmed),
         state: (car && car.pitState) || "none",
         inLane: !!(car && inLane(car)),
+        // The LATERAL half, and WHERE it is, both measured at this car's own
+        // arc position. Two separate needs: "the state machine says lane" and
+        // "the car is actually in the strip" are different questions, and a
+        // stop that will not latch is always the second one — while `laneX` is
+        // the number a driver, a test or an agent has to aim the car at, which
+        // a nominal-half-width constant cannot give (the pit-window half-width
+        // runs 4.93 m at Monaco to 8.0 m at Spa, so the lane centre moves by
+        // over three metres across the calendar). Both are null/false outside
+        // the window, where there is no answer and no sample worth paying for.
+        inLaneLat: lat ? inLaneLat(car, lat.hw, zz.side) : false,
+        laneX: lat ? +laneCentre(lat.hw, zz.side).toFixed(2) : null,
         inWindow: !!(car && inWindowOf(car)),
         stops: (car && car.pitStops) || 0,
         // How far through the commitment dwell — 0 unless the car is holding
@@ -552,13 +665,13 @@ const PitLane = (function () {
 
     return { zoneOf: () => z(), limit, toBox, approachV, inLane, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
-             pickFor, ownedTyres, committing, commitFrac, resetCommit, toEntry, cue,
-             laneEdge, laneCentre, laneUniform };
+             pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
+             laneEdge, laneCentre, laneUniform, laneX, inLaneLat };
   }
 
   return { create, zoneOf, inWindow, throughM,
            ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
            BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V,
-           CUE_M: 550, CUE_WEAR: 0.55, LANE_W, LANE_MIN, MIN_RACING, laneWidth };
+           CUE_M: 550, CUE_WEAR: 0.55, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT, laneWidth };
 })();
 Object.freeze(PitLane);

@@ -141,6 +141,8 @@ const FULL = [
   "js/car/crest-paths.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
+  "js/race/session-records.js",
+  "js/race/driving-coach.js",
   "js/physics/consts.js",
   "js/lighting/knobs.js",
   "js/lighting/track-lights.js",

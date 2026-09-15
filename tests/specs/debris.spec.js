@@ -7,9 +7,30 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
-// How long rapier's WASM takes to load and initialise. Its own number, because
-// it is not a boot — see enableDebris for the measurements and the honest
-// limits of them.
+// How long rapier's WASM takes to load and initialise. Its OWN number, and
+// deliberately NOT BOOT_MS — tests/helpers/fixtures.js says in as many words
+// that the boot budgets are not to be reached for to cover a slow assertion,
+// and this is a slow assertion: a WASM load plus init, nothing like a boot.
+//
+// MEASURED on an idle container, three cold runs:
+//
+//   window.__apex != null     2.6 / 2.7 / 3.7 s
+//   debris().ready           10.8 / 15.4 / 11.1 s    worst 15.4
+//
+// So rapier is ~4x the boot here. The hand-rolled 30 s this replaces looked
+// generous against 15 s and was not: on the CI runner that exposed it, BOOT
+// ALONE took 52 s. 60 s is ~4x the worst idle measurement and fits inside the
+// CI job's own 180 s per-test budget with room for the boot and the test body
+// — a bigger number would only convert this timeout into that one.
+//
+// WHAT I DO NOT KNOW, stated rather than papered over: there is no CI-side
+// measurement, only that 30 s was not enough there. BOOT_MS's own 1.8x margin
+// over its worst idle case would have produced 28 s — roughly what already
+// failed — so the idle box is not predictive for this path. rapier is VENDORED
+// (vendor/rapier-0.19.3, 2.2 MB off the dev server), so this is a local fetch
+// plus a large WASM compile on a contended runner, not a network hang, which is
+// why a timeout is the right instrument at all. If 60 s proves short, MEASURE
+// IT ON CI rather than doubling again.
 const RAPIER_MS = 60000;
 
 async function boot(page) {
@@ -51,60 +72,63 @@ async function startTT(page, id) {
   await page.evaluate(() => window.__apex.go());
 }
 
-// Enable the side-world and wait for the lazy rapier import + WASM init.
-// Fails fast (with the module's own error string) if the import rejects.
-async function enableDebris(page) {
-  await page.evaluate(() => window.__apex.debris(true));
-  // RAPIER_MS, and deliberately NOT BOOT_MS — fixtures.js says in as many words
-  // that the boot budgets are not to be reached for to cover a slow assertion,
-  // and this is a slow assertion: a WASM DOWNLOAD plus init, which is nothing
-  // like a page boot.
-  //
-  // MEASURED on an idle container, three cold runs (scratchpad harness):
-  //
-  //   window.__apex != null     2.6 / 2.7 / 3.7 s
-  //   debris().ready           10.8 / 15.4 / 11.1 s   worst 15.4
-  //
-  // So rapier is ~4x the boot on an idle box. The hand-rolled 30 s that was
-  // here looked generous against 15 s and was not: on the CI runner that
-  // exposed it, BOOT alone took 52 s — a ~17x multiplier on this box's 3 s —
-  // and three tests timed out at exactly 30000 ms with rapier still loading.
-  // 60 s is ~4x the worst idle measurement and fits inside the CI job's own
-  // 180 s per-test budget with room for the boot and the test body — a bigger
-  // number would only turn this timeout into that one.
-  //
-  // WHAT I DO NOT KNOW, stated rather than papered over: there is no CI-side
-  // measurement here, only that 30 s was not enough there. BOOT_MS's 1.8x
-  // margin over its worst idle case would have given 28 s, i.e. roughly what
-  // already failed, so the idle box is not predictive for this path. rapier is
-  // VENDORED (vendor/rapier-0.19.3, 2.2 MB served by the dev server), so this
-  // is a local fetch plus a large WASM compile on a contended runner, not a
-  // network hang — a timeout is the right instrument. If 60 s also proves
-  // short, MEASURE IT ON CI rather than doubling again.
+// Wait for rapier's WASM to be ready (or to have failed). ONE copy, because it
+// existed twice — in enableDebris and inline in the default-on test — and
+// raising only the first left the second failing at exactly 30000 ms on CI
+// while its three siblings went green. A duplicated timeout is a timeout that
+// will be wrong half the time.
+async function awaitRapier(page) {
   await page.waitForFunction(() => {
     const st = window.__apex.debris();
     return st.ready || st.loadState === -1;
   }, null, { polling: 100, timeout: RAPIER_MS });
+}
+
+// Enable the side-world and wait for the lazy rapier import + WASM init.
+// Fails fast (with the module's own error string) if the import rejects.
+async function enableDebris(page) {
+  await page.evaluate(() => window.__apex.debris(true));
+  await awaitRapier(page);
   const st = await page.evaluate(() => window.__apex.debris());
   if (!st.ready) throw new Error("rapier load failed: " + st.error);
 }
 
 test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
+  // THIS FILE IS LEGITIMATELY SLOW, and it was one loaded runner from red.
+  //
+  // Every test here pays its own full boot — and has to: two of them set
+  // apex26.debris / apex26.debrisCap through addInitScript, which is only
+  // readable BEFORE any page script runs, so they cannot share a booted page
+  // the way parts-liveries.spec.js does. On top of that each one builds a track
+  // (a SwiftShader boot measures 11-33 s per the comment above; the CI log for
+  // the run that caught this shows `25461ms [car] info: build mclaren`) and
+  // then waits on a WASM import.
+  //
+  // Measured solo on an idle box, 2026-09-14: 58.3 / 70.7 / 85.9 / 91.2 /
+  // 100.3 s. Against the 120 s default that is ~20 % headroom, which no shared
+  // CI runner reliably provides — and on 2026-09-14 the same three tests timed
+  // out at 150-185 s on ci.yml across THREE different sessions' commits, while
+  // passing 5/5 locally and passing on a re-run of one of the very same SHAs.
+  //
+  // So this is not a tolerance being widened to make an assertion pass — every
+  // assertion here is unchanged and still has to hold. It is a BUDGET being
+  // sized to a measurement it was never sized against. test.slow() is
+  // Playwright's own marker for exactly that (it triples the timeout to 360 s,
+  // ~3.6x the slowest measured run), and it keeps the number in one place
+  // rather than sprinkling setTimeout calls.
+  //
+  // The real cure is fewer boots. It needs the two config-driven tests split
+  // off so the other three can share a page; that is a restructure of someone
+  // else's spec and is not this change.
+  test.slow();
+
 
   test("enabled by default: rapier loads and the side-world runs", async ({ page }) => {
     await boot(page);
     await startRace(page, "monza");
     // Default-on: create() enables at boot; the lazy rapier import resolves
     // shortly after. Wait for it (or a load failure) rather than a fixed sleep.
-    // RAPIER_MS, not a literal: this is the SAME WASM download-and-init wait as
-    // enableDebris(), and it was the one site the 30 s → 60 s raise missed. The
-    // constant's own comment records three tests timing out "at exactly
-    // 30000 ms with rapier still loading"; this test kept a hardcoded 30000 and
-    // went on timing out there (CI run 3707, 2026-09-14).
-    await page.waitForFunction(() => {
-      const st = window.__apex.debris();
-      return st.ready || st.loadState === -1;
-    }, null, { polling: 100, timeout: RAPIER_MS });
+    await awaitRapier(page);
     const r = await page.evaluate(() => {
       window.__apex.jump(0.1, 40, 0);
       // The world runs the WASM solve only when something dynamic is in play

@@ -305,6 +305,25 @@ const AiDrive = (function () {
     return energy > (0.20 - hs.attack * 0.08);
   }
 
+  // One feasible lateral envelope for the planner and the kinematic actuator.
+  // speed is in world m/s; pace removes the ground-speed scale for the taper.
+  function lateralScale(speed, load = 0.5, grip = 1, pace = 1, vmax = 72) {
+    const v = Math.abs(speed) / Math.max(0.05, pace);
+    return (1 + (load - 0.5) * 0.16) * Math.max(0.01, grip)
+      * (1 - clamp((v - 20) / Math.max(1, vmax - 20), 0, 1) * 0.28);
+  }
+  // Solve k*v² = a(v) analytically over the taper's three continuous pieces.
+  // No iterative solver in the per-car, per-node brake lookahead.
+  function cornerSpeed(k, lat, pace = 1, vmax = 72) {
+    const p = Math.max(0.05, pace), span = Math.max(1, vmax - 20);
+    const flat = Math.sqrt(Math.max(0, lat) / Math.max(k, 1e-5));
+    if (flat <= 20 * p) return flat;
+    const fast = flat * Math.sqrt(0.72);
+    if (fast >= vmax * p) return fast;
+    const a = lat * (1 + 0.28 * 20 / span), b = lat * 0.28 / (span * p);
+    return 2 * a / (b + Math.sqrt(b * b + 4 * Math.max(k, 1e-5) * a));
+  }
+
   function brakeTarget(ctx) {
     const t = ctx.traits;
     const samples = ctx.samples || [];
@@ -318,14 +337,14 @@ const AiDrive = (function () {
       const s = samples[i];
       const k = Math.max(Math.abs(s.k || 0), 1e-5);
       const bankMu = 1 + Math.sin(s.bank || 0) * 0.8;
-      const vC = Math.sqrt(latMax * bankMu * grip / k) * skill;
+      const vC = cornerSpeed(k, latMax * bankMu * grip, ctx.pace, ctx.vmax) * skill;
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
       const d = Math.max(s.d || 0, 1);
       const entrySq = vC * vC + 2 * brake * 0.85 * d;
       if (entrySq >= 0 && entrySq < vLimSq) vLimSq = entrySq;
     }
     // sqrt is monotonic: choose the tightest entry budget before taking it.
-    // Keep vC's arithmetic unchanged so the brake limit stays bit-identical.
+    // The tightest sample remains independent of sample order.
     let vLim = Math.sqrt(vLimSq);
     if (!Number.isFinite(vLim)) vLim = 1e6;
     const hold = houseStyle(ctx.team, ctx.seat, ctx.stats).hold;
@@ -949,7 +968,7 @@ const AiDrive = (function () {
 
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
-    traits, houseStyle, isMate, ordersMul, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
+    lateralScale, cornerSpeed, traits, houseStyle, isMate, ordersMul, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,

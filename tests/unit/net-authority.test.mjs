@@ -640,3 +640,24 @@ test("pickRemoteSlot keeps any-fallback only when profile is null", () => {
   assert.equal(miss.error, "no_slot");
   assert.equal(netMiss.status().slotFallback, "profile-miss");
 });
+
+
+test("strategy events require this race epoch and the sender's own car", () => {
+  const G = stubG(3); G.track.def = { id: "monza" };
+  const net = NetPlay.create(G), a = fakeSession(), b = fakeSession();
+  net.start({ role: "host", session: a, sessions: [{id:"a",session:a},{id:"b",session:b}] });
+  const model = a.sent.find(e => e.t === NetPlay.EV.MODEL).d;
+  a.deliver(NetPlay.EV.MODEL, {...model, epoch:"peer-a"});
+  b.deliver(NetPlay.EV.MODEL, {...model, epoch:"peer-b"});
+  const data = {...NetPlay.strategyState({tyreWear:.7, pitState:"box"},1,"monza"),epoch:model.epoch};
+  a.deliver(NetPlay.EV.STRATEGY,data);
+  assert.equal(G.cars[1].tyreWear,.7);
+  assert.equal(b.sent.filter(e=>e.t===NetPlay.EV.STRATEGY).at(-1).d.epoch,"peer-b");
+  a.deliver(NetPlay.EV.STRATEGY,{...data,wire:2});
+  assert.equal(G.cars[2].tyreWear,undefined,"a guest cannot change another guest's tyres");
+  a.deliver(NetPlay.EV.STRATEGY,{...data,wire:0});
+  assert.equal(G.player.tyreWear,undefined,"a guest cannot change the host's tyres");
+  a.deliver(NetPlay.EV.STRATEGY,{...data,epoch:"old-race",fields:{tyreWear:.1}});
+  assert.equal(G.cars[1].tyreWear,.7,"same-track stale events are ignored");
+  net.stop();
+});

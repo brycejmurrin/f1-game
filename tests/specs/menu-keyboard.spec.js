@@ -24,10 +24,18 @@ async function waitReady(page) {
 }
 
 async function openSelect(page) {
+  // BOOT_MS on both, not 8 s. Every test in this file goes through here, so a
+  // hand-picked budget here is a hand-picked budget on the whole file. Neither
+  // 8 s was ever measured, and the sibling spec proved the shape of the failure:
+  // menu-survey's "36 lighting tuner" died on an 8 s wait at 0e8bbdaeb while the
+  // apex log showed the panel it was waiting for opening at 35,980 ms. These two
+  // waits sit behind the same SwiftShader main thread (the menu's rAF loop is
+  // still driving the canvas while #select reveals and menus.js fills the list),
+  // and BOOT_MS carries the measured 11-33 s boot behind it.
   await page.evaluate(() => document.getElementById("mb-race").click());
-  await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: 8_000 });
+  await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: BOOT_MS });
   // the circuit list is filled by menus.js; wait for rows before measuring
-  await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 5, null, { polling: 100, timeout: 8_000 });
+  await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 5, null, { polling: 100, timeout: BOOT_MS });
 }
 
 // Dispatch a wheel over the centre of `sel` and report what the track list did.

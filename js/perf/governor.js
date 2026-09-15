@@ -376,7 +376,26 @@ function cleanRace() {
   }
 }
 
+// Bounded raw-frame history supplements the EMA: occasional hitches must not
+// disappear from diagnostics just because the next second was smooth.
+const frameHistory = new Float64Array(2048);
+let frameCursor = 0, frameCount = 0, droppedSimS = 0, physicsSteps = 0;
+function resetFrameStats() { frameCursor = 0; frameCount = 0; droppedSimS = 0; physicsSteps = 0; }
+function recordSimulation(steps, dropped) {
+  physicsSteps += Math.max(0, steps || 0); droppedSimS += Math.max(0, dropped || 0);
+}
+function frameStats() {
+  const a = Array.from(frameHistory.subarray(0, frameCount)).sort((x, y) => x - y);
+  const q = p => a.length ? a[Math.ceil((a.length - 1) * p)] : 0;
+  return { frames: a.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), maxMs: q(1),
+    droppedSimS, physicsSteps, windowFrames: frameHistory.length };
+}
+
 function tick(dtMs) {
+  if (Number.isFinite(dtMs) && dtMs > 0) {
+    frameHistory[frameCursor] = dtMs; frameCursor = (frameCursor + 1) % frameHistory.length;
+    frameCount = Math.min(frameHistory.length, frameCount + 1);
+  }
   // `_autoRes` gates the RESOLUTION stage ONLY — it must not return early here.
   // It used to, and that made a user-facing control silently disable a safety
   // system: RESOLUTION: LOW/MED/HIGH (js/game.js, applyResMode) calls
@@ -603,7 +622,7 @@ function clearStrikes() {
 }
 
 return {
-  init, tick, sentinelArm, sentinelResume, cleanRace, clearStrikes,
+  init, tick, frameStats, recordSimulation, resetFrameStats, sentinelArm, sentinelResume, cleanRace, clearStrikes,
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
   // Crash + measured only — no GRAPHICS user floor. Look-defining post
   // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so
@@ -717,3 +736,4 @@ return {
   },
 };
 })();
+Object.freeze(PerfGov);

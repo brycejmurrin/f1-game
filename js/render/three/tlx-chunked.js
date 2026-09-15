@@ -308,7 +308,7 @@
       const IndexArray = big ? Uint32Array : Uint16Array;
       const chunks = [];
       let count = 0;
-      buckets.forEach((bk) => {
+      buckets.forEach((bk, key) => {
         const arr = new IndexArray(bk.idx);
         bk.idx = null;   // typed copy made — the growable JS array can go now
         const geo = new THREE.BufferGeometry();
@@ -326,7 +326,16 @@
         geo.boundingSphere = new THREE.Sphere();
         geo.boundingBox.getBoundingSphere(geo.boundingSphere);
         count += arr.length;
-        chunks.push({ geo, count: arr.length, min: mn, max: mx, wrap: { __tlx: true, geo } });
+        // KEEP THE GRID CELL, not just the AABB. The bucket key IS the chunk's
+        // identity — `gx * 4096 + gz` over `cell`-sized cells, both biased by
+        // 1024 (see the binning loop above) — and it is the only exact way back
+        // from a WORLD position to a chunk: `min`/`max` are the union of the
+        // triangles' vertex AABBs, so a triangle binned by its CENTROID can push
+        // them outside their own cell and two neighbours' boxes can overlap.
+        // TLXLampGrid needs the exact mapping; nothing else reads these.
+        const gx = (key / 4096) | 0, gz = key - gx * 4096;
+        chunks.push({ geo, count: arr.length, min: mn, max: mx, gx, gz,
+                      wrap: { __tlx: true, geo } });
       });
       return { __tlx: true, chunked: true, geo: chunks.length ? chunks[0].geo : null,
                chunks, cellSize: cell, count };

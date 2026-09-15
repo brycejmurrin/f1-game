@@ -597,7 +597,7 @@ const api = {
       wrongWay: !!G.player.wrongWay, rescueT: G.player.rescueT || 0, lap: G.player.lap,
       axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac: +axFrac.toFixed(3),
-      slipFactor: +slipFactor.toFixed(3),
+      slipFactor: +slipFactor.toFixed(3), driving: G.coach.status(),
       brakeBias: G.player.brakeBias != null ? +G.player.brakeBias.toFixed(3) : null,   // the SETUP sheet's split (null = BB_REF)
       aeroX: +(G.player.aeroX || 0).toFixed(3),
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
@@ -695,6 +695,7 @@ const api = {
   },
   setPhysics(o) {
     o = o || {};
+    if (G.records && Object.keys(o).length) G.records.invalidate();
     // Floors: pace<0 drove the cap negative, expo≤0 made pow(0,expo) NaN — and
     // a NaN reaches every field of the car with nothing to heal it.
     const fl = (v, lo) => (Number.isFinite(v) ? Math.max(lo, v) : null);
@@ -1511,6 +1512,9 @@ const api = {
       // nothing on my machine" was undiagnosable from outside. perChunkHeld
       // names the gate when the knob is up but the frame resolved to 0.
       perChunkLights: G.frame.perChunkLights || 0,
+      // TLX only (null elsewhere): three resolves lamps per FRAGMENT from baked
+      // textures, and `on` is the only outside proof that path is live.
+      tlxLampGrid: (gfx && typeof gfx.lampGridState === "function") ? gfx.lampGridState() : null,
       roadChunkLamps: G.frame.roadChunkLamps || 0,
       perChunkHeld: (() => {
         if (!(+LT.perChunkLights > 0)) return null;          // player has it off
@@ -1668,7 +1672,7 @@ const api = {
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
   renderScale(v) {
-    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
+    if (v === undefined) return { scale: gfx.getRenderScale(), fps: +(1000 / Math.max(1, PerfGov.fpsEMA())).toFixed(1), floorMs: +PerfGov.floorMs().toFixed(1), auto: PerfGov.autoRes(), tier: PerfGov.tier(), autoTier: PerfGov.autoTier(), autoShed: PerfGov.autoShed(), open: PerfGov.openWindow(), frameTimes: PerfGov.frameStats(), userTier: PerfGov.userTier(), tierFloor: PerfGov.tierFloor(), crashStrikes: PerfGov.strikes(), scaleFutile: PerfGov.scaleFutile(), tierFutile: PerfGov.tierFutile(), tierHold: PerfGov.tierHold() };
     if (v === true) { PerfGov.setAutoRes(true); return this.renderScale(); }
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
   },
@@ -1771,7 +1775,7 @@ const api = {
       // combined-slip physics
       axEstSm:    +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac:     +axFrac.toFixed(3),
-      slipFactor: +slipFactor.toFixed(3),
+      slipFactor: +slipFactor.toFixed(3), driving: G.coach.status(),
       slipDeg:    +(slip * 180 / Math.PI).toFixed(2),
 
       // track context at player position

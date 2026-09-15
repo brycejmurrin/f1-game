@@ -62,15 +62,22 @@ async function ghostSaved(page, trackId) {
   await page.waitForFunction((id) => {
     try {
       const st = JSON.parse(localStorage.getItem("apex26.ghost.v1") || "null");
-      return !!(st && st[id]);
+      const key = Ghost.context() == null ? id : "v2:" + id + ":" + Ghost.context();
+      return !!(st && st[key]);
     } catch (_) { return false; }
   }, trackId, { polling: 50, timeout: 15000 });
-  return page.evaluate((id) => JSON.parse(localStorage.getItem("apex26.ghost.v1"))[id], trackId);
+  return page.evaluate((id) => {
+    const key = Ghost.context() == null ? id : "v2:" + id + ":" + Ghost.context();
+    return JSON.parse(localStorage.getItem("apex26.ghost.v1"))[key];
+  }, trackId);
 }
 
   test("records only one monotonic flying lap in the persisted ghost", async ({ page }) => {
     await enterTT(page);
     const result = await page.evaluate(() => {
+      // This checks persisted samples, not pixels. Keep SwiftShader from
+      // starving the deferred save and the storage polling on CI.
+      window.__apex.headless(true);
       localStorage.removeItem("apex26.ghost.v1");
 
       // Run the real countdown from the grid, then cross once to begin the
@@ -241,11 +248,50 @@ test.describe("Time Trial — results panel", () => {
     await enterTT(page);
     await page.evaluate(() => {
       window.__apex.park(0);
+      // Seed a record in this car/physics class; the init-script rows stay legacy.
+      GameStore.ttBoardAdd("monza", { t:75, teamId:"mclaren", code:"NOR", name:"Lando Norris", ts:2, context:Ghost.context() });
+      Ghost.startLap();
+      for(let i=0;i<8;i++) Ghost.record(i*10,i*700,0);
+      Ghost.finishLap(75);
       window.__apex.finishRace();
     });
     await page.getByRole("button", { name: "✕ CLEAR GHOST" }).click();
+    expect(await page.evaluate(() => GameStore.ttBoard("monza",null).length)).toBe(1);
     await page.locator("#res-next").click();
     await page.evaluate(() => window.__apex.park(0.1));
     await expect(page.locator("#hud-gap-behind")).toContainText("REC 1:15.00");
   });
 });
+
+
+for (const viewport of [{width:1280,height:800}, LANDSCAPE]) {
+  test.describe(`Practice controls at ${viewport.width}x${viewport.height}`, () => {
+    test.use({viewport});
+    test("coach, unscored checkpoint and compound selection work through the pause menu", async ({page}, info) => {
+      const errors=[]; page.on("pageerror", e=>errors.push(e.message));
+      await enterTT(page);
+      // Match menu-keyboard's pause test: skip only the 3D render loop so
+      // locator actionability can settle; DOM controls and physics stay live.
+      await page.evaluate(()=>window.__apex.headless(true));
+      await expect(page).toHaveTitle(/Apex 26/i);
+      await page.evaluate(()=>{window.__apex.go();window.__apex.tyres({level:"light"});});
+      await page.getByRole("button",{name:"Pause",exact:true}).click();
+      await page.getByText("DRIVING & PRACTICE",{exact:true}).click();
+      await page.locator("#pm-coach").click();
+      await expect(page.locator("#pm-coach")).toHaveAttribute("aria-pressed","true");
+      await page.locator("#pm-practice-set").click();
+      await expect(page.locator("#pm-practice-retry")).toBeEnabled();
+      await page.locator("#pm-practice-retry").click();
+      const driving=await page.evaluate(()=>window.__apex.physState().driving);
+      expect(driving.practice).toBe(true);
+      const select=page.locator("#pm-pit-choice");
+      await expect(select).toBeEnabled();
+      const value=await select.locator("option").nth(1).getAttribute("value");
+      await select.selectOption(value);
+      await expect(select).toHaveValue(value);
+      await expect(page.locator("#pm-pit-estimate")).toContainText("Estimated pit loss:");
+      await page.screenshot({path:info.outputPath("practice-controls.png")});
+      expect(errors).toEqual([]);
+    });
+  });
+}
