@@ -66,6 +66,7 @@ const CIRCUIT_MAP = {
   fuji: "fuji", okayama: "okayama", korea: "korea", jerez: "jerez",
   donington: "donington", anderstorp: "anderstorp", brands_hatch: "brands_hatch",
   zolder: "zolder", dijon: "dijon", buddh: "buddh", mont_tremblant: "mont_tremblant",
+  mosport: "mosport",
 };
 
 function normalise(pairs) {
@@ -90,7 +91,7 @@ test("every game circuit matches its pinned real-circuit reference", async ({ pa
   await page.goto("/");
   // Each circuit's OSM trace is the `path` key of its def (js/circuits/<id>.js),
   // copied onto the built def; Tracks loads after every circuit file.
-  await page.waitForFunction(() => typeof Tracks !== "undefined" && Tracks.LIST.length === 51, null, { polling: 100 });
+  await page.waitForFunction(() => typeof Tracks !== "undefined" && Tracks.LIST.length === 52, null, { polling: 100 });
   const gameCircuits = await page.evaluate(() =>
     Object.fromEntries(Tracks.LIST.map((definition) => [
       definition.id,

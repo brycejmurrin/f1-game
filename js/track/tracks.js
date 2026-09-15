@@ -2141,12 +2141,25 @@ const Tracks = (function () {
 
   const DEFS = (typeof window !== "undefined" && window.TrackDefs) || [];
 
+  // CATMULL-ROM, not linear. X/Z has always been a spline; interpolating Y
+  // linearly creased the road at every one of the 64 samples, so the car crested
+  // a kink each ~60 m. What a driver feels is the CHANGE of gradient, not the
+  // gradient, so that read as "abrupt" even inside the baker's 8% slope clamp
+  // (Brands Hatch, 2026-09-14: 8.0% max slope, 5.4% slope change per step).
+  // C1 continuity here fixes it without touching the profile data; circuits
+  // with no CircuitElevations entry never reach this function.
   function elevationAt(id, frac) {
     const prof = (typeof CircuitElevations !== "undefined") && CircuitElevations[id];
     if (!prof || !prof.length) return null;
     const M = prof.length, f = (((frac % 1) + 1) % 1) * M;
-    const i = Math.floor(f) % M, j = (i + 1) % M, t = f - Math.floor(f);
-    return prof[i] + (prof[j] - prof[i]) * t;
+    const i = Math.floor(f) % M, t = f - Math.floor(f);
+    if (M < 4) return prof[i] + (prof[(i + 1) % M] - prof[i]) * t;
+    const p0 = prof[(i - 1 + M) % M], p1 = prof[i];
+    const p2 = prof[(i + 1) % M], p3 = prof[(i + 2) % M];
+    const t2 = t * t, t3 = t2 * t;
+    return 0.5 * ((2 * p1) + (-p0 + p2) * t +
+                  (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+                  (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
   }
   function hasRealElevation(id) {
     return (typeof CircuitElevations !== "undefined") && !!(CircuitElevations[id] && CircuitElevations[id].length);
@@ -2244,6 +2257,13 @@ const Tracks = (function () {
       // This trap has bitten before and was fixed for ONE field only (see the
       // `pal` note in js/lighting/atmosphere.js); nobody swept the rest. The guard
       // in tests/unit/circuit-def-fields.test.mjs is what stops the sixth.
+      // READ OFF THE COPIED DEF by js/physics/tyre-model.js severity(), so it
+      // joins the family above. Omitted, it failed their exact silent way: the
+      // model's fallback is a legitimate 1.0, so all seven authored circuits
+      // simply behaved like the median and nothing anywhere said otherwise.
+      // Caught by tests/unit/circuit-def-fields.test.mjs, which is what that
+      // guard is for.
+      tyreSeverity: d.tyreSeverity,
       sunAzimBias: d.sunAzimBias,
       sceneryTheme: d.sceneryTheme,
       sceneryThemeOverrides: d.sceneryThemeOverrides || null,

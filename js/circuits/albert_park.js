@@ -17,6 +17,11 @@
     theme: "green",
     sceneryTheme: "park",
     lengthKm: 5.3,
+    // TYRE SEVERITY: what the SURFACE and the speeds do to a tyre, on top of the
+    // work the LAYOUT already makes it do (js/physics/tyre-model.js derives that
+    // emergently from the forces the car made). Real 2026 rate / the 0.0493 s/lap
+    // mean of the seven measured circuits — docs/research/TYRE-STRATEGY-DESIGN.md §5.5.
+    tyreSeverity: 0.61,  // Australia 0.030 s/lap
     baseHW: 7,
     sceneryCoordinates: "racing",
     flatTerrain: true,

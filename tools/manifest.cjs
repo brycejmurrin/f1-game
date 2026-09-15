@@ -13,7 +13,7 @@
 // Directory map (post-reorg):
 //   js/render/    renderer: gfx façade, GLX (WebGL2), shaders, WebGPU backend
 //   js/track/     track ENGINE + infra (geometry, surface, scenery kits)
-//   js/circuits/  the 51 circuit DEFINITIONS (24 season + 27 classic; one file each)
+//   js/circuits/  the 52 circuit DEFINITIONS (24 season + 28 classic; one file each)
 //   js/car/       car model, liveries, parts, ghost, teams
 //   js/data/      data hub (api client + tab modules + shell)
 //   js/game/      game-support modules extracted from / loaded before game.js
@@ -54,7 +54,7 @@ const CIRCUITS = [
   // ── recovered from OpenStreetMap (tools/track/osm-circuits.json) — the
   //    bacinger/f1-circuits file the 40 above come from has no more features ──
   "fuji", "okayama", "korea", "jerez", "donington", "anderstorp",
-  "brands_hatch", "zolder", "dijon", "buddh", "mont_tremblant",
+  "brands_hatch", "zolder", "dijon", "buddh", "mont_tremblant", "mosport",
 ];
 
 const CIRCUITS_DIR = "js/circuits";
@@ -160,6 +160,7 @@ const FULL = [
   "js/race/reliability.js",
   "js/physics/tyre-model.js",
   "js/physics/ai-drive.js",
+  "js/race/engineer.js",
   "js/camera/offsets.js",
   "js/garage/setup-tune.js",
   "js/garage/setup-sheet.js",
@@ -456,9 +457,12 @@ const HARD_EDGES = [
   ["js/race/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval
   ["js/core/mat4.js", "js/physics/ai-drive.js"],         // AiDrive binds M4.clamp/lerp at eval
   ["js/core/mat4.js", "js/physics/tyre-model.js"],       // TyreModel binds M4.clamp at eval
+  ["js/physics/consts.js", "js/physics/tyre-model.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/physics/tyre-model.js", "js/game.js"],            // game.js validates the stored TYRE WEAR level at eval
   ["js/core/mat4.js", "js/race/pit-lane.js"],            // PitLane binds M4.clamp at eval
   ["js/race/pit-lane.js", "js/game.js"],                 // game.js calls PitLane.create(G) at eval
+  ["js/core/mat4.js", "js/race/engineer.js"],            // RaceEngineer binds M4.clamp at eval
+  ["js/race/engineer.js", "js/game.js"],                 // game.js calls RaceEngineer.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval

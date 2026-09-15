@@ -483,7 +483,7 @@ the camera counterpart of `lightTune()`. Six knobs per mode, all defaulting to
 | `pitch` | ° | tilt the aim up (+) / down (−) |
 | `yaw` | ° | pan the aim right (+) / left (−) |
 | `fov` | ° | widen (+) / tighten (−) on top of the mode's own speed-scaled FOV |
-| `cornerLead` | 0–1 | **chase/far only** — blend the rig toward the classic road-frame chase so the camera leads/swings INTO corners. 0 = locked behind the car (default); 1 = the old corner-following chase. Purely visual; never touches the car |
+| `cornerLead` | 0–1 | **chase/far only** — blend the rig toward the classic road-frame chase so the camera leads/swings INTO corners. **Ships at 0.54**, which is also its registry default; 0 = locked flat behind the car; 1 = the old corner-following chase. Unlike the six geometric knobs it is an ABSOLUTE blend, not an offset, so its default is not 0. Purely visual; never touches the car |
 
 Translation knobs move the eye only, then `pitch`/`yaw` rotate the aim about it,
 so the car can't fall out of frame. Values are stored **per mode** (a tuned
@@ -493,8 +493,11 @@ the slider range, and are applied inside `vantage()` — so the live camera,
 ground clamp after tuning.
 
 ```js
-__apex.camTune();                                  // → {defs:[…], tuned:{chase:{…}}}
-__apex.camTune("chase");                           // → {height:0, dist:0, side:0, pitch:0, yaw:0, fov:0}
+__apex.camTune();                                  // → {defs:[{id,min,max,def,unit},…], tuned:{chase:{…}}}
+// Every knob resolved, defaults filled in — so cornerLead reads the shipped
+// 0.54, not 0. Compare against each knob's `def` from defs[] to tell an
+// untouched knob from one deliberately tuned to its default's value.
+__apex.camTune("chase");                           // → {height:0, dist:0, side:0, pitch:0, yaw:0, fov:0, cornerLead:0.54}
 __apex.camTune("chase", { height: 0.6, dist: 2, fov: -4 });   // apply + persist + re-snap
 __apex.camTune("chase", null);                     // reset this camera to shipped framing
 ```
@@ -2177,9 +2180,15 @@ const h = __apex.lapHistory();
 ### `pit({car, arm}?) → pitInfo | null`
 
 The pit lane (`js/race/pit-lane.js`): its resolved geometry, the speed limit,
-and this car's state in it. `{arm: true}` calls the stop and `{arm: false}`
-cancels it — exactly what the PIT control does — which is how a spec drives a
-stop with no input device.
+and this car's state in it.
+
+**THERE IS NO PIT CONTROL.** A driver calls a stop the way a real one does — by
+putting the car on the pit side at the entry and holding it there — so there is
+no button, no key and no gamepad bind to press. `{arm: true}` calls the stop
+directly and `{arm: false}` cancels it, which is how a spec skips the gesture;
+to exercise the gesture itself, put the car past `COMMIT_FRAC` of the
+half-width toward `side` within `COMMIT_M` of the entry and hold it for
+`COMMIT_S`.
 
 | Field | Meaning |
 |---|---|
@@ -2193,15 +2202,29 @@ stop with no input device.
 | `state` | `none` / `approach` / `lane` / `box` / `out` |
 | `inWindow` | Inside the arc window at all (true for every car passing the pits) |
 | `stops` | Stops this car has made |
+| `commit` | How far through the commitment dwell this car is, 0-1 — 0 unless it is holding the line into the pits right now. With no button, this is the whole input, and the HUD's compound chip fills with it |
+| `side` | Which way "in" is: `+1` right (where `js/track/tracks.js` places the pit building), `-1` left. Overridable per circuit via `def.pitZone.side` |
+| `lane` | The four numbers the lit shaders paint the lane from, exactly as the frame carries them: `[entry s, window length, side, lap length]`. **`null` means no lane is armed and nothing is painted** — the first thing to check when the lane is invisible |
+| `laneEdgeX` | Where the painted boundary sits laterally at a nominal 7 m half-width. The real line is at `(hw − 3.2) × side`, so it tracks the road's actual width |
+| `inLaneLat` | This car is laterally IN the painted strip. DIFFERENT from `inLane`, and the difference is the one that bites: `inLane` is the state machine, this is the position, and **a stop that will not latch is always this one**. `false` outside the window |
+| `laneX` | The lane's centre at THIS car's arc position — the number to aim at. `null` outside the window. Use it rather than a literal: the pit-window half-width runs 4.93 m (Monaco) to 8.0 m (Spa), so the lane centre moves over three metres across the calendar |
 
-**The lane is a STATE, not a place.** There is no lateral lane to drive into:
-a driveable one was built and measured badly twice (a forced boundary went
-through Monaco's buildings; fitting to existing room found 2.4 m at Monza,
-because the scenery puts a pit WALL there, and a real lane sits on its far side).
-`js/race/pit-lane.js` records both measurements. So the limiter applies to a car
-that has CALLED a stop and is in the window, and the box holds it — meaning an
-unarmed car never sees a speed cap, and a car beached off the road never reads
-as pitting.
+**The lane is a STATE, and also a PLACE TO STOP — but not the place two earlier
+attempts went looking for.** A driveable lane out BEYOND the road edge was built
+and measured badly twice (a forced boundary went through Monaco's buildings;
+fitting to existing room found 2.4 m at Monza, because the scenery puts a pit
+WALL there, and a real lane sits on its far side). `js/race/pit-lane.js` records
+both measurements. The lane that exists is the outermost strip of the ROAD
+across the window, painted rather than built.
+
+So the limiter applies to a car that has CALLED a stop and is in the window —
+an unarmed car never sees a speed cap, and a car beached off the road never
+reads as pitting. The BOX additionally requires being in the strip: an AI is
+steered there, and a player is not (the lane is driven, so the car is never
+taken off you) — which means **a player who halts on the racing line is not
+serviced**, and `pit().inLaneLat` is how you see why. Garages, a crew and a lane
+behind the pit wall are still missing; those need a road that branches, which
+this one-ribbon engine cannot express.
 
 **Pit loss is still emergent**: window length over the limit, against racing the
 same stretch, plus the stop. That is the property that made the driveable lane
@@ -2232,10 +2255,17 @@ have to call both.
 | `life` | How much of the SCHEDULED race distance this compound survives, as a fraction — not a lap count. See below |
 | `lifeLaps` | …and what that works out to in laps at *this* race distance, after the stint floor |
 | `wear` | 0 fresh, 1 spent, up to 2 past the cliff |
+| `wearF` / `wearR` | The same number per axle. Their MEAN is exactly `wear`, always — braking loads the front and traction the rear, and brake bias moves the braking half |
 | `lapsOn` / `stints` | Laps on this set, and how many sets this car has used |
+| `severity` | The circuit's own tyre-severity scale, 1.0 at the median — what the SURFACE does, multiplied onto what the layout already does |
 | `load` | How hard the car worked the tyre on the last tick, ~1.0 for a clean racing lap |
-| `severity` | The circuit's own tyre-severity scale, 1.0 at the median |
+| `tempS` / `tempB` | Surface and bulk (carcass) temperature, °C. The surface follows the driving on a ~9 s constant, the bulk on ~35 s — that gap is what tells graining from blistering |
+| `tempOpt` / `tempWindow` | The fitted compound's optimum and the half-width of its window, °C. Softer compounds work cooler, so the optimum is derived from `life` |
+| `ambient` | Track/air temperature for the current weather, °C (dry 30 → rain 13) |
+| `grain` / `blister` | The two surface defects, 0-1. Graining accumulates on a COLD, SLIDING tyre and **heals** once it is warm; blistering accumulates on an over-heated CORE and **never** does |
+| `tempGrip` / `defectGrip` | What those two cost, as multipliers |
 | `grip` / `traction` | The lateral and longitudinal multipliers the driving model is reading right now |
+| `axleF` / `axleR` | The front/rear grip split, **relative** to `grip` (which already carries the shared drop). 1/1 on an even set; only the player's bicycle model consumes it |
 | `fuel` | Fuel remaining as a fraction of the start load — 1 on the grid, 0 at the flag |
 
 **`life` is a fraction of the distance you selected, not a lap count**, and that
@@ -2244,6 +2274,11 @@ is the single most surprising thing about the model. Real degradation over a
 real rates would mean no stop was ever worth making at any distance this game
 offers (`docs/research/TYRE-STRATEGY-DESIGN.md` §4). A 0.5-life compound is
 spent halfway through a 5-lap race and halfway through a 50-lap race alike.
+
+**A fresh set comes out of blankets at 70 °C, BELOW its window** — that is the
+out-lap, and it is the counterweight that stops an undercut being free and
+therefore always correct. Watch `tempS` climb toward `tempOpt` over the first
+lap; a soft switches on in about a lap and a hard takes two or three.
 
 `{level: "off" | "light" | "real"}` sets the race setting **and** the live model
 together, so a spec can turn wear on without the settings sheet and have it

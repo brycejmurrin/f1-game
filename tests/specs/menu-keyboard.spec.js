@@ -24,10 +24,18 @@ async function waitReady(page) {
 }
 
 async function openSelect(page) {
+  // BOOT_MS on both, not 8 s. Every test in this file goes through here, so a
+  // hand-picked budget here is a hand-picked budget on the whole file. Neither
+  // 8 s was ever measured, and the sibling spec proved the shape of the failure:
+  // menu-survey's "36 lighting tuner" died on an 8 s wait at 0e8bbdaeb while the
+  // apex log showed the panel it was waiting for opening at 35,980 ms. These two
+  // waits sit behind the same SwiftShader main thread (the menu's rAF loop is
+  // still driving the canvas while #select reveals and menus.js fills the list),
+  // and BOOT_MS carries the measured 11-33 s boot behind it.
   await page.evaluate(() => document.getElementById("mb-race").click());
-  await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: 8_000 });
+  await page.waitForFunction(() => !document.getElementById("select").hidden, null, { polling: 100, timeout: BOOT_MS });
   // the circuit list is filled by menus.js; wait for rows before measuring
-  await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 5, null, { polling: 100, timeout: 8_000 });
+  await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 5, null, { polling: 100, timeout: BOOT_MS });
 }
 
 // Dispatch a wheel over the centre of `sel` and report what the track list did.
@@ -61,6 +69,22 @@ const focusInfo = (page) =>
   });
 
 test.describe("Menu keyboard + trackpad (desktop)", () => {
+  // DECLARE THE BUDGET. Four tests in this file boot a full race — 22 cars, a
+  // built circuit, the maps pass — and the file declared nothing, so each got
+  // Playwright's 120 s default. Two of them died on exactly "Test timeout of
+  // 120000ms exceeded" at the DEPLOYED commit 761b81418, with the apex log
+  // showing monza still in buildProps: the budget ran out mid-fixture, before
+  // any assertion ran.
+  //
+  // 300 s is what every peer on this fixture already carries
+  // (hud-layout, bahrain/cota/monaco/montreal-foundation, autopilot), and
+  // hud-layout's header records why the number must be DECLARED rather than
+  // inherited: tools/ci/select-specs.mjs keys its "EXCLUDED (declares Ns test
+  // budget > gate 120s)" guard on test.setTimeout, so a race-fixture spec that
+  // declares nothing silently enters the 120 s change-aware gate that every
+  // other race-fixture spec is excluded from — which is how hud-layout once
+  // burned a whole job's 26-minute cap and CANCELLED a Pages deploy.
+  test.setTimeout(300_000);
   test.use({ viewport: DESKTOP });
 
   test("wheel anywhere on the screen pans the flag strip", async ({ page }) => {
@@ -189,11 +213,20 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await page.goto("/"); await waitReady(page);
     await page.evaluate(() => window.__apex.uiScale(200));
     await page.evaluate(() => document.getElementById("mb-garage").click());
-    await page.waitForFunction(() => !document.getElementById("carsetup").hidden, null, { polling: 100, timeout: 8_000 });
+    // BOOT_MS, not 8 s. These two waits are the only ones in this file that sit
+    // on GPU work — the garage builds a 3D car preview, at 200% UI size, under
+    // SwiftShader — and 8 s was not a budget anyone measured. What it costs:
+    // this test failed 1 run in 3 here, at line 192 in one sample and line 196
+    // in the next, which is the shape of a budget running out rather than of a
+    // defect. Driven directly on an idle box the garage unhides in 180 ms, so
+    // the typical case has 44x headroom and the loaded case has none.
+    // The ASSERTIONS below are untouched; only the wait for the machine moves,
+    // the same way every race-fixture wait in this suite already reads BOOT_MS.
+    await page.waitForFunction(() => !document.getElementById("carsetup").hidden, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => {
       [...document.querySelectorAll("#cs-tabs .cs-tab")].find((e) => /LIVERY/i.test(e.textContent))?.click();
     });
-    await page.waitForFunction(() => document.querySelectorAll("#cs-options .cs-liv-row .cs-liv").length > 20, null, { polling: 100, timeout: 8_000 });
+    await page.waitForFunction(() => document.querySelectorAll("#cs-options .cs-liv-row .cs-liv").length > 20, null, { polling: 100, timeout: BOOT_MS });
     const r = await page.evaluate(() => {
       const opts = document.getElementById("cs-options");
       opts.scrollTop = 0;
@@ -219,6 +252,14 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
 
   test("left/right move along a chip row without leaving it", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
+    // The GARAGE runs a 3D car preview, and Playwright's actionability check
+    // wants the same bounding box on two consecutive animation frames — so a
+    // locator click on that screen retries until its budget is gone. Measured
+    // on the same class of defect in audio-smoke.spec.js today: 14.1 s against
+    // 1.2 s for one click, with rAF at a healthy 40.7 Hz, so this is the live
+    // canvas and not a starved frame clock. Stop the render loop first, the
+    // way menu-baseline.spec.js already does before clicking menus.
+    await page.evaluate(() => window.__apex.headless(true));
     await openSelect(page);
     // The DRIVER chips moved from the select screen into the GARAGE's TEAM tab
     // when the screens were split by question (who you are / where you race).
@@ -449,6 +490,8 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
  * never do something no visible button does.
  */
 test.describe("Escape is BACK", () => {
+  // Same reason as the block above: two tests here boot a race.
+  test.setTimeout(300_000);
   test.use({ viewport: DESKTOP });
 
   // THE STRUCTURAL ONE, and the reason the next screen to be added cannot
@@ -526,6 +569,10 @@ test.describe("Escape is BACK", () => {
     await page.evaluate(() => {
       window.__apex.park(0.1);
       const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
+      // Same live-canvas stall as the garage above — #pausebtn sits over a
+      // rendering race. headlessMode only skips render() (js/game.js), so the
+      // pause/Escape behaviour under test is untouched.
+      window.__apex.headless(true);
     });
     await page.locator("#pausebtn").click();
     await page.locator("#pausemenu").waitFor({ state: "visible" });

@@ -10,6 +10,11 @@
     night: false,
     theme: "street_day",
     lengthKm: 3.3,
+    // TYRE SEVERITY: what the SURFACE and the speeds do to a tyre, on top of the
+    // work the LAYOUT already makes it do (js/physics/tyre-model.js derives that
+    // emergently from the forces the car made). Real 2026 rate / the 0.0493 s/lap
+    // mean of the seven measured circuits — docs/research/TYRE-STRATEGY-DESIGN.md §5.5.
+    tyreSeverity: 1.01,  // Monaco 0.050 s/lap — a gentle surface against a punishing layout
     baseHW: 5,
     street: true,
     terrainOuter: 28,

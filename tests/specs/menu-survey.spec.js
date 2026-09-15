@@ -45,7 +45,12 @@ async function openSettings(page, track = "bahrain", tod = "day", wx = "dry") {
     document.getElementById("pausemenu").hidden = false;
     document.getElementById("pm-settings").click();
   });
-  await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: 8_000 });
+  // BOOT_MS, not 8 s: this opens the settings sheet over a RUNNING race, so the
+  // wait sits behind SwiftShader. It timed out here at the deployed commit
+  // 761b81418 ("36 lighting tuner"), and 8 s was never a measured budget — the
+  // peers on this fixture all read BOOT_MS, which carries the 11-33 s boot
+  // measurement behind it.
+  await page.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { polling: 100, timeout: BOOT_MS });
   await page.waitForTimeout(200);
 }
 // Cycle a labelled toggle in-page until its text contains `want`.
@@ -102,19 +107,31 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
   test("34 settings menu — SOUND + MUSIC OFF", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page);
-    // BOTH switches now live in the MUSIC & SOUND panel — the pause menu's
-    // duplicate SOUND toggle was removed, since it was the master mute while
-    // the panel's switch is the effects bus and the two read as one control.
     await page.evaluate(() => document.getElementById("pm-audio").click());
-    await page.waitForTimeout(120);
-    await page.evaluate(() => document.getElementById("as-music-off").click());
-    await page.evaluate(() => document.getElementById("as-sound-off").click());
-    // The OFF half of each switch must now carry the selected ("active") ring —
-    // game.js toggles it in the audio-sheet sync; AriaState mirrors it to aria-pressed.
+    // #as-music-off / #as-sound-off DO NOT EXIST, and had not for some time:
+    // this test drove the old pair of ON/OFF buttons, and the audio panel is
+    // setting ROWS now (js/ui/setting-row.js — `#<id>-sel` is a native select
+    // whose options are the values), the same shape every other test in this
+    // file already drives through cycleTo.
+    //
+    // It failed as `Cannot read properties of null (reading 'click')` after a
+    // flat 120 ms sleep, which reads like a race and is not one. Replacing the
+    // sleep with an honest wait for the control is what proved it: the wait ran
+    // the full BOOT_MS and the element still never appeared. A superseded
+    // design, not a timing bug — the third one found in this suite today.
+    await page.waitForFunction(() => document.getElementById("as-music-sel") != null
+      && document.getElementById("as-sound-sel") != null, null, { polling: 50, timeout: BOOT_MS });
+    const music = await cycleTo(page, "as-music", "OFF");
+    const sound = await cycleTo(page, "as-sound", "OFF");
+    // Assert what the player is told, in the terms the panel now uses: both
+    // rows READ off, and the collapsed summaries agree, since those are what
+    // you see with the folds shut.
+    expect(music.toUpperCase()).toContain("OFF");
+    expect(sound.toUpperCase()).toContain("OFF");
     expect(await page.evaluate(() => ({
-      music: document.getElementById("as-music-off").classList.contains("active"),
-      sound: document.getElementById("as-sound-off").classList.contains("active"),
-    }))).toEqual({ music: true, sound: true });
+      music: document.getElementById("as-music-sum").textContent.toUpperCase(),
+      sound: document.getElementById("as-sound-sum").textContent.toUpperCase(),
+    }))).toEqual({ music: expect.stringContaining("OFF"), sound: expect.stringContaining("OFF") });
     await page.waitForTimeout(120);
     await shot(page, "portrait-34-settings-sound-music-off");
   });
@@ -130,7 +147,13 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page, "singapore", "night", "dry");
     await clickId(page, "pm-lighting");
-    await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { polling: 100, timeout: 8_000 });
+    // BOOT_MS, not 8 s — the SECOND tight wait in this file and the one I missed
+    // when the helper's was raised. It opens the TUNER over a running singapore
+    // NIGHT race, which is the heaviest fixture here, and it failed on CI at
+    // 0e8bbdaeb with the apex log showing the panel opening at 35,980 ms: the
+    // sheet was never broken, the budget was. Sibling waits on this fixture all
+    // read BOOT_MS, which carries the 11-33 s SwiftShader boot measurement.
+    await page.waitForFunction(() => !document.getElementById("lighting").hidden, null, { polling: 100, timeout: BOOT_MS });
     await page.waitForTimeout(400);
     // The tuner actually built its TUNE_DEFS slider rows, not just an empty shell.
     expect(await page.evaluate(() =>

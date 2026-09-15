@@ -25,6 +25,11 @@
  *
  *   node tools/track/rotate-markings.cjs --check    # report, write nothing
  *   node tools/track/rotate-markings.cjs --write
+ *   node tools/track/rotate-markings.cjs --write donington jerez   # ONLY these
+ *
+ * PASS THE IDS. A bare --write rotates every circuit with a sceneryStartFrac,
+ * including the ones already corrected, because the tool cannot tell a rotated
+ * file from an un-rotated one (see NOT IDEMPOTENT below).
  *
  * NOT IDEMPOTENT — do not re-run --write against an already-rotated
  * circuit file. `_sceneryShift` is a fixed function of startFrac vs
@@ -48,11 +53,18 @@ const circuitFile = (id) => path.join(ROOT, "js/circuits", `${id}.js`);
 const wrap01 = (v) => ((v % 1) + 1) % 1;
 const r4 = (v) => Number(wrap01(v).toFixed(4));
 
-function main(write) {
+function main(write, only) {
   const Tracks = buildContext();
   let changed = 0, skipped = [];
 
   for (const def of Tracks.LIST) {
+    // SCOPE, and the reason this exists: the header says "only run --write once
+    // per circuit", and without a filter that is impossible to honour — every
+    // circuit carrying a sceneryStartFrac reports as "would change" for ever,
+    // because the tool cannot tell an un-rotated file from an already-rotated
+    // one. A bare --write therefore re-rotates the 26 circuits that are already
+    // correct. Name the circuits you are correcting and nothing else moves.
+    if (only.length && !only.includes(def.id)) continue;
     // `_sceneryShift` is stamped by buildCenterline, not by resolve(), so it is
     // undefined on a freshly loaded LIST. Build the centreline (cheap — no
     // meshes) to make the def answer for itself rather than recomputing the
@@ -93,4 +105,5 @@ function main(write) {
   else console.log(`\n${changed} circuit file(s) would change (--write to apply)`);
 }
 
-main(process.argv.includes("--write"));
+main(process.argv.includes("--write"),
+     process.argv.slice(2).filter((a) => !a.startsWith("--")));

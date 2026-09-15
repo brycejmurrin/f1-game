@@ -22,6 +22,41 @@ function rankRow(container, i, color, name, ptsText, extraClass) {
 function create(G) {
 Log.info("ui", "GameResults.create");
 
+// The car's race as a proportional bar: one segment per set, width = its share
+// of the laps that car ran. Returns NULL when TYRE WEAR is off or the car never
+// got a set, so the row keeps its exact old shape — the strip is a thing the
+// setting turns on, not a column that appears blank. Null rather than an empty
+// fragment on purpose: every other builder in this file uses createElement and
+// appendChild alone, and reaching for createDocumentFragment here would be the
+// one DOM call the sheet audit's stub does not implement, for no gain.
+function stintStrip(c) {
+  const tyres = G.tyres;
+  const list = tyres && tyres.on() ? tyres.stints(c) : [];
+  if (list.length < 1) return null;
+  // Denominator is the car's OWN total, not the leader's: a car that retired on
+  // lap 3 shows a full bar of what it actually ran rather than a sliver of
+  // somebody else's race.
+  const total = list.reduce((n, s) => n + s.laps, 0);
+  const strip = document.createElement("div");
+  strip.className = "res-stints";
+  // The bar is decoration for a sighted reader and the codes are the content,
+  // so the accessible name carries the same thing in words.
+  strip.setAttribute("role", "img");
+  strip.setAttribute("aria-label", "tyres: " + list.map((s) =>
+    `${s.code} ${s.laps} lap${s.laps === 1 ? "" : "s"}`).join(", "));
+  list.forEach((s) => {
+    const seg = document.createElement("div");
+    seg.className = "res-stint";
+    // An equal split while total is 0 (every car on lap 0 — a race abandoned
+    // before a lap was completed) rather than a division by zero.
+    seg.style.flex = String(total > 0 ? s.laps : 1);
+    seg.style.background = G.cssCol(s.colour);
+    seg.title = `${s.code} — laps ${s.lap0}-${s.lap1}`;
+    strip.appendChild(seg);
+  });
+  return strip;
+}
+
 function buildResults(order) {
   Log.info("ui", `GameResults.buildResults n=${order && order.length}`);
   const els = G.els;
@@ -87,7 +122,10 @@ function buildResults(order) {
     // when the format pays it, and only to a top-ten finisher).
     const fl = !sprint && G.seasonMode && season && season.lastFl === c.driverId && !dnf ? 1 : 0;
     pt.textContent = dnf ? "DNF" : `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}`;
-    row.append(pos, sw, nm, pt);
+    row.append(pos, sw, nm);
+    const strip = stintStrip(c);
+    if (strip) row.appendChild(strip);
+    row.appendChild(pt);
     els.resultsTable.appendChild(row);
   });
   // THE ROUND'S EARNINGS. Career only, and only for a round that just settled.

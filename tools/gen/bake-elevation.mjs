@@ -121,6 +121,14 @@ async function elevations(lnglat) {
 // residual, but a profile that needs de-trending has already lied about a
 // gradient somewhere.
 const MAX_GRADE = 0.08;
+// The gradient CHANGE allowed between adjacent samples. A road can sit inside
+// MAX_GRADE everywhere and still feel violent, because what a driver feels is
+// the second derivative, not the first: shipped 2026-09-14 with slope clamped
+// to 8%, Brands Hatch still swung slope by 6.5 percentage points across a
+// single 60 m step, 64 times a lap. That is a crest, and no amount of smooth
+// interpolation downstream can remove a kink the data really contains.
+// 2.5 points per ~60 m step is a vertical curve a real circuit would build.
+const MAX_KINK = 0.025;
 
 function smoothClosed(p, passes) {
   const n = p.length;
@@ -157,6 +165,26 @@ function clampGrade(p, spacing) {
   return { prof: a, worstRaw: worst };
 }
 
+// Limit the SECOND difference: |p[i-1] - 2p[i] + p[i+1]| <= MAX_KINK * spacing.
+// Nudging the middle sample toward the chord it sits off reduces that residual
+// directly, and does so without touching the endpoints, so the lap stays closed
+// and the macro shape (which is the part SRTM gets right) is preserved.
+function clampKink(p, spacing) {
+  const n = p.length, lim = MAX_KINK * spacing;
+  let a = p.slice();
+  for (let iter = 0; iter < 400; iter++) {
+    let moved = false;
+    for (let i = 0; i < n; i++) {
+      const d2 = a[(i - 1 + n) % n] - 2 * a[i] + a[(i + 1) % n];
+      if (Math.abs(d2) <= lim) continue;
+      a[i] += (Math.abs(d2) - lim) * Math.sign(d2) * 0.5;
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  return a;
+}
+
 // resample per-vertex elevations to SAMPLES points evenly spaced by arc length,
 // normalized so the start sits at 0
 function toProfile(coords, ele) {
@@ -176,7 +204,10 @@ function toProfile(coords, ele) {
     prof.push(eA + (eB - eA) * t - e0);
   }
   const spacing = total / SAMPLES;
-  const { prof: capped, worstRaw } = clampGrade(smoothClosed(prof, 2), spacing);
+  // Kink first (it is the violent one and it also lowers the slope), then the
+  // slope clamp, so the hard ceiling is what the output is measured against.
+  const eased = clampKink(smoothClosed(prof, 2), spacing);
+  const { prof: capped, worstRaw } = clampGrade(eased, spacing);
   const base = capped[0];
   return {
     prof: capped.map((v) => +(v - base).toFixed(2)),

@@ -340,7 +340,7 @@ const api = {
   //   __apex.camTune("chase", { height: 0.6, dist: 2, fov: -4 })
   camTune(mode, obj) {
     if (mode == null) {
-      const out = { defs: CamTune.defs().map((d) => ({ id: d.id, min: d.min, max: d.max, unit: d.unit })), tuned: {} };
+      const out = { defs: CamTune.defs().map((d) => ({ id: d.id, min: d.min, max: d.max, def: d.def, unit: d.unit })), tuned: {} };  // def: cornerLead ships 0.54, not 0
       for (const m of CamTune.tunedModes()) out.tuned[m] = CamTune.values(m);
       return out;
     }
@@ -1514,6 +1514,9 @@ const api = {
       // nothing on my machine" was undiagnosable from outside. perChunkHeld
       // names the gate when the knob is up but the frame resolved to 0.
       perChunkLights: G.frame.perChunkLights || 0,
+      // TLX only (null elsewhere): three resolves lamps per FRAGMENT from baked
+      // textures, and `on` is the only outside proof that path is live.
+      tlxLampGrid: (gfx && typeof gfx.lampGridState === "function") ? gfx.lampGridState() : null,
       roadChunkLamps: G.frame.roadChunkLamps || 0,
       perChunkHeld: (() => {
         if (!(+LT.perChunkLights > 0)) return null;          // player has it off

@@ -396,7 +396,8 @@ wear += load · rate(compound) · severity(circuit) · dt / (LIFE_REF · lapsTar
   physics.
 - `severity(circuit)` is one number per circuit def (§2.2's 0.022–0.097 spread,
   normalised to 1.0 at the median), authored in `js/circuits/<id>.js` beside the
-  other per-circuit tables.
+  other per-circuit tables. See §5.5 for how it is derived and why it MULTIPLIES
+  the emergent geometric load rather than replacing it.
 
 Grip, piecewise-linear then a knee:
 
@@ -474,6 +475,37 @@ The control is a fourth tap button beside BOOST/OT/AERO: **PIT** arms, and the
 next pit entry takes it. Arming (rather than a hard turn-in) is the mobile-correct
 input, and it mirrors `xArmed`/`otArmed`, which already exist.
 
+**ERRATUM 2 (2026-09-14): there is no pit button.** The stop shipped with a
+control — an on-screen tap, `KeyV`, gamepad 13 — and the control was the wrong
+shape. A button makes a pit stop a MODE you toggle on the approach; the real
+thing is a LINE you take, decided with the steering wheel at the entry. So the
+control is gone from all three input paths and a stop is now called by putting
+the car on the pit side within the entry road and holding it there.
+
+That trades one problem for another, and the one it takes on is the same
+discrimination the half-plane `inLane` failed at in erratum 1: telling a driver
+who meant it from a car that merely ran wide at the entry. Four conditions,
+each answering one way of not meaning it:
+
+| condition | refuses |
+|---|---|
+| `COMMIT_M` — only in the first 120 m of the window | a car hugging the pit wall mid-straight |
+| `COMMIT_FRAC` — 0.70 of the half-width, toward the pit side | a drift rather than a deliberate line |
+| `COMMIT_S` — held 0.55 s | a transient run-wide; a pit entry is sustained |
+| `COMMIT_V` + on-track + forwards | the spun, beached or parked car that broke the auto-rescue last time |
+
+The zone gains a `side`, which is a deliberate and narrow exception to erratum
+1's "no lateral geometry": a side that reads the DRIVER'S STEERING moves no
+boundary and places nothing, and `inLane` is still a state. A lane `width` or a
+`room` measurement would still be the relapse, and the unit guard now asserts
+exactly that distinction rather than the old proxy.
+
+The cost is that the commitment needs feedback a button gave for free, so the
+HUD's compound chip fills with the dwell and the engineer says
+`PIT ENTRY — LIMITER ON` with the compound the crew has ready.
+
+---
+
 ### 5.3 Layer 3 — AI strategy (Phase 3)
 
 Replace `tyreClass`/`tyrePace` with a planner. Keep the determinism contract:
@@ -516,7 +548,48 @@ Payoff, in order of how much it matters here:
 This is also the layer that most rewards deferral: it needs the most tuning and
 the least of it is legible on a phone screen.
 
-### 5.5 What we deliberately do not model
+### 5.5 Authoring `tyreSeverity` (Phase 5)
+
+`severity` and the emergent load are **not** two attempts at the same number,
+and authoring one must not quietly cancel the other. The decomposition:
+
+- The **emergent load** (§5.1) captures how much work the LAYOUT makes the tyre
+  do. It falls out of the forces the car actually made, so a circuit with more
+  cornering wears more, with no authoring at all. Measured over three clean laps:
+  monza 0.944, monaco 1.221.
+- **`tyreSeverity`** captures what the SURFACE and the speeds do on top — track
+  abrasiveness, tarmac age, ambient and track temperature, energy through the
+  fast corners. None of that is knowable from geometry, which is exactly why it
+  has to be authored.
+
+Total wear is the product, and that is the point: Monaco's layout works the tyre
+hard (1.221 emergent) while its surface and speeds work it gently, which is how
+one of the most demanding *layouts* on the calendar is one of the LOWEST deg
+circuits in the sport (0.050 s/lap against Austria's 0.097). One number could
+not say both things.
+
+**Derivation.** §2.2's seven measured 2026 circuit rates, each divided by the
+mean of that sample (0.0493 s/lap) so the un-authored default of 1.0 behaves
+like the average measured circuit rather than like an extreme:
+
+| circuit def | real 2026 deg | ÷ 0.0493 | `tyreSeverity` |
+|---|---|---|---|
+| `redbull` (Austria) | 0.097 | 1.97 | **1.97** — the calendar's outlier, and a layout that emerges LOW |
+| `miami` | 0.060 | 1.22 | **1.22** |
+| `monaco` | 0.050 | 1.01 | **1.01** — gentle surface against a punishing layout |
+| `silverstone` (Britain) | 0.044 | 0.89 | **0.89** |
+| `suzuka` (Japan) | 0.042 | 0.85 | **0.85** |
+| `albert_park` (Australia) | 0.030 | 0.61 | **0.61** |
+| `shanghai` (China) | 0.022 | 0.45 | **0.45** |
+
+Every other circuit stays un-authored at 1.0. That is a deliberate refusal to
+guess: a made-up severity on forty-four circuits would look like data and be
+noise, and the model clamps to 0.4–2.0 so a future authored value cannot break
+a race by a typo.
+
+---
+
+### 5.6 What we deliberately do not model
 
 Named so they are not re-litigated: per-corner temperature slices (iRacing NTM
 runs 7–20 across the tread width — not a phone budget), tyre pressures, camber
@@ -564,7 +637,14 @@ go off, and a player who wants to plan should be able to.**
   "BOX THIS LAP", "SAFETY CAR — BOX NOW", "RAIN IN 2 LAPS — INTERS READY". §2.11
   says this is the most-requested missing thing in shipped F1 games, and Apex
   already has the banner.
-- **PIT tap** beside BOOST/OT/AERO, arming like them.
+- ~~**PIT tap** beside BOOST/OT/AERO, arming like them.~~ **SUPERSEDED: there is
+  no pit control at all.** Built as a tap, a `KeyV` bind and a gamepad button,
+  and then removed: a button makes the stop a MODE you toggle, when the real
+  gesture is a LINE you take. You now call a stop by putting the car on the pit
+  side at the entry and holding it — which is what a driver does, and one fewer
+  control on a phone screen. The difficulty this trades for is telling a pit
+  entry from a car that merely ran wide there, which is the same discrimination
+  problem the half-plane `inLane` failed at; four conditions do it (§5.2).
 - **Pit-stop moment**: the limiter, the box, the crew, the release. §2.11 says
   this is the part reviewers call exhilarating — it deserves the camera.
 - **Results**: a stint strip per driver, which `js/data/telemetry.js` already
@@ -624,7 +704,7 @@ widget, `__apex.tyres()` and `physState()` fields. **No pit lane.** This alone
 makes the compound choice real at 25+ laps and is independently shippable.
 
 **P2 — the stop.** `pitZone` in the circuit defs and `wallAt`, `js/race/pit-lane.js`,
-the limiter, the PIT control, the box sequence, the camera. Pit loss measured and
+the limiter, the box sequence, the camera. Pit loss measured and
 tuned to 20–24 s.
 
 **P3 — the field races strategy.** The planner replaces `tyreClass`/`tyrePace`;
@@ -632,6 +712,15 @@ free stops under caution; weather response. This is the phase where the feature
 becomes *drama* rather than a resource bar.
 
 **P4 — thermal.** Surface and bulk, warm-up, graining recovery, per-axle wear.
+*Shipped 2026-09-14 in full.* Cooling is **solved** per compound rather than
+authored: scaling only the heating by `warmRate` made a soft both warm faster
+and want less heat, so it equilibrated 19 °C above its own window — measured at
+128 °C against a 91 °C optimum. What still varies by compound is the time
+constant, which is exactly the "softs switch on in a lap, hards in three" §2.2
+describes. Per-axle landed as a **bias on one integration** (the two shares
+average to exactly 1) rather than a second model, so nothing downstream of
+`c.tyreWear` changed; `axleSplit` is a ratio against `gripMul` because `muBase`
+already carries the shared drop.
 
 **P5 — depth.** Stint strips in results, engineer suggestions, per-circuit
 severity authored from §2.2's real spread, career tyre allocation via ownership.
@@ -654,7 +743,9 @@ a characterization regeneration. P2–P5 are additive.
    P3 lands and the field races strategy properly. *Recommended: OFF.*
 4. **One scalar or per-axle?** Recommend **one scalar in P1**, per-axle in P4 with
    the thermal layer, since front-limited/rear-limited (§2.4) only means something
-   once temperature exists. *Recommended: scalar.*
+   once temperature exists. *Recommended: scalar.* — **DONE as recommended.**
+   P4's split is a bias on the one scalar rather than a second accumulator, which
+   keeps the strategy planner, the AI, the HUD and the pit call reading one number.
 5. **Pit lane (b) or (c)?** ~~Recommend **(b), the driveable `pitZone`**~~ —
    **SETTLED BY MEASUREMENT: (c).** (b) was built and measured badly on two
    circuits exactly as the fallback clause anticipated; see the errata in §5.2.

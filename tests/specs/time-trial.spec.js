@@ -49,6 +49,25 @@ test.describe("Time Trial — ghost delta HUD", () => {
     expect(gapB).toMatch(/REC/);
   });
 
+// WAIT FOR THE GHOST TO BE WRITTEN. Ghost.finishLap() does not save — it calls
+// scheduleSave(), which defers the write to requestIdleCallback(…, {timeout:
+// 2000}). That is deliberate and correct: a localStorage write is not something
+// to do inside a frame. But it means reading the store on the next line finds
+// NOTHING, which is what both ghost specs did — they failed on `saved.s` with
+// `saved` undefined, on a page whose ghost recording was working perfectly.
+//
+// Same shape as __apex.race() not awaiting startRace(): a deferred write read
+// synchronously. The product is right; the read has to wait for it.
+async function ghostSaved(page, trackId) {
+  await page.waitForFunction((id) => {
+    try {
+      const st = JSON.parse(localStorage.getItem("apex26.ghost.v1") || "null");
+      return !!(st && st[id]);
+    } catch (_) { return false; }
+  }, trackId, { polling: 50, timeout: 15000 });
+  return page.evaluate((id) => JSON.parse(localStorage.getItem("apex26.ghost.v1"))[id], trackId);
+}
+
   test("records only one monotonic flying lap in the persisted ghost", async ({ page }) => {
     await enterTT(page);
     const result = await page.evaluate(() => {
@@ -65,10 +84,10 @@ test.describe("Time Trial — ghost delta HUD", () => {
         window.__apex.step(1 / 60, frac === 0.999 ? 10 : 4);
       }
 
-      const total = window.__apex.info().total;
-      const store = JSON.parse(localStorage.getItem("apex26.ghost.v1") || "{}");
-      return { ghost: store.monza, total };
+      return { total: window.__apex.info().total };
     });
+    const ghost = await ghostSaved(page, "monza");
+    result.ghost = ghost;
 
     expect(result.ghost.s.length).toBeGreaterThanOrEqual(8);
     expect(result.ghost.s[0]).toBeLessThan(result.total * 0.02);
@@ -78,7 +97,7 @@ test.describe("Time Trial — ghost delta HUD", () => {
   test("drops reverse-progress samples from ghost recording and delta lookup", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => typeof Ghost !== "undefined");
-    const result = await page.evaluate(() => {
+    await page.evaluate(() => {
       Ghost.clear("monza");
       Ghost.setTrack("monza");
       Ghost.startLap();
@@ -86,9 +105,12 @@ test.describe("Time Trial — ghost delta HUD", () => {
         Ghost.record(i * 0.06, s, 0);
       });
       Ghost.finishLap(1);
-      const saved = JSON.parse(localStorage.getItem("apex26.ghost.v1")).monza;
-      return { distances: saved.s, timeAt250: Ghost.timeAt(250) };
     });
+    const saved = await ghostSaved(page, "monza");
+    const result = {
+      distances: saved.s,
+      timeAt250: await page.evaluate(() => Ghost.timeAt(250)),
+    };
 
     expect(result.distances).not.toContain(150);
     expect(result.distances.every((s, i) => i === 0 || s >= result.distances[i - 1])).toBe(true);

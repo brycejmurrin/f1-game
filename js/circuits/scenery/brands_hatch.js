@@ -5,9 +5,11 @@
    that carries each one is named below.
 
      1. THE BOWL .............. rows 0.025/-1, 0.076/-1, 0.190/-1, 0.378/-1,
-                               0.832/-1, 0.914/-1  (open grass banking, chalk)
+                               0.832/-1, 0.914/-1  (open grass banking, chalk,
+                               and the spectator country BEHIND the banking)
      2. BRABHAM FRONTAGE ...... rows 0.005/-1, 0.014/-1  (main stand, retail
-                               row, Paddock Hill Grandstand on the lip)
+                               row, Paddock Hill Grandstand on the lip, and the
+                               entrance / car park country behind the frontage)
      3. THE INFIELD ........... rows 0.005/+1, 0.014/+1, 0.040/+1, 0.260/+1,
                                0.960/+1  (pits, Kentagon, paddock, Cooper
                                Straight, race control + start gantry)
@@ -20,18 +22,31 @@
 
    The two worlds are kept apart on purpose: WOODS_A (0.378) .. WOODS_B (0.845)
    is closed-in broadleaf with nothing built; everything outside it is the open
-   bowl with spectators on grass. That contrast IS Brands Hatch (§6). */
+   bowl with spectators on grass. That contrast IS Brands Hatch (§6).
+
+   DEPTH RULE: the bowl reads from every seat (§6), so the -1 side is built in
+   four bands — banking (0..30 m), rim furniture (30..55 m), spectator car
+   parks (75..120 m), boundary tree belt (125..200 m). Inside the woods those
+   bands collapse to trees only. Everything past 40 m is anchor()-tested with
+   onTrack() before it is emitted, because the bowl is tight enough that a
+   far set-back on one corner lands on the far side of the loop. */
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["brands_hatch"] =
   function (api) {
       const { n, hash, every, anchor, onTrack, out,
-        tree, pine, bush, hedge, forestEdge,
-        building, tower, grandstandEx, spectatorHill, terrace, bleacher,
-        guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
-        billboard, sponsorHoarding, gantry,
-        place, ridge, addBox } = api;
+        tree, pine, bush, hedge, forestEdge, conifer, broadleafFall,
+        building, house, motorhome, tower, grandstandEx, spectatorHill,
+        terrace, bleacher,
+        guardrail, fence, wall, tyreWall, marshalPost, cameraTower,
+        broadcastCompound,
+        billboard, signBoard, sponsorHoarding, gantry,
+        place, groundPatch, ridge, addBox } = api;
 
       const K = (s) => Math.round(s * n) % n;
+      // Frame selector for the shared helpers below: block 1 and the far-lap
+      // landmarks author in the def's own frame (ID); the start-line complex
+      // in blocks 2/3 passes sl() so it travels with the line.
+      const ID = (f) => f;
 
       // Kent broadleaf: oak/beech/chestnut, with a little conifer in the mix.
       const OAK   = [0.17, 0.34, 0.15];
@@ -50,10 +65,71 @@
       const GRAVEL= [0.60, 0.56, 0.47];
       const CHALKY= [0.80, 0.79, 0.71];
       const TYRE  = [0.86, 0.22, 0.18];
+      // Ground surfaces behind the barriers: worn turf, hardstanding, litter.
+      const ASPH  = [0.26, 0.26, 0.28];
+      const WORN  = [0.44, 0.44, 0.33];
+      const LITTER= [0.34, 0.28, 0.19];
+      const TENT  = [0.90, 0.90, 0.87];
+      // Parked-car paint. Kent club meeting: a lot of silver and white.
+      const CAR_COLS = [
+        [0.60, 0.62, 0.66], [0.22, 0.24, 0.28], [0.58, 0.16, 0.14],
+        [0.84, 0.85, 0.87], [0.17, 0.27, 0.42], [0.40, 0.42, 0.38],
+        [0.66, 0.62, 0.48], [0.14, 0.14, 0.15],
+      ];
 
       // The GP loop leaves the bowl at Surtees and rejoins it at Stirlings.
       const WOODS_A = 0.378, WOODS_B = 0.845;
       const inWoods = (s) => s >= WOODS_A && s <= WOODS_B;
+
+      /* ---------------------------------------------------------------- */
+      /* 0. SHARED HELPERS — the three things the bowl needs a lot of:      */
+      /*    parked cars, boundary planting, and a guarded set-back test.    */
+      /*    Function declarations so blocks 1..7 can all reach them.        */
+      /* ---------------------------------------------------------------- */
+
+      // True when a set-back at (k, side, d) is clear of the circuit. The bowl
+      // is only ~400 m across, so anything past 40 m has to be asked.
+      function clear(k, side, d, r) {
+        const a = anchor(k, side, d);
+        return !onTrack(a.c[0], a.c[2], r || 10);
+      }
+
+      // Spectator parking: ranks of cars nose-to-tail along the track, stepped
+      // back in rows. This is what is actually behind the banking at a British
+      // club circuit, and it is what gives the bowl its depth from the far rim.
+      function carPark(key, s0, s1, side, d0, rows, step, seed) {
+        for (let s = s0; s < s1; s += step / n) {
+          const k = K(key(s));
+          for (let r = 0; r < rows; r++) {
+            const h = hash(k * (seed + r * 13) + r * 5);
+            if (h < 0.26) continue;             // gaps, aisles, half-full rows
+            const d = d0 + r * 7.2;
+            if (!clear(k, side, d, 11)) continue;
+            place(k, side, d, [1.85, 1.45, 4.3],
+              CAR_COLS[(k + r * 3) % CAR_COLS.length]);
+          }
+        }
+      }
+
+      // Boundary planting: the hedged field edge and the copses that close the
+      // bowl off. Two set-backs so it reads as a belt, not a hedge of trunks.
+      function treeBelt(key, s0, s1, side, d0, depth, step, seed, hMin) {
+        for (let s = s0; s < s1; s += step / n) {
+          const k = K(key(s));
+          const h = hash(k * seed + 3);
+          if (h < 0.28) continue;
+          const d = d0 + h * depth;
+          if (!clear(k, side, d, 11)) continue;
+          const ht = hMin + h * 6;
+          if (h < 0.40) conifer(k, side, d, ht + 3, CONIF);
+          else if (h < 0.72) tree(k, side, d, ht, h < 0.55 ? OAK : OAK_L);
+          else broadleafFall(k, side, d, ht, OAK_D);
+          if (h > 0.70) {
+            const d2 = d + 15 + h * 11;
+            if (clear(k, side, d2, 11)) tree(k, side, d2, ht - 1, OAK_D);
+          }
+        }
+      }
 
       /* ---------------------------------------------------------------- */
       /* 1. THE BOWL — open grass banking, no woodland. The amphitheatre    */
@@ -80,14 +156,87 @@
       terrace(0.064, 0.094, -1, 14, {});
       terrace(0.900, 0.940, -1, 16, {});
       terrace(0.180, 0.208, -1, 16, {});
+      // Druids is the high point of the amphitheatre, so the terracing there
+      // takes a second, higher step set further back up the bank.
+      terrace(0.068, 0.088, -1, 26, {});
       // A low bleacher run at the bottom of the Paddock Hill bank.
       bleacher(0.028, 0.050, -1, 12, {});
       bleacher(0.836, 0.868, -1, 21, {});
 
-      // Chalk showing through the turf (§2) — bare scrapes on the banks.
-      for (const s of [0.030, 0.072, 0.195, 0.360, 0.845, 0.920]) {
-        place(K(s), -1, 15, [15, 0.28, 17], CHALKY);
+      // Chalk showing through the turf (§2) — bare scrapes on the banks, cut
+      // by feet on the steep bits. groundPatch so they follow the bank instead
+      // of hovering as a slab, and varied in size so they read as wear.
+      for (const [s, d, w, l] of [
+        [0.030, 15, 15, 17], [0.020, 21, 9, 11], [0.044, 17, 11, 13],
+        [0.072, 15, 15, 17], [0.066, 24, 12, 14], [0.084, 20, 10, 12],
+        [0.195, 15, 15, 17], [0.186, 23, 11, 13], [0.206, 19, 9, 11],
+        [0.360, 15, 15, 17], [0.330, 22, 12, 16], [0.852, 15, 15, 17],
+        [0.866, 22, 10, 13], [0.920, 15, 15, 17], [0.906, 24, 11, 14],
+        [0.936, 20, 9, 12],
+      ]) {
+        groundPatch(K(s), -1, d, [w, 0.28, l], CHALKY);
       }
+      // Worn desire-paths up the back of the banks to the rim.
+      for (const [s, d] of [[0.038, 30], [0.078, 32], [0.196, 32],
+        [0.852, 33], [0.918, 31]]) {
+        groundPatch(K(s), -1, d, [6, 0.22, 26], WORN);
+      }
+
+      // RIM FURNITURE (30..55 m) — what a British circuit actually puts behind
+      // a grass bank: catering units, a toilet block, a burger van and the
+      // programme hut. Small, low and repeated, never a wall of buildings.
+      for (const [s, d] of [
+        [0.066, 34], [0.074, 34], [0.082, 35], [0.090, 36],
+        [0.180, 33], [0.190, 33], [0.200, 34],
+        [0.850, 35], [0.858, 35], [0.866, 36], [0.876, 35],
+        [0.900, 34], [0.910, 34], [0.922, 35], [0.934, 36],
+        [0.310, 36], [0.340, 37], [0.368, 36],
+      ]) {
+        const k = K(s);
+        if (!clear(k, -1, d, 10)) continue;
+        const h = hash(k * 101);
+        house(k, -1, d, 7 + h * 3, 3.2 + h * 1.1, 5 + h * 3, {});
+      }
+      // Burger vans, awnings and portaloo blocks scattered on the rim.
+      for (const [s, d, sz, col] of [
+        [0.070, 41, [3.0, 3.2, 7.5], CHALK], [0.086, 42, [2.6, 3.0, 6.5], STEEL],
+        [0.184, 40, [3.0, 3.2, 7.5], CHALK], [0.204, 41, [2.4, 2.8, 6.0], RENDER],
+        [0.852, 42, [3.0, 3.2, 7.5], STEEL], [0.868, 41, [2.6, 3.0, 6.5], CHALK],
+        [0.906, 40, [3.0, 3.2, 7.5], CHALK], [0.930, 42, [2.4, 2.8, 6.0], RENDER],
+        [0.326, 43, [2.6, 3.0, 6.5], STEEL],
+        [0.076, 46, [2.0, 2.6, 5.0], DKGREY], [0.192, 46, [2.0, 2.6, 5.0], DKGREY],
+        [0.862, 47, [2.0, 2.6, 5.0], DKGREY], [0.916, 46, [2.0, 2.6, 5.0], DKGREY],
+        [0.058, 44, [8.0, 3.4, 8.0], TENT], [0.198, 45, [8.0, 3.4, 8.0], TENT],
+        [0.872, 46, [8.0, 3.4, 8.0], TENT], [0.926, 44, [8.0, 3.4, 8.0], TENT],
+      ]) {
+        const k = K(s);
+        if (clear(k, -1, d, 10)) place(k, -1, d, sz, col);
+      }
+      // Flag poles along the rim — the one vertical on an open grass bank.
+      for (const s of [0.024, 0.040, 0.056, 0.068, 0.080, 0.092,
+        0.176, 0.192, 0.210, 0.318, 0.348, 0.372,
+        0.850, 0.862, 0.874, 0.886, 0.904, 0.926, 0.944]) {
+        const k = K(s);
+        if (clear(k, -1, 28, 10)) place(k, -1, 28, [0.3, 9.0, 0.3], CHALK);
+      }
+      // Scoreboards facing the two biggest banks (Druids and Clark).
+      if (clear(K(0.080), -1, 38, 10)) signBoard(K(0.080), -1, 38, 9, 5, DKGREY);
+      if (clear(K(0.928), -1, 38, 10)) signBoard(K(0.928), -1, 38, 9, 5, DKGREY);
+
+      // SPECTATOR CAR PARKS (75..120 m) — the fields behind the banking, which
+      // is what actually fills the middle distance of every Brands Hatch shot
+      // out of the bowl. Guarded, so nothing lands on the far side of the loop.
+      carPark(ID, 0.056, 0.140, -1, 78, 5, 2, 11);   // Druids / Graham Hill side
+      carPark(ID, 0.176, 0.268, -1, 76, 4, 2, 17);   // outside Graham Hill
+      carPark(ID, 0.300, 0.372, -1, 82, 4, 3, 19);   // out toward Surtees
+      carPark(ID, 0.850, 0.944, -1, 82, 5, 2, 23);   // Stirlings / Clark side
+
+      // BOUNDARY TREE BELT (125..200 m) — hedged Kent field edges and copses
+      // closing the bowl. The bowl stays open; this is the far lip only.
+      treeBelt(ID, 0.050, 0.150, -1, 128, 44, 4, 31, 9);
+      treeBelt(ID, 0.170, 0.300, -1, 122, 48, 4, 37, 9);
+      treeBelt(ID, 0.306, 0.376, -1, 130, 46, 4, 41, 10);
+      treeBelt(ID, 0.830, 0.950, -1, 126, 46, 4, 43, 9);
 
       // Sparse hedgerow-and-standard planting round the bowl rim: Kent field
       // boundaries, deliberately thin so the bowl stays open (§6).
@@ -101,7 +250,9 @@
           const a = anchor(k, side, dist);
           if (onTrack(a.c[0], a.c[2], 9)) continue;
           tree(k, side, dist, 8 + h * 5, h < 0.6 ? OAK : OAK_L);
-          if (h > 0.80) tree(k, side, dist + 12, 7 + h * 4, OAK_D);
+          if (h > 0.80 && clear(k, side, dist + 12, 9)) {
+            tree(k, side, dist + 12, 7 + h * 4, OAK_D);
+          }
         }
       });
 
@@ -111,6 +262,10 @@
       hedge(0.104, 0.166, -1, 44, 2.2, OAK_D);
       hedge(0.222, 0.296, -1, 46, 2.2, OAK_D);
       hedge(0.894, 0.952, -1, 42, 2.0, OAK_D);
+      // Post-and-rail between the rim path and the car park fields (instanced).
+      wall(0.056, 0.146, -1, 70, 1.3, RENDER);
+      wall(0.176, 0.272, -1, 68, 1.3, RENDER);
+      wall(0.850, 0.948, -1, 74, 1.3, RENDER);
 
       /* ---------------------------------------------------------------- */
       /* 2. BRABHAM STRAIGHT FRONTAGE (-1) — a CONTINUOUS built frontage:   */
@@ -119,31 +274,105 @@
       /*    Rows 0.005/-1 (18 m) and 0.014/-1 (12 m).                       */
       /* ---------------------------------------------------------------- */
 
+      // RE-KEYED THROUGH sl(). The start line moved onto a straight (def
+      // startFrac) because the grid had been laid through a 136 m corner, and
+      // sceneryStartFrac holds the rest of this file on its real corners —
+      // Druids, Westfield, Dingle Dell and the woods must not travel with the
+      // line. At THIS circuit the frontage, the pits and the Paddock Hill
+      // structures are one complex around the line, so they move together;
+      // block 1's open grass banking stays in the authoring frame.
+      const SL = 0.1635;                       // = 1 - def._sceneryShift
+      const sl = (f) => (f + SL) % 1;
+
       // Main grandstand run down Brabham Straight.
-      grandstandEx(0.988, -1, 18, 118, null, null);
+      grandstandEx(sl(0.988), -1, 18, 118, null, null);
       // Paddock Hill Grandstand — end of the row, on the lip of the drop.
       // The single most-photographed viewpoint at the circuit.
-      grandstandEx(0.016, -1, 12, 62, null, null);
+      grandstandEx(sl(0.016), -1, 12, 62, null, null);
+      // Temporary stand bolted on at the top of the straight for a big meeting.
+      grandstandEx(sl(0.952), -1, 20, 44, null, null);
 
       // Merchandise / retail units BEHIND the stands: a solid frontage, not
       // isolated boxes. Shallow units butted together along the straight.
       for (let s = 0.960; s < 1.026; s += 0.0075) {
-        const k = K(s);
+        const k = K(sl(s));
         const h = hash(k * 53);
         building(k, -1, 34, 11, 5.0 + h * 1.6, 13, {});
       }
       // Hospitality / office block anchoring the top of the retail row.
-      building(K(0.972), -1, 50, 22, 9, 18, {});
-      building(K(0.006), -1, 49, 18, 8, 16, {});
+      building(K(sl(0.972)), -1, 50, 22, 9, 18, {});
+      building(K(sl(0.006)), -1, 49, 18, 8, 16, {});
+
+      // SECOND RANK behind the retail row — stores, workshops and the circuit's
+      // own offices. Lower and more broken than the frontage, so the row reads
+      // as a depth of buildings rather than one wall with sky behind it.
+      for (let s = 0.958; s < 1.024; s += 0.0090) {
+        const k = K(sl(s));
+        if (!clear(k, -1, 62, 11)) continue;
+        const h = hash(k * 59);
+        building(k, -1, 62, 9 + h * 4, 4.0 + h * 2.0, 11 + h * 4, {});
+      }
+      // Main entrance: turnstile blocks, ticket huts and the gate buildings.
+      for (const [s, d, w, ht, dp] of [
+        [0.978, 76, 8, 3.6, 6], [0.984, 76, 8, 3.6, 6], [0.990, 76, 8, 3.6, 6],
+        [0.996, 76, 8, 3.6, 6], [1.002, 76, 8, 3.6, 6],
+      ]) {
+        const k = K(sl(s));
+        if (clear(k, -1, d, 11)) house(k, -1, d, w, ht, dp, {});
+      }
+      building(K(sl(0.966)), -1, 78, 16, 6.5, 14, {});
+      building(K(sl(1.014)), -1, 78, 14, 6.0, 13, {});
+      // Hospitality marquee village between the offices and the car park.
+      for (let s = 0.962; s < 1.022; s += 0.0070) {
+        const k = K(sl(s));
+        if (!clear(k, -1, 92, 11)) continue;
+        const h = hash(k * 67);
+        if (h < 0.35) continue;
+        motorhome(k, -1, 92, 4.5 + h * 1.5, 3.6, 12 + h * 4, {});
+      }
+      // Hardstanding: the concourse between the stands and the retail row, and
+      // the access road behind it.
+      for (let s = 0.958; s < 1.028; s += 0.0100) {
+        const k = K(sl(s));
+        groundPatch(k, -1, 26, [11, 0.22, 22], ASPH);
+      }
+      for (let s = 0.960; s < 1.024; s += 0.0140) {
+        const k = K(sl(s));
+        if (clear(k, -1, 70, 11)) groundPatch(k, -1, 70, [7, 0.22, 30], ASPH);
+      }
+
+      // Main spectator car park, then the coach and trade park behind it.
+      carPark(sl, 0.952, 1.032, -1, 104, 6, 2, 71);
+      for (let s = 0.964; s < 1.020; s += 0.0090) {
+        const k = K(sl(s));
+        if (!clear(k, -1, 152, 12)) continue;
+        const h = hash(k * 73);
+        if (h < 0.40) continue;
+        place(k, -1, 152, [2.7, 3.4, 11.5], h > 0.66 ? CHALK : STEEL);
+      }
+      // Boundary belt closing the whole frontage off — the wood behind the
+      // main car park is what the bowl looks out at from Cooper Straight.
+      treeBelt(sl, 0.946, 1.038, -1, 168, 44, 4, 79, 10);
 
       // The Paddock Hill Bar, set INTO the grass bank at the bottom of the dip
       // (row 0.025/-1: bank + bar building, standing crowd on grass, no shell).
-      building(K(0.026), -1, 13, 16, 5.5, 12, {});
-      building(K(0.036), -1, 16, 12, 4.5, 10, {});
+      building(K(sl(0.026)), -1, 13, 16, 5.5, 12, {});
+      building(K(sl(0.036)), -1, 16, 12, 4.5, 10, {});
+      // Its decking and the worn standing ground on the lip above the drop.
+      groundPatch(K(sl(0.030)), -1, 22, [14, 0.24, 20], WORN);
+      groundPatch(K(sl(0.042)), -1, 20, [10, 0.24, 16], ASPH);
+      // Big screen facing the Paddock Hill bank, and a second one at the exit.
+      signBoard(K(sl(0.022)), -1, 30, 10, 6, DKGREY);
+      signBoard(K(sl(0.052)), -1, 28, 8, 5, DKGREY);
+      // Catering and the bank's own toilet block, behind the standing crowd.
+      for (const [s, d] of [[0.020, 30], [0.032, 32], [0.046, 31], [0.058, 33]]) {
+        const k = K(sl(s));
+        if (clear(k, -1, d, 10)) house(k, -1, d, 7, 3.2, 6, {});
+      }
 
       // Crowd furniture on the open bank: flag poles and a scatter of marquees.
       for (const s of [0.020, 0.034, 0.048, 0.190, 0.900, 0.930]) {
-        place(K(s), -1, 24, [3.0, 3.0, 3.0], CHALK);
+        place(K(sl(s)), -1, 24, [3.0, 3.0, 3.0], CHALK);
       }
 
       /* ---------------------------------------------------------------- */
@@ -155,25 +384,38 @@
 
       // Pit garages — a continuous run of bays down the inside of the straight.
       for (let s = 0.938; s < 1.032; s += 0.0068) {
-        building(K(s), 1, 14, 9, 6.5, 15, {});
+        building(K(sl(s)), 1, 14, 9, 6.5, 15, {});
       }
       // Pit-lane rear wall / team offices above the bays.
       for (let s = 0.944; s < 1.026; s += 0.014) {
-        building(K(s), 1, 27, 14, 8.5, 12, {});
+        building(K(sl(s)), 1, 27, 14, 8.5, 12, {});
       }
 
       // Race control / timing building, and the start gantry over the line.
-      building(K(0.960), 1, 25, 20, 12, 17, {});
-      tower(K(0.966), 1, 25, 5.5, 17, {});
-      gantry(0.0, 7.2, STEEL);
-      gantry(0.972, 6.8, DKGREY);
+      building(K(sl(0.960)), 1, 25, 20, 12, 17, {});
+      tower(K(sl(0.966)), 1, 25, 5.5, 17, {});
+      gantry(sl(0.0), 7.2, STEEL);
+      gantry(sl(0.972), 6.8, DKGREY);
+      // Medical centre and the scrutineering bay, the two buildings that
+      // always sit beside race control at the top of a paddock.
+      if (clear(K(sl(0.950)), 1, 40, 10)) {
+        building(K(sl(0.950)), 1, 40, 15, 6.0, 13, {});
+      }
+      if (clear(K(sl(0.942)), 1, 38, 10)) {
+        house(K(sl(0.942)), 1, 38, 10, 4.5, 9, {});
+      }
 
       // The KENTAGON — the circuit's bar/clubhouse, directly opposite the
       // Paddock Hill grandstand. A named landmark in its own right, so it gets
       // a real footprint and a roof lantern rather than a generic box.
-      building(K(0.014), 1, 20, 19, 8.5, 19, {});
-      tower(K(0.014), 1, 20, 4.0, 12.5, {});
+      building(K(sl(0.014)), 1, 20, 19, 8.5, 19, {});
+      tower(K(sl(0.014)), 1, 20, 4.0, 12.5, {});
       building(K(0.024), 1, 22, 13, 5.0, 12, {});
+      // Its terrace, which looks straight down into Paddock Hill.
+      groundPatch(K(sl(0.016)), 1, 33, [14, 0.24, 18], ASPH);
+      if (clear(K(sl(0.008)), 1, 34, 10)) {
+        house(K(sl(0.008)), 1, 34, 8, 3.4, 7, {});
+      }
 
       // Paddock / team area, stepping down the hill behind the pits:
       // transporters, awnings, hospitality units.
@@ -185,6 +427,24 @@
         if (h > 0.45) building(k, 1, 48, 12, 5.5, 11, {});
         place(k, 1, 41, [9, 3.4, 7], h > 0.5 ? RENDER : CHALK);   // awnings
       }
+      // Second paddock rank, stepping further down the hill: proper motorhomes
+      // and team units rather than more boxes, plus the paddock hardstanding.
+      for (let s = 0.028; s < 0.074; s += 0.0060) {
+        const k = K(s);
+        const h = hash(k * 89);
+        if (h > 0.34 && clear(k, 1, 56, 10)) {
+          motorhome(k, 1, 56, 4.6 + h * 1.4, 3.8, 13 + h * 4, {});
+        }
+        if (h < 0.42 && clear(k, 1, 66, 10)) {
+          house(k, 1, 66, 9, 4.0, 8, {});
+        }
+      }
+      for (let s = 0.030; s < 0.072; s += 0.0110) {
+        const k = K(s);
+        if (clear(k, 1, 46, 10)) groundPatch(k, 1, 46, [16, 0.22, 20], ASPH);
+      }
+      // Team and competitor parking at the bottom of the paddock.
+      carPark(ID, 0.034, 0.068, 1, 74, 3, 2, 83);
       broadcastCompound(K(0.050), 1, 58, {});
 
       // Cooper Straight runs back along the foot of the bowl UNDER the pit
@@ -196,9 +456,32 @@
       }
       building(K(0.246), 1, 28, 18, 9, 16, {});
       building(K(0.284), 1, 29, 16, 8, 15, {});
+      // Depth behind that frontage: the workshops and lock-ups on the inside
+      // of the bowl, then the infield planting that stops it being a cut-out.
+      for (let s = 0.220; s < 0.308; s += 0.0110) {
+        const k = K(s);
+        if (!clear(k, 1, 44, 10)) continue;
+        const h = hash(k * 79);
+        building(k, 1, 44, 10 + h * 4, 4.5 + h * 2.2, 12, {});
+      }
+      for (let s = 0.224; s < 0.304; s += 0.0090) {
+        const k = K(s);
+        const h = hash(k * 103);
+        if (h < 0.45) continue;
+        if (clear(k, 1, 58, 10)) tree(k, 1, 58, 8 + h * 5, h < 0.7 ? OAK : OAK_L);
+      }
+      // Circuit helipad on the infield grass, with its windsock mast.
+      if (clear(K(0.264), 1, 70, 12)) {
+        groundPatch(K(0.264), 1, 70, [26, 0.24, 26], ASPH);
+        place(K(0.264), 1, 84, [0.3, 7.0, 0.3], CHALK);
+      }
       // Paddock entrance beyond Clark Curve (row 0.914/-1 tail).
       building(K(0.905), 1, 30, 15, 6.5, 14, {});
       building(K(0.930), 1, 34, 13, 6.0, 12, {});
+      if (clear(K(0.918), 1, 46, 10)) {
+        house(K(0.918), 1, 46, 10, 4.2, 9, {});
+        groundPatch(K(0.918), 1, 46, [14, 0.22, 22], ASPH);
+      }
 
       /* ---------------------------------------------------------------- */
       /* 4. DRUIDS + PILGRIMS — the two spectator footbridges.              */
@@ -270,7 +553,30 @@
             tree(k, side, far, 10 + hash(k * 17 + side) * 8,
               hash(k * 13) < 0.5 ? OAK_D : OAK);
           }
-          if (deep && h > 0.55) tree(k, side, far + 20, 11 + h * 6, OAK_D);
+          // Third rank, only where the wood is genuinely deep. GUARDED: an
+          // unguarded read here is the one thing that drops props on this def.
+          if (deep && h > 0.55 && clear(k, side, far + 20, 8)) {
+            tree(k, side, far + 20, 11 + h * 6, OAK_D);
+          }
+        }
+      });
+
+      // FOURTH RANK — the body of the wood, 55..105 m back. Nothing is built
+      // out here, so all it has to do is stop daylight coming through the
+      // trunks: beech and chestnut with the odd fallen crown of an old oak.
+      every(14, (k) => {
+        const s = k / n;
+        if (!inWoods(s)) return;
+        const h = hash(k * 107);
+        if (h < 0.36) return;
+        const thin = s > 0.760 ? (s - 0.760) / 0.085 : 0;
+        for (const side of [-1, 1]) {
+          const d = 56 + h * 48 + (s > 0.58 && s < 0.72 ? 14 : 0);
+          if (h > 0.92 - thin * 0.50) continue;
+          if (!clear(k, side, d, 9)) continue;
+          if (h < 0.44) conifer(k, side, d, 13 + h * 8, CONIF);
+          else if (h < 0.74) broadleafFall(k, side, d, 11 + h * 8, OAK_D);
+          else tree(k, side, d, 12 + h * 7, OAK);
         }
       });
 
@@ -282,6 +588,35 @@
         if (h < 0.42) return;
         bush(k, h < 0.71 ? -1 : 1, 12 + h * 5, h < 0.6 ? SCRUB : OAK_D);
       });
+      // A second scrub pass further back, where the canopy breaks.
+      every(8, (k) => {
+        const s = k / n;
+        if (!inWoods(s)) return;
+        const h = hash(k * 127);
+        if (h < 0.58) return;
+        const side = h < 0.79 ? 1 : -1;
+        if (clear(k, side, 26 + h * 14, 9)) bush(k, side, 26 + h * 14, SCRUB);
+      });
+      // Leaf litter and bramble on the woodland floor beside the verge, plus
+      // the fallen timber that is always stacked off a forest-road edge.
+      for (const [s, side, d, w, l] of [
+        [0.396, -1, 19, 12, 26], [0.412, 1, 20, 11, 24], [0.446, -1, 21, 12, 28],
+        [0.488, 1, 19, 10, 22], [0.512, -1, 20, 12, 26], [0.566, 1, 21, 11, 24],
+        [0.596, -1, 19, 12, 28], [0.622, 1, 22, 12, 26], [0.664, -1, 20, 11, 24],
+        [0.698, 1, 19, 12, 26], [0.732, -1, 21, 11, 24], [0.772, 1, 20, 12, 26],
+        [0.802, -1, 19, 11, 22], [0.828, 1, 21, 12, 24],
+      ]) {
+        const k = K(s);
+        if (clear(k, side, d, 9)) groundPatch(k, side, d, [w, 0.22, l], LITTER);
+      }
+      for (const [s, side, d] of [
+        [0.404, 1, 24], [0.452, -1, 25], [0.506, 1, 24], [0.580, -1, 26],
+        [0.618, 1, 25], [0.676, -1, 24], [0.716, 1, 26], [0.788, -1, 25],
+        [0.818, 1, 24], [0.838, -1, 26],
+      ]) {
+        const k = K(s);
+        if (clear(k, side, d, 9)) place(k, side, d, [1.1, 1.1, 6.5], OAK_D);
+      }
 
       // Hawthorn Hill / Hawthorns Bend: mature woodland TIGHT to the edge on
       // the inside (row 0.461/+1, 14 m). Extra close rank, nothing built.
@@ -310,12 +645,15 @@
 
       // Westfield Bend: small marshal post and a gravel trap on the outside
       // (row 0.532/-1, 12 m). The only furniture in the wood besides barriers.
-      place(K(0.534), -1, 13, [24, 0.3, 30], GRAVEL);
-      place(K(0.545), -1, 15, [20, 0.3, 22], GRAVEL);
+      groundPatch(K(0.534), -1, 20, [22, 0.3, 30], GRAVEL);
+      groundPatch(K(0.545), -1, 18, [18, 0.3, 22], GRAVEL);
       marshalPost(K(0.528), -1, 13);
-      // Gravel at the other two places the GP loop needs it.
-      place(K(0.468), 1, 14, [20, 0.3, 26], GRAVEL);
-      place(K(0.646), 1, 15, [18, 0.3, 22], GRAVEL);
+      // Gravel at the other two places the GP loop needs it, plus Surtees and
+      // the drop out of Sheene.
+      groundPatch(K(0.468), 1, 17, [20, 0.3, 26], GRAVEL);
+      groundPatch(K(0.646), 1, 17, [18, 0.3, 22], GRAVEL);
+      groundPatch(K(0.386), -1, 18, [18, 0.3, 24], GRAVEL);
+      groundPatch(K(0.772), -1, 18, [16, 0.3, 22], GRAVEL);
 
       /* ---------------------------------------------------------------- */
       /* 6. CIRCUIT FURNITURE — armco everywhere, catch fence through the    */
@@ -385,10 +723,25 @@
         [0.300, -1, 640, 380, 120, 30],
         [0.560,  1, 600, 400, 130, 32],
         [0.700, -1, 620, 360, 120, 28],
-        [0.900,  1, 600, 380, 130, 26],
+        // Was [0.900, +1, 600, ...]: the infield is only a few hundred metres
+        // across here, so that shoulder landed on the far side of the loop and
+        // was guard-dropped. Taken outside the bowl instead.
+        [0.900, -1, 660, 380, 130, 26],
+        [0.040, -1, 700, 360, 120, 30],
+        [0.480, -1, 780, 340, 110, 26],
+        [0.760,  1, 680, 360, 120, 28],
       ]) {
         const a = anchor(K(s), side, dist);
         const ang = Math.atan2(a.t[0], a.t[2]);
         ridge(a.c[0], a.c[2], a.c[1] - 6, ang, len, wid, hgt, [0.22, 0.34, 0.19]);
+      }
+
+      // Distant hangers on the downland shoulders — the silhouette of Kent
+      // woodland above the far rim of the bowl.
+      for (const [s0, s1, side, d0] of [
+        [0.060, 0.190, -1, 300], [0.240, 0.350, -1, 320],
+        [0.860, 0.960, -1, 310],
+      ]) {
+        treeBelt(ID, s0, s1, side, d0, 90, 9, 151 + Math.round(s0 * 100), 12);
       }
   };

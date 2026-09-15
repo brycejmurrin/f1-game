@@ -290,7 +290,18 @@ function fitHud() {
   // the fit key, so the next tick re-fits).
   if (document.body.classList.contains("hud-hidden")) return;
   const root = document.documentElement;
-  const scale = +root.style.getPropertyValue("--hud-scale") || 1;
+  // INLINE first (the player moved HUD SIZE), else the COMPUTED value — not a
+  // bare `|| 1`. The coarse-pointer default lives in the stylesheet, not in
+  // root.style, so the inline read is empty until the slider is touched: a bare
+  // fallback reports 1 while the HUD renders at whatever `@media (pointer:
+  // coarse)` says, and every `cap < scale` comparison below is then judged
+  // against the wrong number. Harmless while that default IS 1 (which
+  // tests/unit/scale-defaults.test.mjs pins), and exactly the defect that sized
+  // the dock cap 25% small when --hud-btn-scale grew a ratio — same shape, same
+  // fix. typeof-guarded for the mini-dom VM, as the btnScale read is.
+  const scale = +root.style.getPropertyValue("--hud-scale")
+    || (typeof getComputedStyle === "function"
+        ? (+getComputedStyle(root).getPropertyValue("--hud-scale") || 1) : 1);
   // body.className is part of the key: cycling STEERING MODE re-parents the
   // dock groups (layoutDocks), so the tallest column's height changes while
   // viewport and scale do not — and the old key held the stale dock cap for
@@ -311,23 +322,6 @@ function fitHud() {
   // without the row count the published height stayed at the empty box's for
   // the whole 3 s same-key backoff. childElementCount costs no layout.
   const secRows = els.hudSectors ? els.hudSectors.childElementCount : 0;
-  // The four fit handles are resolved HERE rather than after the key, because
-  // topLen below reads one of them: resolving them later left the first tick
-  // keying on 0 and re-fitting a tick later for no reason. They never change
-  // identity, so this stays a one-time query.
-  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
-  // AND THE TOP BAND'S OWN TEXT, for the mirror of the reason gapLen is here.
-  // `.hud-top` is CENTRED, so when its readouts populate — "POS-/22 LAP1/3
-  // TIME- BEST-" becoming "POS22/22 LAP1/3 TIME0:00.17 BEST-" as the race
-  // starts — it grows LEFTWARD, into the gap strip, and the strip's fit was
-  // decided against the narrow spelling. Measured at 667x375, hud-scale 1,
-  // frozen so both readings carry identical strings: `.hud-gaps` right edge
-  // 202.8 against `.hud-top` left edge 175.5 — a 27px overlap that fitHud had
-  // already declared clear, because nothing in the key had changed since it
-  // last looked. hud-layout.spec.js does not catch it: it measures ~300ms in,
-  // while the band is still sparse.
-  // textContent.length is layout-free, exactly as gapLen is.
-  const topLen = _hudTop ? _hudTop.textContent.length : 0;
   // BUTTON SIZE is a second slider on the same layer, so it belongs in the key:
   // moving it changes the dock's intrinsic height and nothing else here does.
   // INLINE first (the player set BUTTON SIZE), else the inherited default. That
@@ -342,7 +336,7 @@ function fitHud() {
   const mult = typeof getComputedStyle === "function"
     ? (+getComputedStyle(root).getPropertyValue("--hud-btn-mult") || 1) : 1;
   const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale * mult;
-  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "~" + topLen + "|" + document.body.className;
+  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
@@ -365,6 +359,7 @@ function fitHud() {
     }
     return hi > lo ? (hi - lo) / (el.currentCSSZoom || 1) : wide(el);
   };
+  if (!_hudTop) { _hudTop = document.querySelector(".hud-top"); _hudBottom = document.querySelector(".hud-bottom"); _dockL = document.getElementById("dock-left"); _dockR = document.getElementById("dock-right"); }
   const top = wide(_hudTop);
   // menu layer: nothing laid out, measure again next tick — but BOUNDED: an
   // unlatched key re-ran this whole rect pass (and drawMinimap's layout reads)
@@ -635,10 +630,31 @@ function updateHud(force) {
     hText(els.tyreCode, (player.tyre && player.tyre.code) || "-");
     hStyle(els.tyreFill, "width", (clamp(1 - spent, 0, 1) * 100).toFixed(0) + "%");
     els.tyre.dataset.wear = spent >= 1 ? "gone" : spent >= TYRE_WARN ? "warn" : "ok";
-    // The PIT button carries its own state the way BOOST/OT/AERO do: armed while
-    // the stop is called, on while the car is actually in the lane.
-    hToggle(els.btnPit, "armed", !!player.pitArmed && player.pitState !== "box");
-    hToggle(els.btnPit, "on", player.pitState === "lane" || player.pitState === "box");
+    // THE PIT CUE, and it replaces a button rather than decorating one. A stop
+    // is called by holding the car on the pit side at the entry, so the dwell
+    // has to be visible: without it a driver cannot tell the gesture is
+    // registering and will give up on it half a second in. The compound chip
+    // fills as the commitment runs, then stays lit through the lane and the box.
+    const pit = G.pits;
+    const state = pit ? (player.pitState === "lane" || player.pitState === "box" ? player.pitState
+                         : pit.commitFrac(player) > 0 ? "commit" : "") : "";
+    if (state) els.tyre.dataset.pit = state; else delete els.tyre.dataset.pit;
+    if (state === "commit") hStyle(els.tyre, "--pit-commit", pit.commitFrac(player).toFixed(2));
+    // THE PIT CUE. The chip above says the gesture is REGISTERING; this says
+    // where and which way — without it the steer-in control is undiscoverable,
+    // because the lane it asks you to aim at is 450 m of arc with nothing drawn
+    // on it. PitLane.cue owns the rules (including when to stay quiet); this
+    // only paints what it returns.
+    const c = pit && pit.cue(player);
+    if (els.pitCue) {
+      els.pitCue.hidden = !c;
+      if (c) {
+        hText(els.pitCueText, c.text);
+        els.pitCue.dataset.phase = c.phase;
+        // The arrow points to the PIT SIDE, which is the whole instruction.
+        hText(els.pitCueArrow, (pit.info(player) || {}).side === -1 ? "\u25C0" : "\u25B6");
+      }
+    }
   }
   // gear + tachometer
   hText(els.gear, "" + player.gear);

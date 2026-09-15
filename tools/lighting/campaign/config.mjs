@@ -13,7 +13,7 @@ export const TRACKS = Object.freeze([
   "estoril", "kyalami", "watkins_glen", "indianapolis", "buenos_aires",
   "jacarepagua",
   "fuji", "okayama", "korea", "jerez", "donington", "anderstorp",
-  "brands_hatch", "zolder", "dijon", "buddh", "mont_tremblant",
+  "brands_hatch", "zolder", "dijon", "buddh", "mont_tremblant", "mosport",
 ]);
 
 export const SHARDS = Object.freeze([
@@ -29,7 +29,7 @@ export const SHARDS = Object.freeze([
   ["watkins_glen", "indianapolis", "buenos_aires", "jacarepagua"],
   ["fuji", "okayama", "korea", "jerez"],
   ["donington", "anderstorp", "brands_hatch", "zolder"],
-  ["dijon", "buddh", "mont_tremblant"],
+  ["dijon", "buddh", "mont_tremblant", "mosport"],
 ].map(Object.freeze));
 
 export const CAMERA_FRACTIONS = Object.freeze(Object.fromEntries(Object.entries({
@@ -46,6 +46,7 @@ export const CAMERA_FRACTIONS = Object.freeze(Object.fromEntries(Object.entries(
   dijon: [0.05, 0.40, 0.75],
   buddh: [0.05, 0.40, 0.75],
   mont_tremblant: [0.05, 0.40, 0.75],
+  mosport: [0.05, 0.40, 0.75],
   abudhabi: [0.08, 0.45, 0.88], albert_park: [0.10, 0.50, 0.88],
   bahrain: [0.01, 0.45, 0.81], baku: [0.15, 0.45, 0.75],
   cota: [0.15, 0.50, 0.85], hungaroring: [0.00, 0.35, 0.70],

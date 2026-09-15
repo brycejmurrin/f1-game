@@ -13,6 +13,7 @@ const els = {
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
   tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"),
+  pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
@@ -33,8 +34,7 @@ const els = {
   pmStandings: $("pm-standings"),
   pausebtn: $("pausebtn"), pausemenu: $("pausemenu"), pmsettings: $("pmsettings"), btnCam: $("btn-cam"),
   howtoplay: $("howtoplay"), datahub: $("datahub"), soundbtn: $("soundbtn"),
-  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"), btnLook: $("btn-look"),
-  btnPit: $("btn-pit"),
+  btnBoost: $("btn-boost"), btnOT: $("btn-ot"), btnAero: $("btn-aero"), btnBrake: $("btn-brake"),
   btnThrottle: $("btn-throttle"),
   btnSteerLeft: $("btn-steer-left"), btnSteerRight: $("btn-steer-right"),
   shiftUp: $("shift-up"), shiftDown: $("shift-down"),
@@ -876,6 +876,7 @@ let launchT0 = 0;
 let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
 let tyres = null;     // TyreModel.create(G), same deferral
 let pits = null;      // PitLane.create(G), same deferral
+let engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
 function applyCaution(d) { return raceCtl.apply(d); }
@@ -1787,7 +1788,7 @@ function redFlagRestart() {
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
-    c.speed = 0; c.accSm = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.lane = c.lanePref;   // as gridUp
+    c.speed = 0; c.accSm = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.lane = c.lanePref;   // as gridUp
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wake = 0; c.wheelLock = 0;
     clearRacingScratch(c);
     // A CAR ON A GRID BOX IS STATIONARY, ALONE AND ON CLEAN TARMAC. This path
@@ -1860,7 +1861,7 @@ function gridUp(preOrder) {
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
-    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0; c.towing = 0; c.wake = 0;
     clearRacingScratch(c);
@@ -1874,8 +1875,8 @@ function gridUp(preOrder) {
     // (the row IS the compound); an AI car's from the class it just drew. No RNG
     // here — `h` is already the per-car race hash, so arming costs the sim
     // stream nothing, exactly as Reliability's retirement draw does.
-    c.tyreStints = 0;
-    pits.reset(c);
+    c.tyreStints = 0; c.tyreLog = null;   // a new race is a new strip, not an appended one
+    pits.reset(c); engineer.reset(c);
     // STRATEGY (js/physics/ai-drive.js stintPlan). Drawn ONCE here, from the
     // same per-car race hash the launch plan and the pace phase come from, so
     // arming a race consumes nothing from the sim RNG stream — the contract
@@ -2446,7 +2447,6 @@ function showTouchControls(show) {
   els.btnThrottle.hidden = !(t && !autoThrottle());
   els.btnBrake.hidden = !t;
   els.btnBoost.hidden = !t; els.btnOT.hidden = !t;
-  if (els.btnLook) els.btnLook.hidden = !t;
   // ON AUTO THE AERO BUTTON IS REMOVED, not greyed. The wing drives itself, so
   // the control has no job at all — and a dock of GROUPS can afford to drop it,
   // because the survivors just close ranks. That was not true of the old
@@ -2459,10 +2459,6 @@ function showTouchControls(show) {
   // NO AERO ZONE chip beside a faded button says so. Removing it would silently
   // suggest the game has no such feature.
   if (els.btnAero) els.btnAero.hidden = !t || raceAeroMode === "auto";
-  // PIT only exists when there is a reason to use it. With TYRE WEAR off there
-  // is nothing to change tyres for, so the tap column stays the 3-tall shape
-  // index.html describes rather than growing a control that does nothing.
-  if (els.btnPit) els.btnPit.hidden = !t || !tyres.on();
   els.shiftUp.hidden = !(t && manual);
   els.shiftDown.hidden = !(t && manual);
   const steerBtns = t && steerMode === "buttons";
@@ -2567,6 +2563,10 @@ function endRace(forcedOrder) {
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
   raceCtl.reset(); weatherArc = null; endChangeable();   // an arc that outlives the race would override the next race's weather
+  // Close every car's open stint so the results strip has an end lap. Done here
+  // rather than in the sheet: a retired car stopped laps ago and its last stint
+  // must end where the CAR did, not where the leader is when the flag falls.
+  cars.forEach((c) => tyres.closeStints(c));
   // The flag can fall while the player is PAUSED — a networked guest is ended
   // by the host's RESULT, not by their own input. Leaving `paused` set stranded
   // the pause dialog on top of the results with a RESUME that resolves to
@@ -2993,6 +2993,9 @@ tyres = TyreModel.create(G);
 // The pit lane (js/race/pit-lane.js) — the thing that lets a driver DO something
 // about a worn set. Reads the tyre model, so it is created after it.
 pits = PitLane.create(G);
+// The race engineer (js/race/engineer.js): the voice that makes all of the
+// above legible to a driver who never opens a menu. Reads both, so it is last.
+engineer = RaceEngineer.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
@@ -3661,6 +3664,7 @@ function updateCar(c, dt, ranked) {
   // keeps the characterization baseline bit-identical.
   tyres.update(c, dt);
   pits.update(c, dt);
+  engineer.update(c, dt);   // local player only; the module gates on c.local
   const perfMul = tyres.tractionMul(c) * tyres.fuelAccelMul(c);
   // This car's control source (human cars only — see inputOf).
   const inp = inputOf(c);
@@ -4042,17 +4046,12 @@ function updateCar(c, dt, ranked) {
     // Same rule the AI runs: take every zone the circuit offers.
     c.xOn = c.xArmed;
   } else if (c.human) {
-    if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
-    else c.xOn = !!(inp && inp.aero);
-    // PIT IN arms the stop; PitLane takes it from the next entry (js/race/pit-lane.js).
-    // AFTER the if/else above, not between them: sitting in the middle made this
-    // `if` steal that `else`, so any local car that had not pressed PIT had
+    // Nothing may sit BETWEEN these two: a statement here once stole the `else`,
+    // so any local car that had not pressed the (since removed) PIT key had
     // `c.xOn` overwritten from the raw input and the active-aero toggle stopped
     // working entirely (tests/unit/active-aero-vm.test.mjs, 7 red).
-    if (c.local && Input.consumePitToggle()) {
-      const on = pits.arm(c);
-      announce(on ? "BOX THIS LAP" : "STAYING OUT", 1.4, "race");
-    }
+    if (c.local) { if (Input.consumeAeroToggle()) c.xOn = !c.xOn; }
+    else c.xOn = !!(inp && inp.aero);
   } else {
     // AI takes X when armed unless wantX banks Z (hold/empty battery). Catch
     // and OT still force the open wing so a pass does not sit in high drag.
@@ -4483,11 +4482,25 @@ function updateCar(c, dt, ranked) {
     // a full lane off the other on the side it is already on. A hard edge gives
     // the deadzone an error it cannot swallow.
     let rubClamp = false;
-    if (alongO && Math.abs(alongDx) < CLEAR && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x)) {
+    const alongClose = !!alongO && Math.abs(alongDx) < CLEAR;
+    let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x);
+    // ELECTING THE HUMAN IS ELECTING NOBODY — rule and measurement in
+    // AiDrive.humanYieldGrace; this end only carries the per-car timer.
+    // Are WE steering into them (aim vs where we already are), and is there
+    // still room left to concede? Both halves matter — AiDrive.humanYieldT.
+    const intruding = alongClose && Math.abs(alongDx) < CLEAR - AiDrive.humanYieldBand()
+      && (alongDx <= 0 ? desiredX < c.x : desiredX > c.x);
+    c.hYieldT = AiDrive.humanYieldT(c.hYieldT, alongClose, yieldMine, !!(alongO && alongO.human), intruding, dt);
+    if (!yieldMine && AiDrive.humanYieldTakes(c.hYieldT)) yieldMine = true;
+    if (yieldMine) {
       desiredX = alongDx <= 0 ? Math.max(desiredX, alongO.x + CLEAR) : Math.min(desiredX, alongO.x - CLEAR);
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
       rubClamp = true;
     }
+    // PIT LANE, last so nothing can undo it: a car serving a stop drives the
+    // LANE, not the racing line. pits.laneX returns its argument untouched for
+    // every car that is not in there (PitLane, laneX — and the gap it closes).
+    if (pits) desiredX = pits.laneX(c, hw, desiredX);
     const err = desiredX - c.x;
     const vAbs = Math.abs(c.speed);
     // A contact, a rub clamp or a dig-out is an EMERGENCY: the position loop
@@ -4750,6 +4763,10 @@ function updateCar(c, dt, ranked) {
     // is what keeps tests/specs/physics-characterization.spec.js honest. It is
     // NOT arc-derived: wear integrates the forces this car actually made.
     const tyreMu = tyres.gripMul(c);
+    // …and the FRONT/REAR half of it. muBase already carries the shared drop,
+    // so this is the ratio each axle differs by: worn fronts stop the car
+    // turning in, worn rears let it step out. Exactly 1/1 with the setting off.
+    const tyreAx = tyres.axleSplit(c);
     // BRAKE BIAS spends the friction ellipse per AXLE: under braking the front
     // spends bb/BB_REF of the longitudinal budget and the rear (1−bb)/(1−BB_REF)
     // — forward bias uses up the front's circle (entry understeer), rearward
@@ -4772,8 +4789,8 @@ function updateCar(c, dt, ranked) {
     const bbSlipF = bb ? Math.sqrt(Math.max(0, 1 - afF * afF)) : 1;
     const bbSlipR = bb ? Math.sqrt(Math.max(0, 1 - afR * afR)) : 1;
     const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu * tyreMu;
-    const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP);
-    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55));
+    const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP * tyreAx.f);
+    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55) * tyreAx.r);
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
@@ -6587,6 +6604,12 @@ function render(dt) {
   // Same cloud-speed knob the SKY uses, so the ground cloud-shadow dapple + the
   // godray shafts freeze/slow in lockstep with the visible sky (0 = frozen sky).
   frame.cloudSpeed = LT.cloudSpeed;
+  // THE PAINTED PIT LANE, as (entry s, window length, side, lap length). The
+  // lane is a fragment-shader marking rather than geometry — one ribbon, one
+  // arc coordinate, so a road that branches and rejoins cannot be built here
+  // (js/race/pit-lane.js says what that cost). null until the tyre setting
+  // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
+  frame.pitLane = pits.laneUniform();
   // Wet-road material (rain): ramp wetness in/out smoothly so the surface
   // darkens and starts mirroring lamps/sky over ~1s rather than popping.
   if (LT.wetness >= 0) {

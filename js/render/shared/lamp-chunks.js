@@ -117,5 +117,61 @@ const LampChunks = (function () {
     return e.table;
   }
 
-  return { CAP, capFor, buildTable, resolve };
+  // ── Grid form, for a backend with no per-draw binding ──────────────────
+  //
+  // GLX binds each chunk's list per draw and WGX passes (offset, count) in its
+  // per-draw uniform. THREE HAS NEITHER: every visible chunk is drawn from one
+  // pooled mesh sharing ONE material, so there is nowhere to put a per-chunk
+  // value. Checked in the vendored r185 rather than assumed —
+  // `nodeUniformDrawId` is declared only when `object.isBatchedMesh` and set
+  // only in the BatchedMesh branch of WebGLBackend._draw, so `drawIndex` reads
+  // nothing at all from a plain Mesh.
+  //
+  // What three CAN do is read `positionWorld` — and the chunks are a regular XZ
+  // grid (js/render/three/tlx-chunked.js bins each triangle by centroid into
+  // `cell`-sized cells keyed `gx * 4096 + gz`), so a FRAGMENT can find its own
+  // cell without anyone telling it which chunk it belongs to. This flattens the
+  // per-chunk table into a dense (offset, count) image over the occupied cells,
+  // which the shader samples with one texelFetch.
+  //
+  // THE ONE SEMANTIC DIFFERENCE, and it is deliberate: GLX/WGX resolve lamps
+  // PER CHUNK, this resolves PER FRAGMENT. A triangle is binned by its centroid,
+  // so one straddling a cell boundary lights from the neighbouring cell's set
+  // beyond that line. That is arguably the better answer — the lamps used are
+  // the ones near the PIXEL — but it is not bit-parity with the other two
+  // backends, and docs/ARCHITECTURE.md §Cross-backend parity is where that is
+  // argued rather than discovered.
+  //
+  // Returns { gw, gh, gx0, gz0, data } — `data` is gw*gh*2 Uint32, (offset,
+  // count) per cell, zero where no chunk occupies it. Cell (gx,gz) lives at
+  // ((gz - gz0) * gw + (gx - gx0)) * 2. Empty input gives a 1x1 zero grid so a
+  // consumer always has a texture to bind.
+  function buildGrid(table, chunks) {
+    const nc = chunks.length;
+    let gx0 = Infinity, gz0 = Infinity, gx1 = -Infinity, gz1 = -Infinity;
+    for (let c = 0; c < nc; c++) {
+      const ch = chunks[c];
+      // A chunk with no grid cell cannot be placed. Skipping it is correct and
+      // not silent: its cells stay count 0, so those fragments fall back to the
+      // global lamp set exactly as they do today.
+      if (!(ch.gx >= 0) || !(ch.gz >= 0)) continue;
+      if (ch.gx < gx0) gx0 = ch.gx;
+      if (ch.gx > gx1) gx1 = ch.gx;
+      if (ch.gz < gz0) gz0 = ch.gz;
+      if (ch.gz > gz1) gz1 = ch.gz;
+    }
+    if (!(gx1 >= gx0)) return { gw: 1, gh: 1, gx0: 0, gz0: 0, data: new Uint32Array(2) };
+    const gw = gx1 - gx0 + 1, gh = gz1 - gz0 + 1;
+    const data = new Uint32Array(gw * gh * 2);
+    for (let c = 0; c < nc; c++) {
+      const ch = chunks[c];
+      if (!(ch.gx >= 0) || !(ch.gz >= 0)) continue;
+      const o = ((ch.gz - gz0) * gw + (ch.gx - gx0)) * 2;
+      data[o] = table.offsets[c];
+      data[o + 1] = table.counts[c];
+    }
+    return { gw, gh, gx0, gz0, data };
+  }
+
+  return { CAP, capFor, buildTable, resolve, buildGrid };
 })();

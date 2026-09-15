@@ -11,6 +11,121 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-14 — `test:input` was 20 red; 3 are now FIXED, 15 are pre-existing,
+2 remain OPEN as real defects.** The whole group, accounted for, because a
+partial account is what let the RELAX drift below sit for a week.
+
+| failures | cause | state |
+|---|---|---|
+| 3 (`sliders`, `presets`) | `PRESETS.relax` left behind by the 2026-09-08 re-centring | **FIXED** — see the entry below |
+| 2 (`sliders › OVERALL SPEED`) | the car reaches gear 5, not 8, flat out | **FIXED** on the deploy branch — see below |
+| 4 (`gamepad.spec.js`) | the pad reads as absent: `Input.throttle()` false on button 7, analog trigger 0 | **OPEN**, pre-existing |
+| 9 (`steering.spec.js`) | every one 103-142 s against a 120 s test timeout | box, not code |
+| 2 (`camera-hooks`, `camera-tuner`) | 146 s / 44 s | box, not code |
+
+Every "pre-existing" above is MEASURED, not assumed: each spec was re-run alone
+on a quiet box against the tree and against a worktree at `a28b77d`, and came
+back identical — `gamepad.spec.js` 4 failed / 23 passed on both, the same four
+tests; `OVERALL SPEED` the same two with the same `Expected: 8, Received: 5`.
+
+**`OVERALL SPEED`: RESOLVED by the deploy-branch merge (2026-09-14), and the
+diagnosis is worth keeping.** The spec hardcoded `jump(0.1, …)` as its
+"straight". Nothing steers the car in this test — road-follow and the racing
+line both default to 0 — so on a curved stretch it drove straight off the road,
+hit the grass drag, and settled on the off-track floor: **gear 5 of 8** and
+14.75 m/s where 76.5 was wanted. Not a driving defect at all; the car was on
+the grass. The deploy branch's fix is to locate a real straight first
+(`straightFrac()` walks 60 fractions and takes the lowest |k|), which both
+OVERALL SPEED tests now do. Verified on the merged tree: **4 passed**.
+
+The lesson is the generalisable half: a driving spec that hardcodes a track
+fraction is asserting something about GEOMETRY it never states, and circuit
+geometry moves — the elevations were re-surveyed the same week this went red.
+
+`gamepad.spec.js` fails on the pad being read at all: `Input.throttle()` comes
+back false for button 7 held at 1.0, and the analog trigger reads a flat 0 where
+0.4 was set. The four that fail are the ones that press BUTTONS; the ones that
+only move the sticks pass. So the suspicion is the button path of
+`pollGamepad`, or the synthetic pad the spec installs no longer matching what it
+reads — not the bindings table, which is keyed by action id and cannot be
+shifted by adding or removing an action (checked: removing the PIT bind is not
+the cause).
+
+**2026-09-14 — `career.spec.js` is 14 red and `time-trial.spec.js`'s two ghost
+tests are red, on a CLEAN tree. OPEN.** Found while gating the tyre phases, and
+proven pre-existing rather than assumed: the same specs were run alone on a
+quiet box against this tree and against a worktree at `a28b77d`, the commit
+before any of the tyre work.
+
+```
+career.spec.js       mine 14 failed / 87 passed    base 15 failed / 86 passed
+time-trial.spec.js   mine  2 failed /  2 passed    base  2 failed /  2 passed   (-g ghost)
+```
+
+Every failure on this tree is also a failure at base — the set difference in the
+regression direction is EMPTY, and base additionally fails
+`the hire's contract › it expires`. So this is the tree's state, not a change's.
+
+**Career: the same un-awaited `startRace` as the `quick-validate` entry below.**
+The failing reads are all of one shape — `__apex.race("monza")` followed by a
+SYNCHRONOUS read in the same `page.evaluate`:
+
+```js
+window.__apex.seed(5); window.__apex.race("monza");
+for (let i = 0; i < 24; i++) { const c = window.__apex.carAt(i); if (!c) break; … }
+expect(a.length).toBeGreaterThan(20);   // Received: 0
+```
+
+`race()` starts `startRace()` and does not await it, and `startRace`'s first
+statement is `await ensureScenery(trackIdx)`, so the race arms in a LATER task
+and a synchronous pass never sees it. Every other failure in the file is the
+same thing wearing a different hat: `picked` null, `by("VER")` undefined, and a
+team-development multiplier reading `0.98889` — which is not a wrong number, it
+is the NEUTRAL one, before development applied.
+
+**Time trial: not a race at all.** The second ghost test never boots a session —
+it calls `Ghost.clear/setTrack/startLap/record/finishLap` and reads
+`localStorage` directly — and still fails on `saved.s` with `saved` undefined.
+So the ghost is not being persisted. `storage.persist denied` appears in these
+logs, so a container that refuses persistent storage is the first thing to check
+before touching `js/car/ghost.js`.
+
+**The fix is the one already made for `quick-validate.mjs`**: poll for
+`info().state` instead of reading synchronously after `race()`. Not attempted
+here — it is fourteen specs in a file this change does not touch, and folding a
+speculative rewrite of them into a tyre commit would bury both.
+
+**2026-09-14 — `debris.spec.js › enabled by default` fails on `rapierFetches`. OPEN.**
+Found while gating the tyre thermal layer; **pre-existing**, and proven so
+rather than assumed — the same single spec fails identically on a worktree at
+the parent commit `a28b77d`, on the same assertion line.
+
+```
+tests/specs/debris.spec.js:76
+  expect(r.rapierFetches).toBeGreaterThan(0);
+  Expected: > 0   Received: 0
+```
+
+**What is NOT wrong.** The three assertions above it pass: `active`, `enabled`,
+`ready`, `stepped > 0` and `live > 0`. So Rapier loaded, the side-world ran, and
+the seeded burst spawned debris — the physics under test is fine. What fails is
+only the test's attempt to OBSERVE the load, via
+`performance.getEntriesByType("resource")` filtered on `rapier`.
+
+So the likely cause is in the observation, not the subsystem: a resource served
+from the service-worker precache (or the bfcache) produces no Resource Timing
+entry, and a slow boot on a loaded box can overflow the default 250-entry
+resource buffer before the assertion reads it — this box takes ~80 s for the
+test. Either would leave a working side-world with an empty fetch list.
+
+**The fix is a test fix, not a source fix**, and it should assert the thing it
+means: that Rapier is loaded (`ready` already says so) rather than that a
+network entry was recorded. If the fetch really must be observed, the page needs
+`performance.setResourceTimingBufferSize()` raised at boot and a
+cache-state-independent probe. Not attempted here — it is nothing to do with
+tyres, and a speculative edit to a spec this session cannot re-run cheaply
+would be worse than the honest record.
+
 **2026-09-14 — `tools/check/quick-validate.mjs` was red on a CLEAN tree. FIXED.**
 Found while building the tyre/pit phases and confirmed not caused by them (the
 whole working tree was stashed and it failed identically). It reported:
@@ -1383,3 +1498,78 @@ Deferred with reasoning, none lost:
   not the fix**: "still happening, on X not Y" is a bisect the reporter has
   already run for you, and the second cause was found by taking it literally
   rather than re-examining the first.
+
+---
+
+- **The four `gamepad.spec.js` failures logged above as OPEN do not reproduce:
+  the file is 27/27 green (re-measured 2026-09-14, later the same day).** The
+  entry above reads them as a real button-path defect — "the pad reads as
+  absent: `Input.throttle()` false on button 7, analog trigger 0" — and that is
+  the part that does not hold. Measured individually on a quiet box: both
+  trigger cases pass in 2.8 min, the edge-trigger and HUD-button cases in
+  4.2 min, the whole file in 10.4 min.
+
+  The entry is left standing rather than edited, because HOW it went wrong is
+  the useful part. Its own numbers say it: nine `steering` failures at
+  "103-142 s against a 120 s test timeout" and two camera ones at "146 s / 44 s"
+  are all budget, and the four gamepad cases are among the slowest in the group
+  — so a `test:input` GROUP run on a loaded box produces exactly this shape.
+  A group-level red was then attributed to a specific code path, and the
+  attribution came with a plausible mechanism, which is what made it stick.
+
+  **This is the same mistake as the `ui-button-touch` misdiagnosis recorded in
+  TESTING-FIELD-NOTES the same day, pointing the opposite way.** There, four
+  real test bugs (a wrong `selectOption` value, two tests outliving a redesign)
+  were written off as the SwiftShader actionability stall. Here, slow tests were
+  written up as a button-path defect. Both took a failure's SIGNATURE for its
+  CAUSE, and both cost a later session an investigation. A group verdict is
+  evidence about the GROUP; before a failure earns a named mechanism, re-run
+  that spec ALONE.
+
+  One hypothesis was eliminated before measuring, kept so it is not chased
+  again: `pollGamepad()` returns early behind a 60-frame reprobe gate while
+  `padConnected` is false, and the spec's `poll()` helper calls `Input.poll()`
+  exactly once — which would look exactly like an absent pad. It cannot fire:
+  the helper dispatches `gamepadconnected` first, and that listener
+  (`js/input/input.js:2036`) sets `padConnected = true`.
+
+  Still genuinely OPEN from that entry, and untouched here: `sliders › OVERALL
+  SPEED`, where the car tops out in gear 5 of 8 and its sibling measures
+  14.75 m/s against a > 76.5 expectation, over 1200 fixed sim ticks with no
+  wall-clock dependence. That one is not a budget artefact and deserves the
+  session the entry asks for.
+
+---
+
+- **The `sliders › OVERALL SPEED` entry is stale too: both cases pass.**
+  Re-measured 2026-09-14 — "reaches the full gearbox and dial at every setting"
+  and "clears the old top-gear limiter in MANUAL gears" pass together in 2.1 min,
+  run alone on a quiet box. The whole file is 22/22 in 7.2 min, which also covers
+  the third-case fix below.
+
+  This one had to be MEASURED, not reasoned about, and the entry above is right
+  about why: 1200 fixed `__apex.step(1/60, 60)` ticks is pure sim time with no
+  wall-clock dependence, so "the box was loaded" could not have explained it the
+  way it explains the four gamepad cases. It was the one claim in that entry that
+  deserved a real investigation. The answer is that the fix had already landed —
+  `straightFrac()` asks the track for its straightest point instead of standing
+  at a hardcoded frac, because held at zero steer a car planted on a bend runs
+  wide inside the first second, hits the off-track floor, and plateaus near half
+  of vTop reporting **gear 5 where the test wants 8**. That is the reported
+  symptom exactly, and it is a statement about where the test stood, not about
+  the powertrain.
+
+  **What the re-measurement did find is the quieter half of the same bug.** A
+  THIRD case, "OVERALL SPEED lifts BOTH the player's and the AI's top speed",
+  was still doing `park(0.0)` / `jump(0.0, 0, 0)` long after the helper landed —
+  and PASSING, because it only asserts `fast > slow + 5` and running wide costs
+  both samples about equally. So it measured from wherever frac 0.0 sits rather
+  than from clear road, and would have become a real failure the moment someone
+  tightened the assertion or the geometry moved under it. Now fixed to take the
+  straight like its two siblings.
+
+  The lesson worth carrying: a green test can still be measuring the wrong
+  thing, and a relative assertion (`fast > slow`) will hide a systematic error
+  that biases both sides. When a bug is traced to a hardcoded position, grep for
+  the other hardcoded positions in the same file before closing it — two of the
+  three here were fixed and the third was left, which is how it survived.
