@@ -770,16 +770,40 @@ on the 08-18 perf-hunt board, not this register.
   310,000, justified in the spec's own comment — but Vegas builds 1,825,925
   prop vertices (~80 MB of GPU buffer at the real interleave, against the
   ~100 MB where iOS jetsams the page) with **no cap at all**.
-  `verify-track.cjs` now fails `vegas` above 1 850 000 prop verts (measured
-  ~1.83 M + slack). Other circuits stay uncapped.
+  ~~`verify-track.cjs` now fails `vegas` above 1 850 000 prop verts (measured
+  ~1.83 M + slack). Other circuits stay uncapped.~~ **SUPERSEDED — checked
+  2026-09-15.** The Vegas-only tripwire is gone and `verify-track.cjs` now
+  carries a FLEET cap of 1 100 000 that every circuit is measured against, which
+  is what this entry was asking for. Instancing has since taken Vegas itself to
+  ~370 k, and the real hogs the old tripwire never covered are the ones the cap
+  now binds: mexico 991 k, miami 794 k, jacarepagua 775 k (measured 2026-09-01,
+  fleet median ~340 k). The cap sits ~10 % over the largest, so a circuit
+  ballooning toward the ~2.2 M jetsam line fails in 2 s rather than on a phone.
 - **The banked-reference measurement error is fixed locally, not durably.**
   Monza's 0.294 and Spa's 0.525 "terrain over road" readings were one root
   cause — probes measured against the unbanked centreline where `bankZones`
   lift the tarmac — and both foundation specs now add the `Tracks.banking()`
-  term themselves. The durable fix is still open: `__apex.groundY` should
-  return the banked road surface and an `overRoad` field so no spec rebuilds a
-  centreline (~13 other foundation specs pass only because their probe fracs
-  miss a bankZone; Zandvoort's latent error is 2.41 m). Follow-up: Monza's
+  term themselves. ~~The durable fix is still open~~ **DONE 2026-09-15:**
+  `__apex.groundY()` now applies the banking term and returns `roadSurfaceY`,
+  `bankDy` and `overRoad`. `roadY`/`gap` deliberately keep their raw-centreline
+  meaning — changing `gap` underneath its readers would have re-baselined
+  thirteen circuit specs in one commit, which is not a thing to do blind — so
+  `overRoad` is the field new code reads.
+
+  **One correction to this entry while closing it:** "no spec rebuilds a
+  centreline" turned out to describe ONE spec, not three. Only
+  `monza-foundation` duplicated `groundY`'s arithmetic, and its local
+  `bankTrack` is now deleted (migration verified a numerical no-op — its own
+  comment recorded the local build as "bit-identical to the live track", and the
+  spec passes unchanged). `spa-` and `zandvoort-foundation` do something
+  different: node-corridor scans over `nodeAt()` at lateral offsets derived from
+  measured half-widths, where the local banking term is legitimate rather than
+  duplicated. They are left alone deliberately.
+
+  Still true, and still worth doing: the ~13 specs reading `.gap` should migrate
+  to `.overRoad`. At their probe fracs the two are identical (which is why they
+  pass), so it is low-risk churn rather than a fix — but it is what stops the
+  next circuit author reading the trap field. Follow-up unchanged: Monza's
   Parabolica 4° camber cap lost half its written justification to this bug and
   should be reconsidered on its remaining merits.
 - **A19 residue.** `css/overlays.css` still carries mutually inconsistent
@@ -1461,9 +1485,15 @@ Deferred with reasoning, none lost:
   arrives, so the test hits its 360 s budget. A/B on a QUIET box: red at the
   session tip AND byte-identical red at the pre-batch commit `1aaf91b3`
   (same `page.waitForFunction ... Test timeout` signature), so nothing in
-  the W4 near-miss batch caused it. Note the coverage gap it exposes:
-  `tlx-probes` is in no CI job and was never run earlier this session, so
-  this had no prior verdict to regress from. Either TLX's fx path stopped
+  the W4 near-miss batch caused it. ~~Note the coverage gap it exposes:
+  `tlx-probes` is in no CI job~~ **CORRECTED 2026-09-15: it IS in one** — the
+  `gfx` group (`tests/groups.json`), which runs on macos-latest, the one runner
+  image with a hardware adapter. The accurate gap is narrower and still worth
+  stating: that group runs on renderer diffs, nightly, or dispatch — NOT on the
+  Pages deploy path — so a TLX regression can ship and only surface overnight.
+  Diagnosing the skid batch needs a real GPU (a SwiftShader probe here is not
+  evidence about `fxState().skidVerts`), i.e. a ci.yml dispatch on macos-latest
+  rather than local work. Either TLX's fx path stopped
   stamping skids, or the spec's freeze-then-present premise no longer holds
   on the TLX backend — deciding which needs a TLX render trace, not a
   tolerance change. The other 14 TLX probes pass, including every shadow
