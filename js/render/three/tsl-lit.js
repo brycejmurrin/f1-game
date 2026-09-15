@@ -907,16 +907,35 @@
       const through = mod(s.sub(U.pitLane.x).add(L), L).toVar();
       const laneW = min(float(PIT_LANE_W), max(float(PIT_LANE_MIN), hw.mul(2.0).sub(PIT_MIN_RACING))).toVar();
       const lx = hw.sub(laneW).mul(U.pitLane.z).toVar();
-      const pitBand = smoothstep(aaX.mul(-1.0).add(0.14), aaX.add(0.14), abs(x.sub(lx))).oneMinus().toVar();
-      const fade = smoothstep(0.0, 6.0, through).mul(smoothstep(0.0, 6.0, lenM.sub(through))).toVar();
+      // WIDER than an edge line (0.20 against 0.10): the boundary is an
+      // instruction, not a hint about where the tarmac stops.
+      const pitBand = smoothstep(aaX.mul(-1.0).add(0.20), aaX.add(0.20), abs(x.sub(lx))).oneMinus().toVar();
+      const fadeIn = smoothstep(0.0, 2.0, through).toVar();
+      const fadeOut = smoothstep(0.0, 6.0, lenM.sub(through)).toVar();
       const hasLane = select(lenM.greaterThan(0.0), float(1.0), float(0.0)).toVar();
       const inWin = select(through.lessThanEqual(lenM), float(1.0), float(0.0)).toVar();
-      const pitM = pitBand.mul(fade).mul(hasLane).mul(inWin).toVar();
+      const gate = hasLane.mul(inWin).toVar();
+      // Everything on the pit side of the boundary — still branchless, and via
+      // select() rather than step(): step is NOT in this file's TSL destructure
+      // and a missing symbol here fails ASYNCHRONOUSLY, which is the exact
+      // failure mode the header warns about (boots clean, draws wrong). select
+      // is already the idiom two lines up.
+      const inLane = select(x.sub(lx).mul(U.pitLane.z).greaterThanEqual(0.0), float(1.0), float(0.0)).toVar();
+      // THE ENTRANCE bar. NOT gated by fadeIn, for the GLX reason: fading in
+      // the very mark that says "the lane starts here" defeats the mark.
+      const bar = smoothstep(0.4, 1.0, through).sub(smoothstep(2.4, 3.0, through)).mul(inLane).toVar();
+      const pitLine = max(pitBand.mul(fadeIn), bar).mul(fadeOut).mul(gate).mul(mip).mul(onRoad).toVar();
+      const pitFill = inLane.mul(fadeIn).mul(fadeOut).mul(gate).mul(onRoad).toVar();
 
-      const m = max(base, pitM).mul(mip).mul(onRoad).toVar();
+      const m = base.mul(mip).mul(onRoad).toVar();
 
       albedo.assign(mix(albedo, vec3(0.95, 0.95, 0.97), m));
       rough.assign(mix(rough, 0.55, m));    // paint is smoother than tarmac
+      // The lane SURFACE, then its blue boundary + entrance. Mirrors GLX
+      // pitFloor / pitPaint and WGX PIT_FLOOR / PIT_PAINT.
+      albedo.assign(mix(albedo, vec3(0.15, 0.16, 0.19), pitFill.mul(0.35)));
+      albedo.assign(mix(albedo, vec3(0.10, 0.36, 0.86), pitLine));
+      rough.assign(mix(rough, 0.55, pitLine));
       return vec4(albedo, rough);
     });
 

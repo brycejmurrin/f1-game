@@ -362,6 +362,11 @@ const PIT_LANE_W = 3.2;
 const PIT_LANE_MIN = 2.4;
 const PIT_MIN_RACING = 7.0;
 fn pitLaneWidth(hw: f32) -> f32 { return min(PIT_LANE_W, max(PIT_LANE_MIN, 2.0 * hw - PIT_MIN_RACING)); }
+// The pit lane is NOT a track marking and must not be painted like one — the
+// first cut used the edge lines' white 3 m inboard of one and read as a doubled
+// edge line. Mirrors GLXChunks.lit pitPaint / pitFloor.
+const PIT_PAINT = vec3<f32>(0.10, 0.36, 0.86);
+const PIT_FLOOR = vec3<f32>(0.15, 0.16, 0.19);
 fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f32>, trk: vec3<f32>, fwTrk: vec3<f32>, pit: vec4<f32>) {
   let hw = trk.z;
   if (hw <= 0.5) { return; }
@@ -390,19 +395,29 @@ fn roadMarkings(albedo_ptr: ptr<function, vec3<f32>>, rough_ptr: ptr<function, f
   // this engine is one ribbon with one arc coordinate, so a road that branches
   // and rejoins cannot be expressed. The window WRAPS the start/finish line, so
   // this is a wrapped-interval test.
+  var pitLine = 0.0;
+  var pitFill = 0.0;
   if (pit.y > 0.0) {
     let L = pit.w;
     let through = (s - pit.x + L) % L;
     if (through <= pit.y) {
       let lx = (hw - pitLaneWidth(hw)) * pit.z;
-      let dPit = abs(x - lx);
-      var pitM = 1.0 - smoothstep(0.14 - aaX, 0.14 + aaX, dPit);
-      pitM = pitM * smoothstep(0.0, 6.0, through) * smoothstep(0.0, 6.0, pit.y - through);
-      m = max(m, pitM * mip);
+      let fadeIn = smoothstep(0.0, 2.0, through);
+      let fadeOut = smoothstep(0.0, 6.0, pit.y - through);
+      let inLane = step(0.0, (x - lx) * pit.z);
+      let line = (1.0 - smoothstep(0.20 - aaX, 0.20 + aaX, abs(x - lx))) * fadeIn;
+      // THE ENTRANCE bar — not gated by fadeIn, for the GLX reason: fading in
+      // the mark that says "it starts here" defeats the mark.
+      let bar = (smoothstep(0.4, 1.0, through) - smoothstep(2.4, 3.0, through)) * inLane;
+      pitLine = max(line, bar) * fadeOut * mip;
+      pitFill = inLane * fadeIn * fadeOut;
     }
   }
   *albedo_ptr = mix(*albedo_ptr, paint, m);
   *rough_ptr = mix(*rough_ptr, 0.55, m);
+  *albedo_ptr = mix(*albedo_ptr, PIT_FLOOR, pitFill * 0.35);
+  *albedo_ptr = mix(*albedo_ptr, PIT_PAINT, pitLine);
+  *rough_ptr = mix(*rough_ptr, 0.55, pitLine);
 }
 `;
 
@@ -1079,7 +1094,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
   applyMaterial(i32(vMatId + 0.5), &albedo, &rough, vDist, in.wpos, in.nrm, fwWpos, litPack, packOn);
   if (i32(vMatId + 0.5) == 16) {
-    roadMarkings(&albedo, &rough, vTrk, fwTrk, U.pitLane);
+    roadMarkings(&albedo, &rough, vTrk, fwTrk, F.pitLane);
   }
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);

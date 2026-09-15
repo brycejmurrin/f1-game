@@ -196,11 +196,17 @@ const Ghost = (function () {
     saveStore(store);
     if (id === trackId) best = null;
   }
+  function speedAt(t) {
+    if (!best || !Number.isFinite(t) || t < 0 || t > best.time) return null;
+    const i = Math.min(best.t.length - 2, Math.max(0, findFloorIndex(best.t, t)));
+    const dt = best.t[i + 1] - best.t[i];
+    return dt > 1e-6 ? (best.s[i + 1] - best.s[i]) / dt : null;
+  }
 
   return {
     setTrack, startLap, record, finishLap, at, timeAt, contextKey,
     context: () => context, track: () => trackId,
-    hasGhost, bestTime, meta, medal, clear,
+    hasGhost, bestTime, meta, medal, clear, speedAt,
   };
 })();
 

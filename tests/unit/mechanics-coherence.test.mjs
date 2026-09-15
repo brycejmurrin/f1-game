@@ -15,7 +15,7 @@ function load(files, extra = {}) {
 }
 
 test("the actual collision candidate accepts two rotated humans across the lap seam", () => {
-  const { get } = load(["js/physics/ai-drive.js", "js/physics/collide.js"], {
+  const { get } = load(["js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"], {
     IncidentSim: { owns: () => false }, Tracks: { wallAt: () => 20 },
   });
   const C = get("Collide").create({ track: { total: 1000 }, player: null, netPlay: { owns: () => false }, PACE: 1, wrapS: s => s }, () => {});

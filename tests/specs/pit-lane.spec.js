@@ -27,17 +27,22 @@
 // nothing here looks at a pixel.
 import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 
-async function armedAt(page, track = "monza") {
+async function armedAt(page, { track = "monza", solo = false, rivals = false } = {}) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate((t) => window.__apex.race(t, "day", "dry", { laps: 25 }), track);
+  await page.evaluate(({ track, solo }) => solo
+    ? window.__apex.tt(track, "day")
+    : window.__apex.race(track, "day", "dry", { laps: 25 }), { track, solo });
   await awaitTrackBuild(page);
-  await page.evaluate(() => {
+  // Move rivals away for the player tests. This does not remove them; the
+  // stationary refusal test uses solo mode so traffic cannot reach it again.
+  // The AI test keeps the field in place.
+  await page.evaluate((keep) => {
     window.__apex.headless(true);
     window.__apex.go();
     window.__apex.tyres({ level: "real" });
-    window.__apex.rivals([]);
-  });
+    if (!keep) window.__apex.rivals([]);
+  }, rivals);
 }
 
 test.describe("pit lane", () => {
@@ -168,11 +173,17 @@ test.describe("pit lane", () => {
     // the car really did arrive at the box, really did stop there, and really
     // was outside the lane. Without those three it would pass just as happily
     // for a car that never got to the pits at all.
-    await armedAt(page);
+    // rivals([]) only moves the field back; it does not remove it. In a GP
+    // the AI catches this stationary car and can push it into the lane before
+    // the final assertion. Time Trial exercises the same human pit model with
+    // one car, so this test measures lane eligibility rather than traffic.
+    await armedAt(page, { solo: true });
+    expect(await page.evaluate(() => window.__apex.fieldState().length)).toBe(1);
     const out = await page.evaluate(() => {
       const A = window.__apex;
       A.jump(0.93, 30, 0); A.aim(0);
       A.pit({ arm: true });
+      let stoppedOutsideTicks = 0;
       for (let i = 0; i < 60 * 40; i++) {
         const p = A.pit();
         const ps = A.physState();
@@ -184,14 +195,19 @@ test.describe("pit lane", () => {
         A.setInput({ steer: Math.max(-1, Math.min(1, (0 - ps.x) * 0.35)),
                      throttle: ps.speed < want, brake: ps.speed > want * 1.05 });
         A.step(1 / 60, 1);
+        const after = A.pit(), speed = A.physState().speed;
+        if (after.inWindow && Math.abs(after.atM - after.boxM) < 10
+          && Math.abs(speed) < 1 && !after.inLaneLat) stoppedOutsideTicks++;
         if (A.pit().state === "out") break;
       }
-      return { pit: A.pit(), x: A.physState().x, v: A.physState().speed };
+      return { pit: A.pit(), x: A.physState().x, v: A.physState().speed, stoppedOutsideTicks };
     });
     // It arrived, and it stopped: without these the refusal proves nothing.
     expect(out.pit.inWindow, "the car never reached the pit window").toBe(true);
     expect(out.pit.atM, "the car never reached the box").toBeGreaterThan(out.pit.boxM - 10);
+    expect(out.pit.atM, "the car overshot the box").toBeLessThan(out.pit.boxM + 10);
     expect(Math.abs(out.v), "the car never actually stopped at the box").toBeLessThan(1);
+    expect(out.stoppedOutsideTicks, "the refusal must last at least a full service time").toBeGreaterThanOrEqual(out.pit.boxS * 60);
     // It was on the racing line, not in the lane…
     expect(out.pit.inLaneLat, "the car drifted into the lane — the refusal proves nothing").toBe(false);
     // …and so it was not serviced.
@@ -242,5 +258,59 @@ test.describe("pit lane", () => {
     expect(out.armed, "arming must be refused while there is nothing to stop for").toBe(false);
     expect(out.stops).toBe(0);
     expect(out.peak, "no limiter may fire on the start/finish straight").toBeGreaterThan(40);
+  });
+
+  test("an AI car serving a stop drives the lane, not the racing line", async ({ page }) => {
+    // THE OTHER HALF OF THE LANE, and the half every test above misses: they
+    // clear the field and drive the player, because the player is never steered
+    // (the lane is driven — the car is not taken off you). The AI IS steered:
+    // PitLane.laneX replaces its racing-line target, and that hook lives in
+    // game.js's lateral chain, where a unit test of the pure function cannot
+    // reach it. Without this, the half that cost a ratchet raise had no
+    // integration evidence at all.
+    await armedAt(page, { rivals: true });
+    const out = await page.evaluate(() => {
+      const A = window.__apex;
+      // Find a car that is NOT the player. field().id is the car's own id and
+      // is not its index (measured: pos 3 carries id 5), and pit({car}) takes
+      // an INDEX — so identify by effect instead: arm an index, and if the
+      // PLAYER did not become armed, that index is somebody else.
+      let idx = -1;
+      for (let i = 0; i < A.field().of; i++) {
+        A.pit({ car: i, arm: true });
+        if (!A.pit().armed) { idx = i; break; }
+        A.pit({ car: i, arm: false });
+      }
+      if (idx < 0) return { error: "no rival found" };
+      const states = [];
+      let laneIn = 0, laneOut = 0, boxTicks = 0, boxOutOfLane = 0, stops = 0;
+      for (let k = 0; k < 60 * 240; k++) {
+        A.step(1 / 60, 1);
+        const q = A.pit({ car: idx });
+        if (states[states.length - 1] !== q.state) states.push(q.state);
+        if (q.state === "lane") { q.inLaneLat ? laneIn++ : laneOut++; }
+        if (q.state === "box") { boxTicks++; if (!q.inLaneLat) boxOutOfLane++; }
+        if (q.stops > stops) stops = q.stops;
+        if (stops > 0 && q.state === "out") break;
+      }
+      return { idx, states, laneIn, laneOut, boxTicks, boxOutOfLane, stops,
+               boxS: A.pit({ car: idx }).boxS };
+    });
+    expect(out.error, `${out.error}`).toBeUndefined();
+    // It went through the whole sequence on its own — nothing here drives it.
+    expect(out.states.join(" -> "), "the AI never served its stop").toContain("box -> out");
+    expect(out.stops).toBe(1);
+    // IN THE LANE WHILE STOPPED, every tick. This is not a tolerance: the box
+    // cannot latch outside the lane, so a single tick of box-out-of-lane would
+    // mean the latch and the lateral test disagree.
+    expect(out.boxTicks, "the car was never held in the box").toBeGreaterThan(out.boxS * 60 * 0.9);
+    expect(out.boxOutOfLane, "held in the box while outside the lane").toBe(0);
+    // And in the lane for most of the run down it. Not all: it enters the
+    // window on the racing line and has to cross, which is the point — it is
+    // STEERED there, not teleported. Measured 1415 in / 163 out on a clean run.
+    expect(out.laneIn + out.laneOut, "the car never entered the lane state").toBeGreaterThan(300);
+    expect(out.laneIn / (out.laneIn + out.laneOut),
+      `only ${out.laneIn}/${out.laneIn + out.laneOut} of the lane run was actually in the lane`)
+      .toBeGreaterThan(0.7);
   });
 });

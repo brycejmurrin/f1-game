@@ -3009,3 +3009,32 @@ The player is NOT steered, and that asymmetry is the design rather than an
 omission: the lane is driven (PitLane's COMMIT block), so the car is never taken
 off you. What asks the player for the lane is the box's own condition — stop on
 the racing line and the stop does not happen.
+
+## 2026-09-15 — a deliberate headroom raise, at the owner's direction
+
+`js/game.js` 8777 → 9000 lines and 4729 → 4900 codeLines; `js/render/glx/glx.js`
+2655 → 2750 lines.
+
+THIS ONE IS NOT PAID FOR BY A CHANGE, and that is the honest thing to record.
+Every other entry above was a specific diff buying a specific number of lines.
+This is a policy decision: the owner asked for headroom after L3 needed a raise
+for a single statement. So a future reader comparing a ceiling against the git
+history will not find a commit that "earned" these lines — there isn't one.
+
+WHAT IS AND IS NOT RAISED. The two SIZE metrics, plus glx.js because it is the
+producer side of any new frame uniform and the deferred pit-box marking needs
+one. `gMembers` (246) and `topLets` (147) are deliberately left AT their
+ceilings: they are not size, they are coupling surface — every G member is a new
+thing a module may reach for, and every top-level `let` is closure state an
+extraction has to move. Those two are what make game.js hard to carve up, and
+cheap growth there is the kind that cannot be undone later.
+
+The headroom is bounded by the slack rule itself, which is the point: a ceiling
+more than max(60, 4%) above its value reads as LOOSE and must be lowered. So
+this banks ~220 lines, not an open licence — the ratchet keeps ratcheting, just
+from a higher floor.
+
+THE LEVER THAT ACTUALLY BUYS ROOM is still an extraction: pull a subsystem out
+and `ratchets.mjs --update` lowers the ceiling to match, locking the win in.
+`updateCar`'s lateral-control chain is the standing candidate — a few hundred
+lines with one clean seam, which is where L3's own hook had to go.

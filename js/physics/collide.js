@@ -54,13 +54,14 @@ const Collide = (() => {
   function extLong(c) {
     const psi = c.human ? (c.yawVis || 0) : 0;
     const k = yawMix(psi);
-    return k === 0 ? HL : HL * (1 - k) + k * (HL * Math.abs(Math.cos(psi)) + WL * Math.abs(Math.sin(psi)));
+    return HL * Math.abs(Math.cos(psi * k)) + WL * Math.abs(Math.sin(psi * k));
   }
   function extLat(c) {
     const psi = c.human ? (c.yawVis || 0) : 0;
     const k = yawMix(psi);
-    return k === 0 ? WL : WL * (1 - k) + k * (HL * Math.abs(Math.sin(psi)) + WL * Math.abs(Math.cos(psi)));
+    return HL * Math.abs(Math.sin(psi * k)) + WL * Math.abs(Math.cos(psi * k));
   }
+  function bodyAngle(c) { const psi = c.human && Number.isFinite(c.yawVis) ? c.yawVis : 0; return psi * yawMix(psi); }
   // Both cars can be human and rotated: each support is bounded by its
   // half-diagonal. Use the pair bound for rejection AND arc buckets.
   const LCAR_MAX = 2 * Math.hypot(HL, WL);
@@ -68,13 +69,85 @@ const Collide = (() => {
   // the slop distance the penetration is `LCAR - |dProg|` with LCAR's own
   // rounding still in it, so corr lands at ~3e-16 — positive, and therefore true
   // — while nothing moves. Measured at dProg = -4.75.
-  const CORR_EPS = 1e-3;
+    const CORR_EPS = 1e-3;
 
   function create(G, collideFx) {
     Log.info("game", "Collide.create");
     const wrapS = G.wrapS;
     const incidentSim = IncidentSim;   // static owns()/notifyCar() — one instance per page
     let track = null, player = null, netPlay = null;   // bound at resolveCollisions entry
+    let motion = new WeakMap(), motionTrack = null, motionTime = -1;
+    const geom = {}, swept = {}, impulse = {}, bodyA = {}, bodyB = {};
+    function deltaS(d) { const L = track.total; return ((d + L / 2) % L + L) % L - L / 2; }
+    function body(c, speed, out) {
+      const angle = c.human ? (c.yawVis || 0) : 0, cs = Math.cos(angle), sn = Math.sin(angle);
+      out.angle = bodyAngle(c);
+      out.vx = speed * cs + (c.vLat || 0) * sn;
+      out.vy = speed * sn - (c.vLat || 0) * cs;
+      out.omega = c.human ? (c.yawRateCur || 0) : 0;
+      out.invMass = netPlay.owns(c) ? 0 : c.human ? AiDrive.humanInvMass(!!track.street) : 1;
+      out.invInertia = c.human ? out.invMass / ContactGeometry.INERTIA : 0;
+      return out;
+    }
+    function pushVelocity(c, state, dx, dy, dw) {
+      if (netPlay.owns(c)) return;
+      const angle = c.human ? (c.yawVis || 0) : 0, cs = Math.cos(angle), sn = Math.sin(angle);
+      const vx = state.vx + dx, vy = state.vy + dy;
+      c.speed = Math.max(0, vx * cs + vy * sn);
+      if (c.human) {
+        c.vLat = clamp(vx * sn - vy * cs, -40, 40);
+        c.yawRateCur = clamp(state.omega + dw, -4, 4);
+      }
+    }
+    function orientedResponse(a, b, ct, last) {
+      const correction = Math.max(0, ct.depth - COL_SLOP) * 0.7;
+      shiftLong(a, ct.nx * correction * ct.sA); shiftLong(b, -ct.nx * correction * ct.sB);
+      a.x += ct.ny * correction * ct.sA; b.x -= ct.ny * correction * ct.sB;
+      const ba = body(a, ct.aSp, bodyA), bb = body(b, ct.bSp, bodyB);
+      const j = ContactGeometry.impulse(ba, bb, ct.dProg, ct.dX, ct, impulse);
+      pushVelocity(a, ba, j.ax, j.ay, j.aw); pushVelocity(b, bb, j.bx, j.by, j.bw);
+      if (correction > CORR_EPS || j.magnitude > CORR_EPS) {
+        if (!netPlay.owns(a)) a.contactT = 0.22;
+        if (!netPlay.owns(b)) b.contactT = 0.22;
+        if (last) collideFx(a, b, clamp(j.closing * 0.03, 0.15, 1));
+        // The first impulse carries severity; later relaxation passes have
+        // already removed closing velocity. Both worlds retain their own gates.
+        if (j.magnitude > CORR_EPS && !netPlay.owns(a) && !netPlay.owns(b)) {
+          if (DebrisWorld.active()) DebrisWorld.carImpact(a, b, j.closing);
+          incidentSim.notifyCar(a, b, j.closing);
+        }
+      }
+    }
+    function sweepContacts(ranked, dt) {
+      // Previous resolved poses are local collision state, never render history.
+      // A teleport or rapidly rotating body is not a linear driving sweep.
+      for (let i = 0; i < ranked.length; i++) {
+        const a = ranked[i], pa = motion.get(a);
+        if (!pa || incidentSim.owns(a) || netPlay.owns(a)) continue;
+        const da = deltaS(a.prog - pa.prog), xa = a.x - pa.x;
+        if (Math.hypot(da, xa) > Math.max(6, Math.abs(a.speed) * dt * 2 + 1) || Math.abs(bodyAngle(a) - pa.angle) > 0.15) continue;
+        for (let k = i + 1; k < ranked.length; k++) {
+          const b = ranked[k], pb = motion.get(b);
+          if (!pb || incidentSim.owns(b) || netPlay.owns(b)) continue;
+          const db = deltaS(b.prog - pb.prog), xb = b.x - pb.x;
+          if (Math.hypot(db, xb) > Math.max(6, Math.abs(b.speed) * dt * 2 + 1) || Math.abs(bodyAngle(b) - pb.angle) > 0.15) continue;
+          if (Math.hypot(da - db, xa - xb) < 1) continue;
+          const x0 = deltaS(pa.prog - pb.prog), y0 = pa.x - pb.x, x1 = x0 + da - db, y1 = y0 + xa - xb;
+          if (Math.min(x0, x1) > LCAR_MAX || Math.max(x0, x1) < -LCAR_MAX) continue;
+          if (ContactGeometry.overlap(x1, y1, bodyAngle(a), bodyAngle(b), geom)) continue;
+          const hit = ContactGeometry.sweep(x0, y0, x1, y1, pa.angle, pb.angle, swept);
+          if (!hit) continue;
+          const t = hit.time;
+          shiftLong(a, da * (t - 1)); shiftLong(b, db * (t - 1));
+          a.x = pa.x + xa * t; b.x = pb.x + xb * t;
+          const shares = sepShares(a, b);
+          hit.dProg = x0 + (da - db) * t; hit.dX = y0 + (xa - xb) * t;
+          hit.aSp = a.speed; hit.bSp = b.speed; hit.sA = shares.sA; hit.sB = shares.sB;
+          orientedResponse(a, b, hit, true);
+          break; // let the ordinary solver settle a cluster before another sweep
+        }
+      }
+    }
 
     // Shift a car along the track. Both s and prog advance together so multi-pass
     // pairContact (which keys on prog) sees the push immediately — skipping human
@@ -82,6 +155,7 @@ const Collide = (() => {
     // lap-line test compares c.s to _prevS, and moving both hid a shove across the
     // line (re-cross = a SECOND lap; forward shove = none). _pushD banks the push.
     function shiftLong(c, d) {
+      if (d === 0) return;
       c.s = wrapS(c.s + d);
       c.prog += d; c._pushD = (c._pushD || 0) + d;
       _colShifted = true;
@@ -192,6 +266,10 @@ const Collide = (() => {
       const penLong = eLong - Math.abs(dProg);
       const penLat = eLat - Math.abs(dX);
       if (penLong <= 0 || penLat <= 0) return null;
+      const angleA = bodyAngle(a), angleB = bodyAngle(b);
+      const oriented = angleA !== 0 || angleB !== 0;
+      const exact = oriented ? ContactGeometry.overlap(dProg, dX, angleA, angleB, geom) : null;
+      if (oriented && !exact) return null;
       const { iA, iB, iSum, sA, sB } = sepShares(a, b);
       const closing = (dProg >= 0 ? bSp - aSp : aSp - bSp) > 0.5;
       const nestEdge = closing && penLong > 1.0 && penLat < 0.5;
@@ -199,6 +277,8 @@ const Collide = (() => {
       _ct.dProg = dProg; _ct.dX = dX; _ct.penLong = penLong; _ct.penLat = penLat;
       _ct.iA = iA; _ct.iB = iB; _ct.iSum = iSum; _ct.sA = sA; _ct.sB = sB;
       _ct.aSp = aSp; _ct.bSp = bSp;
+      _ct.oriented = oriented;
+      if (exact) { _ct.depth = exact.depth; _ct.nx = exact.nx; _ct.ny = exact.ny; }
       // Least penetration is the MTV rule, and the MTV is not the contact FACE
       // on a box that is 2.4x longer than it is wide. Raw `penLat < penLong`
       // expands to |dProg| < 2.8 + |dX|, so a car 2.5 m DIRECTLY BEHIND another
@@ -226,6 +306,7 @@ const Collide = (() => {
       if (incidentSim.owns(a) || incidentSim.owns(b)) return;
       const ct = pairContact(a, b);
       if (!ct) return;
+      if (ct.oriented) { orientedResponse(a, b, ct, last); return; }
       const { dProg, dX, penLong, penLat, iA, iB, iSum, sA, sB, sideContact, aSp, bSp } = ct;
       if (sideContact) {
         // side-by-side contact: separate laterally, scrub a little speed. Mark
@@ -322,6 +403,12 @@ const Collide = (() => {
       if (incidentSim.owns(a) || incidentSim.owns(b)) return;
       const ct = pairContact(a, b);
       if (!ct) return;
+      if (ct.oriented) {
+        const corr = Math.max(0, ct.depth - SLOP);
+        shiftLong(a, ct.nx * corr * ct.sA); shiftLong(b, -ct.nx * corr * ct.sB);
+        a.x += ct.ny * corr * ct.sA; b.x -= ct.ny * corr * ct.sB;
+        return;
+      }
       const { dProg, dX, penLong, penLat, sA, sB, sideContact } = ct;
       if (sideContact) {
         const c = Math.max(penLat - SLOP, 0) * 0.6;
@@ -383,9 +470,12 @@ const Collide = (() => {
       // Snapshot the player's road coords so the writeback at the end can tell
       // whether this pass actually shoved it (see there for why that matters).
       const _preColS = player ? player.s : 0, _preColX = player ? player.x : 0;
+      if (motionTrack !== track || G.raceT < motionTime) { motion = new WeakMap(); motionTrack = track; }
+      motionTime = G.raceT;
       // AI cars mirrored their world pose BEFORE this pass (updateCar's tail), so a
       // shove rendered one step late; snapshot so the clamp loop can re-mirror.
       for (const c of ranked) if (!c.human) { c._preColS = c.s; c._preColX = c.x; }
+      sweepContacts(ranked, dt || 1 / 60);
       // PRE-STEP CLOSING SPEED, for the restitution reference only. aSp/bSp are
       // read LIVE, and _colResolvePair mutates .speed as it goes, so in a
       // concertina a car that was already bumped earlier in the same pass
@@ -469,6 +559,10 @@ const Collide = (() => {
         const w = G.worldFromTrack(player.s, player.x);
         player.px = w.x;
         player.pz = w.z;
+      }
+      for (const c of ranked) {
+        let p = motion.get(c); if (!p) { p = {}; motion.set(c, p); }
+        p.prog = c.prog; p.x = c.x; p.angle = bodyAngle(c);
       }
     }
 

@@ -1619,7 +1619,14 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
                     /let fwTrkAttr = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
                     /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn\);/,
-                    /roadMarkings\(&albedo, &rough, vTrk, fwTrk, U\.pitLane\);/,
+                    // F, not U. This pin was written against the shipped text and so
+                    // FROZE a compile error: `U` is the SKY program's binding, and this
+                    // call sits in LIT, which binds `F : FrameU`. Dawn rejected the whole
+                    // lit shader — "unresolved value 'U'" — and this assertion was holding
+                    // the defect in place. A pin copied from the source proves only that
+                    // nobody changed it. tests/unit/wgsl-bindings.test.mjs now checks the
+                    // property instead: no program may name another program's binding.
+                    /roadMarkings\(&albedo, &rough, vTrk, fwTrk, F\.pitLane\);/,
                     // The one the first fix missed: this sits behind `if (detail
                     // > 0.001)`, so it must READ the hoisted footprint.
                     /let mnFpAbs = max\(fwWpos\.x, fwWpos\.z\);/]) {
