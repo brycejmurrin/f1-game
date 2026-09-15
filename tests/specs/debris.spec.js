@@ -96,10 +96,15 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
     await startRace(page, "monza");
     // Default-on: create() enables at boot; the lazy rapier import resolves
     // shortly after. Wait for it (or a load failure) rather than a fixed sleep.
+    // RAPIER_MS, not a literal: this is the SAME WASM download-and-init wait as
+    // enableDebris(), and it was the one site the 30 s → 60 s raise missed. The
+    // constant's own comment records three tests timing out "at exactly
+    // 30000 ms with rapier still loading"; this test kept a hardcoded 30000 and
+    // went on timing out there (CI run 3707, 2026-09-14).
     await page.waitForFunction(() => {
       const st = window.__apex.debris();
       return st.ready || st.loadState === -1;
-    }, null, { polling: 100, timeout: 30000 });
+    }, null, { polling: 100, timeout: RAPIER_MS });
     const r = await page.evaluate(() => {
       window.__apex.jump(0.1, 40, 0);
       // The world runs the WASM solve only when something dynamic is in play

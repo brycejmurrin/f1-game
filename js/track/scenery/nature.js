@@ -756,7 +756,7 @@ const SceneryNature = (function () {
     // edge stays at least `gap` beyond the road edge — i.e. the per-tree `dist`
     // accounts for the canopy radius (which grows with tree height), so a tree
     // called at small gap can never poke its canopy through a wall/hedge/fence.
-    //   opts: { density, hMin, hMax, col, col2, pineFrac }
+    //   opts: { spacing, density, hMin, hMax, col, col2, pineFrac }
     // Canopy outer radius for a species at height h — the SINGLE source of truth
     // for "how far does this tree's foliage actually reach sideways". Both
     // forestEdge() and the FURN roadside scatter derive placement from it.
@@ -807,7 +807,14 @@ const SceneryNature = (function () {
       // half the trees for a small fraction of the spots (measured on
       // hockenheim: 180 k props for 20 spots). Baseline it, don't thin it.
       const dens = opts.density != null ? Math.max(0.05, Math.min(1, opts.density)) : 0.7;
-      const step = 7 - dens * 4;
+      // `spacing` (METRES between trunks) is the escape hatch from the two
+      // reachable density spacings above. A sparse background woodland — a tree
+      // every 15-25 m — is simply not expressible as a density: the knob bottoms
+      // out at stepM 6.8 → 8 m. Callers that pass it were silently getting the
+      // 4 m dense belt, i.e. ~4x the trees they asked for. along() still
+      // quantises to whole nodes (round(stepM / 4)), so the honest grid is
+      // multiples of 4 m: spacing 15 → 16 m, spacing 24 → 24 m.
+      const step = opts.spacing != null ? Math.max(ds, opts.spacing) : 7 - dens * 4;
       ctx.along(s0, s1, step, (k) => {
         const s = hash(k * 4.3 + side * 1.1);
         const h = hMin + s * (hMax - hMin);
