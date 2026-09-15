@@ -1066,7 +1066,15 @@ const TrackMesh = (function () {
     const L = track.total, n = track.n;
     const span = Math.max(0, lane.lenM - 80);
     if (!(span > 40)) return out;
-    const s0 = (lane.sIn + 40) % L, pitch = span / teams.length;
+    // Real working boxes sit in a tight block (~8–9 m pitch, FIA grid slot),
+    // not stretched along the whole inner lane. Fall back to a spread only
+    // when the window is shorter than the block.
+    const BOX_PITCH = 9;
+    const block = teams.length * BOX_PITCH;
+    const pitch = block <= span ? BOX_PITCH : span / teams.length;
+    const s0 = block <= span
+      ? (lane.sIn + 40 + (span - block) * 0.5 + L) % L
+      : (lane.sIn + 40) % L;
     const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
     const white = track.def.palette.line || [0.95, 0.95, 0.98];
     for (let i = 0; i < teams.length; i++) {
@@ -1090,15 +1098,24 @@ const TrackMesh = (function () {
         push(A); push(B); push(C); push(D);
         out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
       };
-      const x0 = xMid - 1.4, x1 = xMid + 1.4, boxLen = 6, paint = 0.16;
+      // FIA grid pitch is 8 m; pit-box paint on the working lane matches that
+      // rather than a 6 m toy box. Open at the rear (same rule as the grid).
+      const x0 = xMid - 1.4, x1 = xMid + 1.4, boxLen = 8, paint = 0.16;
+      const outer = lane.side > 0 ? x1 : x0;
+      const outerIn = lane.side > 0 ? x1 - paint : x0 + paint;
       quad(at(boxLen / 2, x0), at(boxLen / 2, x1), at(boxLen / 2 - paint, x0), at(boxLen / 2 - paint, x1), white);
       quad(at(-boxLen / 2, x0), at(boxLen / 2, x0), at(-boxLen / 2, x0 + paint), at(boxLen / 2, x0 + paint), white);
       quad(at(-boxLen / 2, x1 - paint), at(boxLen / 2, x1 - paint), at(-boxLen / 2, x1), at(boxLen / 2, x1), white);
       quad(at(boxLen / 2 + 0.25, x0), at(boxLen / 2 + 0.25, x1), at(boxLen / 2 + 0.55, x0), at(boxLen / 2 + 0.55, x1), teams[i].col);
+      // Garage-facing colour bar — reads as the team bay without a second hull.
+      quad(at(-boxLen / 2, outerIn), at(boxLen / 2, outerIn), at(-boxLen / 2, outer), at(boxLen / 2, outer), teams[i].col);
     }
     return out;
   }
 
+  // Intentionally empty. addBox stalls collided with kit pit buildings and
+  // lifted prop-clipping counts on 21 circuits. Colour lives on buildPitBoxes
+  // and circuitKit.pitBuilding doors / lintels.
   function buildPitGarages(track, out) {
     return out;
   }
