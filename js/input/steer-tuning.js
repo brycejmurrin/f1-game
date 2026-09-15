@@ -8,6 +8,7 @@ Log.info("input", "SteerTuning.create");
 const { $, store, clamp } = G;
 if (window.BrakeCue && BrakeCue.create) BrakeCue.create(G);
 
+let hapRepaintWired = false;   // the gamepadconnected repaint is wired once
 const SLIDER_MIN = 1, SLIDER_MAX = 10;
 const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 
@@ -568,6 +569,21 @@ function applySteerTuning() {
   paintRow("pm-steerrate", steerRate2);
   paintRow("pm-analogspeed", analogSpd, adaptLabel(analogSpd));
   paintRow("pm-haptics", haptics, adaptLabel(haptics));
+  // HIDE the row outright where no haptic is possible. The help text already
+  // says iPhone and iPad can do neither — but a slider you can drag that cannot
+  // change anything is worse than an absent one, and navigator.vibrate has never
+  // shipped in any WebKit. A pad with an actuator can arrive later, so this is
+  // re-run rather than decided once (see the gamepadconnected repaint below).
+  const hapItem = $("pm-haptics-item");
+  if (hapItem && window.Input && Input.hapticsSupported) {
+    hapItem.hidden = !Input.hapticsSupported();
+    if (!hapRepaintWired && typeof window.addEventListener === "function") {
+      hapRepaintWired = true;
+      window.addEventListener("gamepadconnected", () => {
+        hapItem.hidden = !Input.hapticsSupported();
+      });
+    }
+  }
   paintRow("pm-paddz", padDz, pctLabel(padDz));
   paintRow("pm-padsat", padSat, pctLabel(padSat));
   refreshPresetButtons();

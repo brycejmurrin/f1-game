@@ -1014,6 +1014,13 @@ let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
 // and held constant so the sky doesn't shift mid-race (only the shader animates).
 let _cloudBase = 0.4;
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
+// OS REDUCE MOTION for GAME-WORLD motion, which no stylesheet can reach (the
+// CSS already honours it for menus; the shake that causes trouble is the 3D
+// camera at 300 km/h — XAG 117). Live: the OS toggle can flip mid-session.
+const _mq = (typeof window !== "undefined" && window.matchMedia)
+  ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+let motionReduced = !!(_mq && _mq.matches);
+if (_mq && _mq.addEventListener) _mq.addEventListener("change", (e) => { motionReduced = !!e.matches; });
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
@@ -6282,7 +6289,10 @@ function render(dt) {
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.6);
-      const amt = shake * shake * 0.9;   // squared: grazes barely move, crashes slam
+      // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the
+      // OFFSET, not the trauma — shake still decays on its own clock, so cues
+      // keyed to it are untouched and only the camera stops moving.
+      const amt = motionReduced ? 0 : shake * shake * 0.9;
       eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
