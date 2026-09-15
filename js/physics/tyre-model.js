@@ -405,7 +405,21 @@ const TyreModel = (function () {
   // Which tread the conditions ask for: slick / intermediate / full wet. The
   // same ladder js/physics/consts.js WET_GRIP is indexed by, so "the right tyre"
   // means the one that actually wins there.
-  function treadFor(weather) { return weather === "rain" ? 2 : weather === "wet" ? 1 : 0; }
+  function wetness(weather, arc) {
+    const value = w => w === "rain" ? 1 : w === "wet" ? 0.5 : 0;
+    if (!arc) return value(weather);
+    const f = clamp(arc.t / Math.max(1, arc.dur), 0, 1);
+    return value(arc.from) + (value(arc.to) - value(arc.from)) * f;
+  }
+  function weatherGrip(tread, w) {
+    const table = PhysicsConsts.WET_GRIP, t = Number.isInteger(tread) && tread >= 0 && tread <= 2 ? tread : 0;
+    w = clamp(w, 0, 1);
+    return w <= 0.5 ? 1 + (table.wet[t] - 1) * w * 2 : table.wet[t] + (table.rain[t] - table.wet[t]) * (w - 0.5) * 2;
+  }
+  function treadFor(weather, wetness) {
+    if (Number.isFinite(wetness)) return wetness >= 0.72 ? 2 : wetness >= 0.25 ? 1 : 0;
+    return weather === "rain" ? 2 : weather === "wet" ? 1 : 0;
+  }
   function classForTread(tread) { return tread === 2 ? "wet" : tread === 1 ? "inter" : null; }
   // The catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md §6):
   // one axis, not a compound axis multiplied by an upgrade tier. The single
@@ -618,7 +632,7 @@ const TyreModel = (function () {
     axleShare, longSigned, AXLE_LONG, AXLE_REST, BB_REF,
     T_AMBIENT, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
-    classRecord, optionRecord, AI_CLASS, treadFor, classForTread,
+    classRecord, optionRecord, AI_CLASS, treadFor, classForTread, wetness, weatherGrip,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,
   };

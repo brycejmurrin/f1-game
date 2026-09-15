@@ -669,7 +669,7 @@ function buildTuneOptions(container, team) {
   }
   wrap.appendChild(rakeOut);
   const note = document.createElement("p"); note.className = "adv-help";
-  note.textContent = "Bars: stiffer overall sharpens turn-in and costs traction; a stiffer front than rear steadies braking. "
+  note.textContent = "Bars: stiffer overall sharpens turn-in and costs traction; a stiffer front shifts load transfer forward and reduces front grip in sustained turns; a stiffer rear helps rotation. "
     + "Rake adds aero load on top of the wing (a max-wing car is already at full load). "
     + "Brake bias splits the friction budget between the axles under braking — forward understeers on entry, rearward rotates. "
     + "The works sheet is exactly the car it always was.";

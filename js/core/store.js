@@ -300,18 +300,20 @@ const GameStore = (function () {
   }
 
   const TT_BOARD_MAX = 10;
-  function ttBoard(trackId) {
+  function ttBoard(trackId, context) {
     const b = store.get("ttlb." + trackId, []);
-    return Array.isArray(b) ? b : [];
+    return Array.isArray(b) ? b.filter(e => e && Number.isFinite(e.t) && e.t > 0 && (context === undefined || (e.context || null) === context)) : [];
   }
   function ttBoardAdd(trackId, entry) {
     if (!isFinite(entry.t) || entry.t <= 0) return ttBoard(trackId);
     const b = ttBoard(trackId);
     b.push(entry);
     b.sort((a, z) => a.t - z.t);
-    if (b.length > TT_BOARD_MAX) b.length = TT_BOARD_MAX;
-    store.set("ttlb." + trackId, b);
-    return b;
+    // Ten laps PER comparable class. Existing unversioned entries stay legacy.
+    const counts = new Map();
+    const kept = b.filter(e => { const k = e.context || null; const n = (counts.get(k) || 0) + 1; counts.set(k, n); return n <= TT_BOARD_MAX; });
+    store.set("ttlb." + trackId, kept);
+    return kept;
   }
 
   function hexToRgb(h) {

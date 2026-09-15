@@ -1250,8 +1250,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");
   const selectJs = code("js/ui/select-screen.js");
   assert.match(selectJs, /b\.id\s*=\s*"sel-daily"/);
-  assert.match(selectJs, /textContent\s*=\s*"TODAY · "\s*\+\s*p\.trackName/,
-    "daily chip label is TODAY · circuit; weather/tod/best live in a child span");
+  assert.match(selectJs, /textContent\s*=\s*"DAILY STANDARD · "\s*\+\s*p\.trackName/,
+    "daily chip labels the standard class and circuit; weather/tod/best live in a child span");
   assert.match(selectJs, /bar\.insertBefore\(\s*b\s*,\s*bar\.firstChild\s*\)/,
     "TODAY leads the filter bar so a wrapping sheet paints it as the banner");
   assert.match(code("js/garage/setup-sheet.js"), /rakeOut\.id\s*=\s*"cs-rake-readout"/);
