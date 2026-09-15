@@ -182,9 +182,11 @@ const CircuitKit = (function () {
     }
 
     // 2025 FIA Sporting 34.4: fast lane ≤ 3.5 m (the ribbon). Appendix O: a
-    // pit complex ≥ 12 m wide with garages on the start straight. Bay pitch
-    // on modern F1 buildings is ~8–9 m (same as the FIA grid slot). Doors and
-    // lintels emit INSIDE this modelGroup so clip-audit adjacency treats them
+    // pit complex ≥ 12 m wide with garages on the start straight. Modern
+    // buildings are one hall + roller doors + a glazed hospitality floor, not
+    // a row of detached sheds. Bay pitch is ~8–9 m; F1 teams take two adjacent
+    // bays when the kit asks for ≥16 doors. Doors, pillars, lintels and the
+    // canopy emit INSIDE this modelGroup so clip-audit adjacency treats them
     // as one assembly — a second row of addBox halls is what blew the ratchet.
     const PIT_TEAM_COL = [
       [0.00, 0.83, 0.87], [1.00, 0.11, 0.18], [1.00, 0.50, 0.00],
@@ -192,25 +194,43 @@ const CircuitKit = (function () {
       [0.72, 0.10, 0.16], [0.02, 0.22, 0.55], [0.90, 0.10, 0.12],
       [0.00, 0.44, 0.30],
     ];
+    const PIT_DOOR = [0.10, 0.11, 0.13];
+    const PIT_GLASS = [0.20, 0.30, 0.40];
     function pitBuilding(spec) {
       const garages = boundedCount(spec && spec.garages, 12, 24);
       if (!garages) return false;
       return route("pitBuilding", spec, (stage, place) => {
-        const bay = place.size[2] / garages;
-        const inner = -spec.side * (place.size[0] * 0.48);
-        const door = [0.10, 0.11, 0.13];
+        const W = place.size[0], H = place.size[1], L = place.size[2];
+        const bay = L / garages;
+        const inner = -spec.side * (W * 0.48);
+        const pairTeams = garages >= 16;
+        // One hall so the kit reads as a pit building, not N separate boxes.
+        if (!box(stage, place, [0, -H * 0.10, 0], [W, H * 0.68, L * 0.995], "shell")) {
+          return false;
+        }
+        if (!boxRgb(stage, place, [0, H * 0.26, 0],
+          [W * 0.90, H * 0.26, L * 0.97], PIT_GLASS)) return false;
+        // Thin canopy hanging over the inner lane (the TV shot).
+        if (!box(stage, place, [inner * 0.55, H * 0.10, 0],
+          [W * 0.28, 0.16, L * 0.98], "roof")) return false;
         for (let i = 0; i < garages; i++) {
-          const z = -place.size[2] / 2 + bay * (i + 0.5);
-          if (!box(stage, place, [0, -place.size[1] * 0.08, z],
-            [place.size[0], place.size[1] * 0.84, bay * 0.9], "shell")) return false;
-          if (!boxRgb(stage, place, [inner, -place.size[1] * 0.18, z],
-            [0.28, place.size[1] * 0.50, Math.max(2.2, bay * 0.52)], door)) return false;
-          if (!boxRgb(stage, place, [inner, place.size[1] * 0.16, z],
-            [0.32, 0.28, Math.max(3.0, bay * 0.72)], PIT_TEAM_COL[i % PIT_TEAM_COL.length])) return false;
+          const z = -L / 2 + bay * (i + 0.5);
+          if (!boxRgb(stage, place, [inner, -H * 0.20, z],
+            [0.22, H * 0.40, Math.max(2.4, bay * 0.58)], PIT_DOOR)) return false;
+          const teamI = pairTeams ? (i >> 1) : i;
+          if (!boxRgb(stage, place, [inner, H * 0.06, z],
+            [0.26, 0.20, Math.max(2.8, bay * 0.70)],
+            PIT_TEAM_COL[teamI % PIT_TEAM_COL.length])) return false;
+          if (i > 0) {
+            const zP = -L / 2 + bay * i;
+            if (!box(stage, place, [inner, -H * 0.14, zP],
+              [0.28, H * 0.46, Math.max(0.32, Math.min(0.55, bay * 0.08))],
+              "service")) return false;
+          }
         }
         return landmark("roof", stage, place, {
-          offset: [0, place.size[1] * 0.46, 0],
-          size: [place.size[0] * 1.08, place.size[1] * 0.08, place.size[2]],
+          offset: [0, H * 0.46, 0],
+          size: [W * 1.06, H * 0.08, L],
           kind: spec.style || "flat",
           colorName: "roof",
         });
