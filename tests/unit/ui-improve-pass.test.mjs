@@ -992,6 +992,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   h.nav.show("audio", false);
   assert.equal(h.panel("audio").hidden, false);
   assert.equal(h.title().textContent, "MUSIC & SOUND");
+  h.door("driving").onclick();
+  assert.equal(h.panel("driving").hidden, false);
+  assert.equal(h.title().textContent, "DRIVING");
+  assert.equal(h.panel("audio").hidden, true);
   h.nav.show("display", false);
   assert.equal(h.nav.back(), false, "BACK on a page pops to home");
   assert.equal(h.index().hidden, false);
@@ -1081,7 +1085,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "min-height"), "var(--chip-h)",
     "RENDERER summary matches the HUD / METRICS chip row");
-  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner #pm-display-adv > summary", "#pmsettings-inner #advanced-inner details > summary"]) {
+  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner #pm-display-adv > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
     assert.equal(decl(css("css/components.css"), sel, "height"), "auto", "fold summaries wrap instead of clipping their readout at 150%");
     assert.equal(decl(css("css/components.css"), sel, "flex-wrap"), "wrap");
   }
@@ -1132,9 +1136,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
   assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#advanced-inner, #pm-panel-driving\) details > summary/, "color"), "var(--steel)",
     "STEERING folds use the same disclosure chrome as DISPLAY");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary::after/, "content"), "none");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
   assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
     /25BE/,
     "MUSIC fold chevron sits on the left");
@@ -1328,7 +1332,7 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
   assert.equal(decl(components, ".sheet-foot .bigbtn:only-child", "flex"), "0 1 auto");
   assert.equal(decl(components, ".pm-group .tune-row .tune-label", "position"), "static");
   assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="region"] button', "white-space"), "normal");
-  assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 360px)")));
+  assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 600px)")));
   assert.equal(decl(css("css/career.css"), ".cr-cheats .sel-chip", "min-width"), "0");
 });
 

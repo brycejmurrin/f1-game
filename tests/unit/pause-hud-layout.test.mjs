@@ -16,7 +16,8 @@ test("any open screen hides race HUD chrome, DISPLAY keeps the live tower", () =
   assert.match(css, /\.hud-top/);
   assert.match(css, /#btn-cam/);
   assert.match(css, /\.dock/);
-  assert.match(css, /body:has\(#pmsettings:not\(\[hidden\]\)\)\s*:is\(/);
+  assert.match(css, /body:has\(#pmsettings:not\(\[hidden\]\) #pm-panel-display:not\(\[hidden\]\)\)\s*:is\(/);
+  assert.doesNotMatch(css, /body:has\(#pmsettings:not\(\[hidden\]\)\)\s*:is\(/);
 });
 
 test("garage camera stack hides under a dim overlay, not under garage itself", () => {

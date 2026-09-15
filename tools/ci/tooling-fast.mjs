@@ -311,6 +311,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/metrics.test.mjs",
   "tests/unit/perf-try.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
+  "tests/unit/contact-geometry.test.mjs",
+  "tests/unit/race-insights.test.mjs",
+  "tests/unit/driving-coach.test.mjs",
+  "tests/unit/ai-corridor.test.mjs",
   // @gen-test-groups:end
 ]);
 

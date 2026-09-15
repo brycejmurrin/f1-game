@@ -418,7 +418,7 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   // The NOW PLAYING card's transport (pm-prev / pm-play / pm-skip) sits after
   // QUIT and only while music is live; it is not a menu action.
   const ids = [...pause.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]).filter((id) => !/^pm-(prev|play|skip)$/.test(id));
-  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-coach", "pm-driving-trace", "pm-practice-set", "pm-practice-retry", "pm-settings", "pm-howto", "pm-standings", "pm-quit"]);
+  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-driving", "pm-settings", "pm-howto", "pm-standings", "pm-quit"]);
   assert.match(pause, /<div id="pm-now-card" class="as-now-card" hidden>/, "the pause NOW PLAYING card starts hidden; panel.js shows it while music plays");
   assert.match(pause, /id="pm-resume" autofocus/);
 });

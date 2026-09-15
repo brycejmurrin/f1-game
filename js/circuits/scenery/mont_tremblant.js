@@ -183,12 +183,17 @@
         return f >= 0.980 || f <= 0.068 || (f >= 0.690 && f <= 0.788);
       };
 
-      every(9, (k) => {
+      // every(14) and a 15 m base, not every(9) and 4-7 m. THIS is the block
+      // that made the circuit invisible — four ranks a side, starting inside the
+      // verge, every 36 m of lap. The comment below calls it "ragged, not a
+      // fence"; at 4 m it was a fence. Mont-Tremblant runs through forest, but
+      // the trees begin past the barrier and the runoff.
+      every(14, (k) => {
         const st = stand(k);
         for (const side of [-1, 1]) {
           if (blocked(k, side)) continue;
-          const base = 4.2 + hash(k * 13 + (side + 2) * 91) * 2.8;   // 4-7 m
-          const ranks = 4;
+          const base = 15 + hash(k * 13 + (side + 2) * 91) * 4;     // 15-19 m
+          const ranks = 3;
           for (let r = 0; r < ranks; r++) {
             const h = hash(k * 29 + r * 137 + (side + 2) * 61);
             if (r > 0 && h < 0.16) continue;            // ragged, not a fence
@@ -303,15 +308,22 @@
       // (row 0.020), runs the whole downhill sweep with nothing built at all
       // (row 0.330), walks up to both Bridge abutments (row 0.776), and holds
       // the outfield to the line past Paddock Bend (row 0.897).
-      forestEdge(0.036, 0.088, -1, 4.5, {});
-      forestEdge(0.290, 0.398, -1, 4.5, {});
-      forestEdge(0.430, 0.500, -1, 4.0, {});
-      forestEdge(0.505, 0.552, -1, 5.0, {});
-      forestEdge(0.660, 0.770, -1, 4.5, {});
-      forestEdge(0.660, 0.770, 1, 5.5, {});
-      forestEdge(0.782, 0.828, -1, 4.5, {});
-      forestEdge(0.782, 0.828, 1, 5.5, {});
-      forestEdge(0.900, 0.985, -1, 4.5, {});
+      // GAP 15-19 m, not 4.0-5.5. A 2026-09-15 visual pass found the circuit
+      // completely invisible behind these belts: a 4.5 m gap puts the trunks
+      // inside the runoff, so the canopy fills the camera from every roadside
+      // view. Mont-Tremblant is carved through forest, but the treeline stands
+      // beyond the verge, not on it. `spacing` thins them from the 4 m default
+      // (which was silently ignored before the forestEdge fix) to a woodland
+      // that you can see the track through.
+      forestEdge(0.036, 0.088, -1, 17, { spacing: 13 });
+      forestEdge(0.290, 0.398, -1, 16, { spacing: 13 });
+      forestEdge(0.430, 0.500, -1, 15, { spacing: 12 });
+      forestEdge(0.505, 0.552, -1, 18, { spacing: 14 });
+      forestEdge(0.660, 0.770, -1, 17, { spacing: 13 });
+      forestEdge(0.660, 0.770, 1, 19, { spacing: 14 });
+      forestEdge(0.782, 0.828, -1, 16, { spacing: 13 });
+      forestEdge(0.782, 0.828, 1, 18, { spacing: 14 });
+      forestEdge(0.900, 0.985, -1, 17, { spacing: 13 });
 
       // ---------------------------------------------------------------- 6.
       // THE CUTTING AND THE ESSES (T2-T3, row 0.205). Earth banks either side,
@@ -342,16 +354,20 @@
                  h < 0.5 ? ROCK : ROCK2, [a.r, a.u, a.t]);
         }
       }
-      every(7, (k) => {
+      // every(13) and 16 m out. The original comment below said these sat
+      // "right on top of the rail" at 4.6 m — accurate, and that is the defect:
+      // the 2026-09-15 pass showed nothing of the circuit but trunks. The forest
+      // stays; it stands back from the barrier now.
+      every(13, (k) => {
         if (!within(k, ES0, ES1)) return;
         for (const side of [-1, 1]) {
           const h = hash(k * 41 + (side + 2) * 23);
-          const dist = 4.6 + h * 1.6;                 // right on top of the rail
+          const dist = 16 + h * 4;                    // beyond the rail and the verge
           const a = anchor(k, side, dist);
           if (!onTrack(a.c[0], a.c[2], 1.0)) {
             tree(k, side, dist, 17 + h * 8, h < 0.5 ? HARD : HARD2);
           }
-          const d2 = 8 + h * 4;
+          const d2 = 23 + h * 5;
           const b = anchor(k, side, d2);
           if (!onTrack(b.c[0], b.c[2], 1.2)) pine(k, side, d2, 19 + h * 9, PINE);
           // Ferns and scrub hold the foot of the bank in the damp of the cut.
