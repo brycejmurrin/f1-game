@@ -268,10 +268,10 @@ function buildTTResults() {
   const lbHead = document.createElement("div");
   lbHead.className = "sel-label";
   lbHead.id = "res-tt-board";
-  lbHead.textContent = `LEADERBOARD — ${track.def.name}`;
+  lbHead.textContent = `MATCHING SETUP & CONDITIONS — ${track.def.name}`;
   els.resultsTable.appendChild(lbHead);
 
-  const board = G.ttBoard(track.def.id);
+  const board = G.records.board(track.def.id);
   board.forEach((e, i) => {
     const team = G.teamById(e.teamId);
     const name = `${e.code}  ${e.name}${team ? `  · ${team.short}` : ""}`;
@@ -306,7 +306,7 @@ function buildTTResults() {
     clrBtn.textContent = "✕ CLEAR GHOST";
     clrBtn.onclick = () => {
       Ghost.clear(track.def.id);
-      const remaining = G.ttBoard(track.def.id);
+      const remaining = G.records.board(track.def.id);
       G.ttRecord = remaining.length ? remaining[0].t : Infinity;
       buildTTResults();
     };

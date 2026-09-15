@@ -73,8 +73,8 @@ const SetupTune = (function () {
   // team's own default so an untouched car is exactly 1.0. Stiffer overall
   // (total): sharper turn-in (cornering up) at the cost of traction (accel
   // down); stiffer FRONT than rear (split): more stable under braking, less
-  // traction. The contract has no front/rear balance axis, so bar balance
-  // cannot move understeer here — brake bias (below) is the seam that can.
+  // traction. The additional axleGrip channel below expresses
+  // front/rear balance through lateral load transfer.
   function mods(teamId) {
     const t = get(teamId), d = defaults(teamId);
     const total = ((t.arbF - d.arbF) + (t.arbR - d.arbR)) / 2;
@@ -86,6 +86,28 @@ const SetupTune = (function () {
       cornering: cl(1 + 0.006 * total),
       braking: cl(1 + 0.004 * split),
     };
+  }
+  // Front/rear roll-stiffness changes redistribute lateral load transfer.
+  // Four contact-patch loads with sublinear tyre load sensitivity; normalise
+  // against the same turn on the works setup so defaults remain identity.
+  function balance(teamId) {
+    const t = get(teamId), d = defaults(teamId);
+    return Math.max(-0.3, Math.min(0.3, ((t.arbF - t.arbR) - (d.arbF - d.arbR)) * 0.025));
+  }
+  const axleOut = { f: 1, r: 1 };
+  function axleGrip(bias, lateralAccel, frontLoad = 0.47) {
+    axleOut.f = 1; axleOut.r = 1;
+    if (!Number.isFinite(bias) || !bias || !Number.isFinite(lateralAccel)) return axleOut;
+    const demand = Math.min(1, Math.abs(lateralAccel) / PhysicsConsts.LAT_MAX);
+    const share = Math.max(0.2, Math.min(0.8, frontLoad + bias));
+    const transfer = demand * 0.28;
+    function capacity(load, shift) {
+      const half = load * 0.5, d = Math.min(half * 0.95, shift);
+      return Math.pow(half + d, 0.85) + Math.pow(half - d, 0.85);
+    }
+    axleOut.f = capacity(frontLoad, transfer * share) / capacity(frontLoad, transfer * frontLoad);
+    axleOut.r = capacity(1 - frontLoad, transfer * (1 - share)) / capacity(1 - frontLoad, transfer * (1 - frontLoad));
+    return axleOut;
   }
   // RIDE HEIGHT / RAKE → the aero-load channel: rake in [-1, 1] from the
   // team's default over the half-range. Parts.aeroLoad adds RH_GAIN·rake to
@@ -107,6 +129,6 @@ const SetupTune = (function () {
     return { f: cl(b / BB_REF), r: cl((1 - b) / (1 - BB_REF)) };
   }
 
-  return { RANGE, FIELDS, BASE, DEFAULTS, BB_REF, defaults, get, set, reset, isDefault, mods, rake, aero, brakeBias, bbScales, clampField };
+  return { RANGE, FIELDS, BASE, DEFAULTS, BB_REF, defaults, get, set, reset, isDefault, mods, rake, aero, brakeBias, bbScales, clampField, balance, axleGrip };
 })();
 Object.freeze(SetupTune);

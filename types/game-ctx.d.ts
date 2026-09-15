@@ -293,6 +293,9 @@ interface PitSession {
   reset(c: CarState): void;
   info(c?: CarState): Record<string, unknown> | null;
   setNext(c: CarState, record: unknown): void;
+  estimate(c: CarState): { lossS: number; gapS: number | null } | null;
+  choices(c: CarState): Array<{ id: string; code: string }>;
+  selectNext(c: CarState, id: string): boolean;
   serviceCar(c: CarState): void;
 }
 /** The session-bound half of TyreModel — TyreModel.create(G)'s return. */
@@ -350,7 +353,7 @@ interface GameCtx {
   seasonMode: boolean;
   /** The championship round in a season/career, else the session race counter. */
   readonly seasonRound: number;
-  readonly ttNewRecord: boolean;
+  ttNewRecord: boolean;
   readonly ttSessionTs: number;
   ttRecord: number;
   timeTrial: boolean;
@@ -364,6 +367,11 @@ interface GameCtx {
   raceTyreWear: TyreLevel;
   readonly tyres: TyreSession;
   readonly pits: PitSession;
+  readonly roadWetness: () => number;
+  readonly recordControls: () => Record<string, unknown>;
+  readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
+  readonly coach: { status(): Record<string, unknown> | null };
+
   readonly retireCar: (c: CarState, reason?: string) => void;
   readonly ranked: CarState[];
   readonly sectorLast: [number | null, number | null, number | null];
@@ -721,3 +729,6 @@ declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
 declare const KeyBinds: GameModuleFactory;
 declare const SettingsExport: GameModuleFactory;
+
+declare const SessionRecords: GameModuleFactory;
+declare const DrivingCoach: GameModuleFactory;
