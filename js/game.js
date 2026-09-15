@@ -4221,7 +4221,14 @@ function updateCar(c, dt, ranked) {
   c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
 
   // --- offroad ---
-  c.offroad = Math.abs(c.x) > hw && !c.onKerb;
+  // THE PIT LANE IS ROAD. On the 34 circuits that have room for a separate
+  // ribbon it sits beyond `hw`, so without this every car that drove into it
+  // would pick up grass drag, a cut count and eventually a rescue — i.e. the
+  // lane would be paint you get penalised for using. Tracks.inPitLane is the
+  // same fit the ribbon is built from, so the surface a driver can see and the
+  // surface the physics grants are the same strip by construction.
+  c.inPitLane = Math.abs(c.x) > hw && Tracks.inPitLane(track, c.s, c.x);
+  c.offroad = Math.abs(c.x) > hw && !c.onKerb && !c.inPitLane;
   if (c.offroad) {
     const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
     // Grass DRAG: slows you toward a crawl, and never speeds you up. The floor

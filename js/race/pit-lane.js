@@ -523,8 +523,27 @@ const PitLane = (function () {
      *  track this lands exactly where the road edge USED to be, which is what
      *  makes the racing surface unchanged and the lane genuinely new road. */
     function laneEdge(hw, side) { return (hw - lw(hw)) * side; }
+    /** THE SEPARATE RIBBON at this arc position, or null. On the 34 circuits
+     *  whose walls leave room, Tracks builds a second road beside the racing
+     *  surface and this is where it is; everywhere else there is only paint.
+     *
+     *  TWO THINGS MOVE ONTO IT AND ONE DOES NOT. Where a car serving a stop
+     *  SITS, and where its box is, are the ribbon — that is the point of
+     *  building one. The COMMITMENT stays on the painted line inside the road,
+     *  because that line is the entry: a real driver takes the painted lane on
+     *  the track and it delivers them onto the pit road. Moving the commitment
+     *  out to the ribbon would ask a driver at racing speed to already be on a
+     *  surface they reach by committing, which is the "aim at nothing" failure
+     *  the painted line was drawn to end. */
+    function ribbonAt(s) {
+      if (typeof Tracks === "undefined" || !Tracks.pitLaneAt || !G.track || s == null) return null;
+      return Tracks.pitLaneAt(G.track, s);
+    }
     /** The lane's lateral CENTRE: where the box is and where a car in it sits. */
-    function laneCentre(hw, side) { return (hw - lw(hw) * 0.5) * side; }
+    function laneCentre(hw, side, s) {
+      const rib = ribbonAt(s);
+      return rib ? rib.centre : (hw - lw(hw) * 0.5) * side;
+    }
     /** Is this car laterally IN the lane (within BOX_LAT of it)? Written in
      *  "toward the pit side" coordinates — x * side — so one comparison serves
      *  both sides and there is no sign to get wrong.
@@ -538,6 +557,13 @@ const PitLane = (function () {
      *  never show up as a failing test on the 51 that exist today. Half a car
      *  is the least that can honestly be called "off the racing line". */
     function inLaneLat(c, hw, side) {
+      const rib = ribbonAt(c && c.s);
+      // On a ribbon the threshold is its INNER EDGE less the same tolerance: a
+      // car whose centre is BOX_LAT inside the stripe still has most of itself
+      // on the pit road. No floor is needed here — the ribbon's inner edge is
+      // always outside `hw`, so the racing line can never satisfy it, which is
+      // exactly what the floor below exists to guarantee on a painted lane.
+      if (rib) return (c.x || 0) * side >= rib.inner * side - BOX_LAT;
       return (c.x || 0) * side >= Math.max(1, hw - lw(hw) - BOX_LAT);
     }
     /** Where a car SERVING A STOP should be laterally — the lane's centre — or
@@ -552,7 +578,7 @@ const PitLane = (function () {
      *  happen, exactly as it would not in the real thing. */
     function laneX(c, hw, want) {
       const zz = z();
-      return zz && inLane(c) ? laneCentre(hw, zz.side) : want;
+      return zz && inLane(c) ? laneCentre(hw, zz.side, c && c.s) : want;
     }
     function committing(c, zz, L) {
       if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
@@ -841,7 +867,7 @@ const PitLane = (function () {
         // over three metres across the calendar). Both are null/false outside
         // the window, where there is no answer and no sample worth paying for.
         inLaneLat: lat ? inLaneLat(car, lat.hw, zz.side) : false,
-        laneX: lat ? +laneCentre(lat.hw, zz.side).toFixed(2) : null,
+        laneX: lat ? +laneCentre(lat.hw, zz.side, car && car.s).toFixed(2) : null,
         inWindow: !!(car && inWindowOf(car)),
         stops: (car && car.pitStops) || 0,
         // How far through the commitment dwell — 0 unless the car is holding

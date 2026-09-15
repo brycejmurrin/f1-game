@@ -956,9 +956,82 @@ const TrackMesh = (function () {
     return out;
   }
 
+  // ── The pit lane, as an actual second road ──────────────────────────────────
+  // A ribbon of its own tarmac beside the racing surface across the pit window,
+  // separated from it by the blue stripe the player already learned as "the pit
+  // lane" and bounded on the far side by a white line.
+  //
+  // APPENDED to the start-line decal's buffers, like buildGridBoxes, and for the
+  // same three reasons: it is flat paint-and-tarmac on the ground, it needs the
+  // decal's depth bias to sit over the verge without z-fighting, and riding a
+  // mesh all three backends already draw means GLX, WGX and TLX get it with no
+  // per-backend work. It is also the only seam late enough to see the finished
+  // barL/barR — the driving boundary is not tightened until buildProps has
+  // placed the scenery, and the whole fit is a question about that boundary.
+  //
+  // WHERE IT IS is not decided here: Tracks.pitLaneFit measures the room per
+  // node and hands over `w`, which is zero everywhere the lane does not exist —
+  // outside the window, through the end tapers, and on every circuit whose walls
+  // leave no room at all (Monaco, Baku, Vegas, Singapore). Those keep the
+  // painted-on-road lane, which is unchanged.
+  const PIT_LIFT = 0.05;          // along the road normal, matching buildStartLine
+  const PIT_EDGE_W = 0.15;        // the white line on the far side
+  const PIT_SEP_W = 0.25;         // the blue stripe against the racing surface
+  const PIT_TARMAC = [0.135, 0.145, 0.165];
+  const PIT_SEP_COL = [0.10, 0.36, 0.86];   // matches the lit shaders' pitPaint
+  function buildPitLane(track, out) {
+    const lane = track.pitLane;
+    if (!lane || !lane.w) return out;
+    const { px, py, pz, hw, n } = track;
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
+    const side = lane.side;
+    // One node's four lateral offsets, ordered ASCENDING in r so the winding
+    // below is the same on either side of the road.
+    const ring = (k) => {
+      const w = lane.w[k];
+      if (!(w > 0.01)) return null;
+      const inner = side * (hw[k] + lane.gap), outer = side * (hw[k] + lane.gap + w);
+      const sep = side * (hw[k] + lane.gap + PIT_SEP_W);
+      const edge = side * (hw[k] + lane.gap + w - PIT_EDGE_W);
+      return side > 0 ? [inner, sep, edge, outer] : [outer, edge, sep, inner];
+    };
+    const at = (k, o) => {
+      const u = upOf(track, k);
+      const by = bankOffsetAt(track, k, o) + PIT_LIFT;
+      return [px[k] + track.rx[k] * o + u[0] * by,
+              py[k] + track.ry[k] * o + u[1] * by,
+              pz[k] + track.rz[k] * o + u[2] * by];
+    };
+    for (let k = 0; k < n; k++) {
+      const k2 = (k + 1) % n;
+      const a = ring(k), b = ring(k2);
+      if (!a || !b) continue;
+      const ua = upOf(track, k), ub = upOf(track, k2);
+      for (let i = 0; i < 3; i++) {
+        // Ascending order puts the blue stripe against the road on the right and
+        // the white line against the road on the left, so pick the colour from
+        // which END of the ring this strip touches, not from its index.
+        const c = i === (side > 0 ? 0 : 2) ? PIT_SEP_COL
+                : i === (side > 0 ? 2 : 0) ? white : PIT_TARMAC;
+        const base = out.pos.length / 3;
+        const vert = (P, u) => {
+          out.pos.push(P[0], P[1], P[2]);
+          out.nrm.push(u[0], u[1], u[2]);
+          out.col.push(c[0], c[1], c[2]);
+        };
+        // Same CCW winding as the road, buildStartLine and buildGridBoxes: the
+        // lateral pair first, then the same pair one node further along.
+        vert(at(k, a[i]), ua); vert(at(k, a[i + 1]), ua);
+        vert(at(k2, b[i]), ub); vert(at(k2, b[i + 1]), ub);
+        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      }
+    }
+    return out;
+  }
+
   // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
   return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
            nodeGrid, buildRoad, buildTerrain, buildFloor, gridSlot, buildGridBoxes,
-           GRID_SLOTS };
+           buildPitLane, GRID_SLOTS };
 })();
 Object.freeze(TrackMesh);
