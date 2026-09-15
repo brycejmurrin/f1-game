@@ -686,12 +686,17 @@ body[data-density="compact"] #announce {
   top: calc(22svh / var(--hud-z));
   text-shadow: 0 0 16px rgba(0, 0, 0, 0.85);
 }
+#announce[data-kind="warning"],
 #announce[data-kind="penalty-warn"] {
   font-size: clamp(20px, calc(4.5 * var(--vwzh)), 36px);
   font-style: normal;
   top: calc(18svh / var(--hud-z));
   color: var(--sec-slow);
   text-shadow: 0 0 18px color-mix(in srgb, var(--sec-slow) 75%, transparent);
+  background: var(--surf-1);
+  padding: calc(var(--gap) * 0.5) var(--gap);
+  border: 1px solid currentColor;
+  border-radius: var(--r-sm);
 }
 #announce[data-kind="penalty-hit"] {
   font-size: clamp(26px, calc(6 * var(--vwzh)), 48px);

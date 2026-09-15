@@ -40,15 +40,22 @@ const Onboard = (function () {
     const first = row.codes.find((c) => c != null);
     return first == null ? null : Input.padLabel(first);
   }
+  function inputKind() {
+    if (typeof Input !== "undefined" && Input.activeInputSource) return Input.activeInputSource();
+    return typeof Input !== "undefined" && Input.touchControlsNeeded && Input.touchControlsNeeded() ? "touch" : "keyboard";
+  }
   function verb(key) {
     const action = ACTION_OF[key];
     const touch = !!(typeof Input !== "undefined" && Input.touchControlsNeeded && Input.touchControlsNeeded());
     const NOUN = { brake: "BRAKE", ot: "OVERTAKE", aero: "ACTIVE AERO" }[key];
-    if (typeof Input !== "undefined" && Input.padPresent && Input.padPresent()) {
+    const source = inputKind();
+    if (source === "controller") {
       const b = padFor(action);
       if (b) return `${NOUN} — ${b}`;
     }
-    if (touch) return key === "brake" ? "TAP AND HOLD BRAKE" : (key === "ot" ? "TAP OVERTAKE" : "TAP AERO");
+    if (source === "touch" || (source !== "keyboard" && touch)) {
+      return key === "brake" ? "TAP AND HOLD BRAKE" : (key === "ot" ? "TAP OVERTAKE" : "TAP AERO");
+    }
     const k = codeFor(action);
     return k ? `${NOUN} — ${k}` : NOUN;
   }

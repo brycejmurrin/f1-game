@@ -50,7 +50,7 @@ function stubStore() {
 }
 
 /* ── RESULTS / STANDINGS on the real SeasonCal ─────────────────────────── */
-function bootResults({ state = "menu", season, cars, netPlay }) {
+function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true }) {
   const dom = makeDom();
   const tracks = ["bahrain", "jeddah", "melbourne"].map((id) => ({ id, name: id.toUpperCase(), gp: id + " GP", classic: false }));
   const sb = {
@@ -72,7 +72,7 @@ function bootResults({ state = "menu", season, cars, netPlay }) {
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
   const els = { resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next") };
   const G = {
-    $: (id) => dom.byId(id), els, season, cars, state, seasonMode: true, track: { def: tracks[0] },
+    $: (id) => dom.byId(id), els, season, cars, state, seasonMode, track: { def: tracks[0] },
     cssCol: (c) => "rgb(" + c.join(",") + ")", announce() {}, soundOn: false, careerSettlement: null,
     netPlay,
   };
@@ -146,6 +146,56 @@ test("a GUEST's RESULTS labels DNF from the host's verdict, not from its own rel
   const solo = bootResults({ season, cars });
   solo.api.buildResults([cars[0], cars[1]]);
   assert.equal(nameOf(rowsOf(solo.els.resultsTable)[1]), "BBB  Bravo  (gearbox)");
+});
+
+test("race RESULTS shows host-corrected elapsed and same-lap gaps only when fields are present", () => {
+  const team = (id, color) => ({ id, name: id.toUpperCase(), color });
+  const cars = [
+    { driverId: "w", code: "WIN", name: "Winner", team: team("red", [1, 0, 0]), lap: 5, finishT: 100, penalty: 0 },
+    // The local finish is earlier, but the host penalty makes this car five
+    // seconds behind. This catches stale guest penalty/timing fields.
+    { driverId: "p", code: "PEN", name: "Penalized", team: team("blue", [0, 0, 1]), lap: 5, finishT: 95, penalty: 0 },
+    { driverId: "t", code: "TIE", name: "Tied", team: team("red", [1, 0, 0]), lap: 5, finishT: 100, penalty: 0 },
+    { driverId: "l", code: "LAP", name: "Lapped", team: team("blue", [0, 0, 1]), lap: 4, finishT: 130, penalty: 0 },
+    { driverId: "d", code: "DNF", name: "Retired", team: team("red", [1, 0, 0]), lap: 2, retired: true, dnf: "engine" },
+  ];
+  const host = [
+    { d: "w", t: 100, p: 0, lap: 5, r: 0 },
+    { d: "p", t: 95, p: 10, lap: 5, r: 0 },
+    { d: "t", t: 100, p: 0, lap: 5, r: 0 },
+    { d: "l", t: 130, p: 0, lap: 4, r: 0 },
+    { d: "d", t: 0, p: 0, lap: 2, r: "engine" },
+  ];
+  const netPlay = { active: () => true, ownsClassification: () => false, peerResult: () => host };
+  const h = bootResults({ season: null, cars, netPlay, seasonMode: false });
+  h.api.buildResults(cars.slice());
+  const table = h.els.resultsTable;
+  assert.match(table.children[0].textContent, /OFFICIAL WINNER ELAPSED.*WIN.*1:40\.00/);
+  const rows = rowsOf(table);
+  const gaps = (row) => row.children.flatMap((c) => c.children || [])
+    .filter((c) => c.classList.contains("q-time")).map((c) => c.textContent);
+  assert.deepEqual(gaps(rows[0]), []);
+  assert.deepEqual(gaps(rows[1]), ["+5.000s"], "host penalty is included in the gap");
+  assert.deepEqual(gaps(rows[2]), ["+0.000s"], "a timed tie is explicit instead of looking like missing data");
+  assert.deepEqual(gaps(rows[3]), [], "lap-down finishers do not get same-lap timing");
+  assert.match(nameOf(rows[4]), /\(engine\)/);
+
+  // If the host did not send a winner elapsed time, suppress both the summary
+  // and dependent gaps rather than falling back to this guest's stale fields.
+  const missing = host.map((e) => e.d === "w" ? { d: e.d, t: null, p: e.p, lap: e.lap, r: e.r } : e);
+  const noOfficial = bootResults({ season: null, cars, seasonMode: false,
+    netPlay: { active: () => true, ownsClassification: () => false, peerResult: () => missing } });
+  noOfficial.api.buildResults(cars.slice());
+  assert.equal(noOfficial.els.resultsTable.children.some((e) => e.classList.contains("sel-label")), false);
+  assert.equal(rowsOf(noOfficial.els.resultsTable).some((r) => r.children
+    .flatMap((c) => c.children || []).some((c) => c.classList.contains("q-time"))), false);
+  for (const partial of [host.slice(0, 1), host.slice().reverse()]) {
+    const unclassified = bootResults({ season: null, cars, seasonMode: false,
+      netPlay: { active: () => true, ownsClassification: () => false, peerResult: () => partial } });
+    unclassified.api.buildResults(cars.slice());
+    assert.equal(unclassified.els.resultsTable.children.some((e) => e.classList.contains("sel-label")), false,
+      "partial or mismatched host classification cannot label a local order official");
+  }
 });
 
 test("STANDINGS title says which half of a sprint weekend it stands on, and the pause menu's NEXT line is the race in progress", () => {
@@ -418,7 +468,17 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   // The NOW PLAYING card's transport (pm-prev / pm-play / pm-skip) sits after
   // QUIT and only while music is live; it is not a menu action.
   const ids = [...pause.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]).filter((id) => !/^pm-(prev|play|skip)$/.test(id));
-  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-coach", "pm-driving-trace", "pm-practice-set", "pm-practice-retry", "pm-settings", "pm-howto", "pm-standings", "pm-quit"]);
+  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-howto", "pm-standings", "pm-driving-trace", "pm-quit"]);
+  const advanced = html.slice(html.indexOf('id="advanced"'), html.indexOf("</section>", html.indexOf('id="advanced"')));
+  const practiceIds = ["pm-driving", "pm-coach", "pm-coach-last", "pm-practice-set", "pm-practice-retry"];
+  for (const id of practiceIds) {
+    assert.match(advanced, new RegExp(`id="${id}"`), `${id} lives in STEERING & ASSISTS`);
+    assert.doesNotMatch(pause, new RegExp(`id="${id}"`), `${id} is not a pause-menu action`);
+  }
+  assert.ok(advanced.indexOf('id="pm-driving"') < advanced.indexOf('id="adv-feel-details"'),
+    "DRIVING & PRACTICE comes before FEEL in STEERING & ASSISTS");
+  assert.match(pause, /<div class="sheet-head"><h2 id="dlg-pause">PAUSED<\/h2><button id="pm-resume" autofocus>/,
+    "RESUME is pinned in the sheet header, above the scrolling pause body");
   assert.match(pause, /<div id="pm-now-card" class="as-now-card" hidden>/, "the pause NOW PLAYING card starts hidden; panel.js shows it while music plays");
   assert.match(pause, /id="pm-resume" autofocus/);
 });

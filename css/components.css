@@ -172,6 +172,8 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
   --vwz:  calc(1vw  / var(--sheet-scale, var(--ui-scale)));
   --vhz:  calc(1vh  / var(--sheet-scale, var(--ui-scale)));
   --svhz: calc(1svh / var(--sheet-scale, var(--ui-scale)));
+  /* Keep native sliders at 32 painted px when this sheet is fit-capped. */
+  --slider: calc(32px / var(--sheet-scale, var(--ui-scale)));
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);
@@ -647,6 +649,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    column past the sheet edge, where .sheet's overflow: hidden clipped it
    silently. The compact quali/history rules already wrap; this is the base. */
 .res-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.res-name > .q-time { display: block; font-size: var(--fs-micro); }
 .res-pts { width: 62px; text-align: right; white-space: nowrap; font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
 /* TYRE STINT STRIP (js/physics/tyre-model.js stints(), drawn by results-sheet.js
    and only while TYRE WEAR is on). A PROPORTIONAL bar, not a row of chips: each
@@ -1072,6 +1075,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 0 rgba(0, 0, 0, 0.32),
     0 6px 20px color-mix(in oklab, var(--red) 42%, transparent);
+  width: 100%; margin: 0; min-height: var(--tap-sm);
+}
+/* Resume stays in the fixed head while practice and strategy scroll. */
+#pausemenu .sheet-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center; gap: var(--gap);
 }
 #pm-quit {
   color: color-mix(in oklab, var(--red) 62%, #fff);
@@ -1128,13 +1138,18 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
      instead — same bug family as the auto-fill grids. */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: calc(var(--gap) * 0.6);
+  align-items: start;
 }
-#pm-resume,
+#pausemenu .sheet-body > details,
 #pm-quit,
 #pm-standings,
 #pm-howto,
 #pm-build,
 #pm-now-card { grid-column: 1 / -1; }   /* the NOW PLAYING card spans the pair grid like the build tag */
+#pausemenu .sheet-body > details { min-width: 0; }
+#pausemenu details > .stack,
+#pm-driving > .stack { padding: calc(var(--gap) * 0.5) 0; }
+#pm-pit-choice { max-width: 100%; min-height: var(--tap-sm); }
 /* The card's transport keeps the --chip-h square every other small control
    has (css/tuner.css .as-tbtn): the stack's own button rules — full width,
    compact padding — must not reshape it. */
@@ -1293,11 +1308,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 /* The revert sits in the label row, after the value, and is deliberately quiet:
    it is an escape hatch, not an action anyone is looking for. Full tap height
    via the shared ladder — it is a real target on a phone, not a text link. */
-.tune-revert {
+.tune-revert,
+#pmsettings-inner .pm-group .tune-revert {
   font: inherit; font-size: var(--fs-micro); font-style: normal;
   letter-spacing: var(--ls-4); text-transform: uppercase;
   margin-left: auto; padding: 0 calc(var(--gap) * 0.5);
   min-height: var(--tap-sm); min-width: var(--tap-sm);
+  width: auto; height: auto; flex-shrink: 0; justify-content: center; text-align: center;
   color: var(--dim); background: var(--plate); border: 1px solid var(--plate-line);
   border-radius: var(--r-xs); cursor: pointer;
   touch-action: manipulation;
@@ -1307,13 +1324,20 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pmsettings-inner .pm-doors button {
   width: auto;
+  height: auto;
+  flex-direction: column;
+  align-items: flex-start;
   /* A door, not a key/value row. */
   justify-content: center;
-  text-align: center;
+  text-align: left;
   /* Title-room recipe: carbon tile + steel line. MORE doors sit on the
      settings grain the same way #overlay alts sit on the title grain. */
   background: var(--plate-opaque);
   border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
+#pm-settings-index small {
+  font-size: var(--fs-micro); font-weight: 400; letter-spacing: normal;
+  color: var(--dim);
 }
 .sheet[data-density="compact"] .pm-group-h {
   letter-spacing: var(--ls-4);
@@ -1500,6 +1524,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   min-width: min(100%, var(--balance-min));
   margin: 0;
 }
+#pm-settings-index { --balance-basis: max(12rem, calc(50% - var(--gap) * 0.25)); }
 /* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't
    have to scroll through a single full-width column of buttons.
    Each option button shrinks from full-sheet width (~717px) to half-width

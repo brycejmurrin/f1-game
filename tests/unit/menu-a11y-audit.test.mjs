@@ -288,6 +288,26 @@ test("MenuNav exports items/currentItem/ownsArrows for the focus-landing seam", 
 
 /* ── 2. TopModal: containment never lands on a hidden control ────────────── */
 
+test("repeated keyboard Escape advances one dialog page at a time", () => {
+  const dom = makeDom({ readyState: "loading", tagFor: id => id === "pmsettings" ? "dialog" : "div" });
+  const { els, UiLayers } = layerStack(dom, ["pmsettings"]);
+  const sb = sandbox(dom, { UiLayers, MutationObserver: moShim().MutationObserver });
+  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: "js/ui/modal.js" });
+  const dlg = els[0];
+  dlg.hidden = false;
+  dlg.setAttribute("data-esc-close", "pm-settings-close");
+  const close = control(dom, dlg, "pm-settings-close");
+  let backs = 0;
+  close.onclick = () => { backs++; };
+  for (let i = 1; i <= 3; i++) {
+    const event = { key: "Escape", defaultPrevented: false, stopped: false,
+      preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+    sb.TopModal.onEscape(event);
+    assert.equal(backs, i);
+    assert.equal(event.defaultPrevented && event.stopped, true, "native cancel cannot also pop this page");
+  }
+});
+
 test("TopModal.onFocusIn pulls focus to the first SHOWN control, not the first in DOM order", () => {
   const h = bootTopModal(["select"]);
   const select = h.layer("select");

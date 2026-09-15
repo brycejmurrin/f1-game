@@ -8,6 +8,19 @@ import { pickCircuit } from "./circuit-axis.mjs";
 const require = createRequire(import.meta.url);
 const { devices } = require("playwright");
 
+// Lighting and camera tuning is reachable only from DISPLAY's disclosed
+// ADVANCED VISUALS group. Keep the catalog on the player route: its point is
+// to audit a screen in the state a player can actually reach.
+async function openVisualTuner(p, tunerId, timeout = 15000) {
+  await p.evaluate(() => document.getElementById("pm-open-display")?.click());
+  await p.waitForFunction(() => !document.getElementById("pm-panel-display").hidden,
+    null, { polling: 100, timeout });
+  await p.evaluate(() => { if (!document.getElementById("pm-visual-tuners")?.open) document.querySelector("#pm-visual-tuners > summary")?.click(); });
+  await p.waitForFunction(() => document.getElementById("pm-visual-tuners")?.open,
+    null, { polling: 100, timeout });
+  await p.evaluate((id) => document.getElementById(id)?.click(), tunerId);
+}
+
 export const VIEWPORTS = [
   // The 4th element is the SAFE-AREA INSET to inject (see applyInsets): Chromium
   // reports env(safe-area-inset-*) as 0 under device emulation, so a notch has
@@ -164,42 +177,14 @@ export const SCREENS = [
       await p.evaluate(() => document.getElementById("cs-customize")?.click());
       await p.waitForSelector("#customize:not([hidden])", { timeout: 15000 }); } },
 
-  { id: "advanced", name: "Advanced steering", root: "#advanced", open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
-      await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
-      await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
-      // Open SETTINGS through the app's own door (pause -> SETTINGS), not by
-      // forcing `hidden = false`. The screen keeps internal state, and a cell
-      // that had already opened it left that state saying "open" while the
-      // between-cell reset hid the element — so the next click on a panel button
-      // did nothing at all. Every tuner cell in the sweep skipped from that, and
-      // in isolation they all passed, which is what made it look like a route bug.
-      await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
-      await p.waitForTimeout(200);
-      await p.evaluate(() => document.getElementById("pm-settings")?.click());
-      await p.waitForFunction(() => !document.getElementById("pmsettings").hidden,
-        null, { timeout: 15000 });
-      await p.waitForTimeout(250);
-      await p.evaluate(() => document.getElementById("pm-advanced")?.click());
+  { id: "advanced", name: "Steering & assists", root: "#pmsettings", open: async (p) => {
+      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
+      await p.click("#pm-advanced");
       await p.waitForSelector("#advanced:not([hidden])", { timeout: 15000 }); } },
 
-  { id: "audioset", name: "Music & sound", root: "#audioset", open: async (p) => {
-      await p.evaluate(async () => { await window.__apex.race("monza"); });
-      await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
-      await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
-      // Open SETTINGS through the app's own door (pause -> SETTINGS), not by
-      // forcing `hidden = false`. The screen keeps internal state, and a cell
-      // that had already opened it left that state saying "open" while the
-      // between-cell reset hid the element — so the next click on a panel button
-      // did nothing at all. Every tuner cell in the sweep skipped from that, and
-      // in isolation they all passed, which is what made it look like a route bug.
-      await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
-      await p.waitForTimeout(200);
-      await p.evaluate(() => document.getElementById("pm-settings")?.click());
-      await p.waitForFunction(() => !document.getElementById("pmsettings").hidden,
-        null, { timeout: 15000 });
-      await p.waitForTimeout(250);
-      await p.evaluate(() => document.getElementById("pm-audio")?.click());
+  { id: "audioset", name: "Music & sound", root: "#pmsettings", open: async (p) => {
+      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
+      await p.click("#pm-audio");
       await p.waitForSelector("#audioset:not([hidden])", { timeout: 15000 }); } },
 
   { id: "spotify", name: "Spotify player", root: "#spotifypanel", open: async (p) => {
@@ -286,7 +271,7 @@ export const SCREENS = [
       await p.waitForFunction(() => !document.getElementById("pmsettings").hidden,
         null, { timeout: 15000 });
       await p.waitForTimeout(250);
-      await p.evaluate(() => document.getElementById("pm-lighting")?.click());
+      await openVisualTuner(p, "pm-lighting");
       // waitForSelector requires VISIBILITY, and the panel is un-hidden a frame
       // before its rows are built, so it has a zero box at that instant. Wait on
       // the attribute instead, then let the layout settle.
@@ -309,7 +294,7 @@ export const SCREENS = [
       await p.waitForFunction(() => !document.getElementById("pmsettings").hidden,
         null, { timeout: 15000 });
       await p.waitForTimeout(250);
-      await p.evaluate(() => document.getElementById("pm-camtune")?.click());
+      await openVisualTuner(p, "pm-camtune");
       // waitForSelector requires VISIBILITY, and the panel is un-hidden a frame
       // before its rows are built, so it has a zero box at that instant. Wait on
       // the attribute instead, then let the layout settle.
@@ -355,7 +340,7 @@ export const SCREENS = [
       await p.evaluate(() => document.getElementById("pm-settings")?.click());
       await p.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { timeout: 15000 });
       await p.waitForTimeout(250);
-      await p.evaluate(() => document.getElementById("pm-lighting")?.click());
+      await openVisualTuner(p, "pm-lighting");
       await p.waitForFunction(() => !document.querySelector("#lighting").hidden, null, { polling: 100, timeout: 15000 });
       await p.waitForTimeout(400);
       // The panel's own FREE CAMERA button, which is what a player presses.
@@ -383,7 +368,7 @@ export const SCREENS = [
       // waits timed out on every scale-axis viewport (6 skips, first run).
       await p.waitForFunction(() => !document.getElementById("pmsettings").hidden, null, { timeout: 30000 });
       await p.waitForTimeout(250);
-      await p.evaluate(() => document.getElementById("pm-lighting")?.click());
+      await openVisualTuner(p, "pm-lighting", 30000);
       await p.waitForFunction(() => !document.querySelector("#lighting").hidden, null, { polling: 100, timeout: 30000 });
       await p.waitForTimeout(400);
       await p.evaluate(() => document.getElementById("pc-toggle")?.click());

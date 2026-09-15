@@ -3,7 +3,7 @@
 const DrivingCoach = (function () {
   function create(G) {
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
-    let trace = [], checkpoint = null, practice = false;
+    let trace = [], checkpoint = null, practice = false, lastCue = null;
     function status() {
       const c = G.player;
       if (!c) return null;
@@ -21,6 +21,12 @@ const DrivingCoach = (function () {
       if ((c.frontUtil || 0) > 0.9) return "FRONTS SLIDING — UNWIND SOME STEERING";
       return "";
     }
+    function explanation(text) {
+      if (text === "EASE THE BRAKE AS YOU TURN") return "Release brake pressure as steering increases to keep front grip.";
+      if (text === "REAR SLIDING — EASE THE THROTTLE") return "Reduce throttle until the rear settles, then unwind the slide.";
+      if (text === "FRONTS SLIDING — UNWIND SOME STEERING") return "Open the wheel slightly to restore front grip.";
+      return "Use the cue to make one small input change, then reassess.";
+    }
     function update(dt) {
       if (!enabled && !practice) return;
       elapsed += dt; quiet = Math.max(0, quiet - dt);
@@ -30,7 +36,14 @@ const DrivingCoach = (function () {
       if (s) { trace.push(s); if (trace.length > 600) trace.shift(); }
       if (!enabled || quiet || G.announceBusy || G.cautionInfo().level > 0) return;
       const text = advice(G.player);
-      if (text) { G.announce(text, 1.8, "coach"); quiet = 7; }
+      if (text) {
+        lastCue = { text, explanation: explanation(text) };
+        G.announce(text, 1.8, "coach"); quiet = 7;
+        // The Settings page is the durable explanation surface. It is normally
+        // hidden while driving, so repaint only when a cue changes rather than
+        // adding another per-frame DOM path.
+        paint();
+      }
     }
     function canPractice() { return !!(G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && G.player && G.state === "race"); }
     function mark() {
@@ -62,7 +75,7 @@ const DrivingCoach = (function () {
       G.announce("CHECKPOINT RESTORED — PRACTICE", 2, "info");
       return true;
     }
-    function reset() { checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; }
+    function reset() { checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; lastCue = null; }
     function downloadTrace() {
       const blob = new Blob([JSON.stringify({ physics: PhysicsConsts.REVISION, configuration: G.records.config(), rows: trace }, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -73,6 +86,17 @@ const DrivingCoach = (function () {
     const $ = G.$;
     function paint() {
       const b = $("pm-coach"); if (b) { b.textContent = "DRIVING COACH: " + (enabled ? "ON" : "OFF"); b.setAttribute("aria-pressed", String(enabled)); }
+      const help = $("pm-coach-help");
+      if (help && !String(help.textContent || "").trim()) {
+        help.textContent = "READ-ONLY FEEDBACK · Spots braking and tyre-load patterns; it never steers or changes the car.";
+      }
+      const coachNote = $("pm-coach-last");
+      if (coachNote) {
+        coachNote.textContent = lastCue ? lastCue.text + " — " + lastCue.explanation
+          : enabled ? "No tip yet — braking and grip cues appear when needed."
+          : "Turn on Driving Coach for braking and grip tips.";
+        coachNote.dataset.state = lastCue ? "tip" : "empty";
+      }
       const download = $("pm-driving-trace"); if (download) download.disabled = trace.length === 0;
       const markBtn = $("pm-practice-set"), retryBtn = $("pm-practice-retry");
       if (markBtn) markBtn.disabled = !canPractice();
@@ -95,9 +119,10 @@ const DrivingCoach = (function () {
     bind("pm-driving-trace", downloadTrace);
     bind("pm-coach", toggle); bind("pm-practice-set", mark); bind("pm-practice-retry", retry);
     const select = $("pm-pit-choice"); if (select) select.onchange = () => { G.pits.selectNext(G.player, select.value); paint(); };
-    const menu = $("pausemenu");
-    if (menu && typeof MutationObserver === "function") new MutationObserver(() => { if (!menu.hidden) paint(); }).observe(menu, { attributes: true, attributeFilter: ["hidden"] });
-    return { update, status, advice, mark, retry, reset, toggle, paint, practiceActive: () => practice,
+    for (const menu of [$("pausemenu"), $("pmsettings")]) {
+      if (menu && typeof MutationObserver === "function") new MutationObserver(() => { if (!menu.hidden) paint(); }).observe(menu, { attributes: true, attributeFilter: ["hidden"] });
+    }
+    return { update, status, advice, explanation, mark, retry, reset, toggle, paint, lastTip: () => lastCue ? { ...lastCue } : null, practiceActive: () => practice,
       trace: () => trace.map(row => ({ ...row })) };
   }
   return { create };

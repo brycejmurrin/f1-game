@@ -267,7 +267,7 @@ test.describe("Time Trial — results panel", () => {
 for (const viewport of [{width:1280,height:800}, LANDSCAPE]) {
   test.describe(`Practice controls at ${viewport.width}x${viewport.height}`, () => {
     test.use({viewport});
-    test("coach, unscored checkpoint and compound selection work through the pause menu", async ({page}, info) => {
+    test("coach and practice controls live under Steering & Assists; pit strategy stays in pause", async ({page}, info) => {
       const errors=[]; page.on("pageerror", e=>errors.push(e.message));
       await enterTT(page);
       // Match menu-keyboard's pause test: skip only the 3D render loop so
@@ -276,7 +276,9 @@ for (const viewport of [{width:1280,height:800}, LANDSCAPE]) {
       await expect(page).toHaveTitle(/Apex 26/i);
       await page.evaluate(()=>{window.__apex.go();window.__apex.tyres({level:"light"});});
       await page.getByRole("button",{name:"Pause",exact:true}).click();
-      await page.getByText("DRIVING & PRACTICE",{exact:true}).click();
+      await page.locator("#pm-settings").click();
+      await page.locator("#pm-advanced").click();
+      await page.locator("#pm-driving > summary").click();
       await page.locator("#pm-coach").click();
       await expect(page.locator("#pm-coach")).toHaveAttribute("aria-pressed","true");
       await page.locator("#pm-practice-set").click();
@@ -284,6 +286,9 @@ for (const viewport of [{width:1280,height:800}, LANDSCAPE]) {
       await page.locator("#pm-practice-retry").click();
       const driving=await page.evaluate(()=>window.__apex.physState().driving);
       expect(driving.practice).toBe(true);
+      await page.locator("#pm-settings-close").click(); // Steering & Assists → Settings
+      await page.locator("#pm-settings-close").click(); // Settings → pause
+      await page.locator("#pm-pit-strategy > summary").click();
       const select=page.locator("#pm-pit-choice");
       await expect(select).toBeEnabled();
       const value=await select.locator("option").nth(1).getAttribute("value");

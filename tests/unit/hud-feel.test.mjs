@@ -74,6 +74,7 @@ function boot(opts = {}) {
   const els = {
     pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"), best: $("hud-best"),
     speed: $("hud-speed-n"), energy: $("hud-energy-fill"), ot: $("hud-ot"), aero: $("hud-aero"),
+    btnOT: $("btn-ot"), btnAero: $("btn-aero"),
     gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"), hudSectors: $("hud-sectors"),
     flag: $("hud-flag"), minimap, gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
   };
@@ -109,25 +110,47 @@ test("the tach redline latches with hysteresis instead of flickering on the 92 %
 test("the OVERTAKE chip spells all four states differently — the lockout counts down", () => {
   const { els, player, G, tick } = boot();
   tick();
-  assert.equal(els.ot.textContent, "OVERTAKE");
+  assert.equal(els.ot.textContent, "OT · CLOSE IN");
   assert.equal(els.ot.className, "ot-off");
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
+  assert.equal(els.btnOT.getAttribute("data-state"), "pending");
 
   player.otCool = 11.2; tick();
   assert.equal(els.ot.className, "ot-cool");
   assert.equal(els.ot.textContent, "COOLDOWN 12", "whole seconds — this is a 9..14 s wait, not a tenths readout");
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
+  assert.equal(els.btnOT.getAttribute("data-state"), "cooldown");
   player.otCool = 0.3; tick();
   assert.equal(els.ot.textContent, "COOLDOWN 1");
 
   player.otCool = 0; player.otArmed = true; tick();
   assert.equal(els.ot.className, "ot-armed");
-  assert.equal(els.ot.textContent, "OVERTAKE");
+  assert.equal(els.ot.textContent, "OVERTAKE READY");
+  assert.equal(els.ot.getAttribute("aria-label"), "Overtake ready — press to deploy");
 
   player.otT = 3.2; player.otCool = 12.2; tick();
   assert.equal(els.ot.className, "ot-active");
   assert.equal(els.ot.textContent, "OVERTAKE 3.2", "the push keeps its tenths and never reads as a cooldown while active");
 
   player.otT = 0; player.otArmed = false; G.otEnabled = () => false; tick();
-  assert.equal(els.ot.textContent, "NO OVERTAKE", "the race-wide gate still wins over a cooldown");
+  assert.equal(els.ot.textContent, "OT · LAP 1", "opening lap explains the race-wide gate");
+  assert.equal(els.btnOT.getAttribute("aria-disabled"), "true");
+  assert.equal(els.btnOT.getAttribute("data-state"), "opening-lap");
+
+  G.cautionInfo = () => ({ level: 1 }); tick();
+  assert.equal(els.ot.textContent, "OT · CAUTION", "caution explains the same unavailable control");
+  assert.equal(els.btnOT.getAttribute("data-state"), "caution");
+});
+
+test("automatic active aero identifies its mode while the manual control stays unavailable", () => {
+  const { els, player, G, tick } = boot();
+  G.raceAeroMode = "auto";
+  player.xArmed = true; player.aeroX = 1;
+  tick();
+  assert.equal(els.aero.textContent, "AUTO X-MODE");
+  assert.equal(els.aero.className, "ax-open");
+  assert.equal(els.btnAero.getAttribute("aria-disabled"), "true");
+  assert.equal(els.btnAero.getAttribute("data-state"), "automatic");
 });
 
 test("sector splits carry ★/▼/▲ against sectorBests, timing-screen colours", () => {

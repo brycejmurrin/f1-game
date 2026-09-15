@@ -852,6 +852,13 @@ body[data-density="compact"] #campicker {
 #howtoplay-inner[data-density="compact"] > .sheet-foot {
   grid-column: auto; grid-row: auto;
 }
+#howtoplay .sheet-body {
+  font-size: var(--fs-micro); line-height: 1.45;
+}
+#htp-controls { scroll-margin-block-start: var(--gap); }
+#htp-inputs { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
+#htp-inputs details { min-width: 0; }
+#htp-inputs p { margin-block: calc(var(--gap) * 0.5); }
 #howtoplay dl {
   display: grid;
   grid-template-columns: max-content 1fr;

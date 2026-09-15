@@ -79,5 +79,16 @@ test("driving trace reads actual brake demand and feedback remains observational
   const before=JSON.stringify(p);
   const message=g.G.coach.advice({...p,offroad:false,speed:g.G.vTop()*.6,brakeDemand:1,axFrac:.9,steerAngle:.1});
   assert.match(message,/EASE THE BRAKE/);
+  assert.match(g.G.coach.explanation(message),/Release brake pressure/,
+    "the pause-panel explanation turns the short cue into an actionable step");
+  assert.equal(g.G.coach.lastTip(),null,
+    "reading advice directly does not fabricate a last-cue session state");
   assert.equal(JSON.stringify(p),before);
+  const coach = g.G.coach;
+  if (coach.status().enabled) coach.toggle();
+  coach.paint();
+  assert.match(g.G.$("pm-coach-last").textContent, /Turn on Driving Coach/);
+  coach.toggle();
+  assert.match(g.G.$("pm-coach-last").textContent, /No tip yet/);
+  coach.toggle();
 });

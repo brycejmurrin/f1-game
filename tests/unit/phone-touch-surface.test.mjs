@@ -15,6 +15,9 @@
  *     multiplied by HUD SIZE. Now divided like every other anchor in the list.
  *   - `Input.requestGyro()` latched `gyroDenied` on any rejection and never
  *     cleared it on a later grant, so STEER read "(NO GYRO)" while tilt drove.
+ *   - Rapid menu taps now retain their native click: the shell's touchend
+ *     fallback exempts interactive controls. The regression below preserves
+ *     the background zoom guard and multi-touch driving behavior.
  *
  * CONFIRMED-OK and pinned so they stay that way: every `:hover` in css/ is
  * gated on `(hover: hover)`; every scroll container contains its overscroll;
@@ -38,10 +41,6 @@
  *     which carries no user activation, so `requestPermission()` rejects and
  *     the store flips to BUTTONS. The label fix above makes the next real tap
  *     on STEER recover cleanly; the auto-flip itself is unchanged.
- *   - the index.html double-tap killer cancels the CLICK of a second tap on
- *     the same spot within 350 ms (preventDefault on touchend), so a fast
- *     double press of one menu stepper registers once. Out of this change's
- *     territory; a device check is listed in docs/TESTING.md.
  *
  * Run: node --test tests/unit/phone-touch-surface.test.mjs   (npm run test:tooling-fast)
  */
@@ -52,6 +51,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { cssRules, decl, declares, rulesFor, ruleFor } from "../helpers/css-rules.mjs";
+import { makeDom } from "../helpers/mini-dom.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -245,6 +245,33 @@ test("double-tap zoom is refused on every layer, and driving owns its gestures",
   assert.equal(decl(tk, "#game", "touch-action"), "none", "the canvas owns every gesture while driving");
   assert.equal(decl(css("css/overlays.css"), ".touchbtn", "touch-action"), "none");
   assert.equal(decl(css("css/components.css"), ".pane", "touch-action"), "pan-y", "menus keep native pan");
+});
+
+test("rapid control taps keep their native click while background double taps are guarded", () => {
+  const { document } = makeDom();
+  let now = 1000;
+  const script = read("index.html").match(/<script>([\s\S]*?)<\/script>/)[1];
+  vm.runInNewContext(script, { document, Date: { now: () => now } });
+  function tap(target, fingers = 0) {
+    const event = { type: "touchend", target, touches: Array(fingers).fill({}),
+      changedTouches: [{ clientX: 100, clientY: 100 }], defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; } };
+    document.dispatchEvent(event); now += 50;
+    return event.defaultPrevented;
+  }
+  const background = document.createElement("div");
+  assert.equal(tap(background), false);
+  assert.equal(tap(background), true, "background double-tap still cancels zoom");
+  for (const tag of ["button", "a", "input", "select", "textarea", "summary", "label", "div"]) {
+    const control = document.createElement(tag);
+    if (tag === "a") control.setAttribute("href", "#help");
+    if (tag === "div") control.setAttribute("role", "button");
+    const child = document.createElement("span"); control.appendChild(child);
+    assert.equal(tap(child), false, tag + " first activation");
+    assert.equal(tap(child), false, tag + " rapid repeat activation");
+  }
+  assert.equal(tap(background), false, "a control tap resets the background gesture");
+  assert.equal(tap(background, 1), false, "another driving finger remains down");
 });
 
 test("in-race chrome and the blocker are anchored inside the safe area", () => {

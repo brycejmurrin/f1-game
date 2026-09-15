@@ -1,5 +1,5 @@
 /* SettingsNav — page stack for the pause/title Settings sheet.
-   Home is a door index; CONTROLS, DISPLAY, STEERING and MUSIC are pages.
+   Home is a door index; CONTROLS, DISPLAY, STEERING & ASSISTS and MUSIC are pages.
    Lighting / camera tuners stay as their own docks. BACK pops.
    Decisions: docs/research/PAUSE-SETTINGS-IA.md.
    game.js still owns availability and all individual controls. */
@@ -9,7 +9,7 @@ const SettingsNav = (function () {
     home: "SETTINGS",
     controls: "CONTROLS",
     display: "DISPLAY",
-    advanced: "STEERING",
+    advanced: "STEERING & ASSISTS",
     audio: "MUSIC & SOUND",
   };
   let live = null;
@@ -28,29 +28,67 @@ const SettingsNav = (function () {
   function create(_store, onSelect) {
     Log.info("game", "SettingsNav.create");
     let current = "home";
+    // The index door that opened a page. A dialog does not know about focus
+    // changes inside its own sheet, so keep this explicitly and restore it on
+    // the same page-stack BACK path that Escape presses.
+    let originDoor = null;
 
-    function show(want, focus) {
+    const visible = (el) => {
+      if (!el || el.disabled) return false;
+      for (let p = el; p; p = p.parentElement || p.parentNode) {
+        if (p.hidden || (p.getAttribute && p.getAttribute("aria-hidden") === "true")) return false;
+        // A closed disclosure's SUMMARY is its visible, focusable door; its
+        // descendants are not. This matters when a page opens on an audio or
+        // display fold rather than a plain setting row.
+        if (p.tagName === "DETAILS" && !p.open && !(el.tagName === "SUMMARY" && (el.parentElement || el.parentNode) === p)) return false;
+      }
+      if (el.checkVisibility && !el.checkVisibility({ visibilityProperty: true })) return false;
+      if (el.getClientRects && el.getClientRects().length === 0) return false;
+      return true;
+    };
+    const quietFocus = (el) => {
+      if (!visible(el) || typeof el.focus !== "function") return false;
+      try { el.focus({ preventScroll: true }); } catch (_) { try { el.focus(); } catch (_) { return false; } }
+      return true;
+    };
+    function firstIn(page) {
+      if (!page) return null;
+      const candidates = page.querySelectorAll
+        ? page.querySelectorAll("button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, a[href], [tabindex]:not([tabindex='-1'])")
+        : [];
+      for (const target of candidates) if (visible(target)) return target;
+      return null;
+    }
+    function focusPage(id) {
+      if (id === "home") return quietFocus(originDoor) || quietFocus(firstIn(document.getElementById("pm-settings-index")));
+      const pages = panels();
+      return quietFocus(firstIn(pages[id]));
+    }
+
+    function show(want, focus, after) {
       const id = TITLES[want] ? want : "home";
-      current = id;
       const index = document.getElementById("pm-settings-index");
+      // Capture the door before it is hidden. This also makes a programmatic
+      // SettingsNav.show("audio") behave like a click when called from home.
+      if (id !== "home" && current === "home" && index && !originDoor) {
+        const active = document.activeElement;
+        originDoor = active && index.contains && index.contains(active) ? active : null;
+      }
+      current = id;
       const title = document.getElementById("dlg-settings");
       if (title) title.textContent = TITLES[id];
       if (index) index.hidden = id !== "home";
       const pages = panels();
-      let page = null;
       for (const key of Object.keys(pages)) {
         const panel = pages[key];
         if (!panel) continue;
         panel.hidden = id !== key;
-        if (id === key) page = panel;
       }
       Log.info("game", `SettingsNav.show ${id}`);
-      if (focus) {
-        const target = id === "home"
-          ? document.getElementById("pm-open-controls")
-          : (page && page.querySelector("button, input, select"));
-        if (target) target.focus();
-      }
+      // A callback may disable/reflow controls (KeyBinds and audio do this),
+      // so run it before resolving the page's focus target.
+      if (typeof after === "function") after();
+      if (focus) focusPage(id);
       const body = document.getElementById("pm-settings-body");
       if (body) body.scrollTop = 0;
       if (window.ScrollFade) ScrollFade.refresh();
@@ -59,27 +97,43 @@ const SettingsNav = (function () {
     function back() {
       if (current === "home") return true;
       show("home", false);
+      const door = originDoor;
+      originDoor = null;
+      quietFocus(door) || focusPage("home");
       return false;
     }
 
     const openControls = document.getElementById("pm-open-controls");
     if (openControls) openControls.onclick = () => {
-      show("controls", false); if (onSelect) onSelect("controls");
+      originDoor = openControls;
+      show("controls", true, () => { if (onSelect) onSelect("controls"); });
     };
     const openDisplay = document.getElementById("pm-open-display");
     if (openDisplay) openDisplay.onclick = () => {
-      show("display", false); if (onSelect) onSelect("display");
+      originDoor = openDisplay;
+      show("display", true, () => { if (onSelect) onSelect("display"); });
     };
     const openAdvanced = document.getElementById("pm-advanced");
     if (openAdvanced) openAdvanced.onclick = () => {
-      show("advanced", false); if (onSelect) onSelect("advanced");
+      originDoor = openAdvanced;
+      show("advanced", true, () => { if (onSelect) onSelect("advanced"); });
     };
     const openAudio = document.getElementById("pm-audio");
     if (openAudio) openAudio.onclick = () => {
-      show("audio", false); if (onSelect) onSelect("audio");
+      originDoor = openAudio;
+      show("audio", true, () => { if (onSelect) onSelect("audio"); });
     };
+    // Every open starts at the door index. Do not steal focus here: the dialog
+    // seam owns focus when it opens, and its opener should remain authoritative.
+    originDoor = null;
     show("home", false);
-    live = { showCurrent: () => show("home", false), show, back };
+    live = {
+      // The caller uses this on every open, including after an interrupted
+      // page transition. Clear the previous door so a later BACK cannot return
+      // to a stale element from an earlier dialog instance.
+      showCurrent: () => { originDoor = null; show("home", false); },
+      show, back,
+    };
     return live;
   }
 

@@ -101,6 +101,19 @@ test("more drivers: three lanes load, each with its own colour and map dot", asy
 
   // popup: three legend chips, three map-legend chips, and a drawn map
   await expect(page.locator(".dh-tpopup")).toBeVisible();
+  await expect(page.locator(".dh-thead").nth(0)).toContainText("PRIMARY TRACE");
+  await expect(page.locator(".dh-thead").nth(1)).toContainText("COMPARISON TRACE");
+  await expect(page.locator(".dh-thead").nth(2)).toContainText("SPEED MARKER");
+  const chart = page.locator("canvas[aria-label^='Telemetry trace chart']");
+  await expect(chart).toHaveAttribute("role", "img");
+  const summary = page.locator("#dh-telem-summary");
+  await page.getByText("TEXT SUMMARY", { exact: true }).click();
+  await expect(summary).toContainText("Selected drivers: NOR (primary trace), RUS (comparison trace), LEC (speed marker)");
+  await expect(summary).toContainText("speed 200 km/h");
+  await chart.click({ position: { x: 150, y: 80 } });
+  await expect(summary).not.toContainText("Time —.");
+  await page.locator(".dh-trestart").click();
+  await expect(summary).toContainText("Time 0:00.00.");
   await expect(page.locator(".dh-legend .dh-codechip")).toHaveCount(3);
   await expect(page.locator(".dh-maplegend .dh-legend-item")).toHaveCount(4);   // 3 lanes + gradient key
   await expect(page.locator(".dh-laneboard-row")).toHaveCount(3);               // per-lane board (3-4 only)

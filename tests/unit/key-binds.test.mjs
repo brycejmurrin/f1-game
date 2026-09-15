@@ -297,9 +297,24 @@ test("Input.keyboardSeen latches on a key outside a field, never on typing", () 
   assert.equal(Input.keyboardSeen(), true, "a key on a focused menu button is a keyboard");
 });
 
+test("Input.activeInputSource follows real activity, not connected-device presence", () => {
+  const { Input, key, sb, fire } = boot();
+  assert.equal(Input.activeInputSource(), "keyboard", "desktop defaults to keyboard");
+  key("KeyA", true); key("KeyA", false);
+  assert.equal(Input.activeInputSource(), "keyboard");
+  const pad = fakePad(sb, fire);
+  Input.poll();
+  assert.equal(Input.activeInputSource(), "keyboard", "an idle pad does not take over");
+  pad.press(3); Input.poll();
+  assert.equal(Input.activeInputSource(), "controller", "a pressed pad button becomes active");
+  pad.release(3); Input.poll();
+  key("KeyD", true); key("KeyD", false);
+  assert.equal(Input.activeInputSource(), "keyboard", "the next keyboard press takes priority again");
+});
+
 // A DOM just deep enough for KeyBinds.create: elements by id with hidden,
 // textContent and children; createElement for the rows.
-function bootUi(desktop) {
+function bootUi(desktop, helpSlots = {}) {
   const { Input, key, sb, fire } = boot();
   const nodes = {};
   const mk = () => {
@@ -309,6 +324,7 @@ function bootUi(desktop) {
     return n;
   };
   sb.document.getElementById = (id) => (nodes[id] ||= mk());
+  sb.document.querySelectorAll = (sel) => helpSlots[sel] || [];
   sb.document.createElement = () => mk();
   sb.document.body.classList.contains = (c) => c === "desktop" && desktop;
   sb.document.readyState = "complete";
@@ -349,6 +365,26 @@ test("a desktop shows both tables and never the hint", () => {
   assert.equal($("pm-keys-section").hidden, false);
   assert.equal($("pm-pad-section").hidden, false);
   assert.equal($("pm-ctl-hint").hidden, true);
+});
+
+test("How to Play binding slots are painted from the live key and pad tables", () => {
+  const slot = (attr, action) => ({
+    textContent: "stale",
+    kids: [],
+    getAttribute: (name) => name === attr ? action : null,
+    append(...children) { this.kids.push(...children); },
+  });
+  const keySlot = slot("data-help-keys", "aero");
+  const padSlot = slot("data-help-pad", "overtake");
+  const { $, kb } = bootUi(true, {
+    "[data-help-keys]": [keySlot],
+    "[data-help-pad]": [padSlot],
+  });
+  kb.render();
+  assert.equal(keySlot.textContent, "", "the stale key hint is replaced");
+  assert.equal(keySlot.kids[0].textContent, "Z", "keyboard slot uses the live key label");
+  assert.equal(padSlot.kids[0].textContent, "Y", "controller slot uses the live pad label");
+  assert.equal($("htp-inputs").dataset.activeInput, "keyboard", "help records the current input kind");
 });
 
 // ---- the pad in a menu: value controls --------------------------------------

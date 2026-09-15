@@ -461,6 +461,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     window.__apex.uiScale(200);
     document.getElementById("pausebtn").click();
     document.getElementById("pm-settings").click();
+    document.getElementById("pm-open-display").click();
+    document.querySelector("#pm-visual-tuners > summary").click();
     document.getElementById("pm-lighting").click();
     window.SheetShape?.reclassify();
   });
