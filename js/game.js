@@ -491,6 +491,7 @@ function gearsManual() {
    The TOUCH clause stays exactly as it was: there the drag already owns the
    thumb, so it is not a preference but a fact about the control scheme. */
 let autoThrottleOpt = store.get("autoThrottle", false);
+let throttleLatchOpt = store.get("throttleLatch", false);
 function autoThrottle() { return autoThrottleOpt || (Input.touchControlsNeeded() && steerMode === "touch"); }
 // Left/right-handed docks. F1 Mobile enumerates both as first-class control
 // schemes rather than hiding a toggle; the whole feature here is which dock
@@ -2843,7 +2844,9 @@ const G = {
   // autoThrottle among them — so it calls this to re-read them and repaint.
   onAssistBundle() {
     autoThrottleOpt = store.get("autoThrottle", autoThrottleOpt);
-    SettingRow.paint($("pm-throttlemode"), autoThrottleOpt ? "auto" : "hold");
+    throttleLatchOpt = store.get("throttleLatch", throttleLatchOpt);
+    Input.setThrottleLatch(throttleLatchOpt);
+    SettingRow.paint($("pm-throttlemode"), autoThrottleOpt ? "auto" : (throttleLatchOpt ? "latch" : "hold"));
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
     announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
@@ -8420,11 +8423,15 @@ function setSteerMode(mode) {
 }
 SettingRow.wire("pm-steer", { values: SettingRow.labels(STEER_MODES), read: () => steerMode,
   write: (v) => { if (STEER_MODES.indexOf(v) >= 0) setSteerMode(v); } });
-SettingRow.wire("pm-throttlemode", { values: SettingRow.labels(["hold", "auto"]),
-  read: () => (autoThrottleOpt ? "auto" : "hold"),
+// HOLD / LATCH / AUTO — the middle rung XAG 107 names; js/input/input.js owns it.
+SettingRow.wire("pm-throttlemode", { values: SettingRow.labels(["hold", "latch", "auto"]),
+  read: () => (autoThrottleOpt ? "auto" : (throttleLatchOpt ? "latch" : "hold")),
   write: (v) => {
     autoThrottleOpt = v === "auto";
+    throttleLatchOpt = v === "latch";
     store.set("autoThrottle", autoThrottleOpt);
+    store.set("throttleLatch", throttleLatchOpt);
+    Input.setThrottleLatch(throttleLatchOpt);
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
   } });
@@ -8664,6 +8671,7 @@ Input.onPointerKindChange(syncPointerKind);
     + (Input.touchControlsNeeded() ? ({buttons:"tap arrows to steer",touch:"drag to steer"}[steerMode] || "tilt to steer") : classics + " classics");
 }
 Input.setSteerMode(steerMode);
+Input.setThrottleLatch(throttleLatchOpt);
 // DataHub.init(els.datahub) used to run here. It moved into ensureDataHub(),
 // which the DATA button awaits — js/data is LAZY_DATA now and there is no
 // DataHub at boot to initialise.

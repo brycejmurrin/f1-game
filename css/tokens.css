@@ -593,6 +593,10 @@
      EDIT the cool info family. Ink is the light readable tint, fill the
      saturated base the wash/hover/press states mix from — was 12 raw rgba()
      literals on two buttons. */
+  /* GAS LIT — the pedal's pressed green. Two states wear it now (`:active`
+     under the thumb, `.on` for a held LATCH), so it is one name rather than
+     the same literal twice. */
+  --gas-lit: rgba(0, 210, 90, 0.95);
   --del-ink: rgba(255, 120, 110, 0.85);
   --del-fill: rgb(255, 60, 50);
   --edit-ink: rgba(120, 200, 255, 0.9);

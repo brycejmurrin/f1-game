@@ -29,7 +29,7 @@ function boot() {
   const el = () => ({
     addEventListener() {}, removeEventListener() {}, style: {}, dataset: {},
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-    setAttribute() {}, getAttribute: () => null, children: [],
+    setAttribute() {}, getAttribute: () => null, removeAttribute() {}, children: [],
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 300 }),
     setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture: () => false,
   });
