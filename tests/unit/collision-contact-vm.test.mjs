@@ -289,9 +289,9 @@ test("the broadphase can still see every pair the extents now reach", () => {
   assert.equal(+widestPair.toFixed(4), 5.0);
 
   const src = readFileSync(join(ROOT_C, "js/physics/collide.js"), "utf8");
-  const m = src.match(/const LCAR_MAX = ([\d.]+);/);
+  const m = src.match(/const LCAR_MAX = ([^;]+);/);
   assert.ok(m, "LCAR_MAX must exist");
-  assert.ok(+m[1] >= widestPair, `LCAR_MAX ${m[1]} is under the widest pair ${widestPair}`);
+  assert.ok(Function("HL", "WL", "return " + m[1])(2.4, 1) >= widestPair, `LCAR_MAX ${m[1]} is under the widest pair ${widestPair}`);
   assert.match(src, /const COL_BUCKET_M = LCAR_MAX;/,
     "the bucket must be the widened span, not LCAR");
   assert.match(src, /if \(adProg > LCAR_MAX && adProg < L - LCAR_MAX\) return null;/,

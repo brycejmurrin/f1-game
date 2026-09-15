@@ -61,11 +61,9 @@ const Collide = (() => {
     const k = yawMix(psi);
     return k === 0 ? WL : WL * (1 - k) + k * (HL * Math.abs(Math.sin(psi)) + WL * Math.abs(Math.cos(psi)));
   }
-  // Worst case one car can reach is sqrt(HL^2 + WL^2) = 2.6 (at 22.6° off the
-  // tangent), so the widest contacting PAIR spans 2.6 + 2.4 = 5.0 m — past the
-  // old 4.8 m reject and past the old bucket width. Both must use this or the
-  // broadphase drops the very pair the extents were widened to catch.
-  const LCAR_MAX = 5.0;
+  // Both cars can be human and rotated: each support is bounded by its
+  // half-diagonal. Use the pair bound for rejection AND arc buckets.
+  const LCAR_MAX = 2 * Math.hypot(HL, WL);
   // "This frame actually separated them" is a millimetre, never `corr > 0`: at
   // the slop distance the penetration is `LCAR - |dProg|` with LCAR's own
   // rounding still in it, so corr lands at ~3e-16 — positive, and therefore true
@@ -115,7 +113,7 @@ const Collide = (() => {
     // read-before-next-call contract as _ct / AiDrive.traits.
     // Arc-bucket broadphase for resolveCollisions. Bucket width = LCAR so any
     // contacting pair shares a bucket or sits in adjacent ones (wrap-aware).
-    const COL_BUCKET_M = LCAR_MAX;   // was LCAR — see LCAR_MAX: a yawed pair spans 5.0 m
+    const COL_BUCKET_M = LCAR_MAX;   // was LCAR — see LCAR_MAX: two yawed cars can span 5.2 m
     const _colBuckets = [];   // sparse: bucketId → car[]
     const _colBucketIds = []; // compact list of occupied bucket ids this pass
     let _colShifted = false;  // shiftLong this step — skip idle re-buckets

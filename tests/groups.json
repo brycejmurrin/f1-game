@@ -267,7 +267,8 @@
     "tests/unit/change-driver-tools.test.mjs",
     "tests/unit/trim-comments.test.mjs",
     "tests/unit/metrics.test.mjs",
-    "tests/unit/perf-try.test.mjs"
+    "tests/unit/perf-try.test.mjs",
+    "tests/unit/mechanics-coherence.test.mjs"
   ],
   "groups": {
     "test": {
@@ -558,7 +559,8 @@
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
-        "tests/unit/red-flag-vm.test.mjs"
+        "tests/unit/red-flag-vm.test.mjs",
+        "tests/unit/mechanics-integration-vm.test.mjs"
       ]
     },
     "test:mcp": {
