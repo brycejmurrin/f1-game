@@ -342,6 +342,15 @@ const PitLane = (function () {
      *  road could not be committed to, and one past the exit could not be
      *  reached. On a short circuit the window is capped at a third of the lap,
      *  so this is what stops the row spilling out of it. */
+    /** The ribbon's extent in THIS WINDOW's through-metres, or null where the
+     *  circuit has no separate lane and the painted one covers the whole window. */
+    function ribbonRange(zz, L) {
+      if (typeof Tracks === "undefined" || !Tracks.pitLaneSpan || !G.track) return null;
+      const sp = Tracks.pitLaneSpan(G.track);
+      if (!sp) return null;
+      const a = throughM(zz, sp.sIn, L);
+      return { a, b: a + sp.lenM };
+    }
     function boxThroughFor(c, zz, L) {
       const row = teamRow(c);
       const n = row < 0 ? 1 : Teams.LIST.length;
@@ -361,7 +370,16 @@ const PitLane = (function () {
       // without ever putting a box somewhere it cannot be driven to.
       const poleS = ((-GRID_POLE_M % L) + L) % L;
       const wantFirst = throughM(zz, poleS, L) + GRID_CLEAR;
-      const lo = COMMIT_M + 20, hi = Math.max(lo, zz.lenM - 30 - span);
+      // THE ROW IS LAID OUT INSIDE THE LANE, not inside the window, wherever a
+      // separate ribbon exists. The two used to be the same stretch of road, so
+      // the window served; once the ribbon could be trimmed short of a pinch it
+      // stopped serving, and the last teams' boxes sat past the end of the
+      // tarmac on five circuits. The floor also drops to the ribbon's own start
+      // rather than COMMIT_M: that constant was the old entry-road commit cap,
+      // and boxes nearer the entry are strictly better for reaching one on lap 1.
+      const rib = ribbonRange(zz, L);
+      const lo = rib ? rib.a + 20 : COMMIT_M + 20;
+      const hi = Math.max(lo, (rib ? rib.b : zz.lenM) - 30 - span);
       const first = clamp(Math.max(wantFirst, throughM(zz, zz.sBox, L) - span / 2), lo, hi);
       if (row < 0) return first + span / 2;     // no team: the row's own middle
       return first + row * BOX_PITCH;

@@ -30,6 +30,10 @@ const { buildContext } = require(path.join(ROOT, "tools", "lib", "track-build-vm
 // silverstone has the room and takes the full lane; spa is tight and takes a
 // narrowed one; monaco has none at all and must be refused.
 const WIDE = "silverstone", TIGHT = "spa", NONE = "monaco";
+// monza is pinched only over its LAST 34 m of 530 and used to be refused a lane
+// for it; magny_cours is pinched in the MIDDLE and keeps the longer of the two
+// runs either side.
+const TRIMMED = "monza";
 
 const ctxOnce = (() => { let c = null; return () => (c || (c = buildContext())); })();
 const tracksOnce = () => ctxOnce().Tracks;
@@ -144,5 +148,44 @@ test("the ribbon is drawn where it is fitted, and nowhere else", () => {
   for (const i of wide.out.idx) {
     assert.ok(Number.isInteger(i) && i >= 0 && i < wide.out.pos.length / 3,
       "the ribbon emitted an out-of-range index");
+  }
+});
+
+test("a pinch at one end costs the lane those metres, not the whole circuit", () => {
+  // Refusing on the worst node in the window threw away four circuits pinched
+  // only at one END of it while 90%+ of their window carried metres of room.
+  const t = buildOnce(TRIMMED), l = t.pitLane;
+  assert.ok(l, `${TRIMMED} is pinched only at the end of its window and must still get a lane`);
+  const T = tracksOnce();
+  const win = T.pitWindow(t);
+  assert.ok(l.lenM < win.entryM + win.exitM,
+    "the lane should be SHORTER than the window here — that is what the trim is");
+  assert.ok(l.lenM >= 150, `a lane shorter than 150 m is a lay-by, got ${l.lenM}`);
+  // …and the trimmed part is genuinely the part with no room.
+  const bar = l.side > 0 ? t.barR : t.barL;
+  for (let k = 0; k < t.n; k++) {
+    if (!(l.w[k] > 0.01)) continue;
+    assert.ok(bar[k] - t.hw[k] >= l.gap + l.laneW - 1e-4,
+      `${TRIMMED}: the lane kept node ${k}, which has no room for it`);
+  }
+});
+
+test("the box row is laid out inside the LANE, not inside the window", () => {
+  // Once the ribbon could be trimmed short of a pinch, a row laid out against
+  // the window put the last teams' boxes past the end of the tarmac on five
+  // circuits — their drivers would have stopped on grass.
+  const T = tracksOnce();
+  const BOX_PITCH = 14, TEAMS = 12, span = (TEAMS - 1) * BOX_PITCH;
+  for (const def of T.LIST) {
+    let t;
+    try { t = T.build(def); } catch { continue; }
+    const l = t.pitLane;
+    if (!l) continue;
+    const sp = T.pitLaneSpan(t);
+    assert.ok(sp && sp.lenM === l.lenM, `${def.id}: pitLaneSpan disagrees with the ribbon`);
+    // The same arithmetic PitLane.boxThroughFor does, in lane-relative metres.
+    const lo = 20, hi = Math.max(lo, l.lenM - 30 - span);
+    assert.ok(hi + span <= l.lenM,
+      `${def.id}: the last box sits at ${(hi + span).toFixed(0)} m of a ${l.lenM.toFixed(0)} m lane`);
   }
 });

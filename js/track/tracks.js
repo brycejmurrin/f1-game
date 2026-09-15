@@ -219,6 +219,7 @@ const Tracks = (function () {
   // like trim on the edge of the track, at 2.5 m it is plainly its own thing.
   const PIT_LANE_GAP_MIN = 0.3, PIT_LANE_GAP_MAX = 2.5;
   const PIT_LANE_MIN = 2.4;   // must match PitLane.LANE_MIN — narrower is not a lane
+  const PIT_LANE_RUN_MIN = 150;   // metres — shorter than this is a lay-by, not a lane
 
   /** Fit a separate pit ribbon to a built centreline, or refuse.
    *
@@ -234,37 +235,54 @@ const Tracks = (function () {
     const n = track.n, L = track.total;
     if (!(L > 0) || !(n > 0) || !track.barL || !track.barR) return null;
     const win = pitWindow(track);
-    const lenM = win.entryM + win.exitM;
-    const sIn = ((-win.entryM % L) + L) % L;
+    const winM = win.entryM + win.exitM;
+    const sIn0 = ((-win.entryM % L) + L) % L;
     const ds = L / n;
     const bar = side > 0 ? track.barR : track.barL;
-    // ONE ROOM FIGURE FOR THE WHOLE CIRCUIT — the tightest node in the window.
-    // Fitting per node instead gave a lane that widened and narrowed along its
-    // length, which snakes: a road is a constant offset from the road it runs
-    // beside, and a driver at the limiter cannot see a wall creeping inward.
-    // The worst node is also the only one that can hurt anybody.
-    let room = Infinity, any = false;
-    for (let k = 0; k < n; k++) {
-      let d = k * ds - sIn; d = ((d % L) + L) % L;
-      if (d > lenM) continue;
-      any = true;
-      const r = bar[k] - track.hw[k];
-      if (r < room) room = r;
+    const need = PIT_LANE_GAP_MIN + PIT_LANE_MIN;
+    // The window's nodes in order, each marked with the room it has.
+    const ks = [], room = [];
+    for (let i = 0; i * ds <= winM; i++) {
+      const k = ((Math.round((sIn0 + i * ds) / ds) % n) + n) % n;
+      ks.push(k); room.push(bar[k] - track.hw[k]);
     }
-    // No room at all is a real answer: Monaco, Baku, Vegas and Singapore put
-    // their walls AT the road edge for the whole window. Those circuits keep the
-    // painted-on-road lane, which is unchanged and still works.
-    if (!any || !(room >= PIT_LANE_GAP_MIN + PIT_LANE_MIN)) return null;
-    const gap = Math.min(PIT_LANE_GAP_MAX, Math.max(PIT_LANE_GAP_MIN, room - PIT_LANE_W));
-    const laneW = Math.min(PIT_LANE_W, Math.max(PIT_LANE_MIN, room - gap));
+    if (ks.length < 2) return null;
+    // THE LONGEST CONTINUOUS RUN THAT HAS ROOM, not the whole window or nothing.
+    // Refusing on the worst node in the window threw away four circuits that are
+    // pinched only at ONE END of it — Monza's last 34 m of 530, jerez's last 54
+    // of 354, mexico's first 32 of 314 — while their other 90-odd per cent
+    // carried 5-9 m. A shorter ribbon is still a ribbon; a pinched one is not.
+    // A pinch in the MIDDLE (magny_cours, abudhabi) still costs the circuit its
+    // lane, because splitting the ribbon in two is not a road.
+    let bi = 0, bn = 0, i = 0;
+    while (i < ks.length) {
+      if (!(room[i] >= need)) { i++; continue; }
+      let j = i;
+      while (j < ks.length && room[j] >= need) j++;
+      if (j - i > bn) { bn = j - i; bi = i; }
+      i = j;
+    }
+    // A lane has to be long enough to enter, slow down in and stop in. Below
+    // this it is a lay-by, and the painted lane serves the circuit better.
+    const lenM = (bn - 1) * ds;
+    if (!(lenM >= PIT_LANE_RUN_MIN)) return null;
+    // ONE ROOM FIGURE FOR THE WHOLE LANE — the tightest node in the run. Fitting
+    // per node instead gave a lane that widened and narrowed along its length,
+    // which snakes: a road runs parallel to the road it is beside, and a driver
+    // at the limiter cannot see a wall creeping inward. The worst node in the
+    // run is also the only one that can hurt anybody.
+    let fit = Infinity;
+    for (let m = bi; m < bi + bn; m++) if (room[m] < fit) fit = room[m];
+    const gap = Math.min(PIT_LANE_GAP_MAX, Math.max(PIT_LANE_GAP_MIN, fit - PIT_LANE_W));
+    const laneW = Math.min(PIT_LANE_W, Math.max(PIT_LANE_MIN, fit - gap));
+    const sIn = ((sIn0 + bi * ds) % L + L) % L;
     const w = new Float32Array(n);
-    for (let k = 0; k < n; k++) {
-      let d = k * ds - sIn; d = ((d % L) + L) % L;
-      if (d > lenM) continue;
+    for (let m = 0; m < bn; m++) {
       // Taper both ends to zero. A step in the ribbon is a step the car can hit
       // side-on; the ramp is the same PIT_TAPER the reverted widening used.
+      const d = m * ds;
       const ramp = Math.min(1, Math.min(d, lenM - d) / PIT_TAPER);
-      w[k] = laneW * Math.max(0, ramp);
+      w[ks[bi + m]] = laneW * Math.max(0, ramp);
     }
     return { side, sIn, lenM, gap, laneW, w };
   }
@@ -288,6 +306,17 @@ const Tracks = (function () {
     const inner = side * (track.hw[k] + lane.gap);
     const outer = side * (track.hw[k] + lane.gap + w);
     return { side, w, inner, outer, centre: (inner + outer) / 2 };
+  }
+
+  /** The ribbon's EXTENT: { sIn, lenM, side } or null. Where pitLaneAt answers
+   *  "is there lane here", this answers "how much lane is there at all" — which
+   *  is what a row of boxes has to be laid out inside. They are different
+   *  questions and the box row got them confused: it was laid out against the
+   *  pit WINDOW, and once the ribbon could be shorter than the window the last
+   *  teams' boxes sat past the end of the tarmac, on grass. */
+  function pitLaneSpan(track) {
+    const lane = track && track.pitLane;
+    return lane ? { sIn: lane.sIn, lenM: lane.lenM, side: lane.side } : null;
   }
 
   /** Is this car's lateral position inside the separate ribbon? A TOLERANCE of
@@ -2274,8 +2303,13 @@ const Tracks = (function () {
         base += 4;
       }
     }
-    TrackMesh.buildGridBoxes(track, out);   // the grid rides the start-line decal
-    TrackMesh.buildPitLane(track, out);     // …and so does the pit lane's own tarmac
+    // The pit lane's tarmac rides this decal too — but BEFORE the grid, because
+    // tests/unit/grid-boxes.test.mjs reads the boxes as the TAIL of this buffer
+    // and that is a real invariant, not an accident of order: the grid is the
+    // last thing appended so a reader can slice it off without knowing what
+    // came before.
+    TrackMesh.buildPitLane(track, out);
+    TrackMesh.buildGridBoxes(track, out);   // …and the grid stays the tail
     return out;
   }
 
@@ -2616,5 +2650,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry, pitWindow, pitLaneAt, inPitLane };
+  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
 })();
