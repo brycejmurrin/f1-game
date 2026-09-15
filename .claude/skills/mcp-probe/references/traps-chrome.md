@@ -83,16 +83,19 @@ back, both reproduced twice in the same session:
   nearest `BUTTON` before clicking. Immediate and reliable both times; try the
   MCP `click` tool first, fall back to this rather than retrying it.
 - **Every UI-driven scene change (a livery swap, not just `jump()`/`park()`)
-  needs its own `GLX.awaitSoftPresent()`** before the next screenshot, same as
-  the black-canvas trap above — the frame on `#game-soft` is one blit behind
-  the DOM state until you await a new generation. Confirmed **you do not need
+  needs its own present-wait** before the next screenshot, same as the
+  black-canvas trap above — the frame on `#game-soft` is one blit behind the
+  DOM state until you await a new generation. Confirmed **you do not need
   `snapCam()`/`invalidateSoftPresent()` first**: calling
-  `await GLX.awaitSoftPresent(8000)` on its own is enough to arm the wait
-  (`softBlit()`'s guard is `_softPresentWaiters.length || _softCaptureDue`,
-  and `awaitSoftPresent()` itself pushes a waiter) — `gen` advanced by exactly
-  one on every click-then-await round-trip in this session, with no camera
-  helper called in between. Loop per interaction: click (DOM-dispatch if
-  `chrome_click` times out) → `await GLX.awaitSoftPresent(8000)` in one
+  `await __apex.awaitPresent(8000)` (added 2026-09-15 as the `__apex` front
+  door for what was `GLX.awaitSoftPresent()` — same wait, right whichever
+  backend is bound, no need to know `GLX` is a bare global) on its own is
+  enough to arm the wait (`softBlit()`'s guard is
+  `_softPresentWaiters.length || _softCaptureDue`, and the underlying
+  `awaitSoftPresent()` itself pushes a waiter) — `gen` advanced by exactly one
+  on every click-then-await round-trip in this session, with no camera helper
+  called in between. Loop per interaction: click (DOM-dispatch if
+  `chrome_click` times out) → `await __apex.awaitPresent(8000)` in one
   `evaluate_script` call → `take_screenshot`.
 
 ---

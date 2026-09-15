@@ -3,22 +3,22 @@
   "files": {
     "js/game.js": {
       "lines": 8790,
-      "codeLines": 4750,
+      "codeLines": 4741,
       "gMembers": 250,
       "topLets": 149
     },
     "js/agent/apex.js": {
-      "lines": 2928,
-      "codeLines": 2140
+      "lines": 2941,
+      "codeLines": 2144
     },
     "js/agent/agentview.js": {
-      "lines": 2454
+      "lines": 2458
     },
     "js/car/car3d.js": {
       "lines": 4137
     },
     "js/track/tracks.js": {
-      "lines": 2680
+      "lines": 2677
     },
     "js/lighting/presets.js": {
       "lines": 17318

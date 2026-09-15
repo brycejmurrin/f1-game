@@ -2601,6 +2601,19 @@ const api = {
   // scene()/trackInfo(). The result carries an `aid` note saying so.
   render(opts) { return agentView.render(opts); },
 
+  // awaitPresent(timeoutMs)? — wait for the next composited frame before a
+  // screenshot tool reads the canvas. HeadlessChrome hides the raw WebGL/
+  // WebGPU canvas and blits the real frame onto an overlay ON DEMAND (GLX,
+  // TLX and WGX each implement awaitSoftPresent/softPresent under the same
+  // names — game.js copies the bound backend's descriptors onto GLX, so this
+  // one call is right whichever backend is active). Exists so a capture tool
+  // never has to know GLX is a bare lexical global, not window.GLX. A no-op
+  // outside HeadlessChrome, where the canvas composites for real.
+  async awaitPresent(timeoutMs) {
+    if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) return null;
+    return GLX.awaitSoftPresent(timeoutMs);
+  },
+
   // carView({team, parts}?) — the car as JSON: team identity, livery colours,
   // the full parts spec and its stat effects, the per-team chassis silhouette
   // knobs, and measured geometry from a real Car3D build. Replaces the car

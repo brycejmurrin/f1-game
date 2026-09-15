@@ -2011,6 +2011,10 @@ const AgentView = (function () {
           "render({what,cols,ss,...})":
             "SHOW IT — the one optional raster, APPROXIMATE. "
             + "what: 'view'|'map'|'circuit'|'car'. For intuition, not measurement",
+          "awaitPresent(timeoutMs)?":
+            "WAIT FOR THE PIXELS — resolve once the next real frame has "
+            + "reached the screen; a screenshot tool taken before this "
+            + "resolves can read a stale or black canvas under HeadlessChrome",
         },
         detail: {
           "describe(id)":
