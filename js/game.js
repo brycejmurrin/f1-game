@@ -407,11 +407,22 @@ let difficulty = store.get("difficulty", "normal");
 // save, so OFF is the only default that does not silently start retiring cars
 // in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
-// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). Ships OFF for
-// exactly RELIABILITY's reason, plus one of its own: OFF is a true no-op through
-// the grip seam, so tests/specs/physics-characterization.spec.js stays
-// bit-identical until somebody turns this on.
-let raceTyreWear = store.get("tyreWear", "off");
+// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). SHIPS LIGHT.
+//
+// It shipped OFF, and off is not a quiet default here the way RELIABILITY's is:
+// it gates the ENTIRE pit feature — no lane, no box, no stop, no prompt, and the
+// AI never pits either — so a player who never opened SETTINGS had a pit lane
+// built into every circuit and no way to discover any of it existed.
+//
+// LIGHT rather than REAL: sets last roughly twice as long, so a stop is a choice
+// rather than a schedule. REAL is one click, OFF is still there, and a stored
+// preference beats this default, so nobody who already chose is overridden.
+//
+// OFF's other job was being a true no-op through the grip seam, which kept
+// tests/specs/physics-characterization.spec.js bit-identical. That is pinned
+// where it belongs now: tests/helpers/fixtures.js sets this key "off" for every
+// spec, so the baselines measure the DRIVING MODEL, not the current default.
+let raceTyreWear = store.get("tyreWear", "light");
 // ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
 // "auto". Inside an activation zone X-mode has no cost or downside, so the
 // optimal play is unconditionally on — which is what the AI does in one line.
@@ -420,7 +431,7 @@ let raceTyreWear = store.get("tyreWear", "off");
 // AI's deal. Stays opt-in because pressing the button is the mechanic.
 let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
-if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "off";
+if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "light";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)

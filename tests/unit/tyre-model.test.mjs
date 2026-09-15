@@ -540,3 +540,27 @@ test("optionRecord reads a catalog row, classRecord an AI draw, and both agree i
   assert.equal(T.optionRecord(TYRES.find((o) => o.id === "wet_full")).code, "W");
   assert.equal(T.optionRecord(TYRES.find((o) => o.id === "intermediate")).code, "I");
 });
+
+test("the SHIPPED default turns the pit feature on", () => {
+  // OFF gates the entire pit feature — no lane, no box, no stop, no prompt, and
+  // the AI never pits either. It shipped OFF, so a player who never opened
+  // SETTINGS had a pit lane built into every circuit and no way to find out any
+  // of it existed.
+  //
+  // This is asserted from SOURCE because tests/helpers/fixtures.js pins the key
+  // to "off" for every browser spec, so that the physics baselines measure the
+  // driving model rather than the current default. That pin is right, and it
+  // means no spec would notice this default silently going back to OFF. This is
+  // what notices.
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const m = src.match(/raceTyreWear = store\.get\("tyreWear",\s*"([a-z]+)"\)/);
+  assert.ok(m, "could not find the shipped TYRE WEAR default in js/game.js");
+  assert.ok(T.isLevel(m[1]), `the shipped default "${m[1]}" is not a TyreModel level`);
+  assert.notEqual(m[1], "off",
+    "TYRE WEAR ships OFF again — that switches the whole pit lane back off for every new player");
+  // …and the garbage-stored-value fallback must agree with it, or a corrupted
+  // key would silently put a player on a different level than a fresh one.
+  const f = src.match(/if \(!TyreModel\.isLevel\(raceTyreWear\)\) raceTyreWear = "([a-z]+)"/);
+  assert.ok(f, "could not find the TYRE WEAR validation fallback");
+  assert.equal(f[1], m[1], "the fallback level disagrees with the shipped default");
+});

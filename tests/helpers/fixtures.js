@@ -81,6 +81,16 @@ async function installMocks(context) {
   await context.addInitScript((spec) => {
     window.__TEST_MODE = true;
     if (spec) { try { localStorage.setItem("apex26.logLevel", spec); } catch (_) {} }
+    // TYRE WEAR OFF FOR EVERY SPEC, pinned rather than inherited. It ships ON
+    // now, and OFF is the only level that is a true no-op through the grip seam
+    // — so every physics baseline in the suite, tests/specs/
+    // physics-characterization.spec.js above all, is a measurement of the
+    // DRIVING MODEL and not of whatever the product default happens to be this
+    // month. The specs that actually exercise wear turn it on themselves at
+    // runtime (`__apex.tyres({ level: "real" })`), so nothing here loses cover;
+    // that the shipped default enables the lane is asserted in
+    // tests/unit/tyre-model.test.mjs, which costs nothing to run.
+    try { localStorage.setItem("apex26.tyreWear", JSON.stringify("off")); } catch (_) {}
   }, LOG_SPEC);
   await context.route("https://api.jolpi.ca/**", (route) =>
     route.fulfill({

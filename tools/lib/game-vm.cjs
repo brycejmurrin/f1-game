@@ -518,7 +518,16 @@ async function createGame(opts) {
   // apex26.trackId so boot's raceAssets() fetches ITS scenery and the first
   // wrapped __apex call (lazyTrackEnsure) builds that circuit once, dressed —
   // instead of a bare bahrain followed by the real build.
-  const seed = Object.assign({}, opts.track ? { trackId: opts.track } : {}, opts.storage || {});
+  // TYRE WEAR OFF BY DEFAULT, the same pin tests/helpers/fixtures.js puts on
+  // every browser spec and for the same reason: it ships ON, and OFF is the only
+  // level that is a true no-op through the grip seam, so every physics trace
+  // taken through this harness measures the DRIVING MODEL rather than whatever
+  // the product default is this month. tests/unit/physics-characterization-vm
+  // .test.mjs compares its trace against a BROWSER baseline number for number,
+  // so the two harnesses have to pin the same thing or they cannot agree.
+  // `opts.storage` still wins — a caller testing wear asks for it by name.
+  const seed = Object.assign({ tyreWear: "off" },
+                             opts.track ? { trackId: opts.track } : {}, opts.storage || {});
   for (const k of Object.keys(seed)) {
     sandbox.localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, JSON.stringify(seed[k]));
   }
