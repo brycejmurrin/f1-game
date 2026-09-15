@@ -23,7 +23,15 @@ const DrivingCoach = (function () {
   const TRAINS = Object.freeze({ trail: "trail", rearBrake: "trail", front: "corner", power: "corner",
     rearCoast: "slalom", limits: "sector", coasting: "braking" });
   const SUGGEST_AT = 3;        // repeats of one tip before the goal is worth naming
-  const TURN_WINDOW = 0.05;    // lap fractions either side of an apex that still count as that turn
+  // METRES either side of an apex that still count as that turn — not a lap
+  // FRACTION, which is a different distance on every circuit: 5% of a lap is
+  // 350 m at Spa and 170 m at Monaco, so the same rule would file a tip from
+  // the middle of a straight under a turn on one track and not on another.
+  const TURN_WINDOW_M = 150;
+  // The practice goals as the picker names them, so the review can point at a
+  // goal by the label the driver will actually look for. One list, two readers.
+  const GOALS = Object.freeze([["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"],
+    ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"]]);
   function create(G) {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
@@ -45,10 +53,10 @@ const DrivingCoach = (function () {
       let best = null, bestD = Infinity;
       for (let i = 0; i < turns.length; i++) {
         const raw = (((f - turns[i]) % 1) + 1) % 1;           // 0..1 ahead of the apex
-        const d = Math.abs(raw > 0.5 ? raw - 1 : raw);        // …as a shortest-way distance
+        const d = Math.abs(raw > 0.5 ? raw - 1 : raw) * t.total;   // …as a shortest-way distance in metres
         if (d < bestD) { bestD = d; best = i + 1; }
       }
-      return bestD <= TURN_WINDOW ? best : null;
+      return bestD <= TURN_WINDOW_M ? best : null;
     }
     function coachState() {
       if (!enabled) return "off";
@@ -70,8 +78,9 @@ const DrivingCoach = (function () {
       return { enabled: !!enabled, state: coachState(), latest: latest && { ...latest }, counts,
         total: counts.reduce((n, row) => n + row.count, 0),
         turns: Array.from(spots, ([turn, count]) => ({ turn, count })).sort((a, b) => b.count - a.count || a.turn - b.turn),
-        suggest: repeated ? { id: repeated.id, label: repeated.label, mode: TRAINS[repeated.id],
-          goal: RaceInsights.DRILLS[TRAINS[repeated.id]] } : null };
+        suggest: repeated ? { id: repeated.id, label: repeated.label, count: repeated.count, mode: TRAINS[repeated.id],
+          goal: RaceInsights.DRILLS[TRAINS[repeated.id]],
+          goalLabel: (GOALS.find(g => g[0] === TRAINS[repeated.id]) || [, TRAINS[repeated.id]])[1] } : null };
     }
     function clearCandidate() { candidate = ""; held = 0; }
     function status() {
@@ -200,8 +209,8 @@ const DrivingCoach = (function () {
         // Where they cluster is the part a count alone cannot tell you: one
         // corner earning half the session's tips is a corner to practise.
         + (coaching.turns.length ? " Most at " + coaching.turns.slice(0, 3).map(r => "Turn " + r.turn + " (" + r.count + ")").join(", ") + "." : "")
-        + (coaching.suggest ? " " + coaching.suggest.label + " came up " + coaching.counts.find(r => r.id === coaching.suggest.id).count
-          + " times — the " + coaching.suggest.goal.toLowerCase() + " practice goal drills it." : "")
+        + (coaching.suggest ? " " + coaching.suggest.label + " came up " + coaching.suggest.count
+          + " times. The " + coaching.suggest.goalLabel + " practice goal drills it." : "")
         + " These are reminders, not a driving score."
         : "No tips recorded this session. This is a reminder count, not a driving score.";
       const download = $("pm-driving-trace"); if (download) download.disabled = trace.length === 0 && insights.journal().length === 0;
@@ -275,8 +284,7 @@ const DrivingCoach = (function () {
     bind("pm-practice-set", mark); bind("pm-practice-retry", retry);
     SettingRow.wire($("pm-coach"), { values: [["off", "OFF"], ["on", "ON"]],
       read: () => enabled ? "on" : "off", write: v => { if ((v === "on") !== !!enabled) toggle(); } });
-    SettingRow.wire($("pm-drill"), { values: [["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"],
-        ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"]],
+    SettingRow.wire($("pm-drill"), { values: GOALS.map(g => g.slice()),
       read: () => drillMode, write: v => { if (Object.hasOwn(RaceInsights.DRILLS, v)) drillMode = v; paint(); } });
     SettingRow.wire($("pm-pit-choice"), { read: () => G.player && G.player.pitNext ? G.player.pitNext.id : "auto",
       write: v => { G.pits.selectNext(G.player, v); paint(); } });

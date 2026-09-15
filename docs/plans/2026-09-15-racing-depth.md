@@ -168,6 +168,11 @@ answer the two questions a driver actually asks: *where am I losing it* and
   authored data, not a `Tracks.curvature()` read, so it adds no row to the
   physics table; nothing but a sentence consumes it. The review lists the top
   locations, and a circuit without curated turns simply shows none.
+  The window around an apex is 150 METRES, not a lap fraction: the first cut of
+  this used 5% of a lap, which is 350 m at Spa against 170 m at Monaco, so the
+  same rule filed a mid-straight tip under a turn on one circuit and not on
+  another. A unit test pins the distance rule with a 10 km lap where 3% of the
+  lap must NOT be a turn.
 - **The review ranks and prescribes.** Counts sort most-repeated first, and a
   tip earned three times names the practice goal that drills it (braking tips →
   trail braking, front-grip → corner, track limits → sector, and so on). That

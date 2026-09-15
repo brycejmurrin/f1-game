@@ -106,13 +106,22 @@ test('a tip records the curated turn it happened at, wrapping across the start l
   assert.equal(coach.feedback().latest.turn, 3);
   c.s = 5; tick(31);                                  // 25 m PAST that apex, over the line — still Turn 3
   assert.equal(coach.feedback().latest.turn, 3);
-  c.s = 300; tick(31);                                // mid-straight, nearest apex 200 m away
+  c.s = 300; tick(31);                                // mid-straight: 200 m from the nearest apex, outside the 150 m window
   assert.equal(coach.feedback().latest.turn, null, 'a tip on a straight names no turn');
   assert.equal(JSON.stringify(coach.feedback().turns.map(r => [r.turn, r.count])), '[[3,2],[1,1]]');
   const view = coach.feedback(); view.turns[0].count = 99;
   assert.equal(coach.feedback().turns[0].count, 2, 'the review is a copy');
   G.track = null; c.s = 100; tick(31);
   assert.equal(coach.feedback().latest.turn, null, 'a circuit with no curated turns simply has no location');
+});
+
+test('the turn window is a distance, not a share of the lap, so a long circuit keeps its straights', () => {
+  const { coach, c, G, tick, enable } = fixture(); enable();
+  G.track = { total: 10000, def: { turns: [0.5] } };   // a 10 km lap with one apex, at 5000 m
+  c.s = 5100; tick(.5, braking);
+  assert.equal(coach.feedback().latest.turn, 1, '100 m past the apex is that turn on any circuit');
+  c.s = 5300; tick(31);
+  assert.equal(coach.feedback().latest.turn, null, '300 m out is 3% of this lap — a fraction window would have called it Turn 1');
 });
 
 test('a repeated tip names the practice goal that drills it, and the review reads as advice', () => {
@@ -124,11 +133,13 @@ test('a repeated tip names the practice goal that drills it, and the review read
   const suggest = coach.feedback().suggest;
   assert.equal(suggest.id, 'trail'); assert.equal(suggest.mode, 'trail');
   assert.equal(suggest.goal, 'Release the brake into a turn');
+  assert.equal(suggest.goalLabel, 'TRAIL BRAKING', 'the review names the goal the way the picker does');
+  assert.equal(suggest.count, 3);
   coach.paint();
   const summary = nodes.get('pm-coach-summary').textContent;
   assert.match(summary, /3 tips recorded this session/);
   assert.match(summary, /Most at Turn 1 \(3\)/);
-  assert.match(summary, /Braking into turns came up 3 times — the release the brake into a turn practice goal drills it/);
+  assert.match(summary, /Braking into turns came up 3 times\. The TRAIL BRAKING practice goal drills it\./);
   assert.match(summary, /not a driving score/);
   coach.reset();
   assert.equal(coach.feedback().suggest, null); assert.equal(coach.feedback().turns.length, 0);
