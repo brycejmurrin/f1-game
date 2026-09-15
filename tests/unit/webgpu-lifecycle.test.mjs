@@ -769,6 +769,44 @@ test("WGX publishes the GLX-parity surface instead of undefined stubs", async ()
   assert.equal(maps.layers, 0);
 });
 
+test("WGX timer ignores late readbacks and waits for a timed pass after enabling", async () => {
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const buffer = h.buffers.find((b) => b.desc.size === 16 && b.desc.usage === (2 | 64));
+  assert.ok(buffer, "timestamp read buffer exists");
+  const pending = [];
+  let unmapped = 0;
+  buffer.getMappedRange = () => new BigUint64Array([1000000n, 7000000n]).buffer;
+  buffer.mapAsync = () => {
+    buffer.mapState = "pending";
+    return new Promise((resolve) => pending.push(() => { buffer.mapState = "mapped"; resolve(); }));
+  };
+  buffer.unmap = () => { buffer.mapState = "unmapped"; unmapped++; };
+  const present = () => { assert.equal(gfx.begin({}), true); gfx.present({}); };
+  gfx.gpuTimer(true);
+  present();
+  assert.equal(pending.length, 1);
+  gfx.gpuTimer(false);
+  pending.shift()(); await Promise.resolve();
+  assert.equal(gfx.gpuMs(), -1, "a late sample cannot revive a disabled timer");
+  assert.equal(unmapped, 1, "discarded samples still release the mapped buffer");
+  gfx.gpuTimer(true);
+  present();
+  gfx.gpuTimer(false); gfx.gpuTimer(true);
+  pending.shift()(); await Promise.resolve();
+  assert.equal(gfx.gpuMs(), -1, "a previous timing session cannot populate a new one");
+  gfx.gpuTimer(false);
+  assert.equal(gfx.begin({}), true);
+  gfx.gpuTimer(true);
+  gfx.present({});
+  assert.equal(pending.length, 0, "an untimed pass must not resolve stale timestamp slots");
+  present();
+  gfx.gpuTimer(true); // an idempotent enable preserves the in-flight sample
+  pending.shift()(); await Promise.resolve();
+  assert.equal(gfx.gpuMs(), 6);
+  assert.equal(buffer.mapState, "unmapped");
+});
+
 test("lamp shadow arm does not leak into the next frame", async () => {
   const h = makeGpuHarness();
   const gfx = await h.create();
@@ -1619,7 +1657,7 @@ test("no WGSL derivative sits where control flow can be non-uniform", () => {
   for (const re of [/let fwWpos = abs\(dpdx\(in\.wpos\)\) \+ abs\(dpdy\(in\.wpos\)\);/,
                     /let fwTrkAttr = abs\(dpdx\(in\.trk\)\) \+ abs\(dpdy\(in\.trk\)\);/,
                     /applyMaterialNormal\(i32\(vMatId \+ 0\.5\), &N, vDist, in\.wpos, fwWpos, litNrm, packOn\);/,
-                    /roadMarkings\(&albedo, &rough, vTrk, fwTrk, U\.pitLane\);/,
+                    /roadMarkings\(&albedo, &rough, vTrk, fwTrk, F\.pitLane\);/,
                     // The one the first fix missed: this sits behind `if (detail
                     // > 0.001)`, so it must READ the hoisted footprint.
                     /let mnFpAbs = max\(fwWpos\.x, fwWpos\.z\);/]) {

@@ -22,6 +22,42 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+test("tail-light selection reuses capacity through sorting, shrink and regrowth", () => {
+  const source = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
+  const anchor = "return { setFrameLights, appendCarTailLights };";
+  assert.ok(source.includes(anchor));
+  const sampled = [];
+  const ctx = vm.createContext({
+    LightKnobs: { LT: { tailRange: 160, tailLightMul: 1, brakeGlowMul: 1 } },
+    LightBudget: { MAX: 48, MOBILE: 24, slots: () => 48 },
+    Tracks: { sample(_t, s, out) { sampled.push(s); out.p[2] = s; } },
+  });
+  vm.runInContext(source.replace(anchor,
+    "return { setFrameLights, appendCarTailLights, selection: () => _tlSel.slice() };"), ctx);
+  const api = vm.runInContext("FrameLights", ctx);
+  const track = { total: 5000 }, player = { s: 0, x: 0 };
+  const cars = Array.from({ length: 22 }, (_,i) => ({ s: (21-i)*5, x: 0 }));
+  const assemble = (field) => {
+    sampled.length = 0;
+    const frame = { lights: [] };
+    api.appendCarTailLights(frame, track, field, player, false);
+    assert.equal(frame.tailCount, Math.min(5, field.length));
+    assert.equal(frame.lights.length, frame.tailCount * 15);
+    const expected = field.map((c) => c.s).sort((a,b) => a-b).slice(0,5);
+    assert.deepEqual(sampled, expected, "only the nearest current cars supply lights");
+    return api.selection();
+  };
+  const first = assemble(cars), capacity = new Set(first);
+  for (let i = 0; i < 100; i++) {
+    const rows = assemble(i % 3 === 0 ? cars.slice(0,2) : i % 3 === 1 ? [] : cars);
+    for (const row of rows) assert.ok(capacity.has(row), "a warmed selection entry was reallocated");
+    assert.equal(new Set(rows).size, rows.length, "sorting must not alias pool entries");
+  }
+  const newCars = cars.map((c) => ({ s: c.s+1, x: 2 }));
+  const rows = assemble(newCars);
+  for (const row of rows) assert.ok(newCars.includes(row.c), "a new grid must not use stale car references");
+});
+
 // frame-lights.js is an IIFE exporting a fixed surface, and _fillAllLights is
 // internal to it. Widen the export list for the test rather than reaching past
 // the IIFE — the same shape the lamp-chunks drag guard uses. Asserting the

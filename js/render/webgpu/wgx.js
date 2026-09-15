@@ -1148,6 +1148,7 @@ const WGX = (function () {
     let sceneMSTex = null, sceneMSView = null, depthMSTex = null, depthMSView = null;
     let pDepthResolve = null, depthResolveBG = null;
     let _gpuTimerOn = false, _gpuMs = -1, _gpuQuerySet = null, _gpuResolveBuf = null, _gpuReadBuf = null;
+    let _gpuTimerEpoch = 0, _gpuFrameTimerEpoch = -1;
     let identInstanceBuf = null, zeroAttrBG = null, _roadLutBG = null, _roadLutReady = false;
     let pParticle = null, pParticleAdd = null, particleBGL = null;
     // Dual particle UBO/VBO/BG — smoke then sparks both writeBuffer before
@@ -3717,8 +3718,10 @@ const WGX = (function () {
             depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store",
           },
         };
+        _gpuFrameTimerEpoch = -1;
         if (_gpuTimerOn && _gpuQuerySet) {
           rp.timestampWrites = { querySet: _gpuQuerySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 };
+          _gpuFrameTimerEpoch = _gpuTimerEpoch;
         }
         litPass = encoder.beginRenderPass(rp);
         return true;
@@ -4910,10 +4913,13 @@ const WGX = (function () {
         _tonemapBlit(exposure);
       }
 
-      if (_gpuTimerOn && _gpuQuerySet && _gpuResolveBuf && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped") {
+      let timerRead = null;
+      const timerEpoch = _gpuFrameTimerEpoch;
+      if (_gpuTimerOn && timerEpoch === _gpuTimerEpoch && _gpuQuerySet && _gpuResolveBuf && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped") {
         try {
           encoder.resolveQuerySet(_gpuQuerySet, 0, 2, _gpuResolveBuf, 0);
           encoder.copyBufferToBuffer(_gpuResolveBuf, 0, _gpuReadBuf, 0, 16);
+          timerRead = _gpuReadBuf;
         } catch (_) { /* timer stays at last-good / -1 */ }
       }
       const disp = _softDisplayEncode();
@@ -4924,17 +4930,19 @@ const WGX = (function () {
       _capFinish(_cap);
       _softDisplayFinish(disp);
       _readOutputProbe();
-      if (_gpuTimerOn && _gpuReadBuf && _gpuReadBuf.mapState === "unmapped" && typeof _gpuReadBuf.mapAsync === "function") {
+      if (timerRead && typeof timerRead.mapAsync === "function") {
         try {
-          _gpuReadBuf.mapAsync(GPUMapMode.READ).then(function () {
+          timerRead.mapAsync(GPUMapMode.READ).then(function () {
             try {
-              const t = new BigUint64Array(_gpuReadBuf.getMappedRange());
-              _gpuMs = Number(t[1] - t[0]) / 1e6;
+              if (_gpuTimerOn && timerEpoch === _gpuTimerEpoch) {
+                const t = new BigUint64Array(timerRead.getMappedRange());
+                _gpuMs = Number(t[1] - t[0]) / 1e6;
+              }
             } catch (_) { /* keep last-good gpuMs */ }
             // ALWAYS unmap: a throw above used to leave the buffer mapped for
             // the rest of the session, and the `mapState === "unmapped"` gate
             // then silently switched the GPU timer off for good.
-            try { _gpuReadBuf.unmap(); } catch (_) { /* already unmapped / destroyed */ }
+            try { timerRead.unmap(); } catch (_) { /* already unmapped / destroyed */ }
           }, function () { /* map rejected (device busy or lost): the timer keeps its last-good value */ });
         } catch (_) { /* mapAsync unsupported or already mapped */ }
       }
@@ -5318,7 +5326,9 @@ const WGX = (function () {
 
     function gpuTimer(on) {
       if (on !== undefined) {
-        _gpuTimerOn = !!on && !!_timestampOk;
+        const next = !!on && !!_timestampOk;
+        if (next !== _gpuTimerOn) _gpuTimerEpoch++;
+        _gpuTimerOn = next;
         if (!_gpuTimerOn) _gpuMs = -1;
       }
       return { supported: !!_timestampOk, on: _gpuTimerOn };

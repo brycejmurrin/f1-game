@@ -33,7 +33,7 @@ const GLXChunked = (function () {
 
   function init(core) {
     const gl = core.gl;
-    const { bindVAO, setBlend, setDepthMask, toF32, createMesh, litMaterial } = core;
+    const { bindVAO, setBlend, setDepthMask, setCull, setPolyOffset, toF32, createMesh, litMaterial } = core;
     const F = core.frame;
 
     const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
@@ -145,6 +145,18 @@ const GLXChunked = (function () {
     // translucent work through draw() instead.
     function drawChunked(mesh, modelMat, opts) {
       if ((core.ctxGone && core.ctxGone()) || !mesh) return;
+      const dbl = opts && opts.doubleSided, bias = opts && opts.depthBias;
+      if (dbl) setCull(false);
+      if (bias) setPolyOffset(bias);
+      try {
+        drawChunkedBody(mesh, modelMat, opts);
+      } finally {
+        if (bias) setPolyOffset(null);
+        if (dbl) setCull(true);
+      }
+    }
+
+    function drawChunkedBody(mesh, modelMat, opts) {
       const alpha = litMaterial(modelMat, opts);
       setDepthMask(true);
       setBlend(alpha < 1);

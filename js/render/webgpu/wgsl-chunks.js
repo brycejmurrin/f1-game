@@ -1079,7 +1079,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   }
   applyMaterial(i32(vMatId + 0.5), &albedo, &rough, vDist, in.wpos, in.nrm, fwWpos, litPack, packOn);
   if (i32(vMatId + 0.5) == 16) {
-    roadMarkings(&albedo, &rough, vTrk, fwTrk, U.pitLane);
+    roadMarkings(&albedo, &rough, vTrk, fwTrk, F.pitLane);
   }
 
   var f0 = mix(vec3<f32>(0.08 * specular), albedo, metalness);
