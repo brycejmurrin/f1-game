@@ -237,6 +237,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
+  "tests/unit/wgsl-bindings.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   // that touches the LUT rather than on every edit.
   // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,
