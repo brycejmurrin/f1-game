@@ -895,7 +895,17 @@ flag still fired at the same race time, `maxBackJump` 253.36. (2) Monaco's new
 `pit: { mode: "street", side: 1 }` def block: removed at the tip, red flag
 still fired, 253.27. Neither is the cause.
 
-**The design question is bigger than the commit.** The base was already at 11
+**FIXED, on the test side only (2026-09-16).** `physics-fixes.spec.js` now
+turns the caution layer off for the measurement (`__apex.caution(false)`, the
+same door as the CAUTIONS row in RACE SETTINGS) and asserts
+`caution().level === 0` afterwards, so if a flag ever flies again the test says
+so instead of silently measuring a reposition. The 5 m ceiling is UNCHANGED —
+this removes an unrelated subsystem's interference, it does not widen a
+tolerance. Verified on an idle box: 2/2 green, zero flags raised, 112 s and
+118 s (back to the 110.1 s its own header declares). Race control keeps its
+coverage in its own specs; this file owns the projection.
+
+**The product side is deliberately NOT changed.** The base was already at 11
 of the 16 hazards needed to STOP A RACE, so there was almost no headroom, and
 race control counts one car's own settled debris the same way it counts a
 pile-up. A single player scraping a wall for half a minute should not be able
