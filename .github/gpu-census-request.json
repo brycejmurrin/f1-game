@@ -3,6 +3,6 @@
   "track": "vegas",
   "census_only": false,
   "force": "",
-  "ls": "",
-  "leg": "occlusion-2026-09-16-IN-RUN-ab-gpu-and-pixels"
+  "ls": "apex26.propsUnchunked=1",
+  "leg": "bound-test-2026-09-16-props-as-ONE-draw-call"
 }
