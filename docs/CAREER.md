@@ -469,6 +469,33 @@ skipped rather than counted as zero. `simCareerRound()` (`js/agent/apex.js`) dra
 same fields from the awareness prior it already draws `cuts` from, or a simulated
 career and a driven one would diverge on reputation alone.
 
+### The round debrief
+
+A percentage on its own is a score with no explanation. Under the craft line the
+results sheet prints what cost it, from `RaceInsights.debrief()` — the same event
+journal the coach fills all race, condensed to the kinds that cost craft (track
+limits, penalties, contact, offs, a retirement), each with a count and the laps to
+go and look at. Ordered by what the kind costs, so the biggest cause is first; the
+laps are the numbers the HUD showed (`js/ui/hud.js` prints `c.lap` directly). A stop
+and a compound change stay out of it: strategy is not craft. A faultless race renders
+nothing.
+
+### Craft develops the driver
+
+`rolloverDrivers` infers every axis of every driver from the RESULT, because for an
+AI seat there is nothing else to go on. For the player there is, and the player's
+`craft` axis is the one exception: its winter drift comes from the season's measured
+craft, `clamp((seasonCraft - 0.75) * 12, -3, 3)`, on the same ±3 scale as FORM.
+
+That is what closes the loop. `ratingOf` feeds `overall()`, which ranks the grid in
+`rolloverMarket` and decides who moves in the silly season, and it feeds a simulated
+round's race-day swing. Drive cleanly for a year and the rating that decides those
+things moves with the driving instead of with a dice roll. Every other seat, and
+every other axis, keeps the inferred drift — a test asserts that a scruffy player
+season leaves every AI seat's development byte-identical. A season with no craft rows
+at all (raced before the channel existed) falls back to the inferred drift rather
+than reading as a season of zeroes.
+
 ## Reliability and retirements
 
 `js/race/reliability.js` (global `Reliability`) decides whether a car reaches the

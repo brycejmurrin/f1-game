@@ -3163,3 +3163,16 @@ comments. `js/career/career.js` scores them into reputation and never into
 money; `js/agent/apex.js` draws the same fields for a simulated round from the
 awareness prior it already draws cuts from, or a simulated career and a driven
 one would diverge on reputation alone.
+
+## 2026-09-16 — `cssClasses` 555 → 556
+
+One class: `.res-settle-row.craft`, the round debrief under the race-craft line
+on a career results sheet. The craft percentage on its own is a score with no
+explanation, which is the thing this sheet already got wrong once; the debrief
+is the same events `RaceInsights` logged all race (track limits, penalties,
+contact, offs, a retirement) condensed to the ones that cost craft, with the
+laps to go and look at. A faultless race renders none of it.
+
+It is a modifier on a row that already exists rather than a new block, and it
+carries no raw px: the indent is `padding-left: var(--gap)`, so the shorthand on
+`.res-settle-row` keeps the vertical rhythm and `rawSpacing` is unchanged.

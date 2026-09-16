@@ -515,6 +515,17 @@
 }
 .res-settle-row.total .res-settle-v { color: #fff; }
 .res-settle-row.rep { font-size: var(--fs-micro); }
+/* The round debrief under the race-craft line: what cost it, and which laps. It
+   is evidence for the number above, not another figure in the column, so it is
+   indented under it and its value is a lap list rather than a tabular figure.
+   padding-LEFT only: the shorthand on .res-settle-row keeps the vertical rhythm,
+   and a raw px indent here is what tools/check/tree-counts.mjs counts. */
+.res-settle-row.craft {
+  font-size: var(--fs-micro); padding-left: var(--gap);
+}
+.res-settle-row.craft .res-settle-v {
+  font-weight: 600; color: var(--dim); font-variant-numeric: normal;
+}
 
 /* ---------- the seats within reach ---------- */
 /* offerBar(tier) is already a visible ladder in the rules — this is it on

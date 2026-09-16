@@ -487,3 +487,81 @@ test("rounds saved before craft existed are skipped, not counted as zero", () =>
   assert.equal(Career.seasonCraft(), 1,
     "a legacy row must not drag a faultless season down to 0.50");
 });
+
+// ── THE LOOP: driving -> rating -> the market ────────────────────────────────
+// rolloverDrivers infers every axis of every driver from the RESULT, because for
+// an AI seat there is nothing else to go on. For the player there is: a season of
+// settled rounds that recorded how each was driven. These pin that the player's
+// craft axis takes that evidence and that nobody else's does.
+
+/** Race a full season of identical P3s with the given marks, then roll over. */
+function seasonOf(marks) {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  const me = "haas:1";
+
+  const mk = (id, seat) => ({ team: { id }, seat, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  for (let r = 0; r < 6; r++) {
+    career.season.round = r + 1;
+    const player = Object.assign(mk("haas", 1), marks);
+    const order = [mk("apex", 0), mk("apex", 1), player, mk("vega", 0), mk("vega", 1),
+                   mk("haas", 0), mk("vega", 0), mk("apex", 0)];
+    Career.settleRound(order, player);
+  }
+  const before = JSON.stringify(career.dev);
+  const summary = Career.rollover().summary;
+  return { Career, career, me, before, summary, dev: career.dev };
+}
+
+test("a clean season develops the player's craft; a scruffy one costs it", () => {
+  const clean = seasonOf({});
+  const scruffy = seasonOf({ hits: 2, hitSev: 0.9, wallHits: 3 });
+
+  assert.equal(clean.summary.craft, 1, "six faultless rounds average 1.00");
+  assert.ok(scruffy.summary.craft < 0.6, `scruffy season averaged ${scruffy.summary.craft}`);
+  assert.ok(clean.dev[clean.me].craft > scruffy.dev[scruffy.me].craft,
+    "the craft axis must move with the driving, not with the finishing position");
+  // Same classified P3 every round in both seasons, so pace — which is inferred
+  // from the result — must be untouched by how the car was driven.
+  assert.equal(clean.dev[clean.me].pace, scruffy.dev[scruffy.me].pace,
+    "craft must not leak into the pace axis");
+});
+
+test("only the PLAYER'S seat reads race craft — every AI seat keeps the inferred drift", () => {
+  const clean = seasonOf({});
+  const scruffy = seasonOf({ hits: 2, hitSev: 0.9, wallHits: 3 });
+  for (const id of Object.keys(clean.dev)) {
+    if (id === clean.me) continue;
+    assert.equal(JSON.stringify(clean.dev[id]), JSON.stringify(scruffy.dev[id]),
+      `${id} is an AI seat: the player's driving must not develop it`);
+  }
+});
+
+test("a season with no craft rows falls back to the inferred drift, not a bad year", () => {
+  // The path a save raced entirely before craft existed takes. Strip the key from
+  // every settled round and roll over: the player's craft must develop exactly as
+  // an AI seat's does (half the pace drift), never as a season scored zero.
+  const clean = seasonOf({});
+  const legacy = loadDriver();
+  legacy.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  legacy.engage(true);
+  const career = legacy.data();
+  const mk = (id, seat) => ({ team: { id }, seat, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  for (let r = 0; r < 6; r++) {
+    career.season.round = r + 1;
+    const player = mk("haas", 1);
+    legacy.settleRound(player ? [mk("apex", 0), mk("apex", 1), player, mk("vega", 0),
+                                 mk("vega", 1), mk("haas", 0), mk("vega", 0), mk("apex", 0)] : [], player);
+    delete career.results[career.results.length - 1].craft;
+  }
+  assert.equal(legacy.seasonCraft(), null, "no craft rows at all");
+  legacy.rollover();
+  const craft = career.dev["haas:1"].craft, pace = career.dev["haas:1"].pace;
+  // Half the pace drift, within the rounding bumpAxis applies to each axis.
+  assert.ok(Math.abs(craft - pace / 2) <= 0.5,
+    `legacy craft ${craft} must be half the pace drift ${pace}, as an AI seat's is`);
+  assert.notEqual(craft, -3,
+    "a season with no craft rows must not be scored as a season of zeroes");
+});

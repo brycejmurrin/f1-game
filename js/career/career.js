@@ -788,10 +788,22 @@ function bumpAxis(d, axis, by) {
 //           great year in a bad car is worth more than a title in the best one.
 //   NOISE   development is not a formula. ±2, from the stateless career hash.
 //
+// THE PLAYER'S `craft` AXIS IS THE ONE EXCEPTION, and it is the whole point of
+// measuring race craft. For an AI seat every axis has to be inferred from the
+// result, because there is nothing else to go on. For the player there IS: a
+// season of settled rounds that recorded how each one was driven. Taking their
+// craft drift from that instead of from half their pace drift is what closes
+// the loop — drive cleanly and the rating that feeds the silly season
+// (`overall()` ranks the grid with it) and a simulated round's race-day swing
+// moves with the driving, not with a dice roll. Same ±3 bound as FORM, so it
+// is a season's worth of evidence weighted like a season's worth of results.
+//
 // Stored as per-axis deltas over the shipped DriverRatings table, never absolutes,
 // so updating the real 2026 ratings never invalidates a save.
+const CRAFT_DEV = 12;     // rating points per unit of craft either side of BASE
 function rolloverDrivers(dStand) {
   const posOf = new Map(dStand.map((r) => [r.id, r.pos]));
+  const seasonMark = seasonCraft();
   for (const s of gridSeats()) {
     const r = ratingOf(s);
     const growth = (1 - r.experience / 100) * 6 - 1.5;
@@ -802,8 +814,13 @@ function rolloverDrivers(dStand) {
     // Pace takes the whole drift; the softer axes take half. A driver who has a
     // year does not become a different person, they get quicker.
     bumpAxis(d, "pace", drift);
-    bumpAxis(d, "craft", drift * 0.5);
-    bumpAxis(d, "consistency", drift * 0.5);
+    // `seasonMark` is null for a season raced entirely before craft existed, and
+    // for one settled only through simCareerRound before it drew the fields —
+    // both fall back to the inferred drift rather than reading as a bad year.
+    const mine = isPlayerSeat(s) && seasonMark != null;
+    bumpAxis(d, "craft", mine
+      ? clamp((seasonMark - CRAFT_BASE) * CRAFT_DEV, -3, 3)
+      : drift * 0.5);
     d.experience = clamp(Math.round((d.experience || 0) + 4), 0, EXP_MAX);
   }
 }
@@ -1002,6 +1019,10 @@ function rollover() {
     champion: champ ? (career.season.driverCodes[champ.id] || codeOf(champ.id)) : "",
     wins: career.results.filter((r) => r.p === 1).length,
     podiums: career.results.filter((r) => r.p <= 3).length,
+    // The season's race craft, rounded, or null for a year raced before it
+    // existed. Read straight after this by rolloverDrivers, which develops the
+    // player's craft axis from it; `career.results` is cleared further down.
+    craft: seasonCraft() == null ? null : Math.round(seasonCraft() * 100) / 100,
   };
   career.history.push(entry);
   if (career.history.length > HISTORY_MAX)
