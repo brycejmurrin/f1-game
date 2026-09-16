@@ -84,19 +84,29 @@ export async function waitNoPolling() {
   return count();
 }
 
-/** Fixed sleeps in the suite: `waitForTimeout(` under tests/specs and
+/** Fixed sleeps in the suite: `.waitForTimeout(` under tests/specs and
  *  tests/helpers. A sleep is a guess about the machine — under SwiftShader a
  *  150 ms settle is one frame on an idle box and none on a loaded one — so the
  *  population is ratcheted and each site is converted to a condition wait on
  *  `__apex` state (`{ polling: 100 }`) as it is touched. Same shape as
- *  waitNoPolling: a tree count with a per-file breakdown for --offenders. */
+ *  waitNoPolling: a tree count with a per-file breakdown for --offenders.
+ *
+ *  THE DOT IS LOAD-BEARING (2026-09-16). The bare `\bwaitForTimeout\(` this
+ *  used to match cannot tell a CALL from a DEFINITION or a mention: it counted
+ *  the `async waitForTimeout(_ms)` method on tests/helpers/vm-page.js's page
+ *  adapter — which sleeps for nothing, it only exists so an unmodified spec
+ *  compiles against the VM — and a `waitForTimeout(300)` inside the comment at
+ *  menu-keyboard.spec.js:414 that explains why that sleep was DELETED. Both
+ *  pushed the ceiling the wrong way. A real sleep is always `page.` or
+ *  `racePage.`-qualified, so requiring the dot counts sleeps and nothing else;
+ *  the ceiling came DOWN by two when this landed. */
 export function waitForTimeoutReport() {
   const rows = [];
   for (const dir of ["tests/specs", "tests/helpers"]) {
     const abs = path.join(ROOT, dir);
     if (!fs.existsSync(abs)) continue;
     for (const f of fs.readdirSync(abs).filter((x) => /\.(js|mjs|cjs)$/.test(x)).sort()) {
-      const n = (fs.readFileSync(path.join(abs, f), "utf8").match(/\bwaitForTimeout\(/g) || []).length;
+      const n = (fs.readFileSync(path.join(abs, f), "utf8").match(/\.waitForTimeout\(/g) || []).length;
       if (n) rows.push({ file: `${dir}/${f}`, count: n });
     }
   }
