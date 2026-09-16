@@ -21,11 +21,20 @@
  * The formula does not correct for this — no honest correction exists — so read
  * these as "dominance within his own era", never as a cross-era time sheet.
  *
+ * NATIONAL COLOURS, where a tribute leans on one: Britain green (British
+ * Racing Green, #004225), Italy red (rosso corsa, #E4002B), France blue (Bleu
+ * de France), Germany white or bare metal. The Silver Arrow is bare metal for a
+ * reason worth keeping: Mercedes stripped the white paint at the 1934 Eifel
+ * Race to make the weight limit, and the exposed metal named the cars. Senna's
+ * yellow accent is Brazil's racing colour (pale yellow with green), Fangio's
+ * is Argentina's (blue with a yellow bonnet) — both national, neither a team.
+ *
  * SOURCES (fetched 2026-09-16, en.wikipedia.org): the per-driver articles for
  * Michael Schumacher, Ayrton Senna, Juan Manuel Fangio, Jim Clark, Niki Lauda,
  * Alain Prost, Jackie Stewart and Nigel Mansell, plus "List of Formula One
- * World Drivers' Champions". Clark's podium count is from statsf1.com, which
- * the Wikipedia infobox omits.
+ * World Drivers' Champions", plus "British racing green", "Rosso corsa",
+ * "List of international auto racing colours" and "Silver Arrows" for the
+ * palettes. Clark's podium count is from statsf1.com, which the infobox omits.
  */
 const Legends = (function () {
   "use strict";
@@ -35,7 +44,12 @@ const Legends = (function () {
       years: "1991–2012", teams: "Benetton, Ferrari", car: "Ferrari F2004",
       record: { starts: 306, wins: 91, poles: 68, podiums: 155, titles: 7 },
       trait: "Relentless over a stint, and the era's benchmark in the wet.",
-      livery: { name: "Maranello '04", c1: [0.78, 0.04, 0.03], c2: [0.93, 0.93, 0.95],
+      // Ferrari's red is NOT one colour: 1996-2007 they ran a brighter, almost
+      // day-glo orange-red chosen to reproduce on television, returning to the
+      // original rosso corsa in 2007. Schumacher's five Ferrari titles sit
+      // inside that window, so his tribute is the TV red and Lauda's below is
+      // the darker original — the two must not read as the same car.
+      livery: { name: "Maranello '04", c1: [0.88, 0.11, 0.02], c2: [0.93, 0.93, 0.95],
                 stripe: [0.98, 0.82, 0.10], accent: [0.10, 0.10, 0.12],
                 finShape: "none", spineHeight: "dorsal", spineLogo: "cap" } },
 
@@ -62,7 +76,10 @@ const Legends = (function () {
       record: { starts: 72, wins: 25, poles: 33, podiums: 32, titles: 2 },
       trait: "Never bullied a car — caressed it, and wore it out slower than anyone.",
       // VERIFIED: Lotus ran British Racing Green with gold lettering and accents.
-      livery: { name: "Lotus Green '63", c1: [0.02, 0.22, 0.13], c2: [0.85, 0.70, 0.22],
+      // British Racing Green as the commonly cited #004225 = rgb(0,66,37). The
+      // source is explicit that no exact hue exists — BRG names a spectrum, and
+      // 1960s teams each ran their own shade — so this is the standard value.
+      livery: { name: "Lotus Green '63", c1: [0.00, 0.26, 0.145], c2: [0.85, 0.70, 0.22],
                 stripe: [0.90, 0.76, 0.28], accent: [0.93, 0.94, 0.96],
                 finShape: "none", spineHeight: "low", spineLogo: "fade" } },
 
@@ -70,7 +87,10 @@ const Legends = (function () {
       years: "1971–1985", teams: "March, BRM, Ferrari, Brabham, McLaren", car: "Ferrari 312T",
       record: { starts: 171, wins: 25, poles: 24, podiums: 54, titles: 3 },
       trait: "Engineer first: tested more than he raced and drove to the number.",
-      livery: { name: "Rat's Red '75", c1: [0.68, 0.05, 0.05], c2: [0.14, 0.14, 0.16],
+      // The ORIGINAL rosso corsa (#E4002B), deepened: the source notes it "may
+      // appear almost dark brown" on a period television, which is the memory
+      // this tribute is for — and it keeps the 1975 car off the 2004 car's red.
+      livery: { name: "Rat's Red '75", c1: [0.55, 0.02, 0.05], c2: [0.14, 0.14, 0.16],
                 stripe: [0.92, 0.93, 0.95], accent: [0.86, 0.72, 0.20],
                 finShape: "none", spineHeight: "low", spineLogo: "carbon" } },
 
@@ -78,8 +98,11 @@ const Legends = (function () {
       years: "1980–1993", teams: "McLaren, Renault, Ferrari, Williams", car: "Williams FW15C",
       record: { starts: 199, wins: 51, poles: 33, podiums: 106, titles: 4 },
       trait: "The Professor: tyres and brakes saved early, the race taken late.",
-      livery: { name: "Professor '93", c1: [0.93, 0.94, 0.96], c2: [0.05, 0.13, 0.42],
-                stripe: [0.05, 0.13, 0.42], accent: [0.96, 0.74, 0.12],
+      // NAVY-DOMINANT on purpose. Rendered white-on-blue it was a near twin of
+      // Mansell's Williams below — a real collision no colour assertion caught,
+      // only looking at the two cars side by side did (scratch/renders/legends).
+      livery: { name: "Professor '93", c1: [0.09, 0.12, 0.30], c2: [0.93, 0.94, 0.96],
+                stripe: [0.93, 0.94, 0.96], accent: [0.96, 0.74, 0.12],
                 finShape: "swept", spineHeight: "dorsal", spineLogo: "fade" } },
 
     { id: "stewart", code: "STE", name: "Jackie Stewart", nat: "GB",
@@ -87,7 +110,7 @@ const Legends = (function () {
       record: { starts: 99, wins: 27, poles: 17, podiums: 43, titles: 3 },
       trait: "Ruthless in the wet, and the reason half the safety rules exist.",
       // VERIFIED: Tyrrell ran French Racing Blue under the Elf fuel sponsorship.
-      livery: { name: "Tartan Blue '71", c1: [0.05, 0.16, 0.52], c2: [0.93, 0.94, 0.96],
+      livery: { name: "Tartan Blue '71", c1: [0.04, 0.24, 0.70], c2: [0.93, 0.94, 0.96],
                 stripe: [0.90, 0.20, 0.20], accent: [0.96, 0.96, 0.98],
                 finShape: "none", spineHeight: "low", spineLogo: "number" } },
 
@@ -95,8 +118,8 @@ const Legends = (function () {
       years: "1980–1995", teams: "Lotus, Williams, Ferrari, McLaren", car: "Williams FW14B",
       record: { starts: 187, wins: 31, poles: 32, podiums: 59, titles: 1 },
       trait: "Il Leone — overtook where there was no room and made the room.",
-      livery: { name: "Red Five '92", c1: [0.93, 0.94, 0.96], c2: [0.06, 0.16, 0.48],
-                stripe: [0.88, 0.09, 0.10], accent: [0.98, 0.84, 0.10],
+      livery: { name: "Red Five '92", c1: [0.95, 0.95, 0.97], c2: [0.10, 0.32, 0.78],
+                stripe: [0.90, 0.07, 0.09], accent: [0.99, 0.86, 0.06],
                 finShape: "swept", spineHeight: "dorsal", spineLogo: "number" } }
   ];
 

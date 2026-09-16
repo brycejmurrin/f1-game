@@ -98,3 +98,47 @@ test("the sources block is present, because these are claims about real people",
   assert.match(src, /SOURCES \(fetched/, "the record must say where it came from");
   assert.match(src, /TRIBUTE PALETTE, not a replica/, "the livery claim must stay honest");
 });
+
+test("no two tributes read as the same car", () => {
+  // THE BUG THIS EXISTS FOR, found by RENDERING the eight and looking at them
+  // (scratch/renders/legends), not by any assertion: Lauda's 1975 Ferrari and
+  // Schumacher's 2004 Ferrari were both simply "a red car", and Prost's
+  // Williams and Mansell's Williams were both "a white car with blue". Both
+  // pairs passed the per-livery c1-vs-c2 check above, which only looks INSIDE
+  // one livery.
+  //
+  // THE RULE IS ON c1 ALONE, and the first draft of this test got that wrong in
+  // a way worth recording: weighting c1 against c2 scored the Lauda/Schumacher
+  // pair 2.63 — a comfortable pass — because their SECONDARIES are far apart
+  // (white trim against dark). The eye does not average them. It reads the
+  // dominant colour and calls it a red car, so the dominant colour is what has
+  // to differ, and a deliberate exception is written down rather than smuggled
+  // in by a formula that happens to pass.
+  const MIN_C1 = 0.18;
+  const ALLOWED = {
+    // Two white cars, and they are NOT confusable on track: the accents are at
+    // opposite ends — Senna's red against Mansell's blue-and-red-5 — which the
+    // side-by-side render confirms. Kept explicit so the next white tribute has
+    // to make the same argument instead of inheriting the exemption.
+    "legend_senna|legend_mansell": "both white; separated by accent (red vs blue), confirmed in the render"
+  };
+  const livs = Legends.liveries();
+  const d = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+  for (let i = 0; i < livs.length; i++) {
+    for (let j = i + 1; j < livs.length; j++) {
+      const key = `${livs[i].id}|${livs[j].id}`;
+      const sep = d(livs[i].c1, livs[j].c1);
+      if (ALLOWED[key]) {
+        // An exemption that is no longer needed is a stale comment pretending
+        // to be a decision, so it has to still be doing work.
+        assert.ok(sep <= MIN_C1, `${key} is exempt but now separates by ${sep.toFixed(2)} — drop the ALLOWED row`);
+        // …and the escape hatch is not a free pass: the SECONDARIES must carry it.
+        assert.ok(d(livs[i].c2, livs[j].c2) > 1.0, `${key} leans on its accent, so the accents must be far apart`);
+        continue;
+      }
+      assert.ok(sep > MIN_C1,
+        `${livs[i].name} and ${livs[j].name} share a dominant colour (${sep.toFixed(2)}) — ` +
+        "they read as the same car. Render them side by side before arguing with this.");
+    }
+  }
+});
