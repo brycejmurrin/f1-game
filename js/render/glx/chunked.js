@@ -39,6 +39,103 @@ const GLXChunked = (function () {
     const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                        new Float32Array(4), new Float32Array(4), new Float32Array(4)];
 
+    // ── OCCLUSION CULLING (apex26.occlusionCull, ships OFF) ────────────────
+    //
+    // WHY, with numbers. tools/check/occlusion-estimate.mjs rasterises every
+    // prop triangle into a depth buffer carrying the cell id that won each
+    // pixel: of the chunks this file submits per camera, 84.9 % at vegas,
+    // 80.1 % at monza and 55.9 % at spa contribute NO pixel at all — 58 %, 55 %
+    // and 18 % of submitted prop vertices. And gpu-census run 131/132 measured
+    // the frame GPU-bound and INVARIANT to pixel count (1.67x the pixels, 0.94x
+    // the GPU time), so the cost is geometry and draw submission, which is
+    // exactly what those wasted chunks are. The culling review had rejected
+    // occlusion culling for needing a depth pre-pass; WebGL2 hardware queries
+    // need none, and its other premise — that the frame cost is draw calls —
+    // is the argument FOR removing draws that produce nothing.
+    //
+    // HOW. One proxy box per candidate chunk, drawn with colour and depth
+    // writes off against the depth already in the buffer, wrapped in an
+    // ANY_SAMPLES_PASSED_CONSERVATIVE query. Results are read on a LATER frame
+    // (CHC++ temporal coherence) so nothing ever blocks on the GPU.
+    //
+    // EVERY UNCERTAINTY RESOLVES TO "VISIBLE". A missing extension, a program
+    // that would not link, a chunk never queried, a query whose result has not
+    // landed, a mesh seen for the first time — all keep the chunk drawn. The
+    // failure mode of this feature must be "no saving", never "a hole in the
+    // world", and that is why the flag ships off until a census says otherwise.
+    const OCC_VS = "#version 300 es\nin vec3 aCorner;uniform mat4 uViewProj;uniform vec3 uMin,uMax;" +
+      "void main(){gl_Position=uViewProj*vec4(mix(uMin,uMax,aCorner),1.0);}";
+    const OCC_FS = "#version 300 es\nprecision lowp float;out vec4 o;void main(){o=vec4(1.0);}";
+    let _occOn = false, _occProg = null, _occU = null, _occVao = null, _occFailed = false;
+    let _occState = new WeakMap();        // mesh -> { flag, q, sent }
+    let _occDrawn = [], _occFrame = 0;
+    // `lagMax` / `lagSum` / `lagN` are HOW MANY PASSES a query takes to answer,
+    // and they exist because run 133 reported queries=0 on its sampled pass —
+    // every chunk already had one in flight. Harvesting demonstrably worked
+    // (nothing reaches culled=146 otherwise), but the sample said nothing about
+    // the latency, and a visibility flag that updates slowly is a flag that
+    // POPS: the chunk stays hidden for as many frames as the answer takes.
+    // Counting it is the difference between knowing that and assuming it.
+    const _occStats = { supported: null, on: false, tested: 0, culled: 0, queries: 0, passes: 0,
+                        lagMax: 0, lagAvg: 0 };
+    let _lagSum = 0, _lagN = 0;
+
+    function _occInit() {
+      if (_occProg || _occFailed) return !!_occProg;
+      try {
+        const mk = (type, src) => {
+          const sh = gl.createShader(type); gl.shaderSource(sh, src); gl.compileShader(sh);
+          if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh) || "compile");
+          return sh;
+        };
+        const prog = gl.createProgram();
+        gl.attachShader(prog, mk(gl.VERTEX_SHADER, OCC_VS));
+        gl.attachShader(prog, mk(gl.FRAGMENT_SHADER, OCC_FS));
+        gl.bindAttribLocation(prog, 0, "aCorner");
+        gl.linkProgram(prog);
+        if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || "link");
+        _occProg = prog;
+        _occU = { vp: gl.getUniformLocation(prog, "uViewProj"),
+                  mn: gl.getUniformLocation(prog, "uMin"), mx: gl.getUniformLocation(prog, "uMax") };
+        // Unit cube: 8 corners as 0/1 selectors, 36 indices. The vertex shader
+        // mixes them between the chunk bounds, so the geometry is static.
+        const corners = new Float32Array([0,0,0, 1,0,0, 1,1,0, 0,1,0, 0,0,1, 1,0,1, 1,1,1, 0,1,1]);
+        const cubeIdx = new Uint16Array([0,1,2, 0,2,3, 5,4,7, 5,7,6, 4,0,3, 4,3,7,
+                                         1,5,6, 1,6,2, 3,2,6, 3,6,7, 4,5,1, 4,1,0]);
+        _occVao = gl.createVertexArray();
+        gl.bindVertexArray(_occVao);
+        const vb = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, corners, gl.STATIC_DRAW);
+        gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+        const ib = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeIdx, gl.STATIC_DRAW);
+        gl.bindVertexArray(null);
+        _occStats.supported = true;
+        Log.info("gfx", "GLX occlusion queries ready");
+        return true;
+      } catch (e) {
+        _occFailed = true; _occStats.supported = false;
+        Log.warn("gfx", "GLX occlusion queries unavailable: " + ((e && e.message) || e));
+        return false;
+      }
+    }
+    // A chunk is drawn unless a query has SAID it is hidden. `flag` starts at 1
+    // for every chunk of every mesh, including meshes this pass has never seen.
+    function _occStateOf(mesh) {
+      let st = _occState.get(mesh);
+      if (!st && mesh.chunks) {
+        st = { flag: new Uint8Array(mesh.chunks.length).fill(1), q: new Array(mesh.chunks.length).fill(null),
+               sent: new Uint8Array(mesh.chunks.length), at: new Int32Array(mesh.chunks.length) };
+        _occState.set(mesh, st);
+      }
+      return st;
+    }
+    function _occVisible(mesh, i) {
+      if (!_occOn || !_occProg) return true;
+      const st = _occState.get(mesh);
+      return !st || st.flag[i] !== 0;
+    }
+
     function createChunkedMesh(data, cellSize) {
       const cell = cellSize > 0 ? cellSize : 72;
       let pos = toF32(data.pos), nrm = toF32(data.nrm), col = toF32(data.col);
@@ -157,6 +254,7 @@ const GLXChunked = (function () {
     }
 
     function drawChunkedBody(mesh, modelMat, opts) {
+      if (_occOn && mesh.chunks && _occDrawn.indexOf(mesh) < 0) _occDrawn.push(mesh);
       const alpha = litMaterial(modelMat, opts);
       setDepthMask(true);
       setBlend(alpha < 1);
@@ -233,7 +331,8 @@ const GLXChunked = (function () {
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) ||
-              (cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2)) { flush(); continue; }
+              (cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) ||
+              !_occVisible(mesh, i)) { flush(); continue; }
           const li = _tbl.lists[i];
           let slot = -1;
           if (shadowAllIdx >= 0) {
@@ -255,7 +354,8 @@ const GLXChunked = (function () {
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           const vis = Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
-                      !(cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2);
+                      !(cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) &&
+                      _occVisible(mesh, i);
           if (vis) {
             if (runOff < 0) { runOff = ch.byteOffset; runCount = ch.count; }
             else runCount += ch.count;
@@ -297,6 +397,113 @@ const GLXChunked = (function () {
       if (runOff >= 0) gl.drawElements(gl.TRIANGLES, runCount, mesh.indexType, runOff);
     }
 
+    // THE QUERY PASS. Called once a frame, after the opaque geometry and before
+    // post consumes the scene buffer, so the depth it tests against is the
+    // finished opaque depth of THIS frame. Two halves, in this order:
+    //
+    //   1. Harvest. Read any query whose result has landed — never one that has
+    //      not, because getQueryParameter on a pending query is the stall this
+    //      whole design exists to avoid. A result of false means the proxy box
+    //      did not put a single sample through the depth test, so the chunk is
+    //      behind something solid and is skipped NEXT frame.
+    //   2. Re-test every frustum-candidate, hidden ones included. A hidden
+    //      chunk must keep being asked or it can never come back, and coming
+    //      back late is a hole in the world that heals — the worst kind of bug
+    //      to find later.
+    //
+    // The pass costs one twelve-triangle draw per candidate with no colour and
+    // no depth write. That IS more draw calls than it removes (vegas: ~152
+    // proxy draws to skip ~129 real ones), which would be a bad trade on a
+    // draw-call-bound frame and is a good one here: the census measured the
+    // frame invariant to pixel count, so it is VERTICES that bind, and 152
+    // boxes are 1,216 vertices against the ~58 % of a quarter-million prop
+    // vertices they remove.
+    function occlusionPass() {
+      if (!_occOn || (core.ctxGone && core.ctxGone()) || !_occInit()) { _occDrawn.length = 0; return; }
+      const meshes = _occDrawn;
+      if (!meshes.length) return;
+      _occFrame++;
+      _occStats.passes++;
+      let tested = 0, culled = 0, queries = 0;
+      Frustum.extractPlanes(F.viewProj, _fcPlanes);
+      const eye = F.eye, cd = F.cullDist, cd2 = cd * cd;
+      const ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
+      const prevProg = gl.getParameter(gl.CURRENT_PROGRAM);
+      gl.useProgram(_occProg);
+      gl.uniformMatrix4fv(_occU.vp, false, F.viewProj);
+      bindVAO(_occVao);
+      gl.colorMask(false, false, false, false);
+      setDepthMask(false);
+      setBlend(false);
+      gl.depthFunc(gl.LEQUAL);
+      try {
+        for (const mesh of meshes) {
+          const st = _occStateOf(mesh);
+          if (!st) continue;
+          const chunks = mesh.chunks;
+          for (let i = 0; i < chunks.length; i++) {
+            const ch = chunks[i];
+            // 1. Harvest whatever landed, whether or not this chunk is a
+            //    candidate now — a result thrown away is a query wasted.
+            const q = st.q[i];
+            if (q && st.sent[i]) {
+              if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
+                st.flag[i] = gl.getQueryParameter(q, gl.QUERY_RESULT) ? 1 : 0;
+                st.sent[i] = 0;
+                const lag = _occFrame - st.at[i];
+                if (lag > _occStats.lagMax) _occStats.lagMax = lag;
+                _lagSum += lag; _lagN++;
+              }
+            }
+            const cand = Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
+                         !(cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2);
+            if (!cand) { st.flag[i] = 1; continue; }   // out of frustum: not our business, and never left hidden
+            tested++;
+            if (st.flag[i] === 0) culled++;
+            if (st.sent[i]) continue;                  // one query in flight per chunk
+            if (!st.q[i]) st.q[i] = gl.createQuery();
+            gl.uniform3f(_occU.mn, ch.min[0], ch.min[1], ch.min[2]);
+            gl.uniform3f(_occU.mx, ch.max[0], ch.max[1], ch.max[2]);
+            gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, st.q[i]);
+            gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+            gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE);
+            st.sent[i] = 1; st.at[i] = _occFrame; queries++;
+          }
+        }
+      } finally {
+        gl.depthFunc(gl.LESS);
+        gl.colorMask(true, true, true, true);
+        setDepthMask(true);
+        if (prevProg) gl.useProgram(prevProg);
+        _occDrawn.length = 0;
+      }
+      _occStats.tested = tested; _occStats.culled = culled; _occStats.queries = queries;
+      _occStats.lagAvg = _lagN ? +(_lagSum / _lagN).toFixed(2) : 0;
+      _occStats.on = true;
+    }
+    // EITHER direction of the toggle drops the state, and both directions need
+    // it. Off is covered twice over — _occVisible already short-circuits on
+    // _occOn — but ON is the one that would bite: stale flags from a previous
+    // enable would apply before a single query had re-tested them, so a chunk
+    // hidden a minute ago would be hidden again for a frame in a scene that has
+    // moved. The pass heals that within a frame or two, and a frame or two is
+    // exactly how long a hole in the world is visible. A fresh WeakMap starts
+    // every chunk visible by construction, which is the whole contract.
+    function occlusionCull(on) {
+      const want = !!on;
+      if (want !== _occOn) {
+        _occOn = want;
+        _occDrawn.length = 0;
+        _occState = new WeakMap();
+        _lagSum = 0; _lagN = 0; _occStats.lagMax = 0; _occStats.lagAvg = 0;
+        if (!want) { _occStats.on = false; _occStats.tested = _occStats.culled = _occStats.queries = 0; }
+        Log.info("gfx", "GLX occlusion cull " + (want ? "ON" : "off"));
+      }
+      if (want) _occInit();
+      return { on: _occOn, supported: _occStats.supported };
+    }
+    function occlusionStats() { return Object.assign({}, _occStats, { on: _occOn }); }
+
     function freeChunkedMesh(mesh) {
       if (!mesh) return;
       core.unbindVAOIf(mesh.vao);
@@ -316,6 +523,7 @@ const GLXChunked = (function () {
     // pool — the race prop-batch path must never call the allocating form
     // every frame.
     return { createChunkedMesh, drawChunked, castShadowChunked, freeChunkedMesh,
+             occlusionPass, occlusionCull, occlusionStats,
              makeFrustumPlanes: Frustum.makeFrustumPlanes,
              aabbInFrustum: Frustum.aabbInFrustum, aabbDist2: Frustum.aabbDist2 };
   }

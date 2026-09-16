@@ -138,6 +138,35 @@ try {
       const i = kv.indexOf("=");
       if (i > 0) { try { localStorage.setItem(kv.slice(0, i), kv.slice(i + 1)); } catch (_) { /* blocked */ } }
     }
+    // RACE-ENTRY ATTRIBUTION (2026-09-16), for the multithreading plan's gate
+    // (docs/notes/MULTITHREADING-PLAN-2026-09-16.md §4). That plan asks three
+    // questions about MAIN-THREAD JAVASCRIPT, not about the GPU, and says this
+    // container cannot answer them. Two of the three need only a real CPU;
+    // the third — is the block the track build, or upload back-pressure
+    // wearing a costume, which this repository has already caught once — needs
+    // a real driver, and macos-latest is the one image the census has measured
+    // as anyHardware:true (docs/notes/CI-RENDERING-PERFORMANCE.md).
+    //
+    // A long task is the browser own definition of a main-thread block: a task
+    // over 50 ms. `buffered: true` and an init script together mean the window
+    // starts before the first line of game code runs, so nothing is missed.
+    // Costs nothing on a run that does not read it.
+    window.__apexLongTasks = [];
+    window.__apexMarks = {};
+    window.__apexMark = (n) => { try { window.__apexMarks[n] = performance.now(); } catch (_) { /* no clock */ } };
+    try {
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          if (window.__apexLongTasks.length < 4000) window.__apexLongTasks.push([+e.startTime.toFixed(1), +e.duration.toFixed(1)]);
+        }
+      }).observe({ type: "longtask", buffered: true });
+      window.__apexLongTaskObserver = true;
+    } catch (_) {
+      // Absence must not read as "no blocking". The reader below reports
+      // supported:false rather than a zero, because a zero here would say the
+      // item is dead when nothing had looked.
+      window.__apexLongTaskObserver = false;
+    }
   }, [backend, path3, extraLs]);
 
   // Bounded: a wedged renderer must not turn the diagnosis into another blank.
@@ -170,7 +199,10 @@ try {
   // race() and park() were the last unbounded evaluates. A renderer that
   // wedges DURING the track load hangs them forever, and then the beats below
   // — the whole diagnosis — never run at all.
-  out.raceCall = await bounded(() => page.evaluate((t) => window.__apex.race(t), track), 60000, "race");
+  out.raceCall = await bounded(() => page.evaluate((t) => {
+    window.__apexMark("raceCall");
+    return window.__apex.race(t);
+  }, track), 60000, "race");
   checkpoint("race-called");
   // 300 s was a guess made against a software rasteriser; on a real GPU the
   // load is seconds, so a long wait here only delays the beats that carry the
@@ -179,7 +211,17 @@ try {
     () => page.waitForFunction(() => window.__apex.info().track != null, null,
       { polling: 100, timeout: 120000 }), 130000, "track-ready");
   checkpoint("track-ready");
-  out.parkCall = await bounded(() => page.evaluate(() => window.__apex.park(0.1)), 60000, "park");
+  await bounded(() => page.evaluate(() => window.__apexMark("trackReady")), 10000, "mark-track-ready");
+  out.parkCall = await bounded(() => page.evaluate(() => { window.__apexMark("parked"); return window.__apex.park(0.1); }), 60000, "park");
+  // WHAT IS THE FRAME BOUND BY. The one question that decides whether "render
+  // only what we can see" is the right lever: occlusion culling removes
+  // fragments, vertices and draw calls together, so it pays hugely on a
+  // fragment-bound frame and modestly on a draw-call-bound one. The census
+  // rejected it once on the argument that the frame cost is draw calls and
+  // uploads — an argument, never a measurement. gpuTimer() is the measurement,
+  // and pinning apex26.resMode across two runs is the A/B: GPU time that
+  // scales with pixel count is fragment-bound.
+  out.gpuTimerStart = await bounded(() => page.evaluate(() => window.__apex.gpuTimer(true)), 20000, "gpu-timer-on");
   checkpoint("racing", { track });
   // Poll instead of one blind sleep. The question after park() is whether the
   // page is STILL ANSWERING, and a single waitForTimeout cannot tell a healthy
@@ -220,6 +262,10 @@ try {
             ms: g && g.floorMs != null ? +(+g.floorMs).toFixed(1) : null,
             ti: g ? g.tier : null,
             sc: g && g.scale != null ? +(+g.scale).toFixed(2) : null,
+            // GPU milliseconds for a recent frame, -1 until a result lands and
+            // -1 forever where EXT_disjoint_timer_query_webgl2 is absent. A
+            // negative is NOT a GPU millisecond; the reader below drops them.
+            gms: (() => { try { const q = A && A.gpuTimer && A.gpuTimer(); return q && q.ms > 0 ? +q.ms.toFixed(2) : null; } catch (_) { return null; } })(),
           };
         }),
         new Promise((_, rj) => setTimeout(() => rj(new Error("beat timeout")), 8000)),
@@ -235,6 +281,88 @@ try {
     await new Promise((r) => setTimeout(r, 1000));
   }
   checkpoint("settled");
+
+  // THE RACE-ENTRY WINDOW: race() called -> the track is there. Everything the
+  // multithreading plan calls "race entry" happens inside it.
+  //
+  // `longestBlockMs` is the plan condition 1 verbatim — CONTIGUOUS block, not
+  // the sum, because a worker overlaps a freeze and does nothing for a window
+  // that is already yielding. `otherBlockMs` is condition 3: main-thread work
+  // in the same window that a moved build could overlap WITH. Condition 2
+  // (build vs upload back-pressure) is NOT answered here and must not be
+  // guessed from these numbers; it needs per-subsystem attribution that does
+  // not exist yet.
+  out.raceEntry = await bounded(() => page.evaluate(() => {
+    const marks = window.__apexMarks || {}, tasks = window.__apexLongTasks || [];
+    const r = { supported: window.__apexLongTaskObserver === true, marks, longTasksSeen: tasks.length };
+    if (!r.supported) { r.note = "no longtask PerformanceObserver in this browser — nothing was measured"; return r; }
+    const a = marks.raceCall, b = marks.trackReady;
+    if (a == null || b == null) { r.note = "the window never closed (race or track-ready did not mark)"; return r; }
+    const win = tasks.filter((t) => t[0] + t[1] > a && t[0] < b);
+    const dur = win.map((t) => t[1]);
+    const total = dur.reduce((x, y) => x + y, 0), longest = dur.length ? Math.max.apply(null, dur) : 0;
+    r.entryMs = +(b - a).toFixed(1);
+    r.blockMs = +total.toFixed(1);
+    r.longestBlockMs = +longest.toFixed(1);
+    r.otherBlockMs = +(total - longest).toFixed(1);
+    r.tasks = win.length;
+    r.longest5 = win.slice().sort((x, y) => y[1] - x[1]).slice(0, 5).map((t) => ({ at: t[0], ms: t[1] }));
+    return r;
+  }), 20000, "race-entry");
+  // WHICH JavaScript. The window above says the block is main-thread JS; this
+  // says which phase of the build it is, which is the half of condition 2 the
+  // hardware-vs-software comparison cannot reach.
+  out.buildProfile = await bounded(() => page.evaluate(() => {
+    const p = window.__apex && window.__apex.buildProfile && window.__apex.buildProfile();
+    if (!p || !p.length) return { note: "no buildProfile — this build predates it, or the track never built" };
+    const total = p.reduce((a, b) => a + b.ms, 0);
+    const geo = p.filter((r) => r.k === "geo").reduce((a, b) => a + b.ms, 0);
+    const top = p.slice().sort((a, b) => b.ms - a.ms).slice(0, 4).map((r) => `${r.n}/${r.k}=${r.ms}`);
+    return { totalMs: +total.toFixed(1), geoMs: +geo.toFixed(1), upMs: +(total - geo).toFixed(1),
+      geoShare: total ? +(geo / total).toFixed(3) : null, top, rows: p };
+  }), 20000, "build-profile");
+  // ONE LEVEL OUT. buildProfile says which part of the BUILD costs; this says
+  // whether the build is the part of RACE ENTRY that costs at all. On real
+  // hardware it is 23 % of the block, so the rest of this list is where the
+  // freeze actually lives.
+  out.raceProfile = await bounded(() => page.evaluate(() => {
+    const p = window.__apex && window.__apex.raceProfile && window.__apex.raceProfile();
+    if (!p || !p.length) return { note: "no raceProfile — this build predates it, or startRace never ran" };
+    const total = p.reduce((a, b) => a + b.ms, 0);
+    return { totalMs: +total.toFixed(1),
+      top: p.slice().sort((a, b) => b.ms - a.ms).slice(0, 4).map((r) => `${r.n}=${r.ms}`), rows: p };
+  }), 20000, "race-profile");
+  // Median rather than mean: one stalled beat is not the frame cost.
+  const _g = out.beats.map((b) => b.gms).filter((x) => x != null).sort((a, b) => a - b);
+  const _sc = out.beats.map((b) => b.sc).filter((x) => x != null);
+  out.gpuFrame = _g.length
+    ? { medianMs: _g[Math.floor(_g.length / 2)], samples: _g.length,
+        scale: _sc.length ? _sc[_sc.length - 1] : null,
+        canvas: await bounded(() => page.evaluate(() => { const c = document.getElementById("game"); return c ? { w: c.width, h: c.height } : null; }), 10000, "canvas") }
+    : { note: "no GPU timer samples — EXT_disjoint_timer_query_webgl2 absent or no result landed" };
+  // OCCLUSION CULLING, counted not timed. A renderer unit test is not evidence
+  // that a GL pass runs (AGENTS.md); this is the live boot that says whether
+  // the queries link, issue and come back with a sane answer on real hardware.
+  out.occlusion = await bounded(() => page.evaluate(() => {
+    const A = window.__apex;
+    if (!A || !A.occlusionCull) return { note: "no occlusionCull hook — this build predates it" };
+    try { return A.occlusionCull(); } catch (e) { return { error: String(e && e.message) }; }
+  }), 20000, "occlusion");
+  // AND THE SAME THING IN MOTION. park() gives a static camera, and every
+  // popping risk this feature has lives in movement: a chunk hidden while the
+  // camera was elsewhere stays hidden for as many frames as its query takes to
+  // answer. So drive, then read the counters again. A parked sample alone would
+  // have been the easy measurement rather than the useful one.
+  out.occlusionMoving = await bounded(() => page.evaluate(async () => {
+    const A = window.__apex;
+    if (!A || !A.occlusionCull || !A.go || !A.step) return { note: "no drive hooks" };
+    try {
+      A.go();
+      for (let i = 0; i < 40; i++) { A.step(1 / 60, 3); await new Promise((r) => requestAnimationFrame(r)); }
+      return A.occlusionCull();
+    } catch (e) { return { error: String(e && e.message) }; }
+  }), 60000, "occlusion-moving");
+  checkpoint("race-entry-read");
 
   out.overlay = await bounded(() => page.evaluate(() => {
     const el = document.getElementById("gfx-debug");

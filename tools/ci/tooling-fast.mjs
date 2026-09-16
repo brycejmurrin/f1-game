@@ -148,6 +148,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/baku-migration.test.mjs",
   "tests/unit/image-grade-shaders.test.mjs",
   "tests/unit/chunked-index-ranges.test.mjs",
+  "tests/unit/glx-occlusion.test.mjs",
   "tests/unit/vertex-pack.test.mjs",
   "tests/unit/tex-census.test.mjs",
   "tests/unit/livery-tier.test.mjs",

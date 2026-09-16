@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Field behaviour of the AI race: pace spread, how fast it strings out, settled passes vs oscillation, nose-to-tail dwell.
+ * @doc Field behaviour of the AI race: pace spread, stringing out, settled vs oscillating passes, dwell, mistake rate.
  * @skill ai-racecraft
  * ai-field.mjs — does the AI field RACE, or does it shuffle?
  *
@@ -23,6 +23,20 @@
  *               couple of seconds is racing; minutes is a train.
  *   clumps      share of adjacent gaps under 10 m and under 25 m — what the
  *               field looks like from inside it.
+ *   mistakes    driving errors per car per 100 s of RACING (game.js rolls one
+ *               per braking zone off AiDrive.mistakeChance). Added 2026-09-16
+ *               because the mistake model was UNFALSIFIABLE: nothing counted
+ *               it, so no axis claiming to change error behaviour could be
+ *               gated (docs/notes/AI-PERSONALITY-PLAN-2026-09-16.md §2). A ZERO
+ *               here means the model is inert, not that the field is tidy — at
+ *               the shipped rate the expected count over a default 3-lap race
+ *               is under one for the WHOLE field, so read it over many seeds.
+ *
+ * THE DENOMINATOR IS RACING CAR-SECONDS, NOT `--seconds` x cars. The default
+ * race is three laps, so `--seconds 240` runs well past the chequered flag and
+ * a finished car rolls for nothing; charging it the full window understated the
+ * rate by about a third the first time this was measured. Only the other
+ * metrics use the whole window, and they always did.
  *
  * Deliberately AI-ONLY: no player, so the rubber band (game.js, AI behind the
  * leading human) never fires and this measures the field's own behaviour. Add
@@ -99,6 +113,11 @@ async function measure(seed) {
 
   const pace = new Map(cars.map((c) => [c.code, c.tierV * c.skill]));
   for (let f = 0; f < Math.round(SETTLE / DT); f++) g.step(1, DT);
+  // Baselined AFTER the settle, so a mistake made during the standing start or
+  // the first braking zone is not charged to the measured window.
+  const errs = () => cars.reduce((a, c) => a + (c.errCount || 0), 0);
+  const err0 = errs();
+  let raceCarS = 0;
 
   const ahead = new Map();
   for (const a of cars) for (const b of cars) if (a !== b) ahead.set(a.code + ">" + b.code, a.prog > b.prog);
@@ -108,6 +127,7 @@ async function measure(seed) {
   for (let f = 0, t = 0; f < Math.round(SECONDS / DT); f++, t += DT) {
     g.step(1, DT);
     if (f % 15) continue;                    // 4 Hz is plenty for order and gaps
+    for (const c of cars) if (!c.finished) raceCarS += 0.25;
     // ORDER FLIPS, pairwise — a field-order string cannot tell one pass from a
     // whole reshuffle, and cannot see a pair oscillating inside a static order.
     for (let i = 0; i < cars.length; i++) {
@@ -159,6 +179,9 @@ async function measure(seed) {
     dwellMedianS: dwell.length ? +dwell[Math.floor(dwell.length / 2)].toFixed(1) : 0,
     dwellMaxS: dwell.length ? +dwell[dwell.length - 1].toFixed(1) : 0,
     noseToTailPct: +(100 * closeSeconds / (cars.length * SECONDS)).toFixed(1),
+    mistakes: errs() - err0,
+    racingCarS: Math.round(raceCarS),
+    mistakesPer100s: raceCarS ? +(100 * (errs() - err0) / raceCarS).toFixed(3) : 0,
   };
   g.close();
   return out;
@@ -173,6 +196,7 @@ for (let i = 0; i < RUNS; i++) runs.push(await measure(SEED0 + i));
 
 const KEYS = ["paceSpreadPct", "spreadStartM", "spreadEndM", "flips", "settledPasses",
               "oscillationFlips", "oscillationShare", "dwellMedianS", "dwellMaxS", "noseToTailPct",
+              "mistakes", "racingCarS", "mistakesPer100s",
               "pitStops", "meanTyreWear"];
 const stat = {};
 for (const k of KEYS) {
@@ -190,6 +214,8 @@ else {
   console.log(`  field strings    ${show("spreadStartM")} m -> ${show("spreadEndM")} m`);
   console.log(`  order flips      ${show("flips")}   settled passes ${show("settledPasses")}   oscillation ${show("oscillationFlips")} (${(100 * stat.oscillationShare.median).toFixed(0)}%)`);
   console.log(`  nose-to-tail     median ${show("dwellMedianS", 1)} s, longest ${show("dwellMaxS", 1)} s, ${show("noseToTailPct", 1)}% of car-time`);
+  console.log(`  mistakes         ${show("mistakes")} total, ${show("mistakesPer100s", 3)} per car per 100 s over ${show("racingCarS")} racing car-seconds`);
+  if (!stat.mistakes.max) console.log(`  ! the field made NO mistakes in this window — the model is inert here, not calm`);
   console.log(`  tyres           ${show("pitStops")} pit stop(s), mean wear ${show("meanTyreWear", 3)}` +
               (WEAR === "off" ? "   (wear OFF — no strategy: --wear light|real to measure it)" : ""));
   if (stat.oscillationShare.median > 0.3) console.log(`  ! over a third of order changes are the SAME pairs swapping back and forth`);

@@ -381,6 +381,108 @@ jobs:
             // or fps across these two legs ONLY when this line matches.
             // docs/notes/PERF-FINDINGS.md says the same at "DIFFERENT PRESENT
             // PATHS"; printing it here is what makes it unmissable.
+            // RACE ENTRY — the multithreading plan gate (its section 4), and the
+            // only reason that plan has a real-hardware answer at all: two of
+            // its three conditions need a real CPU and the third needs a real
+            // driver, and this is the one image the census calls hardware.
+            // REPORTED, NOT GATED, for the reason the header gives: a timing
+            // floor is exactly the kind of threshold that goes flaky and then
+            // gets widened to pass, which AGENTS.md forbids outright.
+            // longestBlockMs is CONTIGUOUS block, which is the condition as
+            // written — a sum would count a window that is already yielding,
+            // and a worker overlaps a freeze, not a yield.
+            // EVERY absence prints. The first cut covered supported:false and
+            // note, and nothing else — so when the ubuntu webgl2 leg timed out
+            // before the read, bounded() returned an {error} object that
+            // matched neither branch and the row vanished entirely. A silently
+            // missing row is the one shape this file keeps having to relearn:
+            // absence must never read as normal (PERF-FINDINGS 2j, 2l).
+              const re = g.raceEntry || {};
+              if (re.supported === false || re.note || re.error) {
+                rows.push(`${" ".repeat(8)}entry: NOT MEASURED — ${re.note || re.error || "no longtask observer"}`);
+              } else if (re.longestBlockMs == null) {
+                rows.push(`${" ".repeat(8)}entry: NOT MEASURED — the leg wrote no raceEntry at all (it died before the read)`);
+              } else if (re.longestBlockMs != null) {
+                const verdict = re.longestBlockMs > 400
+                  ? (re.otherBlockMs >= 300 ? "conditions 1 and 3 HOLD"
+                                            : "condition 1 holds, condition 3 FAILS: too little other work to overlap, so a worker buys a spinner")
+                  : "condition 1 FAILS: the block is under 400 ms, so the plan says record the item as DEAD";
+                rows.push(`${" ".repeat(8)}entry: window=${re.entryMs}ms longestBlock=${re.longestBlockMs}ms ` +
+                  `otherBlock=${re.otherBlockMs}ms tasks=${re.tasks}`);
+                rows.push(`${" ".repeat(8)}       ${verdict}`);
+              }
+            // WHICH HALF a worker would move. The entry row says the block is
+            // JavaScript; this says whether it is the track build, and which
+            // phase of it. Reported, not gated, for the same reason.
+              const bp = g.buildProfile || {};
+              if (bp.note || bp.error) {
+                rows.push(`${" ".repeat(8)}build: NOT MEASURED — ${bp.note || bp.error}`);
+              } else if (bp.totalMs != null) {
+                rows.push(`${" ".repeat(8)}build: total=${bp.totalMs}ms geo=${bp.geoMs}ms up=${bp.upMs}ms geoShare=${bp.geoShare}`);
+                rows.push(`${" ".repeat(8)}       hottest: ${(bp.top || []).join("  ")}`);
+            // CONDITION 2, COMPUTED. This step had both numbers in hand and
+            // printed "still unanswered" beside them because that string was
+            // written before the build row existed — a tool that can do the
+            // division and makes a reader do it instead is the same defect as
+            // a verdict line that reports a run which never happened.
+            //
+            // TWO ratios, because they answer different questions and the plan
+            // only names one. Against the longest single task it is the
+            // condition as written. Against ALL blocking in the window it is
+            // what actually decides whether a worker helps: work moved off the
+            // main thread only removes the freeze it was itself causing.
+                const lb = re.longestBlockMs, tb = (re.longestBlockMs || 0) + (re.otherBlockMs || 0);
+                if (lb) {
+                  const ofLongest = Math.round(100 * bp.totalMs / lb), ofAll = Math.round(100 * bp.totalMs / tb);
+                  rows.push(`${" ".repeat(8)}       cond2: build is ${ofLongest}% of the longest block, ${ofAll}% of ALL blocking in the window`);
+                  rows.push(`${" ".repeat(8)}       ${ofAll >= 50
+                    ? "condition 2 HOLDS on both ratios"
+                    : ofLongest >= 50
+                      ? `condition 2 holds as WRITTEN but fails on the ratio that decides: moving the whole build off-thread leaves ${100 - ofAll}% of the freeze in place`
+                      : "condition 2 FAILS on both ratios — the build is not the block"}`);
+                }
+              }
+            // startRace phase by phase. The build is one row of it.
+              const rp = g.raceProfile || {};
+              if (rp.note || rp.error) {
+                rows.push(`${" ".repeat(8)}enter: NOT MEASURED — ${rp.note || rp.error}`);
+              } else if (rp.totalMs != null) {
+                rows.push(`${" ".repeat(8)}enter: startRace total=${rp.totalMs}ms  hottest: ${(rp.top || []).join("  ")}`);
+              }
+            // GPU time against pixel count — the fragment-bound test. Two runs
+            // with apex26.resMode pinned differently make it an A/B; one run
+            // alone just records the number.
+              const gf = g.gpuFrame || {};
+              if (gf.note || gf.error) {
+                rows.push(`${" ".repeat(8)}gpu:   ${gf.note || gf.error}`);
+              } else if (gf.medianMs != null) {
+                const px = gf.canvas && gf.canvas.w ? gf.canvas.w * gf.canvas.h : null;
+                rows.push(`${" ".repeat(8)}gpu:   median=${gf.medianMs}ms over ${gf.samples} samples  scale=${gf.scale}`
+                  + (px ? `  canvas=${gf.canvas.w}x${gf.canvas.h} (${(px / 1e6).toFixed(2)} MP)` : ""));
+              }
+            // Occlusion culling: counted, never timed.
+              const oc = g.occlusion || {};
+              if (oc.note || oc.error) {
+                rows.push(`${" ".repeat(8)}occl:  NOT MEASURED — ${oc.note || oc.error}`);
+              } else if (oc.supported === false) {
+                rows.push(`${" ".repeat(8)}occl:  not supported on this backend (GLX only)`);
+              } else if (oc.on === false) {
+                rows.push(`${" ".repeat(8)}occl:  off (apex26.occlusionCull unset) — supported=${oc.supported}`);
+              } else {
+                rows.push(`${" ".repeat(8)}occl:  ON  tested=${oc.tested} culled=${oc.culled} queries=${oc.queries} passes=${oc.passes}`
+                  + (oc.tested ? `  -> ${Math.round(100 * oc.culled / oc.tested)}% of candidate chunks skipped` : "  <- NOTHING TESTED: the pass never ran"));
+                rows.push(`${" ".repeat(8)}       query lag: max=${oc.lagMax} avg=${oc.lagAvg} passes`
+                  + (oc.lagMax > 4 ? "   <- SLOW: a flag this late pops when the camera moves" : ""));
+              }
+            // The same counters after DRIVING, because a parked camera hides
+            // every popping risk this feature has.
+              const om = g.occlusionMoving || {};
+              if (om.tested != null) {
+                rows.push(`${" ".repeat(8)}       moving: tested=${om.tested} culled=${om.culled} lagMax=${om.lagMax} lagAvg=${om.lagAvg}`
+                  + (om.tested ? `  -> ${Math.round(100 * om.culled / om.tested)}% skipped` : ""));
+              } else if (om.note || om.error) {
+                rows.push(`${" ".repeat(8)}       moving: NOT MEASURED — ${om.note || om.error}`);
+              }
               if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.softBlit === true ? "YES (headless readback — NOT the path a player takes)" : be.softBlit === false ? "no (direct present)" : "?"} skipBatches=${be.skipBatches} gpuErrFrames=${be.gpuErrFrames}`);
             // ...and the bookkeeping the probe keeps on itself, because run 54
             // showed tier=0 with envFace=3 and envFail=0 — the producer WAS

@@ -572,6 +572,9 @@ interface GameCtx {
   readonly worldFromTrack: (s: number, x: number) => { x: number; z: number };
 
   // ── Model constants published for js/race/quali-model.js and the net layer ──────
+  /** The race-entry stopwatch (js/game.js startRace): one row per phase, in
+   *  order. `__apex.raceProfile()` reads it; the build is one row of it. */
+  readonly raceProfile: () => Array<{ n: string; ms: number }>;
   readonly GAME_LAPS: number;
   readonly TT_LAPS: number;
   readonly LONG_GRIP: number;
