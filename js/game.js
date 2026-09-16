@@ -2171,6 +2171,17 @@ function _loadTrackBody(idx, def) {
   };
 }
 
+// Set by the flyby sequencer on a shot boundary; consumed by the camera damping
+// one block later, which would otherwise smear the cut (see there).
+let camSnapNext = false;
+/** The loading screen's flyby progress, 0..1, or 0 when it is not running. The
+ *  menu camera also draws a couple of WARM-UP frames under the picker with no
+ *  screen open (scheduleFlybyTrack), and those should sit on the first shot
+ *  rather than somewhere arbitrary. */
+function flybyProgress() {
+  return (loadingScreen && loadingScreen.progress) ? loadingScreen.progress() : 0;
+}
+
 // Keep one prepared track, never a cache of whole circuits. A generation
 // prevents late scenery downloads (including A -> B -> A) from committing.
 const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
@@ -6541,12 +6552,20 @@ function render(dt) {
   let eyeT, tgtT, fovT, roadCamRoll = 0;
   if (state === "menu") {
     _plOk = false; _plBodyOk = false;
-    const s = wrapS((performance.now() * 0.012) % track.total);
-    const bankCam = Tracks.banking(track, s, 0, _bankScratchCam, true);
-    _vantExtra.bankDy = bankCam ? bankCam.dy : 0; _vantExtra.deploy = false;
-    _vantExtra.slipLat = 0; _vantExtra.att = null; _vantExtra.carPos = null; _vantExtra.carHead = 0;
-    const vant = camVantage("cinematic", s, 0, (40 / VMAX) * vTop(), performance.now(), _vantExtra);
-    eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; camAncNX = null;
+    // THE LOADING SCREEN'S FLYBY IS A SHOT SEQUENCE (js/camera/flyby-seq.js), not
+    // a crawl down the centreline. The old path solved camVantage("cinematic")
+    // around an `s` that advanced with the wall clock; that rig clamps its
+    // lateral offset only on STREET circuits, so on an open circuit it sat 22 m
+    // off the racing line with nothing checking what was standing there, and
+    // flew through buildings. The sequencer places every eye against the props
+    // registry instead. It is driven by PROGRESS through the flyby phase, so the
+    // sequence keeps its shape whatever the phase is retuned to.
+    const fb = FlybySeq.solve(track, flybyProgress());
+    eyeT = fb.eye; tgtT = fb.tgt; fovT = fb.fov; camAncNX = null;
+    // A shot boundary is a CUT. Without this the λ1.6 menu damping below smears
+    // the change of angle into a long swim between two vantages, which reads as
+    // one broken move rather than two shots.
+    if (fb.cut) camSnapNext = true;
   } else {
     if (!player) return;
     // Anchor the camera to the SAME (s, x) the car body samples — playerAnchor
@@ -6666,6 +6685,15 @@ function render(dt) {
   }
   camAncX = ancX; camAncZ = ancZ;
   camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt);
+  // A CUT LANDS WHOLE. Damping exists to smooth a moving vantage; across a shot
+  // boundary there is nothing to smooth — the two vantages are unrelated, and
+  // easing between them turns a cut into a long swim through whatever lies
+  // between. Set by the flyby sequencer at a shot boundary only.
+  if (camSnapNext) {
+    for (let i = 0; i < 3; i++) { camEye[i] = eyeT[i]; camTgt[i] = tgtT[i]; }
+    camFov = fovT;
+    camSnapNext = false;
+  }
 
   // Car-follow cameras counter-rotate by the road bank so the car and asphalt
   // read level while the horizon carries the banking cue. Slip adds a small
