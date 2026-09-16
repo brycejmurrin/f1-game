@@ -201,3 +201,75 @@ claimed it should be corrected rather than left to be rediscovered.
    (interruptible, byte-identical, no worker), but it is now explicitly NOT
    sold as a race-entry fix either: it can only ever reach the quarter.
 4. The bottom-face cull is dead, with a number.
+
+---
+
+## 6. "Only render what we can see" — the rejection was wrong, with numbers
+
+The culling review closed occlusion culling with: there is no depth pre-pass,
+and adding one doubles vertex submission to save fragment work in a frame whose
+measured cost is draw calls and uploads. Both halves of that fail.
+
+**It rejects a technique WebGL2 does not make you use.** A depth pre-pass is one
+way to occlusion-cull and not the way available here. WebGL2 has hardware
+occlusion queries — `ANY_SAMPLES_PASSED` — which answer "did any fragment of
+this proxy box survive the depth test" with no pre-pass, and the standard
+algorithm around them (CHC++) consumes the PREVIOUS frame result so nothing
+stalls. One proxy box per 72 m chunk is twelve triangles against the hundred-odd
+chunks already culled per frame. `createQuery` appears once in this renderer and
+it is the GPU timer, so this has never been tried.
+
+**And its premise is the argument FOR it.** If the frame cost really is draw
+calls, and most draw calls produce no pixel, then draw calls are exactly what
+occlusion culling removes.
+
+### How much is wasted (`tools/check/occlusion-estimate.mjs`)
+
+Exact software visibility: every prop triangle rasterised into a depth buffer
+carrying the cell id that won each pixel, so the cells present at the end are
+exactly the cells that contribute a visible pixel. Four cameras on the racing
+line, 512x288.
+
+| circuit | cells submitted | cells that show a pixel | wasted cells | wasted vertices |
+|---|---|---|---|---|
+| vegas (city) | 152 | 23 | **84.9 %** | **58.2 %** |
+| monza (parkland) | 207 | 41 | **80.1 %** | **54.9 %** |
+| spa (open, forest) | 359 | 158 | **55.9 %** | **18.0 %** |
+
+Stable under resolution, which is the check a rasterised estimate has to pass:
+vegas reads 85.9 / 84.9 / 84.4 % of cells wasted at 256x144, 512x288 and
+1024x576 on identical cameras. An earlier cut rasterised chunk bounding RECTS
+and reported 93 %; that was optimistic nonsense, because a 72 m cell projects to
+a solid rectangle while the buildings in it have sky and streets between them.
+That is why this rasterises triangles.
+
+### And the frame is GPU-bound (run 131, macos-latest, vegas)
+
+The GPU timer now runs during the settle beats. On the GLX leg — the default
+backend, the one players get — **median 19.17 ms of GPU per frame over 14
+samples, at scale 0.9 on a 1152x648 canvas (0.75 megapixels)**, against a CPU
+frame time of 17.3 ms. GPU time exceeds CPU time, so the frame waits on the GPU,
+and 19 ms for three quarters of a megapixel is a lot. The other three legs
+report no samples: `EXT_disjoint_timer_query_webgl2` is a WebGL2 extension and
+those legs are the TLX and WGX paths.
+
+### What is still unproven, and the honest bound
+
+- **Whether the 19 ms is fragments or geometry.** Leg B pins `apex26.resMode`
+  low; GPU time that falls with pixel count is fragment-bound. Until it lands,
+  the split is unknown — though occlusion culling removes fragments, vertices
+  AND draw calls together, so it is the one lever that pays either way.
+- **The baseline is generous.** The estimator's far plane is 1500 m, so any cell
+  the shipped radial and fog cull already drops still counts as submitted. The
+  saving above is an upper bound on what occlusion culling ALONE would add.
+- **Props only**, and a driving camera only.
+- **Spa is the floor and it still wastes 56 % of its draw calls.** An open
+  circuit is the worst case for this technique and it is not a small number
+  there either.
+
+### The case, plainly
+
+Between 18 % and 58 % of submitted prop vertices, and 56 % to 85 % of prop draw
+calls, are spent on geometry that contributes no pixel — on a frame that waits
+on the GPU. That is worth the query path, and it is the first item on this page
+with a measured upside rather than an argued one.

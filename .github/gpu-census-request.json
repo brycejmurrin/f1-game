@@ -3,6 +3,6 @@
   "track": "vegas",
   "census_only": false,
   "force": "",
-  "ls": "apex26.resMode=high",
-  "leg": "frame-bound-A-2026-09-16-resMode-high"
+  "ls": "apex26.resMode=low",
+  "leg": "frame-bound-B-2026-09-16-resMode-low"
 }
