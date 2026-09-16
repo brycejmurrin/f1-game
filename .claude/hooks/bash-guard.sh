@@ -57,6 +57,38 @@ if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:spa
   fi
   mkdir -p "$ROOT/artifacts"
   LOG="$ROOT/artifacts/pre-commit-guards.log"
+  # DOCS-ONLY COMMITS SKIP TO docs-integrity. The deploy branch takes a lot of
+  # note-only commits (one 2026-09-16 session made four), and the 14 guards and
+  # the ratchets have nothing to say about prose — worse, --auto-raise can stage
+  # tests/data/ratchets.json into a commit that changed no code at all. The path
+  # set is deliberately narrow: docs/, any .md, skills and agents. A GENERATED
+  # doc is excluded — it is prose whose SOURCE is code, so generated-docs must
+  # still run — and so is an empty staged list (`git commit -a`, or a pathspec
+  # on the command line, stages at commit time, and nothing staged must never
+  # read as "nothing to check").
+  STAGED=$(cd "$ROOT" && git diff --cached --name-only 2>/dev/null)
+  DOCS_ONLY=0
+  if [ -n "$STAGED" ] && ! printf '%s' "$CMD" | grep -Eq -- '(^|[[:space:]])-[a-zA-Z]*a|--all'; then
+    DOCS_ONLY=1
+    while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      case "$f" in
+        tools/README.md|docs/DEBUG-HOOKS.md|docs/ARCHITECTURE.md|docs/LIGHTING-TUNER-SLIDERS.md) DOCS_ONLY=0; break ;;
+      esac
+      printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$' || { DOCS_ONLY=0; break; }
+    done <<EOF
+$STAGED
+EOF
+  fi
+  if [ "$DOCS_ONLY" = 1 ]; then
+    if ! (cd "$ROOT" && node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1); then
+      echo "BLOCKED: tests/unit/docs-integrity.test.mjs is red (links, index rows). Last lines of $LOG:" >&2
+      grep -E 'not ok|Error|expected|actual|✖' "$LOG" | tail -20 >&2
+      exit 2
+    fi
+    echo "docs-only commit: ran docs-integrity only (no ratchet raise, no test:guards)." >&2
+    exit 0
+  fi
   # Size ratchets first (tools/check/ratchets.mjs --auto-raise): growth of up
   # to 40 lines in a ratcheted file raises its ceiling and STAGES
   # tests/data/ratchets.json, so the raise is in this commit's diff instead of

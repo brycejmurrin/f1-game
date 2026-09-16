@@ -43,8 +43,8 @@ Session shape — eleven rules that control wall time and waiting:
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.
 3. `npm run test:guards` (hook-enforced, every commit) is a CURATED 14-file SUBSET of
-   `test:tooling-fast` — not proof CI's "Structural guards" job will be green; run `test:tooling-fast` before a push (incident: `docs/notes/PROCESS-SPEEDUP-2026-09-16.md` §1.1).
-4. Never block the foreground on a test run: background it (log in `artifacts/`).
+   `test:tooling-fast` — not proof CI's "Structural guards" job will be green; run `test:tooling-fast` before a push (incident: `docs/notes/PROCESS-SPEEDUP-2026-09-16.md` §1.1). A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
+4. Never block the foreground on a test run: background it (log in `artifacts/`). Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs).
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`.
    Anchor on `grep -E '= run (passed|failed|timedout|interrupted)'`, never a
    looser pattern, the process table, or `| tail` on a live log.
