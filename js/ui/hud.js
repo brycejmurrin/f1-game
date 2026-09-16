@@ -16,6 +16,7 @@ let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
                               // derived (W,H): 140css@2x and 280css@1x share a
                               // bitmap size but need different path transforms
 let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
+let _mmPitP = null, _mmYou = "#aeea00";   // the "P"'s local px + map node, and the resolved --you; set with the bg
 let _flagShown = false;       // B1 caution-flag visibility cache (avoid layout thrash)
 let _teamSkin = null;         // last team id pushed to <html data-team> (skins the HUD accent)
 let _redline = false;         // tach redline latch: on above 92% of MAX_RPM, off again below 89%
@@ -925,26 +926,34 @@ function drawMinimap() {
       }
     }
     // THE PIT LANE: a light dashed run from where the entry road peels off
-    // to where the exit road rejoins, and a "P" at the entry line — the map
-    // used to say nothing about where the pits were.
+    // to where the exit road rejoins, a "P" where it PEELS OFF and a tick
+    // across the run at the entry line — the map used to say nothing about
+    // where the pits were, and then it put the "P" on the line, 70 m past the
+    // peel-off, so a driver who steered at it was already on the road the
+    // boards had named 100 m earlier.
     const pit = track.pit;
+    _mmPitP = null;
     if (pit && pit.entryRoadM != null) {
       const L = track.total, fOf = (s) => (((s % L) + L) % L) / L;
       const fa = fOf(pit.sA), fb = fOf(pit.sB);
       const i0 = Math.floor(fa * n), steps = Math.max(2, Math.round((((fb - fa) % 1) + 1) % 1 * n));
       mc.strokeStyle = "rgba(236,236,246,0.85)"; mc.lineWidth = 3; mc.setLineDash([3, 3]);
-      mc.beginPath();
-      for (let i = 0; i <= steps; i++) {
-        const p = map[(i0 + i) % n];
-        const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
-        i === 0 ? mc.moveTo(x, y) : mc.lineTo(x, y);
-      }
+      mmRun(mc, map, n, i0, steps, cssW, cssH);
       mc.stroke(); mc.setLineDash([]);
-      const pe = map[Math.floor(fOf(pit.sIn) * n) % n];
+      // The entry line: a tick across the run, normal to the lane there.
+      const il = Math.floor(fOf(pit.sIn) * n) % n, pe = map[il], pn = map[(il + 1) % n];
       const ex = 8 + pe[0] * (cssW - 16), ey = 8 + pe[1] * (cssH - 16);
-      mc.fillStyle = "rgba(255,255,255,0.95)"; mc.beginPath(); mc.arc(ex, ey, 5, 0, Math.PI * 2); mc.fill();
-      mc.fillStyle = "#14161c"; mc.font = "700 7px system-ui, sans-serif"; mc.textAlign = "center"; mc.textBaseline = "middle";
-      mc.fillText("P", ex, ey + 0.5);
+      let tx = (pn[0] - pe[0]) * (cssW - 16), ty = (pn[1] - pe[1]) * (cssH - 16);
+      const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+      mc.strokeStyle = "rgba(255,255,255,0.95)"; mc.lineWidth = 2;
+      mc.beginPath(); mc.moveTo(ex - ty * 4, ey + tx * 4); mc.lineTo(ex + ty * 4, ey - tx * 4); mc.stroke();
+      const pa = map[i0 % n];
+      _mmPitP = [8 + pa[0] * (cssW - 16), 8 + pa[1] * (cssH - 16), i0 % n];
+      mmPitMark(mc, _mmPitP[0], _mmPitP[1], 5, "rgba(255,255,255,0.95)");
+      // The map's own "--you" (the token the cue and the tyre chip carry the
+      // stop in), read once per rebuild: a resolved colour is not a hot read.
+      _mmYou = (typeof getComputedStyle === "function"
+        && getComputedStyle(document.documentElement).getPropertyValue("--you").trim()) || "#aeea00";
     }
   }
   // Canvas resize resets 2D context state, so the transform is set every
@@ -1006,10 +1015,46 @@ function drawMinimap() {
   }
   const p = at(player.s);
   if (!p) return;
-  mm.fillStyle = "#fff";
+  // THE PIT MARKER CARRIES STATE. The static "P" is the map's "there are pits";
+  // over it, from the same three facts the cue reads (PitLane.worthStopping —
+  // ONE gate, so the map and the words can never disagree): a stop worth
+  // making grows it and gives it --you, an armed stop pulses it, and from
+  // CUE_M in an arc from the car to the peel-off says HOW FAR, the way the
+  // cue's metres do. The lane and the box turn the player's own disc --you.
+  const pits = G.pits, inPit = !!player.pitState && player.pitState !== "none";
+  if (_mmPitP && pits && pits.worthStopping && !inPit && pits.worthStopping(player)) {
+    const d = pits.toEntry(player), ip = Math.floor(player.s / track.total * n) % n;
+    if (d > 0 && d < pits.cueM && Number.isFinite(ip)) {
+      mm.strokeStyle = _mmYou; mm.lineWidth = 2;
+      mmRun(mm, map, n, (ip + n) % n, ((_mmPitP[2] - ip) % n + n) % n, cssW, cssH);
+      mm.stroke();
+    }
+    if (player.pitArmed) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
+    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, _mmYou);
+    mm.globalAlpha = 1;
+  }
+  mm.fillStyle = inPit ? _mmYou : "#fff";
   mm.beginPath();
   mm.arc(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, 0, 7);
   mm.fill();
+}
+
+/** A polyline along `steps` map nodes forward from node `i0`, in the map's
+ *  local px; the caller strokes it (the lane run and the distance arc). */
+function mmRun(ctx, map, n, i0, steps, cssW, cssH) {
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const p = map[(i0 + i) % n];
+    const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+}
+/** The "P" disc at the peel-off, radius `r` in local px. */
+function mmPitMark(ctx, x, y, r, fill) {
+  ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = "#14161c"; ctx.font = "700 " + (r + 2) + "px system-ui, sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("P", x, y + 0.5);
 }
 
 // loadTrack() calls this so the outline re-renders for the new circuit.

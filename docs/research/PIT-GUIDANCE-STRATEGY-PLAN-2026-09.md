@@ -1,7 +1,12 @@
 # Pit guidance and strategy — plan (2026-09-16)
 
-> Plan only; nothing implemented. Every claim below was checked against the
-> tree at `8acd3d4` and carries a `file:line`. Companions:
+> Every claim below was checked against the tree at `8acd3d4` and carries a
+> `file:line`. **§2 is built** (the "P" at the peel-off with a tick at the line,
+> the marker in `--you` and pulsing when armed, the distance arc from `cueM` in,
+> the player's disc in `--you` through the lane, MINIMAL's cue at the head of
+> the bottom stack — not the top centre: `.hud-bottom` carries a transform, so a
+> fixed descendant is positioned against it; `PitLane.worthStopping` is the one
+> gate). §3 and §4 are still plans. Companions:
 > `PIT-LANE-REDESIGN-2026-09.md` (the complex), `PIT-LIGHTING-PLAN-2026-09.md`,
 > `PIT-BAY-LOGOS-PLAN-2026-09.md`, `STREET-PIT-LANES-PLAN-2026-09.md`.
 

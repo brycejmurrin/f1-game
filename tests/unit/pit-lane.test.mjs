@@ -237,7 +237,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
   const Pl = vm.runInContext("PitLane", ctx);
   const track = { total, n: 1346, def: {} };
   const said = [];
-  const pits = Pl.create({
+  const G = {
     track, vTop: () => vTop, lapsTarget: 25, raceWeather: "dry",
     announce: (m) => said.push(m),
     // spent() reads the CAR, not a constant: the cue's whole job is to stay
@@ -247,7 +247,8 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
              classRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
              optionRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }) },
     cautionInfo: () => ({ level: 0 }),
-  });
+  };
+  const pits = Pl.create(G);
   const zone = Pl.zoneOf(track);
   // A car in the entry, on the pit side, at racing speed — i.e. committing.
   const car = (over) => ({
@@ -255,7 +256,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
     x: hw * over * zone.side, offroad: false, wrongWay: false, rescueT: 0,
     tyre: { code: "M", tread: 0 }, pitState: "none",
   });
-  return { Pl, pits, zone, car, said, hw, samples: () => samples };
+  return { Pl, pits, zone, car, said, hw, G, samples: () => samples };
 }
 
 test("holding the line into the pits calls the stop", () => {
@@ -456,6 +457,41 @@ test("it follows the car through the stop: armed, lane, box, then silence", () =
   assert.equal(pits.cue(c).phase, "box");
   c.pitState = "out";
   assert.equal(pits.cue(c), null, "the cue kept talking after the stop was served");
+});
+
+test("worthStopping IS the cue's gate: the minimap's marker and the HUD's words read one function", () => {
+  // The map paints its "P" in --you from PitLane.worthStopping and the HUD
+  // paints the cue from PitLane.cue; if the two gates ever drifted, the map
+  // would say "box" while the cue stayed quiet (or the reverse). So: for every
+  // (wear, tread, caution) triple a car inside CUE_M can be in, one speaks
+  // exactly when the other does — and the map's reach is the cue's.
+  const { pits, zone, car, G } = commitSession();
+  assert.equal(pits.cueM, 550, "the map's arc must start where the cue's countdown does");
+  const c = car(0);
+  c.pitState = "none"; c.s = zone.sIn - 300;
+  let cases = 0, worth = 0;
+  for (const wear of [0, 0.2, 0.35, 0.55, 0.9]) {
+    for (const tread of [0, 1]) {
+      for (const level of [0, 1, 2, 3, 4]) {
+        c.tyreWear = wear; c.tyre = { code: "M", tread };
+        G.cautionInfo = () => ({ level });
+        const w = pits.worthStopping(c), q = pits.cue(c) != null;
+        assert.equal(q, w, `wear ${wear}, tread ${tread}, caution ${level}: cue ${q} but worthStopping ${w}`);
+        cases++; if (w) worth++;
+      }
+    }
+  }
+  assert.ok(worth > 0 && worth < cases, `the gate must open for some triples and not others (${worth}/${cases})`);
+  // Each fact opens it alone: a used set, the wrong tread, a cheap stop under caution.
+  G.cautionInfo = () => ({ level: 0 });
+  c.tyreWear = 0.55; c.tyre = { code: "M", tread: 0 };
+  assert.ok(pits.worthStopping(c), "a set at the wear threshold is worth a stop");
+  c.tyreWear = 0; c.tyre = { code: "I", tread: 1 };
+  assert.ok(pits.worthStopping(c), "an intermediate in the dry is worth a stop at any wear");
+  c.tyre = { code: "M", tread: 0 }; c.tyreWear = 0.35; G.cautionInfo = () => ({ level: 2 });
+  assert.ok(pits.worthStopping(c), "a part-used set under a safety car is a cheap stop");
+  c.tyreWear = 0.2;
+  assert.equal(pits.worthStopping(c), false, "…but not a nearly fresh one");
 });
 
 test("a fresh slick in the dry has nothing to say, used or not", () => {

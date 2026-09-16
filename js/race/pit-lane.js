@@ -523,6 +523,18 @@ const PitLane = (function () {
     const CUE_M = 550;          // start counting down this far out
     const BOX_CUE_M = 90;       // …and start asking for the lane this far from the box
     const CUE_WEAR = 0.55;      // …or not at all, on a set with life left in it
+    /** Is a stop worth making for this car right now — any ONE of a used set,
+     *  the wrong tread for the conditions, a free stop under caution. The
+     *  cue's own gate, and the minimap's (js/ui/hud.js): one function, so the
+     *  marker on the map and the words on the HUD can never disagree. */
+    function worthStopping(c) {
+      if (!enabled() || !c || c.retired || c.finished) return false;
+      const wear = G.tyres.spent(c);
+      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
+      const caution = G.cautionInfo ? G.cautionInfo() : null;
+      const free = !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35;
+      return wear >= CUE_WEAR || wrongTread || free;
+    }
     function cue(c) {
       if (!enabled() || !c || !c.local || c.retired || c.finished) return null;
       const st = c.pitState || "none";
@@ -555,12 +567,7 @@ const PitLane = (function () {
       if (st === "out") return null;
       const d = toEntry(c);
       if (d < 0 || d > CUE_M) return null;
-      // Worth making? Any ONE of: a used set, the wrong tread, a free stop.
-      const wear = G.tyres.spent(c);
-      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
-      const caution = G.cautionInfo ? G.cautionInfo() : null;
-      const free = !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35;
-      if (!(wear >= CUE_WEAR || wrongTread || free)) return null;
+      if (!worthStopping(c)) return null;
       if (c.pitArmed) return { phase: "armed", text: "BOX", dist: 0 };
       // Inside the entry road: say GO, not a distance — the distance is zero and
       // what the driver needs now is the direction.
@@ -1211,6 +1218,7 @@ const PitLane = (function () {
     return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, roadOf, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
+             worthStopping, cueM: CUE_M,
              laneEdge, laneCentre, laneDrive, laneUniform, boxUniform, laneX, inLaneLat, inBoxLat,
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }

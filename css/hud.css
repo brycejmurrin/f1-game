@@ -260,6 +260,17 @@ body.hud-prof-minimal .hud-box:nth-child(4),
 body.hud-prof-minimal #hud-energy,
 body.hud-prof-minimal #hud-ot,
 body.hud-prof-minimal #hud-aero { display: none !important; }
+/* …BUT THE PIT CUE IS PROMOTED, NOT DROPPED. MINIMAL hides the map, and with it
+   the only other thing that says where the pit entry is — so the cue, the one
+   element that knows both the direction (its arrow) and the distance (its
+   metres), moves to the HEAD of the bottom stack, above the gear, with the
+   arrow doubled. Not the top centre under the banner: .hud-bottom carries a
+   transform, so a fixed descendant would be positioned against IT, not the
+   viewport. No `display` here on purpose — this selector outranks
+   `#hud-pit[hidden]` above, and a display would paint the cue while hidden
+   (tests/unit/css-layers.test.mjs). */
+body.hud-prof-minimal #hud-pit { order: -1; font-size: var(--fs-3); }
+body.hud-prof-minimal #hud-pit-arrow { font-size: 2em; line-height: 1; }
 body.hud-hide-map #minimap { display: none !important; }
 body.hud-hide-gaps .hud-gaps { display: none !important; }
 /* Broadcast tower takes the top-left — park map + gaps under it.
