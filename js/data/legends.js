@@ -55,6 +55,7 @@ const Legends = (function () {
 
     { id: "senna", code: "SEN", name: "Ayrton Senna", nat: "BR",
       years: "1984–1994", teams: "Toleman, Lotus, McLaren, Williams", car: "McLaren MP4/4",
+      num: 12,   // SOURCED: the 1988 MP4/4 ran Prost #11 and Senna #12.
       record: { starts: 161, wins: 41, poles: 65, podiums: 80, titles: 3 },
       trait: "A qualifying lap nobody has bettered for rate; untouchable in rain.",
       livery: { name: "Interlagos '88", c1: [0.94, 0.94, 0.96], c2: [0.86, 0.06, 0.09],
@@ -116,6 +117,7 @@ const Legends = (function () {
 
     { id: "mansell", code: "MAN", name: "Nigel Mansell", nat: "GB",
       years: "1980–1995", teams: "Lotus, Williams, Ferrari, McLaren", car: "Williams FW14B",
+      num: 5,    // SOURCED: "Red 5" is his trademark, the red number 5 he carried across teams.
       record: { starts: 187, wins: 31, poles: 32, podiums: 59, titles: 1 },
       trait: "Il Leone — overtook where there was no room and made the room.",
       livery: { name: "Red Five '92", c1: [0.95, 0.95, 0.97], c2: [0.10, 0.32, 0.78],
@@ -160,12 +162,60 @@ const Legends = (function () {
     return l ? ratingsFor(l.record) : null;
   }
 
+  /* THE LEGENDS TEAM occupies the CUSTOM slot rather than adding a twelfth
+   * entry to Teams.LIST, and that is a hard constraint, not a preference:
+   * js/game.js's wireId() packs a team index and seat into ONE byte on the
+   * assumption of "eleven fixed teams plus exactly one appended custom entry"
+   * (so the grid fits inside 0..23), and tests/unit/grid-boxes.test.mjs pins
+   * the field at eleven teams x two seats. A twelfth grid team is a netcode
+   * and grid-geometry change, not a data edit. Taking the custom slot gives
+   * the player a Legends car with a legend's own settings and leaves both
+   * invariants untouched.
+   *
+   * SETTINGS, derived — the four garage stats come from the same five axes as
+   * the ratings, so a legend's car matches the driver rather than being typed
+   * in twice:
+   *   speed      pace, the axis that already means one fast lap
+   *   accel      pace and craft: getting the lap STARTED well
+   *   cornering  craft and awareness — the two that make a car work in traffic
+   *   braking    consistency, the axis that says the lap repeats
+   * The team tier (0 fastest) follows the headline of those axes, so a legend
+   * in a slower era does not silently get a 2026 front-running car. */
+  function statsFor(r) {
+    const mix = (a, b) => Math.round((a * 2 + b) / 3);
+    return { speed: r.pace, accel: mix(r.pace, r.craft),
+             cornering: mix(r.craft, r.awareness), braking: r.consistency };
+  }
+
+  /** A team-shaped object for one legend, ready for the custom slot.
+   *  `id` stays "custom" — that is the slot it occupies; `legend` marks which. */
+  function team(idOrCode) {
+    const l = byId(idOrCode) || byCode(idOrCode);
+    if (!l) return null;
+    const r = ratingsFor(l.record);
+    const st = statsFor(r);
+    const head = (st.speed + st.cornering) / 2;
+    return {
+      id: "custom", custom: true, legend: l.id,
+      name: "Legends", short: "LGD", engine: l.car,
+      tier: head >= 95 ? 0 : head >= 90 ? 1 : head >= 85 ? 2 : 3,
+      color: l.livery.c1.slice(), color2: l.livery.c2.slice(),
+      livery: Object.assign({}, l.livery, { name: undefined }),
+      stats: st,
+      // NUMBERS: only Senna's 12 and Mansell's 5 are sourced above. The rest
+      // fall back to 1 rather than being invented — a plausible-looking wrong
+      // number is worse than an obviously neutral one, and this file's whole
+      // discipline is that a fact is either sourced or is not stated.
+      drivers: [{ name: l.name, code: l.code, num: l.num || 1 }]
+    };
+  }
+
   /** Livery picker entries: `legend_<id>`, so an id can never collide with the
    *  hand-authored ids in js/car/liveries.js. */
   function liveries() {
     return LIST.map((l) => Object.assign({ id: `legend_${l.id}`, legend: l.id }, l.livery));
   }
 
-  return { LIST, ratings, ratingsFor, liveries, byId, byCode };
+  return { LIST, ratings, ratingsFor, statsFor, team, liveries, byId, byCode };
 })();
 Object.freeze(Legends);

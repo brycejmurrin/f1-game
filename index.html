@@ -1943,6 +1943,11 @@
   <div class="sheet">
     <div class="sheet-head"><h2 id="dlg-customize">MY TEAM</h2></div>
     <div class="sheet-body pane" id="cz-body">
+    <!-- LEGENDS fills the rows below from js/data/legends.js and then gets out of
+         the way: the existing SAVE writes the custom slot, so there is no second
+         persistence path and no twelfth team (js/game.js wireId packs team+seat
+         into one byte). Everything stays editable after applying. -->
+    <div class="cz-row"><label for="cz-legend">LEGEND</label><select id="cz-legend"></select><button type="button" id="cz-legend-apply" class="cz-liv-none">APPLY</button></div>
     <div class="cz-row"><label for="cz-name">TEAM NAME</label><input id="cz-name" type="text" maxlength="22" placeholder="My Team"></div>
     <div class="cz-row"><label for="cz-short">SHORT CODE</label><input id="cz-short" type="text" maxlength="4" placeholder="YOU"></div>
     <div class="cz-row"><label for="cz-color">PRIMARY</label><input id="cz-color" type="color"></div>

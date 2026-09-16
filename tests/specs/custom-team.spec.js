@@ -208,6 +208,23 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   expect(leaked, "a cached custom-team body mesh outlived the paint it was built for").toBe(0);
 });
 
+// THE LEGEND PICKER IS NOT COVERED HERE, and that is a recorded gap rather
+// than an oversight. A test driving it through saveMyTeam failed five times on
+// the FIRST #sel-car click: the locator resolves, the click never lands, 60 s
+// gone. It failed on the shared page, at three different positions in the file,
+// AND on its own fresh page via `test` — so it is not the inherited screen
+// state this file warns about elsewhere, and the three tests above take the
+// identical route and pass. Whatever the difference is, five SwiftShader runs
+// did not find it, and AGENTS.md is explicit that a change naming its
+// unverified part beats another hour of it.
+//
+// What IS verified: tests/unit/legends.test.mjs covers the data, the derived
+// ratings and Legends.team(); the row and its APPLY handler are plain DOM in
+// index.html and js/career/custom-team.js, guarded on `typeof Legends`. What
+// is NOT: that a human clicking APPLY sees the rows change. Cover it by
+// finding why #sel-car refuses the click from a fresh page — that is a wider
+// finding than this feature, since it would affect any new test here.
+
 test("custom livery actions are independent keyboard buttons", async ({ page }) => {
   await toMenu(page);
   // The seed the init script used to plant before boot, written through the
