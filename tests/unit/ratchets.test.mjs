@@ -76,7 +76,10 @@ test("the commit hook's auto-raise absorbs small growth and blocks big growth", 
   const rows = await measure();
   const worst = Math.max(0, ...rows.map((r) => r.over));
   // On a green tree nothing moves.
-  const quiet = await autoRaise({ maxRaise: 40 });
+  // dryRun: this test must NOT write tests/data/ratchets.json. Without it the
+  // suite raised a ceiling as a side effect — red on the first run, green on
+  // the second, and a raise nobody reviewed riding into the next commit.
+  const quiet = await autoRaise({ maxRaise: 40, dryRun: true });
   assert.equal(quiet.ok, true);
   assert.deepEqual(quiet.blocked, []);
   if (worst === 0) assert.deepEqual(quiet.raised, [], "a green tree is not raised");
@@ -85,7 +88,7 @@ test("the commit hook's auto-raise absorbs small growth and blocks big growth", 
   // or, on a green tree, by checking the classification directly.
   const over = rows.filter((r) => r.over > 0);
   if (over.length) {
-    const tight = await autoRaise({ maxRaise: Math.max(0, Math.min(...over.map((r) => r.over)) - 1) });
+    const tight = await autoRaise({ maxRaise: Math.max(0, Math.min(...over.map((r) => r.over)) - 1), dryRun: true });
     assert.equal(tight.ok, false);
     assert.ok(tight.blocked.length >= 1);
   }

@@ -65,6 +65,29 @@ const Duel = (function () {
     return cars.filter((c) => !c.isPlayer).sort((a, b) => b.skill - a.skill)[0] || null;
   }
 
-  return { BUMP, bump, pick };
+  /* RACE AGAINST A LEGEND. bump() lifts whoever is fastest on the grid; this
+   * REPLACES the rival's driver instead — his name, his code and his five axes
+   * taken straight from js/data/legends.js, which are absolute rather than a
+   * tier-relative draw, so no BUMP is applied on top. Fangio arrives at his own
+   * numbers, not at a midfielder's plus ten.
+   *
+   * The rival keeps his CAR. Swapping the team object would change the id every
+   * decal atlas and mesh cache is keyed by (js/car/liverytex.js), so a legend
+   * rival races in the machinery he was given, with his name on the timing
+   * screen. Giving him his own livery is a caching change, not a data one, and
+   * is deliberately not smuggled in here. */
+  function asLegend(c, legend, DriverRatings) {
+    if (!c || !legend) return c;
+    const r = legend.ratings || null;
+    if (!r) return bump(c, DriverRatings);      // unknown legend: the ordinary duel
+    c.skill = DriverRatings.skill(r, 0.5);      // mid-roll, same as bump()
+    c.craft = (r.craft || 75) / 100; c.awareness = (r.awareness || 75) / 100;
+    c.experience = (r.experience || 75) / 100; c.consistency = (r.consistency || 75) / 100;
+    c.name = legend.name; c.code = legend.code;
+    c.duelRival = true; c.legendId = legend.id;
+    return c;
+  }
+
+  return { BUMP, bump, pick, asLegend };
 })();
 Object.freeze(Duel);

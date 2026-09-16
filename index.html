@@ -460,9 +460,13 @@
 
 <!-- THE RADIO. Every banner — the engineer, the coach, race control, the pit
      cues' announcements — is a radio message now, not a billboard: a small
-     card with the channel it came in on (WHO) and the words in quotes, the
-     way a broadcast shows team radio. js/game.js showAnnounce fills both. -->
-<div id="announce" role="status" hidden><span id="announce-who"></span><span id="announce-text"></span></div>
+     card with the car NUMBER on a plate of the TEAM's colour, the channel it
+     came in on (WHO, whose colour is the channel) and the words in quotes, the
+     way a broadcast shows team radio. js/game.js showAnnounce fills all three.
+     The plate is the car and never moves; the WHO line is the speaker. The number leads the
+     status text on purpose: "63 · RUSSELL · RADIO · <words>" is how the card
+     reads aloud, which is how it reads by eye. -->
+<div id="announce" role="status" hidden><span id="announce-num"></span><span id="announce-body"><span id="announce-who"></span><span id="announce-text"></span></span></div>
 
 <!-- TOUCH-mode drag affordance: a ring at the point the finger went down, so
      the anchor of an otherwise invisible control is visible for a moment.
@@ -1995,6 +1999,11 @@
   <div class="sheet">
     <div class="sheet-head"><h2 id="dlg-customize">MY TEAM</h2></div>
     <div class="sheet-body pane" id="cz-body">
+    <!-- LEGENDS fills the rows below from js/data/legends.js and then gets out of
+         the way: the existing SAVE writes the custom slot, so there is no second
+         persistence path and no twelfth team (js/game.js wireId packs team+seat
+         into one byte). Everything stays editable after applying. -->
+    <div class="cz-row"><label for="cz-legend">LEGEND</label><select id="cz-legend"></select><button type="button" id="cz-legend-apply" class="cz-liv-none">APPLY</button></div>
     <div class="cz-row"><label for="cz-name">TEAM NAME</label><input id="cz-name" type="text" maxlength="22" placeholder="My Team"></div>
     <div class="cz-row"><label for="cz-short">SHORT CODE</label><input id="cz-short" type="text" maxlength="4" placeholder="YOU"></div>
     <div class="cz-row"><label for="cz-color">PRIMARY</label><input id="cz-color" type="color"></div>
@@ -2546,6 +2555,7 @@
 <script defer crossorigin="anonymous" src="js/render/shared/driving-line.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/teams.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/driver-ratings.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/data/legends.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/save-migrate.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>

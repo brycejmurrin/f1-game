@@ -324,9 +324,31 @@ test("every banner is the SAME small radio card — no kind gets billboard type 
   }
   // The compact override keeps the token discipline too.
   assert.match(hud, /body\[data-density="compact"\] #announce \{[\s\S]*?font-size:\s*var\(--fs-2\)/);
-  // …and the shell carries the two lines the card is made of.
+  // …and the shell carries the plate and the two lines beside it.
   const shell = read("index.html");
-  assert.match(shell, /<div id="announce" role="status" hidden><span id="announce-who"><\/span><span id="announce-text"><\/span><\/div>/);
+  assert.match(shell, /<div id="announce" role="status" hidden><span id="announce-num"><\/span><span id="announce-body"><span id="announce-who"><\/span><span id="announce-text"><\/span><\/span><\/div>/);
+});
+
+test("the number plate is the card's identity anchor, and it collapses to a stripe with no number", () => {
+  // The plate is the one place a HUD digit readout is allowed off the body type
+  // scale (css/tokens.css says so), and it steps down with the compact card so
+  // it can never grow taller than the two lines it stands beside.
+  const hud = read("css/hud.css");
+  const plate = hud.match(/\n#announce-num \{([\s\S]*?)\n\}/);
+  assert.ok(plate, "#announce-num has a rule");
+  assert.match(plate[1], /background:\s*var\(--accent\)/, "the plate carries the team colour");
+  assert.match(plate[1], /color:\s*var\(--accent-ink\)/, "…and the per-team ink that is legible on it");
+  assert.match(plate[1], /font-variant-numeric:\s*tabular-nums/, "a number that changes width jitters the card");
+  assert.match(hud, /#announce-num:empty \{[^}]*min-width: 3px/,
+    "with no number the plate must collapse to the 3px stripe the card had before it");
+  assert.match(hud, /#announce \{[\s\S]*?--radio-num: 26px;/);
+  assert.match(hud, /body\[data-density="compact"\] #announce \{[\s\S]*?--radio-num: 22px;/);
+  // The number left the channel line when it gained the plate — one number on
+  // the card, not two.
+  const g = read("js/game.js");
+  assert.doesNotMatch(g.match(/function radioWho\(kind\) \{[\s\S]*?\n\}/)[0], /num/,
+    "radioWho still appends the car number — the plate already shows it");
+  assert.match(g, /els\.announceNum\.textContent = radioNum\(\);/, "showAnnounce fills the plate");
 });
 
 test("coach and practice keep their own channel and priority, and practice is its own kind", () => {
@@ -335,8 +357,14 @@ test("coach and practice keep their own channel and priority, and practice is it
   // WHO line), never a bigger or smaller card.
   assert.match(hud, /#announce\[data-kind="coach"\] #announce-who,\n#announce\[data-kind="practice"\] #announce-who \{ color: var\(--faster\); \}/);
   const g0 = read("js/game.js");
-  assert.match(g0, /if \(kind === "coach" \|\| kind === "practice"\) return "COACH" \+ num;/, "radioWho names the coach's channel");
-  assert.match(g0, /if \(kind === "penalty-hit" \|\| kind === "penalty-warn" \|\| kind === "warning"\) return "RACE CONTROL" \+ num;/, "…and race control's");
+  assert.match(g0, /if \(kind === "coach" \|\| kind === "practice"\) return "COACH";/, "radioWho names the coach's channel");
+  assert.match(g0, /if \(kind === "penalty-hit" \|\| kind === "penalty-warn" \|\| kind === "warning"\) return "RACE CONTROL";/, "…and race control's");
+  // …and the channel is ALL a kind may recolour. The number plate is the
+  // team's, on every kind: the card belongs to one car for a whole session, so
+  // a plate that changed with the message would be the loudest thing on screen
+  // saying something that never changes.
+  assert.doesNotMatch(hud, /#announce\[data-kind="[a-z-]+"\][^{]*#announce-num/,
+    "a kind repaints the number plate — the plate is the team, the WHO line is the channel");
   // A practice verdict must not be prioritised as a record message.
   const g = read("js/game.js");
   const pri = g.match(/const ANN_PRI = \{([^}]*)\}/)[1];

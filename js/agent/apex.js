@@ -1224,6 +1224,11 @@ const api = {
   // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
   // opts.laps: the race distance (default GAME_LAPS) — the tyre-class draw at
   // grid-up reads it, so a long-race bench must set it HERE, not after.
+  // opts.duel: true for the one-rival practice format, or a legend id
+  // ("fangio") to make that rival the legend. It must be set HERE and not after
+  // for the same reason as laps: startRace() trims the field on the way in, so
+  // a duel asked for afterwards races a full grid. false/absent leaves the
+  // setting alone, so a harness that never mentions duel keeps today's races.
   race(trackRef, timeOfDay, weather, opts) {
     const i = typeof trackRef === "number"
       ? trackRef
@@ -1235,6 +1240,10 @@ const api = {
     G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
+    if (opts && opts.duel != null) {
+      G.duel = !!opts.duel;
+      G.duelLegend = typeof opts.duel === "string" ? opts.duel : "";
+    }
     return settled(startRace(),
       { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather });
   },
