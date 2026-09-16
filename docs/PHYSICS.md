@@ -52,16 +52,40 @@ scale, so a ratio is its natural unit — which is also why the v2→v3 store re
 measures "nearest" in LOG space; in absolute pace the two fastest old settings
 collapse onto one new notch. See `docs/research/PHASE-C-SLIDER-DESIGN.md`.
 
-**Combined-slip (friction ellipse)**: `LONG_GRIP = 34 m/s²` is the longitudinal
-axis of the traction circle. Braking or accelerating consumes longitudinal grip;
-`slipFactor = sqrt(1 − (axUsed/LONG_GRIP)²)` scales lateral grip. Weight
-transfer still reads faded `axEstSm` (no fake unload at vmax). The circle
-itself uses `max(|axEstSm|, throttleDemand)`: demand is unfaded
-`ACCEL · PACE · throttle · THR_ELLIPSE` (`THR_ELLIPSE = 2.2` in
-`js/physics/consts.js`) so planting the throttle mid-corner spends grip even
-when speed-limited. Braking still costs more (`BRAKE` 22 vs ~15 m/s²).
-Trail-braking rotates the car; hard braking mid-corner understeers. Exposed via
-`physState()` fields `axEstSm`, `axFrac`, `slipFactor`. **Brake bias** (the SETUP sheet,
+**Lateral tyre curve** (`TyreModel.lateralCurve`, `js/physics/tyre-model.js`):
+each of the player's axles turns `x = cs·α/mu` into a normalised force —
+`sin(x)` up to the peak at `x = π/2` (slope 1 at the origin, so `CS_FRONT` /
+`CS_REAR` keep their meaning and the peak force is exactly `mu`), then a
+Gaussian fall to `CURVE_FLOOR` (0.75) of width `CURVE_FALL_W` (1.4): ≥ 0.97 of
+peak out to x ≈ 2.1, 0.85 at x = 3, the floor by x ≈ 5. It replaced `tanh(x)`,
+which saturated and never fell, so an overdriven front kept 100 % of its force
+at 16° of slip and a flick at full lock cost nothing. The peak slip angle is
+`(π/2)·mu/cs` — about 9–11° front and 8–9° rear at 45 m/s, lower at low speed,
+rising with aero load as it should. Never negative, never oscillating (a Magic
+Formula with a sharpening E goes negative at spin-sized slips, which this model
+reaches). The front-saturation haptic fires at `x > 1.15`, i.e. before the
+peak; a rear haptic fires past the rear's peak. Measured shapes and the
+literature: `docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md`; the shape is
+locked by `tests/unit/player-dynamics-vm.test.mjs`.
+
+**Combined-slip (friction ellipse), per axle**: `LONG_GRIP = 34 m/s²` is the
+longitudinal axis of the traction circle and each axle pays for what IT does.
+Braking charges both axles from the smoothed deceleration `axEstSm` (split by
+brake bias below; 1/1 at `BB_REF`), so easing off the pedal hands grip back
+continuously and trail-braking rotates the car. Engine braking — the coast
+part of a deceleration, `brakeMix` ramps the pedal's share in from coast drag
+to 1.5× it — and the THROTTLE charge the driven rear only: the undriven front
+spends nothing on the pedal, so a planted throttle at the limit of a slow exit
+lightens the rear's lateral grip and the car rotates (power-on oversteer,
+emergent). The throttle charge is a fraction of `LONG_GRIP`:
+`clamp(THR_VK / vStd, THR_FLOOR, THR_CAP)` (14 / 0.34 / 0.62 in
+`js/physics/consts.js`) — traction-limited at ≤ 23 m/s, power-limited (an
+engine's P/v) above, floored so planting the throttle mid-corner spends grip
+even when speed-limited; ERS deploy adds on top. Full brake is still the bigger
+bill (`BRAKE` 22 / 34 ≈ 0.65). Each axle's `sqrt(1 − axFrac²)` scales its own
+`mu`; `physState()` exposes `axEstSm`, `axFrac` (the larger axle) and
+`slipFactor` (the rear's, which the engine audio reads).
+**Brake bias** (the SETUP sheet,
 `js/garage/setup-tune.js`) splits that budget per axle UNDER BRAKING only:
 the front spends `bb / BB_REF` of it and the rear `(1 − bb) / (1 − BB_REF)`
 (`BB_REF = 0.56`, `js/physics/consts.js`), so `muF`/`muR` carry their own

@@ -553,6 +553,7 @@
         "tests/unit/physics-characterization-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
+        "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/headless-api-vm.test.mjs",
         "tests/unit/obs-act-edge-vm.test.mjs",
         "tests/unit/longitudinal-vm.test.mjs",

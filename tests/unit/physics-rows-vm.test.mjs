@@ -266,7 +266,7 @@ test("shipped turn-in is snappier than the understeer-safe 0.89 / 0.7 pair", asy
 
 test("power-on spends the friction ellipse even when speed-limited", async () => {
   const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /THR_ELLIPSE/, "throttle demand must be a named PhysicsConsts scale");
+  assert.match(src, /THR_CAP[\s\S]{0,200}THR_FLOOR|THR_FLOOR[\s\S]{0,200}THR_CAP/, "throttle demand must be the named PhysicsConsts charge (THR_FLOOR/THR_CAP/THR_VK)");
   assert.match(src, /axThrDemand/, "ellipse cost is throttle demand, not only faded axEst");
   assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
     /axFrac[\s\S]{0,180}clamp\(1 - c\.speed/,
