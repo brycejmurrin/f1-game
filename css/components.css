@@ -1068,6 +1068,15 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    QUIT is the exception the other way: it is the only destructive item here, so
    it gets a rule above it and a muted red label — visibly apart from the two
    harmless ones, without shouting louder than RESUME. */
+/* RESUME IS A FULL-WIDTH PRIMARY IN THE STACK, not a control in the title bar.
+   It spent a spell in .sheet-head paired with the PAUSED heading, on the
+   reasoning that it "stays in the fixed head while the pause actions scroll".
+   Measured, that never bit: RESUME is the FIRST item in the stack, so it is
+   visible without scrolling at every viewport and UI SIZE the sheet supports
+   (852x393 / 667x375 / 1000x456 / 1280x720 at 40, 100, 150 and 200 %). What the
+   pairing did cost was the read — the primary action sat in a red title bar on
+   its own red fill, at --tap-sm rather than a full row, competing with the
+   heading instead of leading the list it belongs to. */
 #pm-resume {
   background: var(--grad-primary); color: var(--text) !important; border-color: transparent;
   font-weight: 700; font-size: var(--fs-5);
@@ -1075,13 +1084,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     inset 0 -1px 0 rgba(0, 0, 0, 0.32),
     0 6px 20px color-mix(in oklab, var(--red) 42%, transparent);
-  width: 100%; margin: 0; min-height: var(--tap-sm);
-}
-/* Resume stays in the fixed head while the pause actions scroll. */
-#pausemenu .sheet-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center; gap: var(--gap);
 }
 #pm-quit {
   color: color-mix(in oklab, var(--red) 62%, #fff);
@@ -1140,6 +1142,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   gap: calc(var(--gap) * 0.6);
   align-items: start;
 }
+#pm-resume,
 #pm-quit,
 #pm-standings,
 #pm-howto,

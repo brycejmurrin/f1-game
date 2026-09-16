@@ -904,3 +904,21 @@ test("the intrusion band leaves a settled pair settled", () => {
   assert.ok(band > 0.05 && band < A.minLatGap(5, false),
     `band ${band} must be a real margin inside the clear gap`);
 });
+
+// --- difficulty's second dimension -----------------------------------------
+// Until 2026-09-15 difficulty was ONE number: every level braked, defended,
+// deployed and erred identically and differed only in top speed. `corner`
+// scales the corner-speed target, so an easier field drives further from the
+// limit rather than merely slower down the straight.
+test("a lower difficulty corner factor lowers the brake target, and 1 is the default", () => {
+  const samples = [{ d: 50, k: 0.018, bank: 0 }];
+  const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1 };
+  const full = A.brakeTarget(base);
+  assert.equal(A.brakeTarget({ ...base, diffCorner: 1 }), full, "1 is a no-op");
+  const easy = A.brakeTarget({ ...base, diffCorner: 0.93 });
+  assert.ok(easy < full, `easy ${easy} corners below hard ${full}`);
+  // The corner term must scale the CORNER speed, not the whole entry budget:
+  // the entry limit is sqrt(vC² + 2·brake·0.85·d), so a 7% cut in vC moves the
+  // limit by less than 7%.
+  assert.ok(full - easy < full * 0.07, "the braking budget is not scaled with it");
+});

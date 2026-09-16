@@ -247,3 +247,41 @@ test("the lap report runs on a real circuit's turns and a real recorded ghost",a
     assert.ok(others.every(r=>Math.abs(r.lost)<.3),"every other segment is on the reference pace: "+JSON.stringify(others));
   } finally { h.close(); }
 });
+
+// RACE CRAFT is scored in career.js from fields only game.js writes, so the pure
+// scorer passing (career-settle.test.mjs) says nothing about whether a driven
+// race ever fills them in. This drives the real car into the real barriers and
+// into a real rival and checks the counts — and, as much as the counts, that
+// they DEBOUNCE: ten seconds against a wall is a handful of strikes, not 600,
+// and one shunt is one hit rather than one per relaxation pass.
+test("a driven race fills in the race-craft fields, debounced", async () => {
+  const h = await createGame({ track: "monaco" });
+  try {
+    await h.race("monaco"); h.apex.go(); h.apex.headless(true);
+    const p = h.G.player;
+    assert.equal(p.hits, 0); assert.equal(p.hitSev, 0); assert.equal(p.wallHits, 0);
+
+    // Ten seconds of full lock into Monaco's barriers.
+    h.apex.jump(0.25, 40, 0);
+    h.apex.setInput({ steer: 1, throttle: 1, brake: 0 });
+    for (let i = 0; i < 600; i++) { if (p.speed < 25) p.speed = 25; h.apex.step(1 / 60); }
+    h.apex.clearInput();
+    assert.ok(p.wasOnWall, "the car must actually have reached the barrier");
+    assert.ok(p.wallHits >= 1, "a wall strike must be counted");
+    assert.ok(p.wallHits <= 20,
+      `600 frames on the wall counted ${p.wallHits} strikes — the wasOnWall gate is not holding`);
+
+    // A rival closing on the player: one shunt, graded by how hard it was.
+    const rival = h.G.cars.find((c) => c !== p);
+    h.apex.jump(0.4, 60, 0);
+    for (let i = 0; i < 300 && !p.hits; i++) {
+      rival.retired = false; rival.finished = false; rival.lap = p.lap;
+      rival.prog = p.prog + 1.5; rival.s = p.s + 1.5; rival.x = p.x + 1.0;
+      rival.speed = p.speed + 8;
+      if (p.speed < 55) p.speed = 55;
+      h.apex.step(1 / 60);
+    }
+    assert.equal(p.hits, 1, "car contact counts once, not once per relaxation pass");
+    assert.ok(p.hitSev > 0 && p.hitSev <= 1, `severity is graded 0..1, got ${p.hitSev}`);
+  } finally { h.close(); }
+});

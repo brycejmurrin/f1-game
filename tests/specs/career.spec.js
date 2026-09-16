@@ -901,7 +901,7 @@ test.describe("Career — objectives", () => {
 test.describe("Career — reputation", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("a settled round moves reputation by result-vs-expectation plus the brief", async ({ page }) => {
+  test("a settled round moves reputation by result-vs-expectation, the brief and race craft", async ({ page }) => {
     await boot(page);
     await startCareer(page);
     await goRacing(page);
@@ -910,10 +910,17 @@ test.describe("Career — reputation", () => {
       return Object.assign({ rep0: st.rep, bar: st.deal.goal.value }, window.__apex.careerSim(1)[0]);
     });
     // The whole formula, restated: the result term is relative to the CAR (the
-    // contract's own goal IS expectedFinish for this team), the brief term is flat.
+    // contract's own goal IS expectedFinish for this team), the brief term is
+    // flat, and race craft is how the result was obtained — bounded well inside
+    // the other two (+1.5 / -0.75) so it colours a season rather than deciding it.
     const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
-    const expected = clamp((r.bar - r.pos) * 0.6, -4, 6) + (r.obj.done ? 2 : -2);
+    expect(typeof r.craft).toBe("number");
+    const craft = clamp((r.craft - 0.75) * 6, -0.75, 1.5);
+    const expected = clamp((r.bar - r.pos) * 0.6, -4, 6) + (r.obj.done ? 2 : -2) + craft;
     expect(r.rep - r.rep0).toBeCloseTo(expected, 5);
+    // ...and the craft term is the ONLY one that moved: without it the sum is
+    // wrong by exactly `craft`, which is what caught this spec when it landed.
+    expect(r.rep - r.rep0).not.toBeCloseTo(expected - craft, 5);
   });
 
   test("the same finish is worth less in a better car", async ({ page }) => {
@@ -1384,7 +1391,10 @@ test.describe("Career — history", () => {
     expect(t["Race starts"]).toBe(String(cal));
     expect(t.Wins).toBe(String(archived.past.wins));
     expect(t.Podiums).toBe(String(archived.past.podiums));
-    expect(t.Points).toBe(String(archived.past.pts));
+    // WITH ITS UNIT, like the season row three lines up and like every other
+    // points figure in the app (tests/unit/setup-screens-state.test.mjs pins it).
+    // This line asserted a bare number and was the odd one out.
+    expect(t.Points).toBe(archived.past.pts + " pts");
     expect(t["Best championship"]).toBe("P" + archived.past.pos + " in 2026");
     expect(t.Championships).toBe(
       (archived.past.pos === 1 ? "1" : "0") + " drivers' · " +

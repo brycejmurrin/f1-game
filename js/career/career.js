@@ -43,6 +43,28 @@ function freeAgents() { return FREE_AGENTS.slice(); }
 const OBJ_BONUS = 150;
 const OBJ_REP = 2;
 
+// RACE CRAFT — HOW the result was obtained, paid in REPUTATION and never in money.
+// Reputation is the seat gate and money is the parts gate; charging a scruffy race
+// to the balance would bill it twice, since a scruffy race already cost positions
+// and therefore prize money. Deductions are limited to what the sim can attribute
+// to the PLAYER'S OWN INPUTS: track limits, the time penalties those earned, and
+// wall contact. There is deliberately NO retirement term — every DNF here is a
+// Reliability.arm() draw, "accident" included (js/race/reliability.js), so nothing
+// retires a car for how it was driven and a DNF term would price a dice roll.
+// Car-to-car contact is the one term we cannot apportion (being hit looks exactly
+// like hitting), so it is the lightest and is scaled by the worst impact.
+const CRAFT_CUT = 0.10;      // per counted track-limits cut
+const CRAFT_PEN = 0.07;      // per second of time penalty — one +5s is 0.35
+const CRAFT_HIT = 0.12;      // per car contact, times the worst impact (0..1)
+const CRAFT_WALL = 0.20;     // per fresh wall strike above a graze
+const CRAFT_BASE = 0.75;     // the score a round must beat to pay anything at all
+const CRAFT_REP = 6;         // reputation per unit of craft either side of BASE
+// Asymmetric on purpose: a faultless race is worth twice what the scruffiest one
+// costs, because the contact term can fire on a driver who was merely hit. BOTH
+// bounds must be reachable — CRAFT_REP has to be at least 1/(1-BASE) times MAX or
+// the ceiling is decorative and the channel is silently symmetric.
+const CRAFT_REP_MIN = -0.75, CRAFT_REP_MAX = 1.5;
+
 const HISTORY_MAX = 10;
 const DEV_MAX = 12;
 const EXP_MAX = 40;
@@ -291,6 +313,7 @@ function start(opts) {
     moves: [],            // what the winter market did, for the season summary
     paidSponsors: [],
     obj: null,
+    objPick: null,      // {round, i}: which of the round's three briefs was taken
     history: [],
     roster: null,
   };
@@ -601,11 +624,54 @@ function objectiveLabel(o) {
   return f ? f(o.value) : "";
 }
 
-function objectiveFor(r) {
+// THE BRIEF IS A CHOICE, NOT A DEMAND. One dealt objective makes a round
+// something that happens to you; three makes it a decision — take the safe
+// points brief in a bad car, or gamble the finish brief when the car is quick.
+// The three are drawn PURELY from the seed, exactly as the single one was, and
+// the player's pick is the only stored part. That keeps settleRound's invariant
+// intact: it recomputes the brief rather than reading `career.obj`, so the
+// settlement can never disagree with what the hub showed, and it still cannot
+// be rerolled by reloading.
+//
+// INDEX 0 IS THE OLD DRAW. The choices start at the kind `objectiveFor` used to
+// return and walk forward through OBJ_KINDS, so a save with no pick — every save
+// written before this existed — keeps precisely the brief it already had.
+const OBJ_CHOICES = 3;
+function objectiveAt(r, i) {
   const team = teamOf(career.team);
-  const i = Math.min(OBJ_KINDS.length - 1, Math.floor(rnd(career.year, "obj", r) * OBJ_KINDS.length));
-  const kind = OBJ_KINDS[i];
+  const base = Math.floor(rnd(career.year, "obj", r) * OBJ_KINDS.length);
+  const kind = OBJ_KINDS[(base + i) % OBJ_KINDS.length];
   return { round: r, type: kind.type, value: team ? kind.value(team) : 0, done: null };
+}
+function objectiveChoices(r) {
+  const out = [];
+  for (let i = 0; i < OBJ_CHOICES; i++) out.push(objectiveAt(r, i));
+  return out;
+}
+// A pick is keyed on its round, so a stale one from an earlier round (or from
+// last season, after rollover resets the counter) reads as "unchosen" and falls
+// back to index 0 rather than silently applying to a round it was never for.
+function objectivePick(r) {
+  const p = career && career.objPick;
+  return p && p.round === r ? clamp(p.i | 0, 0, OBJ_CHOICES - 1) : 0;
+}
+function objectiveFor(r) { return objectiveAt(r, objectivePick(r)); }
+// Locked once the weekend is under way: quali or a sprint has already decided
+// part of what some of these briefs measure, so picking after that is choosing
+// with the answer in hand.
+function objectiveLocked() {
+  const s = career && career.season;
+  return !!(s && (s.stage || s.qualiOrder || s.sprintOrder));
+}
+function chooseObjective(i) {
+  if (!career || careerConflict || seasonDone() || objectiveLocked()) return false;
+  const pick = clamp(i | 0, 0, OBJ_CHOICES - 1);
+  const r = career.season.round;
+  if (objectivePick(r) === pick && career.obj && career.obj.round === r) return true;
+  career.objPick = { round: r, i: pick };
+  career.obj = objectiveFor(r);
+  save();
+  return true;
 }
 function objective() {
   if (!career) return null;
@@ -631,6 +697,24 @@ function objectiveMet(o, ctx) {
 function prizeFor(pos) {
   if (pos <= PRIZE.length) return PRIZE[pos - 1];
   return pos <= 15 ? PRIZE_MID : PRIZE_TAIL;
+}
+
+// Pure: 1.0 is a faultless race, 0 the floor. Reads only fields game.js sets on
+// the player car (cuts/penalty from track limits, hits/hitSev from collideFx,
+// wallHits from the wall model); a car that never had them scores 1.
+function craftScore(p) {
+  if (!p) return 1;
+  const loss = CRAFT_CUT * (p.cuts | 0)
+             + CRAFT_PEN * Math.max(0, p.penalty || 0)
+             + CRAFT_HIT * (p.hits | 0) * clamp(p.hitSev || 0, 0, 1)
+             + CRAFT_WALL * (p.wallHits | 0);
+  return clamp(1 - loss, 0, 1);
+}
+
+function seasonCraft() {
+  const rows = career ? career.results.filter((r) => typeof r.craft === "number") : [];
+  if (!rows.length) return null;
+  return rows.reduce((a, r) => a + r.craft, 0) / rows.length;
 }
 
 function settleRound(order, player) {
@@ -661,23 +745,29 @@ function settleRound(order, player) {
   const wages = wageBill();
   career.money += prize + salary + bonus + (obj.done ? OBJ_BONUS : 0) - wages;
   career.money = Math.max(0, career.money);
-  // Two reputation channels: the result term is relative to the CAR (expectedFinish
-  // encodes the tier), the objective term is flat. A team id no longer on
-  // Teams.LIST degrades to a mid-grid expectation rather than throwing in endRace.
+  // THREE reputation channels: the result term is relative to the CAR
+  // (expectedFinish encodes the tier), the objective term is flat, and race craft
+  // is HOW the result was obtained. A team id no longer on Teams.LIST degrades to
+  // a mid-grid expectation rather than throwing in endRace. Craft is bounded well
+  // inside the other two so it colours a season rather than deciding it — and it
+  // lands on rep only: `career.money` above is already final.
+  const craft = craftScore(player);
   const repDelta = clamp(((team ? expectedFinish(team) : 11) - pos) * 0.6, -4, 6)
-                 + (obj.done ? OBJ_REP : -OBJ_REP);
+                 + (obj.done ? OBJ_REP : -OBJ_REP)
+                 + clamp((craft - CRAFT_BASE) * CRAFT_REP, CRAFT_REP_MIN, CRAFT_REP_MAX);
   career.rep = clamp(career.rep + repDelta, 0, 100);
   const dnf = player.retired ? (player.dnf || "mechanical") : null;
   const matePts = mate && !mate.retired ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
   const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
   const cleanRun = !player.retired && !(player.cuts | 0) && !(player.penalty | 0);
   career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,
-                        double: dbl, clean: cleanRun });
+                        double: dbl, clean: cleanRun,
+                        craft: Math.round(craft * 100) / 100 });
   career.obj = null;          // the next round draws its own brief on demand
   const sponsorPay = settleSponsor();
   const persisted = saveStatus();
   Log.info("game", `Career.settleRound pos=${pos}${dnf ? ` dnf=${dnf}` : ""}`);
-  return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay,
+  return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay, craft,
            money: career.money, rep: career.rep, save: persisted,
            unsaved: !persisted.durable };
 }
@@ -742,10 +832,22 @@ function bumpAxis(d, axis, by) {
 //           great year in a bad car is worth more than a title in the best one.
 //   NOISE   development is not a formula. ±2, from the stateless career hash.
 //
+// THE PLAYER'S `craft` AXIS IS THE ONE EXCEPTION, and it is the whole point of
+// measuring race craft. For an AI seat every axis has to be inferred from the
+// result, because there is nothing else to go on. For the player there IS: a
+// season of settled rounds that recorded how each one was driven. Taking their
+// craft drift from that instead of from half their pace drift is what closes
+// the loop — drive cleanly and the rating that feeds the silly season
+// (`overall()` ranks the grid with it) and a simulated round's race-day swing
+// moves with the driving, not with a dice roll. Same ±3 bound as FORM, so it
+// is a season's worth of evidence weighted like a season's worth of results.
+//
 // Stored as per-axis deltas over the shipped DriverRatings table, never absolutes,
 // so updating the real 2026 ratings never invalidates a save.
+const CRAFT_DEV = 12;     // rating points per unit of craft either side of BASE
 function rolloverDrivers(dStand) {
   const posOf = new Map(dStand.map((r) => [r.id, r.pos]));
+  const seasonMark = seasonCraft();
   for (const s of gridSeats()) {
     const r = ratingOf(s);
     const growth = (1 - r.experience / 100) * 6 - 1.5;
@@ -756,8 +858,13 @@ function rolloverDrivers(dStand) {
     // Pace takes the whole drift; the softer axes take half. A driver who has a
     // year does not become a different person, they get quicker.
     bumpAxis(d, "pace", drift);
-    bumpAxis(d, "craft", drift * 0.5);
-    bumpAxis(d, "consistency", drift * 0.5);
+    // `seasonMark` is null for a season raced entirely before craft existed, and
+    // for one settled only through simCareerRound before it drew the fields —
+    // both fall back to the inferred drift rather than reading as a bad year.
+    const mine = isPlayerSeat(s) && seasonMark != null;
+    bumpAxis(d, "craft", mine
+      ? clamp((seasonMark - CRAFT_BASE) * CRAFT_DEV, -3, 3)
+      : drift * 0.5);
     d.experience = clamp(Math.round((d.experience || 0) + 4), 0, EXP_MAX);
   }
 }
@@ -956,6 +1063,10 @@ function rollover() {
     champion: champ ? (career.season.driverCodes[champ.id] || codeOf(champ.id)) : "",
     wins: career.results.filter((r) => r.p === 1).length,
     podiums: career.results.filter((r) => r.p <= 3).length,
+    // The season's race craft, rounded, or null for a year raced before it
+    // existed. Read straight after this by rolloverDrivers, which develops the
+    // player's craft axis from it; `career.results` is cleared further down.
+    craft: seasonCraft() == null ? null : Math.round(seasonCraft() * 100) / 100,
   };
   career.history.push(entry);
   if (career.history.length > HISTORY_MAX)
@@ -1037,6 +1148,10 @@ function state() {
     owned: career.owned.length,
     deal: career.deal, obj: objective(),
     dnfs: career.results.filter((r) => r.dnf).length,
+    // Season race-craft average, or null before the first race. Rounds saved
+    // before craft existed have no `craft` key and are skipped rather than
+    // counted as zero, which would read as a season of wall-scraping.
+    craft: seasonCraft(),
     // MY TEAM only; null in a driver career, where you are the wage bill.
     roster: career.roster, wages: wageBill(), hire: hirePending(),
     sponsor: sponsor(),
@@ -1050,7 +1165,7 @@ function state() {
 
 return {
   PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
-  OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX,
+  OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX, CRAFT_BASE, craftScore, seasonCraft,
   SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, anySave, firstFree,
   data, active, inCareer, conflicted, engage, load, save, saveStatus, clear, start, state, rnd, hash,
   GRANT, freeMoney, grant,
@@ -1063,6 +1178,7 @@ return {
   paceMult, teamStats,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
   objective, objectiveFor, objectiveLabel, prizeFor, settleRound, worksCost, budgetCap,
+  OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked,
   driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue, offerBar,
   round, roundsTotal, seasonDone, trackIndex,
 };

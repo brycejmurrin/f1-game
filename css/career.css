@@ -192,6 +192,28 @@
   padding-bottom: 4px; border-bottom: 1px solid var(--card-line);
 }
 
+/* The three briefs to choose between. Buttons, not rows: the whole point is
+   that one of them is a decision the player makes, and a line you can press has
+   to look like one. The chosen brief keeps the .cr-obj-line weight so the card
+   reads the same as it did when the brief was dealt; the other two recede. */
+.cr-obj-pick {
+  display: block; width: 100%; text-align: left;
+  font: inherit; font-size: var(--fs-2); font-style: italic; font-weight: 600;
+  color: var(--dim); background: none; border: 0;
+  border-bottom: 1px solid var(--card-line);
+  padding-block: calc(var(--gap) / 2); cursor: pointer; line-height: 1.35;
+}
+.cr-obj-pick.on { color: var(--text); font-weight: 700; }
+.cr-obj-pick.on::before { content: "\25B8  "; color: var(--red); }
+.cr-obj-pick:not(.on)::before { content: "\00a0\00a0\00a0"; }
+/* Pointer only, with an :active twin for touch: a tap leaves :hover stuck on iOS
+   (the css/tokens.css policy phone-touch-surface enforces). */
+@media (hover: hover) {
+  .cr-obj-pick:hover:not(.on) { color: var(--text); }
+}
+.cr-obj-pick:active:not(.on) { color: var(--text); }
+.cr-obj-pick:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
 .cr-nextrace { align-items: flex-start; gap: 2px; }
 .cr-nr-round { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--red); font-weight: 800; }
 .cr-nr-name { font-size: 18px; font-weight: 800; font-style: italic; }
@@ -515,6 +537,17 @@
 }
 .res-settle-row.total .res-settle-v { color: #fff; }
 .res-settle-row.rep { font-size: var(--fs-micro); }
+/* The round debrief under the race-craft line: what cost it, and which laps. It
+   is evidence for the number above, not another figure in the column, so it is
+   indented under it and its value is a lap list rather than a tabular figure.
+   padding-LEFT only: the shorthand on .res-settle-row keeps the vertical rhythm,
+   and a raw px indent here is what tools/check/tree-counts.mjs counts. */
+.res-settle-row.craft {
+  font-size: var(--fs-micro); padding-left: var(--gap);
+}
+.res-settle-row.craft .res-settle-v {
+  font-weight: 600; color: var(--dim); font-variant-numeric: normal;
+}
 
 /* ---------- the seats within reach ---------- */
 /* offerBar(tier) is already a visible ladder in the rules — this is it on
