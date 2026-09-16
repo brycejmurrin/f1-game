@@ -393,6 +393,16 @@ function driverSeatCount(ti) {
     ? Career.gridDrivers(team) : team.drivers;
   return (seats && seats.length) || 1;
 }
+// THE one place driverIdx moves. On the LEGENDS team the driver picker is
+// choosing a different legend, which changes that team's colours, stats, tier
+// and livery, so the entry is rebuilt here. There are two ways in — the G
+// accessor and the RaceSettings/CustomTeam hook — and when the rebuild lived in
+// only one of them the picker silently kept painting the first legend.
+function setDriverIdxAt(v) {
+  driverIdx = v;
+  const t = Teams.LIST[teamIdx];
+  if (t && t.legends && customTeam && customTeam.syncLegendsTeam) customTeam.syncLegendsTeam(v);
+}
 function clampDriverIdx() {
   if (!(driverIdx >= 0 && driverIdx < driverSeatCount(teamIdx))) driverIdx = 0;
 }
@@ -873,6 +883,11 @@ function dirtyAirMul(wake, speed) {
 // ---------- state ----------
 let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
+// The field size the painted grid was built for. In the rebuild guard with
+// id and night because the box paint is baked into the start-line decal:
+// racing the same circuit again with MY TEAM selected changes the field
+// without changing either of the other two, and the paint would be stale.
+let builtGridSlots = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 // THE LIGHTS-OUT INSTANT ON THE RACE CLOCK. AiDrive.launchMul/launchDone read
@@ -1724,13 +1739,37 @@ function buildPace(built, works) {
   return sum / 4;
 }
 
+// The teams that will actually grid, and how many cars they field. Shared by
+// makeCars() and the track build so the PAINT cannot disagree with the CARS —
+// they used to be two independent constants and the grid outgrew the boxes.
+function gridTeams() {
+  // MY TEAM and LEGENDS are both "yours" — each enters the grid only when it is
+  // the one you picked, so the field grows by one car, never by two teams.
+  return Teams.LIST.filter((t, ti) => (!t.custom && !t.legends) || ti === teamIdx);
+}
+// The seats a team actually GRIDS. Everything except LEGENDS is gridDrivers().
+//
+// The Legends team carries all twelve in `drivers` so the ordinary DRIVER picker
+// doubles as the legend picker (js/data/legends.js team()), but it fields ONE —
+// the one selected. Twelve legends on a single grid is a different game, and it
+// would need eleven more boxes besides.
+function seatsFor(team) {
+  if (!team || !team.legends) return Career.gridDrivers(team);
+  const d = team.drivers || [];
+  if (!d.length) return [];
+  return [d[Math.min(Math.max(driverIdx | 0, 0), d.length - 1)]];
+}
+function fieldSize() {
+  return gridTeams().reduce((s, t) => s + seatsFor(t).length, 0);
+}
+
 function makeCars() {
   cars = [];
   // the custom team only enters the grid when the player has selected it
-  const grid = Teams.LIST.filter((t, ti) => !t.custom || ti === teamIdx);
+  const grid = gridTeams();
   // Counted through the same accessor the loop below iterates, or MY TEAM's second
   // car would be missing from the lane spread it feeds.
-  const total = grid.reduce((s, t) => s + Career.gridDrivers(t).length, 0);
+  const total = grid.reduce((s, t) => s + seatsFor(t).length, 0);
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
@@ -1739,8 +1778,11 @@ function makeCars() {
     // MY TEAM enters TWO cars — you and the driver you hired — where the custom
     // team ships with one. gridDrivers() returns team.drivers unchanged in every
     // other case, so free play and driver careers are untouched.
-    Career.gridDrivers(team).forEach((dSeat, di) => {
-      const isP = ti === teamIdx && di === driverIdx;
+    seatsFor(team).forEach((dSeat, di) => {
+      // The Legends team's single seat IS yours: driverIdx picked WHICH legend,
+      // so it is not also a seat index here and `di === driverIdx` would put you
+      // in nobody's car for any pick past the first.
+      const isP = ti === teamIdx && (team.legends ? true : di === driverIdx);
       // MY TEAM's second car is YOUR car. `team.custom` plus a seat that is not
       // yours is the hire by construction: the custom team fields one entry
       // everywhere except a MY TEAM career (see gridDrivers), so free play and
@@ -2146,7 +2188,8 @@ function _loadTrackBody(idx, def) {
   // glowing skyline, and a night-default circuit raced by day looks like daytime.
   const sessionDark = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
     raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && def.night);
-  if (builtTrackId !== def.id || builtTrackNight !== sessionDark) {
+  const wantSlots = fieldSize();
+  if (builtTrackId !== def.id || builtTrackNight !== sessionDark || builtGridSlots !== wantSlots) {
     if (track && track.meshes) {
       gfx.freeMesh(track.meshes.floor);
       gfx.freeMesh(track.meshes.road);
@@ -2175,13 +2218,14 @@ function _loadTrackBody(idx, def) {
     // (opts.gfx) instead of reaching the GLX global directly. On the default
     // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
     // onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3 });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots: wantSlots });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
     DebrisWorld.registerFurniture(track);
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
+    builtGridSlots = wantSlots;
     aeroZ.build();              // fixed ACTIVATION ZONES for this circuit
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
@@ -3010,7 +3054,7 @@ const G = {
   invalidateDecalTextures: (id) => carDraw.invalidateDecalTextures(id),   // const from CarDraw.create(G) below — defer
   armConfirm,
   // Mutable state + helpers consumed by js/ui/select-screen.js.
-  get driverIdx() { return driverIdx; }, set driverIdx(v) { driverIdx = v; },
+  get driverIdx() { return driverIdx; }, set driverIdx(v) { setDriverIdxAt(v); },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
   store, tickUi, scheduleFlybyTrack,
   // Same deferred-arrow trick for the garage <-> select plumbing: setup-ui.js is
@@ -3202,7 +3246,8 @@ customTeam = CustomTeam.create({
   getEls: () => els,
   getTeamIdx: () => teamIdx,
   setTeamIdx: (v) => { teamIdx = v; },
-  setDriverIdx: (v) => { driverIdx = v; },
+  getDriverIdx: () => driverIdx,
+  setDriverIdx: setDriverIdxAt,
   buildSelect,
   buildSetup,
   isCarsetupVisible: () => !$("carsetup").hidden,
