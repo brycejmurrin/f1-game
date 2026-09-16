@@ -709,7 +709,9 @@ const PitLane = (function () {
       const v = Math.sqrt(2 * BOX_BRAKE * Math.max(0, togo - BOX_TOL * 0.5));
       if (v >= CRAWL_V) return v;
       // Not laterally in the box yet: keep crawling (CRAWL_V) so the lateral
-      // pull can still land it; past the box it goes round again.
+      // pull can still land it; past the box it goes round again. This asks
+      // `inBoxLat`, the ACHIEVABLE test, and must keep asking it — see the
+      // note in boxSquare for what asking the strict one did to the AI.
       Tracks.sample(G.track, c.s, _smp);
       return inBoxLat(c, _smp.hw || 0, z().side) ? v : CRAWL_V;
     }
@@ -963,9 +965,21 @@ const PitLane = (function () {
      *  arrives on the centre instead of four fifths of the way across. */
     function boxSquare(c, smp, side) {
       if (!inBoxLat(c, (smp && smp.hw) || 0, side)) return false;
+      // THE STRICT TEST IS THE DRIVER'S. An AI is placed by `laneX` and arrives
+      // at a crawl, where its steering authority is almost nothing, so asking
+      // it for the box's CENTRE is asking for something it cannot do — and a
+      // gate you cannot pass is a deadlock, not a standard. Measured both ways
+      // on a 6-lap Bahrain with the field stopping (scratch/pit-traffic.cjs):
+      // gating the latch on it stopped all twelve AI 4 m short of their own box
+      // at x −15.5 against a centre of −18.25, stopped, and a stopped car
+      // cannot steer; letting them CRAWL until square instead filled the lane
+      // with fourteen cars over 16 sim minutes and never cleared it. What
+      // makes an AI park straight is its LINE — `laneX` finishes its move
+      // SQUARE_BY_M before the box — not a test at the end of it.
+      if (!c.local) return true;
       const want = laneCentre((smp && smp.hw) || 0, side, c && c.s);
       if (Math.abs((c.x || 0) - want) > BOX_SQUARE_LAT) return false;
-      if (!(c.local && Number.isFinite(c.head) && smp && smp.t)) return true;
+      if (!(Number.isFinite(c.head) && smp && smp.t)) return true;
       let rel = c.head - Math.atan2(smp.t[0], smp.t[2]);
       while (rel > Math.PI) rel -= 2 * Math.PI;
       while (rel < -Math.PI) rel += 2 * Math.PI;
