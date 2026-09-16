@@ -176,6 +176,7 @@ const FULL = [
   "js/career/season-ui.js",
   "js/ui/flags.js",
   "js/ui/select-screen.js",
+  "js/ui/loading-screen.js",
   "js/ui/scroll-fade.js",
   "js/ui/css-zoom.js",
   "js/ui/sheet-shape.js",
