@@ -70,6 +70,26 @@ single `slipFactor` it always was — AI and remote cars carry no `brakeBias` an
 read `BB_REF`, so nothing outside the player's sheet moves. Forward bias spends
 the front's circle (entry understeer); rearward lightens the rear (rotation).
 
+**Tyre peak and load sensitivity** (2026-09-16, `js/physics/consts.js`
+`TYRE_DROP` / `TYRE_PEAK_X` / `TYRE_DROP_W` / `LOAD_SENS`). The per-axle
+lateral force is `_tyreSat(cs, slip, mu)`: a `tanh` of normalised slip
+`x = cs·slip/mu` up to the friction limit, and now PAST it a smoothstep drop of
+`TYRE_DROP` (12 %) faded in over `x` 1.5..3.0. A tyre inside its peak is
+untouched — at racing grip `x = 1.5` is ~0.29 rad of slip, the whole steering
+lock, so steering alone never reaches the drop; a lateral SLIDE does, which is
+what makes a big oversteer moment cost grip instead of rotating for free, and
+catching it early a skill. `muF`/`muR` used to scale linearly with axle load;
+each now carries `1 − LOAD_SENS·(load/static − 1)`, so the loaded axle gains
+less than its share and the unloaded one loses less. Static balance is exactly
+unchanged (the factor is 1 at rest) and the pair under full braking has ~1.3 %
+less lateral grip than at rest. The physics-characterization baseline was
+regenerated with the change and the diff read: straight-line accel is
+identical, the steady corner and off-track rows move by millimetres, and
+"trail brake into rotation" (70 m/s, brake + 0.5 steer) rotates less — peak
+slip −4.41° → −3.97° and 1.5 m/s more speed carried at the 60-step row — which
+is the load-sensitivity trim on the braking front's gain, the intended
+"hard braking mid-corner understeers" tendency made slightly firmer.
+
 **ACTIVE AERO (X-mode / Z-mode)** is the THIRD straight-line lever, next to
 BOOST (spends the battery) and OVERTAKE (a free, proximity-gated push). It adds
 NO thrust and spends NO energy — it trades **downforce for drag**, the 2026
@@ -333,10 +353,16 @@ whose grip term is `gripScale = 1 - clamp((vStd(speed) - 20)/(VMAX - 20), 0, 1)
 aero to the planner alone put planned grip (rising 65 %) and available grip
 (falling 28 %) on opposite slopes: the AI planned entry speeds it could not
 turn at and washed 0.60 m out of a short corner's apex at Monza while the long
-ones were unmoved. **The planner and the actuator disagreeing about how grip
-varies with speed is a real open defect**; until one of the two directions in
-`docs/notes/AI-FIELD-RESEARCH.md` is taken, flat `latMax` is the consistent
-choice because it does not contradict the actuator.
+ones were unmoved. That planner/actuator disagreement was CLOSED on
+2026-09-14 (`bf1979d`): `AiDrive.lateralScale` is now the one grip envelope
+(load ±8 %, grip, the 0.28 speed taper) that both the kinematic lateral step
+in `updateCar` and `brakeTarget` read, and `AiDrive.cornerSpeed` inverts the
+taper analytically so the planner's entry speed is one the actuator can turn
+at. `latMax` is no longer flat — it carries the aero-load term — but it still
+has no `aeroGrip` rise, on purpose: the actuator has none either. The 12 m
+look-ahead floor that let every AI carry `sqrt(vC² + 449)` into an apex was
+removed on 2026-09-15 with the `corner` difficulty dimension
+(`docs/notes/AI-FIELD-RESEARCH.md`).
 
 ### Racecraft: who passes, who yields
 

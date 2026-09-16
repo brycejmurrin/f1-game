@@ -1486,6 +1486,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   -webkit-appearance: none;
   cursor: pointer;
 }
+/* PLAYSTATION measures 102px at --fs-3 bold and the shared 8rem select leaves
+   it 100, so the CONTROLS page's button-name row ellipsised to "PLAYSTATIO…" on
+   a portrait phone (measured 393x852, 2026-09-16 — pre-existing, found while
+   verifying the race-settings scoping in css/menus.css). Unlike #rs-body this
+   page has no two-column grid and no one-line budget to protect, so the row can
+   simply have the two pixels. */
+#pm-padbrand > div > select { flex-basis: 8.5rem; width: 8.5rem; }
 .set-row > div > select:disabled,
 .set-row > div > button:disabled { opacity: 0.45; cursor: default; }
 .set-row + .adv-help { margin-top: 0; }
