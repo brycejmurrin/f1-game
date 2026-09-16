@@ -125,3 +125,79 @@ not be sold as a fix for race entry.
 - [gltfpack](https://meshoptimizer.org/gltf/)
 - [LearnOpenGL — Face culling](https://learnopengl.com/Advanced-OpenGL/Face-culling)
 - [How to Optimize WebGL Performance](https://www.geeksforgeeks.org/how-to-optimize-webgl-performance/)
+
+---
+
+## 5. Both of §4's first two items were built, measured, and came back negative
+
+### The other 3.7 s is NOT the load path (run 130, macos-latest, vegas)
+
+`startRace` now keeps the same stopwatch, `__apex.raceProfile()`. Across the
+four legs:
+
+| | webgpu | webgl2 | glx | wgx |
+|---|---|---|---|---|
+| startRace total | 1291 ms | 942 ms | 1021 ms | 1066 ms |
+| of which `loadTrack` | 1249 | 922 | 971 | 1037 |
+| `scenery` | 33 | 10.9 | 38.3 | 13.7 |
+| `makeCars` | 2.7 | — | 4.0 | 4.7 |
+| ALL blocking in the window | 2825 | 3893 | 4345 | 4385 |
+
+**The entire race-entry load path is about one second of a three-to-four second
+block.** `loadTrack` is essentially all of `startRace`, and the build is
+essentially all of `loadTrack` — so the build IS the load path, and the load
+path is only a quarter to a third of the freeze. Two to three and a half
+seconds of main-thread blocking happen inside the race-entry window and OUTSIDE
+`startRace` entirely.
+
+Two candidates die here with numbers rather than by argument. The lazy scenery
+fetch is 11 to 38 ms, so §1 was right to rule it out. And `makeCars` is 2.7 to
+4.7 ms, which means the roughly 800 ms of car and helmet meshes the perf ledger
+describes is **not in the load path at all** — it lands on first draw. That is
+consistent with what is left: the remaining blocking is the renderer's FIRST
+FRAMES, not the loading of anything.
+
+That reframes the whole target. A worker for the build was already a poor trade
+at 23 %; it is aimed at a quarter of a problem whose other three quarters are
+first-frame work — shader link completion, first texture upload, first mesh
+draw — which a worker cannot touch and yielding during the build cannot touch
+either. **Anything aimed at race entry should be aimed at the first frames.**
+
+### The bottom-face cull is worth 0.27 %, not 13 % — BUILT AND REVERTED
+
+Implemented exactly as specified: `addBox` skips face 5 when the caller
+supplies a predicate proving the underside is buried, and `buildProps` supplies
+one that samples the ground at all four footprint corners through the basis and
+answers only when the bottom is at or below every one of them.
+
+    vegas props   441,096 -> 439,912 verts     1,184 saved, 0.27 %
+
+The collision-and-culling note put this at about 13 %. It is 0.27 %, and the
+reason is the difference between "sits on the ground" and "is buried". Scenery
+placers set a box bottom TO the ground, usually the ground sampled at the
+centre; on any slope at all, two of its four corners then have ground BELOW the
+bottom, the underside is genuinely visible from downhill, and keeping the face
+is correct. The 13 % figure assumed every box bottom is hidden. Almost none are
+provably hidden.
+
+A first cut was stricter still — it sampled a square circumscribing the
+footprint, which for a 20 m box means sampling 14 m outside it — and returned
+0.13 %. Using the real corners through the basis doubled the yield to 0.27 %.
+Neither is worth four terrain queries on each of about 85,000 boxes, and the
+build-time cost cannot be resolved against run-to-run noise, which means it
+cannot be shown NOT to be a net loss on the very phase it was meant to help.
+
+**Reverted.** The code was correct and the measurement was against it. What
+survives is the number: this optimisation is not there, and the note that
+claimed it should be corrected rather than left to be rediscovered.
+
+### So the ranking in §4 is wrong and is replaced
+
+1. **Attribute the first frames.** Everything above says that is where the
+   freeze is. Nothing else should be built until it has a name.
+2. Vertex quantization stays where it was — a real win against graphics memory,
+   still not a race-entry fix.
+3. The generator split of the build stays worth doing on its own merits
+   (interruptible, byte-identical, no worker), but it is now explicitly NOT
+   sold as a race-entry fix either: it can only ever reach the quarter.
+4. The bottom-face cull is dead, with a number.

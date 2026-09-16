@@ -24,6 +24,17 @@ closed by measurement.**
 - Measured baseline at Las Vegas at night with a full field: 144 draw calls
   per frame.
 
+> **CORRECTED 2026-09-16 (built, measured, reverted).** The estimate below is
+> wrong by a factor of fifty. The cull was implemented — `addBox` skipping its
+> `-u` face on a predicate proving the underside is buried at all four
+> footprint corners — and removes **1,184 of 441,096 vegas prop vertices,
+> 0.27 %, not 13 %**. The error is the difference between "sits on the ground"
+> and "is buried": a placer sets the bottom TO the ground sampled at the
+> centre, so on any slope two corners have ground below it, the underside is
+> genuinely visible from downhill, and keeping the face is correct. Almost no
+> box is provably buried. Not worth four terrain queries on each of ~85,000
+> boxes; reverted. Details in `PERF-OPTIONS-2026-09-16.md` §5.
+
 There is one genuinely unclaimed culling item, and it is a bake-time change
 rather than a draw-path one: **the box emitter unconditionally emits all six
 faces, including the bottom.** It is the hottest emitter in the build, at
