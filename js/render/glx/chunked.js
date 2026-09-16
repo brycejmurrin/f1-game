@@ -67,7 +67,7 @@ const GLXChunked = (function () {
       "void main(){gl_Position=uViewProj*vec4(mix(uMin,uMax,aCorner),1.0);}";
     const OCC_FS = "#version 300 es\nprecision lowp float;out vec4 o;void main(){o=vec4(1.0);}";
     let _occOn = false, _occProg = null, _occU = null, _occVao = null, _occFailed = false;
-    const _occState = new WeakMap();      // mesh -> { flag, q, sent }
+    let _occState = new WeakMap();        // mesh -> { flag, q, sent }
     let _occDrawn = [], _occFrame = 0;
     const _occStats = { supported: null, on: false, tested: 0, culled: 0, queries: 0, passes: 0 };
 
@@ -468,15 +468,20 @@ const GLXChunked = (function () {
       _occStats.tested = tested; _occStats.culled = culled; _occStats.queries = queries;
       _occStats.on = true;
     }
-    // Turning it OFF must not leave anything hidden: every flag goes back to
-    // visible, so a toggle can never strand a chunk the pass will no longer
-    // re-test. (WeakMap has no iteration, so the state is dropped wholesale —
-    // a fresh state starts all-visible by construction.)
+    // EITHER direction of the toggle drops the state, and both directions need
+    // it. Off is covered twice over — _occVisible already short-circuits on
+    // _occOn — but ON is the one that would bite: stale flags from a previous
+    // enable would apply before a single query had re-tested them, so a chunk
+    // hidden a minute ago would be hidden again for a frame in a scene that has
+    // moved. The pass heals that within a frame or two, and a frame or two is
+    // exactly how long a hole in the world is visible. A fresh WeakMap starts
+    // every chunk visible by construction, which is the whole contract.
     function occlusionCull(on) {
       const want = !!on;
       if (want !== _occOn) {
         _occOn = want;
         _occDrawn.length = 0;
+        _occState = new WeakMap();
         if (!want) { _occStats.on = false; _occStats.tested = _occStats.culled = _occStats.queries = 0; }
         Log.info("gfx", "GLX occlusion cull " + (want ? "ON" : "off"));
       }

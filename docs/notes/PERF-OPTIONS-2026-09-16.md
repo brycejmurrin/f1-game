@@ -273,3 +273,47 @@ Between 18 % and 58 % of submitted prop vertices, and 56 % to 85 % of prop draw
 calls, are spent on geometry that contributes no pixel — on a frame that waits
 on the GPU. That is worth the query path, and it is the first item on this page
 with a measured upside rather than an argued one.
+
+---
+
+## 7. Built, and the first live boot works (run 133)
+
+`ANY_SAMPLES_PASSED_CONSERVATIVE` queries in GLX, one proxy box per candidate
+chunk at the top of `present()`, results read a frame or more later. It SHIPS
+OFF behind `apex26.occlusionCull`.
+
+macos-latest, vegas, Apple/Metal:
+
+    glx   occl: ON  tested=155  culled=146  passes=408  -> 94 % of candidate chunks skipped
+          gpuErrors=0   meanLuma=27.3
+
+Three things in that line, in order of what they settle:
+
+1. **The pass runs and the queries answer.** `tested=155` against the software
+   estimator's ~152 submitted chunks is the same scene counted two entirely
+   different ways, which is the check that the pass is looking at what it
+   should.
+2. **`gpuErrors=0`.** A new GL pass is exactly where a state leak shows up, and
+   none did.
+3. **`meanLuma=27.3`, unchanged from runs 128 and 130 with the flag off.** This
+   is the one that matters: 94 % of prop chunks skipped and the image the same.
+   It is evidence, not proof — a whole-frame average to one decimal would not
+   catch a hole smaller than 0.05 — so it says "no gross over-cull", not
+   "pixel-identical". The census keeps the screenshots; a diff is the next
+   check before this flag goes on by default.
+
+94 % against the estimator's 84.9 % is the expected direction: the real depth
+buffer has road, terrain and cars occluding as well, and the estimator only ever
+had props.
+
+One reading to watch rather than celebrate: `queries=0` on the sampled pass
+means every chunk already had a query in flight that frame. Harvesting
+demonstrably works — nothing reaches `culled=146` otherwise — but the sample
+says nothing about how MANY frames a result takes to land, and a flag that
+updates slowly is a flag that pops. That needs its own measurement.
+
+**Still not on by default, and should not be until:** a screenshot diff against
+the flag off, a moving-camera check rather than a parked one (`park()` gives a
+static view, and the popping risk is entirely in motion), and a second circuit —
+spa is the floor of the range at 55.9 % and the one most likely to spend more on
+queries than it saves.
