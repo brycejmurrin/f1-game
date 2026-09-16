@@ -442,6 +442,13 @@ jobs:
                       : "condition 2 FAILS on both ratios — the build is not the block"}`);
                 }
               }
+            // startRace phase by phase. The build is one row of it.
+              const rp = g.raceProfile || {};
+              if (rp.note || rp.error) {
+                rows.push(`${" ".repeat(8)}enter: NOT MEASURED — ${rp.note || rp.error}`);
+              } else if (rp.totalMs != null) {
+                rows.push(`${" ".repeat(8)}enter: startRace total=${rp.totalMs}ms  hottest: ${(rp.top || []).join("  ")}`);
+              }
               if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.softBlit === true ? "YES (headless readback — NOT the path a player takes)" : be.softBlit === false ? "no (direct present)" : "?"} skipBatches=${be.skipBatches} gpuErrFrames=${be.gpuErrFrames}`);
             // ...and the bookkeeping the probe keeps on itself, because run 54
             // showed tier=0 with envFace=3 and envFail=0 — the producer WAS

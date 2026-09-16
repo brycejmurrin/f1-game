@@ -1156,6 +1156,12 @@ const api = {
   // back-pressure, and this says WHICH JavaScript, which is what decides
   // whether moving the build off the main thread would move anything.
   buildProfile: () => (G.track && G.track.buildProfile) || null,
+  // The RACE-ENTRY timeline (js/game.js, "RACE-ENTRY PROFILE"): one row per
+  // phase of startRace, the build being only one of them. buildProfile() says
+  // which part of the BUILD costs; this says whether the build is the part of
+  // race entry that costs at all — measured at 23 % of it on the default
+  // backend, so the rest of this list is where the freeze actually lives.
+  raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
   // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
   // Distinct from curated FIA turns on track.def.turns / info().turns — use those
   // for official turn counts; this hook is for physics/parking at sharp bends.

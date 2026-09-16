@@ -2335,8 +2335,23 @@ function dropRaceWake() {
 // caller is a click handler that ignores the result and makes startRace() its
 // last statement, and the specs already poll `__apex.info().track != null`
 // rather than assuming race() returns built, so nothing downstream changes.
+// RACE-ENTRY PROFILE — the same stopwatch tracks.js keeps over the build, one
+// level out. Run 128/129 measured race entry on real hardware at 2193 ms of
+// contiguous main-thread block on the default backend and found the track
+// build is only 23 % of it; the other three-and-a-half seconds have no name
+// (docs/notes/MULTITHREADING-PLAN-2026-09-16.md §8). Two candidates were ruled
+// out by reading rather than by measuring — shader compilation, because glx.js
+// already takes KHR_parallel_shader_compile, and the lazy scenery fetch,
+// because the largest circuit module in the tree is 58 KB — so the rest has to
+// be attributed rather than guessed. Anything optimised before this row exists
+// is aimed at a quarter of the problem.
+let _raceProfile = [];
+function raceProfile() { return _raceProfile; }
 async function startRace() {
+  _raceProfile = []; let _rt = performance.now();
+  const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
   await ensureScenery(trackIdx);
+  rlap("scenery");
   // Completed seasons are readable, never raceable (also guarded by award()).
   if ((flow === "season" && !SeasonCal.canRace(season)) || (isCareer() && Career.conflicted())) {
     state = "menu"; $("race-settings").hidden = true;
@@ -2359,8 +2374,11 @@ async function startRace() {
   // shards, marbles and knocked-over cones — visible on the grid, and
   // RaceControl can fly a caution for debris nobody produced this race.
   DebrisWorld.reset();
+  rlap("resets");
   loadTrack(trackIdx);
-  makeCars(); coach.reset(); PerfGov.resetFrameStats();
+  rlap("loadTrack");
+  makeCars(); rlap("makeCars");
+  coach.reset(); PerfGov.resetFrameStats();
   // Qualifying keeps the full field for simulation, then drives one standing lap.
   if (isQuali()) {
     qualiField = cars;
@@ -2378,6 +2396,7 @@ async function startRace() {
     lapsTarget = SeasonCal.lapsFor(raceLaps, season);
   }
   applyRaceSettings();
+  rlap("settings");
   if (isWetRoad()) {           // "rain" = storm; "wet" = the DRIZZLE tier —
     initRainDrops();           // initRainDrops seeds sparse/short/slow streaks
     Particles.rainShow(true);  // per the drizzle* TUNE_DEFS. Gating this on
@@ -2386,8 +2405,10 @@ async function startRace() {
   }
   if (!isQuali() && gridFromQuali() && !quali.order(cars)) { openQuali(); return false; }
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
+  rlap("gridUp");
   startChangeable();
   recomputePlayerMods();
+  rlap("finish");
   if (isTimeTrial()) { records.begin(); Ghost.startLap(); }
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
@@ -2932,6 +2953,7 @@ const G = {
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP, COUNTDOWN_S,
+  raceProfile,   // the race-entry stopwatch (startRace), read by __apex.raceProfile()
   // The friction-circle constants, for js/race/quali-model.js: it runs a quasi-steady
   // lap simulation off the SAME numbers the driving model uses, so a simulated
   // qualifying time and a driven one are on one scale by construction.

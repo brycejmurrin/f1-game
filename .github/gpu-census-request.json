@@ -1,8 +1,8 @@
 {
-  "images": "macos-latest,ubuntu-latest",
+  "images": "macos-latest",
   "track": "vegas",
   "census_only": false,
   "force": "",
   "ls": "",
-  "leg": "build-profile-2026-09-16-multithreading-condition-2"
+  "leg": "race-profile-2026-09-16-attribute-the-other-3.7s"
 }

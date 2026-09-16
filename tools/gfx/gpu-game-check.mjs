@@ -308,6 +308,17 @@ try {
     return { totalMs: +total.toFixed(1), geoMs: +geo.toFixed(1), upMs: +(total - geo).toFixed(1),
       geoShare: total ? +(geo / total).toFixed(3) : null, top, rows: p };
   }), 20000, "build-profile");
+  // ONE LEVEL OUT. buildProfile says which part of the BUILD costs; this says
+  // whether the build is the part of RACE ENTRY that costs at all. On real
+  // hardware it is 23 % of the block, so the rest of this list is where the
+  // freeze actually lives.
+  out.raceProfile = await bounded(() => page.evaluate(() => {
+    const p = window.__apex && window.__apex.raceProfile && window.__apex.raceProfile();
+    if (!p || !p.length) return { note: "no raceProfile — this build predates it, or startRace never ran" };
+    const total = p.reduce((a, b) => a + b.ms, 0);
+    return { totalMs: +total.toFixed(1),
+      top: p.slice().sort((a, b) => b.ms - a.ms).slice(0, 4).map((r) => `${r.n}=${r.ms}`), rows: p };
+  }), 20000, "race-profile");
   checkpoint("race-entry-read");
 
   out.overlay = await bounded(() => page.evaluate(() => {
