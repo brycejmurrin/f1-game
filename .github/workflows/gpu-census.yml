@@ -411,6 +411,16 @@ jobs:
                   `otherBlock=${re.otherBlockMs}ms tasks=${re.tasks}`);
                 rows.push(`${" ".repeat(8)}       ${verdict}`);
               }
+            // WHICH HALF a worker would move. The entry row says the block is
+            // JavaScript; this says whether it is the track build, and which
+            // phase of it. Reported, not gated, for the same reason.
+              const bp = g.buildProfile || {};
+              if (bp.note || bp.error) {
+                rows.push(`${" ".repeat(8)}build: NOT MEASURED — ${bp.note || bp.error}`);
+              } else if (bp.totalMs != null) {
+                rows.push(`${" ".repeat(8)}build: total=${bp.totalMs}ms geo=${bp.geoMs}ms up=${bp.upMs}ms geoShare=${bp.geoShare}`);
+                rows.push(`${" ".repeat(8)}       hottest: ${(bp.top || []).join("  ")}`);
+              }
               if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.softBlit === true ? "YES (headless readback — NOT the path a player takes)" : be.softBlit === false ? "no (direct present)" : "?"} skipBatches=${be.skipBatches} gpuErrFrames=${be.gpuErrFrames}`);
             // ...and the bookkeeping the probe keeps on itself, because run 54
             // showed tier=0 with envFace=3 and envFail=0 — the producer WAS

@@ -1149,6 +1149,13 @@ const api = {
     ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
     ax: +(c.aeroX || 0).toFixed(2), err: c.errCount | 0,
   })),
+  // The track build TIMELINE (js/track/tracks.js, "BUILD PROFILE"): one row per
+  // phase in build order, `k` "geo" for emission and "up" for upload. It exists
+  // to answer the multithreading plan condition 2 — run 128 proved the
+  // main-thread block at race entry is JavaScript rather than upload
+  // back-pressure, and this says WHICH JavaScript, which is what decides
+  // whether moving the build off the main thread would move anything.
+  buildProfile: () => (G.track && G.track.buildProfile) || null,
   // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
   // Distinct from curated FIA turns on track.def.turns / info().turns — use those
   // for official turn counts; this hook is for physics/parking at sharp bends.

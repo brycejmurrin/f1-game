@@ -296,6 +296,18 @@ try {
     r.longest5 = win.slice().sort((x, y) => y[1] - x[1]).slice(0, 5).map((t) => ({ at: t[0], ms: t[1] }));
     return r;
   }), 20000, "race-entry");
+  // WHICH JavaScript. The window above says the block is main-thread JS; this
+  // says which phase of the build it is, which is the half of condition 2 the
+  // hardware-vs-software comparison cannot reach.
+  out.buildProfile = await bounded(() => page.evaluate(() => {
+    const p = window.__apex && window.__apex.buildProfile && window.__apex.buildProfile();
+    if (!p || !p.length) return { note: "no buildProfile — this build predates it, or the track never built" };
+    const total = p.reduce((a, b) => a + b.ms, 0);
+    const geo = p.filter((r) => r.k === "geo").reduce((a, b) => a + b.ms, 0);
+    const top = p.slice().sort((a, b) => b.ms - a.ms).slice(0, 4).map((r) => `${r.n}/${r.k}=${r.ms}`);
+    return { totalMs: +total.toFixed(1), geoMs: +geo.toFixed(1), upMs: +(total - geo).toFixed(1),
+      geoShare: total ? +(geo / total).toFixed(3) : null, top, rows: p };
+  }), 20000, "build-profile");
   checkpoint("race-entry-read");
 
   out.overlay = await bounded(() => page.evaluate(() => {
