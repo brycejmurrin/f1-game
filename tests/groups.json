@@ -563,6 +563,7 @@
         "tests/unit/elevation-tracks-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/determinism-replay-vm.test.mjs",
+        "tests/unit/episode-transients.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collision-ai-fixes-vm.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",

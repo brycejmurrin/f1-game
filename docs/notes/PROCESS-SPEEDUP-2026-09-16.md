@@ -34,32 +34,49 @@ push-and-wait cycle (~11 min of CI time, plus the context-switch of coming
 back to a red check) for a check that exists locally, just under the wrong
 name.
 
-**Fix**: either make `test:guards` an alias for exactly what CI's structural
-gate runs (so "guards passed locally" and "guards passed in CI" mean the same
-16-test difference doesn't exist), or — if they are deliberately different
-tiers — say so in `AGENTS.md`'s verification table and in each script's own
-`--help`/description, and name which one is the pre-push gate. Whichever
-script is authoritative should be the one every skill and this file's own
-verification table names first.
+**Fix, DONE (2026-09-16):** `test:guards` turns out to be a deliberately
+small, hand-curated 14-file subset (`package.json`'s own script literal),
+kept fast on purpose because the commit hook runs it on every commit —
+aliasing it to `test:tooling-fast` (194 files, ~5 min) would tax every single
+commit, not just pushes. The real gap was that nothing said "green
+`test:guards` does not mean CI's structural gate will be green" out loud.
+`AGENTS.md` rule 3 now says so explicitly and names the actual pre-push
+command (`test:tooling-fast` / `verify-change.mjs --fast`, which already
+calls it — this was already the documented pre-push tool; the miss was
+reaching for `test:guards` instead of it).
 
-### 1.2 Ratchets fight small, correct source edits
+### 1.2 Ratchets fight small, correct source edits — RETRACTED on closer reading
 
 Both fixes to `apex.js`/`agentview.js` in this session (a 16-item array
 addition, then a comment reword of that same addition) individually pushed
-the file over its line-count ceiling, because the ceiling is the *exact*
-current count, not a small fixed margin. Each trip needed its own
-`node tools/check/ratchets.mjs --update` + a second `test:guards` run before
-the commit was clean — two extra round-trips for one small, correct,
-already-reviewed change.
+the file over its line-count ceiling. My first-pass read of that as "the
+ceiling has no slack" was wrong, and the proposed fix below (give `lines`/
+`codeLines` a fixed +10 slack) would have been a real mistake — reading
+`tools/check/ratchets.mjs` in full on 2026-09-16 shows the ratchet already
+has a slack mechanism, and it runs the OTHER direction: `slackMax` catches a
+ceiling sitting too far *above* its current value (a stale, over-generous
+number nobody has lowered), never a reason to tolerate growth *above* the
+ceiling. The `OVER` case I hit (value > ceiling) is supposed to fire on any
+growth at all, by the tool's own design doc: "a raise is a deliberate edit
+with its reason in the commit." Loosening it there would remove exactly the
+property it exists for — silent, unreviewed growth going unnoticed — which
+its own comment already warns against ("must not quietly widen any of
+them").
 
-**Fix**: give `lines`/`codeLines` ceilings a small fixed slack (e.g. +10) the
+**What the friction actually was**: not a design flaw, but a workflow gap —
+`ratchets.mjs --update` is a step I ran only after being told to by a failing
+`test:guards`, rather than as a routine last step of any edit to a ratcheted
+file, before verifying. No mechanism change needed; ~~the original "Fix"
+below~~ is retracted.
+
+~~**Fix**: give `lines`/`codeLines` ceilings a small fixed slack (e.g. +10) the
 way `tests/data/ratchets.json`'s own doc string already allows for the four
 CSS token-adoption counts (`slack: 0` there is a *tightening*, proving the
 mechanism exists) — a deliberate LOOSENING for line-count metrics specifically,
 where the failure mode this ratchet defends against (silent, unreviewed
 growth) is not meaningfully worse at +10 lines than at +0. Keeps the "a raise
 is a deliberate, explained edit" property for anything bigger, while not
-taxing single-digit comment edits.
+taxing single-digit comment edits.~~
 
 ### 1.3 `EPISODE_TRANSIENTS` drifts by construction, and only `agent-determinism.spec.js` notices
 
@@ -73,18 +90,33 @@ between consecutive post-reset snapshots at the same seed" — i.e. it is
 already defined AS a diff against actual behaviour, just computed by hand,
 after the fact, only when someone happens to run the determinism spec.
 
-**Fix**: a static guard, cheap and mechanical — collect every
-`c.<identifier>` (or `player.<identifier>`) assignment target across
-`js/game.js` and `js/physics/*.js` via regex (the same class of scan
-`tools/check/vstd-lint.mjs` already does for a different property), diff
-against `EPISODE_TRANSIENTS` ∪ the explicit reset-block's own hand-written
-list (`c.gear = 1`, etc.), and fail on any name written during simulation
-that appears in neither. This would have caught today's 16 missing fields at
-edit time, in milliseconds, with no browser — instead of waiting for
-`agent-determinism.spec.js`'s next run to notice the symptom. Same shape as
-§1.5's proposal below; both are "a list a human maintains by re-deriving it
-from a diff" turned into "a list a script checks against the source it is
-supposed to mirror."
+**Fix, DONE (2026-09-16)**: the original idea here (a regex/AST scan
+collecting every `c.<identifier> =` target across `js/game.js` and
+`js/physics/*.js`, diffed against `EPISODE_TRANSIENTS`) turned out to be the
+wrong shape once tried — `makeCars()`, `gridUp()` and `clearRacingScratch()`
+in `js/game.js` already reset most of those fields through mechanisms
+entirely separate from `EPISODE_TRANSIENTS`'s delete-on-reset list, so a
+naive "written somewhere, not in the list" scan flags mostly false positives.
+Modelling all three coverage mechanisms statically would have been a second,
+parallel re-implementation of what `reset()` already does at runtime.
+
+`tools/check/episode-diff.mjs` already does the real check, empirically: it
+replays one seed for a few episodes in the no-browser VM
+(`tools/lib/game-vm.cjs`) and diffs the post-reset snapshot of episode 0
+against episode 1, field by field — the exact "every key that differed
+between consecutive post-reset snapshots" the `EPISODE_TRANSIENTS` header
+comment already describes, just run by hand before today. It was refactored
+to export `episodeLeaks()` (the CLI at the bottom is now a thin wrapper), and
+`tests/unit/episode-transients.test.mjs` calls it for two tracks (monza,
+singapore) and fails on any non-empty leak list. Running it once, before the
+test existed, immediately found a live, previously-unknown instance: `game.js`'s
+lazy `c.passPlan || (c.passPlan = {})` overtake-lane cache survived `reset()`
+untouched, and a later line reads `.side` off it directly whenever the
+overtake-attempt gate is closed that tick — a cold car has no `passPlan` so
+that read is always true, a warm one carries last episode's `.side`, which can
+be a stale `0`. Added to `EPISODE_TRANSIENTS`; the new test is green on both
+tracks and confirmed red (reverted the one-line fix, reran, got the exact
+failure) before being restored. ~15 s, two VM boots, in `test:game-vm`.
 
 ### 1.4 Live-render actionability timeouts are a known trap in docs, not yet a shared helper
 
@@ -128,8 +160,8 @@ situation, not a recurring tax.
 
 | tier | items | effort | saves |
 |---|---|---|---|
-| A (today, no browser, do first) | §1.1 (name the real pre-push gate), §1.2 (ratchet slack) | ~30 min | one push-and-wait cycle avoided per small source edit from here on (this session alone would have saved ~15 min) |
-| B (one sitting, no browser) | §1.3 (EPISODE_TRANSIENTS static guard), §1.4 (`clickLive` helper + one migration pass over existing `locator(...).click()` sites on live-render pages) | ~2-3 h | turns a class of bug that takes a live repro + code reading to find into a guard that fails at edit time; removes a recurring rediscovery cost from every spec that clicks a HUD button mid-race |
+| A (today, no browser, do first) | §1.1 (name the real pre-push gate) — **DONE**, `AGENTS.md` rule 3. §1.2 — **retracted**, not a real gap | ~30 min | one push-and-wait cycle avoided per small source edit from here on |
+| B (one sitting, no browser) | §1.3 (EPISODE_TRANSIENTS static guard) — **DONE**, `tests/unit/episode-transients.test.mjs`. §1.4 (`clickLive` helper + one migration pass over existing `locator(...).click()` sites on live-render pages) | ~2-3 h | turns a class of bug that takes a live repro + code reading to find into a guard that fails at edit time; removes a recurring rediscovery cost from every spec that clicks a HUD button mid-race |
 | C (as it comes up) | §1.5 (`verify-agent --tests`) | ~1 h | only pays off the next time a small known-failing set needs a base-comparison, which is not every session |
 
 ## 3. What this addendum does NOT re-litigate
