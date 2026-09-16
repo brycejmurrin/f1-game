@@ -276,6 +276,17 @@
   gap: var(--gap); min-height: 0;
   overflow: hidden;
 }
+/* The ONE spacing in this stack the compact tier never trimmed. Everything else
+   between the sheet edge and #cs-options has a compact override — head padding,
+   the budget bar, the stat block, the tab rows, the foot padding — and each is
+   documented in this file as measured. This gap was simply missed: on a 852x393
+   phone #cs-body is 165 own px of which #cs-options gets 94, so 4px back is
+   ~4% more option list for no risk, since it only separates the tab strip from
+   the list below it. The big levers here are all closed and say so in their own
+   comments; this is what was left. */
+#cs-inner:not([data-pair="on"])[data-density="compact"] > #cs-body {
+  gap: calc(var(--gap) * 0.5);
+}
 #cs-tabs {
   /* Horizontal strip, not a wrapping vertical catalogue. Overrides .pane's
      overflow-y:auto — this axis pans sideways; #cs-options owns vertical. */
@@ -340,10 +351,18 @@
      label and at 852x393 it needs 47px against a 47px column interior —
      9.5px needs 55px and still clips. min() restores the measured size and
      still shrinks if the token ever drops below 11px.
-     Kept at 8px even though the derived column count is now WIDER than the 7
-     this was measured against: the floor has to hold for the narrowest roster
-     and the narrowest sheet that reaches this tier, not for today's count. */
-  font-size: min(8px, calc(var(--fs-micro) - 3px));
+     RAISED 8px -> 9px on 2026-09-16, paid for by the `tab:` short label. With
+     SUSPENSION in the rail the widest label needed 46px of a 40px column and 8px
+     was the most that fitted; with SUSP the widest is now GEARBOX, and a sweep
+     across 852x393 / 852x344 / 740x360 puts the clipping threshold between 9.5
+     and 10px (9.5 clean, 10 clips GEARBOX, 10.5 clips EXHAUST too). 9px takes
+     the legibility and leaves ~1px of headroom rather than squeezing the last
+     half-pixel, because the caveat below still stands.
+     The floor has to hold for the narrowest roster and the narrowest sheet that
+     reaches this tier, not for today's count — a roster that grows narrows these
+     columns again, which is exactly how SUSPENSION came to be clipped. min()
+     keeps the token arm, so a --fs-micro below 12px still shrinks this. */
+  font-size: min(9px, calc(var(--fs-micro) - 3px));
   letter-spacing: 0;
   text-align: center;
   width: 100%;
@@ -593,13 +612,18 @@
   margin-left: 0;
   pointer-events: none;
   z-index: 1;
-  /* CONTAINED, because the swatch is only 56px and clips. CHROME measures ~73px
-     at --fs-micro bold with --ls-4 tracking and 5px of padding, so the badge ran
-     17px past its own overflow:hidden parent and was sliced mid-glyph (measured
-     2026-09-16, ios-ipad-landscape and desktop-narrow-860x560, 7 tiles each).
-     No width fits CHROME here at a legible size, so the badge ellipsises like
-     every other label in the app instead of being cut by the box behind it;
-     the short tags this grid also carries are unaffected. */
+  /* SIZED TO THE SWATCH IT SITS IN, which is 56px and clips. At the inherited
+     --fs-micro bold with --ls-4 tracking and 5px of padding, CHROME measured
+     ~73px and ran 17px past its own overflow:hidden parent, sliced mid-glyph
+     (2026-09-16: 7 tiles each on ios-ipad-landscape and desktop-narrow-860x560).
+     Swept in the browser: 11px with 4px of padding and --ls-1 tracking would FIT
+     the 54px interior outright (the only tags this grid carries are SATIN and
+     CHROME). NOT TAKEN: --fs-micro is 14px and the bottom of the scale, so an
+     11px literal is a new `subFloorFontSize` offender, and that ratchet carries
+     slack: 0 precisely because "a migration must lower them, not bank headroom"
+     (see tests/data/ratchets). Ellipsising costs the last two glyphs of one
+     tag; a sub-floor literal costs a guard the whole tree is held to. If the
+     scale ever gains a rung below --fs-micro, this is the rule to revisit. */
   max-width: calc(100% - 2px);
   overflow: hidden;
   text-overflow: ellipsis;
