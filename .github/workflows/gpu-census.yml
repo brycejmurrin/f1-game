@@ -542,6 +542,13 @@ jobs:
             // makes of them, and the groups their light SETS make. Locally at
             // vegas night that reads 108.5 -> 24.5 -> 15.0 a frame; this is the
             // same three numbers on real hardware.
+            // When the lamp branch did NOT run, say why rather than leaving a
+            // missing row to be inferred from. perChunkKnob and allLightsLen are
+            // the two halves of the `perChunk` gate in drawChunked.
+                if (st.plainFrames != null && !st.perChunkDraws) {
+                  rows.push(`${" ".repeat(8)}       grouping: LAMP BRANCH DID NOT RUN — ${st.lampFrames} lamp draws vs ${st.plainFrames} plain;`
+                    + ` perChunkLights=${st.perChunkKnob} allLights=${st.allLightsLen} (gate needs knob>0 AND a lights array)`);
+                }
                 if (st.perChunkDraws) {
                   rows.push(`${" ".repeat(8)}       grouping: ${per(st.perChunkDraws)} visible chunks/frame -> ${per(st.consecutiveGroups)} groups by NEIGHBOUR -> ${per(st.setGroups)} by SET`
                     + (st.setGroups > 0 ? `  (${(st.consecutiveGroups / st.setGroups).toFixed(2)}x fewer calls)` : ""));
