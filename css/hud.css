@@ -681,12 +681,18 @@ body[data-density="compact"] #hud-flag {
   font-size: var(--fs-micro);
   padding: calc(var(--gap) * 0.35) var(--gap);
 }
-/* Compact (every landscape phone): the timing row is shorter and the card
-   rides lower under it, same anchor as the sector box's own drop. */
+/* Compact (every landscape phone): the SAME anchor — right under the timing
+   row — with smaller type. It used to keep the billboard's 36svh, which put
+   the card in the middle of the road on a phone (reported with screenshots). */
 body[data-density="compact"] #announce {
-  top: calc(36svh / var(--hud-z));
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px);
   font-size: var(--fs-2);
 }
+/* UNDER A CAUTION the flag chip owns the slot under the timing row (#hud-flag,
+   100px / 72px compact), so the card steps below it — the two are read
+   together on a broadcast, never one over the other. */
+body:has(#hud-flag:not([hidden])) #announce { top: calc(100px + var(--sat) / var(--hud-z) + 38px); }
+body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(72px + var(--sat) / var(--hud-z) + 34px); }
 
 /* ---------- start lights ---------- */
 /* The gantry is driven purely by `els.lights.hidden = true/false` in
