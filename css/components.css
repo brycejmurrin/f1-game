@@ -1412,10 +1412,23 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   width: 100%;
   box-sizing: border-box;
 }
-/* 5rem label basis + 7rem select basis + two --chip-h chevrons ≈ 293px: the
-   whole row shares ONE line on a 393px phone at UI SIZE 100% (measured: 7rem /
-   8.5rem wrapped every row). 7rem holds the longest value, BROADCAST /
-   TRACKSIDE / MY TRACKS, at --fs-3 bold. */
+/* 5rem label basis + the select + two --chip-h chevrons is the ONE-LINE budget.
+   The select below is 8rem, so the hypothetical row is ~309px: it shares one
+   line while a column is ≥ 305px wide and WRAPS below that, and a wrapped row is
+   63px instead of 44px. A notched landscape iPhone gives #rs-body 598px — 299px
+   a column — so every race-settings row wraps there and five of ten sit below
+   the fold. The cliff is sharp: measured 2026-09-16, 800px viewport → 305px
+   columns → 0/10 wrapped, 760px → 285px → 10/10.
+
+   DO NOT "FIX" THIS BY NARROWING THE SELECT. Tried and reverted the same day:
+   7rem un-wraps every row (63px hidden → 0) but clips PACE ORDER on the GRID
+   row by 1px; reclaiming that pixel from the select's own padding clears the
+   value and then clips the LABELS instead (CONDITIONS needs 88px and gets 83,
+   RELIABILITY 86/83). 7.25rem clears the value and re-wraps the row. There is
+   no width at this type size that fits the longest label AND the longest value
+   AND the one-line budget — and a clipped label is a worse defect than a scroll
+   in a body that already carries overflow-y: auto by design. The trade was
+   measured rather than argued; the numbers are here so it is not re-litigated. */
 .set-row > .tune-label { flex: 1 1 5rem; min-width: 0; margin: 0; }
 .set-row > div {
   display: flex;
