@@ -107,8 +107,10 @@ run_mcp() {
   if local_ok; then
     exec node "$BIN" "${MCP_ARGS[@]}" "$@"
   fi
-  echo "Local clone missing or broken — run: $0 clone && $0 build" >&2
-  echo "Falling back to npx $MCP_NPM_PACKAGE" >&2
+  # The npm package is the normal path on a fresh container (the clone is an
+  # opt-in for hacking on the server itself), so say so only when asked:
+  # two stderr lines on every session start is noise, not a warning.
+  [[ -n "${APEX_MCP_VERBOSE:-}" ]] && echo "No local clone ($0 clone && $0 build) — running npx $MCP_NPM_PACKAGE" >&2
   exec npx -y "$MCP_NPM_PACKAGE" "${MCP_ARGS[@]}" "$@"
 }
 

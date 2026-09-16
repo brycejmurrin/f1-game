@@ -78,16 +78,24 @@ export function collect() {
   const presets = loadPresets();
   const presetIds = new Set();
   for (const cond of Object.values(presets)) for (const id of Object.keys(cond)) presetIds.add(id);
-  const sources = shippingFiles().map((rel) => ({
-    rel,
-    base: path.basename(rel),
-    src: rel === "js/lighting/knobs.js" ? stripTuneDefs(readRepo(rel)) : readRepo(rel),
-  }));
+  // ONE pass per source file, not one regex per slider per file. The consumer
+  // column is "qualified `.id` reads" — `[ident].id\b` — and 183 sliders x
+  // ~250 files of a fresh RegExp each was 12.5 of the commit hook's 16 s
+  // (`test:guards` runs `--check` on every commit; measured 2026-09-16). Every
+  // `.member` with an identifier character before the dot is tallied once,
+  // and each slider looks its id up: the same count, because `\b` after the
+  // id is exactly "the member name ends here".
+  const sources = shippingFiles().map((rel) => {
+    const src = rel === "js/lighting/knobs.js" ? stripTuneDefs(readRepo(rel)) : readRepo(rel);
+    const members = new Map();
+    for (const m of src.matchAll(/(?<=[A-Za-z0-9_$])\.([A-Za-z_][A-Za-z0-9_]*)/g))
+      members.set(m[1], (members.get(m[1]) || 0) + 1);
+    return { rel, base: path.basename(rel), members };
+  });
   const rows = defs.map((d) => {
-    const re = new RegExp(`[A-Za-z_$][A-Za-z0-9_$]*\\.${d.id}\\b`, "g");
     const consumed = [];
     for (const f of sources) {
-      const n = (f.src.match(re) || []).length;
+      const n = f.members.get(d.id) || 0;
       if (n) consumed.push(n > 1 ? `${f.base}×${n}` : f.base);
     }
     return {

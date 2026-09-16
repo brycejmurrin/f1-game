@@ -1821,23 +1821,14 @@ async function renderFrames(page, n = 10) {
 test.describe("visible()", () => {
   test.use({ viewport: LANDSCAPE });
 
-  test("reports scenery chunks inside the camera frustum", async ({ page }) => {
-    await load(page);
-    await renderFrames(page);
-    const v = await page.evaluate(() => window.__apex.scene({ visible: true, limit: 4 }));
-    expect(v.scenery.available).toBe(true);
-    expect(v.scenery.cellSizeM).toBe(72);
-    expect(v.scenery.totalCells).toBeGreaterThan(50);
-    // Some scenery must be in view, but never all of it — that would mean the
-    // cull test is passing everything and the answer is worthless.
-    expect(v.scenery.visibleCells).toBeGreaterThan(0);
-    expect(v.scenery.visibleCells).toBeLessThan(v.scenery.totalCells);
-    expect(v.scenery.nearest.length).toBeLessThanOrEqual(4);
-    for (const c of v.scenery.nearest) {
-      expect(c.distM).toBeGreaterThanOrEqual(0);
-      expect(c.sizeM.length).toBe(3);
-    }
-  });
+  // "reports scenery chunks inside the camera frustum" moved to
+  // tests/specs/webgl-probes.spec.js (2026-09-16): it reads the GLX chunk
+  // index (`track.meshes.props.chunks`, built by js/render/glx/chunked.js
+  // against a live gl) through GLX.makeFrustumPlanes / aabbInFrustum, which is
+  // a renderer probe, not a world-view contract — and the one test in this
+  // file the Node VM twin (tests/unit/agent-view-vm.test.mjs) cannot replay.
+  // Every other test here is pure `__apex` JSON; the twin runs them on the
+  // unconditional node gate, and tools/ci/twinned-specs.mjs keeps the counts equal.
 
   test("the player car projects near the centre of frame", async ({ page }) => {
     await load(page);
