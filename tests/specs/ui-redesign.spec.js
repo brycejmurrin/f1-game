@@ -331,9 +331,14 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // branch until an unrelated change happened to select it. A bare count
   // fails with "expected 6, received 7", which says a door appeared but not
   // WHICH — so the next session has to go and find it. This list says it.
+  // FIVE on this branch, not the trunk's seven: LIGHTING TUNER and CAMERA TUNER
+  // moved OUT of the index and under DISPLAY -> ADVANCED VISUALS. They are
+  // relocated, not removed — tests/unit/ui-sheets-audit.test.mjs asserts both
+  // ids still exist nested under #pm-panel-display, and this list is the same
+  // one it pins, so the two files cannot drift apart.
   expect(settings.doorIds).toEqual([
     "pm-open-controls", "pm-open-driving", "pm-open-display",
-    "pm-advanced", "pm-lighting", "pm-camtune", "pm-audio",
+    "pm-advanced", "pm-audio",
   ]);
   expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
@@ -470,6 +475,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     window.__apex.uiScale(200);
     document.getElementById("pausebtn").click();
     document.getElementById("pm-settings").click();
+    document.getElementById("pm-open-display").click();
+    document.querySelector("#pm-visual-tuners > summary").click();
     document.getElementById("pm-lighting").click();
     window.SheetShape?.reclassify();
   });

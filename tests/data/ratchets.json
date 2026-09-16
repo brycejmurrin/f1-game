@@ -38,13 +38,16 @@
       "ceiling": 555,
       "slack": 5
     },
-    "shellNodes": 1616,
+    "shellNodes": {
+      "ceiling": 1567,
+      "slack": 25
+    },
     "bareCatches": {
       "ceiling": 42,
       "slack": 15
     },
     "waitNoPolling": {
-      "ceiling": 55,
+      "ceiling": 51,
       "slack": 39
     },
     "waitForTimeout": 150,

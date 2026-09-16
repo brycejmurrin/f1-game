@@ -362,7 +362,11 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       });
       await page.waitForFunction(() => !document.getElementById("pmsettings").hidden,
         null, { polling: 50, timeout: 8_000 });
-      await page.evaluate(() => document.getElementById("pm-lighting").click());
+      await page.evaluate(() => {
+        document.getElementById("pm-open-display").click();
+        document.querySelector("#pm-visual-tuners > summary").click();
+        document.getElementById("pm-lighting").click();
+      });
       await page.waitForFunction(() => !document.getElementById("lighting").hidden,
         null, { polling: 50, timeout: 8_000 });
       await page.waitForTimeout(500);

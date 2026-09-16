@@ -1,7 +1,7 @@
 # Pause + settings information architecture
 
-Locked 2026-09-04. Scope is the pause sheet and the settings sheet only —
-title rooms, SELECT, career, garage, and Data Hub stay out.
+Updated 2026-09-15 after the code and rendered UI audit. Scope is the pause
+and settings sheets; the shared help page follows the same names and paths.
 
 Cited from `js/ui/settings-tabs.js`.
 
@@ -25,35 +25,38 @@ destinations are peers you bounce between).
 
 ## Locked decisions
 
-**Pause stays a 1-2-1-1 action sheet.** RESUME full-width; RESTART |
-SETTINGS one row; HOW TO PLAY one tap (do not bury it again); STANDINGS
-championship-only; QUIT full-width; `#pm-build`. No extra pause
-disclosure.
+**Pause keeps RESUME in the fixed header.** RESTART | SETTINGS share the
+first scrolling row. HOW TO PLAY stays one tap away; STANDINGS is
+championship-only. Driving tools live together in Settings › Driving: coach,
+practice goals, pit strategy and session review. Pause has no duplicate Driving
+shortcut or practice controls.
+QUIT stays the final destructive action, followed by playback and build info.
 
 **Settings is a drill-down stack, not tabs, not one long scroll.**
 
-Pages: `home` | `controls` | `display` | `advanced` | `audio`.
+Pages: `home` | `controls` | `driving` | `display` | `advanced` | `audio`.
 
 Settings home (`#pm-settings-index`, `.pm-doors`) is a door list:
 
-1. CONTROLS…
-2. DISPLAY…
-3. ADVANCED STEERING…
-4. LIGHTING TUNER…
-5. CAMERA TUNER…
-6. MUSIC & SOUND…
+1. CONTROLS… — input, pedals and bindings.
+2. DRIVING… — coach, practice and strategy.
+3. DISPLAY… — interface, HUD and graphics.
+4. STEERING & ASSISTS… — presets, response and aids.
+5. MUSIC & SOUND… — playback, effects and volume.
 
-STEERING and MUSIC are in-sheet pages, same chrome as DISPLAY
-(`#advanced` / `#audioset` inside `#pm-groups`). Lighting and camera
-tuner doors stay on the index and still open their existing docks.
-BACK on a page pops to home. BACK on home closes settings (to pause or
-title). Escape / pause-key / gamepad B press the same BACK control, so
-they pop the same way.
+STEERING & ASSISTS and MUSIC are in-sheet pages, with the same chrome as
+DISPLAY (`#advanced` / `#audioset` inside `.pm-groups`). Lighting and camera
+tuners open from DISPLAY › ADVANCED VISUALS. Their explanatory note says a
+race is required for the live preview; unavailable buttons stay disabled.
+BACK from a tuner returns to DISPLAY. BACK from a settings page returns to
+home and restores focus to its originating door. BACK on home closes settings
+to pause or title. Escape follows the same visible BACK control.
 
-**Always open on home.** Do not restore `settingsCategory`. Title
-Settings and pause Settings land on the same index.
+Each settings visit starts at home. Entering a page focuses its first visible,
+enabled control after page updates. Hidden input sections and controls inside
+closed disclosures are skipped; the disclosure summary itself is reachable.
 
-**STEERING is presets + OVERALL SPEED, then three stacked folds.** Presets
+**STEERING & ASSISTS is presets + OVERALL SPEED, then three stacked folds.** Presets
 are the always-visible primary (set everything). PACE is the field-wide
 slider, same heading + bare range as UI SIZE — it is not a handling feel
 and does not live inside a fold. FEEL holds tilt sensitivity and the
@@ -63,13 +66,21 @@ Folds start closed. Summaries are disclosures (steel + rule + left
 chevron) and carry the live choice (`FEEL · NORMAL · TILT 6`). No intro
 paragraph — How to Play already covers this. Control ids stay.
 
+**DRIVING starts with the coach setting and its latest tip.** PRACTICE A SECTION
+groups the goal picker, saved starting point and retry action. PIT STRATEGY
+contains next tyres and stint/energy estimates. SESSION REVIEW groups tip counts
+and incidents; TECHNICAL DATA is a nested optional disclosure. The page refreshes
+availability on entry, including from title. Practice stays limited to solo Time
+Trial and marks the session unscored after saving a starting point.
+
 **MUSIC is five closed folds.** MUSIC / SOUND / ENGINE TONE / YOUR TRACKS
 / SPOTIFY. Summaries carry state (`MUSIC · ON · ALL`). ON/OFF lives
 inside the fold body so a summary tap only opens. MUSIC and SOUND start
 closed, same as ENGINE TONE — the 2026-08 “leave the two most-used
 open” default was the DISPLAY wall again. Control ids stay.
 
-**DISPLAY is UI SIZE, then three stacked folds, then COCKPIT.** No reprint
+**DISPLAY starts with UI SIZE and groups the HUD, metrics, cockpit, renderer
+and advanced visual tuners in disclosures.** No reprint
 HUD / RENDERER headings — the fold summaries are disclosures (steel +
 rule + left chevron, same language as COCKPIT). A plate made them copies
 of HALO / TURN CHASING. HUD fold: ON/OFF,
@@ -113,8 +124,8 @@ plate + `…`. Heading = steel + `--grad-rule`, not clickable. Disclosure
 = steel + rule + left chevron. Picker = `‹ value ›`.
 
 **No new class families.** Index reuses `.pm-doors`. Panels stay
-`.pm-group`. Sheet `h2#dlg-settings` reads SETTINGS / CONTROLS / DISPLAY /
-STEERING / MUSIC & SOUND so the first-child `.pm-group-h` on those pages
+`.pm-group`. Sheet `h2#dlg-settings` reads SETTINGS / CONTROLS / DRIVING / DISPLAY /
+STEERING & ASSISTS / MUSIC & SOUND so the first-child `.pm-group-h` on those pages
 stays hidden.
 
 ## Rejected
@@ -125,3 +136,28 @@ stays hidden.
 | One long settings scroll | The 2026-08 fold measurement. Phone landscape cannot show 49% below. |
 | Accordion of every group on one sheet | Same fold problem plus heading-vs-button confusion we just spent a pass killing. |
 | Put HOW TO PLAY back under settings | It was buried there. Pause is the one-tap path. |
+
+## Shared help and driving feedback
+
+HOW TO PLAY starts with a short driving introduction and input disclosures.
+The current device is first and open on entry; other devices remain available.
+Keyboard and controller prompts come from the same live binding tables as
+CONTROLS, including references within the racing and settings help.
+
+The driving coach explains its advisory role and shows its latest tip with a
+reason under SETTINGS › DRIVING. It never changes steering, throttle or brakes. Track-limit
+warnings and WRONG WAY remain visible across driving camera modes. Overtake
+reports the reason it cannot activate; automatic aero has an explicit HUD state.
+
+UI reset controls use the shared small tap target without inheriting the full
+width of a settings action. Reset keeps each scale's own device default.
+Native slider targets use the sheet's actual fitted scale so they stay 32 px
+tall even when a short viewport caps a larger UI size preference.
+Rapid control taps keep their native click. The shell's double-tap fallback
+exempts buttons, pickers and other interactive targets; noninteractive areas
+retain the guard. Controls use `touch-action: manipulation`, following
+[WebKit's fast-tap guidance](https://webkit.org/blog/5610/more-responsive-tapping-on-ios/).
+
+These choices follow [Xbox focus guidance](https://learn.microsoft.com/en-us/xbox/accessibility/xbox-accessibility-guidelines/112)
+and [context guidance](https://learn.microsoft.com/en-us/xbox/accessibility/xbox-accessibility-guidelines/114).
+Rendered verification and its platform limits belong in the change report.

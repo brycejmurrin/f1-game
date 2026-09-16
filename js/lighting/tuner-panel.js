@@ -423,6 +423,10 @@ $("pm-lighting").onclick = () => {
   $("lighting").hidden = false;
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
   els.pmsettings.hidden = true;     // unobstructed live preview (opened from settings)
+  // Nested under DISPLAY -> ADVANCED VISUALS: hide that page too, or its own
+  // .hidden survives underneath and reappears the moment pmsettings does.
+  const displayPage = $("pm-panel-display");
+  if (displayPage) displayPage.hidden = true;
 };
 function closeLightTuner(showPauseMenu) {
   Log.info("game", "TunerPanel.close");
@@ -434,7 +438,11 @@ function closeLightTuner(showPauseMenu) {
   _ltPrevTOD = null; _ltPrevWx = null;
   $("lighting").hidden = true;
   document.body.classList.remove("lt-open");   // restore race HUD + touch controls
-  if (showPauseMenu && G.paused) els.pmsettings.hidden = false;   // back to the settings menu
+  if (showPauseMenu && G.paused) {
+    els.pmsettings.hidden = false;   // back to the settings menu
+    const displayPage = $("pm-panel-display");
+    if (displayPage) displayPage.hidden = false;   // ...specifically its DISPLAY page
+  }
 }
 $("lt-close").onclick = () => closeLightTuner(true);
 return { buildLightTunePanel, refreshLightTunePanel, closeLightTuner };
