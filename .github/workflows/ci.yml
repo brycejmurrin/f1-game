@@ -358,9 +358,11 @@ jobs:
       fail-fast: false
       matrix:
         # vm-a / vm-b: test:game-vm measured 9.2-9.4 min as ONE slice on the
-        # first matrix run (2026-09-16) — the whole job's wall. The two halves
-        # (tests/groups.json partitions of the same file list; test:game-vm is
-        # still the full set for local use) put the four heavy files two a side.
+        # first matrix run (2026-09-16) — the whole job's wall. vm-a is
+        # elevation-tracks-vm ALONE (40 circuit builds, 399 s on the dev box,
+        # 7.6 min with twelve siblings beside it on a runner); vm-b is every
+        # other file (~2 min). tests/groups.json partitions of one list;
+        # test:game-vm is still the full set for local use.
         slice: [vm-a, vm-b, slow, fast]
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
