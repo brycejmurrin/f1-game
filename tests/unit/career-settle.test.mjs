@@ -169,7 +169,11 @@ function loadDriver(ratings, opts = {}) {
         id: "c" + i, options: [{ cost: 0 }, { cost: 500 }],
       })),
     },
-    Tracks: { LIST: [], SEASON: [] },
+    // An EMPTY calendar by default, which makes seasonDone() true at round 0 —
+    // every rollover test here settles nothing and wants it that way. `rounds`
+    // gives the few that need a live season one.
+    Tracks: { LIST: [],
+      SEASON: Array.from({ length: opts.rounds || 0 }, (_, i) => ({ id: "t" + i })) },
     DriverRatings: {
       // ratings, when supplied, keys per-driver overall() by code — the market
       // pin below uses it; every other test keeps the flat 80 that parks swaps.
@@ -564,4 +568,79 @@ test("a season with no craft rows falls back to the inferred drift, not a bad ye
     `legacy craft ${craft} must be half the pace drift ${pace}, as an AI seat's is`);
   assert.notEqual(craft, -3,
     "a season with no craft rows must not be scored as a season of zeroes");
+});
+
+// ── THE BRIEF IS A CHOICE ────────────────────────────────────────────────────
+// Three briefs per round, drawn purely from the seed; only the PICK is stored.
+// The load-bearing property is that settleRound still recomputes the brief
+// rather than reading career.obj, so the settlement cannot disagree with what
+// the hub showed — and a save written before the choice existed keeps its brief.
+
+function hub() {
+  const Career = loadDriver(null, { rounds: 8 });
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  return Career;
+}
+
+test("index 0 is the brief that used to be dealt, so an old save keeps it", () => {
+  const Career = hub();
+  const career = Career.data();
+  assert.equal(career.objPick, null, "a fresh save has no pick");
+  const choices = Career.objectiveChoices(0);
+  assert.equal(choices.length, Career.OBJ_CHOICES);
+  assert.equal(JSON.stringify(Career.objective()), JSON.stringify(choices[0]),
+    "unchosen must resolve to index 0");
+  assert.equal(new Set(choices.map((o) => o.type)).size, choices.length,
+    "the three briefs must be distinct kinds, or the choice is not one");
+});
+
+test("choosing a brief changes what the hub shows and what settleRound pays", () => {
+  const Career = hub();
+  const career = Career.data();
+  const choices = Career.objectiveChoices(0);
+  assert.equal(Career.chooseObjective(2), true);
+  assert.equal(JSON.stringify(Career.objective()), JSON.stringify(choices[2]));
+
+  // Settle round 0 and check the brief that was PAID is the one that was picked.
+  career.season.round = 1;
+  const mk = (id, seat) => ({ team: { id }, seat, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  const player = mk("haas", 1);
+  const res = Career.settleRound([mk("apex", 0), player, mk("vega", 0)], player);
+  assert.equal(res.obj.type, choices[2].type,
+    "settleRound recomputes the brief; it must recompute the CHOSEN one");
+});
+
+test("a pick is keyed on its round — a stale one never applies to another", () => {
+  const Career = hub();
+  const career = Career.data();
+  Career.chooseObjective(2);
+  assert.equal(Career.objectivePick(0), 2);
+  career.season.round = 1;
+  assert.equal(Career.objectivePick(1), 0, "the next round is unchosen, not still on 2");
+  assert.equal(JSON.stringify(Career.objective()),
+    JSON.stringify(Career.objectiveChoices(1)[0]));
+});
+
+test("the pick locks once the weekend is under way", () => {
+  const Career = hub();
+  const career = Career.data();
+  Career.chooseObjective(1);
+  career.season.stage = "race";          // the sprint has run
+  assert.equal(Career.objectiveLocked(), true);
+  assert.equal(Career.chooseObjective(2), false, "no choosing with the answer in hand");
+  assert.equal(Career.objectivePick(0), 1, "and the earlier pick stands");
+  delete career.season.stage;
+  career.season.qualiOrder = ["haas:1"];  // or quali has
+  assert.equal(Career.chooseObjective(2), false);
+});
+
+test("the choices are drawn from the seed, so reloading cannot reroll them", () => {
+  const a = hub(), b = hub();
+  assert.equal(JSON.stringify(a.objectiveChoices(3)), JSON.stringify(b.objectiveChoices(3)));
+  // ...and a different round draws a different set, or the "choice" is one brief
+  // three times over the whole season.
+  const seen = new Set();
+  for (let r = 0; r < 6; r++) seen.add(a.objectiveChoices(r)[0].type);
+  assert.ok(seen.size > 1, "the dealt brief must still vary between rounds");
 });

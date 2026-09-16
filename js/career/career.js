@@ -313,6 +313,7 @@ function start(opts) {
     moves: [],            // what the winter market did, for the season summary
     paidSponsors: [],
     obj: null,
+    objPick: null,      // {round, i}: which of the round's three briefs was taken
     history: [],
     roster: null,
   };
@@ -623,11 +624,54 @@ function objectiveLabel(o) {
   return f ? f(o.value) : "";
 }
 
-function objectiveFor(r) {
+// THE BRIEF IS A CHOICE, NOT A DEMAND. One dealt objective makes a round
+// something that happens to you; three makes it a decision — take the safe
+// points brief in a bad car, or gamble the finish brief when the car is quick.
+// The three are drawn PURELY from the seed, exactly as the single one was, and
+// the player's pick is the only stored part. That keeps settleRound's invariant
+// intact: it recomputes the brief rather than reading `career.obj`, so the
+// settlement can never disagree with what the hub showed, and it still cannot
+// be rerolled by reloading.
+//
+// INDEX 0 IS THE OLD DRAW. The choices start at the kind `objectiveFor` used to
+// return and walk forward through OBJ_KINDS, so a save with no pick — every save
+// written before this existed — keeps precisely the brief it already had.
+const OBJ_CHOICES = 3;
+function objectiveAt(r, i) {
   const team = teamOf(career.team);
-  const i = Math.min(OBJ_KINDS.length - 1, Math.floor(rnd(career.year, "obj", r) * OBJ_KINDS.length));
-  const kind = OBJ_KINDS[i];
+  const base = Math.floor(rnd(career.year, "obj", r) * OBJ_KINDS.length);
+  const kind = OBJ_KINDS[(base + i) % OBJ_KINDS.length];
   return { round: r, type: kind.type, value: team ? kind.value(team) : 0, done: null };
+}
+function objectiveChoices(r) {
+  const out = [];
+  for (let i = 0; i < OBJ_CHOICES; i++) out.push(objectiveAt(r, i));
+  return out;
+}
+// A pick is keyed on its round, so a stale one from an earlier round (or from
+// last season, after rollover resets the counter) reads as "unchosen" and falls
+// back to index 0 rather than silently applying to a round it was never for.
+function objectivePick(r) {
+  const p = career && career.objPick;
+  return p && p.round === r ? clamp(p.i | 0, 0, OBJ_CHOICES - 1) : 0;
+}
+function objectiveFor(r) { return objectiveAt(r, objectivePick(r)); }
+// Locked once the weekend is under way: quali or a sprint has already decided
+// part of what some of these briefs measure, so picking after that is choosing
+// with the answer in hand.
+function objectiveLocked() {
+  const s = career && career.season;
+  return !!(s && (s.stage || s.qualiOrder || s.sprintOrder));
+}
+function chooseObjective(i) {
+  if (!career || careerConflict || seasonDone() || objectiveLocked()) return false;
+  const pick = clamp(i | 0, 0, OBJ_CHOICES - 1);
+  const r = career.season.round;
+  if (objectivePick(r) === pick && career.obj && career.obj.round === r) return true;
+  career.objPick = { round: r, i: pick };
+  career.obj = objectiveFor(r);
+  save();
+  return true;
 }
 function objective() {
   if (!career) return null;
@@ -1134,6 +1178,7 @@ return {
   paceMult, teamStats,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
   objective, objectiveFor, objectiveLabel, prizeFor, settleRound, worksCost, budgetCap,
+  OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked,
   driverStandings, teamStandings, rollover, offers, acceptOffer, marketValue, offerBar,
   round, roundsTotal, seasonDone, trackIndex,
 };

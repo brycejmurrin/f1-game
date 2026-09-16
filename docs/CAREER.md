@@ -391,8 +391,9 @@ end-of-season sheet, the one screen that sits between two seasons.
 
 ## Objectives and reputation
 
-One objective per round, drawn with `Career.rnd(year, "obj", round)` from a table of
-five kinds. Meeting it pays **+150 cr and +2 rep**; missing it costs **2 rep**.
+**Three** objectives per round, drawn with `Career.rnd(year, "obj", round)` from a
+table of five kinds; the player takes one. Meeting it pays **+150 cr and +2 rep**;
+missing it costs **2 rep**.
 
 | Type | Met when | Value |
 |---|---|---|
@@ -406,6 +407,30 @@ five kinds. Meeting it pays **+150 cr and +2 rep**; missing it costs **2 rep**.
 `game.js` counts on a separate `cutWarn` that RESETS — three warnings, one +5 s
 penalty, reset — precisely so that "no cuts at all" cannot become satisfiable by
 cutting four more times. Do not merge the two counters.
+
+### Choosing the brief
+
+One dealt objective makes a round something that happens to you; three makes it a
+decision — the safe `points` brief in a bad car, the `finish` brief when the car is
+quick. `objectiveChoices(round)` walks forward through `OBJ_KINDS` from the kind the
+single draw used to return, so the three are distinct and **index 0 is exactly the
+old brief**: a save with no pick — every save written before this existed — keeps the
+brief it already had.
+
+Only the pick is stored, as `career.objPick = {round, i}`. That is what keeps the
+invariant below intact: `settleRound` still recomputes the brief from the seed and the
+pick rather than reading `career.obj`, so the settlement cannot disagree with what the
+hub showed, and reloading still cannot reroll the choices. A pick is keyed on its
+round, so a stale one — from an earlier round, or from last season after `rollover()`
+resets the counter — reads as unchosen and falls back to index 0 rather than silently
+applying to a round it was never for. No `CAREER_V` rung is owed: `migrateCareer`
+normalises the field the way it does `moves` and `paidSponsors`.
+
+`objectiveLocked()` freezes the pick once `season.stage`, `qualiOrder` or
+`sprintOrder` is set. Quali and a sprint have already decided part of what
+`outQualMate` and `finish` measure, so choosing after them is choosing with the
+answer in hand; the hub then shows the chosen line alone, as it did when the brief
+was dealt.
 
 The save stores four **scalars** — `{round, type, value, done}` — never the sentence.
 Wording comes from `OBJ_LABELS` at render time, because prose in a save can never be

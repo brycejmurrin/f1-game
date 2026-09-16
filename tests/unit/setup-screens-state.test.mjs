@@ -100,7 +100,15 @@ function careerStub(opts = {}) {
     salaryFor: (t, rep) => Math.round(20 + rep * 1.2 + t.tier * 15),
     state: () => opts.state || null,
     conflicted: () => false, seasonDone: () => false,
-    objective: () => ({ type: "mate" }), objectiveLabel: () => "Beat your team-mate",
+    objective: () => ({ type: "mate" }), objectiveLabel: (o) => o && o.label || "Beat your team-mate",
+    // The round's three briefs. `locked` flips the hub to the single-line form.
+    OBJ_CHOICES: 3,
+    objectiveChoices: () => [{ type: "mate", label: "Beat your team-mate" },
+                             { type: "points", label: "Score championship points" },
+                             { type: "clean", label: "Clean race" }],
+    objectivePick: () => opts.objPick || 0,
+    objectiveLocked: () => !!opts.objLocked,
+    chooseObjective: () => true,
     budget: () => (opts.budget != null ? opts.budget : 1170),
     freeMoney: () => false,
     marketValue: () => 40, driverStandings: () => [], offerBar: (t) => 92 - t * 18,
@@ -376,4 +384,26 @@ test("garage: hiding the screen with no editor open is a no-op", () => {
   mo.cb([]);
   assert.equal(G.livDraftOverride, null);
   assert.ok($("cs-options").classList.contains("cs-liv-grid"));
+});
+
+test("career hub: the round's brief is three pressable choices, with the taken one marked", () => {
+  const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState(), objPick: 1 });
+  ui.openHub();
+  const picks = $("cr-left").querySelectorAll(".cr-obj-pick");
+  assert.equal(picks.length, 3, "one button per brief");
+  for (const b of picks) assert.equal(b.tagName, "BUTTON", "a line you can press must be a button");
+  const on = Array.from(picks).filter((b) => b.className.includes("on"));
+  assert.equal(on.length, 1, "exactly one brief is taken");
+  assert.equal(Array.from(picks).indexOf(on[0]), 1, "the one objectivePick() names");
+  assert.equal(on[0].getAttribute("aria-pressed"), "true");
+  assert.equal(picks[0].getAttribute("aria-pressed"), "false");
+});
+
+test("career hub: once the weekend is under way the brief is one line again", () => {
+  // Quali or a sprint has already decided part of what some briefs measure, so
+  // the hub must not offer a choice it would refuse.
+  const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState(), objLocked: true });
+  ui.openHub();
+  assert.equal($("cr-left").querySelectorAll(".cr-obj-pick").length, 0, "no choosing");
+  assert.equal(texts($("cr-left"), ".cr-obj-line").length, 1, "the chosen brief, stated");
 });

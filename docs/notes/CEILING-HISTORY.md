@@ -3176,3 +3176,16 @@ laps to go and look at. A faultless race renders none of it.
 It is a modifier on a row that already exists rather than a new block, and it
 carries no raw px: the indent is `padding-left: var(--gap)`, so the shorthand on
 `.res-settle-row` keeps the vertical rhythm and `rawSpacing` is unchanged.
+
+## 2026-09-16 — `cssClasses` 556 → 557
+
+One class: `.cr-obj-pick`, the round's three briefs on the career hub. The brief
+used to be dealt, which makes a round something that happens to you; three makes
+it a decision — the safe points brief in a bad car, the finish brief when it is
+quick. They are drawn purely from the career seed exactly as the single one was,
+and only the player's pick is stored, so `settleRound` still recomputes the brief
+instead of reading `career.obj` and the settlement cannot disagree with the hub.
+
+Buttons rather than rows, because a line you can press has to look like one; the
+chosen one keeps the `.cr-obj-line` weight so the card reads as it always did.
+No raw px: the vertical padding is `calc(var(--gap) / 2)`.

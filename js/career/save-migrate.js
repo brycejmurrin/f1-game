@@ -131,6 +131,11 @@ const SaveMigrate = (function () {
     career.seats = career.seats && typeof career.seats === "object" ? career.seats : {};
     career.offers = Array.isArray(career.offers) ? career.offers : [];
     career.obj = career.obj && typeof career.obj === "object" ? career.obj : null;
+    // Which of the round's three briefs was chosen, {round, i}. No CAREER_V rung:
+    // absent reads as index 0, which is the kind the single dealt brief always
+    // was, so a save written before the choice existed keeps the brief it had.
+    career.objPick = career.objPick && typeof career.objPick === "object"
+      && !Array.isArray(career.objPick) ? career.objPick : null;
     career.budgetLvl = Math.max(0, career.budgetLvl | 0);
     career.facility = career.facility | 0;
     career.moves = Array.isArray(career.moves) ? career.moves : [];
