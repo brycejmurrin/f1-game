@@ -6,7 +6,14 @@
 > the player's disc in `--you` through the lane, MINIMAL's cue at the head of
 > the bottom stack — not the top centre: `.hud-bottom` carries a transform, so a
 > fixed descendant is positioned against it; `PitLane.worthStopping` is the one
-> gate). §3 and §4 are still plans. Companions:
+> gate). **§3 is built** (the `served` / `merge` / `out` phases on the exit road,
+> the armed cue naming the compound, the `--pit-dist` bar from `cue.frac`, the
+> engineer's `DIRECTIONAL` wait through `PitLane.lastCue`, the stop summary at
+> the release — which also took over the "GO GO GO" banner that used to fire as
+> the car STOPPED — and the three-line teach ended by `apex26.pitTaught`; the
+> browser walk of `__apex.pit().cue` down the exit road is NOT added: the unit
+> suite drives the ladder with stub cars, and a spec that no session runs is
+> not evidence). §4 is still a plan. Companions:
 > `PIT-LANE-REDESIGN-2026-09.md` (the complex), `PIT-LIGHTING-PLAN-2026-09.md`,
 > `PIT-BAY-LOGOS-PLAN-2026-09.md`, `STREET-PIT-LANES-PLAN-2026-09.md`.
 

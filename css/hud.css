@@ -450,9 +450,10 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
 /* PIT CUE (js/race/pit-lane.js cue()). With no pit button, the entry has to
    announce itself — the arrow IS the instruction, because the thing it points
    at is 450 m of arc with nothing painted on it. Phases: counting down to the
-   entry, at the entry, committed, in the lane, being asked back INTO the lane
-   before the box, and stopped. It stays hidden unless a stop is worth making,
-   so it never becomes wallpaper. */
+   entry, at the entry, committed (naming the compound), in the lane, being
+   asked back INTO the lane before the box, stopped — then GO, MERGE while a car
+   is closing on the exit, and the metres to the end of the exit road. It stays
+   hidden unless a stop is worth making, so it never becomes wallpaper. */
 /* …and the restatement the shell needs: an author `display` beats the UA's
    `[hidden] { display: none }`, so without this the cue paints while hidden.
    tests/unit/css-layers.test.mjs caught exactly that. */
@@ -480,9 +481,25 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
    it caught this exact line. The URGENCY is carried by the second channel
    instead: the whole cue pulses, where the earlier phases pulse only the arrow.
    A static sign is the one a driver at the pit limit reads last. */
-#hud-pit[data-phase="keep"] {
+#hud-pit[data-phase="keep"],
+/* MERGE — the exit road's own KEEP LEFT: a serviced car at the limit with a
+   car closing at racing speed. Same treatment, for the same reasons. */
+#hud-pit[data-phase="merge"] {
   color: var(--you); animation: pulse var(--hud-pulse) infinite;
 }
+/* THE DISTANCE BAR. "PIT 320m" is a number; at 300 km/h a driver reads a bar
+   faster. A thin line under the cue fills as the distance runs out — to the
+   entry from CUE_M, to the box over the last BOX_CUE_M (in --you: the stretch
+   with no second chance), down the exit road to its end. One custom property,
+   --pit-dist, set from cue.frac by js/ui/hud.js. A pseudo-element, so it adds
+   nothing to the shell's nodes or the class ceiling. */
+#hud-pit { position: relative; }
+#hud-pit::after {
+  content: ""; position: absolute; left: 0; bottom: -3px; height: 2px;
+  width: calc(var(--pit-dist, 0) * 100%); background: var(--text); opacity: 0.85;
+}
+#hud-pit[data-phase="near-box"]::after,
+#hud-pit[data-phase="stop"]::after { background: var(--you); }
 body.hud-met-timing #hud-pit,
 body.hud-met-compact #hud-pit { display: none !important; }
 body.hud-met-timing #hud-tyre,

@@ -652,6 +652,9 @@ function updateHud(force) {
       if (c) {
         hText(els.pitCueText, c.text);
         els.pitCue.dataset.phase = c.phase;
+        // The distance BAR under the words: a driver at 300 km/h reads a bar
+        // faster than a number. `frac` is the cue's own fill, 0 → 1.
+        hStyle(els.pitCue, "--pit-dist", clamp(c.frac || 0, 0, 1).toFixed(2));
         // The arrow points to the PIT SIDE, which is the whole instruction.
         hText(els.pitCueArrow, (pit.info(player) || {}).side === -1 ? "\u25C0" : "\u25B6");
       }

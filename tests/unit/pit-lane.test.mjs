@@ -247,6 +247,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
              classRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
              optionRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }) },
     cautionInfo: () => ({ level: 0 }),
+    cars: [], ranked: [],
   };
   const pits = Pl.create(G);
   const zone = Pl.zoneOf(track);
@@ -456,7 +457,80 @@ test("it follows the car through the stop: armed, lane, box, then silence", () =
   c.pitState = "box";
   assert.equal(pits.cue(c).phase, "box");
   c.pitState = "out";
+  assert.match(pits.cue(c).text, /^EXIT \d+m$/, "the exit road used to be silence");
+  c.pitState = "none"; c.tyreWear = 0;
   assert.equal(pits.cue(c), null, "the cue kept talking after the stop was served");
+});
+
+test("the exit road speaks: GO after the release, MERGE while a car is closing, else the metres to the end", () => {
+  // The exit is where a serviced car rejoins at the limit into traffic at
+  // racing speed, and the cue returned null for the whole of it.
+  const { pits, zone, car, G } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9; c.s = zone.sIn + 60; c.prog = 3000; c.speed = 20;
+  c.pitState = "box"; c.pitT = 0.01;
+  pits.update(c, 0.02);
+  assert.equal(c.pitState, "out", "the hold did not release");
+  assert.equal(pits.cue(c).phase, "served");
+  assert.equal(pits.cue(c).text, "GO GO GO");
+  pits.update(c, pits.servedS + 0.1);
+  assert.notEqual(pits.cue(c).phase, "served", "GO GO GO must not outlive the release");
+  const rival = { code: "VER", prog: c.prog - 60 * 2, speed: 60, pitState: "none" };   // 2 s back, closing
+  G.cars = [c, rival];
+  assert.equal(pits.cue(c).phase, "merge");
+  assert.match(pits.cue(c).text, /MERGE — VER/, "the closing car must be NAMED");
+  rival.prog = c.prog - 60 * 4;                                                       // 4 s back: not yet
+  const out = pits.cue(c);
+  assert.equal(out.phase, "out");
+  assert.match(out.text, /^EXIT \d+m$/);
+  assert.ok(out.dist > 0 && out.dist < zone.lenM, `the exit metres must be inside the lane: ${out.dist}`);
+  assert.ok(out.frac >= 0 && out.frac <= 1, `the bar fill must be a fraction: ${out.frac}`);
+  rival.prog = c.prog - 60 * 2; rival.pitState = "lane";                               // a car in the lane is no threat
+  assert.equal(pits.cue(c).phase, "out");
+});
+
+test("the release says what the stop cost: the time held, the place you come out in, the places it cost", () => {
+  const { pits, zone, car, G, said } = commitSession();
+  const c = car(0), a = { prog: 1 }, b = { prog: 2 };
+  c.tyreWear = 0.9; c.s = zone.sIn + 60;
+  G.ranked = [c, a, b];
+  pits.arm(c, true);                          // called from P1
+  G.ranked = [a, b, c];                       // two cars went by while it was held
+  c.pitState = "box"; c.pitT = 0.01;
+  pits.update(c, 0.02);
+  const line = said.find((m) => /^STOP /.test(m));
+  assert.ok(line, `no stop summary in: ${said.join(" | ")}`);
+  assert.match(line, /^STOP \d+\.\ds — P3, -2 PLACES$/);
+  assert.ok(!said.some((m) => /TYRES ON/.test(m)), "GO GO GO at the START of the hold was a lie for the whole of it");
+});
+
+test("the armed cue names the compound the crew will fit", () => {
+  const { pits, zone, car } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9; c.s = zone.sIn + 20; c.pitArmed = true;
+  c.pitNext = { code: "S" };
+  assert.equal(pits.cue(c).text, "BOX — S");
+  c.pitNext = null;
+  assert.match(pits.cue(c).text, /^BOX — [A-Z]+$/, "with no choice made, the crew's own pick is named");
+  // …and a stop that IS called is shown, whatever the wear gate thinks.
+  c.tyreWear = 0;
+  assert.equal(pits.cue(c).phase, "armed");
+});
+
+test("the first stop is taught in three lines — the road, the line, the gate — each once", () => {
+  const { pits, zone, car, said, hw } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9; c.s = zone.sIn + 20;
+  pits.cue(c); pits.cue(c);
+  assert.equal(said.filter((m) => /TAKE THE PIT ROAD/.test(m)).length, 1);
+  c.pitState = "lane";                        // far from the box: the lane phase
+  pits.cue(c); pits.cue(c);
+  assert.equal(said.filter((m) => /STOP AT YOUR CREST/.test(m)).length, 1);
+  const boxAt = pits.boxThroughFor(c);
+  c.s = ((zone.sIn + boxAt - 40) % 5386 + 5386) % 5386; c.x = hw * 0.95 * zone.side; c.speed = 6;
+  assert.equal(pits.cue(c).phase, "near-box");
+  pits.cue(c);
+  assert.equal(said.filter((m) => /GLOWING GATE/.test(m)).length, 1);
 });
 
 test("worthStopping IS the cue's gate: the minimap's marker and the HUD's words read one function", () => {
