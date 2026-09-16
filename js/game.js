@@ -3319,6 +3319,9 @@ const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 // CAMERA TUNER panel UI (js/camera/tuner-panel.js) — per-camera-mode framing offsets.
 const { closeCamTuner } = CamTunerPanel.create(G);
+// FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
+// shot list; previews through __apex.flybyCam, touches no render-path state.
+FlybyPanel.create(G);
 // Steering-tuning sliders + presets (js/input/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,

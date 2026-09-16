@@ -727,6 +727,7 @@ declare const PitLane: GameModuleFactory;
 declare const RaceEngineer: GameModuleFactory;
 declare const CamModes: GameModuleFactory;
 declare const CamTunerPanel: GameModuleFactory;
+declare const FlybyPanel: GameModuleFactory;
 declare const CareerUI: GameModuleFactory;
 declare const SeasonUI: GameModuleFactory;
 declare const DebrisWorld: GameModuleFactory;
