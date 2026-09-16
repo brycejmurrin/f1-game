@@ -1391,7 +1391,10 @@ test.describe("Career — history", () => {
     expect(t["Race starts"]).toBe(String(cal));
     expect(t.Wins).toBe(String(archived.past.wins));
     expect(t.Podiums).toBe(String(archived.past.podiums));
-    expect(t.Points).toBe(String(archived.past.pts));
+    // WITH ITS UNIT, like the season row three lines up and like every other
+    // points figure in the app (tests/unit/setup-screens-state.test.mjs pins it).
+    // This line asserted a bare number and was the odd one out.
+    expect(t.Points).toBe(archived.past.pts + " pts");
     expect(t["Best championship"]).toBe("P" + archived.past.pos + " in 2026");
     expect(t.Championships).toBe(
       (archived.past.pos === 1 ? "1" : "0") + " drivers' · " +

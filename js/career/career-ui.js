@@ -1103,7 +1103,7 @@ function create(G) {
       row("Race starts", String(t.starts)),
       row("Wins", String(t.wins)),
       row("Podiums", String(t.podiums)),
-      row("Points", String(t.points)),
+      row("Points", t.points + " pts"),
       row("Championships", t.titles + " drivers' · " + t.cTitles + " constructors'"),
       row("Best championship", t.best ? "P" + t.best + " in " + t.bestYear : "no season finished yet"),
       row("Teams driven for", t.teams.map(teamName).join(", ")));
