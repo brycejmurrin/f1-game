@@ -85,6 +85,16 @@ export async function clickLive(page, id) {
  *   APEX_LOG=scenery:debug npm test -- tests/specs/props-over-road.spec.js
  */
 import { test as base, expect } from "@playwright/test";
+import { makeVmTest } from "./vm-page.js";
+
+/* APEX_VM_PAGE=1 swaps the BACKEND, not the specs: `test` then comes from
+ * tests/helpers/vm-page.js and the same spec file runs under
+ * `node --test tests/specs/<file>.spec.js` against tools/lib/game-vm.cjs.
+ * Everything below stays exactly as it was for Playwright — the flag only
+ * chooses which object the two `export const`s at the bottom point at, and
+ * guards the two module-scope `afterEach` registrations, which Playwright's
+ * runner refuses to accept outside a worker. */
+const VM_PAGE = process.env.APEX_VM_PAGE === "1";
 
 const JOLPICA_STUB = JSON.stringify({
   MRData: {
@@ -150,7 +160,7 @@ function captureConsole(page) {
   page.on("pageerror", (e) => lines.push(`pageerror: ${e.message}`));
 }
 
-export const test = base.extend({
+const pwTest = base.extend({
   context: async ({ context }, use) => {
     await installMocks(context);
     context.on("page", captureConsole);
@@ -235,7 +245,7 @@ export const test = base.extend({
 //                   `info`, INCLUDING the ones that were never printed
 //   page-console  — what the page actually said, in order
 // All three are free on a passing test — they are only collected when red.
-test.afterEach(async ({ page }, testInfo) => {
+if (!VM_PAGE) pwTest.afterEach(async ({ page }, testInfo) => {
   if (testInfo.status === testInfo.expectedStatus) return;
   const lines = consoleByPage.get(page);
   if (lines && lines.length) {
@@ -327,7 +337,7 @@ test.afterEach(async ({ page }, testInfo) => {
 // Safe for sharedTest, which reuses one page: its per-test reset already calls
 // headless(false) before each test, so the page wakes back up. Between tests it
 // now idles instead of rasterising, which is the same win.
-test.afterEach(async ({ page }) => {
+if (!VM_PAGE) pwTest.afterEach(async ({ page }) => {
   try {
     await page.evaluate(() => { try { window.__apex && window.__apex.headless(true); } catch (_) {} });
   } catch (_) { /* page already closed, or never had __apex — nothing to quiet */ }
@@ -362,7 +372,7 @@ test.afterEach(async ({ page }) => {
    needs a specific setting must set it, which is what `load()`-style helpers
    already do.
    ───────────────────────────────────────────────────────────────────────── */
-export const sharedTest = test.extend({
+const pwSharedTest = pwTest.extend({
   // Worker-scoped: created once, reused until the worker exits.
   _bootedPage: [async ({ browser }, use, workerInfo) => {
     const context = await browser.newContext({
@@ -442,5 +452,12 @@ async function ensureLive(page) {
   await page.goto("/");
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
 }
+
+/* The two exported entry points. Under Playwright they ARE `pwTest` /
+ * `pwSharedTest`, unchanged; under APEX_VM_PAGE=1 they are the game-vm
+ * adapter wearing the same declaration surface (test / test.describe /
+ * test.use / test.beforeEach), so no spec file changes either way. */
+export const test = VM_PAGE ? makeVmTest({ shared: false }) : pwTest;
+export const sharedTest = VM_PAGE ? makeVmTest({ shared: true }) : pwSharedTest;
 
 export { expect };

@@ -496,6 +496,8 @@ async function settle(pred, maxTurns) {
  * createGame({ track, tod, wx, verbose }) → Promise<handle>
  *   track   circuit id ("monza") — when given, race()+go() before returning
  *   storage { key: value } pre-seeded into localStorage (apex26. prefix optional)
+ *   onSandbox(sandbox, ctx)  run once after the sandbox is built and BEFORE the
+ *           first manifest file — the VM's equivalent of page.addInitScript
  *   handle  { apex, G, ctx, sandbox, step(n, dt), race(id, tod, wx, opts),
  *             settle(pred), flushTimers(), record, bootMs, trackMs }
  */
@@ -531,6 +533,12 @@ async function createGame(opts) {
   for (const k of Object.keys(seed)) {
     sandbox.localStorage.setItem(k.startsWith("apex26.") ? k : "apex26." + k, JSON.stringify(seed[k]));
   }
+  // ADDITIVE HOOK, for tests/helpers/vm-page.js's addInitScript: the one moment
+  // between "the sandbox exists" and "the first game script runs", which is
+  // where a browser runs an init script. AFTER the seed loop above, so an init
+  // script that writes localStorage WINS over the default seed — the same order
+  // the browser fixture relies on. No existing caller passes it.
+  if (typeof opts.onSandbox === "function") opts.onSandbox(sandbox, ctx);
   const onRej = (reason) => { record.rejections.push(String(reason && reason.message || reason)); };
   process.on("unhandledRejection", onRej);
 
