@@ -43,6 +43,28 @@ function freeAgents() { return FREE_AGENTS.slice(); }
 const OBJ_BONUS = 150;
 const OBJ_REP = 2;
 
+// RACE CRAFT — HOW the result was obtained, paid in REPUTATION and never in money.
+// Reputation is the seat gate and money is the parts gate; charging a scruffy race
+// to the balance would bill it twice, since a scruffy race already cost positions
+// and therefore prize money. Deductions are limited to what the sim can attribute
+// to the PLAYER'S OWN INPUTS: track limits, the time penalties those earned, and
+// wall contact. There is deliberately NO retirement term — every DNF here is a
+// Reliability.arm() draw, "accident" included (js/race/reliability.js), so nothing
+// retires a car for how it was driven and a DNF term would price a dice roll.
+// Car-to-car contact is the one term we cannot apportion (being hit looks exactly
+// like hitting), so it is the lightest and is scaled by the worst impact.
+const CRAFT_CUT = 0.10;      // per counted track-limits cut
+const CRAFT_PEN = 0.07;      // per second of time penalty — one +5s is 0.35
+const CRAFT_HIT = 0.12;      // per car contact, times the worst impact (0..1)
+const CRAFT_WALL = 0.20;     // per fresh wall strike above a graze
+const CRAFT_BASE = 0.75;     // the score a round must beat to pay anything at all
+const CRAFT_REP = 6;         // reputation per unit of craft either side of BASE
+// Asymmetric on purpose: a faultless race is worth twice what the scruffiest one
+// costs, because the contact term can fire on a driver who was merely hit. BOTH
+// bounds must be reachable — CRAFT_REP has to be at least 1/(1-BASE) times MAX or
+// the ceiling is decorative and the channel is silently symmetric.
+const CRAFT_REP_MIN = -0.75, CRAFT_REP_MAX = 1.5;
+
 const HISTORY_MAX = 10;
 const DEV_MAX = 12;
 const EXP_MAX = 40;
@@ -633,6 +655,24 @@ function prizeFor(pos) {
   return pos <= 15 ? PRIZE_MID : PRIZE_TAIL;
 }
 
+// Pure: 1.0 is a faultless race, 0 the floor. Reads only fields game.js sets on
+// the player car (cuts/penalty from track limits, hits/hitSev from collideFx,
+// wallHits from the wall model); a car that never had them scores 1.
+function craftScore(p) {
+  if (!p) return 1;
+  const loss = CRAFT_CUT * (p.cuts | 0)
+             + CRAFT_PEN * Math.max(0, p.penalty || 0)
+             + CRAFT_HIT * (p.hits | 0) * clamp(p.hitSev || 0, 0, 1)
+             + CRAFT_WALL * (p.wallHits | 0);
+  return clamp(1 - loss, 0, 1);
+}
+
+function seasonCraft() {
+  const rows = career ? career.results.filter((r) => typeof r.craft === "number") : [];
+  if (!rows.length) return null;
+  return rows.reduce((a, r) => a + r.craft, 0) / rows.length;
+}
+
 function settleRound(order, player) {
   if (!inCareer() || !player || careerConflict) return null;
   // The calendar has already moved on, so the brief that was live for this race is
@@ -661,23 +701,29 @@ function settleRound(order, player) {
   const wages = wageBill();
   career.money += prize + salary + bonus + (obj.done ? OBJ_BONUS : 0) - wages;
   career.money = Math.max(0, career.money);
-  // Two reputation channels: the result term is relative to the CAR (expectedFinish
-  // encodes the tier), the objective term is flat. A team id no longer on
-  // Teams.LIST degrades to a mid-grid expectation rather than throwing in endRace.
+  // THREE reputation channels: the result term is relative to the CAR
+  // (expectedFinish encodes the tier), the objective term is flat, and race craft
+  // is HOW the result was obtained. A team id no longer on Teams.LIST degrades to
+  // a mid-grid expectation rather than throwing in endRace. Craft is bounded well
+  // inside the other two so it colours a season rather than deciding it — and it
+  // lands on rep only: `career.money` above is already final.
+  const craft = craftScore(player);
   const repDelta = clamp(((team ? expectedFinish(team) : 11) - pos) * 0.6, -4, 6)
-                 + (obj.done ? OBJ_REP : -OBJ_REP);
+                 + (obj.done ? OBJ_REP : -OBJ_REP)
+                 + clamp((craft - CRAFT_BASE) * CRAFT_REP, CRAFT_REP_MIN, CRAFT_REP_MAX);
   career.rep = clamp(career.rep + repDelta, 0, 100);
   const dnf = player.retired ? (player.dnf || "mechanical") : null;
   const matePts = mate && !mate.retired ? (Teams.POINTS[order.indexOf(mate)] || 0) : 0;
   const dbl = career.flavour === "myteam" && pts > 0 && matePts > 0;
   const cleanRun = !player.retired && !(player.cuts | 0) && !(player.penalty | 0);
   career.results.push({ r: raced, p: pos, pts, obj: obj.done, dnf,
-                        double: dbl, clean: cleanRun });
+                        double: dbl, clean: cleanRun,
+                        craft: Math.round(craft * 100) / 100 });
   career.obj = null;          // the next round draws its own brief on demand
   const sponsorPay = settleSponsor();
   const persisted = saveStatus();
   Log.info("game", `Career.settleRound pos=${pos}${dnf ? ` dnf=${dnf}` : ""}`);
-  return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay,
+  return { pos, pts, prize, salary, bonus, wages, obj, dnf, sponsorPay, craft,
            money: career.money, rep: career.rep, save: persisted,
            unsaved: !persisted.durable };
 }
@@ -1037,6 +1083,10 @@ function state() {
     owned: career.owned.length,
     deal: career.deal, obj: objective(),
     dnfs: career.results.filter((r) => r.dnf).length,
+    // Season race-craft average, or null before the first race. Rounds saved
+    // before craft existed have no `craft` key and are skipped rather than
+    // counted as zero, which would read as a season of wall-scraping.
+    craft: seasonCraft(),
     // MY TEAM only; null in a driver career, where you are the wage bill.
     roster: career.roster, wages: wageBill(), hire: hirePending(),
     sponsor: sponsor(),
@@ -1050,7 +1100,7 @@ function state() {
 
 return {
   PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
-  OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX,
+  OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX, CRAFT_BASE, craftScore, seasonCraft,
   SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, anySave, firstFree,
   data, active, inCareer, conflicted, engage, load, save, saveStatus, clear, start, state, rnd, hash,
   GRANT, freeMoney, grant,

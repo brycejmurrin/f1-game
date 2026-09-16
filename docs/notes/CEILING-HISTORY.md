@@ -3140,3 +3140,26 @@ and says it is not a score, and a per-corner time analysis is a different claim
 about a different lap. Folding them into one sentence would have made both
 harder to read.
 
+
+## 2026-09-16 — `js/game.js` 8790 → 8803, `js/agent/apex.js` 2928 → 2936 (+4 code)
+
+Two unrelated changes, both of which had to live in `game.js` because that is
+where the field they touch is written.
+
+**+7 in `updateCar`'s AI brake look** — the deletion is one character
+(`(c.s + 12)` → `c.s`) and the rest is the comment that stops it coming back.
+The 12 m floor meant the nearest lookahead sample sat 12 m in front of the car,
+and `brakeTarget` admits a sample at `sqrt(vC² + 2·brake·0.85·d)`, so every AI
+had a standing `sqrt(vC² + 449)` allowance at the apex and never had to reach
+`vC` at all. Measured at Monza it was worth 8.2% of lap time — more than the
+whole easy→hard range was — and it bit hardest in slow corners, exactly where
+the constraint is supposed to. The difficulty ladder was re-cut against the
+corrected pace (`js/physics/consts.js`, `DIFF.corner`).
+
+**+6 for race craft** — one field-reset on `gridUp`'s existing line, two counts
+in `collideFx` (player-only and already debounced at 0.35 s, so a shunt counts
+once rather than once per relaxation pass), one in the wall model, and their
+comments. `js/career/career.js` scores them into reputation and never into
+money; `js/agent/apex.js` draws the same fields for a simulated round from the
+awareness prior it already draws cuts from, or a simulated career and a driven
+one would diverge on reputation alone.

@@ -168,6 +168,11 @@ function buildResults(order) {
     line("Driver wages", -st.wages);
     addRow("res-settle-row total", "BALANCE", `${st.money.toLocaleString()} cr`);
     addRow("res-settle-row rep", "Reputation", `${Math.round(st.rep)} / 100`);
+    // Craft pays reputation, never money, so it sits BELOW the balance line and
+    // outside the credit column — a percentage there would read as an unpaid fee.
+    if (typeof st.craft === "number") {
+      addRow("res-settle-row rep", "Race craft", `${Math.round(st.craft * 100)}%`);
+    }
     if (st.unsaved) {
       const unsaved = document.createElement("div");
       unsaved.id = "res-settle-unsaved";

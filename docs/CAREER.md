@@ -421,15 +421,53 @@ cars, so the hire is the benchmark there like anywhere else; the branch still fi
 for a `myteam` save written before `career.roster` existed, which `migrateCareer`
 fills with nothing, leaving `gridDrivers()` on the custom team's single entry.
 
-Reputation has two channels, deliberately different in kind:
+Reputation has three channels, deliberately different in kind:
 
 ```js
 rep += clamp((expectedFinish(team) - finishPos) * 0.6, -4, +6)   // relative to the CAR
      + (objectiveMet ? +2 : -2)                                   // flat: met or not
+     + clamp((craft - 0.75) * 6, -0.75, +1.5)                     // HOW you got there
 ```
 
 `expectedFinish` already encodes the tier, so beating a bad car raises reputation and
 cruising in a good one does not.
+
+### Race craft
+
+The first two channels score the **result**. `craftScore(player)` scores **how it was
+obtained**, from four marks the driver's own inputs leave on the race:
+
+```js
+craft = 1 - (0.10*cuts + 0.07*penaltySeconds + 0.12*hits*worstImpact + 0.20*wallHits)
+```
+
+`cuts` and `penalty` come from track limits, `hits`/`hitSev` from `collideFx` and
+`wallHits` from the wall model — all four written in `js/game.js` and cleared by
+`gridUp()` beside `cuts` and `penalty`. Both counts are debounced at their source
+(`collideFx` is already player-only and gated at 0.35 s; the wall counts a fresh
+strike above a graze, not every frame in contact), so ten seconds scraping a barrier
+is a handful of strikes rather than six hundred.
+
+Three properties are load-bearing, and each has a test:
+
+- **It pays reputation and never money.** A scruffy race already cost positions and
+  therefore prize money; billing the balance again would charge it twice. Reputation
+  is the seat gate and money is the parts gate, so craft decides what you are offered,
+  not what you can build.
+- **There is no retirement term.** Every DNF here is a `Reliability.arm()` draw,
+  `"accident"` included (`js/race/reliability.js`) — nothing retires a car for how it
+  was driven, so a DNF term would price a dice roll.
+- **It is asymmetric in the clean run's favour.** A faultless race is +1.5; the floor
+  is −0.75, reached at craft ≤ 0.625. Contact is the one mark the sim cannot
+  apportion (being hit looks exactly like hitting), so it carries the lowest weight,
+  is scaled by the worst impact, and the downside is capped at half the upside.
+
+Bounded well inside the other two channels, craft colours a season rather than
+deciding one: a clean year is worth about a round's objective. `Career.state().craft`
+is the season average — rounds saved before craft existed carry no `craft` key and are
+skipped rather than counted as zero. `simCareerRound()` (`js/agent/apex.js`) draws the
+same fields from the awareness prior it already draws `cuts` from, or a simulated
+career and a driven one would diverge on reputation alone.
 
 ## Reliability and retirements
 

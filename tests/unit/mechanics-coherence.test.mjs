@@ -96,3 +96,27 @@ test("adaptive presentation cannot rewind when a burst grows the delay", () => {
   a.predict(1200);
   assert.ok(a.sample(402).s<20,"collision prediction must not advance the presentation clock");
 });
+
+test("every difficulty carries both dimensions, the ladder is monotonic, and no AI out-drags the player", () => {
+  const src = readFileSync(new URL("../../js/physics/consts.js", import.meta.url), "utf8");
+  const ctx = { window: {} }; ctx.globalThis = ctx;
+  vm.createContext(ctx); vm.runInContext(src, ctx);
+  const C = ctx.window.PhysicsConsts, DIFF = C.DIFF;
+  const order = ["easy", "normal", "hard"];
+  for (const k of order) {
+    assert.ok(DIFF[k].corner > 0 && DIFF[k].corner <= 1, `${k} corner ${DIFF[k].corner} is a real factor at or below the grip model`);
+    assert.ok(DIFF[k].ai > 0, `${k} has a pace scale`);
+  }
+  for (let i = 1; i < order.length; i++) {
+    const lo = DIFF[order[i - 1]], hi = DIFF[order[i]];
+    assert.ok(hi.ai > lo.ai, `${order[i]} is faster than ${order[i - 1]}`);
+    assert.ok(hi.corner >= lo.corner, `${order[i]} corners at least as close to the limit as ${order[i - 1]}`);
+  }
+  // The fastest team's TIER_V times the best driver's skill ceiling (1.0) times
+  // the top pace scale must stay under the player's own 1.0, or a same-spec AI
+  // out-drags the player on the straight — the one cheat players reliably catch.
+  const teams = readFileSync(new URL("../../js/data/teams.js", import.meta.url), "utf8");
+  const tierTop = parseFloat(teams.match(/TIER_V = \[([0-9.]+)/)[1]);
+  assert.ok(tierTop * DIFF.hard.ai < 1, `top AI scale ${(tierTop * DIFF.hard.ai).toFixed(4)} stays under the player`);
+  assert.ok(C.BAND_CEIL <= 1, `a rubber-banded AI is capped at ${C.BAND_CEIL}, not above the player`);
+});

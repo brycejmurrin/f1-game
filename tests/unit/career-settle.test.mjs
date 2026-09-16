@@ -389,3 +389,101 @@ test("silly season moves the driver overall() rates highest, not a coin flip", (
   assert.equal(move.from, "vega");
   assert.equal(move.to, "apex");
 });
+
+// ── RACE CRAFT pays reputation and NEVER money ───────────────────────────────
+// The whole point of the channel: a scruffy race already cost positions and
+// therefore prize money, so billing the balance again would charge it twice.
+// These tests settle the SAME classified order twice, changing only the marks
+// the player left on the way there.
+
+/** Settle a fixed P3 with the given craft-input fields on the player car. */
+function settleCraft(marks) {
+  const Career = load();
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.round = 1;
+  const repBefore = career.rep;
+
+  const mk = (id) => ({ team: { id }, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  const player = Object.assign(mk("custom"), marks);
+  const order = [mk("haas"), mk("haas"), player, mk("haas"), mk("custom")];
+  for (let i = 0; i < 15; i++) order.push(mk("haas"));
+
+  const res = Career.settleRound(order, player);
+  return { Career, res, repBefore, row: career.results[career.results.length - 1] };
+}
+
+test("craftScore is 1.00 for a faultless race and falls with each kind of mark", () => {
+  const Career = load();
+  assert.equal(Career.craftScore({}), 1, "no marks at all is a perfect score");
+  assert.equal(Career.craftScore(null), 1, "a missing car cannot be scored down");
+  // 2 cuts (0.20) + a single +5s penalty (0.35) = 0.55 off.
+  assert.ok(Math.abs(Career.craftScore({ cuts: 2, penalty: 5 }) - 0.45) < 1e-9);
+  // Contact is scaled by the WORST impact: the same hit at half severity costs half.
+  assert.ok(Career.craftScore({ hits: 1, hitSev: 1 }) < Career.craftScore({ hits: 1, hitSev: 0.5 }));
+  assert.equal(Career.craftScore({ wallHits: 99 }), 0, "the score floors at zero");
+});
+
+test("a RETIREMENT does not touch craft — every DNF here is a reliability draw", () => {
+  // js/race/reliability.js draws "accident" from the same table as "gearbox";
+  // nothing retires a car for how it was driven, so charging a DNF would price
+  // a dice roll rather than the driving.
+  const Career = load();
+  assert.equal(Career.craftScore({ retired: true, dnf: "accident" }), 1);
+});
+
+test("the same P3, scruffy by CONTACT: reputation differs, the money is identical", () => {
+  // Contact and wall strikes are the craft-only inputs — no objective reads them
+  // (objectiveMet's "clean" brief looks at retired/cuts/penalty), so this pair
+  // isolates the new channel completely.
+  const clean = settleCraft({});
+  const scruffy = settleCraft({ hits: 2, hitSev: 0.8, wallHits: 3 });
+
+  assert.equal(clean.res.pos, scruffy.res.pos, "same classified position");
+  assert.equal(clean.res.pts, scruffy.res.pts, "same points");
+  assert.equal(clean.res.prize, scruffy.res.prize, "same prize money");
+  assert.equal(clean.res.money, scruffy.res.money,
+    "RACE CRAFT MUST NOT REACH THE BALANCE — it is a reputation channel only");
+  assert.ok(clean.res.rep > scruffy.res.rep,
+    "the clean round must be worth more reputation than the scruffy one");
+});
+
+test("cuts and penalties cost money only through the brief that already priced them", () => {
+  // Round 0 at seed 7 draws the "clean" objective, so cuts DO move the balance —
+  // by exactly OBJ_BONUS, and by nothing else. Craft adds no second money term.
+  const clean = settleCraft({});
+  const cut = settleCraft({ cuts: 4, penalty: 5 });
+  assert.equal(clean.res.obj.done, true);
+  assert.equal(cut.res.obj.done, false, "four cuts must fail the clean brief");
+  assert.equal(clean.res.money - cut.res.money, clean.Career.OBJ_BONUS,
+    "the whole money gap is the missed brief — craft contributes nothing");
+});
+
+test("the craft reputation term is bounded, and asymmetric in the clean run's favour", () => {
+  const clean = settleCraft({});
+  const floored = settleCraft({ wallHits: 99 });   // craftScore 0, well past the clamp
+  const gain = clean.res.rep - clean.repBefore;
+  const loss = floored.res.rep - floored.repBefore;
+  // Both rounds share every other reputation term and both meet the clean brief
+  // (wall contact is not a track-limits cut), so the gap is the craft term alone:
+  // +1.5 at the top, -0.75 at the bottom (CRAFT_REP_MAX / CRAFT_REP_MIN).
+  assert.ok(Math.abs((gain - loss) - 2.25) < 1e-9,
+    `craft term spans 2.25 rep end to end, got ${gain - loss}`);
+});
+
+test("craft is recorded on the results row and averaged across the season", () => {
+  // state() is not reachable from this loader (it reads Tracks.SEASON, which the
+  // stub above does not carry); seasonCraft() is the value state() exposes.
+  const { Career, row } = settleCraft({ cuts: 1 });
+  assert.equal(row.craft, 0.9, "one cut costs 0.10, rounded to two places on the row");
+  assert.ok(Math.abs(Career.seasonCraft() - 0.9) < 1e-9, "one race: the average is that race");
+});
+
+test("rounds saved before craft existed are skipped, not counted as zero", () => {
+  const { Career } = settleCraft({});
+  const career = Career.data();
+  career.results.unshift({ r: 0, p: 8, pts: 4, obj: false, dnf: null });   // no craft key
+  assert.equal(Career.seasonCraft(), 1,
+    "a legacy row must not drag a faultless season down to 0.50");
+});

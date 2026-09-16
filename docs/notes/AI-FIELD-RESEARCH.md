@@ -91,11 +91,25 @@ project does not have.
 
 ## Open, with citations, from the code audit
 
-- `js/game.js:4823` starts the corner look **12 m ahead**, so the AI's real
-  corner speed is `sqrt(vC² + 449)`, not `vC`. Worth **6.9 % of lap time at
-  Monza and 12.3 % at Monaco** — several times the entire easy→hard range — and
-  it flattens skill and difficulty in slow corners, which is why hard is only
-  1.6 % faster than normal.
+- ~~`js/game.js:4823` starts the corner look **12 m ahead**~~ — FIXED
+  2026-09-16 (`const ss0 = Math.ceil(c.s / dsN) * dsN`). The floor put the
+  nearest sample 12 m in front of the car and `brakeTarget` admits a sample at
+  `sqrt(vC² + 2·brake·0.85·d)`, so every AI carried a standing `sqrt(vC² + 449)`
+  allowance into the apex and never had to reach `vC`. **Re-measured before
+  removing it: 8.2 % of lap time at Monza** (119.55 → 129.40 s field median in
+  the VM), larger than the 6.9 % this row claimed. Removing it alone would have
+  made the field slow, so the difficulty ladder was re-cut against the corrected
+  pace: `DIFF` gained a `corner` dimension (easy 0.93 / normal 0.97 / hard 1.00)
+  so difficulty scales the AI's willingness to commit to a corner and not just
+  its ground speed. That second half is the real change: difficulty was one
+  number, and a single ground-speed scale cannot make an easy field brake early
+  and a hard field commit.
+  Monza now settles at 138.97 / 132.50 / 125.02 and Monaco at 99.25 / 96.17 /
+  92.08: monotonic, and a ~10 % easy→hard spread against the 1.6 % measured
+  here. `hard.ai` is capped at 1.030 so `0.9695 × 1.030 = 0.9986` keeps the
+  quickest AI just inside the player's top-speed scale, and `BAND_CEIL` is
+  clamped to 1 because the derived value would otherwise have licensed a
+  rubber-banded easy car to out-run the player outright.
 - ~~The AI's corner model has **no downforce term**~~ — FIXED 2026-09-09, see
   "Downforce in the AI's corner model" below. (The first cut of this row also
   claimed the AI was "superhuman in hairpins, 2.2× a player's grip": wrong, and
@@ -104,9 +118,15 @@ project does not have.
   within ~3 %. The asymmetry was one-sided and lived entirely in the FAST
   corners, where the player had up to 65 % more grip than the AI credited
   itself with.)
-- `js/physics/ai-drive.js:609` returns 0 whenever there is no curvature 18–70 m
-  ahead, so **the AI cannot defend on a straight** — the most recognisable
-  defensive move in the sport is structurally impossible.
+- ~~`js/physics/ai-drive.js:609` returns 0 whenever there is no curvature
+  18–70 m ahead, so **the AI cannot defend on a straight**~~ — ALREADY FIXED
+  when this row was re-checked on 2026-09-16; the line number had gone stale
+  and the row with it. `defendPull` has carried a straight branch since the
+  covering work: below `|kA| = 0.004` the side comes from the chaser's own
+  lateral offset (dead behind is not yet a move to cover), at three fifths of
+  the corner pull, and `defendOnce` still spends one move per straight.
+  `tests/unit/ai-drive.test.mjs` pins both directions and the dead-behind
+  no-op. Nothing to do; the row is struck rather than actioned.
 - ~~On easy, `0.851 × 1.18 = 1.004` beats `DIFF.hard.ai = 0.980`~~ — FIXED
   2026-09-09 (`BAND_CEIL` in js/game.js caps a banded AI at the top of the
   ladder, `DIFF.hard.ai · (1 + DIFF.hard.band)` = 0.9996). It only ever bit on

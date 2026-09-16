@@ -1881,7 +1881,7 @@ function gridUp(preOrder) {
     c.speed = 0; c.accSm = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
-    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
+    c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0; c.hits = 0; c.hitSev = 0; c.wallHits = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.hYieldT = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
@@ -3651,6 +3651,11 @@ function collideFx(a, b, impact) {
   shake = Math.min(1, shake + impact * 0.45);
   hitStop = Math.max(hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
   pc.collideT = 0.35;
+  // Career reads these at settlement. Counted HERE because this hook is already
+  // player-only and already debounced at 0.35 s, so one shunt is one count
+  // rather than one per relaxation pass. Nothing in physics reads them back.
+  pc.hits = (pc.hits | 0) + 1;
+  pc.hitSev = Math.max(pc.hitSev || 0, impact);
   // Visual-only spark cue: render() consumes this flag and fires a Particles
   // burst at the car's world position (collideFx has no world coords here).
   // Never read by physics — headless runs are unaffected.
@@ -3988,7 +3993,14 @@ function updateCar(c, dt, ranked) {
     // on the nodes, the window gains one node ahead and drops one behind per
     // node travelled, and the target moves as smoothly as the LUT.
     const dsN = track.total / track.n;
-    const ss0 = Math.ceil((c.s + 12) / dsN) * dsN;
+    // FROM THE CAR, not 12 m ahead of it. The old floor meant the nearest
+    // sample sat 12 m away, and brakeTarget's entry speed for a sample is
+    // sqrt(vC² + 2·brake·0.85·d) — so the AI only ever had to be at
+    // sqrt(vC² + 449) by the time the corner arrived, and never at vC. It was
+    // free speed in every corner, worth more than the whole easy→hard range,
+    // and it flattened skill and difficulty most in the slow corners where the
+    // constraint should bite hardest (docs/notes/AI-FIELD-RESEARCH.md).
+    const ss0 = Math.ceil(c.s / dsN) * dsN;
     for (let ss = ss0, d = ss0 - c.s; d < look; ss += dsN, d += dsN) {
       // Tracks.curvature / pathK / bankAngle all wrap s themselves.
       const kk = Tracks.curvature(track, ss);
@@ -3998,7 +4010,7 @@ function updateCar(c, dt, ranked) {
       // signed/adverse bank must not boost the player while it cuts the AI.
       AiDrive.pushLook(d, onLine ? TrackLine.pathK(track, ss) : kk, Math.abs(Tracks.bankAngle(track, ss)));
     }
-    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX;
+    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = dd.corner;
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * tyres.tractionMul(c); _aiBr.pace = PACE; _aiBr.vmax = VMAX;
     _aiBr.grip = gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
@@ -5040,6 +5052,7 @@ function updateCar(c, dt, ranked) {
         const wallAlign = (1 - Math.exp(-(4 + incidence * 8) * dt))
                         * clamp(Math.abs(c.speed) / 8, 0, 1);
         c.head -= rel * wallAlign;
+        if (c.isPlayer && !c.wasOnWall && incidence > 0.12) c.wallHits = (c.wallHits | 0) + 1;
         if (track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
           if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
