@@ -1,5 +1,5 @@
 /**
- * @doc Classifies process-table lines for Playwright occupancy (`playwright test` / `@playwright/mcp`) — the MCP lock's oracle; an idle host MCP server is reported, not busy.
+ * @doc Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy.
  * @skill check-changes
  * Classify process-table lines for Playwright occupancy.
  *

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Garage shots, ONE Chromium: walks teams × liveries/any livery field/parts × cameras (views, absolute az/el/dist, zoom, pan) × viewports; clears dead DISPLAY for headless WebGL.
+// @doc Garage shots, ONE Chromium: walks teams x liveries x parts x cameras x viewports; clears dead DISPLAY.
 //   node tools/shot/garage-angles.mjs [--team=redbull,mclaren|all] [--views=spine] [--livery=default,rb_white]
 //     [--spineLogo=wrap,saddle] [--finShape=blade] [--cover=#101014] [--part.engine=turbo,stock]
 //     [--design='[{"spineLogo":"wrap"},…]'|@file.json] [--zip] [--base=<liveryId>] [--against=HEAD~1]
