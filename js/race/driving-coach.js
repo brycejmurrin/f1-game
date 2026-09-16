@@ -332,19 +332,34 @@ const DrivingCoach = (function () {
         : "Net energy per lap: " + (f.energyPerLap * 100).toFixed(1) + "%" + (f.energyLaps == null ? " · current pattern sustains charge" : " · charge lasts ≈ " + f.energyLaps.toFixed(1) + " laps") + " · estimated from recent sectors";
       const net = insights.network(), connection = $("pm-connection");
       if (connection) { connection.hidden = !net; connection.textContent = net ? net.text : ""; }
+      // AN EMPTY LIST SAYS WHY IT IS EMPTY, like every other readout in this
+      // function — the tip line, the lap report and the energy forecast all
+      // carry a sentence for the no-data case. These two lists were the only
+      // ones that rendered a bare <ol>, so a clean session (the common one)
+      // opened SESSION REVIEW on a heading and a blank gap that read as
+      // half-loaded rather than as "nothing happened".
+      const emptyRow = (list, text) => {
+        const li = document.createElement("li");
+        li.textContent = text;
+        list.appendChild(li);
+      };
       const journal = $("pm-incident-log");
       if (journal) {
         journal.textContent = "";
-        for (const e of insights.journal().slice(-20)) { const li = document.createElement("li"); li.textContent = e.time.toFixed(1) + "s · " + e.text; journal.appendChild(li); }
+        const rows = insights.journal().slice(-20);
+        for (const e of rows) { const li = document.createElement("li"); li.textContent = e.time.toFixed(1) + "s · " + e.text; journal.appendChild(li); }
+        if (!rows.length) emptyRow(journal, "No incidents yet — penalties, contact, off-track moments and pit phases appear here as they happen.");
       }
       const decisions = $("pm-ai-decisions");
       if (decisions) {
         decisions.textContent = "";
+        let planned = 0;
         for (const c of G.cars || []) if (!c.human && c.passPlan) {
           const li = document.createElement("li"), p = c.passPlan;
           li.textContent = c.code + " · " + p.reason + " · left: " + p.left.reason + " · right: " + p.right.reason;
-          decisions.appendChild(li);
+          decisions.appendChild(li); planned++;
         }
+        if (!planned) emptyRow(decisions, "No rival is lining up a pass right now.");
       }
       const note = $("pm-pit-estimate");
       const names = new Map(G.pits.ownedTyres().map(o => [o.id, o.label]));
