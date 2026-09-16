@@ -49,6 +49,7 @@ async function fresh() {
   const a = g.apex;
   a.tyres({ level: "real" });
   a.go();
+  a.rivals([]);                          // the field away: a player crawling on the pit straight is hit by it (measured: an abort case read 80 km/h after a shunt)
   a.setPhysics({ pace: 1, drift: 0 });   // drift 0: steer 0 holds the lateral
   return a;
 }
