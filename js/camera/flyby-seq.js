@@ -336,12 +336,6 @@ const FlybySeq = (function () {
 
   // ---- the shipped sequence ------------------------------------------------
 
-  /** Three shots against the loading screen's flyby budget. Written to read as
-   *  an arrival: the grid you are about to start from, the corner you will meet
-   *  first, then the straight you will be racing down.
-   *
-   *  Durations are FRACTIONS of the budget, not seconds, so the sequence keeps
-   *  its shape when the screen's timing is retuned (it has been, twice). */
   /* EIGHT SHOTS, ONE EIGHTH OF THE BUDGET EACH — 3 s a shot at FLY_MS 24 s.
      Durations stay fractions so retuning the budget rebalances all eight rather
      than truncating the last.
