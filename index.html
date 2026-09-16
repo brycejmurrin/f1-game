@@ -424,7 +424,7 @@
            spends, one over seconds and one over laps. Hidden whenever TYRE WEAR
            is off, which is the shipped default, so the bar costs nothing to a
            player who never turns it on. -->
-      <div id="hud-tyre" hidden><span id="hud-tyre-code">M</span><div id="hud-tyre-bar"><div id="hud-tyre-fill"></div></div></div>
+      <div id="hud-tyre" hidden><span id="hud-tyre-code">M</span><div id="hud-tyre-bar"><div id="hud-tyre-fill"></div></div><span id="hud-plan"></span></div>
       <!-- PIT ENTRY. There is no pit button — a stop is called by steering into
            the entry (js/race/pit-lane.js) — so the window has to announce
            itself, or the gesture is undiscoverable. Shows the distance to the
@@ -450,7 +450,11 @@
   <span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span>
 </div>
 
-<div id="announce" role="status" hidden></div>
+<!-- THE RADIO. Every banner — the engineer, the coach, race control, the pit
+     cues' announcements — is a radio message now, not a billboard: a small
+     card with the channel it came in on (WHO) and the words in quotes, the
+     way a broadcast shows team radio. js/game.js showAnnounce fills both. -->
+<div id="announce" role="status" hidden><span id="announce-who"></span><span id="announce-text"></span></div>
 
 <!-- TOUCH-mode drag affordance: a ring at the point the finger went down, so
      the anchor of an otherwise invisible control is visible for a moment.
@@ -1851,6 +1855,19 @@
           <button id="rs-tyres-next" type="button" data-step="1" aria-label="Next tyre wear">&rsaquo;</button>
         </div>
       </div>
+      <!-- STRATEGY: the player's reference plan for THIS circuit (js/race/pit-lane.js
+           planFor) — AUTO or a pinned stop count, drawn as a stint bar in the
+           compounds' colours with the lane's pit loss beside it. Shown only when
+           TYRE WEAR is on and this is a race, like the row above. -->
+      <div id="rs-plan" class="set-row" role="group" aria-labelledby="rs-plan-label" hidden>
+        <span class="tune-label" id="rs-plan-label">STRATEGY</span>
+        <div>
+          <button id="rs-plan-prev" type="button" data-step="-1" aria-label="Previous strategy">&lsaquo;</button>
+          <select id="rs-plan-sel" aria-labelledby="rs-plan-label"></select>
+          <button id="rs-plan-next" type="button" data-step="1" aria-label="Next strategy">&rsaquo;</button>
+        </div>
+      </div>
+      <div id="rs-plan-bar" hidden><div id="rs-plan-stints"></div><span id="rs-plan-loss"></span></div>
       <div id="rs-reliab" class="set-row" role="group" aria-labelledby="rs-reliab-label">
         <span class="tune-label" id="rs-reliab-label">RELIABILITY</span>
         <div>

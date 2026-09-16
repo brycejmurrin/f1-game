@@ -108,6 +108,60 @@ green on the unmodified path; one push for the slice time.
 **Saves.** ~4.5 min on every deploy push's fast tier (the floor moves to the
 next slice, ~2 min). Effort half a day.
 
+**LANDED 2026-09-16 — steps 1 and 2; step 3 deliberately not attempted.**
+`tools/lib/game-vm-pool.cjs` (`createPool`/`run`/`stats`/`close`) runs one
+circuit's probe per worker, compiled from SOURCE in the worker and called as
+`probe(g, args, state)`, with every `assert` still in the parent. Size
+`min(4, cores)`, recycle after 8 circuits or 1200 MB RSS, 300 s per job; a
+worker that throws, dies or hangs rejects THAT circuit by name. The probes
+live in `tests/helpers/elevation-probes.cjs`, verbatim but for the closure
+reads becoming arguments, and `APEX_VM_POOL=0` keeps the serial path.
+`createGame({ carMeshes: false })` stubs Car3D's builders (0.57 s of a 2.50 s
+boot, 23 builds) and THROWS if a caller passes `measure: true`, so it cannot
+silently lie to a mesh-measuring test.
+
+| run | wall |
+|---|---|
+| before | 400 s |
+| after, `APEX_VM_POOL=0` | 400 s (the port did not slow the old path) |
+| after, pooled | **191 s**, 210 s |
+
+**The 110-130 s this item predicted is now DISPROVEN, not merely unproven.**
+Re-measured the same day on a genuinely idle box (loadavg 0.14, four REAL
+cores — `cpu cores: 4`, `siblings: 4`, no hyperthreading): serial **400 s**,
+pooled **191 s**. That is 2.09x, and it is identical to the best figure from
+the loaded session, so contention was never what held the pool back. 191 s is
+this design's floor on four cores; quote it, and do not re-raise the 110-130 s
+estimate without a new mechanism behind it.
+
+Why it stops at ~2x rather than 4x, from the CI log of run 35078191499
+(`vm-a`, `duration_ms 304744`): across a 216 s window the parent's awaits sum
+to 242 s, i.e. it is waiting on essentially ONE outstanding circuit at a time,
+and completions arrive every 6.3 s against a ~10 s serial circuit. The pool is
+SATURATED, not starved — dispatch is already correct (all 40 circuits are
+queued up front at `elevation-tracks-vm.test.mjs:81`, which is why circuits
+that finish early report `duration_ms` of 0.2 ms: those are await latencies,
+not work). So the remaining cost is the physics stepping itself, and the next
+real win has to come from doing less per circuit, not from more workers.
+
+Where a circuit's ~10 s actually goes matters for step 3 below: the probe runs
+180 flat steps, the 300-step grade search, 150 downhill, 150 climb, and then
+**70 steps per corner** across every corner the circuit has. The corner sweep,
+not the 300-step search, is the largest block — so step 3 as written targets
+the smaller half.
+
+No assertion, threshold, launch or step count changed; the twin still declares
+7 against the spec's 7 and `twinned-specs` is green at 14 pairs / 253 tests.
+`tests/unit/game-vm-pool.test.mjs` runs the real probes through one worker and
+asserts the results are deep-equal FLOAT FOR FLOAT against the serial path —
+that equality, not the wall time, is what makes the pool safe to keep.
+
+**Step 3 stays open** and should stay open until someone budgets it properly:
+swapping the 300 × (jump + step) search for `trackProfile(300)` is a
+test-semantics change that needs the same edit on the browser spec plus a
+40-circuit A/B showing the chosen fracs match. The `vm-a` slice time still
+needs a re-measure from a real runner push.
+
 ### 4. Shard the geometry sweeps
 
 **Evidence.** `sweeps` measured 7.8 min median, 9.8 p90 when a circuit

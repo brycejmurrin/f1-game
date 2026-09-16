@@ -35,6 +35,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 |---|---|---|
 | **lib/chromium-path.mjs** | Derives the Chromium executable from playwright-core's browsers.json revision + the browsers root; run it to print. | playwright-probe |
 | **lib/cli-args.mjs** | Shared CLI flag reader: both `--name=v` and `--name v`, and an unknown flag is an ERROR not a shrug. | — |
+| **lib/game-vm-pool.cjs** | Pool of game-vm contexts in worker threads: one circuit's probe per worker, JSON back — assertions stay in the parent. | — |
 | **lib/game-vm.cjs** | Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser. | — |
 | **lib/harness.mjs** | Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown. | playwright-probe |
 | **lib/output-paths.mjs** | Path-containment helpers for the `artifacts/` vs `scratch/` output contract; gated by `output-paths.spec.js`. | — |
@@ -50,7 +51,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/deploy.mjs** | the ONE deploy: fetch → merge → tooling-fast → verify-track → push the deploy branch (or --pr); pages.yml stamps it | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy (`playwright test` / `@playwright/mcp`) — the MCP lock's… | check-changes |
-| **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip: fetch, merge (deploy.mjs's cureable rules), verify, push back to the branch. | check-changes |
+| **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 
 ### `tools/check/`
@@ -74,12 +75,14 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/extract-module.mjs** | Reorg helper for `game.js` extractions: free-reference analysis of a line range, rewritten against `G.<name>` (`--out`). | slim-bloat |
 | **check/font-digits.py** | Measure every shipped font's DIGIT ADVANCES and OpenType figure features | — |
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
+| **check/player-dyn.mjs** | Player vehicle-dynamics bench (VM): braking, accel, skidpad, step steer, trail-brake, lift-off, power-on, flick. | tune-physics |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
 | **check/ratchets.mjs** | Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update` snaps every ceiling down, `--json`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
 | **check/tree-counts.mjs** | Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, waits, sleeps. `--offenders`. | — |
 | **check/trim-comments.mjs** | Strips low-signal `//` comments (dividers, loc pointers, orphans); `--headers --narrative` compresses file headers. | slim-bloat |
+| **check/vm-portable.mjs** | Which specs `tests/helpers/vm-page.js` could run under `node --test`: per-spec blocking calls + a portable count. | — |
 | **check/vstd-lint.mjs** | REPORT, not a gate: lists every `.speed`-vs-literal comparison, always exits 0. The gate is tests/unit/vstd-invariant. | tune-physics |
 
 ### `tools/gen/`

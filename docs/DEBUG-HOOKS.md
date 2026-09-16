@@ -1970,7 +1970,7 @@ forget the second.
 
 ### `lobbyReady(v?) → bool` · `lobbyStart() → bool`
 The two buttons the waiting room ends with. `lobbyStart()` is host-only and
-returns `false` if anyone is still choosing. Exposed for `tools/net/rtc-e2e-3p`,
+returns `false` if anyone is still choosing. Exposed for `tools/net/rtc-e2e-3p.mjs`,
 which drives a real handshake and cannot click — Playwright's actionability
 check fights the ~25 s a real ICE exchange takes, so it would end up testing
 the buttons rather than the wire.

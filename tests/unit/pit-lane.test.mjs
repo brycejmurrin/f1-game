@@ -226,6 +226,9 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
   ctx.TyreModel = { treadFor: () => 0, classForTread: () => null, lifeLaps: () => 30,
                     AI_CLASS: { medium: { life: 0.74 } } };
   ctx.Parts = { CATALOG: [{ id: "tyres", options: [{ id: "medium", cost: 0 }] }] };
+  // The AI's planner, for think(): the plan fires on its lap and not before.
+  ctx.AiDrive = { pitNow: (x) => (x.wrongTread ? "weather" : x.wear >= 1 ? "worn" : x.lapsToStop <= 0 && x.stopsLeft > 0 ? "plan" : ""),
+                  compoundFor: () => "medium", STRAT: { CAUTION_REACH: 6 } };
   // The garage row order. Real Teams.LIST is 12 entries; the count is what sets
   // how wide the row is, so the stub carries the same number rather than a
   // convenient few — a row that fits at 4 teams and not at 12 is the bug.
@@ -237,7 +240,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
   const Pl = vm.runInContext("PitLane", ctx);
   const track = { total, n: 1346, def: {} };
   const said = [];
-  const pits = Pl.create({
+  const G = {
     track, vTop: () => vTop, lapsTarget: 25, raceWeather: "dry",
     announce: (m) => said.push(m),
     // spent() reads the CAR, not a constant: the cue's whole job is to stay
@@ -252,7 +255,9 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
              // `real` (1.0), so nominal is the right answer here.
              planLaps: (life, lapsTarget) => Math.max(4, (life || 0.88) * Math.max(1, lapsTarget || 1)) },
     cautionInfo: () => ({ level: 0 }),
-  });
+    cars: [], ranked: [],
+  };
+  const pits = Pl.create(G);
   const zone = Pl.zoneOf(track);
   // A car in the entry, on the pit side, at racing speed — i.e. committing.
   const car = (over) => ({
@@ -260,7 +265,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
     x: hw * over * zone.side, offroad: false, wrongWay: false, rescueT: 0,
     tyre: { code: "M", tread: 0 }, pitState: "none",
   });
-  return { Pl, pits, zone, car, said, hw, samples: () => samples };
+  return { Pl, pits, zone, car, said, hw, G, samples: () => samples };
 }
 
 test("holding the line into the pits calls the stop", () => {
@@ -460,7 +465,115 @@ test("it follows the car through the stop: armed, lane, box, then silence", () =
   c.pitState = "box";
   assert.equal(pits.cue(c).phase, "box");
   c.pitState = "out";
+  assert.match(pits.cue(c).text, /^EXIT \d+m$/, "the exit road used to be silence");
+  c.pitState = "none"; c.tyreWear = 0;
   assert.equal(pits.cue(c), null, "the cue kept talking after the stop was served");
+});
+
+test("the exit road speaks: GO after the release, MERGE while a car is closing, else the metres to the end", () => {
+  // The exit is where a serviced car rejoins at the limit into traffic at
+  // racing speed, and the cue returned null for the whole of it.
+  const { pits, zone, car, G } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9; c.s = zone.sIn + 60; c.prog = 3000; c.speed = 20;
+  c.pitState = "box"; c.pitT = 0.01;
+  pits.update(c, 0.02);
+  assert.equal(c.pitState, "out", "the hold did not release");
+  assert.equal(pits.cue(c).phase, "served");
+  assert.equal(pits.cue(c).text, "GO GO GO");
+  pits.update(c, pits.servedS + 0.1);
+  assert.notEqual(pits.cue(c).phase, "served", "GO GO GO must not outlive the release");
+  const rival = { code: "VER", prog: c.prog - 60 * 2, speed: 60, pitState: "none" };   // 2 s back, closing
+  G.cars = [c, rival];
+  assert.equal(pits.cue(c).phase, "merge");
+  assert.match(pits.cue(c).text, /MERGE — VER/, "the closing car must be NAMED");
+  rival.prog = c.prog - 60 * 4;                                                       // 4 s back: not yet
+  const out = pits.cue(c);
+  assert.equal(out.phase, "out");
+  assert.match(out.text, /^EXIT \d+m$/);
+  assert.ok(out.dist > 0 && out.dist < zone.lenM, `the exit metres must be inside the lane: ${out.dist}`);
+  assert.ok(out.frac >= 0 && out.frac <= 1, `the bar fill must be a fraction: ${out.frac}`);
+  rival.prog = c.prog - 60 * 2; rival.pitState = "lane";                               // a car in the lane is no threat
+  assert.equal(pits.cue(c).phase, "out");
+});
+
+test("the release says what the stop cost: the time held, the place you come out in, the places it cost", () => {
+  const { pits, zone, car, G, said } = commitSession();
+  const c = car(0), a = { prog: 1 }, b = { prog: 2 };
+  c.tyreWear = 0.9; c.s = zone.sIn + 60;
+  G.ranked = [c, a, b];
+  pits.arm(c, true);                          // called from P1
+  G.ranked = [a, b, c];                       // two cars went by while it was held
+  c.pitState = "box"; c.pitT = 0.01;
+  pits.update(c, 0.02);
+  const line = said.find((m) => /^STOP /.test(m));
+  assert.ok(line, `no stop summary in: ${said.join(" | ")}`);
+  assert.match(line, /^STOP \d+\.\ds — P3, -2 PLACES$/);
+  assert.ok(!said.some((m) => /TYRES ON/.test(m)), "GO GO GO at the START of the hold was a lie for the whole of it");
+});
+
+test("the armed cue names the compound the crew will fit", () => {
+  const { pits, zone, car } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9; c.s = zone.sIn + 20; c.pitArmed = true;
+  c.pitNext = { code: "S" };
+  assert.equal(pits.cue(c).text, "STAY IN LANE · BOX — S");
+  c.pitNext = null;
+  assert.match(pits.cue(c).text, /^STAY IN LANE · BOX — [A-Z]+$/, "with no choice made, the crew's own pick is named");
+  // …and a stop that IS called is shown, whatever the wear gate thinks.
+  c.tyreWear = 0;
+  assert.equal(pits.cue(c).phase, "armed");
+});
+
+test("the first stop is taught in three lines — the road, the line, the gate — each once", () => {
+  const { pits, zone, car, said, hw } = commitSession();
+  const c = car(0);
+  c.tyreWear = 0.9; c.s = zone.sIn + 20;
+  pits.cue(c); pits.cue(c);
+  assert.equal(said.filter((m) => /TAKE THE PIT ROAD/.test(m)).length, 1);
+  c.pitState = "lane";                        // far from the box: the lane phase
+  pits.cue(c); pits.cue(c);
+  assert.equal(said.filter((m) => /STOP AT YOUR CREST/.test(m)).length, 1);
+  const boxAt = pits.boxThroughFor(c);
+  c.s = ((zone.sIn + boxAt - 40) % 5386 + 5386) % 5386; c.x = hw * 0.95 * zone.side; c.speed = 6;
+  assert.equal(pits.cue(c).phase, "near-box");
+  pits.cue(c);
+  assert.equal(said.filter((m) => /GLOWING GATE/.test(m)).length, 1);
+});
+
+test("worthStopping IS the cue's gate: the minimap's marker and the HUD's words read one function", () => {
+  // The map paints its "P" in --you from PitLane.worthStopping and the HUD
+  // paints the cue from PitLane.cue; if the two gates ever drifted, the map
+  // would say "box" while the cue stayed quiet (or the reverse). So: for every
+  // (wear, tread, caution) triple a car inside CUE_M can be in, one speaks
+  // exactly when the other does — and the map's reach is the cue's.
+  const { pits, zone, car, G } = commitSession();
+  assert.equal(pits.cueM, 550, "the map's arc must start where the cue's countdown does");
+  const c = car(0);
+  c.pitState = "none"; c.s = zone.sIn - 300;
+  let cases = 0, worth = 0;
+  for (const wear of [0, 0.2, 0.35, 0.55, 0.9]) {
+    for (const tread of [0, 1]) {
+      for (const level of [0, 1, 2, 3, 4]) {
+        c.tyreWear = wear; c.tyre = { code: "M", tread };
+        G.cautionInfo = () => ({ level });
+        const w = pits.worthStopping(c), q = pits.cue(c) != null;
+        assert.equal(q, w, `wear ${wear}, tread ${tread}, caution ${level}: cue ${q} but worthStopping ${w}`);
+        cases++; if (w) worth++;
+      }
+    }
+  }
+  assert.ok(worth > 0 && worth < cases, `the gate must open for some triples and not others (${worth}/${cases})`);
+  // Each fact opens it alone: a used set, the wrong tread, a cheap stop under caution.
+  G.cautionInfo = () => ({ level: 0 });
+  c.tyreWear = 0.55; c.tyre = { code: "M", tread: 0 };
+  assert.ok(pits.worthStopping(c), "a set at the wear threshold is worth a stop");
+  c.tyreWear = 0; c.tyre = { code: "I", tread: 1 };
+  assert.ok(pits.worthStopping(c), "an intermediate in the dry is worth a stop at any wear");
+  c.tyre = { code: "M", tread: 0 }; c.tyreWear = 0.35; G.cautionInfo = () => ({ level: 2 });
+  assert.ok(pits.worthStopping(c), "a part-used set under a safety car is a cheap stop");
+  c.tyreWear = 0.2;
+  assert.equal(pits.worthStopping(c), false, "…but not a nearly fresh one");
 });
 
 test("a fresh slick in the dry has nothing to say, used or not", () => {
@@ -688,7 +801,7 @@ test("the cue says which way when the box is coming and the car is not in the la
   // their own box is — there is no mark on the road, and each team's box sits
   // at its own place in the row, so it is not even a fixed distance from the
   // line. The speed limit is the thing they can already read off the HUD.
-  assert.match(at(0.95).text, /BOX \d+m/, `a car in the lane must be told where its box is: ${at(0.95).text}`);
+  assert.match(at(0.95).text, /PULL IN · \d+m/, `a car in the lane must be told where its box is: ${at(0.95).text}`);
   assert.equal(at(0.95).phase, "near-box");
   // Far from the box it is the limit that matters, not the line — a KEEP sign
   // for 300 m is the wallpaper the cue exists to avoid.
@@ -896,10 +1009,68 @@ test("the cue counts the box down and then says STOP HERE on it", () => {
     pitState: "lane", tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
   });
   const far = at(70), near = at(20), on = at(0);
-  assert.match(far.text, /BOX 7\dm/, `expected a countdown, got ${far.text}`);
-  assert.match(near.text, /BOX 2\dm/, `expected a countdown, got ${near.text}`);
+  assert.match(far.text, /PULL IN · 7\dm/, `expected a countdown, got ${far.text}`);
+  assert.match(near.text, /PULL IN · 2\dm/, `expected a countdown, got ${near.text}`);
   assert.equal(on.text, "STOP HERE");
   assert.equal(on.phase, "stop");
   // …and it counts DOWN: a number that grows as you approach is worse than none.
   assert.ok(far.dist > near.dist, `the countdown ran backwards: ${far.dist} -> ${near.dist}`);
+});
+
+// ── The player's reference plan ─────────────────────────────────────────────
+// planFor gives the PLAYER a plan too — the one the pit wall would run — and
+// nothing executes it: think() keeps its human guard. The HUD reads it
+// (planInfo), the gap chips read the rivals' (windowOf), and it is re-cut once
+// a lap on the set that is on the car (replan).
+
+test("a human's plan never arms a stop: think() is the AI's, whatever the plan says", () => {
+  const { pits, zone, car } = commitSession();
+  const c = car(0);
+  c.s = zone.sIn - 300; c.lap = 12; c.pitStops = 0; c.tyreWear = 0.3;
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] };
+  assert.equal(pits.think(c), "", "a human car through think() must say nothing");
+  assert.equal(!!c.pitArmed, false, "…and must not be armed");
+  c.human = false; c.local = false;
+  assert.notEqual(pits.think(c), "", "the same car as an AI does fire its plan");
+});
+
+test("planInfo reads the plan for the HUD: the stops, the next box lap, and the lap's state", () => {
+  const { pits, zone, car } = commitSession();
+  const c = car(0);
+  c.s = zone.sIn - 300; c.pitStops = 0;
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] };
+  c.lap = 5;
+  let i = pits.planInfo(c);
+  assert.equal(i.state, "");
+  assert.match(i.text, /^PLAN 1-STOP · BOX L12/);
+  c.lap = 11; i = pits.planInfo(c);
+  assert.equal(i.state, "soon"); assert.match(i.text, /^BOX NEXT LAP/);
+  c.lap = 12; i = pits.planInfo(c);
+  assert.equal(i.state, "now"); assert.match(i.text, /^BOX THIS LAP/);
+  c.pitArmed = true; i = pits.planInfo(c);
+  assert.equal(i.state, "", "a called stop carries no urgency of its own");
+  c.pitArmed = false; c.pitStops = 1; i = pits.planInfo(c);
+  assert.match(i.text, /DONE/, "the plan is served");
+  c.pitPlan = { stops: 0, seq: ["hard"], stints: [25], lapsAt: [] }; c.pitStops = 0;
+  assert.match(pits.planInfo(c).text, /NO STOP/);
+  assert.equal(pits.planInfo({ local: true }), null, "no plan, nothing to paint");
+});
+
+test("windowOf names a rival's window for the gap chips: P<lap> within three laps, IN while stopping", () => {
+  const { pits } = commitSession();
+  const o = { pitPlan: { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] }, pitStops: 0, lap: 8, pitState: "none" };
+  assert.equal(pits.windowOf(o), "", "four laps out is not a window");
+  o.lap = 9; assert.equal(pits.windowOf(o), "P12");
+  o.lap = 12; assert.equal(pits.windowOf(o), "P12");
+  o.lap = 13; assert.equal(pits.windowOf(o), "", "a missed window is not advertised");
+  o.pitState = "lane"; assert.equal(pits.windowOf(o), "IN");
+  assert.equal(pits.windowOf({ lap: 3 }), "", "no plan, no window");
+});
+
+test("lossS is the lane's net cost in seconds, and estimate agrees with it off a caution", () => {
+  const { pits, car } = commitSession();
+  const s = pits.lossS();
+  assert.ok(s > 5 && s < 60, `a plausible pit loss: ${s}`);
+  const est = pits.estimate(car(0));
+  assert.ok(Math.abs(est.lossS - s) < 1e-9, `estimate's lossS is the same number off a caution (${est.lossS} vs ${s})`);
 });

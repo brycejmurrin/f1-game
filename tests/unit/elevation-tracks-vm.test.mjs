@@ -10,11 +10,29 @@
  * measured roll -13.5 deg on Madrid's bowl). The pageerror guards read the
  * VM's console/rejection record.
  * Not portable: none. This is the heaviest twin because it BUILDS 40 circuits
- * (~1 s each here) plus ~1700 physics steps per circuit — ~2 min alone, and
- * still an order of magnitude under the browser group's 40 × 24 s.
+ * plus ~2,200 physics steps per circuit — still an order of magnitude under
+ * the browser group's 40 × 24 s.
+ *
+ * FOUR VMs, ONE FILE (2026-09-16). ~70 % of this file was physics stepping at
+ * 3.13 ms a step on ONE core (docs/plans/research-2026-09-16/vm-harness.md), and
+ * the 42 per-circuit tests are independent races. They now go through
+ * tools/lib/game-vm-pool.cjs: each worker boots its own game-vm and runs one
+ * circuit's probe from tests/helpers/elevation-probes.cjs — the same recipe,
+ * launches, step counts and thresholds — and returns a plain object. EVERY
+ * assertion stayed here, so a failure still names the circuit and the number,
+ * and the twin is still ONE file with 47 declared tests (tools/ci/twinned-specs
+ * .mjs counts them against the spec). Measured on this 4-core box:
+ * 400 s serial -> 191-210 s pooled, 47/47 green every run. (The box was shared
+ * with other agents' suites throughout: the 210 s run averaged load 5.1 of four
+ * cores, so the pool held about three of them.) The five geometry / camera
+ * tests keep the parent's own boot, because they read `Tracks` and camState()
+ * directly.
+ * `APEX_VM_POOL=0` runs the identical probes serially in the parent, the way
+ * this file ran before (400 s); tests/unit/game-vm-pool.test.mjs asserts the
+ * two paths return the same numbers for two circuits.
  *
  * The browser spec stays the truth until CI has run this twin.
- * Run: node --test tests/unit/elevation-tracks-vm.test.mjs   (~2 min, one boot)
+ * Run: node --test tests/unit/elevation-tracks-vm.test.mjs   (~3.5 min, 4 VMs)
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -22,6 +40,8 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
+const { createPool } = require("../../tools/lib/game-vm-pool.cjs");
+const { INIT, GRADIENT, BANKED } = require("../helpers/elevation-probes.cjs");
 
 const closeTo = (r, e, d, m) => assert.ok(Math.abs(e - r) < Math.pow(10, -d) / 2, m || `${r} not within 10^-${d}/2 of ${e}`);
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
@@ -42,20 +62,53 @@ const ELEVATION_TRACKS = [
 const BANKED_TRACKS = ["zandvoort", "madrid"];
 const FLAT_LAUNCH = 40;    // m/s, flat-out reference run on the straightest stretch
 const CLIMB_LAUNCH = 10;   // m/s, low-speed run at the steepest climb
+const LAUNCHES = { FLAT_LAUNCH, CLIMB_LAUNCH };
 
-let g = null, PHYS0 = null;
-before(async () => { g = await createGame({ track: "monza" }); PHYS0 = { ...g.apex.tuning() }; });
-after(() => { if (g) g.close(); });
+// The probes never read a car mesh (they read physState/probe/corners/
+// trackProfile only), so the workers and the parent skip building one.
+const BOOT = { track: "monza", carMeshes: false };
+const POOLED = process.env.APEX_VM_POOL !== "0";
+
+let g = null, state = null, pool = null;
+const queued = new Map();
+
+before(async () => {
+  // Queue every circuit FIRST: the workers boot and build while the parent
+  // boots its own game for the five geometry/camera tests.
+  if (POOLED) {
+    pool = createPool({ boot: BOOT, init: INIT });
+    const add = (key, circuit, probe) => {
+      const p = pool.run({ circuit, probe, options: LAUNCHES });
+      p.catch(() => {});                  // the awaiting test reports it
+      queued.set(key, p);
+    };
+    for (const id of ELEVATION_TRACKS) add(`grad:${id}`, id, GRADIENT);
+    for (const id of BANKED_TRACKS) add(`bank:${id}`, id, BANKED);
+  }
+  g = await createGame(BOOT);
+  state = INIT(g);
+});
+after(async () => { if (pool) await pool.close(); if (g) g.close(); });
 
 // The browser spec gets a FRESH page per test; one boot here, so put back the
 // physics knobs and the headless flag a previous test may have left behind.
-const fresh = () => { g.apex.setPhysics(PHYS0); g.apex.headless(false); };
+const fresh = () => { g.apex.setPhysics(state.PHYS0); g.apex.headless(false); };
 
 const mark = () => ({ c: g.record.console.length, r: g.record.rejections.length });
 const errorsSince = (m) => [
   ...g.record.console.slice(m.c).filter((c) => c[0] === "error").map((c) => c[1]),
   ...g.record.rejections.slice(m.r),
 ];
+
+/** One circuit's probe: the queued worker result, or — under APEX_VM_POOL=0 —
+ *  the same probe function run in the parent's own VM. Both return the pool's
+ *  shape, `{ result, errors }`, so the assertions below cannot tell them apart. */
+async function probed(key, circuit, probe) {
+  if (queued.has(key)) return queued.get(key);
+  const m = mark();
+  const result = await probe(g, { circuit, ...LAUNCHES }, state);
+  return { result, errors: errorsSince(m) };
+}
 
 // The spec's startRace(): race(id) and, before anything reads a slope, wait
 // for the elevation profile to show relief (the build is synchronous here,
@@ -159,110 +212,14 @@ test("chase camera follows the road bank instead of showing a sideways wall", as
   lt(Math.abs(flatRoll) * 180 / Math.PI, 1);
 });
 
-// The per-circuit recipe, verbatim from the browser spec (see it for why the
-// reference run is placed on the straightest stretch and stops off-road).
-function gradientProbe() {
-  const A = g.apex;
-  let finite = true;
-  const prof = A.trackProfile(300);
-  const WIN = 10;                       // ~1/30 of a lap
-  let flatAt = 0, bestBend = Infinity;
-  for (let i = 0; i < prof.length; i++) {
-    let bend = 0;
-    for (let j = 0; j < WIN; j++) bend += Math.abs(prof[(i + j) % prof.length].k);
-    if (bend < bestBend) { bestBend = bend; flatAt = prof[i].frac; }
-  }
-  A.jump(flatAt, FLAT_LAUNCH, 0);
-  A.setInput({ steer: 0, throttle: true });
-  let flatMax = 0, flatSteps = 0;
-  for (let i = 0; i < 180; i++) {
-    A.step(1 / 60, 1);
-    const p = A.physState();
-    if (Math.abs(p.x) > A.probe().hw) break;   // off the road — stop counting
-    flatMax = Math.max(flatMax, p.speed);
-    flatSteps++;
-  }
-  A.clearInput();
-
-  let dnAt = 0, dn = 0, upAt = 0, up = 0;
-  for (let i = 0; i < 300; i++) {
-    const f = i / 300;
-    A.jump(f, 40, 0); A.step(1 / 60, 1);
-    const s = A.physState().slope;
-    if (s < dn) { dn = s; dnAt = f; }
-    if (s > up) { up = s; upAt = f; }
-  }
-
-  A.jump(dnAt, flatMax, 0);
-  A.setInput({ steer: 0, throttle: true });
-  let maxV = 0;
-  for (let i = 0; i < 150; i++) {
-    A.step(1 / 60, 1);
-    const p = A.physState();
-    maxV = Math.max(maxV, p.speed);
-    if (!Number.isFinite(p.speed) || !Number.isFinite(p.s) || !Number.isFinite(p.x)) finite = false;
-  }
-
-  A.jump(upAt, CLIMB_LAUNCH, 0);
-  const cv0 = A.physState().speed;
-  for (let i = 0; i < 150; i++) A.step(1 / 60, 1);
-  const cv1 = A.physState().speed;
-
-  A.setPhysics({ roadFollow: 0.6 });
-  const corners = A.corners();
-  let widest = 0, hw = 7;
-  for (const f of corners) {
-    A.jump((f - 0.02 + 1) % 1, 30, 0);
-    A.setInput({ steer: 0, throttle: false });
-    hw = A.probe().hw;
-    for (let i = 0; i < 70; i++) {
-      A.step(1 / 60, 1);
-      const p = A.probe();
-      if (!Number.isFinite(p.x)) finite = false;
-      widest = Math.max(widest, Math.abs(p.x));
-    }
-  }
-  A.clearInput();
-  A.setPhysics({ roadFollow: 0 });   // restore the shipped default
-  return { dn, up, maxV, flatMax, flatSteps, flatAt: +flatAt.toFixed(3), climbGain: cv1 - cv0, climbEnd: cv1, widest, hw, finite };
-}
-
-function bankedProbe() {
-  const A = g.apex;
-  A.setPhysics({ roadFollow: 0.6 });
-  const corners = A.corners();
-  const probe = A.probe.bind(A);
-  const scored = corners.map((f) => {
-    A.jump(f, 30, 0);
-    return { f, k: Math.abs(probe().k) };
-  }).sort((a, b) => b.k - a.k).slice(0, 2);
-
-  let finite = true, widest = 0, hw = 7, allProgressed = true;
-  for (const { f } of scored) {
-    A.jump((f - 0.03 + 1) % 1, 25, 0);
-    A.setInput({ steer: 0, throttle: false });   // road-following rides the bank
-    const s0 = A.physState().prog;
-    hw = probe().hw;
-    for (let i = 0; i < 100; i++) {
-      A.step(1 / 60, 1);
-      const p = probe();
-      const ps = A.physState();
-      if (!Number.isFinite(p.x) || !Number.isFinite(ps.head) || !Number.isFinite(ps.speed)) finite = false;
-      widest = Math.max(widest, Math.abs(p.x));
-    }
-    if (A.physState().prog <= s0 + 20) allProgressed = false;
-  }
-  A.clearInput();
-  A.setPhysics({ roadFollow: 0 });
-  return { finite, widest, hw, progressed: allProgressed };
-}
+// The per-circuit recipes live in tests/helpers/elevation-probes.cjs — ONE copy
+// that a pool worker compiles from source and the serial path calls directly.
 
 for (const id of ELEVATION_TRACKS) {
   test(`${id}: slope gravity behaves + road-following holds on the grade`, async () => {
-    const m = mark();
-    await startRace(id);
-    const r = gradientProbe();
-    assert.deepEqual(errorsSince(m), []);
+    const { result: r, errors } = await probed(`grad:${id}`, id, GRADIENT);
+    assert.ok(r.relief, `${id}: elevation profile never showed relief`);
+    assert.deepEqual(errors, []);
     assert.equal(r.finite, true);
     lt(r.dn, 0);                                  // the track really does descend
     gt(r.up, 0);                                  // and climb
@@ -277,10 +234,9 @@ for (const id of ELEVATION_TRACKS) {
 
 for (const id of BANKED_TRACKS) {
   test(`${id}: banked corner is drivable and stays on the road`, async () => {
-    const m = mark();
-    await startRace(id);
-    const r = bankedProbe();
-    assert.deepEqual(errorsSince(m), []);
+    const { result: r, errors } = await probed(`bank:${id}`, id, BANKED);
+    assert.ok(r.relief, `${id}: elevation profile never showed relief`);
+    assert.deepEqual(errors, []);
     assert.equal(r.finite, true);
     assert.equal(r.progressed, true);   // the car drove through, didn't beach
     lt(r.widest, r.hw);                 // stayed ON the banked paved road

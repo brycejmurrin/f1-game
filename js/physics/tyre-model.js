@@ -45,6 +45,58 @@ const TyreModel = (function () {
   const LEVELS = { off: 0, light: 0.55, real: 1 };
   function isLevel(v) { return Object.prototype.hasOwnProperty.call(LEVELS, v); }
 
+  // LATERAL FORCE CURVE — the shape of the tyre past its limit, for the
+  // player's per-axle bicycle model in game.js (AI cars take the Frenet step
+  // and never evaluate it). Input x = cs·α/mu (cornering stiffness times slip
+  // angle over the axle's friction limit), output the normalised force in
+  // [-1, 1], multiplied back by mu at the call site.
+  //
+  // It used to be tanh(x): slope 1 at the origin, saturating at 1 and NEVER
+  // falling — so the front could be driven to 16° of slip with the force still
+  // at 100 %, a flick at full lock turned the car 2.4× as far as a moderate
+  // input at no cost, and nothing the driver overdid ever came back to bite.
+  // Every developer account of tyre feel (docs/notes/PLAYER-PHYSICS-RESEARCH-
+  // 2026-09.md §4) says the same thing: the linear range and the peak are the
+  // easy part; the WIDTH of the plateau past the peak and the STEEPNESS of the
+  // fall after it are what make a tyre feel real and drivable.
+  //
+  // Three regions, same units as before so every CS_* constant keeps its
+  // meaning: sin(x) up to the peak at x = π/2 (slope 1 at 0, peak force exactly
+  // mu), then a Gaussian fall from 1 to CURVE_FLOOR of width CURVE_FALL_W:
+  // ≥ 0.97 of peak out to x ≈ 2.1 (the "limit zone" a driver leans on), 0.85 at
+  // x = 3, the floor by x ≈ 5. Never oscillates, never negative, C¹ at the peak
+  // — a Magic Formula with a sharpening E goes NEGATIVE at spin-sized slip
+  // angles, which this model reaches every time a car goes round. The floor is
+  // the "forgiving" end of the range shipped titles use (0.73 relative in
+  // Vehicle Physics Pro's default curve; competition curves drop to ~0.55):
+  // overdriving costs a quarter of the grip, enough to make smooth inputs
+  // faster than flicks without turning the limit into a cliff on a keyboard.
+  const CURVE_PEAK_X = Math.PI / 2;
+  const CURVE_FLOOR = 0.75;
+  const CURVE_FALL_W = 1.4;
+  // The REAR's fall is gentler and shallower than the front's. Two reasons,
+  // one physical and one for the hands on the controls: a rear tyre is the
+  // wider, more progressive one, and a rear that lets go as sharply as the
+  // front turns every yaw overshoot at a low-speed full-lock turn-in into a
+  // spin nobody on a keyboard or a pad can feel coming (measured: 32 m/s, full
+  // lock, coasting — rear 22° and gone with the front's parameters; held with
+  // these). The front keeps the sharper fall: that is what makes a flick cost
+  // grip and understeer legible. Both floors sit inside the "forgiving" range
+  // shipped titles use (0.73–0.8 of peak).
+  const CURVE_FLOOR_R = 0.80;
+  const CURVE_FALL_W_R = 2.0;
+  const CURVE_HOLD_R = 2.6;    // the rear holds its peak out to here before the fall starts (x; ≈ 11° at 30 m/s)
+  function lateralCurve(x, floor, fallW, hold) {
+    const ax = Math.abs(x);
+    if (ax <= CURVE_PEAK_X) return Math.sin(x);
+    const h = hold == null ? CURVE_PEAK_X : hold;
+    if (ax <= h) return x < 0 ? -1 : 1;
+    const fl = floor == null ? CURVE_FLOOR : floor, w = fallW == null ? CURVE_FALL_W : fallW;
+    const d = (ax - h) / w;
+    const g = fl + (1 - fl) * Math.exp(-d * d);
+    return x < 0 ? -g : g;
+  }
+
   // ── COMPOUND LIFE ─────────────────────────────────────────────────────────
   // Life as a fraction of the scheduled race distance (see the header). Derived
   // from the catalog row's own `cornering` stat rather than authored per row, so
@@ -643,7 +695,7 @@ const TyreModel = (function () {
   }
 
   return {
-    LEVELS, isLevel, deriveLife, lifeOf, lifeLaps, MIN_LIFE_LAPS,
+    LEVELS, isLevel, lateralCurve, CURVE_PEAK_X, CURVE_FLOOR, CURVE_FALL_W, CURVE_FLOOR_R, CURVE_FALL_W_R, CURVE_HOLD_R, deriveLife, lifeOf, lifeLaps, MIN_LIFE_LAPS,
     gripFor, longFor, humanLoad, aiLoad, fuelFrac,
     optTemp, warmRate, coolFor, stepTemp, tempGrip, stepGrain, stepBlister, defectGrip,
     axleShare, longSigned, AXLE_LONG, AXLE_REST, BB_REF,

@@ -91,6 +91,47 @@ real network timing or `page.route` mocks need the fixture's stubs mirrored in
 the VM. (d) Do not adapt `smoke.spec.js` or `physics-characterization.spec.js`:
 they are the parity anchors and must stay in a real browser.
 
+### BUILT AND MEASURED, 2026-09-16 (`tests/helpers/vm-page.js`)
+
+The adapter exists and the core claim held: an **unmodified** spec runs under
+`node --test` against `tools/lib/game-vm.cjs`, because Playwright already
+forbids closures in `page.evaluate`, so the body is portable as source into the
+VM context. Playwright's own `expect` imports standalone and works under
+`node --test`, so there is no matcher shim and no second semantics.
+`APEX_VM_PAGE=1` chooses the backend in `tests/helpers/fixtures.js`; all 118
+specs still collect under Playwright (1467 tests, 3 s).
+
+| spec | adapter | node wall | browser cost on record |
+|---|---|---|---|
+| physics-fixes | 2/2 | 22.0 s | 110.1 s, and it blocked four Pages deploys |
+| logging (sharedTest) | 6/6 | 4.0 s | one boot for six tests |
+| headless-api | 23/24 | 5 s | |
+| new-hooks | 50/56 | 22 s | |
+| agent-determinism | 4/5 | 21.2 s | |
+
+Ten specs, 140 tests: **107 pass in 7.5 min** of node against ~3.1 h billed by
+the repo's own cost model. **The third that fails is the result that matters.**
+Running them found blocker classes no static census can see: in-page DOM
+driving against an inert DOM, `requestAnimationFrame` in an evaluate body (no
+renderer, `render()` throws on the first pump), and a semantic divergence —
+`createGame` settles the boot circuit before returning, so every "returns null
+before a track is loaded" assertion goes red. And `understeer-cue` is portable
+by every static measure and still **0/7**.
+
+So the census figure of 67 was eligibility, not readiness. `tools/check/vm-portable.mjs`
+now reports the honest number — **35 portable today, 53 after a one-line import
+change, 65 need a browser** — and it predicted agent-determinism's only failure
+before the run.
+
+**Therefore: a fast local pre-check that runs ALONGSIDE the browser gate, never
+instead of it.** Nothing moves off a blocking gate until item 2 exists;
+`understeer-cue` is the standing proof that a green static verdict and a green
+adapter run are two different facts. Next, cheapest first: `createGame({
+noBootCircuit: true })` to close the boot-state class, the 18-spec import
+codemod, the fidelity gate, then a `test:vm-page` group and an `ADAPTED` map
+in `tools/ci/twinned-specs.mjs` (whose equal-test-count check is meaningless
+for these — the twin IS the spec, so the counts are trivially equal).
+
 ## 2. Twin-fidelity mutation gate
 
 **What.** The whole twin strategy assumes "the twin catches what the spec

@@ -305,31 +305,39 @@ test("the ahead chip marks the slipstream from player.towing", () => {
   assert.equal(els.gapA.dataset.tow, undefined, "and it clears when the tow fades");
 });
 
-test("tiered announce styles stay smaller than the race banner", () => {
+test("every banner is the SAME small radio card — no kind gets billboard type back", () => {
+  // The banners used to be tiered billboards (64px race, 40px info, 26px
+  // coach). They are one radio card now (js/game.js radioWho, index.html
+  // #announce-who/#announce-text): one token-sized type for every kind, and
+  // a kind may only recolour the stripe and the channel line.
   const hud = read("css/hud.css");
-  assert.match(hud, /#announce \{[\s\S]*?font-size:\s*clamp\(30px/);
-  assert.match(hud, /#announce\[data-kind="info"\][\s\S]*?font-size:\s*clamp\(22px/);
-  assert.match(hud, /#announce\[data-kind="penalty-hit"\][\s\S]*?font-size:\s*clamp\(26px/);
+  const card = hud.match(/\n#announce \{([\s\S]*?)\n\}/);
+  assert.ok(card, "#announce has a rule");
+  assert.match(card[1], /font-size:\s*var\(--fs-3\)/, "the card's type is a token, not a viewport clamp");
+  assert.doesNotMatch(card[1], /clamp\(/, "no viewport-scaled billboard type");
+  assert.match(hud, /#announce\[hidden\] \{ display: none; \}/, "the card's own display must not beat the UA's [hidden]");
+  assert.match(hud, /#announce-who \{[\s\S]*?font-size:\s*var\(--fs-micro\)/, "the channel line is micro type");
+  assert.match(hud, /#announce-text::before \{ content: "\\201C"; \}/, "the words are quoted");
+  // No kind re-sizes the type: every #announce[data-kind=…] rule is colour only.
+  for (const m of hud.matchAll(/#announce\[data-kind="[a-z-]+"\][^{]*\{([^}]*)\}/g)) {
+    assert.doesNotMatch(m[1], /font-size|font-style|padding|text-shadow/, `a kind rule re-styles the card: ${m[0].slice(0, 60)}`);
+  }
+  // The compact override keeps the token discipline too.
+  assert.match(hud, /body\[data-density="compact"\] #announce \{[\s\S]*?font-size:\s*var\(--fs-2\)/);
+  // …and the shell carries the two lines the card is made of.
+  const shell = read("index.html");
+  assert.match(shell, /<div id="announce" role="status" hidden><span id="announce-who"><\/span><span id="announce-text"><\/span><\/div>/);
 });
 
-test("coach and practice are the smallest announce tier, and practice is its own kind", () => {
+test("coach and practice keep their own channel and priority, and practice is its own kind", () => {
   const hud = read("css/hud.css");
-  // The advisory tier: sentences, not announcements. It must OVERRIDE the info
-  // rule it shares an anchor with, so it has to come after it in the sheet.
-  const tier = hud.indexOf('#announce[data-kind="coach"],\n#announce[data-kind="practice"],\n');
-  assert.ok(tier > hud.indexOf('#announce[data-kind="info"]'), "the smaller tier follows the info rule it narrows");
-  assert.ok(tier > hud.indexOf('body[data-density="compact"] #announce {'), "…and the compact rule it also has to outrank");
-  assert.match(hud.slice(tier), /^[\s\S]*?font-size:\s*clamp\(16px, calc\(3\.2 \* var\(--vwzh\)\), 26px\)/);
-  // The compact override scores a type selector higher than a bare
-  // #announce[data-kind], so the tier must name it or short viewports — every
-  // landscape phone — keep the 40px banner this tier exists to shrink.
-  for (const kind of ["coach", "practice"])
-    assert.ok(hud.slice(tier, tier + 400).includes(`body[data-density="compact"] #announce[data-kind="${kind}"]`), kind + " is capped in compact density too");
-  // Every px literal in this tier stays at or above --fs-micro, or the
-  // sub-floor font guard (tools/check/tree-counts.mjs) counts it.
-  const floor = parseFloat(read("css/tokens.css").match(/--fs-micro:\s*([0-9.]+)px/)[1]);
-  for (const m of hud.slice(tier, tier + 200).matchAll(/([0-9.]+)px/g)) assert.ok(parseFloat(m[1]) >= floor, m[1] + "px is below the micro floor");
-  // A practice verdict must not be sized, or prioritised, as a record message.
+  // The advisory kinds are a CHANNEL on the card (the coach's colour on the
+  // WHO line), never a bigger or smaller card.
+  assert.match(hud, /#announce\[data-kind="coach"\] #announce-who,\n#announce\[data-kind="practice"\] #announce-who \{ color: var\(--faster\); \}/);
+  const g0 = read("js/game.js");
+  assert.match(g0, /if \(kind === "coach" \|\| kind === "practice"\) return "COACH" \+ num;/, "radioWho names the coach's channel");
+  assert.match(g0, /if \(kind === "penalty-hit" \|\| kind === "penalty-warn" \|\| kind === "warning"\) return "RACE CONTROL" \+ num;/, "…and race control's");
+  // A practice verdict must not be prioritised as a record message.
   const g = read("js/game.js");
   const pri = g.match(/const ANN_PRI = \{([^}]*)\}/)[1];
   assert.match(pri, /practice: 2/);

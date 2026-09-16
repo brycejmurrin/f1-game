@@ -984,6 +984,42 @@ function create(G) {
     const past = c.history[c.history.length - 1];
     $("co-title").textContent = past ? "SEASON " + past.year : "END OF SEASON";
 
+    // THE DECISION FIRST, the season recap under it. This screen exists to pick
+    // a seat, and the recap used to come first: measured on a landscape phone
+    // (852x393 with the notch insets), #co-body shows 277px of 519px, which put
+    // ON THE TABLE at y=315 and the first offer at y=391 — both below the fold,
+    // while the only pinned control read DECIDE LATER. A player who did not
+    // scroll saw three recap cards and a deferral, and no sign a choice existed.
+    // THE YEAR / YOUR CONTRACT / THE DRIVER MARKET are context FOR the choice,
+    // so they still belong on this screen — underneath it.
+    body.appendChild(head("ON THE TABLE"));
+    body.appendChild(el("div", "cr-note",
+      "Pick a seat for " + c.year + ". Moving team means starting the car over from " +
+      "that team's works build — you do not take your parts with you."));
+
+    (c.offers || []).forEach((o, i) => {
+      const t = teamById(o.teamId);
+      const staying = o.teamId === c.team;
+      const b = el("button", "co-offer" + (staying ? " staying" : ""));
+      const sw = el("span", "co-offer-sw");
+      sw.style.background = G.cssCol(t ? t.color : [0.5, 0.5, 0.5]);
+      sw.style.borderColor = G.cssCol(t ? (t.color2 || t.color) : [0.5, 0.5, 0.5]);
+      b.append(sw,
+        el("span", "co-offer-team", t ? t.name : o.teamId),
+        el("span", "co-offer-tag", staying ? "STAY" : "MOVE"),
+        el("span", "co-offer-terms",
+          o.years + (o.years === 1 ? " season" : " seasons") + " · " +
+          o.salary + " cr / round · target P" + o.goal.value));
+      b.onclick = () => {
+        if (G.soundOn) GameAudio.uiSelect();
+        Career.acceptOffer(i);
+        closeOffers();
+        G.openCareer();
+      };
+      body.appendChild(b);
+    });
+
+
     if (past) {
       body.appendChild(head("THE YEAR"));
       const card = el("div", "cr-card");
@@ -1019,32 +1055,6 @@ function create(G) {
       body.appendChild(mv);
     }
 
-    body.appendChild(head("ON THE TABLE"));
-    body.appendChild(el("div", "cr-note",
-      "Pick a seat for " + c.year + ". Moving team means starting the car over from " +
-      "that team's works build — you do not take your parts with you."));
-
-    (c.offers || []).forEach((o, i) => {
-      const t = teamById(o.teamId);
-      const staying = o.teamId === c.team;
-      const b = el("button", "co-offer" + (staying ? " staying" : ""));
-      const sw = el("span", "co-offer-sw");
-      sw.style.background = G.cssCol(t ? t.color : [0.5, 0.5, 0.5]);
-      sw.style.borderColor = G.cssCol(t ? (t.color2 || t.color) : [0.5, 0.5, 0.5]);
-      b.append(sw,
-        el("span", "co-offer-team", t ? t.name : o.teamId),
-        el("span", "co-offer-tag", staying ? "STAY" : "MOVE"),
-        el("span", "co-offer-terms",
-          o.years + (o.years === 1 ? " season" : " seasons") + " · " +
-          o.salary + " cr / round · target P" + o.goal.value));
-      b.onclick = () => {
-        if (G.soundOn) GameAudio.uiSelect();
-        Career.acceptOffer(i);
-        closeOffers();
-        G.openCareer();
-      };
-      body.appendChild(b);
-    });
     ScrollFade.refresh();
   }
 

@@ -471,11 +471,11 @@ const PitLane = (function () {
       if (flag >= 4) return null;
       const normal = G.vTop() * 0.75;
       const roadSpeed = Math.max(1, Math.min(normal, G.vTop() * (flag === 3 ? 0.45 : flag === 2 ? 0.6 : 1)));
-      const lossS = Math.max(zz.boxS, zz.lenM / Math.max(1, limit()) + zz.boxS - zz.lenM / roadSpeed);
+      const loss = Math.max(zz.boxS, zz.lenM / Math.max(1, limit()) + zz.boxS - zz.lenM / roadSpeed);
       const behind = (G.cars || []).filter(o => o !== c && !o.retired && !o.finished && o.prog < c.prog)
         .sort((a, b) => b.prog - a.prog)[0];
       const gapS = behind ? (c.prog - behind.prog) / Math.max(1, behind.speed || roadSpeed) : null;
-      return { lossS, gapS, marginS: gapS == null ? null : gapS - lossS, caution: flag >= 2, estimated: true };
+      return { lossS: loss, gapS, marginS: gapS == null ? null : gapS - loss, caution: flag >= 2, estimated: true };
     }
     function choices(c) {
       if (!G.tyres) return [];
@@ -518,15 +518,79 @@ const PitLane = (function () {
     // driver stops reading it, which is worse than no cue. It appears when a
     // stop is actually worth making: the set is meaningfully used, or the tread
     // is wrong for the conditions, or a caution is out and a stop is cheap.
-    // Once per session: the entry cue spells the gesture out the first time.
-    let _saidEnter = false;
     const CUE_M = 550;          // start counting down this far out
     const BOX_CUE_M = 90;       // …and start asking for the lane this far from the box
     const CUE_WEAR = 0.55;      // …or not at all, on a set with life left in it
+    const SERVED_S = 1.2;       // "GO GO GO" lasts this long after the release
+    const MERGE_S = 3;          // a car this close behind on the exit is CLOSING
+    // THE FIRST STOP, TAUGHT. Three lines — the road, the line, the gate — each
+    // once per session, and none at all once a stop has been completed
+    // (apex26.pitTaught). The road, the crest and the gate are in the world
+    // now; the words point at them.
+    const _said = {};
+    let _lastCue = null;
+    function taught() { return G.store && G.store.get ? !!G.store.get("pitTaught", 0) : false; }
+    function teach(k, msg) {
+      if (_said[k] || taught()) return;
+      _said[k] = true;
+      if (G.announce) G.announce(msg, 2.2, "race");
+    }
+    /** The nearest car behind on the racing surface that is on this car
+     *  inside MERGE_S at its own speed — the one a merging car has to see. */
+    function closingCar(c) {
+      const cars = G.cars || [];
+      let best = null, bestGap = MERGE_S;
+      for (let i = 0; i < cars.length; i++) {
+        const o = cars[i];
+        if (o === c || o.retired || o.finished || inLane(o) || !(o.prog < c.prog)) continue;
+        const gap = (c.prog - o.prog) / Math.max(1, o.speed || 0);
+        if (gap < bestGap) { bestGap = gap; best = o; }
+      }
+      return best;
+    }
+    /** Metres from a serviced car to the end of the exit road (the exit line
+     *  on a painted lane), 0 once past it. */
+    function toExit(c) {
+      const zz = z(), t = G.track;
+      if (!zz || !t) return 0;
+      const p = t.pit, end = p && !p.painted && p.sB != null ? p.sB : zz.sOut;
+      const d = ((end - c.s) % t.total + t.total) % t.total;
+      return d > zz.lenM + exitRoadM() + 50 ? 0 : d;
+    }
+    /** The exit road past the exit line, metres (0 on a painted lane). */
+    function exitRoadM() {
+      const t = G.track, p = t && t.pit;
+      return p && !p.painted && p.sB != null ? ((p.sB - p.sOut) % t.total + t.total) % t.total : 0;
+    }
+    /** This car's box to the end of the exit road, for the bar. */
+    function exitLen(c) {
+      const zz = z(), t = G.track;
+      return Math.max(1, zz.lenM - boxThroughFor(c, zz, t.total) + exitRoadM());
+    }
+    /** Is a stop worth making for this car right now — any ONE of a used set,
+     *  the wrong tread for the conditions, a free stop under caution. The
+     *  cue's own gate, and the minimap's (js/ui/hud.js): one function, so the
+     *  marker on the map and the words on the HUD can never disagree. */
+    function worthStopping(c) {
+      if (!enabled() || !c || c.retired || c.finished) return false;
+      const wear = G.tyres.spent(c);
+      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
+      const caution = G.cautionInfo ? G.cautionInfo() : null;
+      const free = !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35;
+      return wear >= CUE_WEAR || wrongTread || free;
+    }
+    // `frac` is the distance BAR's fill (js/ui/hud.js --pit-dist): 0 at the
+    // start of a countdown, 1 at its end. The last cue given to the local car
+    // is kept (lastCue) so the engineer can wait while it is giving a direction.
     function cue(c) {
+      const r = cueOf(c);
+      if (c && c.local) _lastCue = r;
+      return r;
+    }
+    function cueOf(c) {
       if (!enabled() || !c || !c.local || c.retired || c.finished) return null;
       const st = c.pitState || "none";
-      if (st === "box") return { phase: "box", text: "STOP", dist: 0 };
+      if (st === "box") return { phase: "box", text: "STOP", dist: 0, frac: 1 };
       if (st === "lane") {
         // APPROACHING THE BOX AND NOT IN THE LANE: say which way. A stop that
         // silently does not happen is the cruellest thing this module could
@@ -534,9 +598,9 @@ const PitLane = (function () {
         const togo = toBox(c);
         if (togo > -BOX_TOL && togo < BOX_CUE_M) {
           Tracks.sample(G.track, c.s, _smp);
-          const zz = z();
+          const zz = z(), frac = 1 - togo / BOX_CUE_M;
           if (!inBoxLat(c, _smp.hw || 0, zz.side)) {
-            return { phase: "keep", text: zz.side > 0 ? "KEEP RIGHT" : "KEEP LEFT", dist: 0 };
+            return { phase: "keep", text: zz.side > 0 ? "KEEP RIGHT" : "KEEP LEFT", dist: 0, frac };
           }
           // WHERE THE BOX IS. This distance was already being computed here and
           // thrown away to show the speed limit instead — so the one number a
@@ -544,40 +608,55 @@ const PitLane = (function () {
           // is no mark on the road, and since each team's box sits at its own
           // place in the row, a player cannot even learn a fixed distance from
           // the line: it depends which car they are in.
+          teach("gate", "STOP ON THE GLOWING GATE");
+          // PULL IN: the working lane is one more step toward the wall, and
+          // this is the moment to take it — the box is the next thing.
           return togo <= BOX_TOL
-            ? { phase: "stop", text: "STOP HERE", dist: 0 }
-            : { phase: "near-box", text: "BOX " + Math.round(togo) + "m", dist: togo };
+            ? { phase: "stop", text: "STOP HERE", dist: 0, frac: 1 }
+            : { phase: "near-box", text: "PULL IN · " + Math.round(togo) + "m", dist: togo, frac };
         }
         // Past the box by more than the latch allows: no crew here, go round.
-        if (togo < -BOX_TOL * 2) return { phase: "missed", text: "BOX MISSED", dist: togo };
-        return { phase: "lane", text: Math.round(limit() * 3.6) + " LIMIT", dist: 0 };
+        if (togo < -BOX_TOL * 2) return { phase: "missed", text: "BOX MISSED", dist: togo, frac: 0 };
+        teach("line", "HOLD THE LANE — STOP AT YOUR CREST");
+        // STAY IN LANE, all the way from the line to the box: the instruction
+        // is continuous, and the limit rides along with it.
+        return { phase: "lane", text: "STAY IN LANE · " + Math.round(limit() * 3.6) + " LIMIT", dist: 0, frac: 0 };
       }
-      if (st === "out") return null;
+      if (st === "out") {
+        // THE EXIT ROAD used to be silence — and it is where a serviced car
+        // rejoins at the limit into traffic at racing speed. GO for a moment
+        // after the release; MERGE, naming the car, while one is closing on
+        // the track side; otherwise the metres to the end of the road.
+        if ((c.pitOutT || 0) > 0) return { phase: "served", text: "GO GO GO", dist: 0, frac: 1 };
+        const o = closingCar(c);
+        if (o) return { phase: "merge", text: "MERGE — " + (o.code || "CAR") + " CLOSING", dist: 0, frac: 1 };
+        const m = toExit(c);
+        return m > 0 ? { phase: "out", text: "EXIT " + Math.round(m) + "m", dist: m, frac: clamp(1 - m / exitLen(c), 0, 1) } : null;
+      }
       const d = toEntry(c);
       if (d < 0 || d > CUE_M) return null;
-      // Worth making? Any ONE of: a used set, the wrong tread, a free stop.
-      const wear = G.tyres.spent(c);
-      const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== TyreModel.treadFor(G.raceWeather, G.roadWetness && G.roadWetness());
-      const caution = G.cautionInfo ? G.cautionInfo() : null;
-      const free = !!caution && caution.level >= 2 && caution.level < 4 && wear >= 0.35;
-      if (!(wear >= CUE_WEAR || wrongTread || free)) return null;
-      if (c.pitArmed) return { phase: "armed", text: "BOX", dist: 0 };
-      // Inside the entry road: say GO, not a distance — the distance is zero and
-      // what the driver needs now is the direction.
-      if (d === 0 && throughM(z(), c.s, G.track.total) <= COMMIT_M) {
+      if (c.pitArmed) {
+        // …AND WHAT WILL BE FITTED. The stop is booked by a gesture, and a
+        // driver could not tell a wet stop from a slick stop until the wheels
+        // were on. Armed beats the wear gate: a stop that IS called is shown.
+        const next = c.pitNext || pickFor(c);
+        return { phase: "armed", text: "STAY IN LANE · BOX" + (next && next.code ? " — " + next.code : ""), dist: 0, frac: 1 };
+      }
+      if (!worthStopping(c)) return null;
+      // ON THE ENTRY ROAD — the peel on the complex (sA→sIn), or the first
+      // COMMIT_M past the line on a painted lane — say what to DO, not a
+      // distance: the instruction is the lane, and holding it is the gesture.
+      if (roadOf(c) === "entry" || (d === 0 && throughM(z(), c.s, G.track.total) <= COMMIT_M)) {
         // SAY WHAT TO DO, not just where you are. "PIT ENTRY" names the place
         // and assumes you already know the gesture — and the gesture is the one
         // thing nobody can guess, because there is no button to find. The first
-        // time in a session it spells it out; after that the short form, since
-        // by then the instruction is noise.
-        if (!_saidEnter) {
-          _saidEnter = true;
-          if (G.announce) G.announce("PIT ENTRY — TAKE THE PIT ROAD TO BOX", 2.2, "race");
-        }
-        return { phase: "enter", text: "HOLD THE LANE", dist: 0 };
+        // time it is spelt out; after that the short form, since by then the
+        // instruction is noise.
+        teach("road", "PIT ENTRY — TAKE THE PIT ROAD TO BOX");
+        return { phase: "enter", text: "HOLD THE LANE", dist: 0, frac: 1 };
       }
       if (d === 0) return null;   // in the window but past the entry road
-      return { phase: "near", text: "PIT " + Math.round(d) + "m", dist: d };
+      return { phase: "near", text: "PIT " + Math.round(d) + "m", dist: d, frac: 1 - d / CUE_M };
     }
 
     /** A stopping envelope onto the box: how fast a car may be HERE and still be
@@ -655,7 +734,23 @@ const PitLane = (function () {
     function arm(c, on) {
       if (!c || !enabled()) return false;
       c.pitArmed = on == null ? !c.pitArmed : !!on;
+      // The place the stop was called from: what it cost is said at the release.
+      if (c.pitArmed && !(c.pitPos0 > 0)) c.pitPos0 = rankOf(c);
       return c.pitArmed;
+    }
+    function rankOf(c) { const r = G.ranked; return r ? r.indexOf(c) + 1 : 0; }
+    /** The release. The chip says GO for SERVED_S, and a LOCAL car gets the
+     *  stop summarised — the time held, the place it comes out in and what the
+     *  stop cost: numbers the game always had and never said. A completed stop
+     *  also ends the teach. */
+    function release(c, zz) {
+      c.pitOutT = SERVED_S;
+      if (!c.local) return;
+      const pos = rankOf(c), k = c.pitPos0 > 0 && pos > 0 ? c.pitPos0 - pos : 0;
+      const places = k === 0 ? "" : ", " + (k > 0 ? "+" : "") + k + (Math.abs(k) === 1 ? " PLACE" : " PLACES");
+      if (G.announce) G.announce("STOP " + zz.boxS.toFixed(1) + "s" + (pos > 0 ? " — P" + pos + places : ""), 2.2, "race");
+      c.pitPos0 = 0;
+      if (G.store && G.store.set) G.store.set("pitTaught", 1);
     }
 
     // Is this car, RIGHT NOW, holding the line into the pits? Pure apart from
@@ -894,6 +989,9 @@ const PitLane = (function () {
       if (!c || !enabled() || c.retired) return;
       const st = c.pitState || "none";
       const zz = z(), L = G.track.total;
+      if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock
+      // The player's reference plan is re-cut once per lap (replan).
+      if (c.local && c.human && c.pitPlan && c.lap !== c._planLap) { c._planLap = c.lap; if ((c.lap || 0) > 1) replan(c); }
       // The commitment lands: armed, the crew told what to ready. With no
       // button there is no other moment the compound choice becomes visible.
       const commitNow = () => {
@@ -935,7 +1033,7 @@ const PitLane = (function () {
       }
       if (st === "box") {
         c.pitT = (c.pitT || 0) - dt;
-        if (c.pitT <= 0) { c.pitState = "out"; c.pitT = 0; }
+        if (c.pitT <= 0) { c.pitState = "out"; c.pitT = 0; release(c, zz); }
         return;
       }
       if (st === "out") return;                       // serviced; drive away
@@ -1051,7 +1149,8 @@ const PitLane = (function () {
       const next = c.pitNext || (c.local ? pickFor(c) : null);
       G.tyres.fit(c, next || (c.tyreOpt ? G.tyres.optionRecord(c.tyreOpt) : G.tyres.classRecord(c.tyreClass || "medium")));
       c.pitNext = null;
-      if (c.isPlayer && G.announce) G.announce("TYRES ON — GO GO GO", 1.6, "race");
+      // No banner here: this runs as the car STOPS, and "GO GO GO" at the start
+      // of the hold was a lie for the whole of it. The release says it (release).
     }
 
     /** The compound this car will fit at its next stop (a TyreModel record). */
@@ -1066,7 +1165,7 @@ const PitLane = (function () {
     /** Draw a stint plan for one AI car. PIT LOSS IS DERIVED FROM THE LANE, in
      *  laps, so a circuit whose lane costs more really does see fewer stops —
      *  which is the whole reason pit loss was kept emergent. */
-    function planFor(roll) {
+    function planFor(roll, player, laps) {
       const zz = z();
       if (!zz) return null;
       // A representative racing speed for the pit straight, as a fraction of the
@@ -1074,19 +1173,110 @@ const PitLane = (function () {
       const raceV = Math.max(1, G.vTop() * 0.55);
       const lapRefS = G.track && G.track.total > 0 ? G.track.total / raceV : 100;
       const lossS = zz.lenM / Math.max(1, limit()) - zz.lenM / raceV + zz.boxS;
-      return AiDrive.stintPlan({
-        laps: G.lapsTarget,
-        lifeLaps: (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget),
-        pitLossLaps: clamp(lossS / Math.max(1, lapRefS), 0.02, 0.9),
-        roll,
+      const n = laps > 0 ? laps : G.lapsTarget;
+      const pitLossLaps = clamp(lossS / Math.max(1, lapRefS), 0.02, 0.9);
+      // THE PLAYER'S plan is a REFERENCE — the plan the pit wall would run —
+      // never executed (think() keeps its human guard): it honours the stop
+      // count the STRATEGY row pinned for this circuit, if any.
+      const pin = player ? pinnedStops() : null;
+      const plan = AiDrive.stintPlan({
+        laps: n,
+        lifeLaps: (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, n),
+        pitLossLaps, roll, stops: pin,
       });
+      if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; }
+      return plan;
+    }
+    /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
+    function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
+    function pinnedStops() {
+      const v = G.store && G.store.get ? G.store.get(pinKey(), "auto") : "auto";
+      return v == null || v === "auto" ? null : Math.max(0, Math.min(2, v | 0));
+    }
+    function setPinnedStops(v) { if (G.store && G.store.set) G.store.set(pinKey(), v == null ? "auto" : (v | 0)); }
+    /** The lane's net cost in seconds at racing speed — the number that makes
+     *  a 2-stop at Monaco read as the mistake it is. `estimate` refines it
+     *  under a caution; this is the plain figure the STRATEGY row shows. */
+    function lossS() {
+      const zz = z();
+      if (!zz) return 0;
+      const normal = Math.max(1, G.vTop() * 0.75);
+      return Math.max(zz.boxS, zz.lenM / Math.max(1, limit()) + zz.boxS - zz.lenM / normal);
+    }
+
+    /** The player's plan, read for the HUD: the stops, the next box lap and
+     *  how the race stands against it. Pure of the DOM; hud.js paints it. */
+    function planInfo(c) {
+      const plan = c && c.pitPlan;
+      if (!plan || !enabled()) return null;
+      const done = c.pitStops || 0, lap = c.lap || 0, stops = plan.stops || 0;
+      const next = plan.lapsAt[done];
+      const cls = plan.seq[done + 1], code = cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : "";
+      const label = stops ? stops + "-STOP" : "NO STOP";
+      if (next == null) return { text: "PLAN " + label + (stops ? " · DONE" : ""), state: "", stops, next: null, lapsToStop: null, code };
+      const lapsToStop = next - lap;
+      const caution = G.cautionInfo ? G.cautionInfo() : null;
+      const est = caution && caution.level >= 2 && caution.level < 4 ? estimate(c) : null;
+      const busy = !!c.pitArmed || (c.pitState && c.pitState !== "none");
+      let state = "", text = "PLAN " + label + " · BOX L" + next + (code ? " " + code : "");
+      if (busy) state = "";
+      else if (est && est.marginS > 0 && lapsToStop <= (typeof AiDrive !== "undefined" && AiDrive.STRAT ? AiDrive.STRAT.CAUTION_REACH : 6)) { state = "free"; text = "FREE STOP · BOX NOW" + (code ? " " + code : ""); }
+      else if (lapsToStop <= 0) { state = "now"; text = "BOX THIS LAP" + (code ? " · " + code : ""); }
+      else if (lapsToStop === 1) { state = "soon"; text = "BOX NEXT LAP" + (code ? " · " + code : ""); }
+      return { text, state, stops, next, lapsToStop, code };
+    }
+    /** A rival's window, for the gap chips: "IN" while it is stopping, "P<lap>"
+     *  when its planned stop is within three laps, else "". */
+    function windowOf(o) {
+      if (!o || !o.pitPlan) return "";
+      if (o.pitState && o.pitState !== "none") return "IN";
+      const n = o.pitPlan.lapsAt[o.pitStops || 0];
+      if (n == null) return "";
+      const d = n - (o.lap || 0);
+      return d >= 0 && d <= 3 ? "P" + n : "";
+    }
+    /** Once per lap for the local player: re-cut the plan over the laps left,
+     *  on the set that is on the car and the life it has left. Adopted only
+     *  when the next stop moves by two laps or more — the stagger is a lap by
+     *  design — and said once when it is. Advice, so it may change its mind;
+     *  the AI's plan does not (its stop reasons are pitNow's three). */
+    function replan(c) {
+      const plan = c.pitPlan, zz = z();
+      if (!plan || !zz || !G.tyres || !c.tyre || typeof AiDrive === "undefined") return false;
+      const done = c.pitStops || 0, lap = Math.max(1, c.lap || 1);
+      const lapsLeft = G.lapsTarget - lap + 1;
+      const oldNext = plan.lapsAt[done];
+      if (lapsLeft < 2 || oldNext == null) return false;
+      const lifeLaps = (cls) => TyreModel.lifeLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
+      const cls = c.tyre.id && TyreModel.AI_CLASS[c.tyre.id] ? c.tyre.id : (c.tyreClass || "medium");
+      const firstLife = Math.max(1, lifeLaps(cls) * (1 - G.tyres.spent(c)));
+      const stops = plan.pin != null ? Math.max(0, plan.pin - done) : null;
+      const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || 0.18, roll: 0.5,
+                                      start: cls, firstLife, stops });
+      if (!rel) return false;
+      const newNext = rel.stops > 0 ? lap - 1 + rel.lapsAt[0] : null;
+      if (newNext != null && Math.abs(newNext - oldNext) < 2) return false;
+      if (newNext == null && rel.stops === 0 && plan.stops - done === 0) return false;
+      plan.seq = plan.seq.slice(0, done + 1).concat(rel.seq.slice(1));
+      plan.stints = plan.stints.slice(0, done).concat(rel.stints);
+      plan.stops = done + rel.stops;
+      plan.lapsAt = plan.lapsAt.slice(0, done).concat(rel.lapsAt.map((k) => lap - 1 + k));
+      if (G.announce) G.announce(newNext != null ? "NEW PLAN — BOX LAP " + newNext : "NEW PLAN — NO MORE STOPS", 2.2, "info");
+      return true;
     }
 
     /** Does this AI car call its stop this tick? The plan says WHEN; AiDrive.pitNow
-     *  owns the three reasons to ignore it, and this owns the state they read. */
+     *  owns the three reasons to ignore it, and this owns the state they read.
+     *  A PLANNED stop arms the moment the lap counter turns — at the line,
+     *  which is inside the window — and is served at the END of that lap, the
+     *  next time round: "box on lap N". The lap in between costs nothing (an
+     *  armed AI is only held to the pit side within APPROACH_M, and entryV is
+     *  unbounded that far out), so the hunt counts it as h_armedAtLine, not
+     *  as a stop that failed to happen. */
     function think(c) {
       const plan = c && c.pitPlan;
-      if (!plan || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
+      // A HUMAN's plan is advice (planFor): nothing here ever arms it.
+      if (!plan || c.human || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
       const stopsLeft = plan.stops - (c.pitStops || 0);
       const nextAt = plan.lapsAt[c.pitStops || 0];
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
@@ -1143,8 +1333,10 @@ const PitLane = (function () {
     function reset(c) {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0; c.pitNext = null; c.pitStops = 0; c.pitWhy = "";
-      c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false;
-      if (c.local) _saidEnter = false;   // the first-entry cue is per SESSION, not per page load
+      c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false; c.pitOutT = 0; c.pitPos0 = 0;
+      // The teach is per SESSION, not per page load — and over for good once
+      // a stop has been completed (release).
+      if (c.local) { for (const k in _said) delete _said[k]; _lastCue = null; }
     }
 
     function info(c) {
@@ -1205,6 +1397,8 @@ const PitLane = (function () {
     return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, roadOf, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
+             worthStopping, cueM: CUE_M, servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
+             planInfo, windowOf, replan, lossS, pinnedStops, setPinnedStops,
              laneEdge, laneCentre, laneDrive, laneUniform, boxUniform, laneX, inLaneLat, inBoxLat,
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }

@@ -3018,7 +3018,7 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   assert.match(human, /c\.wake = wakeOf\(tg, tc\.x - c\.x\)/, "the player's tow uses the AI's window and fade");
   assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
   assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
-  assert.match(game, /c\.wheelLock = braking && axFrac > 0\.60/, "a lock-up fires inside the REACHABLE friction budget: axFrac ceilings at BRAKE*mods/(LONG_GRIP*gripMult) = 0.638 dry / 0.887 wet, so the old 0.92 gate could never fire and the flat-spot system behind it (wobble, 90 s heal) was unreachable — 0.60 locks a dry stamp partially and a wet one fully");
+  assert.match(game, /c\.wheelLock = braking && axFracF > 0\.92/, "a lock-up is the top of the FRONT axle's friction budget under braking");
   // The planted wheels spin in the car-draw seam (js/car/car-draw.js), which reads WHEEL_R off PhysicsConsts.
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(cd, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");

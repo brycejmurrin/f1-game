@@ -835,6 +835,95 @@ on the 08-18 perf-hunt board, not this register.
   telemetry scrubber uses `CssZoom.viewportRect`.
 - **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
 
+### 2026-09-16 — Monaco now escalates to a RED FLAG where it raised no flag at all (product, found by benchmarking)
+
+**Reproduced twice on an idle box, byte-identical both times**, and the same
+spec run at a pre-session base does not reproduce it. Found while measuring
+`tests/specs/physics-fixes.spec.js` for the process-speedup work, not by a
+gate — the file is not twinned and only runs when `selected` picks it, which
+is why nothing caught it.
+
+| ref | race-control flag changes during the spec | test 1 (Monaco lap distance) |
+|---|---|---|
+| `22ea30d` (2026-09-15, pre-session) | **0** | pass (191.3 s) |
+| `13ee765` (today's tip, LIVE at build 9147) | **6** | **fail** — `maxBackJump` 253.27, ceiling 5 |
+
+The escalation, from the failing run's own log:
+
+```
+RaceControl flag GREEN -> YELLOW
+RaceControl flag YELLOW -> VSC
+RaceControl flag VSC -> SAFETY CAR
+RaceControl flag SAFETY CAR -> RED FLAG
+red flag: standing restart, 22 cars re-gridded at raceT 32.8
+```
+
+The 253 m "backwards jump" is not a projection bug: it is the standing
+restart legitimately re-gridding the player. The assertion is sound; what
+changed is that the scenario now produces a red flag. The spec drives
+deliberately WIDE into the barriers (steer 0.3 / -0.3 / 0.6 with throttle,
+3 x 1500 steps ~ 75 s of sim) with the full 22-car field — so in player terms:
+**running wide at Monaco for half a minute now triggers a full race stoppage
+and standing restart, where before it raised no flag at all.**
+
+**BISECTED to `d402fd7` — `fix(pit): the stop is driven end to end — approach,
+entry, box, queue, exit`** (146 commits, 8 steps, one commit between the last
+good and the first bad). `js/race/race-control.js` is UNCHANGED; the
+thresholds are untouched (YELLOW 3 / VSC 6 / SC 10 / **RED 16**).
+
+The mechanism, from that commit's own diff: it makes THE PIT WALL solid. Its
+comment says `TrackPit.openBoundary` had "left the wall itself as scenery a
+car running wide drove straight through", and it now grows the wall in
+(`wallR = Math.min(wallR, face - 1.1)`). The spec drives deliberately wide
+along the pit straight, so where it used to pass through the wall it now
+scrapes it, sheds debris, and the settled pieces are counted.
+
+Measured hazard totals through the spec's own driving (`caution({hazards:true})`,
+probe kept at `artifacts/bench/probe.spec.js`):
+
+| ref | max hazard total | vs RED_MIN 16 |
+|---|---|---|
+| `22ea30d` (pre-session) | **11** | under |
+| `13ee765` (tip, LIVE) | **17** | **over** |
+
+Every hazard sits in sector 0 around frac 0.081 — the pit straight.
+
+**Two hypotheses tested and REFUTED, recorded so nobody re-tests them.**
+(1) The new tyre curve (`CURVE_FLOOR` 0.75 / 0.80, a fall past the peak where
+tanh never fell): neutralised at the tip with `CURVE_FLOOR = 1.0`, and the red
+flag still fired at the same race time, `maxBackJump` 253.36. (2) Monaco's new
+`pit: { mode: "street", side: 1 }` def block: removed at the tip, red flag
+still fired, 253.27. Neither is the cause.
+
+**FIXED, on the test side only (2026-09-16).** `physics-fixes.spec.js` now
+turns the caution layer off for the measurement (`__apex.caution(false)`, the
+same door as the CAUTIONS row in RACE SETTINGS) and asserts
+`caution().level === 0` afterwards, so if a flag ever flies again the test says
+so instead of silently measuring a reposition. The 5 m ceiling is UNCHANGED —
+this removes an unrelated subsystem's interference, it does not widen a
+tolerance. Verified on an idle box: 2/2 green, zero flags raised, 112 s and
+118 s (back to the 110.1 s its own header declares). Race control keeps its
+coverage in its own specs; this file owns the projection.
+
+**The product side is deliberately NOT changed.** The base was already at 11
+of the 16 hazards needed to STOP A RACE, so there was almost no headroom, and
+race control counts one car's own settled debris the same way it counts a
+pile-up. A single player scraping a wall for half a minute should not be able
+to red-flag a race. Owner: the race-incidents-control / pit-lane session —
+decide whether the new wall contact rate is intended and whether RED_MIN is
+still calibrated, before deciding whether the spec needs a guard against a
+legitimate re-grid (it has none today — `physics-fixes.spec.js:69`).
+
+**Two other things this measurement settled.** (1) The same file's OTHER test,
+wall scrub, FAILED at the base and PASSES at the tip: the base ran two
+Playwright workers on this 4-core box and the contention broke its timing
+assertion, which is exactly what the 2026-09-16 one-worker change
+(`playwright.config.js` `LOCAL_WORKERS`) was landed to stop. A measured fix.
+(2) The `APEX_VM_PAGE=1` adapter runs this spec in 19 s and reports **2/2
+green** — it never sees the red flag. That is the sharpest evidence yet for
+the standing rule that the adapter is a pre-check ALONGSIDE the browser gate
+and never a replacement: here the VM is blind to a live product regression.
+
 ### 2026-09-16 — the deploy tip's release train is red on the coplanar sweep (geometry, not tooling)
 
 Found by the train on `f46cb99` (pages run 35068834342, 2026-09-16 07:35 UTC)
@@ -882,6 +971,12 @@ row, chip and price intact. (3) The `selected` shards moved to Mesa llvmpipe
 today; the shard carrying menu-baseline stays on SwiftShader, since the six
 goldens are SwiftShader captures (ci.yml carve-out, pinned by
 `tests/unit/ci-coverage.test.mjs`).
+
+**LIVE.** The first green train after those three landed is pages run 2356 on
+`1f04126` (2026-09-16 08:45 UTC): every job green, and the live shell now reads
+`<meta name="apex-sha" content="1f04126…">` at build **9116**, up from the 9058
+the site had been stuck on all morning. The tooling landing of 2026-09-16 rode
+out with it.
 
 ### 2026-09-01 general survey — fixed, recorded, and the player-facing list
 

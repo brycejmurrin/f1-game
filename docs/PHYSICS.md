@@ -52,26 +52,57 @@ scale, so a ratio is its natural unit — which is also why the v2→v3 store re
 measures "nearest" in LOG space; in absolute pace the two fastest old settings
 collapse onto one new notch. See `docs/research/PHASE-C-SLIDER-DESIGN.md`.
 
-**Combined-slip (friction ellipse)**: `LONG_GRIP = 34 m/s²` is the longitudinal
-axis of the traction circle. Braking or accelerating consumes longitudinal grip;
-`slipFactor = sqrt(1 − (axUsed/LONG_GRIP)²)` scales lateral grip. Weight
-transfer still reads faded `axEstSm` (no fake unload at vmax). The circle
-itself uses `max(|axEstSm|, throttleDemand)`: demand is unfaded
-`ACCEL · PACE · throttle · THR_ELLIPSE` (`THR_ELLIPSE = 2.2` in
-`js/physics/consts.js`) so planting the throttle mid-corner spends grip even
-when speed-limited. Braking still costs more (`BRAKE` 22 vs ~15 m/s²).
+**Lateral tyre curve** (`TyreModel.lateralCurve`, `js/physics/tyre-model.js`):
+each of the player's axles turns `x = cs·α/mu` into a normalised force —
+`sin(x)` up to the peak at `x = π/2` (slope 1 at the origin, so `CS_FRONT` /
+`CS_REAR` keep their meaning and the peak force is exactly `mu`), then a
+Gaussian fall to `CURVE_FLOOR` (0.75) of width `CURVE_FALL_W` (1.4): ≥ 0.97 of
+peak out to x ≈ 2.1, 0.85 at x = 3, the floor by x ≈ 5 — that is the FRONT.
+The rear holds its peak out to `CURVE_HOLD_R` (2.6) before a gentler fall
+(`CURVE_FALL_W_R` 2.0) to `CURVE_FLOOR_R` (0.80): with the front's fall on
+both axles, full lock while coasting at 32–44 m/s spun the car, because the
+rear's peak slip angle is only 6–7° without aero and every turn-in overshoot
+carried it past the peak. It replaced `tanh(x)`,
+which saturated and never fell, so an overdriven front kept 100 % of its force
+at 16° of slip and a flick at full lock cost nothing. The peak slip angle is
+`(π/2)·mu/cs` — about 9–11° front and 8–9° rear at 45 m/s, lower at low speed,
+rising with aero load as it should. Never negative, never oscillating (a Magic
+Formula with a sharpening E goes negative at spin-sized slips, which this model
+reaches). The front-saturation haptic fires at `x > 1.15`, i.e. before the
+peak; a rear haptic fires past the rear's peak. `c.frontUtil` / `c.rearUtil`
+(the coach, `obs()`) are `x / (π/2)` — 1.0 at the peak, above it past — because
+`|Fy| / mu` is not monotonic any more. Measured shapes and the
+literature: `docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md`; the shape is
+locked by `tests/unit/player-dynamics-vm.test.mjs`.
+
+**Combined-slip (friction ellipse), per axle**: `LONG_GRIP = 34 m/s²` is the
+longitudinal axis of the traction circle and each axle pays for what IT does.
+Braking charges both axles from the smoothed deceleration `axEstSm` (split by
+brake bias below; 1/1 at `BB_REF`), so easing off the pedal hands grip back
+continuously and trail-braking rotates the car. Engine braking — the coast
+part of a deceleration, `brakeMix` ramps the pedal's share in from coast drag
+to 1.5× it — and the THROTTLE charge the driven rear only: the undriven front
+spends nothing on the pedal, so a planted throttle at the limit of a slow exit
+lightens the rear's lateral grip and the car rotates (power-on oversteer,
+emergent). The throttle charge is a fraction of `LONG_GRIP`:
+`clamp(THR_VK / vStd, THR_FLOOR, THR_CAP)` (14 / 0.34 / 0.62 in
+`js/physics/consts.js`) — traction-limited at ≤ 23 m/s, power-limited (an
+engine's P/v) above, floored so planting the throttle mid-corner spends grip
+even when speed-limited; ERS deploy adds on top. Full brake is still the bigger
+bill (`BRAKE` 22 / 34 ≈ 0.65). Each axle's `sqrt(1 − axFrac²)` scales its own
+`mu`; `physState()` exposes `axEstSm`, `axFrac` (the larger axle) and
+`slipFactor` (the rear's, which the engine audio reads).
 **The surface scales the brake as well as the grip** (2026-09-16): `surfMu`
 scaled lateral grip off-track while the brake term carried no surface at all,
 so a tyre on grass retarded the car exactly as hard as one on tarmac. The brake
-now carries the same `lerp(1, OFF_GRIP, depth)`, which drops the off-track
-friction-circle draw from 0.638 to 0.268 at full brake. **A known defect remains
-next to it**: the run-off SCRUB (`20 + offDepth·28` m/s², up to 4.6 g) dwarfs
-`BRAKE`, so 70 → 30 m/s measures 90.9 m on tarmac against 34.9 m on grass —
+now carries the same `lerp(1, OFF_GRIP, depth)`. **A known defect remains next
+to it**: the run-off SCRUB (`20 + offDepth·28` m/s², up to 4.6 g) dwarfs
+`BRAKE`, so 70 → 30 m/s measured 90.9 m on tarmac against 34.9 m on grass —
 running wide is still the quickest way to stop. Fixing that is a track-limits
 DETERRENCE decision (the `c.cuts` counter is the other half), not a physics
 tidy-up, so it is recorded here rather than changed.
-Trail-braking rotates the car; hard braking mid-corner understeers. Exposed via
-`physState()` fields `axEstSm`, `axFrac`, `slipFactor`. **Brake bias** (the SETUP sheet,
+
+**Brake bias** (the SETUP sheet,
 `js/garage/setup-tune.js`) splits that budget per axle UNDER BRAKING only:
 the front spends `bb / BB_REF` of it and the rear `(1 − bb) / (1 − BB_REF)`
 (`BB_REF = 0.56`, `js/physics/consts.js`), so `muF`/`muR` carry their own
@@ -80,25 +111,16 @@ single `slipFactor` it always was — AI and remote cars carry no `brakeBias` an
 read `BB_REF`, so nothing outside the player's sheet moves. Forward bias spends
 the front's circle (entry understeer); rearward lightens the rear (rotation).
 
-**Tyre peak and load sensitivity** (2026-09-16, `js/physics/consts.js`
-`TYRE_DROP` / `TYRE_PEAK_X` / `TYRE_DROP_W` / `LOAD_SENS`). The per-axle
-lateral force is `_tyreSat(cs, slip, mu)`: a `tanh` of normalised slip
-`x = cs·slip/mu` up to the friction limit, and now PAST it a smoothstep drop of
-`TYRE_DROP` (12 %) faded in over `x` 1.5..3.0. A tyre inside its peak is
-untouched — at racing grip `x = 1.5` is ~0.29 rad of slip, the whole steering
-lock, so steering alone never reaches the drop; a lateral SLIDE does, which is
-what makes a big oversteer moment cost grip instead of rotating for free, and
-catching it early a skill. `muF`/`muR` used to scale linearly with axle load;
-each now carries `1 − LOAD_SENS·(load/static − 1)`, so the loaded axle gains
-less than its share and the unloaded one loses less. Static balance is exactly
-unchanged (the factor is 1 at rest) and the pair under full braking has ~1.3 %
-less lateral grip than at rest. The physics-characterization baseline was
-regenerated with the change and the diff read: straight-line accel is
-identical, the steady corner and off-track rows move by millimetres, and
-"trail brake into rotation" (70 m/s, brake + 0.5 steer) rotates less — peak
-slip −4.41° → −3.97° and 1.5 m/s more speed carried at the 60-step row — which
-is the load-sensitivity trim on the braking front's gain, the intended
-"hard braking mid-corner understeers" tendency made slightly firmer.
+**Load sensitivity** (2026-09-16, `LOAD_SENS` in `js/physics/consts.js`).
+`muF`/`muR` used to scale linearly with axle load; each now carries
+`1 − LOAD_SENS·(load/static − 1)`, so the loaded axle gains less than its
+share and the unloaded one loses less. Static balance is exactly unchanged
+(the factor is 1 at rest) and the pair under full braking has ~1.3 % less
+lateral grip than at rest — the braking front's gain trimmed, "hard braking
+mid-corner understeers" made slightly firmer. (The post-peak drop that landed
+with it, a 12 % smoothstep on `tanh`, was superseded by the peaked curve
+above in the same day's merge; `tests/unit/physics-rows-vm.test.mjs` pins
+both.)
 
 **ACTIVE AERO (X-mode / Z-mode)** is the THIRD straight-line lever, next to
 BOOST (spends the battery) and OVERTAKE (a free, proximity-gated push). It adds
