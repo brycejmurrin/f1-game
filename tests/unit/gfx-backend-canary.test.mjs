@@ -2880,7 +2880,10 @@ test("GLX links its core programs as one parallel batch when KHR_parallel_shader
     });
     return { links, statuses };
   };
-  const par = order(bootGlx({ parallel: true }));
+  const parallel = bootGlx({ parallel: true });
+  const par = order(parallel);
+  assert.equal(parallel.count("getShaderParameter"), 0,
+    "successful shaders must not block the pending batch on COMPILE_STATUS");
   assert.ok(par.links.length >= 8, "the core batch links at least eight programs");
   assert.ok(par.statuses.length >= 8, "every program's LINK_STATUS is still read (failures still surface)");
   assert.ok(par.statuses[0] > par.links[7],
@@ -2890,6 +2893,52 @@ test("GLX links its core programs as one parallel batch when KHR_parallel_shader
     "without the extension each link is checked before the next is issued (unchanged contract)");
   const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(glx, /getExtension\("KHR_parallel_shader_compile"\)/, "init() requests the extension");
+});
+
+test("GLX still diagnoses and releases a failed shader after linking", () => {
+  for (const parallel of [false, true]) {
+    const calls = [];
+    assert.throws(() => bootGlx({ parallel, shaderFailure: true, calls }), /refused/);
+    const firstLink = calls.findIndex(([name]) => name === "linkProgram");
+    const firstStatus = calls.findIndex(([name]) => name === "getShaderParameter");
+    assert.ok(firstStatus > firstLink, "compiler diagnostics are deferred until link failure");
+    assert.ok(calls.some(([name]) => name === "getShaderInfoLog"));
+    const deleted = calls.filter(([name, args]) => name === "deleteProgram" && args[0].shaders.some((sh) => sh.id === 1));
+    assert.equal(deleted.length, 1, "the failed program is released exactly once");
+  }
+});
+
+test("GLX chunked road draws honor depth bias and back faces, then restore state", () => {
+  const h = bootGlx();
+  const model = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+  const tri = { pos: [0,0,0, 0.1,0,0, 0,0.1,0], nrm: [0,0,1, 0,0,1, 0,0,1], col: [1,1,1, 1,1,1, 1,1,1], idx: [0,1,2] };
+  const mesh = h.GLX.createMesh(tri);
+  h.GLX.begin(h.frame({ viewProj: model }));
+  const road = { surfaceId: 16, doubleSided: true, depthBias: [-8, -16] };
+  for (const chunked of [false, true]) {
+    mesh.chunks = chunked ? [{ byteOffset: 0, count: 3, indexType: mesh.indexType, min: [0,0,0], max: [0.1,0.1,0] }] : null;
+    for (const fail of [false, true]) {
+      h.reset();
+      let drew = false;
+      h.answers.drawElements = () => {
+        drew = true;
+        assert.ok(h.calls.some(([n, a]) => n === "disable" && a[0] === h.gl.CULL_FACE));
+        assert.ok(h.calls.some(([n, a]) => n === "enable" && a[0] === h.gl.POLYGON_OFFSET_FILL));
+        assert.ok(h.calls.some(([n, a]) => n === "polygonOffset" && a[0] === -8 && a[1] === -16));
+        if (fail) throw new Error("injected draw failure");
+      };
+      if (fail) assert.throws(() => h.GLX.drawChunked(mesh, model, road), /injected/);
+      else h.GLX.drawChunked(mesh, model, road);
+      assert.ok(drew, "the visible road was drawn");
+      const lastState = (cap) => h.calls.filter(([n, a]) => (n === "enable" || n === "disable") && a[0] === cap).at(-1)?.[0];
+      assert.equal(lastState(h.gl.CULL_FACE), "enable");
+      assert.equal(lastState(h.gl.POLYGON_OFFSET_FILL), "disable");
+    }
+  }
+  h.answers.drawElements = () => {};
+  h.reset();
+  h.GLX.drawChunked(mesh, model, {});
+  assert.equal(h.count("polygonOffset"), 0, "ordinary scenery needs no depth bias");
 });
 
 test("the flyby shows under race settings only; the picker pre-builds it hidden once the pick settles", () => {
