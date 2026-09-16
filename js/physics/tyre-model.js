@@ -443,6 +443,19 @@ const TyreModel = (function () {
 
     function on() { return LEVELS[level] > 0; }
     function setLevel(v) { if (isLevel(v)) level = v; return level; }
+    // How many laps a set ACTUALLY lasts at the setting in force — the number a
+    // STRATEGY has to plan against. lifeLaps() is the nominal, level-free life,
+    // and wear then accrues at LEVELS[level]/lifeLaps per lap, so a set survives
+    // lifeLaps / LEVELS[level] laps. The planner used to ask lifeLaps() direct,
+    // which is only right at `real` (1.0); at the SHIPPED DEFAULT `light` (0.55)
+    // a set lasts 1.82x longer and the AI pitted for tyres it had not used —
+    // measured identical first stops (lap 7) and stop counts at light and real,
+    // because the plan could not see the setting. At `off` nothing wears, so the
+    // honest answer is "the whole race".
+    function planLaps(life, lapsTarget) {
+      const k = LEVELS[level];
+      return k > 0 ? lifeLaps(life, lapsTarget) / k : Math.max(1, lapsTarget || 1);
+    }
 
     // Put a fresh set on a car. The ONLY place c.tyreWear is cleared, so a stop
     // and a re-grid cannot disagree about what "fresh" means.
@@ -620,7 +633,7 @@ const TyreModel = (function () {
       fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
       stints, closeStints,
       lapsOn, spent, info, severity,
-      level: () => level, setLevel, on,
+      level: () => level, setLevel, on, planLaps,
       classRecord, optionRecord,
     };
   }
