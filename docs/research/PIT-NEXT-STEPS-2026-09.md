@@ -76,9 +76,9 @@ as one commit with the tests named; the radio card's compact anchor fix
    `rivalBoxed` (a rival whose `pitStops` rose this lap within `lossS + 2 s`
    behind), `marginS`, `lap`; `callFor` gains, in this order: caution with
    margin ("STOP NOW LOSES NOTHING", keyed `caution`), undercut, rain before
-   the stop, then after `gone`: BOX THIS LAP / BOX NEXT LAP — <compound>
+   the stop, then after `gone`: BOX BOX BOX / BOX NEXT LAP — <compound>
    (`js/race/engineer.js:76-103`). `engineer.test.mjs`'s `sense()` defaults
-   grow the five fields; tread still beats BOX NEXT LAP, BOX THIS LAP beats
+   grow the five fields; tread still beats BOX NEXT LAP, BOX BOX BOX beats
    the wear ladder.
 5. **Rivals' windows** — on the gap chips, not a tower (there is none:
    `.hud-gaps` `:398-401` is the only per-rival HUD element): `data-pit="P12"`
@@ -105,12 +105,27 @@ at the end.
 
 ## 3. Then: the entrance lamps
 
-`PIT-ENTRY-LAMPS-PLAN-2026-09.md`, two commits: the lit green pair with light
-records and the re-cut six-luminaire test, then the live red aspect through the
-pit-signs decal (which also gives the exit signal its live aspect). Needs the
-night frame from §1.3 before the halo option is chosen.
+**Built**, then re-cut TWICE the same evening, both times from a night shot and
+a measurement (see the plan's header for the numbers). Where it landed: the
+pair stands on the WALL CORNERS at the ENTRY LINE — the platform wall's nose on
+the track side, the outer wall opposite — one gate with the lane's middle
+between them, which is the only arc where a wall stands on both sides at all
+(down the entry road the peel is a wedge off the road edge with tarmac on its
+track side). They are RED by default, with GREEN as the called-in overlay, on a
+new `signal` lamp kind that is a signal rather than a road light; each aims at
+the fast lane's middle a car's length in, and the radius is the throw, not a
+flat 24/32 that washed 16 m of racing line white.
+
+Still open from it: the exit signal's live aspect on the same decal mechanism,
+and the real-GPU night frame (§1.3) — the SwiftShader frame is what caught the
+white pool, so the red one wants the same check on a real GPU.
 
 ## 4. Then: the entry road's mouth on the straight
+
+**Built** in the same commit as the lamps (`MOUTH_RUN` 20 in `TrackPit.window`;
+the pit-complex test walks every circuit whose straight can hold the floor
+plus the road). Abu Dhabi's window is 174 m (was 260) with the full 70 m road
+and 16 m of straight before the mouth; Sochi 174, Spa 214, Mosport 182.
 
 **Reported** (phone screenshots, 2026-09-16 evening): "the pit entrance is still
 right off a turn and should be shortened." Surveyed on every circuit

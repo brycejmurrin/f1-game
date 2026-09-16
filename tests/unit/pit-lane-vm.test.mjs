@@ -314,7 +314,7 @@ test("THE DIRECTIONS, FOLLOWED, MAKE THE STOP: every cue fires at the model's ow
   assert.ok(armed, "holding the lane's tarmac on the entry road did not call the stop");
   assert.ok(inside(armed.ps.s, p.sA, p.sIn), `armed ON the entry road (s ${armed.ps.s.toFixed(0)}, road ${p.sA.toFixed(0)}..${p.sIn.toFixed(0)})`);
   assert.equal(armed.c.phase, "armed");
-  assert.match(armed.c.text, /^STAY IN LANE · BOX — [A-Z]$/, `the booked compound is named: "${armed.c.text}"`);
+  assert.match(armed.c.text, /^STAY IN LANE · BOX BOX — [A-Z]$/, `the booked compound is named: "${armed.c.text}"`);
   assert.equal(armed.q.state, "none", "the limiter waits for the line");
 
   // 5. THE LINE: the state turns to LANE there, the cue says STAY IN LANE with the limit, and the limiter holds.

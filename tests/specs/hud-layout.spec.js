@@ -73,7 +73,10 @@ const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed"];
 // the pause button taller (--tap is 44 desktop / 52 touch) or the sectors box
 // start higher has anywhere to go — that is the collision this very file caught
 // once already, when the 56 was hard-coded. Everything else has room.
-const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors", "#hud-limits"];
+// #announce is the RADIO CARD (every banner since 8d3604596): hidden until a
+// message shows, so race() below unhides it with a long line — measured, it
+// must clear the timing row it hangs under, the flag chip, and the gaps strip.
+const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors", "#hud-limits", "#announce"];
 
 async function race(page, steer, manual, ins, opts) {
   const o = opts || {};
@@ -103,6 +106,16 @@ async function race(page, steer, manual, ins, opts) {
   // The CAMERA decides half the adaptive rules (ONBOARD_IDS / BCAM_IDS in
   // js/ui/hud.js), so a spec that never leaves chase cannot see them.
   if (o.cam) await page.evaluate((c) => { window.__apex.camera(c); }, o.cam);
+  // THE RADIO CARD, shown with its longest tenant so its box is measured: the
+  // engineer's longest line on the driver's channel. The DOM is poked
+  // directly — there is no __apex hook for a banner, and a real one would
+  // fade during the measurement.
+  await page.evaluate(() => {
+    const e = document.getElementById("announce");
+    document.getElementById("announce-who").textContent = "VERSTAPPEN · RADIO · 33";
+    document.getElementById("announce-text").textContent = "CAUTION — CHEAPER STOP, ABOUT 23s LOST";
+    e.hidden = false;
+  });
   await page.waitForTimeout(300);
 }
 

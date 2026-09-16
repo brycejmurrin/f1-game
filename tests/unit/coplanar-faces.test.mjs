@@ -132,6 +132,18 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // stacked building sections (41 x 4.8 x 7.6 m, 49 x 6.7 x 35 m), not pit
 // prims. Restored scenery is the point of the shorter lane; the seams are the
 // generators' open defect, as the header says.
+//
+// hockenheim 47→48 (2026-09-16, evening): the SAME cause one cut further on.
+// `TrackPit.window` now leaves MOUTH_RUN (20 m) of straight between the last
+// corner and the entry road's mouth, so on the 21 circuits whose mouth sat
+// inside a corner the window opens later and is shorter still — Hockenheim's
+// among them. One more of its own kit masses stands where the complex used to
+// supersede it. Measured, and bisected against the lamp work in the same
+// commit: `coplanar-audit hockenheim --why` reads 48 spots / 62 pairs, ONE
+// `trk` call site, maxArea 73.1 m², minGap 0.0 mm — stacked building sections,
+// the same class as the six above, no pit prim among them; and the count read
+// 48 on both sweeps of that commit, before and after the entrance lamps moved
+// from the mouth to the entry line, so the lamps are not in it.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );

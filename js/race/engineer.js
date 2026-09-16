@@ -101,7 +101,16 @@ const RaceEngineer = (function () {
       }
       if (s.blistering >= BLISTER_CALL) return ["BLISTERS — THAT SET IS DONE", "blister"];
       if (s.wear >= 1) return ["TYRES ARE GONE — BOX WHEN YOU CAN", "gone"];
-      if (s.lapsToStop === 0) return ["BOX THIS LAP" + (s.nextCode ? " — " + s.nextCode : ""), "plan0"];
+      // THE PIT CALL IS THE REAL ONE. On a Formula 1 radio the word is "box",
+      // not "pit": it is short for the German *Boxenstopp*, and one hard
+      // syllable carries over engine noise where "pit" does not. It is said
+      // two or three times for the same reason — "box, box, box" is one
+      // instruction repeated, not three (racefans.net's radio-jargon guide;
+      // williamsf1.com's own glossary: "repeated two or three times just makes
+      // sure there's no confusion over the radio"). "Box this lap" is the
+      // same call in longhand; the repeat is what a driver hears at 300 km/h,
+      // so that is what this game says.
+      if (s.lapsToStop === 0) return ["BOX BOX BOX" + (s.nextCode ? " — " + s.nextCode : ""), "plan0"];
       if (s.lapsToStop === 1) return ["BOX NEXT LAP" + (s.nextCode ? " — " + s.nextCode : ""), "plan1"];
       if (s.graining >= GRAIN_CALL) return ["GRAINING — EASE OFF AND CLEAN THEM UP", "grain"];
       if (s.outLap && s.belowWindow >= COLD_CALL) return ["TYRES ARE COLD — TAKE A LAP", "cold"];

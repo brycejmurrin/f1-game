@@ -1,7 +1,52 @@
 # Two coloured lamps flanking the pit entrance — plan (2026-09-16)
 
-> Plan only; nothing built. Every claim carries a `file:line` against the tree
-> at `8d3604596`. Companions: `PIT-LIGHTING-PLAN-2026-09.md` (the canopy
+> **Built** the same evening (§4 A + B + C(a) + D, and B2's live red aspect in
+> the same commit): one post at the mouth on the verge, the far one where the
+> peel has reached the lane's full width (`entryRoadM − grow` in, NOT 6 m in as
+> §4 A said — measured, the road has no width there and the verge barrier still
+> runs at 3 m on Bahrain and Abu Dhabi); the GREEN aspect as `track.pitSignal`,
+> a second texMesh on the signs atlas. The exit signal was NOT moved onto
+> the live mechanism (§4 B2's second half) — still open.
+>
+> **Re-cut the same evening**, from the first night shot of it (Abu Dhabi,
+> `scratch/captures/pit-hud/`): the pair is RED by default and the colours are
+> the other way round from §1 below. Reported: "those lamps look at the wrong
+> spot and aren't red." Both were true and both were measured
+> (`scratch/pit-lamp-aim.cjs`):
+>
+> - **The aim stood on bare verge.** Both lamps aimed at the lane's FULL width
+>   15 m past `sA`, where the road has opened to `w` 0.26 and `v` is 0 — the
+>   point sat 13.8 m from the centreline with tarmac only to 9.0, so the beam
+>   lit run-off. Each lamp now aims at the peel's own centre about 12 m from
+>   ITSELF, read off `p.w`/`p.v`: the near post forward into the mouth, the far
+>   post back at it, so both pools land on the turn-in.
+> - **The pool washed the racing line.** The window is a sphere around the lens,
+>   so radius 24 on a post 8.5 m off the centreline lit 16 m of racing surface
+>   white. The radius is now the throw plus a metre (14–18 m), and the far
+>   post's pool no longer reaches the road at all (−1.1 m on Abu Dhabi).
+> - **RED is the steady state**, on a new `signal` lamp kind (a signal, not a
+>   road light: a fifth of `led`'s energy, a 44° cone, and `tintMix` 0.04 so a
+>   sodium theme cannot turn a red light amber). The GREEN aspect is the decal
+>   overlay, laid over the red only while THIS car is called in — `PitLane`'s
+>   own cue phase, so the lamps and the radio never disagree.
+>
+> **Moved once more, to the WALL CORNERS.** Asked: "one lamp on the wall
+> corners on either side of the entrance, that's in the middle of the lane."
+> Measured down the entry road (`scratch/pit-mouth-walls.cjs`), that pair of
+> corners exists at exactly one arc, and it is the ENTRY LINE, not the mouth:
+> the peel is a wedge off the road edge with TARMAC on its track side and only
+> the outer wall beside it (which opens at `sA + 6`), so a gate cannot stand at
+> the mouth. At `sIn` the platform wall's nose stands at 10.0 m, the outer wall
+> at 22.0 and the fast lane's middle between them at 13.8 — a doorway the car
+> drives through, where the lane legally begins, the limit starts and the
+> "PIT LANE 80" board already stands. Each corner carries the head on a short
+> post off its own wall top, both finishing level at 2.55 m; the aim is the
+> lane's middle a car's length in, so both pools land BETWEEN the posts (radius
+> 11–17 m; the outer one does not reach the racing line at all). The gate is
+> anchored on the WALL'S first node rather than `kOf(sIn)` — node rounding can
+> land one step short of the wall, and Monaco lost both lamps to exactly that.
+> All 52 circuits with a walled lane now carry it, street circuits included. Every claim below
+> carries a `file:line` against the tree at `8d3604596`. Companions: `PIT-LIGHTING-PLAN-2026-09.md` (the canopy
 > luminaires and the exit signal — this plan reuses that pipeline end to end),
 > `PIT-LANE-REDESIGN-2026-09.md` (the complex's model), `PIT-GUIDANCE-STRATEGY-PLAN-2026-09.md`
 > (the HUD's cue, which these lamps are the world-side twin of).

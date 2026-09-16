@@ -889,6 +889,10 @@ let launchT0 = 0;
 let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
 let tyres = null;     // TyreModel.create(G), same deferral
 let pits = null;      // PitLane.create(G), same deferral
+// The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
+// called in and still on your way to the box. Not `out`/`served`/`merge` — by
+// then you are leaving, and not `missed`.
+const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "stop", "box"];
 let engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
@@ -7167,7 +7171,14 @@ function render(dt) {
   drawWorldMeshes(frame, night, wet, _floodEmit, false);
   gfx.drawSky(frameSky);
   // The pit bay signs: one decal after the sky (opaque → sky → decal; it depth-tests, never writes).
-  if (typeof PitSigns !== "undefined") PitSigns.draw(gfx, track, MAT_IDENT, frame.eye, night, hideMeshes.pitSigns);
+  // …and the entrance lamps go GREEN over their steady red once you are called
+  // in and still on your way to the box (PitLane's own cue, so the lamps and
+  // the radio never disagree).
+  if (typeof PitSigns !== "undefined") {
+    const cue = pits && pits.lastCue ? pits.lastCue() : null;
+    PitSigns.draw(gfx, track, MAT_IDENT, frame.eye, night, hideMeshes.pitSigns,
+                  !!cue && PIT_LAMP_GREEN.indexOf(cue.phase) >= 0);
+  }
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
