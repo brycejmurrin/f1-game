@@ -289,7 +289,24 @@ const Tracks = (function () {
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
       lap("propsSeal", "geo");
-      track.meshes.props = G.createChunkedMesh ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
+      // THE DISCRIMINATOR (apex26.propsUnchunked, diagnostic only, default off).
+      //
+      // The census measured GPU time invariant to pixel count, which rules out
+      // a fragment-bound frame but does NOT separate vertex-bound from
+      // draw-call-bound — and the two want opposite fixes. Culling pays on the
+      // first; on the second it can LOSE, which is what the occlusion numbers
+      // did at vegas (94 % of chunks skipped, 10 % slower).
+      //
+      // One unchunked mesh is the clean separation: every prop vertex
+      // submitted, no frustum cull, no occlusion, exactly ONE draw call. If
+      // that is FASTER than the chunked path, draw calls are what bind and
+      // WEBGL_multi_draw is the lever; if it is slower, vertices bind and the
+      // query overhead is the thing to fix. Either answer closes a question
+      // that has been guessed at twice.
+      let _unchunked = false;
+      try { _unchunked = localStorage.getItem("apex26.propsUnchunked") === "1"; } catch (_) { /* no storage */ }
+      track.meshes.props = (G.createChunkedMesh && !_unchunked)
+        ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
       lap("props", "up");
       track.meshes.propBatches = null;
       if (track.graph && G.createInstancedBatch) {

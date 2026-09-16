@@ -483,6 +483,21 @@ jobs:
               } else if (om.note || om.error) {
                 rows.push(`${" ".repeat(8)}       moving: NOT MEASURED — ${om.note || om.error}`);
               }
+            // THE IN-RUN A/B. Same commit, same runner, clock pinned — the only
+            // comparison of two flag states this workflow can make honestly.
+              const ab = g.occlusionAB || {};
+              if (ab.note || ab.error) {
+                rows.push(`${" ".repeat(8)}A/B:   NOT MEASURED — ${ab.note || ab.error}`);
+              } else if (ab.off && ab.on) {
+                rows.push(`${" ".repeat(8)}A/B:   gpu off=${ab.off.median}ms on=${ab.on.median}ms  delta=${ab.gpuDeltaPct}%  clockPinned=${ab.clockPinned}`
+                  + (ab.gpuDeltaPct != null && ab.gpuDeltaPct > 0 ? "   <- occlusion COSTS time here" : ""));
+                const px = ab.pixels || {};
+                if (px.error) rows.push(`${" ".repeat(8)}       pixels: diff FAILED — ${px.error}`);
+                else if (px.differing != null) {
+                  rows.push(`${" ".repeat(8)}       pixels: ${px.differing} of ${px.ofTotal} differ (${px.pctDiffering}%) maxDelta=${px.maxChannelDelta} meanAbs=${px.meanAbsDelta}`
+                    + (px.pctDiffering > 1 ? "   <- the image CHANGED: something visible was culled" : "   (image effectively identical)"));
+                }
+              }
               if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.softBlit === true ? "YES (headless readback — NOT the path a player takes)" : be.softBlit === false ? "no (direct present)" : "?"} skipBatches=${be.skipBatches} gpuErrFrames=${be.gpuErrFrames}`);
             // ...and the bookkeeping the probe keeps on itself, because run 54
             // showed tier=0 with envFace=3 and envFail=0 — the producer WAS

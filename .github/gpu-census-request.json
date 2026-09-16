@@ -1,8 +1,8 @@
 {
   "images": "macos-latest",
-  "track": "spa",
+  "track": "vegas",
   "census_only": false,
   "force": "",
   "ls": "",
-  "leg": "occlusion-2026-09-16-spa-CONTROL-flag-off-for-the-luma-diff"
+  "leg": "occlusion-2026-09-16-IN-RUN-ab-gpu-and-pixels"
 }

@@ -348,6 +348,79 @@ try {
     if (!A || !A.occlusionCull) return { note: "no occlusionCull hook — this build predates it" };
     try { return A.occlusionCull(); } catch (e) { return { error: String(e && e.message) }; }
   }), 20000, "occlusion");
+  // THE IN-RUN A/B — the only honest way to compare two flag states.
+  //
+  // Runs 131-136 compared occlusion on against off across SEPARATE census runs
+  // and the comparison was worthless twice over: different commits (a merge of
+  // another session landed between them) and cloud drift, which this repo has
+  // already recorded as a Metal-CI flake. Same commit, same runner, same parked
+  // camera, seconds apart, and the render clock PINNED so sky and cloud cannot
+  // move — then the difference is the flag or it is nothing.
+  //
+  // Two answers, because the counted oracle answers neither: does it cost less
+  // GPU TIME, and does it change the IMAGE. A per-pixel diff is what "no hole
+  // in the world" actually needs; a whole-frame mean luma can hide a hole.
+  const shotBase = flag("--shot", null);
+  out.occlusionAB = await bounded(async () => {
+    const A = { };
+    const has = await page.evaluate(() => !!(window.__apex && window.__apex.occlusionCull && window.__apex.gpuTimer));
+    if (!has) return { note: "no occlusionCull/gpuTimer hooks" };
+    // Pin the clock FIRST: everything below depends on the two captures being
+    // the same instant of weather.
+    A.clockPinned = await page.evaluate(() => {
+      try { window.__apex.renderClock(12, true); return true; } catch (_) { return false; }
+    });
+    const settle = async (n) => {
+      for (let i = 0; i < n; i++) await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    };
+    const sampleGpu = async (n) => {
+      const xs = [];
+      for (let i = 0; i < n; i++) {
+        await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        const v = await page.evaluate(() => { try { const q = window.__apex.gpuTimer(); return q && q.ms > 0 ? q.ms : null; } catch (_) { return null; } });
+        if (v != null) xs.push(v);
+      }
+      xs.sort((a, b) => a - b);
+      return xs.length ? { median: +xs[Math.floor(xs.length / 2)].toFixed(2), n: xs.length } : { median: null, n: 0 };
+    };
+    for (const on of [false, true]) {
+      await page.evaluate((v) => window.__apex.occlusionCull(v), on);
+      await settle(on ? 24 : 8);            // ON needs long enough for the queries to answer
+      const key = on ? "on" : "off";
+      A[key] = await sampleGpu(12);
+      A[key].stats = await page.evaluate(() => window.__apex.occlusionCull());
+      if (shotBase) {
+        A[key].shot = shotBase.replace(/\.png$/, "") + ".occl-" + key + ".png";
+        const r = await bounded(() => page.screenshot({ path: A[key].shot }), 30000, "ab-shot");
+        if (r && r.error) A[key].shotError = r.error;
+      }
+    }
+    await page.evaluate(() => { try { window.__apex.renderClock(null, false); } catch (_) {} });
+    await page.evaluate(() => window.__apex.occlusionCull(false));
+    if (A.off.shot && A.on.shot) {
+      try {
+        const sharp = (await import("sharp")).default;
+        const a = await sharp(A.off.shot).raw().toBuffer({ resolveWithObject: true });
+        const b = await sharp(A.on.shot).raw().toBuffer({ resolveWithObject: true });
+        if (a.data.length !== b.data.length) A.pixels = { error: "captures differ in size" };
+        else {
+          let diff = 0, maxd = 0, sum = 0;
+          for (let i = 0; i + 2 < a.data.length; i += a.info.channels) {
+            const d = Math.max(Math.abs(a.data[i] - b.data[i]), Math.abs(a.data[i + 1] - b.data[i + 1]),
+                               Math.abs(a.data[i + 2] - b.data[i + 2]));
+            sum += d; if (d > maxd) maxd = d; if (d > 2) diff++;
+          }
+          const n = (a.data.length / a.info.channels) | 0;
+          A.pixels = { differing: diff, ofTotal: n, pctDiffering: +(100 * diff / n).toFixed(3),
+                       maxChannelDelta: maxd, meanAbsDelta: +(sum / n).toFixed(3) };
+        }
+      } catch (e) { A.pixels = { error: String((e && e.message) || e).slice(0, 140) }; }
+    }
+    if (A.off.median && A.on.median) A.gpuDeltaPct = +(100 * (A.on.median / A.off.median - 1)).toFixed(1);
+    return A;
+  }, 180000, "occlusion-ab");
+  checkpoint("occlusion-ab");
+
   // AND THE SAME THING IN MOTION. park() gives a static camera, and every
   // popping risk this feature has lives in movement: a chunk hidden while the
   // camera was elsewhere stays hidden for as many frames as its query takes to
