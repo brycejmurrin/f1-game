@@ -48,7 +48,7 @@ test("--since takes a REF, and does not read it as a path", () => {
   // itself — and `reason` was "unmatched", i.e. "nothing to run" for a diff
   // that certainly had files in it.
   //
-  // HEAD, not HEAD~1: CI's guards job checks out SHALLOW (`actions/checkout@v4`
+  // HEAD, not HEAD~1: CI's guards job checks out SHALLOW (`actions/checkout@v5`
   // with no fetch-depth), where HEAD~1 does not exist and git fails with
   // "ambiguous argument". HEAD resolves in every clone and pins the same
   // property — the ref must not end up in the FILE list.
