@@ -450,6 +450,30 @@ test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
     "the selection report must make its delegated coverage visible");
 });
 
+test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: swiftshader` opts out", () => {
+  // 2026-09-16, second pass. llvmpipe reached the smoke shards first (run
+  // 35062479811: corner approach 17.8 s against a 214 s SwiftShader median,
+  // every frame assertion holding) while `selected`'s oversize shards were
+  // still 10-40 min of SwiftShader and were the gate's wall clock. A step that
+  // sets APEX_GL without the apt+Xvfb step above it launches against a display
+  // that is not there, so the two must travel together in every job — that
+  // pairing is the thing YAML cannot state and this test can.
+  const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
+  const drivingJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  driving-model:\n"), ciWorkflow.indexOf("\n  renderer-filter:\n"));
+  for (const [name, job] of [["smoke", smokeJob], ["selected", selectedJob]]) {
+    assert.match(job, /- name: Mesa llvmpipe \+ Xvfb\n\s+if: [^\n]*inputs\.gl != 'swiftshader'/,
+      `${name} must install Mesa + Xvfb, and skip it on the \`gl: swiftshader\` opt-out`);
+    assert.match(job, /Xvfb :99 -screen 0 1280x800x24[^\n]*&\n\s+echo "DISPLAY=:99" >> "\$GITHUB_ENV"/,
+      `${name}'s Xvfb must export DISPLAY so the pinned test command line is unchanged`);
+    assert.match(job, /APEX_GL: (llvmpipe|\$\{\{ inputs\.gl != 'swiftshader'[^\n]*\}\})/,
+      `${name} installs llvmpipe but never asks the browser for it`);
+  }
+  // driving-model is the parity anchor for the VM twins (physics-baseline.json):
+  // a rasteriser swap under it is a separate, separately measured change.
+  assert.doesNotMatch(drivingJob, /APEX_GL|llvmpipe/,
+    "driving-model stays on SwiftShader — swap it deliberately, with its own measurement");
+});
+
 // THE RENDERER JOB (2026-09-01): the gfx group on macos-latest, the one runner
 // image with a hardware (Metal) adapter. Three things about it are load-bearing
 // and none of them is enforced by YAML: it must run on the macOS image, it must

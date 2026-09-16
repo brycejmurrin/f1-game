@@ -192,18 +192,22 @@ on:
         type: boolean
         required: false
         default: false
-      # EXPERIMENT (2026-09-16): Mesa llvmpipe instead of SwiftShader on the
-      # smoke shards. Dead in the dev container (no /dev/dri —
-      # docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe), untested on GitHub's
-      # runners, where the public walkthrough that note cites got its numbers.
-      # `llvmpipe` installs Mesa + Xvfb on the smoke runners and launches with
-      # APEX_GL=llvmpipe (playwright.config.js swaps the ANGLE flags). Read the
-      # shard times and the renderer string in the log; nothing else changes.
+      # THE OPT-OUT, NOT THE OPT-IN (2026-09-16, second pass). Mesa llvmpipe
+      # replaced SwiftShader on the smoke gate after run 35062479811 measured
+      # it 8-12x faster with every frame assertion holding; the browser jobs
+      # (smoke, the wide run, `selected`) now install Mesa + Xvfb and launch
+      # with APEX_GL=llvmpipe (playwright.config.js swaps the ANGLE flags) by
+      # default. `gl: swiftshader` skips the Mesa step and the env, so a spec
+      # can still be measured on both — read the shard times and the
+      # WEBGL_debug_renderer_info string in the log. It is dead in the dev
+      # container (no /dev/dri — docs/notes/CI-RENDERING-PERFORMANCE.md
+      # §llvmpipe), alive on GitHub's runners. driving-model is deliberately
+      # NOT on it: it is the parity anchor for the VM twins.
       gl:
-        description: "software GL for the smoke shards: swiftshader (default) or llvmpipe (experiment)"
+        description: "software GL for the browser jobs: llvmpipe (default) or swiftshader (opt-out)"
         type: string
         required: false
-        default: "swiftshader"
+        default: "llvmpipe"
   workflow_call:      # pages.yml gates its deploy on this
     inputs:
       # Caller's push `before` SHA, forwarded EXPLICITLY. github.event in a
@@ -831,10 +835,11 @@ jobs:
       # `npm run test:smoke` line below is unchanged) and the launch flags
       # APEX_GL swaps in playwright.config.js. Dead in the dev container (no
       # /dev/dri — docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe), alive on
-      # GitHub's runners. The dispatched wide run keeps SwiftShader unless
-      # `gl: llvmpipe` is passed, so a spec can still be measured on both.
+      # GitHub's runners. The dispatched wide run is llvmpipe too since
+      # 2026-09-16; `gl: swiftshader` is the opt-OUT that skips this step and
+      # the env below, so a spec can still be measured on both.
       - name: Mesa llvmpipe + Xvfb
-        if: steps.shipfilter.outputs.ships != 'false'
+        if: steps.shipfilter.outputs.ships != 'false' && inputs.gl != 'swiftshader'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
@@ -925,27 +930,34 @@ jobs:
         # argv to `playwright test`). Unsharded this step took 30-37 min.
         run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/4
       # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
-      # whichever browser group the `group` input names (default tiny).
+      # whichever browser group the `group` input names (default tiny). On
+      # llvmpipe since 2026-09-16, for the smoke numbers measured above (corner
+      # approach 17.8 s vs 214, grid start 21.4 vs 138, shard walls 1.1-1.6 min
+      # vs 1.8-4.8); `gl: swiftshader` is the opt-OUT below.
       - name: Boot group (nightly) / dispatched group
-        if: steps.shipfilter.outputs.ships != 'false' && inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.gl != 'llvmpipe'
+        if: steps.shipfilter.outputs.ships != 'false' && inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.gl != 'swiftshader'
         env:
           APEX_WORKERS: 1
           GROUP: ${{ github.event_name == 'workflow_dispatch' && inputs.group || 'tiny' }}
           # A dispatched group runs its browser copies of the VM-twinned specs
           # too (locally run-playwright skips them; this is where they still run).
           APEX_WITH_TWINNED: 1
+          # Mesa llvmpipe + Xvfb, installed by the step above (it is skipped
+          # with `gl: swiftshader`, and so is this step).
+          APEX_GL: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: 1
         run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
-      # The same run under Mesa llvmpipe + Xvfb (dispatch input `gl: llvmpipe`).
-      # Its own step so the step above keeps the exact command line
-      # tests/unit/ci-coverage.test.mjs pins; read the shard times and the
-      # WEBGL_debug_renderer_info string in the log against a SwiftShader run.
-      - name: Dispatched group on llvmpipe (experiment)
-        if: steps.shipfilter.outputs.ships != 'false' && github.event_name == 'workflow_dispatch' && inputs.gl == 'llvmpipe'
+      # The same run on ANGLE's SwiftShader (dispatch input `gl: swiftshader`):
+      # the opt-out, for measuring a spec on both rasterisers or for a renderer
+      # verdict that must match the pre-2026-09-16 history. Its own step so the
+      # step above keeps the exact command line tests/unit/ci-coverage.test.mjs
+      # pins; read the shard times and the WEBGL_debug_renderer_info string in
+      # the log against an llvmpipe run.
+      - name: Dispatched group on SwiftShader (opt-out)
+        if: steps.shipfilter.outputs.ships != 'false' && github.event_name == 'workflow_dispatch' && inputs.gl == 'swiftshader'
         env:
           APEX_WORKERS: 1
           APEX_WITH_TWINNED: 1
-          APEX_GL: llvmpipe
-          LIBGL_ALWAYS_SOFTWARE: 1
           GROUP: ${{ inputs.group || 'tiny' }}
         run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
       - name: Failure artifacts
@@ -1364,9 +1376,29 @@ jobs:
       # on surviving a timeout. Three bounds the failure cost at 3 x 180 s =
       # 9 min (the --timeout below) inside the shard's cap while still showing
       # a pattern.
+      #
+      # MESA LLVMPIPE HERE TOO (2026-09-16). This job's oversize shards were the
+      # gate's wall clock — agent-view 22-40 min, wake-lock 18.6, pit-signs and
+      # race-control 1-12 — all of it SwiftShader, while the smoke shards next
+      # door had already moved to llvmpipe and measured 8-12x on exactly these
+      # rendering tests (run 35062479811: corner approach 17.8 s vs 214, grid
+      # start 21.4 vs 138). Same step as smoke's, verbatim: apt, an Xvfb on :99
+      # for ANGLE's GL backend to bind through, DISPLAY exported so the pinned
+      # `npm test --` line below is unchanged. `gl: swiftshader` opts out.
+      - name: Mesa llvmpipe + Xvfb
+        if: inputs.gl != 'swiftshader'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
+          Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
       - name: Run the selection (${{ matrix.name }}, ${{ matrix.tests }} tests)
         env:
           APEX_WORKERS: 1
+          # llvmpipe (the step above). Empty on `gl: swiftshader`, where the
+          # step is skipped and playwright.config.js keeps the ANGLE default.
+          APEX_GL: ${{ inputs.gl != 'swiftshader' && 'llvmpipe' || '' }}
+          LIBGL_ALWAYS_SOFTWARE: ${{ inputs.gl != 'swiftshader' && '1' || '' }}
         run: npm test -- ${{ matrix.specs }} --retries=0 --timeout=180000 --max-failures=3
       # Record what failed so the NEXT run hoists it to the front. junit.xml is
       # the machine-readable half of the reporter set playwright.config already
