@@ -177,8 +177,9 @@ test.describe("Time Trial — sector splits", () => {
     await enterTT(page);
 
     // Start just before this track's curated S1→S2 boundary at low speed so the
-    // car crosses cleanly without triggering auto-rescue (which would overwrite
-    // the "S1" announce with "RECOVERED").
+    // car crosses cleanly without triggering auto-rescue. (Auto-rescue no longer
+    // announces anything — the banner was removed as self-evident — but it still
+    // teleports the car, which would move it off the boundary this test needs.)
     await page.evaluate(async () => {
       window.__apex.headless(true);
       window.__apex.go();

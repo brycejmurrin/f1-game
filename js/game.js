@@ -18,7 +18,8 @@ const els = {
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
   flag: $("hud-flag"), minimap: $("minimap"),
-  lights: $("lights"), announce: $("announce"), announceWho: $("announce-who"), announceText: $("announce-text"),
+  lights: $("lights"), announce: $("announce"), announceNum: $("announce-num"),
+  announceWho: $("announce-who"), announceText: $("announce-text"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
   lighting: $("lighting"), camtune: $("camtune"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
@@ -1124,20 +1125,26 @@ const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3,
 let _annPri = 0, _annQueue = null;
 // THE RADIO. A banner is a radio message: the WHO line names the channel it
 // came in on — race control for a penalty or a warning, the coach for a tip,
-// otherwise the driver's own pit-wall channel with their name and number, the
-// way a broadcast captions team radio — and the words sit under it in quotes.
+// otherwise the driver's own pit-wall channel under their name — the words sit
+// under it in quotes, and the car NUMBER sits on the plate beside both
+// (css/hud.css #announce-num), the way a broadcast captions team radio. The
+// number used to be the last token of the WHO line, in micro type at --dim: the
+// dimmest thing on a card that is always about that car. Every channel here is
+// addressed TO the player, so the one number serves all three.
 function radioWho(kind) {
-  const p = player, num = p && p.num != null ? " · " + p.num : "";
-  if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL" + num;
-  if (kind === "coach" || kind === "practice") return "COACH" + num;
+  if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL";
+  if (kind === "coach" || kind === "practice") return "COACH";
+  const p = player;
   const who = p && p.name ? String(p.name).split(" ").pop().toUpperCase() : (p && p.code) || "";
-  return (who ? who + " · " : "") + "RADIO" + num;
+  return (who ? who + " · " : "") + "RADIO";
 }
+const radioNum = () => (player && player.num != null ? String(player.num) : "");
 function showAnnounce(msg, dur, kind) {
   kind = kind || "race";
   _annPri = ANN_PRI[kind] || 2;
   els.announceText.textContent = msg;
   els.announceWho.textContent = radioWho(kind);
+  els.announceNum.textContent = radioNum();   // "" collapses the plate to the old 3px stripe
   els.announce.className = "";
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
@@ -1215,20 +1222,37 @@ function fmtTime(t) {
   const m = Math.floor(t / 60), s = t - m * 60;
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
 }
+// RETURNS WHETHER THE MESSAGE REACHED THE SCREEN — true shown, false dropped
+// or queued. It used to return nothing, and a caller that needs to know could
+// not: RaceEngineer marks a wear step CONSUMED as it speaks, on the promise
+// (its own comment) that "a threshold crossed while the banner was busy is
+// still waiting on the next tick rather than silently spent". That promise was
+// unkeepable while this told it nothing. Both early returns below are silent
+// drops, and the camera one is permanent — see the note on it.
 function announce(msg, dur, kind) {
   kind = kind || "race";
   const pri = ANN_PRI[kind] || 2;
   if (hudProfile !== "broadcast") {
     const camId = CAM_MODES[camMode].id;
     if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead") {
-      if (kind === "info" || kind === "coach") return;
+      // The cinematic cameras drop the two quiet channels so a film shot is not
+      // captioned. That is a LOOK choice, and it must not silence the engineer:
+      // every RaceEngineer line is "info", so before this returned a verdict a
+      // player who pressed the camera button stopped being told to BOX for the
+      // rest of the session — the call was consumed unseen and a wear step,
+      // once advanced, never re-crosses.
+      if (kind === "info" || kind === "coach") return false;
     }
   }
   if (announceT > 0 && pri <= _annPri) {
-    if (!_annQueue || pri > (_annQueue.pri || 0)) _annQueue = { msg, dur, kind, pri };
-    return;
+    // The queue is a single slot. Taking it means the line still gets its turn,
+    // so that counts as accepted; losing it to a higher priority means the line
+    // is gone and the caller has to offer it again.
+    if (!_annQueue || pri > (_annQueue.pri || 0)) { _annQueue = { msg, dur, kind, pri }; return true; }
+    return false;
   }
   showAnnounce(msg, dur, kind);
+  return true;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
 // Curated def.sectors splits when present; equal thirds only as fallback.
@@ -3219,7 +3243,42 @@ const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags });
 /** The RACE! button's route into a race. Not folded into startRace(): netplay
  *  and __apex.race() both AWAIT that function, and neither should gain two
  *  seconds of flourish. The button is the only place a human is watching. */
+/** THE GRID, FOR THE FLYBY'S LAST SHOT. The menu builds a world but no field —
+ *  prepareMenuCarAssets only warms the car MESHES — so the closing shot up the
+ *  middle of the grid was an aisle of empty tarmac. This seats the cars for it.
+ *
+ *  IT MUST NOT COST THE SIM STREAM A SINGLE DRAW. makeCars() spends one simRnd()
+ *  per car, and the seeded stream's draw count is a contract the whole race
+ *  reproduces from (see gridUp, armReliability). So the state is snapshotted and
+ *  restored around the call, and the cars are seated on TrackMesh's own slots
+ *  directly rather than through gridUp(), which spends a draw per car of its own
+ *  for the grid jitter. startRace() then builds the real field from an untouched
+ *  stream moments later and throws this one away.
+ *
+ *  Only the fields the DRAW path reads are set: this is scenery, not a race. */
+function menuGridCars() {
+  if (!track || headlessMode || typeof TrackMesh === "undefined") return;
+  const rng = _simRngState;
+  try {
+    makeCars();
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i], slot = TrackMesh.gridSlot(track, i);
+      c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
+      const w = worldFromTrack(c.s, c.x, smp);
+      c.px = w.x; c.pz = w.z;
+      c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x;
+      c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.steerVis = 0;
+      c.speed = 0; c.lap = 0; c.prog = -(14 + i * 8);
+    }
+  } catch (e) {
+    cars = [];                       // half a grid is worse than none
+    Log.warn("gfx", "menu grid failed", e);
+  }
+  _simRngState = rng;
+}
+
 function raceIntro(go) {
+  menuGridCars();
   loadingScreen.run({
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
@@ -3566,7 +3625,10 @@ function update(dt) {
      same call mid-count would hand the player a free re-place on the grid. */
   if (state === "race" && Input.consumeRecover() && player && !player.retired) {
     // A saved practice checkpoint makes RECOVER the driver's TRY AGAIN; coach.retry() is false everywhere else.
-    if (!coach.retry()) { rescuePlayer(player); announce("RECOVERED", 1.5, "coach"); }
+    // No banner: rescuePlayer() is the one place a recovery is reported, and it
+    // used to announce here TOO — the same word from two speakers (COACH here,
+    // the driver's own RADIO there) for one keypress.
+    if (!coach.retry()) rescuePlayer(player);
     Log.info("game", "manual recover");
   }
   if (state === "count") {
@@ -5718,10 +5780,13 @@ function rescuePlayer(c) {
   c.rescueLastT = raceT;
   // Cues are for the driver at THIS screen — a rival being recovered elsewhere
   // on track must not announce itself here.
-  if (c.local) {
-    announce("RECOVERED", 1.2, "info");
-    if (soundOn) GameAudio.offtrack();
-  }
+  //
+  // NO BANNER. A recovery is the most self-evident event in the game: the car
+  // is back on the road, pointing the right way, at a sane speed. The player
+  // just watched it happen, so a card saying RECOVERED spends the radio — and
+  // the banner is a QUEUE (ANN_PRI / _annQueue), so a message that reports the
+  // obvious can delay or mask one that does not. The sound still marks it.
+  if (c.local && soundOn) GameAudio.offtrack();
 }
 
 // Retire a car. The counterpart of rescuePlayer above — same job, opposite
@@ -7309,7 +7374,12 @@ function render(dt) {
     // boot renders the same screen with cars === [] — the asymmetry.
     // The setup/garage preview is not affected: renderSetupPreview() returns
     // out of render() well before this loop.
-    if (state === "menu") break;
+    // …EXCEPT for the pre-race flyby, whose closing shot is the grid itself.
+    // menuGridCars() seats the field deliberately for that shot, so here the
+    // field is the SUBJECT rather than the leftovers the guard above describes.
+    // Still nothing after quitToMenu: that leaves the loading screen inactive,
+    // which is the same break as before.
+    if (state === "menu" && !loadingScreen.active()) break;
     if (!c.isPlayer && player) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;

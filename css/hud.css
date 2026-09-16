@@ -703,6 +703,7 @@ body[data-density="compact"] #hud-flag {
 body[data-density="compact"] #announce {
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px);
   font-size: var(--fs-2);
+  --radio-num: 22px;   /* the plate steps down with the card, so it never outgrows two lines of type */
 }
 /* UNDER A CAUTION the flag chip owns the slot under the timing row (#hud-flag,
    100px / 72px compact), so the card steps below it — the two are read
@@ -735,27 +736,41 @@ body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(
    middle of the screen, over the corner it was about, and a coach tip ran to
    four lines covering half the height (measured 852x344). It is a radio
    message now, the way a broadcast captions team radio: a small card under the
-   timing row, the channel on top (#announce-who: RUSSELL · RADIO · 63, RACE
-   CONTROL, COACH — js/game.js radioWho), the words in quotes under it. One
-   size for every kind; the KIND only picks the stripe and the WHO colour.
-   The stripe is the team's --accent, the same ornament .hud-box carries —
-   decoration, not state (tests/unit/nontext-contrast.test.mjs); the kinds
-   that DO carry state (a warning, a penalty) recolour it with their own
-   token, exactly as the old banners coloured their type. */
+   timing row, the channel on top (#announce-who: RUSSELL · RADIO, RACE
+   CONTROL, COACH — js/game.js radioWho), the words in quotes under it.
+
+   THE NUMBER PLATE (#announce-num) is the card's identity anchor, the device
+   every broadcast radio caption is built around: a filled block of the TEAM's
+   colour with the car number on it. It replaced a trailing `· 63` set in micro
+   type at --dim — the least visible thing on a card that is ALWAYS about that
+   car. The plate spans both text lines, so the card is no taller than it was.
+
+   The plate is the TEAM, on every kind, and it does not move: the card belongs
+   to one car for a whole session, so a plate that changed colour with the
+   message would be the loudest thing on screen saying something that never
+   changes. The CHANNEL is the WHO line's job (its colour, below), which is
+   also where the words RACE CONTROL and COACH already are — one place naming
+   the speaker, not two.
+
+   The plate is the one surface painted --accent, and that is still decoration
+   (tests/unit/nontext-contrast.test.mjs): the team colour is the GROUND and
+   --accent-ink, picked per team to clear 4.5:1 on it, is what carries the
+   number. One type size for every kind; a kind may only recolour the WHO line.
+   With no number to show (the menus, a car with none) :empty collapses the
+   plate back to exactly the 3px stripe this card used to carry. */
 #announce[hidden] { display: none; }   /* the author `display` below would beat the UA's [hidden] */
 #announce {
   position: fixed;
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 10px);
   left: 50%; transform: translateX(-50%);
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: row; align-items: stretch;
   min-width: 200px;
   /* --vwzh, the HUD twin: this element IS zoomed by --hud-scale (see the
      .hud-top zoom rule above), so the cap is in its own zoom. */
   max-width: min(440px, calc(72 * var(--vwzh)));
-  padding: calc(var(--gap) * 0.45) var(--gap) calc(var(--gap) * 0.55);
   background: rgba(8, 8, 14, 0.82);
-  border-left: 3px solid var(--accent);
   border-radius: var(--r-sm);
+  overflow: hidden;   /* the plate is square — the card's radius does the corners */
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
   font-family: var(--font-hud);
   font-size: var(--fs-3); font-weight: 600; font-style: normal; line-height: 1.25;
@@ -763,6 +778,25 @@ body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(
   text-align: left;
   text-wrap: pretty;
   z-index: 15;
+  --radio-num: 26px;   /* a HUD digit readout: off the body type scale on purpose (css/tokens.css) */
+}
+/* The plate. Italic is the racing number's own convention, not emphasis. */
+#announce-num {
+  flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  min-width: calc(var(--gap) * 2.6);
+  padding-inline: calc(var(--gap) * 0.45);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: var(--radio-num); font-weight: 800; font-style: italic;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+#announce-num:empty { min-width: 3px; padding-inline: 0; }
+#announce-body {
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 0;   /* without it the flex item refuses to wrap and the card outgrows max-width */
+  padding: calc(var(--gap) * 0.45) var(--gap) calc(var(--gap) * 0.55);
 }
 #announce-who {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em;
@@ -770,13 +804,11 @@ body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(
 }
 #announce-text::before { content: "\201C"; }
 #announce-text::after { content: "\201D"; }
-/* The kinds that carry state keep their own colour, on the stripe and the
-   channel line — never the accent (the dark team skins fail 1.4.11 on it). */
-#announce[data-kind="warning"],
-#announce[data-kind="penalty-warn"] { border-left-color: var(--sec-slow); }
+/* The kinds that carry state keep their own colour on the CHANNEL LINE and
+   nowhere else — never the accent (the dark team skins fail 1.4.11 on it),
+   and never the plate, which is the team's and stays put. */
 #announce[data-kind="warning"] #announce-who,
 #announce[data-kind="penalty-warn"] #announce-who { color: var(--sec-slow); }
-#announce[data-kind="penalty-hit"] { border-left-color: var(--slower); }
 #announce[data-kind="penalty-hit"] #announce-who { color: var(--slower); }
 #announce[data-kind="coach"] #announce-who,
 #announce[data-kind="practice"] #announce-who { color: var(--faster); }

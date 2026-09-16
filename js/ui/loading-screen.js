@@ -25,8 +25,9 @@
 const LoadingScreen = (function () {
   // The whole sequence's budget. js/camera/flyby-seq.js spends it across eight
   // shots as FRACTIONS, so retuning this number rebalances them all rather than
-  // truncating the last one.
-  const FLY_MS = 10000;
+  // truncating the last one. 24 s is 3 s a shot, which is what a pan needs to
+  // read as a move rather than a jerk. Skippable with any pointer or key.
+  const FLY_MS = 24000;
   // With nothing to fly over, just long enough for the card's fade to land
   // before the build takes the main thread.
   const CARD_MS = 700;

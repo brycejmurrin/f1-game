@@ -450,6 +450,13 @@
      tracks whatever --accent resolves to (custom props resolve at use-time). */
   --accent: var(--red);
   --accent-dim: color-mix(in oklab, var(--accent) 40%, var(--bg));
+  /* INK for the one place text stands ON --accent: the radio card's number
+     plate. The accents run from #0f3cc9 (racing bulls) to #f5f5f5 (cadillac),
+     so NO single ink clears 4.5:1 across them — each team names its own in the
+     [data-team] blocks below, and tests/unit/nontext-contrast.test.mjs proves
+     every pair. This is also what keeps --accent decoration: the team colour is
+     the SURFACE, the ink on it is what carries the number. */
+  --accent-ink: var(--text);
   /* Keyboard focus is WHITE, not brand red, for two independent reasons.
      (1) Contrast: #e10600 on the near-black page measures ~2.6:1, under the
          3:1 WCAG 1.4.11 / 2.4.11 asks of a focus indicator. White is ~19:1 on
@@ -845,18 +852,23 @@ body:not(.desktop) {
 }
 
 /* Per-team accents (ids + colours from js/car/teams.js — vivid brand colour of
-   each team; dark liveries use their secondary accent so it reads on --bg). */
-:root[data-team="mercedes"]    { --accent: #00b4ab; }
-:root[data-team="ferrari"]     { --accent: #dc0000; }
-:root[data-team="mclaren"]     { --accent: #ff8000; }
-:root[data-team="redbull"]     { --accent: #ffd700; }
-:root[data-team="alpine"]      { --accent: #0093cc; }
-:root[data-team="racingbulls"] { --accent: #1634cb; }
-:root[data-team="haas"]        { --accent: #da291c; }
-:root[data-team="williams"]    { --accent: #0f3cc9; }
-:root[data-team="audi"]        { --accent: #fa470d; }
-:root[data-team="astonmartin"] { --accent: #b7e11b; }
-:root[data-team="cadillac"]    { --accent: #f5f5f5; }
+   each team; dark liveries use their secondary accent so it reads on --bg).
+   --accent-ink is the ink for the radio card's number plate, which is the one
+   surface painted --accent. It is NOT a style choice: it is whichever of
+   --text / --bg measures further from that team's accent, and the ratio is in
+   the comment. Nothing here may be hand-picked — change an accent and re-run
+   tests/unit/nontext-contrast.test.mjs, which recomputes both candidates. */
+:root[data-team="mercedes"]    { --accent: #00b4ab; --accent-ink: var(--bg); }    /*  7.53:1 */
+:root[data-team="ferrari"]     { --accent: #dc0000; --accent-ink: var(--text); }  /*  4.82:1 */
+:root[data-team="mclaren"]     { --accent: #ff8000; --accent-ink: var(--bg); }    /*  7.73:1 */
+:root[data-team="redbull"]     { --accent: #ffd700; --accent-ink: var(--bg); }    /* 13.88:1 */
+:root[data-team="alpine"]      { --accent: #0093cc; --accent-ink: var(--bg); }    /*  5.61:1 */
+:root[data-team="racingbulls"] { --accent: #1634cb; --accent-ink: var(--text); }  /*  8.15:1 */
+:root[data-team="haas"]        { --accent: #da291c; --accent-ink: var(--text); }  /*  4.51:1 */
+:root[data-team="williams"]    { --accent: #0f3cc9; --accent-ink: var(--text); }  /*  7.76:1 */
+:root[data-team="audi"]        { --accent: #fa470d; --accent-ink: var(--bg); }    /*  5.54:1 */
+:root[data-team="astonmartin"] { --accent: #b7e11b; --accent-ink: var(--bg); }    /* 12.80:1 */
+:root[data-team="cadillac"]    { --accent: #f5f5f5; --accent-ink: var(--bg); }    /* 17.86:1 */
 
 * { margin: 0; padding: 0; box-sizing: border-box;
   /* iPhone home-screen / Safari: kill the gray tap flash, the blue text
