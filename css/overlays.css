@@ -221,8 +221,18 @@
   background: rgba(12, 12, 18, 0.92); color: var(--text);
   font-size: var(--fs-micro); line-height: 1.35;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  /* THE BANNER IS NOT A TARGET — only its dismiss button is. Bottom-centre is
+     the right place for it (it points at Safari's Share button, which is in the
+     bottom toolbar on iPhone), but that is also where every screen puts its
+     action row, so the box lands on top of the primary. Measured with the
+     banner forced visible: at 667x375 it covers 64% of #sel-go and #sel-back
+     and elementFromPoint at each button's centre returned the BANNER; at
+     390x844 it covers 100% of #sel-go. A player tapping NEXT hit a paragraph.
+     pointer-events lets those taps through to the button underneath, which is
+     what the comment above this rule has always asked for. */
+  pointer-events: none;
 }
-#ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; }
+#ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; pointer-events: auto; }
 /* `display: flex` above OUTRANKS the UA's `[hidden] { display: none }`, so the
    attribute stops working and the banner shows on every platform — where it
    sits bottom-centre and swallows clicks meant for #mb-race / #sel-go / #rs-go.
