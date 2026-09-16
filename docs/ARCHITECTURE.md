@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_177 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_179 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -184,6 +184,7 @@ _177 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `geom.js` | `TrackGeom` | tag | pure 3D geometry emitters shared by the track/scenery builders (js/track/tracks.js). |
+| `pit.js` | `TrackPit` | tag | TrackPit: the PIT COMPLEX as one model every consumer reads. |
 | `space.js` | `TrackSpace` | tag | explicit source-trace ↔ racing-lap coordinate transforms. |
 | `surface.js` | `TrackSurface` | tag | shared terrain ribbon and prop-grounding profile. |
 | `spline.js` | `TrackSpline` | tag | TrackSpline: pure centreline / spline math for the tracks engine. centerline() integrates an authored segment list into closed control points, cr() is… |
@@ -204,6 +205,7 @@ _177 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `structures.js` | `SceneryStructures` | tag | SceneryStructures: the linear track furniture + race-infrastructure band of the buildProps composite-model toolkit — the along() node walker, the barr… |
 | `city.js` | `SceneryCity` | tag | SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… |
 | `identity.js` | `SceneryIdentity` | tag | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
+| `pits.js` | `SceneryPits` | tag | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
 
 **`js/circuits/`**
 
@@ -762,6 +764,7 @@ One concern per file, all loaded before `tracks.js`:
 
 | File | Global | Owns |
 |---|---|---|
+| `pit.js` | `TrackPit` | the PIT COMPLEX as one model, built once in `Tracks.build` before the terrain profile and the scenery: side, mode (`full` / `narrow` for street circuits), limit, the bands in metres (verge → platform + wall → fast lane ≤ 3.5 m → corridor → working lane → garage line), the per-node easing of the entry road and the exit road, the keep-out the scenery guards read, and the row — one box per team in `Teams.LIST` order plus MY TEAM, at the bay's 11 m pitch. `TrackMesh.buildPitLane` / `buildPitBoxes`, `SceneryPits`, `PitLane` and the GARAGE screen all read it; `tests/unit/pit-complex.test.mjs` asserts paint ≡ stop ≡ door. Design and evidence: `docs/research/PIT-LANE-REDESIGN-2026-09.md` |
 | `spline.js` | `TrackSpline` | closed Catmull-Rom sampling, curvature |
 | `graph.js` | `TrackGraph` | the scenery model library + node graph (HARD_EDGES pair with `tracks.js`) |
 | `mesh.js` | `TrackMesh` | road/terrain mesh extrusion (`buildRoad`/`buildTerrain`) |
@@ -772,6 +775,7 @@ One concern per file, all loaded before `tracks.js`:
 | `landmark-kit.js` / `circuit-kit.js` | `LandmarkKit` / `CircuitKit` | landmark & circuit composite kits for `scenery(api)` |
 | `maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine — was `trackmaps.js` |
 | `scenery-nature.js` / `scenery-city.js` / `scenery-structures.js` / `scenery-identity.js` | `Scenery*` | the buildProps split (below) |
+| `scenery/pits.js` | `SceneryPits` | the pit complex's 3D furniture, last in `buildProps` and every position `track.pit`'s: the signalling platform, wall and barrier swept along the lane, the entry boards and exit lights, and the garages — `GarageScene.buildStatic` (the setup screen's own bay) placed once per team with `TrackGeom.addMesh` under a per-bay roof, hospitality storey and race control. Emits with the RAW emitters; every other prop is kept out of the complex by `onRoadHit` / `onTrack`, and a circuit's superseded pit block is recorded as such rather than as a required failure |
 
 **The buildProps split.** Prop placement is four `Scenery*.create(ctx)`
 modules — nature (trees/terrain furniture), city (the `cityStyle` building

@@ -50,10 +50,13 @@
  * ribbon and no boundary moved — what changed is that the strip now means
  * something to the cars as well as to the eye.
  *
- * WHAT IS STILL MISSING, stated rather than quietly dropped: garages, a crew,
- * and a lane BEHIND the pit wall. Those need a road that branches, which is the
- * thing this engine cannot express — so they are not a to-do, they are a
- * different track engine.
+ * THE LANE IS A PLACE NOW — js/track/core/pit.js (TrackPit) builds the pit
+ * complex once per track: the entry road, the fast lane, the working lane,
+ * the wall and the row of garages. This module reads that model for the
+ * window, the side and each team's box, and keeps what was always its own:
+ * the state machine, the commitment gesture, the cue and the stop. The
+ * geometry-free arithmetic below survives as the fallback for a track built
+ * without a model (the VM tests build centrelines by hand).
  */
 const PitLane = (function () {
   "use strict";
@@ -240,7 +243,11 @@ const PitLane = (function () {
   // It costs no pit loss. The box moves; the distance through the window at the
   // limiter does not, so where a team's garage sits changes where you stop and
   // nothing about what the stop is worth.
-  const BOX_PITCH = 14;
+  // ONE PITCH, THE BAY'S. TrackPit.PITCH is the garage frontage the setup
+  // screen's room is built to, the paint is spaced by and the doors stand at;
+  // read at call time so this file still loads in a bare VM (the unit harness
+  // loads pit.js beside it).
+  const pitch = () => (typeof TrackPit !== "undefined" ? TrackPit.PITCH : 11);
   // Where POLE sits, in metres before the start/finish line. Mirrors
   // TrackMesh.gridSlot's own 14 m; a second copy is the lesser evil here
   // because js/track/ loads first and has no business knowing what a pit box is.
@@ -274,6 +281,20 @@ const PitLane = (function () {
     // here could drift from the road it describes. entryRunM stays as the
     // fallback for a track built without it (the VM tests build centrelines by
     // hand) and as the place the reasoning is written down.
+    // THE MODEL FIRST. A built track carries the complex, and its window, its
+    // side and its limit ARE the zone — a def's overrides still win field by
+    // field, as they always did.
+    const model = track.pit;
+    if (model) {
+      return {
+        sIn: model.sIn, sOut: model.sOut, sBox: wrap(-(z.boxM != null ? z.boxM : BOX_M)),
+        lenM: model.lenM,
+        // km/h over the 259 km/h envelope, the same ratio LIMIT_FRAC encodes.
+        limitFrac: z.limitFrac != null ? z.limitFrac : (model.limitKph / 3.6) / 72,
+        boxS: z.boxS != null ? z.boxS : BOX_S,
+        side: model.side,
+      };
+    }
     const eng = typeof Tracks !== "undefined" && Tracks.pitWindow ? Tracks.pitWindow(track) : null;
     const entryM = z.entryM != null ? z.entryM : (eng ? eng.entryM : entryRunM(track));
     const exitM = z.exitM != null ? z.exitM : EXIT_M;
@@ -352,8 +373,20 @@ const PitLane = (function () {
       return { a, b: a + sp.lenM };
     }
     function boxThroughFor(c, zz, L) {
+      // THE MODEL'S ROW: the box the paint is at and the door stands behind.
+      // A car with no team, or one the row does not know, takes the MY TEAM
+      // bay at the end — reachable, and nobody else's.
+      const model = G.track && G.track.pit;
+      if (model && model.row && model.row.boxes.length) {
+        const t = c && c.team;
+        const id = t ? (typeof t === "object" ? t.id : t) : null;
+        let i = TrackPit.rowOf(model, id);
+        if (i < 0) i = model.row.boxes.length - 1;
+        return model.row.boxes[i].through;
+      }
       const row = teamRow(c);
       const n = row < 0 ? 1 : Teams.LIST.length;
+      const BOX_PITCH = pitch();
       const span = (n - 1) * BOX_PITCH;
       // THE ROW HAS TO START PAST THE GRID, or a stop on lap 1 is reachable only
       // by whoever happens to drive the right team. The grid sits INSIDE the pit
@@ -458,7 +491,7 @@ const PitLane = (function () {
         if (togo > -BOX_TOL && togo < BOX_CUE_M) {
           Tracks.sample(G.track, c.s, _smp);
           const zz = z();
-          if (!inLaneLat(c, _smp.hw || 0, zz.side)) {
+          if (!inBoxLat(c, _smp.hw || 0, zz.side)) {
             return { phase: "keep", text: zz.side > 0 ? "KEEP RIGHT" : "KEEP LEFT", dist: 0 };
           }
           // WHERE THE BOX IS. This distance was already being computed here and
@@ -493,7 +526,7 @@ const PitLane = (function () {
         // by then the instruction is noise.
         if (!_saidEnter) {
           _saidEnter = true;
-          if (G.announce) G.announce("PIT ENTRY — HOLD THE BLUE LANE TO BOX", 2.2, "race");
+          if (G.announce) G.announce("PIT ENTRY — TAKE THE PIT ROAD TO BOX", 2.2, "race");
         }
         return { phase: "enter", text: "HOLD THE LANE", dist: 0 };
       }
@@ -514,7 +547,13 @@ const PitLane = (function () {
      *  merely running wide on the start/finish straight never gets the limiter,
      *  and a car beached off the road never reads as pitting. */
     function inLane(c) {
-      return !!(c && (c.pitState === "lane" || c.pitState === "box"));
+      if (!c) return false;
+      if (c.pitState === "lane" || c.pitState === "box") return true;
+      // Serviced and driving away: still IN the lane until the exit line —
+      // the limiter stays on and the car stays on the pit road, because now
+      // there is a wall between it and the track. update() clears the state
+      // the moment the car leaves the window.
+      return c.pitState === "out" && inWindowOf(c);
     }
 
     /** Inside the window at all — the arc test alone, without the lateral one. */
@@ -557,10 +596,19 @@ const PitLane = (function () {
       if (typeof Tracks === "undefined" || !Tracks.pitLaneAt || !G.track || s == null) return null;
       return Tracks.pitLaneAt(G.track, s);
     }
-    /** The lane's lateral CENTRE: where the box is and where a car in it sits. */
+    /** The BOX's lateral centre: where a car serving a stop sits, and the
+     *  number a driver, a test or an agent aims at. On the complex that is the
+     *  working lane; on a painted lane, the strip's middle. */
     function laneCentre(hw, side, s) {
       const rib = ribbonAt(s);
-      return rib ? rib.centre : (hw - lw(hw) * 0.5) * side;
+      if (rib) return rib.workCentre != null ? rib.workCentre : rib.centre;
+      return (hw - lw(hw) * 0.5) * side;
+    }
+    /** The FAST lane's centre — where a car transits the complex at the
+     *  limiter between the entry and its box. Falls back to the box line. */
+    function laneDrive(hw, side, s) {
+      const rib = ribbonAt(s);
+      return rib ? rib.centre : laneCentre(hw, side, s);
     }
     /** Is this car laterally IN the lane (within BOX_LAT of it)? Written in
      *  "toward the pit side" coordinates — x * side — so one comparison serves
@@ -576,13 +624,22 @@ const PitLane = (function () {
      *  is the least that can honestly be called "off the racing line". */
     function inLaneLat(c, hw, side) {
       const rib = ribbonAt(c && c.s);
-      // On a ribbon the threshold is its INNER EDGE less the same tolerance: a
-      // car whose centre is BOX_LAT inside the stripe still has most of itself
-      // on the pit road. No floor is needed here — the ribbon's inner edge is
-      // always outside `hw`, so the racing line can never satisfy it, which is
-      // exactly what the floor below exists to guarantee on a painted lane.
+      // On the complex the threshold is the lane's INNER EDGE less the same
+      // tolerance: a car whose centre is BOX_LAT inside the line still has
+      // most of itself on the pit road. No floor is needed — the lane is always
+      // outside `hw`, so the racing line can never satisfy it, which is what
+      // the floor below exists to guarantee on a painted lane.
       if (rib) return (c.x || 0) * side >= rib.inner * side - BOX_LAT;
       return (c.x || 0) * side >= Math.max(1, hw - lw(hw) - BOX_LAT);
+    }
+    /** Laterally IN THE BOX: the WORKING lane (F1 SR B1.7.1(e) — the inner
+     *  lane is the only place work is done). A car halted in the fast lane
+     *  has not reached its box, exactly as it would not in the real thing.
+     *  On a painted lane there is one strip and this is inLaneLat. */
+    function inBoxLat(c, hw, side) {
+      const rib = ribbonAt(c && c.s);
+      if (rib && rib.workIn != null) return (c.x || 0) * side >= rib.workIn * side - BOX_LAT;
+      return inLaneLat(c, hw, side);
     }
     /** Where a car SERVING A STOP should be laterally — the lane's centre — or
      *  `want` unchanged for every other car. game.js hands its finished
@@ -596,7 +653,12 @@ const PitLane = (function () {
      *  happen, exactly as it would not in the real thing. */
     function laneX(c, hw, want) {
       const zz = z();
-      return zz && inLane(c) ? laneCentre(hw, zz.side, c && c.s) : want;
+      if (!(zz && inLane(c))) return want;
+      // The FAST lane through the complex, the WORKING lane for the last
+      // stretch into the box and away from it — the move a real stop makes.
+      const togo = toBox(c);
+      if (togo > -BOX_TOL * 2 && togo < 60) return laneCentre(hw, zz.side, c && c.s);
+      return laneDrive(hw, zz.side, c && c.s);
     }
     function committing(c, zz, L) {
       if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
@@ -638,15 +700,19 @@ const PitLane = (function () {
     function boxUniform() {
       const zz = z(), t = G.track, car = G.player;
       if (!enabled() || !zz || !t || !car) return null;
-      if (t.pitLane) return null;
+      if (t.pit && !t.pit.painted) return null;
       return [boxThroughFor(car, zz, t.total), BOX_TOL * 0.75];
     }
 
-    /** The four numbers the lit shaders paint the lane from, or null. */
+    /** The four numbers the lit shaders paint the PAINTED lane from, or null.
+     *  A built track carries the complex, whose tarmac and paint are geometry
+     *  (TrackMesh.buildPitLane), so this is null wherever there is a ribbon.
+     *  A STREET circuit's model is `painted` — no room beside the road — and
+     *  keeps the shader lane, as does a track built without a model. */
     function laneUniform() {
       const zz = z(), t = G.track;
       if (!enabled() || !zz || !t) return null;
-      if (t.pitLane) return null;
+      if (t.pit && !t.pit.painted) return null;
       return [zz.sIn, zz.lenM, zz.side, t.total];
     }
 
@@ -705,7 +771,7 @@ const PitLane = (function () {
         // — which is also what makes the stop cost the lateral move rather than
         // handing it over for free.
         Tracks.sample(G.track, c.s, _smp);
-        if (!inLaneLat(c, _smp.hw || 0, zz.side)) return;
+        if (!inBoxLat(c, _smp.hw || 0, zz.side)) return;
         c.pitState = "box";
         c.pitT = zz.boxS;
         c.pitArmed = false;
@@ -887,7 +953,11 @@ const PitLane = (function () {
         // over three metres across the calendar). Both are null/false outside
         // the window, where there is no answer and no sample worth paying for.
         inLaneLat: lat ? inLaneLat(car, lat.hw, zz.side) : false,
+        // …and IN THE BOX: the working lane, which is where a stop latches.
+        inBoxLat: lat ? inBoxLat(car, lat.hw, zz.side) : false,
         laneX: lat ? +laneCentre(lat.hw, zz.side, car && car.s).toFixed(2) : null,
+        // The fast lane's centre here — the line a car transits the complex on.
+        driveX: lat ? +laneDrive(lat.hw, zz.side, car && car.s).toFixed(2) : null,
         inWindow: !!(car && inWindowOf(car)),
         stops: (car && car.pitStops) || 0,
         // How far through the commitment dwell — 0 unless the car is holding
@@ -906,7 +976,7 @@ const PitLane = (function () {
     return { zoneOf: () => z(), limit, toBox, approachV, inLane, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
-             laneEdge, laneCentre, laneUniform, boxUniform, laneX, inLaneLat,
+             laneEdge, laneCentre, laneDrive, laneUniform, boxUniform, laneX, inLaneLat, inBoxLat,
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }
 
@@ -915,6 +985,6 @@ const PitLane = (function () {
            BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V, COMMIT_CLEAR,
            GRID_POLE_M,
            CUE_M: 550, CUE_WEAR: 0.55, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
-           BOX_PITCH, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
+           get BOX_PITCH() { return pitch(); }, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
 })();
 Object.freeze(PitLane);

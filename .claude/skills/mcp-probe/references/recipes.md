@@ -112,9 +112,20 @@ mcp__chrome-devtools__take_screenshot   filePath: scratch/<name>.png
 ```
 
 HeadlessChrome GLX paints `#game-soft`, not `#game` (opacity 0). Await
-`GLX.awaitSoftPresent()` while the loop still runs, then screenshot the overlay
-or a compositor clip of its box. `locator("canvas#game").screenshot()` is the
+`await __apex.awaitPresent()` (the `__apex` front door — no need to know `GLX`
+is a bare global; same thing as `GLX.awaitSoftPresent()`, right whichever
+backend is bound) while the loop still runs, then screenshot the overlay or a
+compositor clip of its box. `locator("canvas#game").screenshot()` is the
 uncomposited GPU buffer — often black even with `preserveDrawingBuffer`.
+
+**Driving a UI screen (Garage/livery, not just camera moves):** the same
+soft-present wait applies after ANY DOM interaction that changes the 3D scene,
+not only `jump()`/`park()`/`orbit()`. Loop per click: `chrome_click` the
+control (a `role=tab` category button can time out with "did not become
+interactive" — dispatch a raw `.click()` on the matching element from
+`evaluate_script` instead, see `references/traps-chrome.md`), then in one
+`evaluate_script` call `await __apex.awaitPresent(8000)` — no `snapCam()`
+needed, the wait alone arms the next blit — then `take_screenshot`.
 
 Shell one-liner (auto-starts `:3456` if needed, parks to `about:blank` after):
 

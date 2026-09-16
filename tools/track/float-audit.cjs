@@ -240,7 +240,12 @@ function audit(id) {
     }
     if (best < 0) return null;
     const lat = Math.max(0, Math.sqrt(bestD) - hw[best]);
-    return surface.heightAt(best, lat);
+    // WITH the side: the profile is flat under the pit complex on the pit
+    // side only (TrackSurface.heightAt), and the side-less closed form read
+    // the slope the mesh no longer draws — Catalunya's hedge on the flattened
+    // apron edge read 2 m over ground it was standing on.
+    const side = ((wx - px[best]) * track.rx[best] + (wz - pz[best]) * track.rz[best]) < 0 ? -1 : 1;
+    return surface.heightAt(best, lat, side);
   };
 
   // Ground as a SURFACE, not a scatter of vertices. Binning vertices per cell

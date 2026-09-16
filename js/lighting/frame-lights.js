@@ -17,6 +17,7 @@ const _clampNum = (v, a, b) => (v < a ? a : v > b ? b : v);
 // a red glow trailing each car on the road surface.
 const _tlSmp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _tlSel = [];
+const _tlPool = [];
 function appendCarTailLights(frame, track, cars, player, mobileTier) {
   const L = frame.lights;
   // PER-CHUNK LAMPS needs to know which records here are the DYNAMIC ones, and
@@ -38,11 +39,16 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
     if (d < tlRange) {
       // Reuse pooled {c,d} entries in place (same pattern as _lightCullBuf) —
       // fresh objects here were per-car-per-frame GC churn on night tracks.
-      const e = _tlSel[_tlN];
-      if (e) { e.c = c; e.d = d; } else _tlSel[_tlN] = { c: c, d: d };
+      let e = _tlPool[_tlN];
+      if (!e) e = _tlPool[_tlN] = { c: null, d: 0 };
+      e.c = c; e.d = d;
+      _tlSel[_tlN] = e;
       _tlN++;
     }
   }
+  // Selection is sorted and may shrink; capacity must survive both. Release
+  // inactive car references so a smaller/new grid does not retain the old one.
+  for (let i = _tlN; i < _tlPool.length; i++) _tlPool[i].c = null;
   _tlSel.length = _tlN;      // drop stale entries from earlier (busier) frames
   _tlSel.sort(_byDistAsc);   // hoisted comparator, shared with setFrameLights
   const nT = Math.min(_tlSel.length, 5);

@@ -566,8 +566,8 @@ The dashboard `install` should call `bash tools/env/cloud-agent-install.sh`. A b
 `npm install` can die on `registry.npmjs.org` ECONNRESET with npm's "Exit
 handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even when
 `node_modules` is already usable — `--prefer-offline` is what the script adds.
-`wgx-validate` / `wgx-capture` need full Chromium: the headless shell has no
-`navigator.gpu`. Missing Lavapipe (`test -f
+`wgx-validate` / `wgx-capture` prefer full Chromium. Headless-shell support
+varies by build; the September 15 probe below verified one working build. Missing Lavapipe (`test -f
 /usr/share/vulkan/icd.d/lvp_icd.json` fails) means reinstall
 `mesa-vulkan-drivers` or re-Save the env snapshot.
 
@@ -612,8 +612,8 @@ turns a real-GPU run software. Census tables and what the real GPU has found:
 
 Fresh-agent bootstrap is `bash tools/env/cloud-agent-install.sh` (the dashboard
 `install` should call it: the AGENTS.md §Verification session-shape sequence
-plus full Chromium, which `wgx-validate` / `wgx-capture` need — the headless
-shell has no `navigator.gpu`). System packages (`mesa-vulkan-drivers`,
+plus full Chromium, preferred for `wgx-validate` / `wgx-capture`; test
+headless-shell capability explicitly instead of assuming it is absent). System packages (`mesa-vulkan-drivers`,
 `vulkan-tools`, `xvfb`) survive a cold boot only via snapshot + Save on the
 environment dashboard; `test -f /usr/share/vulkan/icd.d/lvp_icd.json` proves
 Lavapipe. The npm ECONNRESET note is in §Part 3.
@@ -670,3 +670,91 @@ soft-blit is so expensive on these runners that the WebGPU legs measure the
 harness rather than the game. If so the fix is `--headed`, or capturing through
 the readback deliberately with the cost subtracted, not a change to the
 renderer.
+
+
+## Verified local WebGPU and hardware census recipe (2026-09-15)
+
+**Local WebGPU execution works.** Chromium 153.0.8010.0 from
+`@sparticuz/chromium` 153.0.0 (a headless-shell build) exposed `navigator.gpu`,
+returned a Google SwiftShader fallback adapter, compiled and dispatched a WGSL
+compute shader, and copied its results back as `[3, 5, 7, 9]`. A separate render
+pass cleared an RGBA8 texture and read back `[255, 0, 128, 255]`, with no validation
+errors. This corrects older blanket claims in these notes that headless shell
+has no WebGPU or software can only validate shaders without executing them.
+It does not establish native swapchain support or hardware performance.
+
+Preferred install and repo entry points:
+
+```sh
+npm ci
+npx playwright install chromium
+node tools/lib/chromium-path.mjs
+node tools/gfx/wgx-validate.mjs --static
+node tools/gfx/wgx-validate.mjs --lite --frames 2
+```
+
+If the browser download is unavailable but a compatible Chromium is already
+installed, select its executable explicitly. In the September 15 environment:
+
+```sh
+CHROME=/opt/apex-browser/chromium node tools/gfx/wgx-validate.mjs --lite --frames 2
+```
+
+That path is session-specific, not a repo dependency. `PW_CHROMIUM` takes
+precedence over `CHROME`. Keep the browser's SwiftShader/Vulkan libraries beside
+its executable when using a standalone package. The shared software arguments
+are in `tools/lib/webgpu-chrome-args.cjs`: `--headless=new`,
+`--enable-unsafe-webgpu`, `--enable-features=Vulkan`, `--use-vulkan=swiftshader`,
+`--use-webgpu-adapter=swiftshader`, and `--no-sandbox`. These are trusted local
+harness flags. Do not apply software-forcing flags to a hardware census.
+
+The harness starts its static server and browser in one process and tears both
+down together. This also works in environments where separate shell executions
+cannot reach each other's loopback server. Use a secure context (loopback is
+sufficient), then check the adapter and device, not only API presence.
+
+The validator now parses option values separately from the positional track.
+Previously `--lite --frames 2` selected track `2`, which made the race readiness
+wait time out. Invalid frame counts and unknown tracks now fail explicitly.
+The corrected run selected Montreal, bound WGX, and reported zero GPU errors,
+zero WGSL parse errors, no device loss, HDR enabled, and MSAA 1. Software forces
+MSAA 1, so this cannot verify the hardware MSAA path.
+
+For a new controlled screenshot, wait for a *new* soft-present generation after
+changing the camera. `awaitSoftPresent()` alone can resolve against an older
+completed frame. Freeze simulation, set the camera, render once, then confirm
+`softPresentState().shown` advanced and `pending` is false before capture.
+Store settings that use JSON decoding as JSON (for example
+`localStorage.setItem("apex26.gfxPreset", JSON.stringify("low"))`).
+
+### Request the hardware check on the exact fixed tree
+
+The existing `.github/workflows/gpu-census.yml` supports a push request when
+workflow dispatch is unavailable. On a `claude/*` or `cursor/*` feature branch,
+change `.github/gpu-census-request.json` in the same commit as the code:
+
+```json
+{
+  "images": "macos-latest",
+  "track": "montreal",
+  "census_only": false,
+  "force": "",
+  "ls": "",
+  "leg": "unique-description-of-this-check"
+}
+```
+
+Push the feature branch, match the workflow's `head_sha` to that commit, and read
+its **Verdict** step plus `gpu-census-macos-latest` artifacts. `leg` is a request
+label that makes repeated requests a file change; it does not select graphics
+settings. Full census checks GLX, WGX, TLX WebGPU and TLX WebGL2. Require positive
+backend binding and zero GPU validation errors, and inspect adapter identity.
+Headless WGX/TLX WebGPU may still use readback presentation on real hardware;
+a headed hardware run is needed to sign off native presentation. Do not call
+census FPS a player-performance measurement or compare legs with different
+presentation paths.
+
+Primary references: [Playwright browser selection](https://playwright.dev/docs/browsers),
+[Chrome headless modes](https://developer.chrome.com/docs/automation-and-testing/headless),
+[Chromium SwiftShader](https://chromium.googlesource.com/chromium/src/+/main/docs/gpu/swiftshader.md),
+[Sparticuz Chromium package](https://github.com/Sparticuz/chromium).

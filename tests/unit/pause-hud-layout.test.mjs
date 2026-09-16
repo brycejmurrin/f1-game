@@ -3,8 +3,32 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
+test("driving warnings survive camera changes while quiet views suppress optional tips", () => {
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const priorities = game.match(/const ANN_PRI = [^;]+;/)[0];
+  const announce = game.match(/function announce\([^]*?\n\}/)[0];
+  for (const id of ["chase", "cockpit", "heli", "side", "cinematic", "low", "overhead"]) {
+    const shown = [];
+    const ctx = vm.createContext({ hudProfile: "standard", CAM_MODES: [{ id }], camMode: 0,
+      announceT: 0, _annPri: 0, _annQueue: null, showAnnounce: (...args) => shown.push(args) });
+    vm.runInContext(priorities + "\n" + announce, ctx);
+    for (const kind of ["warning", "penalty-warn", "penalty-hit", "race"]) {
+      ctx.kind = kind;
+      vm.runInContext('announce("driver message", 2, kind)', ctx);
+      assert.equal(shown.at(-1)?.[2], kind, `${id} preserves ${kind}`);
+    }
+    shown.length = 0;
+    vm.runInContext('announce("optional tip", 2, "coach")', ctx);
+    assert.equal(shown.length, ["chase", "cockpit"].includes(id) ? 1 : 0);
+    ctx.hudProfile = "broadcast";
+    vm.runInContext('announce("optional tip", 2, "coach")', ctx);
+    assert.equal(shown.at(-1)?.[2], "coach", "broadcast keeps its optional tips");
+  }
+});
 
 test("any open screen hides race HUD chrome, DISPLAY keeps the live tower", () => {
   const css = fs.readFileSync(path.join(ROOT, "css/hud.css"), "utf8");

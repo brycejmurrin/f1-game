@@ -86,8 +86,15 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
     await page.waitForFunction(() => window.__wakeLog.includes("request:screen"));
-    await page.locator("#pausebtn").click();
-    await page.locator("#pm-quit").click();
+    // Dispatched clicks, not locator.click(): Playwright's (and chrome-devtools
+    // MCP's) actionability check waits for the target's bounding box to be
+    // stable across two consecutive animation frames, which apex26's own live
+    // render loop never gives it — confirmed live via chrome-devtools MCP on
+    // this exact button, in BOTH "count" (pre-go()) and "race" state, on an
+    // otherwise idle box (not a load artifact). A raw .click() reaches the
+    // same onclick handler the game wires up and pauses/quits correctly.
+    await page.evaluate(() => document.getElementById("pausebtn").click());
+    await page.evaluate(() => document.getElementById("pm-quit").click());
     await page.waitForFunction(() => window.__wakeLog.includes("release"));
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release"]);
   });

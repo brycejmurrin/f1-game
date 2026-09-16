@@ -657,7 +657,7 @@ const TrackMesh = (function () {
         for (let v = 0; v < NTV; v++) {
           const o = (lats[v] < 0 ? -w : w) + lats[v];
           const t = NTV <= 1 ? 1 : v / (NTV - 1);
-          const yBase = surface.heightAt(k, __M.abs(lats[v]));
+          const yBase = surface.heightAt(k, __M.abs(lats[v]), lats[v] < 0 ? -1 : 1);
           let by = 0;
           if (bankLift > 0) {
             let frac = (bankSide * o + w) / (2 * w);
@@ -957,133 +957,119 @@ const TrackMesh = (function () {
   }
 
   // ── The pit lane, as an actual second road ──────────────────────────────────
-  // A ribbon of its own tarmac beside the racing surface across the pit window,
-  // separated from it by the blue stripe the player already learned as "the pit
-  // lane" and bounded on the far side by a white line.
+  // The complex's TARMAC and its PAINT, built from track.pit (js/track/core/pit.js)
+  // and nothing else: the entry road peeling off the racing surface, the fast
+  // lane, the corridor, the working lane out to the garage line, and the exit
+  // road blending back — one ribbon per node, its rails the model's bands
+  // scaled by the model's easing. The wall, the platform and the garages are
+  // 3D and live in js/track/scenery/pits.js; this is what lies on the ground.
   //
   // APPENDED to the start-line decal's buffers, like buildGridBoxes, and for the
   // same three reasons: it is flat paint-and-tarmac on the ground, it needs the
   // decal's depth bias to sit over the verge without z-fighting, and riding a
   // mesh all three backends already draw means GLX, WGX and TLX get it with no
-  // per-backend work. It is also the only seam late enough to see the finished
-  // barL/barR — the driving boundary is not tightened until buildProps has
-  // placed the scenery, and the whole fit is a question about that boundary.
-  //
-  // WHERE IT IS is not decided here: Tracks.pitLaneFit measures the room per
-  // node and hands over `w`, which is zero everywhere the lane does not exist —
-  // outside the window, through the end tapers, and on every circuit whose walls
-  // leave no room at all (Monaco, Baku, Vegas, Singapore). Those keep the
-  // painted-on-road lane, which is unchanged.
+  // per-backend work.
   const PIT_LIFT = 0.05;          // along the road normal, matching buildStartLine
-  const PIT_EDGE_W = 0.15;        // the white line on the far side
-  const PIT_SEP_W = 0.25;         // the blue stripe against the racing surface
+  const PIT_LINE_W = 0.10;        // FIM §4.11.10: 10 cm lines
+  const PIT_EDGE_W = 0.15;        // the lane's wall-side edge, a little bolder
   const PIT_TARMAC = [0.135, 0.145, 0.165];
-  const PIT_SEP_COL = [0.10, 0.36, 0.86];   // matches the lit shaders' pitPaint
+  const PIT_WORK = [0.160, 0.166, 0.180];    // the working lane / apron, a shade lighter
   function buildPitLane(track, out) {
-    const lane = track.pitLane;
-    if (!lane || !lane.w) return out;
-    const { px, py, pz, hw, n } = track;
+    const p = track.pit;
+    if (!p) return out;
+    const { px, py, pz, hw, n, total: L } = track;
     const white = track.def.palette.line || [0.95, 0.95, 0.98];
-    const side = lane.side;
-    // One node's four lateral offsets, ordered ASCENDING in r so the winding
-    // below is the same on either side of the road.
-    // Five rails: road edge → inner (tarmac apron over the old grass gap) →
-    // blue sep → white edge → outer. At the tapers `r` → 0 so inner meets the
-    // road and the lane peels on/off instead of sitting on grass.
-    const ring = (k) => {
-      const w = lane.w[k];
+    const sd = p.side, o = p.off, ds = L / n;
+    // The bands at one node as [offset beyond hw, colour of the band that starts
+    // here], ascending outward. On the entry and exit roads (before the wall has
+    // grown) the lane's inner edge is DASHED — it is the track edge you may
+    // cross — and solid once the wall stands beside it.
+    const bands = (k) => {
+      const w = p.w[k];
       if (!(w > 0.01)) return null;
-      const r = lane.laneW > 0.01 ? Math.min(1, w / lane.laneW) : 1;
-      const road = side * hw[k];
-      const inner = side * (hw[k] + lane.gap * r);
-      const outer = side * (hw[k] + lane.gap * r + w);
-      const sep = side * (hw[k] + lane.gap * r + Math.min(PIT_SEP_W, w * 0.3));
-      const edge = side * (hw[k] + lane.gap * r + w - Math.min(PIT_EDGE_W, w * 0.2));
-      return side > 0 ? [road, inner, sep, edge, outer] : [outer, edge, sep, inner, road];
+      const v = p.v[k];
+      const fi = o.fastIn * v, fo = o.fastOut * w, co = o.corrOut * w, wo = o.workOut * w;
+      const dash = Math.floor((k * ds) / 2) % 2 === 0;
+      const innerCol = v < 0.5 ? (dash ? white : PIT_TARMAC) : white;
+      const edge = Math.min(PIT_EDGE_W, Math.max(0, fo - fi) * 0.5);
+      const lw = Math.min(PIT_LINE_W, Math.max(0, co - fo) * 0.3);
+      return [
+        [fi, innerCol], [fi + edge, PIT_TARMAC], [Math.max(fi + edge, fo - lw), white], [fo, PIT_TARMAC],
+        [Math.max(fo, co - lw), white], [co, PIT_WORK], [Math.max(co, wo - lw), white], [wo, null],
+      ];
     };
-    const at = (k, o) => {
+    const at = (k, lat) => {
       const u = upOf(track, k);
-      const by = bankOffsetAt(track, k, o) + PIT_LIFT;
-      return [px[k] + track.rx[k] * o + u[0] * by,
-              py[k] + track.ry[k] * o + u[1] * by,
-              pz[k] + track.rz[k] * o + u[2] * by];
+      const by = bankOffsetAt(track, k, lat) + PIT_LIFT;
+      return [px[k] + track.rx[k] * lat + u[0] * by,
+              py[k] + track.ry[k] * lat + u[1] * by,
+              pz[k] + track.rz[k] * lat + u[2] * by];
     };
+    // World-right ordered laterals so the winding matches the road on either side.
+    const lat = (k, off) => sd * (hw[k] + off);
     for (let k = 0; k < n; k++) {
       const k2 = (k + 1) % n;
-      const a = ring(k), b = ring(k2);
+      const a = bands(k), b = bands(k2);
       if (!a || !b) continue;
       const ua = upOf(track, k), ub = upOf(track, k2);
-      for (let i = 0; i < 4; i++) {
-        if (Math.abs(a[i] - a[i + 1]) < 0.02 && Math.abs(b[i] - b[i + 1]) < 0.02) continue;
-        const roadIdx = side > 0 ? 0 : 3;
-        const blueIdx = side > 0 ? 1 : 2;
-        const whiteIdx = side > 0 ? 3 : 0;
-        const c = i === blueIdx ? PIT_SEP_COL : i === whiteIdx ? white : PIT_TARMAC;
+      for (let i = 0; i + 1 < a.length; i++) {
+        const c = a[i][1];
+        if (!c) continue;
+        if (Math.abs(a[i + 1][0] - a[i][0]) < 0.02 && Math.abs(b[i + 1][0] - b[i][0]) < 0.02) continue;
+        const l0 = sd > 0 ? lat(k, a[i][0]) : lat(k, a[i + 1][0]);
+        const l1 = sd > 0 ? lat(k, a[i + 1][0]) : lat(k, a[i][0]);
+        const m0 = sd > 0 ? lat(k2, b[i][0]) : lat(k2, b[i + 1][0]);
+        const m1 = sd > 0 ? lat(k2, b[i + 1][0]) : lat(k2, b[i][0]);
         const base = out.pos.length / 3;
         const vert = (P, u) => {
           out.pos.push(P[0], P[1], P[2]);
           out.nrm.push(u[0], u[1], u[2]);
           out.col.push(c[0], c[1], c[2]);
         };
-        vert(at(k, a[i]), ua); vert(at(k, a[i + 1]), ua);
-        vert(at(k2, b[i]), ub); vert(at(k2, b[i + 1]), ub);
+        vert(at(k, l0), ua); vert(at(k, l1), ua);
+        vert(at(k2, m0), ub); vert(at(k2, m1), ub);
         out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
       }
+    }
+    // THE ENTRY LINE AND THE EXIT LINE: a continuous 10 cm line across the
+    // whole lane where the limiter comes on and where it goes off (FIM §4.11.10.1/.2).
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    for (const s of [p.sIn, p.sOut]) {
+      const k = ((Math.round((s / L) * n) % n) + n) % n;
+      if (!(p.w[k] > 0.5)) continue;
+      TrackSpline.sample(track, s, smp);
+      const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t), uu = TrackGeom.norm(cross(rr, tt));
+      const x0 = sd * (smp.hw + o.fastIn * p.v[k] + 0.05), x1 = sd * (smp.hw + o.workOut * p.w[k] - 0.05);
+      const P = (lon, x) => [smp.p[0] + rr[0] * x + tt[0] * lon + uu[0] * PIT_LIFT,
+                             smp.p[1] + rr[1] * x + tt[1] * lon + uu[1] * PIT_LIFT,
+                             smp.p[2] + rr[2] * x + tt[2] * lon + uu[2] * PIT_LIFT];
+      const base = out.pos.length / 3;
+      const lo = Math.min(x0, x1), hi = Math.max(x0, x1);
+      for (const Q of [P(-0.05, lo), P(-0.05, hi), P(0.05, lo), P(0.05, hi)]) {
+        out.pos.push(Q[0], Q[1], Q[2]); out.nrm.push(uu[0], uu[1], uu[2]); out.col.push(white[0], white[1], white[2]);
+      }
+      out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
     }
     return out;
   }
 
-  const PIT_TEAMS = [
-    { short: "MER", col: [0.00, 0.83, 0.87] },
-    { short: "FER", col: [1.00, 0.11, 0.18] },
-    { short: "MCL", col: [1.00, 0.50, 0.00] },
-    { short: "RBR", col: [0.14, 0.22, 0.55] },
-    { short: "ALP", col: [0.00, 0.35, 0.72] },
-    { short: "RB",  col: [0.40, 0.62, 0.90] },
-    { short: "HAA", col: [0.72, 0.10, 0.16] },
-    { short: "WIL", col: [0.02, 0.22, 0.55] },
-    { short: "AUD", col: [0.90, 0.10, 0.12] },
-    { short: "AMR", col: [0.00, 0.44, 0.30] },
-  ];
-  function pitTeamList() {
-    if (typeof Teams !== "undefined" && Teams.ORDER) {
-      const rows = [];
-      for (const t of Teams.ORDER) {
-        if (t.custom) continue;
-        rows.push({ short: (t.short || t.id || "?").slice(0, 3).toUpperCase(),
-                    col: t.primary || t.color || t.col || [0.8, 0.8, 0.8] });
-        if (rows.length >= 10) break;
-      }
-      if (rows.length) return rows;
-    }
-    return PIT_TEAMS;
-  }
-
+  // THE PAINTED BOXES, one per row entry, at the positions the model laid out —
+  // the same `row.boxes[i].s` js/race/pit-lane.js stops a car at and
+  // js/track/scenery/pits.js puts a garage door behind. Painted in the WORKING
+  // lane, 8 m long (the FIA grid slot; a real box's frontage), open at the rear
+  // like the grid, with the team's colour on the front line and along the
+  // garage edge. Colours are the grid's own (js/data/teams.js via TrackPit.row).
   function buildPitBoxes(track, out) {
-    const lane = track.pitLane;
-    if (!lane || !lane.w) return out;
-    const teams = pitTeamList();
-    const L = track.total, n = track.n;
-    const span = Math.max(0, lane.lenM - 80);
-    if (!(span > 40)) return out;
-    // Real working boxes sit in a tight block (~8–9 m pitch, FIA grid slot),
-    // not stretched along the whole inner lane. Fall back to a spread only
-    // when the window is shorter than the block.
-    const BOX_PITCH = 9;
-    const block = teams.length * BOX_PITCH;
-    const pitch = block <= span ? BOX_PITCH : span / teams.length;
-    const s0 = block <= span
-      ? (lane.sIn + 40 + (span - block) * 0.5 + L) % L
-      : (lane.sIn + 40) % L;
+    const p = track.pit;
+    if (!p || !p.row) return out;
+    const L = track.total, n = track.n, sd = p.side, o = p.off;
     const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
     const white = track.def.palette.line || [0.95, 0.95, 0.98];
-    for (let i = 0; i < teams.length; i++) {
-      const s = (s0 + (i + 0.5) * pitch) % L;
+    const painted = [];
+    for (const box of p.row.boxes) {
+      const s = box.s;
       const k = ((Math.round((s / L) * n) % n) + n) % n;
-      const w = lane.w[k];
-      if (!(w > 1.2)) continue;
-      const rRamp = lane.laneW > 0.01 ? Math.min(1, w / lane.laneW) : 1;
-      const xMid = lane.side * (track.hw[k] + lane.gap * rRamp + w * 0.5);
+      if (!(p.w[k] > 0.98)) continue;
       TrackSpline.sample(track, s, smp);
       const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t);
       const uu = TrackGeom.norm(cross(rr, tt));
@@ -1098,24 +1084,25 @@ const TrackMesh = (function () {
         push(A); push(B); push(C); push(D);
         out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
       };
-      // FIA grid pitch is 8 m; pit-box paint on the working lane matches that
-      // rather than a 6 m toy box. Open at the rear (same rule as the grid).
-      const x0 = xMid - 1.4, x1 = xMid + 1.4, boxLen = 8, paint = 0.16;
-      const outer = lane.side > 0 ? x1 : x0;
-      const outerIn = lane.side > 0 ? x1 - paint : x0 + paint;
+      const wi = sd * (smp.hw + o.corrOut + 0.3), wo = sd * (smp.hw + o.workOut - 0.3);
+      const x0 = Math.min(wi, wo), x1 = Math.max(wi, wo);
+      const boxLen = p.row.boxLen, paint = 0.16;
+      const outer = sd > 0 ? x1 : x0;
+      const outerIn = sd > 0 ? x1 - 0.28 : x0 + 0.28;
       quad(at(boxLen / 2, x0), at(boxLen / 2, x1), at(boxLen / 2 - paint, x0), at(boxLen / 2 - paint, x1), white);
       quad(at(-boxLen / 2, x0), at(boxLen / 2, x0), at(-boxLen / 2, x0 + paint), at(boxLen / 2, x0 + paint), white);
       quad(at(-boxLen / 2, x1 - paint), at(boxLen / 2, x1 - paint), at(-boxLen / 2, x1), at(boxLen / 2, x1), white);
-      quad(at(boxLen / 2 + 0.25, x0), at(boxLen / 2 + 0.25, x1), at(boxLen / 2 + 0.55, x0), at(boxLen / 2 + 0.55, x1), teams[i].col);
-      // Garage-facing colour bar — reads as the team bay without a second hull.
-      quad(at(-boxLen / 2, outerIn), at(boxLen / 2, outerIn), at(-boxLen / 2, outer), at(boxLen / 2, outer), teams[i].col);
+      quad(at(boxLen / 2 + 0.25, x0), at(boxLen / 2 + 0.25, x1), at(boxLen / 2 + 0.55, x0), at(boxLen / 2 + 0.55, x1), box.col);
+      quad(at(-boxLen / 2, Math.min(outer, outerIn)), at(boxLen / 2, Math.min(outer, outerIn)),
+           at(-boxLen / 2, Math.max(outer, outerIn)), at(boxLen / 2, Math.max(outer, outerIn)), box.col);
+      painted.push(s);
     }
+    p.row.painted = painted;
     return out;
   }
 
-  // Intentionally empty. addBox stalls collided with kit pit buildings and
-  // lifted prop-clipping counts on 21 circuits. Colour lives on buildPitBoxes
-  // and circuitKit.pitBuilding doors / lintels.
+  // Kept for the export's shape. The garages are js/track/scenery/pits.js's,
+  // built into the props mesh from the same row the boxes are painted from.
   function buildPitGarages(track, out) {
     return out;
   }

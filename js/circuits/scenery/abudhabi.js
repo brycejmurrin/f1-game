@@ -337,7 +337,10 @@
         const k = K(0.88);
         const H = 100;
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 30);
+          // 33 m out, not 30: the tower's 18 m base radius reaches 15 m back
+          // toward the road, and at 30 it stood 2 m inside the pit complex's
+          // working lane (the engine builds the lane 14 m out on the pit side).
+          const a = anchor(k, side, 33);
           const b = [a.r, a.u, a.t];
           modelGroup(`yas-hotel-${side < 0 ? "left" : "right"}-tower`, {
             center: vadd(a.c, a.u, 54), size: [30, 108, 40], basis: b,

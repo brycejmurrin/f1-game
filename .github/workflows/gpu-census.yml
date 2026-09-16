@@ -147,9 +147,9 @@ jobs:
 
       - run: npm ci
 
-      # The FULL browser, not the headless shell: the shell ships without
-      # navigator.gpu, and censusing it answers a question about the binary
-      # rather than about the machine.
+      # Prefer full Chromium for a consistent census binary. WebGPU support
+      # in headless-shell builds varies; test the adapter rather than
+      # inferring support from the executable name.
       - name: Install Chromium
         run: npx playwright install chromium
 

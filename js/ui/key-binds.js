@@ -3,7 +3,7 @@
    key (or a controller button) to rebind it, RESET to go back to the defaults.
    Both edit a binding table in js/input/input.js (Input.keyBindings /
    setKeyBinding and the pad twins), persist it under `apex26.keys` /
-   `apex26.pad`, and rewrite the HOW TO PLAY line for that device so the help
+   `apex26.pad`, and rewrite the HOW TO PLAY binding slots for that device so the help
    never contradicts the bindings. A desktop shows both; a touch device shows
    each table once its device has been seen (a trusted key press, a pad
    button) or when its map is already customised, with one hint line saying
@@ -16,6 +16,35 @@ function create(G) {
   const { $, store } = G;
   const tick = () => { if (G.soundOn && window.GameAudio) GameAudio.uiTick(); };
   const sections = [];
+
+  // The same activity report drives Help and first-run coaching prompts.
+  const activeInputKind = () => Input.activeInputSource ? Input.activeInputSource()
+    : Input.touchControlsNeeded() ? "touch" : "keyboard";
+
+  function markHelpInput() {
+    const root = document.getElementById("htp-inputs");
+    if (root && root.dataset) root.dataset.activeInput = activeInputKind();
+  }
+
+  // On opening, put the active device article first and open it. Do this only
+  // for the initial disclosure state: once the player has opened an alternate
+  // article, preserve that choice across rebinding and later Help openings.
+  function prioritizeHelpInput() {
+    const root = document.getElementById("htp-inputs");
+    const sheet = document.getElementById("howtoplay");
+    if (!root || !root.querySelectorAll || (sheet && sheet.hidden)) return;
+    const details = Array.from(root.querySelectorAll("details[data-input]"));
+    if (!details.length) return;
+    const kind = activeInputKind();
+    const current = details.find((el) => el.getAttribute("data-input") === kind) || details[0];
+    if (!root.dataset.helpInputReady) {
+      for (const el of details) el.open = el === current;
+      root.dataset.helpInputReady = "1";
+    } else if (!current.open) {
+      current.open = true;
+    }
+    if (root.firstElementChild !== current && root.insertBefore) root.insertBefore(current, root.firstElementChild);
+  }
 
   // One rebinding section. `dev` carries the DOM (section, host, note, reset,
   // help — looked up by literal id at the call sites) and the Input half it
@@ -125,11 +154,37 @@ function create(G) {
       if (wrap && dev.show) wrap.hidden = !dev.show();
       renderHint();
       renderHelp();
+      markHelpInput();
+      prioritizeHelpInput();
     }
-    // HOW TO PLAY's line for this device, from the live table: "Steer ← → /
-    // A D · Gas ↑ / W …". A group whose ids is a string is fixed text (the
+    // Both the complete input guide and in-prose binding references use the
+    // live table. A group whose ids is a string is fixed text (the
     // stick, pause). Written with DOM nodes (the .key chips), never markup.
     function renderHelp() {
+      const attr = dev.keys ? "data-help-keys" : "data-help-pad";
+      // Inline references also live outside the input disclosures.
+      const slots = document.querySelectorAll ? document.querySelectorAll(`[${attr}]`) : [];
+      if (slots.length) {
+        const byId = {};
+        for (const a of dev.list()) byId[a.id] = a;
+        const aliases = { ot: "overtake", activeaero: "aero", "active-aero": "aero" };
+        for (const slot of slots) {
+          const raw = (slot.getAttribute(attr) || "").trim().toLowerCase();
+          const action = aliases[raw] || raw;
+          const row = byId[action];
+          slot.textContent = "";
+          if (!row) { slot.textContent = "unset"; continue; }
+          const codes = row.codes.filter((c) => c != null);
+          if (!codes.length) { slot.textContent = "unset"; continue; }
+          codes.forEach((code, i) => {
+            if (i) slot.append(" / ");
+            const chip = document.createElement("span");
+            chip.className = "key";
+            chip.textContent = dev.label(code);
+            slot.append(chip);
+          });
+        }
+      }
       if (!help) return;
       help.textContent = "";
       const chip = (code) => { const k = document.createElement("span"); k.className = "key"; k.textContent = dev.label(code); return k; };
@@ -224,6 +279,14 @@ function create(G) {
   // settled and on every later flip.
   const rerender = () => { for (const s of sections) s.render(); };
   if (Input.onPointerKindChange) Input.onPointerKindChange(rerender);
+  // `hidden` is the shell's source of truth for dialog visibility. The
+  // observer keeps Help's first disclosure aligned with the source the player
+  // actually used when the dialog is opened, without a per-frame DOM walk.
+  if (typeof MutationObserver === "function") {
+    const helpSheet = document.getElementById("howtoplay");
+    if (helpSheet) new MutationObserver(prioritizeHelpInput)
+      .observe(helpSheet, { attributes: true, attributeFilter: ["hidden"] });
+  }
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", rerender, { once: true });
   else rerender();
   /* BUTTON NAMES — the manual override for a guess that cannot always be
@@ -331,6 +394,6 @@ function create(G) {
   return { render() { for (const s of sections) s.render(); } };
 }
 
-return { create };
+  return { create };
 })();
 Object.freeze(KeyBinds);
