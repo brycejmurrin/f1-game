@@ -155,7 +155,7 @@ const CustomTeam = (function () {
       for (const l of Legends.LIST) {
         const o = document.createElement("option");
         o.value = l.id;
-        o.textContent = `${l.name} — ${l.car}`;
+        o.textContent = l.name;   // the car shows as the ENGINE label once applied
         sel.appendChild(o);
       }
     }

@@ -208,22 +208,54 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   expect(leaked, "a cached custom-team body mesh outlived the paint it was built for").toBe(0);
 });
 
-// THE LEGEND PICKER IS NOT COVERED HERE, and that is a recorded gap rather
-// than an oversight. A test driving it through saveMyTeam failed five times on
-// the FIRST #sel-car click: the locator resolves, the click never lands, 60 s
-// gone. It failed on the shared page, at three different positions in the file,
-// AND on its own fresh page via `test` — so it is not the inherited screen
-// state this file warns about elsewhere, and the three tests above take the
-// identical route and pass. Whatever the difference is, five SwiftShader runs
-// did not find it, and AGENTS.md is explicit that a change naming its
-// unverified part beats another hour of it.
-//
-// What IS verified: tests/unit/legends.test.mjs covers the data, the derived
-// ratings and Legends.team(); the row and its APPLY handler are plain DOM in
-// index.html and js/career/custom-team.js, guarded on `typeof Legends`. What
-// is NOT: that a human clicking APPLY sees the rows change. Cover it by
-// finding why #sel-car refuses the click from a fresh page — that is a wider
-// finding than this feature, since it would affect any new test here.
+test("the LEGEND picker fills the team from js/data/legends.js and leaves it editable", async ({ page }) => {
+  // #mb-race FIRST. pinFreePlay({click:false}) deliberately does NOT open the
+  // select screen, so #sel-car is in the DOM but never visible — and Playwright
+  // reports that as "locator resolved" followed by a 60 s click timeout, which
+  // reads like a dead button rather than a screen that was never opened. Five
+  // runs went into that before reading the tests above, which all open the
+  // screen on their way through.
+  test.setTimeout(240_000);
+  await toMenu(page);
+  await pinFreePlay(page, { click: false });
+  await page.locator("#mb-race").click();
+
+  // The picker has NO save path of its own: it writes the dialog's own rows and
+  // stops, so the existing SAVE stays the only thing that persists and an
+  // applied legend remains editable. That is what this checks.
+  const seen = {};
+  await saveMyTeam(page, async () => {
+    seen.opts = await page.locator("#cz-legend option").count();
+    // BARE `Legends`, not window.Legends: these modules declare a top-level
+    // `const`, which binds in script scope and never lands on window — the same
+    // reason tests/helpers/shared-page.js reaches for `Teams` bare.
+    seen.total = await page.evaluate(() => Legends.LIST.length);
+
+    await page.selectOption("#cz-legend", "senna");
+    await page.locator("#cz-legend-apply").click();
+    seen.name = await page.inputValue("#cz-name");
+    seen.code = await page.inputValue("#cz-code");
+    seen.num = await page.inputValue("#cz-num");
+    const sennaColor = await page.inputValue("#cz-color");
+
+    // A second APPLY repaints, so it is not a one-shot.
+    await page.selectOption("#cz-legend", "clark");
+    await page.locator("#cz-legend-apply").click();
+    seen.code2 = await page.inputValue("#cz-code");
+    seen.repainted = (await page.inputValue("#cz-color")) !== sennaColor;
+
+    // …and a player can still override what a legend filled in.
+    await page.fill("#cz-short", "MINE");
+    seen.short = await page.inputValue("#cz-short");
+  });
+  expect(seen.opts).toBe(seen.total);
+  expect(seen.name).toBe("Legends");
+  expect(seen.code).toBe("SEN");
+  expect(seen.num).toBe("12");          // the sourced number, not an invented one
+  expect(seen.code2).toBe("CLK");
+  expect(seen.repainted).toBe(true);
+  expect(seen.short).toBe("MINE");
+});
 
 test("custom livery actions are independent keyboard buttons", async ({ page }) => {
   await toMenu(page);
