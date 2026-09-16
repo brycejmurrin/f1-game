@@ -38,7 +38,15 @@ SHA="${1:?commit sha}"
 REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY}"
 
 say() { echo "$*" >&2; }
-verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\n' "$1" "$2" "$3"; }
+# fast_run: the FAST-tier ci.yml run (a deploy-branch push: guards, node
+# suites, sweeps-parts, driving-model, selection) that already passed on this
+# exact tree, when there is one. Never a reason to skip the gate — the train
+# still runs the browser smoke and the geometry sweeps — but the four tree-only
+# jobs it already passed give the same answer on the same bytes, so ci.yml's
+# `fast_tier_run` input skips them (2026-09-16; a deploy push paid ~12 min of
+# fast tier and then ~14 min of full tier, serially, with no job shared).
+FAST_RUN=""
+verdict() { printf 'reuse=%s\nsource=%s\nrun=%s\nfast_run=%s\n' "$1" "$2" "$3" "$FAST_RUN"; }
 tree_of() { git rev-parse --verify -q "$1^{tree}" 2>/dev/null; }
 
 TREE="$(tree_of "$SHA")" || { say "::warning::$SHA is not in this checkout; running the full gate"; verdict false "" ""; exit 0; }
@@ -57,6 +65,20 @@ done
 for c in $candidates; do
   json="$(gh api "repos/$REPO/actions/runs?head_sha=$c&status=success&per_page=30" 2>/dev/null)" \
     || { say "::warning::could not list workflow runs for $c; running the full gate"; continue; }
+  # The fast tier on the same tree, remembered for the verdict either way.
+  if [ -z "$FAST_RUN" ]; then
+    FAST_RUN="$(printf '%s' "$json" | node -e '
+      let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
+        let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}
+        const self = process.env.GITHUB_RUN_ID || "";
+        const deployBranch = process.env.DEPLOY_BRANCH || "";
+        const fast = (r) => r.status === "completed" && r.conclusion === "success" && String(r.id) !== self
+          && r.path === ".github/workflows/ci.yml" && r.event === "push" && deployBranch !== "" && r.head_branch === deployBranch;
+        const r = runs.find(fast);
+        if (r) process.stdout.write(String(r.id));
+      });')"
+    [ -n "$FAST_RUN" ] && say "fast tier already green on $c: ci.yml run $FAST_RUN (its tree-only jobs are reused)"
+  fi
   hit="$(printf '%s' "$json" | node -e '
     let s = ""; process.stdin.on("data", (d) => s += d).on("end", () => {
       let runs = []; try { runs = JSON.parse(s).workflow_runs || []; } catch (_) {}

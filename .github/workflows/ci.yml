@@ -192,6 +192,18 @@ on:
         type: boolean
         required: false
         default: false
+      # EXPERIMENT (2026-09-16): Mesa llvmpipe instead of SwiftShader on the
+      # smoke shards. Dead in the dev container (no /dev/dri —
+      # docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe), untested on GitHub's
+      # runners, where the public walkthrough that note cites got its numbers.
+      # `llvmpipe` installs Mesa + Xvfb on the smoke runners and launches with
+      # APEX_GL=llvmpipe (playwright.config.js swaps the ANGLE flags). Read the
+      # shard times and the renderer string in the log; nothing else changes.
+      gl:
+        description: "software GL for the smoke shards: swiftshader (default) or llvmpipe (experiment)"
+        type: string
+        required: false
+        default: "swiftshader"
   workflow_call:      # pages.yml gates its deploy on this
     inputs:
       # Caller's push `before` SHA, forwarded EXPLICITLY. github.event in a
@@ -211,6 +223,22 @@ on:
       # 2026-08-12 anyway; the smoke gate runs on every push, PR and deploy.
       concurrency_key:
         description: "unique caller run key; empty keeps direct push/PR branch concurrency"
+        type: string
+        required: false
+        default: ""
+      # REUSE THE FAST TIER'S TREE-ONLY JOBS (2026-09-16). A deploy-branch push
+      # runs guards, node-suites, sweeps-parts and driving-model (the fast
+      # tier), pokes the train, and the train's gate ran all four AGAIN on the
+      # same tree — measured: ~12 min of fast tier, then ~14 min of full tier,
+      # serially, sharing nothing. Those four depend on the TREE only (no diff
+      # base, no selection), so the same bytes give the same answer. pages.yml's
+      # verdict passes the id of a completed, successful fast-tier ci.yml run
+      # on this exact tree; the four jobs skip and the gate is smoke + sweeps +
+      # selection (the change-aware `selected` always re-runs: its base is the
+      # LIVE commit here, which can be older than the push's `before`). Empty
+      # on every direct run, and on a train whose tip has no green fast tier.
+      fast_tier_run:
+        description: "id of a green fast-tier ci.yml run on this exact tree; its tree-only jobs are skipped"
         type: string
         required: false
         default: ""
@@ -258,6 +286,8 @@ jobs:
   guards:
     name: Structural guards
     runs-on: ubuntu-latest
+    # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
+    if: ${{ inputs.fast_tier_run == '' }}
     # RE-TIMED 2026-09-03, after this job timed out on Pages #1959 and #1961 and
     # blocked two deploys. It was `timeout-minutes: 10` while running npm ci
     # (3m32s and 5m02s on those two runs) plus tooling-fast plus a TEN-GROUP
@@ -270,7 +300,9 @@ jobs:
     # PARALLEL, so the gate's wall time is the larger of the two, not the sum,
     # and both still gate the deploy — pages.yml aggregates every job in this
     # workflow, so a new job joins the gate by itself.
-    # MEASURED locally 2026-09-03: tooling-fast 136s. + npm ci ~5 min on CI.
+    # MEASURED locally 2026-09-03: tooling-fast 136s. Setup on CI is ~15-45 s
+    # now (setup-node's npm cache hits; `npm ci` is 1-2 s — 2026-09-16), not
+    # the ~5 min this line once claimed.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -312,6 +344,20 @@ jobs:
   node-suites:
     name: Pure-node unit suites
     runs-on: ubuntu-latest
+    # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
+    if: ${{ inputs.fast_tier_run == '' }}
+    # THREE RUNNERS, NOT ONE (2026-09-16). This job ran its scripts one after
+    # another and measured 11.3 min on 40 of 40 runs — the floor of the fast
+    # tier, hence of every deploy push, and never shortened by anything. The
+    # pieces are independent: game-vm ~3 min, node-slow ~2.5 min, the rest
+    # seconds. One slice per runner, wall ≈ the slowest slice. The step below
+    # keeps its name and one `npm run test:*` per line because deploy.mjs
+    # (gateNodeSuites) and tools/ci/twinned-specs.mjs DERIVE the node half of
+    # the gate from that text.
+    strategy:
+      fail-fast: false
+      matrix:
+        slice: [vm, slow, fast]
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
     # game-vm 161s = 305s total (+ garage-unit 39s, steering-unit 1s, 2026-09-10). Plus npm ci, which cost 3m32s and 5m02s on the
@@ -327,36 +373,48 @@ jobs:
       - run: npm ci
       - name: Pure-node unit suites
         run: |
-          npm run test:net-unit
-          npm run test:service-worker
-          npm run test:lifecycle-unit
-          npm run test:state-unit
-          npm run test:agent-contract
-          npm run test:audio-unit
-          # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,
-          # livery-contrast, body-split, cover-legibility, helmets) and three
-          # steering files (digital-steer, key-binds, settings-export) were in
-          # these two groups and in NO gate — not tooling-fast, not this step,
-          # so deploy.mjs (which derives its node list from here) never ran
-          # them either. Measured 2026-09-10: garage-unit 39 s, steering-unit
-          # 0.5 s. The sub-5 s files are in tooling-fast too; the two slow
-          # livery rasters (7-10 s each) run only here.
-          npm run test:garage-unit
-          npm run test:steering-unit
-          # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
-          # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
-          # their fast-gate half is mcp-cli. environment-json stays gated below.
-          npm run test:mcp
-          # The three raster/spawn-heavy car files, out of the edit loop
-          # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.
-          npm run test:node-slow
-          # The Node VM harness: js/game.js headless, exact parity with the
-          # physics baseline (tests/unit/physics-characterization-vm.test.mjs).
-          npm run test:game-vm
+          # ONE SLICE PER RUNNER (matrix.slice). Every script stays on its own
+          # line: deploy.mjs and twinned-specs.mjs read this step's text.
+          case "${{ matrix.slice }}" in
+            vm)
+              # The Node VM harness: js/game.js headless, exact parity with the
+              # physics baseline (tests/unit/physics-characterization-vm.test.mjs).
+              npm run test:game-vm
+              ;;
+            slow)
+              # The three raster/spawn-heavy car files, out of the edit loop
+              # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.
+              npm run test:node-slow
+              ;;
+            fast)
+              npm run test:net-unit
+              npm run test:service-worker
+              npm run test:lifecycle-unit
+              npm run test:state-unit
+              npm run test:agent-contract
+              npm run test:audio-unit
+              # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,
+              # livery-contrast, body-split, cover-legibility, helmets) and three
+              # steering files (digital-steer, key-binds, settings-export) were in
+              # these two groups and in NO gate — not tooling-fast, not this step,
+              # so deploy.mjs (which derives its node list from here) never ran
+              # them either. Measured 2026-09-10: garage-unit 39 s, steering-unit
+              # 0.5 s. The sub-5 s files are in tooling-fast too; the two slow
+              # livery rasters (7-10 s each) run only here.
+              npm run test:garage-unit
+              npm run test:steering-unit
+              # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;
+              # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and
+              # their fast-gate half is mcp-cli. environment-json stays gated below.
+              npm run test:mcp
+              ;;
+          esac
 
   sweeps-parts:
     name: Parts option-resolution census
     runs-on: ubuntu-latest
+    # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
+    if: ${{ inputs.fast_tier_run == '' }}
     # One subtest of parts-visual-distinctness ("every option resolves to
     # itself") measured 559 s of the 999 s sweeps run on 2026-09-01. Its own
     # runner, unconditional and in parallel, so the geometry sweeps finish in
@@ -835,12 +893,36 @@ jobs:
         run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/4
       # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
       # whichever browser group the `group` input names (default tiny).
+      # The llvmpipe experiment (dispatch input `gl`): Mesa's software GL needs
+      # a display to bind through, which Xvfb provides; the launch flags come
+      # from APEX_GL in playwright.config.js.
+      - name: Mesa llvmpipe + Xvfb (experiment)
+        if: steps.shipfilter.outputs.ships != 'false' && github.event_name == 'workflow_dispatch' && inputs.gl == 'llvmpipe'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
       - name: Boot group (nightly) / dispatched group
-        if: steps.shipfilter.outputs.ships != 'false' && inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        if: steps.shipfilter.outputs.ships != 'false' && inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.gl != 'llvmpipe'
         env:
           APEX_WORKERS: 1
           GROUP: ${{ github.event_name == 'workflow_dispatch' && inputs.group || 'tiny' }}
+          # A dispatched group runs its browser copies of the VM-twinned specs
+          # too (locally run-playwright skips them; this is where they still run).
+          APEX_WITH_TWINNED: 1
         run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
+      # The same run under Mesa llvmpipe + Xvfb (dispatch input `gl: llvmpipe`).
+      # Its own step so the step above keeps the exact command line
+      # tests/unit/ci-coverage.test.mjs pins; read the shard times and the
+      # WEBGL_debug_renderer_info string in the log against a SwiftShader run.
+      - name: Dispatched group on llvmpipe (experiment)
+        if: steps.shipfilter.outputs.ships != 'false' && github.event_name == 'workflow_dispatch' && inputs.gl == 'llvmpipe'
+        env:
+          APEX_WORKERS: 1
+          APEX_WITH_TWINNED: 1
+          APEX_GL: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: 1
+          GROUP: ${{ inputs.group || 'tiny' }}
+        run: xvfb-run -a --server-args="-screen 0 1280x800x24" npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -857,6 +939,8 @@ jobs:
   driving-model:
     name: Driving model (characterization traces)
     runs-on: ubuntu-latest
+    # Tree-only: skipped when the train reuses a green fast tier (`fast_tier_run`).
+    if: ${{ inputs.fast_tier_run == '' }}
     # 42 s measured in CI (run 31197770813, step 7). The old 10-minute cap was
     # consumed entirely by an uncached Chromium install on run 32083395969, so
     # the characterization never started and Pages was blocked. Keep the same
@@ -1224,7 +1308,17 @@ jobs:
           node-version: "20"
           cache: npm
       - run: npm ci
-      - name: Install browser
+      # The same lockfile-keyed cache smoke and driving-model restore in 2-5 s;
+      # this job installed from scratch (17-33 s per shard, `--with-deps` entering
+      # apt each time) until 2026-09-16.
+      - name: Cache Chromium
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Install Chromium on cache miss
+        if: steps.pwcache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
       # STOP AT THREE, don't grind to the cap. Pages #1967 selected 32 tests,
       # failed 6 of the first 7 at the per-test timeout, and kept going until

@@ -36,6 +36,32 @@ test.describe("WebGL renderer probes", () => {
     await page.evaluate(() => window.__apex?.setTimeOfDay("default")).catch(() => {});
   });
 
+  test("scene({visible:true}) reports scenery chunks inside the camera frustum", async ({ page }) => {
+    // From agent-view.spec.js (2026-09-16): the one agent-view test that reads
+    // the RENDERER — GLX's per-chunk AABB index (js/render/glx/chunked.js) via
+    // GLX.makeFrustumPlanes / aabbInFrustum — so it lives with the GLX probes
+    // and the rest of that file runs as a Node VM twin. Same assertions.
+    await loadRace(page, "monza");
+    await page.evaluate(() => window.__apex.jump(0.05, 60, 0));
+    await page.evaluate(() => window.__apex.snapCam());
+    await page.evaluate(() => new Promise((r) => {
+      let n = 0; const tick = () => (++n >= 10 ? r() : requestAnimationFrame(tick)); requestAnimationFrame(tick);
+    }));
+    const v = await page.evaluate(() => window.__apex.scene({ visible: true, limit: 4 }));
+    expect(v.scenery.available).toBe(true);
+    expect(v.scenery.cellSizeM).toBe(72);
+    expect(v.scenery.totalCells).toBeGreaterThan(50);
+    // Some scenery must be in view, but never all of it — that would mean the
+    // cull test is passing everything and the answer is worthless.
+    expect(v.scenery.visibleCells).toBeGreaterThan(0);
+    expect(v.scenery.visibleCells).toBeLessThan(v.scenery.totalCells);
+    expect(v.scenery.nearest.length).toBeLessThanOrEqual(4);
+    for (const c of v.scenery.nearest) {
+      expect(c.distM).toBeGreaterThanOrEqual(0);
+      expect(c.sizeM.length).toBe(3);
+    }
+  });
+
   test("dynamic player shadow uses the current-frame car transform", async ({ page }) => {
     await loadRace(page, "madrid");
     // Folded hdrMode() contract (was a standalone typeof-only test — same

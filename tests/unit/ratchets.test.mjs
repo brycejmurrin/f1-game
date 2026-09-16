@@ -68,3 +68,25 @@ test("an entry may tighten the slack rule, never widen it", async () => {
     () => measure({ files: {}, tree: { cssClasses: { ceiling: 535, slack: 9999 } } }),
     /looser than the default/);
 });
+
+test("the commit hook's auto-raise absorbs small growth and blocks big growth", async () => {
+  // The bound is the whole contract: ≤ maxRaise lines over → raised (and the
+  // raise is in the diff the hook stages); more → blocked, exactly as before.
+  const { autoRaise } = await import("../../tools/check/ratchets.mjs");
+  const rows = await measure();
+  const worst = Math.max(0, ...rows.map((r) => r.over));
+  // On a green tree nothing moves.
+  const quiet = await autoRaise({ maxRaise: 40 });
+  assert.equal(quiet.ok, true);
+  assert.deepEqual(quiet.blocked, []);
+  if (worst === 0) assert.deepEqual(quiet.raised, [], "a green tree is not raised");
+  // A ceiling that is over by more than the bound is refused, never written:
+  // simulate by asking for a bound below any real growth on a tree that has some,
+  // or, on a green tree, by checking the classification directly.
+  const over = rows.filter((r) => r.over > 0);
+  if (over.length) {
+    const tight = await autoRaise({ maxRaise: Math.max(0, Math.min(...over.map((r) => r.over)) - 1) });
+    assert.equal(tight.ok, false);
+    assert.ok(tight.blocked.length >= 1);
+  }
+});

@@ -44,8 +44,8 @@ read-only.
   other circuits, baselines (`tools/*-baseline.json`), tests, `index.html`,
   or `version.json`. Report the change unverified rather than running a group.
 - NEVER flip a curvature sign without a rendered lap (+k = LEFT-hand turn).
-- In a linked worktree: first step is `git checkout -B <branch> <the session
-  branch or its SHA>` and verify a session-known file — worktrees default to a
-  stale base.
+- Unless `.claude/settings.json` sets `worktree.baseRef: "head"`, a worktree
+  starts STALE: first `git checkout -B <branch> <the session SHA>` and verify
+  a session-known file — a stale base is the wrong circuit.
 
 Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.

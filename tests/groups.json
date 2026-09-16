@@ -571,6 +571,7 @@
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",
+        "tests/unit/agent-view-vm.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/red-flag-vm.test.mjs",
         "tests/unit/mechanics-integration-vm.test.mjs"

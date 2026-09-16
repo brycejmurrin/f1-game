@@ -80,6 +80,7 @@ jobs:
       reuse: ${{ steps.v.outputs.reuse }}
       source: ${{ steps.v.outputs.source }}
       run: ${{ steps.v.outputs.run }}
+      fast_run: ${{ steps.v.outputs.fast_run }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -162,6 +163,10 @@ jobs:
       # group that matters is the one on this job. It also tells ci.yml this
       # is the deploy gate (full tier, never the fast one).
       concurrency_key: pages-${{ github.run_id }}
+      # The deploy push's fast tier already passed the tree-only jobs on this
+      # exact tree (verdict looked it up): the gate runs smoke + sweeps +
+      # selection and reuses the rest — see ci.yml's `fast_tier_run` input.
+      fast_tier_run: ${{ needs.verdict.outputs.fast_run }}
     # ONE TRAIN AT A TIME (rule 1 above). One group per branch, no cancel: a
     # running gate finishes, the next tick waits, a later tick replaces the
     # waiting one. A dispatch shares the group and queues the same way.
