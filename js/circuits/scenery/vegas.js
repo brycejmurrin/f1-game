@@ -156,15 +156,19 @@
       guardrail(0.45, 0.49, -1, 1.0, [0.80, 0.80, 0.84]);          // T8-T9 onto the Strip
       tyreWall(0.305, 0.345, -1, 1.2, MAGENTA);                     // Sphere chicane apex
       tyreWall(0.955, 0.985, 1, 1.2, CYAN);                        // Harmon chicane apex
+      // The -1 (pit side) fence and hoarding stop at the pit complex's
+      // window (.1210-.1923) and resume after it: the 2.4 m hoarding's 0.35 m
+      // thickness straddled the keep-out's 2.5 m edge and stood in the
+      // platform band — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
       for (const [s0, s1, side] of [
         [0.07, 0.30,  1], [0.30, 0.50,  1], [0.50, 0.72,  1], [0.72, 0.99,  1],
-        [0.00, 0.25, -1], [0.25, 0.48, -1], [0.48, 0.70, -1], [0.70, 0.83, -1],
+        [0.00, 0.121, -1], [0.192, 0.25, -1], [0.25, 0.48, -1], [0.48, 0.70, -1], [0.70, 0.83, -1],
         [0.91, 0.99, -1],
       ]) fence(s0, s1, side, 3.4, 3.6, [0.55, 0.56, 0.60]);
       // Lit hoarding band on the barrier top — continuous neon advertising.
       for (const [s0, s1, side] of [
         [0.00, 0.32,  1], [0.34, 0.64,  1], [0.66, 0.98,  1],
-        [0.02, 0.33, -1], [0.35, 0.65, -1], [0.67, 0.97, -1],
+        [0.02, 0.121, -1], [0.192, 0.33, -1], [0.35, 0.65, -1], [0.67, 0.97, -1],
       ]) wall(s0, s1, side, 2.4, 1.5,
               NEON[Math.round(s0 * 13) % NEON.length], 0.35);
 
@@ -355,7 +359,8 @@
       // Prominent hotel towers either side of the start/finish straight approach
       building(K(0.10), -1, 22, 30, 46, 30, { kind: "twin", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
       building(K(0.14), 1, 20, 26, 40, 26, { kind: "tiered", wall: BOH_WALL, window: BOH_WIN, floor: 8, lit: true });
-      cityFront(0.12, 0.20, -1, 20, { minH: 20, maxH: 42, depth: 22, step: 30,
+      // gap 28 on the pit side: the complex's row and its tail keep 26.7 m.
+      cityFront(0.12, 0.20, -1, 28, { minH: 20, maxH: 42, depth: 22, step: 30,
         palette: [[0.18, 0.18, 0.20], [0.19, 0.19, 0.20]], lit: true, windowCol: BOH_WIN });
       cityFront(0.12, 0.20,  1, 20, { minH: 18, maxH: 38, depth: 20, step: 30,
         palette: [[0.18, 0.18, 0.20], [0.17, 0.18, 0.21]], lit: true, windowCol: BOH_WIN });

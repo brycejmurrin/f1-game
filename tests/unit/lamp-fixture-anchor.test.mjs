@@ -130,8 +130,14 @@ test("every registered fixture's pool reaches the road", () => {
     if (!posts.length) continue;               // covered by the test above
     let short = 0, worst = 0;
     for (let o = 0; o < L.length; o += STRIDE) {
-      if (nearestFixture(L, o, posts) > ON_FIXTURE_M) continue;   // not a fixture light
-      const gap = throwToRoad(L, o, track) - L[o + I_RAD];
+      const post = posts.find((p) => Math.hypot(p.x - L[o], p.y - L[o + 1], p.z - L[o + 2]) <= ON_FIXTURE_M);
+      if (!post) continue;                                         // not a fixture light
+      // A fixture that names the point it lights (`aimAt`: the pit canopy
+      // luminaires over the working lane) must reach THAT, not the centreline.
+      const throwM = post.aimAt
+        ? Math.hypot(L[o] - post.aimAt[0], L[o + 1] - post.aimAt[1], L[o + 2] - post.aimAt[2])
+        : throwToRoad(L, o, track);
+      const gap = throwM - L[o + I_RAD];
       if (gap > 0) { short++; worst = Math.max(worst, gap); }
     }
     if (short) {
@@ -214,4 +220,30 @@ test("the start-gantry downlights stay fixture-less AND invisible", () => {
   // The pool itself must survive: this bar is what marks the start line.
   const lit = tail.every((t) => t.y > track.py[0]);
   assert.ok(lit, "downlights still sit above the road at node 0");
+});
+
+test("the pit canopy luminaires throw at the working lane, not at the racing road", () => {
+  // buildTrackLights sizes a lamp's energy by its lens → near-lane-centre
+  // distance squared. A soffit luminaire 5 m over the working lane is 16 m
+  // from that point, so measured against the road it came out ~27× too hot
+  // (Monaco's tunnel soffits fudge the same thing with `energy`). A record's
+  // `aimAt` names the point it lights instead; the bake takes throw, aim and
+  // incidence from it. Monaco's hand-tuned soffits land ~250.
+  for (const id of ["bahrain", "silverstone"]) {
+    const { track, L } = nightLights(id);
+    const pit = (track.lampPosts || []).filter((p) => p.pit);
+    assert.equal(pit.length, 6, `${id}: the row's six luminaires are registered`);
+    for (const p of pit) {
+      let o0 = -1, best = Infinity;
+      for (let o = 0; o < L.length; o += STRIDE) {
+        const d = Math.hypot(L[o] - p.x, L[o + 1] - p.y, L[o + 2] - p.z);
+        if (d < best) { best = d; o0 = o; }
+      }
+      assert.ok(best <= ON_FIXTURE_M, `${id}: the light sits on its luminaire`);
+      const e = Math.max(L[o0 + 3], L[o0 + 4], L[o0 + 5]);
+      assert.ok(e >= 150 && e <= 600, `${id}: energy ${e.toFixed(0)} — a lane pool, not a floodlight`);
+      assert.ok(L[o0 + 8] < -0.9, `${id}: the beam points down (${L[o0 + 8].toFixed(2)})`);
+      assert.ok(L[o0 + I_RAD] <= 20, `${id}: radius ${L[o0 + I_RAD]} reaches the wall and the bays, not the far kerb`);
+    }
+  }
 });

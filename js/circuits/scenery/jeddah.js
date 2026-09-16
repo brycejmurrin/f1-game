@@ -86,7 +86,13 @@
       ];
       for (const side of [-1, 1]) {
         for (const [b0, b1, accent] of SAUDI_BLOCKS) {
-          canyon(b0, b1, side, 3.50, {
+          // The -1 (pit side) canyon stops at the pit complex's window
+          // (.9643-.0211) and resumes after it: 82 slabs measured superseded
+          // across it, and a wall that visibly ends at the pit wall reads
+          // right — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
+          const a0 = side === -1 && b0 === 0.00 ? 0.0211 : b0;
+          const a1 = side === -1 && b1 === 1.00 ? 0.9643 : b1;
+          canyon(a0, a1, side, 3.50, {
             h: (b0 < 0.5 ? 1.35 : 1.40) + (side > 0 ? 0.06 : 0.08),
             stripeCol: accent, stripeEvery: 5,
           });
@@ -213,9 +219,21 @@
 
       // ── START/FINISH gantries ─────────────────────────────────────────────
       gantry(0.0,   13, [0.12, 0.13, 0.17]);
-      gantry(0.012, 11, [0.12, 0.13, 0.17]);
+      // .030, past the complex's exit line (.0211): at .012 its portal leg at
+      // 1.5 m stood ON the exit road's lane (measured, an 11.2 m box at lat 2.0).
+      gantry(0.030, 11, [0.12, 0.13, 0.17]);
 
-      building(K(0.0), -1, 16, 62, 8, 28, { kind: "hall", wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
+      // The pit building: the complex has no bays here (its 190 m window
+      // compresses the row's pitch under a bay), so the kit's hall stands
+      // behind the garage line, 12 doors over the painted row's 120 m.
+      if (circuitKit) {
+        circuitKit.pitBuilding({
+          id: "kit:jeddah:pit-building", frac: 0.993, side: -1, gap: 11.2,
+          size: [18, 11, 120], garages: 12,
+        });
+      } else {
+        building(K(0.0), -1, 16, 62, 8, 28, { kind: "hall", wall: [0.26, 0.27, 0.30], window: WINWARM, floor: 4 });
+      }
       const STAND_GREEN = [0.07, 0.30, 0.16];
       const STAND_GOLD  = [0.72, 0.58, 0.16];
       grandstandEx(0.0,  1, 15, 60, STAND_GREEN, [0.42, 0.46, 0.40],

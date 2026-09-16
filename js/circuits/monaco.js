@@ -17,6 +17,10 @@
     tyreSeverity: 1.01,  // Monaco 0.050 s/lap — a gentle surface against a punishing layout
     baseHW: 5,
     street: true,
+    // The pit complex (TrackPit): the STREET one, built on the harbour side
+    // (track right — the 2004 permanent pit building), 60 km/h, the narrowest
+    // lane in F1. Racing-space side, like every def.pit.
+    pit: { mode: "street", side: 1, limitKph: 60 },
     terrainOuter: 28,
     sceneryCoordinates: "source",
     barrierGap: 2.0,

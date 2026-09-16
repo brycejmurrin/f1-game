@@ -27,7 +27,7 @@
 //                   it every bucket is barrier-ribbon graze or facade mullion.
 //
 // Usage:
-//   node tools/track/clip-audit.cjs <trackId> [--why] [--depth M] [--adj N]
+//   node tools/track/clip-audit.cjs <trackId> [--why] [--dump] [--depth M] [--adj N]
 //   node tools/track/clip-audit.cjs --all [--json] [--gate]
 //
 // --gate exits 1 if any circuit exceeds its BASELINE severe-spot count.
@@ -247,6 +247,7 @@ const opt = { depth: flag("--depth", DEPTH_MIN), adj: flag("--adj", ADJ) };
 const asJson = args.includes("--json");
 const gate = args.includes("--gate");
 const why = args.includes("--why");
+const dump = args.includes("--dump");
 
 // Per-circuit SEVERE spot caps. Same semantics as tests/specs/props-over-road.spec.js:
 // a circuit NOT in this map must read 0, and a capped circuit fails when its
@@ -257,11 +258,15 @@ function report(r) {
   console.log(`\n${r.id.padEnd(13)} ${String(r.severeSpots.length).padStart(4)} severe spot(s) ` +
               `(>=${SEVERE}m)  ${String(r.spots.length).padStart(4)} total spot(s) ` +
               `(>=${opt.depth}m)  from ${r.hits.length} pair(s)`);
-  for (const h of r.spots.slice(0, why ? 4 : 8)) {
+  // `--dump`: EVERY severe spot, with both prims' extents — the top eight
+  // tell you a circuit grew a spot, not which one.
+  const list = dump ? r.severeSpots : r.spots.slice(0, why ? 4 : 8);
+  const ext = (p) => `${p.name}[${(p.maxX - p.minX).toFixed(1)}x${(p.maxY - p.minY).toFixed(2)}x${(p.maxZ - p.minZ).toFixed(1)} y${p.minY.toFixed(2)}..${p.maxY.toFixed(2)}]`;
+  for (const h of list) {
     const tag = h.depth >= SEVERE ? "SEVERE" : "minor ";
     console.log(`   ${tag} ${h.depth.toFixed(2).padStart(6)}m  ov ${h.ov.toFixed(0).padStart(5)}m3  ` +
                 `@(${((h.a.minX + h.a.maxX) / 2).toFixed(0)},${((h.a.minZ + h.a.maxZ) / 2).toFixed(0)})  ` +
-                `frac ${h.frac.toFixed(3)}  ${h.a.name} x ${h.b.name}`);
+                `frac ${h.frac.toFixed(3)}  ${dump ? ext(h.a) + " x " + ext(h.b) : h.a.name + " x " + h.b.name}`);
   }
 }
 

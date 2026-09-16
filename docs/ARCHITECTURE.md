@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_179 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_180 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -304,6 +304,7 @@ _179 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
 | `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
+| `pit-signs.js` | `PitSigns` | tag | PitSigns: each team's identity on the OUTSIDE of its pit garage. |
 | `setup-tune.js` | `SetupTune` | tag | the SETUP SHEET: the car's mechanical set-up — anti-roll bars, ride height / rake, brake bias — per team, persisted, folded into the parts contract… |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
 
@@ -1681,6 +1682,13 @@ gfx.draw(mesh, MAT_IDENT, { …material, depthBias: [-1, -2] });   // [factor, u
 `GLX.draw()` enables `POLYGON_OFFSET_FILL` around the draw when `depthBias` is
 present. Polygon offset scales with the fragment's depth slope, so it holds at
 every distance and grazing angle. The start line uses it; any new decal should.
+
+The exception is a *textured* decal on a **vertical** face through `drawDecal`
+(no bias option on the three backends): the garage's door sign sits 5 mm in
+front of its fascia, and the pit bay signs (`js/garage/pit-signs.js`,
+`TrackPit.SIGN.proud`) 1 cm in front of the lintel — at the 0.9 m near plane a
+24-bit buffer resolves ~0.2 mm at 30 m, so a fixed centimetre never fights on a
+wall the camera looks at square, and never lands inside the box behind it.
 
 ### 3. Ways to SEE render clipping
 

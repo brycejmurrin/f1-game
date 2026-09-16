@@ -57,27 +57,29 @@
         [0.38, 0.37, 0.35],
       ];
 
+      // The pit building is the engine's row of bays (TrackPit, STREET mode);
+      // the kit one was a no-op under `pitBuilt` and a dead required spec.
       if (circuitKit) {
-        circuitKit.pitBuilding({
-          id: "kit:baku:pit-building", frac: 0.975, side: 1, gap: 30,
-          size: [18, 11, 76], garages: 14, required: true,
-        });
         circuitKit.pedestrianBridge({
           id: "kit:baku:finish-bridge", frac: 0.91,
           clearance: 7.2, thickness: 0.9, depth: 3.2, required: true,
         });
       }
 
-      wall(0.0, 0.65, 1, 2.0, 1.3, CONCRETE, 0.4);
-      wall(0.82, 1.0, 1, 2.0, 1.3, CONCRETE, 0.4);
+      // The +1 (pit side) walls, fences and armco stop at the pit complex's
+      // window (.9203-.0261) and resume after it: at 1.8-2.2 m they survive
+      // the keep-out's placeable band and stood on the lane (62 slabs
+      // measured) — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
+      wall(0.0261, 0.65, 1, 2.0, 1.3, CONCRETE, 0.4);
+      wall(0.82, 0.9203, 1, 2.0, 1.3, CONCRETE, 0.4);
       wall(0.0, 0.62, -1, 2.0, 1.3, CONCRETE, 0.4);
       wall(0.97, 1.0, -1, 2.0, 1.3, CONCRETE, 0.4);
 
-      fence(0.0, 0.35, 1, 2.6, 3.4, FENCE_COL);
-      fence(0.86, 1.0, 1, 2.6, 3.4, FENCE_COL);
+      fence(0.0261, 0.35, 1, 2.6, 3.4, FENCE_COL);
+      fence(0.86, 0.9203, 1, 2.6, 3.4, FENCE_COL);
       fence(0.0, 0.32, -1, 2.6, 3.4, FENCE_COL);
-      guardrail(0.63, 0.96, 1, 3.0, ARMCO);
-      fence(0.63, 0.95, 1, 4.0, 3.0, FENCE_COL);
+      guardrail(0.63, 0.9203, 1, 3.0, ARMCO);
+      fence(0.63, 0.9203, 1, 4.0, 3.0, FENCE_COL);
 
       for (let i = 0; i < 22; i++) {
         const k = K(i / 22), side = (i % 2) ? 1 : -1;
@@ -132,7 +134,7 @@
       }
 
       // Continuous civic facade — R side (gap=14 keeps it behind the concrete wall)
-      cityFront(0.0, 0.12, 1, 14, {
+      cityFront(0.0261, 0.12, 1, 14, {
         minH: 14, maxH: 28, depth: 18, step: 20,
         palette: CIVIC_PAL, lit: true, windowCol: WIN_WARM, floor: 4,
       });
@@ -176,14 +178,14 @@
         addBox(out, vadd(aGov.c, aGov.u, 0.1), [80, 0.5, 40], [0.22, 0.18, 0.10], [aGov.r, aGov.u, aGov.t]);
       }
 
-      for (let i = 0; i < 5; i++)
-        building(K(0.95 + i * 0.012), 1, 5, 16, 9, 14, { kind: "hall", wall: [0.20, 0.21, 0.26], window: WIN_COOL, floor: 3, lit: true });
-      wall(0.94, 0.02, 1, 1.0, 1.0, [0.85, 0.85, 0.88], 0.4);
+      // (The five pit halls and the 1 m pit wall at .94-.02 are the engine's
+      // bays and pit wall now: the halls were superseded, the wall survived at
+      // 0.8-1.2 m and stood on the lane — 57 slabs measured.)
       grandstand(0.985, -1, 4, 70, [0.42, 0.36, 0.40], [0.50, 0.30, 0.34]);
       grandstand(0.05, -1, 4, 60, [0.42, 0.36, 0.40], [0.46, 0.30, 0.36]);
       gantry(0.0, 7.5, [0.14, 0.14, 0.18]);
       gantry(0.96, 7.0, [0.14, 0.14, 0.18]);
-      billboard(K(0.01), 1, 9, 14, 5, FLAME);   // K(): billboard takes a NODE, not a fraction
+      billboard(K(0.01), 1, 30, 14, 5, FLAME);   // K(): billboard takes a NODE, not a fraction; gap 30 clears the complex's tail
 
       if (broadcastCompound) {
         broadcastCompound(K(0.975), 1, 55, { vans: 4, dishes: 2, mastH: 10 });
@@ -577,7 +579,7 @@
         minH: 40, maxH: 100, depth: 20, step: 20,
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
       });
-      cityFront(0.762, 0.95, 1, 14, {
+      cityFront(0.762, 0.9203, 1, 14, {
         minH: 40, maxH: 100, depth: 20, step: 20,
         palette: GLASS_PAL, lit: true, windowCol: WIN_COOL, floor: 4,
       });
@@ -651,11 +653,12 @@
         });
       }
 
-      tyreWall(0.955, 0.99, 1, 3.0, TARMAC_AD);
+      // The +1 tyre stacks and apron box at .955-.99 were the pit lane's ground
+      // (52 stacks superseded); the -1 pair stays.
       tyreWall(0.955, 0.99, -1, 3.0, [0.9, 0.9, 0.92]);
-      for (const side of [-1, 1]) {
-        const a = anchor(K(0.97), side, 4);
-        addBox(out, vadd(a.c, a.u, 1.0), [2, 0.3, 12], side > 0 ? TARMAC_AD : [0.9, 0.9, 0.92], [a.r, a.u, a.t]);
+      {
+        const a = anchor(K(0.97), -1, 4);
+        addBox(out, vadd(a.c, a.u, 1.0), [2, 0.3, 12], [0.9, 0.9, 0.92], [a.r, a.u, a.t]);
       }
       billboard(K(0.93), 1, 11, 18, 11, FLAME);
       billboard(K(0.99), -1, 8, 14, 8, WIN_COOL);

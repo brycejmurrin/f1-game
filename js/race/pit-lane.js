@@ -169,14 +169,19 @@ const PitLane = (function () {
   // buildProps places the grandstand at -1 and the pit building at +1), so that
   // is the default side. A circuit may say otherwise via `def.pitZone.side`.
   const PIT_SIDE = 1;
-  // THE LANE IS THE OUTERMOST STRIP OF THE ROAD across the window, separated
-  // from the racing surface by a painted line. It is not a separate road behind
-  // the wall, and that is a decision rather than a shortcut: this track engine
-  // is one ribbon with one arc coordinate, so a road that branches off and
-  // rejoins cannot be expressed — which is why both earlier attempts died (see
-  // the header). On-road costs no geometry, moves no boundary and leaves the
-  // car on tarmac, so neither failure can return. What it does not give is
-  // garages, a crew, or a lane behind the wall.
+  // SINCE THE 2026-09 REDESIGN the lane on every circuit is the COMPLEX
+  // (TrackPit, js/track/core/pit.js): a ribbon beside the road behind a real
+  // pit wall, bays on the row — the FULL set on permanent circuits, the
+  // STREET set between a street circuit's walls (docs/research/
+  // STREET-PIT-LANES-PLAN-2026-09.md). laneUniform() is null there; the road
+  // carries the geometry. What follows describes the PAINTED strip that a
+  // `def.pit.mode: "narrow"` opt-out keeps, and a track built without a model:
+  //
+  // THE PAINTED LANE IS THE OUTERMOST STRIP OF THE ROAD across the window,
+  // separated from the racing surface by a painted line — not a separate road
+  // behind the wall. Two earlier attempts at a driveable lane out beyond the
+  // road edge died (see the header); on-road costs no geometry, moves no
+  // boundary and leaves the car on tarmac, so neither failure can return.
   //
   // MUST MATCH PIT_LANE_W in the three lit shaders (glsl-lit.js, wgsl-chunks.js,
   // tsl-lit.js) — the painted line IS the lane edge, and a driver steering at
@@ -706,9 +711,10 @@ const PitLane = (function () {
 
     /** The four numbers the lit shaders paint the PAINTED lane from, or null.
      *  A built track carries the complex, whose tarmac and paint are geometry
-     *  (TrackMesh.buildPitLane), so this is null wherever there is a ribbon.
-     *  A STREET circuit's model is `painted` — no room beside the road — and
-     *  keeps the shader lane, as does a track built without a model. */
+     *  (TrackMesh.buildPitLane), so this is null wherever there is a ribbon —
+     *  street circuits included, since they build the STREET set. Only a
+     *  `pit.mode: "narrow"` model is `painted` and keeps the shader lane, as
+     *  does a track built without a model. */
     function laneUniform() {
       const zz = z(), t = G.track;
       if (!enabled() || !zz || !t) return null;

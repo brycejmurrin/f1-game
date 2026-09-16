@@ -660,6 +660,13 @@ const api = {
     if (out && c) { out.plan = c.pitPlan || null; out.why = c.pitWhy || ""; }
     return out;
   },
+  // The bay signs (js/garage/pit-signs.js): cells laid out on the row, whether
+  // the atlas and the texMesh uploaded, frames drawn and frames asked.
+  pitSigns() {
+    const t = G.track, q = t && t.pitSigns, m = t && t.meshes;
+    const s = typeof PitSigns !== "undefined" ? PitSigns.stats() : { drawn: 0, calls: 0 };
+    return { cells: q ? q.cells.length : 0, mesh: !!(m && m.pitSigns), tex: !!(m && m.pitSignTex), drawn: s.drawn, calls: s.calls };
+  },
   // The whole tyre picture for one car (default: the player) — compound, life
   // in laps at THIS race distance, wear, the grip it costs and the load that
   // caused it. `field: true` returns the same record for every car, which is

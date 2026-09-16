@@ -336,6 +336,7 @@
         "tests/specs/audit.spec.js",
         "tests/specs/*-foundation.spec.js",
         "tests/specs/props-over-road.spec.js",
+        "tests/specs/pit-signs.spec.js",
         "tests/specs/terrain-over-road.spec.js",
         "tests/specs/f1-track-accuracy.spec.js",
         "tests/specs/scenery-kits.spec.js"
@@ -614,6 +615,7 @@
         "tests/unit/car-front-wing-width.test.mjs",
         "tests/unit/grid-boxes.test.mjs",
         "tests/unit/pit-complex.test.mjs",
+        "tests/unit/pit-signs.test.mjs",
         "tests/unit/driving-line.test.mjs",
         "tests/unit/driving-line-opts.test.mjs"
       ]
