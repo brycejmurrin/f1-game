@@ -1,8 +1,8 @@
 {
   "images": "macos-latest",
-  "track": "spa",
+  "track": "vegas",
   "census_only": false,
   "force": "",
-  "ls": "",
-  "leg": "occlusion-2026-09-16-spa-CONTROL-flag-off-for-the-luma-diff"
+  "ls": "apex26.resMode=high",
+  "leg": "grouping-oracle-2026-09-16-per-frame-counts-so-1.03-can-be-read"
 }

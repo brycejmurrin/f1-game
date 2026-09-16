@@ -6283,6 +6283,8 @@ const WGX = (function () {
       // forgotten. WebGPU has no occlusion-query equivalent wired here yet.
       occlusionCull: () => ({ supported: false, on: false }),
       occlusionStats: () => ({ supported: false, on: false }),
+      multiDraw: () => ({ supported: false, on: false }),
+      multiDrawStats: () => ({ supported: false, on: false }),
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

@@ -66,12 +66,18 @@ const SessionRecords = (function () {
       const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), context: key,
         pace: G.PACE, difficulty: G.difficulty, weather: G.raceWeather });
       Ghost.startLap();
-      if (up && medal && medal !== held) G.announce(medal.toUpperCase() + " MEDAL", 2, "info");
+      // ONE CARD FOR ONE LAP. A good lap can earn a medal AND beat the record,
+      // and these were two announce() calls: the banner showed the medal, then
+      // the record two and a half seconds later, five seconds of cards for one
+      // line crossing — and before the queue took a second entry of equal
+      // priority, one of them was simply eaten. They are one sentence now,
+      // because they are one lap.
+      const won = up && medal && medal !== held ? medal.toUpperCase() + " MEDAL" : "";
       if (G.daily.isActive()) G.daily.record(lapTime, key);
-      if (lapTime < G.ttRecord) {
-        G.ttRecord = lapTime; G.ttNewRecord = true;
-        G.announce("NEW RECORD " + G.fmtTime(lapTime), 2, "info");
-      }
+      const record = lapTime < G.ttRecord;
+      if (record) { G.ttRecord = lapTime; G.ttNewRecord = true; }
+      const line = record ? (won ? won + " — NEW RECORD " : "NEW RECORD ") + G.fmtTime(lapTime) : won;
+      if (line) G.announce(line, record && won ? 2.6 : 2, "info");
     }
     function board(id) { return GameStore.ttBoard(id, id === Ghost.track() ? Ghost.context() : undefined); }
     return { begin, current, config, sample, accept, board, invalidate, finish, prepareDaily, restoreDaily, key: () => key };

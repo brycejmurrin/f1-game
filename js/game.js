@@ -1136,8 +1136,21 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0;
-const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, race: 4, "penalty-hit": 5 };
-let _annPri = 0, _annQueue = null;
+// "box" is the engineer's PIT CALL and nothing else (js/race/engineer.js): an
+// instruction the player has one lap to act on, where every other engineer line
+// is a report. It ranks with the pit-lane messages it belongs to rather than
+// under them — before this it was "info", so the confirmation that you HAD
+// entered the pits outranked the call telling you to.
+const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, box: 4, race: 4, "penalty-hit": 5 };
+// THE QUEUE, which _annQueue now IS rather than holds. One slot meant a THIRD
+// message in a burst was dropped, and so was a second of EQUAL priority — a lap
+// crossing that set a record and earned a medal showed one of them and silently
+// ate the other. Two slots, highest priority first and arrival breaking ties,
+// so a burst plays out in the order it mattered. Two and not more on purpose:
+// each card holds the screen ~2.5 s, so a third would arrive seven seconds
+// after the thing it describes, by which time it is a lie, not a message.
+const ANN_QUEUE_MAX = 2;
+let _annPri = 0, _annQueue = [];
 // THE RADIO. A banner is a radio message: the WHO line names the channel it
 // came in on — race control for a penalty or a warning, the coach for a tip,
 // otherwise the driver's own pit-wall channel under their name — the words sit
@@ -1252,19 +1265,25 @@ function announce(msg, dur, kind) {
     if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead") {
       // The cinematic cameras drop the two quiet channels so a film shot is not
       // captioned. That is a LOOK choice, and it must not silence the engineer:
-      // every RaceEngineer line is "info", so before this returned a verdict a
-      // player who pressed the camera button stopped being told to BOX for the
-      // rest of the session — the call was consumed unseen and a wear step,
-      // once advanced, never re-crosses.
+      // the engineer's REPORTS are "info", so before this returned a verdict a
+      // player who pressed the camera button stopped hearing them for the rest
+      // of the session — the call was consumed unseen and a wear step, once
+      // advanced, never re-crosses. The PIT CALL is "box" and is not on this
+      // list at all: a camera angle is a look, and a look must not cost a stop.
       if (kind === "info" || kind === "coach") return false;
     }
   }
   if (announceT > 0 && pri <= _annPri) {
-    // The queue is a single slot. Taking it means the line still gets its turn,
-    // so that counts as accepted; losing it to a higher priority means the line
-    // is gone and the caller has to offer it again.
-    if (!_annQueue || pri > (_annQueue.pri || 0)) { _annQueue = { msg, dur, kind, pri }; return true; }
-    return false;
+    // Into the queue, highest priority first, arrival breaking ties. Taking a
+    // slot means the line still gets its turn, so that counts as accepted;
+    // being pushed off the end means it is gone and the caller must offer it
+    // again (RaceEngineer does, on its next tick).
+    const entry = { msg, dur, kind, pri };
+    let at = _annQueue.length;
+    while (at > 0 && _annQueue[at - 1].pri < pri) at--;
+    _annQueue.splice(at, 0, entry);
+    const dropped = _annQueue.splice(ANN_QUEUE_MAX);
+    return dropped.indexOf(entry) < 0;
   }
   showAnnounce(msg, dur, kind);
   return true;
@@ -3506,7 +3525,7 @@ function quitToMenu() {
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
-  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annQueue = null;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
+  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
@@ -8138,7 +8157,7 @@ function tickBody(now) {
       els.announce.className = "";
       delete els.announce.dataset.kind;
       _annPri = 0;
-      if (_annQueue) { const q = _annQueue; _annQueue = null; showAnnounce(q.msg, q.dur, q.kind); }
+      if (_annQueue.length) { const q = _annQueue.shift(); showAnnounce(q.msg, q.dur, q.kind); }
     }
   }
   // hit-stop: slow the simulation to a crawl for a few frames after a hard
