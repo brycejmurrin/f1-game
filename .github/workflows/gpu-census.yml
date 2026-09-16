@@ -485,13 +485,15 @@ jobs:
               }
             // THE IN-RUN A/B. Same commit, same runner, clock pinned — the only
             // comparison of two flag states this workflow can make honestly.
-              const ab = g.occlusionAB || {};
+              for (const ab of [g.occlusionAB, g.multiDrawAB]) {
+              if (!ab) continue;
+              const tag = (ab.feature === "multiDraw" ? "mdraw" : "occl ").padEnd(5);
               if (ab.note || ab.error) {
-                rows.push(`${" ".repeat(8)}A/B:   NOT MEASURED — ${ab.note || ab.error}`);
+                rows.push(`${" ".repeat(8)}${tag} A/B: NOT MEASURED — ${ab.note || ab.error}`);
               } else if (ab.off && ab.on) {
-                rows.push(`${" ".repeat(8)}A/B:   gpu off=${ab.off.median}ms on=${ab.on.median}ms  delta=${ab.gpuDeltaPct}%  `
+                rows.push(`${" ".repeat(8)}${tag} A/B: gpu off=${ab.off.median}ms on=${ab.on.median}ms  delta=${ab.gpuDeltaPct}%  `
                   + `clockPinned=${ab.clockPinned} simFrozen=${ab.simFrozen}`
-                  + (ab.gpuDeltaPct != null && ab.gpuDeltaPct > 0 ? "   <- occlusion COSTS time here" : ""));
+                  + (ab.gpuDeltaPct != null && ab.gpuDeltaPct > 0 ? "   <- COSTS time here" : "   <- saves time here"));
             // THE FLOOR FIRST. off against off2 is the same state twice, so it
             // is what this run cannot hold still; the effect below only means
             // anything if it clears it. Borrowing a floor from another leg or
@@ -503,9 +505,14 @@ jobs:
                 if (px.error) rows.push(`${" ".repeat(8)}       pixels: diff FAILED — ${px.error}`);
                 else if (px.differing != null) {
                   rows.push(`${" ".repeat(8)}       pixels: ${px.differing} of ${px.ofTotal} differ (${px.pctDiffering}%) maxDelta=${px.maxChannelDelta} meanAbs=${px.meanAbsDelta}`
-                    + (ab.aboveFloor === true ? "   <- ABOVE the floor: something visible was culled"
+                    + (ab.aboveFloor === true ? "   <- ABOVE the floor: the image CHANGED"
                        : ab.aboveFloor === false ? "   (at the floor — no visible change)" : ""));
                 }
+                const st = (ab.on && ab.on.stats) || {};
+                if (st.drawElementsAvoided != null) {
+                  rows.push(`${" ".repeat(8)}       counted: ${st.multiCalls} multi-draw calls, ${st.rangesSubmitted} ranges, ${st.drawElementsAvoided} drawElements AVOIDED`);
+                }
+              }
               }
               if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.softBlit === true ? "YES (headless readback — NOT the path a player takes)" : be.softBlit === false ? "no (direct present)" : "?"} skipBatches=${be.skipBatches} gpuErrFrames=${be.gpuErrFrames}`);
             // ...and the bookkeeping the probe keeps on itself, because run 54

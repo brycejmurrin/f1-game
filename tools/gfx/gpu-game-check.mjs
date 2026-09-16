@@ -361,10 +361,15 @@ try {
   // GPU TIME, and does it change the IMAGE. A per-pixel diff is what "no hole
   // in the world" actually needs; a whole-frame mean luma can hide a hole.
   const shotBase = flag("--shot", null);
-  out.occlusionAB = await bounded(async () => {
-    const A = { };
-    const has = await page.evaluate(() => !!(window.__apex && window.__apex.occlusionCull && window.__apex.gpuTimer));
-    if (!has) return { note: "no occlusionCull/gpuTimer hooks" };
+  // ONE A/B, RUN PER FEATURE. There are two levers now and they pull opposite
+  // ways — occlusion removes vertices and adds draw calls, multi-draw removes
+  // draw calls and touches nothing else — so each needs its own three captures
+  // and its own noise floor. Parameterising beats copying: a second copy of
+  // this block would drift from the first exactly where it matters.
+  const abFor = (feature) => async () => {
+    const A = { feature };
+    const has = await page.evaluate((f) => !!(window.__apex && window.__apex[f] && window.__apex.gpuTimer), feature);
+    if (!has) return { note: "no " + feature + "/gpuTimer hooks" };
     // Pin the clock FIRST: everything below depends on the two captures being
     // the same instant of weather.
     A.clockPinned = await page.evaluate(() => {
@@ -399,18 +404,18 @@ try {
     // produced two withdrawn conclusions already.
     for (const key of ["off", "off2", "on"]) {
       const on = key === "on";
-      await page.evaluate((v) => window.__apex.occlusionCull(v), on);
+      await page.evaluate(([f, v]) => window.__apex[f](v), [feature, on]);
       await settle(on ? 24 : 8);            // ON needs long enough for the queries to answer
       A[key] = await sampleGpu(12);
-      A[key].stats = await page.evaluate(() => window.__apex.occlusionCull());
+      A[key].stats = await page.evaluate((f) => window.__apex[f](), feature);
       if (shotBase) {
-        A[key].shot = shotBase.replace(/\.png$/, "") + ".occl-" + key + ".png";
+        A[key].shot = shotBase.replace(/\.png$/, "") + "." + feature + "-" + key + ".png";
         const r = await bounded(() => page.screenshot({ path: A[key].shot }), 30000, "ab-shot");
         if (r && r.error) A[key].shotError = r.error;
       }
     }
     await page.evaluate(() => { try { window.__apex.renderClock(null, false); window.__apex.freeze(false); } catch (_) {} });
-    await page.evaluate(() => window.__apex.occlusionCull(false));
+    await page.evaluate((f) => window.__apex[f](false), feature);
     try {
       const sharp = (await import("sharp")).default;
       const raw = async (f) => (f ? sharp(f).raw().toBuffer({ resolveWithObject: true }) : null);
@@ -439,8 +444,10 @@ try {
     // reads is what the clock cannot resolve.
     if (A.off.median && A.off2.median) A.gpuNoisePct = +(100 * (A.off2.median / A.off.median - 1)).toFixed(1);
     return A;
-  }, 180000, "occlusion-ab");
-  checkpoint("occlusion-ab");
+  };
+  out.occlusionAB = await bounded(abFor("occlusionCull"), 180000, "occlusion-ab");
+  out.multiDrawAB = await bounded(abFor("multiDraw"), 180000, "multidraw-ab");
+  checkpoint("feature-ab");
 
   // AND THE SAME THING IN MOTION. park() gives a static camera, and every
   // popping risk this feature has lives in movement: a chunk hidden while the

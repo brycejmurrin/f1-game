@@ -418,10 +418,20 @@ test("the per-chunk merge only extends a run under all four guards", () => {
   // failing for the one reason a guard must not: the thing it protects was
   // still true. The force is unchanged, because what it is really asserting is
   // that the cull branch ENDS in flush() and never in a bare continue.
-  assert.match(loop, /> cd2\)[\s\S]{0,120}?\) \{ flush\(\); continue; \}/,
-    "an invisible chunk must FLUSH the open run — a bare continue would merge across it");
+  assert.match(loop, /> cd2\)[\s\S]{0,120}?\) \{ breakRun\(\); continue; \}/,
+    "an invisible chunk must break the open run — a bare continue would merge across it");
   assert.doesNotMatch(loop, /> cd2\)[\s\S]{0,120}?\) \{ continue; \}/,
-    "the cull branch must not `continue` without flushing the open run");
+    "the cull branch must not `continue` without breaking the open run");
+  // breakRun exists because the two draw paths enforce the SAME invariant by
+  // different means: drawElements must flush, because its run is one
+  // contiguous span and a gap inside it would draw the culled chunk;
+  // multi-draw carries explicit ranges, so it enforces it by not adding an
+  // entry and may leave the group open across the gap. That is the whole
+  // saving — at vegas most chunks are culled, and flushing at every gap would
+  // hand multi-draw lists of one. Pin both halves, so neither can quietly
+  // become "skip the flush" for the drawElements path too.
+  assert.match(loop, /const breakRun = \(\) => \{ if \(!md\) flush\(\); \};/,
+    "breakRun must flush on the drawElements path and only skip it under multi-draw");
   // And _sameList must compare contents, not just identity: LampChunks is free
   // to hand back equal-but-distinct arrays, and an identity-only check would
   // silently stop merging (a perf regression nothing goes red for).

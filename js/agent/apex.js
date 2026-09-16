@@ -1172,6 +1172,17 @@ const api = {
   // because a query said they contribute no pixel, and queries issued. Counted
   // and not timed on purpose: this container has no GPU, so a frame rate here
   // measures the box (docs/notes/CI-RENDERING-PERFORMANCE.md).
+  // WEBGL_multi_draw (GLX only, apex26.multiDraw). multiDraw(true|false)
+  // toggles it live; no argument reports the COUNTED oracle — multi-draw calls
+  // issued, ranges inside them, and the drawElements calls thereby avoided.
+  // Counted because the bound test says draw calls are what this frame pays
+  // for, and because a frame rate measured in this container measures the box.
+  multiDraw: (on) => {
+    if (!gfx || !gfx.multiDraw) return { supported: false, on: false };
+    if (on === undefined) return gfx.multiDrawStats ? gfx.multiDrawStats() : { supported: false, on: false };
+    gfx.multiDraw(!!on);
+    return gfx.multiDrawStats ? gfx.multiDrawStats() : { supported: false, on: !!on };
+  },
   occlusionCull: (on) => {
     if (!gfx || !gfx.occlusionCull) return { supported: false, on: false };
     if (on === undefined) return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: false };

@@ -39,6 +39,55 @@ const GLXChunked = (function () {
     const _fcPlanes = [new Float32Array(4), new Float32Array(4), new Float32Array(4),
                        new Float32Array(4), new Float32Array(4), new Float32Array(4)];
 
+    // ── WEBGL_multi_draw (apex26.multiDraw) ───────────────────────────────
+    //
+    // WHY, and it is the opposite of what the occlusion work assumed. The
+    // census measured the frame GPU-bound and invariant to pixel count, which
+    // rules out fragment-bound but not the difference that matters here; the
+    // bound test then settled it (run 139, RENDER-PERF-PLAN §2): props uploaded
+    // as ONE mesh — every vertex, no frustum cull, no occlusion — came in at
+    // 18.21 ms against 18.75 ms for 152 culled draws. A single draw call
+    // carrying 441,000 vertices beats 152 culled ones. DRAW CALLS bind.
+    //
+    // So collapse them. multiDrawElementsWEBGL takes a list of (count, offset)
+    // pairs and issues them as one call, which is exactly the shape this file
+    // already has: createChunkedMesh gives every chunk a range into one shared
+    // index buffer, and tests/unit/chunked-index-ranges.test.mjs proves those
+    // ranges tile it with no gap or overlap. Nothing about the DATA changes —
+    // only the number of calls that submit it.
+    //
+    // It also removes the constraint the run-merge was built around.
+    // drawElements can merge two chunks only when they are CONTIGUOUS in the
+    // index buffer; multi-draw does not care, so chunks that share a light set
+    // but sit apart now travel in one call instead of several.
+    //
+    // 92.6 % of browsers have the extension — 100 % on iOS and Safari, 99.97 %
+    // Chrome — and Firefox is the outlier at 1.4 %, so the fallback below is
+    // not decoration. Absent extension, or the flag off, and every path here is
+    // the drawElements one it has always been.
+    let _mdExt = null, _mdOn = false, _mdTried = false;
+    let _mdCounts = null, _mdOffsets = null;
+    const _mdStats = { supported: null, on: false, multiCalls: 0, rangesSubmitted: 0, drawElementsAvoided: 0 };
+    function _mdInit() {
+      if (_mdTried) return !!_mdExt;
+      _mdTried = true;
+      try { _mdExt = gl.getExtension("WEBGL_multi_draw"); } catch (_) { _mdExt = null; }
+      _mdStats.supported = !!_mdExt;
+      Log.info("gfx", "GLX multi-draw " + (_mdExt ? "available" : "NOT available"));
+      return !!_mdExt;
+    }
+    function _mdRoom(n) {
+      if (!_mdCounts || _mdCounts.length < n) { _mdCounts = new Int32Array(n + 64); _mdOffsets = new Int32Array(n + 64); }
+    }
+    function multiDraw(on) {
+      const want = !!on;
+      if (want && !_mdInit()) { _mdOn = false; return { on: false, supported: false }; }
+      _mdOn = want; _mdStats.on = want;
+      if (!want) { _mdStats.multiCalls = _mdStats.rangesSubmitted = _mdStats.drawElementsAvoided = 0; }
+      return { on: _mdOn, supported: _mdStats.supported };
+    }
+    function multiDrawStats() { return Object.assign({}, _mdStats, { on: _mdOn }); }
+
     // ── OCCLUSION CULLING (apex26.occlusionCull, ships OFF) ────────────────
     //
     // WHY, with numbers. tools/check/occlusion-estimate.mjs rasterises every
@@ -312,33 +361,64 @@ const GLXChunked = (function () {
         //   same slot — uLampShadowIdx is a slot in that set.
         //   contiguous + same index type — the merged draw is one range.
         let runOff = -1, runCount = 0, runType = 0, runLi = null, runSlot = -1;
+        // Multi-draw accumulates RANGES for the open light-set group instead of
+        // one contiguous span, so a group survives gaps.
+        const md = _mdOn && !!_mdExt;
+        let _mdN = 0;
+        if (md) _mdRoom(chunks.length);
+        // An invisible chunk must never be drawn. drawElements enforces that by
+        // FLUSHING the open run — a bare continue would merge across it — while
+        // multi-draw enforces it by simply not adding an entry, which is why it
+        // can leave the group open across a gap. That difference is the whole
+        // saving: at vegas most chunks are culled, so flushing at every gap
+        // would hand multi-draw lists of one and buy nothing.
+        const breakRun = () => { if (!md) flush(); };
         // The program keeps its uniforms between runs, so a run whose lamp
         // list matches the one already uploaded (same members, non-contiguous
         // chunks — ~40 of ~150 pairs per frame, PERF-FINDINGS 2c) skips the
         // uniform4fv. _sameList compares by content: chunk lists are distinct
         // arrays with equal members more often than the same array.
         const flush = () => {
-          if (runOff < 0) return;
+          if (runOff < 0 && !_mdN) return;
           if (!_sameList(lastLi, runLi)) {
             core.uploadLightSet(F.allLights, runLi, runLi.length,
                                 F.lights, F.tailStart, F.tailCount);
             lastLi = runLi;
           }
           if (runSlot !== lastSlot) { core.setLampShadowSlot(runSlot); lastSlot = runSlot; }
-          gl.drawElements(gl.TRIANGLES, runCount, runType, runOff);
+          if (_mdN) {
+            _mdExt.multiDrawElementsWEBGL(gl.TRIANGLES, _mdCounts, 0, runType, _mdOffsets, 0, _mdN);
+            _mdStats.multiCalls++; _mdStats.rangesSubmitted += _mdN; _mdStats.drawElementsAvoided += _mdN - 1;
+            _mdN = 0;
+          } else {
+            gl.drawElements(gl.TRIANGLES, runCount, runType, runOff);
+          }
           runOff = -1; runCount = 0; runLi = null;
         };
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) ||
               (cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) ||
-              !_occVisible(mesh, i)) { flush(); continue; }
+              !_occVisible(mesh, i)) { breakRun(); continue; }
           const li = _tbl.lists[i];
           let slot = -1;
           if (shadowAllIdx >= 0) {
             for (let j = 0; j < li.length; j++) if (li[j] === shadowAllIdx) { slot = j; break; }
           }
           const stride = ch.indexType === gl.UNSIGNED_INT ? 4 : 2;
+          if (md) {
+            // The group is (light set, shadow slot, index type) — contiguity
+            // is no longer part of it, which is the constraint multi-draw
+            // removes. Contiguous neighbours still fold into one RANGE, so the
+            // list stays as short as the geometry allows.
+            if (!(runOff >= 0 && runType === ch.indexType && runSlot === slot && _sameList(runLi, li))) {
+              flush();
+              runOff = ch.byteOffset; runCount = 0; runType = ch.indexType; runLi = li; runSlot = slot;
+            }
+            if (_mdN && _mdOffsets[_mdN - 1] + _mdCounts[_mdN - 1] * stride === ch.byteOffset) _mdCounts[_mdN - 1] += ch.count;
+            else { _mdCounts[_mdN] = ch.count; _mdOffsets[_mdN] = ch.byteOffset; _mdN++; }
+            continue;
+          }
           if (runOff >= 0 && runType === ch.indexType && runSlot === slot &&
               _sameList(runLi, li) && runOff + runCount * stride === ch.byteOffset) {
             runCount += ch.count;
@@ -349,6 +429,26 @@ const GLXChunked = (function () {
           runLi = li; runSlot = slot;
         }
         flush();
+      } else if (_mdOn && _mdExt) {
+        // Contiguous chunks still merge into one RANGE — a shorter list is
+        // still less for the driver to walk — but a break no longer costs a
+        // call, it costs an entry.
+        const stride = mesh.indexType === gl.UNSIGNED_INT ? 4 : 2;
+        _mdRoom(chunks.length);
+        let n = 0, plain = 0;
+        for (let i = 0; i < chunks.length; i++) {
+          const ch = chunks[i];
+          if (!(Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
+                !(cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) &&
+                _occVisible(mesh, i))) { plain = 0; continue; }
+          if (plain && _mdOffsets[n - 1] + _mdCounts[n - 1] * stride === ch.byteOffset) _mdCounts[n - 1] += ch.count;
+          else { _mdCounts[n] = ch.count; _mdOffsets[n] = ch.byteOffset; n++; }
+          plain = 1;
+        }
+        if (n) {
+          _mdExt.multiDrawElementsWEBGL(gl.TRIANGLES, _mdCounts, 0, mesh.indexType, _mdOffsets, 0, n);
+          _mdStats.multiCalls++; _mdStats.rangesSubmitted += n; _mdStats.drawElementsAvoided += n - 1;
+        }
       } else {
         let runOff = -1, runCount = 0;
         for (let i = 0; i < chunks.length; i++) {
@@ -523,7 +623,7 @@ const GLXChunked = (function () {
     // pool — the race prop-batch path must never call the allocating form
     // every frame.
     return { createChunkedMesh, drawChunked, castShadowChunked, freeChunkedMesh,
-             occlusionPass, occlusionCull, occlusionStats,
+             occlusionPass, occlusionCull, occlusionStats, multiDraw, multiDrawStats,
              makeFrustumPlanes: Frustum.makeFrustumPlanes,
              aabbInFrustum: Frustum.aabbInFrustum, aabbDist2: Frustum.aabbDist2 };
   }
