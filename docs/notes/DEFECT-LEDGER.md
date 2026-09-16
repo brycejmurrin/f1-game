@@ -883,6 +883,12 @@ today; the shard carrying menu-baseline stays on SwiftShader, since the six
 goldens are SwiftShader captures (ci.yml carve-out, pinned by
 `tests/unit/ci-coverage.test.mjs`).
 
+**LIVE.** The first green train after those three landed is pages run 2356 on
+`1f04126` (2026-09-16 08:45 UTC): every job green, and the live shell now reads
+`<meta name="apex-sha" content="1f04126…">` at build **9116**, up from the 9058
+the site had been stuck on all morning. The tooling landing of 2026-09-16 rode
+out with it.
+
 ### 2026-09-01 general survey — fixed, recorded, and the player-facing list
 
 Fixed in the same session (each a two-line local change; browser groups
