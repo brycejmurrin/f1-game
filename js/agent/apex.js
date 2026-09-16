@@ -227,6 +227,7 @@ const api = {
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;
     // playerAnchor()/renderPosOf() draw the HUMAN car from THESE (world), not the AI-only pair above — else it stays lerp'd toward the pre-teleport spot once park() freezes physics.
     G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;
+    G.player.rPrevHead = G.player.head;   // yaw anchor too, or the car swings into place over a frame
     if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(true);
     return { s: G.player.s, total: G.track.total };
   },
@@ -363,6 +364,31 @@ const api = {
     const v = camVantage(m, s, lat, speed, 0, { carPos: [px, pz], carHead: head });
     G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
     return { eye: v.eye, target: v.tgt, fov: +v.fov.toFixed(1), mode: m };
+  },
+  // flybyCam(u, shots?) — park the camera at progress `u` (0..1) through the
+  // PRE-RACE FLYBY's shot sequence (js/camera/flyby-seq.js) and report where it
+  // put the eye, what it is looking at, which shot that is, and whether the eye
+  // landed inside solid scenery. This is the authoring/inspection seam: the live
+  // sequence is driven by a phase timer that lasts a few seconds, which is not
+  // something a capture tool can aim at, so this drives the same solver
+  // deterministically through dbgCam (the override photo mode uses).
+  // Pass `shots` to preview an EDITED sequence without reloading.
+  flybyCam(u, shots) {
+    if (!G.track || typeof FlybySeq === "undefined") return false;
+    const v = FlybySeq.solve(G.track, +u || 0, shots);
+    G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
+    const hit = FlybySeq.insideProp(G.track, v.eye, 0);
+    return {
+      u: +(+u || 0).toFixed(4), shot: v.id, index: v.index, cut: v.cut,
+      eye: v.eye.map((n) => +n.toFixed(2)), target: v.tgt.map((n) => +n.toFixed(2)),
+      fov: +v.fov.toFixed(1),
+      inside: hit ? { kind: hit.kind, size: [hit.w, hit.h, hit.d] } : null,
+    };
+  },
+  // flybyShots() — the sequence the flyby is currently playing, as data. The
+  // authoring loop is: read this, edit it, hand it back to flybyCam(u, shots).
+  flybyShots() {
+    return typeof FlybySeq === "undefined" ? null : JSON.parse(JSON.stringify(FlybySeq.DEFAULT));
   },
   // camTune(mode?, obj?) — the CAMERA TUNER's per-camera-mode framing offsets
   // (js/camera/offsets.js), the camera counterpart of lightTune(). With no args
@@ -1211,6 +1237,11 @@ const api = {
   // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
   // opts.laps: the race distance (default GAME_LAPS) — the tyre-class draw at
   // grid-up reads it, so a long-race bench must set it HERE, not after.
+  // opts.duel: true for the one-rival practice format, or a legend id
+  // ("fangio") to make that rival the legend. It must be set HERE and not after
+  // for the same reason as laps: startRace() trims the field on the way in, so
+  // a duel asked for afterwards races a full grid. false/absent leaves the
+  // setting alone, so a harness that never mentions duel keeps today's races.
   race(trackRef, timeOfDay, weather, opts) {
     const i = typeof trackRef === "number"
       ? trackRef
@@ -1222,6 +1253,10 @@ const api = {
     G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
+    if (opts && opts.duel != null) {
+      G.duel = !!opts.duel;
+      G.duelLegend = typeof opts.duel === "string" ? opts.duel : "";
+    }
     return settled(startRace(),
       { track: Tracks.LIST[i].id, timeOfDay: G.raceTimeOfDay, weather: G.raceWeather });
   },
@@ -2443,7 +2478,16 @@ const api = {
     c.vLat = 0; c.yawRateCur = 0;
     Tracks.sample(G.track, c.s, smp2);
     placeFromTrack(c, smp2);
-    c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
+    // THE SAME TELEPORT HYGIENE jump() carries, and for the same measured
+    // reason: the wall/rescue accumulators describe the OLD location, so a car
+    // placed after a wedge brings ~3 s of rescueT with it and auto-rescues
+    // itself somewhere it was never stuck. jump() gained this block after that
+    // was measured; aiPlace() never did, so every AI placement kept the bug.
+    c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
+    c.wrongT = 0; c.wrongWay = false; c.offT = 0;
+    // rPrevHead with the rest: without it the yaw interpolator tweens from the
+    // old heading and the car visibly swings into place over a frame.
+    c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevHead = c.head;
     return { id: idx, frac: +(c.s / G.track.total).toFixed(4), speed: +c.speed.toFixed(2), x: +c.x.toFixed(3) };
   },
 

@@ -30,6 +30,25 @@ async function boot(page) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  // RENDERING OFF FOR THE WHOLE FILE, and it is the fix for two real failures
+  // rather than a speed-up. These specs read carAt().tierV, info() and the
+  // career save — DATA. The file captures no image and is not in RENDER_SPECS,
+  // so every frame SwiftShader draws for it is waste, and the waste is not
+  // free: with a Monza race armed behind a menu the GPU process sits at ~344 %
+  // of four cores, and Playwright's click actionability check — which needs a
+  // stable bounding box across consecutive animation frames — starves.
+  //
+  // Measured on an idle box (2026-09-16): "career team development does not
+  // reach a Grand Prix" spent 57 s inside ONE #cr-back click, blowing the
+  // config's 60 s actionTimeout; the page log shows the click finally
+  // dispatching at 89 443 ms. That config comment sizes 60 s against "the
+  // slowest measured interaction here is a screen swap at 8.1 s", so the click
+  // was running seven times over its own budget. Both tests failed identically
+  // on 8cecdfa with no feature commits present, so this is pre-existing.
+  //
+  // The honest fix is to stop paying for pixels nobody looks at, not to raise
+  // the budget until the waste fits inside it.
+  await page.evaluate(() => window.__apex.headless(true));
 }
 
 // ARM A RACE AND WAIT FOR IT, which is not the same as calling race().

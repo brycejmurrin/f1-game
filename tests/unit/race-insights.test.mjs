@@ -314,3 +314,55 @@ test('a faultless race has an empty debrief, and reset clears it', () => {
   api.reset();
   assert.equal(JSON.stringify(api.debrief()), '[]');
 });
+
+// ── the first drill that looks past the player's own car ─────────────────────
+// Every other goal judges the car alone against the road; a race start is only
+// meaningful relative to the cars you started beside.
+function gridFixture() {
+  const f = fixture();
+  // Player P2 of 3: one car up the road, one behind. prog is cumulative arc, so
+  // this is the same ordering the classification uses.
+  const lead = { prog: 20, retired: false }, back = { prog: -20, retired: false };
+  f.G.cars = [lead, f.c, back];
+  f.c.prog = 0; f.c.speed = 0;
+  return { ...f, lead, back };
+}
+
+test('a race start drill needs the grid and a field, and says which is missing', () => {
+  const { api, c, G } = gridFixture();
+  c.speed = 40;
+  assert.equal(api.startDrill('start'), false, 'refused once the car is already rolling');
+  c.speed = 0;
+  G.cars = [c];
+  assert.equal(api.startDrill('start'), false, 'refused with nobody to gain a place on');
+  G.cars = [{ prog: 20, retired: false }, c];
+  assert.equal(api.startDrill('start'), true);
+});
+
+test('a race start scores the places gained, ends at the first corner, and ranks more places as better', () => {
+  const { api, c, tick, lead } = gridFixture();
+  assert.equal(api.startDrill('start'), true, 'armed on the grid');
+  // Away cleanly and past the car that started ahead.
+  tick({ speed: 30, prog: 10, throttleDemand: 1 });
+  tick({ speed: 50, prog: 30 });
+  lead.prog = 25;                       // player is now ahead of the car that led away
+  tick({ speed: 60, prog: 45 });
+  // Into the first corner and out the other side — the same phase detector the
+  // corner drill uses, so the two agree on where a corner ends.
+  for (let i = 0; i < 3; i++) tick({ lateralAccel: 8, prog: c.prog + 10 });
+  for (let i = 0; i < 6; i++) tick({ lateralAccel: 0, prog: c.prog + 10 });
+  const last = api.summary().lastDrill;
+  assert.equal(last.mode, 'start');
+  assert.equal(last.clean, true, 'no contact, never left the track');
+  assert.equal(last.score, -1, 'ONE place gained, stored negated so mastery Math.min ranks it above zero');
+  assert.match(last.text, /gained 1 place — P2 to P1/);
+});
+
+test('a race start that never gets away fails with that reason rather than scoring zero', () => {
+  const { api, tick } = gridFixture();
+  assert.equal(api.startDrill('start'), true);
+  for (let i = 0; i < 8; i++) tick({ speed: 0 });      // stalled on the grid
+  const last = api.summary().lastDrill;
+  assert.equal(last.clean, false);
+  assert.equal(last.reason, 'the car never got away');
+});

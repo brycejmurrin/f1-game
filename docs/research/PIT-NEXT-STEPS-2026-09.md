@@ -176,6 +176,94 @@ this cause, as the 2026-09 window shortening did); one orbit shot of the
 Abu Dhabi and Sochi mouths before/after (`tools/shot/shot.mjs <id> <frac of sA>
 orbit --dist 60 --el 35`). Cost: pit.js +6, a test +25, a baseline re-cut.
 
+## 4b. The EXIT MERGE is in a corner on 11 circuits — measured, not fixed
+
+Asked: "make sure entry and exit aren't on turns." The entrance was fixed in §4
+(`MOUTH_RUN`). The exit was surveyed the same way and is worse, and the fix was
+TRIED AND REVERTED — this section is the evidence and the reason.
+
+**The measurement** (`scratch/pit-exit-survey.cjs`: the straight run starting at
+the merge `sB`, the peak |k| along the exit road, and the peak |k| in the 80 m
+after the merge, at `PIT_K` 0.0035):
+
+| straight after the merge | circuits | worst |k| on the exit road |
+|---|---|---|
+| 0 m — the car rejoins mid-corner | 11: anderstorp, baku, brands_hatch, donington, jerez, monaco, mont_tremblant, mosport, nurburgring, shanghai, zolder | nurburgring 0.0715 (a 14 m radius), zolder 0.0544, baku 0.0463, jerez 0.0429 |
+| 4-32 m | 7: madrid, miami, spa, interlagos, sochi, abudhabi, bahrain, montreal | — |
+| 52 m or more | the rest | — |
+
+**Why it happens.** `window()` sizes the exit against `ROAD_MIN` (30 m) while
+`exitRoadM` actually runs 80-90, so the road reaches past the straight the
+window was fitted to. The merge is `sOut + exitRoadM`, so pulling it back means
+shrinking one of the two.
+
+**Why neither can shrink, today.** Both were tried on 2026-09-16:
+
+- **The window** is also what the twelve bays stand in. Closing it earlier took
+  Bahrain's exit from 106 m to 40, the window below the 201 m the row needs, and
+  the pitch below a bay's width — so the circuit placed NO BAYS AT ALL, and with
+  them went the canopy luminaires, race control and the stop itself (six suites
+  red). A floor at the row's own length puts the pitch on a knife edge
+  (`pitch 11.00 < 11`) and each circuit that clears it pushes another under.
+- **The exit road** has an 80 m floor (`EXIT_ROAD_MIN`) because a shorter blend
+  is what sent the AI off the end of it — 17 m of run left every stop 0.6 m on
+  the grass, measured, 21 of 21.
+
+**What it needs first.** Decouple the ROW from the WINDOW: let the row start
+before the entry line (it is anchored past pole's slot today) or lay it against
+the entry road, so the window's tail is free to close early. Then the exit rule
+is the mirror of `MOUTH_RUN` and costs nothing. Keep `scratch/pit-exit-survey.cjs`
+as the before/after.
+
+One guard-rail worth keeping from the attempt, and kept: the row's pitch
+comparison now carries an epsilon (`js/track/core/pit.js`), so a window sized to
+exactly the row's length no longer loses every bay to a float's width.
+
+## 4c. THE AI PILE UP IN THE LANE — reproduced and measured, NOT fixed
+
+Reported: "AI are getting caught up in the pit lane and bays — we need to space
+them out or they have to wait their turn somehow." True, and worse than it
+looks. `scratch/pit-traffic.cjs` (new) runs a race in the VM with the field
+stopping and samples every car in the complex each tick. Bahrain, 6 laps, 9 sim
+minutes, 12 of 22 cars stopping:
+
+| measure | reading |
+|---|---|
+| most cars in the lane at once | 8 |
+| closest two cars ever came | 0.02 m |
+| ticks with a pair inside a car length | 619 (~10 s) |
+| cars that STALLED (< 0.5 m/s for 3 s in the lane, not on the jacks) | 12 of 12 |
+| ticks with a car within 16 m ahead in the lane | 6878 |
+| …of those, closing on it by more than 1 m/s | 1232 |
+| teams with BOTH cars in the complex at once | audi, cadillac |
+
+**What was fixed.** `PitLane.boxBusy` — a car may not latch a stop on a box
+another car is already on the jacks in. Teammates SHARE a box (one bay per
+team, by design), so two cars of one team stopping on the same lap aimed at the
+same patch of tarmac. The second now keeps its limiter and its lane, misses the
+latch and comes round again. Free: all 12 stops still complete.
+
+**What is NOT fixed, and this is the honest part.** The numbers above are
+IDENTICAL with that rule in place. The pile-up is not the teammate case and it
+is not the AI's queue cap either: instrumented, the "held behind a car serving a
+stop" branch (`game.js`, `capBlocks`/`queued`) fires 4869 times in this run and
+the cars still end up 0.02 m apart. So the dominant cause is BELOW the speed
+cap — whatever separates two cars in contact does not separate them in the
+lane, where every car is steered to one lateral by `laneX` and the cap can ask
+for a slower speed but nothing holds a gap.
+
+**Tried and reverted.** Dropping the queue's crawl floor to zero inside the
+lane (the floor exists so a stopped AI on the circuit can still steer out, which
+does not apply on rails) moved NOTHING in the measurements and carries a
+deadlock risk, since a queued car is already exempt from the unstuck rescue. Not
+worth shipping unproven.
+
+**Next.** Start at the contact layer, not the AI: find why two cars at the same
+lateral and the same arc in the lane are not pushed apart, and give the lane its
+own longitudinal spacing rule (a held gap, not a speed ceiling). Re-run
+`scratch/pit-traffic.cjs bahrain 9 6` — the four numbers that must move are
+closestPairM, overlapTicks, stallCount and maxCarsInLaneAtOnce.
+
 ## 5. Smaller loose ends
 
 - The `served` chip and the release banner both say the stop is over; the

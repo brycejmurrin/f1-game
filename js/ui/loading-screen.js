@@ -6,31 +6,40 @@
  * race. It now plays here instead, in the gap the player already pays for:
  * between pressing RACE! and the grid appearing.
  *
- * Two phases, and the split is load-bearing:
- *   FLY  — the canvas shows the cinematic camera over the world that
- *          scheduleFlybyTrack() already pre-built under the picker. Nothing
- *          heavy runs, so the frames are smooth.
- *   CARD — the wordmark and the circuit card fade in over the world. ONLY
- *          THEN does the caller run its build. loadTrack() is ~1.1 s of
- *          SYNCHRONOUS work with no progress signal (js/game.js), so it can
- *          only ever stall whatever is on screen — a static DOM card stalls
- *          invisibly, a moving camera stalls as a freeze.
+ * THE CARD AND THE FLYBY RUN TOGETHER. They used to be two phases — cinematic
+ * first, card afterwards — because the card was there to stall behind while
+ * loadTrack() did its ~1.1 s of synchronous work. That is not what the wait is
+ * any more: the world is BUILT UNDER RACE SETTINGS (scheduleFlybyTrack, and
+ * loadTrack memoises on builtTrackId, so the call at race start is nearly free),
+ * so by the time RACE! is pressed there is nothing to hide. Showing the card
+ * afterwards just meant the flyby and the circuit's details never shared the
+ * screen. The card now fades in at the start and stays for the whole sequence.
  *
- * Any pointer or key during FLY skips to CARD: the screen is a flourish, and
- * a flourish that cannot be skipped is a wait.
+ * With no pre-built world to fly over — a circuit picked a moment ago, scenery
+ * still downloading — there is no cinematic to play: the card goes up alone and
+ * the build runs immediately behind it.
+ *
+ * Any pointer or key ends the screen early: it is a flourish, and a flourish
+ * that cannot be skipped is a wait.
  */
 const LoadingScreen = (function () {
-  // A CINEMATIC NEEDS LONG ENOUGH TO READ AS ONE. The first cut was 1.5 s + 0.42 s
-  // and played as a flicker: the camera barely moved before the card took the
-  // screen. These are the budget for the whole screen, and it is skippable with
-  // any pointer or key — an intro nobody can cut past is a wait, not a flourish.
-  const FLY_MS = 3000;    // cinematic hold before the card arrives
-  const CARD_MS = 700;    // card fade-in; the build starts when it lands
+  // The whole sequence's budget. js/camera/flyby-seq.js spends it across eight
+  // shots as FRACTIONS, so retuning this number rebalances them all rather than
+  // truncating the last one. 24 s is 3 s a shot, which is what a pan needs to
+  // read as a move rather than a jerk. Skippable with any pointer or key.
+  const FLY_MS = 24000;
+  // With nothing to fly over, just long enough for the card's fade to land
+  // before the build takes the main thread.
+  const CARD_MS = 700;
 
   function create(hooks) {
     const { $, Tracks, TrackMaps, Flags } = hooks;
 
-    let timer = 0, phase = "", build = null, el = null;
+    let timer = 0, phase = "", build = null, el = null, flyT0 = 0;
+
+    // The map's slot in the card, in CSS px. fitCanvas keeps the circuit's own
+    // aspect inside it, so a wide circuit gets the width and a tall one the height.
+    const MAP_W = 210, MAP_H = 150;
 
     const WX = { dry: "DRY", wet: "WET", rain: "RAIN", overcast: "CLOUDY", fog: "FOG" };
     const TOD = { dawn: "DAWN", day: "DAY", dusk: "DUSK", night: "NIGHT" };
@@ -54,6 +63,7 @@ const LoadingScreen = (function () {
         ["WEATHER", WX[info.weather] || "DRY"],
         ["TIME", TOD[info.tod] || (t.night ? "NIGHT" : "DAY")],
       ];
+      drawMap(t);
       const meta = $("ld-meta");
       if (typeof meta.replaceChildren === "function") meta.replaceChildren(); else meta.textContent = "";
       for (const [k, v] of rows) {
@@ -65,17 +75,39 @@ const LoadingScreen = (function () {
       }
     }
 
+    /** The lap outline, on the circuit picker's recipe: white line, dark casing,
+     *  red start marker, no corner/sector/DRS furniture. Sized from the
+     *  circuit's own aspect, and oversampled for HiDPI the way the picker's
+     *  preview is, with the line weight scaled by the same ratio so it keeps
+     *  its visual thickness. Wrapped: a map that will not draw must never stop
+     *  a race from starting. */
+    function drawMap(t) {
+      const cv = $("ld-map");
+      // TrackMaps comes from `hooks`, not window: every module here is a bare
+      // lexical `const` at script scope, so window.TrackMaps is undefined and a
+      // window-based guard would silently skip the map on every boot.
+      if (!cv || !TrackMaps || typeof TrackMaps.draw !== "function") return;
+      try {
+        const fit = TrackMaps.fitCanvas(cv, MAP_W, MAP_H, t, true);
+        const ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+        if (ratio > 1.01) {
+          cv.width = Math.round(fit.w * ratio);
+          cv.height = Math.round(fit.h * ratio);
+        }
+        const br = fit.w ? (cv.width / fit.w) : 1;
+        const lw = Math.max(2, Math.round(Math.min(fit.w, fit.h) / 42));
+        TrackMaps.draw(cv, t, {
+          color: "#ffffff", casing: "rgba(0,0,0,0.55)", startColor: "#e10600",
+          width: lw * br, pad: Math.round(lw * 1.5) * br,
+          corners: false, sectors: false, drs: false,
+        });
+      } catch (_) { /* no outline is a smaller loss than no race */ }
+    }
+
     function setPhase(p) {
       phase = p;
       const r = root();
       if (r) r.dataset.phase = p;
-    }
-
-    function toCard() {
-      if (phase !== "fly") return;
-      clearTimeout(timer);
-      setPhase("card");
-      timer = setTimeout(fire, CARD_MS);
     }
 
     function fire() {
@@ -86,7 +118,9 @@ const LoadingScreen = (function () {
       if (go) go();
     }
 
-    function onSkip() { toCard(); }
+    /** A skip goes straight to the race. There is no second half to advance to
+     *  any more, and the build behind it is already warm. */
+    function onSkip() { if (phase) fire(); }
 
     /** Show the screen and run `go` once the card is up. `info.hasWorld` false
      *  (no pre-built track to fly over) skips the flyby: an empty black hold
@@ -100,13 +134,11 @@ const LoadingScreen = (function () {
       r.hidden = false;
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
-      if (info.hasWorld) {
-        setPhase("fly");
-        timer = setTimeout(toCard, FLY_MS);
-      } else {
-        setPhase("card");
-        timer = setTimeout(fire, CARD_MS);
-      }
+      flyT0 = Date.now();
+      // "run" is the flyby WITH the card up; "card" is the no-world fallback.
+      // Both show the card, so the stylesheet reveals it for either.
+      setPhase(info.hasWorld ? "run" : "card");
+      timer = setTimeout(fire, info.hasWorld ? FLY_MS : CARD_MS);
     }
 
     /** Close and disarm. Called by clearMenuScreens() once the race owns the
@@ -124,9 +156,17 @@ const LoadingScreen = (function () {
 
     return {
       run, stop,
+      /** How far through the FLYBY the screen is, 0..1. The shot sequencer is
+       *  driven by this rather than by the wall clock, so the sequence keeps its
+       *  shape when FLY_MS is retuned, and a phase skipped by a keypress does not
+       *  leave the camera mid-move. 1 once the card is up, 0 when nothing runs. */
+      progress() {
+        if (phase !== "run" || !flyT0) return 0;
+        return Math.max(0, Math.min(1, (Date.now() - flyT0) / FLY_MS));
+      },
       /** True while the screen owns the canvas — game.js keeps the world
        *  drawn for exactly this window and blanks every other menu. */
-      active() { return phase === "fly" || phase === "card"; },
+      active() { return phase === "run" || phase === "card"; },
       phase() { return phase; },
     };
   }

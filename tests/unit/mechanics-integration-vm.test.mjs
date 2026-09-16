@@ -74,6 +74,13 @@ test("rewind steps the player back about ten seconds, and never rewinds a penalt
   assert.equal(p.cuts,2,"nor is the track-limits ladder");
   assert.equal(g.G.coach.practiceActive(),true,"rewinding is practising");
   assert.equal(g.G.coach.rewind(),false,"the buffer is spent, not replayed");
+  // A REWIND MUST NOT DIRTY THE ATTEMPT IT EXISTS TO RETRY. RaceInsights fails
+  // an in-progress drill when the clock or arc jumps backwards ("position
+  // jumped") — which is what a rewind is — so rewind() re-arms the drill the
+  // way retry() does. Without that the drill comes back already unclean, for a
+  // reason that names the mechanism rather than anything the driver did.
+  const d=g.G.coach.insights.summary().lastDrill;
+  assert.ok(!d||d.reason!=="position jumped","the rewind itself must not fail the drill");
 });
 
 test("rewinding a race with other cars puts the WHOLE race back, not just the player",async()=>{
@@ -102,6 +109,37 @@ test("rewinding a race with other cars puts the WHOLE race back, not just the pl
   g.G.duel=false;
 });
 
+test("aiPlace clears the teleport accumulators, exactly as jump() does",async()=>{
+  // jump() gained this block after a MEASURED bug: a wedge-then-jump carried
+  // ~3 s of rescueT into the new spot and fired a surprise auto-rescue.
+  // aiPlace() never did, so an AI placed into a scripted scenario could rescue
+  // itself somewhere it had never been stuck.
+  await g.race("monza");g.apex.go();g.step(2);
+  const rival=g.G.cars.find(c=>!c.isPlayer), idx=g.G.cars.indexOf(rival);
+  rival.rescueT=3; rival.wallT=2; rival.wasOnWall=true;
+  rival.wrongT=1.5; rival.wrongWay=true; rival.offT=2.5;
+  assert.ok(g.apex.aiPlace(idx,.4,60,0),"the placement is accepted");
+  assert.equal(rival.rescueT,0,"rescueT does not follow the car to the new spot");
+  assert.equal(rival.wallT,0);assert.equal(rival.wasOnWall,false);
+  assert.equal(rival.wrongT,0);assert.equal(rival.wrongWay,false);assert.equal(rival.offT,0);
+  assert.equal(rival.rPrevHead,rival.head,"the yaw anchor moves too, or the car swings into place");
+  assert.equal(rival.rPrevS,rival.s,"and the arc anchor");
+});
+
+test("the duel rival is not bumped on the axis that makes it concede",async()=>{
+  // AWARENESS runs backwards for a benchmark rival (js/physics/ai-drive.js):
+  //   letPassDelay = lerp(4.2, 1.8, awareness)  -> higher yields SOONER
+  //   awareMul     = lerp(1.25, 0.7, awareness) -> higher attacks LESS
+  // The first cut of DUEL_BUMP raised it by 10, buying a rival that concedes
+  // quicker and attacks less often — the opposite of the intent.
+  const Duel=g.sandbox.Duel, DR=g.sandbox.DriverRatings;
+  assert.equal(Duel.BUMP.awareness,0,"awareness is deliberately not bumped");
+  assert.ok(Duel.BUMP.craft>0,"craft is — it raises BOTH attack and defend");
+  const base=DR.get("VER",0,null), bumped=DR.get("VER",0,Duel.BUMP);
+  assert.ok((bumped.awareness||0)<=(base.awareness||0),
+    "so a duel rival never ends up more willing to concede than the stock driver");
+});
+
 test("a duel trims the grid to the player and one bumped rival",async()=>{
   g.G.duel=true;
   await g.race("monza");g.apex.go();g.step(2);
@@ -120,7 +158,12 @@ test("a duel trims the grid to the player and one bumped rival",async()=>{
   const DR=g.sandbox.DriverRatings;
   const base=DR.get(rival.code,rival.tier,null);
   assert.ok(rival.craft>(base.craft||75)/100,"craft is lifted above the stock rating");
-  assert.ok(rival.awareness>(base.awareness||75)/100,"so is awareness");
+  // NOT awareness. This assertion used to require it to be lifted, which pinned
+  // the bug: awareness is the CAUTION axis, and raising it makes the rival
+  // concede sooner (letPassDelay) and attack less (awareMul). See Duel.BUMP.
+  assert.ok(rival.awareness<=(base.awareness||75)/100+1e-9,
+    "awareness is not lifted — raising it would make the rival concede sooner");
+  assert.ok(rival.experience>(base.experience||75)/100,"experience is, for attack persistence");
   // PACE IS THE SMALLEST LIFT on purpose (js/race/duel.js): a same-spec car
   // out-dragging the player down a straight is the tell players catch first.
   const dCraft=rival.craft-(base.craft||75)/100, dPace=rival.skill-DR.skill(base,0.5);

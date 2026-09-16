@@ -3,7 +3,8 @@
 const RaceInsights = (function () {
   const DRILLS = Object.freeze({ free: "Free practice", sector: "Finish this sector cleanly", corner: "Drive through the next corner",
     lap: "One full lap from the line", braking: "Brake to a controlled stop", trail: "Release the brake into a turn",
-    slalom: "Six clean direction changes", launch: "Standing start to racing speed" });
+    slalom: "Six clean direction changes", launch: "Standing start to racing speed",
+    start: "Gain a place off the line" });
   // A drill judges what the CAR did, never the stick. Lateral acceleration says
   // the car changed direction: a pad deflection of 0.35 reads 0.11 after the
   // steer expo, so the old stick thresholds silently failed every analog driver
@@ -32,17 +33,35 @@ const RaceInsights = (function () {
       if (["braking", "trail"].includes(mode) && Math.abs(c.speed) < G.vTop() * .3) {
         G.announce("BUILD SPEED BEFORE SETTING THIS DRILL", 2, "practice"); return false;
       }
-      if (mode === "launch" && Math.abs(c.speed) > 1) { G.announce("STOP THE CAR BEFORE SETTING THIS DRILL", 2, "practice"); return false; }
+      // ONE stopped-car test for both standing-start goals, so the absolute
+      // speed literal is written once and carries one approval in
+      // tests/unit/vstd-invariant.test.mjs rather than one per drill.
+      if (["launch", "start"].includes(mode) && Math.abs(c.speed) > 1) { G.announce(mode === "start" ? "SET THIS ON THE GRID, BEFORE THE LIGHTS" : "STOP THE CAR BEFORE SETTING THIS DRILL", 2, "practice"); return false; }
+      // …and a start drill also needs somebody to gain a place on.
+      if (mode === "start" && placeOf(c) === 0) { G.announce("A START DRILL NEEDS OTHER CARS ON THE GRID", 2, "practice"); return false; }
       previous = sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false;
       drill = { mode, time: G.raceT, sector: G.sectorIdx, startProg: c.prog, lap: c.lap,
         changes: 0, side: 0, brakeSeen: false, brakeProg: c.prog, brakeSpeed: 0, slowing: 0, held: 0, turnSeen: false,
         phase: 0, turnRun: 0, straightRun: 0, minSpeed: Infinity, exitSpeed: 0, peakDecel: 0, launchT: null, lapStart: null, lapDone: false,
+        place0: placeOf(c), placeNow: placeOf(c), startProg0: c.prog,
         clean: true, reason: "", done: false };
       event("practice", DRILLS[mode] + " — unscored");
       return true;
     }
     // The first failure is the one the driver needs to hear; later ones follow from it.
     function failDrill(reason) { if (drill && !drill.done && drill.clean) { drill.clean = false; drill.reason = reason; } }
+    // THE PLAYER'S PLACE, counted the way the classification counts it: by
+    // cumulative arc, so a car a lap down is behind rather than alongside. The
+    // first drill to look past G.player — every other one judges the car alone
+    // against the road. Same sort js/agent/apex.js uses for its gap readouts.
+    // Returns 1-based position, or 0 when there is no field to have a place in.
+    function placeOf(c) {
+      const cars = G.cars;
+      if (!c || !Array.isArray(cars) || cars.length < 2) return 0;
+      let ahead = 0;
+      for (const o of cars) if (o !== c && !o.retired && (o.prog || 0) > (c.prog || 0)) ahead++;
+      return ahead + 1;
+    }
     const masteryKey = (mode, sectorIdx) => G.records.key() + ":" + mode + ":" + (mode === "sector" ? sectorIdx : "all");
     function masteryEntries() {
       const raw = G.store.get("circuitMastery", null);
@@ -61,7 +80,14 @@ const RaceInsights = (function () {
       // compare); a lap by the timed lap itself (the line keeps the exact time
       // even though practice laps never enter the records); the rest by time.
       const lapTime = Number.isFinite(c._lapTimeAtLine) && c._lapTimeAtLine > 0 ? c._lapTimeAtLine : drill.lapStart == null ? seconds : G.raceT - drill.lapStart;
-      const score = mode === "braking" ? stop : mode === "launch" && drill.launchT != null ? G.raceT - drill.launchT : mode === "lap" ? lapTime : seconds;
+      // PLACES GAINED IS THE ONE SCORE WHERE MORE IS BETTER. Every other drill
+      // scores a time or a distance and mastery keeps the MINIMUM, so this is
+      // stored NEGATED — gaining two places scores -2, which the same Math.min
+      // ranks above -1. The sign is undone once, at the display edge, so
+      // nothing else in the ledger needs a per-mode "which way is better".
+      const placed = (drill.place0 || 0) - (drill.placeNow || 0);
+      const score = mode === "braking" ? stop : mode === "launch" && drill.launchT != null ? G.raceT - drill.launchT
+        : mode === "lap" ? lapTime : mode === "start" ? -placed : seconds;
       // v²/2a at the hardest deceleration the car actually produced: the distance
       // this stop WOULD have taken had the driver held that from the first brake.
       // The gap is what modulation cost, in metres, and it is the one number a
@@ -74,6 +100,8 @@ const RaceInsights = (function () {
         : mode === "slalom" ? seconds.toFixed(1) + "s · " + drill.changes + " direction changes"
         : mode === "corner" ? seconds.toFixed(1) + "s · min " + kmh(drill.minSpeed) + " km/h · exit " + kmh(drill.exitSpeed) + " km/h"
         : mode === "launch" ? "0 to " + kmh(G.vTop() * .5) + " km/h in " + score.toFixed(2) + "s"
+        : mode === "start" ? (placed > 0 ? "gained " + placed + (placed === 1 ? " place" : " places") : placed < 0 ? "lost " + (-placed) + (placed === -1 ? " place" : " places") : "held position")
+          + " — P" + drill.place0 + " to P" + drill.placeNow
         : mode === "lap" ? "lap " + G.fmtTime(score) : seconds.toFixed(1) + "s";
       lastDrill = { mode, seconds, clean: drill.clean, changes: drill.changes, reason: drill.reason, score, text,
         limit: limit == null ? null : +limit.toFixed(1), slack: slack == null ? null : +slack.toFixed(1) };
@@ -127,6 +155,20 @@ const RaceInsights = (function () {
         if (drill.lapDone) finishDrill(current, c);
       } else if (drill.mode === "launch") {
         if (v >= G.vTop() * .5) finishDrill(current, c);
+      } else if (drill.mode === "start") {
+        // Tracked every sample, so the result is where you ARE when the run
+        // ends, not a single late reading that a shuffle could flatter.
+        drill.placeNow = placeOf(c) || drill.placeNow;
+        // THE RUN ENDS AT THE FIRST CORNER, which is what a start IS: the drag
+        // to the braking zone and the place you hold through it. Phase 2 is the
+        // corner-drill's own "through it and out the other side" detector, so
+        // the two agree on where a corner ends rather than inventing a second
+        // rule. The distance floor keeps a twitch on the grid from ending it.
+        if (drill.phase === 2 && moving && current.prog - drill.startProg0 > 40) finishDrill(current, c);
+        // A start that never starts is not a result. The launch drill has the
+        // same shape (it waits for speed); this one also has to survive the car
+        // simply stopping — a stall, or a first-corner shunt that ends the run.
+        else if (v < 1 && now - drill.time > 6) { failDrill("the car never got away"); finishDrill(current, c); }
       } else if (drill.mode === "braking") {
         if (v < 1) {
           if (!drill.brakeSeen) failDrill("stopped without firm braking");

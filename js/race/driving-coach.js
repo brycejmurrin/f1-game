@@ -34,7 +34,8 @@ const DrivingCoach = (function () {
   // The practice goals as the picker names them, so the review can point at a
   // goal by the label the driver will actually look for. One list, two readers.
   const GOALS = Object.freeze([["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"],
-    ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"]]);
+    ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"],
+    ["start", "RACE START"]]);
   function create(G) {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
@@ -235,10 +236,18 @@ const DrivingCoach = (function () {
       held += step;
       if (held + 1e-9 < TIPS[id].dwell) return;
       const tip = TIPS[id], turn = turnAt();
+      // Only a line that will be HEARD counts as advice given. The 30 s repeat
+      // block, the tip counts and the post-session feedback all claim to
+      // describe what the player was told, so none of them may record a tip a
+      // cinematic camera silenced (js/game.js announce() returns that verdict).
+      // Nothing is cleared on the way out: the candidate stays held so the tip
+      // lands on the very next tick the banner is free, rather than starting
+      // its dwell over. (An edge tip still ages out on its own staleness rule.)
+      if (!G.announce(tip.text, 2.5, "coach")) return;
       latest = { id, text: tip.text, detail: tip.detail, time: G.raceT, turn };
       tipCounts.set(id, (tipCounts.get(id) || 0) + 1); lastTip.set(id, clock);
       log.push({ id, turn, time: G.raceT }); if (log.length > 200) log.shift();
-      G.announce(tip.text, 2.5, "coach"); quiet = 8; clearCandidate(); edge = null;
+      quiet = 8; clearCandidate(); edge = null;
     }
     const goal = () => RaceInsights.DRILLS[drillMode].toUpperCase();
     // G.practice, NOT G.timeTrial: a checkpoint is safe in any session the
@@ -376,6 +385,14 @@ const DrivingCoach = (function () {
       practice = true;                // rewinding IS practising, whether or not a checkpoint was set
       const n = (G.cars || []).length;
       restoreWorld(e.world);
+      // RE-ARM THE DRILL, exactly as retry() does. RaceInsights fails any
+      // in-progress attempt when the clock or the arc jumps backwards
+      // (js/race/race-insights.js, "position jumped") — which is precisely what
+      // a rewind is. Without this the attempt you rewound in order to RETRY is
+      // silently marked dirty, with a reason that describes the mechanism
+      // rather than anything the driver did. startDrill() resets its `previous`
+      // sample so the next tick is not read as a teleport.
+      insights.startDrill(drillMode);
       G.announce("REWIND " + Math.round(clock - e.t) + "s" + (n > 1 ? " — FULL GRID" : ""), 2, "practice");
       return true;
     }
@@ -450,8 +467,13 @@ const DrivingCoach = (function () {
           braking: "Build speed before saving, then brake firmly and keep braking until the car stops. Coasting to a stop does not count.",
           trail: "Build speed before saving. Brake firmly, keep some brake on as the car turns in, then release it while the car is still turning.",
           slalom: "Make six direction changes while moving: the car must change direction, not just the stick. Stay on the track and avoid contact.",
-          launch: "Stop the car before saving, then launch to racing speed. Timed from your first throttle." };
-        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m" : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s" : s.toFixed(1) + "s";
+          launch: "Stop the car before saving, then launch to racing speed. Timed from your first throttle.",
+          start: "Set this on the grid before the lights. The run ends at the first corner and scores the places you gained off the line." };
+        // `start` is stored NEGATED so mastery's Math.min ranks more places
+        // higher (js/race/race-insights.js). The sign is undone here, once, at
+        // the only place a human reads the number.
+        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m" : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s"
+          : mode === "start" ? (-s >= 0 ? "+" : "") + (-s) + (Math.abs(s) === 1 ? " place" : " places") : s.toFixed(1) + "s";
         const last = summary.lastDrill, tries = insights.attempts(drillMode), clean = tries.filter(a => a.clean), saved = insights.mastery(drillMode);
         drillInfo.textContent = guide[drillMode]
           + (last && last.mode === drillMode ? " Last attempt: " + (last.clean ? "completed · " + last.text : "retry suggested · " + last.reason) + "." : "")

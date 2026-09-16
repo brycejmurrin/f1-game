@@ -784,9 +784,39 @@ const PitLane = (function () {
       if (!c.local) return;
       const pos = rankOf(c), k = c.pitPos0 > 0 && pos > 0 ? c.pitPos0 - pos : 0;
       const places = k === 0 ? "" : ", " + (k > 0 ? "+" : "") + k + (Math.abs(k) === 1 ? " PLACE" : " PLACES");
-      if (G.announce) G.announce("STOP " + zz.boxS.toFixed(1) + "s" + (pos > 0 ? " — P" + pos + places : ""), 2.2, "race");
-      c.pitPos0 = 0;
+      // The stop's REAL length, work included: a summary that reported 2.2 s
+      // after twenty seconds in the garage would be the one number the driver
+      // knows is wrong.
+      const held = zz.boxS + (c.pitWorked || 0);
+      if (G.announce) G.announce("STOP " + held.toFixed(1) + "s" + (c.pitWorked > 0 ? " — WORK DONE" : "") + (pos > 0 ? " — P" + pos + places : ""), 2.2, "race");
+      c.pitPos0 = 0; c.pitWorked = 0;
       if (G.store && G.store.set) G.store.set("pitTaught", 1);
+    }
+
+    // ── WORKING ON THE CAR MID-STOP ──────────────────────────────────────────
+    // Asked: a button, while pitting, that opens the GARAGE to change parts or
+    // the set-up. Real F1 cannot: a part change is a garage job and the car is
+    // out of the race for minutes, which is why the regulations do not need to
+    // forbid it. So the honest game version is not "no" — it is that work COSTS
+    // TIME. The hold is extended by WORK_S, once, and only if something
+    // actually changed: opening the garage to look at the car is free, and a
+    // stop you spent fifteen seconds on is a stop the field drove past.
+    const WORK_S = 15;
+    /** Can this car be worked on right now? The LOCAL player only, stopped in
+     *  its own box, while the crew is still on it. Not on the way in, not on
+     *  the way out: the car is on jacks for exactly this window. */
+    function canWork(c) {
+      return !!(c && c.local && !c.retired && !c.finished &&
+                c.pitState === "box" && (c.pitT || 0) > 0);
+    }
+    /** Charge the stop for the work and return the seconds added. Idempotent in
+     *  the sense that matters: the caller decides whether anything CHANGED, and
+     *  a visit that changed nothing must not call this at all. */
+    function addWork(c) {
+      if (!canWork(c)) return 0;
+      c.pitWorked = (c.pitWorked || 0) + WORK_S;
+      c.pitT = (c.pitT || 0) + WORK_S;
+      return WORK_S;
     }
 
     // Is this car, RIGHT NOW, holding the line into the pits? Pure apart from
@@ -897,6 +927,25 @@ const PitLane = (function () {
       if (rib && rib.workIn != null) return (c.x || 0) * side >= rib.workIn * side - BOX_LAT;
       return inLaneLat(c, hw, side);
     }
+    /** Is THIS car's box already occupied by someone else? One bay per team
+     *  means the only car that can take yours is your team-mate, but the test
+     *  is on the BOX ARC rather than on the team so a future row that shares a
+     *  bay any other way is covered by construction. A car on the jacks holds
+     *  it; a car merely queueing does not, or two waiting cars would deadlock. */
+    function boxBusy(c) {
+      const zz = z(), t = G.track;
+      if (!zz || !t || !c) return false;
+      const cars = G.cars;
+      if (!cars || cars.length < 2) return false;
+      const mine = boxThroughFor(c, zz, t.total);
+      for (let i = 0; i < cars.length; i++) {
+        const o = cars[i];
+        if (o === c || !o || o.retired || o.pitState !== "box") continue;
+        if (Math.abs(boxThroughFor(o, zz, t.total) - mine) < 1e-6) return true;
+      }
+      return false;
+    }
+
     /** SQUARE IN THE BOX — the stop's real lateral condition, for every car.
      *
      *  `inBoxLat` only asks that the car has REACHED the working lane, and on
@@ -1131,6 +1180,15 @@ const PitLane = (function () {
       }
       // Called the stop and reached the window: the limiter is on from here.
       c.pitState = "lane";
+      // WAIT YOUR TURN. Teammates SHARE a box — the row is one bay per team, by
+      // design — so two cars of one team stopping on the same lap aim at the
+      // same patch of tarmac, and the second drove into the first. Measured on
+      // a 6-lap Bahrain with the field stopping (scratch/pit-traffic.cjs):
+      // Audi and Cadillac both had their pair in the complex at once. A busy
+      // box is not a box: the car keeps its limiter and its lane, misses the
+      // latch below, and takes the stop on the next pass of it — which is what
+      // a real crew's "hold, hold" is.
+      if (boxBusy(c)) return;
       // The box: reached when the car has driven far enough in — and not too
       // far: a car halted two garages down is not at its crew — and only once
       // slow enough to have actually STOPPED there. Blowing through the box at
@@ -1462,7 +1520,8 @@ const PitLane = (function () {
     return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, roadOf, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
-             worthStopping, cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
+             worthStopping, canWork, addWork, workS: WORK_S, boxBusy,
+             cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
              boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,
              servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
              planInfo, windowOf, replan, lossS, pinnedStops, setPinnedStops,

@@ -1278,6 +1278,9 @@ body[data-density="compact"] #campicker {
   transform: translateY(var(--gap));
   transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
+/* Both live phases show the card: "run" is the flyby with the card up, "card"
+   is the no-world fallback where the card is all there is. */
+#loading[data-phase="run"] #ld-card,
 #loading[data-phase="card"] #ld-card { opacity: 1; transform: none; }
 /* The wordmark is #title's recipe at card scale — same italic, same skewed red
    underline — because this IS the title screen's brand arriving on the grid. */
@@ -1296,6 +1299,17 @@ body[data-density="compact"] #campicker {
   background: var(--red);
   transform: skewX(-30deg);
 }
+/* Map beside the text, not above it: the card is a lower third, and stacking
+   the outline would push it into the middle of the screen where the flyby is.
+   Wraps on a phone, where 560px of card is not available. */
+#ld-body { display: flex; align-items: center; gap: var(--pad); flex-wrap: wrap; }
+#ld-map {
+  flex: 0 0 auto;
+  display: block;
+  max-width: 45%;
+  height: auto;
+}
+#ld-text { flex: 1 1 14rem; min-width: 0; }
 #ld-head { display: flex; align-items: center; gap: var(--gap); }
 #ld-flag { display: block; width: calc(2 * var(--fs-6)); flex: 0 0 auto; line-height: 0; }
 #ld-flag svg, #ld-flag img { display: block; width: 100%; height: auto; border-radius: 2px; }

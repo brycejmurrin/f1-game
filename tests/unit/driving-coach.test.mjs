@@ -21,7 +21,11 @@ function fixture() {
     // for the copy that distinguishes an armable session from a TT.
     $: id => nodes.get(id) || null, timeTrial: true, practice: true, daily: { isActive: () => false }, netPlay: { active: () => false },
     records: { invalidate() {}, config: () => ({}) }, tyres: { on: () => false },
-    pits: { ownedTyres: () => [], choices: () => [] }, announce: (...args) => announcements.push(args) };
+    // announce() returns the banner's VERDICT: false when the line never
+    // reaches the screen (a cinematic camera drops "coach"). G.heard is the
+    // knob a test turns to stand in for that camera.
+    pits: { ownedTyres: () => [], choices: () => [] }, heard: true,
+    announce: (...args) => { announcements.push(args); return G.heard; } };
   const ins = { update() {}, reset() {}, summary: () => ({}), journal: () => [], forecast: () => null, network: () => null,
     startDrill: () => true, attempts: () => [], mastery: () => null };
   const ctx = vm.createContext({
@@ -89,6 +93,23 @@ test('coasting and X-mode tips read the pedals, the flaps and the cornering load
   assert.equal(advice({ aeroX: 1, lateralAccel: 8, speed: 30 }), '');
   tick(1, { throttleDemand: 0 }); assert.equal(announcements.length, 0, 'a one-second lift is a corner entry');
   tick(.3); assert.equal(announcements.length, 1); assert.equal(coach.feedback().latest.id, 'coasting');
+});
+
+test('a tip the banner never showed is not recorded as advice given', () => {
+  // The cinematic cameras silence "coach" so a film shot is not captioned. The
+  // coach's own log, its 30 s repeat block and the post-session feedback all
+  // claim to describe what the player was TOLD, so a silenced tip must leave
+  // none of them — and must still be on offer once the camera comes back.
+  const { coach, G, tick, enable, announcements } = fixture(); enable();
+  G.heard = false;
+  tick(1.4, { throttleDemand: 0 });
+  assert.ok(announcements.length > 1, 'the coach stopped offering the tip, not just saying it');
+  assert.equal(coach.feedback().latest, null, 'a tip nobody saw was logged as delivered');
+  G.heard = true;
+  const before = announcements.length;
+  tick(.05);
+  assert.equal(announcements.length, before + 1, 'a held candidate had to re-serve its whole dwell');
+  assert.equal(coach.feedback().latest.id, 'coasting');
 });
 
 test('a track-limits warning is coached at once, but not the count the coach first saw nor the reset after a penalty', () => {
