@@ -509,3 +509,55 @@ test("the survey forwarders are gone — layout-audit --survey is the entry poin
   assert.match(src, /--survey/);
   assert.match(src, /ios-iphone-landscape/);
 });
+
+// ── the AI instruments' --wear flag ─────────────────────────────────────────
+// tools/lib/game-vm.cjs seeds `tyreWear: "off"`, but js/game.js's shipped
+// default is `store.get("tyreWear", "light")`. Nothing said so, and the
+// consequence was that AiDrive.stintPlan / pitNow / compoundFor / degCost and
+// pits.think were INERT in all four AI instruments: every strategy number they
+// ever printed was a no-wear number, silently. `--wear off|light|real` is the
+// opt-in that makes the seam measurable, and these guard both halves of it —
+// that the flag exists and reaches createGame, and that the DEFAULT is still
+// off so the tables in docs/notes/AI-FIELD-RESEARCH.md stay reproducible.
+const AI_INSTRUMENTS = ["ai-pace.mjs", "ai-field.mjs", "ai-line.mjs", "ai-human.mjs"];
+
+test("every AI instrument takes --wear and passes it into the VM's storage seed", () => {
+  for (const name of AI_INSTRUMENTS) {
+    const src = fs.readFileSync(tool(name), "utf8");
+    assert.match(src, /wearArg\s*\(\s*argv\s*\)/, `${name}: does not read the --wear flag`);
+    // The seam is the storage seed: game-vm's own `tyreWear: "off"` default is
+    // overridden per-call, so a tool that parses the flag and forgets to pass
+    // it would print "wear real" over a race with wear off.
+    assert.match(src, /createGame\(\{[^}]*storage:\s*\{[^}]*tyreWear:\s*WEAR/,
+      `${name}: --wear never reaches createGame's storage seed`);
+  }
+});
+
+test("--wear defaults to off, and a bad level is refused rather than defaulted", async () => {
+  const { wearArg, WEAR_LEVELS } = await import("../../tools/lib/cli-args.mjs");
+  assert.deepEqual(WEAR_LEVELS, ["off", "light", "real"], "must match TyreModel.LEVELS");
+  assert.equal(wearArg([]), "off", "the default moved — recorded AI numbers assume wear off");
+  assert.equal(wearArg(["--track", "monza"]), "off");
+  for (const v of WEAR_LEVELS) {
+    assert.equal(wearArg(["--wear", v]), v);
+    assert.equal(wearArg([`--wear=${v}`]), v);
+  }
+  // A typo must not race on the default: an instrument that quietly measured
+  // no-wear under a "--wear=lite" heading is the whole defect again.
+  for (const bad of [["--wear", "lite"], ["--wear=REAL"], ["--wear"], ["--wear", "--json"]]) {
+    const r = spawnSync(process.execPath,
+      ["-e", `import("./tools/lib/cli-args.mjs").then(m=>m.wearArg(${JSON.stringify(bad)}))`],
+      { cwd: ROOT, encoding: "utf8", timeout: 10000 });
+    assert.equal(r.status, 1, `wearArg accepted ${bad.join(" ")}`);
+    assert.match(r.stderr, /--wear: expected one of off\|light\|real/);
+  }
+});
+
+test("the game's shipped tyreWear default is still 'light' (so off must be opt-in, not inherited)", () => {
+  // The premise of the flag. If game.js ever ships "off" as the default, the
+  // instruments and the product agree by accident and this comment is wrong —
+  // and if it ships something else, the LEVELS list above needs revisiting.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(game, /store\.get\("tyreWear",\s*"light"\)/,
+    "js/game.js no longer defaults tyreWear to \"light\" — re-read tools/lib/cli-args.mjs wearArg");
+});

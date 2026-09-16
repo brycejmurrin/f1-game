@@ -6069,7 +6069,6 @@ const WGX = (function () {
       return _bootFail(_presentReason);
     }
 
-    const noop = function () {};
     LightBudget.setSlots(MAX_LIGHTS);   // the cull (frame-lights.js) budgets against the bound backend's slots
     _runtimeReady = true;
     try { Log.info("gfx", "WGX bind ok"); } catch (_) { /* harness */ }

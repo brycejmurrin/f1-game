@@ -155,8 +155,8 @@ look; boot never awaits assets. GLX, TLX, and WGX implement it. `tools/gen/asset
 
 ## `window.__apex` dev API
 
-~185 hooks; `docs/DEBUG-HOOKS.md` is the reference and `__apex.agentHelp()`
-the machine-readable manifest — call it once per session. `obs()`/`physState()`
+`docs/DEBUG-HOOKS.md` is the reference (its generated index carries the count)
+and `__apex.agentHelp()` the machine-readable manifest — call it once a session. `obs()`/`physState()`
 need `player.px` initialised (`jump()` or `step()` after `race()`+`go()`).
 `node tools/shot/agent.mjs <track> <cmd>` is the same surface from a shell.
 
@@ -191,7 +191,7 @@ Work happens on a `claude/<topic>` branch. The deploy branch is
 (https://brycejmurrin.github.io/f1-game/). Other sessions develop directly on
 it, so a deploy is a merge of THEIR work — re-measure on the merged tree, never
 force-push. Catch a branch up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
-merge (ratchets + generated files conflict; it cures both). `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
+merge (ratchets + generated files conflict; it cures both, but leaves you ON `sync-pr-<branch>` and pushes nothing without `--push` — recovery in check-changes). `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
 `test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens a
 PR, `--plan` prints the union); it cures GENERATED-file conflicts, stops on any
 other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in

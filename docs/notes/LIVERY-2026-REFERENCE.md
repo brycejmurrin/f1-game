@@ -1,5 +1,12 @@
 # 2026 launch liveries — what is sourced, and what is not
 
+> Errata (2026-09-16): the Alpine rows below record the pink crown stripe as
+> APPLIED, which was true when measured. It no longer ships. `spineTint` must
+> clear the blue cover at ≥2:1 and launch pink #FF87BC measures ~1.56:1 on
+> #0093CC, which made every crown band invisible to cover-legibility, so
+> `js/data/teams.js` now carries white. The sourcing below still stands — only
+> the applied tint changed.
+
 Written 2026-09-08, after adding the ENGINE COVER colour zone (`liv.cover`) and
 giving Ferrari a white cover and Mercedes a silver one from the owner's own
 launch photographs. The question this note answers: **which other teams should

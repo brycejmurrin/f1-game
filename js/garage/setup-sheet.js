@@ -645,8 +645,13 @@ function buildTuneOptions(container, team) {
   const refresh = () => {
     const t = SetupTune.get(team.id);
     for (const k of SetupTune.FIELDS) { rows[k].b.textContent = t[k] + SetupTune.RANGE[k].unit; rows[k].inp.value = t[k]; }
-    rakeOut.textContent = "RAKE " + (t.rideR - t.rideF) + " mm (rear − front) · aero load "
-      + (SetupTune.rake(team.id) >= 0 ? "+" : "") + Math.round(SetupTune.rake(team.id) * Parts.RH_GAIN * 100) + " %"
+    // "X-mode trade", not "aero load": RH_GAIN·rake is a step on the 0..1
+    // NORMALISED load axis, and that axis reaches the player only through
+    // xVmaxGain/xDfLoss/xCoastCut, each multiplied by the flap position. With
+    // the flaps shut it is exactly zero, so labelling it a live aero-load gain
+    // told the player the opposite of what the model does.
+    rakeOut.textContent = "RAKE " + (t.rideR - t.rideF) + " mm (rear − front) · X-mode trade "
+      + (SetupTune.rake(team.id) >= 0 ? "+" : "") + Math.round(SetupTune.rake(team.id) * Parts.RH_GAIN * 100) + " pts"
       + " · brake bias " + t.brakeBias.toFixed(1) + " % front";
     renderStatBars($("cs-stats-inner"), team);
     const tab = $(csTabId("tune"));
@@ -670,7 +675,7 @@ function buildTuneOptions(container, team) {
   wrap.appendChild(rakeOut);
   const note = document.createElement("p"); note.className = "adv-help";
   note.textContent = "Bars: stiffer overall sharpens turn-in and costs traction; a stiffer front shifts load transfer forward and reduces front grip in sustained turns; a stiffer rear helps rotation. "
-    + "Rake adds aero load on top of the wing (a max-wing car is already at full load). "
+    + "Rake sizes the ACTIVE AERO trade, not the car's standing downforce: more rake means more top speed to gain and more grip to lose when the flaps open, and with them shut the car drives exactly the same (measured: identical grip across the whole rake range in Z-mode). A max-wing car is already at full load. "
     + "Brake bias splits the friction budget between the axles under braking — forward understeers on entry, rearward rotates. "
     + "The works sheet is exactly the car it always was.";
   wrap.appendChild(note);

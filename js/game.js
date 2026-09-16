@@ -12,13 +12,13 @@ const els = {
   hud: $("hud"), pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"),
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
-  tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"),
+  tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"), plan: $("hud-plan"),
   pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
   flag: $("hud-flag"), minimap: $("minimap"),
-  lights: $("lights"), announce: $("announce"),
+  lights: $("lights"), announce: $("announce"), announceWho: $("announce-who"), announceText: $("announce-text"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
   lighting: $("lighting"), camtune: $("camtune"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
@@ -889,6 +889,10 @@ let launchT0 = 0;
 let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
 let tyres = null;     // TyreModel.create(G), same deferral
 let pits = null;      // PitLane.create(G), same deferral
+// The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
+// called in and still on your way to the box. Not `out`/`served`/`merge` — by
+// then you are leaving, and not `missed`.
+const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "stop", "box"];
 let engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
@@ -974,6 +978,21 @@ const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (qualiGri
 function setFlow(v) { flow = v; Career.engage(v === "career"); SeasonCal.engage(v); }
 const isTimeTrial = () => session === "tt";
 const isQuali = () => session === "quali";
+// PRACTICE is not a fourth `session` value, it is a flag ACROSS them: the point
+// is to practise the session you are actually driving — a race start, a quali
+// lap — not a separate mode that drives differently. It means exactly one
+// thing: THIS SESSION IS UNSCORED. Everything that can rewind the player
+// (checkpoints, rewind) is gated on it, because every one of them is a scoring
+// exploit in a session that counts — `retry()` restores the car's own fields,
+// and `penalty`/`cuts` are ordinary fields on that car.
+// A Time Trial is always practisable, which is what the feature shipped as.
+// Cleared by startRace() so it can never leak from one session into the next.
+let practiceMode = false;
+const isPractice = () => practiceMode || isTimeTrial();
+// A DUEL is a practice race against ONE bumped rival. Same trim that Time Trial
+// and Quali already do to `cars` after makeCars(); the rival's stats come from
+// the deltas argument DriverRatings.get() already takes for career development.
+let duelMode = false;
 // The full field as it was before startRace() narrowed `cars` to the lone
 // qualifying car — Quali.simulate() needs every car to build a classification.
 let qualiField = null;
@@ -1100,15 +1119,28 @@ let lastFrame = 0;
 let announceT = 0;
 const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, race: 4, "penalty-hit": 5 };
 let _annPri = 0, _annQueue = null;
+// THE RADIO. A banner is a radio message: the WHO line names the channel it
+// came in on — race control for a penalty or a warning, the coach for a tip,
+// otherwise the driver's own pit-wall channel with their name and number, the
+// way a broadcast captions team radio — and the words sit under it in quotes.
+function radioWho(kind) {
+  const p = player, num = p && p.num != null ? " · " + p.num : "";
+  if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL" + num;
+  if (kind === "coach" || kind === "practice") return "COACH" + num;
+  const who = p && p.name ? String(p.name).split(" ").pop().toUpperCase() : (p && p.code) || "";
+  return (who ? who + " · " : "") + "RADIO" + num;
+}
 function showAnnounce(msg, dur, kind) {
   kind = kind || "race";
   _annPri = ANN_PRI[kind] || 2;
-  els.announce.textContent = msg;
+  els.announceText.textContent = msg;
+  els.announceWho.textContent = radioWho(kind);
   els.announce.className = "";
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
   els.announce.hidden = false;
-  announceT = dur || 1.6;
+  // A card of small type takes a beat longer to read than a billboard did.
+  announceT = (dur || 1.6) + 0.5;
 }
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
@@ -1700,7 +1732,7 @@ function makeCars() {
         // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
         // MY TEAM + hire share the saved build; everyone else uses factory.
         rollBalance: isP ? SetupTune.balance(team.id) : 0,
-        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, SetupTune.aero(team.id)) : Parts.aeroLoad(factoryParts.setup, team),
+        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, isP ? SetupTune.aero(team.id) : undefined) : Parts.aeroLoad(factoryParts.setup, team),   // the BUILD is shared, the SHEET is not: rollBalance/mods above are already isP-only, and an AI reads aeroLoad continuously (AiDrive.lateralScale), so the mate was the only car the player's rake moved
         ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
         ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
         color: team.color, tier: team.tier, seat: di, houseStats: Career.teamStats(team),
@@ -1906,8 +1938,10 @@ function gridUp(preOrder) {
     // An AI car's STARTING compound is the plan's, not the class draw's, when
     // wear is on; the class draw still stands in for the legacy fudge when it
     // is off. The player plans their own race.
-    c.pitPlan = (!c.human && tyres.on()) ? pits.planFor((h >>> 24) / 256) : null;
-    if (c.pitPlan) c.tyreClass = c.pitPlan.start;
+    // The PLAYER gets a plan too — a REFERENCE, the one the pit wall would run
+    // (PitLane.think never executes a human's; the HUD and the engineer read it).
+    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human) : null;
+    if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
     tyres.fit(c, c.tyreOpt ? tyres.optionRecord(c.tyreOpt) : tyres.classRecord(c.tyreClass));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
@@ -2377,6 +2411,13 @@ async function startRace() {
   rlap("resets");
   loadTrack(trackIdx);
   rlap("loadTrack");
+  // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
+  // must never survive into the next — a race that silently did not count
+  // because the last one was practice is the worst possible failure here. A
+  // Time Trial needs no flag: isPractice() derives it.
+  // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
+  // chosen on the settings sheet and meant to stick until the player changes it.
+  practiceMode = false;
   makeCars(); rlap("makeCars");
   coach.reset(); PerfGov.resetFrameStats();
   // Qualifying keeps the full field for simulation, then drives one standing lap.
@@ -2384,6 +2425,12 @@ async function startRace() {
     qualiField = cars;
     cars = [player];
     lapsTarget = 1;
+  } else if (duelMode) {
+    // ONE RIVAL, BUMPED — the same trim Quali and Time Trial do on either side
+    // of this branch. js/race/duel.js owns what the format means.
+    const rival = Duel.pick(cars);
+    if (rival) { Duel.bump(rival, DriverRatings); cars = [player, rival]; }
+    lapsTarget = raceLaps;
   } else if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
     lapsTarget = raceLaps;
@@ -2731,6 +2778,12 @@ const G = {
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
   set timeTrial(v) { session = v ? "tt" : "race"; },
+  // DERIVED, like timeTrial: a Time Trial is always practice, and any other
+  // session becomes practice once the player arms it. The setter never turns
+  // a Time Trial OFF — there is no scored state for it to return to.
+  get practice() { return isPractice(); },
+  set practice(v) { practiceMode = !!v; },
+  get duel() { return duelMode; }, set duel(v) { duelMode = !!v; },
   get lapsTarget() { return lapsTarget; },
   // RELIABILITY: the race setting, the shared arming path (so a simulated career
   // round draws its retirements exactly as a driven race does), and the manual
@@ -3130,11 +3183,31 @@ raceSettings = RaceSettings.create({
   getRaceGrid: () => raceGrid, setRaceGrid: (v) => { raceGrid = v; },
   getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
   getRaceTyreWear: () => raceTyreWear, setRaceTyreWear: (v) => { G.raceTyreWear = v; },
+  getDuel: () => duelMode, setDuel: (v) => { duelMode = !!v; },
+  getPits: () => pits,   // the STRATEGY row: the reference plan and the pin (PitLane.planFor)
   getRaceCtl: () => raceCtl,
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
   openQuali, startRace, enableTilt, getSteerMode: () => steerMode,
   getNetLobby: () => netLobby, buildSelect, els, openGarage, buildStandings,
+  raceIntro,
 });
+// PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
+// over the world scheduleFlybyTrack() already warmed, then holds a static card
+// while the caller's build runs — see that file for why the split matters.
+const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags });
+/** The RACE! button's route into a race. Not folded into startRace(): netplay
+ *  and __apex.race() both AWAIT that function, and neither should gain two
+ *  seconds of flourish. The button is the only place a human is watching. */
+function raceIntro(go) {
+  loadingScreen.run({
+    track: Tracks.LIST[trackIdx], laps: raceLaps,
+    weather: raceWeather, tod: raceTimeOfDay,
+    // Only fly over a world that is actually built. A missed pre-build (a
+    // circuit switched a moment ago, scenery still downloading) would put a
+    // black hold where the cinematic should be, which reads as a hang.
+    hasWorld: !!track && _menuGate.track === track,
+  }, go);
+}
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
@@ -3257,6 +3330,9 @@ function armConfirm(btn, armedText, action) {
 // title screen) and the two tuner panels predate the class and are named
 // individually.
 function clearMenuScreens() {
+  // Disarm the loading screen BEFORE the sweep hides it: it holds a pending
+  // timer that would otherwise fire its build callback into a running race.
+  loadingScreen.stop();
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
   for (const id of ["overlay", "lighting", "camtune"]) { const el = $(id); if (el) el.hidden = true; }
   // The garage's 3D turntable keeps rendering while #carsetup is up; a race
@@ -3741,7 +3817,7 @@ function updateCar(c, dt, ranked) {
   // it moves with the table rather than pinning a literal here.
   if (!c.human && _leadHuman) {
     const gap = _leadHuman.prog - c.prog;
-    const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
+    const bandFactor = gap > 0 && gap < track.total * 0.5 && raceT - launchT0 > 8 ? Math.min(gap / 700, 1) * dd.band : 0;   // never off the START LINE (a P22 grid slot is 182 m back by itself = +4.7 % vmax on easy into T1, "the antithesis of what we want" — Game AI Pro ch.42) and never once LAPPED (the gap clamps the band to full, so an easy car a lap down took min(1, 0.93 x 1.18) = hard's corner authority and un-lapped itself). Both only ever REMOVE a boost, so the DIFF ladder cannot move.
     const bandCap = Math.max(1, BAND_CEIL / (c.tierV * c.skill * dd.ai));
     vmax *= Math.min(1 + bandFactor, bandCap); c._bandNow = bandFactor;   // the corner half of the band: read by the brake target below
   } else c._bandNow = 0;
@@ -4805,7 +4881,8 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
+    // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
+    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.onKerb ? 1 : lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1))) * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
       : (onThrottle
           ? ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
@@ -4859,7 +4936,7 @@ function updateCar(c, dt, ranked) {
     // stops the fronts turning; a lock leaves a flat spot that wobbles the
     // wheel once per revolution and heals over ~90 s of rolling. The grip
     // model above is untouched — this is what the wheels SHOW.
-    c.wheelLock = braking && axFracF > 0.92 ? clamp((axFracF - 0.92) / 0.08, 0, 1) : 0;
+    c.wheelLock = braking && axFracF > 0.60 ? clamp((axFracF - 0.60) / 0.08, 0, 1) : 0;   // 0.92 is unreachable and the per-axle rewrite did not move it: measured peak axFracF 0.638 dry / 0.887 rain on a straight-line full stop, and 0.638 again at 62 % front bias, so no dry stop ever locked a wheel and the flat-spot system below (wobble, 90 s heal) was dead code
     c.flatSpot = clamp((c.flatSpot || 0) + c.wheelLock * dt * 0.4 - dt / 90, 0, 1);
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
@@ -6423,15 +6500,19 @@ const _hazeWorld = [0, 0, 0];
 let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
-const _rsEl = $("race-settings");      // the one menu screen that shows the flyby
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
 function render(dt) {
   if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
-  // race-settings flyby, or the garage's car preview; under every other menu it is
-  // HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat behind the
-  // title, title → GARAGE → MENU). First, before every early return; written on change.
-  const menuBlank = state === "menu" && !setupPreviewOn && (!track || _rsEl.hidden);
+  // PRE-RACE LOADING SCREEN's flyby, or the garage's car preview; under every other
+  // menu it is HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat
+  // behind the title, title → GARAGE → MENU). First, before every early return.
+  // RACE SETTINGS USED TO BE ON THIS LIST (2026-09-16). The flyby played behind the
+  // settings sheet, which made the menu look like a paused race and gave the rows a
+  // moving, high-contrast backdrop to be read against. The world the picker warms is
+  // still built — it is just not SHOWN until the player commits to the race, where
+  // js/ui/loading-screen.js spends it as the cinematic it always wanted to be.
+  const menuBlank = state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active());
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
@@ -7138,7 +7219,14 @@ function render(dt) {
   drawWorldMeshes(frame, night, wet, _floodEmit, false);
   gfx.drawSky(frameSky);
   // The pit bay signs: one decal after the sky (opaque → sky → decal; it depth-tests, never writes).
-  if (typeof PitSigns !== "undefined") PitSigns.draw(gfx, track, MAT_IDENT, frame.eye, night, hideMeshes.pitSigns);
+  // …and the entrance lamps go GREEN over their steady red once you are called
+  // in and still on your way to the box (PitLane's own cue, so the lamps and
+  // the radio never disagree).
+  if (typeof PitSigns !== "undefined") {
+    const cue = pits && pits.lastCue ? pits.lastCue() : null;
+    PitSigns.draw(gfx, track, MAT_IDENT, frame.eye, night, hideMeshes.pitSigns,
+                  !!cue && PIT_LAMP_GREEN.indexOf(cue.phase) >= 0);
+  }
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the

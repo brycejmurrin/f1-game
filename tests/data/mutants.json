@@ -1,0 +1,57 @@
+{
+  "_doc": [
+    "Mutants for the twin-fidelity gate (tools/check/twin-fidelity.mjs).",
+    "",
+    "WHY. A VM twin is only worth trusting if it catches what the browser copy",
+    "catches. Equal test COUNTS prove nothing \u2014 tools/ci/twinned-specs.mjs's own",
+    "check is trivially satisfied by an adapted spec, because the twin IS the",
+    "spec. So each row breaks one real mechanism and names WHICH tests must go",
+    "red. The asymmetry is the whole point: a mutant that reddens every test",
+    "proves only that the suite runs.",
+    "",
+    "`find` is pinned to a CONSTANT, never a line number, so a refactor moves it",
+    "without silently voiding the mutant; tests/unit/twin-fidelity.test.mjs fails",
+    "the moment a `find` string stops existing.",
+    "",
+    "`mutants` GATE. `openQuestions` do not: they are mutants that SHOULD bite and",
+    "measurably do not, kept here because deleting them would delete the evidence."
+  ],
+  "mutants": [
+    {
+      "id": "m-wall-scrub-flat",
+      "file": "js/physics/ai-drive.js",
+      "find": "return street ? 20 : 16;",
+      "replace": "return street ? 0 : 0;",
+      "why": "Kills the steer-scaled wall scrub, so leaning gently on the barrier costs the same as burying the wheel in it \u2014 the flat stop the scrub test was written against.",
+      "spec": "tests/specs/physics-fixes.spec.js",
+      "catchers": {
+        "lap distance stays continuous driving wide through Monaco": false,
+        "wall scrub scales with how hard you steer into it (not a flat stop)": true
+      }
+    }
+  ],
+  "openQuestions": [
+    {
+      "id": "m-projection-*",
+      "file": "js/track/core/spline.js",
+      "spec": "tests/specs/physics-fixes.spec.js",
+      "test": "lap distance stays continuous driving wide through Monaco",
+      "finding": "That test's comment calls it 'a guard that the projection stays continuous (and that future changes don't reintroduce a teleport)'. It is not. THREE separate mutations of project() leave it green: CONT = 0 (the arc-length penalty removed), CONT inverted (cost -= ..., which actively REWARDS snapping far from the last arc), and W = track.n (the +/-16-node locality window opened to a global nearest-point search, the pre-hint behaviour that caused the original teleports).",
+      "measured": {
+        "CONT = 0": {
+          "twin": "2/2 green",
+          "browser": "2/2 green (114.6s, 115.8s)"
+        },
+        "cost -= CONT*da*da": {
+          "twin": "2/2 green",
+          "browser": "2/2 green (110.2s, 117.7s)"
+        },
+        "W = track.n": {
+          "twin": "2/2 green",
+          "browser": "not measured \u2014 two browser columns already agreed"
+        }
+      },
+      "sowhat": "The test costs ~110 s of browser per run and guards less than it claims. Before it can gate anything, someone has to find driving that MAKES the projection ambiguous (roadFollow 0.7 may hold the car too near the line for a hairpin to be ambiguous at all) \u2014 and until then it should not be cited as projection coverage. Recorded rather than quietly deleted: docs/notes/DEFECT-LEDGER.md, 2026-09-16."
+    }
+  ]
+}

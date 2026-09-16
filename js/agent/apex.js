@@ -397,6 +397,10 @@ const api = {
     state: G.state, track: (G.state === "race" || G.state === "count") ? (G.track && G.track.def.id) : null,
     n: G.track && G.track.n, total: G.track && G.track.total, timeTrial: G.timeTrial, seasonMode: G.seasonMode,
     flow: G.flow, session: G.session, career: !!G.career,
+    // Whether this session counts, and whether it is a duel — the two facts a
+    // harness needs to read a result correctly. `practice` is derived (a Time
+    // Trial is always one), so it is NOT the same question as session === "tt".
+    practice: G.practice, duel: G.duel,
     raceQuali: !!G.raceQuali, raceGrid: G.raceGrid,
     lapsTarget: G.lapsTarget,
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,

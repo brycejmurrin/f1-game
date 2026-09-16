@@ -102,8 +102,10 @@ Eighteen parallel read-only bloat-auditor runs (see agent IDs in scratch matrix)
 2. **Vertical monoliths** — game.js (10428 cap), wgx.js, telemetry.js, input.js, apex.js, debris-world.js
 3. **Data not logic** — presets.js, KIT_DEF rows
 
-**Dead exports to verify before delete:** hub `teamSwatch`, `streetLamp`, `trackAtmoBias`.
-(`F1API.lastRace()` was verified dead and deleted — 2026-09 code survey.)
+**Dead exports to verify before delete:** hub `teamSwatch`, `streetLamp`.
+(`F1API.lastRace()` was verified dead and deleted — 2026-09 code survey.
+`Atmosphere.trackAtmoBias` likewise: no reader anywhere, the export is gone and
+`_trackAtmoBias` stays module-private.)
 
 ---
 

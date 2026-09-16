@@ -248,3 +248,36 @@ test("the plan alone fires when its lap arrives, and not before", () => {
   assert.equal(now({ lapsToStop: 0 }), "plan");
   assert.equal(now({ lapsToStop: -3 }), "plan", "a stop missed by a lap or two still happens");
 });
+
+// ── 5. The PLAYER's reference plan: pins (js/race/pit-lane.js planFor / replan) ──
+
+test("a pinned stop count returns that many stops, with the stop laps inside the race", () => {
+  // The STRATEGY row pins the count; the planner keeps choosing the rubber.
+  for (const stops of [0, 1, 2]) {
+    const p = A.stintPlan({ laps: 53, lifeLaps: lifeFor(53), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, stops });
+    assert.equal(p.stops, stops, `pinned ${stops}`);
+    assert.equal(p.lapsAt.length, stops);
+    for (const at of p.lapsAt) assert.ok(at >= 1 && at <= 52, `stop lap ${at} inside [1, 52]`);
+    assert.equal(p.stints.reduce((a, v) => a + v, 0), 53, "the stints still cover the distance");
+  }
+  // A pin above the cap is the cap, not a crash.
+  assert.equal(A.stintPlan({ laps: 53, lifeLaps: lifeFor(53), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, stops: 5 }).stops, A.STRAT.MAX_STOPS);
+});
+
+test("a pinned start is the first compound, and a compound the planner does not enumerate falls back to the classes", () => {
+  for (const start of ["soft", "medium", "hard"]) {
+    const p = A.stintPlan({ laps: 53, lifeLaps: lifeFor(53), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, start });
+    assert.equal(p.seq[0], start);
+  }
+  const wet = A.stintPlan({ laps: 53, lifeLaps: lifeFor(53), pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, start: "wet" });
+  assert.ok(wet && wet.seq.length >= 1, "a wet start still plans (from the classes)");
+});
+
+test("firstLife shortens the FIRST stint only: a re-plan runs the set that is on the car, not a fresh one", () => {
+  const life = lifeFor(53);
+  const fresh = A.stintPlan({ laps: 53, lifeLaps: life, pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, start: "medium", stops: 1 });
+  const worn = A.stintPlan({ laps: 53, lifeLaps: life, pitLossLaps: PIT_LOSS_LAPS, roll: 0.5, start: "medium", stops: 1, firstLife: 6 });
+  assert.ok(worn.lapsAt[0] < fresh.lapsAt[0], `a set with 6 laps left stops earlier (${worn.lapsAt[0]} vs ${fresh.lapsAt[0]})`);
+  assert.ok(worn.lapsAt[0] <= 9, `…and soon: lap ${worn.lapsAt[0]}`);
+  assert.equal(worn.stints.reduce((a, v) => a + v, 0), 53);
+});

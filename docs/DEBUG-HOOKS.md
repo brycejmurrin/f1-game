@@ -14,7 +14,8 @@ line, increasing in the racing direction. Internally that maps to an arc-length
 slip convention is `+steer → turns right (+x)`.
 
 > **Driving this as an LLM agent?** Skip to
-> [Agent world view](#agent-world-view). The ~185 hooks below are a dev console —
+> [Agent world view](#agent-world-view). The hooks below (the generated [Hook
+> index](#hook-index) carries the current count) are a dev console —
 > one narrow question each, `false`/`null` on failure. The agent layer composes
 > them into one egocentric snapshot per decision, renders the view as text
 > instead of a screenshot, and never returns `null`. Start with
@@ -2025,7 +2026,7 @@ forget the second.
 
 ### `lobbyReady(v?) → bool` · `lobbyStart() → bool`
 The two buttons the waiting room ends with. `lobbyStart()` is host-only and
-returns `false` if anyone is still choosing. Exposed for `tools/net/rtc-e2e-3p`,
+returns `false` if anyone is still choosing. Exposed for `tools/net/rtc-e2e-3p.mjs`,
 which drives a real handshake and cannot click — Playwright's actionability
 check fights the ~25 s a real ICE exchange takes, so it would end up testing
 the buttons rather than the wire.

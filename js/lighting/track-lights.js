@@ -58,6 +58,16 @@ const LAMP_KINDS = {
   globe:      { col: [1.30, 0.92, 0.52], eMul: 0.60, cIn: 0.30, cOut: 0.02, blB: 0.16, blV: 0.10, volW: 0.30, glareW: 1.6, tintMix: 0.25 }, // 2700K heritage globe (near-omni)
   work:       { col: [1.38, 0.74, 0.30], eMul: 0.55, cIn: 0.70, cOut: 0.44, blB: 0.08, blV: 0.06, volW: 0.4,  glareW: 0.8, tintMix: 0.20 }, // orange work lamp
   fluor:      { col: [1.00, 1.10, 0.94], eMul: 0.92, cIn: 0.80, cOut: 0.46, blB: 0.10, blV: 0.08, volW: 0.5,  glareW: 0.85, tintMix: 0.28 }, // 4000K greenish fluorescent
+  // A SIGNAL, not a road light: the pit entrance's red aspects. Every other
+  // kind here is sized to throw a pool onto tarmac, and one aimed from 8 m off
+  // the verge washed the racing line white (a 24 m `led` pool overran the
+  // centreline by 16 m — measured on abudhabi, bahrain and monza). This one is
+  // deliberately weak and TIGHT (cOut 0.72 ≈ 44°, a fifth of `led`'s energy),
+  // so what it lights is the peel it points at and what you see from the car is
+  // the lens: a red head with a halo, the way a signal reads at night. It keeps
+  // its own colour under a warm or cool circuit theme (tintMix 0.04) — a red
+  // light that goes amber under sodium is not a red light.
+  signal:     { col: [1.50, 0.20, 0.16], eMul: 0.40, cIn: 0.92, cOut: 0.72, blB: 0.04, blV: 0.04, volW: 0.35, glareW: 0.9,  tintMix: 0.04 }, // red pit-entrance aspect
 };
 // Pool radius for one fixture. `themeRadius` (floodColor) is sized for a verge
 // lamp — "the pool's far corner sits 21-25 m from the lens" — and a tall flood

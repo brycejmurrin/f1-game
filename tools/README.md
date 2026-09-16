@@ -50,8 +50,9 @@ The test runner and the release pipeline: what to run, how to run it in the back
 |---|---|---|
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/deploy.mjs** | the ONE deploy: fetch → merge → tooling-fast → verify-track → push the deploy branch (or --pr); pages.yml stamps it | — |
-| **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy (`playwright test` / `@playwright/mcp`) — the MCP lock's… | check-changes |
-| **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip: fetch, merge (deploy.mjs's cureable rules), verify, push back to the branch. | check-changes |
+| **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
+| **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
+| **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 
 ### `tools/check/`
@@ -83,6 +84,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
 | **check/tree-counts.mjs** | Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, waits, sleeps. `--offenders`. | — |
 | **check/trim-comments.mjs** | Strips low-signal `//` comments (dividers, loc pointers, orphans); `--headers --narrative` compresses file headers. | slim-bloat |
+| **check/twin-fidelity.mjs** | Prove a VM twin catches what the browser copy catches — by breaking the | — |
 | **check/vm-portable.mjs** | Which specs `tests/helpers/vm-page.js` could run under `node --test`: per-spec blocking calls + a portable count. | — |
 | **check/vstd-lint.mjs** | REPORT, not a gate: lists every `.speed`-vs-literal comparison, always exits 0. The gate is tests/unit/vstd-invariant. | tune-physics |
 
@@ -117,7 +119,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |
 | **shot/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **shot/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
-| **shot/garage-angles.mjs** | Garage shots, ONE Chromium: walks teams × liveries/any livery field/parts × cameras (views, absolute az/el/dist, zoom,… | — |
+| **shot/garage-angles.mjs** | Garage shots, ONE Chromium: walks teams x liveries x parts x cameras x viewports; clears dead DISPLAY. | — |
 | **shot/garage-frame.mjs** | Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B. | — |
 | **shot/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
@@ -185,8 +187,8 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/cockpit-pale-sweep.mjs** | Does anything in the COCKPIT read as a blank pale slab? Ray-casts the real Car3D cockpit from the driver's eye. | playwright-probe |
 | **car/crest-sweep.mjs** | Measures every team crest offline by replaying `LiveryTex.drawCrest` into a recording 2D context + scanline raster. | playwright-probe |
 | **car/flank-occlusion.mjs** | Ray-tests cover-flank stations against the real car mesh + wheels from a garage camera; reports what is hidden. | garage-parts-livery |
-| **car/helmet-sheet.mjs** | Rasterises each js/car/helmets.js design onto the real shell and writes a labelled contact sheet PNG (`--only`,… | playwright-probe |
-| **car/helmet-trace.mjs** | Projects the js/car/helmets.js shell into a side-on reference photo and samples the real colour at every (t, az) of… | playwright-probe |
+| **car/helmet-sheet.mjs** | Rasterises each js/car/helmets.js design onto the real shell and writes a labelled contact-sheet PNG. | playwright-probe |
+| **car/helmet-trace.mjs** | Projects the helmet shell into a side-on photo, samples the real colour per (t, az), writes a colour map. | playwright-probe |
 | **car/livery-contrast.mjs** | Sweeps every team x spine design offline and reports any large area that fails to separate from what it covers. | garage-parts-livery |
 | **car/logo-authored-sweep.mjs** | Does the colour picked in the TEAM LOGO row get painted? Scores `LiveryTex.markPalette` over team × livery × colours. | playwright-probe |
 | **car/parts-ladder.mjs** | Would anyone ever PICK this catalog option? Proves no paid option is dominated by a cheaper one (offline, no browser). | garage-parts-livery |
@@ -271,7 +273,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 |---|---|---|
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
 | **env/install-browsers.sh** | Idempotent Playwright Chromium install into `/opt/pw-browsers`; skips `npm install` when node_modules is usable. | — |
-| **env/mirror-skills.sh** | Repair the tracked `.agents/skills/` Codex mirror: one symlink per `.claude/skills/<name>` dir (`--check` reports… | check-changes |
+| **env/mirror-skills.sh** | Repair the tracked .agents/skills/ Codex mirror: one symlink per skill dir (--check drift, --copy fallback). | check-changes |
 
 ## Test runner & coverage
 
@@ -289,7 +291,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
-| **ci/pages-publishable.sh** | Pages deploy monotonic guard: prints `true` when the live shell's apex-sha is an ancestor of the given commit, else… |
+| **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |
 | **ci/pages-reuse-verdict.sh** | Pages gate reuse: prints `reuse=true` (+source/run) when this tree already passed CI as this commit or a parent. |
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/run-playwright.mjs** | The engine behind every `npm run test:*`: a free port + port-suffixed report paths so runs never share a server. |

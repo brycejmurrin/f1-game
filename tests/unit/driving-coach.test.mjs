@@ -15,7 +15,11 @@ function fixture() {
     vTop: () => 100, roadWetness: () => 0, cautionInfo: () => ({ level: 0 }),
     fmtTime: t => { const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(2); },
     store: { get: (key, fallback) => saved.get(key) ?? fallback, set: (key, value) => saved.set(key, value) },
-    $: id => nodes.get(id) || null, timeTrial: true, daily: { isActive: () => false }, netPlay: { active: () => false },
+    // practice, not timeTrial, is what gates checkpoints and rewind now — a
+    // Time Trial is simply always practice (G.practice derives it in game.js).
+    // Both are stubbed: the coach reads `practice` for the gate and `timeTrial`
+    // for the copy that distinguishes an armable session from a TT.
+    $: id => nodes.get(id) || null, timeTrial: true, practice: true, daily: { isActive: () => false }, netPlay: { active: () => false },
     records: { invalidate() {}, config: () => ({}) }, tyres: { on: () => false },
     pits: { ownedTyres: () => [], choices: () => [] }, announce: (...args) => announcements.push(args) };
   const ins = { update() {}, reset() {}, summary: () => ({}), journal: () => [], forecast: () => null, network: () => null,

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // sync-pr.mjs — catch an open PR branch up to the deploy tip (2026-09-16).
-// @doc Syncs a PR branch to the deploy tip: fetch, merge (deploy.mjs's cureable rules), verify, push back to the branch.
+// @doc Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>.
 // @skill check-changes
 //
 //   node tools/ci/sync-pr.mjs <branch> --plan   # print the plan, run nothing

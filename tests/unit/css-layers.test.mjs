@@ -338,3 +338,31 @@ test("an element that ships the hidden attribute is not un-hidden by a display r
     "a shell element marked hidden is painted anyway — add `#<id>[hidden] { display: none; }`:\n  " +
     offenders.join("\n  "));
 });
+
+/* THE PRE-RACE LOADING SCREEN MUST OUTRANK EVERY MENU SCREEN.
+ * `.screen` deliberately declares no z-index — the migrated screens are
+ * <dialog>s in the top layer, where z-index is not consulted. #loading is a
+ * plain div (it has to let the WebGL canvas show through, which a modal
+ * backdrop would prevent), so it takes the DOCUMENT stacking rules instead:
+ * with no z-index it fell to auto and painted UNDER the menu screens that do
+ * declare one. Caught in a capture where the title screen's buttons drew
+ * straight over the card. This pins the invariant rather than the number. */
+test("#loading stacks above every id-addressed menu screen", () => {
+  const MENUS = ["overlay", "select", "season-setup", "career", "carsetup"];
+  const z = {};
+  for (const f of files) {
+    const src = stripComments(fs.readFileSync(path.join(CSS_DIR, f), "utf8"));
+    for (const id of [...MENUS, "loading"]) {
+      const rule = new RegExp(`(^|[,{}])\\s*#${id}\\s*\\{([^{}]*)\\}`, "g");
+      for (const m of src.matchAll(rule)) {
+        const d = /(?:^|;)\s*z-index\s*:\s*(-?\d+)/.exec(m[2]);
+        if (d) z[id] = Math.max(z[id] ?? -Infinity, +d[1]);
+      }
+    }
+  }
+  assert.ok(Number.isFinite(z.loading), "#loading declares a z-index at all");
+  const under = MENUS.filter((id) => Number.isFinite(z[id]) && z[id] >= z.loading);
+  assert.deepEqual(under, [],
+    `#loading (z-index ${z.loading}) must outrank every menu screen it is shown over; ` +
+    `these are at or above it: ${under.map((id) => `#${id} ${z[id]}`).join(", ")}`);
+});

@@ -15,6 +15,10 @@ const RaceSettings = (function () {
   // exists so a player can have the mechanic without it deciding the race.
   const RS_TYRES = [["off", "OFF"], ["light", "LIGHT"], ["real", "REAL"]];
   const RS_LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
+  // STRATEGY (js/race/pit-lane.js planFor): the player's reference plan for
+  // this circuit — the planner's own choice, or a pinned stop count. The pin
+  // is persisted per circuit (apex26.pitPlan.<id>) by PitLane.setPinnedStops.
+  const RS_PLAN = [["auto", "AUTO"], ["0", "NO STOP"], ["1", "1 STOP"], ["2", "2 STOPS"]];
 
   function create(hooks) {
     const {
@@ -25,8 +29,8 @@ const RaceSettings = (function () {
       getRaceTimeOfDay, setRaceTimeOfDay, getRaceChangeable, setRaceChangeable,
       setWxArcPlan, getDifficulty, setDifficulty,
       getRaceGrid, setRaceGrid, getRaceReliability, setRaceReliability,
-      getRaceTyreWear, setRaceTyreWear,
-      getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace,
+      getRaceTyreWear, setRaceTyreWear, getDuel, setDuel, getPits,
+      getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace, raceIntro,
       enableTilt, getSteerMode, getNetLobby, buildSelect, els, openGarage,
     } = hooks;
 
@@ -55,6 +59,12 @@ const RaceSettings = (function () {
       $("rs-diff").hidden = tt;
       SettingRow.paint("rs-diff", getDifficulty(), RS_DIFF);
       const champ = isChampionship();
+      // DUEL is a one-off practice format: a 2-car race against the field's
+      // quickest driver with his stats lifted. Hidden in a Time Trial (which
+      // has no field at all) and in a championship, where the classification
+      // feeds points and standings — a 2-car GP would score a season.
+      $("rs-duel").hidden = tt || champ;
+      SettingRow.paint("rs-duel", getDuel() ? "on" : "off", RS_ONOFF);
       $("rs-quali").hidden = tt;
       const qForced = champ ? SeasonCal.quali() : null;
       const rules = qForced ? [["quali", "QUALIFYING"]]
@@ -73,6 +83,38 @@ const RaceSettings = (function () {
       $("rs-tyres").hidden = tt;
       SettingRow.paint("rs-tyres", getRaceTyreWear(), RS_TYRES);
       SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
+      paintPlan(tt, raceLaps);
+    }
+
+    /** The STRATEGY row and its stint bar. Hidden with TYRE WEAR (a plan is a
+     *  consequence of wear existing) and in a time trial; degrades to the row
+     *  alone where no complex is built yet (no zone: no plan to draw). */
+    function paintPlan(tt, laps) {
+      const pits = typeof getPits === "function" ? getPits() : null;
+      const on = !tt && getRaceTyreWear() !== "off" && !!pits;
+      $("rs-plan").hidden = !on;
+      const bar = $("rs-plan-bar");
+      if (!on) { bar.hidden = true; return; }
+      const pin = pits.pinnedStops();
+      SettingRow.paint("rs-plan", pin == null ? "auto" : String(pin), RS_PLAN);
+      const plan = pits.zoneOf() ? pits.planFor(0.5, true, laps) : null;
+      bar.hidden = !plan;
+      if (!plan) return;
+      const stints = $("rs-plan-stints");
+      if (typeof stints.replaceChildren === "function") stints.replaceChildren(); else stints.innerHTML = "";
+      const total = plan.stints.reduce((a, v) => a + v, 0) || 1;
+      for (let i = 0; i < plan.stints.length; i++) {
+        const cls = plan.seq[i], rec = TyreModel.AI_CLASS[cls] || TyreModel.AI_CLASS.medium;
+        const seg = document.createElement("span");
+        seg.style.flexBasis = (plan.stints[i] / total * 100).toFixed(1) + "%";
+        seg.style.background = "rgb(" + rec.colour.map((v) => Math.round(Math.min(1, v) * 255)).join(",") + ")";
+        seg.textContent = rec.code + " " + plan.stints[i];
+        seg.title = cls + ", " + plan.stints[i] + " laps";
+        stints.appendChild(seg);
+      }
+      const stops = plan.stops || 0;
+      $("rs-plan-loss").textContent = (stops ? stops + (stops === 1 ? " STOP · BOX L" : " STOPS · BOX L") + plan.lapsAt.join(", L") : "NO STOP")
+        + " · PIT LOSS ≈ " + Math.round(pits.lossS()) + " s";
     }
 
     function wireRaceSettings() {
@@ -95,6 +137,9 @@ const RaceSettings = (function () {
       wire("rs-reliab", getRaceReliability, (v) => { setRaceReliability(v); store.set("reliability", v); });
       wire("rs-tyres", getRaceTyreWear, (v) => setRaceTyreWear(v));
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
+      wire("rs-duel", () => (getDuel() ? "on" : "off"), (v) => setDuel(v === "on"));
+      wire("rs-plan", () => { const p = getPits && getPits(); const v = p ? p.pinnedStops() : null; return v == null ? "auto" : String(v); },
+           (v) => { const p = getPits && getPits(); if (p) p.setPinnedStops(v === "auto" ? null : +v); });
     }
 
     function setNetRoom(on) { netRoom = !!on; }
@@ -149,8 +194,13 @@ const RaceSettings = (function () {
         // so arm it from this click or the first in-race brake cue is dropped.
         if (window.Input && Input.primeHaptics) Input.primeHaptics();
         const season = getSeason();
+        // QUALIFYING goes straight through: that path opens another SHEET, and a
+        // cinematic between two menus is a wait, not an arrival. Only the route
+        // that ends on a grid earns the loading screen — and it is the route that
+        // pays ~1.1 s of synchronous track build, which the screen covers.
         if ((isChampionship() && SeasonCal.qualiNext(season) && !qualiResults()) ||
             (!isChampionship() && gridFromQuali() && !qualiResults())) openQuali();
+        else if (raceIntro) raceIntro(startRace);
         else startRace();
       };
     }

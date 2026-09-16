@@ -514,12 +514,14 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBackend", "apex26.gfxBackendProbe",
     "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
     "apex26.gfxTlxFail",
-    // The boot canary's two latches. gfxProbeStrikes counts loads that died
-    // before presenting a frame — one is a memory kill, two retires the pick —
-    // and gfxBackendWas remembers the pick that was retired so it can be
-    // offered back. A RESET that left a strike behind would hand the next boot
-    // a strike it did not earn, and retire the pick on its first real failure.
-    "apex26.gfxProbeStrikes", "apex26.gfxBackendWas",
+    // The boot canary's latch. gfxProbeStrikes counts loads that died before
+    // presenting a frame — one is a memory kill, two retires the pick. A RESET
+    // that left a strike behind would hand the next boot a strike it did not
+    // earn, and retire the pick on its first real failure. (There is no
+    // "remember the retired pick" key: apex26.gfxBackendWas was listed here
+    // and in renderer-picker.js long after its only writer left game.js, which
+    // is what the WRITER check below now catches.)
+    "apex26.gfxProbeStrikes",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxViz",
     "apex26.wgxCapture",
@@ -577,6 +579,39 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   }).sort();
   assert.deepEqual(unresettable, [],
     "these backend-written latches survive RESET RENDERER — add them to RENDERER_LS_KEYS/SS_KEYS (renderer-picker.js) or, if they are read-only debug pins, to READ_ONLY_PINS here");
+
+  // CONVERSE MECHANISM: every key RENDERER_LS_KEYS promises to clear must be
+  // WRITTEN somewhere under js/. Without this direction a key whose only
+  // writer is deleted stays on the list for good, and its comment keeps
+  // describing behaviour the game no longer has — exactly how
+  // apex26.gfxBackendWas ("remembers the retired pick so it can be offered
+  // back") outlived the game.js write that created it. The scan is js/-wide,
+  // not js/render/: gfxBackend and gfxProbeStrikes are written by the boot
+  // canary in game.js, and tlxForceGL/wgxCapture by the picker itself.
+  const wroteSomewhere = new Set();
+  const jsStack = [path.join(ROOT, "js")];
+  while (jsStack.length) {
+    for (const e of fs.readdirSync(jsStack.pop(), { withFileTypes: true })) {
+      const abs = path.join(e.parentPath || e.path, e.name);
+      if (e.isDirectory()) { jsStack.push(abs); continue; }
+      if (!e.name.endsWith(".js")) continue;
+      const src = fs.readFileSync(abs, "utf8");
+      // Direct: localStorage.setItem("apex26.x", …) / GameStore.store.rawSet("apex26.x", …)
+      for (const m of src.matchAll(/(?:(?:local|session)Storage\.setItem|rawSet)\(\s*"(apex26\.[A-Za-z0-9_]+)"/g)) wroteSomewhere.add(m[1]);
+      // Via a named constant in the same file: `const K = "apex26.x"` + `setItem(K, …)`.
+      for (const m of src.matchAll(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*"(apex26\.[A-Za-z0-9_]+)"/g)) {
+        if (new RegExp(`(?:setItem|rawSet)\\(\\s*${m[1]}\\s*,`).test(src)) wroteSomewhere.add(m[2]);
+      }
+    }
+  }
+  // Dev pins a human sets by hand (or via ?viz=) and the game only reads.
+  // RESET RENDERER still has to clear them — that is the way back out.
+  const HAND_SET_ONLY = new Set(["apex26.tlxViz"]);
+  const neverWritten = Array.from(G.RENDERER_LS_KEYS)
+    .filter((k) => !wroteSomewhere.has(k) && !HAND_SET_ONLY.has(k)).sort();
+  assert.deepEqual(neverWritten, [],
+    "RENDERER_LS_KEYS names keys nothing under js/ writes — delete them (and the comment describing what they hold) or, if a human sets them by hand, name them in HAND_SET_ONLY here");
+
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
   assert.equal(ls.getItem("apex26.gfxBackend"), null);
@@ -2941,7 +2976,7 @@ test("GLX chunked road draws honor depth bias and back faces, then restore state
   assert.equal(h.count("polygonOffset"), 0, "ordinary scenery needs no depth bias");
 });
 
-test("the flyby shows under race settings only; the picker pre-builds it hidden once the pick settles", () => {
+test("the flyby plays on the pre-race loading screen only; the picker pre-builds it hidden once the pick settles", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const raceSettings = read("js/race/race-settings.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const menus = read("js/ui/select-screen.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -2957,10 +2992,17 @@ test("the flyby shows under race settings only; the picker pre-builds it hidden 
     "a circuit tile pre-builds after the settle delay, never on the tap itself");
   assert.match(game, /settle \? 1500 : 120/);
   // Under a menu that draws nothing the canvas is hidden — so neither a finished
-  // race's last frame nor the garage's car sits behind the title; race settings
-  // and the garage preview show it again. The gate runs before every early
-  // return, and a freshly built world still gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| _rsEl\.hidden\);/);
+  // race's last frame nor the garage's car sits behind the title. Since
+  // 2026-09-16 RACE SETTINGS is no longer an exception: the warmed world is
+  // spent on the LOADING SCREEN's cinematic instead, between RACE! and the grid,
+  // so the settings rows are read against black rather than a moving world.
+  // The gate runs before every early return, and a freshly built world still
+  // gets its warm-up frames hidden.
+  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\)\);/);
+  assert.match(raceSettings, /else if \(raceIntro\) raceIntro\(startRace\);/,
+    "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
+  assert.match(game, /function clearMenuScreens\(\) \{\s*loadingScreen\.stop\(\);/,
+    "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
   assert.match(game, /if \(state === "results"\) return;/,
     "results keeps the last race present — physics already stopped, re-drawing is unpaid");
@@ -2983,7 +3025,7 @@ test("driving feel: the player tows on car positions only, the fronts lock, ever
   assert.match(human, /c\.wake = wakeOf\(tg, tc\.x - c\.x\)/, "the player's tow uses the AI's window and fade");
   assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
   assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
-  assert.match(game, /c\.wheelLock = braking && axFracF > 0\.92/, "a lock-up is the top of the FRONT axle's friction budget under braking");
+  assert.match(game, /c\.wheelLock = braking && axFracF > 0\.60/, "a lock-up fires inside the REACHABLE front-axle budget: axFracF peaks at 0.638 dry / 0.887 rain (0.638 even at 62 % front bias), so a 0.92 gate can never fire and the flat-spot system behind it is dead code");
   // The planted wheels spin in the car-draw seam (js/car/car-draw.js), which reads WHEEL_R off PhysicsConsts.
   const cd = read("js/car/car-draw.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(cd, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ PhysicsConsts\.WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");

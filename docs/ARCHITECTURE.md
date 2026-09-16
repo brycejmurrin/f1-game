@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_180 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_182 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -160,6 +160,7 @@ _180 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
+| `loading-screen.js` | `LoadingScreen` | tag | PRE-RACE LOADING SCREEN. |
 | `scroll-fade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
 | `css-zoom.js` | `CssZoom` | tag | CssZoom — one place for zoom ↔ viewport ↔ local conversions. |
 | `sheet-shape.js` | `SheetShape` | tag | SHEET SHAPE — one place decides whether a panel is TALL or WIDE. |
@@ -221,6 +222,7 @@ _180 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `session-records.js` | `SessionRecords` | tag | Comparable time-trial classes and lap configuration continuity. |
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
 | `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
+| `duel.js` | `Duel` | tag | DUEL: a practice race against ONE rival with his rating lifted. |
 | `reliability.js` | `Reliability` | tag | RELIABILITY: whether a car reaches the flag at all. |
 | `engineer.js` | `RaceEngineer` | tag | RACE ENGINEER: the voice that makes the tyre model legible. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
@@ -1113,7 +1115,7 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `photomode.js` | `Photomode` | photo mode ONLY — the free-fly camera, its touch sticks / hold buttons and the enter/exit plumbing; the lighting tuner's `lt-*` buttons live in `tuner.js` |
 | `tuner.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel: slider rows from `TUNE_DEFS`, preview chips, COPY TO ALL TRACKS, the help toggle, RESET and the COPY VALUES export (`window.LightEdits`) |
 | `steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
-| `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
+| `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `inAeroZone(c)`/`aeroDfMult()` stay in game.js because they read car state |
 | `skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
 | `sheetshape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
 | `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 19 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |

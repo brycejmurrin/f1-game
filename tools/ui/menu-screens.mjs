@@ -198,6 +198,19 @@ export const SCREENS = [
       await p.evaluate(() => { document.getElementById("spotifypanel").hidden = false; });
       await p.waitForTimeout(400); } },
 
+  // THE PRE-RACE LOADING SCREEN, which the real flow holds for about two
+  // seconds and then destroys by starting a race — nothing a layout survey can
+  // measure. It is opened here through its OWN module with no build callback,
+  // so the paint is the real one (flag, name, the five facts) and the card
+  // simply never advances into a race. hasWorld: false skips the cinematic
+  // phase, which has no DOM to measure anyway.
+  { id: "loading", name: "Pre-race loading", root: "#loading", open: async (p) => {
+      await p.evaluate(() => {
+        const ls = LoadingScreen.create({ $: (id) => document.getElementById(id), Tracks, TrackMaps, Flags });
+        ls.run({ track: Tracks.LIST[0], laps: 5, weather: "dry", tod: "day", hasWorld: false }, null);
+      });
+      await p.waitForTimeout(600); } },
+
   { id: "careerguide", name: "Career guide", root: "#career-guide", open: async (p) => {
       await p.click("#mb-career"); await p.waitForSelector("#career:not([hidden])", { timeout: 15000 });
       await p.waitForTimeout(400);

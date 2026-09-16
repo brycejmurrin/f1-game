@@ -13,7 +13,16 @@
 > the car STOPPED — and the three-line teach ended by `apex26.pitTaught`; the
 > browser walk of `__apex.pit().cue` down the exit road is NOT added: the unit
 > suite drives the ladder with stub cars, and a spec that no session runs is
-> not evidence). §4 is still a plan. Companions:
+> not evidence). **§4 is built**: the player's reference plan (`planFor(roll, player, laps)`,
+> honouring the STRATEGY row's pin; `think` keeps a human guard), `stintPlan`'s
+> `stops` / `start` / `firstLife` pins, the plan line under the tyre bar
+> (`planInfo`, `data-plan` soon/now/free), the engineer's plan lines (caution
+> with margin, the undercut, rain before the stop, BOX THIS / NEXT LAP), the
+> rivals' windows as a `data-pit` suffix on the gap chips (`windowOf` — there is
+> no timing tower; the chips are the per-rival HUD), once-per-lap re-planning
+> adopted only when the next stop moves by two laps (`replan`), and the
+> STRATEGY row with its stint bar and pit loss in RACE SETTINGS
+> (`js/race/race-settings.js paintPlan`, pin persisted as `apex26.pitPlan.<id>`). Companions:
 > `PIT-LANE-REDESIGN-2026-09.md` (the complex), `PIT-LIGHTING-PLAN-2026-09.md`,
 > `PIT-BAY-LOGOS-PLAN-2026-09.md`, `STREET-PIT-LANES-PLAN-2026-09.md`.
 
@@ -245,7 +254,7 @@ plan-aware lines, above the wear ladder and below the tread/caution lines:
 | sense | line |
 |---|---|
 | `lapsToStop === 1` | "BOX NEXT LAP — <COMPOUND>" |
-| `lapsToStop === 0` | "BOX THIS LAP" |
+| `lapsToStop === 0` | "BOX BOX BOX" |
 | rival within `marginS` of you pitted this lap | "<CODE> HAS BOXED — UNDERCUT ON, BOX NOW OR PUSH 2 LAPS" |
 | `rainInLaps <= lapsToStop` | "RAIN BEFORE THE STOP — BOX LAP <n> FOR WETS" |
 | caution and `marginS > 0` | "CAUTION — STOP NOW LOSES NOTHING" |
@@ -269,7 +278,7 @@ is advice, so it may.
 - `tests/unit/ai-drive.test.mjs` (exists): `stintPlan` with `stops` pinned returns
   that many stops and keeps `lapsAt` inside `[1, laps−1]`.
 - `engineer.test.mjs`: the five plan lines in order against the existing
-  ladder (a tread call still beats "BOX NEXT LAP"; "BOX THIS LAP" beats the wear
+  ladder (a tread call still beats "BOX NEXT LAP"; "BOX BOX BOX" beats the wear
   ladder).
 - `pit-lane.test.mjs`: the player's plan never arms a stop — drive a human car
   through `think` and assert `pitArmed` stays false.

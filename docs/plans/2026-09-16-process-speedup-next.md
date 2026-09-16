@@ -126,10 +126,29 @@ silently lie to a mesh-measuring test.
 | after, `APEX_VM_POOL=0` | 400 s (the port did not slow the old path) |
 | after, pooled | **191 s**, 210 s |
 
-The box was shared all session (loads 5-11, two or three foreign suites), and
-the 210 s run averaged load 5.1, so four workers held about three cores. An
-idle box should reach the 110-130 s this item predicted; that is UNPROVEN
-here, so the numbers above are what the docs and headers say.
+**The 110-130 s this item predicted is now DISPROVEN, not merely unproven.**
+Re-measured the same day on a genuinely idle box (loadavg 0.14, four REAL
+cores — `cpu cores: 4`, `siblings: 4`, no hyperthreading): serial **400 s**,
+pooled **191 s**. That is 2.09x, and it is identical to the best figure from
+the loaded session, so contention was never what held the pool back. 191 s is
+this design's floor on four cores; quote it, and do not re-raise the 110-130 s
+estimate without a new mechanism behind it.
+
+Why it stops at ~2x rather than 4x, from the CI log of run 35078191499
+(`vm-a`, `duration_ms 304744`): across a 216 s window the parent's awaits sum
+to 242 s, i.e. it is waiting on essentially ONE outstanding circuit at a time,
+and completions arrive every 6.3 s against a ~10 s serial circuit. The pool is
+SATURATED, not starved — dispatch is already correct (all 40 circuits are
+queued up front at `elevation-tracks-vm.test.mjs:81`, which is why circuits
+that finish early report `duration_ms` of 0.2 ms: those are await latencies,
+not work). So the remaining cost is the physics stepping itself, and the next
+real win has to come from doing less per circuit, not from more workers.
+
+Where a circuit's ~10 s actually goes matters for step 3 below: the probe runs
+180 flat steps, the 300-step grade search, 150 downhill, 150 climb, and then
+**70 steps per corner** across every corner the circuit has. The corner sweep,
+not the 300-step search, is the largest block — so step 3 as written targets
+the smaller half.
 
 No assertion, threshold, launch or step count changed; the twin still declares
 7 against the spec's 7 and `twinned-specs` is green at 14 pairs / 253 tests.
@@ -137,11 +156,28 @@ No assertion, threshold, launch or step count changed; the twin still declares
 asserts the results are deep-equal FLOAT FOR FLOAT against the serial path —
 that equality, not the wall time, is what makes the pool safe to keep.
 
-**Step 3 stays open** and should stay open until someone budgets it properly:
-swapping the 300 × (jump + step) search for `trackProfile(300)` is a
-test-semantics change that needs the same edit on the browser spec plus a
-40-circuit A/B showing the chosen fracs match. The `vm-a` slice time still
-needs a re-measure from a real runner push.
+**Step 3 is RE-SCOPED — it was aimed at the smaller half.** Measured per block
+(`artifacts/bench/profile-circuit.cjs` mirrors the probe block for block), a
+circuit's ~10 s goes on: `race()` (the track build), the relief `settle`, 180
+flat steps, the 300-step grade search, 150 downhill, 150 climb, and then **70
+steps per corner across EVERY corner** (`tests/helpers/elevation-probes.cjs`).
+Monaco has 19 turns; a 12-corner circuit is 840 corner steps against the
+search's 300. The corner sweep is the biggest single block, so removing the
+grade search buys the smaller saving.
+
+Take them in this order instead:
+1. **The corner sweep.** 70 steps a corner is a settling budget paid at every
+   corner, and the assertion it feeds is `widest` — how far off-line the car
+   got. Either sample a SUBSET of corners (the audit already spans 40
+   circuits, so per-circuit exhaustiveness buys little) or cut the per-corner
+   step count against a measured A/B of `widest`.
+2. **The 300-step grade search → `trackProfile(300)`** (1 ms against ~1,029 ms),
+   still worth doing, still needing the same edit on the browser spec plus a
+   40-circuit A/B that the chosen fracs match.
+
+Neither is a pure optimisation — both change what the test SAMPLES — so both
+want their own measurement and a lockstep edit to the browser spec, not a
+drive-by. The `vm-a` slice time also still needs a re-measure from a runner.
 
 ### 4. Shard the geometry sweeps
 

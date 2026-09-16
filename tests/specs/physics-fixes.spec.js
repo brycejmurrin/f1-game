@@ -42,6 +42,20 @@ test.describe("Apex 26 — physics robustness", () => {
   test("lap distance stays continuous driving wide through Monaco", async ({ page }) => {
     await start(page, "monaco");
     const r = await page.evaluate(() => {
+      // THE CAUTION LAYER IS OFF FOR THIS MEASUREMENT, and that is not a
+      // tolerance being widened — the 5 m ceiling below is untouched. This test
+      // measures ONE thing: whether the world->(s) projection stays continuous
+      // at Monaco's hairpins. A red flag's STANDING RESTART re-grids all 22
+      // cars, which repositions the player by design, and a reposition is not
+      // a teleport: it read as a 253 m "backwards jump" and failed this test
+      // for a reason it does not test. Driving deliberately wide for 4500 steps
+      // now scrapes the pit wall that `d402fd7` made solid (it had been
+      // scenery a car drove through), and the settled debris crosses race
+      // control's RED_MIN of 16 — 11 hazards before that commit, 17 after.
+      // Full reproduction and the bisect: docs/notes/DEFECT-LEDGER.md,
+      // 2026-09-16. Race control keeps its own coverage in race-control.spec.js
+      // and pit-lane.spec.js; this file owns the projection.
+      window.__apex.caution(false);
       const L = window.__apex.info().total;
       let maxBackJump = 0, finite = true;
       for (const steer of [0.3, -0.3, 0.6]) {     // run wide both ways through every corner
@@ -60,9 +74,13 @@ test.describe("Apex 26 — physics robustness", () => {
         }
         window.__apex.clearInput();
       }
-      return { maxBackJump: +maxBackJump.toFixed(2), finite, L: Math.round(L) };
+      return { maxBackJump: +maxBackJump.toFixed(2), finite, L: Math.round(L),
+               cautionLevel: window.__apex.caution().level };
     });
     expect(r.finite).toBe(true);
+    // The guard on the guard: if a flag flew anyway, something repositioned the
+    // car and maxBackJump below is measuring that, not the projection.
+    expect(r.cautionLevel).toBe(0);
     expect(r.L).toBeGreaterThan(100);              // sanity: real length, not a null
     // A genuine wrong-leg teleport jumps tens of metres; normal motion + tiny
     // numerical wobble stays well under a couple of metres.

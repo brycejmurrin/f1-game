@@ -34,7 +34,11 @@ const SessionRecords = (function () {
       G.ttRecord = b.length ? b[0].t : Infinity;
       return key;
     }
-    function invalidate() { if (G.timeTrial) spoiled = true; }
+    // G.practice, not G.timeTrial. This was the reason checkpoints could not
+    // leave Time Trial: outside one this was a NO-OP, so a rewound lap stayed
+    // eligible for the ghost and the board. Practice spoils the session by
+    // definition, whatever the session is.
+    function invalidate() { if (G.practice) spoiled = true; }
     function sample(c) {
       if (revision !== G.store.rev) {
         revision = G.store.rev;

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# @doc Repair the tracked `.agents/skills/` Codex mirror: one symlink per `.claude/skills/<name>` dir (`--check` reports drift, `--copy` for a host whose Codex will not follow symlinks).
+# @doc Repair the tracked .agents/skills/ Codex mirror: one symlink per skill dir (--check drift, --copy fallback).
 # @skill check-changes
 #
 # .agents/skills/<name> -> ../../.claude/skills/<name> is TRACKED in git

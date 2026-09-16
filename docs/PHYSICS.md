@@ -92,6 +92,16 @@ even when speed-limited; ERS deploy adds on top. Full brake is still the bigger
 bill (`BRAKE` 22 / 34 ≈ 0.65). Each axle's `sqrt(1 − axFrac²)` scales its own
 `mu`; `physState()` exposes `axEstSm`, `axFrac` (the larger axle) and
 `slipFactor` (the rear's, which the engine audio reads).
+**The surface scales the brake as well as the grip** (2026-09-16): `surfMu`
+scaled lateral grip off-track while the brake term carried no surface at all,
+so a tyre on grass retarded the car exactly as hard as one on tarmac. The brake
+now carries the same `lerp(1, OFF_GRIP, depth)`. **A known defect remains next
+to it**: the run-off SCRUB (`20 + offDepth·28` m/s², up to 4.6 g) dwarfs
+`BRAKE`, so 70 → 30 m/s measured 90.9 m on tarmac against 34.9 m on grass —
+running wide is still the quickest way to stop. Fixing that is a track-limits
+DETERRENCE decision (the `c.cuts` counter is the other half), not a physics
+tidy-up, so it is recorded here rather than changed.
+
 **Brake bias** (the SETUP sheet,
 `js/garage/setup-tune.js`) splits that budget per axle UNDER BRAKING only:
 the front spends `bb / BB_REF` of it and the rear `(1 − bb) / (1 − BB_REF)`
