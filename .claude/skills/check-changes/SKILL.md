@@ -30,6 +30,11 @@ reporter's terminal line `= run <status>  (N/M done, K failed)` — match it wit
 `grep -E '= run (passed|failed|timedout|interrupted)'` (ERE alternation; a
 fixed-string or BRE grep never matches).
 
+Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed
+job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs
+were cancelled by a newer push; two of three inspected hid a real failure).
+`verify-change` says so at verdict time when it can see a live run.
+
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 
 Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
