@@ -353,7 +353,7 @@ function makeGlx(record) {
 // ---------------------------------------------------------------------------
 
 function buildSandbox(opts) {
-  const record = { meshes: 0, gfxUnknown: new Set(), console: [], scripts: [], rejections: [] };
+  const record = { meshes: 0, gfxUnknown: new Set(), console: [], scripts: [], rejections: [], carMeshes: "real", carMeshStubs: 0 };
   const timers = makeTimers();
   const rafQueue = [];
   const echo = !!opts.verbose;
@@ -473,6 +473,42 @@ function buildSandbox(opts) {
 
 function safeStr(x) { try { return typeof x === "object" ? JSON.stringify(x) : String(x); } catch (_) { return String(x); } }
 
+// ---------------------------------------------------------------------------
+// createGame({ carMeshes: false }) — OPT-IN, and never on a parity twin.
+//
+// Car geometry is build-once-per-process work: js/car/car-draw.js memoises one
+// body per livery (putBoundedMesh, line 460), so a VM pays for it at boot and
+// never again — 23 builds, measured 2026-09-16 at 0.57 s of a 2.50 s boot on
+// this box (docs/plans/research-2026-09-16/vm-harness.md probe1/probe4 put the
+// same cost at ~1.0 s: helmets.js 542 ms + car3d.js 204 + liverytex.js 55).
+// Nothing in the physics path reads a car mesh: js/physics/collide.js works
+// from the extLong/extLat extents, not from vertices.
+//
+// So a file that never asks for a mesh may stub the three builders and skip
+// that second. It is opt-in because the harness's job is to run the SHIPPED
+// path: tests/unit/physics-characterization-vm.test.mjs, which reproduces a
+// real-Chromium baseline number for number, must never set it.
+//
+// A wrong opt-in fails LOUDLY rather than reporting a 0-vertex car: the one
+// caller that reads geometry back (`measure: true` — __apex.carMesh via
+// js/agent/agentview.js:982) throws.
+// ---------------------------------------------------------------------------
+function stubCarMeshes(ctx, record) {
+  const C = ctx.Car3D;
+  if (!C) throw new Error("game-vm: carMeshes:false, but Car3D never loaded — the manifest changed");
+  const empty = () => { record.carMeshStubs++; return { pos: [], nrm: [], col: [], mat: [], idx: [], _stub: true }; };
+  const guard = (opts) => {
+    if (opts && opts.measure) throw new Error(
+      "game-vm: carMeshes:false stubbed Car3D.build, but this caller MEASURES the mesh " +
+      "(__apex.carMesh / garage geometry). Boot without carMeshes:false.");
+  };
+  record.carMeshes = "stubbed";
+  C.build = (c1, c2, opts) => { guard(opts); return empty(); };
+  C.buildComplete = (c1, c2, opts) => { guard(opts); return empty(); };
+  C.buildWheel = () => empty();
+  C.buildWheelLayers = () => ({ rotating: empty(), fixed: empty() });
+}
+
 function runFile(ctx, relPath, record) {
   const src = fs.readFileSync(path.join(ROOT, relPath), "utf8");
   const t0 = performance.now();
@@ -496,6 +532,8 @@ async function settle(pred, maxTurns) {
  * createGame({ track, tod, wx, verbose }) → Promise<handle>
  *   track   circuit id ("monza") — when given, race()+go() before returning
  *   storage { key: value } pre-seeded into localStorage (apex26. prefix optional)
+ *   carMeshes false stubs Car3D's builders (~1 s a process; see stubCarMeshes)
+ *           — OPT-IN, and never on a parity twin
  *   handle  { apex, G, ctx, sandbox, step(n, dt), race(id, tod, wx, opts),
  *             settle(pred), flushTimers(), record, bootMs, trackMs }
  */
@@ -541,6 +579,9 @@ async function createGame(opts) {
     const r = runFile(ctx, f, record);
     if (f === MANIFEST.PATHS.GAME) bootPromise = r;
   }
+  // The loop above is fully SYNCHRONOUS — game.js's async IIFE has not resumed
+  // past its first await yet — so this lands before any draw could build a car.
+  if (opts.carMeshes === false) stubCarMeshes(ctx, record);
   // The game IIFE is async: it resolves after bootAgentSurface() (LAZY_AGENT
   // + js/net through the script stub above) and raceAssets().
   if (bootPromise && typeof bootPromise.then === "function") {

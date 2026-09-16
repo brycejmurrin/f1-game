@@ -548,6 +548,7 @@
       "kind": "node",
       "files": [
         "tests/unit/game-vm.test.mjs",
+        "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
@@ -588,6 +589,7 @@
       "kind": "node",
       "files": [
         "tests/unit/game-vm.test.mjs",
+        "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
