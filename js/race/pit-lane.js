@@ -784,9 +784,39 @@ const PitLane = (function () {
       if (!c.local) return;
       const pos = rankOf(c), k = c.pitPos0 > 0 && pos > 0 ? c.pitPos0 - pos : 0;
       const places = k === 0 ? "" : ", " + (k > 0 ? "+" : "") + k + (Math.abs(k) === 1 ? " PLACE" : " PLACES");
-      if (G.announce) G.announce("STOP " + zz.boxS.toFixed(1) + "s" + (pos > 0 ? " — P" + pos + places : ""), 2.2, "race");
-      c.pitPos0 = 0;
+      // The stop's REAL length, work included: a summary that reported 2.2 s
+      // after twenty seconds in the garage would be the one number the driver
+      // knows is wrong.
+      const held = zz.boxS + (c.pitWorked || 0);
+      if (G.announce) G.announce("STOP " + held.toFixed(1) + "s" + (c.pitWorked > 0 ? " — WORK DONE" : "") + (pos > 0 ? " — P" + pos + places : ""), 2.2, "race");
+      c.pitPos0 = 0; c.pitWorked = 0;
       if (G.store && G.store.set) G.store.set("pitTaught", 1);
+    }
+
+    // ── WORKING ON THE CAR MID-STOP ──────────────────────────────────────────
+    // Asked: a button, while pitting, that opens the GARAGE to change parts or
+    // the set-up. Real F1 cannot: a part change is a garage job and the car is
+    // out of the race for minutes, which is why the regulations do not need to
+    // forbid it. So the honest game version is not "no" — it is that work COSTS
+    // TIME. The hold is extended by WORK_S, once, and only if something
+    // actually changed: opening the garage to look at the car is free, and a
+    // stop you spent fifteen seconds on is a stop the field drove past.
+    const WORK_S = 15;
+    /** Can this car be worked on right now? The LOCAL player only, stopped in
+     *  its own box, while the crew is still on it. Not on the way in, not on
+     *  the way out: the car is on jacks for exactly this window. */
+    function canWork(c) {
+      return !!(c && c.local && !c.retired && !c.finished &&
+                c.pitState === "box" && (c.pitT || 0) > 0);
+    }
+    /** Charge the stop for the work and return the seconds added. Idempotent in
+     *  the sense that matters: the caller decides whether anything CHANGED, and
+     *  a visit that changed nothing must not call this at all. */
+    function addWork(c) {
+      if (!canWork(c)) return 0;
+      c.pitWorked = (c.pitWorked || 0) + WORK_S;
+      c.pitT = (c.pitT || 0) + WORK_S;
+      return WORK_S;
     }
 
     // Is this car, RIGHT NOW, holding the line into the pits? Pure apart from
@@ -1462,7 +1492,8 @@ const PitLane = (function () {
     return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, roadOf, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
-             worthStopping, cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
+             worthStopping, canWork, addWork, workS: WORK_S,
+             cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
              boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,
              servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
              planInfo, windowOf, replan, lossS, pinnedStops, setPinnedStops,

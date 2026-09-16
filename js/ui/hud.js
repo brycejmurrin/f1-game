@@ -659,6 +659,11 @@ function updateHud(force) {
         hText(els.pitCueArrow, (pit.info(player) || {}).side === -1 ? "\u25C0" : "\u25B6");
       }
     }
+    // WORK ON CAR: up for exactly as long as the car is stopped on the jacks
+    // (PitLane.canWork), and never a frame longer \u2014 it opens a menu, so a
+    // button that outlived the stop would be a menu you could open while
+    // driving.
+    if (els.workBtn) els.workBtn.hidden = !(pit && pit.canWork && pit.canWork(player));
     // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
     // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
     // lap before, --you on the lap, and FREE STOP under a caution that fits it.
