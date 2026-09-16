@@ -98,6 +98,9 @@ const FULL = [
   "js/render/shared/driving-line.js",
   "js/data/teams.js",
   "js/data/driver-ratings.js",
+  // Legends sits with the other driver data and AHEAD of js/car/liveries.js,
+  // whose forTeam() appends Legends.liveries() to the picker.
+  "js/data/legends.js",
   "js/career/save-migrate.js",
   // Persistence sits ahead of every js/game module: the settings panels, the
   // perf sentinel and the Spotify client go through GameStore.store's raw lane,
