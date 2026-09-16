@@ -308,10 +308,13 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .lt-preview-row .opt-btn.on {
   background: var(--plate-on); color: var(--text); border-color: var(--red);
 }
+/* No border-top here. The shared .sheet-foot sets `border-top: 0` and draws its
+   rule as a gradient ::before (css/components.css) — re-adding a solid border
+   painted BOTH, so these two panels were the only feet in the app with a
+   hairline and a solid line stacked at the same edge. */
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
   display: flex; gap: calc(var(--gap) * 2 / 3); flex-shrink: 0;
   margin-top: 10px; padding-top: 10px;
-  border-top: 1px solid var(--card-line);
 }
 #lighting-inner .sheet-foot button,
 #camtune-inner .sheet-foot button {
