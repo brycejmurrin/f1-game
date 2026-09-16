@@ -404,7 +404,7 @@ jobs:
                 rows.push(`${" ".repeat(8)}entry: NOT MEASURED — the leg wrote no raceEntry at all (it died before the read)`);
               } else if (re.longestBlockMs != null) {
                 const verdict = re.longestBlockMs > 400
-                  ? (re.otherBlockMs >= 300 ? "conditions 1 and 3 HOLD — condition 2 (build vs upload back-pressure) still unanswered"
+                  ? (re.otherBlockMs >= 300 ? "conditions 1 and 3 HOLD"
                                             : "condition 1 holds, condition 3 FAILS: too little other work to overlap, so a worker buys a spinner")
                   : "condition 1 FAILS: the block is under 400 ms, so the plan says record the item as DEAD";
                 rows.push(`${" ".repeat(8)}entry: window=${re.entryMs}ms longestBlock=${re.longestBlockMs}ms ` +
@@ -420,6 +420,27 @@ jobs:
               } else if (bp.totalMs != null) {
                 rows.push(`${" ".repeat(8)}build: total=${bp.totalMs}ms geo=${bp.geoMs}ms up=${bp.upMs}ms geoShare=${bp.geoShare}`);
                 rows.push(`${" ".repeat(8)}       hottest: ${(bp.top || []).join("  ")}`);
+            // CONDITION 2, COMPUTED. This step had both numbers in hand and
+            // printed "still unanswered" beside them because that string was
+            // written before the build row existed — a tool that can do the
+            // division and makes a reader do it instead is the same defect as
+            // a verdict line that reports a run which never happened.
+            //
+            // TWO ratios, because they answer different questions and the plan
+            // only names one. Against the longest single task it is the
+            // condition as written. Against ALL blocking in the window it is
+            // what actually decides whether a worker helps: work moved off the
+            // main thread only removes the freeze it was itself causing.
+                const lb = re.longestBlockMs, tb = (re.longestBlockMs || 0) + (re.otherBlockMs || 0);
+                if (lb) {
+                  const ofLongest = Math.round(100 * bp.totalMs / lb), ofAll = Math.round(100 * bp.totalMs / tb);
+                  rows.push(`${" ".repeat(8)}       cond2: build is ${ofLongest}% of the longest block, ${ofAll}% of ALL blocking in the window`);
+                  rows.push(`${" ".repeat(8)}       ${ofAll >= 50
+                    ? "condition 2 HOLDS on both ratios"
+                    : ofLongest >= 50
+                      ? `condition 2 holds as WRITTEN but fails on the ratio that decides: moving the whole build off-thread leaves ${100 - ofAll}% of the freeze in place`
+                      : "condition 2 FAILS on both ratios — the build is not the block"}`);
+                }
               }
               if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.softBlit === true ? "YES (headless readback — NOT the path a player takes)" : be.softBlit === false ? "no (direct present)" : "?"} skipBatches=${be.skipBatches} gpuErrFrames=${be.gpuErrFrames}`);
             // ...and the bookkeeping the probe keeps on itself, because run 54

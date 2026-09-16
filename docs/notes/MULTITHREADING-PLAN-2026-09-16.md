@@ -220,3 +220,73 @@ the ubuntu webgl2 leg timed out before the read, `bounded()` returned an
 `{error}` object that matched neither reporting branch, and the row vanished
 instead of saying so. Absence reading as normal is the shape this file keeps
 relearning; every absence prints now.
+
+## 8. Condition 2, answered — and it does NOT support the worker
+
+Run 129 added `track.buildProfile`: a stopwatch across the build, emission
+separated from upload, exposed as `__apex.buildProfile()` and reported beside
+the entry row. macos-latest (Metal) and ubuntu-latest (SwiftShader), vegas.
+
+**The geometry-versus-upload half is settled outright.** `geoShare` is 0.71 to
+0.90 on hardware and 0.80 to 0.83 on software; uploads are 119 to 318 ms of a
+831 to 1136 ms build. Upload back-pressure is not the build cost — now by
+direct measurement, not only by the hardware-against-software inference of §7.
+And the build itself is GPU-independent: 807 to 862 ms on SwiftShader against
+831 to 1136 ms on Metal, with `props/geo` 483 to 520 ms against 484 to 798 ms.
+It is CPU-bound JavaScript, as §7 inferred and this now shows directly.
+
+**But the build is not the block.** macos-latest:
+
+| leg | longest block | ALL blocking | build | build/longest | build/all |
+|---|---|---|---|---|---|
+| webgpu | 1499 ms | 3005 ms | 1136 ms | 76 % | **38 %** |
+| webgl2 | 1494 ms | 2812 ms | 831 ms | 56 % | **30 %** |
+| **glx (the DEFAULT)** | 2193 ms | 4856 ms | 1114 ms | **51 %** | **23 %** |
+| wgx | 1593 ms | 4046 ms | 1104 ms | 69 % | **27 %** |
+
+Condition 2 as WRITTEN asks whether the build is more than half of *the block*,
+meaning condition 1s contiguous block. It scrapes through — and on GLX, the
+backend players actually get, it is 51 %, on the line.
+
+Against ALL main-thread blocking in the race-entry window it is **23 to 38 %**.
+That is the ratio that decides whether a worker helps, because work moved off
+the main thread only removes the freeze it was itself causing. On the default
+backend roughly **3.7 seconds of blocking is not the track build**, and the
+ubuntu control says that remainder is GPU-independent too: the build is 38 % of
+all blocking on BOTH images on the webgpu leg, so what surrounds it is more
+JavaScript, not driver work.
+
+**So the recommendation changes.** §3 called the honest ceiling "this moves
+work, it does not remove it". That now has a number: moving the ENTIRE track
+build to a worker removes at most a quarter to a third of the race-entry
+freeze, on a change whose own §3 lists three things that break first and whose
+own §6 lists six pieces of registration mechanics. That is a poor trade, and it
+is a poor trade for the DEFAULT backend most of all, which is the worst case in
+the table rather than the best.
+
+`props/geo` is the largest single phase everywhere (484 to 798 ms, 58 to 78 %
+of emission), so if anything here is worth attacking it is that one emitter —
+and the collision-and-culling note independently puts the box emitter at 78 %
+of vegas prop vertices, which points at the same place from a second direction.
+But 484 to 798 ms is 15 to 25 % of the block. It is a target for making the
+build cheaper, not an argument for moving it.
+
+**The next measurement, and it is not a worker.** Find the other 3.7 s. The
+same stopwatch pattern applied to the race-entry path OUTSIDE the build would
+say; §2 guesses car and helmet meshes at about 800 ms, which is a guess, and
+nothing measured here touches it. Until that is attributed, any worker is aimed
+at a quarter of the problem.
+
+One correction to a lead in §7, made here rather than left standing: a scratch
+probe that wrapped `TrackGeom.addBox` to attribute `props/geo` to individual
+emitters reported zero box calls. That is the probe measuring its own blind
+spot — `js/track/tracks.js` destructures the emitters at eval and captures the
+bindings into `RAW`, so a patch applied after boot intercepts nothing. What is
+inside `props/geo` is still unattributed, and needs marks inside `buildProps`
+rather than a wrapper outside it.
+
+Also fixed in this round: the Verdict step had both numbers in hand and printed
+"condition 2 still unanswered" beside them, because that string was written
+before the build row existed. It computes both ratios now. A tool that can do
+the division and makes a reader do it instead is the same defect as a verdict
+line reporting a run that never happened.
