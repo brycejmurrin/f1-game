@@ -767,6 +767,84 @@ test("ci.yml treats a Pages call as the gate it is, whatever the caller's event"
     "on a Pages call the plan's base is the train's live commit");
 });
 
+test("base-verdict.sh: the newest deploy-branch run strictly below this head, named jobs and all", () => {
+  // The base-red line (docs/plans/research-2026-09-16/ci.md §5). Three ways to
+  // get it wrong, all of them silent: take the newest run on the branch
+  // (a tip that was never merged says nothing about this tree), take THIS
+  // commit's own run (that is the push, not its base), or report a conclusion
+  // without the job names (which is the whole reason a session opens the run).
+  // A -> B -> C on the deploy line; X branches from A and is never merged.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "base-verdict-"));
+  const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  git("init", "-q", "-b", "deploy"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
+  const commit = (msg) => { fs.writeFileSync(path.join(dir, "f.txt"), msg); git("add", "."); git("commit", "-q", "-m", msg); return git("rev-parse", "HEAD"); };
+  const A = commit("A"), B = commit("B"), C = commit("C");
+  git("checkout", "-q", "-b", "feature", A); const X = commit("X"); git("checkout", "-q", "deploy");
+
+  const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "gh"),
+    '#!/usr/bin/env bash\n[ "${FAKE_GH:-}" = fail ] && exit 1\n' +
+    'case "$2" in\n' +
+    '  */jobs*) node -e \'console.log(JSON.stringify({jobs:JSON.parse(process.env.FAKE_JOBS||"[]")}))\' ;;\n' +
+    '  *) node -e \'console.log(JSON.stringify({workflow_runs:JSON.parse(process.env.FAKE_RUNS||"[]")}))\' ;;\n' +
+    'esac\n');
+  fs.chmodSync(path.join(bin, "gh"), 0o755);
+  const script = new URL("../../tools/ci/base-verdict.sh", import.meta.url).pathname;
+  const ci = (sha, over = {}) => ({ id: 11, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", head_sha: sha, ...over });
+  const verdict = (runs, jobs = [], env = {}) => {
+    const summary = path.join(dir, `summary-${Math.random().toString(36).slice(2)}.md`);
+    const r = cp.spawnSync("bash", [script, C], {
+      cwd: dir, encoding: "utf8",
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy",
+        GITHUB_STEP_SUMMARY: summary, FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(jobs), ...env },
+    });
+    return { status: r.status, out: r.stdout.trim(), summary: fs.existsSync(summary) ? fs.readFileSync(summary, "utf8") : "" };
+  };
+  const failed = [{ name: "Per-circuit geometry sweeps", conclusion: "failure" },
+    { name: "Selected specs (change-aware gate)", conclusion: "failure" },
+    { name: "Structural guards", conclusion: "success" },
+    { name: "Golden menus on a runner (trial, non-blocking)", conclusion: "skipped" }];
+
+  const green = verdict([ci(B)]);
+  assert.equal(green.out, `::notice::base ${B.slice(0, 7)} was green — ci.yml run 11`);
+  assert.match(green.summary, /### Base verdict/);
+  assert.match(green.summary, new RegExp(`base \`${B.slice(0, 7)}\` was \\*\\*green\\*\\*`));
+
+  const red = verdict([ci(B, { conclusion: "failure" })], failed);
+  assert.equal(red.out, `::notice::base ${B.slice(0, 7)} was red on: Per-circuit geometry sweeps, Selected specs (change-aware gate) — ci.yml run 11`);
+  assert.doesNotMatch(red.out, /Structural guards|Golden menus/, "a green or skipped job is not a failure");
+  assert.match(red.summary, /red on: Per-circuit geometry sweeps/);
+
+  // THIS commit's own run is not a base, and neither is an unmerged branch tip.
+  assert.match(verdict([ci(C, { id: 99, conclusion: "failure" }), ci(X, { id: 98, conclusion: "failure" }), ci(B)]).out,
+    new RegExp(`base ${B.slice(0, 7)} was green`),
+    "a run of this head, and a run on a commit that is not an ancestor, are both skipped");
+  assert.match(verdict([ci(B, { id: 7 })], [], { GITHUB_RUN_ID: "7" }).out, /no completed ci\.yml run/,
+    "a run never reads itself as its own base");
+  assert.match(verdict([ci(B, { path: ".github/workflows/pages.yml" })]).out, /no completed ci\.yml run/,
+    "another workflow's verdict is not this gate's base");
+  assert.match(verdict([ci(B, { status: "in_progress", conclusion: null })]).out, /no completed ci\.yml run/,
+    "a run still going has no verdict to report");
+  assert.match(verdict([ci(B, { conclusion: "cancelled" })], failed).out, /was red \(cancelled\) on: Per-circuit/,
+    "a cancelled base is red, and says which kind");
+  assert.match(verdict([ci(B, { conclusion: "failure" })], []).out, /no failing job named/,
+    "a red with no job list still reports something");
+  // Advisory: every failure path is one line and an exit 0.
+  const broken = verdict([ci(B)], [], { FAKE_GH: "fail" });
+  assert.match(broken.out, /^::notice::base verdict unavailable/);
+  for (const r of [green, red, broken]) assert.equal(r.status, 0, "base-verdict must never fail the job it reports in");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("ci.yml runs the base verdict where the checkout can answer it, and never lets it decide", () => {
+  assert.match(selectJob, /fetch-depth: 0/, "ancestry is a git question; a shallow checkout answers it wrong");
+  assert.match(selectJob, /- name: Was the base already red\?\n\s+if: always\(\)\n\s+continue-on-error: true/,
+    "the base verdict reports on red runs too, and may never turn one red");
+  assert.match(selectJob, /run: bash tools\/ci\/base-verdict\.sh "\$GITHUB_SHA"/);
+  assert.match(selectJob, /actions: read/, "listing the deploy branch's runs needs actions:read on the job token");
+  assert.doesNotMatch(selectJob, /needs\.[\w-]*base/, "nothing may depend on the report");
+});
+
 test("pages-live-sha.sh: the live apex-sha or nothing, and never a failure", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pages-live-"));
   const bin = path.join(dir, "bin"); fs.mkdirSync(bin);

@@ -1268,6 +1268,12 @@ jobs:
     # what is live". The caller's event is `schedule` there, hence the third
     # clause rather than an event test.
     if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' || inputs.concurrency_key != '' }}
+    # actions:read on top of the workflow default — the base-verdict step at the
+    # end lists this workflow's runs on the deploy branch. A job that names
+    # permissions gets ONLY what it names, hence contents too.
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 10
     outputs:
       shards: ${{ steps.sel.outputs.shards }}
@@ -1308,6 +1314,25 @@ jobs:
           PUSH_BEFORE: ${{ inputs.concurrency_key != '' && inputs.before_sha || github.event.before }}
           PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: bash tools/ci/ci-select-specs-step.sh
+      # WHOSE RED IS IT? A gate that goes red asks two different questions
+      # depending on a fact nobody has to hand: was the base already red?
+      # Train #2348 (2026-09-16) failed on the sweeps and on `selected` while
+      # the change under it was a tooling edit that could touch neither, and
+      # establishing that took several API calls and a log download. One line
+      # in the summary answers it for every run, red or green.
+      #
+      # It lives here because this job already has what the lookup needs — a
+      # fetch-depth: 0 checkout (ancestry is a git question) and npm ci — and
+      # because `select` runs on every push, PR and Pages call. `if: always()`
+      # plus continue-on-error, belt and braces: a report may never decide a
+      # verdict, and the script itself exits 0 on every failure.
+      - name: Was the base already red?
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_BRANCH: claude/f1-game-project-26h3ng
+        run: bash tools/ci/base-verdict.sh "$GITHUB_SHA"
 
   selected:
     name: Selected specs (change-aware gate)
