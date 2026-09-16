@@ -4928,7 +4928,21 @@ function updateCar(c, dt, ranked) {
     // Front saturation cue: feedback only; never writes the driving state.
     if (c.isPlayer && !c.offroad && sp > 0.5) {
       const asking = Math.abs(steer) > 0.15;
-      if (sat > 1.15 && asking && (c.uslipHapT = (c.uslipHapT || 0) - dt) <= 0) {
+      // A DWELL of one extra tick before the first pulse. Placing the car
+      // (jump/rescue/an incident handback) starts it with zero lateral
+      // velocity and zero yaw rate, so full lock puts the whole steer angle
+      // into the front's slip on tick one and `sat` spikes over the trigger
+      // before the slide has actually begun — measured at 1.18, then settling
+      // to 0.94 for nine ticks while the car starts to rotate, and only then
+      // climbing for real. A single frame over a threshold is not information;
+      // it is a discontinuity, and it left a pulse stranded ahead of the
+      // cue's own cadence (tests/specs/understeer-cue.spec.js's bounded-rate
+      // row measured the 16-tick hole it opened). Two consecutive qualifying
+      // ticks is 33 ms — under the pulse's own 70 ms — so a real slide is
+      // announced no later than before.
+      const hot = sat > 1.15 && asking;
+      c.uslipDwell = hot ? Math.min((c.uslipDwell || 0) + 1, 3) : 0;
+      if (c.uslipDwell >= 2 && (c.uslipHapT = (c.uslipHapT || 0) - dt) <= 0) {
         const bite = clamp((sat - 1.15) / 0.85, 0, 1);   // 0 at onset, 1 well past
         // Safari throws from vibrate() outside a user gesture and some engines
         // throw on an out-of-range pattern. A cue the driver may not even feel
