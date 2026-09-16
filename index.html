@@ -1765,6 +1765,26 @@
   </div>
 </dialog>
 
+<!-- PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). A plain div, not a
+     <dialog>: it is never dismissed by Escape, takes no focus, and must let
+     the WebGL canvas behind it show through during its first phase — a modal
+     dialog's backdrop would sit between the two. `role="status"` because that
+     is what it is; it announces once and asks nothing. The `hidden` attribute
+     and the .screen class are what clearMenuScreens() closes it with. -->
+<div id="loading" class="screen" role="status" aria-label="Preparing race" hidden>
+  <div id="ld-card">
+    <h2 id="ld-wordmark">APEX&nbsp;26</h2>
+    <div id="ld-head">
+      <span id="ld-flag"></span>
+      <div id="ld-title">
+        <div id="ld-name"></div>
+        <div id="ld-gp"></div>
+      </div>
+    </div>
+    <dl id="ld-meta"></dl>
+  </div>
+</div>
+
 <!-- race settings -->
 <dialog id="race-settings" class="screen dim" data-esc-close="rs-cancel" aria-labelledby="dlg-racesettings" hidden>
   <div class="sheet">
@@ -2606,6 +2626,7 @@
 <script defer crossorigin="anonymous" src="js/career/season-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/loading-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scroll-fade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/css-zoom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/sheet-shape.js?v=dev"></script>

@@ -1244,4 +1244,67 @@ body[data-density="compact"] #campicker {
 /* Failure here is usually NAT traversal, which the player can act on only if
    we say so plainly — hence a distinct state rather than the same grey text. */
 #vsfriend .vs-status.vs-error { color: #ff8a80; opacity: 1; }
+
+/* ---------- pre-race loading screen (js/ui/loading-screen.js) ---------- */
+/* NO SCRIM OF ITS OWN in the fly phase: the WebGL canvas behind it is the
+   picture, and a wash here would be the one thing that makes a cinematic look
+   like a menu. The vignette is a gradient with a TRANSPARENT centre, so the
+   world stays legible while the edges carry the letterbox mood — which is why
+   it is not `.dim`, whose whole job is to flatten what is behind it. */
+#loading {
+  place-items: end center;
+  pointer-events: auto;      /* swallow the click that skips the flyby */
+  background: radial-gradient(ellipse at 50% 45%, transparent 38%, var(--scrim-heavy) 100%);
+}
+/* The card is laid out from the first frame and only its OPACITY animates.
+   Building it at reveal time would run layout during the phase whose entire
+   job is to be the still thing the synchronous track build stalls behind. */
+#ld-card {
+  width: min(100%, var(--sheet-w, 560px));
+  margin-bottom: clamp(var(--gap), 6vh, calc(4 * var(--pad)));
+  padding: var(--gap) var(--pad);
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-md);
+  background: var(--plate-opaque);
+  box-shadow: var(--edge), var(--lift-2);
+  opacity: 0;
+  transform: translateY(var(--gap));
+  transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+#loading[data-phase="card"] #ld-card { opacity: 1; transform: none; }
+/* The wordmark is #title's recipe at card scale — same italic, same skewed red
+   underline — because this IS the title screen's brand arriving on the grid. */
+#ld-wordmark {
+  margin: 0 0 var(--gap);
+  font-size: clamp(var(--fs-6), calc(3.4 * var(--vwz)), calc(2 * var(--fs-6)));
+  font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-2);
+  color: var(--text);
+  text-shadow: 0 0 30px color-mix(in oklab, var(--red) 70%, transparent);
+}
+#ld-wordmark::after {
+  content: ""; display: block;
+  height: var(--r-xs); width: 100%;
+  margin: calc(0.5 * var(--gap)) 0 0;
+  background: var(--red);
+  transform: skewX(-30deg);
+}
+#ld-head { display: flex; align-items: center; gap: var(--gap); }
+#ld-flag { display: block; width: calc(2 * var(--fs-6)); flex: 0 0 auto; line-height: 0; }
+#ld-flag svg, #ld-flag img { display: block; width: 100%; height: auto; border-radius: 2px; }
+#ld-name { font-size: var(--fs-3); font-weight: 700; letter-spacing: var(--ls-1); }
+#ld-gp { font-size: var(--fs-micro); opacity: 0.75; letter-spacing: var(--ls-2); }
+/* auto-fit, not a fixed count: five facts sit on one row on a desktop and wrap
+   to two or three on a phone without a breakpoint deciding where. */
+#ld-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(6 * var(--fs-micro)), 1fr));
+  gap: var(--gap);
+  margin: var(--gap) 0 0;
+}
+#ld-meta dt { font-size: var(--fs-micro); opacity: 0.6; letter-spacing: var(--ls-3); }
+#ld-meta dd { margin: calc(0.2 * var(--gap)) 0 0; font-size: var(--fs-2); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  #ld-card { transition: none; transform: none; }
+}
 } /* @layer overlays */

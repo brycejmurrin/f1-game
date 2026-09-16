@@ -3127,7 +3127,25 @@ raceSettings = RaceSettings.create({
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
   openQuali, startRace, enableTilt, getSteerMode: () => steerMode,
   getNetLobby: () => netLobby, buildSelect, els, openGarage, buildStandings,
+  raceIntro,
 });
+// PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
+// over the world scheduleFlybyTrack() already warmed, then holds a static card
+// while the caller's build runs — see that file for why the split matters.
+const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags });
+/** The RACE! button's route into a race. Not folded into startRace(): netplay
+ *  and __apex.race() both AWAIT that function, and neither should gain two
+ *  seconds of flourish. The button is the only place a human is watching. */
+function raceIntro(go) {
+  loadingScreen.run({
+    track: Tracks.LIST[trackIdx], laps: raceLaps,
+    weather: raceWeather, tod: raceTimeOfDay,
+    // Only fly over a world that is actually built. A missed pre-build (a
+    // circuit switched a moment ago, scenery still downloading) would put a
+    // black hold where the cinematic should be, which reads as a hang.
+    hasWorld: !!track && _menuGate.track === track,
+  }, go);
+}
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
@@ -3250,6 +3268,9 @@ function armConfirm(btn, armedText, action) {
 // title screen) and the two tuner panels predate the class and are named
 // individually.
 function clearMenuScreens() {
+  // Disarm the loading screen BEFORE the sweep hides it: it holds a pending
+  // timer that would otherwise fire its build callback into a running race.
+  loadingScreen.stop();
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
   for (const id of ["overlay", "lighting", "camtune"]) { const el = $(id); if (el) el.hidden = true; }
   // The garage's 3D turntable keeps rendering while #carsetup is up; a race
@@ -6417,15 +6438,19 @@ const _hazeWorld = [0, 0, 0];
 let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
-const _rsEl = $("race-settings");      // the one menu screen that shows the flyby
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
 function render(dt) {
   if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
-  // race-settings flyby, or the garage's car preview; under every other menu it is
-  // HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat behind the
-  // title, title → GARAGE → MENU). First, before every early return; written on change.
-  const menuBlank = state === "menu" && !setupPreviewOn && (!track || _rsEl.hidden);
+  // PRE-RACE LOADING SCREEN's flyby, or the garage's car preview; under every other
+  // menu it is HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat
+  // behind the title, title → GARAGE → MENU). First, before every early return.
+  // RACE SETTINGS USED TO BE ON THIS LIST (2026-09-16). The flyby played behind the
+  // settings sheet, which made the menu look like a paused race and gave the rows a
+  // moving, high-contrast backdrop to be read against. The world the picker warms is
+  // still built — it is just not SHOWN until the player commits to the race, where
+  // js/ui/loading-screen.js spends it as the cinematic it always wanted to be.
+  const menuBlank = state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active());
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep

@@ -30,7 +30,7 @@ const RaceSettings = (function () {
       setWxArcPlan, getDifficulty, setDifficulty,
       getRaceGrid, setRaceGrid, getRaceReliability, setRaceReliability,
       getRaceTyreWear, setRaceTyreWear, getPits,
-      getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace,
+      getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace, raceIntro,
       enableTilt, getSteerMode, getNetLobby, buildSelect, els, openGarage,
     } = hooks;
 
@@ -187,8 +187,13 @@ const RaceSettings = (function () {
         // so arm it from this click or the first in-race brake cue is dropped.
         if (window.Input && Input.primeHaptics) Input.primeHaptics();
         const season = getSeason();
+        // QUALIFYING goes straight through: that path opens another SHEET, and a
+        // cinematic between two menus is a wait, not an arrival. Only the route
+        // that ends on a grid earns the loading screen — and it is the route that
+        // pays ~1.1 s of synchronous track build, which the screen covers.
         if ((isChampionship() && SeasonCal.qualiNext(season) && !qualiResults()) ||
             (!isChampionship() && gridFromQuali() && !qualiResults())) openQuali();
+        else if (raceIntro) raceIntro(startRace);
         else startRace();
       };
     }
