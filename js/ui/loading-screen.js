@@ -20,8 +20,12 @@
  * a flourish that cannot be skipped is a wait.
  */
 const LoadingScreen = (function () {
-  const FLY_MS = 1500;    // cinematic hold before the card arrives
-  const CARD_MS = 420;    // card fade-in; the build starts when it lands
+  // A CINEMATIC NEEDS LONG ENOUGH TO READ AS ONE. The first cut was 1.5 s + 0.42 s
+  // and played as a flicker: the camera barely moved before the card took the
+  // screen. These are the budget for the whole screen, and it is skippable with
+  // any pointer or key — an intro nobody can cut past is a wait, not a flourish.
+  const FLY_MS = 3000;    // cinematic hold before the card arrives
+  const CARD_MS = 700;    // card fade-in; the build starts when it lands
 
   function create(hooks) {
     const { $, Tracks, TrackMaps, Flags } = hooks;
