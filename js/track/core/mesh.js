@@ -496,6 +496,14 @@ const TrackMesh = (function () {
     const _bG = pal.grass || [0.30, 0.42, 0.22];
     const grass = [_bG[0] * _gBri + _gWarm, _bG[1] * _gBri, Math.max(0, _bG[2] * _gBri - _gWarm)];
     const wearF = (v) => (v >= 5 && v <= 8) ? 0.86 : (v === 4 || v === 9 ? 1.07 : 1.0);
+    // THE ROAD'S OWN VERGE IS GRASS — and on the pit side, inside the complex,
+    // that is the green strip between the racing surface and the pit wall. It
+    // is this mesh, not the lane's: the ribbon starts at the lane's inner edge
+    // and the road's outermost columns (hw + 0.4, hw + 2.2) sit inside it,
+    // drawn opaque, so no decal can cover them. Paved here instead, at the
+    // source, wherever the complex stands beside the road.
+    const _pit = track.pit && !track.pit.painted ? track.pit : null;
+    const pitPaved = (k, side) => !!_pit && side === _pit.side && _pit.w[k] > 0.01;
     const ds = track.total / n;
     const V = 14;
     for (let k = 0; k < n; k++) {
@@ -546,10 +554,16 @@ const TrackMesh = (function () {
         // now carry plain asphalt, so the shader owns the paint outright and
         // the two cannot disagree.
         let c, m;
-        if (v === 0 || v === 13) {
-          c = grass; m = MAT.GRASS;
-        } else if (v === 1 || v === 12) {
-          c = grass; m = MAT.GRASS;   // kerb ribbons added separately by buildKerbs
+        if (v <= 1 || v >= 12) {
+          if (pitPaved(k, v <= 1 ? -1 : 1)) {
+            // The pit apron, not a verge: asphalt, and MAT.ASPHALT so the baked
+            // pack reads it as tarmac rather than laying grass over it.
+            const grain = (hash(k * 13 + v) - 0.5) * 0.016;
+            c = [asphalt[0] + grain, asphalt[1] + grain, asphalt[2] + grain];
+            m = MAT.ASPHALT;
+          } else {
+            c = grass; m = MAT.GRASS;   // kerb ribbons added separately by buildKerbs
+          }
         } else {
           // asphalt running surface: racing-line wear + subtle aggregate grain
           const f = wearF(v), grain = (hash(k * 13 + v) - 0.5) * 0.016;
@@ -975,6 +989,7 @@ const TrackMesh = (function () {
   const PIT_EDGE_W = 0.15;        // the lane's wall-side edge, a little bolder
   const PIT_TARMAC = [0.135, 0.145, 0.165];
   const PIT_WORK = [0.160, 0.166, 0.180];    // the working lane / apron, a shade lighter
+  const PIT_APRON = [0.205, 0.208, 0.215];   // the paved ground behind the lane: concrete, not grass
   function buildPitLane(track, out) {
     const p = track.pit;
     if (!p) return out;
@@ -988,15 +1003,33 @@ const TrackMesh = (function () {
     const bands = (k) => {
       const w = p.w[k];
       if (!(w > 0.01)) return null;
-      const v = p.v[k];
-      const fi = o.fastIn * v, fo = o.fastOut * w, co = o.corrOut * w, wo = o.workOut * w;
+      const v = p.v[k], b = p.b ? p.b[k] : w;
+      // The CORRIDOR and the WORKING lane ride `b` — they exist where the bays
+      // do (TrackPit) — so the entry road, the exit road and the stretches
+      // between are the fast lane alone. The APRON then paves everything from
+      // the lane's outer edge to the complex's flattened FOOTPRINT: that ground
+      // is already level (js/track/core/surface.js holds it flat to `keep`) and
+      // was the circuit's own terrain, so the entrance and the exit had a strip
+      // of GRASS beside them where the lane had narrowed. A pit complex is
+      // paved end to end; this is the paving.
+      const fi = o.fastIn * v, fo = o.fastOut * w;
+      const co = fo + (o.corrOut - o.fastOut) * b, wo = co + (o.workOut - o.corrOut) * b;
+      const apron = Math.max(wo, o.outer * w + 0.3);
       const dash = Math.floor((k * ds) / 2) % 2 === 0;
       const innerCol = v < 0.5 ? (dash ? white : PIT_TARMAC) : white;
       const edge = Math.min(PIT_EDGE_W, Math.max(0, fo - fi) * 0.5);
       const lw = Math.min(PIT_LINE_W, Math.max(0, co - fo) * 0.3);
+      // …and the VERGE, from the racing surface's own edge out to the lane's
+      // inner edge, where the platform and the wall stand. That strip was bare
+      // terrain — the green band between the road and the pit wall in every
+      // shot of the entrance and the exit — because the ribbon started at
+      // `fastIn`. Paved, the complex reads as one surface from the white line
+      // to the garage line.
       return [
+        [0, PIT_TARMAC],
         [fi, innerCol], [fi + edge, PIT_TARMAC], [Math.max(fi + edge, fo - lw), white], [fo, PIT_TARMAC],
-        [Math.max(fo, co - lw), white], [co, PIT_WORK], [Math.max(co, wo - lw), white], [wo, null],
+        [Math.max(fo, co - lw), white], [co, PIT_WORK], [Math.max(co, wo - lw), white], [wo, PIT_APRON],
+        [apron, null],
       ];
     };
     const at = (k, lat) => {
