@@ -106,6 +106,22 @@ test("the sources block is present, because these are claims about real people",
   assert.match(src, /TRIBUTE PALETTE, not a replica/, "the livery claim must stay honest");
 });
 
+test("the file header's driver count matches the roster", () => {
+  // THIS SHIPPED WRONG. The header still read "eight historic drivers" four
+  // legends after the roster reached twelve, and nothing in the suite caught
+  // it — a check against the LIVE published artifact did. A count written in
+  // prose beside the list it counts drifts on every addition, so assert it
+  // rather than trusting the next person to remember.
+  const src = fs.readFileSync(new URL("../../js/data/legends.js", import.meta.url), "utf8");
+  const WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven",
+                 "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+                 "fifteen", "sixteen", "seventeen", "eighteen", "nineteen", "twenty"];
+  const want = WORDS[Legends.LIST.length];
+  assert.ok(want, `roster of ${Legends.LIST.length} is past the word list — extend it`);
+  assert.ok(src.slice(0, 200).includes(`${want} historic drivers`),
+    `the header must say "${want} historic drivers" for a roster of ${Legends.LIST.length}`);
+});
+
 test("no two tributes read as the same car", () => {
   // THE BUG THIS EXISTS FOR, found by RENDERING the eight and looking at them
   // (scratch/renders/legends), not by any assertion: Lauda's 1975 Ferrari and
