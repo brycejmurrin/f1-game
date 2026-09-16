@@ -51,7 +51,7 @@ test("every built complex lays out twelve fascia quads, one per bay, in row orde
     // approach-side pier, last in the quad order.
     const nq = S.cells + q.boards.length + q.panels.length + q.crests.length;
     assert.ok(q.boards.length >= 1 && q.boards.length <= 3, `${id}: ${q.boards.length} boards`);
-    assert.equal(q.panels.length, S.cells, `${id}: a crest panel on the wall opposite every bay`);
+    assert.equal(q.panels.length, 2 * S.cells, `${id}: a crest panel on the wall opposite every bay, read from both sides`);
     assert.equal(q.crests.length, S.crests, `${id}: a crest plaque on every bay's pier`);
     for (let b = 0; b < q.crests.length; b++) {
       const i = S.cells + q.boards.length + q.panels.length + b, k = q.crests[b].k, box = p.row.boxes[b];
@@ -92,10 +92,14 @@ test("every built complex lays out twelve fascia quads, one per bay, in row orde
     assert.equal(q.anchors.length, q.boards.length);
     for (let b = 0; b < q.panels.length; b++) {
       const i = S.cells + q.boards.length + b, k = q.panels[b].k;
-      assert.equal(q.panels[b].cell, b, `${id}: panel ${b} is not bay ${b}'s cell`);
+      assert.equal(q.panels[b].cell, b >> 1, `${id}: panel ${b} is not bay ${b >> 1}'s cell`);
+      // Two per bay in order: the LANE face, then the TRACK face.
+      const face = q.panels[b].face, fs = face === "lane" ? 1 : -1;
+      assert.equal(face, (b & 1) ? "track" : "lane", `${id}: panel ${b} face ${face}`);
       const n = [q.nrm[i * 12], q.nrm[i * 12 + 1], q.nrm[i * 12 + 2]];
-      // Faces the LANE (away from the track), from the top of the pit wall.
-      assert.ok(dot(n, [sd * t.rx[k], 0, sd * t.rz[k]]) > 0.99, `${id}: panel ${b} does not face the lane`);
+      // The lane face looks away from the track, the track face toward it,
+      // both from the top of the pit wall.
+      assert.ok(dot(n, [fs * sd * t.rx[k], 0, fs * sd * t.rz[k]]) > 0.99, `${id}: panel ${b} does not face the ${face}`);
       const P = [0, 1, 2, 3].map((c) => [q.pos[(i * 4 + c) * 3], q.pos[(i * 4 + c) * 3 + 1], q.pos[(i * 4 + c) * 3 + 2]]);
       const c = [0, 1, 2].map((a) => (P[0][a] + P[1][a] + P[2][a] + P[3][a]) / 4);
       const lat = ((c[0] - t.px[k]) * t.rx[k] + (c[2] - t.pz[k]) * t.rz[k]) * sd - t.hw[k];
@@ -105,7 +109,7 @@ test("every built complex lays out twelve fascia quads, one per bay, in row orde
         assert.ok(hh > 1.35 && hh < 2.0, `${id}: panel ${b} corner ${hh.toFixed(2)} m up, the wall top is 1.42`);
       }
       assert.ok(dot(cross(sub(P[1], P[0]), sub(P[3], P[0])), n) > 0, `${id}: panel ${b} is mirrored`);
-      const cx = (b % S.cols) * S.cellW, cy = Math.floor(b / S.cols) * S.cellH;
+      const cx = ((b >> 1) % S.cols) * S.cellW, cy = Math.floor((b >> 1) / S.cols) * S.cellH;
       for (let c2 = 0; c2 < 4; c2++) {
         const u = q.uv[(i * 4 + c2) * 2], v = q.uv[(i * 4 + c2) * 2 + 1];
         assert.ok(u >= cx / S.w - 1e-9 && u <= (cx + S.cellW) / S.w + 1e-9, `${id}: panel ${b} u ${u}`);
@@ -164,6 +168,27 @@ test("every built complex lays out twelve fascia quads, one per bay, in row orde
     // The signs are NOT in the props buffer: it carries no UVs and nothing of
     // it stands on the sign plane in the lintel band.
     assert.equal(t.propsGeo.uv, undefined);
+  }
+});
+
+test("the approach boards walk back past the circuit's own scenery instead of standing in it", () => {
+  // The far board's nominal distance is boardM[1] (110 m); where the verge is
+  // taken — Nürburgring's trunk at 110 is the case that once moved it to 95 by
+  // hand — the board walks up to 24 m further back, 4 m at a time, and is
+  // skipped rather than placed through a prop. Measured from the node it
+  // stands on, so a placed board is within [nominal, nominal + 24] plus a node.
+  const S = ctxOnce().TrackPit.SIGN;
+  for (const id of [FULL, LEFT, "nurburgring"]) {
+    const t = buildOnce(id), p = t.pit, q = t.pitSigns;
+    if (!q) continue;                                       // no complex, no boards
+    const ds = t.total / t.n;
+    const backs = q.boards.filter((b) => b.cell === S.cells).map((b) => ((p.sA - b.k * ds) % t.total + t.total) % t.total);
+    assert.ok(backs.length >= 1, `${id}: no approach board survived the walk`);
+    for (const back of backs) {
+      const nominal = S.boardM.reduce((best, m) => (back >= m - ds && (best == null || m > best) ? m : best), null);
+      assert.ok(nominal != null && back <= nominal + 24 + ds, `${id}: a board ${back.toFixed(0)} m back is not within 24 m of ${S.boardM.join("/")}`);
+    }
+    if (id === "nurburgring") assert.ok(Math.max(...backs) >= S.boardM[1] - ds, `nurburgring: the far board fell back to ${Math.max(...backs).toFixed(0)} m; it should walk past the trunk, not vanish`);
   }
 });
 

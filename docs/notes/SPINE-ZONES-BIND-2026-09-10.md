@@ -1,7 +1,8 @@
 # Spine zones + bind — evidence (2026-09-10)
 
-Implements `docs/superpowers/specs/2026-09-09-spine-zones-bind-design.md`
-and `docs/superpowers/plans/2026-09-09-spine-zones-bind.md`.
+Implements `docs/archive/superpowers/specs/2026-09-09-spine-zones-bind-design.md`
+and `docs/archive/superpowers/plans/2026-09-09-spine-zones-bind.md`
+(both archived 2026-09-16, once their deliverables were verified shipped).
 
 ## Shipped
 

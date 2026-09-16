@@ -253,6 +253,7 @@ const ACCENT_DECOR = {
     "`.hud-box` border-left — the team stripe on a box whose value is the readout",
     "`body.hud-prof-broadcast .hud-gaps` border-left — the same stripe, broadcast skin",
     "`--accent-dim` on the sector rows — the same stripe again, dimmed",
+    "`#announce` border-left — the radio card's team stripe; the kinds that carry state (warning, penalty) recolour it with their own token",
   ],
   "css/tokens.css": [
     "`--accent-dim` derivation",

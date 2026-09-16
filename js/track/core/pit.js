@@ -51,8 +51,10 @@ const TrackPit = (function () {
                  // at the pit side, cell 13 "PIT LANE <limit> km/h". Laid on
                  // 2.4 x 0.33 m boards (the cell's own 7.3:1) on posts, the
                  // first two on the verge of the approach before the entry
-                 // road, the last on the platform at the entry line.
-                 boards: 2, boardW: 2.4, boardH: 0.33, boardY: 1.5, boardM: [45, 95] };
+                 // road (SceneryPits walks each up to 24 m further back past
+                 // whatever the circuit put on that verge), the last on the
+                 // platform at the entry line.
+                 boards: 2, boardW: 2.4, boardH: 0.33, boardY: 1.5, boardM: [45, 110] };
   // The EXIT WALL (SceneryPits, game.js's clamp): the pit wall slides from the
   // platform's line to the road edge as the wall fades over the exit road, and
   // runs along the edge while the road keeps this share of its width — a

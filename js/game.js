@@ -18,7 +18,7 @@ const els = {
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
   flag: $("hud-flag"), minimap: $("minimap"),
-  lights: $("lights"), announce: $("announce"),
+  lights: $("lights"), announce: $("announce"), announceWho: $("announce-who"), announceText: $("announce-text"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
   lighting: $("lighting"), camtune: $("camtune"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
@@ -1100,15 +1100,28 @@ let lastFrame = 0;
 let announceT = 0;
 const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, race: 4, "penalty-hit": 5 };
 let _annPri = 0, _annQueue = null;
+// THE RADIO. A banner is a radio message: the WHO line names the channel it
+// came in on — race control for a penalty or a warning, the coach for a tip,
+// otherwise the driver's own pit-wall channel with their name and number, the
+// way a broadcast captions team radio — and the words sit under it in quotes.
+function radioWho(kind) {
+  const p = player, num = p && p.num != null ? " · " + p.num : "";
+  if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL" + num;
+  if (kind === "coach" || kind === "practice") return "COACH" + num;
+  const who = p && p.name ? String(p.name).split(" ").pop().toUpperCase() : (p && p.code) || "";
+  return (who ? who + " · " : "") + "RADIO" + num;
+}
 function showAnnounce(msg, dur, kind) {
   kind = kind || "race";
   _annPri = ANN_PRI[kind] || 2;
-  els.announce.textContent = msg;
+  els.announceText.textContent = msg;
+  els.announceWho.textContent = radioWho(kind);
   els.announce.className = "";
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
   els.announce.hidden = false;
-  announceT = dur || 1.6;
+  // A card of small type takes a beat longer to read than a billboard did.
+  announceT = (dur || 1.6) + 0.5;
 }
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the

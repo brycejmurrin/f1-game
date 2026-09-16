@@ -55,6 +55,14 @@ const linkResolves = (dir, href) => {
 // were accurate when written. Exempting historical records is the POINT of
 // keeping them — a provenance doc or implementation plan naming a file that
 // will move or has not yet been created must not churn build logs.
+//
+// `superpowers` is kept in the pattern although docs/superpowers/ was emptied
+// on 2026-09-16 (its 2026-09 plans and specs verified shipped, then moved under
+// docs/archive/superpowers/ beside the 2026-08 batch). The workflow recreates
+// that directory when it next runs, and a fresh plan names files that do not
+// exist yet by definition — so dropping the exemption would turn the next
+// planning session red. archive/ is skipped wholesale, so the archived copies
+// are covered either way.
 const LIVE_DOCS = [];
 (function walk(dir) {
   for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
@@ -554,6 +562,34 @@ test("the skills index lists every skill", () => {
     .map((e) => e.name)
     .filter((s) => !index.includes(s));
   assert.deepEqual(missing, [], "a skill exists on disk but is not in .claude/skills/README.md");
+});
+
+test("docs/README.md indexes every directory under docs/", () => {
+  // THE GAP THIS CLOSES. Two tests below already check index coverage, but
+  // only per FILE and only for two trees ("every live engineering doc",
+  // "every research doc"). A whole DIRECTORY outside those two could go
+  // unlisted and nothing noticed. Measured 2026-09-16: 33 files in three
+  // directories had zero mentions in docs/README.md (superpowers/ 15,
+  // archive/moves/ 10, archive/tools/ 8). An unindexed directory is not a
+  // broken link either, so the reference guards passed too, while a reader
+  // following the index could not find those files at all.
+  //
+  // Nested one level under archive/ as well, because that is where the index
+  // keeps its own table and where two of the three strays were.
+  const index = read("docs/README.md");
+  const dirs = [];
+  for (const top of fs.readdirSync(path.join(ROOT, "docs"), { withFileTypes: true })) {
+    if (!top.isDirectory()) continue;
+    dirs.push(`${top.name}/`);
+    if (top.name !== "archive") continue;
+    for (const sub of fs.readdirSync(path.join(ROOT, "docs/archive"), { withFileTypes: true }))
+      if (sub.isDirectory()) dirs.push(`archive/${sub.name}/`);
+  }
+  // A directory counts as indexed when the path appears anywhere in the file:
+  // some are linked as a directory row, others only through a link to a file
+  // inside them (notes/, research/). Either is discoverable, which is the point.
+  const missing = dirs.filter((d) => !index.includes(d));
+  assert.deepEqual(missing, [], "a directory under docs/ is unreachable from docs/README.md");
 });
 
 test("the agents index lists every custom subagent and gitignore tracks the dir", () => {

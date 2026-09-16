@@ -44,6 +44,11 @@ const RaceEngineer = (function () {
   // …and no single line repeats inside this many, so a car sitting exactly on a
   // threshold does not get the same sentence every ten seconds.
   const REPEAT_S = 45;
+  // ONE VOICE. The pit cue (js/race/pit-lane.js cue) and the engineer write to
+  // the same driver; while the cue is giving a DIRECTION — hold the lane, keep
+  // left, stop here, merge — the engineer waits, and the line it owes is not
+  // spent (the wear step is only consumed when a line is actually said).
+  const DIRECTIONAL = ["enter", "keep", "stop", "merge"];
 
   function create(G) {
     Log.info("race", "RaceEngineer.create");
@@ -166,6 +171,8 @@ const RaceEngineer = (function () {
       for (const k in b.said) b.said[k] = Math.max(0, b.said[k] - dt);
       const call = callFor(s);
       if (!call) return "";
+      const cue = G.pits && G.pits.lastCue ? G.pits.lastCue() : null;
+      if (cue && DIRECTIONAL.indexOf(cue.phase) >= 0) return "";
       const [msg, key] = call;
       if (b.t > 0 || b.said[key] > 0) return "";
       // A wear step is only CONSUMED when it is actually said, so a threshold
@@ -182,6 +189,6 @@ const RaceEngineer = (function () {
     return { update, reset, callFor, senseOf };
   }
 
-  return { create, WEAR_STEPS, AXLE_SPLIT, GRAIN_CALL, BLISTER_CALL, COLD_CALL, QUIET_S, REPEAT_S };
+  return { create, WEAR_STEPS, AXLE_SPLIT, GRAIN_CALL, BLISTER_CALL, COLD_CALL, QUIET_S, REPEAT_S, DIRECTIONAL };
 })();
 Object.freeze(RaceEngineer);

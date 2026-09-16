@@ -606,6 +606,7 @@ const TrackMesh = (function () {
       }
     }
     buildKerbs(track, { pos, nrm, col, mat, trk, idx: idxArr });
+    buildPitHatch(track, { pos, nrm, col, mat, trk, idx: idxArr });
     return { pos, nrm, col, mat, trk, idx: idxArr };
   }
 
@@ -1073,6 +1074,68 @@ const TrackMesh = (function () {
     return out;
   }
 
+  /** The entry hatch as pure numbers, one stripe per entry: `s` its arc
+   *  position, `x0..x1` its lateral span measured from the centreline on the
+   *  pit side (inside the road edge, never over the peel line), `w` its width.
+   *  From the road's start to where the wall's fade begins (`v` reaching 0.5),
+   *  one stripe every 2 m, 1.2 m in from the edge. Tested on its own
+   *  (tests/unit/pit-complex.test.mjs) because the painted buffer cannot
+   *  tell a stripe from a chevron. */
+  function pitHatch(track) {
+    const p = track && track.pit, out = [];
+    if (!p || p.painted || !(p.entryRoadM > 0)) return out;
+    const L = track.total, n = track.n, W = 1.2;
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    for (let d = 2; d < p.entryRoadM; d += 2) {
+      const s = ((p.sA + d) % L + L) % L, k = ((Math.round((s / L) * n) % n) + n) % n;
+      if (p.v[k] >= 0.5) break;
+      TrackSpline.sample(track, s, smp);
+      out.push({ s, x0: smp.hw - W, x1: smp.hw - 0.05, w: W });
+    }
+    return out;
+  }
+
+  /** THE HATCH, into the ROAD buffer: the FIA no-go fill on the road side of
+   *  the peel line, a 45° white stripe every 2 m over the entry road's first
+   *  stretch (pitHatch above). In the road's own buffer, not the decal's,
+   *  because the road draws with a strong depth bias toward the camera and
+   *  the decal mesh with a weak one (js/game.js _wmRoadDryD / _startBias):
+   *  a stripe at PIT_LIFT over the road was invisible under SwiftShader and
+   *  visible only 15 cm up. Here it rides the road's bias like its edge lines
+   *  and sits a centimetre above the surface. `trk` carries hw = 0 so the
+   *  fragment-side marking SDF (roadMarkings) leaves it alone, as it does
+   *  the kerbs. Paint, not prims: nothing for the clip audit, nothing to hit. */
+  function buildPitHatch(track, out) {
+    const hatch = pitHatch(track);
+    if (!hatch.length) return out;
+    const { n, total: L } = track, sd = track.pit.side;
+    const white = track.def.palette.line || [0.95, 0.95, 0.98];
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+    for (const h of hatch) {
+      const k = ((Math.round((h.s / L) * n) % n) + n) % n;
+      TrackSpline.sample(track, h.s, smp);
+      const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t), uu = TrackGeom.norm(cross(rr, tt));
+      const P = (lon, x) => {
+        const by = bankOffsetAt(track, k, x) + 0.03;   // the road is at +0.02 (buildRoad)
+        return [smp.p[0] + rr[0] * x + tt[0] * lon + uu[0] * by,
+                smp.p[1] + rr[1] * x + tt[1] * lon + uu[1] * by,
+                smp.p[2] + rr[2] * x + tt[2] * lon + uu[2] * by, x];
+      };
+      // Laterals SORTED (lo/hi) like every road quad, so the winding faces up
+      // on either pit side; a parallelogram sheared one hatch width along.
+      const xa = Math.min(sd * h.x0, sd * h.x1), xb = Math.max(sd * h.x0, sd * h.x1);
+      const base = out.pos.length / 3;
+      for (const [lon, x] of [[-h.w, xa], [0, xb], [-h.w + 0.16, xa], [0.16, xb]]) {
+        const Q = P(lon, x);
+        out.pos.push(Q[0], Q[1], Q[2]); out.nrm.push(uu[0], uu[1], uu[2]); out.col.push(white[0], white[1], white[2]);
+        if (out.mat) out.mat.push(TrackGeom.MAT.FLAT);
+        if (out.trk) out.trk.push(h.s, x, 0);
+      }
+      out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+    }
+    return out;
+  }
+
   // THE PAINTED BOXES, one per row entry, at the positions the model laid out —
   // the same `row.boxes[i].s` js/race/pit-lane.js stops a car at and
   // js/track/scenery/pits.js puts a garage door behind. Painted in the WORKING
@@ -1130,6 +1193,6 @@ const TrackMesh = (function () {
   // buildKerbs stays private — it is only ever appended to buildRoad's buffers.
   return { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
            nodeGrid, buildRoad, buildTerrain, buildFloor, gridSlot, buildGridBoxes,
-           buildPitLane, buildPitBoxes, buildPitGarages, GRID_SLOTS };
+           buildPitLane, buildPitBoxes, buildPitGarages, pitHatch, buildPitHatch, GRID_SLOTS };
 })();
 Object.freeze(TrackMesh);

@@ -89,6 +89,22 @@ test("it speaks to the LOCAL player and to nobody else", () => {
   assert.equal(said.length, 0, "an AI car got a radio message");
 });
 
+test("one voice: while the pit cue gives a DIRECTION the engineer waits, and the line it owes is not spent", () => {
+  // Both write to the same driver; an engineer that talks over KEEP LEFT at
+  // the pit limit is worse than one that says nothing.
+  const { eng, tyres, said, G } = sessionFor();
+  const c = carOn(tyres, { wear: 0.8 });     // past the 0.75 step: a line is owed
+  let phase = "keep";
+  G.pits = { lastCue: () => ({ phase }), estimate: () => null };
+  for (let i = 0; i < 20; i++) eng.update(c, 1);
+  assert.equal(said.length, 0, "the engineer talked over the cue");
+  phase = "near";                             // a countdown is information, not a direction
+  eng.update(c, 1);
+  assert.equal(said.length, 1, "the owed line was not said once the cue let go");
+  assert.match(said[0], /TYRES AT/);
+  for (const p of E.DIRECTIONAL) assert.ok(["enter", "keep", "stop", "merge"].includes(p), p);
+});
+
 test("OFF: the engineer is silent, because there is nothing to be legible about", () => {
   const { eng, tyres, said } = sessionFor();
   tyres.setLevel("off");
