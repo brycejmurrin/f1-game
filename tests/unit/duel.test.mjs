@@ -36,13 +36,25 @@ test("pick() takes the fastest non-player car", () => {
   assert.equal(Duel.pick([{ isPlayer: true, skill: 9 }]), null);
 });
 
-test("the bump lifts racecraft harder than pace", () => {
+test("the bump lifts racecraft harder than pace, and leaves awareness alone", () => {
   const B = Duel.BUMP;
-  assert.ok(B.craft > B.pace && B.awareness > B.pace,
-    `craft ${B.craft} / awareness ${B.awareness} must outweigh pace ${B.pace}`);
+  // Pace is the SMALLEST lift that happens: a same-spec car out-dragging the
+  // player down a straight reads as a cheat, so the difficulty lives in craft.
+  assert.ok(B.craft > B.pace, `craft ${B.craft} must outweigh pace ${B.pace}`);
+  assert.ok(B.consistency > B.pace && B.experience > B.pace, "…and so must the other two");
+  // AWARENESS STAYS 0, and this assertion exists because an earlier version of
+  // this test demanded the opposite. In js/physics/ai-drive.js awareness is the
+  // CAUTION axis and runs the wrong way for a benchmark:
+  //     letPassDelay = lerp(4.2, 1.8, awareness)  — higher concedes SOONER
+  //     awareMul     = lerp(1.25, 0.7, awareness) — higher attacks LESS
+  // so +10 bought a rival that yields quicker and overtakes less. Lowering it
+  // instead would cost the rival its box-exit and launch reaction, which is a
+  // worse car rather than a harder one. Zero is the considered answer.
+  assert.equal(B.awareness, 0, "bumping awareness makes the rival concede sooner, not drive better");
   const c = Duel.bump(car(), DR);
   assert.equal(c.duelRival, true);
-  assert.ok(c.craft > 0.8 && c.awareness > 0.8, "racecraft axes reach the car as 0..1");
+  assert.ok(c.craft > 0.8, "the lifted racecraft axis reaches the car as 0..1");
+  assert.equal(c.awareness, 0.8, "…and the untouched one arrives at the base, undisturbed");
   assert.equal(c.code, "XXX", "an ordinary duel keeps the rival's identity");
 });
 
