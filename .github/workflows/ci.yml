@@ -357,7 +357,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        slice: [vm, slow, fast]
+        # vm-a / vm-b: test:game-vm measured 9.2-9.4 min as ONE slice on the
+        # first matrix run (2026-09-16) — the whole job's wall. The two halves
+        # (tests/groups.json partitions of the same file list; test:game-vm is
+        # still the full set for local use) put the four heavy files two a side.
+        slice: [vm-a, vm-b, slow, fast]
     # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
     # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
     # game-vm 161s = 305s total (+ garage-unit 39s, steering-unit 1s, 2026-09-10). Plus npm ci, which cost 3m32s and 5m02s on the
@@ -376,10 +380,14 @@ jobs:
           # ONE SLICE PER RUNNER (matrix.slice). Every script stays on its own
           # line: deploy.mjs and twinned-specs.mjs read this step's text.
           case "${{ matrix.slice }}" in
-            vm)
+            vm-a)
               # The Node VM harness: js/game.js headless, exact parity with the
               # physics baseline (tests/unit/physics-characterization-vm.test.mjs).
-              npm run test:game-vm
+              # Two partitions of test:game-vm on two runners (see the matrix).
+              npm run test:game-vm-a
+              ;;
+            vm-b)
+              npm run test:game-vm-b
               ;;
             slow)
               # The three raster/spawn-heavy car files, out of the edit loop
@@ -887,20 +895,35 @@ jobs:
         if: steps.shipfilter.outputs.ships != 'false' && (inputs.concurrency_key != '' || (github.event_name != 'schedule' && github.event_name != 'workflow_dispatch'))
         env:
           APEX_WORKERS: 1
+          # llvmpipe (the step above): ~10x on the rendering tests, measured.
+          APEX_GL: llvmpipe
+          LIBGL_ALWAYS_SOFTWARE: 1
         # --shard splits smoke.spec.js's tests across the four matrix VMs; the
         # flag passes through tools/ci/run-playwright.mjs verbatim (it forwards
         # argv to `playwright test`). Unsharded this step took 30-37 min.
         run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/4
       # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
       # whichever browser group the `group` input names (default tiny).
-      # The llvmpipe experiment (dispatch input `gl`): Mesa's software GL needs
-      # a display to bind through, which Xvfb provides; the launch flags come
-      # from APEX_GL in playwright.config.js.
-      - name: Mesa llvmpipe + Xvfb (experiment)
-        if: steps.shipfilter.outputs.ships != 'false' && github.event_name == 'workflow_dispatch' && inputs.gl == 'llvmpipe'
+      # MESA LLVMPIPE, NOT SWIFTSHADER, FOR THE SMOKE GATE (2026-09-16). MEASURED
+      # on the first dispatch (run 35062479811, all four shards green): corner
+      # approach 17.8 s against a 214 s SwiftShader median, grid start 21.4 s vs
+      # 138, jump() 9.7 s vs 171, DRIVING LINE 18.4 s vs 65 — every non-blank
+      # frame assertion held. Shard walls 1.1-1.6 min against 1.8-4.8 min on the
+      # SwiftShader push run of the same commit. llvmpipe is Mesa's software
+      # rasteriser reached through ANGLE's GL backend; it needs a display to
+      # bind through (Xvfb, started here and exported via DISPLAY so the pinned
+      # `npm run test:smoke` line below is unchanged) and the launch flags
+      # APEX_GL swaps in playwright.config.js. Dead in the dev container (no
+      # /dev/dri — docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe), alive on
+      # GitHub's runners. The dispatched wide run keeps SwiftShader unless
+      # `gl: llvmpipe` is passed, so a spec can still be measured on both.
+      - name: Mesa llvmpipe + Xvfb
+        if: steps.shipfilter.outputs.ships != 'false'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
+          Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
       - name: Boot group (nightly) / dispatched group
         if: steps.shipfilter.outputs.ships != 'false' && inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.gl != 'llvmpipe'
         env:
@@ -922,7 +945,7 @@ jobs:
           APEX_GL: llvmpipe
           LIBGL_ALWAYS_SOFTWARE: 1
           GROUP: ${{ inputs.group || 'tiny' }}
-        run: xvfb-run -a --server-args="-screen 0 1280x800x24" npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
+        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4

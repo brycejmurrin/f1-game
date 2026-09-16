@@ -81,6 +81,7 @@ export const TWINNED = {
   "tests/specs/longitudinal.spec.js":       "tests/unit/longitudinal-vm.test.mjs",
   "tests/specs/obs-act-edge.spec.js":       "tests/unit/obs-act-edge-vm.test.mjs",
   "tests/specs/offtrack.spec.js":           "tests/unit/offtrack-vm.test.mjs",
+  "tests/specs/wake-lock.spec.js":          "tests/unit/wake-lock-vm.test.mjs",
   "tests/specs/world-physics.spec.js":      "tests/unit/world-physics-vm.test.mjs",
 };
 
