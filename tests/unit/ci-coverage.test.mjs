@@ -481,9 +481,15 @@ test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: s
       `${name} must install Mesa + Xvfb, and skip it on the \`gl: swiftshader\` opt-out`);
     assert.match(job, /Xvfb :99 -screen 0 1280x800x24[^\n]*&\n\s+echo "DISPLAY=:99" >> "\$GITHUB_ENV"/,
       `${name}'s Xvfb must export DISPLAY so the pinned test command line is unchanged`);
-    assert.match(job, /APEX_GL: (llvmpipe|\$\{\{ inputs\.gl != 'swiftshader'[^\n]*\}\})/,
+    assert.match(job, /APEX_GL: (llvmpipe|\$\{\{ \(?inputs\.gl != 'swiftshader'[^\n]*\}\})/,
       `${name} installs llvmpipe but never asks the browser for it`);
   }
+  // The one carve-out: menu-baseline's goldens are SwiftShader captures (the
+  // spec's own platform note), so a `selected` shard that carries it keeps the
+  // ANGLE default: on the deploy tip `selected` still ran SwiftShader, and this
+  // branch moves it to llvmpipe, so the carve-out lands with the swap.
+  assert.match(selectedJob, /APEX_GL: \$\{\{ \(inputs\.gl != 'swiftshader' && !contains\(matrix\.specs, 'menu-baseline'\)\) && 'llvmpipe' \|\| '' \}\}/,
+    "a selected shard carrying menu-baseline must stay on SwiftShader (its goldens are SwiftShader captures)");
   // driving-model is the parity anchor for the VM twins (physics-baseline.json):
   // a rasteriser swap under it is a separate, separately measured change.
   assert.doesNotMatch(drivingJob, /APEX_GL|llvmpipe/,

@@ -1426,8 +1426,11 @@ jobs:
           APEX_WORKERS: 1
           # llvmpipe (the step above). Empty on `gl: swiftshader`, where the
           # step is skipped and playwright.config.js keeps the ANGLE default.
-          APEX_GL: ${{ inputs.gl != 'swiftshader' && 'llvmpipe' || '' }}
-          LIBGL_ALWAYS_SOFTWARE: ${{ inputs.gl != 'swiftshader' && '1' || '' }}
+          # ...except a shard carrying menu-baseline: its six goldens are
+          # SwiftShader captures ("a baseline captured on a GPU will not match",
+          # the spec's own platform note), so that shard keeps the ANGLE default.
+          APEX_GL: ${{ (inputs.gl != 'swiftshader' && !contains(matrix.specs, 'menu-baseline')) && 'llvmpipe' || '' }}
+          LIBGL_ALWAYS_SOFTWARE: ${{ (inputs.gl != 'swiftshader' && !contains(matrix.specs, 'menu-baseline')) && '1' || '' }}
         run: npm test -- ${{ matrix.specs }} --retries=0 --timeout=180000 --max-failures=3
       # Record what failed so the NEXT run hoists it to the front. junit.xml is
       # the machine-readable half of the reporter set playwright.config already
