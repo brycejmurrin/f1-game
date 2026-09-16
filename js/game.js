@@ -13,7 +13,7 @@ const els = {
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
   tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"), plan: $("hud-plan"),
-  pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"),
+  pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"), workBtn: $("hud-work"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
@@ -8556,6 +8556,41 @@ function openGarage(from) {
   vt(openSetup);
 }
 $("mb-garage").onclick = () => openGarage("menu");
+// ── WORK ON CAR, from inside a pit stop ────────────────────────────────────
+// The GARAGE is the same screen the menu opens; what differs is the way back
+// and the price. `paused` freezes physics and the clock (the loop's own gate)
+// WITHOUT the pause card, because the garage is the screen here — two stacked
+// menus would each own the Escape key. `setupPreviewOn`, which openSetup sets,
+// already makes the renderer draw the car instead of the race, so the frozen
+// world costs nothing while you are in there.
+let pitWorkSpec = null;
+/** What the car IS, as one comparable string: the parts sheet and the set-up.
+ *  A visit that changes neither is free — the stop is only charged for work
+ *  that happened. */
+function carSpecKey() {
+  const team = player ? player.team : Teams.LIST[teamIdx];
+  try { return JSON.stringify([getTeamParts(team.id), SetupTune.get(team.id)]); } catch (e) { return null; }
+}
+function openPitWork() {
+  if (!pits || !pits.canWork(player)) return;
+  pitWorkSpec = carSpecKey();
+  paused = true;
+  GameAudio.stopEngine(); GameAudio.setSkid(0);
+  openGarage("pit");
+}
+/** Back to the race. Called by BOTH garage exits — there is no "cancel" here
+ *  either (the garage keeps what you picked), so DONE and BACK do the same
+ *  thing and only the price is conditional. */
+function closePitWork() {
+  leaveGarage();                       // …which is what recomputes the car's mods
+  const changed = pitWorkSpec != null && carSpecKey() !== pitWorkSpec;
+  pitWorkSpec = null;
+  const added = changed ? pits.addWork(player) : 0;
+  if (added > 0 && typeof announce === "function") announce("WORK DONE — +" + added + "s", 1.8, "race");
+  paused = false;
+  lastFrame = performance.now();       // or the frozen minutes arrive as one dt
+  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); }
+}
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
 function leaveGarage() {
@@ -8572,6 +8607,7 @@ function leaveGarage() {
    Selections are kept exactly as DONE keeps them: nothing here is a cancel. */
 function garageBack() {
   if (soundOn) GameAudio.uiTick();
+  if (garageReturn === "pit") { closePitWork(); return; }
   leaveGarage();
   if (garageReturn === "vsfriend") {
     $("vsfriend").hidden = false;
@@ -8585,6 +8621,7 @@ function garageBack() {
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {
+  if (garageReturn === "pit") { closePitWork(); return; }
   leaveGarage();
   // Back to the waiting room, and tell the other player what you are driving —
   // a room that only synced on START would have two people spend a minute each
@@ -8661,6 +8698,7 @@ function setPaused(p) {
   lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }
 els.pausebtn.onclick = () => setPaused(true);
+els.workBtn.onclick = openPitWork;
 
 // ---- Hide-HUD (clean-screen) mode ----
 // HUD: OFF (DISPLAY ▸ HUD fold) strips every overlay via a body class

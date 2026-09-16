@@ -416,3 +416,57 @@ test("a car on the lane's own tarmac commits, and the limiter comes on", async (
   assert.equal(p.state, "lane");
   assert.equal(p.inLaneLat, true);
 });
+
+test("WORK ON CAR is offered only on the jacks, and the stop pays for it", async () => {
+  // Asked: a button, while pitting, that opens the GARAGE to change parts or
+  // the set-up. The gate is the whole safety property — it opens a MENU, so it
+  // must be unreachable at any speed — and the price is what keeps it a
+  // decision: real F1 cannot change a part mid-race at all, so the game charges
+  // `workS` seconds of the stop instead of refusing.
+  const a = await fresh();
+  const pits = g.G.pits, car = g.G.cars ? g.G.cars.find((c) => c.local) : null;
+  assert.ok(car, "the local car");
+  assert.equal(pits.canWork(car), false, "not on the racing surface");
+  // Into the box, the same way the test above drives it.
+  a.jump(0.985, 30, 0);
+  const p0 = a.pit(), L = g.G.track.total;
+  const f = ((0.985 + (p0.boxM - p0.atM - 18) / L) % 1 + 1) % 1;
+  a.jump(f, 2.5, 0);
+  const lx = a.pit().laneX;
+  a.jump(f, 2.5, lx); a.aim(0);
+  a.pit({ arm: true });
+  let inBox = false;
+  for (let i = 0; i < 60 * 12 && !inBox; i++) {
+    const ps = a.physState(), p = a.pit();
+    a.aim(0);
+    const near = p.atM >= p.boxM - 3;
+    a.setInput({ steer: Math.max(-1, Math.min(1, (lx - ps.x) * 0.5)),
+                 throttle: !near && ps.speed < 5,
+                 brake: near && p.state !== "box" && ps.speed > 0.2 });
+    a.step(1 / 60, 1);
+    inBox = a.pit().state === "box";
+  }
+  a.clearInput();
+  assert.ok(inBox, "reached the box");
+  assert.equal(pits.canWork(car), true, "…and the work is offered on the jacks");
+  // THE PRICE, charged to the hold that is left — so the field drives past
+  // while you are in there, which is the whole point of charging it.
+  const held = car.pitT;
+  const added = pits.addWork(car);
+  assert.equal(added, pits.workS, "the stop is charged one work period");
+  assert.ok(Math.abs(car.pitT - (held + pits.workS)) < 1e-6,
+            `the hold grew by it (${held.toFixed(2)} → ${car.pitT.toFixed(2)})`);
+  assert.equal(car.pitWorked, pits.workS, "…and the summary knows what the stop really cost");
+  // Off the jacks, the offer is gone — a menu you could open while rolling down
+  // the lane is a menu you can open at 300 km/h. Asked of STUBS, and this test
+  // runs LAST on purpose: it drives a whole stop, and with it ahead of the
+  // driven-directions test that one read `merge` where it expects `out` —
+  // `fresh()` re-races but a serviced car's release does not unwind cleanly
+  // between tests. Worth fixing in `fresh()`; pinned here so the next reader
+  // knows the order is load-bearing rather than incidental.
+  const stub = (state, t) => ({ local: true, pitState: state, pitT: t });
+  assert.equal(pits.canWork(stub("out", 0)), false, "not on the way out");
+  assert.equal(pits.canWork(stub("lane", 0)), false, "not while rolling down the lane");
+  assert.equal(pits.canWork(stub("box", 0)), false, "not once the hold has run out");
+  assert.equal(pits.canWork({ pitState: "box", pitT: 2 }), false, "and never for a car that is not yours");
+});

@@ -479,6 +479,22 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
   letter-spacing: 0.08em; color: var(--text); text-shadow: var(--hud-halo);
 }
 #hud-pit-arrow { color: var(--you); }
+/* WORK ON CAR — only up while the car is on the jacks, so it is a REAL button
+   rather than a cue: big enough to hit on a phone with a thumb that is already
+   on the screen (44 px, WCAG 2.5.8), in --you like the box phase it belongs to,
+   and pulsing so it reads as an offer with a clock on it. */
+#hud-work[hidden] { display: none; }
+#hud-work {
+  display: block; margin-top: calc(var(--gap) / 3);
+  min-height: 44px; padding: 0 calc(var(--gap) * 0.9);
+  font-family: var(--font-hud); font-size: var(--fs-micro); font-weight: 800;
+  letter-spacing: 0.08em; color: var(--bg); background: var(--you);
+  border: 0; border-radius: calc(var(--radius) * 0.6);
+  box-shadow: var(--lift-2);
+  animation: pulse var(--hud-pulse) infinite;
+  pointer-events: auto; cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) { #hud-work { animation: none; } }
 #hud-pit[data-phase="enter"] #hud-pit-arrow,
 #hud-pit[data-phase="armed"] #hud-pit-arrow { animation: pulse var(--hud-pulse) infinite; }
 #hud-pit[data-phase="box"],
