@@ -3718,7 +3718,7 @@ function updateCar(c, dt, ranked) {
   // it moves with the table rather than pinning a literal here.
   if (!c.human && _leadHuman) {
     const gap = _leadHuman.prog - c.prog;
-    const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
+    const bandFactor = gap > 0 && gap < track.total * 0.5 && raceT - launchT0 > 8 ? Math.min(gap / 700, 1) * dd.band : 0;   // never off the START LINE (a P22 grid slot is 182 m back by itself = +4.7 % vmax on easy into T1, "the antithesis of what we want" — Game AI Pro ch.42) and never once LAPPED (the gap clamps the band to full, so an easy car a lap down took min(1, 0.93 x 1.18) = hard's corner authority and un-lapped itself). Both only ever REMOVE a boost, so the DIFF ladder cannot move.
     const bandCap = Math.max(1, BAND_CEIL / (c.tierV * c.skill * dd.ai));
     vmax *= Math.min(1 + bandFactor, bandCap); c._bandNow = bandFactor;   // the corner half of the band: read by the brake target below
   } else c._bandNow = 0;
