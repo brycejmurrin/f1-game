@@ -555,3 +555,201 @@ difficulty setting, and it is the strongest argument yet for a per-circuit or
 per-notch pace factor rather than one global triple — the thing §8 stopped
 short of recommending. Not shipped: the decision is the owner's, and the
 instrument now exists to check it either way.
+
+## 11. The exact curvature, the lurch cap and a lap-time instrument (2026-09-16)
+
+A second pass over "how is the line chosen", eight days on, with the
+literature re-read at the source rather than from memory. What it adds to §3:
+
+- **TUMFTM's min-curvature QP linearises the offset path's curvature around
+  the reference line** and its `mincurv_iqp` variant exists because that
+  linearisation error "gets large in corners" — the QP is re-solved around
+  the previous solution until the curvature it minimised and the curvature
+  the result actually has agree ([Heilmeier et al. 2019](https://www.tandfonline.com/doi/full/10.1080/00423114.2019.1631455),
+  [opt_min_curv.py](https://github.com/TUMFTM/trajectory_planning_helpers/blob/master/trajectory_planning_helpers/opt_min_curv.py)
+  tracks `curv_error_max` for exactly this).
+- **Kapania, Subosits & Gerdes' two-step** ([arXiv 1902.00606](https://arxiv.org/abs/1902.00606))
+  is, precisely: a three-pass speed profile (steady-state cap `√(μg/|K|)`,
+  forward under the accelerating force, backward under the braking force,
+  both through a friction circle `F_x² + F_y² ≤ (μF_z)²`), then a convex path
+  update minimising the heading rate `Σ((Ψ_k − Ψ_{k−1})/Δs)² + λ(δ_k − δ_{k−1})²`
+  under an affine time-varying bicycle model and the track bounds, iterated;
+  the lap time converged in four to five iterations, and the result (136.4 s
+  simulated, 138.6 s driven) beat a professional's 137.7 s at Thunderhill.
+  Where it differs from a min-curvature-only line is in the transitions
+  between corners ("gradually approaches the left side" for the next right),
+  not at the apexes.
+- **K1999** as it survives in [vdrift's port](https://github.com/VDrift/vdrift/blob/master/src/k1999.cpp):
+  curvature is the circumscribed circle through three points, each point's
+  lane position is Newton-stepped toward the curvature of its neighbours
+  (`dLane = 0.0001`), a `SecurityR` margin keeps the line off the edges, and
+  the step size halves from 128 down to 1 — a coarse-to-fine schedule, which
+  is what §6's coarse/fine relaxation is.
+
+### 11.1 The objective was minimising the wrong curvature
+
+§6's relaxation minimised `κ/(1+κx) − x''`, the offset curve's curvature to
+first order. The exact curvature of `p = c + x·n` is
+
+    κ_line = [(1+κx)²κ − (1+κx)x'' + x'(κ'x + 2κx')] / ((1+κx)² + x'²)^{3/2}
+
+and the dropped denominator alone is a 1.3× overstatement at a 0.45 m/m road
+crossing — the objective was taxing every crossing about a third more than
+the geometry does, which is the same linearisation error TUMFTM iterate to
+remove. `TrackLine.relaxLine` now minimises the exact expression (its
+partials were checked against finite differences to 1e-5 before anything was
+measured), and `TrackLine.lineCurvature` exports the same expression so the
+audit and the circuit test measure what the bake minimises. Measured against
+the pre-change tree under that ONE metric set (the first-order audit had
+also been understating the old line):
+
+| circuit | cornerTime gain, old → new | lapTime gain (§11.4), old → new | worst slope, old → new |
+|---|---|---|---|
+| monza | +2.37 → +3.07 % | +7.25 → +10.39 % | 0.43 → 0.45 |
+| spa | +2.30 → +2.12 % | +7.04 → +6.63 % | 0.33 → 0.46 |
+| silverstone | +1.80 → +1.68 % | +8.62 → +10.08 % | 0.38 → 0.45 |
+| monaco | +4.65 → +3.89 % | +11.48 → +14.16 % | 0.43 → 0.45 |
+| suzuka | +1.91 → +1.63 % | +7.23 → +8.56 % | 0.37 → 0.40 |
+| baku | +0.95 → +0.65 % | +10.01 → +11.48 % | 0.32 → 0.40 |
+| singapore | +0.93 → +0.52 % | +9.59 → +11.09 % | 0.32 → 0.45 |
+| zandvoort | +0.31 → −0.23 % | +6.47 → +6.88 % | 0.32 → 0.36 |
+
+Summed over the eight: 13.3 → 11.8 s by the grip-only model, 73.6 → 85.6 s
+under the brake/accel sweep. The two models disagree because the exact
+objective, freed of the crossing tax, spends curvature where the car is not
+grip-limited (the transitions) and saves it where it is — which is the
+Kapania result above, arrived at without a speed profile. Spa is the one
+circuit the sweep reads as slightly worse, and §11.2 says why.
+
+### 11.2 Honest crossings are steeper than the lurch cap, and the cap is right
+
+With the crossing tax gone, the optimum at a hairpin or chicane EXIT is a
+0.54–0.64 m/m crossing (Monza's first chicane, Spa's La Source), over the
+0.5 m/m `track-line-circuits` pins. That cap was set against the knot bake's
+overlap lurches (0.58–0.68), not against a car; at 15–25 m/s a 0.6 m/m
+crossing is inside the AI's lateral authority (`STEER_VMAX` 15 m/s of
+lateral speed), so the first question was whether the cap is a proxy worth
+keeping. It is: the AI field's Monza median with the uncapped line measured
+124.67 s against 122.68 s on the old one (`ai-pace`, normal, 21 cars) — the
+AI's controller does not take a 0.54 m/m crossing the way the geometry says
+a car could. Holding the cap took three attempts, each measured on the
+synthetic chicane of `track-line.test.mjs` (two R33 corners 10 m apart on a
+14 m road — the crossing needs 25 m at the cap, so the bound is active):
+
+| bound as… | what happened |
+|---|---|
+| a projected box on each node against both neighbours | the sweep stalled: a node can only move within a cap of its neighbours, so a crossing relocates one node per pass; the chicane came out ASYMMETRIC (first apex −2.7 m, second +5.5) with an objective of 9.8e-4 against 7.5e-4 for the symmetric average of the line and its mirror image — and relaxing from that average reached −5.0e-4 |
+| a piecewise quadratic penalty beyond the cap, over-relaxed | stiff (μ/ds² against a curvature stencil) and discontinuous: ω = 1.25 sent the chicane's objective to 3.9e-2, ω = 1.5 with a 0.40 cap sent a Spa crossing to 3.4 m/m; damped to ω = 1 it stalled like the box |
+| a uniform `ν·Σx'²` (the tax the first-order form applied by accident, made explicit) | stable, and useless: ×30 before a hairpin exit's slope moved, and by then the line's gain had halved (ν = 5e-3: slopes 0.48, Monza's sweep gain 10.8 → 6.2 %) — the steep crossings are two specific slow exits, and a global tax reaches them last |
+
+What shipped is **projected relaxation after convergence**: the line is
+relaxed unconstrained, then six rounds of {ten edge-wise trims, five
+relaxation passes} and a final trim. The trim is edge-wise on purpose — an
+edge steeper than the cap has both ends moved half the excess toward each
+other, inside the road, so the excess propagates to the neighbouring edges
+and the crossing LENGTHENS; a per-node box cannot do this because on a
+uniform ramp above the cap every node's neighbours are already further apart
+than two caps allow. The relaxation bursts between trims re-smooth what the
+trim kinked: pure trimming left the chicane's objective at 1.1e-3 and Spa's
+sweep gain at 5.7 %; interleaved, 0.3e-4 and 6.6 %. The chicane is symmetric
+(apexes −5.65 / +5.79, 0.55 m off centre at the midpoint) and every circuit
+sits at 0.45–0.46 m/m. The light `SLOPE_NU = 1e-4` stays as a regulariser
+(it keeps the sweep from wiggling on a straight), not as the cap.
+
+The principled criterion is a bound on LATERAL SPEED, `v·x' ≤ STEER_VMAX`,
+which would let the slow exits cross at 0.6 and hold the fast ones tighter
+than 0.45; it needs the speed profile inside the bake (§11.5's sweep) and a
+new test criterion in place of the geometric 0.5 m/m. Not done here: that is
+a change to what the test pins, which is the owner's call, and the measured
+Monza median above says the geometric cap is not costing the AI anything
+today.
+
+### 11.3 Convergence: alternate the sweep, add a level
+
+Two solver changes fell out of the chicane probe. The Gauss-Seidel sweep now
+alternates direction each pass (symmetric SOR): a one-way sweep settles a
+conflict the bounds cannot both satisfy in favour of whichever corner it
+reaches second. And there is a stride-2 level between the every-4th-node
+coarse solve and the fine passes: a 25 m road crossing is 1.5 cells on the
+16 m coarse grid, so the coarse solve parks it a few metres off (that is
+where §6's line got its 0.57 m chicane asymmetry) and the fine sweep, which
+moves a crossing one node per pass, could not bring it back. With the level,
+the pass budget came down: 120 / 40 / 30 measures the same line as
+250 / 60 / 60 (Monza's sweep gain 10.36 vs 10.41 %, chicane objective 0.9e-4
+vs 0.3e-4). The exact stencil costs three square roots per node, so
+`TrackLine.bake` on Monza is 123 ms against 68 ms before — 5 % of an
+1100 ms circuit build, and §7's "time the shipped path" lesson applied: this
+is the number from the track-build VM, not a prototype.
+
+### 11.4 The instrument the street circuits needed
+
+§6 recorded Baku, Singapore and Zandvoort as marginally SLOWER than the
+centreline on the relaxed line and called it "a real (small) loss" — under
+the grip-only corner-speed model, which is grip-limited at every node and so
+cannot see what a line does at a corner's exit. `tools/track/line-audit.mjs`
+now also reports `lapTime`, the forward/backward brake/accel sweep the
+DRIVING LINE display already runs (`driving-line.js`: cornering cap, a
+backward pass under `BRAKE·0.85`, a forward pass under `ACCEL`, twice) —
+the velocity-profile half of the two-step, applied to measurement. Under it
+the same three circuits read +11.5, +11.1 and +6.9 %, and
+`track-line-circuits.test.mjs` pins every circuit shape at ≥ 5 % under the
+sweep beside the grip-only "no slower than the centreline" it already held.
+Relative use only, same constants on both sides; nothing here reaches the
+player (`PHYSICS.md` §curvature channels).
+
+### 11.5 The two-step's other half, measured and not shipped
+
+With the sweep to hand, Kapania's path re-weighting was tried the way the
+paper frames it — where the car is below its cornering cap (braking in,
+accelerating out) curvature costs less time than where it is on the cap —
+as a weight `w = clamp((v/cap)², wMin, 1)` on each node's κ² term, two or
+three iterations of sweep → weighted relaxation → trim, against the SAME
+continuation with unit weights so extra passes were not mistaken for the
+weighting:
+
+| wMin | monza | spa | silverstone | monaco | baku | singapore | zandvoort |
+|---|---|---|---|---|---|---|---|
+| unit weights | 10.49 % | 6.80 % | 10.07 % | 14.15 % | 11.50 % | 11.15 % | 6.90 % |
+| 0.3 | 10.87 % | 7.01 % | 10.49 % | 14.62 % | 11.99 % | 11.06 % | 7.17 % |
+| 0.1 | 10.21 % | 7.30 % | 10.70 % | 14.98 % | 12.18 % | 11.50 % | 7.31 % |
+
++0.2 to +0.5 points of sweep gain — a twentieth of what the line already
+gains — for 0.1 to 1 point less by the grip-only model and a second sweep
+per bake, on a proxy that §9 showed does not reliably reach the AI's lap.
+Same verdict as §6's speed-weighted pass, on a better instrument: recorded,
+not shipped. The prototype patches `relaxLine` with a per-node weight array
+and lived in the session's scratch directory.
+
+### 11.6 The AI on the new line
+
+Measured with the instruments §7–§10 left behind, old line against new,
+normal difficulty:
+
+- **`ai-line.mjs`, three rebuilt fields each.** Where the AI puts the car:
+  at Monza the three scored corners' approaches are unchanged (−2.0 / −1.9 /
+  −1.9 m, outside) and the apex at s = 2496 deepens from 3.6 to 5.4 m inside
+  (the other two hold at 6.2 and 6.0). At Spa, La Source's apex was 3.8 m
+  OUTSIDE on the old line — the car was not making the hairpin — and is
+  3.4 m inside on the new one; the other ten scored corners move by at most
+  0.8 m, six of them deeper. `ai-racecraft-vm` passes 4/4.
+- **Solo flying laps** (one AI car, the field parked 1500 m behind, the §8
+  method, three laps): Monza 128.6 s on both lines, to the tenth; Baku
+  best 130.9 s old against 131.6 s new, with the third lap 131.6 s on both
+  and the same car's own laps 0.7 s apart within one run — inside its
+  lap-to-lap spread, not a pace change. Expected — the AI's corner speed is
+  `pathK`, the calibrated brake model §6 deliberately left alone, so the
+  line changes where the car IS through a corner and not how fast the model
+  lets it go. The difficulty scales need no re-measure.
+- **Field medians** (`ai-pace`, 21 cars, two laps): Monza 122.68 → 125.27 s
+  with the fastest car 119.27 → 118.37 s; Baku 133.63 → 133.28 s. The Monza
+  median moving 2 % while the fastest lap and the solo lap do not is traffic
+  — §10's point that the median car is limited by the car ahead — and one
+  seed of it; the instrument has no multi-seed mode yet, so it is quoted for
+  what it is and not as a pace change.
+
+Not done: the lateral-speed criterion of §11.2 (a test change), an honest
+`pathK` from the line's own curvature (still the §5 follow-up, still gated
+on re-calibrating the difficulty scales), and the browser groups
+`pick-tests` names for a `js/track/core/` edit beyond `tiny` — the node
+groups (`sweeps`, `audit`, `game-vm`'s determinism and transient gates,
+`tooling-fast`) were run.
