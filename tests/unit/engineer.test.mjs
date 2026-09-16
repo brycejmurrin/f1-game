@@ -40,8 +40,13 @@ function load() {
 const { E, T } = load();
 
 // A G stand-in with the tyre model armed. The engineer reads it and nothing else.
-function sessionFor({ weather = "dry", cautionLevel = 0, arc = null, laps = 25 } = {}) {
+// `heard` is the banner's verdict: real announce() returns false when the line
+// never reaches the screen (a cinematic camera drops "info", or the single
+// queue slot is already held by something higher — js/game.js announce()).
+function sessionFor({ weather = "dry", cautionLevel = 0, arc = null, laps = 25, heard = true } = {}) {
   const said = [];
+  let hear = heard;
+  const setHeard = (v) => { hear = v; };
   const tyres = T.create({
     lapsTarget: laps, track: { total: 5386, def: {} }, LAT_MAX: 22,
     aTop: () => 7, vTop: () => 60, raceWeather: weather,
@@ -50,9 +55,9 @@ function sessionFor({ weather = "dry", cautionLevel = 0, arc = null, laps = 25 }
   const G = {
     tyres, raceWeather: weather, weatherArc: arc,
     cautionInfo: () => ({ level: cautionLevel }),
-    announce: (msg) => said.push(msg),
+    announce: (msg) => { said.push(msg); return hear; },
   };
-  return { eng: E.create(G), tyres, said, G };
+  return { eng: E.create(G), tyres, said, G, setHeard };
 }
 // A car three laps INTO its stint, and up to temperature. Both matter: a car
 // still on its out-lap is legitimately told its tyres are cold, and that call
@@ -212,6 +217,27 @@ test("a wear step is only SPENT when it is actually said", () => {
   quiet(eng, c);
   eng.update(c, 1);
   assert.ok(said.length >= 2, "the step crossed during the quiet window was lost");
+});
+
+test("a line the BANNER drops is not spent either — a cinematic camera must not end the radio", () => {
+  // The camera modes silence "info" and "coach" so a film shot is not captioned
+  // (js/game.js announce()). Every engineer line is "info", so if the engineer
+  // spent its state on the call anyway, one press of the camera button ended
+  // the radio for the session: the wear step advanced unseen and a step, once
+  // advanced, never re-crosses. announce() returns the verdict; the engineer
+  // only pays on true.
+  const { eng, tyres, said, setHeard } = sessionFor({ heard: false });
+  const c = carOn(tyres, { wear: 0 });
+  c.tyreWear = 0.55;
+  for (let i = 0; i < 20; i++) eng.update(c, 1);
+  assert.ok(said.length > 1, "the engineer stopped OFFERING the line, not just saying it");
+  setHeard(true);                                  // camera back to a driving view
+  const before = said.length;
+  eng.update(c, 1);
+  assert.equal(said.length, before + 1, "the line did not come back once the banner was free");
+  const after = said.length;
+  for (let i = 0; i < 5; i++) eng.update(c, 1);
+  assert.equal(said.length, after, "…and now that it WAS heard, it is spent and quiet");
 });
 
 test("a NEW SET restarts the ladder, worked out from the stint counter alone", () => {

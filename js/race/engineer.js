@@ -218,14 +218,17 @@ const RaceEngineer = (function () {
       if (cue && DIRECTIONAL.indexOf(cue.phase) >= 0) return "";
       const [msg, key] = call;
       if (b.t > 0 || b.said[key] > 0) return "";
+      // "info" priority, not "race": an engineer must never talk over a flag,
+      // a penalty or the lights (js/game.js ANN_PRI). announce() reports back
+      // whether the line will actually be heard — a cinematic camera drops
+      // "info" outright, and a busy banner's single queue slot can be lost to
+      // a higher priority.
+      if (!G.announce(msg, 2.2, "info")) return "";
       // A wear step is only CONSUMED when it is actually said, so a threshold
       // crossed while the banner was busy is still waiting on the next tick
       // rather than silently spent.
       if (key.indexOf("wear") === 0) b.step = s.step;
       b.t = QUIET_S; b.said[key] = REPEAT_S;
-      // "info" priority, not "race": an engineer must never talk over a flag,
-      // a penalty or the lights (js/game.js ANN_PRI).
-      G.announce(msg, 2.2, "info");
       return msg;
     }
 

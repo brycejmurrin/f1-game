@@ -236,10 +236,18 @@ const DrivingCoach = (function () {
       held += step;
       if (held + 1e-9 < TIPS[id].dwell) return;
       const tip = TIPS[id], turn = turnAt();
+      // Only a line that will be HEARD counts as advice given. The 30 s repeat
+      // block, the tip counts and the post-session feedback all claim to
+      // describe what the player was told, so none of them may record a tip a
+      // cinematic camera silenced (js/game.js announce() returns that verdict).
+      // Nothing is cleared on the way out: the candidate stays held so the tip
+      // lands on the very next tick the banner is free, rather than starting
+      // its dwell over. (An edge tip still ages out on its own staleness rule.)
+      if (!G.announce(tip.text, 2.5, "coach")) return;
       latest = { id, text: tip.text, detail: tip.detail, time: G.raceT, turn };
       tipCounts.set(id, (tipCounts.get(id) || 0) + 1); lastTip.set(id, clock);
       log.push({ id, turn, time: G.raceT }); if (log.length > 200) log.shift();
-      G.announce(tip.text, 2.5, "coach"); quiet = 8; clearCandidate(); edge = null;
+      quiet = 8; clearCandidate(); edge = null;
     }
     const goal = () => RaceInsights.DRILLS[drillMode].toUpperCase();
     // G.practice, NOT G.timeTrial: a checkpoint is safe in any session the

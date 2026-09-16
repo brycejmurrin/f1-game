@@ -1212,20 +1212,37 @@ function fmtTime(t) {
   const m = Math.floor(t / 60), s = t - m * 60;
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
 }
+// RETURNS WHETHER THE MESSAGE REACHED THE SCREEN — true shown, false dropped
+// or queued. It used to return nothing, and a caller that needs to know could
+// not: RaceEngineer marks a wear step CONSUMED as it speaks, on the promise
+// (its own comment) that "a threshold crossed while the banner was busy is
+// still waiting on the next tick rather than silently spent". That promise was
+// unkeepable while this told it nothing. Both early returns below are silent
+// drops, and the camera one is permanent — see the note on it.
 function announce(msg, dur, kind) {
   kind = kind || "race";
   const pri = ANN_PRI[kind] || 2;
   if (hudProfile !== "broadcast") {
     const camId = CAM_MODES[camMode].id;
     if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead") {
-      if (kind === "info" || kind === "coach") return;
+      // The cinematic cameras drop the two quiet channels so a film shot is not
+      // captioned. That is a LOOK choice, and it must not silence the engineer:
+      // every RaceEngineer line is "info", so before this returned a verdict a
+      // player who pressed the camera button stopped being told to BOX for the
+      // rest of the session — the call was consumed unseen and a wear step,
+      // once advanced, never re-crosses.
+      if (kind === "info" || kind === "coach") return false;
     }
   }
   if (announceT > 0 && pri <= _annPri) {
-    if (!_annQueue || pri > (_annQueue.pri || 0)) _annQueue = { msg, dur, kind, pri };
-    return;
+    // The queue is a single slot. Taking it means the line still gets its turn,
+    // so that counts as accepted; losing it to a higher priority means the line
+    // is gone and the caller has to offer it again.
+    if (!_annQueue || pri > (_annQueue.pri || 0)) { _annQueue = { msg, dur, kind, pri }; return true; }
+    return false;
   }
   showAnnounce(msg, dur, kind);
+  return true;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
 // Curated def.sectors splits when present; equal thirds only as fallback.
@@ -3545,7 +3562,10 @@ function update(dt) {
      same call mid-count would hand the player a free re-place on the grid. */
   if (state === "race" && Input.consumeRecover() && player && !player.retired) {
     // A saved practice checkpoint makes RECOVER the driver's TRY AGAIN; coach.retry() is false everywhere else.
-    if (!coach.retry()) { rescuePlayer(player); announce("RECOVERED", 1.5, "coach"); }
+    // No banner: rescuePlayer() is the one place a recovery is reported, and it
+    // used to announce here TOO — the same word from two speakers (COACH here,
+    // the driver's own RADIO there) for one keypress.
+    if (!coach.retry()) rescuePlayer(player);
     Log.info("game", "manual recover");
   }
   if (state === "count") {
@@ -5697,10 +5717,13 @@ function rescuePlayer(c) {
   c.rescueLastT = raceT;
   // Cues are for the driver at THIS screen — a rival being recovered elsewhere
   // on track must not announce itself here.
-  if (c.local) {
-    announce("RECOVERED", 1.2, "info");
-    if (soundOn) GameAudio.offtrack();
-  }
+  //
+  // NO BANNER. A recovery is the most self-evident event in the game: the car
+  // is back on the road, pointing the right way, at a sane speed. The player
+  // just watched it happen, so a card saying RECOVERED spends the radio — and
+  // the banner is a QUEUE (ANN_PRI / _annQueue), so a message that reports the
+  // obvious can delay or mask one that does not. The sound still marks it.
+  if (c.local && soundOn) GameAudio.offtrack();
 }
 
 // Retire a car. The counterpart of rescuePlayer above — same job, opposite

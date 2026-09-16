@@ -587,7 +587,14 @@ interface GameCtx {
   readonly applyRaceSettings: () => void;
 
   // ── Race flow + the shared physics/energy formulas ────────────────────────
-  readonly announce: (msg: string, dur?: number, kind?: string) => void;
+  /**
+   * Shows a banner line. Returns true when the line will be heard — on screen
+   * now, or holding the single queue slot. Returns FALSE when it was dropped:
+   * a cinematic camera silences "info"/"coach", and a busy banner's queue slot
+   * can already be held by something higher. A caller that spends state on the
+   * line (a cooldown, a wear step) must spend it only on true.
+   */
+  readonly announce: (msg: string, dur?: number, kind?: string) => boolean;
   readonly applyCaution: (d: unknown) => void;
   readonly camVantage: (mode: number, s: number, x: number, spd: number, now: number, extra?: Opaque) => CamVantage;
   readonly endRace: (forcedOrder?: CarState[]) => void;
