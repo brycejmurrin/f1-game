@@ -863,6 +863,19 @@
                   <button id="pm-upscale-next" type="button" data-step="1" aria-label="Next upscale">&rsaquo;</button>
                 </div>
               </div>
+              <!-- OCCLUSION sits here because it is a pure renderer lever: it
+                   changes what is SUBMITTED, never what is drawn. Hidden on a
+                   backend that cannot do it (js/ui/scale.js), because a row
+                   that sits there doing nothing is worse than no row. -->
+              <div id="pm-occlusion" class="set-row" role="group" aria-labelledby="pm-occlusion-label">
+                <span class="tune-label" id="pm-occlusion-label">OCCLUSION</span>
+                <div>
+                  <button id="pm-occlusion-prev" type="button" data-step="-1" aria-label="Previous occlusion setting">&lsaquo;</button>
+                  <select id="pm-occlusion-sel" aria-labelledby="pm-occlusion-label"></select>
+                  <button id="pm-occlusion-next" type="button" data-step="1" aria-label="Next occlusion setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p id="pm-occlusion-note" class="adv-help">Skips scenery the track itself is hiding, using depth queries on the graphics card. Costs nothing visually when it works; turn it off if anything flickers or disappears.</p>
               <!-- DEBRIS sits with the renderer levers because that is what it is
                    on a handset: a Rapier side-world stepping every frame for
                    spall, marbles and trackside furniture. OFF costs no lap
