@@ -489,13 +489,22 @@ jobs:
               if (ab.note || ab.error) {
                 rows.push(`${" ".repeat(8)}A/B:   NOT MEASURED — ${ab.note || ab.error}`);
               } else if (ab.off && ab.on) {
-                rows.push(`${" ".repeat(8)}A/B:   gpu off=${ab.off.median}ms on=${ab.on.median}ms  delta=${ab.gpuDeltaPct}%  clockPinned=${ab.clockPinned}`
+                rows.push(`${" ".repeat(8)}A/B:   gpu off=${ab.off.median}ms on=${ab.on.median}ms  delta=${ab.gpuDeltaPct}%  `
+                  + `clockPinned=${ab.clockPinned} simFrozen=${ab.simFrozen}`
                   + (ab.gpuDeltaPct != null && ab.gpuDeltaPct > 0 ? "   <- occlusion COSTS time here" : ""));
-                const px = ab.pixels || {};
+            // THE FLOOR FIRST. off against off2 is the same state twice, so it
+            // is what this run cannot hold still; the effect below only means
+            // anything if it clears it. Borrowing a floor from another leg or
+            // another run is what produced two withdrawn conclusions.
+                const nf = ab.noiseFloor || {}, px = ab.pixels || {};
+                if (nf.pctDiffering != null) {
+                  rows.push(`${" ".repeat(8)}       floor:  same state twice -> ${nf.pctDiffering}% of pixels, gpu ${ab.gpuNoisePct}%`);
+                }
                 if (px.error) rows.push(`${" ".repeat(8)}       pixels: diff FAILED — ${px.error}`);
                 else if (px.differing != null) {
                   rows.push(`${" ".repeat(8)}       pixels: ${px.differing} of ${px.ofTotal} differ (${px.pctDiffering}%) maxDelta=${px.maxChannelDelta} meanAbs=${px.meanAbsDelta}`
-                    + (px.pctDiffering > 1 ? "   <- the image CHANGED: something visible was culled" : "   (image effectively identical)"));
+                    + (ab.aboveFloor === true ? "   <- ABOVE the floor: something visible was culled"
+                       : ab.aboveFloor === false ? "   (at the floor — no visible change)" : ""));
                 }
               }
               if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.softBlit === true ? "YES (headless readback — NOT the path a player takes)" : be.softBlit === false ? "no (direct present)" : "?"} skipBatches=${be.skipBatches} gpuErrFrames=${be.gpuErrFrames}`);

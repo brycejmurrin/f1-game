@@ -370,6 +370,15 @@ try {
     A.clockPinned = await page.evaluate(() => {
       try { window.__apex.renderClock(12, true); return true; } catch (_) { return false; }
     });
+    // AND FREEZE THE SIMULATION. Pinning the render clock stops sky and cloud;
+    // it does NOT stop the AI field, which keeps driving between captures. Run
+    // 138 measured that cost: the three legs where occlusion does nothing still
+    // diffed at 0.088 %, 0.271 % and 7.533 % against their own second capture,
+    // purely from cars moving — so the instrument could not resolve anything
+    // smaller than the traffic.
+    A.simFrozen = await page.evaluate(() => {
+      try { return window.__apex.freeze(true) === true; } catch (_) { return false; }
+    });
     const settle = async (n) => {
       for (let i = 0; i < n; i++) await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     };
@@ -383,10 +392,15 @@ try {
       xs.sort((a, b) => a - b);
       return xs.length ? { median: +xs[Math.floor(xs.length / 2)].toFixed(2), n: xs.length } : { median: null, n: 0 };
     };
-    for (const on of [false, true]) {
+    // THREE captures, not two. "off" and "off2" are the same state, so their
+    // diff is this run's OWN noise floor — everything the harness cannot hold
+    // still. A difference between off and on only means something if it clears
+    // that floor, and borrowing a floor from another leg or another run is what
+    // produced two withdrawn conclusions already.
+    for (const key of ["off", "off2", "on"]) {
+      const on = key === "on";
       await page.evaluate((v) => window.__apex.occlusionCull(v), on);
       await settle(on ? 24 : 8);            // ON needs long enough for the queries to answer
-      const key = on ? "on" : "off";
       A[key] = await sampleGpu(12);
       A[key].stats = await page.evaluate(() => window.__apex.occlusionCull());
       if (shotBase) {
@@ -395,28 +409,35 @@ try {
         if (r && r.error) A[key].shotError = r.error;
       }
     }
-    await page.evaluate(() => { try { window.__apex.renderClock(null, false); } catch (_) {} });
+    await page.evaluate(() => { try { window.__apex.renderClock(null, false); window.__apex.freeze(false); } catch (_) {} });
     await page.evaluate(() => window.__apex.occlusionCull(false));
-    if (A.off.shot && A.on.shot) {
-      try {
-        const sharp = (await import("sharp")).default;
-        const a = await sharp(A.off.shot).raw().toBuffer({ resolveWithObject: true });
-        const b = await sharp(A.on.shot).raw().toBuffer({ resolveWithObject: true });
-        if (a.data.length !== b.data.length) A.pixels = { error: "captures differ in size" };
-        else {
-          let diff = 0, maxd = 0, sum = 0;
-          for (let i = 0; i + 2 < a.data.length; i += a.info.channels) {
-            const d = Math.max(Math.abs(a.data[i] - b.data[i]), Math.abs(a.data[i + 1] - b.data[i + 1]),
-                               Math.abs(a.data[i + 2] - b.data[i + 2]));
-            sum += d; if (d > maxd) maxd = d; if (d > 2) diff++;
-          }
-          const n = (a.data.length / a.info.channels) | 0;
-          A.pixels = { differing: diff, ofTotal: n, pctDiffering: +(100 * diff / n).toFixed(3),
-                       maxChannelDelta: maxd, meanAbsDelta: +(sum / n).toFixed(3) };
+    try {
+      const sharp = (await import("sharp")).default;
+      const raw = async (f) => (f ? sharp(f).raw().toBuffer({ resolveWithObject: true }) : null);
+      const diffOf = async (p1, p2) => {
+        const a = await raw(p1), b = await raw(p2);
+        if (!a || !b) return { error: "a capture is missing" };
+        if (a.data.length !== b.data.length) return { error: "captures differ in size" };
+        let diff = 0, maxd = 0, sum = 0;
+        for (let i = 0; i + 2 < a.data.length; i += a.info.channels) {
+          const d = Math.max(Math.abs(a.data[i] - b.data[i]), Math.abs(a.data[i + 1] - b.data[i + 1]),
+                             Math.abs(a.data[i + 2] - b.data[i + 2]));
+          sum += d; if (d > maxd) maxd = d; if (d > 2) diff++;
         }
-      } catch (e) { A.pixels = { error: String((e && e.message) || e).slice(0, 140) }; }
-    }
+        const n = (a.data.length / a.info.channels) | 0;
+        return { differing: diff, ofTotal: n, pctDiffering: +(100 * diff / n).toFixed(3),
+                 maxChannelDelta: maxd, meanAbsDelta: +(sum / n).toFixed(3) };
+      };
+      A.noiseFloor = await diffOf(A.off.shot, A.off2.shot);   // same state twice
+      A.pixels = await diffOf(A.off.shot, A.on.shot);
+      if (A.pixels.pctDiffering != null && A.noiseFloor.pctDiffering != null) {
+        A.aboveFloor = A.pixels.pctDiffering > Math.max(0.01, A.noiseFloor.pctDiffering * 2);
+      }
+    } catch (e) { A.pixels = { error: String((e && e.message) || e).slice(0, 140) }; }
     if (A.off.median && A.on.median) A.gpuDeltaPct = +(100 * (A.on.median / A.off.median - 1)).toFixed(1);
+    // The GPU noise floor too: off against off2, same state, so whatever this
+    // reads is what the clock cannot resolve.
+    if (A.off.median && A.off2.median) A.gpuNoisePct = +(100 * (A.off2.median / A.off.median - 1)).toFixed(1);
     return A;
   }, 180000, "occlusion-ab");
   checkpoint("occlusion-ab");

@@ -63,6 +63,28 @@ occlusion, exactly one draw call.
 
 Nothing below should be built before this answers.
 
+### First reading (run 139): DRAW CALLS, and it is not close in direction
+
+    chunked   152 draws, frustum + radial culled   18.75 ms  @0.75 MP  [138, off]
+    UNCHUNKED   1 draw,  every prop vertex, no cull 18.21 ms  @0.59 MP  [139]
+
+**One draw call carrying 441,000 vertices with no culling at all beats 152
+culled draws.** Three independent results now point the same way: GPU time is
+invariant to pixel count (not fragment-bound); occlusion culling, which removes
+vertices and adds draws, COSTS 2.1 %; and removing draws while adding every
+vertex back SAVES about 3 %.
+
+The honest caveat is that 2.9 % is at the ~3 % noise floor and the two runs used
+different canvas sizes, so this is the direction rather than the magnitude. The
+confirmation is two runs with `apex26.resMode=high` pinned on both, differing
+only in `propsUnchunked` — same canvas, same commit shape, one variable. That is
+the next request.
+
+What it already rules out: any plan whose first move is to submit fewer
+vertices. The frustum and radial culls this renderer already does are not
+earning their draw calls, and a cull that adds draws to remove vertices is
+pushing on the wrong end.
+
 ## 3. The work, ranked, each with its gate
 
 1. **Answer §2.** One census leg with `propsUnchunked=1` against one without.
@@ -70,7 +92,8 @@ Nothing below should be built before this answers.
 2. **Park the AI field during the pixel diff.** The instrument cannot currently
    resolve a change smaller than the cars moving. Gate: two captures with
    occlusion off diff at under 0.01 %.
-3. **If draw-call-bound: `WEBGL_multi_draw`.** Collapse the per-chunk
+3. **`WEBGL_multi_draw` — now the favourite, pending the pinned-resolution
+   confirmation.** Collapse the per-chunk
    `drawElements` run into one `multiDrawElementsWEBGL`. The chunk ranges
    already exist — `tests/unit/chunked-index-ranges.test.mjs` proves they tile
    the buffer exactly — so this is a call-shape change, not a data change. Gate:
