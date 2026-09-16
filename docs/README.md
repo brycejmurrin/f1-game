@@ -120,12 +120,14 @@ ledger lists.
 | [archive/ATTIC.md](archive/ATTIC.md) | The attic ledger: one row per record deleted from `docs/` (title, original path, last SHA, one-line summary). |
 | [archive/research/](archive/research/) | Provenance investigations — the 2026-08 audit records, the UI campaign set, the browser-graphics survey, the cleanup sweep, the parallel fleet survey and the 2026-09 code survey (dead code / bugs / perf). |
 | [archive/research/raw/](archive/research/raw/) | The five workflows' verbatim per-agent output. Read when a summary's wording is doing too much work. |
-| [archive/superpowers/](archive/superpowers/) | The 2026-08 plans and specs (apex-tools MCP weeks 1-4, release safety, audit remediation, perf-hunt fixes). |
+| [archive/superpowers/](archive/superpowers/) | The plans and specs, both batches. 2026-08: apex-tools MCP weeks 1-4, release safety, audit remediation, perf-hunt fixes. 2026-09: livery open gaps, logo-only mark colours, the paint-sheet redesign, spatial upscale across all three backends (and its parentless follow-ups spec), the performance-regression repair, the spine design pass and spine zones bind. All verified shipped against the tree before archiving on 2026-09-16 — but **the spine-zones-bind spec outlived two of its fields**: `ridgeTint` and `airboxTint` shipped, then were retired a day later by `Liveries.migratePaint` (`js/car/liveries.js`), which folds `ridgeTint` into `spineTint` and drops `airboxTint`. Only `saddleTint` is still authorable. |
 | [archive/slider-effect/](archive/slider-effect/) | 20 before/after slider-effect PNG pairs from the lighting classifier. |
 | [archive/manual-probes/](archive/manual-probes/) | Four single-incident diagnostic instruments (banking, throttle-rescue, skid, act) — bugs resolved, kept as reusable probe patterns. |
 | [archive/webgpu/](archive/webgpu/) | The WebGPU migration plan and maintainability review (still cited by `spike/README.md`). |
 | [archive/tracks/](archive/tracks/) | Spent track-campaign notes. |
 | [archive/workflows/](archive/workflows/) | Spent multi-agent orchestration scripts. Live workflows remain under `.claude/workflows/`. |
+| [archive/moves/](archive/moves/) | Applied `move-tree.mjs` plans from the 2026-09 tree restructure. Not runnable — their `from` paths no longer exist. Live plans stay in `tools/moves/`. |
+| [archive/tools/](archive/tools/) | Retired orphan tools, each with the live tool to prefer instead (`hud-metrics-audit.mjs` and `ui-readable-survey-mcp.py` → `tools/ui/layout-audit.mjs`; the `gfx/` benches, including the soft-present bench retired 2026-09-10). Hardcoded Cloud paths made them agent traps. |
 | [archive/2026-08-repo-audit.md](archive/2026-08-repo-audit.md) | The Aug-2026 repo audit's finding register as recorded at the time. |
 | [archive/2026-08-architecture-review-journal.md](archive/2026-08-architecture-review-journal.md) | The session journal behind the architecture review: the full defect register with fix narratives, verbatim. |
 | [archive/SCENERY-UPGRADE-PLAN.md](archive/SCENERY-UPGRADE-PLAN.md) | The scenery upgrade roadmap; its helpers are all in the frozen contract now. |
