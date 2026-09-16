@@ -133,7 +133,13 @@ test.describe("pit lane", () => {
       // which is the position whose width actually matters.
       A.jump(0.99, 30, 0);
       const laneX = A.pit().laneX;
-      A.jump(0.93, 30, laneX); A.aim(0);
+      // …and START inside the window too, on the lane: the window is 260 m
+      // before the line at most now (TrackPit), so 0.93 of a Monza lap is
+      // before the entry road, and a car dropped on the lane's lateral there
+      // stands on the grass. The first frac from 0.93 that is inside it.
+      let f0 = 0.93;
+      for (const f of [0.93, 0.94, 0.95, 0.96, 0.97]) { A.jump(f, 30, 0); if (A.pit().inWindow && A.pit().laneX != null) { f0 = f; break; } }
+      A.jump(f0, 30, laneX); A.aim(0);
       A.pit({ arm: true });
       let sawBox = false, boxTicks = 0; const states = [];
       for (let i = 0; i < 60 * 60; i++) {

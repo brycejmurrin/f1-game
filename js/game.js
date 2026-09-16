@@ -4551,6 +4551,17 @@ function updateCar(c, dt, ranked) {
     // the deadzone an error it cannot swallow.
     let rubClamp = false;
     const alongClose = !!alongO && Math.abs(alongDx) < CLEAR;
+    // THE AIM, NOT THE CONTACT (AiDrive.aimIntrudes): is our aim point inside
+    // the other car's clear gap and on their side of where we are? Asked of a
+    // HUMAN neighbour only. Asked of every neighbour it also worked (Monza,
+    // first touches with a scripted player 5.6 -> 3.1 per 100 s), but the
+    // AI-only field paid for it: settled passes 40 -> 30 per 240 s, every seed
+    // at or under the old minimum, and the field strung out 1091 -> 1238 m —
+    // two AI cars both running the election at aim distance concede a
+    // side-by-side neither has lost yet. Between AI cars the contact-time
+    // election below stays; a human runs no election at all, which is why
+    // the aim is the right moment there (AiDrive.aimIntrudes).
+    const aimClose = !!alongO && !alongClose && !!alongO.human && AiDrive.aimIntrudes(desiredX, c.x, alongO.x, CLEAR);
     let yieldMine = alongClose && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x);
     // ELECTING THE HUMAN IS ELECTING NOBODY — rule and measurement in
     // AiDrive.humanYieldGrace; this end only carries the per-car timer.
@@ -4560,10 +4571,16 @@ function updateCar(c, dt, ranked) {
       && (alongDx <= 0 ? desiredX < c.x : desiredX > c.x);
     c.hYieldT = AiDrive.humanYieldT(c.hYieldT, alongClose, yieldMine, !!(alongO && alongO.human), intruding, dt);
     if (!yieldMine && AiDrive.humanYieldTakes(c.hYieldT)) yieldMine = true;
+    // A HUMAN neighbour: an aim into their gap is conceded at once. Nobody else
+    // in the pair will, and a clear gap held at the aim point IS the clean
+    // side-by-side the grace protects — the grace stays for the contact case.
+    if (!yieldMine && aimClose && alongO.human) yieldMine = true;
     if (yieldMine) {
       desiredX = alongDx <= 0 ? Math.max(desiredX, alongO.x + CLEAR) : Math.min(desiredX, alongO.x - CLEAR);
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
-      rubClamp = true;
+      // Only a car ALREADY inside the gap is an emergency for the controller
+      // below; at aim distance the heading state bends the line in time.
+      rubClamp = alongClose;
     }
     // PIT LANE, last so nothing can undo it: a car serving a stop drives the
     // LANE, not the racing line. pits.laneX returns its argument untouched for
@@ -5014,6 +5031,15 @@ function updateCar(c, dt, ranked) {
         const face = track.hw[k] + p.bands.verge;
         if (c.x * pitSd < face + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, face - 1.1); else wallL = Math.min(wallL, face - 1.1); }
         else laneMin = track.hw[k] + p.off.fastIn + 1.0;
+      } else if (p.w[k] >= TrackPit.EXIT_WALL_W && ((c.s - p.sOut) % track.total + track.total) % track.total < p.exitRoadM) {
+        // THE EXIT WALL (SceneryPits): from the platform's line at the exit
+        // line to the road edge as the wall fades (verge · v), then along
+        // the edge while the exit road keeps EXIT_WALL_W of its width — a
+        // serviced car rejoins where the wall ends, not through it.
+        pitSd = p.side;
+        const wallLat = track.hw[k] + p.bands.verge * p.v[k];
+        if (c.x * pitSd < wallLat + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, wallLat - 1.15); else wallL = Math.min(wallL, wallLat - 1.15); }
+        else laneMin = wallLat + 0.30 + 1.0;
       }
     }
   }
@@ -7184,6 +7210,9 @@ function render(dt) {
     // absorption). tmpMat carries the body mesh; _groundMat (wheels/contact/shadow)
     // was built from the un-offset tmpP, so the tyres stay planted on the road.
     if (_baHeave) tmpMat[13] += _baHeave;
+    // On the jacks (PitLane.stopAnim): the body rises with the wheels, which
+    // drawPlayerWheels lifts by the same number off _groundMat.
+    if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
     shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
     // Side frustum: 8 m sphere, same planes as propBatches. After the
     // shadow enqueue so an off-camera rival still casts. Player never culled.

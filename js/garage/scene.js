@@ -153,27 +153,47 @@ function buildShell(out, liv) {
 // an absolute one — the ceiling LED housings reach x 2.70 and are fine, because
 // they sit at y 4.3, above the top of the frame.
 const SIDES = ["nx", "px", "back", "door", "mid"];
+// The two props the trackside bay (buildPropsLite) shares with the full one.
+const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90]];
+function tyreStack(out, x, z, seed) {
+  for (let t = 0; t < 4; t++) {
+    const y = t * 0.345;
+    cyl(out, x, y, z, 0.36, 0.33, [0.045, 0.045, 0.050], 14);
+    cyl(out, x, y + 0.30, z, 0.305, 0.025, COMPOUND[(seed + t) % 3], 14);
+  }
+}
+function toolChest(out, x, z, c1) {
+  const sgn = x > 0 ? -1 : 1;
+  block(out, x, 0.62, z, 0.36, 0.52, 0.80, scale(c1, 0.55));
+  block(out, x, 1.16, z, 0.38, 0.03, 0.82, STEEL);
+  for (let d = 0; d < 4; d++) {
+    block(out, x + sgn * 0.37, 0.26 + d * 0.24, z, 0.012, 0.09, 0.72, scale(STEEL, 0.8));
+    block(out, x + sgn * 0.39, 0.26 + d * 0.24, z, 0.010, 0.02, 0.20, scale(STEEL, 1.15));   // drawer pull
+  }
+  for (let w = 0; w < 4; w++)
+    cyl(out, x + (w % 2 ? 0.26 : -0.26), 0, z + (w < 2 ? 0.6 : -0.6), 0.05, 0.10, DARK, 6);
+}
+// THE TRACKSIDE BAY'S FURNITURE — what reads from the lane at twenty metres:
+// tyre stacks in both door corners and two more OUT on the apron in front of
+// the jambs (the set going on, the set that came off), a wheel trolley beside
+// them, a tool chest each side, the front jack. A subset of buildProps on
+// purpose: twelve of these ride every circuit's static buffer, and
+// tests/unit/pit-complex pins a bay's vertex count.
+function buildPropsLite(g, liv) {
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  tyreStack(g.nx, -4.55, 5.30, 0); tyreStack(g.px, 4.55, 4.6, 2);
+  toolChest(g.nx, -4.92, 3.6, c1); toolChest(g.px, 4.92, -1.5, c1);
+  tyreStack(g.door, -4.3, Z_DOOR + 0.55, 1); tyreStack(g.door, 4.3, Z_DOOR + 0.55, 0);
+  block(g.door, -3.15, 0.30, Z_DOOR + 0.62, 0.55, 0.03, 0.34, STEEL);   // the wheel trolley
+  for (let w = 0; w < 4; w++)
+    cyl(g.door, -3.15 + (w % 2 ? 0.42 : -0.42), 0, Z_DOOR + 0.62 + (w < 2 ? 0.24 : -0.24), 0.05, 0.27, scale(STEEL, 0.7), 6);
+  block(g.mid, 1.55, 0.12, 4.35, 0.55, 0.05, 0.12, scale(STEEL, 0.8));   // the front jack, beside the nose
+  cyl(g.mid, 1.55, 0.12, 4.55, 0.03, 0.85, STEEL, 6);
+}
 function buildProps(g, liv) {
   const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
-  const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90]];
-  const stack = (out, x, z, seed) => {
-    for (let t = 0; t < 4; t++) {
-      const y = t * 0.345;
-      cyl(out, x, y, z, 0.36, 0.33, [0.045, 0.045, 0.050], 14);
-      cyl(out, x, y + 0.30, z, 0.305, 0.025, COMPOUND[(seed + t) % 3], 14);
-    }
-  };
-  const toolbox = (out, x, z) => {
-    const sgn = x > 0 ? -1 : 1;
-    block(out, x, 0.62, z, 0.36, 0.52, 0.80, scale(c1, 0.55));
-    block(out, x, 1.16, z, 0.38, 0.03, 0.82, STEEL);
-    for (let d = 0; d < 4; d++) {
-      block(out, x + sgn * 0.37, 0.26 + d * 0.24, z, 0.012, 0.09, 0.72, scale(STEEL, 0.8));
-      block(out, x + sgn * 0.39, 0.26 + d * 0.24, z, 0.010, 0.02, 0.20, scale(STEEL, 1.15));   // drawer pull
-    }
-    for (let w = 0; w < 4; w++)
-      cyl(out, x + (w % 2 ? 0.26 : -0.26), 0, z + (w < 2 ? 0.6 : -0.6), 0.05, 0.10, DARK, 6);
-  };
+  const stack = tyreStack;
+  const toolbox = (out, x, z) => toolChest(out, x, z, c1);
   // -X wall: the engineers' monitor bank and desk, plus a tyre stack.
   toolbox(g.nx, -4.92, 3.6);
   // The -X stacks stand in the DOOR corner, not the deep bay: at z -5.4 and
@@ -1323,8 +1343,11 @@ function buildStatic(liv, opts) {
   if (o.props) {
     const g = {};
     for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
-    buildProps(g, liv);
-    if (o.equipment && typeof GarageEquipment !== "undefined") GarageEquipment.build(g, liv, o.ctx || {});
+    if (o.props === "lite") buildPropsLite(g, liv);
+    else {
+      buildProps(g, liv);
+      if (o.equipment && typeof GarageEquipment !== "undefined") GarageEquipment.build(g, liv, o.ctx || {});
+    }
     for (let i = 0; i < SIDES.length; i++) appendBuf(out, g[SIDES[i]]);
   }
   return out;

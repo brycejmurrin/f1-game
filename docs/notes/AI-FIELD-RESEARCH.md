@@ -542,6 +542,95 @@ Stopped after one driver pair, deliberately, because the design pre-registered
 one looked favourable would be fishing, and this file already carries one entry
 whose headline turned out to be the author's own measurement error.
 
+## 2026-09-16 — "it drives into my side": the aim, not the contact
+
+The owner's report, again: the AI runs into the player and follows its line
+regardless of who is beside it. `tools/check/ai-human.mjs` existed for this
+and could not see it, for two reasons that took most of the day.
+
+**The instrument first.** The bench's scripted player was "steered to the
+line at a bounded lateral rate" — a 5 cm/frame nudge of `player.x` that the
+car's own lateral physics swamped; a self-check added today read the player
+3.2 m off the line in corners whatever `--offset` asked for. It was measuring
+an unsteered car, and at one seed it found no encounter at all in 90 s. The
+player is now DRIVEN through the test-input path (`__apex.setInput`): a
+Stanley-style follower on the human car's yaw model (K = 4, Kh = 8 — 0.32 m
+RMS off the line over a Monza half-lap alone; a PD on position swung ±12 m),
+a drivable speed profile times `--pace` (0.97 by default, so the field comes
+THROUGH the player), re-insertion into the pack's largest gap when alone (at
+the speed of the car behind — at the pair's mean speed it was slower than the
+car behind from frame one, and the bench booked that as a rear-end), and a
+reasonable human's avoidance: never steer into a car alongside, keep the gap
+off one already inside it, match the car ahead in lane. Without that last
+rule the first driven cut chased its line straight into AI cars and 6 of 9
+first touches had the AI BEHIND the player. The bench now classifies each
+first touch (rear-end / side / diagonal, AI ahead or behind on arc) and
+prints a self-check (`playerOffsetInCornersM`, settled corners only — a
+follower lags a chicane crossing by 3–4 m at any pace, measured) that must be
+read before the rest.
+
+**Then the defect.** With that player, the shipped tree touches it 5.6 times
+per 100 s at Monza, nearly all "diagonal": overlapping by 3–4 m on arc, first
+touch at 1.95 m lateral, the car width. Every side-by-side rule — the clear
+gap election, the rub clamp, the human grace — keys on where the cars ARE
+(|dx| inside 2.8 m, i.e. 0.8 m of air), while the AI steers toward a point
+8–25 m ahead on its line. So a car half a length back and a lane over was
+aimed THROUGH until the boxes touched, and only then did anything begin.
+`AiDrive.aimIntrudes` asks the same question of the AIM: inside the other
+car's clear gap, and on their side of where we are (steering into them — as
+opposed to holding while they come to us, which stays their move and a rub,
+exactly the distinction `humanYieldT` already drew for the contact case).
+Against a human the AI concedes at the aim, without the emergency controller
+(at aim distance the heading state has time to bend the line) — there is
+nobody else in the pair who will, and a clear gap held at the aim IS the
+clean side-by-side the grace was protecting. Between AI cars the question
+stays at contact time: asked at the aim of every neighbour (the first cut)
+the player bench improved just the same, but `ai-field` on the AI-only race
+paid for it — settled passes 40 → 30 per 240 s (median of 3, every seed at
+or under the old minimum), oscillation share 0.56 → 0.62, the field strung
+out 1091 → 1238 m — two AI cars both running the election at aim distance
+concede a side-by-side neither has lost yet. `queueBrake` separately gained a light brake for a small closing
+rate inside the follow distance: +1.5 m/s reached neither of its gates (under
+the +3 threshold; aReq 2.25 with `room` floored at 0.5 m) and was carried
+into the tail of the car ahead.
+
+| Monza, 3 seeds × 240 s | tree | alongside frames | contact % of them | first touches / 100 s (per seed) | rear-end | side | diagonal |
+|---|---|---|---|---|---|---|---|
+| player on the line | shipped | 1066 | 25.0 | 5.56 (5.0 / 4.2 / 7.5) | 3.7 | 4.0 | 5.7 |
+| | aim at every neighbour (not shipped) | 800 | 18.8 | 3.06 (4.2 / 2.1 / 2.9) | 1.0 | 2.3 | 4.0 |
+| | **aim at a human + follow brake (shipped)** | 1281 | 13.3 | 4.86 (4.6 / 3.8 / 6.3) | 2.3 | 3.3 | 6.0 |
+| player 1.5 m wide | shipped | 1462 | 22.0 | 5.83 (5.0 / 5.4 / 7.1) | 2.7 | 4.3 | 7.0 |
+| | aim at every neighbour (not shipped) | 853 | 21.1 | 4.03 (6.3 / 3.8 / 2.1) | 2.7 | 3.0 | 4.0 |
+| | **aim at a human + follow brake (shipped)** | 834 | 20.3 | 3.89 (5.8 / 2.1 / 3.8) | 2.3 | 3.7 | 3.3 |
+| **Monaco**, on the line | shipped | 1865 | 47.4 | 15.41 (19.6 / 15.8 / 10.8) | 1.3 | 17.0 | 18.7 |
+| | **shipped cut** | 1390 | 38.9 | 8.33 (7.9 / 7.1 / 10.0) | 1.3 | 7.7 | 11.0 |
+| Monaco, 1.5 m wide | shipped | 1718 | 43.0 | 13.06 (15.4 / 11.7 / 12.1) | 1.7 | 17.3 | 12.3 |
+| | **shipped cut** | 1278 | 41.7 | 9.30 (12.5 / 7.1 / 8.3) | 0.0 | 10.3 | 12.0 |
+
+Monaco is where the complaint lives — three times Monza's touch rate on the
+old tree, the road too narrow for the clear gap in places — and it is where
+the cut reads clearest: first touches nearly halved on the line with no seed
+overlap, a third fewer wide, side contacts down from 17 to 8–10 per 100 s.
+Read with the per-seed spread in mind (this bench, like `ai-field`, reshuffles
+the race with every behaviour change): the every-neighbour cut is the bigger
+reduction in first touches, the shipped cut the bigger reduction in TIME
+spent touching once alongside (25 → 13 %), and both are under the old tree on
+the wide player, where the aim-through case lives.
+
+**The AI-only field, and what three seeds can and cannot say.** `ai-field`
+(Monza, 240 s, 3 seeds) read settled passes 40 [30–47] on the shipped tree,
+30 [19–30] with the aim asked of every neighbour, 33 [23–34] with it asked
+of a human only — and 36 [12–51] with ONLY the follow brake (a worktree at
+HEAD plus the new `ai-drive.js`). The last range says what §"Which AI
+instrument can actually resolve a change" already did: at n = 3 this
+instrument cannot resolve a shift of that size, so the every-neighbour cut's
+30 (every seed at or under the old minimum) is the one difference read as
+real, and the reason it was restricted; the shipped tree's 33 is not
+distinguishable from the old 40. Field median lap time (`ai-pace`, normal):
+132.0 → 132.5 s, the fastest car 127.8 → 127.1 s — noise either way. The
+collision and racecraft VM benches (57 tests), the determinism gates and the
+AiDrive unit tests are green on the shipped tree.
+
 ## 2026-09-14 — the pass latch engaged outside its own release window
 
 `js/game.js` releases the pass latch when the blocker is more than 16 m ahead

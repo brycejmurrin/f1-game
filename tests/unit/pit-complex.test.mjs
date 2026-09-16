@@ -273,6 +273,17 @@ test("the garages are the setup screen's bay, and the build says so", () => {
   const bay = G.buildStatic({ c1: [0.9, 0.4, 0.1], c2: [0.1, 0.1, 0.1] });
   assert.ok(bay.pos.length / 3 > 1500 && bay.pos.length / 3 < 6000, `a static bay is ${bay.pos.length / 3} verts`);
   assert.equal(bay.mat.length, bay.pos.length / 3, "one material id per vertex, as the garage suite demands");
+  // The TRACKSIDE bay (`props: "lite"`, what SceneryPits places): the furniture
+  // that reads from the lane, including two tyre stacks OUT on the apron past
+  // the door plane. Bounded: twelve of these ride every circuit's static buffer.
+  const lite = G.buildStatic({ c1: [0.9, 0.4, 0.1], c2: [0.1, 0.1, 0.1] }, { props: "lite" });
+  const nLite = lite.pos.length / 3;
+  assert.ok(nLite > bay.pos.length / 3 + 1500 && nLite < 12000, `a lite bay is ${nLite} verts (bare ${bay.pos.length / 3})`);
+  assert.equal(lite.mat.length, nLite);
+  let zMax = -Infinity;
+  for (let i = 2; i < lite.pos.length; i += 3) zMax = Math.max(zMax, lite.pos[i]);
+  const Z_DOOR = ctxOnce().TrackPit.BAY.depth / 2;
+  assert.ok(zMax > Z_DOOR + 0.5 && zMax < Z_DOOR + 1.2, `the apron stacks stand past the door plane (z max ${zMax.toFixed(2)}, door ${Z_DOOR})`);
 });
 
 test("neither end of the complex lies in a corner: the exit closes before the first turn-in", () => {

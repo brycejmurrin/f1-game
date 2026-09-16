@@ -13,7 +13,7 @@ const SceneryPits = (function () {
   const WALL = [0.82, 0.82, 0.84], WALL_TOP = [0.46, 0.47, 0.50];
   const BARRIER = [0.86, 0.86, 0.88], GLASS = [0.24, 0.34, 0.44];
   const SHELL = [0.86, 0.87, 0.89], ROOF = [0.30, 0.32, 0.36], DARK = [0.16, 0.17, 0.19];
-  const BOARD = [0.96, 0.96, 0.97], POST = [0.22, 0.24, 0.28];
+  const POST = [0.22, 0.24, 0.28];
 
   // One bay mesh per team, shared across circuits: the geometry is a function
   // of the livery only, and a session builds a handful of circuits.
@@ -23,7 +23,9 @@ const SceneryPits = (function () {
     const key = rowEntry.team + "|" + rowEntry.col.join(",") + "|" + rowEntry.col2.join(",");
     let m = BAY_CACHE.get(key);
     if (!m) {
-      m = GarageScene.buildStatic({ c1: rowEntry.col, c2: rowEntry.col2, accent: rowEntry.col2 });
+      // `props: "lite"`: the furniture that reads from the lane — tyre stacks
+      // in the door corners and out on the apron, tool chests, the jack.
+      m = GarageScene.buildStatic({ c1: rowEntry.col, c2: rowEntry.col2, accent: rowEntry.col2 }, { props: "lite" });
       BAY_CACHE.set(key, m);
     }
     return m;
@@ -71,25 +73,70 @@ const SceneryPits = (function () {
     // strip per profile, so consecutive segments share no end caps and the
     // coplanar audit sees a wall rather than a hundred boxes. Profile points
     // are (offset beyond hw, height) and wind CCW seen from ahead.
+    // The SIGNS (js/garage/pit-signs.js paints the atlas, game.js draws the
+    // decal): twelve fascia cells on the lintels (§3) and the BOARDS —
+    // cells 12 and 13 of the same atlas, on posts (TrackPit.SIGN.boards).
+    // Corners [BL, BR, TR, TL] as seen by the reader, V flipped for the
+    // FLIP_Y upload, U not (a world-space quad on the identity).
+    const S = typeof TrackPit !== "undefined" ? TrackPit.SIGN : null;
+    const signs = { pos: [], nrm: [], uv: [], idx: [], cells: [], boards: [], anchors: [], centre: null };
+    // A lettered board on a post at node k, its face toward the oncoming
+    // driver (normal -t; the reader's right is the road's +r), `cell` of the
+    // atlas. The face is the decal; a dark body a few centimetres behind it
+    // gives it a back and something for the decal's depth test.
+    // Deferred until after the fascias (§3), so quad i is fascia i for the
+    // twelve and the boards follow: the painter and the tests index them so.
+    const boardsWanted = [];
+    const boardAt = (k, lat, y, cell) => { if (S) boardsWanted.push([k, lat, y, cell]); };
+    const emitBoard = (k, lat, y, cell) => {
+      const c = at(k, lat, y), r = [rx[k], ry[k], rz[k]], u = upOf(track, k), t = [tx[k], ty[k], tz[k]];
+      const hw2 = S.boardW / 2, hh = S.boardH / 2;
+      const P = (sx, sy) => [c[0] + r[0] * sx * hw2 + u[0] * sy * hh, c[1] + r[1] * sx * hw2 + u[1] * sy * hh, c[2] + r[2] * sx * hw2 + u[2] * sy * hh];
+      const corners = [P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)];
+      const cx = (cell % S.cols) * S.cellW, cy = Math.floor(cell / S.cols) * S.cellH;
+      const uL = cx / S.w, uR = (cx + S.cellW) / S.w, vT = 1 - cy / S.h, vB = 1 - (cy + S.cellH) / S.h;
+      const uvs = [[uL, vB], [uR, vB], [uR, vT], [uL, vT]];
+      const base = signs.pos.length / 3;
+      for (let i = 0; i < 4; i++) {
+        signs.pos.push(corners[i][0], corners[i][1], corners[i][2]);
+        signs.nrm.push(-t[0], -t[1], -t[2]);
+        signs.uv.push(uvs[i][0], uvs[i][1]);
+      }
+      signs.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      signs.boards.push({ cell, k });
+      signs.anchors.push(c);
+      const bs = basisAt(k);
+      rawBox(out, [c[0] + t[0] * 0.05, c[1] + t[1] * 0.05, c[2] + t[2] * 0.05], [S.boardW + 0.06, S.boardH + 0.06, 0.06], DARK, bs);
+      const postH = y - hh;
+      rawBox(out, at(k, lat, postH / 2), [0.07, postH, 0.07], POST, bs);
+    };
+
     let wallBuilt = false;
     if (p.hasWall) {
       const b = p.bands;
-      const ks = [];
-      for (let s = p.sIn; ; s = wrap(s + ds)) {
-        const k = kOf(s);
-        if (p.v[k] >= 0.98 && !(ks.length && ks[ks.length - 1] === k)) ks.push(k);
-        if (wrap(s - p.sIn) >= p.lenM) break;
-        if (ks.length > n) break;
-      }
-      const sweep = (profile, col, mat) => {
+      // Nodes from `s0` forward while `keep(k)` holds, over at most `maxM`.
+      const nodesFrom = (s0, keep, maxM) => {
+        const list = [];
+        for (let s = s0; ; s = wrap(s + ds)) {
+          const k = kOf(s);
+          if (!keep(k)) break;
+          if (!(list.length && list[list.length - 1] === k)) list.push(k);
+          if (wrap(s - s0) >= maxM || list.length > n) break;
+        }
+        return list;
+      };
+      const ks = nodesFrom(p.sIn, (k) => p.v[k] >= 0.98, p.lenM);
+      // `shift(k)`, when given, slides the whole profile laterally per node.
+      const sweep = (ks, profile, col, mat, shift) => {
         if (ks.length < 2) return;
         const m = profile.length;
+        const latOf = (k, q) => sd * (hw[k] + q[0] + (shift ? shift(k) : 0));
         for (let i = 0; i + 1 < ks.length; i++) {
           const k = ks[i], k2 = ks[i + 1];
           for (let e = 0; e < m; e++) {
             const a = profile[e], c = profile[(e + 1) % m];
-            const A = at(k, sd * (hw[k] + a[0]), a[1]), B = at(k, sd * (hw[k] + c[0]), c[1]);
-            const C = at(k2, sd * (hw[k2] + a[0]), a[1]), D = at(k2, sd * (hw[k2] + c[0]), c[1]);
+            const A = at(k, latOf(k, a), a[1]), B = at(k, latOf(k, c), c[1]);
+            const C = at(k2, latOf(k2, a), a[1]), D = at(k2, latOf(k2, c), c[1]);
             // Outward normal of this face of the extrusion: (along) x (around),
             // flipped by the side so the strip faces out on either side.
             const ax = C[0] - A[0], ay = C[1] - A[1], az = C[2] - A[2];
@@ -109,7 +156,7 @@ const SceneryPits = (function () {
           const base = out.pos.length / 3;
           const u = upOf(track, k), t = [tx[k], ty[k], tz[k]];
           const nrm = flip ? t : [-t[0], -t[1], -t[2]];
-          for (const q of profile) { const P = at(k, sd * (hw[k] + q[0]), q[1]); out.pos.push(P[0], P[1], P[2]); out.nrm.push(nrm[0], nrm[1], nrm[2]); out.col.push(col[0], col[1], col[2]); }
+          for (const q of profile) { const P = at(k, latOf(k, q), q[1]); out.pos.push(P[0], P[1], P[2]); out.nrm.push(nrm[0], nrm[1], nrm[2]); out.col.push(col[0], col[1], col[2]); }
           pushMat(m, mat);
           for (let e = 1; e + 1 < m; e++) {
             if (flip) out.idx.push(base, base + e + 1, base + e); else out.idx.push(base, base + e, base + e + 1);
@@ -119,23 +166,61 @@ const SceneryPits = (function () {
       };
       const v0 = b.verge, v1 = b.verge + b.platform;
       // Platform: 35 cm above the lane (FIM §9.2).
-      sweep([[v0, 0], [v1, 0], [v1, 0.35], [v0, 0.35]], PLATFORM, MAT.CONCRETE);
+      sweep(ks, [[v0, 0], [v1, 0], [v1, 0.35], [v0, 0.35]], PLATFORM, MAT.CONCRETE);
       // The pit wall on the TRACK side of the platform: 25 cm thick, 1 m high.
-      sweep([[v0, 0.35], [v0 + 0.25, 0.35], [v0 + 0.25, 1.35], [v0, 1.35]], WALL, MAT.CONCRETE);
-      sweep([[v0 - 0.02, 1.35], [v0 + 0.27, 1.35], [v0 + 0.27, 1.42], [v0 - 0.02, 1.42]], WALL_TOP, MAT.METAL);
+      sweep(ks, [[v0, 0.35], [v0 + 0.25, 0.35], [v0 + 0.25, 1.35], [v0, 1.35]], WALL, MAT.CONCRETE);
+      sweep(ks, [[v0 - 0.02, 1.35], [v0 + 0.27, 1.35], [v0 + 0.27, 1.42], [v0 - 0.02, 1.42]], WALL_TOP, MAT.METAL);
       // The 65 cm barrier between the platform and the lane.
-      sweep([[v1 - 0.10, 0.35], [v1, 0.35], [v1, 1.0], [v1 - 0.10, 1.0]], BARRIER, MAT.METAL);
+      sweep(ks, [[v1 - 0.10, 0.35], [v1, 0.35], [v1, 1.0], [v1 - 0.10, 1.0]], BARRIER, MAT.METAL);
       wallBuilt = ks.length >= 2;
 
-      // ── 2. Boards at the entry line, lights at the exit line ─────────────
+      // ── 1b. THE EXIT WALL: the pit wall carried on down the exit road ────
+      // From the platform's line at the exit line to the road edge as the
+      // wall fades (verge · v, the same easing the lane's inner edge follows),
+      // then along the edge while the road keeps EXIT_WALL_W of its width —
+      // a serviced car rejoins where the wall ends, not through it, and a
+      // car on the track cannot cut across the exit road (game.js clamps
+      // both sides off the same numbers). There was no wall here at all.
+      const EXW = typeof TrackPit !== "undefined" ? TrackPit.EXIT_WALL_W : 0.55;
+      const kx = nodesFrom(p.sOut, (k) => p.w[k] >= EXW, p.exitRoadM);
+      const slide = (k) => v0 * p.v[k];
+      sweep(kx, [[-0.05, 0], [0.30, 0], [0.30, 1.0], [-0.05, 1.0]], WALL, MAT.CONCRETE, slide);
+      sweep(kx, [[-0.07, 1.0], [0.32, 1.0], [0.32, 1.07], [-0.07, 1.07]], WALL_TOP, MAT.METAL, slide);
+
+      // ── 1c. CONES down the entry road's inner edge ───────────────────────
+      // Where the wall has not grown the peel is a painted line, and a line
+      // is not a separation a driver reads at 200 km/h: one cone every 8 m
+      // from the road's start until the wall's fade begins.
+      const CONE = [0.95, 0.42, 0.08], CBAND = [0.97, 0.97, 0.97];
+      for (let d = 6; d < p.entryRoadM; d += 8) {
+        const k = kOf(p.sA + d);
+        if (p.v[k] > 0.5 || !(p.w[k] > 0.05)) continue;
+        const bs = basisAt(k), lat = sd * (hw[k] + 0.45);
+        rawBox(out, at(k, lat, 0.03), [0.36, 0.06, 0.36], DARK, bs);
+        rawBox(out, at(k, lat, 0.33), [0.20, 0.60, 0.20], CONE, bs);
+        rawBox(out, at(k, lat, 0.46), [0.22, 0.08, 0.22], CBAND, bs);
+      }
+
+      // ── 2. Boards on the approach and at the entry line, lights at the exit
+      // "PIT ENTRY" with an arrow, twice on the approach before the entry
+      // road (TrackPit.SIGN.boardM back from where it peels off), just off
+      // the road's pit-side edge and short of whatever barrier stands
+      // there; "PIT LANE <limit> km/h" on the platform at the entry line. A
+      // blank white square used to be the whole of it.
       const kIn = kOf(p.sIn), kOut = kOf(p.sOut);
-      const boardAt = (k, along) => {
-        const c = at(k, sd * (hw[k] + v1 - 0.6), 1.0);
-        const bs = basisAt(k);
-        rawBox(out, [c[0] + bs[2][0] * along, c[1] + bs[2][1] * along, c[2] + bs[2][2] * along], [0.08, 0.6, 0.6], BOARD, bs);
-        rawBox(out, [c[0] + bs[2][0] * along, c[1] - 0.55 + bs[2][1] * along, c[2] + bs[2][2] * along], [0.06, 0.5, 0.06], POST, bs);
-      };
-      if (p.v[kIn] >= 0.98) boardAt(kIn, 0);
+      if (S && S.boards) {
+        // On the verge, its inner edge 0.4 m off the road, and only where the
+        // barrier leaves the whole board room (a board through a fence post
+        // is worse than no board; the arrows on the road remain).
+        const bar = sd > 0 ? track.barR : track.barL;
+        for (const back of S.boardM) {
+          const k = kOf(p.sA - back);
+          const off = hw[k] + 0.4 + S.boardW / 2;
+          if (bar && bar[k] < off + S.boardW / 2 + 0.5) continue;
+          boardAt(k, sd * off, S.boardY, S.cells);
+        }
+        if (p.v[kIn] >= 0.98) boardAt(kIn, sd * (hw[kIn] + v1 - 0.6), S.boardY, S.cells + 1);
+      }
       if (p.v[kOut] >= 0.98) {
         const c = at(kOut, sd * (hw[kOut] + v1 - 0.5), 0.35);
         const bs = basisAt(kOut);
@@ -158,11 +243,7 @@ const SceneryPits = (function () {
     // of the fascia, laid out here as pure numbers (track.pitSigns — the
     // headless builds see only these); js/garage/pit-signs.js paints the
     // atlas and uploads the texMesh where a canvas exists, and game.js
-    // draws the twelve as ONE decal after the sky. Corners [BL, BR, TR, TL]
-    // as seen from the lane, V flipped for the FLIP_Y upload, U not (a
-    // world-space quad on the identity; a U flip would mirror the crests).
-    const S = typeof TrackPit !== "undefined" ? TrackPit.SIGN : null;
-    const signs = { pos: [], nrm: [], uv: [], idx: [], cells: [], centre: null };
+    // draws the twelve (and the boards above) as ONE decal after the sky.
     if (p.hasBays) {
       const B = p.bay, doorW = B.doorW || 5.4, doorH = B.doorH || 4.8;
       const garage = o.workOut;                 // the garage line, beyond the road edge
@@ -294,8 +375,9 @@ const SceneryPits = (function () {
       }
     }
     if (p.row) p.row.placed = placed;
-    if (signs.cells.length) track.pitSigns = signs;
-    return { bays, wall: wallBuilt, lamps, signs: signs.cells.length };
+    for (const b of boardsWanted) emitBoard(b[0], b[1], b[2], b[3]);
+    if (signs.cells.length || signs.boards.length) track.pitSigns = signs;
+    return { bays, wall: wallBuilt, lamps, signs: signs.cells.length, boards: signs.boards.length };
   }
 
   return { build };
