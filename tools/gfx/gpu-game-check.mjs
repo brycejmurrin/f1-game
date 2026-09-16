@@ -348,6 +348,20 @@ try {
     if (!A || !A.occlusionCull) return { note: "no occlusionCull hook — this build predates it" };
     try { return A.occlusionCull(); } catch (e) { return { error: String(e && e.message) }; }
   }), 20000, "occlusion");
+  // AND THE SAME THING IN MOTION. park() gives a static camera, and every
+  // popping risk this feature has lives in movement: a chunk hidden while the
+  // camera was elsewhere stays hidden for as many frames as its query takes to
+  // answer. So drive, then read the counters again. A parked sample alone would
+  // have been the easy measurement rather than the useful one.
+  out.occlusionMoving = await bounded(() => page.evaluate(async () => {
+    const A = window.__apex;
+    if (!A || !A.occlusionCull || !A.go || !A.step) return { note: "no drive hooks" };
+    try {
+      A.go();
+      for (let i = 0; i < 40; i++) { A.step(1 / 60, 3); await new Promise((r) => requestAnimationFrame(r)); }
+      return A.occlusionCull();
+    } catch (e) { return { error: String(e && e.message) }; }
+  }), 60000, "occlusion-moving");
   checkpoint("race-entry-read");
 
   out.overlay = await bounded(() => page.evaluate(() => {

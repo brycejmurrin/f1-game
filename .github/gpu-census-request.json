@@ -1,8 +1,8 @@
 {
   "images": "macos-latest",
-  "track": "vegas",
+  "track": "spa",
   "census_only": false,
   "force": "",
   "ls": "apex26.occlusionCull=1",
-  "leg": "occlusion-cull-2026-09-16-first-live-boot"
+  "leg": "occlusion-2026-09-16-spa-the-floor-plus-motion-and-lag"
 }

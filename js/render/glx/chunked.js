@@ -69,7 +69,16 @@ const GLXChunked = (function () {
     let _occOn = false, _occProg = null, _occU = null, _occVao = null, _occFailed = false;
     let _occState = new WeakMap();        // mesh -> { flag, q, sent }
     let _occDrawn = [], _occFrame = 0;
-    const _occStats = { supported: null, on: false, tested: 0, culled: 0, queries: 0, passes: 0 };
+    // `lagMax` / `lagSum` / `lagN` are HOW MANY PASSES a query takes to answer,
+    // and they exist because run 133 reported queries=0 on its sampled pass —
+    // every chunk already had one in flight. Harvesting demonstrably worked
+    // (nothing reaches culled=146 otherwise), but the sample said nothing about
+    // the latency, and a visibility flag that updates slowly is a flag that
+    // POPS: the chunk stays hidden for as many frames as the answer takes.
+    // Counting it is the difference between knowing that and assuming it.
+    const _occStats = { supported: null, on: false, tested: 0, culled: 0, queries: 0, passes: 0,
+                        lagMax: 0, lagAvg: 0 };
+    let _lagSum = 0, _lagN = 0;
 
     function _occInit() {
       if (_occProg || _occFailed) return !!_occProg;
@@ -116,7 +125,7 @@ const GLXChunked = (function () {
       let st = _occState.get(mesh);
       if (!st && mesh.chunks) {
         st = { flag: new Uint8Array(mesh.chunks.length).fill(1), q: new Array(mesh.chunks.length).fill(null),
-               sent: new Uint8Array(mesh.chunks.length) };
+               sent: new Uint8Array(mesh.chunks.length), at: new Int32Array(mesh.chunks.length) };
         _occState.set(mesh, st);
       }
       return st;
@@ -441,6 +450,9 @@ const GLXChunked = (function () {
               if (gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) {
                 st.flag[i] = gl.getQueryParameter(q, gl.QUERY_RESULT) ? 1 : 0;
                 st.sent[i] = 0;
+                const lag = _occFrame - st.at[i];
+                if (lag > _occStats.lagMax) _occStats.lagMax = lag;
+                _lagSum += lag; _lagN++;
               }
             }
             const cand = Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) &&
@@ -455,7 +467,7 @@ const GLXChunked = (function () {
             gl.beginQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE, st.q[i]);
             gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
             gl.endQuery(gl.ANY_SAMPLES_PASSED_CONSERVATIVE);
-            st.sent[i] = 1; queries++;
+            st.sent[i] = 1; st.at[i] = _occFrame; queries++;
           }
         }
       } finally {
@@ -466,6 +478,7 @@ const GLXChunked = (function () {
         _occDrawn.length = 0;
       }
       _occStats.tested = tested; _occStats.culled = culled; _occStats.queries = queries;
+      _occStats.lagAvg = _lagN ? +(_lagSum / _lagN).toFixed(2) : 0;
       _occStats.on = true;
     }
     // EITHER direction of the toggle drops the state, and both directions need
@@ -482,6 +495,7 @@ const GLXChunked = (function () {
         _occOn = want;
         _occDrawn.length = 0;
         _occState = new WeakMap();
+        _lagSum = 0; _lagN = 0; _occStats.lagMax = 0; _occStats.lagAvg = 0;
         if (!want) { _occStats.on = false; _occStats.tested = _occStats.culled = _occStats.queries = 0; }
         Log.info("gfx", "GLX occlusion cull " + (want ? "ON" : "off"));
       }
