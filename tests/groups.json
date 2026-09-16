@@ -168,7 +168,7 @@
     "// racecraft harder than pace, and asLegend hands over the legend's OWN",
     "// axes rather than bumping whoever was fastest. Pure module load, ~0.1 s.",
     "tests/unit/duel.test.mjs",
-    "// …and the DUEL ROW that reaches it: one control carrying OFF / ON / a",
+    "// \u2026and the DUEL ROW that reaches it: one control carrying OFF / ON / a",
     "// named legend has to round-trip through two setters, and the inert VM DOM",
     "// builds no SettingRow children, so painting the row would assert nothing.",
     "tests/unit/duel-row.test.mjs",
@@ -297,7 +297,8 @@
     "tests/unit/contact-geometry.test.mjs",
     "tests/unit/race-insights.test.mjs",
     "tests/unit/driving-coach.test.mjs",
-    "tests/unit/ai-corridor.test.mjs"
+    "tests/unit/ai-corridor.test.mjs",
+    "tests/unit/radio-voice.test.mjs"
   ],
   "groups": {
     "test": {
@@ -481,7 +482,8 @@
         "tests/unit/audio-sample-upgrade.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/rival-audio.test.mjs",
-        "tests/unit/photomode-hold.test.mjs"
+        "tests/unit/photomode-hold.test.mjs",
+        "tests/unit/radio-voice.test.mjs"
       ]
     },
     "test:modes": {

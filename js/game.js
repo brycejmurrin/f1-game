@@ -1120,7 +1120,7 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 // module-scope so updateCar's per-car binding never allocates.
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
-let announceT = 0;
+let announceT = 0, radioVoice = RadioVoice.inert();   // the real instance lands at the module wires; inert() means no call site needs a guard
 // "box" is the engineer's PIT CALL and nothing else (js/race/engineer.js): an
 // instruction the player has one lap to act on, where every other engineer line
 // is a report. It ranks with the pit-lane messages it belongs to rather than
@@ -1181,6 +1181,14 @@ function showAnnounce(msg, dur, kind) {
   // was 1.4 s, which nobody reads at racing speed.
   announceT = Math.max(ANN_MIN_S, (dur || 1.6) + 0.5);
   _annFloor = ANN_MIN_S;
+  // THE ONLY PLACE THE RADIO SPEAKS. showAnnounce is the one place a line
+  // reaches the screen, so hooking it inherits the whole ANN_PRI / _annQueue
+  // policy for free: a line the cinematic camera dropped never arrives here and
+  // is never spoken, a queued line is spoken when its turn comes, and a preempt
+  // interrupts. There is no second priority table anywhere in the voice.
+  // announceT — the card's ACTUAL life, not a second copy of the expression
+  // above — is the utterance's whole budget.
+  radioVoice.say(msg, announceT, kind);
 }
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
@@ -2858,6 +2866,7 @@ const G = {
   get ttSessionTs() { return ttSessionTs; },
   get records() { return records; },
   get coach() { return coach; },
+  get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
   recordControls: () => ({ autoThrottle: autoThrottle(), gearsManual: gearsManual(), steerMode, aero: raceAeroMode }),
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
@@ -3184,6 +3193,10 @@ pits = PitLane.create(G);
 // The race engineer (js/race/engineer.js): the voice that makes all of the
 // above legible to a driver who never opens a menu. Reads both, so it is last.
 engineer = RaceEngineer.create(G);
+// The radio's VOICE (js/audio/radio-voice.js) — speechSynthesis over the banner
+// the engineer, the coach and race control already write. Off by default, and
+// inert wherever the API, a voice or the setting is missing.
+radioVoice = RadioVoice.create(G);
 const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
@@ -8228,6 +8241,10 @@ function firstGesture() {
   // Tilt permission is requested at race start (rs-go click), not here — so the
   // gyro prompt and button fallback don't appear on the title screen.
   if (soundOn) { GameAudio.init(); GameAudio.startMusic(-1); }
+  // Unconditional, not gated on soundOn: unlock() is silent and idempotent, and
+  // the alternative means a player who turns the radio on from a KEYBOARD-driven
+  // pause menu never gets the priming gesture iOS wants.
+  radioVoice.unlock();
 }
 let gestured = false;
 document.addEventListener("pointerdown", () => {

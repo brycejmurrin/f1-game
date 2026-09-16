@@ -105,17 +105,17 @@ const RaceInsights = (function () {
           // shape. NOT a c.speed-against-a-literal compare, which would be a
           // PACE-rule violation (tests/unit/vstd-invariant.test.mjs) and wrong.
           if (!((rival._vmaxNow || 0) >= (c._vmaxNow || 0) + THREAT * G.vTop())) {
-            G.announce("THE CAR BEHIND IS NOT QUICK ENOUGH TO DEFEND FROM", 2, "practice"); return false;
+            G.announce("HE IS NOT QUICK ENOUGH TO DEFEND FROM", 2, "practice"); return false;
           }
         } else {
           if (placeOf(c) === 1) { G.announce("YOU ARE LEADING — THERE IS NOBODY TO PASS", 2, "practice"); return false; }
-          if (!rival || gap > TOW_RANGE) { G.announce(mode === "overtake" ? "CLOSE ON THE CAR AHEAD BEFORE SETTING THIS DRILL" : "GET INTO THE WAKE OF THE CAR AHEAD", 2, "practice"); return false; }
+          if (!rival || gap > TOW_RANGE) { G.announce(mode === "overtake" ? "CLOSE ON THE CAR AHEAD FIRST" : "GET INTO THE WAKE OF THE CAR AHEAD", 2, "practice"); return false; }
         }
-        if (mode === "slipstream" && gap < WAKE_DONE_M) { G.announce("YOU ARE ALREADY THERE — DROP BACK AND RUN AT IT", 2, "practice"); return false; }
+        if (mode === "slipstream" && gap < WAKE_DONE_M) { G.announce("ALREADY THERE — DROP BACK FIRST", 2, "practice"); return false; }
         if (mode === "overtake") {
           const par = paceParity();
           if (par == null) { G.announce("HOLD THIS GAP A MOMENT LONGER", 2, "practice"); return false; }
-          if (Math.abs(par - 1) > PARITY) { G.announce("THAT CAR IS NOT ON YOUR PACE — THIS IS NOT A FAIR FIGHT", 2, "practice"); return false; }
+          if (Math.abs(par - 1) > PARITY) { G.announce("NOT ON YOUR PACE — NOT A FAIR FIGHT", 2, "practice"); return false; }
         }
       }
       previous = sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false;

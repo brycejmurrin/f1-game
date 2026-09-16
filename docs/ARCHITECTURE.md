@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_184 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_185 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -268,6 +268,7 @@ _184 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `music-lib.js` | `MusicLib` | tag | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | tag | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
 | `rivals.js` | `RivalAudio` | tag | RivalAudio — the field around you, reduced to the player's TRACK frame for js/audio/engine.js, which owns the sound and deliberately does no track maths. |
+| `radio-voice.js` | `RadioVoice` | tag | The radio banner, spoken aloud by the browser's own speech synthesiser. |
 | `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
 
 **`js/physics/`**
