@@ -430,6 +430,14 @@
            itself, or the gesture is undiscoverable. Shows the distance to the
            entry and which way to go, and only while a stop is worth making. -->
       <div id="hud-pit" hidden><span id="hud-pit-arrow">&#9654;</span><span id="hud-pit-text">PIT</span></div>
+      <!-- WORK ON CAR. Only while the car is stopped in its box on the jacks
+           (PitLane.canWork): opens the GARAGE mid-race to change parts or the
+           set-up, and charges the stop PitLane.workS seconds for it if anything
+           changed. A button rather than a gesture because, unlike calling the
+           stop, there is nothing to steer — and because it must be impossible
+           to press by accident at 300 km/h, which is why it only exists for the
+           two seconds the car is stationary. -->
+      <button id="hud-work" type="button" hidden>WORK ON CAR</button>
       <div id="hud-ot" class="ot-off">OVERTAKE</div>
       <div id="hud-aero" class="ax-off">Z-MODE</div>
     </div>
@@ -2660,6 +2668,7 @@
 <script defer crossorigin="anonymous" src="js/physics/ai-corridor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-ui.js?v=dev"></script>

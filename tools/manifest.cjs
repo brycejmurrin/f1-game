@@ -170,6 +170,7 @@ const FULL = [
   "js/physics/ai-corridor.js",
   "js/race/engineer.js",
   "js/camera/offsets.js",
+  "js/camera/flyby-seq.js",
   "js/garage/setup-tune.js",
   "js/garage/setup-sheet.js",
   "js/career/career-ui.js",

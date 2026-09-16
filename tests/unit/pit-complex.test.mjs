@@ -103,7 +103,10 @@ test("a street complex owns its side: no engine street barrier on the lane, the 
     const bar = p.side > 0 ? t.barR : t.barL;
     for (let k = 0; k < t.n; k++) {
       if (!(p.keep[k] > 0)) continue;
-      assert.ok(bar[k] >= t.hw[k] + p.off.outer * p.w[k] - 0.9 - 1e-6, `${id}: node ${k} boundary ${bar[k].toFixed(2)} inside the lane`);
+      // The LANE's edge, not the footprint's: it is the garage line where the
+      // bays are and the fast lane's far side elsewhere (TrackPit.outerAt).
+      const edge = t.hw[k] + ctxOnce().TrackPit.outerAt(p, k) - 0.9;
+      assert.ok(bar[k] >= edge - 1e-6, `${id}: node ${k} boundary ${bar[k].toFixed(2)} inside the lane (${edge.toFixed(2)})`);
     }
   }
   // Jeddah's 190 m window (its trace's corners sit against the line) compresses
@@ -195,13 +198,26 @@ test("the driving boundary is opened across the complex, on the pit side only", 
   const bar = p.side > 0 ? t.barR : t.barL, other = p.side > 0 ? t.barL : t.barR;
   const T = tracksOnce();
   const raw = T.buildCenterline(T.LIST.find((d) => d.id === FULL));
+  const P = ctxOnce().TrackPit;
   for (let k = 0; k < t.n; k++) {
     if (!(p.keep[k] > 0)) continue;
-    // …to 0.9 m short of the garage line for the car's centre: its side
+    // …to 0.9 m short of THE LANE'S OWN EDGE for the car's centre: its side
     // reaches the line, where the OUTER WALL stands wherever a bay does not.
-    assert.ok(bar[k] >= t.hw[k] + p.off.outer * p.w[k] - 0.9 - 1e-6,
-      `node ${k}: boundary ${bar[k].toFixed(2)} inside the complex's edge ${(t.hw[k] + p.off.outer * p.w[k] - 0.9).toFixed(2)}`);
+    // That edge is the garage line only where the bays are — on the entry
+    // road, the exit road and the stretches between, the lane is the fast lane
+    // and the wall comes in with it, so the boundary must come in too or a car
+    // drives through a wall into the apron behind it.
+    const edge = t.hw[k] + P.outerAt(p, k) - 0.9;
+    assert.ok(bar[k] >= edge - 1e-6,
+      `node ${k}: boundary ${bar[k].toFixed(2)} inside the lane's edge ${edge.toFixed(2)}`);
   }
+  // …and NOT out to the old full width where no bay stands: an entrance you
+  // can drive 6.5 m of working lane down is the width this change removed.
+  let narrowed = 0;
+  for (let k = 0; k < t.n; k++) {
+    if (p.w[k] > 0.98 && p.b[k] < 0.02) narrowed++;
+  }
+  assert.ok(narrowed > 10, `the window carries a fast-lane-only stretch (${narrowed} nodes)`);
   void other; void raw;
 });
 

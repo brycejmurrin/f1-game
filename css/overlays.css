@@ -1278,6 +1278,9 @@ body[data-density="compact"] #campicker {
   transform: translateY(var(--gap));
   transition: opacity 0.4s ease-out, transform 0.4s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
+/* Both live phases show the card: "run" is the flyby with the card up, "card"
+   is the no-world fallback where the card is all there is. */
+#loading[data-phase="run"] #ld-card,
 #loading[data-phase="card"] #ld-card { opacity: 1; transform: none; }
 /* The wordmark is #title's recipe at card scale — same italic, same skewed red
    underline — because this IS the title screen's brand arriving on the grid. */
