@@ -49,6 +49,13 @@ const RaceEngineer = (function () {
   // left, stop here, merge — the engineer waits, and the line it owes is not
   // spent (the wear step is only consumed when a line is actually said).
   const DIRECTIONAL = ["enter", "keep", "square", "stop", "merge"];
+  // THE PIT CALLS — the callFor keys that are an INSTRUCTION with a lap to act
+  // on it, rather than a report on the car. Only these ride the "box" priority
+  // (js/game.js ANN_PRI); everything else here is "info" and yields. "tread" is
+  // in because the wrong tyre for the weather costs whole seconds a lap and the
+  // answer is the same one: box, now. "gone" and "undercut" are NOT — they say
+  // box when you can and box or push, which is a decision, not a lap.
+  const BOX_CALLS = ["plan0", "plan1", "tread"];
 
   function create(G) {
     Log.info("race", "RaceEngineer.create");
@@ -218,12 +225,15 @@ const RaceEngineer = (function () {
       if (cue && DIRECTIONAL.indexOf(cue.phase) >= 0) return "";
       const [msg, key] = call;
       if (b.t > 0 || b.said[key] > 0) return "";
-      // "info" priority, not "race": an engineer must never talk over a flag,
-      // a penalty or the lights (js/game.js ANN_PRI). announce() reports back
-      // whether the line will actually be heard — a cinematic camera drops
-      // "info" outright, and a busy banner's single queue slot can be lost to
-      // a higher priority.
-      if (!G.announce(msg, 2.2, "info")) return "";
+      // "info", so an engineer never talks over a flag, a penalty or the lights
+      // (js/game.js ANN_PRI) — EXCEPT the pit call, which is not a report but an
+      // instruction with a lap to act on it, and rides "box" (rank 4) with the
+      // pit-lane messages it belongs to. At "info" it lost to "PIT ENTRY —
+      // LIMITER ON": the confirmation you had pitted outranked the call to pit.
+      // announce() reports back whether the line will actually be heard — a
+      // cinematic camera drops "info", and a queue slot can be pushed off the
+      // end by higher priorities.
+      if (!G.announce(msg, 2.2, BOX_CALLS.indexOf(key) >= 0 ? "box" : "info")) return "";
       // A wear step is only CONSUMED when it is actually said, so a threshold
       // crossed while the banner was busy is still waiting on the next tick
       // rather than silently spent.
@@ -235,6 +245,6 @@ const RaceEngineer = (function () {
     return { update, reset, callFor, senseOf };
   }
 
-  return { create, WEAR_STEPS, AXLE_SPLIT, GRAIN_CALL, BLISTER_CALL, COLD_CALL, QUIET_S, REPEAT_S, DIRECTIONAL };
+  return { create, WEAR_STEPS, AXLE_SPLIT, GRAIN_CALL, BLISTER_CALL, COLD_CALL, QUIET_S, REPEAT_S, DIRECTIONAL, BOX_CALLS };
 })();
 Object.freeze(RaceEngineer);
