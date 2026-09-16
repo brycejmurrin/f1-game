@@ -34,7 +34,7 @@ const LoadingScreen = (function () {
   function create(hooks) {
     const { $, Tracks, TrackMaps, Flags } = hooks;
 
-    let timer = 0, phase = "", build = null, el = null;
+    let timer = 0, phase = "", build = null, el = null, flyT0 = 0;
 
     // The map's slot in the card, in CSS px. fitCanvas keeps the circuit's own
     // aspect inside it, so a wide circuit gets the width and a tall one the height.
@@ -139,6 +139,7 @@ const LoadingScreen = (function () {
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
       if (info.hasWorld) {
+        flyT0 = Date.now();
         setPhase("fly");
         timer = setTimeout(toCard, FLY_MS);
       } else {
@@ -162,6 +163,15 @@ const LoadingScreen = (function () {
 
     return {
       run, stop,
+      /** How far through the FLYBY the screen is, 0..1. The shot sequencer is
+       *  driven by this rather than by the wall clock, so the sequence keeps its
+       *  shape when FLY_MS is retuned, and a phase skipped by a keypress does not
+       *  leave the camera mid-move. 1 once the card is up, 0 when nothing runs. */
+      progress() {
+        if (phase === "card") return 1;
+        if (phase !== "fly" || !flyT0) return 0;
+        return Math.max(0, Math.min(1, (Date.now() - flyT0) / FLY_MS));
+      },
       /** True while the screen owns the canvas — game.js keeps the world
        *  drawn for exactly this window and blanks every other menu. */
       active() { return phase === "fly" || phase === "card"; },

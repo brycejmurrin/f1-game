@@ -364,6 +364,31 @@ const api = {
     G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
     return { eye: v.eye, target: v.tgt, fov: +v.fov.toFixed(1), mode: m };
   },
+  // flybyCam(u, shots?) — park the camera at progress `u` (0..1) through the
+  // PRE-RACE FLYBY's shot sequence (js/camera/flyby-seq.js) and report where it
+  // put the eye, what it is looking at, which shot that is, and whether the eye
+  // landed inside solid scenery. This is the authoring/inspection seam: the live
+  // sequence is driven by a phase timer that lasts a few seconds, which is not
+  // something a capture tool can aim at, so this drives the same solver
+  // deterministically through dbgCam (the override photo mode uses).
+  // Pass `shots` to preview an EDITED sequence without reloading.
+  flybyCam(u, shots) {
+    if (!G.track || typeof FlybySeq === "undefined") return false;
+    const v = FlybySeq.solve(G.track, +u || 0, shots);
+    G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
+    const hit = FlybySeq.insideProp(G.track, v.eye, 0);
+    return {
+      u: +(+u || 0).toFixed(4), shot: v.id, index: v.index, cut: v.cut,
+      eye: v.eye.map((n) => +n.toFixed(2)), target: v.tgt.map((n) => +n.toFixed(2)),
+      fov: +v.fov.toFixed(1),
+      inside: hit ? { kind: hit.kind, size: [hit.w, hit.h, hit.d] } : null,
+    };
+  },
+  // flybyShots() — the sequence the flyby is currently playing, as data. The
+  // authoring loop is: read this, edit it, hand it back to flybyCam(u, shots).
+  flybyShots() {
+    return typeof FlybySeq === "undefined" ? null : JSON.parse(JSON.stringify(FlybySeq.DEFAULT));
+  },
   // camTune(mode?, obj?) — the CAMERA TUNER's per-camera-mode framing offsets
   // (js/camera/offsets.js), the camera counterpart of lightTune(). With no args
   // it reports every tuned mode plus the knob registry; with a mode id it
