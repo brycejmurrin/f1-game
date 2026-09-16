@@ -223,6 +223,21 @@ test("an armed AI is guided: the pit side of the road on the approach, one line 
   assert.equal(pits.entryV(ai(p.sIn + 50)), Infinity, "and no cap inside the window");
 });
 
+test("the stop is seen: up on the jacks, four wheels off and on, down again — from the hold's own clock", async () => {
+  await fresh();
+  const pits = g.G.pits, boxS = pits.zoneOf().boxS;
+  const at = (u) => pits.stopAnim({ pitState: "box", pitT: boxS * (1 - u) });
+  const zero = (v, m) => assert.ok(Math.abs(v) < 1e-6, `${m} (${v})`);
+  zero(pits.stopAnim({ pitState: "lane", pitT: 1 }).lift, "nothing moves outside the box");
+  zero(at(0).lift, "on the ground at the start"); zero(at(0).off, "wheels on at the start");
+  assert.ok(at(0.12).lift > 0.21 && at(0.5).lift > 0.21 && at(0.88).lift > 0.21, "on the jacks through the middle of the stop");
+  zero(at(1).lift, "…and down at the end");
+  zero(at(0.15).off, "wheels still on when the jacks are up");
+  assert.ok(at(0.3).off > 0.5 && at(0.6).off > 0.5, "the wheels are off in the middle");
+  zero(at(0.85).off, "…and back on before the car drops");
+  assert.ok(boxS > 2 && boxS < 2.5, `the hold is ${boxS} s`);
+});
+
 test("a car on the lane's own tarmac commits, and the limiter comes on", async () => {
   const a = await fresh();
   a.jump(0.985, 40, 0);

@@ -68,9 +68,9 @@ const PitLane = (function () {
   // backwards — a pit lane is a building, not a share of a circuit. Measured
   // from the start/finish line, which is where every circuit's pit straight is
   // (racing coordinates put the line at s = 0; see TrackSpace).
-  const ENTRY_M = 400;     // the LONGEST the lane may open before the line
+  const ENTRY_M = 260;     // the LONGEST the lane may open before the line (TrackPit.ENTRY_MAX; was 400)
   const ENTRY_MIN = 150;   // ...and the shortest that is still a lane
-  const EXIT_M = 130;      // where it closes, after the line
+  const EXIT_M = 110;      // where it closes, after the line (TrackPit.EXIT_M; was 130)
   const BOX_M = 40;        // the stop, this far before the line
 
   // ── WHERE THE LANE OPENS IS A PROPERTY OF THE CIRCUIT ─────────────────────
@@ -128,7 +128,7 @@ const PitLane = (function () {
   // (record 1.80 s); this is deterministic on purpose — a random stop time
   // would make a strategy call a coin flip and would break replay determinism,
   // which js/race/reliability.js is equally careful about.
-  const BOX_S = 2.4;
+  const BOX_S = 2.2;   // was 2.4: the 2025 field's median stationary time is ~2.2 s
 
   // How slow the car has to be at the box for the stop to count. A fraction of
   // the speed envelope, so it rides OVERALL SPEED like the limiter does.
@@ -1097,6 +1097,26 @@ const PitLane = (function () {
 
     function resetCommit(c) { if (c) c.pitCommitT = 0; }
 
+    // ── THE STOP, SEEN: the jacks and the wheels ─────────────────────────
+    // Render-only numbers for a car HELD in its box, read off the hold's own
+    // clock (pitT counts boxS down): up on the jacks in the first 12 %, the
+    // four wheels off outward along their axles from 15 % to 27 %, the new
+    // set on from 68 % to 80 %, down in the last 12 %. Nothing here moves
+    // the physics; js/car/car-draw.js lifts and slides the wheels by these,
+    // js/game.js lifts the body. One shared record, no per-frame allocation.
+    const _anim = { lift: 0, off: 0, u: -1 };
+    const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+    function stopAnim(c) {
+      const zz = z();
+      _anim.lift = 0; _anim.off = 0; _anim.u = -1;
+      if (!c || c.pitState !== "box" || !zz || !(zz.boxS > 0)) return _anim;
+      const u = Math.min(1, Math.max(0, 1 - (c.pitT || 0) / zz.boxS));
+      _anim.u = u;
+      _anim.lift = 0.22 * (u < 0.5 ? ease(u / 0.12) : ease((1 - u) / 0.12));
+      _anim.off = 0.55 * (u < 0.5 ? ease((u - 0.15) / 0.12) : ease((0.80 - u) / 0.12));
+      return _anim;
+    }
+
     function reset(c) {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0; c.pitNext = null; c.pitStops = 0; c.pitWhy = "";
@@ -1159,7 +1179,7 @@ const PitLane = (function () {
       };
     }
 
-    return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, inLane, inWindow: inWindowOf,
+    return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
              laneEdge, laneCentre, laneDrive, laneUniform, boxUniform, laneX, inLaneLat, inBoxLat,

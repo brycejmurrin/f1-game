@@ -42,10 +42,34 @@ test("every built complex lays out twelve fascia quads, one per bay, in row orde
     const t = buildOnce(id), p = t.pit, q = t.pitSigns, sd = p.side;
     assert.ok(q, `${id}: track.pitSigns`);
     assert.equal(q.cells.length, S.cells, `${id}: one cell per bay`);
-    assert.equal(q.pos.length / 3, S.cells * 4);
-    assert.equal(q.idx.length, S.cells * 6);
-    assert.equal(q.uv.length, S.cells * 8);
+    // …plus the BOARDS (TrackPit.SIGN.boards): two "PIT ENTRY" on the
+    // approach and one "PIT LANE" at the entry line, each a quad on the same
+    // atlas after the twelve fascias, each an anchor for the distance gate.
+    const nq = S.cells + q.boards.length;
+    assert.ok(q.boards.length >= 1 && q.boards.length <= 3, `${id}: ${q.boards.length} boards`);
+    assert.equal(q.pos.length / 3, nq * 4);
+    assert.equal(q.idx.length, nq * 6);
+    assert.equal(q.uv.length, nq * 8);
+    assert.equal(q.anchors.length, q.boards.length);
     assert.ok(Array.isArray(q.centre) && q.centre.length === 3, `${id}: a centre for the distance gate`);
+    for (let b = 0; b < q.boards.length; b++) {
+      const i = S.cells + b, k = q.boards[b].k;
+      assert.ok(q.boards[b].cell === S.cells || q.boards[b].cell === S.cells + 1, `${id}: board ${b} cell ${q.boards[b].cell}`);
+      const n = [q.nrm[i * 12], q.nrm[i * 12 + 1], q.nrm[i * 12 + 2]];
+      // Faces the oncoming driver: against the road's tangent.
+      assert.ok(dot(n, [-t.tx[k], -t.ty[k], -t.tz[k]]) > 0.99, `${id}: board ${b} does not face the driver`);
+      const P = [0, 1, 2, 3].map((c) => [q.pos[(i * 4 + c) * 3], q.pos[(i * 4 + c) * 3 + 1], q.pos[(i * 4 + c) * 3 + 2]]);
+      assert.ok(Math.abs(len(sub(P[1], P[0])) - S.boardW) < 0.01, `${id}: board ${b} width`);
+      assert.ok(Math.abs(len(sub(P[3], P[0])) - S.boardH) < 0.01, `${id}: board ${b} height`);
+      assert.ok(dot(cross(sub(P[1], P[0]), sub(P[3], P[0])), n) > 0, `${id}: board ${b} is mirrored`);
+      // Its row of the atlas: the seventh, under the fascias.
+      const cy = Math.floor(q.boards[b].cell / S.cols) * S.cellH;
+      assert.ok(cy + S.cellH <= S.h, `${id}: board cell ${q.boards[b].cell} is off the atlas`);
+      for (let c2 = 0; c2 < 4; c2++) {
+        const v = q.uv[(i * 4 + c2) * 2 + 1];
+        assert.ok(v >= 1 - (cy + S.cellH) / S.h - 1e-9 && v <= 1 - cy / S.h + 1e-9, `${id}: board ${b} v ${v}`);
+      }
+    }
     for (let i = 0; i < S.cells; i++) {
       const box = p.row.boxes[i], k = box.k;
       assert.equal(q.cells[i].team, box.team, `${id}: cell ${i} is not bay ${i}'s team`);
@@ -138,18 +162,21 @@ test("with a canvas and the livery painter it paints twelve cells and uploads on
   // compares prototypes across realms.
   assert.deepEqual(painted.map((x) => x.id), Array.from(t.pit.row.boxes, (b) => b.team));
   assert.ok(texts.includes("MER") && texts.includes("FER"), "the codes are lettered");
+  assert.ok(texts.some((s) => /PIT ENTRY/.test(s)) && texts.some((s) => /PIT LANE \d+ km\/h/.test(s)), `the boards are lettered: ${texts.join("|")}`);
   assert.equal(up.length, 2);
   const mesh = up.find((u) => u[0] === "mesh")[1];
-  assert.equal(mesh.pos.length / 3, 48); assert.equal(mesh.uv.length, 96); assert.equal(mesh.idx.length, 72);
+  const nq = 12 + t.pitSigns.boards.length;
+  assert.equal(mesh.pos.length / 3, nq * 4); assert.equal(mesh.uv.length, nq * 8); assert.equal(mesh.idx.length, nq * 6);
   const cv = up.find((u) => u[0] === "tex")[1];
   const S = ctxOnce().TrackPit.SIGN;
   assert.equal(cv.width, S.w); assert.equal(cv.height, S.h);
-  // The draw: once inside 350 m of the row, never beyond it, never when hidden.
+  // The draw: once inside 350 m of the row (or of a board), never beyond
+  // both, never when hidden.
   const drawn = [];
   const gfx = { drawDecal: (m, model, tex, o) => drawn.push({ glow: o.glow }) , freeMesh() {}, freeTexture() {} };
   const c = t.pitSigns.centre;
   assert.equal(P.draw(gfx, t, null, [c[0] + 100, c[1], c[2]], true, false), true);
-  assert.equal(P.draw(gfx, t, null, [c[0] + 400, c[1], c[2]], true, false), false);
+  assert.equal(P.draw(gfx, t, null, [c[0] + 3000, c[1], c[2]], true, false), false);
   assert.equal(P.draw(gfx, t, null, [c[0], c[1], c[2]], false, true), false);
   assert.deepEqual(drawn, [{ glow: 0.5 }]);
   P.free(gfx, t);

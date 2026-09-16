@@ -653,8 +653,12 @@ it on. `js/race/reliability.js` ships off for the same reason.
   are keyed to `pitState` and arc distance, with no geometry mutation at all
   (`docs/research/TYRE-STRATEGY-DESIGN.md` §5.2 erratum). **Pit loss is still
   emergent**: window length over the limiter against racing the same stretch,
-  plus the box. Measured **23.6 s at Monza**, inside the real 20-25 s band, and
-  it varies by circuit the way real strategy does.
+  plus the box. Measured **23.6 s at Monza** on the original 530 m window,
+  inside the real 20-25 s band, and it varies by circuit the way real strategy
+  does. The window was shortened on 2026-09-16 (`TrackPit` ENTRY_MAX 400→260,
+  EXIT_M 130→110, a 370 m lane at most; the box hold 2.4→2.2 s), which
+  `PitLane.estimate` puts at ~12 s at 80 km/h on a full-length lane — a stop
+  that still decides a strategy without a quarter of a lap under the limiter.
 - **Temperature is TWO states, and the second one is not decoration.** A real
   tyre fails in two opposite ways a single temperature cannot tell apart:
   **graining** is SURFACE damage from cold or sliding rubber, costs a couple of

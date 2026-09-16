@@ -1050,6 +1050,26 @@ const TrackMesh = (function () {
       }
       out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
     }
+    // ARROWS down the entry road: a white chevron every 12 m on the peel's
+    // own centre, pointing into the lane — the paint a driver reads before
+    // any board. Skipped while the road is still a sliver (w < 0.25).
+    for (let d = 10; d < p.entryRoadM - 4; d += 12) {
+      const s = ((p.sA + d) % L + L) % L, k = ((Math.round((s / L) * n) % n) + n) % n;
+      if (!(p.w[k] > 0.25)) continue;
+      TrackSpline.sample(track, s, smp);
+      const rr = TrackGeom.norm(smp.r), tt = TrackGeom.norm(smp.t), uu = TrackGeom.norm(cross(rr, tt));
+      const xc = sd * (smp.hw + (o.fastIn * p.v[k] + o.workOut * p.w[k]) * 0.5);
+      const P = (lon, x) => [smp.p[0] + rr[0] * x + tt[0] * lon + uu[0] * PIT_LIFT,
+                             smp.p[1] + rr[1] * x + tt[1] * lon + uu[1] * PIT_LIFT,
+                             smp.p[2] + rr[2] * x + tt[2] * lon + uu[2] * PIT_LIFT];
+      const quad = (A, B, C, D) => {
+        const base = out.pos.length / 3;
+        for (const Q of [A, B, C, D]) { out.pos.push(Q[0], Q[1], Q[2]); out.nrm.push(uu[0], uu[1], uu[2]); out.col.push(white[0], white[1], white[2]); }
+        out.idx.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+      };
+      quad(P(-1.2, xc - 0.16), P(-1.2, xc + 0.16), P(0.5, xc - 0.16), P(0.5, xc + 0.16));   // the shaft
+      quad(P(0.3, xc - 0.7), P(0.3, xc + 0.7), P(1.4, xc), P(1.4, xc));                     // the head (a triangle)
+    }
     return out;
   }
 

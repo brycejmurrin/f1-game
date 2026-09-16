@@ -2236,8 +2236,10 @@ serviced**, and `pit().inLaneLat` is how you see why.
 
 **Pit loss is still emergent**: window length over the limit, against racing the
 same stretch, plus the stop. That is the property that made the driveable lane
-attractive and it survives the fallback — measured 23.6 s at Monza, inside the
-real 20-25 s band (`docs/research/TYRE-STRATEGY-DESIGN.md` §2.6). You still have
+attractive and it survives the fallback — measured 23.6 s at Monza on the
+original 530 m window, inside the real 20-25 s band
+(`docs/research/TYRE-STRATEGY-DESIGN.md` §2.6); the 2026-09-16 window is 370 m
+at most (~12 s by `estimate()`). You still have
 to actually STOP in the box; blowing through it at the limit misses the stop.
 
 ```js

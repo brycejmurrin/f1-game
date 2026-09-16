@@ -553,6 +553,10 @@ const CarDraw = (function () {
       const flat = (c.flatSpot || 0) * 0.004 * (0.5 + 0.5 * cpF);
       const steerA = M4.clamp(c.steerVis || 0, -1, 1) * PhysicsConsts.WHEEL_STEER_VIS;
       const ws = wScale || 1;   // widen the tyre along its axle (cockpit view)
+      // The stop, seen (PitLane.stopAnim): a car held in its box is up on its
+      // jacks and its wheels come off outward along their axles.
+      const anim = c.pitState === "box" && G.pits && G.pits.stopAnim ? G.pits.stopAnim(c) : null;
+      const lift = anim ? anim.lift : 0, off = anim ? anim.off : 0;
       for (let w = 0; w < WHEELS.length; w++) {
         const wd = WHEELS[w];
         if (frontsOnly && wd.rear) continue;   // cockpit: rears sit beside the camera and blob the corners
@@ -565,7 +569,7 @@ const CarDraw = (function () {
         L[4] = ss*sp;    L[5] = cp;     L[6] = cs*sp;     L[7] = 0;
         L[8] = ss*cp;    L[9] = -sp;    L[10] = cs*cp;    L[11] = 0;
         // Push the widened wheels outward so they don't intersect the tub.
-        L[12] = wd.x + (wd.x < 0 ? -1 : 1) * (ws - 1) * 0.16; L[13] = wd.y + (wd.front ? flat : 0); L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
+        L[12] = wd.x + (wd.x < 0 ? -1 : 1) * ((ws - 1) * 0.16 + off); L[13] = wd.y + (wd.front ? flat : 0) + lift; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
         M4.mulTo(_wheelWorld, base, L);
         G.gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, opt);
         const F = _fixedWheelLocal;
