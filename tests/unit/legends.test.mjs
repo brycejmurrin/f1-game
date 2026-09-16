@@ -207,9 +207,30 @@ test("the eras are actually different cars, and the wingless ones stay wingless"
     "ERA_YEAR and PERIOD name different eras");
   const years = order.map((e) => Legends.ERA_YEAR[e]);
   assert.deepEqual(years, years.slice().sort((a, b) => a - b), "the table is out of chronological order");
-  // Not one shared setup with a paint change: no two eras may be identical.
-  const keys = order.map((e) => Parts.CATALOG.map((c) => Legends.PERIOD[e][c.id]).join("|"));
-  assert.equal(new Set(keys).size, keys.length, "two eras resolve to the same car");
+  // Not one shared setup with a paint change. An id-level check only catches an
+  // exact duplicate, so measure what a player actually sees: the resolved
+  // VISUAL fields, which is what js/car/car3d.js builds geometry from. The
+  // closest pair today is front50 vs slim60 — the two cigars — at 16 of 103
+  // fields, so 8 is a floor that leaves room to retune without going vacuous.
+  const MIN_VISUAL_DIFF = 8;
+  const visualOf = (era) => {
+    const v = Parts.resolveSetup(Legends.PERIOD[era], CUSTOM).visual;
+    const flat = {};
+    for (const cat of Object.keys(v)) {
+      for (const k of Object.keys(v[cat])) if (k !== "id") flat[`${cat}.${k}`] = JSON.stringify(v[cat][k]);
+    }
+    return flat;
+  };
+  const vis = Object.fromEntries(order.map((e) => [e, visualOf(e)]));
+  const fields = new Set(order.flatMap((e) => Object.keys(vis[e])));
+  for (let i = 0; i < order.length; i++) {
+    for (let j = i + 1; j < order.length; j++) {
+      let d = 0;
+      for (const k of fields) if (vis[order[i]][k] !== vis[order[j]][k]) d++;
+      assert.ok(d >= MIN_VISUAL_DIFF,
+        `${order[i]} and ${order[j]} differ in only ${d} of ${fields.size} visual fields — same car, new paint`);
+    }
+  }
 });
 
 test("no legend gets a halo — every one of them raced before 2018", () => {
