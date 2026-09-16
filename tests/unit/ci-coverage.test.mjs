@@ -450,6 +450,22 @@ test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
     "the selection report must make its delegated coverage visible");
 });
 
+test("the golden-menu trial is advisory AND never runs on the Pages call", () => {
+  // E3 (2026-09-16): its `if:` was `pull_request || workflow_dispatch` under a
+  // comment promising "never the Pages call" — but a called workflow sees the
+  // CALLER's event, and "deploy now" is a workflow_dispatch of pages.yml, so
+  // the trial ran in train #2348 (run 35066895398). An advisory job that leaks
+  // into the deploy gate is one `continue-on-error` deletion away from
+  // blocking it, so both halves of the contract are pinned here.
+  const trial = (ciWorkflow.split("\n  baseline-trial:")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.ok(trial, "baseline-trial job missing");
+  assert.match(trial, /^    continue-on-error: true$/m, "the trial must stay non-blocking");
+  assert.match(trial, /inputs\.concurrency_key == ''/,
+    "a Pages call carries a concurrency_key whatever its caller's event; that is the only reliable tell");
+  assert.doesNotMatch(ciWorkflow, /needs: \[?[^\n\]]*baseline-trial/,
+    "nothing may depend on the trial");
+});
+
 test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: swiftshader` opts out", () => {
   // 2026-09-16, second pass. llvmpipe reached the smoke shards first (run
   // 35062479811: corner approach 17.8 s against a 214 s SwiftShader median,

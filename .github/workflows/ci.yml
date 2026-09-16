@@ -1468,7 +1468,17 @@ jobs:
     name: Golden menus on a runner (trial, non-blocking)
     # PRs and dispatches only: never a push, and never the Pages call, whose
     # conclusion gates the deploy.
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    #
+    # THE COMMENT ABOVE WAS FALSE FOR SIX DAYS. A called workflow reports the
+    # CALLER's event, so a "deploy now" train — pages.yml dispatched, calling
+    # this workflow — reads as `workflow_dispatch` here and ran the trial in
+    # train #2348 (run 35066895398, 45 s), against its own promise. Harmless to
+    # the verdict (continue-on-error) but it took a runner slot on every poked
+    # train, and a comment that is wrong about WHEN a job runs is how an
+    # advisory job becomes a blocking one by accident. concurrency_key is the
+    # only signal a Pages call always carries — the same tell the smoke, sweeps
+    # and select jobs use — so it leads the condition here too.
+    if: ${{ inputs.concurrency_key == '' && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 20
