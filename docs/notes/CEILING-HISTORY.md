@@ -7,6 +7,10 @@ Every raise and lower was recorded as a comment beside its number; those comment
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
 
+2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
+under Settings, removing duplicate pause controls and simplifying Help markup.
+The newer practice goals and session review remain. Shell slack is tightened to 25.
+
 ## Why a ratchet (the original header)
 
 ```
@@ -3111,3 +3115,32 @@ and not in the person asking.
 The section leads with TYRE WEAR shipping OFF, because that gates the entire
 feature — lane, prompt, stop and AI strategy all vanish with it — and someone
 looking for a pit lane that does not exist needs that sentence before any other.
+
+## 2026-09-15 — teaching the practice goals: shellNodes 1602 → 1613
+
++11 shell nodes in HOW TO PLAY: three new coach tips (coasting, X-mode in a
+corner, track limits) in WHAT THE TIPS MEAN, three new practice goals (corner,
+full lap, launch) in PRACTICE GOALS, and the RECOVER key named as TRY AGAIN.
+Text only — `<b>`, `<br>` and `<span class="key">` inside the existing lists; no
+new control, screen or class. The DRIVING page itself is unchanged because
+SettingRow fills the goal list from js/race/driving-coach.js.
+
+## 2026-09-15 — where the lap went: shellNodes 1613 → 1616
+
++3 shell nodes: `#pm-lap-report`, one `<p>` under the coach's latest tip on the
+DRIVING page, and the `<br><b>` pair that gives its HOW TO PLAY entry the same
+labelled-paragraph shape every other entry in that section already uses.
+
+It is the readout for the only question the coach could not answer. Every tip
+is an absolute threshold — this axle is at 90% of its grip, this brake is at
+80% of its ceiling — so the coach could say the car was at its limit and never
+where the driver was slow. The lap report differences elapsed time against the
+saved best lap at the same ARC POSITION and attributes the difference to the
+corner that caused it, which is the mechanism every telemetry coaching tool is
+built on.
+
+A node rather than more text in `#pm-coach-summary`: that paragraph counts tips
+and says it is not a score, and a per-corner time analysis is a different claim
+about a different lap. Folding them into one sentence would have made both
+harder to read.
+

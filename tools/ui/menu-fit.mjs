@@ -131,6 +131,8 @@ const SCREENS = [
      const rd = document.getElementById('rotate-device'); if (rd) rd.hidden = true;
      document.getElementById('pausemenu').hidden = false;
      document.getElementById('pm-settings').click();
+     document.getElementById('pm-open-display').click();
+     document.querySelector('#pm-visual-tuners > summary').click();
      document.getElementById('pm-lighting').click();
      await until('#lt-rows .tune-row', 6000).catch(() => {});
    `, "#lighting", { wait: 2600 }],

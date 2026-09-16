@@ -633,6 +633,19 @@ const Input = (function () {
   // hid it (Input.keyboardSeen), the twin of padPresent for the pad table.
   let kbSeen = false;
   function keyboardSeen() { return kbSeen; }
+  // The Help sheet and first-run coach need the source the player is actually
+  // using, rather than whichever devices happen to be connected. This is a
+  // report of input activity only; it never participates in control priority.
+  let inputSource = null; // "keyboard" | "controller" | "touch"
+  let defaultInputSource = null;
+  function noteInputSource(source) {
+    if (source === "keyboard" || source === "controller" || source === "touch") inputSource = source;
+  }
+  function activeInputSource() {
+    if (inputSource) return inputSource;
+    if (!defaultInputSource) defaultInputSource = touchControlsNeeded() ? "touch" : "keyboard";
+    return defaultInputSource;
+  }
   const PAD_NAMES_XBOX = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "VIEW", "MENU", "LS", "RS", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "HOME"];
   const PAD_NAMES_PS = ["CROSS", "CIRCLE", "SQUARE", "TRIANGLE", "L1", "R1", "L2", "R2", "SHARE", "OPTIONS", "L3", "R3", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "PS"];
   // Nintendo's physical A/B and X/Y sit OPPOSITE the Xbox positions, so index 0
@@ -822,7 +835,10 @@ const Input = (function () {
     // BUTTON still counts (the menus keep one focused, and a key on it is a
     // keyboard); a field does not, because a phone's on-screen keyboard fires
     // there too.
-    if (down && e.isTrusted !== false && !(tag === "INPUT" || tag === "TEXTAREA" || (active && active.isContentEditable))) kbSeen = true;
+    if (down && e.isTrusted !== false && !(tag === "INPUT" || tag === "TEXTAREA" || (active && active.isContentEditable))) {
+      kbSeen = true;
+      noteInputSource("keyboard");
+    }
     /* COMMAND EATS THE KEY-UP, so Command going down is a release-all.
        On macOS the OS does not deliver key-up to an application while Command
        is held: press W, tap Cmd, let go of W, and NO keyup ever arrives. The
@@ -1021,6 +1037,7 @@ const Input = (function () {
 
   function onTouchStart(e) {
     if (!canvasTouchIsDriving()) return;
+    noteInputSource("touch");
     e.preventDefault();
     for (const t of e.changedTouches) {
       touches.set(t.identifier, { anchorX: t.clientX, x: t.clientX, seq: ++touchSeq });
@@ -1323,6 +1340,7 @@ const Input = (function () {
       padNavDir = null;
       padNavSeeded = false;
       padNavSeedLayer = null;
+      if (inputSource === "controller") inputSource = null;
       return;
     }
     padConnected = true;
@@ -1350,6 +1368,17 @@ const Input = (function () {
     padBrakeVal = Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake"));
     padThrottle = padThrottleVal > 0.12;
     padBrake = padBrakeVal > 0.12;
+    // A connected pad is not active input. Record only a real deflection or a
+    // newly pressed button, so an idle Bluetooth pad cannot steal Help/coach
+    // wording from the keyboard or touch player.
+    let padActive = Math.abs(stick) > 0.05 || Math.abs(dpad) > 0.05 ||
+      padThrottleVal > 0.12 || padBrakeVal > 0.12;
+    if (!padActive && pad.buttons) {
+      for (let i = 0; i < pad.buttons.length; i++) {
+        if (btnDown(pad, i) && !padPrevButtons[i]) { padActive = true; break; }
+      }
+    }
+    if (padActive) noteInputSource("controller");
     if (axisCaptureCb) {
       // The wheel wizard owns the frame: turning the wheel to answer "which
       // axis steers?" must not also steer the car sitting behind the sheet.
@@ -1966,6 +1995,9 @@ const Input = (function () {
     loadLayoutMap();
     window.addEventListener("keydown", function (e) { onKey(e, true); });
     window.addEventListener("keyup", function (e) { onKey(e, false); });
+    window.addEventListener("pointerdown", function (e) {
+      if (e.isTrusted !== false && (e.pointerType === "touch" || e.pointerType === "pen")) noteInputSource("touch");
+    }, true);
     window.addEventListener("blur", reset);
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) reset();
@@ -2211,7 +2243,7 @@ const Input = (function () {
   return {
     init,
     reset,
-    keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, keyboardSeen,
+    keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, keyboardSeen, activeInputSource,
     padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel, padCapture, padPresent,
     debugState,
     poll: pollGamepad,

@@ -30,6 +30,8 @@ function load(opts = {}) {
     // not express (they passed while the aero mark named a key it was not on).
     Input: {
       touchControlsNeeded: () => !!opts.touch,
+      keyboardSeen: () => !!opts.keyboardSeen,
+      activeInputSource: () => opts.activeSource || (opts.touch ? "touch" : "keyboard"),
       padPresent: () => !!opts.pad,
       keyBindings: () => (opts.binds || [
         { id: "brake", label: "BRAKE", codes: ["KeyS", null] },
@@ -146,9 +148,21 @@ test("a rebound key is what the mark names", () => {
 });
 
 test("a controller is named by its buttons, not by a keyboard key", () => {
-  const pad = load({ aeroArmed: true, pad: true });
+  const pad = load({ aeroArmed: true, pad: true, activeSource: "controller" });
   step(pad.on, 1);
   assert.match(pad.said[0][0], /^ACTIVE AERO — BTN12 — /);
+});
+
+test("an idle connected controller does not override the player's active keyboard", () => {
+  const keyboard = load({ urgency: 0.9, pad: true, keyboardSeen: true, activeSource: "keyboard" });
+  step(keyboard.on, 1);
+  assert.match(keyboard.said[0][0], /^BRAKE — S — /,
+    "the coach follows the active keyboard binding even when a pad is connected");
+
+  const legacyFallback = load({ urgency: 0.9, pad: true, keyboardSeen: true });
+  step(legacyFallback.on, 1);
+  assert.match(legacyFallback.said[0][0], /^BRAKE — S — /,
+    "the default source also ignores a connected but unused controller");
 });
 
 test("the aero mark waits for the ARM, and never fires in auto mode", () => {

@@ -144,13 +144,21 @@ function openCamTuner() {
   $("ct-json").hidden = true;
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
   els.pmsettings.hidden = true;             // unobstructed live preview (opened from settings)
+  // Nested under DISPLAY -> ADVANCED VISUALS: hide that page too, or its own
+  // .hidden survives underneath and reappears the moment pmsettings does.
+  const displayPage = $("pm-panel-display");
+  if (displayPage) displayPage.hidden = true;
   applyLive();
 }
 function closeCamTuner(showPauseMenu) {
   Log.info("game", "CamTunerPanel.close");
   $("camtune").hidden = true;
   document.body.classList.remove("lt-open");
-  if (showPauseMenu && G.paused) els.pmsettings.hidden = false;   // back to the settings menu
+  if (showPauseMenu && G.paused) {
+    els.pmsettings.hidden = false;   // back to the settings menu
+    const displayPage = $("pm-panel-display");
+    if (displayPage) displayPage.hidden = false;   // ...specifically its DISPLAY page
+  }
 }
 $("pm-camtune").onclick = openCamTuner;
 $("ct-close").onclick = () => closeCamTuner(true);
