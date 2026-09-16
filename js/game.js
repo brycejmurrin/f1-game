@@ -3740,6 +3740,18 @@ function updateCar(c, dt, ranked) {
     // actually does.
     if (!c.human) pitV = Math.min(pitV, pits.approachV(c));
     vmax = Math.min(vmax, pitV);
+  } else if (!c.human && c.pitArmed) {
+    // THE APPROACH: at the limit BY the entry line, not braking for it past
+    // the line (AI-only by contract — PitLane.entryV; a driver brakes for
+    // the line themselves).
+    pitV = pits.entryV(c);
+    vmax = Math.min(vmax, pitV);
+  } else if (!c.human && c.pitState === "out") {
+    // THE EXIT ROAD: the limit until the blend has the car inside the road
+    // edge (PitLane.exitV) — a 30 m blend into a corner is not crossed at
+    // racing speed.
+    pitV = pits.exitV(c);
+    vmax = Math.min(vmax, pitV);
   }
   let cautionV = -1;   // the delta pace a caution demands; -1 = green
   if (raceCtl) {
@@ -3755,7 +3767,7 @@ function updateCar(c, dt, ranked) {
   // wedged — instead of grinding to a halt against a car or wall. Rating axes
   // (js/physics/ai-drive.js) scale how quickly they dig out and how much space they
   // leave when following.
-  let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false, letPass = false, aiFreeSpeed = 0, squeezed = false, roadL = Infinity, roadR = Infinity;
+  let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false, letPass = false, aiFreeSpeed = 0, squeezed = false, roadL = Infinity, roadR = Infinity, queued = false;
   let alongO = null, alongDx = 0, alongDprog = 0, alongAdx = Infinity;   // the LATERALLY nearest car overlapping us longitudinally (see the side-rub constraint)
   let towCar = null, towGap = Infinity;   // nearest car ahead in the slipstream (wider than the blocker box)
   let chaser = null, chaserGap = Infinity; // nearest car close BEHIND in our lane (for defending)
@@ -4035,6 +4047,10 @@ function updateCar(c, dt, ranked) {
     if (c.towing > 0) {
       vmax *= 1 + AiDrive.towGain(!!track.street) * c.towing;
     }
+    // THE LANE'S CAP, LAST: the phase, tyre, fuel and tow multipliers above
+    // are pace, and a limit is not pace — the tow alone ran a queue down the
+    // Bahrain lane at 91 km/h under an 80 limit (measured).
+    if (pitV >= 0) vmax = Math.min(vmax, pitV);
     // queue behind the car blocking our lane (prog-based, immune to rank swaps):
     // cap our pace to it, braking if closing fast, so we tuck behind not ram.
     // Streets tuck at followBase 8 m (was 12). Awareness pads (AiDrive.followPad).
@@ -4047,6 +4063,10 @@ function updateCar(c, dt, ranked) {
       !(blocker === c.passOf && Math.abs(c.x - blocker.x) >= 1.8);
     if (blocker && blockerGap < 16) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
     if (capBlocks) {
+      // Held behind a car SERVING A STOP (or queued for one), not by the ground
+      // — the pit-lane rescue reads this. Only a lane car: a car welded to
+      // anything else in there still gets its rescue.
+      queued = pits.inLane(blocker);
       const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
       // Floored (AiDrive.queueFloor): the cap may match the blocker's pace but
       // must never command a STANDSTILL — which it did behind a stopped car,
@@ -4364,7 +4384,7 @@ function updateCar(c, dt, ranked) {
     // the controller below steers to, so the line is followed, not chased.
     // (`ln` is TrackLine.at's shared object — targetX is read before this call.)
     const ln2 = TrackLine.at(track, wrapS(c.s + lead + 4), c.aiFam);
-    const tanT = (clamp(lerp(laneX, ln2.x, ln2.w * follow), -(hw - 1.0), hw - 1.0) - targetX) / 4;
+    let tanT = (clamp(lerp(laneX, ln2.x, ln2.w * follow), -(hw - 1.0), hw - 1.0) - targetX) / 4;
     // A missed braking point runs WIDE: the target goes most of the way to the outside edge.
     if (AiDrive.mistakePhase(c.errT) === 1 && Math.abs(kA) > 0.004) targetX = lerp(targetX, Math.sign(kA) * (hw - 0.9), 0.7);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
@@ -4565,7 +4585,13 @@ function updateCar(c, dt, ranked) {
     // PIT LANE, last so nothing can undo it: a car serving a stop drives the
     // LANE, not the racing line. pits.laneX returns its argument untouched for
     // every car that is not in there (PitLane, laneX — and the gap it closes).
-    if (pits) desiredX = pits.laneX(c, hw, desiredX);
+    if (pits) {
+      const lx = pits.laneX(c, hw, desiredX);
+      // Guided: the heading follows the LANE's line, not the racing line's
+      // slope (tanT) — which leaned a car in the fast lane on the platform
+      // barrier the whole way down the Bahrain lane (traced, aiHead +0.15).
+      if (lx !== desiredX) { desiredX = lx; tanT = 0; }
+    }
     const err = desiredX - c.x;
     const vAbs = Math.abs(c.speed);
     // A contact, a rub clamp or a dig-out is an EMERGENCY: the position loop
@@ -4987,8 +5013,27 @@ function updateCar(c, dt, ranked) {
   // The driving boundary is per-side and derived from where solid barriers were
   // actually placed (Tracks.wallAt), so the car always stops just before a model
   // instead of clipping through it — consistent across street and open circuits.
-  const wallR = Tracks.wallAt(track, c.s, 1);
-  const wallL = Tracks.wallAt(track, c.s, -1);
+  let wallR = Tracks.wallAt(track, c.s, 1);
+  let wallL = Tracks.wallAt(track, c.s, -1);
+  // THE PIT WALL. TrackPit.openBoundary opens the boundary to the garages
+  // across the window so a car can reach the lane, which left the wall itself
+  // as scenery a car running wide drove straight through. Where the wall
+  // stands (v >= 0.98) a car on the ROAD side keeps to its track-side face,
+  // and a car on the LANE side to the lane's own barrier at the platform's
+  // edge (SceneryPits sweeps both from the same bands).
+  let laneMin = 0, pitSd = 0;
+  {
+    const p = track.pit;
+    if (p && !p.painted) {
+      const k = ((Math.round(c.s / track.total * track.n) % track.n) + track.n) % track.n;
+      if (p.v[k] >= 0.98) {
+        pitSd = p.side;
+        const face = track.hw[k] + p.bands.verge;
+        if (c.x * pitSd < face + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, face - 1.1); else wallL = Math.min(wallL, face - 1.1); }
+        else laneMin = track.hw[k] + p.off.fastIn + 1.0;
+      }
+    }
+  }
   let xPinned = false;   // did the barrier clamp c.x? (see the writeback below)
   if (c.x > wallR || c.x < -wallL) {
     const into = c.x > wallR ? 1 : -1;          // +1 = hit right wall, -1 = left
@@ -5098,6 +5143,13 @@ function updateCar(c, dt, ranked) {
   } else {
     c.wasOnWall = false;
     if (c.human) c.wallT = Math.max(0, (c.wallT || 0) - dt);
+  }
+  // The lane side of the pit wall: a car on the lane is kept off the platform
+  // and its barrier — it cannot rejoin the track through the wall either.
+  if (laneMin > 0 && c.x * pitSd < laneMin) {
+    c.x = laneMin * pitSd; xPinned = true;
+    if (c.vLat) c.vLat = 0;
+    if (c.human) Tracks.sample(track, c.s, smp);
   }
   // Re-sample at the NEW c.s — the yawVis block below reads the tangent here.
   //
@@ -5392,7 +5444,12 @@ function updateCar(c, dt, ranked) {
     // x = 0 after 3 s. Both are precisely the bugs this comment says were
     // fixed, reintroduced through the OVERALL SPEED slider.
     const beached = c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5 * Math.max(PACE, 0.05);
-    const stuck = beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
+    // A car serving a stop is not stuck: it is held in its box at 0 with the
+    // throttle down (touch auto-gas holds it for you), and creep-in plus the
+    // 2.4 s hold crossed the 3 s gate — the rescue teleported it to x = 0
+    // mid-stop, and the box then held it stationary on the racing line.
+    const stuck = !(pits.inLane(c) || c.pitState === "box") &&
+      (beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack);
     // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
     // stuck conditions. Only applies once a rescue has actually happened —
     // (c.rescueLastT || 0) defaulted to 0 and blocked rescue for the first 4 s of
@@ -5413,18 +5470,33 @@ function updateCar(c, dt, ranked) {
     // against another car, was the one case that could never be rescued. It is
     // a PATIENCE knob now (AiDrive.aiRescueDelay): a shuffle clears in well
     // under a second and never reaches the longer contact timer.
-    const aiStuck = (c.offroad && c.offT > 0.5) ||
-      (c.speed < 5 && raceT > 2 && !unstuckActive);
-    if (aiStuck) c.rescueT = (c.rescueT || 0) + dt;
+    // A car HELD in its box is parked on purpose, not stuck (every AI stop was
+    // being rescued onto the racing line 1.5-2 s after the tyres went on).
+    // A car QUEUED in the lane behind a stop (capBlocks, the crawl floor) is
+    // held by a car, not stuck: rescuing it fired it at 8 m/s into the parked
+    // car it was waiting for.
+    const aiStuck = c.pitState !== "box" && ((c.offroad && c.offT > 0.5) ||
+      (c.speed < 5 && raceT > 2 && !unstuckActive && !(queued && pits.inLane(c))));
+    // Parked on purpose: a timer that crossed the line in the queue must not
+    // fire the moment the stop begins (it did, 0.2 s into a Monaco stop).
+    if (c.pitState === "box") c.rescueT = 0;
+    else if (aiStuck) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
     if (c.rescueT > AiDrive.aiRescueDelay((c.contactT || 0) > 0)) {
       Tracks.sample(track, c.s, smp);
       // Break the weld SIDEWAYS first: a car pinned against another is stuck
       // laterally, and a bare speed restore re-loads the same contact next frame.
       if ((c.contactT || 0) > 0) c.x += (roomR >= roomL ? 1 : -1) * 1.2;
-      c.x = clamp(c.x, -(smp.hw - 1.5), smp.hw - 1.5);   // back onto the track
-      // Pace-scaled restore floor (same shape as coast()); never above vTop().
-      c.speed = Math.min(vTop(), Math.max(c.speed, 14 * Math.max(PACE, 0.05)));
+      if (pits.inLane(c)) {
+        // Stuck IN THE LANE (a queue behind a parked car): back onto the lane's
+        // own line at the limit, the stop still on — never onto the road.
+        c.x = pits.laneX(c, smp.hw, c.x);
+        c.speed = Math.min(pits.limit(), Math.max(c.speed, 8 * Math.max(PACE, 0.05)));
+      } else {
+        c.x = clamp(c.x, -(smp.hw - 1.5), smp.hw - 1.5);   // back onto the track
+        // Pace-scaled restore floor (same shape as coast()); never above vTop().
+        c.speed = Math.min(vTop(), Math.max(c.speed, 14 * Math.max(PACE, 0.05)));
+      }
       c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0;
     }
   }

@@ -734,11 +734,23 @@ const AiDrive = (function () {
       for (const cls of CLASSES) rec(seq.concat(cls));
     };
     for (const cls of CLASSES) rec([cls]);
-    // Stop laps are the running totals of the stint lengths.
+    // Stop laps are the running totals of the stint lengths — STAGGERED by the
+    // roll, a lap either way in thirds of the field. Without it a field on one
+    // plan stopped on ONE lap: 22 cars into a twelve-box lane at once (Bahrain,
+    // measured — five cars over a minute in the lane, every exit crawling
+    // behind the next box's stop). A lap off the optimum costs the planner's
+    // own curve almost nothing; the stints are re-cut to match.
+    const shift = clamp(Math.round((roll - 0.5) * 3), -1, 1);
     const lapsAt = [];
-    let acc = 0;
-    for (let i = 0; i < best.stints.length - 1; i++) { acc += best.stints[i]; lapsAt.push(acc); }
-    return { start: best.seq[0], seq: best.seq, stints: best.stints, stops: best.stops, lapsAt, cost: best.cost };
+    const stints = best.stints.slice();
+    let acc = 0, prev = 0;
+    for (let i = 0; i < stints.length - 1; i++) {
+      acc += best.stints[i];
+      const at = clamp(acc + shift, prev + 1, laps - (stints.length - 1 - i));
+      lapsAt.push(at); stints[i] = at - prev; prev = at;
+    }
+    if (stints.length) stints[stints.length - 1] = laps - prev;
+    return { start: best.seq[0], seq: best.seq, stints, stops: best.stops, lapsAt, cost: best.cost };
   }
 
   // The compound for an UNPLANNED stop — a spent set, or a track that has dried
