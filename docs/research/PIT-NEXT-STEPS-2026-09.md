@@ -50,8 +50,9 @@ runs the sweeps and the selected specs.
 
 ## 2. Next build: strategy (§4 of the guidance plan)
 
-Half designed during this round; the facts are verified, the design is a
-morning's work. In order, each its own commit:
+**Built** (`1382535cf`, deployed at `2cc56a8f0`): all seven items below landed
+as one commit with the tests named; the radio card's compact anchor fix
+(`4b2787b86`) followed. Kept for the record of what was decided:
 
 1. **The player's reference plan** — `js/game.js:1909` drops `!c.human` from
    the `pitPlan` draw (`c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : roll) : null`,
@@ -109,7 +110,48 @@ records and the re-cut six-luminaire test, then the live red aspect through the
 pit-signs decal (which also gives the exit signal its live aspect). Needs the
 night frame from §1.3 before the halo option is chosen.
 
-## 4. Smaller loose ends
+## 4. Then: the entry road's mouth on the straight
+
+**Reported** (phone screenshots, 2026-09-16 evening): "the pit entrance is still
+right off a turn and should be shortened." Surveyed on every circuit
+(`scratch/pit-entry-survey.cjs`: the straight run ending at the mouth `sA`,
+the peak |k| along the entry road, at `PIT_K` 0.0035):
+
+| shape | circuits | what the numbers say |
+|---|---|---|
+| mouth INSIDE the last corner (0 m of straight before `sA`, road at its 30 m floor) | 21: abudhabi (peak k 0.044 = 23 m radius), sochi (0.050), singapore (0.022), jerez, mont_tremblant, mosport, anderstorp, hockenheim, mexico, monaco, okayama, miami, magny_cours, spa, silverstone, suzuka, brands_hatch, interlagos, jacarepagua, korea, redbull | the window opened as far back as the straight ran (`entryM` 260) and the 70 m road before it had no straight left |
+| 8–100 m of straight before the mouth | 17 (madrid and zolder 8 m, catalunya and watkins_glen 16 m, zandvoort 28 m, …) | right, but tight |
+| a long straight (160–600 m) | 14 (monza 368, nurburgring 396, sepang, shanghai, qatar, buddh, portimao, mugello, baku, vegas, jeddah, bahrain, imola, estoril) | fine |
+
+Bahrain is its own case: the window is already on the 150 m floor because T15's
+exit bends inside the last 150 m (peak k 0.049 in the first 60 m of the window),
+so the mouth has 456 m of straight before it and the lane runs through the bend.
+The floor is the row's (twelve bays); this item does not move it.
+
+**The rule** (`js/track/core/pit.js` `window()`, `:150-160`): measure the straight
+back from the line to `ENTRY_MAX + ENTRY_ROAD + MOUTH_RUN` (a new 20 m run-out
+after the corner) and open the window at `back − ENTRY_ROAD − MOUTH_RUN`, still
+clamped to `[ENTRY_MIN, min(ENTRY_MAX, cap·0.7)]`. Where the straight allows, the
+peel then stands on the straight with 20 m after the corner; a long straight
+keeps 260; a straight shorter than 150 + 90 stays as it is (the floor). On the
+21 corner-mouth circuits this SHORTENS the entrance by up to 90 m — the ask.
+
+**Tests.** `pit-complex.test.mjs` (next to "neither end of the complex lies in a
+corner"): for every circuit whose straight back from the line is at least
+`ENTRY_MIN + ENTRY_ROAD + MOUTH_RUN`, no node from `sA − MOUTH_RUN` to `sIn` is
+cornering (`|k| ≤ PIT_K`), and `entryRoadM` is the full `ENTRY_ROAD`; Monza and
+the Nürburgring keep `entryM` 260; Abu Dhabi and Sochi drop below it. The driven
+Bahrain test (`pit-lane-vm`) is unaffected (its window is on the floor).
+
+**Verification** (engine change): `node tools/track/verify-track.cjs` on
+abudhabi, sochi, singapore, spa, bahrain; the coplanar, clip and float sweeps
+(`npm run test:sweeps` — the window length changes on ~18 circuits, so the
+coplanar baseline (`tools/track/coplanar-baseline.json`) may need a re-cut with
+this cause, as the 2026-09 window shortening did); one orbit shot of the
+Abu Dhabi and Sochi mouths before/after (`tools/shot/shot.mjs <id> <frac of sA>
+orbit --dist 60 --el 35`). Cost: pit.js +6, a test +25, a baseline re-cut.
+
+## 5. Smaller loose ends
 
 - The `served` chip and the release banner both say the stop is over; the
   banner also names the cost. If the two read as a shout, drop the chip's
