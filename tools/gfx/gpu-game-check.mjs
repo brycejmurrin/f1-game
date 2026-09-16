@@ -213,6 +213,15 @@ try {
   checkpoint("track-ready");
   await bounded(() => page.evaluate(() => window.__apexMark("trackReady")), 10000, "mark-track-ready");
   out.parkCall = await bounded(() => page.evaluate(() => { window.__apexMark("parked"); return window.__apex.park(0.1); }), 60000, "park");
+  // WHAT IS THE FRAME BOUND BY. The one question that decides whether "render
+  // only what we can see" is the right lever: occlusion culling removes
+  // fragments, vertices and draw calls together, so it pays hugely on a
+  // fragment-bound frame and modestly on a draw-call-bound one. The census
+  // rejected it once on the argument that the frame cost is draw calls and
+  // uploads — an argument, never a measurement. gpuTimer() is the measurement,
+  // and pinning apex26.resMode across two runs is the A/B: GPU time that
+  // scales with pixel count is fragment-bound.
+  out.gpuTimerStart = await bounded(() => page.evaluate(() => window.__apex.gpuTimer(true)), 20000, "gpu-timer-on");
   checkpoint("racing", { track });
   // Poll instead of one blind sleep. The question after park() is whether the
   // page is STILL ANSWERING, and a single waitForTimeout cannot tell a healthy
@@ -253,6 +262,10 @@ try {
             ms: g && g.floorMs != null ? +(+g.floorMs).toFixed(1) : null,
             ti: g ? g.tier : null,
             sc: g && g.scale != null ? +(+g.scale).toFixed(2) : null,
+            // GPU milliseconds for a recent frame, -1 until a result lands and
+            // -1 forever where EXT_disjoint_timer_query_webgl2 is absent. A
+            // negative is NOT a GPU millisecond; the reader below drops them.
+            gms: (() => { try { const q = A && A.gpuTimer && A.gpuTimer(); return q && q.ms > 0 ? +q.ms.toFixed(2) : null; } catch (_) { return null; } })(),
           };
         }),
         new Promise((_, rj) => setTimeout(() => rj(new Error("beat timeout")), 8000)),
@@ -319,6 +332,14 @@ try {
     return { totalMs: +total.toFixed(1),
       top: p.slice().sort((a, b) => b.ms - a.ms).slice(0, 4).map((r) => `${r.n}=${r.ms}`), rows: p };
   }), 20000, "race-profile");
+  // Median rather than mean: one stalled beat is not the frame cost.
+  const _g = out.beats.map((b) => b.gms).filter((x) => x != null).sort((a, b) => a - b);
+  const _sc = out.beats.map((b) => b.sc).filter((x) => x != null);
+  out.gpuFrame = _g.length
+    ? { medianMs: _g[Math.floor(_g.length / 2)], samples: _g.length,
+        scale: _sc.length ? _sc[_sc.length - 1] : null,
+        canvas: await bounded(() => page.evaluate(() => { const c = document.getElementById("game"); return c ? { w: c.width, h: c.height } : null; }), 10000, "canvas") }
+    : { note: "no GPU timer samples — EXT_disjoint_timer_query_webgl2 absent or no result landed" };
   checkpoint("race-entry-read");
 
   out.overlay = await bounded(() => page.evaluate(() => {
