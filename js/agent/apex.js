@@ -116,6 +116,14 @@ function simCareerRound() {
     const swing = (Career.rnd(round, "race", car.driverId) - 0.5) * 10 * (1 - rt.craft / 200);
     car.cuts = Career.rnd(round, "cuts", car.driverId) * 100 < (100 - rt.awareness) ? 2 : 0;
     car.penalty = 0;
+    // Race craft reads these at settlement (js/career/career.js). Drawn from the
+    // same awareness prior as the cuts above, because a simulated round that left
+    // them undefined scored a flawless 1.00 every time and a simulated career
+    // drifted apart from a driven one on reputation alone.
+    const scruffy = Career.rnd(round, "hits", car.driverId) * 100 < (100 - rt.awareness);
+    car.hits = scruffy ? 1 : 0;
+    car.hitSev = scruffy ? 0.5 : 0;
+    car.wallHits = Career.rnd(round, "wall", car.driverId) * 100 < (100 - rt.awareness) / 2 ? 1 : 0;
     grid.push({ car, key: car.retired ? 1000 + i : i + swing });
   }
   if (grid.length !== live.length) return null;   // a partial map is not a result

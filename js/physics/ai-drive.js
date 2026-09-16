@@ -337,7 +337,7 @@ const AiDrive = (function () {
       const s = samples[i];
       const k = Math.max(Math.abs(s.k || 0), 1e-5);
       const bankMu = 1 + Math.sin(s.bank || 0) * 0.8;
-      const vC = cornerSpeed(k, latMax * bankMu * grip, ctx.pace, ctx.vmax) * skill;
+      const vC = cornerSpeed(k, latMax * bankMu * grip, ctx.pace, ctx.vmax) * skill * (ctx.diffCorner || 1);
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
       const d = Math.max(s.d || 0, 1);
       const entrySq = vC * vC + 2 * brake * 0.85 * d;

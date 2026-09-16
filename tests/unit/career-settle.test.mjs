@@ -169,7 +169,11 @@ function loadDriver(ratings, opts = {}) {
         id: "c" + i, options: [{ cost: 0 }, { cost: 500 }],
       })),
     },
-    Tracks: { LIST: [], SEASON: [] },
+    // An EMPTY calendar by default, which makes seasonDone() true at round 0 —
+    // every rollover test here settles nothing and wants it that way. `rounds`
+    // gives the few that need a live season one.
+    Tracks: { LIST: [],
+      SEASON: Array.from({ length: opts.rounds || 0 }, (_, i) => ({ id: "t" + i })) },
     DriverRatings: {
       // ratings, when supplied, keys per-driver overall() by code — the market
       // pin below uses it; every other test keeps the flat 80 that parks swaps.
@@ -388,4 +392,255 @@ test("silly season moves the driver overall() rates highest, not a coin flip", (
   assert.ok(move, "the top-rated midfielder must be the one who moves");
   assert.equal(move.from, "vega");
   assert.equal(move.to, "apex");
+});
+
+// ── RACE CRAFT pays reputation and NEVER money ───────────────────────────────
+// The whole point of the channel: a scruffy race already cost positions and
+// therefore prize money, so billing the balance again would charge it twice.
+// These tests settle the SAME classified order twice, changing only the marks
+// the player left on the way there.
+
+/** Settle a fixed P3 with the given craft-input fields on the player car. */
+function settleCraft(marks) {
+  const Career = load();
+  Career.start({ flavour: "myteam", teamId: "custom", seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  career.season.round = 1;
+  const repBefore = career.rep;
+
+  const mk = (id) => ({ team: { id }, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  const player = Object.assign(mk("custom"), marks);
+  const order = [mk("haas"), mk("haas"), player, mk("haas"), mk("custom")];
+  for (let i = 0; i < 15; i++) order.push(mk("haas"));
+
+  const res = Career.settleRound(order, player);
+  return { Career, res, repBefore, row: career.results[career.results.length - 1] };
+}
+
+test("craftScore is 1.00 for a faultless race and falls with each kind of mark", () => {
+  const Career = load();
+  assert.equal(Career.craftScore({}), 1, "no marks at all is a perfect score");
+  assert.equal(Career.craftScore(null), 1, "a missing car cannot be scored down");
+  // 2 cuts (0.20) + a single +5s penalty (0.35) = 0.55 off.
+  assert.ok(Math.abs(Career.craftScore({ cuts: 2, penalty: 5 }) - 0.45) < 1e-9);
+  // Contact is scaled by the WORST impact: the same hit at half severity costs half.
+  assert.ok(Career.craftScore({ hits: 1, hitSev: 1 }) < Career.craftScore({ hits: 1, hitSev: 0.5 }));
+  assert.equal(Career.craftScore({ wallHits: 99 }), 0, "the score floors at zero");
+});
+
+test("a RETIREMENT does not touch craft — every DNF here is a reliability draw", () => {
+  // js/race/reliability.js draws "accident" from the same table as "gearbox";
+  // nothing retires a car for how it was driven, so charging a DNF would price
+  // a dice roll rather than the driving.
+  const Career = load();
+  assert.equal(Career.craftScore({ retired: true, dnf: "accident" }), 1);
+});
+
+test("the same P3, scruffy by CONTACT: reputation differs, the money is identical", () => {
+  // Contact and wall strikes are the craft-only inputs — no objective reads them
+  // (objectiveMet's "clean" brief looks at retired/cuts/penalty), so this pair
+  // isolates the new channel completely.
+  const clean = settleCraft({});
+  const scruffy = settleCraft({ hits: 2, hitSev: 0.8, wallHits: 3 });
+
+  assert.equal(clean.res.pos, scruffy.res.pos, "same classified position");
+  assert.equal(clean.res.pts, scruffy.res.pts, "same points");
+  assert.equal(clean.res.prize, scruffy.res.prize, "same prize money");
+  assert.equal(clean.res.money, scruffy.res.money,
+    "RACE CRAFT MUST NOT REACH THE BALANCE — it is a reputation channel only");
+  assert.ok(clean.res.rep > scruffy.res.rep,
+    "the clean round must be worth more reputation than the scruffy one");
+});
+
+test("cuts and penalties cost money only through the brief that already priced them", () => {
+  // Round 0 at seed 7 draws the "clean" objective, so cuts DO move the balance —
+  // by exactly OBJ_BONUS, and by nothing else. Craft adds no second money term.
+  const clean = settleCraft({});
+  const cut = settleCraft({ cuts: 4, penalty: 5 });
+  assert.equal(clean.res.obj.done, true);
+  assert.equal(cut.res.obj.done, false, "four cuts must fail the clean brief");
+  assert.equal(clean.res.money - cut.res.money, clean.Career.OBJ_BONUS,
+    "the whole money gap is the missed brief — craft contributes nothing");
+});
+
+test("the craft reputation term is bounded, and asymmetric in the clean run's favour", () => {
+  const clean = settleCraft({});
+  const floored = settleCraft({ wallHits: 99 });   // craftScore 0, well past the clamp
+  const gain = clean.res.rep - clean.repBefore;
+  const loss = floored.res.rep - floored.repBefore;
+  // Both rounds share every other reputation term and both meet the clean brief
+  // (wall contact is not a track-limits cut), so the gap is the craft term alone:
+  // +1.5 at the top, -0.75 at the bottom (CRAFT_REP_MAX / CRAFT_REP_MIN).
+  assert.ok(Math.abs((gain - loss) - 2.25) < 1e-9,
+    `craft term spans 2.25 rep end to end, got ${gain - loss}`);
+});
+
+test("craft is recorded on the results row and averaged across the season", () => {
+  // state() is not reachable from this loader (it reads Tracks.SEASON, which the
+  // stub above does not carry); seasonCraft() is the value state() exposes.
+  const { Career, row } = settleCraft({ cuts: 1 });
+  assert.equal(row.craft, 0.9, "one cut costs 0.10, rounded to two places on the row");
+  assert.ok(Math.abs(Career.seasonCraft() - 0.9) < 1e-9, "one race: the average is that race");
+});
+
+test("rounds saved before craft existed are skipped, not counted as zero", () => {
+  const { Career } = settleCraft({});
+  const career = Career.data();
+  career.results.unshift({ r: 0, p: 8, pts: 4, obj: false, dnf: null });   // no craft key
+  assert.equal(Career.seasonCraft(), 1,
+    "a legacy row must not drag a faultless season down to 0.50");
+});
+
+// ── THE LOOP: driving -> rating -> the market ────────────────────────────────
+// rolloverDrivers infers every axis of every driver from the RESULT, because for
+// an AI seat there is nothing else to go on. For the player there is: a season of
+// settled rounds that recorded how each was driven. These pin that the player's
+// craft axis takes that evidence and that nobody else's does.
+
+/** Race a full season of identical P3s with the given marks, then roll over. */
+function seasonOf(marks) {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const career = Career.data();
+  const me = "haas:1";
+
+  const mk = (id, seat) => ({ team: { id }, seat, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  for (let r = 0; r < 6; r++) {
+    career.season.round = r + 1;
+    const player = Object.assign(mk("haas", 1), marks);
+    const order = [mk("apex", 0), mk("apex", 1), player, mk("vega", 0), mk("vega", 1),
+                   mk("haas", 0), mk("vega", 0), mk("apex", 0)];
+    Career.settleRound(order, player);
+  }
+  const before = JSON.stringify(career.dev);
+  const summary = Career.rollover().summary;
+  return { Career, career, me, before, summary, dev: career.dev };
+}
+
+test("a clean season develops the player's craft; a scruffy one costs it", () => {
+  const clean = seasonOf({});
+  const scruffy = seasonOf({ hits: 2, hitSev: 0.9, wallHits: 3 });
+
+  assert.equal(clean.summary.craft, 1, "six faultless rounds average 1.00");
+  assert.ok(scruffy.summary.craft < 0.6, `scruffy season averaged ${scruffy.summary.craft}`);
+  assert.ok(clean.dev[clean.me].craft > scruffy.dev[scruffy.me].craft,
+    "the craft axis must move with the driving, not with the finishing position");
+  // Same classified P3 every round in both seasons, so pace — which is inferred
+  // from the result — must be untouched by how the car was driven.
+  assert.equal(clean.dev[clean.me].pace, scruffy.dev[scruffy.me].pace,
+    "craft must not leak into the pace axis");
+});
+
+test("only the PLAYER'S seat reads race craft — every AI seat keeps the inferred drift", () => {
+  const clean = seasonOf({});
+  const scruffy = seasonOf({ hits: 2, hitSev: 0.9, wallHits: 3 });
+  for (const id of Object.keys(clean.dev)) {
+    if (id === clean.me) continue;
+    assert.equal(JSON.stringify(clean.dev[id]), JSON.stringify(scruffy.dev[id]),
+      `${id} is an AI seat: the player's driving must not develop it`);
+  }
+});
+
+test("a season with no craft rows falls back to the inferred drift, not a bad year", () => {
+  // The path a save raced entirely before craft existed takes. Strip the key from
+  // every settled round and roll over: the player's craft must develop exactly as
+  // an AI seat's does (half the pace drift), never as a season scored zero.
+  const clean = seasonOf({});
+  const legacy = loadDriver();
+  legacy.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  legacy.engage(true);
+  const career = legacy.data();
+  const mk = (id, seat) => ({ team: { id }, seat, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  for (let r = 0; r < 6; r++) {
+    career.season.round = r + 1;
+    const player = mk("haas", 1);
+    legacy.settleRound(player ? [mk("apex", 0), mk("apex", 1), player, mk("vega", 0),
+                                 mk("vega", 1), mk("haas", 0), mk("vega", 0), mk("apex", 0)] : [], player);
+    delete career.results[career.results.length - 1].craft;
+  }
+  assert.equal(legacy.seasonCraft(), null, "no craft rows at all");
+  legacy.rollover();
+  const craft = career.dev["haas:1"].craft, pace = career.dev["haas:1"].pace;
+  // Half the pace drift, within the rounding bumpAxis applies to each axis.
+  assert.ok(Math.abs(craft - pace / 2) <= 0.5,
+    `legacy craft ${craft} must be half the pace drift ${pace}, as an AI seat's is`);
+  assert.notEqual(craft, -3,
+    "a season with no craft rows must not be scored as a season of zeroes");
+});
+
+// ── THE BRIEF IS A CHOICE ────────────────────────────────────────────────────
+// Three briefs per round, drawn purely from the seed; only the PICK is stored.
+// The load-bearing property is that settleRound still recomputes the brief
+// rather than reading career.obj, so the settlement cannot disagree with what
+// the hub showed — and a save written before the choice existed keeps its brief.
+
+function hub() {
+  const Career = loadDriver(null, { rounds: 8 });
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  return Career;
+}
+
+test("index 0 is the brief that used to be dealt, so an old save keeps it", () => {
+  const Career = hub();
+  const career = Career.data();
+  assert.equal(career.objPick, null, "a fresh save has no pick");
+  const choices = Career.objectiveChoices(0);
+  assert.equal(choices.length, Career.OBJ_CHOICES);
+  assert.equal(JSON.stringify(Career.objective()), JSON.stringify(choices[0]),
+    "unchosen must resolve to index 0");
+  assert.equal(new Set(choices.map((o) => o.type)).size, choices.length,
+    "the three briefs must be distinct kinds, or the choice is not one");
+});
+
+test("choosing a brief changes what the hub shows and what settleRound pays", () => {
+  const Career = hub();
+  const career = Career.data();
+  const choices = Career.objectiveChoices(0);
+  assert.equal(Career.chooseObjective(2), true);
+  assert.equal(JSON.stringify(Career.objective()), JSON.stringify(choices[2]));
+
+  // Settle round 0 and check the brief that was PAID is the one that was picked.
+  career.season.round = 1;
+  const mk = (id, seat) => ({ team: { id }, seat, retired: false, cuts: 0, penalty: 0, gridPos: 5 });
+  const player = mk("haas", 1);
+  const res = Career.settleRound([mk("apex", 0), player, mk("vega", 0)], player);
+  assert.equal(res.obj.type, choices[2].type,
+    "settleRound recomputes the brief; it must recompute the CHOSEN one");
+});
+
+test("a pick is keyed on its round — a stale one never applies to another", () => {
+  const Career = hub();
+  const career = Career.data();
+  Career.chooseObjective(2);
+  assert.equal(Career.objectivePick(0), 2);
+  career.season.round = 1;
+  assert.equal(Career.objectivePick(1), 0, "the next round is unchosen, not still on 2");
+  assert.equal(JSON.stringify(Career.objective()),
+    JSON.stringify(Career.objectiveChoices(1)[0]));
+});
+
+test("the pick locks once the weekend is under way", () => {
+  const Career = hub();
+  const career = Career.data();
+  Career.chooseObjective(1);
+  career.season.stage = "race";          // the sprint has run
+  assert.equal(Career.objectiveLocked(), true);
+  assert.equal(Career.chooseObjective(2), false, "no choosing with the answer in hand");
+  assert.equal(Career.objectivePick(0), 1, "and the earlier pick stands");
+  delete career.season.stage;
+  career.season.qualiOrder = ["haas:1"];  // or quali has
+  assert.equal(Career.chooseObjective(2), false);
+});
+
+test("the choices are drawn from the seed, so reloading cannot reroll them", () => {
+  const a = hub(), b = hub();
+  assert.equal(JSON.stringify(a.objectiveChoices(3)), JSON.stringify(b.objectiveChoices(3)));
+  // ...and a different round draws a different set, or the "choice" is one brief
+  // three times over the whole season.
+  const seen = new Set();
+  for (let r = 0; r < 6; r++) seen.add(a.objectiveChoices(r)[0].type);
+  assert.ok(seen.size > 1, "the dealt brief must still vary between rounds");
 });
