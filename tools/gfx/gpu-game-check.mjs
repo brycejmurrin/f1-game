@@ -340,6 +340,14 @@ try {
         scale: _sc.length ? _sc[_sc.length - 1] : null,
         canvas: await bounded(() => page.evaluate(() => { const c = document.getElementById("game"); return c ? { w: c.width, h: c.height } : null; }), 10000, "canvas") }
     : { note: "no GPU timer samples — EXT_disjoint_timer_query_webgl2 absent or no result landed" };
+  // OCCLUSION CULLING, counted not timed. A renderer unit test is not evidence
+  // that a GL pass runs (AGENTS.md); this is the live boot that says whether
+  // the queries link, issue and come back with a sane answer on real hardware.
+  out.occlusion = await bounded(() => page.evaluate(() => {
+    const A = window.__apex;
+    if (!A || !A.occlusionCull) return { note: "no occlusionCull hook — this build predates it" };
+    try { return A.occlusionCull(); } catch (e) { return { error: String(e && e.message) }; }
+  }), 20000, "occlusion");
   checkpoint("race-entry-read");
 
   out.overlay = await bounded(() => page.evaluate(() => {

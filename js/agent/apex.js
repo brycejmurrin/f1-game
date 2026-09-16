@@ -1162,6 +1162,18 @@ const api = {
   // race entry that costs at all — measured at 23 % of it on the default
   // backend, so the rest of this list is where the freeze actually lives.
   raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
+  // Occlusion culling (GLX only, ships OFF behind apex26.occlusionCull).
+  // occlusionCull(true|false) toggles it live; with no argument it reports the
+  // COUNTED oracle — chunks tested against the depth buffer, chunks skipped
+  // because a query said they contribute no pixel, and queries issued. Counted
+  // and not timed on purpose: this container has no GPU, so a frame rate here
+  // measures the box (docs/notes/CI-RENDERING-PERFORMANCE.md).
+  occlusionCull: (on) => {
+    if (!gfx || !gfx.occlusionCull) return { supported: false, on: false };
+    if (on === undefined) return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: false };
+    gfx.occlusionCull(!!on);
+    return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: !!on };
+  },
   // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
   // Distinct from curated FIA turns on track.def.turns / info().turns — use those
   // for official turn counts; this hook is for physics/parking at sharp bends.

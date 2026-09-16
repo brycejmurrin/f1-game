@@ -460,6 +460,18 @@ jobs:
                 rows.push(`${" ".repeat(8)}gpu:   median=${gf.medianMs}ms over ${gf.samples} samples  scale=${gf.scale}`
                   + (px ? `  canvas=${gf.canvas.w}x${gf.canvas.h} (${(px / 1e6).toFixed(2)} MP)` : ""));
               }
+            // Occlusion culling: counted, never timed.
+              const oc = g.occlusion || {};
+              if (oc.note || oc.error) {
+                rows.push(`${" ".repeat(8)}occl:  NOT MEASURED — ${oc.note || oc.error}`);
+              } else if (oc.supported === false) {
+                rows.push(`${" ".repeat(8)}occl:  not supported on this backend (GLX only)`);
+              } else if (oc.on === false) {
+                rows.push(`${" ".repeat(8)}occl:  off (apex26.occlusionCull unset) — supported=${oc.supported}`);
+              } else {
+                rows.push(`${" ".repeat(8)}occl:  ON  tested=${oc.tested} culled=${oc.culled} queries=${oc.queries} passes=${oc.passes}`
+                  + (oc.tested ? `  -> ${Math.round(100 * oc.culled / oc.tested)}% of candidate chunks skipped` : "  <- NOTHING TESTED: the pass never ran"));
+              }
               if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.softBlit === true ? "YES (headless readback — NOT the path a player takes)" : be.softBlit === false ? "no (direct present)" : "?"} skipBatches=${be.skipBatches} gpuErrFrames=${be.gpuErrFrames}`);
             // ...and the bookkeeping the probe keeps on itself, because run 54
             // showed tier=0 with envFace=3 and envFail=0 — the producer WAS
