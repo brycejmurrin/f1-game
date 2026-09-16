@@ -103,7 +103,7 @@ test("a street complex owns its side: no engine street barrier on the lane, the 
     const bar = p.side > 0 ? t.barR : t.barL;
     for (let k = 0; k < t.n; k++) {
       if (!(p.keep[k] > 0)) continue;
-      assert.ok(bar[k] >= t.hw[k] + p.off.outer * p.w[k] + 1.5 - 1e-6, `${id}: node ${k} boundary ${bar[k].toFixed(2)} inside the lane`);
+      assert.ok(bar[k] >= t.hw[k] + p.off.outer * p.w[k] - 0.9 - 1e-6, `${id}: node ${k} boundary ${bar[k].toFixed(2)} inside the lane`);
     }
   }
   // Jeddah's 190 m window (its trace's corners sit against the line) compresses
@@ -197,8 +197,10 @@ test("the driving boundary is opened across the complex, on the pit side only", 
   const raw = T.buildCenterline(T.LIST.find((d) => d.id === FULL));
   for (let k = 0; k < t.n; k++) {
     if (!(p.keep[k] > 0)) continue;
-    assert.ok(bar[k] >= t.hw[k] + p.off.outer * p.w[k] + 1.5 - 1e-6,
-      `node ${k}: boundary ${bar[k].toFixed(2)} inside the complex's edge ${(t.hw[k] + p.off.outer * p.w[k] + 1.5).toFixed(2)}`);
+    // …to 0.9 m short of the garage line for the car's centre: its side
+    // reaches the line, where the OUTER WALL stands wherever a bay does not.
+    assert.ok(bar[k] >= t.hw[k] + p.off.outer * p.w[k] - 0.9 - 1e-6,
+      `node ${k}: boundary ${bar[k].toFixed(2)} inside the complex's edge ${(t.hw[k] + p.off.outer * p.w[k] - 0.9).toFixed(2)}`);
   }
   void other; void raw;
 });
@@ -295,9 +297,12 @@ test("neither end of the complex lies in a corner: the exit closes before the fi
   {
     const t = buildOnce("nurburgring"), p = t.pit;
     assert.ok(p.exitM < P.EXIT_M && p.exitM >= P.EXIT_MIN, `exitM ${p.exitM}`);
-    // From the line to the end of the exit road, not a node is cornering.
-    for (let s = 0; s < p.sB; s += 4)
-      assert.ok(Math.abs(T.curvature(t, s)) <= P.PIT_K, `nurburgring: cornering at s=${s | 0} (sB ${p.sB | 0})`);
+    // From the line to the end of the WALL'S FADE, not a node is cornering.
+    // The exit road's blend runs on past it (its floor is EXIT_ROAD_MIN — a
+    // 30 m blend was undrivable at the limit) and may reach the turn-in.
+    for (let s = 0; s < p.sOut + p.grow; s += 4)
+      assert.ok(Math.abs(T.curvature(t, s)) <= P.PIT_K, `nurburgring: cornering at s=${s | 0} (sOut ${p.sOut | 0} + grow ${p.grow})`);
+    assert.ok(p.exitRoadM >= P.EXIT_ROAD_MIN, `the exit road is at least ${P.EXIT_ROAD_MIN} m (${p.exitRoadM})`);
   }
   // Where the straight cannot hold even the minimum (Mosport 24 m, Jerez 48 m)
   // the exit sits on the floor, not at 130. (The ENTRY is clamped to
@@ -407,4 +412,35 @@ test("the complex lights its row: six canopy luminaires over the working lane, r
   }
   assert.equal((buildOnce(STREET).lampPosts || []).filter((l) => l.pit).length, 6, "the street complex lights its row too");
   assert.equal((narrowOnce().lampPosts || []).filter((l) => l.pit).length, 0, "a painted lane hangs no canopy");
+});
+
+test("the row seats the custom team ONCE when the roster already carries it, as the game's does", () => {
+  // js/career/custom-team.js pushes the custom team INTO Teams.LIST, so in the
+  // game the list TrackPit.row reads already ends with it; appending MY TEAM
+  // again built a 13-bay row with "custom" twice — 11 m longer than the twelve
+  // every VM-side test measures — and its head superseded Yas Marina's
+  // hotel leg (abudhabi-foundation.spec, 2026-09-16). The VM has no Teams at
+  // all, so this is the one place the game's roster reaches the geometry.
+  const env = ctxOnce(), T = env.Tracks;
+  const def = T.LIST.find((d) => d.id === FULL);
+  const bare = buildOnce(FULL);                     // no Teams: twelve unnamed bays
+  const eleven = ["mercedes", "ferrari", "mclaren", "redbull", "alpine", "racingbulls", "haas", "williams", "audi", "astonmartin", "cadillac"]
+    .map((id) => ({ id, name: id, color: [0.5, 0.5, 0.5] }));
+  const custom = { id: "custom", name: "MY TEAM", short: "MY", color: [0.55, 0.55, 0.6] };
+  try {
+    env.sandbox.Teams = { LIST: eleven.concat([custom]), DEFAULT_CUSTOM: custom };   // as the career module leaves it
+    const inList = T.build(def);
+    env.sandbox.Teams = { LIST: eleven, DEFAULT_CUSTOM: custom };                    // a bare roster: appended once
+    const appended = T.build(def);
+    for (const [name, t] of [["custom in LIST", inList], ["custom appended", appended]]) {
+      const teams = t.pit.row.boxes.map((b) => b.team);
+      assert.equal(teams.length, 12, `${name}: twelve bays, not ${teams.length} (${teams.join(",")})`);
+      assert.equal(new Set(teams).size, 12, `${name}: no team seated twice (${teams.join(",")})`);
+      assert.equal(teams[11], "custom", `${name}: MY TEAM's bay is the last`);
+      assert.equal(t.pit.row.count, 12);
+      assert.equal(t.pit.row.s0, bare.pit.row.s0, `${name}: the row stands where the VM's twelve unnamed bays stand`);
+    }
+  } finally {
+    delete env.sandbox.Teams;
+  }
 });

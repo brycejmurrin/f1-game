@@ -357,6 +357,71 @@ function getBrakeRing() {
   return brakeRingMesh;
 }
 
+// THE COMPOUND'S STRIPE on the sidewall, from the tyre record the car runs
+// on (js/physics/tyre-model.js AI_CLASS colour): one flat ring per colour,
+// cached by its rgb, laid on each wheel's outer face like the brake ring —
+// outside the brake ring's band, so the two never overlap.
+const _compoundRings = new Map();
+function getCompoundRing(col) {
+  const key = col[0].toFixed(2) + "," + col[1].toFixed(2) + "," + col[2].toFixed(2);
+  let m = _compoundRings.get(key);
+  if (m) return m;
+  const out = { pos: [], nrm: [], col: [], idx: [] };
+  const SEG = 20, R0 = 0.24, R1 = 0.315;
+  for (let i = 0; i < SEG; i++) {
+    const a0 = (i / SEG) * Math.PI * 2, a1 = ((i + 1) / SEG) * Math.PI * 2;
+    const c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+    const base = out.pos.length / 3;
+    out.pos.push(0, R0 * c0, R0 * s0,  0, R1 * c0, R1 * s0,
+                 0, R1 * c1, R1 * s1,  0, R0 * c1, R0 * s1);
+    for (let v = 0; v < 4; v++) { out.nrm.push(1, 0, 0); out.col.push(col[0], col[1], col[2]); }
+    out.idx.push(base, base + 1, base + 2, base, base + 2, base + 3,
+                 base, base + 2, base + 1, base, base + 3, base + 2);
+  }
+  m = _gfx.createMesh(out);
+  _compoundRings.set(key, m);
+  return m;
+}
+
+// THE STOP'S KIT, no people: a jack at each end of the car — the beam under
+// the nose or the gearbox, its cradle, its two castors and the upright
+// handle, in the team's colour — and a wheel gun on the ground at each wheel.
+// One mesh per team colour in the car's own frame (+z the nose, wheels at
+// x +/-0.79 / z 1.7 and -1.6), drawn only while the car is held in its box
+// (car-draw drawPitCrew). Built from GaragePrims' blocks; a VM without them
+// draws nothing.
+const _crewMeshes = new Map();
+function getCrewMesh(col) {
+  const key = col[0].toFixed(2) + "," + col[1].toFixed(2) + "," + col[2].toFixed(2);
+  let m = _crewMeshes.get(key);
+  if (m) return m;
+  const P = typeof GaragePrims !== "undefined" ? GaragePrims : null;
+  if (!P) return null;
+  const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+  const steel = [0.62, 0.63, 0.66], dark = [0.16, 0.17, 0.19], rubber = [0.07, 0.07, 0.08];
+  // A jack: `z0` is where its cradle meets the car, `dir` the way its beam
+  // runs away from it (+1 ahead of the nose, -1 behind the gearbox).
+  const jack = (z0, dir) => {
+    P.block(out, 0, 0.11, z0, 0.36, 0.05, 0.07, steel);                        // the cradle under the car
+    P.block(out, 0, 0.14, z0 + dir * 0.62, 0.06, 0.04, 0.55, col);              // the beam, in the team's colour
+    for (const x of [-0.30, 0.30]) P.block(out, x, 0.07, z0 + dir * 1.10, 0.03, 0.07, 0.07, rubber);   // castors
+    P.block(out, 0, 0.13, z0 + dir * 1.10, 0.33, 0.03, 0.03, steel);            // the axle between them
+    P.block(out, 0, 0.55, z0 + dir * 1.22, 0.025, 0.40, 0.025, col);            // the upright handle…
+    P.block(out, 0, 0.95, z0 + dir * 1.22, 0.22, 0.025, 0.025, dark);           // …and its grip
+  };
+  jack(2.6, 1);
+  jack(-2.4, -1);
+  // A wheel gun laid on the ground beside each wheel, its hose running out
+  // toward the garage side of the box (+x).
+  for (const [x, z] of [[1.35, 1.7], [-1.35, 1.7], [1.35, -1.6], [-1.35, -1.6]]) {
+    P.block(out, x, 0.06, z, 0.07, 0.06, 0.16, dark);                          // the gun
+    P.block(out, x + 0.55, 0.02, z + 0.05, 0.50, 0.02, 0.02, rubber);          // its hose
+  }
+  m = _gfx.createMesh(out);
+  _crewMeshes.set(key, m);
+  return m;
+}
+
 // Shared body for a flat billboard quad in the local XY plane (normal -Z,
 // half-extents w/h), wound both ways so it reads from either side — the
 // shape rainLight/exhaustFlame/boostFlame/ersLight/endplateLight all share,
@@ -737,6 +802,6 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawMirrorLights, ersLightCode, gridStrobe };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawMirrorLights, ersLightCode, gridStrobe };
 })();
 Object.freeze(CarMesh);
