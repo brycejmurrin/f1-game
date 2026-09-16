@@ -108,6 +108,41 @@ green on the unmodified path; one push for the slice time.
 **Saves.** ~4.5 min on every deploy push's fast tier (the floor moves to the
 next slice, ~2 min). Effort half a day.
 
+**LANDED 2026-09-16 — steps 1 and 2; step 3 deliberately not attempted.**
+`tools/lib/game-vm-pool.cjs` (`createPool`/`run`/`stats`/`close`) runs one
+circuit's probe per worker, compiled from SOURCE in the worker and called as
+`probe(g, args, state)`, with every `assert` still in the parent. Size
+`min(4, cores)`, recycle after 8 circuits or 1200 MB RSS, 300 s per job; a
+worker that throws, dies or hangs rejects THAT circuit by name. The probes
+live in `tests/helpers/elevation-probes.cjs`, verbatim but for the closure
+reads becoming arguments, and `APEX_VM_POOL=0` keeps the serial path.
+`createGame({ carMeshes: false })` stubs Car3D's builders (0.57 s of a 2.50 s
+boot, 23 builds) and THROWS if a caller passes `measure: true`, so it cannot
+silently lie to a mesh-measuring test.
+
+| run | wall |
+|---|---|
+| before | 400 s |
+| after, `APEX_VM_POOL=0` | 400 s (the port did not slow the old path) |
+| after, pooled | **191 s**, 210 s |
+
+The box was shared all session (loads 5-11, two or three foreign suites), and
+the 210 s run averaged load 5.1, so four workers held about three cores. An
+idle box should reach the 110-130 s this item predicted; that is UNPROVEN
+here, so the numbers above are what the docs and headers say.
+
+No assertion, threshold, launch or step count changed; the twin still declares
+7 against the spec's 7 and `twinned-specs` is green at 14 pairs / 253 tests.
+`tests/unit/game-vm-pool.test.mjs` runs the real probes through one worker and
+asserts the results are deep-equal FLOAT FOR FLOAT against the serial path —
+that equality, not the wall time, is what makes the pool safe to keep.
+
+**Step 3 stays open** and should stay open until someone budgets it properly:
+swapping the 300 × (jump + step) search for `trackProfile(300)` is a
+test-semantics change that needs the same edit on the browser spec plus a
+40-circuit A/B showing the chosen fracs match. The `vm-a` slice time still
+needs a re-measure from a real runner push.
+
 ### 4. Shard the geometry sweeps
 
 **Evidence.** `sweeps` measured 7.8 min median, 9.8 p90 when a circuit
