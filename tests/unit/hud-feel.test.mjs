@@ -359,9 +359,12 @@ test("coach and practice keep their own channel and priority, and practice is it
   const g0 = read("js/game.js");
   assert.match(g0, /if \(kind === "coach" \|\| kind === "practice"\) return "COACH";/, "radioWho names the coach's channel");
   assert.match(g0, /if \(kind === "penalty-hit" \|\| kind === "penalty-warn" \|\| kind === "warning"\) return "RACE CONTROL";/, "…and race control's");
-  // …and each gets its own PLATE, which is the same message at a size the
-  // player can catch without looking away from the corner.
-  assert.match(hud, /#announce\[data-kind="coach"\] #announce-num,\n#announce\[data-kind="practice"\] #announce-num \{ background: var\(--faster\); color: var\(--bg\); \}/);
+  // …and the channel is ALL a kind may recolour. The number plate is the
+  // team's, on every kind: the card belongs to one car for a whole session, so
+  // a plate that changed with the message would be the loudest thing on screen
+  // saying something that never changes.
+  assert.doesNotMatch(hud, /#announce\[data-kind="[a-z-]+"\][^{]*#announce-num/,
+    "a kind repaints the number plate — the plate is the team, the WHO line is the channel");
   // A practice verdict must not be prioritised as a record message.
   const g = read("js/game.js");
   const pri = g.match(/const ANN_PRI = \{([^}]*)\}/)[1];

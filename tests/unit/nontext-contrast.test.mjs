@@ -253,7 +253,7 @@ const ACCENT_DECOR = {
     "`.hud-box` border-left — the team stripe on a box whose value is the readout",
     "`body.hud-prof-broadcast .hud-gaps` border-left — the same stripe, broadcast skin",
     "`--accent-dim` on the sector rows — the same stripe again, dimmed",
-    "`#announce-num` background — the radio card's number PLATE. The team colour is the ground, not the message: the number on it is `--accent-ink`, picked per team to clear 4.5:1 (proved below), and the kinds that carry state (warning, penalty, coach) repaint the plate with their own token",
+    "`#announce-num` background — the radio card's number PLATE. The team colour is the ground, not the message: the number on it is `--accent-ink`, picked per team to clear 4.5:1 (proved below), and the CHANNEL a message came in on is carried by the WHO line's colour, never by the plate",
   ],
   "css/tokens.css": [
     "`--accent-dim` derivation",
@@ -326,10 +326,5 @@ test("every team's --accent-ink is READABLE on that team's --accent, and is the 
     assert.equal(inkName, scored[0][0],
       `${team}: --accent-ink is ${inkName} (${got.toFixed(2)}:1) but ${scored[0][0]} measures ` +
       `${scored[0][1].toFixed(2)}:1 — the ink is whichever is further, not a preference`);
-  }
-  // The kinds that repaint the plate all ink it --bg (css/hud.css). Same floor.
-  for (const name of ["--sec-slow", "--slower", "--faster"]) {
-    const r = ratio(resolve(token(name)), resolve(token("--bg")));
-    assert.ok(r >= 4.5, `${name} plate inked --bg measures ${r.toFixed(2)}:1`);
   }
 });

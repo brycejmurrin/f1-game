@@ -724,21 +724,24 @@ body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(
    CONTROL, COACH — js/game.js radioWho), the words in quotes under it.
 
    THE NUMBER PLATE (#announce-num) is the card's identity anchor, the device
-   every broadcast radio caption is built around: a filled block of the
-   channel's colour with the car number on it, so which channel is talking is
-   legible from the corner of the eye at 300 km/h, before a word is read. It
-   replaced a trailing `· 63` set in micro type at --dim — the least visible
-   thing on a card that is ALWAYS about that car. The plate spans both text
-   lines, so the card is no taller than it was.
+   every broadcast radio caption is built around: a filled block of the TEAM's
+   colour with the car number on it. It replaced a trailing `· 63` set in micro
+   type at --dim — the least visible thing on a card that is ALWAYS about that
+   car. The plate spans both text lines, so the card is no taller than it was.
+
+   The plate is the TEAM, on every kind, and it does not move: the card belongs
+   to one car for a whole session, so a plate that changed colour with the
+   message would be the loudest thing on screen saying something that never
+   changes. The CHANNEL is the WHO line's job (its colour, below), which is
+   also where the words RACE CONTROL and COACH already are — one place naming
+   the speaker, not two.
 
    The plate is the one surface painted --accent, and that is still decoration
    (tests/unit/nontext-contrast.test.mjs): the team colour is the GROUND and
    --accent-ink, picked per team to clear 4.5:1 on it, is what carries the
-   number. The kinds that carry state (a warning, a penalty, the coach) repaint
-   the plate with their own token — where the old card had a 3px stripe, which
-   is the same message at a tenth of the size. One type size for every kind;
-   a kind may still only recolour. With no number to show (the menus, a car
-   with none) :empty collapses the plate back to exactly that 3px stripe. */
+   number. One type size for every kind; a kind may only recolour the WHO line.
+   With no number to show (the menus, a car with none) :empty collapses the
+   plate back to exactly the 3px stripe this card used to carry. */
 #announce[hidden] { display: none; }   /* the author `display` below would beat the UA's [hidden] */
 #announce {
   position: fixed;
@@ -785,18 +788,12 @@ body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce { top: calc(
 }
 #announce-text::before { content: "\201C"; }
 #announce-text::after { content: "\201D"; }
-/* The kinds that carry state keep their own colour, on the plate and the
-   channel line — never the accent (the dark team skins fail 1.4.11 on it).
-   Every plate ink here is --bg: --sec-slow 13.11:1, --slower 5.49:1,
-   --faster 12.92:1. */
-#announce[data-kind="warning"] #announce-num,
-#announce[data-kind="penalty-warn"] #announce-num { background: var(--sec-slow); color: var(--bg); }
+/* The kinds that carry state keep their own colour on the CHANNEL LINE and
+   nowhere else — never the accent (the dark team skins fail 1.4.11 on it),
+   and never the plate, which is the team's and stays put. */
 #announce[data-kind="warning"] #announce-who,
 #announce[data-kind="penalty-warn"] #announce-who { color: var(--sec-slow); }
-#announce[data-kind="penalty-hit"] #announce-num { background: var(--slower); color: var(--bg); }
 #announce[data-kind="penalty-hit"] #announce-who { color: var(--slower); }
-#announce[data-kind="coach"] #announce-num,
-#announce[data-kind="practice"] #announce-num { background: var(--faster); color: var(--bg); }
 #announce[data-kind="coach"] #announce-who,
 #announce[data-kind="practice"] #announce-who { color: var(--faster); }
 
