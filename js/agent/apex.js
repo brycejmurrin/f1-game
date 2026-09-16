@@ -32,7 +32,7 @@ function settled(promise, out) {
 const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0",
   "_lapTimeAtLine", "incidentInvalidLap", "passSide", "passBest", "offroad",
-  "towing", "wake", "axFrac", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
+  "towing", "wake", "axFrac", "axFracF", "axFracR", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
   "kerbSndT", "kerbHapT",
   // 2026-09-15: five the guard had been red on. The last three need a STREET
   // circuit with real contact to appear — sweep tracks, not just monza.
