@@ -487,6 +487,34 @@ load in Node) and the tool scripts stay source pins — matched on
 comment-stripped code by identifier and shape, never on whitespace, argument
 order or a comment.
 
+#### `vmPage` — the same SPEC file, no browser (spike, 2026-09-16)
+
+`tests/helpers/vm-page.js` is a `page`-shaped adapter over `createGame()`, so
+`APEX_VM_PAGE=1 node --test tests/specs/<file>.spec.js` runs an **unmodified**
+browser spec. It works because Playwright already forbids closures in
+`page.evaluate`: the body is portable as source into the VM's realm. Playwright's
+own `expect` imports standalone under `node --test`, so there is one matcher
+semantics, not two. `fixtures.js` picks the backend off the env var; with it
+unset every spec collects and runs under Playwright exactly as before.
+
+Measured here: `physics-fixes` 2/2 in 22 s against the 110.1 s its own header
+records for the browser copy. **It is a pre-check that runs ALONGSIDE the
+browser gate, never instead of it** — no spec leaves a blocking gate until a
+twin-fidelity gate exists (`docs/plans/research-2026-09-16/testing.md` items 1-2).
+A ten-spec cohort put a third of its tests red for three reasons no static scan
+sees: in-page DOM driving against an inert DOM, `requestAnimationFrame` in an
+evaluate body (no renderer — `render()` throws on the first pump), and
+`createGame` settling the boot circuit before it returns, which reddens every
+"returns null before a track is loaded" assertion. `understeer-cue` is portable
+by every static measure and still goes 0/7: that is the standing proof that a
+green eligibility verdict and a green adapter run are different facts.
+
+`node tools/check/vm-portable.mjs` is the eligibility lint (`--json`,
+`--portable`, `--blocked`): **35 of 118 specs portable today**, 53 after a
+one-line import change, 65 need a browser. Eligibility, not a recommendation —
+an adapted spec is blind to the renderer. Every DOM API the adapter does not
+serve throws a NAMED refusal rather than `undefined is not a function`.
+
 ### `sharedTest` — one booted page per worker
 
 `tests/helpers/fixtures.js` also exports `sharedTest`, a drop-in replacement for `test`
