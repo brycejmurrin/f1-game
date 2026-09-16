@@ -147,12 +147,27 @@ export async function update(data = load()) {
  *  and review see it. What goes is the manual round-trip, and only for small
  *  growth — anything past `maxRaise` still blocks, and a LOOSE ceiling is
  *  lowered on the way through (the direction the ratchet always allowed). */
-export async function autoRaise({ maxRaise = 40 } = {}) {
+/* `dryRun` CLASSIFIES WITHOUT WRITING, and it exists because the absence of it
+ * was a live defect: tests/unit/ratchets.test.mjs called this to prove the
+ * bound, which WROTE tests/data/ratchets.json on any tree that was over. The
+ * suite then reported a red on the first run and a green on the second, having
+ * silently raised a ceiling in between — a guard that edits the thing it
+ * guards, with no commit and no human in the loop, and whose raise then rides
+ * along in whatever commit happens next. Found 2026-09-16 when a four-node
+ * shell addition made tooling-fast fail once and pass immediately after.
+ * The commit hook still calls this WITHOUT dryRun: there the write is the
+ * point, and it is staged into the diff a human reads. */
+export async function autoRaise({ maxRaise = 40, dryRun = false } = {}) {
   const data = load();
   const v = verdict(await measure(data));
   const big = v.over.filter((r) => r.over > maxRaise || r.missing);
   if (big.length) return { ok: false, raised: [], lowered: [], blocked: big };
   if (!v.over.length && !v.loose.length) return { ok: true, raised: [], lowered: [], blocked: [] };
+  if (dryRun) {
+    return { ok: true, dryRun: true, blocked: [],
+             raised: v.over.map((r) => ({ file: r.file, metric: r.metric })),
+             lowered: v.loose.map((r) => ({ file: r.file, metric: r.metric })) };
+  }
   const rows = await update(data);
   const key = (r) => `${r.file} ${r.metric}`;
   const raised = rows.filter((r) => v.over.some((o) => key(o) === key(r)));

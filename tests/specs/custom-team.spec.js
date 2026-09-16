@@ -208,6 +208,82 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   expect(leaked, "a cached custom-team body mesh outlived the paint it was built for").toBe(0);
 });
 
+test("the LEGEND picker fills the team from js/data/legends.js and leaves it editable", async ({ page }) => {
+  // #mb-race FIRST. pinFreePlay({click:false}) deliberately does NOT open the
+  // select screen, so #sel-car is in the DOM but never visible — and Playwright
+  // reports that as "locator resolved" followed by a 60 s click timeout, which
+  // reads like a dead button rather than a screen that was never opened. Five
+  // runs went into that before reading the tests above, which all open the
+  // screen on their way through.
+  test.setTimeout(240_000);
+  await toMenu(page);
+  await pinFreePlay(page, { click: false });
+  await page.locator("#mb-race").click();
+
+  // The picker has NO save path of its own: it writes the dialog's own rows and
+  // stops, so the existing SAVE stays the only thing that persists and an
+  // applied legend remains editable. That is what this checks.
+  const seen = {};
+  await saveMyTeam(page, async () => {
+    seen.opts = await page.locator("#cz-legend option").count();
+    // BARE `Legends`, not window.Legends: these modules declare a top-level
+    // `const`, which binds in script scope and never lands on window — the same
+    // reason tests/helpers/shared-page.js reaches for `Teams` bare.
+    seen.total = await page.evaluate(() => Legends.LIST.length);
+
+    await page.selectOption("#cz-legend", "senna");
+    await page.locator("#cz-legend-apply").click();
+    seen.name = await page.inputValue("#cz-name");
+    seen.code = await page.inputValue("#cz-code");
+    seen.num = await page.inputValue("#cz-num");
+    const sennaColor = await page.inputValue("#cz-color");
+
+    // A second APPLY repaints, so it is not a one-shot.
+    await page.selectOption("#cz-legend", "clark");
+    await page.locator("#cz-legend-apply").click();
+    seen.code2 = await page.inputValue("#cz-code");
+    seen.repainted = (await page.inputValue("#cz-color")) !== sennaColor;
+
+    // …and a player can still override what a legend filled in.
+    await page.fill("#cz-short", "MINE");
+    seen.short = await page.inputValue("#cz-short");
+  });
+  expect(seen.opts).toBe(seen.total);
+  expect(seen.name).toBe("Legends");
+  expect(seen.code).toBe("SEN");
+  expect(seen.num).toBe("12");          // the sourced number, not an invented one
+  expect(seen.code2).toBe("CLK");
+  expect(seen.repainted).toBe(true);
+  expect(seen.short).toBe("MINE");
+  // SAVE fitted Clark's period car (the second APPLY): a wingless 1962 Lotus,
+  // not the 2026 default. `aero` is the assertion because it is the one field
+  // a player sees from across the garage — lvl 0 means no wings at all.
+  const fitted = await page.evaluate(() => GameStore.store.get("parts.custom", {}));
+  expect(fitted.aero).toBe("minimal");
+  expect(fitted).toEqual(await page.evaluate(() => Legends.parts("clark")));
+});
+
+test("CANCEL after APPLY leaves the player's own car on the sheet", async ({ page }) => {
+  // APPLY only fills the dialog. parts.custom is a REAL garage sheet, not a
+  // preview, so a staged period car must not reach it until SAVE — otherwise
+  // browsing the picker silently rebuilds the car you already built.
+  test.setTimeout(240_000);
+  await toMenu(page);
+  await page.evaluate(() => GameStore.store.set("parts.custom", { aero: "extreme" }));
+  await pinFreePlay(page, { click: false });
+  await page.locator("#mb-race").click();
+  await page.locator("#sel-car").click();
+  await page.locator("#carsetup").waitFor({ state: "visible" });
+  await page.locator('#cs-tabs [data-cs-cat="team"]').click();
+  await page.locator("#cs-customize").click();
+  await page.locator("#customize").waitFor({ state: "visible" });
+  await page.selectOption("#cz-legend", "fangio");
+  await page.locator("#cz-legend-apply").click();
+  await page.locator("#cz-cancel").click();
+  await page.locator("#customize").waitFor({ state: "hidden" });
+  expect(await page.evaluate(() => GameStore.store.get("parts.custom", {}).aero)).toBe("extreme");
+});
+
 test("custom livery actions are independent keyboard buttons", async ({ page }) => {
   await toMenu(page);
   // The seed the init script used to plant before boot, written through the

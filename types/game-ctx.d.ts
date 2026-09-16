@@ -366,6 +366,9 @@ interface GameCtx {
   /** DUEL format: trim the grid to the player and one bumped rival
    *  (js/race/duel.js). A race SETTING, so it persists between sessions. */
   duel: boolean;
+  /** Which legend the duel rival is (`js/data/legends.js` id), or "" for the
+   *  ordinary duel against the grid's fastest car. Read only when `duel` is on. */
+  duelLegend: string;
   readonly lapsTarget: number;
 
   // ── Reliability: the race setting, the arming path, the manual retire ──────

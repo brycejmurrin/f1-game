@@ -994,6 +994,9 @@ const isPractice = () => practiceMode || isTimeTrial();
 // and Quali already do to `cars` after makeCars(); the rival's stats come from
 // the deltas argument DriverRatings.get() already takes for career development.
 let duelMode = false;
+// WHICH legend the duel rival is, or "" for the ordinary fastest-car duel. A
+// race SETTING like duelMode itself, so it survives a restart the same way.
+let duelLegend = "";
 // The full field as it was before startRace() narrowed `cars` to the lone
 // qualifying car — Quali.simulate() needs every car to build a classification.
 let qualiField = null;
@@ -2464,7 +2467,12 @@ async function startRace() {
     // ONE RIVAL, BUMPED — the same trim Quali and Time Trial do on either side
     // of this branch. js/race/duel.js owns what the format means.
     const rival = Duel.pick(cars);
-    if (rival) { Duel.bump(rival, DriverRatings); cars = [player, rival]; }
+    if (rival) {
+      const lg = (duelLegend && typeof Legends !== "undefined") ? Legends.byId(duelLegend) : null;
+      if (lg) Duel.asLegend(rival, { id: lg.id, name: lg.name, code: lg.code, ratings: Legends.ratings(lg.id) }, DriverRatings);
+      else Duel.bump(rival, DriverRatings);
+      cars = [player, rival];
+    }
     lapsTarget = raceLaps;
   } else if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
@@ -2819,6 +2827,7 @@ const G = {
   get practice() { return isPractice(); },
   set practice(v) { practiceMode = !!v; },
   get duel() { return duelMode; }, set duel(v) { duelMode = !!v; },
+  get duelLegend() { return duelLegend; }, set duelLegend(v) { duelLegend = v || ""; },
   get lapsTarget() { return lapsTarget; },
   // RELIABILITY: the race setting, the shared arming path (so a simulated career
   // round draws its retirements exactly as a driven race does), and the manual
@@ -3219,6 +3228,7 @@ raceSettings = RaceSettings.create({
   getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
   getRaceTyreWear: () => raceTyreWear, setRaceTyreWear: (v) => { G.raceTyreWear = v; },
   getDuel: () => duelMode, setDuel: (v) => { duelMode = !!v; },
+  getDuelLegend: () => duelLegend, setDuelLegend: (v) => { duelLegend = v || ""; },
   getPits: () => pits,   // the STRATEGY row: the reference plan and the pin (PitLane.planFor)
   getRaceCtl: () => raceCtl,
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),

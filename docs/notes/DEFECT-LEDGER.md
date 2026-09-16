@@ -835,6 +835,39 @@ on the 08-18 perf-hunt board, not this register.
   telemetry scrubber uses `CssZoom.viewportRect`.
 - **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
 
+### 2026-09-16 — a guard suite that EDITED the thing it guards (ratchets)
+
+`tests/unit/ratchets.test.mjs` proved the commit hook's bound by calling the
+real `autoRaise({ maxRaise: 40 })` — with no dry run. On any tree that was over
+a ceiling, running the SUITE wrote `tests/data/ratchets.json`.
+
+The behaviour, seen while adding four DOM nodes for the Legends picker:
+
+| run | result | side effect |
+|---|---|---|
+| 1 | `tooling-fast` FAILS, `shellNodes` over its ceiling | raises 1588 -> **1592** |
+| 2 | `tooling-fast` PASSES | none — it raised it a moment ago |
+
+Two things are wrong with that, and the second is the serious one. It presents
+as a flake: a red that vanishes on re-run is the exact shape an agent learns to
+dismiss, and it cost a confusing detour here. And a ceiling could be raised
+with **no commit, no diff and no human** — the raise then rides into whatever
+commit happens next, so the ratchet silently stops ratcheting. The commit
+hook's auto-raise is the opposite: it writes deliberately AND stages the change
+into the diff a person reads.
+
+**Fixed.** `autoRaise` takes `dryRun`, which classifies without writing, and the
+test passes it. The hook still calls it without, because there the write is the
+point. Verified by reverting the silently-raised ceiling: the suite now reports
+the SAME red twice and leaves the file untouched, where before it healed itself
+between runs.
+
+The general lesson is worth more than the fix: this suite and the twin-fidelity
+gate both went in this session, and both first shipped in a state where they
+could not fail for the reason they existed. A guard needs a test that it still
+BITES, which is why `ratchets.test.mjs` has "the ratchet bites, in both
+directions" and why the fidelity matrix keeps its refuted mutants.
+
 ### 2026-09-16 — the Monaco continuity test does not test continuity (found by building the fidelity gate)
 
 `tests/specs/physics-fixes.spec.js` test 1 says of itself: "a guard that the

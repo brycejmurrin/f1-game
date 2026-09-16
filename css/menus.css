@@ -1238,6 +1238,12 @@ h3.sel-label {
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-4); color: var(--dim);
 }
 #customize .cz-row label { flex: 1 1 auto; min-width: 0; }
+/* The LEGEND select needs the same shrink contract as the text inputs below.
+   Without it the row is flex with no rule for a <select>, so the control takes
+   its INTRINSIC width from the longest driver name, overflows the row and
+   pushes the APPLY button outside the clipped pane — where it is still in the
+   DOM and still resolves, but can never be clicked. */
+#customize #cz-legend { flex: 1 1 56%; min-width: 0; max-width: 60%; }
 #customize input[type="text"], #customize input[type="number"] {
   /* flex-basis, not a fixed 56% width: the panel is sized by the sheet now, and
      a percentage width fought the shrink-to-fit box it used to live in — the
