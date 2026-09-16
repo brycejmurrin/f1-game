@@ -376,6 +376,14 @@ const DrivingCoach = (function () {
       practice = true;                // rewinding IS practising, whether or not a checkpoint was set
       const n = (G.cars || []).length;
       restoreWorld(e.world);
+      // RE-ARM THE DRILL, exactly as retry() does. RaceInsights fails any
+      // in-progress attempt when the clock or the arc jumps backwards
+      // (js/race/race-insights.js, "position jumped") — which is precisely what
+      // a rewind is. Without this the attempt you rewound in order to RETRY is
+      // silently marked dirty, with a reason that describes the mechanism
+      // rather than anything the driver did. startDrill() resets its `previous`
+      // sample so the next tick is not read as a teleport.
+      insights.startDrill(drillMode);
       G.announce("REWIND " + Math.round(clock - e.t) + "s" + (n > 1 ? " — FULL GRID" : ""), 2, "practice");
       return true;
     }
