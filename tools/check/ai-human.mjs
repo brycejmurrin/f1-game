@@ -60,6 +60,8 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { wearArg } from "../lib/cli-args.mjs";
+
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
@@ -67,6 +69,9 @@ const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
 const argv = process.argv.slice(2);
 const flag = (n, d) => { const i = argv.indexOf("--" + n); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d; };
 const TRACK = flag("track", "monza");
+// Default OFF, the harness pin, so the recorded yield/contact rates hold.
+// --wear light|real races the player against a field that pits and degrades.
+const WEAR = wearArg(argv);
 const SECONDS = Math.max(30, +flag("seconds", 240));
 const RUNS = Math.max(1, Math.min(9, +flag("runs", 1) || 1));
 const JSON_OUT = argv.includes("--json");
@@ -85,7 +90,7 @@ const PACE = +flag("pace", 0.97) || 1;
 const REINSERT_S = 4;
 
 async function measure(seed) {
-  const g = await createGame({ track: TRACK, storage: { difficulty: "normal" } });
+  const g = await createGame({ track: TRACK, storage: { difficulty: "normal", tyreWear: WEAR } });
   await g.race(TRACK); if (g.go) await g.go();
   if (g.apex && typeof g.apex.seed === "function") {
     g.apex.seed(seed); await g.race(TRACK); if (g.go) await g.go();
@@ -276,9 +281,9 @@ const rows = [];
 for (let r = 0; r < RUNS; r++) rows.push(await measure(r + 1));
 const model = (OFFSET ? `holds the racing line ${OFFSET} m toward the outside of each corner` : "holds the racing line") +
   (PACE < 1 ? ` at ${Math.round(PACE * 100)} % of the field's median pace, re-inserted into the pack when alone` : " at median field pace");
-const out = { track: TRACK, seconds: SECONDS, runs: RUNS, offsetM: OFFSET, pace: PACE, playerModel: model, rows };
+const out = { track: TRACK, seconds: SECONDS, wear: WEAR, runs: RUNS, offsetM: OFFSET, pace: PACE, playerModel: model, rows };
 if (JSON_OUT) { console.log(JSON.stringify(out, null, 2)); process.exit(0); }
-console.log(`ai-human — ${TRACK}, ${SECONDS}s, ${RUNS} run(s); player ${model}\n`);
+console.log(`ai-human — ${TRACK}, ${SECONDS}s, ${RUNS} run(s), tyre wear ${WEAR}; player ${model}\n`);
 for (const r of rows) {
   console.log(`  seed ${r.seed}: ${r.alongsideFrames} alongside frames, mean gap ${r.meanGapM} m, contact ${r.contactPct}%` +
               `, player ${r.playerOffsetInCornersM} m off the line in corners, ${r.reinserts} re-insertion(s)${r.insertTimes.length ? " at " + r.insertTimes.join("/") + " s" : ""}` +

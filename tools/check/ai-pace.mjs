@@ -22,6 +22,12 @@
  *   node tools/check/ai-pace.mjs                      monza, all three notches
  *   node tools/check/ai-pace.mjs --track spa --laps 3
  *   node tools/check/ai-pace.mjs --diff normal --json
+ *   node tools/check/ai-pace.mjs --wear real            wear ON: deg over a stint
+ *
+ * --wear off|light|real, DEFAULT off. The VM harness pins wear off, so every
+ * lap time this tool has ever printed is a fresh-tyre time and the strategy
+ * seam (stintPlan / pitNow / degCost) was never running. Turn it on to measure
+ * degradation; leave it off to compare against the recorded numbers.
  *
  * Reading it: compare a tree against its base, not against absolutes. A shift
  * over ~0.5 % on one circuit and not the others is the controller favouring
@@ -31,6 +37,8 @@
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { wearArg } from "../lib/cli-args.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -44,6 +52,9 @@ const flag = (name, def) => {
 const has = (name) => argv.includes("--" + name);
 
 const TRACK = flag("track", "monza");
+// Default OFF — the harness's own pin, so every lap time already recorded with
+// this tool stays reproducible. --wear light|real for a stint/strategy run.
+const WEAR = wearArg(argv);
 const LAPS = Math.max(1, +flag("laps", 2));
 const DIFFS = flag("diff", null) ? [flag("diff")] : ["easy", "normal", "hard"];
 const DT = 1 / 60;
@@ -59,7 +70,7 @@ const mmss = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(3).padStart(6, "0"
 
 /** Times every AI car's laps by watching its own lap counter tick. */
 async function paceOf(difficulty) {
-  const g = await createGame({ track: TRACK, storage: { difficulty } });
+  const g = await createGame({ track: TRACK, storage: { difficulty, tyreWear: WEAR } });
   const cars = g.G.cars.filter((c) => !c.isPlayer && !c.human);
   if (!cars.length) throw new Error("ai-pace: no AI cars in the field");
   const seen = cars.map((c) => c.lap || 0), laps = cars.map(() => []);
@@ -86,9 +97,9 @@ const out = [];
 for (const d of DIFFS) out.push(await paceOf(d));
 
 if (has("json")) {
-  console.log(JSON.stringify({ track: TRACK, laps: LAPS, results: out }, null, 2));
+  console.log(JSON.stringify({ track: TRACK, laps: LAPS, wear: WEAR, results: out }, null, 2));
 } else {
-  console.log(`${TRACK} — best of ${LAPS} timed lap(s) per AI car, sim time`);
+  console.log(`${TRACK} — best of ${LAPS} timed lap(s) per AI car, sim time, tyre wear ${WEAR}`);
   console.log("difficulty   cars  timed   median best      fastest    slowest");
   for (const r of out) {
     if (!r.timed) { console.log(`${r.difficulty.padEnd(12)} ${String(r.cars).padStart(4)}      0   — no car completed a lap`); continue; }
