@@ -28,6 +28,16 @@ runs the sweeps and the selected specs.
 
 ## 1. Owed now (before anything new)
 
+> **§1.2 is CLOSED** (2026-09-16, evening, on the gate/mouth/BOX BOX BOX tree):
+> both specs ran locally as single specs, on an idle box, and both passed —
+> `pit-lane.spec.js` 6/6 in 2.4 min (the driven stop, on the shortened window)
+> and `hud-layout.spec.js` 32/32 in 10.9 min, with `#announce` now IN its
+> measured set, so the radio card is measured for collisions across all 12
+> landscape shapes rather than reasoned about. §1.1 is closed too: CI 4053 on
+> the merged deploy tip is green. §1.3, the real-GPU night frame, is still
+> open, and the entrance lamps make it worth more than before — a SwiftShader
+> frame is what caught the white pool they used to throw.
+
 1. **Read CI 4007 and the pages run it pokes.** If the fast tier is red, the
    Structural-guards job is the first suspect (ratchets: `shellNodes` +2 for
    the card, `cssClasses` +1 — both auto-raised in-diff). If the pages gate is
