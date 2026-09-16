@@ -1,9 +1,12 @@
 #!/bin/bash
 # PreToolUse guard for Bash. Two AGENTS.md rules made deterministic:
 #
-#  §Verification 3 — `git commit` runs `npm run test:guards` first (11 s) and
-#    a red result blocks the commit. Prefix the command with APEX_SKIP_GUARDS=1
-#    only when the guards themselves are what you are fixing.
+#  §Verification 3 — `git commit` runs `npm run test:guards` first (~5 s since
+#    the slider-doc check stopped rebuilding a regex per slider; 16 s before
+#    2026-09-16) and a red result blocks the commit. Prefix the command with
+#    APEX_SKIP_GUARDS=1 only when the guards themselves are what you are fixing.
+#    Before the guards, `ratchets.mjs --auto-raise` absorbs ≤ 40 lines of growth
+#    in a ratcheted file into the commit (the raise is staged and printed).
 #  §Verification 6/7 — a test-bg run is stopped with `test-bg.mjs --stop`,
 #    never by PID; `pkill -f` / `killall` against chrome, node or playwright
 #    matches your own shell and orphans browsers. Kill orphan Chrome by a
@@ -54,6 +57,21 @@ if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:spa
   fi
   mkdir -p "$ROOT/artifacts"
   LOG="$ROOT/artifacts/pre-commit-guards.log"
+  # Size ratchets first (tools/check/ratchets.mjs --auto-raise): growth of up
+  # to 40 lines in a ratcheted file raises its ceiling and STAGES
+  # tests/data/ratchets.json, so the raise is in this commit's diff instead of
+  # a hand edit plus a second guard run. Bigger growth still blocks below.
+  RLOG="$ROOT/artifacts/pre-commit-ratchets.log"
+  if (cd "$ROOT" && node tools/check/ratchets.mjs --auto-raise >"$RLOG" 2>&1); then
+    if grep -q '^RAISED\|^LOWERED' "$RLOG"; then
+      (cd "$ROOT" && git add tests/data/ratchets.json) || true
+      grep '^RAISED\|^LOWERED' "$RLOG" >&2
+    fi
+  else
+    echo "BLOCKED: a size ratchet is over its ceiling by more than the auto-raise allows ($RLOG):" >&2
+    grep '^OVER' "$RLOG" >&2
+    exit 2
+  fi
   if ! (cd "$ROOT" && npm run --silent test:guards >"$LOG" 2>&1); then
     echo "BLOCKED: npm run test:guards is red — AGENTS.md §Verification 3 forbids committing on a red guard. Last lines of $LOG:" >&2
     grep -E 'not ok|Error|expected|actual|✖' "$LOG" | tail -20 >&2

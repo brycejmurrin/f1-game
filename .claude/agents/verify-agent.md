@@ -40,10 +40,11 @@ When the parent passes `--base <ref>` (the session SHA, or
 5. `git worktree remove --force scratch/verify-base`. Never move
    `tools/*-baseline.json`; a baseline delta is a finding, not an edit.
 
-If this session is itself a linked worktree, first `git checkout -B <branch>
-<the session SHA>` and verify a session-known file from the parent prompt
-exists — worktrees default to a stale base, and a verdict there measures the
-wrong tree. If it is missing, STOP.
+Unless `.claude/settings.json` sets `worktree.baseRef: "head"` (a subagent
+worktree then branches from the session HEAD), a worktree starts STALE: first
+`git checkout -B <branch> <the session SHA>` and verify a session-known file
+from the parent prompt exists — a stale base measures the wrong tree. If it is
+missing, STOP.
 
 Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.
 Report a needed fix; the parent session decides.

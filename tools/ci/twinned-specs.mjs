@@ -70,6 +70,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
  *  before it was added; the count check below is what keeps that true. */
 export const TWINNED = {
   "tests/specs/active-aero.spec.js":        "tests/unit/active-aero-vm.test.mjs",
+  "tests/specs/agent-view.spec.js":         "tests/unit/agent-view-vm.test.mjs",
   "tests/specs/aero-zones.spec.js":         "tests/unit/aero-zones-vm.test.mjs",
   "tests/specs/collision-ai-fixes.spec.js": "tests/unit/collision-ai-fixes-vm.test.mjs",
   "tests/specs/collisions-deep.spec.js":    "tests/unit/collisions-deep-vm.test.mjs",
@@ -80,10 +81,41 @@ export const TWINNED = {
   "tests/specs/longitudinal.spec.js":       "tests/unit/longitudinal-vm.test.mjs",
   "tests/specs/obs-act-edge.spec.js":       "tests/unit/obs-act-edge-vm.test.mjs",
   "tests/specs/offtrack.spec.js":           "tests/unit/offtrack-vm.test.mjs",
+  "tests/specs/wake-lock.spec.js":          "tests/unit/wake-lock-vm.test.mjs",
   "tests/specs/world-physics.spec.js":      "tests/unit/world-physics-vm.test.mjs",
 };
 
 export const isTwinned = (file) => Object.hasOwn(TWINNED, file);
+
+/** The LOCAL half of the substitution (2026-09-16). select-specs skipped the
+ *  twins on CI's blocking gate from the day they landed, but every local
+ *  runner — `npm run test:<group>`, test-bg, verify-change — still spawned
+ *  them: the `collisions` group is 32/32 twinned, `aero` 30/37, and a
+ *  js/game.js edit routes to both, so a physics change paid ~16 minutes of
+ *  SwiftShader for assertions test:game-vm had already run in seconds.
+ *
+ *  Splits a `playwright test` argv into what still runs and what a twin
+ *  covers. Flags and non-spec paths pass through untouched; a twinned spec is
+ *  dropped unless `--with-twinned` is on the command line or
+ *  APEX_WITH_TWINNED=1 is set (CI's dispatched wide run sets it, so a
+ *  dispatched `collisions` group still runs its browser copies). The caller
+ *  prints one line per drop — the same honesty contract as select-specs —
+ *  and, when every spec named was a twin, runs NOTHING rather than handing
+ *  Playwright an empty list (which would run the whole suite). */
+export function partitionArgs(argv, env = process.env) {
+  const withTwinned = argv.includes("--with-twinned") || env.APEX_WITH_TWINNED === "1";
+  const keep = [], dropped = [];
+  let specs = 0;
+  for (const a of argv) {
+    if (a === "--with-twinned") continue;
+    const rel = a.startsWith("-") ? null : a.replace(/^\.\//, "").replace(/^\/.*\/(tests\/specs\/)/, "$1");
+    const isSpec = rel != null && /^tests\/specs\/[^/]+\.spec\.js$/.test(rel);
+    if (isSpec) specs++;
+    if (isSpec && !withTwinned && isTwinned(rel)) { dropped.push({ spec: rel, twin: TWINNED[rel] }); continue; }
+    keep.push(a);
+  }
+  return { args: keep, dropped, nothingToRun: specs > 0 && specs === dropped.length };
+}
 
 /** Every node test file the Pages gate runs UNCONDITIONALLY: the `npm run
  *  test:*` lines of ci.yml's pure-node job, resolved through tests/groups.json,

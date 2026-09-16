@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-capture.mjs, apex-eval.mjs), before/after frames, Playwright headless probes, flicker/shimmer/z-fighting while driving (a recorded driven clip via motion-capture.mjs), or a game-loop CPU profile / flame chart / GC spikes (profile-gameloop.mjs). Also the CAR STUDIO — show/render/check the car, a team livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated front/side/rear shots (carview.html, render-car.mjs) — and CAMERA SEMANTICS: switch or check camera modes, cockpit/chase/orbit/cinematic/roadside, frame a corner, camState/viewState, camera lag. For hook catalogs use agent-view; for a live canvas use mcp-probe; live version.json is deploy-research.
+description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-eval.mjs, apex-capture.mjs), before/after frames, flicker/shimmer/z-fighting clips (motion-capture), game-loop CPU profiles / flame charts / GC spikes (profile-gameloop), the CAR STUDIO (livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated shots via carview.html), or camera modes (cockpit/chase/orbit/cinematic/roadside, camState/viewState, framing a corner, camera lag).
 ---
 
 # Headless Playwright probing (parallel)

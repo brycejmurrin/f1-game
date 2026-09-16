@@ -1,6 +1,6 @@
 ---
 name: lighting-tuner
-description: Use when the user says night looks washed out/like day, dawn sun is too high, floodlights/lamps aren't firing, day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, or wants to validate Apex 26 lighting knobs via lightState, or pastes a window.LightPresets / LightEdits blob to bake into js/lighting/presets.js. Bloom as a GPU/shader defect → webgl-debug. Mirror a new knob across backends → ../../../docs/ARCHITECTURE.md §Cross-backend parity after the tune.
+description: Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing, the day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, validating lighting knobs via lightState, or baking a pasted window.LightPresets / LightEdits blob into js/lighting/presets.js. Bloom as a GPU/shader defect is webgl-debug.
 ---
 
 # Tune and validate scene lighting via __apex probes

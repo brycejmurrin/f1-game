@@ -38,14 +38,12 @@ running more than the change needs is slower feedback, not extra safety
 Session shape — eleven rules that control wall time and waiting:
 
 1. Fresh container: the SessionStart hook runs `npm install` and checks for
-   `chromium-headless-shell` (fallback `bash tools/env/cloud-agent-install.sh`).
-   Either missing reads as a total-red run: read the FIRST failure first.
+   `chromium-headless-shell` (fallback `bash tools/env/cloud-agent-install.sh`); either missing reads as a total-red run — read the FIRST failure first.
 2. Make ALL source edits first, then verify ONCE: tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.
-3. `npm run test:guards` (hook-enforced, every commit) is a CURATED 14-file
-   SUBSET of `test:tooling-fast` — not proof CI's "Structural guards" job
-   will be green; run `test:tooling-fast` before a push instead (incident: `docs/notes/PROCESS-SPEEDUP-2026-09-16.md` §1.1).
+3. `npm run test:guards` (hook-enforced, every commit) is a CURATED 14-file SUBSET of
+   `test:tooling-fast` — not proof CI's "Structural guards" job will be green; run `test:tooling-fast` before a push (incident: `docs/notes/PROCESS-SPEEDUP-2026-09-16.md` §1.1).
 4. Never block the foreground on a test run: background it (log in `artifacts/`).
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`.
    Anchor on `grep -E '= run (passed|failed|timedout|interrupted)'`, never a
@@ -64,12 +62,12 @@ Session shape — eleven rules that control wall time and waiting:
 9. Stopping is allowed: a pushed change that names its unverified groups
    beats an hour of SwiftShader. Never widen a tolerance to make a spec pass;
    a `waitForFunction` on a rendering page needs `{ polling: 100 }`.
-10. Never hand a subagent a browser run ("report it unverified"). Worktrees
-    default to a STALE base: first `git checkout -B <branch> <session SHA>`.
+10. Never hand a subagent a browser run ("report it unverified"). A worktree
+    starts STALE (unless `worktree.baseRef: "head"`): `git checkout -B <branch> <session SHA>` first.
 11. Never hand-edit a generated file (the edit hook blocks it): `index.html`'s
     `@gen-shell` blocks, `version.json`, `package.json`'s test scripts
     (source `tests/groups.json`), `tools/README.md` (source: `@doc` headers),
-    `js/roster.js`, `tools/carview.html`. Edit the SOURCE, run its generator.
+    `js/roster.js`, `tools/carview.html`. Edit the SOURCE, then `npm run gen` (`gen:check` names drift).
 
 ## Seeing the game (cheapest first)
 
@@ -122,8 +120,9 @@ what exists. Per-directory module tables: `docs/ARCHITECTURE.md`.
   `node tools/gen/gen-shell.mjs`.
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
 - `tests/data/ratchets.json` ratchets game.js and the other big modules at
-  their current values — pay for every added line (`node
-  tools/check/ratchets.mjs --update` lowers them after an extraction).
+  their current values — pay for every added line. The commit hook absorbs ≤ 40
+  lines of growth (raises, stages, prints — the raise is in your diff); more blocks
+  until you extract or raise it with a reason (`ratchets.mjs --update`; also lowers).
 - localStorage keys are prefixed `apex26.`. Logging goes through `Log`
   (`js/core/log.js`), never bare `console.*`.
 - Coordinates: +Y up, metres, radians, arc `s`, lateral `x` +right; +k = LEFT
@@ -191,7 +190,8 @@ Work happens on a `claude/<topic>` branch. The deploy branch is
 `claude/f1-game-project-26h3ng`: never push there without review; only it ships
 (https://brycejmurrin.github.io/f1-game/). Other sessions develop directly on
 it, so a deploy is a merge of THEIR work — re-measure on the merged tree, never
-force-push. `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
+force-push. Catch a branch up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
+merge (ratchets + generated files conflict; it cures both). `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
 `test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens a
 PR, `--plan` prints the union); it cures GENERATED-file conflicts, stops on any
 other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in

@@ -60,7 +60,7 @@ export const RULES = [
   // ── always ──────────────────────────────────────────────────────────────
   [/^(js|css)\//, ["tiny"], "any source edit: does the page still boot"],
   [/^(js|css|index\.html|version\.json)/, ["tooling-fast"],
-   "load order, docs integrity, api contracts — 4 s, catches the structural slips"],
+   "load order, docs integrity, api contracts — ~2 min at three files at a time, catches the structural slips"],
 
   // ── renderer ────────────────────────────────────────────────────────────
   // NOT "visual" — tests/manual/tracks-visual.spec.js is PARKED. It has no
