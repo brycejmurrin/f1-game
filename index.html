@@ -909,6 +909,7 @@
             <p id="pm-visual-tuners-help" class="adv-help">Start a race, then pause to preview lighting and camera changes on track.</p>
             <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
             <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
+            <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
           </details>
         </section>
         <section id="advanced" class="pm-group" role="region"
@@ -2456,6 +2457,52 @@
   </div>
 </div>
 
+<!-- flyby shot editor: authoring surface for the PRE-RACE LOADING SCREEN's camera
+     (js/camera/flyby-seq.js). Docked right like the other two tuners so the scene
+     behind it is the live preview — every edit re-solves the sequence through
+     __apex.flybyCam(u, editedShots) and parks the camera there, so the panel shows
+     the real solver rather than a second copy of it. Rows are generated in
+     js/camera/flyby-panel.js from its own pose-field registry; COPY VALUES emits
+     `window.FlybyShots = [...]` for tools/gen/bake-flyby.mjs. -->
+<div id="flyby" role="region" aria-label="Flyby shot editor" data-esc-close="fb-close" hidden>
+  <div id="flyby-inner" class="sheet">
+    <!-- #fb-rail mirrors #ct-rail: the wide-and-short RAIL layout in css/tuner.css
+         is a two-column grid whose child-placement rules need something to place.
+         `display: contents` at every other size. -->
+    <div id="fb-rail">
+      <div id="fb-head">
+        <h2>FLYBY SHOT EDITOR</h2>
+      </div>
+      <div id="fb-profile"></div>
+      <!-- The one readout that answers "is this shot any good": which shot the
+           scrub landed in, where the eye ended up, what lens — and whether the eye
+           is INSIDE solid scenery, which is the defect the sequencer exists to
+           prevent and the one thing a still frame cannot show you. -->
+      <div id="fb-status" aria-live="polite"></div>
+      <label class="tune-row" id="fb-scrub">
+        <span class="tune-label">SCRUB <b id="fb-u-val">0.000</b></span>
+        <input id="fb-u" type="range" min="0" max="1000" step="1" value="0" aria-label="Scrub through the whole flyby">
+      </label>
+      <div id="fb-shots" class="lt-tabs balanced-row" role="tablist" aria-label="Flyby shots"></div>
+      <div id="fb-ops" class="balanced-row" aria-label="Shot list operations">
+        <button type="button" id="fb-add" title="Insert a new shot after the selected one">ADD</button>
+        <button type="button" id="fb-dup" title="Duplicate the selected shot">DUPE</button>
+        <button type="button" id="fb-del" title="Delete the selected shot. The list may never be emptied — the solver falls back to the shipped default when it is handed none.">DEL</button>
+        <button type="button" id="fb-up" title="Move the selected shot earlier">&lsaquo; UP</button>
+        <button type="button" id="fb-down" title="Move the selected shot later">DOWN &rsaquo;</button>
+        <button type="button" id="fb-norm" title="Rescale every duration so they sum to 1. Changes no framing — the solver already normalises — but makes the copied numbers mean what they look like.">NORM</button>
+      </div>
+    </div>
+    <div id="fb-rows" class="pane" role="tabpanel"></div>
+    <textarea id="fb-json" readonly hidden aria-label="Exported flyby shot list"></textarea>
+    <div class="sheet-foot balanced-row">
+      <button id="fb-reset" title="Throw away every edit and reload the shipped DEFAULT shot list from js/camera/flyby-seq.js.">RESET</button>
+      <button id="fb-copy">COPY VALUES</button>
+      <button id="fb-close" class="bigbtn">DONE</button>
+    </div>
+  </div>
+</div>
+
 <!-- photo mode: on-screen fly-cam controls (shown while FREE CAMERA is on).
      Desktop uses WASD / R-F / arrows / drag; touch uses the two thumbsticks
      + the up/down buttons. Container is click-through; only the controls grab
@@ -2674,6 +2721,7 @@
 <script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/flyby-panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-ui.js?v=dev"></script>
