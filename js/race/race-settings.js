@@ -9,6 +9,18 @@ const RaceSettings = (function () {
   const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]];
   const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
   const RS_ONOFF = [["off", "OFF"], ["on", "ON"]];
+  /* DUEL is OFF / ON / a named legend — one control rather than a second row.
+   * ON keeps the original meaning (the fastest car on the grid, bumped); a
+   * legend replaces that rival's driver with his own five axes
+   * (js/race/duel.js asLegend). Built lazily because js/data/legends.js is a
+   * roster file this module must not hard-require: with it absent the row
+   * degrades to the OFF/ON it always was. */
+  function duelOpts() {
+    if (typeof Legends === "undefined" || !Legends.LIST) return RS_ONOFF.slice();
+    return RS_ONOFF.concat(Legends.LIST.map((l) => [l.id, l.name.toUpperCase()]));
+  }
+  const duelValue = (getDuel, getDuelLegend) =>
+    !getDuel() ? "off" : ((getDuelLegend && getDuelLegend()) || "on");
   const RS_RELIAB = [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]];
   // TYRE WEAR (js/physics/tyre-model.js). Same three-rung shape as RELIABILITY
   // and for the same reason — OFF is the shipped default, and the middle rung
@@ -29,7 +41,7 @@ const RaceSettings = (function () {
       getRaceTimeOfDay, setRaceTimeOfDay, getRaceChangeable, setRaceChangeable,
       setWxArcPlan, getDifficulty, setDifficulty,
       getRaceGrid, setRaceGrid, getRaceReliability, setRaceReliability,
-      getRaceTyreWear, setRaceTyreWear, getDuel, setDuel, getPits,
+      getRaceTyreWear, setRaceTyreWear, getDuel, setDuel, getDuelLegend, setDuelLegend, getPits,
       getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace,
       enableTilt, getSteerMode, getNetLobby, buildSelect, els, openGarage,
     } = hooks;
@@ -64,7 +76,7 @@ const RaceSettings = (function () {
       // has no field at all) and in a championship, where the classification
       // feeds points and standings — a 2-car GP would score a season.
       $("rs-duel").hidden = tt || champ;
-      SettingRow.paint("rs-duel", getDuel() ? "on" : "off", RS_ONOFF);
+      SettingRow.paint("rs-duel", duelValue(getDuel, getDuelLegend), duelOpts());
       $("rs-quali").hidden = tt;
       const qForced = champ ? SeasonCal.quali() : null;
       const rules = qForced ? [["quali", "QUALIFYING"]]
@@ -137,7 +149,10 @@ const RaceSettings = (function () {
       wire("rs-reliab", getRaceReliability, (v) => { setRaceReliability(v); store.set("reliability", v); });
       wire("rs-tyres", getRaceTyreWear, (v) => setRaceTyreWear(v));
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
-      wire("rs-duel", () => (getDuel() ? "on" : "off"), (v) => setDuel(v === "on"));
+      wire("rs-duel", () => duelValue(getDuel, getDuelLegend), (v) => {
+        setDuel(v !== "off");
+        if (setDuelLegend) setDuelLegend(v === "off" || v === "on" ? "" : v);
+      });
       wire("rs-plan", () => { const p = getPits && getPits(); const v = p ? p.pinnedStops() : null; return v == null ? "auto" : String(v); },
            (v) => { const p = getPits && getPits(); if (p) p.setPinnedStops(v === "auto" ? null : +v); });
     }
@@ -212,6 +227,9 @@ const RaceSettings = (function () {
     };
   }
 
-  return { create };
+  /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
+   * tested without a DOM: the inert VM DOM does not build SettingRow children,
+   * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
+  return { create, duelOpts, duelValue };
 })();
 Object.freeze(RaceSettings);

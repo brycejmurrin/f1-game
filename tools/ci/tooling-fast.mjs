@@ -203,6 +203,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/nightly-group.test.mjs",
   "tests/unit/twin-fidelity.test.mjs",
   "tests/unit/legends.test.mjs",
+  // The duel format's two behaviours (js/race/duel.js): the bump lifts
+  // racecraft harder than pace, and asLegend hands over the legend's OWN
+  // axes rather than bumping whoever was fastest. Pure module load, ~0.1 s.
+  "tests/unit/duel.test.mjs",
+  // …and the DUEL ROW that reaches it: one control carrying OFF / ON / a
+  // named legend has to round-trip through two setters, and the inert VM DOM
+  // builds no SettingRow children, so painting the row would assert nothing.
+  "tests/unit/duel-row.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,

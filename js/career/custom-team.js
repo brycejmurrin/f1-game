@@ -160,11 +160,18 @@ const CustomTeam = (function () {
       }
     }
 
+    /* The period parts APPLY staged for the next SAVE, or null. Held rather
+     * than written straight through because APPLY only fills the dialog: a
+     * player who then hits CANCEL must get their own car back, and parts.custom
+     * is a real garage sheet, not a preview. */
+    let czLegendParts = null;
+
     function czApplyLegend() {
       const sel = $("cz-legend");
       if (!sel || typeof Legends === "undefined") return;
       const t = Legends.team(sel.value);
       if (!t) return;
+      czLegendParts = Legends.parts(sel.value);
       $("cz-name").value = t.name;
       $("cz-short").value = t.short;
       $("cz-color").value = rgbToHex(t.color);
@@ -179,6 +186,7 @@ const CustomTeam = (function () {
     }
 
     function openCustomize() {
+      czLegendParts = null;      // a fresh visit stages nothing
       const ct = loadCustomTeam();
       $("cz-name").value = ct.name;
       $("cz-short").value = ct.short;
@@ -236,6 +244,13 @@ const CustomTeam = (function () {
         };
         ct.livery = czLivFromDialog();
         store.set("customTeam", ct);
+        // The period car. Written only on SAVE, and only when APPLY staged one,
+        // so a player who builds their own team keeps the sheet they fitted.
+        if (czLegendParts) {
+          store.set("parts.custom", czLegendParts);
+          invalidateCustomMeshCaches();
+          czLegendParts = null;
+        }
         syncCustomTeam();
         setTeamIdx(customTeamIndex());
         setDriverIdx(0);

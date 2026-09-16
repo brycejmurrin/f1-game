@@ -7,14 +7,15 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import fs from "node:fs";
 
-function load(files) {
-  const ctx = vm.createContext({ console, Object });
+function load(files, extra = {}) {
+  const ctx = vm.createContext(Object.assign({ console, Object, Math }, extra));
   for (const f of files) vm.runInContext(fs.readFileSync(new URL(`../../${f}`, import.meta.url), "utf8"), ctx, { filename: f });
   return (name) => vm.runInContext(name, ctx);
 }
 // mat4.js first: legends.js aliases M4.clamp at eval, the same way
 // js/data/driver-ratings.js does.
 const get = load(["js/core/mat4.js", "js/data/legends.js"]);
+const Parts = load(["js/core/mat4.js", "js/car/parts.js"], { Log: { info() {}, warn() {}, error() {} } })("Parts");
 const Legends = get("Legends");
 const Teams = load(["js/core/mat4.js", "js/data/teams.js"])("Teams");
 
@@ -25,7 +26,13 @@ test("every legend's record is internally consistent", () => {
     assert.ok(r.wins <= r.podiums, `${l.id}: ${r.wins} wins cannot exceed ${r.podiums} podiums`);
     assert.ok(r.podiums <= r.starts, `${l.id}: podiums cannot exceed starts`);
     assert.ok(r.poles <= r.starts, `${l.id}: poles cannot exceed starts`);
-    assert.ok(r.titles >= 1, `${l.id}: a legend without a title needs a different table`);
+    // A legend has a TITLE or a written reason it belongs without one. Moss is
+    // the case this exists for, and the point is that a zero cannot be silent:
+    // it has to be argued in the data, where a reader sees it.
+    if (r.titles < 1) {
+      assert.ok(l.noTitle && l.noTitle.length > 30,
+        `${l.id}: no title and no noTitle reason — say why the roster keeps him`);
+    }
     assert.ok(l.trait && l.trait.length > 20, `${l.id}: needs a trait line`);
     assert.ok(/^\d{4}–\d{4}$/.test(l.years), `${l.id}: years must read 1991–2012`);
   }
@@ -141,4 +148,86 @@ test("no two tributes read as the same car", () => {
         "they read as the same car. Render them side by side before arguing with this.");
     }
   }
+});
+
+// ── PERIOD CAR SHAPES ────────────────────────────────────────────────────────
+// The era table names option ids in another file's catalog, so the failure mode
+// is a silent one: a typo resolves to the DEFAULT part and the legend quietly
+// drives a 2026 car. These check the join, and that the eras stay era-shaped.
+
+const CUSTOM = { id: "custom", custom: true, engine: "Custom" };
+const catOf = (id) => Parts.CATALOG.find((c) => c.id === id);
+
+test("every legend names an era, and every era is in the table", () => {
+  for (const l of Legends.LIST) {
+    assert.ok(l.era, `${l.id}: no era`);
+    assert.ok(Legends.PERIOD[l.era], `${l.id}: era "${l.era}" is not in PERIOD`);
+    assert.ok(Legends.parts(l.id), `${l.id}: parts() returned nothing`);
+  }
+  const used = new Set(Legends.LIST.map((l) => l.era));
+  for (const era of Object.keys(Legends.PERIOD)) {
+    assert.ok(used.has(era), `PERIOD.${era} is dead — no legend uses it`);
+  }
+});
+
+test("every era covers every category with an option that exists", () => {
+  for (const [era, setup] of Object.entries(Legends.PERIOD)) {
+    for (const cat of Parts.CATALOG) {
+      const want = setup[cat.id];
+      assert.ok(want, `${era}: no ${cat.id} — it would fall back to the 2026 default`);
+      assert.ok(cat.options.some((o) => o.id === want),
+        `${era}: ${cat.id} "${want}" is not in the catalog`);
+    }
+    for (const k of Object.keys(setup)) {
+      assert.ok(catOf(k), `${era}: "${k}" is not a parts category`);
+    }
+  }
+});
+
+test("every era fits the garage budget — parts.custom IS the player's sheet", () => {
+  for (const [era, setup] of Object.entries(Legends.PERIOD)) {
+    const cost = Parts.getCost(setup, CUSTOM);
+    assert.ok(cost <= Parts.BUDGET,
+      `${era}: ${cost} cr over the ${Parts.BUDGET} budget — the garage would refuse every new fit`);
+  }
+});
+
+test("the eras are actually different cars, and the wingless ones stay wingless", () => {
+  const order = Object.keys(Legends.PERIOD);
+  const lvl = (e) => Parts.resolveSetup(Legends.PERIOD[e], CUSTOM).visual.aero.lvl;
+  // NOT monotonic, and deliberately so: the 1994 rule cut and the 1998 narrow
+  // track really did take wing off the cars (active92 3.25 > narrow98 3). The
+  // claim that holds is the one that dates a car — wings arrived in 1968.
+  for (const e of order) {
+    const pre = Legends.ERA_YEAR[e] < 1968;
+    assert.equal(lvl(e) === 0, pre,
+      `${e} (${Legends.ERA_YEAR[e]}) has ${lvl(e)} wing — wings arrived in 1968`);
+  }
+  assert.deepEqual(Object.keys(Legends.ERA_YEAR).sort(), order.slice().sort(),
+    "ERA_YEAR and PERIOD name different eras");
+  const years = order.map((e) => Legends.ERA_YEAR[e]);
+  assert.deepEqual(years, years.slice().sort((a, b) => a - b), "the table is out of chronological order");
+  // Not one shared setup with a paint change: no two eras may be identical.
+  const keys = order.map((e) => Parts.CATALOG.map((c) => Legends.PERIOD[e][c.id]).join("|"));
+  assert.equal(new Set(keys).size, keys.length, "two eras resolve to the same car");
+});
+
+test("no legend gets a halo — every one of them raced before 2018", () => {
+  for (const l of Legends.LIST) {
+    const v = Parts.resolveSetup(Legends.parts(l.id), CUSTOM).visual;
+    assert.ok(!v.cockpit.halo, `${l.id} (${l.era}): a halo on a pre-2018 car`);
+    // The CAR's year, not the driver's last season: Vettel raced to 2022, but
+    // his car here is the 2013 RB9. ERA_YEAR exists for exactly this gap.
+    const year = Legends.ERA_YEAR[l.era];
+    assert.ok(year < 2018, `${l.id}: ${l.era} is ${year} — the halo claim needs revisiting`);
+    assert.ok(year >= +l.years.split("\u2013")[0] && year <= +l.years.split("\u2013")[1],
+      `${l.id}: ${l.era} is ${year}, outside his ${l.years} career`);
+  }
+});
+
+test("parts() hands back a copy, so a caller cannot edit the table", () => {
+  const a = Legends.parts("fangio");
+  a.aero = "extreme";
+  assert.equal(Legends.parts("fangio").aero, "minimal");
+  assert.equal(Legends.parts("nobody"), null);
 });

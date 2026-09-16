@@ -255,6 +255,33 @@ test("the LEGEND picker fills the team from js/data/legends.js and leaves it edi
   expect(seen.code2).toBe("CLK");
   expect(seen.repainted).toBe(true);
   expect(seen.short).toBe("MINE");
+  // SAVE fitted Clark's period car (the second APPLY): a wingless 1962 Lotus,
+  // not the 2026 default. `aero` is the assertion because it is the one field
+  // a player sees from across the garage — lvl 0 means no wings at all.
+  const fitted = await page.evaluate(() => GameStore.store.get("parts.custom", {}));
+  expect(fitted.aero).toBe("minimal");
+  expect(fitted).toEqual(await page.evaluate(() => Legends.parts("clark")));
+});
+
+test("CANCEL after APPLY leaves the player's own car on the sheet", async ({ page }) => {
+  // APPLY only fills the dialog. parts.custom is a REAL garage sheet, not a
+  // preview, so a staged period car must not reach it until SAVE — otherwise
+  // browsing the picker silently rebuilds the car you already built.
+  test.setTimeout(240_000);
+  await toMenu(page);
+  await page.evaluate(() => GameStore.store.set("parts.custom", { aero: "extreme" }));
+  await pinFreePlay(page, { click: false });
+  await page.locator("#mb-race").click();
+  await page.locator("#sel-car").click();
+  await page.locator("#carsetup").waitFor({ state: "visible" });
+  await page.locator('#cs-tabs [data-cs-cat="team"]').click();
+  await page.locator("#cs-customize").click();
+  await page.locator("#customize").waitFor({ state: "visible" });
+  await page.selectOption("#cz-legend", "fangio");
+  await page.locator("#cz-legend-apply").click();
+  await page.locator("#cz-cancel").click();
+  await page.locator("#customize").waitFor({ state: "hidden" });
+  expect(await page.evaluate(() => GameStore.store.get("parts.custom", {}).aero)).toBe("extreme");
 });
 
 test("custom livery actions are independent keyboard buttons", async ({ page }) => {
