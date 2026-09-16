@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Audits the baked racing line on real circuits: lateral slope, clamp time, corner-time gain, corners tighter than road.
+ * @doc Audits the baked racing line on real circuits: slope, clamp time, corner-time / lap-time gains, tighter corners.
  * @skill agent-view
  * line-audit.mjs — is the baked racing line any good, on the circuits we ship?
  *
@@ -20,6 +20,14 @@
  *               the LINE's. This is the number that showed the pre-relaxation
  *               line was 5-14 % SLOWER than the centreline while pathK's
  *               synthetic arc hid it.
+ *   lapTime     the same, under a brake / accel budget (the display's own
+ *               forward/backward sweep). cornerTime is grip-limited at every
+ *               node, so a line that straightens a corner's EXIT — where the
+ *               car is traction-limited and the throttle opens earlier —
+ *               reads as no gain there; this sees it (2026-09-16: the exact
+ *               curvature bake is 1.5-4 % better by cornerTime and 7-14 % by
+ *               lapTime, and on the street circuits only the latter is
+ *               positive).
  *   tighter     corners whose peak |line curvature| exceeds the road's — over
  *               the corner's own CORE (±len/2 about the apex), on a 5-node
  *               mean. Both qualifiers are load-bearing. lineCorners' s0..s1
@@ -48,16 +56,10 @@ const { buildContext } = require(path.join(ROOT, "tools/track/verify-track.cjs")
 
 const LAT_MAX = 22, VMAX = 72, MARGIN = 1.2;   // js/physics/consts.js, js/track/core/line.js
 
-/** The line's own curvature: the road's, corrected for the offset, minus the
- *  offset's second derivative — the same expression the bake minimises. */
+/** The line's own curvature — TrackLine's exact offset-curve expression, the
+ *  one the bake minimises, so the audit cannot drift from it. */
 function lineCurvature(track) {
-  const n = track.n, ds = track.total / n, x = track.line, k = track.curv;
-  const out = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    const a = (i - 1 + n) % n, b = (i + 1) % n;
-    out[i] = k[i] / (1 + k[i] * x[i]) - (x[a] - 2 * x[i] + x[b]) / (ds * ds);
-  }
-  return out;
+  return Tracks._vmContext.TrackLine.lineCurvature(track);
 }
 
 /** A 5-node (20 m) mean: one node's second difference is not a corner. */
@@ -73,12 +75,33 @@ const cornerTime = (k, n, ds) => {
   return t;
 };
 
+/** Lap time under a brake / accel budget — the forward/backward sweep the
+ *  DRIVING LINE display already runs (js/render/shared/driving-line.js: the
+ *  cornering cap, a backward pass under BRAKE·0.85, a forward pass under
+ *  ACCEL, twice). cornerTime above is grip-limited everywhere and so cannot
+ *  see what a line does at a corner's EXIT, where the car is traction-limited
+ *  and a straighter path lets the throttle open earlier (Kapania et al. 2016,
+ *  the velocity-profile half of the sequential two-step). Same constants on
+ *  both sides of every comparison; relative use only. */
+const BRAKE = 22 * 0.85, ACCEL = 7;
+function lapTime(k, n, ds) {
+  const v = new Float64Array(n);
+  for (let i = 0; i < n; i++) v[i] = Math.min(VMAX, Math.sqrt(LAT_MAX / Math.max(Math.abs(k[i]), 1e-5)));
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = n - 1; i >= 0; i--) { const nx = (i + 1) % n; v[i] = Math.min(v[i], Math.sqrt(v[nx] * v[nx] + 2 * BRAKE * ds)); }
+    for (let i = 0; i < n; i++) { const pv = (i - 1 + n) % n; v[i] = Math.min(v[i], Math.sqrt(v[pv] * v[pv] + 2 * ACCEL * ds)); }
+  }
+  let t = 0;
+  for (let i = 0; i < n; i++) t += ds / v[i];
+  return t;
+}
+
 const Tracks = buildContext();
 const ids = process.argv.slice(2).filter((a) => !a.startsWith("-"));
 const want = ids.length ? ids : ["monza", "spa", "silverstone", "monaco", "suzuka"];
 
 let worst = 0;
-console.log("circuit        len   corners  maxSlope        steep>0.2  onClamp  cornerTime road→line   tighter");
+console.log("circuit        len   corners  maxSlope        steep>0.2  onClamp  cornerTime road→line      lapTime road→line       tighter");
 for (const id of want) {
   const def = Tracks.LIST.find((d) => d.id === id);
   if (!def) { console.log(`${id}: no such circuit`); continue; }
@@ -93,6 +116,7 @@ for (const id of want) {
   }
   const kLine = lineCurvature(t);
   const tRoad = cornerTime(t.curv, n, ds), tLine = cornerTime(kLine, n, ds);
+  const lRoad = lapTime(t.curv, n, ds), lLine = lapTime(kLine, n, ds);
   // A corner whose LINE is tighter than the ROAD *at its apex* is a bake that
   // made things worse. Measured over the core, not the padded window — see the
   // header for why the window version reads a neighbour's turn-in.
@@ -110,6 +134,7 @@ for (const id of want) {
     `   ${maxSlope.toFixed(2)} @ ${String(Math.round(maxAt)).padStart(4)} m` +
     `   ${(100 * steep / n).toFixed(1).padStart(6)}%  ${(100 * onClamp / n).toFixed(0).padStart(5)}%` +
     `   ${tRoad.toFixed(1)} → ${tLine.toFixed(1)} s (${(100 * (1 - tLine / tRoad) >= 0 ? "+" : "")}${(100 * (1 - tLine / tRoad)).toFixed(2)}%)` +
+    `   ${lRoad.toFixed(1)} → ${lLine.toFixed(1)} s (${(100 * (1 - lLine / lRoad) >= 0 ? "+" : "")}${(100 * (1 - lLine / lRoad)).toFixed(2)}%)` +
     `   ${String(tighter).padStart(4)}/${(t.lineCorners || []).length}` +
     (tighter ? `  (worst ${worstRatio.toFixed(2)}× @ ${worstAt} m)` : ""));
 }

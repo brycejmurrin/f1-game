@@ -140,7 +140,9 @@ const ALLOWED = [
   },
   {
     file: "js/game.js", expr: "c.speed < 4",
-    code: "const stuck = beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;",
+    code: "(beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack);",
+    // Re-keyed 2026-09-16: the conjunction is gated on "not serving a stop"
+    // on the line above (a car held in its box is parked, not stuck).
     // Its sibling on the very next line, `beached`, IS pace-scaled
     // (GRASS_V * 0.6 * max(PACE, 0.05) + 1.5) — because that one must clear the
     // grass-drag FLOOR, which is pace-scaled. This one must clear a standstill,
@@ -149,7 +151,9 @@ const ALLOWED = [
   },
   {
     file: "js/game.js", expr: "c.speed < 5",
-    code: "(c.speed < 5 && raceT > 2 && !unstuckActive);",
+    code: "(c.speed < 5 && raceT > 2 && !unstuckActive && !(queued && pits.inLane(c))));",
+    // Re-keyed 2026-09-16: a car QUEUED in the pit lane behind a stop is held by
+    // a car, not stuck (rescuing it fired it into the parked car ahead).
     // The `(c.contactT || 0) === 0` clause that used to sit in this conjunction
     // was a VETO: an AI wedged against another car — the commonest way to be
     // genuinely stuck — was the one case that could never be rescued, so the
