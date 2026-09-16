@@ -37,9 +37,10 @@ const SOURCES = FILES.map((f) => [f, fs.readFileSync(path.join(ROOT, f), "utf8")
 
 
 export function bootGlx(opts = {}) {
-  const calls = [];
+  const calls = opts.calls || [];
   const enums = Object.create(null);
   let locSeq = 0;
+  let shaderSeq = 0;
   let contextLost = false;
   const enumOf = (k) => {
     if (!(k in enums)) enums[k] = 1 << (Object.keys(enums).length % 30);
@@ -59,15 +60,19 @@ export function bootGlx(opts = {}) {
     getParameter: () => 16,
     // Desktop-class MSAA support, so glx/post.js takes its multisampled path.
     getInternalformatParameter: () => new Int32Array([4]),
-    getShaderParameter: () => true,
-    getProgramParameter: () => true,
-    getShaderInfoLog: () => "",
+    getShaderParameter: (sh) => !(opts.shaderFailure && sh.id === 1),
+    getProgramParameter: (p) => !(opts.shaderFailure && p.shaders.some((sh) => sh.id === 1)),
+    getShaderInfoLog: () => opts.shaderFailure ? "invalid shader" : "",
     getProgramInfoLog: () => "",
+    getAttachedShaders: (p) => p.shaders,
+    getShaderSource: (sh) => sh.source,
+    shaderSource: (sh, source) => { sh.source = source; },
+    attachShader: (p, sh) => { p.shaders.push(sh); },
     getUniformLocation: (_p, name) => ({ name, id: ++locSeq }),
     getAttribLocation: () => 0,
     getError: () => 0,
-    createShader: () => ({ shader: true }),
-    createProgram: () => ({ program: true }),
+    createShader: () => ({ shader: true, id: ++shaderSeq }),
+    createProgram: () => ({ program: true, shaders: [] }),
     createBuffer: () => ({ buffer: ++locSeq }),
     createTexture: () => ({ texture: ++locSeq }),
     createVertexArray: () => ({ vao: ++locSeq }),

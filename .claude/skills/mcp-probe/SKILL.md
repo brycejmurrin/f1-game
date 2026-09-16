@@ -52,11 +52,18 @@ vs playwright-official).
    then `chrome-stop`, then check CPU; see [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
 2. **github.io is unreachable from any container browser or curl** (egress
    proxy) — `deploy-research` with the host fetch tool is the only path.
+   Measured 2026-09-15: `chrome-devtools` navigating to ANY external HTTPS
+   (not just github.io — plain `https://example.com` too) fails
+   `net::ERR_CERT_AUTHORITY_INVALID`, since Chrome here does not trust the
+   proxy's CA. That error is the signature of "wrong tool for this URL," not a
+   flag or config bug — route to `deploy-research` instead of chasing it.
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
 4. SwiftShader WebGPU **executes** — visible WGX pixels come from the soft-present
-   2D blit on `#game` (`gfx-probe.mjs` / `GLX.awaitSoftPresent()`), not from the
-   hidden swapchain canvas. HeadlessChrome GLX (and TLX-WebGPU) hide `#game` and
-   blit onto `#game-soft` — `awaitSoftPresent()` then capture that overlay, never
+   2D blit on `#game` (`gfx-probe.mjs` / `GLX.awaitSoftPresent()`, or from a live
+   `chrome_*` session `await __apex.awaitPresent()` — same wait, no need to know
+   `GLX` is a bare global), not from the hidden swapchain canvas. HeadlessChrome
+   GLX (and TLX-WebGPU) hide `#game` and blit onto `#game-soft` —
+   `awaitSoftPresent()`/`awaitPresent()` then capture that overlay, never
    `locator("#game").screenshot()`. Primary probe:
    `node tools/gfx/gfx-probe.mjs --backend webgpu <track>` (aliases
    `wgx-capture.mjs` / `wgx-lavapipe-probe.mjs` forward here — prefer the parent).

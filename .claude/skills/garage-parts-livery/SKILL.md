@@ -26,6 +26,12 @@ cover/draft lockstep, paint-sheet rules) → [references/livery-fields.md](refer
 - Pure driving feel → **tune-physics**. Career economy with no parts edit →
   **career-mode**. Isolated car shots → **playwright-probe** (`references/car-studio.md`). Cache bump →
   `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md): `?v=dev`, no bump).
+- A live, driven-by-hand look at the Garage/LIVERY screen (as opposed to a
+  batch `garage-angles.mjs` run) → **mcp-probe** against the local server,
+  clicking category tabs / livery swatches directly — see
+  `.claude/skills/mcp-probe/references/recipes.md` § "Driving a UI screen" and
+  `references/traps-chrome.md` for the click-timeout and soft-present-wait
+  gotchas specific to that screen.
 
 ## Quick Reference
 

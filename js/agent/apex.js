@@ -36,7 +36,17 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "kerbSndT", "kerbHapT",
   // 2026-09-15: five the guard had been red on. The last three need a STREET
   // circuit with real contact to appear — sweep tracks, not just monza.
-  "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI"];
+  "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI",
+  // 2026-09-15 (second pass): the tyre-force model (js/physics/tyre-model.js)
+  // and the smoothed control-demand fields (game.js "--- lateral ---") joined
+  // the sim after this list was last extended, every one already read with a
+  // `|| 0` / Number.isFinite fallback for the cold-car case (tyre-model.js's
+  // telemetry getter, collide.js's pre-collision speed read, and this file's
+  // own tyres() hook) — undefined was always a tolerated input, just never
+  // actually reached because nothing cleared it between episodes.
+  "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
+  "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
+  "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
 // off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
 function apiHook(base, path, fix) {
@@ -2610,6 +2620,19 @@ const api = {
   // APPROXIMATE — for intuition and debugging; read geometry from world()/
   // scene()/trackInfo(). The result carries an `aid` note saying so.
   render(opts) { return agentView.render(opts); },
+
+  // awaitPresent(timeoutMs)? — wait for the next composited frame before a
+  // screenshot tool reads the canvas. HeadlessChrome hides the raw WebGL/
+  // WebGPU canvas and blits the real frame onto an overlay ON DEMAND (GLX,
+  // TLX and WGX each implement awaitSoftPresent/softPresent under the same
+  // names — game.js copies the bound backend's descriptors onto GLX, so this
+  // one call is right whichever backend is active). Exists so a capture tool
+  // never has to know GLX is a bare lexical global, not window.GLX. A no-op
+  // outside HeadlessChrome, where the canvas composites for real.
+  async awaitPresent(timeoutMs) {
+    if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) return null;
+    return GLX.awaitSoftPresent(timeoutMs);
+  },
 
   // carView({team, parts}?) — the car as JSON: team identity, livery colours,
   // the full parts spec and its stat effects, the per-team chassis silhouette
