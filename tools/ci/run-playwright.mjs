@@ -4,7 +4,7 @@
 // @section runner
 // commands can run concurrently without sharing a web server or artifact paths.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, createReadStream, mkdirSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
@@ -68,12 +68,71 @@ function startStaticServer() {
 // APEX_WITH_TWINNED=1): tools/ci/twinned-specs.mjs partitionArgs, the local
 // half of the substitution the selected gate has made since the twins landed.
 const { args, dropped, nothingToRun } = partitionArgs(process.argv.slice(2));
-for (const d of dropped) console.error(`[playwright] COVERED BY VM TWIN: ${d.spec} → ${d.twin} (npm run test:game-vm; --with-twinned runs it here anyway)`);
-if (nothingToRun) {
-  // The reporter's terminal line, so test-bg / verify-change read this as a pass.
-  console.error(`[playwright] every spec named is covered by a VM twin — nothing to run in a browser`);
-  console.error(`= run passed  (0/0 done, 0 failed)`);
-  process.exit(0);
+for (const d of dropped) console.error(`[playwright] COVERED BY VM TWIN: ${d.spec} → ${d.twin}`);
+
+// THE TWIN RUNS HERE, IN NODE. The first cut merely NAMED it and skipped it,
+// and for a fully twinned group that printed `= run passed  (0/0 done, 0 failed)` —
+// the exact line AGENTS.md rule 5 tells every agent and every tool to anchor
+// on — for a run that had executed nothing at all. `collisions` is 32/32
+// twinned, so `node tools/ci/test-bg.mjs collisions` reported a green gate
+// while testing zero lines of the contact solver, and the twins are in
+// test:game-vm rather than test:tooling-fast, so the cheap local gate did not
+// cover them either. Both local gates said yes and neither had looked.
+//
+// Nothing was WRONG with the substitution: twinned-specs.verify() proves every
+// twin sits in a group the Pages gate runs unconditionally, so CI never lost
+// the coverage. What was wrong was the LOCAL verdict line, which claimed a
+// pass it had not earned. So run the twins rather than name them: it is the
+// same assertions in seconds instead of SwiftShader minutes, which is the
+// trade the substitution was already making — just completed, so the group
+// command means "these assertions ran" again.
+//
+// They go FIRST and they fail fast: a red twin ends the run before a browser
+// starts, because paying 10-40 minutes of SwiftShader to confirm a failure
+// node found in one second is the worst trade this repository can make.
+if (dropped.length && !args.includes("--list")) {
+  const twins = [...new Set(dropped.map((d) => d.twin))];
+  console.error(`[playwright] running ${twins.length} VM twin(s) in node — same assertions, no browser`);
+  // TAP by name, and NODE_TEST_CONTEXT out of the environment. Both are for
+  // the nested case: when this runner is itself spawned from inside a
+  // `node --test` process, node sees that variable and switches the CHILD to
+  // the v8-serialized reporter, so the `# pass` summary parsed below is simply
+  // absent — which is how the regression test for this block first failed, by
+  // reproducing the very 0/0 it exists to forbid.
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const r = spawnSync(process.execPath, ["--test", "--test-reporter=tap", ...twins],
+    { cwd: ROOT, encoding: "utf8", env });
+  process.stdout.write(r.stdout || "");
+  process.stderr.write(r.stderr || "");
+  const num = (re) => { const m = re.exec(r.stdout || ""); return m ? +m[1] : null; };
+  const failed = num(/^# fail (\d+)$/m), passed = num(/^# pass (\d+)$/m);
+  // A PASS MUST HAVE RUN SOMETHING. If the summary could not be read, the
+  // honest verdict is failure, not a zero-count green — an unparseable run and
+  // an empty one are indistinguishable from here, and the empty one is the bug
+  // this whole block exists to close.
+  if (passed === null || failed === null) {
+    console.error(`[playwright] could not read the twins' TAP summary — refusing to report a verdict for a run whose result is unknown`);
+    console.error(`= run failed  (0/0 done, 1 failed)  [VM twins: no TAP summary]`);
+    process.exit(1);
+  }
+  const ok = r.status === 0 && failed === 0 && passed > 0;
+  if (!ok) {
+    // A `= run failed` line, in the reporter's own shape, so every anchor that
+    // reads a Playwright group reads this one too — and it is LAST, because
+    // the browser half never starts.
+    console.error(`[playwright] VM twin(s) FAILED — not starting a browser`);
+    console.error(`= run failed  (${passed + failed}/${passed + failed} done, ${Math.max(failed, 1)} failed)  [VM twins, no browser]`);
+    process.exit(1);
+  }
+  if (nothingToRun) {
+    console.error(`= run passed  (${passed}/${passed} done, 0 failed)  [VM twins, no browser]`);
+    process.exit(0);
+  }
+  // Something is still left for a browser. Do NOT emit a verdict line here:
+  // the reporter's own is the group's, and two of them would let the parser's
+  // last-match-wins rule report the twins' result as the group's.
+  console.error(`[playwright] VM twin(s) passed (${passed}) — the browser half follows`);
 }
 
 const managed = process.env.APEX_PORT ? null : await startStaticServer();

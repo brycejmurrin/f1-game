@@ -239,6 +239,49 @@ const UiScale = (() => {
         try { store.rawSet("spatialUpscale", on ? "1" : "0"); } catch (_) { /* blocked */ }
       }
     }
+    // OCCLUSION CULLING — hardware depth queries skip scenery chunks that
+    // contribute no pixel (js/render/glx/chunked.js). Same raw key GLX reads at
+    // boot (apex26.occlusionCull "1"/"0"); OFF by default, because the saving
+    // is measured but the pass is young and a wrong answer is a hole in the
+    // world rather than a slow frame.
+    //
+    // GLX ONLY, and the row HIDES rather than greys where it cannot work: WGX
+    // and TLX answer supported:false by design (they declare the member so a
+    // descriptor-copied backend cannot fall through to GLX's own function), and
+    // a settings row that a player can move while nothing happens is a worse
+    // bug than an absent one. `supported` is null before the program has been
+    // built, which is not "no" — that case shows the row.
+    function occlusionSupported() {
+      const gfx = G.gfx;
+      if (!gfx || typeof gfx.occlusionStats !== "function") return false;
+      try { return gfx.occlusionStats().supported !== false; } catch (_) { return false; }
+    }
+    function occlusionOn() {
+      const gfx = G.gfx;
+      if (gfx && typeof gfx.occlusionStats === "function") {
+        try { return !!gfx.occlusionStats().on; } catch (_) { /* fall through to the key */ }
+      }
+      try { return store.raw("occlusionCull") === "1"; } catch (_) { return false; }
+    }
+    function applyOcclusion(on) {
+      const gfx = G.gfx;
+      try { store.rawSet("occlusionCull", on ? "1" : "0"); } catch (_) { /* blocked storage */ }
+      if (gfx && typeof gfx.occlusionCull === "function") gfx.occlusionCull(!!on);
+      const row = $("pm-occlusion"), note = $("pm-occlusion-note");
+      const show = occlusionSupported();
+      if (row) row.hidden = !show;
+      if (note) note.hidden = !show;
+    }
+    SettingRow.wire("pm-occlusion", {
+      values: SettingRow.labels(["off", "on"]),
+      read: () => (occlusionOn() ? "on" : "off"),
+      write: (v) => {
+        applyOcclusion(v === "on");
+        if (G.soundOn) GameAudio.uiSelect();
+      },
+    });
+    applyOcclusion(occlusionOn());
+
     SettingRow.wire("pm-upscale", {
       values: SettingRow.labels(["off", "on"]),
       read: () => (upscaleOn() ? "on" : "off"),
@@ -248,7 +291,8 @@ const UiScale = (() => {
       },
     });
 
-    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale, applyBtnOpacity, applyUpscale, upscaleOn };
+    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale, applyBtnOpacity, applyUpscale, upscaleOn,
+             applyOcclusion, occlusionOn, occlusionSupported };
   }
   return { create };
 })();
