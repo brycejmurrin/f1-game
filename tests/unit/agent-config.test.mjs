@@ -124,6 +124,25 @@ test("settings.json registers the hooks that enforce the rules, and each hook ex
     assert.match(read(`.claude/hooks/${hook}`), /allow-protected|APEX_SKIP_GUARDS/, `${hook} needs its escape hatch`);
 });
 
+test("the commit guard's docs-only fast path keeps its two exclusions", () => {
+  // A prose commit runs docs-integrity alone (1.1 s against ~25 s measured
+  // 2026-09-16) and, more to the point, never lets --auto-raise stage
+  // tests/data/ratchets.json into a commit that changed no code. Both
+  // exclusions are the whole safety of it: a GENERATED doc is prose whose
+  // source is code (generated-docs must still run), and `git commit -a` stages
+  // at commit time, so the staged list the hook reads is not what will be
+  // committed. AGENTS.md rule 3 states the rule this encodes.
+  const hook = read(".claude/hooks/bash-guard.sh");
+  assert.match(hook, /git diff --cached --name-only/, "the fast path must decide on the STAGED paths");
+  assert.match(hook, /\^\(docs\/\|\\\.claude\/skills\/\|\\\.claude\/agents\/\)\|\\\.md\$/,
+    "the docs-only path set is docs/, skills, agents and *.md — nothing wider");
+  for (const gen of ["tools/README.md", "docs/DEBUG-HOOKS.md", "docs/ARCHITECTURE.md", "docs/LIGHTING-TUNER-SLIDERS.md"])
+    assert.ok(hook.includes(gen), `${gen} is generated from code; it must fall through to the full guards`);
+  assert.match(hook, /--all/, "`git commit -a` stages at commit time: the fast path must not trust the index then");
+  assert.match(hook, /node --test tests\/unit\/docs-integrity\.test\.mjs/);
+  assert.match(read("AGENTS.md"), /docs-integrity/, "rule 3 must state the docs-only carve-out");
+});
+
 test("the Codex skill mirror is tracked symlinks and the repair script exists", () => {
   // The deploy branch tracks .agents/skills/<name> -> ../../.claude/skills/<name>
   // (agent-surface.test.mjs locksteps every dir); it must NOT be gitignored,
