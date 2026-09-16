@@ -2976,7 +2976,7 @@ test("GLX chunked road draws honor depth bias and back faces, then restore state
   assert.equal(h.count("polygonOffset"), 0, "ordinary scenery needs no depth bias");
 });
 
-test("the flyby shows under race settings only; the picker pre-builds it hidden once the pick settles", () => {
+test("the flyby plays on the pre-race loading screen only; the picker pre-builds it hidden once the pick settles", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const raceSettings = read("js/race/race-settings.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const menus = read("js/ui/select-screen.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -2992,10 +2992,17 @@ test("the flyby shows under race settings only; the picker pre-builds it hidden 
     "a circuit tile pre-builds after the settle delay, never on the tap itself");
   assert.match(game, /settle \? 1500 : 120/);
   // Under a menu that draws nothing the canvas is hidden — so neither a finished
-  // race's last frame nor the garage's car sits behind the title; race settings
-  // and the garage preview show it again. The gate runs before every early
-  // return, and a freshly built world still gets its warm-up frames hidden.
-  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| _rsEl\.hidden\);/);
+  // race's last frame nor the garage's car sits behind the title. Since
+  // 2026-09-16 RACE SETTINGS is no longer an exception: the warmed world is
+  // spent on the LOADING SCREEN's cinematic instead, between RACE! and the grid,
+  // so the settings rows are read against black rather than a moving world.
+  // The gate runs before every early return, and a freshly built world still
+  // gets its warm-up frames hidden.
+  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| !loadingScreen\.active\(\)\);/);
+  assert.match(raceSettings, /else if \(raceIntro\) raceIntro\(startRace\);/,
+    "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
+  assert.match(game, /function clearMenuScreens\(\) \{\s*loadingScreen\.stop\(\);/,
+    "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
   assert.match(game, /if \(state === "results"\) return;/,
     "results keeps the last race present — physics already stopped, re-drawing is unpaid");
