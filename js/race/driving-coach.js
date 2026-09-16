@@ -34,7 +34,8 @@ const DrivingCoach = (function () {
   // The practice goals as the picker names them, so the review can point at a
   // goal by the label the driver will actually look for. One list, two readers.
   const GOALS = Object.freeze([["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"],
-    ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"]]);
+    ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"],
+    ["start", "RACE START"]]);
   function create(G) {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
@@ -458,8 +459,13 @@ const DrivingCoach = (function () {
           braking: "Build speed before saving, then brake firmly and keep braking until the car stops. Coasting to a stop does not count.",
           trail: "Build speed before saving. Brake firmly, keep some brake on as the car turns in, then release it while the car is still turning.",
           slalom: "Make six direction changes while moving: the car must change direction, not just the stick. Stay on the track and avoid contact.",
-          launch: "Stop the car before saving, then launch to racing speed. Timed from your first throttle." };
-        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m" : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s" : s.toFixed(1) + "s";
+          launch: "Stop the car before saving, then launch to racing speed. Timed from your first throttle.",
+          start: "Set this on the grid before the lights. The run ends at the first corner and scores the places you gained off the line." };
+        // `start` is stored NEGATED so mastery's Math.min ranks more places
+        // higher (js/race/race-insights.js). The sign is undone here, once, at
+        // the only place a human reads the number.
+        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m" : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s"
+          : mode === "start" ? (-s >= 0 ? "+" : "") + (-s) + (Math.abs(s) === 1 ? " place" : " places") : s.toFixed(1) + "s";
         const last = summary.lastDrill, tries = insights.attempts(drillMode), clean = tries.filter(a => a.clean), saved = insights.mastery(drillMode);
         drillInfo.textContent = guide[drillMode]
           + (last && last.mode === drillMode ? " Last attempt: " + (last.clean ? "completed · " + last.text : "retry suggested · " + last.reason) + "." : "")
