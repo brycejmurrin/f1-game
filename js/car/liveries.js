@@ -528,7 +528,13 @@ const Liveries = (function () {
     if (ex) {
       for (const k of FIELDS) if (ex[k]) def[k] = ex[k];
     }
-    return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
+    // LEGEND TRIBUTES last, so they never displace a team's own specials at the
+    // top of the tab. Guarded on `typeof` rather than ordered by the manifest
+    // alone: liveries.js is reachable from tools that load a subset of the
+    // roster (the cockpit and crest sweeps build a car without js/data), and a
+    // missing Legends there must cost the picker its extras, never throw.
+    const legends = (typeof Legends !== "undefined" && Legends.liveries) ? Legends.liveries() : [];
+    return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL, legends);
   }
 
   return { UNIVERSAL, BY_TEAM, FIELDS, forTeam, migratePaint };

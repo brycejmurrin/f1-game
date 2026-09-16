@@ -13,12 +13,13 @@ const els = {
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
   tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"), plan: $("hud-plan"),
-  pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"),
+  pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"), workBtn: $("hud-work"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
   flag: $("hud-flag"), minimap: $("minimap"),
-  lights: $("lights"), announce: $("announce"), announceWho: $("announce-who"), announceText: $("announce-text"),
+  lights: $("lights"), announce: $("announce"), announceNum: $("announce-num"),
+  announceWho: $("announce-who"), announceText: $("announce-text"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
   lighting: $("lighting"), camtune: $("camtune"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
@@ -993,6 +994,9 @@ const isPractice = () => practiceMode || isTimeTrial();
 // and Quali already do to `cars` after makeCars(); the rival's stats come from
 // the deltas argument DriverRatings.get() already takes for career development.
 let duelMode = false;
+// WHICH legend the duel rival is, or "" for the ordinary fastest-car duel. A
+// race SETTING like duelMode itself, so it survives a restart the same way.
+let duelLegend = "";
 // The full field as it was before startRace() narrowed `cars` to the lone
 // qualifying car — Quali.simulate() needs every car to build a classification.
 let qualiField = null;
@@ -1121,20 +1125,26 @@ const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3,
 let _annPri = 0, _annQueue = null;
 // THE RADIO. A banner is a radio message: the WHO line names the channel it
 // came in on — race control for a penalty or a warning, the coach for a tip,
-// otherwise the driver's own pit-wall channel with their name and number, the
-// way a broadcast captions team radio — and the words sit under it in quotes.
+// otherwise the driver's own pit-wall channel under their name — the words sit
+// under it in quotes, and the car NUMBER sits on the plate beside both
+// (css/hud.css #announce-num), the way a broadcast captions team radio. The
+// number used to be the last token of the WHO line, in micro type at --dim: the
+// dimmest thing on a card that is always about that car. Every channel here is
+// addressed TO the player, so the one number serves all three.
 function radioWho(kind) {
-  const p = player, num = p && p.num != null ? " · " + p.num : "";
-  if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL" + num;
-  if (kind === "coach" || kind === "practice") return "COACH" + num;
+  if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL";
+  if (kind === "coach" || kind === "practice") return "COACH";
+  const p = player;
   const who = p && p.name ? String(p.name).split(" ").pop().toUpperCase() : (p && p.code) || "";
-  return (who ? who + " · " : "") + "RADIO" + num;
+  return (who ? who + " · " : "") + "RADIO";
 }
+const radioNum = () => (player && player.num != null ? String(player.num) : "");
 function showAnnounce(msg, dur, kind) {
   kind = kind || "race";
   _annPri = ANN_PRI[kind] || 2;
   els.announceText.textContent = msg;
   els.announceWho.textContent = radioWho(kind);
+  els.announceNum.textContent = radioNum();   // "" collapses the plate to the old 3px stripe
   els.announce.className = "";
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
@@ -1212,20 +1222,37 @@ function fmtTime(t) {
   const m = Math.floor(t / 60), s = t - m * 60;
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
 }
+// RETURNS WHETHER THE MESSAGE REACHED THE SCREEN — true shown, false dropped
+// or queued. It used to return nothing, and a caller that needs to know could
+// not: RaceEngineer marks a wear step CONSUMED as it speaks, on the promise
+// (its own comment) that "a threshold crossed while the banner was busy is
+// still waiting on the next tick rather than silently spent". That promise was
+// unkeepable while this told it nothing. Both early returns below are silent
+// drops, and the camera one is permanent — see the note on it.
 function announce(msg, dur, kind) {
   kind = kind || "race";
   const pri = ANN_PRI[kind] || 2;
   if (hudProfile !== "broadcast") {
     const camId = CAM_MODES[camMode].id;
     if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead") {
-      if (kind === "info" || kind === "coach") return;
+      // The cinematic cameras drop the two quiet channels so a film shot is not
+      // captioned. That is a LOOK choice, and it must not silence the engineer:
+      // every RaceEngineer line is "info", so before this returned a verdict a
+      // player who pressed the camera button stopped being told to BOX for the
+      // rest of the session — the call was consumed unseen and a wear step,
+      // once advanced, never re-crosses.
+      if (kind === "info" || kind === "coach") return false;
     }
   }
   if (announceT > 0 && pri <= _annPri) {
-    if (!_annQueue || pri > (_annQueue.pri || 0)) _annQueue = { msg, dur, kind, pri };
-    return;
+    // The queue is a single slot. Taking it means the line still gets its turn,
+    // so that counts as accepted; losing it to a higher priority means the line
+    // is gone and the caller has to offer it again.
+    if (!_annQueue || pri > (_annQueue.pri || 0)) { _annQueue = { msg, dur, kind, pri }; return true; }
+    return false;
   }
   showAnnounce(msg, dur, kind);
+  return true;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
 // Curated def.sectors splits when present; equal thirds only as fallback.
@@ -2440,7 +2467,12 @@ async function startRace() {
     // ONE RIVAL, BUMPED — the same trim Quali and Time Trial do on either side
     // of this branch. js/race/duel.js owns what the format means.
     const rival = Duel.pick(cars);
-    if (rival) { Duel.bump(rival, DriverRatings); cars = [player, rival]; }
+    if (rival) {
+      const lg = (duelLegend && typeof Legends !== "undefined") ? Legends.byId(duelLegend) : null;
+      if (lg) Duel.asLegend(rival, { id: lg.id, name: lg.name, code: lg.code, ratings: Legends.ratings(lg.id) }, DriverRatings);
+      else Duel.bump(rival, DriverRatings);
+      cars = [player, rival];
+    }
     lapsTarget = raceLaps;
   } else if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
@@ -2795,6 +2827,7 @@ const G = {
   get practice() { return isPractice(); },
   set practice(v) { practiceMode = !!v; },
   get duel() { return duelMode; }, set duel(v) { duelMode = !!v; },
+  get duelLegend() { return duelLegend; }, set duelLegend(v) { duelLegend = v || ""; },
   get lapsTarget() { return lapsTarget; },
   // RELIABILITY: the race setting, the shared arming path (so a simulated career
   // round draws its retirements exactly as a driven race does), and the manual
@@ -3195,6 +3228,7 @@ raceSettings = RaceSettings.create({
   getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
   getRaceTyreWear: () => raceTyreWear, setRaceTyreWear: (v) => { G.raceTyreWear = v; },
   getDuel: () => duelMode, setDuel: (v) => { duelMode = !!v; },
+  getDuelLegend: () => duelLegend, setDuelLegend: (v) => { duelLegend = v || ""; },
   getPits: () => pits,   // the STRATEGY row: the reference plan and the pin (PitLane.planFor)
   getRaceCtl: () => raceCtl,
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
@@ -3591,7 +3625,10 @@ function update(dt) {
      same call mid-count would hand the player a free re-place on the grid. */
   if (state === "race" && Input.consumeRecover() && player && !player.retired) {
     // A saved practice checkpoint makes RECOVER the driver's TRY AGAIN; coach.retry() is false everywhere else.
-    if (!coach.retry()) { rescuePlayer(player); announce("RECOVERED", 1.5, "coach"); }
+    // No banner: rescuePlayer() is the one place a recovery is reported, and it
+    // used to announce here TOO — the same word from two speakers (COACH here,
+    // the driver's own RADIO there) for one keypress.
+    if (!coach.retry()) rescuePlayer(player);
     Log.info("game", "manual recover");
   }
   if (state === "count") {
@@ -5743,10 +5780,13 @@ function rescuePlayer(c) {
   c.rescueLastT = raceT;
   // Cues are for the driver at THIS screen — a rival being recovered elsewhere
   // on track must not announce itself here.
-  if (c.local) {
-    announce("RECOVERED", 1.2, "info");
-    if (soundOn) GameAudio.offtrack();
-  }
+  //
+  // NO BANNER. A recovery is the most self-evident event in the game: the car
+  // is back on the road, pointing the right way, at a sane speed. The player
+  // just watched it happen, so a card saying RECOVERED spends the radio — and
+  // the banner is a QUEUE (ANN_PRI / _annQueue), so a message that reports the
+  // obvious can delay or mask one that does not. The sound still marks it.
+  if (c.local && soundOn) GameAudio.offtrack();
 }
 
 // Retire a car. The counterpart of rescuePlayer above — same job, opposite
@@ -8624,6 +8664,41 @@ function openGarage(from) {
   vt(openSetup);
 }
 $("mb-garage").onclick = () => openGarage("menu");
+// ── WORK ON CAR, from inside a pit stop ────────────────────────────────────
+// The GARAGE is the same screen the menu opens; what differs is the way back
+// and the price. `paused` freezes physics and the clock (the loop's own gate)
+// WITHOUT the pause card, because the garage is the screen here — two stacked
+// menus would each own the Escape key. `setupPreviewOn`, which openSetup sets,
+// already makes the renderer draw the car instead of the race, so the frozen
+// world costs nothing while you are in there.
+let pitWorkSpec = null;
+/** What the car IS, as one comparable string: the parts sheet and the set-up.
+ *  A visit that changes neither is free — the stop is only charged for work
+ *  that happened. */
+function carSpecKey() {
+  const team = player ? player.team : Teams.LIST[teamIdx];
+  try { return JSON.stringify([getTeamParts(team.id), SetupTune.get(team.id)]); } catch (e) { return null; }
+}
+function openPitWork() {
+  if (!pits || !pits.canWork(player)) return;
+  pitWorkSpec = carSpecKey();
+  paused = true;
+  GameAudio.stopEngine(); GameAudio.setSkid(0);
+  openGarage("pit");
+}
+/** Back to the race. Called by BOTH garage exits — there is no "cancel" here
+ *  either (the garage keeps what you picked), so DONE and BACK do the same
+ *  thing and only the price is conditional. */
+function closePitWork() {
+  leaveGarage();                       // …which is what recomputes the car's mods
+  const changed = pitWorkSpec != null && carSpecKey() !== pitWorkSpec;
+  pitWorkSpec = null;
+  const added = changed ? pits.addWork(player) : 0;
+  if (added > 0 && typeof announce === "function") announce("WORK DONE — +" + added + "s", 1.8, "race");
+  paused = false;
+  lastFrame = performance.now();       // or the frozen minutes arrive as one dt
+  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); }
+}
 // Leaving the GARAGE, shared by DONE and BACK: the screen's own teardown plus
 // the part maths, which both exits owe the rest of the game.
 function leaveGarage() {
@@ -8640,6 +8715,7 @@ function leaveGarage() {
    Selections are kept exactly as DONE keeps them: nothing here is a cancel. */
 function garageBack() {
   if (soundOn) GameAudio.uiTick();
+  if (garageReturn === "pit") { closePitWork(); return; }
   leaveGarage();
   if (garageReturn === "vsfriend") {
     $("vsfriend").hidden = false;
@@ -8653,6 +8729,7 @@ function garageBack() {
 }
 $("cs-back").onclick = garageBack;
 $("cs-done").onclick = () => {
+  if (garageReturn === "pit") { closePitWork(); return; }
   leaveGarage();
   // Back to the waiting room, and tell the other player what you are driving —
   // a room that only synced on START would have two people spend a minute each
@@ -8729,6 +8806,7 @@ function setPaused(p) {
   lastFrame = performance.now(); syncRotateBlocker(false);   // the pause card yields to an active rotate blocker on EVERY entry
 }
 els.pausebtn.onclick = () => setPaused(true);
+els.workBtn.onclick = openPitWork;
 
 // ---- Hide-HUD (clean-screen) mode ----
 // HUD: OFF (DISPLAY ▸ HUD fold) strips every overlay via a body class

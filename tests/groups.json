@@ -162,6 +162,15 @@
     "tests/unit/ci-coverage.test.mjs",
     "tests/unit/nightly-group.test.mjs",
     "tests/unit/twin-fidelity.test.mjs",
+    "tests/unit/legends.test.mjs",
+    "// The duel format's two behaviours (js/race/duel.js): the bump lifts",
+    "// racecraft harder than pace, and asLegend hands over the legend's OWN",
+    "// axes rather than bumping whoever was fastest. Pure module load, ~0.1 s.",
+    "tests/unit/duel.test.mjs",
+    "// …and the DUEL ROW that reaches it: one control carrying OFF / ON / a",
+    "// named legend has to round-trip through two setters, and the inert VM DOM",
+    "// builds no SettingRow children, so painting the row would assert nothing.",
+    "tests/unit/duel-row.test.mjs",
     "tests/unit/select-budget.test.mjs",
     "tests/unit/select-specs.test.mjs",
     "// The duration HISTORY behind the budget: junit/live-reporter merge,",
@@ -537,7 +546,9 @@
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/debris-opts.test.mjs",
-        "tests/unit/quali-persist.test.mjs"
+        "tests/unit/quali-persist.test.mjs",
+        "tests/unit/duel.test.mjs",
+        "tests/unit/duel-row.test.mjs"
       ]
     },
     "test:service-worker": {
@@ -722,6 +733,7 @@
         "tests/unit/ci-coverage.test.mjs",
         "tests/unit/nightly-group.test.mjs",
         "tests/unit/twin-fidelity.test.mjs",
+        "tests/unit/legends.test.mjs",
         "tests/unit/twinned-specs.test.mjs",
         "tests/unit/ratchets.test.mjs"
       ]

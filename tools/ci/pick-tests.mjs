@@ -115,6 +115,11 @@ export const RULES = [
   // ── car ─────────────────────────────────────────────────────────────────
   [/^js\/car\/parts\.js/, ["car", "sweeps-parts"], "the catalog, budgets, recipes and their physics; sweeps-parts is the option-resolution census (~70 s across four worker threads)"],
   [/^js\/car\/(car3d|liveries|liverytex|crest-paths)\.js/, ["car", "node-slow"], "car mesh + livery specs; node-slow rasterises every livery and crest"],
+  // The legends table is FACT (a sourced record) plus a formula derived from
+  // it, and tests/unit/legends.test.mjs is the only thing checking the two
+  // still agree. Without this rule, editing the record selects the boot and
+  // structural groups — neither of which reads a single one of its numbers.
+  [/^js\/data\/legends\.js/, ["guards"], "the sourced record and the ratings derived from it must stay consistent"],
   [/^js\/data\/teams\.js/, ["car", "modes"], "the grid feeds season and career"],
   [/^js\/car\/ghost\.js/, ["modes"], "time-trial ghost"],
   [/^js\/car\//, ["car"], "the car's mesh, livery and parts"],
