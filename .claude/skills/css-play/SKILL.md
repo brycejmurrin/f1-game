@@ -42,6 +42,24 @@ Unknown screen: `--click "#mb-foo" --root "#id"`. Catalog ids are a subset of
 3. **Open through the app's buttons**, never `hidden = false` on a dialog.
 4. **Park / close Playwright** before `test-bg` or Chrome MCP.
 5. **Do not run `layout-audit` for one screen.** That is the matrix.
+6. **A change to TYPE METRICS invalidates a pixel golden — re-bless in the SAME
+   commit.** `tests/specs/menu-baseline.spec.js` holds six blessed PNGs; the
+   title, select and garage screens are pixel-compared at a 1% tolerance. A
+   font-size, tracking, weight or gap change relays text and blows that budget.
+   `pick-tests` already selects the spec when `css/` changes, so the signal is
+   there — the failure mode is pushing without running it. Regenerate on this
+   box (goldens are portable; the runner and a dev container agree to within
+   1-17 px) and REVIEW the diff, never accept it blind:
+
+   ```sh
+   npm test -- tests/specs/menu-baseline.spec.js            # does it still match?
+   npm run test:baseline -- --update-snapshots              # re-bless all six; only the moved one changes
+   ```
+
+   Incident 2026-09-16: an 8px -> 9px garage tab label shipped without the
+   re-bless. `menu-baseline` went red on the deploy branch, `needs: ci` never
+   passed, and FIVE consecutive Pages runs (#2351-#2355) published nothing
+   until another session blessed the golden.
 
 Live MCP session (already on localhost): `browser_resize` →
 `browser_evaluate` the `collectDomInfo` body from `css-play.mjs` →
