@@ -79,7 +79,7 @@ const SceneryPits = (function () {
     // Corners [BL, BR, TR, TL] as seen by the reader, V flipped for the
     // FLIP_Y upload, U not (a world-space quad on the identity).
     const S = typeof TrackPit !== "undefined" ? TrackPit.SIGN : null;
-    const signs = { pos: [], nrm: [], uv: [], idx: [], cells: [], boards: [], anchors: [], centre: null };
+    const signs = { pos: [], nrm: [], uv: [], idx: [], cells: [], boards: [], panels: [], crests: [], anchors: [], centre: null };
     // A lettered board on a post at node k, its face toward the oncoming
     // driver (normal -t; the reader's right is the road's +r), `cell` of the
     // atlas. The face is the decal; a dark body a few centimetres behind it
@@ -109,6 +109,73 @@ const SceneryPits = (function () {
       rawBox(out, [c[0] + t[0] * 0.05, c[1] + t[1] * 0.05, c[2] + t[2] * 0.05], [S.boardW + 0.06, S.boardH + 0.06, 0.06], DARK, bs);
       const postH = y - hh;
       rawBox(out, at(k, lat, postH / 2), [0.07, postH, 0.07], POST, bs);
+    };
+    // A team's crest PANEL on the pit wall opposite its bay (asked: the
+    // team's logo on the wall outside): the bay's own atlas cell again, at
+    // the cell's aspect, standing on the wall's top and facing the lane
+    // (normal +sd·r; the reader's right is +sd·t), on a dark plate that sits
+    // on the wall. After the boards, so quad i is fascia i, then the boards,
+    // then a panel per bay: the painter and the tests index them so.
+    const panelsWanted = [];
+    const panelAt = (f, k, cell) => { if (S) panelsWanted.push([f, k, cell]); };
+    const PANEL_SCALE = 0.46, WALL_TOP_Y = 1.42;
+    const emitPanel = (f, k, cell) => {
+      const pw = S.quadW * PANEL_SCALE, ph = S.quadH * PANEL_SCALE;
+      const wallLat = sd * (f.hw + p.bands.verge + 0.125);
+      const c = atF(f, wallLat, WALL_TOP_Y + 0.03 + ph / 2, k);
+      const right = [sd * f.t[0], sd * f.t[1], sd * f.t[2]], up = f.u, nrm = [sd * f.r[0], sd * f.r[1], sd * f.r[2]];
+      const P = (sx, sy) => [c[0] + right[0] * sx * pw / 2 + up[0] * sy * ph / 2,
+                             c[1] + right[1] * sx * pw / 2 + up[1] * sy * ph / 2,
+                             c[2] + right[2] * sx * pw / 2 + up[2] * sy * ph / 2];
+      const corners = [P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)];
+      const cx = (cell % S.cols) * S.cellW, cy = Math.floor(cell / S.cols) * S.cellH;
+      const uL = cx / S.w, uR = (cx + S.cellW) / S.w, vT = 1 - cy / S.h, vB = 1 - (cy + S.cellH) / S.h;
+      const uvs = [[uL, vB], [uR, vB], [uR, vT], [uL, vT]];
+      const base = signs.pos.length / 3;
+      for (let i = 0; i < 4; i++) {
+        signs.pos.push(corners[i][0], corners[i][1], corners[i][2]);
+        signs.nrm.push(nrm[0], nrm[1], nrm[2]);
+        signs.uv.push(uvs[i][0], uvs[i][1]);
+      }
+      signs.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      signs.panels.push({ cell, k });
+      // The plate: a centimetre behind the decal, and grounded THROUGH the
+      // wall — its body runs from the ground to the panel's top inside the
+      // wall's 25 cm (the wall is a swept strip the float sweep cannot see
+      // as a support, so a plate that merely sat on its top read as 1.44 m
+      // of floating scenery on every circuit); only the part above the top
+      // shows.
+      const top = WALL_TOP_Y + 0.06 + ph;
+      rawBox(out, atF(f, wallLat - sd * 0.04, top / 2, k), [0.06, top, pw + 0.06], DARK, f.basis);
+    };
+    // The team's CREST on the outside wall (asked): its square crest cell
+    // (TrackPit.SIGN.crests, the crest alone on the team's colour) as a
+    // plaque a centimetre proud of the door's approach-side pier — the pier
+    // itself is the backing — facing the lane like the fascia. After the
+    // panels in the quad order.
+    const crestsWanted = [];
+    const crestAt = (f, k, i, along) => { if (S && S.crests && i < S.crests) crestsWanted.push([f, k, i, along]); };
+    const emitCrest = (f, k, i, along) => {
+      const cw = S.crestW, h = f.hw;
+      const lat = sd * (h + p.off.workOut - 0.13 - 0.125 - 0.01);   // the pier's lane face, a centimetre proud
+      const c0 = atF(f, lat, S.crestY0 + cw / 2, k);
+      const c = [c0[0] + f.t[0] * along, c0[1] + f.t[1] * along, c0[2] + f.t[2] * along];
+      const right = [-sd * f.t[0], -sd * f.t[1], -sd * f.t[2]], up = f.u, nrm = [-sd * f.r[0], -sd * f.r[1], -sd * f.r[2]];
+      const P = (sx, sy) => [c[0] + right[0] * sx * cw / 2 + up[0] * sy * cw / 2,
+                             c[1] + right[1] * sx * cw / 2 + up[1] * sy * cw / 2,
+                             c[2] + right[2] * sx * cw / 2 + up[2] * sy * cw / 2];
+      const corners = [P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)];
+      const cx = (i % S.crestCols) * S.crestPx, cy = S.crestY + Math.floor(i / S.crestCols) * S.crestPx;
+      const uL = cx / S.w, uR = (cx + S.crestPx) / S.w, vT = 1 - cy / S.h, vB = 1 - (cy + S.crestPx) / S.h;
+      const uvs = [[uL, vB], [uR, vB], [uR, vT], [uL, vT]];
+      const base = signs.pos.length / 3;
+      for (let q = 0; q < 4; q++) {
+        signs.pos.push(corners[q][0], corners[q][1], corners[q][2]);
+        signs.nrm.push(nrm[0], nrm[1], nrm[2]);
+        signs.uv.push(uvs[q][0], uvs[q][1]);
+      }
+      signs.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      signs.crests.push({ cell: i, k });
     };
 
     let wallBuilt = false;
@@ -186,6 +253,27 @@ const SceneryPits = (function () {
       const slide = (k) => v0 * p.v[k];
       sweep(kx, [[-0.05, 0], [0.30, 0], [0.30, 1.0], [-0.05, 1.0]], WALL, MAT.CONCRETE, slide);
       sweep(kx, [[-0.07, 1.0], [0.32, 1.0], [0.32, 1.07], [-0.07, 1.07]], WALL_TOP, MAT.METAL, slide);
+
+      // ── 1d. THE OUTER WALL: the lane's far side, wherever a bay is not ────
+      // Along the ribbon's outer edge — the garage line, scaled by the
+      // ribbon's own width on the roads — from where the entry road peels
+      // off to where the exit road rejoins, leaving the row of bays and race
+      // control to stand in it. With the platform wall, the exit wall and
+      // this, the lane is walled on both sides from entrance to exit; the
+      // driving boundary (TrackPit.openBoundary) stops a car's side at it.
+      const outerShift = (k) => o.workOut * p.w[k];
+      const outerWall = (ks2) => {
+        sweep(ks2, [[0.02, 0], [0.32, 0], [0.32, 1.0], [0.02, 1.0]], WALL, MAT.CONCRETE, outerShift);
+        sweep(ks2, [[0.0, 1.0], [0.34, 1.0], [0.34, 1.07], [0.0, 1.07]], WALL_TOP, MAT.METAL, outerShift);
+      };
+      const hasRibbon = (k) => p.w[k] > 0.02;
+      if (p.hasBays && p.row) {
+        const gap0 = wrap(p.row.s0 - 0.5), gap1 = wrap(p.row.s1 + p.row.tail + 0.5);   // …to race control's far face
+        outerWall(nodesFrom(wrap(p.sA + 6), hasRibbon, Math.max(0, wrap(gap0 - p.sA) - 6)));
+        outerWall(nodesFrom(gap1, hasRibbon, wrap(p.sB - gap1)));
+      } else {
+        outerWall(nodesFrom(wrap(p.sA + 6), hasRibbon, wrap(p.sB - p.sA) - 6));
+      }
 
       // ── 1c. CONES down the entry road's inner edge ───────────────────────
       // Where the wall has not grown the peel is a painted line, and a line
@@ -346,6 +434,42 @@ const SceneryPits = (function () {
         const kap = ctx.curvature ? ctx.curvature(box.s) : 0;
         const canLat = sd * (h + garage - 1.45) - bump;
         rawBox(out, atF(f, canLat, B.h + 0.45 + lift, k), [2.6, 0.25, segAt(kap, canLat)], ROOF, bs);
+        // The TEAM'S LED STRIP under the canopy's front edge: the bay's own
+        // colour as a lit line the length of the bay — over-white at night so
+        // the props pass blooms it (the luminaire lens works the same way),
+        // a plain painted strip by day.
+        const stripLat = sd * (h + garage - 2.70) - bump;
+        const tc = box.col || [0.6, 0.6, 0.65];
+        const led = night ? [tc[0] * 2.2 + 0.25, tc[1] * 2.2 + 0.25, tc[2] * 2.2 + 0.25] : [tc[0] * 1.15, tc[1] * 1.15, tc[2] * 1.15];
+        rawBox(out, atF(f, stripLat, B.h + 0.45 - 0.125 - 0.05 + lift, k), [0.08, 0.06, segAt(kap, stripLat) - 0.5], led, bs);
+        // NEON at the box (asked): the bay's colour as lit tubes a driver
+        // reads from the lane — one up each jamb of the door, on the jambs'
+        // lane face — and on the ground the STOP MARK: a bar across the
+        // working lane just past the painted stop line, with a stub back
+        // along each side of the box, so where to stop is a glowing gate at
+        // night and a coloured one by day. Here, not in the bay's own pass,
+        // so a bay stays the eight prims the clip audit reads as one model.
+        // …and the strip's twin ON THE GROUND (asked: one on top, one on the
+        // ground): the same lit line the length of the bay, on the apron
+        // along the door line, just outside the painted box's outer band.
+        rawBox(out, atF(f, sd * (h + garage - 0.16) - bump, 0.02 + lift, k), [0.08, 0.04, segAt(kap, stripLat) - 0.5], led, bs);
+        const jamb2 = (B.w - doorW) / 2;
+        const tubeLat = sd * (h + garage - 0.13 - 0.125 - 0.03) - bump;
+        for (const side of [-1, 1]) {
+          const ct = atF(f, tubeLat, 1.45, k), along = side * (doorW / 2 + 0.08);   // framing the door, on the piers' faces
+          rawBox(out, [ct[0] + bs[2][0] * along, ct[1] + bs[2][1] * along, ct[2] + bs[2][2] * along], [0.04, 2.0, 0.05], led, bs);
+        }
+        // The crest plaque on the pier the driver reaches first (along -t).
+        crestAt(f, k, i, -(B.w / 2 - jamb2 / 2));
+        const lane0 = h + o.corrOut + 0.3, lane1 = h + o.workOut - 0.3;   // the painted box's own edges (TrackMesh.buildPitBoxes)
+        const lon = p.row.boxLen / 2 + 0.9;
+        const gc = atF(f, sd * (lane0 + lane1) / 2, 0.015, k);
+        rawBox(out, [gc[0] + bs[2][0] * lon, gc[1] + bs[2][1] * lon, gc[2] + bs[2][2] * lon], [lane1 - lane0, 0.03, 0.08], led, bs);
+        for (const e of [lane0 + 0.15, lane1 - 0.15]) {
+          const sc = atF(f, sd * e, 0.015, k), l2 = lon - 0.64;
+          rawBox(out, [sc[0] + bs[2][0] * l2, sc[1] + bs[2][1] * l2, sc[2] + bs[2][2] * l2], [0.08, 0.03, 1.2], led, bs);
+        }
+        if (p.hasWall && p.v[k] >= 0.98) panelAt(f, k, i);
         if ((i & 1) === 0 && i + 1 < count && typeof ctx.registerLamp === "function") {
           const along = seg / 2;                                   // the party line with bay i + 1
           const cl0 = atF(f, sd * (h + garage - 1.7), B.h + 0.45 - 0.125 - 0.04, k);   // its top 2 cm inside the soffit
@@ -376,8 +500,11 @@ const SceneryPits = (function () {
     }
     if (p.row) p.row.placed = placed;
     for (const b of boardsWanted) emitBoard(b[0], b[1], b[2], b[3]);
+    for (const q of panelsWanted) emitPanel(q[0], q[1], q[2]);
+    for (const q of crestsWanted) emitCrest(q[0], q[1], q[2], q[3]);
     if (signs.cells.length || signs.boards.length) track.pitSigns = signs;
-    return { bays, wall: wallBuilt, lamps, signs: signs.cells.length, boards: signs.boards.length };
+    return { bays, wall: wallBuilt, lamps, signs: signs.cells.length, boards: signs.boards.length,
+             panels: signs.panels.length, crests: signs.crests.length };
   }
 
   return { build };

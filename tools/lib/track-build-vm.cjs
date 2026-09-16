@@ -145,6 +145,9 @@ function buildContext(opts) {
     Tracks: ctx.Tracks, TrackSurface: ctx.TrackSurface, TrackGeom: ctx.TrackGeom,
     TrackPit: ctx.TrackPit, GarageScene: ctx.GarageScene,
     TrackMesh: ctx.TrackMesh,
+    // The VM's global object, for a test that must define what the engine
+    // reads at CALL time (TrackPit.row reads `Teams`, absent here by default).
+    sandbox,
     prims, liveBufs,
     // Emission-order marker, so a caller reusing one context across circuits can
     // slice out just the primitives a given build produced.

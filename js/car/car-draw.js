@@ -14,7 +14,7 @@
 const CarDraw = (function () {
   function create(G, deps) {
     Log.info("game", "CarDraw.create");
-    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCockpitWheel,
+    const { getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getCompoundRing, getCrewMesh, getCockpitWheel,
             getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 
     // ── cache-helpers ───────────────────────────────────────────────
@@ -542,6 +542,23 @@ const CarDraw = (function () {
         };
       }, FIELD_WHEEL_CACHE_MAX, freeWheelPair);
     }
+    const _cq = [], _cqMesh = [];
+    let _cqN = 0;
+    // THE STOP'S KIT at a car held in its box (CarMesh.getCrewMesh): the two
+    // jacks and a wheel gun at each wheel, on the ground in the grounded
+    // basis (the jacks lift the car, not themselves). Within 90 m of the
+    // camera; nothing for a car that is not stopped.
+    const _crewOpts = { emissive: 0 };
+    function drawPitCrew(c, base, opt) {
+      if (!c || c.pitState !== "box") return false;
+      const dx = base[12] - G.camEye[0], dy = base[13] - G.camEye[1], dz = base[14] - G.camEye[2];
+      if (dx * dx + dy * dy + dz * dz > 90 * 90) return false;
+      const col = (c.team && c.team.color) || [0.30, 0.32, 0.36];
+      const m = getCrewMesh(col);
+      if (!m) return false;
+      G.gfx.draw(m, base, opt || _crewOpts);
+      return true;
+    }
     function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
       const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team);
       c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / PhysicsConsts.WHEEL_R) * dt) % (Math.PI * 2);
@@ -557,6 +574,14 @@ const CarDraw = (function () {
       // jacks and its wheels come off outward along their axles.
       const anim = c.pitState === "box" && G.pits && G.pits.stopAnim ? G.pits.stopAnim(c) : null;
       const lift = anim ? anim.lift : 0, off = anim ? anim.off : 0;
+      // The camera distance, once per car: the brake rings draw within 40 m
+      // of a rival, the compound stripes within 60 m, everything for the player.
+      let camD2 = 0;
+      if (!c.isPlayer) {
+        const dx = base[12] - G.camEye[0], dy = base[13] - G.camEye[1], dz = base[14] - G.camEye[2];
+        camD2 = dx * dx + dy * dy + dz * dz;
+      }
+      const tyreCol = camD2 < 60 * 60 && c.tyre && c.tyre.colour ? c.tyre.colour : null;
       for (let w = 0; w < WHEELS.length; w++) {
         const wd = WHEELS[w];
         if (frontsOnly && wd.rear) continue;   // cockpit: rears sit beside the camera and blob the corners
@@ -591,10 +616,18 @@ const CarDraw = (function () {
         // Hot brake discs: an emissive ring floating just off the outer wheel face,
         // ramping with the render-only brakeHeat (bright orange → blooms when hot).
         const heat = c.brakeHeat || 0;
-        let ringOk = heat > 0.05;
-        if (ringOk && !c.isPlayer) {
-          const dx = base[12] - G.camEye[0], dy = base[13] - G.camEye[1], dz = base[14] - G.camEye[2];
-          ringOk = dx * dx + dy * dy + dz * dz < 40 * 40;
+        const ringOk = heat > 0.05 && camD2 < 40 * 40;
+        // The COMPOUND'S STRIPE on the sidewall (getCompoundRing): the record
+        // the car runs on, so a fresh set reads as what it is the moment the
+        // stop fits it. Opaque, queued with the fixed layers.
+        if (tyreCol) {
+          const tx = (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.012);
+          _cq[_cqN] || (_cq[_cqN] = new Float32Array(16));
+          const Wc = _cq[_cqN];
+          Wc.set(_wheelWorld);
+          Wc[12] += Wc[0] * tx; Wc[13] += Wc[1] * tx; Wc[14] += Wc[2] * tx;
+          _cqMesh[_cqN] = getCompoundRing(tyreCol);
+          _cqN++;
         }
         if (ringOk) {
           const tx = (wd.x < 0 ? -1 : 1) * ((wd.rear ? 0.19 : 0.16) + 0.025);
@@ -617,8 +650,11 @@ const CarDraw = (function () {
           _rqN++;
         }
       }
-      // Run 1: the fixed wheel layers, one bind for up to four draws.
+      // Run 1: the fixed wheel layers, one bind for up to four draws, then
+      // the compound stripes (one shared ring per colour).
       for (let i = 0; i < _wqN; i++) G.gfx.draw(_wqMesh[i], _wq[i], opt);
+      for (let i = 0; i < _cqN; i++) G.gfx.draw(_cqMesh[i], _cq[i], opt);
+      _cqN = 0;
       // Run 2: the blended rings, after every opaque wheel of this car.
       const ro = _ringOpts;
       for (let i = 0; i < _rqN; i++) {
@@ -690,7 +726,7 @@ const CarDraw = (function () {
       teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh,
       teamDecalState, carDecalNum, getCarDecalTexture, invalidateDecalTextures,
       drawCarDecals, queueCarDecals, beginDecals, flushDecals,
-      drawPlayerWheels, drawCockpitRig,
+      drawPlayerWheels, drawPitCrew, drawCockpitRig,
       warmCarAssets, prepareMenuCarAssets, loadCarModel, buildCarData,
       setPlayerParts, invalidateCustomMeshCaches,
       WHEELS,

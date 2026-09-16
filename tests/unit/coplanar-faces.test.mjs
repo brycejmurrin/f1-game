@@ -121,6 +121,17 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // rather than deleted, because the ordering is the lesson: a raise is the
 // fallback, not the first move, and "restored props cost overlap spots" is a
 // trade worth one more attempt at the geometry before it is written down.
+//
+// fuji 16→17, hungaroring 18→20, istanbul 4→5, magny_cours 1→2, redbull 8→9,
+// albert_park 8→7 (2026-09-16): the pit window shrank (TrackPit ENTRY_MAX
+// 400→260, EXIT_M 130→110, 80acf93), so the complex supersedes ~160 m less of
+// each circuit's own scenery and the kit/city masses that stood there stand
+// again, carrying the same-plane seams they always had. Bisected, not
+// assumed: the deployed tree with only the old window restored reads every
+// one of these at its old cap (albert_park back to 8), and the raw pairs are
+// stacked building sections (41 x 4.8 x 7.6 m, 49 x 6.7 x 35 m), not pit
+// prims. Restored scenery is the point of the shorter lane; the seams are the
+// generators' open defect, as the header says.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );

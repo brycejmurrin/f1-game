@@ -3044,7 +3044,7 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 // and the setup preview share them); the module reads them through deps.
 const carDraw = CarDraw.create(G, { resolveLivery, partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali });
 const { teamMesh, teamBodyMesh, playerBodyMesh, cockpitBodyMesh, teamDecalState, carDecalNum,
-        drawCarDecals, queueCarDecals, drawPlayerWheels, drawCockpitRig,
+        drawCarDecals, queueCarDecals, drawPlayerWheels, drawPitCrew, drawCockpitRig,
         warmCarAssets, prepareMenuCarAssets } = carDraw;
 // The three shadow-map passes (js/render/shared/shadow-pass.js): sun snap cache,
 // per-frame car map, night lamp map, the caster pools and the blob flush.
@@ -3671,7 +3671,7 @@ function updateCar(c, dt, ranked) {
   if (c.retired) { c._prevS = c.s; return; }
   // A net-owned rival takes no local motion, finished or not: coasting it here
   // fought poseRemote every tick (jitter, prog drift). See js/net/netplay.js.
-  if (c.finished && !netPlay.owns(c)) { coast(c, dt); c._prevS = c.s; return; }
+  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); coast(c, dt); c._prevS = c.s; return; }
   // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
@@ -5614,12 +5614,20 @@ function coast(c, dt) {
   const floor = GRASS_V * 0.6 * Math.max(PACE, 0.05);
   const next = c.speed - 20 * dt;
   c.speed = c.speed > floor ? Math.max(floor, next) : Math.max(0, next);
+  // A car the flag found in the pit lane finishes its stop and coasts out
+  // down the LANE at the limit (pits.update still runs for it): held in the
+  // box, on the lane's line to the exit road's end. It used to cruise the
+  // inside line straight through the wall and pile up on the others.
+  const onLane = pits.inLane(c) || (c.pitState === "out" && pits.roadOf(c) === "exit");
+  if (c.pitState === "box") c.speed = 0;
+  else if (onLane) c.speed = Math.min(c.speed, pits.limit());
   c.s = wrapS(c.s + c.speed * dt);
   c.prog += c.speed * dt;
   Tracks.sample(track, c.s, smp);
   const kA = Tracks.curvature(track, wrapS(c.s + 30));
   // Finished cars cruise the inside line (-sign(k)), same convention as the AI.
-  c.x = damp(c.x, clamp(-kA * 130, -0.5, 0.5) * smp.hw, 2, dt);
+  c.x = onLane ? damp(c.x, pits.laneX(c, smp.hw, c.x), 3, dt)
+               : damp(c.x, clamp(-kA * 130, -0.5, 0.5) * smp.hw, 2, dt);
   // Finished cars are kinematic in (s, x). Mirror world metres or renderPosOf
   // keeps the last racing px/pz and the mesh freezes on the line while s walks
   // away (~2 s until results). Heading follows the road — nothing steers.
@@ -7359,6 +7367,7 @@ function render(dt) {
       queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer);
       _wheelOpts.emissive = night ? 0.12 : 0;
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
+      if (c.pitState === "box") drawPitCrew(c, _groundMat, _wheelOpts);   // the jacks and guns, on the ground beside it
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
       gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);

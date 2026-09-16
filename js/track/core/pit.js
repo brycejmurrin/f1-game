@@ -38,20 +38,31 @@ const TrackPit = (function () {
   // agree. Twelve cells of 512 x 70 px on a 1024 x 512 canvas (~100 px/m on
   // a 5.2 x 0.7 m quad), the quad a centimetre proud of the lintel's face
   // (garage line - 0.265) inside its 0.8 m band over the door.
-  const SIGN = { w: 1024, h: 512, cols: 2, cells: 12, cellW: 512, cellH: 70,
+  const SIGN = { w: 1024, h: 1024, cols: 2, cells: 12, cellW: 512, cellH: 70,
                  quadW: 5.2, quadH: 0.7, y0: 4.85, proud: 0.275,
+                 // The CRESTS (asked: the logo on the outside wall): twelve
+                 // square cells of 160 px in the atlas's lower half — six per
+                 // row from y 512 — each the crest alone on the team's colour,
+                 // laid on a 1.8 m plaque a centimetre proud of the door's
+                 // approach-side pier, its foot 1.5 m up.
+                 crests: 12, crestPx: 160, crestCols: 6, crestY: 512, crestW: 1.8, crestY0: 1.5,
                  // The BOARDS, two more cells on the atlas's seventh row (the
                  // twelve fascias fill six): cell 12 "PIT ENTRY" with an arrow
                  // at the pit side, cell 13 "PIT LANE <limit> km/h". Laid on
                  // 2.4 x 0.33 m boards (the cell's own 7.3:1) on posts, the
                  // first two on the verge of the approach before the entry
                  // road, the last on the platform at the entry line.
-                 boards: 2, boardW: 2.4, boardH: 0.33, boardY: 1.5, boardM: [45, 110] };
+                 boards: 2, boardW: 2.4, boardH: 0.33, boardY: 1.5, boardM: [45, 95] };
   // The EXIT WALL (SceneryPits, game.js's clamp): the pit wall slides from the
   // platform's line to the road edge as the wall fades over the exit road, and
   // runs along the edge while the road keeps this share of its width — a
-  // serviced car rejoins where the wall ends, not through it.
-  const EXIT_WALL_W = 0.55;
+  // serviced car rejoins where the wall ends, not through it. 0.75, not 0.5:
+  // what is left of the road after the wall is where a serviced car moves
+  // from the wall's line back inside the road edge (2 m of lateral at the
+  // limiter), and the AI's line lags its target by ~0.5 s. At 0.5 that left
+  // 17 m on Bahrain and every stop ended 0.6 m on the grass (pit-hunt, 21 of
+  // 21); at 0.75 the wall ends 10 m sooner and leaves 27 m.
+  const EXIT_WALL_W = 0.75;
 
   // Along the arc. The LIMITER window (entry line → exit line) is the old
   // pitWindow: it walks back from the line to where the last corner lets go
@@ -73,6 +84,11 @@ const TrackPit = (function () {
   const ENTRY_MAX = 260, ENTRY_MIN = 150, EXIT_M = 110, EXIT_MIN = 40;
   const PIT_K = 0.0035, STEP = 8;         // "not actively cornering" — see docs/PHYSICS.md
   const ENTRY_ROAD = 70, EXIT_ROAD = 90, ROAD_MIN = 30, WALL_GROW = 30;
+  // The EXIT road's own floor: its blend is driven at the limiter with the
+  // exit wall beside it to EXIT_WALL_W of its width, and what is left after
+  // the wall must hold a car's move back inside the road edge — 25 m of it
+  // at 80 m, measured against 14 m at 60 (the AI still ran off the end).
+  const EXIT_ROAD_MIN = 80;
   const LIMIT_KPH = 80, LIMIT_KPH_STREET = 60;   // F1 SR 2026 B1.7.3(a); Monaco / Melbourne
   // The row starts past POLE's grid slot (14 m before the line, TrackMesh.gridSlot)
   // plus the run-up a commitment needs, and ends ROW_END short of the exit line.
@@ -154,8 +170,15 @@ const TrackPit = (function () {
                                      col: t.color || [0.6, 0.6, 0.65], col2: t.color2 || [0.9, 0.9, 0.9],
                                      logo3: (t.livery && t.livery.logo3) || null });
     const custom = T && T.DEFAULT_CUSTOM;
-    out.push({ team: custom ? custom.id : "custom", name: custom ? custom.name : "MY TEAM", short: (custom && custom.short) || "MY",
-               col: (custom && custom.color) || [0.55, 0.55, 0.6], col2: (custom && custom.color2) || [0.9, 0.9, 0.9], logo3: null });
+    // Once only: the career module pushes the custom team INTO Teams.LIST
+    // (js/career/custom-team.js), so in the game the list above already ends
+    // with it, and appending it again built a 13-bay row with "custom" twice
+    // — 11 m longer than the twelve every VM-side test measures, which put
+    // the row's head through Yas Marina's hotel leg (abudhabi-foundation).
+    const customId = custom ? custom.id : "custom";
+    if (!out.some((b) => b.team === customId))
+      out.push({ team: customId, name: custom ? custom.name : "MY TEAM", short: (custom && custom.short) || "MY",
+                 col: (custom && custom.color) || [0.55, 0.55, 0.6], col2: (custom && custom.color2) || [0.9, 0.9, 0.9], logo3: null });
     while (out.length < 12) out.push({ team: "row" + out.length, name: "ROW " + out.length, short: "R" + out.length, col: [0.6, 0.6, 0.65], col2: [0.9, 0.9, 0.9], logo3: null });
     return out;
   }
@@ -175,8 +198,13 @@ const TrackPit = (function () {
     const room = Math.max(ROAD_MIN, (L / 3 - lenM) * 0.4);
     const entryRoadM = Math.min(ENTRY_ROAD, room,
       Math.max(ROAD_MIN, straightRun(track, curvature, sIn, -1, ENTRY_ROAD)));
+    // The EXIT road's floor is EXIT_ROAD_MIN, not ROAD_MIN: a 30 m blend
+    // (Bahrain's, into T1) asked the AI for 7 m of lateral in 1.4 s — 0.4 s
+    // on the grass at the end of every exit, measured. The wall's fade
+    // (`grow`) still keeps to the straight; the tail of the blend may run
+    // into the corner.
     const exitRoadM = Math.min(EXIT_ROAD, room,
-      Math.max(ROAD_MIN, straightRun(track, curvature, sOut, 1, EXIT_ROAD)));
+      Math.max(EXIT_ROAD_MIN, straightRun(track, curvature, sOut, 1, EXIT_ROAD)));
     const sA = wrap(sIn - entryRoadM, L), sB = wrap(sOut + exitRoadM, L);
     const grow = Math.min(WALL_GROW, entryRoadM * 0.5, exitRoadM * 0.5);
 
@@ -268,14 +296,19 @@ const TrackPit = (function () {
   }
 
   /** Push the driving boundary out to the complex's far edge across the
-   *  window, so the barrier clamp (Tracks.wallAt) lets a car onto the lane. */
+   *  window, so the barrier clamp (Tracks.wallAt) lets a car onto the lane —
+   *  never past its outer wall. */
   function openBoundary(track) {
     const p = track && track.pit;
     if (!p || !track.barL || !track.barR) return;
     const bar = p.side > 0 ? track.barR : track.barL;
     for (let k = 0; k < track.n; k++) {
       if (!(p.keep[k] > 0)) continue;
-      const lim = track.hw[k] + p.off.outer * p.w[k] + 1.5;
+      // 0.9 m SHORT of the garage line for the car's CENTRE: its side then
+      // reaches the line, where the OUTER WALL stands wherever a bay does not
+      // (SceneryPits). It was 1.5 m past it, and a car pushed out there stood
+      // through that wall.
+      const lim = track.hw[k] + p.off.outer * p.w[k] - 0.9;
       if (bar[k] < lim) bar[k] = lim;
     }
   }
@@ -288,7 +321,7 @@ const TrackPit = (function () {
     return -1;
   }
 
-  return { BANDS, STREET, NARROW, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, WALL_GROW,
+  return { BANDS, STREET, NARROW, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, EXIT_ROAD_MIN, WALL_GROW,
            ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, LIMIT_KPH, LIMIT_KPH_STREET, GRID_POLE_M, GRID_CLEAR,
            ROW_END, ROW_TAIL,
            resolve, window, row, build, at, openBoundary, rowOf };
