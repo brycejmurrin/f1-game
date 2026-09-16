@@ -155,6 +155,17 @@ function drive(page, opts) {
     }
 
     A.setInput({ steer: o.steer, throttle: !!o.throttle, brake: false });
+    // SETTLE (opt-in): step the slide into existence before recording. reset()
+    // places the car with zero lateral velocity and zero yaw rate, so tick one
+    // puts the whole steer angle into the front's slip and `sat` spikes over
+    // the trigger before the car has begun to rotate, then falls back under it
+    // for the ten or so ticks the rotation takes to build (measured in the VM:
+    // 1.18, then 0.94 for nine ticks, then climbing for real). That hole is
+    // the placement, not the cue's cadence, so a test that measures the
+    // cadence steps past it first. Every OTHER test here wants tick one
+    // included — firing, silence and the offroad gate are all claims about the
+    // whole run — so this is off by default.
+    for (let i = 0; i < (o.settle || 0); i++) A.step(1 / 60, 1);
     window.__cue.length = 0;
 
     const pulses = [];          // tick index of each understeer pulse
@@ -295,7 +306,8 @@ test.describe("understeer cue — front-axle saturation haptic", () => {
   test("repeats at a bounded rate, not once per frame", async ({ page }) => {
     await loadRig(page);
     const frac = await longStraight(page);
-    const run = await drive(page, { ...SATURATED, frac });
+    // settle: the cadence is a claim about a slide in progress. See drive().
+    const run = await drive(page, { ...SATURATED, frac, settle: 14 });
 
     expect(run.pulses, JSON.stringify(run)).toBeGreaterThanOrEqual(3);
 
