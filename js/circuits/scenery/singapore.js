@@ -539,23 +539,10 @@
       floodMastRing(38, { h: 24, dist: 11, cool: false, pool: true, arms: 3 });
 
       if (circuitKit) {
-        const PIT_SEGS = [
-          { id: "kit:singapore:pit-building-1", frac: 0.958,  len: 90, garages: 8 },
-          { id: "kit:singapore:pit-building-2", frac: 0.9755, len: 50, garages: 4 },
-          { id: "kit:singapore:pit-building-3", frac: 0.988,  len: 15, garages: 2 },
-          { id: "kit:singapore:pit-building-4", frac: 0.999,  len: 90, garages: 8 },
-        ];
-        for (const seg of PIT_SEGS) {
-          circuitKit.pitBuilding({
-            id: seg.id, frac: seg.frac, side: -1, gap: 11,
-            size: [22, 16, seg.len], garages: seg.garages, style: "flat",
-            required: true,
-          });
-          const a = anchor(K(seg.frac), -1, 11);
-          for (const yy of [4.0, 8.6, 13.2]) {
-            addBox(out, vadd(a.c, a.u, yy), [0.7, 2.6, seg.len - 4], WIN_CYAN, [a.r, a.u, a.t]);
-          }
-        }
+        // The pit building is the engine's row of bays now (TrackPit, STREET
+        // mode): the four kit segments were a no-op under `pitBuilt`, and
+        // their cyan glazing bands, anchored in authored space, landed at
+        // racing ~.57 — not the pit straight at all.
         circuitKit.raceControl({
           id: "kit:singapore:pit-race-control", frac: 0.999, side: -1, gap: 46,
           size: [14, 34, 16], required: true,
@@ -593,13 +580,17 @@
 
       for (const [s0, s1, side] of [
         [0.00, 0.18, -1], [0.20, 0.40, -1], [0.42, 0.62, -1], [0.64, 0.85, -1], [0.87, 0.99, -1],
-        [0.00, 0.16,  1], [0.30, 0.44,  1], [0.55, 0.66,  1], [0.92, 0.99,  1],
+        [0.00, 0.16,  1], [0.30, 0.44,  1], [0.582, 0.66,  1], [0.92, 0.99,  1],
       ]) {
         // Sit behind the 1.2 m concrete wall rather than sharing its edge.
         fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
       }
+      // The +1 (authored = racing -1, the pit side) fences end at the pit
+      // complex's window (authored .4850-.5816): 101 posts measured
+      // superseded across it, and a fence that visibly ends at the pit wall
+      // reads right — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
       for (const [s0, s1, side] of [
-        [0.17, 0.29,  1], [0.45, 0.54,  1], [0.67, 0.79,  1], [0.80, 0.91,  1],
+        [0.17, 0.29,  1], [0.45, 0.485,  1], [0.67, 0.79,  1], [0.80, 0.91,  1],
         [0.185, 0.195, -1], [0.405, 0.415, -1], [0.625, 0.635, -1],
       ]) fence(s0, s1, side, 3.0, 3.4, [0.66, 0.70, 0.78]);
 

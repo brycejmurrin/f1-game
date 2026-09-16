@@ -157,6 +157,7 @@ const FULL = [
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
   "js/garage/scene.js",
+  "js/garage/pit-signs.js",
   "js/physics/body-attitude.js",
   "js/fx/particles.js",
   "js/lighting/atmosphere.js",

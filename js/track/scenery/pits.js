@@ -32,7 +32,9 @@ const SceneryPits = (function () {
   function build(ctx) {
     const { track, out, rawBox, upOf, bankOffsetAt } = ctx;
     const p = track && track.pit;
-    if (!p || !out) return { bays: 0, wall: false };
+    if (!p || !out) return { bays: 0, wall: false, lamps: 0 };
+    const night = !!ctx.night;
+    const lensCol = ctx.lensAlbedo ? ctx.lensAlbedo("led") : [0.96, 1.00, 1.05];
     const MAT = TrackGeom.MAT;
     const { n, total: L, px, py, pz, rx, ry, rz, tx, ty, tz, hw } = track;
     const ds = L / n, sd = p.side, o = p.off;
@@ -139,14 +141,28 @@ const SceneryPits = (function () {
         const bs = basisAt(kOut);
         rawBox(out, [c[0], c[1] + 1.8, c[2]], [0.16, 3.6, 0.16], POST, bs);
         rawBox(out, [c[0], c[1] + 3.75, c[2]], [0.5, 0.9, 0.34], DARK, bs);
-        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + 3.95, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], [0.2, 0.9, 0.3], bs);
-        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + 3.55, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], [0.9, 0.15, 0.1], bs);
+        // The exit signal. At night the lit aspect (green: the lane is open)
+        // is over-white so the props draw blooms it, and the dead one is dark
+        // glass, so it reads as a signal rather than two painted discs. No
+        // light record: a halo would be 2 m wide on a 28 cm lamp.
+        const go = night ? [0.30, 1.40, 0.45] : [0.2, 0.9, 0.3], stop = night ? [0.30, 0.06, 0.04] : [0.9, 0.15, 0.1];
+        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + 3.95, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], go, bs);
+        rawBox(out, [c[0] + bs[0][0] * 0.2, c[1] + 3.55, c[2] + bs[0][2] * 0.2], [0.12, 0.28, 0.28], stop, bs);
       }
     }
 
     // ── 3. The garages: the setup screen's bay, once per team, on the row ──
-    let bays = 0;
+    let bays = 0, lamps = 0;
     const placed = [];
+    // The team's SIGN on each lintel: a 5.2 x 0.7 m quad a centimetre proud
+    // of the fascia, laid out here as pure numbers (track.pitSigns — the
+    // headless builds see only these); js/garage/pit-signs.js paints the
+    // atlas and uploads the texMesh where a canvas exists, and game.js
+    // draws the twelve as ONE decal after the sky. Corners [BL, BR, TR, TL]
+    // as seen from the lane, V flipped for the FLIP_Y upload, U not (a
+    // world-space quad on the identity; a U flip would mirror the crests).
+    const S = typeof TrackPit !== "undefined" ? TrackPit.SIGN : null;
+    const signs = { pos: [], nrm: [], uv: [], idx: [], cells: [], centre: null };
     if (p.hasBays) {
       const B = p.bay, doorW = B.doorW || 5.4, doorH = B.doorH || 4.8;
       const garage = o.workOut;                 // the garage line, beyond the road edge
@@ -196,6 +212,24 @@ const SceneryPits = (function () {
         const lintH = B.h - doorH + 0.6;
         const cl = atF(f, sd * (h + garage - 0.14) - bump, doorH + lintH / 2, k);   // a centimetre proud of the jambs
         rawBox(out, cl, [0.25, lintH, doorW], box.col, bs);
+        if (S && i < S.cells) {
+          const right = [-sd * f.t[0], -sd * f.t[1], -sd * f.t[2]];   // the viewer's right, facing the bay from the lane
+          const lat = sd * (h + garage - S.proud) - bump, hw2 = S.quadW / 2;
+          const lo = atF(f, lat, S.y0, k), hi = atF(f, lat, S.y0 + S.quadH, k);
+          const cx = (i % S.cols) * S.cellW, cy = Math.floor(i / S.cols) * S.cellH;
+          const uL = cx / S.w, uR = (cx + S.cellW) / S.w, vT = 1 - cy / S.h, vB = 1 - (cy + S.cellH) / S.h;
+          const corners = [[lo, -1], [lo, 1], [hi, 1], [hi, -1]], uvs = [[uL, vB], [uR, vB], [uR, vT], [uL, vT]];
+          const base = signs.pos.length / 3;
+          for (let c2 = 0; c2 < 4; c2++) {
+            const P = corners[c2][0], s2 = corners[c2][1] * hw2;
+            signs.pos.push(P[0] + right[0] * s2, P[1] + right[1] * s2, P[2] + right[2] * s2);
+            signs.nrm.push(-bs[0][0], -bs[0][1], -bs[0][2]);
+            signs.uv.push(uvs[c2][0], uvs[c2][1]);
+          }
+          signs.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+          signs.cells.push({ i, team: box.team });
+          if (i === (count >> 1)) signs.centre = atF(f, sd * (h + garage), 3, k);
+        }
         const cr = atF(f, sd * (h + garage + B.depth / 2), B.h + 0.05 + 0.175 + lift, k);
         rawBox(out, cr, [B.depth + 0.5, 0.35, segAt(kap, sd * (h + garage + B.depth / 2))], ROOF, bs);
         const cb = atF(f, sd * (h + garage + B.depth + 0.2) + bump, (B.h + 0.4) / 2 + lift, k);
@@ -209,6 +243,36 @@ const SceneryPits = (function () {
           const along = (i === 0 ? -1 : 1) * (seg / 2 + 0.15);
           rawBox(out, [ce[0] + bs[2][0] * along, ce[1] + bs[2][1] * along, ce[2] + bs[2][2] * along],
                  [B.depth + 0.5, B.h + 0.38, 0.3], SHELL, bs);
+        }
+      }
+      // ── 4. The canopy over the working lane, and its luminaires ─────────
+      // A slab 2.6 m proud of the doors continuing the roof line, one slice
+      // per bay like the roof, and under its soffit at every second party
+      // line an LED luminaire: one fixture per 22 m — the engine's own pool
+      // stride — six per row. The lens is painted from the same table as the
+      // masts' and the light is registered AT the lens, throwing at the
+      // working lane's centre (`aimAt`), so the lane is lit by a fixture the
+      // player can see hanging there. Six of the 48 light slots while the car
+      // is on the straight; the cull drops them with distance elsewhere
+      // (docs/research/PIT-LIGHTING-PLAN-2026-09.md). A pass of its own, after
+      // the bays, so a bay stays the eight prims the clip audit reads as one
+      // model (its ADJ window) and two neighbours on a bending row are judged
+      // as they were before the canopy existed.
+      for (let i = 0; i < count; i++) {
+        const box = boxes[i], k = box.k;
+        const f = frameAtS(box.s), bs = f.basis, h = f.hw;
+        const lift = (i & 1) ? 0.006 : 0, bump = sd * lift;
+        const kap = ctx.curvature ? ctx.curvature(box.s) : 0;
+        const canLat = sd * (h + garage - 1.45) - bump;
+        rawBox(out, atF(f, canLat, B.h + 0.45 + lift, k), [2.6, 0.25, segAt(kap, canLat)], ROOF, bs);
+        if ((i & 1) === 0 && i + 1 < count && typeof ctx.registerLamp === "function") {
+          const along = seg / 2;                                   // the party line with bay i + 1
+          const cl0 = atF(f, sd * (h + garage - 1.7), B.h + 0.45 - 0.125 - 0.04, k);   // its top 2 cm inside the soffit
+          const lens = [cl0[0] + bs[2][0] * along, cl0[1] + bs[2][1] * along, cl0[2] + bs[2][2] * along];
+          rawBox(out, lens, [0.5, 0.12, 2.4], lensCol, bs);
+          const wc = atF(f, sd * (h + (o.corrOut + o.workOut) / 2), 0, k);
+          if (ctx.registerLamp({ pos: lens, k, side: sd, kind: "led", radius: 18,
+                                 aimAt: [wc[0] + bs[2][0] * along, wc[1] + bs[2][1] * along, wc[2] + bs[2][2] * along] })) lamps++;
         }
       }
       // Race control, stepped up at the exit end of the row: 12 m square,
@@ -230,7 +294,8 @@ const SceneryPits = (function () {
       }
     }
     if (p.row) p.row.placed = placed;
-    return { bays, wall: wallBuilt };
+    if (signs.cells.length) track.pitSigns = signs;
+    return { bays, wall: wallBuilt, lamps, signs: signs.cells.length };
   }
 
   return { build };

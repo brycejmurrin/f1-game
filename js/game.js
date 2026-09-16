@@ -2081,6 +2081,7 @@ function _loadTrackBody(idx, def) {
       if (track.meshes.water) gfx.freeMesh(track.meshes.water);
       gfx.freeMesh(track.meshes.gate);
       gfx.freeMesh(track.meshes.startline);
+      if (typeof PitSigns !== "undefined") PitSigns.free(gfx, track);
     }
     // Drop the old track object BEFORE building the new one: the build's
     // transient peak (plain-JS geometry arrays for up to ~5 M verts) is the
@@ -6938,6 +6939,8 @@ function render(dt) {
   //  LT.glareStr, default 0.12.)
   drawWorldMeshes(frame, night, wet, _floodEmit, false);
   gfx.drawSky(frameSky);
+  // The pit bay signs: one decal after the sky (opaque → sky → decal; it depth-tests, never writes).
+  if (typeof PitSigns !== "undefined") PitSigns.draw(gfx, track, MAT_IDENT, frame.eye, night, hideMeshes.pitSigns);
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
