@@ -20,10 +20,13 @@
  *   repeat  uslipHapT = 0.16 - bite * 0.06         → 0.16 s shallow, 0.10 s deep
  *
  * OBSERVATION. The cue has two output channels and no state hook, so the spec
- * stubs both: `navigator.vibrate` and `Input.rumble`. Four call sites in
+ * stubs both: `navigator.vibrate` and `Input.rumble`. FIVE call sites in
  * js/game.js reach `Input.rumble`, and only the understeer cue passes a
- * duration of 70 ms (kerb 90, wall scrape 100, impact 120) — that duration is
- * the discriminator. The tests still steer clear of kerbs and walls so the
+ * duration of 70 ms (kerb 90, wall scrape 100, impact 120, and since
+ * 2026-09-16 the REAR-slip cue at 110 ms) — that duration is the
+ * discriminator. The rear cue cannot fire in these scenarios by construction:
+ * it speaks only when the rear is further past the end of its own plateau
+ * than the front is past its peak, and every run below is front-limited. The tests still steer clear of kerbs and walls so the
  * discriminator never has to work hard, and they assert that no OTHER haptic
  * fired during a run rather than trusting the filter blindly.
  *

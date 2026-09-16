@@ -4938,11 +4938,22 @@ function updateCar(c, dt, ranked) {
         Input.rumble(0.18 + bite * 0.32, 70);
         c.uslipHapT = 0.16 - bite * 0.06;                // firmer slide = tighter pulse
       }
-      // …and the REAR, past its peak (the curve's fall, not its approach): a
-      // slower, heavier pulse than the front's so a pad or a phone can tell
-      // which end has let go. Feedback only — reads the slip, writes nothing.
-      if (satR > TyreModel.CURVE_PEAK_X && (c.oslipHapT = (c.oslipHapT || 0) - dt) <= 0) {
-        const bite = clamp((satR - TyreModel.CURVE_PEAK_X) / 1.5, 0, 1);
+      // …and the REAR — but only when the rear is the end that is going. Each
+      // axle is measured against where ITS OWN grip starts to fall (the front
+      // at its peak, the rear at the end of its longer plateau), and the cue
+      // fires when the rear is further past its own edge than the front is
+      // past theirs. An absolute rear threshold is useless: the rear's
+      // x = cs·slip/mu runs ABOVE the front's through ordinary understeer
+      // (CS_REAR > CS_FRONT, muR < muF), so it buzzed through every fast
+      // corner and broke tests/specs/understeer-cue.spec.js's "no other
+      // haptic" premise (measured). With the relative rule it is silent
+      // through understeer, a held drift and a lift-off, and speaks where the
+      // rear actually goes light — trail braking (measured: 55 m/s, 0.75
+      // lock). Slower and heavier than the front's pulse so a pad or a phone
+      // can tell the two ends apart. Feedback only: reads slip, writes nothing.
+      const pastR = satR / TyreModel.CURVE_HOLD_R, pastF = sat / TyreModel.CURVE_PEAK_X;
+      if (pastR > 1 && pastR > pastF && (c.oslipHapT = (c.oslipHapT || 0) - dt) <= 0) {
+        const bite = clamp(pastR - 1, 0, 1);
         Input.vibrate(18 + (bite * 22) | 0);
         Input.rumble(0.30 + bite * 0.40, 110);
         c.oslipHapT = 0.24 - bite * 0.08;
