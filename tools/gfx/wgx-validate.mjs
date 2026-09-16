@@ -6,21 +6,19 @@
 //
 // For months this repo believed "WGSL is not compilable in this container" and
 // shipped read-verified-only WGSL (447e904b's own commit message says so). That
-// is FALSE: the full Playwright Chromium binary (NOT the headless shell — it
-// has no navigator.gpu) with new-headless + the flags below exposes a real Dawn
-// WebGPU device on SwiftShader. Dawn then does what no amount of read-review
+// is FALSE: Chromium with the flags below can expose a real Dawn WebGPU
+// device on SwiftShader. Full Chromium is preferred; some headless-shell
+// builds also work, so test the adapter instead of inferring support from
+// the executable name. Dawn then does what no amount of read-review
 // does: it PARSES every WGSL module (the derivative_uniformity violation that
 // painted the whole road NaN-white on phones was a one-line Dawn error here),
 // VALIDATES every pipeline (the spec-invalid MSAA count 2, the non-renderable
 // rg11b10ufloat), and runs the full frame graph.
 //
-// THE CEILING — read this before chasing pixels: this environment VALIDATES
-// but does not EXECUTE. Submitted work completes with zeroed results, canvas
-// present composites nothing (screenshots of the WGX canvas are BLANK — that is
-// the environment, not a bug), and under the full desktop stack SwiftShader may
-// LOSE the device a few seconds in ("createBuffer failed, size (N) is too
-// large" on a tiny N is Chrome's misleading lost-device error). Validation
-// evidence here is exact; pixel sign-off needs a real GPU.
+// SwiftShader can EXECUTE shaders and WGX can present through its readback /
+// Canvas2D path. Native swapchain support and device stability vary by build.
+// Software execution validates functionality, not real-hardware performance;
+// software forces MSAA 1 and cannot sign off the hardware-only paths.
 //
 // Usage:
 //   node tools/gfx/wgx-validate.mjs --static
@@ -44,20 +42,26 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { parseArgs } from "node:util";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
-const args = process.argv.slice(2);
-const track = args.find((a) => !a.startsWith("--")) || "montreal";
-const lite = args.includes("--lite");
-const noRg11b10 = args.includes("--no-rg11b10");
-const staticOnly = args.includes("--static");
+const { values, positionals } = parseArgs({ allowPositionals: true, options: {
+  lite: { type: "boolean" }, "no-rg11b10": { type: "boolean" },
+  static: { type: "boolean" }, "lax-uniformity": { type: "boolean" },
+  frames: { type: "string", default: "60" },
+} });
+if (positionals.length > 1) throw new Error("Expected at most one trackId");
+const track = positionals[0] || "montreal";
+const lite = !!values.lite;
+const noRg11b10 = !!values["no-rg11b10"];
+const staticOnly = !!values.static;
 // Default ON: the live gate compiles as WebKit does (see the init script).
 // --lax-uniformity restores Dawn's warning-only default to bisect a red run.
-const uniformityError = !args.includes("--lax-uniformity");
-const framesArg = args.indexOf("--frames");
-const frames = framesArg >= 0 ? Math.max(1, parseInt(args[framesArg + 1], 10) || 60) : 60;
+const uniformityError = !values["lax-uniformity"];
+const frames = Number(values.frames);
+if (!Number.isSafeInteger(frames) || frames < 1) throw new Error("--frames must be a positive integer");
 
 // Source invariants the Dawn pass cannot see on a software adapter (it forces
 // MSAA 1) and cannot see at all for legal-but-wrong pipeline state (sky
@@ -117,19 +121,14 @@ const fail = (msg) => { failures += 1; console.error("FAIL:", msg); };
 staticCheck();
 if (staticOnly) {
   if (failures) { console.error("FAIL: wgx-validate --static (" + failures + ")"); process.exit(1); }
-  console.log(JSON.stringify({ ok: true, static: true }, null, 2));
+  console.log(JSON.stringify({ ok: true, static: true, track, frames }, null, 2));
   process.exit(0);
 }
 
 try {
   const srv = await startStaticServer(ROOT);
-  // The FULL Chromium build: the headless shell playwright launches by default
-  // has no navigator.gpu at all. launchChromium's pickChromium() already
-  // resolves the sandbox's full build; passing chromium.executablePath() here
-  // OVERRODE it with playwright's registry path for whatever build the npm
-  // pin wants — which broke the moment playwright 1.61 pinned chromium-1228
-  // in a container whose egress allowlist blocks cdn.playwright.dev, while
-  // /opt/pw-browsers/chromium (full 1194, navigator.gpu present) sat unused.
+  // Honor the shared executable resolver, including CHROME / PW_CHROMIUM.
+  // Overriding it with chromium.executablePath() can select an absent download.
   const browser = await launchChromium({
     headless: true,
     args: WEBGPU_CHROMIUM_ARGS,
@@ -196,11 +195,12 @@ try {
 
   await page.goto(srv.url + "index.html");
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 60000 });
-  await page.evaluate((id) => { __apex.race(id); __apex.go(); }, track);
+  const requested = await page.evaluate((id) => __apex.race(id), track);
+  if (!requested) throw new Error("Unknown trackId: " + track);
   await page.waitForFunction(
-    () => { try { const p = __apex.physState(); return p && p.ok !== false; } catch { return false; } },
-    null, { polling: 100, timeout: 120000 });
-  await page.evaluate(() => { __apex.jump(0.10); __apex.snapCam(); });
+    (id) => { try { const p = __apex.physState(); return __apex.info().track === id && p && p.ok !== false; } catch { return false; } },
+    track, { polling: 100, timeout: 120000 });
+  await page.evaluate(() => { __apex.go(); __apex.jump(0.10); __apex.snapCam(); });
   await page.evaluate(
     (n) => new Promise((res) => { let i = 0; const t = () => (++i > n ? res() : requestAnimationFrame(t)); requestAnimationFrame(t); }),
     frames);

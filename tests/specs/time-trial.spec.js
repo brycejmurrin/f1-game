@@ -272,7 +272,7 @@ for (const device of [
   const {viewport,touch,scale}=device;
   test.describe(`Practice controls at ${viewport.width}x${viewport.height} ${scale}%`, () => {
     test.use({viewport,hasTouch:touch,isMobile:touch});
-    test("coach, unscored checkpoint and compound selection work through the pause menu", async ({page}, info) => {
+    test("coach, drills and pit strategy work through Settings → Driving", async ({page}, info) => {
       const errors=[]; page.on("pageerror", e=>errors.push(e.message));
       const press = async selector => touch ? page.locator(selector).tap() : page.locator(selector).click();
       await enterTT(page);

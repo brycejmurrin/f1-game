@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "montreal",
+    pit: { side: -1 },   // the pit complex (TrackPit): left of the main straight
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
     // Start/finish line. Snapped to the real one: coord 0.1 m off centreline, 2 nodes past vertex 0.
     // Was 0.9150. That already measured straight (mean |k| 0.00003 over

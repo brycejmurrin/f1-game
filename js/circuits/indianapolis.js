@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "indianapolis",
+    pit: { side: -1 },   // the pit complex (TrackPit): this circuit's own garages stand on the left of the main straight
     classic: true,
     // Upstream us-1909 already runs clockwise, matching the F1 lap.
     reverse: false,

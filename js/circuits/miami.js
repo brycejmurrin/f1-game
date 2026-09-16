@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "miami",
+    pit: { side: -1 },   // the pit complex (TrackPit): left of the main straight
     reverse: false, // direction switched to real-world CW/CCW (was auto-audit reverse:true)
     // Start/finish line. Snapped to the real one: coord 0.7 m off centreline; = trace vertex 0.
     // Was 0.2325, which put the line inside a corner — a start line is

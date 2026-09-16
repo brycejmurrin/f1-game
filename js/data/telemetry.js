@@ -2,6 +2,25 @@
 const DataTelemetry = (function () {
   "use strict";
 
+  // Four lanes remain selectable for a useful field overview. Only the first
+  // two receive full channel traces; lanes three and four are intentionally
+  // speed-marker comparisons on the primary chart (and remain visible in the
+  // map/gauge lane board). Naming that distinction in the DOM keeps the picker
+  // affordance honest without discarding the extra-driver comparison.
+  function laneRole(i) {
+    return i === 0 ? "PRIMARY TRACE" : i === 1 ? "COMPARISON TRACE" : "SPEED MARKER";
+  }
+
+  function summaryTime(t) {
+    if (typeof t !== "number" || !isFinite(t) || t < 0) return "—";
+    const m = Math.floor(t / 60), s = t - m * 60;
+    return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
+  }
+
+  function summaryValue(v, suffix) {
+    return (typeof v === "number" && isFinite(v)) ? String(Math.round(v)) + suffix : "—";
+  }
+
   function create(ctx) {
     const { el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
             invalidateOther, COMPOUND, findTeam, cssColor, textColorOn, NO_TELEM_MSG } = ctx;
@@ -89,6 +108,33 @@ const DataTelemetry = (function () {
       }
       if (lo > 0 && Math.abs(car[lo - 1].t - t) < Math.abs(car[lo].t - t)) lo--;
       return car[lo];
+    }
+
+    function updateTextSummary(view) {
+      if (!view || !view.a11ySummary) return;
+      const selected = view.laps.map(function (t, i) {
+        return dcode(t.d) + " (" + laneRole(i).toLowerCase() + ")";
+      }).join(", ");
+      const bits = ["Selected drivers: " + (selected || "none") + ".",
+        "Time " + summaryTime(view.cursorT) + "."];
+      view.laps.forEach(function (lane, i) {
+        // The full text is useful to assistive technology and also gives the
+        // parent CSS a stable, concise diagnostic line without putting dynamic
+        // values into the canvas bitmap.
+        const c = sampleAt(lane.car, view.cursorT === null ? 0 : view.cursorT);
+        if (!c) {
+          bits.push(dcode(lane.d) + ": no current sample.");
+          return;
+        }
+        bits.push(dcode(lane.d) + " " + laneRole(i).toLowerCase() + ": " +
+          "speed " + summaryValue(c.speed, " km/h") + ", gear " +
+          (typeof c.gear === "number" && isFinite(c.gear) ? (c.gear ? "G" + c.gear : "N") : "—") +
+          ", throttle " + summaryValue(c.throttle, "%") + ", brake " + summaryValue(c.brake, "%") +
+          ", rpm " + summaryValue(c.rpm, "") + ", DRS " +
+          (c.drs == null ? "—" : (drsOpen(c.drs) ? "open" : "closed")) + ".");
+      });
+      if (view.laps.length > 2) bits.push("Additional lanes are speed markers only.");
+      view.a11ySummary.textContent = bits.join(" ");
     }
 
     function loadTelemetry() {
@@ -191,6 +237,7 @@ const DataTelemetry = (function () {
             chip.style.color = textColorOn(col);
             row.appendChild(chip);
             row.appendChild(el("span", "dh-name", e.d.name || "—"));
+            row.appendChild(el("span", "dh-tsect", laneRole(i)));
             if (badges || tray.some(function (o) { return o.sessionKey !== e.sessionKey; })) {
               row.appendChild(el("span", "dh-lane-ses", e.sessionLabel || e.sessionName));
             }
@@ -204,6 +251,10 @@ const DataTelemetry = (function () {
             row.appendChild(rm);
             summary.appendChild(row);
           });
+          if (tray.length > 2) {
+            summary.appendChild(el("div", "dh-live-sub",
+              "The first two lanes draw full traces; additional lanes add speed markers."));
+          }
           const loadBtn = el("button", "dh-livebtn");
           loadBtn.textContent = tray.length === 1 ? "LOAD LAP" : "COMPARE " + tray.length + " LANES";
           loadBtn.dataset.block = "full";   // css/data.css .dh-livebtn[data-block]
@@ -436,7 +487,7 @@ const DataTelemetry = (function () {
     }
 
     // one-line header per lane: swatch · name (· session) · caller's tail (sectors/lap, or a message)
-    function laneHeader(t, col, dupNum, buildTail) {
+    function laneHeader(t, col, dupNum, buildTail, role) {
       const ht = el("div", "dh-live-title dh-thead");
       const sw = el("span", "dh-swatch"); sw.style.background = cssColor(col);
       ht.appendChild(sw);
@@ -445,6 +496,7 @@ const DataTelemetry = (function () {
       nameEl.title = t.d.name || dcode(t.d);
       ht.appendChild(nameEl);
       if (dupNum[t.d.num] > 1 && t.sessionLabel) ht.appendChild(el("span", "dh-lane-ses", t.sessionLabel));
+      if (role) ht.appendChild(el("span", "dh-tsect", role));
       buildTail(ht);
       return ht;
     }
@@ -460,7 +512,7 @@ const DataTelemetry = (function () {
         tels.forEach(function (t, i) {
           mainArea.appendChild(laneHeader(t, laneCols0[i], dupNum0, function (ht) {
             ht.appendChild(el("span", "dh-tsect", "Car telemetry isn't available for this lap."));
-          }));
+          }, laneRole(i) + " · NO DATA"));
         });
         detail.appendChild(mainArea);
         appendStintsPits(mainArea, tels[0]);
@@ -479,6 +531,7 @@ const DataTelemetry = (function () {
       const sideArea = el("div", "dh-telem-side");
 
       tels.forEach(function (t, i) {
+        const li = laps.indexOf(t);
         mainArea.appendChild(laneHeader(t, laneCols[i], dupNum, function (ht) {
           if (!t.lap) {
             ht.appendChild(el("span", "dh-tsect", "No timed lap found in this session."));
@@ -492,7 +545,7 @@ const DataTelemetry = (function () {
             (t.lap.lapNumber !== null ? "L" + t.lap.lapNumber + " · " : "") + fmtLap(t.lap.lapDuration));
           lapEl.title = "Fastest lap";
           ht.appendChild(lapEl);
-        }));
+        }, li < 0 ? "NO CAR DATA" : laneRole(li)));
       });
 
       const view = {
@@ -512,8 +565,9 @@ const DataTelemetry = (function () {
         playing: false, rate: 1, _raf: 0, _last: 0, onboard: false,
         chart: null, map: null, delta: null,
         chartBase: null, mapBase: null, deltaBase: null, mapT: null,
-        sectors: null, g: null, playBtn: null
+        sectors: null, g: null, playBtn: null, a11ySummary: null, updateSummary: null
       };
+      view.updateSummary = function () { updateTextSummary(view); };
       // per-driver visibility: visible = primary (solid), visibleC = compare (dashed)
       view.visibleC = {};
       CHANNELS.forEach(function (ch) { view.visible[ch.id] = view.visibleC[ch.id] = !ch.off; });
@@ -536,6 +590,16 @@ const DataTelemetry = (function () {
       }
 
       // Transport bar → main
+      const textSummary = el("details");
+      textSummary.appendChild(el("summary", "adv-more-btn", "TEXT SUMMARY"));
+      const textSummaryBody = el("p", "dh-live-sub");
+      textSummaryBody.id = "dh-telem-summary";
+      textSummaryBody.setAttribute("role", "status");
+      textSummaryBody.setAttribute("aria-live", "polite");
+      textSummaryBody.setAttribute("aria-atomic", "true");
+      textSummary.appendChild(textSummaryBody);
+      view.a11ySummary = textSummaryBody;
+      mainArea.appendChild(textSummary);
       mainArea.appendChild(buildTransport(view));
 
       const isLS = shortLS();
@@ -547,6 +611,11 @@ const DataTelemetry = (function () {
 
       const c1 = el("canvas", "dh-canvas");
       c1.style.touchAction = "none";
+      c1.setAttribute("role", "img");
+      c1.setAttribute("aria-label", "Telemetry trace chart for " + view.laps.map(function (t, i) {
+        return dcode(t.d) + " (" + laneRole(i).toLowerCase() + ")";
+      }).join(", ") + "; drag to scrub.");
+      c1.setAttribute("aria-describedby", "dh-telem-summary");
       mainArea.appendChild(c1);
       view.chart = c1;
       // Layout dims live on the view; the buffers carry layout x ratio. Every
@@ -561,6 +630,9 @@ const DataTelemetry = (function () {
         const CD_H = deltaH(CW);
         const cd = el("canvas", "dh-canvas dh-delta");
         cd.style.touchAction = "none";
+        cd.setAttribute("role", "img");
+        cd.setAttribute("aria-label", "Time gap chart between the primary and comparison traces; drag to scrub.");
+        cd.setAttribute("aria-describedby", "dh-telem-summary");
         mainArea.appendChild(cd);
         view.delta = cd;
         view.dw = CW; view.dh = CD_H;
@@ -574,7 +646,8 @@ const DataTelemetry = (function () {
         // driver key: each lane's code chip in its own trace/dot colour
         view.laps.forEach(function (t, i) {
           const badge = (dupNum[t.d.num] > 1 && t.sessionLabel) ? " " + t.sessionLabel : "";
-          const chip = el("span", "dh-codechip", dcode(t.d) + badge);
+          const chip = el("span", "dh-codechip", dcode(t.d) + badge + " · " + laneRole(i));
+          chip.setAttribute("aria-label", dcode(t.d) + " " + laneRole(i).toLowerCase());
           const col = view.laneCols[i];
           chip.style.background = cssColor(col);
           chip.style.color = textColorOn(col);
@@ -643,6 +716,9 @@ const DataTelemetry = (function () {
 
       if (primary.loc && primary.loc.length > 8) {
         const c2 = el("canvas", "dh-canvas dh-map");
+        c2.setAttribute("role", "img");
+        c2.setAttribute("aria-label", "Track map for the selected telemetry lanes; dots mark each driver and colour shows speed.");
+        c2.setAttribute("aria-describedby", "dh-telem-summary");
         sideArea.appendChild(c2);
         view.map = c2;
         view.mw = 320; view.mh = 320;
@@ -659,7 +735,7 @@ const DataTelemetry = (function () {
         // one map-legend chip per lane, in that lane's colour
         view.laps.forEach(function (t, i) {
           const badge = (dupNum[t.d.num] > 1 && t.sessionLabel) ? " " + t.sessionLabel : "";
-          mkey.appendChild(mchip(view.laneCols[i], dcode(t.d) + badge));
+          mkey.appendChild(mchip(view.laneCols[i], dcode(t.d) + badge + " · " + laneRole(i)));
         });
         // track colouring key: slow (blue) -> fast (red), sectors marked S2/S3
         const gi = el("span", "dh-legend-item dh-legend-static");
@@ -691,6 +767,7 @@ const DataTelemetry = (function () {
       attachScrub(c1, view);
       buildBases(view);
       paintFrame(view);
+      updateTextSummary(view);
       telView = view;
 
       // Resize canvases when the popup is resized (e.g. orientation change)
@@ -778,7 +855,7 @@ const DataTelemetry = (function () {
       view.playBtn = play;
       const restart = el("button", "dh-tbtn dh-trestart", "⏮");
       restart.type = "button"; restart.title = "Restart lap";
-      restart.addEventListener("click", function () { view.cursorT = 0; view._last = 0; paintFrame(view); });
+      restart.addEventListener("click", function () { view.cursorT = 0; view._last = 0; paintFrame(view); if (view.updateSummary) view.updateSummary(); });
       bar.appendChild(play); bar.appendChild(restart);
 
       const rates = el("div", "dh-trates");
@@ -964,6 +1041,7 @@ const DataTelemetry = (function () {
         if (pid === null || (ev && ev.pointerId !== pid)) return;
         try { canvas.releasePointerCapture && canvas.releasePointerCapture(pid); } catch (e) {}
         pid = null; srect = null;
+        if (view.updateSummary) view.updateSummary();
       }
       canvas.addEventListener("pointerup", endScrub);
       canvas.addEventListener("pointercancel", endScrub);
@@ -990,6 +1068,7 @@ const DataTelemetry = (function () {
       view.playing = false;
       if (view._raf) { cancelAnimationFrame(view._raf); view._raf = 0; }
       setPlayLabel(view);
+      if (view.updateSummary) view.updateSummary();
     }
 
     // composite one frame: cached bases + moving cursor, car dots, delta, gauges

@@ -4,6 +4,33 @@ const GameResults = (function () {
 
 const PODIUM = [" p1", " p2", " p3"];   // indexed 0-based; 4th place on has none
 
+// Race classification timing is deliberately derived from the same fields as
+// RaceControl.finishOrder (game.js): completed laps, then finishT + penalty.
+// Missing fields mean the source cannot support an official elapsed/gap, so the
+// results sheet leaves that part out rather than manufacturing a value.
+function correctedFinish(c) {
+  if (!c || typeof c.finishT !== "number" || !isFinite(c.finishT) ||
+      typeof c.penalty !== "number" || !isFinite(c.penalty) || c.finishT <= 0) return null;
+  return c.finishT + c.penalty;
+}
+
+function raceClock(G, seconds) {
+  if (!(typeof seconds === "number" && isFinite(seconds) && seconds > 0)) return null;
+  if (G && typeof G.fmtTime === "function") return G.fmtTime(seconds);
+  const m = Math.floor(seconds / 60), s = seconds - m * 60;
+  return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
+}
+
+function timingSummary(G, order, dnfOf, sourceOf) {
+  const winner = order && order[0];
+  if (!winner || dnfOf(winner)) return null;
+  const data = sourceOf ? sourceOf(winner) : winner;
+  if (!data || data.retired) return null;
+  const winnerTime = correctedFinish(data);
+  if (winnerTime == null || typeof data.lap !== "number" || !isFinite(data.lap)) return null;
+  return { winner, winnerTime, winnerLap: data.lap, text: raceClock(G, winnerTime) };
+}
+
 // One POS / SWATCH / NAME / PTS row, the shape every ranking list on this
 // screen shares (results top-10, constructors, standings, the champion
 // panel). `extraClass` appends to "res-row" (e.g. " you").
@@ -79,8 +106,11 @@ function buildResults(order) {
   // the retirements among the untimed. An untimed car with no `r` keeps the
   // local flag — the best a guest can do until the payload says.
   const np = G.netPlay;
-  const verdict = np && np.active && np.active() && !np.ownsClassification() && np.peerResult();
+  const guest = np && np.active && np.active() && !np.ownsClassification();
+  const verdict = guest && np.peerResult();
   const hostRow = new Map(Array.isArray(verdict) ? verdict.map((e) => [e.d, e]) : []);
+  const hasCanonicalHost = Array.isArray(verdict) && verdict.length === order.length && order.length > 0
+    && hostRow.size === order.length && order.every((c, i) => verdict[i] && verdict[i].d === c.driverId);
   const dnfOf = (c) => {
     const e = hostRow.get(c.driverId);
     const local = c.retired ? (c.dnf || "dnf") : null;
@@ -88,6 +118,28 @@ function buildResults(order) {
     if (e.r != null) return e.r || null;
     return e.t > 0 ? null : local;
   };
+  // A guest's order and verdict are host-owned. Use those same timing, penalty,
+  // and lap fields for the official summary; local reliability can classify a
+  // different car and must never leak into the host's result arithmetic.
+  const sourceOf = (c) => {
+    if (!hasCanonicalHost) return c;
+    const e = hostRow.get(c.driverId);
+    if (!e) return null;
+    const data = Object.assign({}, c);
+    data.finishT = typeof e.t === "number" && isFinite(e.t) ? e.t : null;
+    data.penalty = typeof e.p === "number" && isFinite(e.p) ? e.p : null;
+    data.lap = typeof e.lap === "number" && isFinite(e.lap) ? e.lap : null;
+    data.retired = !!e.r;
+    return data;
+  };
+  const timing = guest && !hasCanonicalHost ? null : timingSummary(G, order, dnfOf, sourceOf);
+  if (timing) {
+    const box = document.createElement("div");
+    box.className = "sel-label";
+    box.setAttribute("role", "status");
+    box.textContent = `OFFICIAL WINNER ELAPSED — ${timing.winner.code || "WINNER"}  ${timing.winner.name || ""}: ${timing.text}`;
+    els.resultsTable.appendChild(box);
+  }
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
     const row = document.createElement("div");
@@ -105,8 +157,12 @@ function buildResults(order) {
     // append after it (appending first silently destroyed the tag every race).
     // A lapped finisher is flagged at its next crossing (RaceControl.flagOut),
     // so its lap count is what separates it from the winner — say so.
-    const down = !dnf && order[0] ? Math.max(0, (order[0].lap | 0) - (c.lap | 0)) : 0;
-    const suffix = dnf ? `  (${dnf})` : c.penalty ? `  (+${c.penalty}s)` : "";
+    const winnerData = order[0] ? sourceOf(order[0]) : null;
+    const carData = sourceOf(c) || {};
+    const down = !dnf && winnerData && typeof winnerData.lap === "number" &&
+      isFinite(winnerData.lap) && typeof carData.lap === "number" && isFinite(carData.lap)
+      ? Math.max(0, (winnerData.lap | 0) - (carData.lap | 0)) : 0;
+    const suffix = dnf ? `  (${dnf})` : carData.penalty ? `  (+${carData.penalty}s)` : "";
     const downSuffix = down ? `  (+${down}${down > 1 ? " LAPS)" : " LAP)"}` : "";
     nm.textContent = `${c.code}  ${c.name}${suffix}${downSuffix}`;
     if (other) {
@@ -123,6 +179,18 @@ function buildResults(order) {
     const fl = !sprint && G.seasonMode && season && season.lastFl === c.driverId && !dnf ? 1 : 0;
     pt.textContent = dnf ? "DNF" : `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}`;
     row.append(pos, sw, nm);
+    if (timing && !dnf && c !== timing.winner && typeof carData.lap === "number" &&
+        isFinite(carData.lap) && carData.lap === timing.winnerLap) {
+      const official = correctedFinish(carData);
+      const gap = official == null ? null : official - timing.winnerTime;
+      if (gap != null && isFinite(gap) && gap >= 0) {
+        const gapText = "+" + gap.toFixed(3) + "s";
+        const gapEl = document.createElement("span");
+        gapEl.className = "q-time"; gapEl.textContent = gapText;
+        gapEl.setAttribute("aria-label", gapText + " behind winner");
+        nm.appendChild(gapEl);
+      }
+    }
     const strip = stintStrip(c);
     if (strip) row.appendChild(strip);
     row.appendChild(pt);

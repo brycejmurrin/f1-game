@@ -33,7 +33,7 @@ function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m)
   if (m[prop] !== v) { m[prop] = v; if (prop.charCodeAt(0) === 45) el.style.setProperty(prop, v); else el.style[prop] = v; } }
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
-
+function hAttr(el, name, value) { if (!el) return; const v = String(value); if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
 let _lastRank = 0, _posFlashT = 0;   // POS box flash state (see the tick)
 // Team colours are static — compute once per team, the minimap's idiom.
 // Keyed on the store revision, exactly as _livResolveCache is (js/game.js):
@@ -672,34 +672,66 @@ function updateHud(force) {
   hToggle(els.btnOT, "armed", player.otArmed && player.otT <= 0);
   const ot = player.otT > 0 ? "ot-active" : player.otArmed ? "ot-armed" : player.otCool > 0 ? "ot-cool" : "ot-off";
   hClass(els.ot, ot);
-  const otOff = G.state === "race" && !G.otEnabled() && player.otT <= 0;
-  // Four states, four spellings. ot-off and ot-cool both read "OVERTAKE" and
-  // differed by a 50% opacity alone — "closing on the car ahead will arm it"
-  // and "nothing arms it for another 12 s" are different messages, so the
-  // lockout counts itself down (whole seconds: a 9..14 s wait, not a 0.1 s push).
-  hText(els.ot, player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1)
-                : otOff ? "NO OVERTAKE"
+  const caution = G.cautionInfo ? G.cautionInfo() : null;
+  const gateOpen = typeof G.otEnabled === "function" ? !!G.otEnabled() : true;
+  const otOff = G.state === "race" && !gateOpen && player.otT <= 0;
+  const leader = G.ranked && G.ranked[0];
+  let otReason = "";
+  if (otOff) {
+    // RaceControl has two independent gates. Keep the reason in the HUD so a
+    // player knows whether to wait for green or for the opening lap to pass;
+    // do not alter the input path, which still checks c.otArmed in game.js.
+    otReason = caution && caution.level > 0 ? "caution"
+      : leader && leader.lap > 1 ? "race-control"
+      : leader ? "opening-lap" : "waiting-for-leader";
+  }
+  const otPending = player.otT <= 0 && !player.otArmed;
+  const otUnavailable = otPending || otOff;
+  const otText = player.otT > 0 ? "OVERTAKE " + player.otT.toFixed(1)
+                : otOff ? (otReason === "caution" ? "OT · CAUTION"
+                  : otReason === "opening-lap" ? "OT · LAP 1"
+                  : otReason === "waiting-for-leader" ? "OT · GRID"
+                  : "NO OVERTAKE")
                 : player.otCool > 0 && !player.otArmed ? "COOLDOWN " + Math.ceil(player.otCool)
-                : "OVERTAKE");
+                : player.otArmed ? "OVERTAKE READY" : "OT · CLOSE IN";
+  hText(els.ot, otText);
+  hAttr(els.ot, "aria-label", player.otT > 0 ? "Overtake active"
+    : otOff ? (otReason === "caution" ? "Overtake unavailable under caution"
+      : otReason === "opening-lap" ? "Overtake unavailable on lap 1"
+      : otReason === "waiting-for-leader" ? "Overtake waiting for the leader"
+      : "Overtake unavailable")
+    : player.otCool > 0 && !player.otArmed ? "Overtake cooldown"
+    : player.otArmed ? "Overtake ready — press to deploy" : "Overtake unavailable — close on the car ahead");
+  hAttr(els.btnOT, "aria-disabled", otUnavailable ? "true" : "false");
+  hAttr(els.btnOT, "data-state", otOff ? otReason : player.otT > 0 ? "active"
+    : player.otCool > 0 && !player.otArmed ? "cooldown" : player.otArmed ? "ready" : "pending");
   hToggle(els.btnOT, "dead", otOff);
   const xOpen = (player.aeroX || 0) > 0.05;
   const dz = G.aeroZoneAhead ? G.aeroZoneAhead(player.s || 0) : Infinity;
   const noZones = !(G.aeroZones && G.aeroZones.length);
+  const autoAero = G.raceAeroMode === "auto";
   hToggle(els.btnAero, "on", xOpen);
   hToggle(els.btnAero, "armed", !!player.xArmed && !xOpen);
   hToggle(els.btnAero, "dead", noZones);
-  hClass(els.aero, noZones ? "ax-none" : xOpen ? "ax-open"
-    : player.xArmed ? "ax-armed" : "ax-off");
+  hAttr(els.btnAero, "aria-disabled", autoAero || noZones ? "true" : "false");
+  hAttr(els.btnAero, "data-state", autoAero ? "automatic" : noZones ? "unavailable" : xOpen ? "active" : player.xArmed ? "armed" : "available");
+  const aeroClass = noZones ? "ax-none" : xOpen ? "ax-open"
+    : player.xArmed ? "ax-armed" : "ax-off";
+  hClass(els.aero, aeroClass);
   // The TEXT answers "where is the zone", so it keys off position, not arming.
   // Keying it off xArmed showed "AERO 0m" to a car standing INSIDE a zone but
   // too slow to arm — a distance readout of zero, which reads as "the zone is
   // right here" rather than "you are in it". Whether the mode is available is
   // the CLASS's job (ax-armed lights the chip), so the two never contradict.
-  hText(els.aero, noZones ? "NO AERO ZONE"
+  const aeroText = autoAero ? (xOpen ? "AUTO X-MODE" : "AERO AUTO")
+    : noZones ? "NO AERO ZONE"
     : xOpen ? "X-MODE"
     : dz === 0 ? "AERO ZONE"
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
-    : "Z-MODE");
+    : "Z-MODE";
+  hText(els.aero, aeroText);
+  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? "Automatic X-mode active" : "Active aero automatic")
+    : noZones ? "No aero zone" : xOpen ? "X-mode active" : "Active aero manual");
   if (timeTrial) {
     // The DROP rule (gapForm) runs here too. The attribute it maintains lives
     // on <html> and outlives the session, so a race on a narrow phone left the

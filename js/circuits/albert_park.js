@@ -25,7 +25,7 @@
     baseHW: 7,
     // S/F walls sit ~1.7 m off the road; 4.5 m of local setback is enough
     // for a 2.4 m lane + verge without opening the rest of the lap.
-    pitCorridor: { side: 1, setback: 4.5 },
+    pit: { side: 1 },   // the pit complex (TrackPit): lake side of the main straight
     sceneryCoordinates: "racing",
     flatTerrain: true,
     terrainOuter: 120,

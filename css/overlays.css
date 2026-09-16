@@ -802,7 +802,7 @@ body[data-density="compact"] #campicker {
 /* ---------- how to play ---------- */
 /* Section landmarks turn a very long reference into something browsable. On a
    tall sheet the rail is a horizontal strip under the title; on a wide sheet
-   it becomes a left contents rail. The <dl> owns the one vertical scroller
+   it becomes a left contents rail. The body owns the one vertical scroller
    either way. Links never wrap into a second row of chrome. */
 #howtoplay-inner {
   --fit-at: 200px;
@@ -874,6 +874,16 @@ body[data-density="compact"] #campicker {
 #howtoplay-inner[data-density="compact"] > .sheet-foot {
   grid-column: auto; grid-row: auto;
 }
+#howtoplay .sheet-body {
+  /* Keep the scroll thumb in a grid row: its negative right margin creates
+     scrollable overflow in block layout after Quick Start wraps the <dl>. */
+  display: grid; grid-template-columns: minmax(0, 1fr); align-content: start;
+  font-size: var(--fs-micro); line-height: 1.45;
+}
+#htp-controls { scroll-margin-block-start: var(--gap); }
+#htp-inputs { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5); }
+#htp-inputs details { min-width: 0; }
+#htp-inputs p { margin-block: calc(var(--gap) * 0.5); }
 #howtoplay dl {
   display: grid;
   grid-template-columns: minmax(0, 0.3fr) minmax(0, 1fr);

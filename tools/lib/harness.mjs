@@ -27,8 +27,8 @@
 //   try { browser = await launchChromium({ args: [...WEBGPU_CHROMIUM_ARGS] }); … }
 //   finally { await shutdown(); }
 //
-// WGX needs the FULL Chromium binary (not the headless shell — no navigator.gpu)
-// plus Vulkan/SwiftShader pins. The old `--use-angle=swiftshader
+// WGX prefers full Chromium; some headless-shell builds also expose WebGPU.
+// Test the adapter with the Vulkan/SwiftShader pins. The old `--use-angle=swiftshader
 // --enable-unsafe-webgpu` pair alone refuses MSAA>1; see tools/gfx/wgx-validate.mjs.
 //
 // SwiftShader: Dawn validation oracle — native swapchain compositor blank; WGX

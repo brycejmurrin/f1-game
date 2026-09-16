@@ -4,6 +4,7 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "bahrain",
+    pit: { side: -1 },   // the pit complex (TrackPit): the paddock is on the left of the main straight
     reverse: false,  // driving direction flipped (manual override of the GPS-trace auto-audit)
     // Bounded only (START-LINES: Not located — OSM pit way is a weak proxy). Keep until a better source.
     startFrac: 0.2250,

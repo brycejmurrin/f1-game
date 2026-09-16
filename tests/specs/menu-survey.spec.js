@@ -33,6 +33,7 @@ async function shot(page, name) {
 }
 // Fire a button's click handler in-page (bypasses canvas hit-test flakiness).
 const clickId = (page, id) => page.evaluate((id) => document.getElementById(id).click(), id);
+const openDetails = (page, id) => page.evaluate((id) => document.querySelector(`#${id} > summary`).click(), id);
 const labelOf = (page, id) => page.evaluate((id) => document.getElementById(id).textContent || "", id);
 
 // Race + park, then reveal the pause SETTINGS sub-menu.
@@ -146,6 +147,8 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
   test("36 lighting tuner", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSettings(page, "singapore", "night", "dry");
+    await clickId(page, "pm-open-display");
+    await openDetails(page, "pm-visual-tuners");
     await clickId(page, "pm-lighting");
     // BOOT_MS, not 8 s — the SECOND tight wait in this file and the one I missed
     // when the helper's was raised. It opens the TUNER over a running singapore
