@@ -518,10 +518,10 @@ function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season);
 // here. Everything slider- or harness-tunable stays a `let` below.
 const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         GRAVITY_SLOPE, LAT_MAX, STEER_VMAX, FRONT_WEIGHT, CS_FRONT, CS_REAR,
-        WT_LONG, TYRE_DROP, TYRE_PEAK_X, TYRE_DROP_W, LOAD_SENS, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
+        WT_LONG, LOAD_SENS, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
         X_DF_LOSS_HI, X_COAST_CUT_LO, X_COAST_CUT_HI, X_OPEN_RATE, X_CLOSE_RATE,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
-        LONG_GRIP, THR_ELLIPSE, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
+        LONG_GRIP, THR_FLOOR, THR_CAP, THR_VK, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
         DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, DRAIN_LO, DRAIN_HI,
         REGEN_LO, REGEN_HI, OT_TIME_LO, OT_TIME_HI, OT_COOL_LO, OT_COOL_HI,
         OT_GAP, WET_GRIP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF, BAND_CEIL,
@@ -3639,7 +3639,7 @@ const _aiDefOnce = { defend: 0, side: 0 };
 const LCAR = Collide.LCAR, WCAR = Collide.WCAR;   // car box (js/physics/collide.js)
 // Soft-saturating lateral tyre force (accel units) — hoisted out of updateCar so
 // the human path does not allocate a closure every physics step (~60/s).
-const _tyreSat = (cs, a, mu) => { const x = cs * a / mu, p = clamp((Math.abs(x) - TYRE_PEAK_X) / TYRE_DROP_W, 0, 1); return -mu * (Math.tanh(x) - Math.sign(x) * TYRE_DROP * p * p * (3 - 2 * p)); };   // past the peak the tyre lets go (TYRE_DROP in consts.js)
+const _tyreSat = (cs, a, mu, floor, fallW, hold) => -mu * TyreModel.lateralCurve(cs * a / mu, floor, fallW, hold);   // peak, plateau, floor — see tyre-model.js
 const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] each frame)
 const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 // Collision feedback when the player is involved, scaled by impact (0..1).
@@ -4801,30 +4801,42 @@ function updateCar(c, dt, ranked) {
     const vtRaw = clamp(kv * c.speed * c.speed / 9.8, -0.20, 0.20);
     c.vertLoad = damp(c.vertLoad ?? vtRaw, vtRaw, 4, dt);
     const vertLoad = c.vertLoad;
-    // --- combined slip (traction circle): grip already spent braking or
-    // accelerating is unavailable for cornering. axEstSm is the smoothed
-    // longitudinal accel (m/s²) computed above for weight transfer; the friction
-    // ellipse drops lateral grip by sqrt(1 - (axUsed/LONG_GRIP)²). So braking
-    // hard mid-corner understeers wide, while trail-braking (easing off as you
-    // turn in) progressively returns grip to the front tyres and rotates the car.
-    // Weather thins the longitudinal budget too, so braking bites grip in the wet.
-    // Weight transfer still uses faded axEstSm (no fake unload at vmax).
-    // The circle itself uses throttle DEMAND without the vmax fade, scaled by
-    // THR_ELLIPSE, so planting the throttle mid-corner spends grip even when
-    // speed-limited. Braking still costs more (BRAKE > ACCEL·THR_ELLIPSE).
+    // --- combined slip (traction circle), PER AXLE: grip already spent
+    // braking or accelerating is unavailable for cornering, and each axle pays
+    // for what IT does. Braking charges both axles (split by brake bias below;
+    // 1/1 at BB_REF) from the smoothed deceleration axEstSm, so easing off the
+    // pedal hands grip back continuously and trail-braking rotates the car.
+    // Engine braking (the coast part of that deceleration) and the THROTTLE
+    // charge the driven rear only: the undriven front spends nothing on the
+    // pedal, so a planted throttle on a slow exit lightens the rear's lateral
+    // grip and the car rotates — power-on oversteer, emergent. The throttle
+    // charge is a fraction of LONG_GRIP: traction-limited at low speed
+    // (THR_CAP), power-limited above (THR_VK / vStd, an engine's P/v), floored
+    // at THR_FLOOR so planting the pedal mid-corner spends grip even when
+    // speed-limited (THR_* in js/physics/consts.js). Weather thins the
+    // longitudinal budget too, so braking bites grip in the wet. Weight
+    // transfer still uses faded axEstSm (no fake unload at vmax).
     const axThrDemand = onThrottle
-      ? (ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * gearMult) * THR_ELLIPSE + Math.max(0, deploy)
+      ? clamp(THR_VK / Math.max(vStd(Math.abs(c.speed)), 1), THR_FLOOR, THR_CAP)
+          * (c.human ? throttleLvl : 1) * gearMult + Math.max(0, deploy) / LONG_GRIP
       : 0;
-    const axUsed = Math.max(Math.abs(c.axEstSm ?? 0), axThrDemand);
-    const axFrac = Math.min(1, axUsed / (LONG_GRIP * gripMult(c)));
-    const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
+    const longBudget = LONG_GRIP * gripMult(c);
+    const decel = Math.max(0, -(c.axEstSm ?? 0));
+    const cdNow = COAST_DRAG * (1 - xCoastCut(c) * (c.aeroX || 0));
+    // The pedal's share of a deceleration: 0 while coasting (engine braking
+    // only), 1 from 1.5× coast drag up. Continuous, so a brush of the brake
+    // never steps the front's grip.
+    const brakeMix = clamp((decel - cdNow) / (0.5 * cdNow), 0, 1);
+    const axFracF = Math.min(1, decel * brakeMix / longBudget);
+    const axFracR = Math.min(1, Math.max(decel / longBudget, axThrDemand));
+    const axFrac = Math.max(axFracF, axFracR);
     c.axFrac = axFrac;
-    c.slipFactor = slipFactor;   // setEngine() reads it for slip01; unassigned it read a constant 1
+    c.axFracF = axFracF; c.axFracR = axFracR;
     // LOCK-UP (render + feel only): braking at the top of the friction budget
     // stops the fronts turning; a lock leaves a flat spot that wobbles the
     // wheel once per revolution and heals over ~90 s of rolling. The grip
     // model above is untouched — this is what the wheels SHOW.
-    c.wheelLock = braking && axFrac > 0.92 ? clamp((axFrac - 0.92) / 0.08, 0, 1) : 0;
+    c.wheelLock = braking && axFracF > 0.92 ? clamp((axFracF - 0.92) / 0.08, 0, 1) : 0;
     c.flatSpot = clamp((c.flatSpot || 0) + c.wheelLock * dt * 0.4 - dt / 90, 0, 1);
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
@@ -4858,15 +4870,18 @@ function updateCar(c, dt, ranked) {
     // so this is the ratio each axle differs by: worn fronts stop the car
     // turning in, worn rears let it step out. Exactly 1/1 with the setting off.
     const tyreAx = tyres.axleSplit(c);
-    // Brake bias splits the ellipse by axle, gated on smoothed deceleration
-    // so pedal release is continuous. BB_REF retains the shared ellipse.
+    // Brake bias re-splits the PEDAL's share of each axle's charge, gated on
+    // smoothed deceleration so pedal release is continuous. At BB_REF both
+    // scales are exactly 1 and the per-axle fractions above stand as they are.
     const bbOn = (c.axEstSm ?? 0) < 0 && c.brakeBias != null && c.brakeBias !== SetupTune.BB_REF;
     const bb = bbOn ? SetupTune.bbScales(c.brakeBias) : null;
     // (bbSlip*, not slipF/slipR — those names are the axles' SLIP ANGLES below.)
-    const afF = bb ? Math.min(1, axFrac * bb.f) : 0, afR = bb ? Math.min(1, axFrac * bb.r) : 0;
-    const bbSlipF = bb ? Math.sqrt(Math.max(0, 1 - afF * afF)) : 1;
-    const bbSlipR = bb ? Math.sqrt(Math.max(0, 1 - afR * afR)) : 1;
-    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu * tyreMu;
+    const afF = bb ? Math.min(1, axFracF * bb.f) : axFracF;
+    const afR = bb ? Math.min(1, Math.max(axFracR - axFracF + axFracF * bb.r, axThrDemand)) : axFracR;
+    const bbSlipF = Math.sqrt(Math.max(0, 1 - afF * afF));
+    const bbSlipR = Math.sqrt(Math.max(0, 1 - afR * afR));
+    c.slipFactor = bbSlipR;   // the DRIVEN axle's circle: setEngine() reads it for slip01; unassigned it read a constant 1
+    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * marbleMu * tyreMu;
     const rollAx = SetupTune.axleGrip(c.rollBalance, c.lateralAccel || 0, loadF);
     const muF = Math.max(0.5, muBase * bbSlipF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
     const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
@@ -4900,13 +4915,34 @@ function updateCar(c, dt, ranked) {
     // near centre, smoothly capped at the friction limit — how real tyres behave
     // and far more controllable on a noisy tilt signal than a hard clamp.
     const Fyf = _tyreSat(CS_FRONT, slipF, muF) * sp;
-    const Fyr = _tyreSat(csR, slipR, muR) * sp;
+    const Fyr = _tyreSat(csR, slipR, muR, TyreModel.CURVE_FLOOR_R, TyreModel.CURVE_FALL_W_R, TyreModel.CURVE_HOLD_R) * sp;   // the rear's wider limit zone and gentler fall
     const cosD = Math.cos(delta);
+    // Where each axle sits on its tyre curve: x = cs·α/mu, the curve's own
+    // abscissa (peak at TyreModel.CURVE_PEAK_X). MONOTONIC in slip, unlike
+    // |Fy|/mu, which peaks at 1 and FALLS past the peak — a consumer keyed on
+    // "utilisation > 0.9" would go quiet exactly when the driver has overdriven
+    // most. So frontUtil/rearUtil below are x / peak: 1.0 = at the peak, above
+    // it = past (the coach and obs() read them).
+    const sat = Math.abs(CS_FRONT * slipF) / Math.max(muF, 1e-3);
+    const satR = Math.abs(csR * slipR) / Math.max(muR, 1e-3);
     // Front saturation cue: feedback only; never writes the driving state.
     if (c.isPlayer && !c.offroad && sp > 0.5) {
-      const sat = Math.abs(CS_FRONT * slipF) / Math.max(muF, 1e-3);
       const asking = Math.abs(steer) > 0.15;
-      if (sat > 1.15 && asking && (c.uslipHapT = (c.uslipHapT || 0) - dt) <= 0) {
+      // A DWELL of one extra tick before the first pulse. Placing the car
+      // (jump/rescue/an incident handback) starts it with zero lateral
+      // velocity and zero yaw rate, so full lock puts the whole steer angle
+      // into the front's slip on tick one and `sat` spikes over the trigger
+      // before the slide has actually begun — measured at 1.18, then settling
+      // to 0.94 for nine ticks while the car starts to rotate, and only then
+      // climbing for real. A single frame over a threshold is not information;
+      // it is a discontinuity, and it left a pulse stranded ahead of the
+      // cue's own cadence (tests/specs/understeer-cue.spec.js's bounded-rate
+      // row measured the 16-tick hole it opened). Two consecutive qualifying
+      // ticks is 33 ms — under the pulse's own 70 ms — so a real slide is
+      // announced no later than before.
+      const hot = sat > 1.15 && asking;
+      c.uslipDwell = hot ? Math.min((c.uslipDwell || 0) + 1, 3) : 0;
+      if (c.uslipDwell >= 2 && (c.uslipHapT = (c.uslipHapT || 0) - dt) <= 0) {
         const bite = clamp((sat - 1.15) / 0.85, 0, 1);   // 0 at onset, 1 well past
         // Safari throws from vibrate() outside a user gesture and some engines
         // throw on an out-of-range pattern. A cue the driver may not even feel
@@ -4916,13 +4952,33 @@ function updateCar(c, dt, ranked) {
         Input.rumble(0.18 + bite * 0.32, 70);
         c.uslipHapT = 0.16 - bite * 0.06;                // firmer slide = tighter pulse
       }
+      // …and the REAR — but only when the rear is the end that is going. Each
+      // axle is measured against where ITS OWN grip starts to fall (the front
+      // at its peak, the rear at the end of its longer plateau), and the cue
+      // fires when the rear is further past its own edge than the front is
+      // past theirs. An absolute rear threshold is useless: the rear's
+      // x = cs·slip/mu runs ABOVE the front's through ordinary understeer
+      // (CS_REAR > CS_FRONT, muR < muF), so it buzzed through every fast
+      // corner and broke tests/specs/understeer-cue.spec.js's "no other
+      // haptic" premise (measured). With the relative rule it is silent
+      // through understeer, a held drift and a lift-off, and speaks where the
+      // rear actually goes light — trail braking (measured: 55 m/s, 0.75
+      // lock). Slower and heavier than the front's pulse so a pad or a phone
+      // can tell the two ends apart. Feedback only: reads slip, writes nothing.
+      const pastR = satR / TyreModel.CURVE_HOLD_R, pastF = sat / TyreModel.CURVE_PEAK_X;
+      if (pastR > 1 && pastR > pastF && (c.oslipHapT = (c.oslipHapT || 0) - dt) <= 0) {
+        const bite = clamp(pastR - 1, 0, 1);
+        Input.vibrate(18 + (bite * 22) | 0);
+        Input.rumble(0.30 + bite * 0.40, 110);
+        c.oslipHapT = 0.24 - bite * 0.08;
+      }
     }
     // --- rigid-body equations of motion (per unit mass). kz2 = yaw inertia/mass.
     const ay = Fyf * cosD + Fyr;                         // body lateral accel
     c.lateralAccel = ay;
     c.slipFront = slipF; c.slipRear = slipR; c.steerAngle = delta;
     c.gripFront = muF; c.gripRear = muR; c.forceFront = Fyf; c.forceRear = Fyr;
-    c.frontUtil = Math.abs(Fyf) / muF; c.rearUtil = Math.abs(Fyr) / muR;
+    c.frontUtil = sat / TyreModel.CURVE_PEAK_X; c.rearUtil = satR / TyreModel.CURVE_PEAK_X;
     // Floored: setPhysics({yawInertia:0}) would otherwise make the rdot below
     // divide by zero and NaN the whole car state.
     const kz2 = Math.max(1e-3, af * ar * YAW_INERTIA);   // yaw inertia / mass (scaled)

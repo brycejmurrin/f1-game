@@ -20,10 +20,13 @@
  *   repeat  uslipHapT = 0.16 - bite * 0.06         → 0.16 s shallow, 0.10 s deep
  *
  * OBSERVATION. The cue has two output channels and no state hook, so the spec
- * stubs both: `navigator.vibrate` and `Input.rumble`. Four call sites in
+ * stubs both: `navigator.vibrate` and `Input.rumble`. FIVE call sites in
  * js/game.js reach `Input.rumble`, and only the understeer cue passes a
- * duration of 70 ms (kerb 90, wall scrape 100, impact 120) — that duration is
- * the discriminator. The tests still steer clear of kerbs and walls so the
+ * duration of 70 ms (kerb 90, wall scrape 100, impact 120, and since
+ * 2026-09-16 the REAR-slip cue at 110 ms) — that duration is the
+ * discriminator. The rear cue cannot fire in these scenarios by construction:
+ * it speaks only when the rear is further past the end of its own plateau
+ * than the front is past its peak, and every run below is front-limited. The tests still steer clear of kerbs and walls so the
  * discriminator never has to work hard, and they assert that no OTHER haptic
  * fired during a run rather than trusting the filter blindly.
  *
@@ -152,6 +155,17 @@ function drive(page, opts) {
     }
 
     A.setInput({ steer: o.steer, throttle: !!o.throttle, brake: false });
+    // SETTLE (opt-in): step the slide into existence before recording. reset()
+    // places the car with zero lateral velocity and zero yaw rate, so tick one
+    // puts the whole steer angle into the front's slip and `sat` spikes over
+    // the trigger before the car has begun to rotate, then falls back under it
+    // for the ten or so ticks the rotation takes to build (measured in the VM:
+    // 1.18, then 0.94 for nine ticks, then climbing for real). That hole is
+    // the placement, not the cue's cadence, so a test that measures the
+    // cadence steps past it first. Every OTHER test here wants tick one
+    // included — firing, silence and the offroad gate are all claims about the
+    // whole run — so this is off by default.
+    for (let i = 0; i < (o.settle || 0); i++) A.step(1 / 60, 1);
     window.__cue.length = 0;
 
     const pulses = [];          // tick index of each understeer pulse
@@ -292,7 +306,8 @@ test.describe("understeer cue — front-axle saturation haptic", () => {
   test("repeats at a bounded rate, not once per frame", async ({ page }) => {
     await loadRig(page);
     const frac = await longStraight(page);
-    const run = await drive(page, { ...SATURATED, frac });
+    // settle: the cadence is a claim about a slide in progress. See drive().
+    const run = await drive(page, { ...SATURATED, frac, settle: 14 });
 
     expect(run.pulses, JSON.stringify(run)).toBeGreaterThanOrEqual(3);
 
