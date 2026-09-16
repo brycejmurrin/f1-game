@@ -240,6 +240,14 @@ test.describe("Career — isolation", () => {
   });
 
   test("career team development does not reach a Grand Prix", async ({ page }) => {
+    // Same double-grid-build cost as its sibling below, and the same budget
+    // problem one step earlier: MEASURED 98.5 s alone on an idle box, which
+    // clears the 120 s default with almost nothing to spare — and it duly
+    // failed at 102.8 s inside a `modes` run with the box at loadavg 4-5,
+    // on `locator.click: Timeout 60000ms`, never reaching an assertion.
+    // A guard that only holds while the machine is quiet is not a guard.
+    // test.slow() triples the budget rather than hiding the cost.
+    test.slow();
     // The save is loaded at boot and stays loaded, so this is the guard that its
     // RULES stay switched off outside career. tierV is the one number career
     // development moves, so read it per car directly rather than inferring it
@@ -270,6 +278,18 @@ test.describe("Career — isolation", () => {
   });
 
   test("…but it DOES reach the career itself", async ({ page }) => {
+    // MEASURED 2026-09-16, alone on an otherwise idle box: 132.1 s at the
+    // then-deploy tip and 145.8 s one commit later — i.e. it exceeds the file's
+    // 120 s default even with nothing else running, and it fails as
+    // "Test timeout of 120000ms exceeded" with no assertion ever reached,
+    // which reads as a career-development regression and is not one.
+    // The cost is inherent: mercTierV() goes racing through the hub, so this
+    // test pays for TWO full boots and TWO full 11-team grid builds either side
+    // of a page reload — the apex-logs show it still building cars at 61.8 s.
+    // The reload is what gives the second measurement a clean career, so
+    // removing it would gut the isolation this test exists to prove.
+    // test.slow() triples the budget rather than hiding the cost.
+    test.slow();
     // The other half of the same guarantee: inside a career the development is
     // real, or the whole progression arc is cosmetic.
     //
