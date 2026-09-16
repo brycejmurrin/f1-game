@@ -132,6 +132,16 @@ project does not have.
   ladder, `DIFF.hard.ai · (1 + DIFF.hard.band)` = 0.9996). It only ever bit on
   easy, at gaps past ~640 m, and it is a monotonicity fix rather than a
   measurable pace change.
+  **The band now lifts corner authority too** (2026-09-16): it used to scale
+  only `vmax`, so a banded car braked and cornered exactly like the same
+  driver with a higher top speed — on a twisty track it caught up down the
+  straight and fell back through every corner. `updateCar` writes the band
+  factor to `c._bandNow` and the brake target reads
+  `diffCorner = min(1, DIFF.corner · (1 + band))`, the same ≤ 1.0 policy the
+  ladder already holds (the AI never corners past its own grip model). Easy
+  and normal reach 1.0 at their full band (0.93 × 1.18, 0.97 × 1.08); hard is
+  already there. Because `lateralScale` gates the actuator and `cornerSpeed`
+  inverts it, the lifted target stays one the car can turn at.
 
 ## The AI's planner and its actuator disagree about grip (2026-09-09) — CLOSED 2026-09-14
 
@@ -573,3 +583,38 @@ always the same: the small sample flattered the change being tested.
 
 Guards 178/178, ai-drive 57/57, ai-racecraft-vm 4/4. `js/game.js` grew 3 lines /
 1 code line for the named constant; both ceilings raised by exactly that.
+
+## 2026-09-16 — the merged tree measured, and two findings withdrawn
+
+Baselines on the deploy tip after the brake-look fix and the `corner`
+dimension (`tools/check/ai-race.mjs`, Monza, VM):
+
+- **pace** — easy 2:18.967 / normal 2:12.500 / hard 2:06.217 (medians of
+  21 cars' best-of-2); easy +4.9 %, hard −4.7 % vs normal. Matches the
+  138.97 / 132.50 / 125.02 table above. Before the fix, on 851dd02, normal
+  was 2:02.683: the AI was ten seconds a lap faster by cheating the short
+  corners, and the honest ladder now spans ~10 % easy→hard instead of ~9 %
+  with the wrong shape.
+- **field ×5** — pace spread 1.43 [1.41–1.46] %, settled passes 24 [19–52],
+  oscillation flips 105 [95–122] (63 % of 177 order flips), nose-to-tail
+  22.8 % of car-time. The 63 % oscillation share is NOT a re-pass count:
+  `ai-field` calls any pair whose prog order flips three or more times an
+  oscillation, and a pair running side by side flips prog at 4 Hz for as long
+  as it stays level. Until the instrument separates a level pair from a
+  re-pass, this number cannot back an `otWant` change, and the post-pass
+  lockout above is the shipped lever. **"Overtaking is too easy" is withdrawn
+  as a finding**: 24 settled passes in the first 240 s of a race is the
+  launch reshuffle, which the instrument's own header says not to read as a
+  pass rate.
+- **human ×5** — the AI elected to yield in 51.8 / 24.4 / 40.7 / 39.0 /
+  85.2 % of alongside frames, contact 26–61 %. **"The yield rule is a coin
+  flip" is withdrawn**: the election is deterministic on relative progress
+  (`sideYieldsA`), the branch shares vary because the seeds put the human in
+  different places, and the 0.3 s grace takes the role over every time the
+  AI is the intruder. The bench's "longest lean" was the intrusion timer's
+  maximum, which keeps counting AFTER the takeover (it clears only on
+  separation), so 1.25 s there is 0.3 s of lean plus yielding alongside; the
+  label now says so. The contact that remains is the human-elected branch —
+  a player leaning on an AI holding its own line is a rub by design, and
+  making it a concession is the pushover outcome the grace's own comment
+  rejects.

@@ -88,8 +88,11 @@ test.describe("Apex 26 — collisions (deep)", () => {
       window.__apex.setPhysics({ drift: 0 });
       const hw = window.__apex.probe().hw;
       window.__apex.jump(0.0, 60, 0);
-      // steer hard toward the wall on the straight and hold
-      window.__apex.setInput({ steer: 1, throttle: true });
+      // steer hard toward the wall on the straight and hold — LEFT (steer -1):
+      // the right of Monza's start straight is the pit side, where the pit
+      // complex opens the driving boundary out past hw + 9 (collisions-deep-vm
+      // has steered left for the same reason; measured 23.4 m to the right).
+      window.__apex.setInput({ steer: -1, throttle: true });
       let maxAbsX = 0, v1 = 0;
       for (let i = 0; i < 120; i++) {
         window.__apex.step(1 / 60, 1);

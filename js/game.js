@@ -518,7 +518,7 @@ function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season);
 // here. Everything slider- or harness-tunable stays a `let` below.
 const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         GRAVITY_SLOPE, LAT_MAX, STEER_VMAX, FRONT_WEIGHT, CS_FRONT, CS_REAR,
-        WT_LONG, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
+        WT_LONG, TYRE_DROP, TYRE_PEAK_X, TYRE_DROP_W, LOAD_SENS, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
         X_DF_LOSS_HI, X_COAST_CUT_LO, X_COAST_CUT_HI, X_OPEN_RATE, X_CLOSE_RATE,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
         LONG_GRIP, THR_ELLIPSE, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
@@ -3639,7 +3639,7 @@ const _aiDefOnce = { defend: 0, side: 0 };
 const LCAR = Collide.LCAR, WCAR = Collide.WCAR;   // car box (js/physics/collide.js)
 // Soft-saturating lateral tyre force (accel units) — hoisted out of updateCar so
 // the human path does not allocate a closure every physics step (~60/s).
-const _tyreSat = (cs, a, mu) => -mu * Math.tanh(cs * a / mu);
+const _tyreSat = (cs, a, mu) => { const x = cs * a / mu, p = clamp((Math.abs(x) - TYRE_PEAK_X) / TYRE_DROP_W, 0, 1); return -mu * (Math.tanh(x) - Math.sign(x) * TYRE_DROP * p * p * (3 - 2 * p)); };   // past the peak the tyre lets go (TYRE_DROP in consts.js)
 const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] each frame)
 const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 // Collision feedback when the player is involved, scaled by impact (0..1).
@@ -3720,8 +3720,8 @@ function updateCar(c, dt, ranked) {
     const gap = _leadHuman.prog - c.prog;
     const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
     const bandCap = Math.max(1, BAND_CEIL / (c.tierV * c.skill * dd.ai));
-    vmax *= Math.min(1 + bandFactor, bandCap);
-  }
+    vmax *= Math.min(1 + bandFactor, bandCap); c._bandNow = bandFactor;   // the corner half of the band: read by the brake target below
+  } else c._bandNow = 0;
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
   // racing speed — humans used to keep race pace while the AI was capped.
   // Cautions default ON (RaceControl store default true); a race with them
@@ -4011,7 +4011,7 @@ function updateCar(c, dt, ranked) {
       // signed/adverse bank must not boost the player while it cuts the AI.
       AiDrive.pushLook(d, onLine ? TrackLine.pathK(track, ss) : kk, Math.abs(Tracks.bankAngle(track, ss)));
     }
-    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = dd.corner;
+    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0)));   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * tyres.tractionMul(c); _aiBr.pace = PACE; _aiBr.vmax = VMAX;
     _aiBr.grip = gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
@@ -4825,8 +4825,8 @@ function updateCar(c, dt, ranked) {
     const bbSlipR = bb ? Math.sqrt(Math.max(0, 1 - afR * afR)) : 1;
     const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu * tyreMu;
     const rollAx = SetupTune.axleGrip(c.rollBalance, c.lateralAccel || 0, loadF);
-    const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP * tyreAx.f * rollAx.f);
-    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
+    const muF = Math.max(0.5, muBase * bbSlipF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
+    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays

@@ -24,6 +24,26 @@ window.PhysicsConsts = {
   CS_FRONT: 130,       // front cornering stiffness (accel per rad of slip)
   CS_REAR: 175,       // rear stiffer than front → understeer in the linear range too
   WT_LONG: 0.22,       // longitudinal load transfer (braking loads the front axle)
+  // TYRE PEAK. The lateral force curve used to be a bare tanh: it rose to the
+  // friction limit and stayed there, so a tyre dragged past its peak (a slide,
+  // a spin) kept every bit of its grip and an overdriven car never paid for it.
+  // A real tyre falls off past the peak — that drop is what makes catching a
+  // slide a skill, and what turns a big oversteer moment into a spin instead of
+  // a free rotation. TYRE_DROP is the fraction of the limit lost, faded in over
+  // normalised slip TYRE_PEAK_X..TYRE_PEAK_X+TYRE_DROP_W (x = cs·slip/mu, so 1.5
+  // is well past the 0.29 rad steering lock at racing grip: steering alone never
+  // reaches it, a lateral slide does). Unchanged inside the peak, so the
+  // characterisation gates that measure steady-state cornering do not move.
+  TYRE_DROP: 0.12,
+  TYRE_PEAK_X: 1.5,
+  TYRE_DROP_W: 1.5,
+  // LOAD SENSITIVITY. Axle friction used to scale linearly with axle load, so
+  // weight transfer moved balance without ever costing total grip. A real tyre's
+  // friction coefficient falls as its load rises: the loaded axle gains less
+  // than its share, the unloaded one loses less, and the pair under full braking
+  // has ~1.3 % less lateral grip than at rest. Static balance is untouched (the
+  // factor is 1 at each axle's static load).
+  LOAD_SENS: 0.10,
 
   // AERODYNAMIC DOWNFORCE. Grip used to FALL with speed (gripScale: 1.00 at 10 m/s
   // down to 0.72 at VMAX) — an arcade understeer taper, and backwards for a car
