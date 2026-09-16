@@ -4782,7 +4782,8 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
+    // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
+    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.onKerb ? 1 : lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1))) * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
       : (onThrottle
           ? ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
@@ -4824,7 +4825,7 @@ function updateCar(c, dt, ranked) {
     // stops the fronts turning; a lock leaves a flat spot that wobbles the
     // wheel once per revolution and heals over ~90 s of rolling. The grip
     // model above is untouched — this is what the wheels SHOW.
-    c.wheelLock = braking && axFrac > 0.92 ? clamp((axFrac - 0.92) / 0.08, 0, 1) : 0;
+    c.wheelLock = braking && axFrac > 0.60 ? clamp((axFrac - 0.60) / 0.08, 0, 1) : 0;   // 0.92 was unreachable: axFrac tops out at BRAKE*mods/(LONG_GRIP*gripMult) = 0.638 dry / 0.887 in rain, so no dry stop ever locked a wheel and the flat-spot system below could not fire at all
     c.flatSpot = clamp((c.flatSpot || 0) + c.wheelLock * dt * 0.4 - dt / 90, 0, 1);
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.

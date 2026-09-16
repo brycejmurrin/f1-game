@@ -60,6 +60,16 @@ itself uses `max(|axEstSm|, throttleDemand)`: demand is unfaded
 `ACCEL · PACE · throttle · THR_ELLIPSE` (`THR_ELLIPSE = 2.2` in
 `js/physics/consts.js`) so planting the throttle mid-corner spends grip even
 when speed-limited. Braking still costs more (`BRAKE` 22 vs ~15 m/s²).
+**The surface scales the brake as well as the grip** (2026-09-16): `surfMu`
+scaled lateral grip off-track while the brake term carried no surface at all,
+so a tyre on grass retarded the car exactly as hard as one on tarmac. The brake
+now carries the same `lerp(1, OFF_GRIP, depth)`, which drops the off-track
+friction-circle draw from 0.638 to 0.268 at full brake. **A known defect remains
+next to it**: the run-off SCRUB (`20 + offDepth·28` m/s², up to 4.6 g) dwarfs
+`BRAKE`, so 70 → 30 m/s measures 90.9 m on tarmac against 34.9 m on grass —
+running wide is still the quickest way to stop. Fixing that is a track-limits
+DETERRENCE decision (the `c.cuts` counter is the other half), not a physics
+tidy-up, so it is recorded here rather than changed.
 Trail-braking rotates the car; hard braking mid-corner understeers. Exposed via
 `physState()` fields `axEstSm`, `axFrac`, `slipFactor`. **Brake bias** (the SETUP sheet,
 `js/garage/setup-tune.js`) splits that budget per axle UNDER BRAKING only:
