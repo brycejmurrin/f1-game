@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: Use when the user asks did I break anything, run the right tests, validate changes, ready to push, pre-commit/pre-push checks, test selection for touched files, verify track edits, shell/cache policy after a js/css edit (tags stay ?v=dev; gen-shell after manifest), merge with or push to the deploy branch, or when a Playwright test times out (timeout) or hangs and the question is machine-load vs real failure. Spawn verify-agent for a read-only --fast JSON verdict (--base <ref> for "was it already red?"). Live version.json is deploy-research.
+description: Use when asked did I break anything, run the right tests, validate or pre-push check a change, pick tests for touched files, verify track edits, the shell/cache policy after a js/css edit (tags stay ?v=dev), merging with or pushing to the deploy branch, or triaging a Playwright timeout/hang (machine load vs real failure). verify-agent gives a read-only --fast verdict (--base: was it already red?).
 ---
 
 # Validate changes before committing/pushing

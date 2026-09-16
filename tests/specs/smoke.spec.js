@@ -149,8 +149,18 @@ async function raceOnBootedPage(page, trackId = "bahrain") {
 
 async function bootRace(page, trackId = "bahrain") {
   await page.goto("/");
-  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: bootWait() });
+  // QUIET FOR THE BUILD, the same shape as goToRace: headless(true) before the
+  // race starts, headless(false) once it has. Without it the SwiftShader render
+  // loop draws the title flyby all through the car and circuit build, and every
+  // evaluate queues behind those frames. MEASURED 2026-09-16, three green CI
+  // runs: the goToRace-based tests (race starts 9 s, park() 13 s) and the
+  // bootRace-based ones (grid start 138 s, corner approach 214 s, jump() 171 s)
+  // build the SAME Bahrain — the render loop was the difference. The screenshot
+  // tests still get a live scene: the loop is back on before the track wait
+  // returns, exactly as goToRace's callers see it.
+  await quietRenderer(page);
   await page.evaluate((t) => window.__apex.race(t), trackId);
+  await page.evaluate(() => window.__apex.headless(false));
   // Generous: the menu walk used to absorb the circuit build, and this does not.
   // CI has been measured taking 94 s just to boot a race on a starved runner —
   // and 187 s on a contended one, which is what trackWait() exists for.
@@ -189,30 +199,106 @@ async function parkForScreenshot(page, frac = 0) {
 
 // ─── tests ────────────────────────────────────────────────────────────────────
 
+// DECLARATION ORDER IS SHARD BALANCE. ci.yml runs this file as `--shard=i/4`,
+// and Playwright cuts ONE spec file's tests into contiguous chunks by COUNT in
+// declaration order — ten tests go [3,3,2,2]. MEASURED 2026-09-16 on three
+// green CI runs (medians, s): corner approach 214, jump() 171, speed readout
+// 138, grid start 138, DRIVING LINE 65, minimap 14, park() 13, race starts 9,
+// select screen 8, page loads 5. In the old "smoke" / "rendering" describe
+// order that put corner approach and jump() together in shard 3 (385 s of test
+// time) while shard 1 held 23 s — shard 3 set the whole matrix's wall clock in
+// 12 of 32 runs. The order below pairs the heavy tests with light ones
+// (predicted 193 / 211 / 219 / 152 s), so the pole is the one test that
+// cannot be split. The HUD pair at the bottom stays last and adjacent: the
+// minimap test is cheap only because it reuses the page speed readout booted.
+// Adding or removing a test moves every boundary — re-derive the order.
+//
+// The rendering tests are SMOKE checks: confirm the WebGL scene actually
+// renders a non-blank frame, not a pixel-exact regression (the scene has
+// procedural scenery / time-of-day variation, so it differs 10-30% run-to-run
+// under SwiftShader — pixel comparison belongs in tests/manual/tracks-visual.spec.js).
+// A rendered 3D scene PNG is tens of KB; a blank/solid canvas is < ~2 KB.
 test.describe("Apex 26 — smoke", () => {
-  test("page loads without WebGL error", async ({ page, pageErrors }) => {
-    const errors = [];
-    page.on("console", (msg) => {
-      if (msg.type() === "error") errors.push(msg.text());
-    });
 
-    await page.goto("/");
+  test("jump() sets player speed and lateral offset", async ({ page }) => {
+    await bootRace(page);
+    // Enter race state first
+    await park(page, 0);
+    // Then jump to mid-lap at 60 m/s, 2 m right of centre
+    await page.evaluate(() => window.__apex.jump(0.5, 60, 2));
+    await page.waitForTimeout(100);
 
-    // Main menu overlay must be visible
-    await expect(page.locator("#overlay")).toBeVisible();
-
-    // WebGL2 unavailable banner must stay hidden
-    await expect(page.locator("#nogl")).toBeHidden();
-
-    // Canvas must have non-zero dimensions (GLX.resize() ran)
-    const box = await page.locator("canvas#game").boundingBox();
-    expect(box?.width).toBeGreaterThan(0);
-    expect(box?.height).toBeGreaterThan(0);
-
-    // No console errors during load
-    expect(errors.filter((e) => !e.includes("favicon"))).toHaveLength(0);
-    expect(pageErrors).toEqual([]);
+    const info = await page.evaluate(() => window.__apex.info());
+    const probe = await page.evaluate(() => window.__apex.probe());
+    expect(info.state).toBe("race");
+    expect(info.total).toBeGreaterThan(0);
+    expect(probe.s / info.total).toBeCloseTo(0.5, 2);
+    expect(probe.speed).toBeCloseTo(60, 1);
+    expect(probe.x).toBeCloseTo(2, 1);
   });
+
+
+  test("park() skips countdown and positions player", async ({ page }) => {
+    await goToRace(page);
+    await park(page, 0);
+
+    const info = await page.evaluate(() => window.__apex.info());
+    expect(info.state).toBe("race");
+
+    // HUD should be visible in-race
+    await expect(page.locator("#hud")).toBeVisible();
+    await expect(page.locator("#lights")).toBeHidden();
+  });
+
+
+  test("race starts and __apex hook is available", async ({ page }) => {
+    await goToRace(page);
+
+    const info = await page.evaluate(() => window.__apex.info());
+    expect(info.state).toMatch(/count|race/);
+    expect(typeof info.track).toBe("string");
+    expect(info.total).toBeGreaterThan(0);
+  });
+
+
+  test("grid start renders a non-blank frame", async ({ page }) => {
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+    await bootRace(page);
+    await parkForScreenshot(page, 0);
+
+    const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
+    expect(shot.bytes).toBeGreaterThan(5000);
+    expect(errors.filter((e) => !e.includes("favicon"))).toHaveLength(0);
+  });
+
+
+  test("the DRIVING LINE is built for the circuit on the first frame it is on", async ({ page }) => {
+    // RACE SETTINGS › DRIVING LINE ships CORNERS; the ribbon is built lazily by
+    // the first frame that draws it (js/render/shared/driving-line.js), so a
+    // race that has rendered has a strip for THIS circuit, with a speed
+    // profile a player could be shown. GLX draws it; on a backend without the
+    // pass the strip is still built and reported — this pins the data, not
+    // the pixels.
+    await goToRace(page);
+    await park(page, 0.1);
+    // WAIT for the frame, on the wall clock: park() flushes ~100 ms, which was a
+    // frame on the dev box and none on a CI runner (Pages #2064: `built` null
+    // on the first evaluate, twice). The strip exists once a frame has drawn.
+    await page.waitForFunction(() => window.__apex.drivingLine().built === window.__apex.info().track, null,
+      { polling: 100, timeout: 60_000 });
+    const d = await page.evaluate(() => {
+      const r = window.__apex.drivingLine("full");
+      return { mode: r.mode, built: r.built, samples: r.samples, verts: r.verts,
+               v0: r.speedAt(0), vMax: Math.max(...Array.from({ length: 40 }, (_, i) => r.speedAt(i * 100))) };
+    });
+    expect(d.mode).toBe("full");
+    expect(d.built).toBe(await page.evaluate(() => window.__apex.info().track));
+    expect(d.verts).toBe((d.samples + 1) * 2);
+    expect(d.vMax).toBeGreaterThan(50);      // somewhere on the lap the line is at racing speed
+    expect(d.v0).toBeGreaterThan(10);
+  });
+
 
   test("the select screen is a circuit picker, and YOUR CAR opens the garage", async ({ page }) => {
     await page.goto("/");
@@ -255,70 +341,6 @@ test.describe("Apex 26 — smoke", () => {
     expect(["easy", "normal", "hard"]).toContain(await page.locator("#rs-diff-sel").inputValue());
   });
 
-  test("race starts and __apex hook is available", async ({ page }) => {
-    await goToRace(page);
-
-    const info = await page.evaluate(() => window.__apex.info());
-    expect(info.state).toMatch(/count|race/);
-    expect(typeof info.track).toBe("string");
-    expect(info.total).toBeGreaterThan(0);
-  });
-
-  test("the DRIVING LINE is built for the circuit on the first frame it is on", async ({ page }) => {
-    // RACE SETTINGS › DRIVING LINE ships CORNERS; the ribbon is built lazily by
-    // the first frame that draws it (js/render/shared/driving-line.js), so a
-    // race that has rendered has a strip for THIS circuit, with a speed
-    // profile a player could be shown. GLX draws it; on a backend without the
-    // pass the strip is still built and reported — this pins the data, not
-    // the pixels.
-    await goToRace(page);
-    await park(page, 0.1);
-    // WAIT for the frame, on the wall clock: park() flushes ~100 ms, which was a
-    // frame on the dev box and none on a CI runner (Pages #2064: `built` null
-    // on the first evaluate, twice). The strip exists once a frame has drawn.
-    await page.waitForFunction(() => window.__apex.drivingLine().built === window.__apex.info().track, null,
-      { polling: 100, timeout: 60_000 });
-    const d = await page.evaluate(() => {
-      const r = window.__apex.drivingLine("full");
-      return { mode: r.mode, built: r.built, samples: r.samples, verts: r.verts,
-               v0: r.speedAt(0), vMax: Math.max(...Array.from({ length: 40 }, (_, i) => r.speedAt(i * 100))) };
-    });
-    expect(d.mode).toBe("full");
-    expect(d.built).toBe(await page.evaluate(() => window.__apex.info().track));
-    expect(d.verts).toBe((d.samples + 1) * 2);
-    expect(d.vMax).toBeGreaterThan(50);      // somewhere on the lap the line is at racing speed
-    expect(d.v0).toBeGreaterThan(10);
-  });
-
-  test("park() skips countdown and positions player", async ({ page }) => {
-    await goToRace(page);
-    await park(page, 0);
-
-    const info = await page.evaluate(() => window.__apex.info());
-    expect(info.state).toBe("race");
-
-    // HUD should be visible in-race
-    await expect(page.locator("#hud")).toBeVisible();
-    await expect(page.locator("#lights")).toBeHidden();
-  });
-});
-
-test.describe("Apex 26 — rendering", () => {
-  // These are SMOKE checks: confirm the WebGL scene actually renders a non-blank
-  // frame, not a pixel-exact regression (the scene has procedural scenery /
-  // time-of-day variation, so it differs 10-30% run-to-run under SwiftShader —
-  // pixel comparison belongs in tests/manual/tracks-visual.spec.js).
-  // A rendered 3D scene PNG is tens of KB; a blank/solid canvas is < ~2 KB.
-  test("grid start renders a non-blank frame", async ({ page }) => {
-    const errors = [];
-    page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
-    await bootRace(page);
-    await parkForScreenshot(page, 0);
-
-    const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
-    expect(shot.bytes).toBeGreaterThan(5000);
-    expect(errors.filter((e) => !e.includes("favicon"))).toHaveLength(0);
-  });
 
   test("corner approach renders a non-blank frame", async ({ page }) => {
     await bootRace(page);
@@ -332,21 +354,29 @@ test.describe("Apex 26 — rendering", () => {
     expect(shot.bytes).toBeGreaterThan(5000);
   });
 
-  test("jump() sets player speed and lateral offset", async ({ page }) => {
-    await bootRace(page);
-    // Enter race state first
-    await park(page, 0);
-    // Then jump to mid-lap at 60 m/s, 2 m right of centre
-    await page.evaluate(() => window.__apex.jump(0.5, 60, 2));
-    await page.waitForTimeout(100);
 
-    const info = await page.evaluate(() => window.__apex.info());
-    const probe = await page.evaluate(() => window.__apex.probe());
-    expect(info.state).toBe("race");
-    expect(info.total).toBeGreaterThan(0);
-    expect(probe.s / info.total).toBeCloseTo(0.5, 2);
-    expect(probe.speed).toBeCloseTo(60, 1);
-    expect(probe.x).toBeCloseTo(2, 1);
+  test("page loads without WebGL error", async ({ page, pageErrors }) => {
+    const errors = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") errors.push(msg.text());
+    });
+
+    await page.goto("/");
+
+    // Main menu overlay must be visible
+    await expect(page.locator("#overlay")).toBeVisible();
+
+    // WebGL2 unavailable banner must stay hidden
+    await expect(page.locator("#nogl")).toBeHidden();
+
+    // Canvas must have non-zero dimensions (GLX.resize() ran)
+    const box = await page.locator("canvas#game").boundingBox();
+    expect(box?.width).toBeGreaterThan(0);
+    expect(box?.height).toBeGreaterThan(0);
+
+    // No console errors during load
+    expect(errors.filter((e) => !e.includes("favicon"))).toHaveLength(0);
+    expect(pageErrors).toEqual([]);
   });
 });
 

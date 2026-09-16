@@ -32,6 +32,30 @@ import { TRACK_STALL_MS, awaitTrackBuild } from "./await-track-build.js";
 export { TRACK_STALL_MS, awaitTrackBuild };
 
 /**
+ * Click a button on a page whose render loop is LIVE (a race, the garage).
+ *
+ * Not `locator.click()`: Playwright's actionability check waits for the
+ * target's bounding box to be stable across two consecutive animation frames,
+ * and apex26's own render loop never gives it that under SwiftShader —
+ * confirmed live via the chrome-devtools MCP on `#pausebtn` in both the
+ * "count" and "race" states on an otherwise idle box (not a load artifact),
+ * and measured in docs/TESTING.md §3 at 80-113 s per click while the game
+ * renders against 0.3-0.6 s while it does not. A raw DOM `.click()` reaches
+ * the same onclick handler the game wires up. Use this for any HUD / pause /
+ * garage button reached with a race running and no `headless(true)` first;
+ * menu clicks on a quiet page keep `locator.click()` and its checks.
+ */
+export async function clickLive(page, id) {
+  const hit = await page.evaluate((i) => {
+    const el = document.getElementById(i);
+    if (!el) return false;
+    el.click();
+    return true;
+  }, id);
+  if (!hit) throw new Error(`clickLive: no element with id "${id}"`);
+}
+
+/**
  * Shared Playwright fixtures for Apex 26.
  *
  * Importing `test` from here instead of `@playwright/test` gives every

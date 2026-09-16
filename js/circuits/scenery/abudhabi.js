@@ -382,7 +382,13 @@
         const shellThick = 0.65;
 
         const shellLegH = shellClearances[0] + shellThick / 2;
-        for (const [label, frac] of [["front", 0.872], ["rear", 0.888]]) {
+        // The rear legs stand at 0.884, one node short of the shell's last arch
+        // (0.888): the pit-side leg sits 23 m off the pit straight, and at the
+        // arch's own node the engine's garage row (pit.keep 30 m, since the
+        // 2026-09-16 shorter exit slid the row back) supersedes anything
+        // inside 38 m. One node earlier the complex is the 14 m platform band,
+        // which the leg clears by the same half-metre the front pair does.
+        for (const [label, frac] of [["front", 0.872], ["rear", 0.884]]) {
           for (const side of [-1, 1])
             hotelSupport(`yas-hotel-gridshell-${label}-${side < 0 ? "left" : "right"}-support`,
               frac, side, 14.5, 1.2, shellLegH, 2.2, [0.06, 0.07, 0.10], MAT.METAL);

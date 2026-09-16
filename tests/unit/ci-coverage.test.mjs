@@ -317,7 +317,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
     env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy", FAKE_RUNS: JSON.stringify(runs), ...env },
   }).trim().split("\n").map((l) => l.split(/=(.*)/s).slice(0, 2)));
 
-  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7" },
+  assert.deepEqual(verdict(M2, { [D]: [run()] }), { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "" },
     "merge with a parent's exact tree + that parent's green PR run: reuse");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }).reuse, "true", "a branch push run counts too");
   // THE FAST TIER IS NOT A GATE. Run 2237 reused the merge commit's own
@@ -325,10 +325,13 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   // gate; the head_sha candidate is checked first, so this must be rejected
   // before the parent's real run is even looked at.
   assert.deepEqual(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })], [D]: [run()] }),
-    { reuse: "true", source: D, run: "https://example.test/run/7" },
-    "a deploy-branch push run (fast tier) must be skipped in favour of the parent's full run");
-  assert.equal(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })] }).reuse, "false",
-    "a fast-tier run alone never reuses");
+    { reuse: "true", source: D, run: "https://example.test/run/7", fast_run: "7" },
+    "a deploy-branch push run (fast tier) must be skipped in favour of the parent's full run — and remembered as fast_run");
+  const fastOnly = verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy" })] });
+  assert.equal(fastOnly.reuse, "false", "a fast-tier run alone never reuses");
+  assert.equal(fastOnly.fast_run, "7", "…but the gate is told which fast-tier run already passed the tree-only jobs");
+  assert.equal(verdict(M2, { [M2]: [run({ event: "push", head_branch: "deploy", conclusion: "failure" })] }).fast_run, "",
+    "a red fast tier is not reused");
   assert.equal(verdict(M2, { [D]: [run({ event: "push" })] }, { DEPLOY_BRANCH: "" }).reuse, "false",
     "without DEPLOY_BRANCH no push run can be told from the fast tier: fail safe into the gate");
   assert.equal(verdict(M2, { [D]: [run({ path: ".github/workflows/pages.yml", event: "schedule" })] }).reuse, "true", "a train tick that deployed the same tree counts");
@@ -339,7 +342,7 @@ test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", 
   assert.equal(verdict(M2, { [D]: [run({ id: 99 })] }, { GITHUB_RUN_ID: "99" }).reuse, "false", "a run never reuses itself");
   assert.equal(verdict(M1, { [B]: [run()], [C]: [run({ path: ".github/workflows/pages.yml", event: "push" })] }).reuse, "false",
     "both parents green but the merge tree is new: the gate runs");
-  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7" },
+  assert.deepEqual(verdict(B, { [B]: [run({ event: "push" })] }), { reuse: "true", source: B, run: "https://example.test/run/7", fast_run: "" },
     "a fast-forwarded commit with its own green push run: reuse");
   assert.equal(verdict(M2, { [D]: [run()] }, { FAKE_GH: "fail" }).reuse, "false", "an API failure runs the gate rather than guessing");
   assert.equal(verdict(M2, {}).reuse, "false", "no run on record: the gate runs");

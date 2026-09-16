@@ -5,10 +5,11 @@
 // commands can run concurrently without sharing a web server or artifact paths.
 
 import { spawn } from "node:child_process";
-import { createReadStream, statSync } from "node:fs";
+import { copyFileSync, createReadStream, mkdirSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { extname, join, resolve as resolvePath, sep } from "node:path";
+import { partitionArgs } from "./twinned-specs.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MIME = {
@@ -63,10 +64,35 @@ function startStaticServer() {
   });
 }
 
+// A spec with a VM twin does not run here unless asked (--with-twinned /
+// APEX_WITH_TWINNED=1): tools/ci/twinned-specs.mjs partitionArgs, the local
+// half of the substitution the selected gate has made since the twins landed.
+const { args, dropped, nothingToRun } = partitionArgs(process.argv.slice(2));
+for (const d of dropped) console.error(`[playwright] COVERED BY VM TWIN: ${d.spec} → ${d.twin} (npm run test:game-vm; --with-twinned runs it here anyway)`);
+if (nothingToRun) {
+  // The reporter's terminal line, so test-bg / verify-change read this as a pass.
+  console.error(`[playwright] every spec named is covered by a VM twin — nothing to run in a browser`);
+  console.error(`= run passed  (0/0 done, 0 failed)`);
+  process.exit(0);
+}
+
 const managed = process.env.APEX_PORT ? null : await startStaticServer();
 const port = process.env.APEX_PORT || String(managed.port);
+// `--last-failed` reads <outputDir>/.last-run.json, and outputDir is suffixed
+// by THIS run's port (playwright.config.js) — so a previous run's record has to
+// be carried across: test-bg --last-failed names it in APEX_LAST_RUN_FILE.
+if (args.includes("--last-failed") && process.env.APEX_LAST_RUN_FILE) {
+  const dir = join(ROOT, "artifacts", `test-results-${port}`);
+  try {
+    mkdirSync(dir, { recursive: true });
+    copyFileSync(process.env.APEX_LAST_RUN_FILE, join(dir, ".last-run.json"));
+    console.error(`[playwright] --last-failed: re-running the failures recorded in ${process.env.APEX_LAST_RUN_FILE}`);
+  } catch (e) {
+    console.error(`[playwright] --last-failed: could not stage ${process.env.APEX_LAST_RUN_FILE} (${e.message}); running everything named`);
+  }
+}
 const cli = join(ROOT, "node_modules", ".bin", "playwright");
-const child = spawn(cli, ["test", ...process.argv.slice(2)], {
+const child = spawn(cli, ["test", ...args], {
   cwd: ROOT,
   env: {
     ...process.env,

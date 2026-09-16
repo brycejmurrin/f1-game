@@ -67,3 +67,27 @@ test("the gated-node set is derived from ci.yml, not copied", () => {
   assert.ok(ci.includes("- name: Pure-node unit suites"),
     "the step the derivation reads was renamed — update gatedNodeFiles(), do not hard-code a group list");
 });
+
+test("the LOCAL runner skips twins too, says so, and never hands Playwright an empty list", async () => {
+  // run-playwright.mjs is what every `npm run test:<group>` spawns, so this is
+  // the half of the substitution the 2026-09-01 plan left unpaid: CI's gate
+  // skipped the twins from day one, the local groups kept running them (the
+  // `collisions` group is 32/32 twinned). partitionArgs is the one decision.
+  const { partitionArgs } = await import("../../tools/ci/twinned-specs.mjs");
+  const [twin] = Object.keys(TWINNED);
+  const r = partitionArgs(["--workers=1", twin, "tests/specs/smoke.spec.js", "--timeout=900000"], {});
+  assert.deepEqual(r.args, ["--workers=1", "tests/specs/smoke.spec.js", "--timeout=900000"], "flags and untwinned specs pass through in order");
+  assert.deepEqual(r.dropped, [{ spec: twin, twin: TWINNED[twin] }], "the drop names both halves of the pair");
+  assert.equal(r.nothingToRun, false);
+  // Every spec a twin: run NOTHING. A bare `playwright test` runs the whole suite.
+  const all = partitionArgs(["--workers=1", ...Object.keys(TWINNED)], {});
+  assert.equal(all.nothingToRun, true);
+  assert.deepEqual(all.args, ["--workers=1"]);
+  // Two ways to keep the browser copies: the flag (consumed) and the CI env.
+  assert.deepEqual(partitionArgs([twin, "--with-twinned"], {}).args, [twin]);
+  assert.deepEqual(partitionArgs([twin], { APEX_WITH_TWINNED: "1" }).dropped, []);
+  // The flag itself never reaches Playwright, which would reject it.
+  assert.ok(!partitionArgs([twin, "--with-twinned"], {}).args.includes("--with-twinned"));
+  // A no-spec invocation (flags only) is not "nothing to run" — it is Playwright's default.
+  assert.equal(partitionArgs(["--project=render"], {}).nothingToRun, false);
+});
