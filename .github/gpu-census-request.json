@@ -4,5 +4,5 @@
   "census_only": false,
   "force": "",
   "ls": "apex26.resMode=high",
-  "leg": "multidraw-2026-09-16-first-live-AB-both-levers"
+  "leg": "interleaved-sampler-2026-09-16-can-it-clear-its-own-floor"
 }

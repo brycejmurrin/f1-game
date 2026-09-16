@@ -397,6 +397,35 @@ try {
       xs.sort((a, b) => a - b);
       return xs.length ? { median: +xs[Math.floor(xs.length / 2)].toFixed(2), n: xs.length } : { median: null, n: 0 };
     };
+    // GPU TIME IS SAMPLED INTERLEAVED, not in two blocks.
+    //
+    // Run 141 measured the floor for the first time and it was 17.9 % on one
+    // leg and 45.2 % on another — the SAME state, twice. Every GPU delta this
+    // session had quoted (2.1, 14.3, 15.8, 20.2 %) sits inside that, and so
+    // does the 2.9 % the draw-call-bound conclusion rests on. Two blocks of
+    // twelve samples cannot resolve any of it: whatever drifts between the
+    // blocks — clocks, thermals, scheduling — lands entirely on the
+    // difference.
+    //
+    // Interleaving cancels drift to first order: toggle, settle, one sample,
+    // toggle back, settle, one sample, and repeat, so both states are spread
+    // across the same span of wall time. The paired medians then differ by the
+    // flag rather than by when they were taken. The off/off2 floor stays, and
+    // is now the honest test of whether the sampler is good enough yet.
+    const interleave = async (rounds) => {
+        const xs = { off: [], on: [] };
+        for (let r = 0; r < rounds; r++) {
+          for (const k of ["off", "on"]) {
+            await page.evaluate(([f, v]) => window.__apex[f](v), [feature, k === "on"]);
+            await settle(k === "on" ? 10 : 4);
+            const v = await page.evaluate(() => { try { const q = window.__apex.gpuTimer(); return q && q.ms > 0 ? q.ms : null; } catch (_) { return null; } });
+            if (v != null) xs[k].push(v);
+          }
+        }
+        const med = (a) => { a.sort((x, y) => x - y); return a.length ? +a[Math.floor(a.length / 2)].toFixed(2) : null; };
+        return { off: med(xs.off), on: med(xs.on), samples: xs.off.length + xs.on.length };
+    };
+
     // THREE captures, not two. "off" and "off2" are the same state, so their
     // diff is this run's OWN noise floor — everything the harness cannot hold
     // still. A difference between off and on only means something if it clears
@@ -439,7 +468,11 @@ try {
         A.aboveFloor = A.pixels.pctDiffering > Math.max(0.01, A.noiseFloor.pctDiffering * 2);
       }
     } catch (e) { A.pixels = { error: String((e && e.message) || e).slice(0, 140) }; }
-    if (A.off.median && A.on.median) A.gpuDeltaPct = +(100 * (A.on.median / A.off.median - 1)).toFixed(1);
+    // The interleaved pass is the one to believe; the block medians above stay
+    // only because the floor is computed from them.
+    A.paired = await interleave(20);
+    if (A.paired.off && A.paired.on) A.gpuDeltaPct = +(100 * (A.paired.on / A.paired.off - 1)).toFixed(1);
+    else if (A.off.median && A.on.median) A.gpuDeltaPct = +(100 * (A.on.median / A.off.median - 1)).toFixed(1);
     // The GPU noise floor too: off against off2, same state, so whatever this
     // reads is what the clock cannot resolve.
     if (A.off.median && A.off2.median) A.gpuNoisePct = +(100 * (A.off2.median / A.off.median - 1)).toFixed(1);

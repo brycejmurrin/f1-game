@@ -491,7 +491,8 @@ jobs:
               if (ab.note || ab.error) {
                 rows.push(`${" ".repeat(8)}${tag} A/B: NOT MEASURED — ${ab.note || ab.error}`);
               } else if (ab.off && ab.on) {
-                rows.push(`${" ".repeat(8)}${tag} A/B: gpu off=${ab.off.median}ms on=${ab.on.median}ms  delta=${ab.gpuDeltaPct}%  `
+                const pr = ab.paired || {};
+                rows.push(`${" ".repeat(8)}${tag} A/B: gpu off=${pr.off != null ? pr.off : ab.off.median}ms on=${pr.on != null ? pr.on : ab.on.median}ms  delta=${ab.gpuDeltaPct}% (interleaved, ${pr.samples || 0} samples)  `
                   + `clockPinned=${ab.clockPinned} simFrozen=${ab.simFrozen}`
                   + (ab.gpuDeltaPct != null && ab.gpuDeltaPct > 0 ? "   <- COSTS time here" : "   <- saves time here"));
             // THE FLOOR FIRST. off against off2 is the same state twice, so it

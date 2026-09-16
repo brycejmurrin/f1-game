@@ -63,6 +63,14 @@ occlusion, exactly one draw call.
 
 Nothing below should be built before this answers.
 
+> **WITHDRAWN 2026-09-16 (run 141).** The section below, and every GPU delta
+> quoted anywhere in this note, is inside its own noise. Run 141 measured the
+> floor for the first time — the SAME state sampled twice — and it came back at
+> **17.9 % on one leg and 45.2 % on another**. The draw-call-bound conclusion
+> rests on a 2.9 % difference. It is not supported, and neither is
+> "occlusion costs 2.1 %", "occlusion costs 15.8 %", or anything else timed
+> here. What survives is stated in §6.
+
 ### First reading (run 139): DRAW CALLS, and it is not close in direction
 
     chunked   152 draws, frustum + radial culled   18.75 ms  @0.75 MP  [138, off]
@@ -131,3 +139,41 @@ pushing on the wrong end.
 - **Counted oracles measure work avoided, not time saved.** 94 % of chunks
   skipped read as a triumph and was a 2 % loss. Keep both instruments; believe
   the clock.
+
+---
+
+## 6. What actually survives run 141
+
+**The GPU-time instrument does not work yet.** The floor row, added precisely to
+catch this, caught it on its first run:
+
+| leg | effect | its own floor | verdict |
+|---|---|---|---|
+| occlusion | +20.2 % | 17.9 % | barely above — not significant |
+| multi-draw | +14.3 % | 45.2 % | far below — meaningless |
+
+Two blocks of twelve samples cannot resolve a ten-per-cent effect when anything
+that drifts between the blocks lands entirely on the difference. Fixed by
+interleaving — toggle, settle, one sample, toggle back, settle, one sample,
+twenty rounds — so both states are spread over the same wall time and slow drift
+cancels to first order. The floor stays, and is now the test of whether the
+sampler is good enough.
+
+**What is still true, because it was never timed:**
+
+- Between 56 % and 85 % of prop chunks contribute no pixel
+  (`occlusion-estimate.mjs`, exact software visibility, resolution-stable).
+- Multi-draw does what it claims mechanically: **2,496 ranges collapsed into 312
+  calls, 2,184 `drawElements` avoided** in one settle window.
+- Neither feature changes the image: both pixel diffs sit at their own floor.
+- All three backends pay a per-draw cost — GLX ~152, TLX 184 measured, WGX per
+  chunk (`BACKEND-DRAWCALL-RESEARCH-2026-09-16.md`).
+
+**What is NOT established:** that draw calls bind rather than vertices; that
+occlusion culling costs time; that multi-draw saves it. Those need the
+interleaved sampler to clear its floor first, and until it does, no default
+should move on timing evidence.
+
+The counted oracles remain trustworthy because counting is exact here and timing
+is not — which was the lesson twice over before this, and is now the lesson
+three times.
