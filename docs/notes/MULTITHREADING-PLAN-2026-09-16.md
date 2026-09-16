@@ -137,3 +137,86 @@ manifest-driven and must exclude a file that lives in a different scope.
 
 One naming caution: the existing top-level worker directory is a server-side
 relay, not a browser worker. A browser worker must not land there.
+
+## 7. The gate was taken, 2026-09-16 — and the item is NOT dead
+
+§4 said the question this container cannot answer is whether there is anything
+on the main thread worth overlapping with, and treated a real device as out of
+reach. It is not, and the plan simply did not use two facts this repository had
+already written down.
+
+- **`macos-latest` is real hardware.** The census measured it: apple/Metal,
+  `anyHardware: true`, 2 GiB `maxBufferSize` against SwiftShader's 1,
+  `shader-f16` and `subgroups` present (`CI-RENDERING-PERFORMANCE.md`).
+- **An agent can trigger it.** `workflow_dispatch` is a 403 for a GitHub App
+  token, but `gpu-census.yml` also fires on a push of
+  `.github/gpu-census-request.json` to a `claude/**` branch, and runs THAT
+  branch's tree.
+
+And a framing correction the workflow's name invites: **this gate is about
+main-thread JavaScript, not the GPU.** Conditions 1 and 3 need only a real CPU.
+Only condition 2 needs the GPU, because its rival explanation is upload
+back-pressure, which exists only with a real driver.
+
+`gpu-game-check.mjs` grew a `longtask` PerformanceObserver, marks at
+`raceCall` / `trackReady` / `parked`, and a per-leg report of the window, the
+CONTIGUOUS longest block (a worker overlaps a freeze, not a window that is
+already yielding, so a sum answers a different question), and the other
+blocking time. Run 128, track `vegas` — the prop-heaviest circuit, chosen
+because the worst case is the decisive experiment.
+
+| leg | macos-latest (Metal) | ubuntu-latest (SwiftShader) |
+|---|---|---|
+| webgpu | **1796 ms** block / 2594 ms window | 1566 ms / 3015 ms |
+| wgx | **1845 ms** / 2460 ms | 2373 ms / 2921 ms |
+| glx (the DEFAULT backend) | **3009 ms** / 6644 ms | 32762 ms / 95539 ms |
+| webgl2 | 2661 ms / 5316 ms | not measured — the leg died before the read |
+
+**Condition 1 does not merely hold, it is blown out.** The threshold is 400 ms
+of contiguous block, with "if a desktop is near 200, the item is dead". It is
+1796 to 3009 ms on real hardware — four to seven times the bar, and worst on
+GLX, which is the backend players actually get. **Condition 3 holds on every
+leg** (559 to 3490 ms of other blocking work, against a 300 ms bar).
+
+**Condition 2 is half answered, and the control is what answered it.**
+`ubuntu-latest` was requested as a sanity check and turned out to carry the
+argument: on the two legs where both images produced a number, the block is
+within a factor of 1.3 of each other across a real Metal GPU and a software
+rasteriser (1796 vs 1566; 1845 vs 2373). A cost that insensitive to the GPU
+cannot be upload back-pressure — there are no real uploads to be
+back-pressured on SwiftShader. So the specific rival hypothesis §4 named, the
+one this repository has already been fooled by once, is eliminated: the block
+is main-thread JavaScript. What is still NOT established is the positive half —
+that the TRACK BUILD is more than half of that JavaScript, rather than car
+meshes, parsing or anything else in the window. That needs per-subsystem
+attribution, which is the next measurement, not an inference from these
+numbers.
+
+What these numbers are not:
+
+- **A CI runner is not a player's machine, and a slow runner inflates them.**
+  Two macOS legs carry the harness's own `ONLY n frames rendered —
+  INCONCLUSIVE` warning. Even discounted hard, 3009 ms does not fall to 400.
+- **The macOS GPU is an Apple Paravirtual device** — virtualised, so upload
+  behaviour is not bare metal.
+- **The window is a LOWER BOUND.** It runs `race()` to track-ready, which
+  excludes the roughly 800 ms of car and helmet mesh cost §2 puts on first
+  draw. What a player feels is larger than what was measured.
+- **The ubuntu GLX row is junk** and is listed only for completeness: 95 s with
+  a `gfx timeout` beside it is SwiftShader falling over, not a measurement.
+- **The phone leg is still unreachable** and always will be from CI. §3's
+  honest ceiling — that on a single-core phone the net could be zero or
+  negative — is untouched by any of this.
+
+**So the item advances rather than dying.** The next step is unchanged in shape
+but now justified: split the build into a geometry function returning plain
+typed arrays and an upload function, with the inline path calling both back to
+back and byte-identical output proven on three circuits — and add per-subsystem
+marks while doing it, because that split is exactly what makes condition 2
+answerable.
+
+One defect in this instrumentation, found by the run and fixed the same day:
+the ubuntu webgl2 leg timed out before the read, `bounded()` returned an
+`{error}` object that matched neither reporting branch, and the row vanished
+instead of saying so. Absence reading as normal is the shape this file keeps
+relearning; every absence prints now.

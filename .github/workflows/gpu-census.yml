@@ -391,9 +391,17 @@ jobs:
             // longestBlockMs is CONTIGUOUS block, which is the condition as
             // written — a sum would count a window that is already yielding,
             // and a worker overlaps a freeze, not a yield.
+            // EVERY absence prints. The first cut covered supported:false and
+            // note, and nothing else — so when the ubuntu webgl2 leg timed out
+            // before the read, bounded() returned an {error} object that
+            // matched neither branch and the row vanished entirely. A silently
+            // missing row is the one shape this file keeps having to relearn:
+            // absence must never read as normal (PERF-FINDINGS 2j, 2l).
               const re = g.raceEntry || {};
-              if (re.supported === false || re.note) {
-                rows.push(`${" ".repeat(8)}entry: NOT MEASURED — ${re.note || "no longtask observer"}`);
+              if (re.supported === false || re.note || re.error) {
+                rows.push(`${" ".repeat(8)}entry: NOT MEASURED — ${re.note || re.error || "no longtask observer"}`);
+              } else if (re.longestBlockMs == null) {
+                rows.push(`${" ".repeat(8)}entry: NOT MEASURED — the leg wrote no raceEntry at all (it died before the read)`);
               } else if (re.longestBlockMs != null) {
                 const verdict = re.longestBlockMs > 400
                   ? (re.otherBlockMs >= 300 ? "conditions 1 and 3 HOLD — condition 2 (build vs upload back-pressure) still unanswered"
