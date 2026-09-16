@@ -24,7 +24,7 @@ const LoadingScreen = (function () {
   // and played as a flicker: the camera barely moved before the card took the
   // screen. These are the budget for the whole screen, and it is skippable with
   // any pointer or key — an intro nobody can cut past is a wait, not a flourish.
-  const FLY_MS = 5000;    // cinematic hold before the card arrives
+  const FLY_MS = 10000;   // cinematic hold before the card arrives
   // Fade (0.4 s, css) PLUS a hold: the card carries a lap outline now, and a
   // map nobody has time to look at is decoration. The build starts when this
   // elapses and then owns the screen for its ~1.1 s, so the card is readable

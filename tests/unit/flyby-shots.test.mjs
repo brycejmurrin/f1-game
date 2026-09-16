@@ -56,25 +56,25 @@ test("the shipped flyby never puts the eye inside a building", async () => {
   }
 });
 
-test("the shipped flyby stays above the road and below the sky", async () => {
+test("clearance lifts a shot, it does not relocate one", async () => {
   for (const id of CIRCUITS) {
-    const out = await withTrack(id, (track, g) => {
+    const worst = await withTrack(id, (track, g) => {
       const FlybySeq = g.sandbox.FlybySeq;
-      let minY = Infinity, maxY = -Infinity;
+      let max = 0, where = "";
       FlybySeq.reset();
       for (let i = 0; i <= SAMPLES; i++) {
         const v = FlybySeq.solve(track, i / SAMPLES);
-        if (v.eye[1] < minY) minY = v.eye[1];
-        if (v.eye[1] > maxY) maxY = v.eye[1];
+        if (v.lift > max) { max = v.lift; where = v.id; }
       }
-      return { minY, maxY };
+      return { max, where };
     });
-    // Not absolute heights — the circuits sit at different elevations — but the
-    // sequence must never duck under its own lowest authored pose, and a lift
-    // that has run away is a framing failure even when nothing is clipped.
-    assert.ok(out.maxY - out.minY < 120,
-      `${id}: the eye swings ${Math.round(out.maxY - out.minY)} m vertically; ` +
-      "a clearance lift has run away rather than a shot being authored high");
+    // The authored height is not the test — an establishing shot is 300 m up on
+    // purpose. What must not happen is the clearance doing the authoring: a shot
+    // placed INSIDE a grandstand still passes the containment test above,
+    // because the lift rescued it, while framing something nobody chose.
+    assert.ok(worst.max < 25,
+      `${id}: clearance lifted shot "${worst.where}" by ${worst.max.toFixed(1)} m — ` +
+      "that shot is authored inside scenery and is being rescued, not framed");
   }
 });
 
@@ -84,18 +84,27 @@ test("each shot is continuous, and only a shot BOUNDARY is a cut", async () => {
     FlybySeq.reset();
     let prev = null, prevIdx = -1;
     const jumps = [];
+    // Per shot, because a fixed metre budget is the wrong test once the sequence
+    // has establishing shots: "wide" crosses a whole circuit radius while
+    // "turn-first" moves 90 m, and both are correct. What is never correct is
+    // one step inside a shot dwarfing that shot's own others — the signature of
+    // an anchor resolving somewhere unrelated.
+    const steps = {};
     for (let i = 0; i <= SAMPLES; i++) {
       const v = FlybySeq.solve(track, i / SAMPLES);
       const eye = [v.eye[0], v.eye[1], v.eye[2]];
       if (prev && v.index === prevIdx) {
         const d = Math.hypot(eye[0] - prev[0], eye[1] - prev[1], eye[2] - prev[2]);
-        // Within one shot the eye interpolates, so consecutive samples are a
-        // fraction of the move apart. A big step means a pose resolved somewhere
-        // unrelated — the failure mode when an anchor is wrong.
-        if (d > 25) jumps.push(`shot ${v.id} step ${d.toFixed(1)} m at u=${(i / SAMPLES).toFixed(2)}`);
+        (steps[v.id] || (steps[v.id] = [])).push(d);
         assert.equal(v.cut, false, `no cut inside shot ${v.id}`);
       }
       prev = eye; prevIdx = v.index;
+    }
+    for (const id of Object.keys(steps)) {
+      const d = steps[id];
+      const avg = d.reduce((a, b) => a + b, 0) / d.length;
+      const max = Math.max.apply(null, d);
+      if (avg > 0 && max > avg * 4) jumps.push(`shot ${id}: one step ${max.toFixed(1)} m against a ${avg.toFixed(1)} m average`);
     }
     assert.deepEqual(jumps, [], "the eye teleports inside a shot:\n  " + jumps.join("\n  "));
     return null;
