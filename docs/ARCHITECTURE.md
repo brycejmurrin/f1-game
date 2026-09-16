@@ -132,7 +132,7 @@ _185 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `teams.js` | `Teams` | tag | Teams: hardcoded, verified 2026 grid (11 teams, 22 drivers). |
 | `driver-ratings.js` | `DriverRatings` | tag | DRIVER RATINGS: the five-axis skill table for the 2026 grid. |
-| `legends.js` | `Legends` | tag | LEGENDS: eight historic drivers, their record, and a tribute livery. |
+| `legends.js` | `Legends` | tag | LEGENDS: twelve historic drivers, their record, a tribute livery and the period car each of them raced. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica (Ergast) + OpenF1 clients. |
 | `telemetry.js` | `DataTelemetry` | LAZY_DATA | the data hub's TELEMETRY tab (trace viewer, delta, map, playback). |
 | `export.js` | `DataExport` | LAZY_DATA | the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… |

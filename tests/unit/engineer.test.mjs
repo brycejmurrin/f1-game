@@ -44,7 +44,7 @@ const { E, T } = load();
 // never reaches the screen (a cinematic camera drops "info", or the single
 // queue slot is already held by something higher — js/game.js announce()).
 function sessionFor({ weather = "dry", cautionLevel = 0, arc = null, laps = 25, heard = true } = {}) {
-  const said = [];
+  const said = [], kinds = [];
   let hear = heard;
   const setHeard = (v) => { hear = v; };
   const tyres = T.create({
@@ -55,9 +55,9 @@ function sessionFor({ weather = "dry", cautionLevel = 0, arc = null, laps = 25, 
   const G = {
     tyres, raceWeather: weather, weatherArc: arc,
     cautionInfo: () => ({ level: cautionLevel }),
-    announce: (msg) => { said.push(msg); return hear; },
+    announce: (msg, dur, kind) => { said.push(msg); kinds.push(kind); return hear; },
   };
-  return { eng: E.create(G), tyres, said, G, setHeard };
+  return { eng: E.create(G), tyres, said, kinds, G, setHeard };
 }
 // A car three laps INTO its stint, and up to temperature. Both matter: a car
 // still on its out-lap is legitimately told its tyres are cold, and that call
@@ -297,4 +297,31 @@ test("senseOf reads the plan and the field: the next stop lap, its compound, and
   assert.ok(said.some((m) => /^BOX BOX BOX — H$/.test(m)), `the stop lap is called: ${said.join(" | ")}`);
   c.pitArmed = true;
   assert.equal(eng.senseOf(c).lapsToStop, null, "a called stop needs no calling");
+});
+
+test("the PIT CALL rides its own priority; every other line still yields", () => {
+  // Every engineer line was "info" (js/game.js ANN_PRI rank 2), which put the
+  // instruction to pit BELOW the pit lane's own "PIT ENTRY — LIMITER ON"
+  // (rank 4): the confirmation that you had pitted outranked the call telling
+  // you to. The three lines that name THIS lap or the next — box now, box next
+  // lap, and the wrong tyre for the weather — ride "box" (rank 4) instead.
+  // Rank is all that changes: the words, the ladder and the quiet timers are
+  // untouched, and a report is still a report.
+  // join, not deepEqual: the array is built in the module's VM realm, so its
+  // prototype is not the host's and strict deepEqual refuses it.
+  assert.equal(Array.prototype.join.call(E.BOX_CALLS, ","), "plan0,plan1,tread");
+  const kindOf = (car, over = {}) => {
+    const { eng, tyres, kinds } = sessionFor(over.session || {});
+    const c = carOn(tyres, car);
+    Object.assign(c, over.car || {});
+    if (over.plan) { c.pitPlan = over.plan; c.pitStops = 0; }
+    eng.update(c, 1);
+    return kinds[0];
+  };
+  // BOX BOX BOX: the plan's stop lap is this lap.
+  assert.equal(kindOf({ wear: 0.8, lap: 9 }, { plan: { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] } }), "box");
+  // The wrong tread — slicks in the rain — is the same answer, box now.
+  assert.equal(kindOf({ wear: 0.2 }, { session: { weather: "rain" } }), "box");
+  // The wear ladder is a REPORT and keeps yielding to flags and penalties.
+  assert.equal(kindOf({ wear: 0.55 }), "info");
 });

@@ -348,6 +348,156 @@ try {
     if (!A || !A.occlusionCull) return { note: "no occlusionCull hook — this build predates it" };
     try { return A.occlusionCull(); } catch (e) { return { error: String(e && e.message) }; }
   }), 20000, "occlusion");
+  // THE IN-RUN A/B — the only honest way to compare two flag states.
+  //
+  // Runs 131-136 compared occlusion on against off across SEPARATE census runs
+  // and the comparison was worthless twice over: different commits (a merge of
+  // another session landed between them) and cloud drift, which this repo has
+  // already recorded as a Metal-CI flake. Same commit, same runner, same parked
+  // camera, seconds apart, and the render clock PINNED so sky and cloud cannot
+  // move — then the difference is the flag or it is nothing.
+  //
+  // Two answers, because the counted oracle answers neither: does it cost less
+  // GPU TIME, and does it change the IMAGE. A per-pixel diff is what "no hole
+  // in the world" actually needs; a whole-frame mean luma can hide a hole.
+  const shotBase = flag("--shot", null);
+  // ONE A/B, RUN PER FEATURE. There are two levers now and they pull opposite
+  // ways — occlusion removes vertices and adds draw calls, multi-draw removes
+  // draw calls and touches nothing else — so each needs its own three captures
+  // and its own noise floor. Parameterising beats copying: a second copy of
+  // this block would drift from the first exactly where it matters.
+  const abFor = (feature) => async () => {
+    const A = { feature };
+    const has = await page.evaluate((f) => !!(window.__apex && window.__apex[f] && window.__apex.gpuTimer), feature);
+    if (!has) return { note: "no " + feature + "/gpuTimer hooks" };
+    // Pin the clock FIRST: everything below depends on the two captures being
+    // the same instant of weather.
+    A.clockPinned = await page.evaluate(() => {
+      try { window.__apex.renderClock(12, true); return true; } catch (_) { return false; }
+    });
+    // AND FREEZE THE SIMULATION. Pinning the render clock stops sky and cloud;
+    // it does NOT stop the AI field, which keeps driving between captures. Run
+    // 138 measured that cost: the three legs where occlusion does nothing still
+    // diffed at 0.088 %, 0.271 % and 7.533 % against their own second capture,
+    // purely from cars moving — so the instrument could not resolve anything
+    // smaller than the traffic.
+    A.simFrozen = await page.evaluate(() => {
+      try { return window.__apex.freeze(true) === true; } catch (_) { return false; }
+    });
+    const settle = async (n) => {
+      for (let i = 0; i < n; i++) await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    };
+    const sampleGpu = async (n) => {
+      const xs = [];
+      for (let i = 0; i < n; i++) {
+        await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        const v = await page.evaluate(() => { try { const q = window.__apex.gpuTimer(); return q && q.ms > 0 ? q.ms : null; } catch (_) { return null; } });
+        if (v != null) xs.push(v);
+      }
+      xs.sort((a, b) => a - b);
+      return xs.length ? { median: +xs[Math.floor(xs.length / 2)].toFixed(2), n: xs.length } : { median: null, n: 0 };
+    };
+    // GPU TIME IS SAMPLED INTERLEAVED, not in two blocks.
+    //
+    // Run 141 measured the floor for the first time and it was 17.9 % on one
+    // leg and 45.2 % on another — the SAME state, twice. Every GPU delta this
+    // session had quoted (2.1, 14.3, 15.8, 20.2 %) sits inside that, and so
+    // does the 2.9 % the draw-call-bound conclusion rests on. Two blocks of
+    // twelve samples cannot resolve any of it: whatever drifts between the
+    // blocks — clocks, thermals, scheduling — lands entirely on the
+    // difference.
+    //
+    // Interleaving cancels drift to first order: toggle, settle, one sample,
+    // toggle back, settle, one sample, and repeat, so both states are spread
+    // across the same span of wall time. The paired medians then differ by the
+    // flag rather than by when they were taken. The off/off2 floor stays, and
+    // is now the honest test of whether the sampler is good enough yet.
+    const interleave = async (rounds) => {
+        const xs = { off: [], on: [] };
+        for (let r = 0; r < rounds; r++) {
+          for (const k of ["off", "on"]) {
+            await page.evaluate(([f, v]) => window.__apex[f](v), [feature, k === "on"]);
+            await settle(k === "on" ? 10 : 4);
+            const v = await page.evaluate(() => { try { const q = window.__apex.gpuTimer(); return q && q.ms > 0 ? q.ms : null; } catch (_) { return null; } });
+            if (v != null) xs[k].push(v);
+          }
+        }
+        const med = (a) => { a.sort((x, y) => x - y); return a.length ? +a[Math.floor(a.length / 2)].toFixed(2) : null; };
+        return { off: med(xs.off), on: med(xs.on), samples: xs.off.length + xs.on.length };
+    };
+
+    // THREE captures, not two. "off" and "off2" are the same state, so their
+    // diff is this run's OWN noise floor — everything the harness cannot hold
+    // still. A difference between off and on only means something if it clears
+    // that floor, and borrowing a floor from another leg or another run is what
+    // produced two withdrawn conclusions already.
+    for (const key of ["off", "off2", "on"]) {
+      const on = key === "on";
+      // COUNT THE FRAMES the counters accumulate over. Both features' counters
+      // are cumulative and are zeroed by toggling the flag OFF, so a raw total
+      // is only interpretable against the number of frames that produced it.
+      // Run 143 is the cost of not doing this: "4,709 calls for 4,853 ranges"
+      // could not be turned into a per-frame figure, so a grouping defect and a
+      // scene with few visible chunks were indistinguishable, and the number
+      // ended up labelled unexplained instead of answered.
+      await page.evaluate(([f, v]) => {
+        window.__apex[f](v);
+        if (!window.__abTick) {
+          window.__abTick = true;
+          const t = () => { window.__abFrames = (window.__abFrames | 0) + 1; requestAnimationFrame(t); };
+          requestAnimationFrame(t);
+        }
+        window.__abFrames = 0;
+      }, [feature, on]);
+      await settle(on ? 24 : 8);            // ON needs long enough for the queries to answer
+      A[key] = await sampleGpu(12);
+      A[key].stats = await page.evaluate((f) => window.__apex[f](), feature);
+      A[key].frames = await page.evaluate(() => window.__abFrames | 0);
+      if (shotBase) {
+        A[key].shot = shotBase.replace(/\.png$/, "") + "." + feature + "-" + key + ".png";
+        const r = await bounded(() => page.screenshot({ path: A[key].shot }), 30000, "ab-shot");
+        if (r && r.error) A[key].shotError = r.error;
+      }
+    }
+    await page.evaluate(() => { try { window.__apex.renderClock(null, false); window.__apex.freeze(false); } catch (_) {} });
+    await page.evaluate((f) => window.__apex[f](false), feature);
+    try {
+      const sharp = (await import("sharp")).default;
+      const raw = async (f) => (f ? sharp(f).raw().toBuffer({ resolveWithObject: true }) : null);
+      const diffOf = async (p1, p2) => {
+        const a = await raw(p1), b = await raw(p2);
+        if (!a || !b) return { error: "a capture is missing" };
+        if (a.data.length !== b.data.length) return { error: "captures differ in size" };
+        let diff = 0, maxd = 0, sum = 0;
+        for (let i = 0; i + 2 < a.data.length; i += a.info.channels) {
+          const d = Math.max(Math.abs(a.data[i] - b.data[i]), Math.abs(a.data[i + 1] - b.data[i + 1]),
+                             Math.abs(a.data[i + 2] - b.data[i + 2]));
+          sum += d; if (d > maxd) maxd = d; if (d > 2) diff++;
+        }
+        const n = (a.data.length / a.info.channels) | 0;
+        return { differing: diff, ofTotal: n, pctDiffering: +(100 * diff / n).toFixed(3),
+                 maxChannelDelta: maxd, meanAbsDelta: +(sum / n).toFixed(3) };
+      };
+      A.noiseFloor = await diffOf(A.off.shot, A.off2.shot);   // same state twice
+      A.pixels = await diffOf(A.off.shot, A.on.shot);
+      if (A.pixels.pctDiffering != null && A.noiseFloor.pctDiffering != null) {
+        A.aboveFloor = A.pixels.pctDiffering > Math.max(0.01, A.noiseFloor.pctDiffering * 2);
+      }
+    } catch (e) { A.pixels = { error: String((e && e.message) || e).slice(0, 140) }; }
+    // The interleaved pass is the one to believe; the block medians above stay
+    // only because the floor is computed from them.
+    A.paired = await interleave(20);
+    if (A.paired.off && A.paired.on) A.gpuDeltaPct = +(100 * (A.paired.on / A.paired.off - 1)).toFixed(1);
+    else if (A.off.median && A.on.median) A.gpuDeltaPct = +(100 * (A.on.median / A.off.median - 1)).toFixed(1);
+    // The GPU noise floor too: off against off2, same state, so whatever this
+    // reads is what the clock cannot resolve.
+    if (A.off.median && A.off2.median) A.gpuNoisePct = +(100 * (A.off2.median / A.off.median - 1)).toFixed(1);
+    return A;
+  };
+  out.occlusionAB = await bounded(abFor("occlusionCull"), 180000, "occlusion-ab");
+  out.multiDrawAB = await bounded(abFor("multiDraw"), 180000, "multidraw-ab");
+  checkpoint("feature-ab");
+
   // AND THE SAME THING IN MOTION. park() gives a static camera, and every
   // popping risk this feature has lives in movement: a chunk hidden while the
   // camera was elsewhere stays hidden for as many frames as its query takes to
