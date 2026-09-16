@@ -343,3 +343,50 @@ same-circuit comparison with the flag OFF. `meanLuma` 87.7 here has nothing to
 be compared against, because every earlier baseline is vegas. That control run
 is the next request, and until it matches, "no gross over-cull" is a claim about
 vegas only.
+
+---
+
+## 9. The research says my occlusion design is the superseded one
+
+`nvpro-samples/gl_occlusion_culling` is NVIDIA's reference for this problem, and
+its own summary of what it does is the verdict on what I built: the system **"is
+not based on individual occlusion queries anymore, but uses shaders to cull many
+boxes at once."** Per-object queries are what the reference sample moved AWAY
+from. Per-object queries are exactly what I implemented.
+
+Its numbers say the prize is real and large — 17,576 objects, no culling ~26 ms
+a frame, raster-based culling ~4.9 ms at 12 % visible, and the GPU variants cut
+CPU stalls to ~0.5 ms. So culling is worth roughly five times the frame when
+done in the batched form. The waste this repo measured (56-85 % of chunks
+producing no pixel) is the same shape of prize.
+
+**Why per-object loses, and why it lost here.** One proxy draw and one query per
+candidate is 155 draws and 155 queries a frame at vegas, plus a readback per
+query. That is a draw-call cost paid to save a vertex cost, which is only ever a
+good trade if vertices bind — the thing I assumed and did not establish. Vegas
+came back 94 % culled and 10 % SLOWER, which is what that trade looks like when
+the assumption is wrong.
+
+**The batched form, in WebGL2 terms.** No compute and no mesh shaders here, but
+the idea ports: draw all chunk proxy boxes as ONE instanced call into a small
+target, depth-testing against the scene depth, with the fragment shader writing
+the instance id of whatever survives. One draw, one readback, and the set of ids
+present is the visible set — 155 draws and 155 queries collapse to 1 and 1. It
+is the GPU version of what `tools/check/occlusion-estimate.mjs` already does in
+software.
+
+That is the design to build IF the frame turns out to be vertex-bound. If
+`apex26.propsUnchunked` says draw calls bind instead, the first lever is
+`WEBGL_multi_draw` (92.6 % support, 100 % on iOS and Safari, Firefox the outlier
+at 1.4 %), which collapses the per-chunk draws themselves — and then batched
+culling composes on top of it rather than competing with it.
+
+Either way the current per-object implementation is a step on the way, not the
+destination, and it should not ship on by default in this form.
+
+### Sources
+
+- [nvpro-samples/gl_occlusion_culling](https://github.com/nvpro-samples/gl_occlusion_culling)
+- [CHC++: Coherent Hierarchical Culling Revisited](https://onlinelibrary.wiley.com/doi/10.1111/j.1467-8659.2008.01119.x)
+- [WEBGL_multi_draw specification](https://registry.khronos.org/webgl/extensions/WEBGL_multi_draw/)
+- [WEBGL_multi_draw support survey](https://web3dsurvey.com/webgl/extensions/WEBGL_multi_draw)
