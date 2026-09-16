@@ -433,10 +433,26 @@ try {
     // produced two withdrawn conclusions already.
     for (const key of ["off", "off2", "on"]) {
       const on = key === "on";
-      await page.evaluate(([f, v]) => window.__apex[f](v), [feature, on]);
+      // COUNT THE FRAMES the counters accumulate over. Both features' counters
+      // are cumulative and are zeroed by toggling the flag OFF, so a raw total
+      // is only interpretable against the number of frames that produced it.
+      // Run 143 is the cost of not doing this: "4,709 calls for 4,853 ranges"
+      // could not be turned into a per-frame figure, so a grouping defect and a
+      // scene with few visible chunks were indistinguishable, and the number
+      // ended up labelled unexplained instead of answered.
+      await page.evaluate(([f, v]) => {
+        window.__apex[f](v);
+        if (!window.__abTick) {
+          window.__abTick = true;
+          const t = () => { window.__abFrames = (window.__abFrames | 0) + 1; requestAnimationFrame(t); };
+          requestAnimationFrame(t);
+        }
+        window.__abFrames = 0;
+      }, [feature, on]);
       await settle(on ? 24 : 8);            // ON needs long enough for the queries to answer
       A[key] = await sampleGpu(12);
       A[key].stats = await page.evaluate((f) => window.__apex[f](), feature);
+      A[key].frames = await page.evaluate(() => window.__abFrames | 0);
       if (shotBase) {
         A[key].shot = shotBase.replace(/\.png$/, "") + "." + feature + "-" + key + ".png";
         const r = await bounded(() => page.screenshot({ path: A[key].shot }), 30000, "ab-shot");

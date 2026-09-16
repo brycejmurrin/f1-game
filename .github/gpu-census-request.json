@@ -4,5 +4,5 @@
   "census_only": false,
   "force": "",
   "ls": "apex26.resMode=high",
-  "leg": "interleaved-sampler-2026-09-16-can-it-clear-its-own-floor"
+  "leg": "grouping-oracle-2026-09-16-per-frame-counts-so-1.03-can-be-read"
 }

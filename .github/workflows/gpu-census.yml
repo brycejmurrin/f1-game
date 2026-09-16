@@ -510,8 +510,26 @@ jobs:
                        : ab.aboveFloor === false ? "   (at the floor — no visible change)" : ""));
                 }
                 const st = (ab.on && ab.on.stats) || {};
+            // COUNTED, AND PER FRAME. A raw total says nothing without the
+            // frames it accumulated over — run 143 reported 4,709 calls for
+            // 4,853 ranges and the ratio could not be read, because a grouping
+            // defect and a scene with almost nothing visible produce the same
+            // 1.03. Both are printed: the total for the record, the per-frame
+            // figure for the judgement.
+                const fr = (ab.on && ab.on.frames) || 0;
+                const per = (n) => (fr > 0 && n != null ? (n / fr).toFixed(1) : "?");
                 if (st.drawElementsAvoided != null) {
-                  rows.push(`${" ".repeat(8)}       counted: ${st.multiCalls} multi-draw calls, ${st.rangesSubmitted} ranges, ${st.drawElementsAvoided} drawElements AVOIDED`);
+                  rows.push(`${" ".repeat(8)}       counted: ${st.multiCalls} multi-draw calls, ${st.rangesSubmitted} ranges, ${st.drawElementsAvoided} drawElements AVOIDED`
+                    + ` over ${fr} frames -> ${per(st.rangesSubmitted)} ranges/frame in ${per(st.multiCalls)} calls/frame`);
+                }
+            // THE GROUPING ORACLE. perChunkDraws -> consecutiveGroups ->
+            // setGroups is visible chunks, the groups a NEIGHBOUR comparison
+            // makes of them, and the groups their light SETS make. Locally at
+            // vegas night that reads 108.5 -> 24.5 -> 15.0 a frame; this is the
+            // same three numbers on real hardware.
+                if (st.perChunkDraws) {
+                  rows.push(`${" ".repeat(8)}       grouping: ${per(st.perChunkDraws)} visible chunks/frame -> ${per(st.consecutiveGroups)} groups by NEIGHBOUR -> ${per(st.setGroups)} by SET`
+                    + (st.setGroups > 0 ? `  (${(st.consecutiveGroups / st.setGroups).toFixed(2)}x fewer calls)` : ""));
                 }
               }
               }
