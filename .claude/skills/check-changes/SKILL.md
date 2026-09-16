@@ -47,6 +47,24 @@ node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wr
 ./tools/mcp/apex-tools-mcp.sh smoke
 ```
 
+## After `sync-pr.mjs`: you are NOT on your own branch
+
+`sync-pr.mjs <branch>` verifies on a temp branch and **checks it out**. Without
+`--push` it pushes nothing and returns with `HEAD` on `sync-pr-<branch>`. Its
+last line says so; the trap is that everything looks finished.
+
+```sh
+node tools/ci/sync-pr.mjs <branch>              # verifies, leaves HEAD on sync-pr-<branch>
+git rev-parse --abbrev-ref HEAD                 # CHECK THIS before anything else
+git checkout <branch> && git merge --ff-only sync-pr-<branch>
+git branch -D sync-pr-<branch>                  # then push / deploy as normal
+```
+
+Why it matters: running `deploy.mjs` from the temp branch pushes the RIGHT tree
+to the deploy branch and leaves your own branch behind without the sync merge —
+so what shipped and what your branch says shipped disagree. `--push` avoids the
+dance entirely when you already intend to publish.
+
 ## Load on demand
 
 - Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)
