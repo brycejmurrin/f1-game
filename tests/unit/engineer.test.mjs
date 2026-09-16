@@ -102,7 +102,11 @@ test("one voice: while the pit cue gives a DIRECTION the engineer waits, and the
   eng.update(c, 1);
   assert.equal(said.length, 1, "the owed line was not said once the cue let go");
   assert.match(said[0], /TYRES AT/);
-  for (const p of E.DIRECTIONAL) assert.ok(["enter", "keep", "stop", "merge"].includes(p), p);
+  // SQUARE IT UP is a direction too — it is the cue telling a driver stopped on
+  // the right arc that the car is not in its bay, and the one moment a stop
+  // still depends on what they do next.
+  for (const p of E.DIRECTIONAL) assert.ok(["enter", "keep", "square", "stop", "merge"].includes(p), p);
+  assert.ok(E.DIRECTIONAL.includes("square"), "the engineer must not talk over SQUARE IT UP");
 });
 
 test("OFF: the engineer is silent, because there is nothing to be legible about", () => {
