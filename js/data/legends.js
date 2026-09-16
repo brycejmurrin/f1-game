@@ -1,4 +1,5 @@
-/* Apex 26 — LEGENDS: eight historic drivers, their record, and a tribute livery.
+/* Apex 26 — LEGENDS: twelve historic drivers, their record, a tribute livery
+ * and the period car each of them raced.
  *
  * WHAT IS FACT AND WHAT IS THE GAME'S OPINION — the split this file exists to keep.
  *
