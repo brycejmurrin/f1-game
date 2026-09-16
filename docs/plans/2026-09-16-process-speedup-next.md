@@ -5,7 +5,9 @@ Base: the `claude/agent-dev-process-optimization-t7bqz8` branch after the
 what already shipped; this file is what comes after it). Every plan below
 names the evidence it rests on, the files it touches, how it is verified and
 what it is expected to save, so any session can pick one up cold. Ordered by
-saving ÷ risk inside each group; the "do next" order is at the bottom.
+saving ÷ risk inside each group; the "do next" order is at the bottom. Five
+deeper research plans written the same day sit in `research-2026-09-16/`
+(its README ranks them across each other).
 
 Baseline after the landing (measured on the branch's own CI runs and this
 box): commit guard ~5 s; pre-push node gate ~2 min at `--jobs=3`; the train's
@@ -67,38 +69,79 @@ Effort 10 min.
 
 ### 3. `elevation-tracks-vm` — the fast tier's floor
 
-**Evidence.** 399 s on this box for 47 tests over 40 circuits = ~10 s a
-circuit, where `tools/lib/game-vm.cjs` documents "a build is ~1 s". The
-`vm-a` slice is that file alone and ~6.5 min on a runner; nothing else in
-`node-suites` is above 2 min.
+**Evidence (measured later the same day — see
+`research-2026-09-16/vm-harness.md`, which overturns this item's first
+draft).** 399 s on this box for 47 tests over 40 circuits. The share is
+NOT the build: ~70 % is physics stepping (`A.step(1/60,1)` costs 3.13 ms
+with a 22-car field and the spec runs ~2,200 steps a circuit ≈ 6.9 s),
+~13 % `Tracks.build` (0.8–1.2 s a race), LAZY_SCENERY 0.4 %, car meshes
+built once per FILE (~1 s, memoised in `js/car/car-draw.js`), the 193-file
+manifest eval 178 ms. The `vm-a` slice is that file alone and ~6.5 min on a
+runner; nothing else in `node-suites` is above 2 min.
 
-**Plan.**
-1. Profile one circuit: `node --cpu-prof --test tests/unit/elevation-tracks-vm.test.mjs`
-   on a two-circuit subset, or time `g.race(id)` per circuit with
-   `handle.trackMs`. Expected culprits: `ensureScenery` (LAZY_SCENERY script
-   injection + `scenery(api)` build per circuit) and `makeCars` per race,
-   not the centreline build.
-2. If scenery dominates: the assertions are elevation/foundation reads
-   (`trackProfile`, `groundY`, wall stats) that need geometry, not props —
-   add a `createGame({ scenery: false })` option to `game-vm.cjs` that stubs
-   `ensureScenery` to a no-op, and let the twin opt in per test where no
-   scenery diagnostic is asserted.
-3. If the per-race boot dominates: build each circuit ONCE per file (a
-   `Map` of `apex.race(id)` results is not possible — the game holds one
-   track — so instead order the tests by circuit and share the race across
-   the tests that read the same circuit; today several tests re-race the
-   same id).
-4. Only if neither lands under ~3 min: split the spec AND the twin into
-   `elevation-tracks-{a,b,c}` by circuit list (the twin count check needs
-   both sides split identically; `tools/ci/twinned-specs.mjs` gets three
-   entries), and give each its own `node-suites` slice.
+**Plan (revised).**
+1. A `worker_threads` pool for the harness (a `game-vm-pool` sibling of
+   `tools/lib/game-vm.cjs`): four VM contexts, one circuit's probe body per
+   worker, every `assert` in the parent. No physics change, and the 1↔1
+   spec↔twin mapping `tools/ci/twinned-specs.mjs` checks stays intact
+   (a 4-way file split would break it). Cap the pool: RSS grows ~40 MB a
+   circuit. Expected 399 s → ~110–130 s; `vm-a` 6.5 min → ~2.
+2. `createGame({ carMeshes: false })` stubbing `Car3D.build` for files that
+   never read a car mesh: ~1 s per VM process, ~25–30 s per CI node run.
+   Opt-in; `physics-characterization-vm` never sets it (it is the parity
+   anchor against `tests/data/physics-baseline.json`).
+3. Replace the spec's 300 × (jump + step) steepest-grade SEARCH with
+   `trackProfile(300)` (1 ms vs 1,029 ms) narrowed to ~12 candidates — the
+   same edit on the browser spec, plus a 40-circuit A/B that the chosen
+   fracs match, before the twin count check accepts it.
+4. Closed by measurement: `scenery:false` (30 ms a circuit), a disk cache of
+   track geometry (the physics-bearing half of the build is 130–240 ms and
+   the collider list is produced inside the `createMesh` gate a cache would
+   skip), V8 `--build-snapshot` (snapshots the main context, not a
+   `vm.createContext` sandbox), a one-car field (a physics change in a
+   parity twin).
 
 **Verify.** `node --test tests/unit/elevation-tracks-vm.test.mjs` wall time;
-`node tools/ci/twinned-specs.mjs` still equal counts; one push for the slice
-time.
+`node tools/ci/twinned-specs.mjs` still equal counts; `physics-characterization-vm`
+green on the unmodified path; one push for the slice time.
 
-**Saves.** 3–5 min on every deploy push's fast tier (the floor moves to the
-next slice, ~2 min). Effort 2–4 h.
+**Saves.** ~4.5 min on every deploy push's fast tier (the floor moves to the
+next slice, ~2 min). Effort half a day.
+
+**LANDED 2026-09-16 — steps 1 and 2; step 3 deliberately not attempted.**
+`tools/lib/game-vm-pool.cjs` (`createPool`/`run`/`stats`/`close`) runs one
+circuit's probe per worker, compiled from SOURCE in the worker and called as
+`probe(g, args, state)`, with every `assert` still in the parent. Size
+`min(4, cores)`, recycle after 8 circuits or 1200 MB RSS, 300 s per job; a
+worker that throws, dies or hangs rejects THAT circuit by name. The probes
+live in `tests/helpers/elevation-probes.cjs`, verbatim but for the closure
+reads becoming arguments, and `APEX_VM_POOL=0` keeps the serial path.
+`createGame({ carMeshes: false })` stubs Car3D's builders (0.57 s of a 2.50 s
+boot, 23 builds) and THROWS if a caller passes `measure: true`, so it cannot
+silently lie to a mesh-measuring test.
+
+| run | wall |
+|---|---|
+| before | 400 s |
+| after, `APEX_VM_POOL=0` | 400 s (the port did not slow the old path) |
+| after, pooled | **191 s**, 210 s |
+
+The box was shared all session (loads 5-11, two or three foreign suites), and
+the 210 s run averaged load 5.1, so four workers held about three cores. An
+idle box should reach the 110-130 s this item predicted; that is UNPROVEN
+here, so the numbers above are what the docs and headers say.
+
+No assertion, threshold, launch or step count changed; the twin still declares
+7 against the spec's 7 and `twinned-specs` is green at 14 pairs / 253 tests.
+`tests/unit/game-vm-pool.test.mjs` runs the real probes through one worker and
+asserts the results are deep-equal FLOAT FOR FLOAT against the serial path —
+that equality, not the wall time, is what makes the pool safe to keep.
+
+**Step 3 stays open** and should stay open until someone budgets it properly:
+swapping the 300 × (jump + step) search for `trackProfile(300)` is a
+test-semantics change that needs the same edit on the browser spec plus a
+40-circuit A/B showing the chosen fracs match. The `vm-a` slice time still
+needs a re-measure from a real runner push.
 
 ### 4. Shard the geometry sweeps
 
@@ -376,6 +419,6 @@ Effort 20 min.
 |---|---|---|
 | next session, one sitting | 2 (guards jobs), 1 (`selected` on llvmpipe), 9 (docs-only guard), 15 (push cadence line) | all small, all measured, no browser run to land |
 | a person, 5 min | 10 (settings.json), then 11 (MCP on demand), 5 (ruleset) | the only items a session cannot write |
-| half a day each | 6 (`ci-dispatch`), 3 (elevation-tracks), 12 (smaller reads) | the shape-of-session changes |
+| half a day each | 6 (`ci-dispatch`), 3 (elevation-tracks worker pool), 12 (smaller reads) | the shape-of-session changes |
 | as they come up | 8 (twins), 13 (pins), 4 (sweeps shards), 7 (DRI probe) | per-file or environment work |
 | two weeks on | 14 (re-measure) | the note's §0 table gets a third column |

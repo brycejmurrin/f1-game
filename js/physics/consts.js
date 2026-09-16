@@ -7,7 +7,7 @@
 // physics block, so load order matters (a HARD_EDGES entry in
 // tools/manifest.cjs).
 window.PhysicsConsts = {
-  REVISION: "2026-09-racing-depth-1", // increment when comparable lap physics changes
+  REVISION: "2026-09-tyre-peak-1", // increment when comparable lap physics changes
   VMAX: 72,            // m/s base (~259 km/h) — F1 race pace; scales all speeds
                        //   (PACE and the vTop()/vStd() normalisers live in game.js)
   ACCEL: 7,            // m/s^2 at low speed
@@ -24,19 +24,8 @@ window.PhysicsConsts = {
   CS_FRONT: 130,       // front cornering stiffness (accel per rad of slip)
   CS_REAR: 175,       // rear stiffer than front → understeer in the linear range too
   WT_LONG: 0.22,       // longitudinal load transfer (braking loads the front axle)
-  // TYRE PEAK. The lateral force curve used to be a bare tanh: it rose to the
-  // friction limit and stayed there, so a tyre dragged past its peak (a slide,
-  // a spin) kept every bit of its grip and an overdriven car never paid for it.
-  // A real tyre falls off past the peak — that drop is what makes catching a
-  // slide a skill, and what turns a big oversteer moment into a spin instead of
-  // a free rotation. TYRE_DROP is the fraction of the limit lost, faded in over
-  // normalised slip TYRE_PEAK_X..TYRE_PEAK_X+TYRE_DROP_W (x = cs·slip/mu, so 1.5
-  // is well past the 0.29 rad steering lock at racing grip: steering alone never
-  // reaches it, a lateral slide does). Unchanged inside the peak, so the
-  // characterisation gates that measure steady-state cornering do not move.
-  TYRE_DROP: 0.12,
-  TYRE_PEAK_X: 1.5,
-  TYRE_DROP_W: 1.5,
+  // TYRE PEAK: the lateral curve (peak, plateau, floor) lives in
+  // js/physics/tyre-model.js as TyreModel.lateralCurve — see there.
   // LOAD SENSITIVITY. Axle friction used to scale linearly with axle load, so
   // weight transfer moved balance without ever costing total grip. A real tyre's
   // friction coefficient falls as its load rises: the loaded axle gains less
@@ -78,10 +67,20 @@ window.PhysicsConsts = {
   LINE_PURSUIT: 2.6,
 
   LONG_GRIP: 34,
-  // Power-on friction-circle cost: unfaded ACCEL·PACE·throttle, times this.
-  // 1.0 is only ~2 % lateral at racing speed (ACCEL/LONG_GRIP); 2.2 is a
-  // noticeable exit tax without matching full brake (BRAKE/LONG_GRIP ≈ 0.65).
-  THR_ELLIPSE: 2.2,
+  // Power-on friction-circle cost, charged to the DRIVEN (rear) axle only —
+  // the undriven front spends nothing on the throttle, so a planted pedal on a
+  // slow exit lightens the rear's lateral grip and the car rotates (power-on
+  // oversteer), while the front keeps turning. The charge is a fraction of
+  // LONG_GRIP: traction-limited at low speed (THR_CAP, reached at
+  // vStd ≤ THR_VK / THR_CAP ≈ 23 m/s: 78 % of rear lateral grip left with the
+  // pedal planted), power-limited above it (THR_VK / vStd, an engine's P/v),
+  // never below THR_FLOOR so planting the throttle mid-corner spends grip even
+  // when speed-limited (the old flat THR_ELLIPSE charge was 0.38 of LONG_GRIP
+  // at every speed, on BOTH axles). Full brake is still the bigger bill
+  // (BRAKE / LONG_GRIP ≈ 0.65, both axles by bias).
+  THR_FLOOR: 0.34,
+  THR_CAP: 0.62,
+  THR_VK: 14,          // m/s (a vStd() scale) — charge = THR_VK / vStd above the cap
 
   // Road grip in the wet, by TYRE TREAD CLASS: [slick, intermediate, full wet],
   // indexed by the fitted compound's `wetTread` in the Parts catalog. Read by

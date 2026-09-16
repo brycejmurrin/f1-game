@@ -1,21 +1,81 @@
 // Change-aware CI budget derivation. See docs/archive/research/TEST-AUDIT-2026-08.md §3.
-// @doc Can a change-aware CI job run what it selects? Re-derives the budget from measured per-spec counts (79.7 s/test).
+// @doc Can a change-aware CI job run what it selects? Bills each spec from `spec-timings.json`, else the 79.7 s constant.
 // @section runner
 // Measures per-spec runtime from CI and accounts for retries/timeouts.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as espree from "espree";
+import { loadDb, median, inBuckets, TIMINGS_FILE } from "./spec-timings.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 // MEASURED, not assumed. Change these only with a CI run id to point at.
+// `secPerTest` is the FALLBACK now, not the whole model: a spec with enough
+// samples in tests/data/spec-timings.json is billed at its own median (see
+// specSecPerTest below). One tree-wide mean was always a compromise — smoke's
+// cheapest test is 2.4 s and its dearest 100.6 s on the same box, same run.
 export const MEASURED = {
   source: "CI run 31197770813, 2026-08-07",
   secPerTest: 79.7,          // smoke: 9 declared tests in 11m57s, one worker
   perTestTimeoutSec: 240,    // ci.yml's --timeout=240000
   retries: 1,                // ci.yml: retries: process.env.CI ? 1 : 0
 };
+
+// A CI bucket is a RUNNER. `local` — this container, a laptop — is deliberately
+// excluded: it is a different machine under a different load, and the whole
+// point of the number is to predict what a CI job will cost. A local history is
+// still recorded and still readable; it just may not set a CI budget.
+export const CI_BUCKETS = ["swiftshader", "llvmpipe"];
+
+// Three samples is the floor for a median that is not simply "the one run we
+// saw". Below it the constant above is the honest answer, and `source` says so.
+export const MIN_SAMPLES = 3;
+
+let TIMINGS = null;
+/** The rolling history, loaded once. Absent file -> empty history -> constant. */
+export function timings(reload = false) {
+  if (reload || !TIMINGS) TIMINGS = loadDb(path.join(ROOT, TIMINGS_FILE));
+  return TIMINGS;
+}
+
+/** What one test of `file` costs, and WHERE THE NUMBER CAME FROM.
+ *
+ *  Measured beats assumed, but only inside one runner bucket and only with
+ *  MIN_SAMPLES behind it; otherwise the 2026-08-07 constant stands. The bucket
+ *  with the most samples wins, so a move from SwiftShader to llvmpipe re-bases
+ *  the estimate as the new runner's history accumulates rather than averaging
+ *  two machines into a number that describes neither.
+ *
+ *  Returns `{ sec, source, bucket, samples }`; `source` is "measured" or
+ *  "constant" and is reported wherever the number is, because a budget derived
+ *  from a default must never read like a budget derived from a measurement. */
+export function specSecPerTest(file, db = timings()) {
+  const entry = db?.specs?.[file];
+  const samples = inBuckets(entry?.s, CI_BUCKETS);
+  let best = null;
+  for (const bucket of CI_BUCKETS) {
+    const rows = samples.filter((s) => s[1] === bucket);
+    if (rows.length < MIN_SAMPLES) continue;
+    if (!best || rows.length > best.rows.length) best = { bucket, rows };
+  }
+  if (!best) {
+    return { sec: MEASURED.secPerTest, source: "constant", bucket: null,
+      samples: samples.length };
+  }
+  // Per TEST, not per run: a spec that grew from 8 tests to 10 did not get 25%
+  // slower, and billing the whole-file wall would say it did.
+  const per = best.rows.map((s) => (s[3] ? s[2] / s[3] : s[2]));
+  return { sec: Math.round(median(per) * 10) / 10, source: "measured",
+    bucket: best.bucket, samples: best.rows.length };
+}
+
+/** The `capacity()` settings object for one spec, billed at its own rate. */
+export function billing(file, m = MEASURED) {
+  const { sec, source, bucket, samples } = specSecPerTest(file);
+  return { ...m, secPerTest: sec, secPerTestSource: source, secPerTestBucket: bucket,
+    secPerTestSamples: samples };
+}
 
 // The settings a SELECTED job could plausibly run under, against the ones
 // ci.yml's smoke step uses today. Same per-test cost throughout — only the
@@ -95,7 +155,17 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const rows = budgets.flatMap((b) => [0, 1, 2].map((k) => ({ budgetMin: b, failures: k, ...capacity(b, k) })));
 
   if (process.argv.includes("--json")) {
-    console.log(JSON.stringify({ measured: MEASURED, rows, specCounts: counts }, null, 2));
+    // Every per-spec number carries its PROVENANCE. A reader who cannot tell a
+    // measured 51 s from the inherited 79.7 s default has a table of numbers,
+    // not a table of measurements — and this file's own header records what
+    // believing an un-sourced number cost.
+    const specCounts = counts.map((c) => ({ ...c, ...specSecPerTest(c.file) }));
+    const measuredCount = specCounts.filter((c) => c.source === "measured").length;
+    console.log(JSON.stringify({
+      measured: MEASURED, rows, specCounts,
+      timings: { file: TIMINGS_FILE, ciBuckets: CI_BUCKETS, minSamples: MIN_SAMPLES,
+        specsMeasured: measuredCount, specsOnConstant: specCounts.length - measuredCount },
+    }, null, 2));
   } else {
     const med = counts[Math.floor(counts.length / 2)].tests;
     console.log(`MEASURED (${MEASURED.source}): ${MEASURED.secPerTest} s per test at one worker,`);
@@ -107,6 +177,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       const c = [0, 1, 2].map((k) => String(capacity(b, k).tests).padStart(6));
       console.log(`  ${String(b).padStart(4)} min ${c.join("   ")}`);
     }
+    const sourced = counts.map((c) => specSecPerTest(c.file));
+    const measuredSpecs = sourced.filter((s) => s.source === "measured").length;
+    console.log(`\nPer-spec cost from ${TIMINGS_FILE}: ${measuredSpecs}/${counts.length} spec(s) have ` +
+      `${MIN_SAMPLES}+ samples in a CI bucket (${CI_BUCKETS.join("/")}) and are billed at their own ` +
+      `median; the rest fall back to ${MEASURED.secPerTest} s.`);
+    if (!measuredSpecs) console.log("  (no CI samples yet — merge a run's junit with tools/ci/spec-timings.mjs)");
+
     console.log(`\nSpecs on disk: ${counts.length}. Median ${med} declared tests;`);
     console.log(`smallest ${counts[0].tests} (${counts[0].file}),`);
     console.log(`largest ${counts.at(-1).tests} (${counts.at(-1).file}).`);

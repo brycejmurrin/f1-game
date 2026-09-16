@@ -835,6 +835,60 @@ on the 08-18 perf-hunt board, not this register.
   telemetry scrubber uses `CssZoom.viewportRect`.
 - **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
 
+### 2026-09-16 — the deploy tip's release train is red on the coplanar sweep (geometry, not tooling)
+
+Found by the train on `f46cb99` (pages run 35068834342, 2026-09-16 07:35 UTC)
+and on every full-tier run of the deploy tip since `80acf93` (`feat(pit): a
+shorter lane, a signed entry, a walled exit, furnished bays, the stop seen`)
+and its follow-ups (`c48d891` re-baselined floating scenery only; `5710a0c`
+fixed the Abu Dhabi gridshell that `abudhabi-foundation.spec.js` caught).
+`tests/unit/coplanar-faces.test.mjs` fails both ways:
+
+| circuit | coplanar spots | baseline (`tools/track/coplanar-baseline.json`) |
+|---|---|---|
+| fuji | 17 | 16 |
+| hungaroring | 20 | 18 |
+| istanbul | 5 | 4 |
+| magny_cours | 2 | 1 |
+| redbull | 9 | 8 |
+| albert_park | 7 | 8 (stale — must come DOWN) |
+
+The growth is a real finding (a new same-facing coplanar face is a
+z-fighting risk), so the baseline must not simply be raised: the check-changes
+deploy reference says a grown count needs `node tools/track/coplanar-audit.cjs <id>`
+and a dated note in the test file first — most likely the new pit-lane
+building or wall sits flush on an existing face at those six circuits. The
+albert_park entry must be lowered to 7 regardless. Until both land, every
+train on the deploy branch fails at "Per-circuit geometry sweeps" and nothing
+publishes; the tooling landing of 2026-09-16 (`docs/notes/AGENT-PROCESS-RESEARCH-2026-09-16.md`
+§5) is on the tip and its fast tier is green, so the site will pick it up with
+the first green train. Owner: the pit-lane session; this note is the hand-off.
+
+**Closed the same morning, in three parts.** The pit-lane session audited the
+six circuits and landed the coplanar baseline on `45fbd81`; its train
+(pages run 35070243183) then went red one job later on two other things.
+(1) `tools/track/float-audit.cjs abudhabi --why` named one floating cluster —
+the Yas hotel gridshell's last arch at frac 0.989, 18 m over prop cells with
+no leg beneath it after `5710a0c` moved both rear legs a node early —
+and `b3f3bb3` keeps the rear-left leg under the arch (audit: 0 elevated
+clusters). (2) `menu-baseline.spec.js` `garage-phone-landscape` was 6166 px
+(2 %) off its golden: `5903510` shrank the garage tab labels to 9 px and
+untrimmed a gap (SUSPENS… reads SUSP, the rows sit 3 px higher), so the golden
+was STALE, not the render. Re-blessed 2026-09-16 from the runner's own
+SwiftShader capture (artifact `golden-menus-runner`, run 35070786138) and
+confirmed on this container (the two agree to 1-17 px — table above,
+2026-09-01), with the diff reviewed by eye: labels and spacing only, every
+row, chip and price intact. (3) The `selected` shards moved to Mesa llvmpipe
+today; the shard carrying menu-baseline stays on SwiftShader, since the six
+goldens are SwiftShader captures (ci.yml carve-out, pinned by
+`tests/unit/ci-coverage.test.mjs`).
+
+**LIVE.** The first green train after those three landed is pages run 2356 on
+`1f04126` (2026-09-16 08:45 UTC): every job green, and the live shell now reads
+`<meta name="apex-sha" content="1f04126…">` at build **9116**, up from the 9058
+the site had been stuck on all morning. The tooling landing of 2026-09-16 rode
+out with it.
+
 ### 2026-09-01 general survey — fixed, recorded, and the player-facing list
 
 Fixed in the same session (each a two-line local change; browser groups
