@@ -835,6 +835,35 @@ on the 08-18 perf-hunt board, not this register.
   telemetry scrubber uses `CssZoom.viewportRect`.
 - **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
 
+### 2026-09-16 — the deploy tip's release train is red on the coplanar sweep (geometry, not tooling)
+
+Found by the train on `f46cb99` (pages run 35068834342, 2026-09-16 07:35 UTC)
+and on every full-tier run of the deploy tip since `80acf93` (`feat(pit): a
+shorter lane, a signed entry, a walled exit, furnished bays, the stop seen`)
+and its follow-ups (`c48d891` re-baselined floating scenery only; `5710a0c`
+fixed the Abu Dhabi gridshell that `abudhabi-foundation.spec.js` caught).
+`tests/unit/coplanar-faces.test.mjs` fails both ways:
+
+| circuit | coplanar spots | baseline (`tools/track/coplanar-baseline.json`) |
+|---|---|---|
+| fuji | 17 | 16 |
+| hungaroring | 20 | 18 |
+| istanbul | 5 | 4 |
+| magny_cours | 2 | 1 |
+| redbull | 9 | 8 |
+| albert_park | 7 | 8 (stale — must come DOWN) |
+
+The growth is a real finding (a new same-facing coplanar face is a
+z-fighting risk), so the baseline must not simply be raised: the check-changes
+deploy reference says a grown count needs `node tools/track/coplanar-audit.cjs <id>`
+and a dated note in the test file first — most likely the new pit-lane
+building or wall sits flush on an existing face at those six circuits. The
+albert_park entry must be lowered to 7 regardless. Until both land, every
+train on the deploy branch fails at "Per-circuit geometry sweeps" and nothing
+publishes; the tooling landing of 2026-09-16 (`docs/notes/AGENT-PROCESS-RESEARCH-2026-09-16.md`
+§5) is on the tip and its fast tier is green, so the site will pick it up with
+the first green train. Owner: the pit-lane session; this note is the hand-off.
+
 ### 2026-09-01 general survey — fixed, recorded, and the player-facing list
 
 Fixed in the same session (each a two-line local change; browser groups
