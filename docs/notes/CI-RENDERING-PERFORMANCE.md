@@ -80,8 +80,43 @@ APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d
    swapchain canvas. Readback oracle: `wgx-capture.mjs` / `render({what:"view"})`.
 4. **For Playwright CI speed**, measure dropping the SwiftShader pin for the
    **WebGL2** suite (`llvmpipe`); that is independent of WebGPU backend choice.
+   **Measured in THIS container (2026-09-16): does not reproduce — read the
+   note right below before trying again.**
 5. **Real GPU + `xvfb-run`** remains the path for hardware WebGL/WebGPU visuals;
    GitHub GPU runners still need driver load — see §1 point 3.
+
+### llvmpipe for WebGL2 does not reproduce in this container (2026-09-16)
+
+Five separate launches, all resolving `WEBGL_debug_renderer_info` to
+`ANGLE (Google, ... SwiftShader Device ...)` or hanging outright — never to
+Mesa:
+
+| Flags | Result |
+|---|---|
+| `--use-gl=angle --use-angle=gl` | SwiftShader |
+| same, under `xvfb-run` | SwiftShader |
+| `--use-gl=egl --use-angle=gl` + `LIBGL_ALWAYS_SOFTWARE=1` | SwiftShader |
+| `--use-angle=swiftshader-webgl` (control) | SwiftShader, as expected |
+| `--ozone-platform=x11 --use-gl=desktop`, headed, under `xvfb-run` | SwiftShader |
+| `--ozone-platform=x11 --use-gl=angle --use-angle=gl`, headed, under `xvfb-run` | page never boots (20 s timeout) |
+
+Root cause: this is the same Firecracker microVM the §"no hardware adapter"
+note below describes for Vulkan — `ls /dev/dri` still fails. Mesa's llvmpipe
+OpenGL path is a DRI driver (`swrast_dri.so`); on Linux it is loaded through
+EGL/GLX, both of which want either a DRM render node or (for the classic X11
+GLX indirect-rendering fallback) a real X server backing a `/dev/dri`-less
+software path that this container's Xvfb does not provide either — `Xvfb`
+gives Chromium a display to open a window on, not a GPU/DRI stack to render
+through. `mesa-libgallium`/`libgl1-mesa-dri` are installed (`dpkg -l`), so the
+driver is present; there is simply nothing for it to attach to here.
+
+The 2026-08-17 llvmpipe/WebGL2 row above was real *for whatever environment
+that session ran in* — not for this container. Lavapipe (software Vulkan,
+used by the WebGPU rows) is unaffected: it needs no DRM device, which is
+exactly why it is the one software path that has worked consistently across
+every measurement in this file. **Do not re-attempt the llvmpipe/WebGL2 swap
+without first confirming `/dev/dri` exists** (`ls /dev/dri`) or moving to an
+environment that provides it — chasing Chromium flags alone will not fix it.
 
 ### There is no hardware adapter here — and it was never the limit (2026-08-28)
 
