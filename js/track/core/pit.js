@@ -170,6 +170,26 @@ const TrackPit = (function () {
     const entryM = Math.min(Math.max(back - ENTRY_ROAD - MOUTH_RUN, ENTRY_MIN), ENTRY_MAX, cap * 0.7);
     // The exit line closes before the first corner, leaving the exit road its
     // minimum run to blend back on the straight.
+    //
+    // THE MERGE ITSELF IS STILL IN A BEND ON 11 OF 52 CIRCUITS, and this is
+    // where that was measured and NOT fixed. `ROAD_MIN` here is 30 m while the
+    // exit road actually runs 80-90, so the road reaches past the straight and
+    // the car rejoins mid-corner — zero straight after the merge at Jerez,
+    // Mosport, Zolder, Baku, Monaco, Shanghai, Donington, Anderstorp, Brands
+    // Hatch, Mont-Tremblant and the Nürburgring, whose exit road peaks at |k|
+    // 0.0715, a 14 m radius (scratch/pit-exit-survey.cjs). It is the one thing
+    // a pit exit should not do — a car coming off the limiter cannot dodge, and
+    // the guidance for a real circuit is that entry and exit belong on a slow,
+    // straight section and must not put a rejoining car on the racing line.
+    //
+    // Closing the window earlier to pull the merge back was TRIED and reverted:
+    // the window is also what the twelve bays stand in, and shortening it took
+    // Bahrain's row under the 201 m it needs, compressed the pitch below a
+    // bay's width and placed NO BAYS AT ALL — taking the canopy, race control
+    // and the stop with them. The exit road cannot shorten either: its 80 m
+    // floor is what stops the AI running off the end of the blend. Moving the
+    // merge needs the row decoupled from the window first; the survey and the
+    // plan are in docs/research/PIT-NEXT-STEPS-2026-09.md.
     const fwd = straightRun(track, curvature, 0, 1, EXIT_M + ROAD_MIN);
     const exitM = Math.min(EXIT_M, cap * 0.3, Math.max(EXIT_MIN, fwd - ROAD_MIN));
     return { entryM, exitM };
@@ -236,7 +256,10 @@ const TrackPit = (function () {
     const count = rows.length;
     const lo = grow + 20, hi = Math.max(lo, lenM - ROW_END);
     let pitch = PITCH;
-    if ((count - 1) * pitch > hi - lo) pitch = Math.max(BOX_LEN + 1, (hi - lo) / (count - 1));
+    // The epsilon is load-bearing: a window sized to EXACTLY the row's length
+    // compresses by a float's width, and `pitch 11.00 < 11` then drops every
+    // bay on the circuit. A row that just fits is a row that fits.
+    if ((count - 1) * pitch > hi - lo + 1e-6) pitch = Math.max(BOX_LEN + 1, (hi - lo) / (count - 1));
     // A compressed row paints its boxes closer than a bay is wide (Jeddah's
     // 190 m window: 10.0 m against 10.8), so it places no bays — two would
     // interpenetrate by the difference on every party wall.
