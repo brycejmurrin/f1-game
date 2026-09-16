@@ -1,8 +1,9 @@
 {
   "images": "macos-latest",
   "track": "vegas",
+  "clock": 2,
   "census_only": false,
   "force": "",
   "ls": "apex26.resMode=high",
-  "leg": "grouping-oracle-2026-09-16-per-frame-counts-so-1.03-can-be-read"
+  "leg": "night-leg-2026-09-16-the-lamp-branch-has-never-been-measured"
 }
