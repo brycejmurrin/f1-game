@@ -114,7 +114,11 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
       window.__apex.clearInput();
       return speed;
     }, [LAUNCH, lat]);
-    const offSpeed = await leg(14);   // way off in the grass
+    // NEGATIVE lateral: the +x side of Monza's start straight is the PIT LANE
+    // (js/race/pit-lane.js — `c.inPitLane` suppresses `offroad`), so +14 m is
+    // a surface, not grass; measured 2026-09-16, the "grass" leg came back at
+    // the tarmac speed to the metre. The left verge is grass on every circuit.
+    const offSpeed = await leg(-14);  // way off in the grass
     const onSpeed = await leg(0);     // same launch, on the tarmac
     // Grass held it slow: a net LOSS from the launch despite full throttle
     // (measured 55.56 = 69 % of 80; the bound is the claim plus margin).
@@ -152,7 +156,7 @@ test.describe("Apex 26 — off-track / reverse / wrong-way", () => {
     const r = await page.evaluate(() => {
       window.__apex.setPhysics({ drift: 0 });
       let onTrack = false;
-      window.__apex.jump(0.0, 0, 16);            // beached in the grass, stopped
+      window.__apex.jump(0.0, 0, -16);           // beached in the grass, stopped (−x: +x is Monza's pit lane, see above)
       for (let i = 0; i < 320; i++) {
         window.__apex.setInput({ steer: 0, throttle: false });
         window.__apex.step(1 / 60, 1);
