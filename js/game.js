@@ -1700,7 +1700,7 @@ function makeCars() {
         // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
         // MY TEAM + hire share the saved build; everyone else uses factory.
         rollBalance: isP ? SetupTune.balance(team.id) : 0,
-        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, SetupTune.aero(team.id)) : Parts.aeroLoad(factoryParts.setup, team),
+        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, isP ? SetupTune.aero(team.id) : undefined) : Parts.aeroLoad(factoryParts.setup, team),   // the BUILD is shared, the SHEET is not: rollBalance/mods above are already isP-only, and an AI reads aeroLoad continuously (AiDrive.lateralScale), so the mate was the only car the player's rake moved
         ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
         ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
         color: team.color, tier: team.tier, seat: di, houseStats: Career.teamStats(team),
