@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# @doc Pages deploy monotonic guard: prints `true` when the live shell's apex-sha is an ancestor of the given commit, else `false`.
+# @doc Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false.
 # @section runner
 #
 # pages-publishable.sh <commit-sha> <site-url>
