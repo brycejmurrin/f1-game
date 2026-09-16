@@ -46,7 +46,17 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   // actually reached because nothing cleared it between episodes.
   "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
-  "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane"];
+  "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
+  // 2026-09-16: found by tools/check/episode-diff.mjs, not a live repro — the
+  // lazy `c.passPlan || (c.passPlan = {})` cache in game.js's overtake-attempt
+  // block survives reset() untouched, and `!c.passPlan || c.passPlan.side`
+  // (same file) reads `.side` straight off it without AiCorridor.choose()
+  // having run yet this tick whenever the attempt gate above it is closed. A
+  // cold car has no passPlan, so that read is always true; a warm one carries
+  // last episode's `.side`, which can be 0 (a previous "no lane" verdict) and
+  // flip the same read to false — an AI overtake decision that depends on
+  // which episode number it is.
+  "passPlan"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
 // off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
 function apiHook(base, path, fix) {
