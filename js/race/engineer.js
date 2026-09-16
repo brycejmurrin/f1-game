@@ -48,7 +48,7 @@ const RaceEngineer = (function () {
   // the same driver; while the cue is giving a DIRECTION — hold the lane, keep
   // left, stop here, merge — the engineer waits, and the line it owes is not
   // spent (the wear step is only consumed when a line is actually said).
-  const DIRECTIONAL = ["enter", "keep", "stop", "merge"];
+  const DIRECTIONAL = ["enter", "keep", "square", "stop", "merge"];
 
   function create(G) {
     Log.info("race", "RaceEngineer.create");

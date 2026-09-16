@@ -205,7 +205,10 @@ const DrivingCoach = (function () {
         rewindAcc += step;
         if (rewindAcc >= 1 / REWIND_HZ) {
           rewindAcc = 0;
-          rewindBuf.push({ t: clock, snap: captureCar(G.player) });
+          // A solo session captures one car; a race captures the world. Same
+          // cadence either way — 20 cars x 3 deep clones per sample at 2 Hz is
+          // 60 clones every half second, which the physics path does not feel.
+          rewindBuf.push({ t: clock, world: captureWorld() });
           if (rewindBuf.length > REWIND_KEEP) rewindBuf.shift();
         }
       } else if (rewindBuf.length) { rewindBuf = []; rewindAcc = 0; }
@@ -251,11 +254,10 @@ const DrivingCoach = (function () {
     // each growing their own field list that drifts out of step.
     const PRIM = (v) => v == null || ["number", "boolean", "string"].includes(typeof v);
     const DEEP = ["tyre", "tyreLog", "pitNext"];
-    // Single-car capture, not a whole-world one. Never a career, a remote car,
-    // or a queued race settlement. The generic sweep is deliberate: the car
-    // carries ~60 live primitives and an explicit list would rot silently —
-    // see EPISODE_TRANSIENTS in js/agent/apex.js, which had to be built by
-    // measurement rather than inspection for exactly that reason.
+    // The generic sweep is deliberate: a car carries ~60 live primitives and an
+    // explicit list would rot silently — see EPISODE_TRANSIENTS in
+    // js/agent/apex.js, which had to be built by measurement rather than
+    // inspection for exactly that reason. Never a career or a remote car.
     function captureCar(c) {
       const fields = {};
       for (const k of Object.keys(c)) if (PRIM(c[k])) fields[k] = c[k];
@@ -270,33 +272,87 @@ const DrivingCoach = (function () {
     // so it would not corrupt a result, but a practice tool that quietly erases
     // the consequence of running wide is teaching the wrong lap. Carried
     // forward across every restore instead.
+    // PENALTIES AND CUTS DO NOT REWIND FOR THE PLAYER. They are ordinary
+    // primitives, so the generic sweep captures them and a naive restore hands
+    // them back — undoing a time penalty or resetting the track-limits ladder
+    // by pressing a button. The session is unscored so no result is at risk,
+    // but a practice tool that quietly erases the consequence of running wide
+    // is teaching the wrong lap.
+    // ONLY the player: an AI car is part of the world being rewound, and there
+    // is no lesson to protect there — so a rival's penalty rewinds with
+    // everything else, which is what "the race is back where it was" means.
     const KEEP_FORWARD = ["penalty", "cuts", "cutWarn", "hits", "wallHits", "hitSev"];
-    function restoreCar(c, snap) {
-      IncidentSim.reset(); DebrisWorld.reset();
+    function applyCar(c, snap, keepForward) {
       const keep = {};
-      for (const k of KEEP_FORWARD) if (Object.hasOwn(c, k)) keep[k] = c[k];
+      if (keepForward) for (const k of KEEP_FORWARD) if (Object.hasOwn(c, k)) keep[k] = c[k];
       for (const k of Object.keys(c)) if (PRIM(c[k]) && !Object.hasOwn(snap.fields, k)) delete c[k];
       Object.assign(c, snap.fields, keep);
       for (const [k, v] of Object.entries(snap.objects)) c[k] = v == null ? v : JSON.parse(JSON.stringify(v));
-      // The lap is dead either way, and the interpolator must not tween the car
-      // across the gap it just jumped — it would draw a streak from where the
-      // car was to where it now is.
-      c.incidentInvalidLap = true; c._prevS = c.s;
+      // The interpolator must not tween the car across the gap it just jumped —
+      // it would draw a streak from where the car was to where it now is.
+      c._prevS = c.s;
       c.rPrevPx = c.px; c.rPrevPz = c.pz;
       c.rPrevHead = c.head; c.rPrevS = c.s; c.rPrevX = c.x;
+    }
+    // ---- the WORLD, not just the player ------------------------------------
+    // A rewind that moved one car through a field that kept running is not a
+    // rewind, it is a teleport: you rejoin having lost the ground everyone else
+    // covered, the order scrambles, and you can land inside a rival who is now
+    // occupying the road you left. So a session with other cars on track
+    // rewinds ALL of them, the race clock, and the sector state with them.
+    //
+    // WHAT CANNOT BE RESTORED, said plainly: the debris field and any live
+    // incident. DebrisWorld is a Rapier (WASM) rigid-body side-world with
+    // reset()/prime() and no snapshot, and IncidentSim's takeovers are keyed to
+    // ticks that no longer exist. Both are RESET rather than restored, so a
+    // rewind clears marbles and broken panels instead of putting them back.
+    // That is a visible difference from a true time machine and the honest one
+    // to take — the alternative is cars rewound into debris that was never
+    // there when they were last at that point on the road.
+    function captureWorld() {
+      const cars = (G.cars || []).map((c) => captureCar(c));
+      return { cars, raceT: G.raceT, sectorIdx: G.sectorIdx, sectorStartT: G.sectorStartT,
+        sectorBests: Array.isArray(G.sectorBests) ? G.sectorBests.slice() : null,
+        sectorLast: Array.isArray(G.sectorLast) ? G.sectorLast.slice() : null };
+    }
+    function restoreWorld(w) {
+      IncidentSim.reset(); DebrisWorld.reset();
+      const cars = G.cars || [];
+      // Index-keyed: `cars` is built once by makeCars() and its ORDER never
+      // changes (standings are derived from prog, not by sorting this array),
+      // so index i is the same car across the window. Length-guarded anyway.
+      for (let i = 0; i < cars.length && i < w.cars.length; i++)
+        applyCar(cars[i], w.cars[i], cars[i].isPlayer);
+      // THE CLOCK COMES BACK TOO. Without it the cars are 10 s younger and the
+      // race is not, so every gap, delta and lap projection reads wrong.
+      if (Number.isFinite(w.raceT)) G.raceT = w.raceT;
+      if (Number.isFinite(w.sectorIdx)) G.sectorIdx = w.sectorIdx;
+      if (Number.isFinite(w.sectorStartT)) G.sectorStartT = w.sectorStartT;
+      if (w.sectorBests) G.sectorBests = w.sectorBests.slice();
+      // sectorLast has no setter — mutate the live array in place.
+      if (w.sectorLast && Array.isArray(G.sectorLast)) {
+        G.sectorLast.length = 0;
+        for (const v of w.sectorLast) G.sectorLast.push(v);
+      }
+      if (G.player) G.player.incidentInvalidLap = true;
       G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
     }
+    // A CHECKPOINT IS A WORLD TOO. Same reasoning as rewind: saving a starting
+    // point in a race and restoring only your own car would put you back on the
+    // road with rivals who never went back — the order scrambled and a rival
+    // possibly sitting where you just materialised. In a solo session this is
+    // a one-car world and behaves exactly as it always did.
     function mark() {
       if (!canPractice()) return false;
       if (!insights.startDrill(drillMode)) return false;
-      checkpoint = Object.assign(captureCar(G.player), { mode: drillMode });
+      checkpoint = { world: captureWorld(), mode: drillMode };
       practice = true; G.records.invalidate();
       G.announce("PRACTICE: " + goal() + " — LAPS NOT SAVED", 3, "practice");
       return true;
     }
     function retry() {
       if (!checkpoint || !canPractice()) return false;
-      restoreCar(G.player, checkpoint);
+      restoreWorld(checkpoint.world);
       drillMode = checkpoint.mode;
       insights.startDrill(drillMode);
       G.announce("TRY AGAIN: " + goal(), 2, "practice");
@@ -308,21 +364,19 @@ const DrivingCoach = (function () {
     // player who rewinds twice in a row should keep travelling backwards
     // instead of landing on the same spot.
     //
-    // WHAT DOES NOT REWIND, said plainly because a player will notice: the
-    // other cars. This restores ONE car, so in a duel or a race the rival
-    // keeps the ground it covered and you rejoin behind where you were
-    // relative to it. The alternative is a whole-world rewind, which the
-    // Rapier debris side-world (js/physics/debris-world.js) cannot do — it has
-    // reset() and prime(), no snapshot — so this stays honest about its scope
-    // and the session is unscored anyway.
+    // THE WHOLE RACE GOES BACK — every car, the clock and the sector state —
+    // so gaps, positions and deltas are the ones you actually had 10 s ago.
+    // See restoreWorld() for the two things that are RESET rather than
+    // restored (the Rapier debris field and any live incident).
     function rewind() {
       if (!canPractice() || !rewindBuf.length) return false;
       const e = rewindBuf.shift();
       rewindBuf = [];                 // everything after it is a future that no longer happened
       rewindAcc = 0;
       practice = true;                // rewinding IS practising, whether or not a checkpoint was set
-      restoreCar(G.player, e.snap);
-      G.announce("REWIND " + Math.round(clock - e.t) + "s", 2, "practice");
+      const n = (G.cars || []).length;
+      restoreWorld(e.world);
+      G.announce("REWIND " + Math.round(clock - e.t) + "s" + (n > 1 ? " — FULL GRID" : ""), 2, "practice");
       return true;
     }
     function reset() {

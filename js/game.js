@@ -892,7 +892,7 @@ let pits = null;      // PitLane.create(G), same deferral
 // The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
 // called in and still on your way to the box. Not `out`/`served`/`merge` — by
 // then you are leaving, and not `missed`.
-const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "stop", "box"];
+const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "square", "stop", "box"];
 let engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
