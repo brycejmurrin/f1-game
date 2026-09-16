@@ -229,6 +229,17 @@ const PitLane = (function () {
   // lane" and nothing looser: at Monaco's narrowed 2.86 m lane it still refuses
   // a car sitting on the racing line.
   const BOX_LAT = 1.0;
+  // SQUARE IN THE BOX. `BOX_LAT` above is the LANE test — "most of the car is
+  // in the working lane" — and it was also, wrongly, the whole of the stop's
+  // lateral condition: a car anywhere from the corridor edge to the garage
+  // wall latched, and the AI's own diagonal halted it four fifths of the way
+  // across (`laneX`), so nobody ever parked in their bay. A stop needs the car
+  // SQUARE: centred on its own box and pointing down the lane, the way a crew
+  // can actually work on it. These two are that condition, and they bind on
+  // the player and the AI alike.
+  const BOX_SQUARE_LAT = 1.2;   // m from the box's own centre (the car is 2.0 m wide)
+  const BOX_SQUARE_RAD = 0.22;  // rad off the lane's tangent — 12.6°, a crooked car, not a parked one
+  const SQUARE_BY_M = 6;        // …and the AI's lateral move is COMPLETE this far before the box
   // ── A ROW OF BOXES, NOT ONE POINT ────────────────────────────────────────
   // Every car used to stop at the SAME arc position, and since the lane became
   // a place, at the same lateral position too — so two cars pitting on the same
@@ -519,7 +530,17 @@ const PitLane = (function () {
     // stop is actually worth making: the set is meaningfully used, or the tread
     // is wrong for the conditions, or a caution is out and a stop is cheap.
     const CUE_M = 550;          // start counting down this far out
-    const BOX_CUE_M = 90;       // …and start asking for the lane this far from the box
+    const BOX_CUE_M = 90;       // …and start counting the metres down this far from the box
+    // ASK FOR THE WORKING LANE ONLY WHEN IT IS TIME TO TAKE IT. Reported, with
+    // a screenshot of the cue reading KEEP RIGHT at the top of the lane: "it's
+    // wrongly telling me to stay right before it's my time to pull over."
+    // True — the ask rode the whole 90 m countdown, so a driver doing the right
+    // thing (down the fast lane, turn in late, as a real stop is driven) was
+    // told they were wrong for four seconds. The instruction now waits until
+    // the move is due: 36 m is a second and a half at the 80 km/h limit, and
+    // three bay pitches, so it is late enough to mean something and early
+    // enough to act on.
+    const MOVE_M = 36;
     const CUE_WEAR = 0.55;      // …or not at all, on a set with life left in it
     const SERVED_S = 1.2;       // "GO GO GO" lasts this long after the release
     const MERGE_S = 3;          // a car this close behind on the exit is CLOSING
@@ -599,6 +620,11 @@ const PitLane = (function () {
         if (togo > -BOX_TOL && togo < BOX_CUE_M) {
           Tracks.sample(G.track, c.s, _smp);
           const zz = z(), frac = 1 - togo / BOX_CUE_M;
+          // FAR OUT: the box is coming, and the lane you want is the one you
+          // are in. Count it down; do not ask for the working lane yet.
+          if (togo > MOVE_M) {
+            return { phase: "lane", text: "STAY IN LANE · BOX " + Math.round(togo) + "m", dist: togo, frac };
+          }
           if (!inBoxLat(c, _smp.hw || 0, zz.side)) {
             return { phase: "keep", text: zz.side > 0 ? "KEEP RIGHT" : "KEEP LEFT", dist: 0, frac };
           }
@@ -611,9 +637,16 @@ const PitLane = (function () {
           teach("gate", "STOP ON THE GLOWING GATE");
           // PULL IN: the working lane is one more step toward the wall, and
           // this is the moment to take it — the box is the next thing.
-          return togo <= BOX_TOL
+          if (togo > BOX_TOL) {
+            return { phase: "near-box", text: "PULL IN · " + Math.round(togo) + "m", dist: togo, frac };
+          }
+          // AT THE BOX. A stop needs the car SQUARE in it, so when it is not,
+          // say THAT rather than "STOP HERE" — a driver stopped on the right
+          // arc, crooked or half a lane wide, would otherwise be told they had
+          // arrived and then get no stop and no reason.
+          return boxSquare(c, _smp, zz.side)
             ? { phase: "stop", text: "STOP HERE", dist: 0, frac: 1 }
-            : { phase: "near-box", text: "PULL IN · " + Math.round(togo) + "m", dist: togo, frac };
+            : { phase: "square", text: "SQUARE IT UP", dist: 0, frac: 1 };
         }
         // Past the box by more than the latch allows: no crew here, go round.
         if (togo < -BOX_TOL * 2) return { phase: "missed", text: "BOX MISSED", dist: togo, frac: 0 };
@@ -640,7 +673,10 @@ const PitLane = (function () {
         // driver could not tell a wet stop from a slick stop until the wheels
         // were on. Armed beats the wear gate: a stop that IS called is shown.
         const next = c.pitNext || pickFor(c);
-        return { phase: "armed", text: "STAY IN LANE · BOX" + (next && next.code ? " — " + next.code : ""), dist: 0, frac: 1 };
+        // "BOX BOX" as the engineer says it (see the note in engineer.js): the
+        // repeat is the call, and it reads as a radio instruction rather than
+        // as a label on the screen.
+        return { phase: "armed", text: "STAY IN LANE · BOX BOX" + (next && next.code ? " — " + next.code : ""), dist: 0, frac: 1 };
       }
       if (!worthStopping(c)) return null;
       // ON THE ENTRY ROAD — the peel on the complex (sA→sIn), or the first
@@ -861,6 +897,31 @@ const PitLane = (function () {
       if (rib && rib.workIn != null) return (c.x || 0) * side >= rib.workIn * side - BOX_LAT;
       return inLaneLat(c, hw, side);
     }
+    /** SQUARE IN THE BOX — the stop's real lateral condition, for every car.
+     *
+     *  `inBoxLat` only asks that the car has REACHED the working lane, and on
+     *  its own it let a stop happen anywhere from the corridor edge to the
+     *  garage wall, at any angle. Two more things have to be true before a crew
+     *  can work on a car: it is centred on its OWN box (the row is a row —
+     *  `laneCentre` reads this car's), and its nose points down the lane.
+     *
+     *  The angle is checked only where a live heading exists. `c.head` is the
+     *  world heading the bicycle model integrates for the local player
+     *  (js/game.js); an AI's is written at resets and rescues only, so reading
+     *  it for an AI would fail a stop on a stale number rather than on how the
+     *  car is actually parked. What binds the AI is the lateral test above it,
+     *  and `laneX` now finishes its move SQUARE_BY_M before the box so the car
+     *  arrives on the centre instead of four fifths of the way across. */
+    function boxSquare(c, smp, side) {
+      if (!inBoxLat(c, (smp && smp.hw) || 0, side)) return false;
+      const want = laneCentre((smp && smp.hw) || 0, side, c && c.s);
+      if (Math.abs((c.x || 0) - want) > BOX_SQUARE_LAT) return false;
+      if (!(c.local && Number.isFinite(c.head) && smp && smp.t)) return true;
+      let rel = c.head - Math.atan2(smp.t[0], smp.t[2]);
+      while (rel > Math.PI) rel -= 2 * Math.PI;
+      while (rel < -Math.PI) rel += 2 * Math.PI;
+      return Math.abs(rel) <= BOX_SQUARE_RAD;
+    }
     /** Where a car SERVING A STOP should be laterally — the lane's centre — or
      *  `want` unchanged for every other car. game.js hands its finished
      *  racing-line target through this, so the override is one expression at the
@@ -900,10 +961,14 @@ const PitLane = (function () {
       const togo = inWindowOf(c) ? toBox(c) : -Infinity;
       const fast = laneDrive(hw, zz.side, c.s, road === "entry");
       if (c.pitState === "out" || !(togo > -BOX_TOL && togo < WORK_IN_M)) return fast;
-      // The diagonal: the fast lane WORK_IN_M out, the working lane's centre at
-      // the box (the AI halts BOX_TOL/2 short of it, four fifths of the way
-      // across — inside inBoxLat's line with a metre to spare on every band set).
-      const u = Math.min(1, Math.max(0, (WORK_IN_M - togo) / WORK_IN_M));
+      // The diagonal: the fast lane WORK_IN_M out, the working lane's centre
+      // SQUARE_BY_M BEFORE the box — not at it. The move used to finish at the
+      // box itself, and since the AI halts BOX_TOL/2 short, it parked four
+      // fifths of the way across: inside `inBoxLat`'s line, which was all the
+      // latch asked, but not in its bay. Now the car is on the centre before it
+      // arrives and stops square, which is what `boxSquare` requires of it.
+      const span = Math.max(1, WORK_IN_M - SQUARE_BY_M);
+      const u = Math.min(1, Math.max(0, (WORK_IN_M - togo) / span));
       return fast + (laneCentre(hw, zz.side, c.s) - fast) * u;
     }
     function committing(c, zz, L) {
@@ -1077,7 +1142,7 @@ const PitLane = (function () {
         // — which is also what makes the stop cost the lateral move rather than
         // handing it over for free.
         Tracks.sample(G.track, c.s, _smp);
-        if (!inBoxLat(c, _smp.hw || 0, zz.side)) return;
+        if (!boxSquare(c, _smp, zz.side)) return;
         c.pitState = "box";
         c.pitT = zz.boxS;
         c.pitArmed = false;
@@ -1221,7 +1286,7 @@ const PitLane = (function () {
       let state = "", text = "PLAN " + label + " · BOX L" + next + (code ? " " + code : "");
       if (busy) state = "";
       else if (est && est.marginS > 0 && lapsToStop <= (typeof AiDrive !== "undefined" && AiDrive.STRAT ? AiDrive.STRAT.CAUTION_REACH : 6)) { state = "free"; text = "FREE STOP · BOX NOW" + (code ? " " + code : ""); }
-      else if (lapsToStop <= 0) { state = "now"; text = "BOX THIS LAP" + (code ? " · " + code : ""); }
+      else if (lapsToStop <= 0) { state = "now"; text = "BOX BOX BOX" + (code ? " · " + code : ""); }
       else if (lapsToStop === 1) { state = "soon"; text = "BOX NEXT LAP" + (code ? " · " + code : ""); }
       return { text, state, stops, next, lapsToStop, code };
     }
@@ -1397,9 +1462,13 @@ const PitLane = (function () {
     return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, roadOf, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
-             worthStopping, cueM: CUE_M, servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
+             worthStopping, cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
+             boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,
+             servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
              planInfo, windowOf, replan, lossS, pinnedStops, setPinnedStops,
              laneEdge, laneCentre, laneDrive, laneUniform, boxUniform, laneX, inLaneLat, inBoxLat,
+             boxSquare: (c) => { const zz = z(); if (!zz || !c || !G.track) return false;
+                                 Tracks.sample(G.track, c.s, _smp); return boxSquare(c, _smp, zz.side); },
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }
 
@@ -1408,6 +1477,7 @@ const PitLane = (function () {
            BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V, COMMIT_CLEAR,
            GRID_POLE_M,
            CUE_M: 550, CUE_WEAR: 0.55, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
+           BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M,
            get BOX_PITCH() { return pitch(); }, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
 })();
 Object.freeze(PitLane);

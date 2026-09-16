@@ -293,11 +293,24 @@ const DataHub = (function () {
     }, function (err) {
       if (gen[id] !== myGen) return;
       Log.warn("data", "tab " + id + " fail");
-      state[id] = null;
+      // KEEP the stale node. It used to be dropped on the floor (state[id] =
+      // null), so a tab that had loaded a minute ago and then lost the network
+      // showed nothing but an error — the hub threw away the only copy of the
+      // data it had. A schedule from an hour ago is still the schedule; the
+      // footnote already says how old a view is, and errorBlock now says the
+      // refresh failed rather than pretending there is nothing to show.
+      const st = state[id];
       if (openFlag && active === id) {
         clear(contentEl);
-        contentEl.appendChild(errorBlock(id, err));
+        contentEl.appendChild(errorBlock(id, err, !!(st && st.node)));
+        if (st && st.node) {
+          contentEl.appendChild(st.node);
+          contentEl.appendChild(footnote(st.at));
+        }
       }
+      // A stale node is only worth keeping while it can still be shown; with
+      // nothing cached the tab stays empty and the next visit re-loads.
+      if (!st || !st.node) state[id] = null;
     });
   }
 
@@ -311,10 +324,17 @@ const DataHub = (function () {
     return w;
   }
 
-  function errorBlock(id, err) {
+  function errorBlock(id, err, hasStale) {
     const w = el("div", "dh-error");
     w.setAttribute("role", "status");
-    let msg = "Couldn't load data. Check your connection and try again.";
+    // Three different things were all one sentence telling the player to check
+    // a connection that may be fine. navigator.onLine is only trustworthy in
+    // the negative — false really does mean no network — so it is read that
+    // way and nothing is claimed when it is true.
+    let msg = navigator.onLine === false
+      ? "You're offline. This tab needs a connection."
+      : "Couldn't reach the F1 data service. It may be busy — try again.";
+    if (hasStale) msg += " Showing the last data you loaded.";
     if (err && err.message && err.message.indexOf("Live F1 session") !== -1) {
       msg = err.message;
     }

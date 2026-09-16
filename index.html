@@ -863,6 +863,19 @@
                   <button id="pm-upscale-next" type="button" data-step="1" aria-label="Next upscale">&rsaquo;</button>
                 </div>
               </div>
+              <!-- OCCLUSION sits here because it is a pure renderer lever: it
+                   changes what is SUBMITTED, never what is drawn. Hidden on a
+                   backend that cannot do it (js/ui/scale.js), because a row
+                   that sits there doing nothing is worse than no row. -->
+              <div id="pm-occlusion" class="set-row" role="group" aria-labelledby="pm-occlusion-label">
+                <span class="tune-label" id="pm-occlusion-label">OCCLUSION</span>
+                <div>
+                  <button id="pm-occlusion-prev" type="button" data-step="-1" aria-label="Previous occlusion setting">&lsaquo;</button>
+                  <select id="pm-occlusion-sel" aria-labelledby="pm-occlusion-label"></select>
+                  <button id="pm-occlusion-next" type="button" data-step="1" aria-label="Next occlusion setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p id="pm-occlusion-note" class="adv-help">Skips scenery the track itself is hiding, using depth queries on the graphics card. Costs nothing visually when it works; turn it off if anything flickers or disappears.</p>
               <!-- DEBRIS sits with the renderer levers because that is what it is
                    on a handset: a Rapier side-world stepping every frame for
                    spall, marbles and trackside furniture. OFF costs no lap
@@ -1767,6 +1780,37 @@
   </div>
 </dialog>
 
+<!-- PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). A plain div, not a
+     <dialog>: it is never dismissed by Escape, takes no focus, and must let
+     the WebGL canvas behind it show through during its first phase — a modal
+     dialog's backdrop would sit between the two. `role="status"` because that
+     is what it is; it announces once and asks nothing. The `hidden` attribute
+     and the .screen class are what clearMenuScreens() closes it with. -->
+<div id="loading" class="screen" role="status" aria-label="Preparing race" hidden>
+  <div id="ld-card">
+    <h2 id="ld-wordmark">APEX&nbsp;26</h2>
+    <div id="ld-body">
+      <!-- The lap outline, drawn by TrackMaps.draw the same way the circuit
+           picker draws its preview: a plain white line with a dark casing and a
+           red start marker. No corner numbers, sectors or DRS bands — this is a
+           three-second read on the way to a race, not the CIRCUIT DETAIL sheet.
+           Sized in JS from the circuit's own aspect (TrackMaps.fitCanvas), so
+           the width/height here are only the pre-layout placeholder. -->
+      <canvas id="ld-map" width="240" height="150" role="img" aria-label="Circuit layout"></canvas>
+      <div id="ld-text">
+        <div id="ld-head">
+          <span id="ld-flag"></span>
+          <div id="ld-title">
+            <div id="ld-name"></div>
+            <div id="ld-gp"></div>
+          </div>
+        </div>
+        <dl id="ld-meta"></dl>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- race settings -->
 <dialog id="race-settings" class="screen dim" data-esc-close="rs-cancel" aria-labelledby="dlg-racesettings" hidden>
   <div class="sheet">
@@ -2618,12 +2662,14 @@
 <script defer crossorigin="anonymous" src="js/physics/ai-corridor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/engineer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/loading-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scroll-fade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/css-zoom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/sheet-shape.js?v=dev"></script>

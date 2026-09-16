@@ -793,6 +793,14 @@ const GLX = (function () {
     if (spatialUpscale && PST.ensureSpatial) PST.ensureSpatial();
     SHD = GLXShadow.init(core); core.shadow = SHD;  // sun/car/lamp shadow maps + PCSS blocker
     CHK = GLXChunked.init(core);                    // frustum-culled chunked city/props meshes
+    // OCCLUSION CULLING, opt-in. Ships off: the saving is measured (56-85 % of
+    // prop chunks produce no pixel, docs/notes/PERF-OPTIONS-2026-09-16.md §6)
+    // but the pass itself has never run on a real GPU, and a wrong answer here
+    // is a hole in the world rather than a slow frame. It goes on when a census
+    // says the counted oracle is sane on hardware.
+    try {
+      if (localStorage.getItem("apex26.occlusionCull") === "1") CHK.occlusionCull(true);
+    } catch (_) { /* storage blocked: stays off, which is the safe side */ }
 
     // The per-instance colour attribute is multiplied into vCol on EVERY lit
     // draw, so its generic value must be the identity or ordinary meshes — which
@@ -2574,11 +2582,20 @@ const GLX = (function () {
     drawParticles,
     present: (opts) => {
       if (ctxGone()) return;
+      // Occlusion queries go LAST and before post, which is the only moment in
+      // the frame when the opaque depth buffer is both complete and still
+      // bound. A no-op unless apex26.occlusionCull is on (GLXChunked).
+      if (CHK && CHK.occlusionPass) { try { CHK.occlusionPass(); } catch (e) { Log.warn("gfx", "occlusionPass: " + (e && e.message)); } }
       const r = PST.present(opts);
       if (_softPresentWaiters.length || _softCaptureDue) softBlit();
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
       return r;
     },
+    // Occlusion culling (js/render/glx/chunked.js). Off unless asked; the
+    // stats are a COUNTED oracle — chunks tested and chunks skipped — because
+    // this box has no GPU and a frame rate here measures the box.
+    occlusionCull: (on) => (CHK && CHK.occlusionCull ? CHK.occlusionCull(on) : { on: false, supported: false }),
+    occlusionStats: () => (CHK && CHK.occlusionStats ? CHK.occlusionStats() : { supported: false, on: false }),
     softPresent: () => !!_softPresent,
     softPresentState,
     awaitSoftPresent,

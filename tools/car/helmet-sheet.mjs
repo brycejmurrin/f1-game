@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // helmet-sheet — a contact sheet of every driver's helmet design.
-// @doc Rasterises each js/car/helmets.js design onto the real shell and writes a labelled contact sheet PNG (`--only`, `--view`, `--cell`, `--plain`, `--mesh`).
+// @doc Rasterises each js/car/helmets.js design onto the real shell and writes a labelled contact-sheet PNG.
 // @skill playwright-probe
 //
 //   node tools/car/helmet-sheet.mjs                  # all 22, front-3/4

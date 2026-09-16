@@ -34,7 +34,8 @@ const DrivingCoach = (function () {
   // The practice goals as the picker names them, so the review can point at a
   // goal by the label the driver will actually look for. One list, two readers.
   const GOALS = Object.freeze([["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"],
-    ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"]]);
+    ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"],
+    ["start", "RACE START"]]);
   function create(G) {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
@@ -205,7 +206,10 @@ const DrivingCoach = (function () {
         rewindAcc += step;
         if (rewindAcc >= 1 / REWIND_HZ) {
           rewindAcc = 0;
-          rewindBuf.push({ t: clock, snap: captureCar(G.player) });
+          // A solo session captures one car; a race captures the world. Same
+          // cadence either way — 20 cars x 3 deep clones per sample at 2 Hz is
+          // 60 clones every half second, which the physics path does not feel.
+          rewindBuf.push({ t: clock, world: captureWorld() });
           if (rewindBuf.length > REWIND_KEEP) rewindBuf.shift();
         }
       } else if (rewindBuf.length) { rewindBuf = []; rewindAcc = 0; }
@@ -251,11 +255,10 @@ const DrivingCoach = (function () {
     // each growing their own field list that drifts out of step.
     const PRIM = (v) => v == null || ["number", "boolean", "string"].includes(typeof v);
     const DEEP = ["tyre", "tyreLog", "pitNext"];
-    // Single-car capture, not a whole-world one. Never a career, a remote car,
-    // or a queued race settlement. The generic sweep is deliberate: the car
-    // carries ~60 live primitives and an explicit list would rot silently —
-    // see EPISODE_TRANSIENTS in js/agent/apex.js, which had to be built by
-    // measurement rather than inspection for exactly that reason.
+    // The generic sweep is deliberate: a car carries ~60 live primitives and an
+    // explicit list would rot silently — see EPISODE_TRANSIENTS in
+    // js/agent/apex.js, which had to be built by measurement rather than
+    // inspection for exactly that reason. Never a career or a remote car.
     function captureCar(c) {
       const fields = {};
       for (const k of Object.keys(c)) if (PRIM(c[k])) fields[k] = c[k];
@@ -270,33 +273,87 @@ const DrivingCoach = (function () {
     // so it would not corrupt a result, but a practice tool that quietly erases
     // the consequence of running wide is teaching the wrong lap. Carried
     // forward across every restore instead.
+    // PENALTIES AND CUTS DO NOT REWIND FOR THE PLAYER. They are ordinary
+    // primitives, so the generic sweep captures them and a naive restore hands
+    // them back — undoing a time penalty or resetting the track-limits ladder
+    // by pressing a button. The session is unscored so no result is at risk,
+    // but a practice tool that quietly erases the consequence of running wide
+    // is teaching the wrong lap.
+    // ONLY the player: an AI car is part of the world being rewound, and there
+    // is no lesson to protect there — so a rival's penalty rewinds with
+    // everything else, which is what "the race is back where it was" means.
     const KEEP_FORWARD = ["penalty", "cuts", "cutWarn", "hits", "wallHits", "hitSev"];
-    function restoreCar(c, snap) {
-      IncidentSim.reset(); DebrisWorld.reset();
+    function applyCar(c, snap, keepForward) {
       const keep = {};
-      for (const k of KEEP_FORWARD) if (Object.hasOwn(c, k)) keep[k] = c[k];
+      if (keepForward) for (const k of KEEP_FORWARD) if (Object.hasOwn(c, k)) keep[k] = c[k];
       for (const k of Object.keys(c)) if (PRIM(c[k]) && !Object.hasOwn(snap.fields, k)) delete c[k];
       Object.assign(c, snap.fields, keep);
       for (const [k, v] of Object.entries(snap.objects)) c[k] = v == null ? v : JSON.parse(JSON.stringify(v));
-      // The lap is dead either way, and the interpolator must not tween the car
-      // across the gap it just jumped — it would draw a streak from where the
-      // car was to where it now is.
-      c.incidentInvalidLap = true; c._prevS = c.s;
+      // The interpolator must not tween the car across the gap it just jumped —
+      // it would draw a streak from where the car was to where it now is.
+      c._prevS = c.s;
       c.rPrevPx = c.px; c.rPrevPz = c.pz;
       c.rPrevHead = c.head; c.rPrevS = c.s; c.rPrevX = c.x;
+    }
+    // ---- the WORLD, not just the player ------------------------------------
+    // A rewind that moved one car through a field that kept running is not a
+    // rewind, it is a teleport: you rejoin having lost the ground everyone else
+    // covered, the order scrambles, and you can land inside a rival who is now
+    // occupying the road you left. So a session with other cars on track
+    // rewinds ALL of them, the race clock, and the sector state with them.
+    //
+    // WHAT CANNOT BE RESTORED, said plainly: the debris field and any live
+    // incident. DebrisWorld is a Rapier (WASM) rigid-body side-world with
+    // reset()/prime() and no snapshot, and IncidentSim's takeovers are keyed to
+    // ticks that no longer exist. Both are RESET rather than restored, so a
+    // rewind clears marbles and broken panels instead of putting them back.
+    // That is a visible difference from a true time machine and the honest one
+    // to take — the alternative is cars rewound into debris that was never
+    // there when they were last at that point on the road.
+    function captureWorld() {
+      const cars = (G.cars || []).map((c) => captureCar(c));
+      return { cars, raceT: G.raceT, sectorIdx: G.sectorIdx, sectorStartT: G.sectorStartT,
+        sectorBests: Array.isArray(G.sectorBests) ? G.sectorBests.slice() : null,
+        sectorLast: Array.isArray(G.sectorLast) ? G.sectorLast.slice() : null };
+    }
+    function restoreWorld(w) {
+      IncidentSim.reset(); DebrisWorld.reset();
+      const cars = G.cars || [];
+      // Index-keyed: `cars` is built once by makeCars() and its ORDER never
+      // changes (standings are derived from prog, not by sorting this array),
+      // so index i is the same car across the window. Length-guarded anyway.
+      for (let i = 0; i < cars.length && i < w.cars.length; i++)
+        applyCar(cars[i], w.cars[i], cars[i].isPlayer);
+      // THE CLOCK COMES BACK TOO. Without it the cars are 10 s younger and the
+      // race is not, so every gap, delta and lap projection reads wrong.
+      if (Number.isFinite(w.raceT)) G.raceT = w.raceT;
+      if (Number.isFinite(w.sectorIdx)) G.sectorIdx = w.sectorIdx;
+      if (Number.isFinite(w.sectorStartT)) G.sectorStartT = w.sectorStartT;
+      if (w.sectorBests) G.sectorBests = w.sectorBests.slice();
+      // sectorLast has no setter — mutate the live array in place.
+      if (w.sectorLast && Array.isArray(G.sectorLast)) {
+        G.sectorLast.length = 0;
+        for (const v of w.sectorLast) G.sectorLast.push(v);
+      }
+      if (G.player) G.player.incidentInvalidLap = true;
       G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
     }
+    // A CHECKPOINT IS A WORLD TOO. Same reasoning as rewind: saving a starting
+    // point in a race and restoring only your own car would put you back on the
+    // road with rivals who never went back — the order scrambled and a rival
+    // possibly sitting where you just materialised. In a solo session this is
+    // a one-car world and behaves exactly as it always did.
     function mark() {
       if (!canPractice()) return false;
       if (!insights.startDrill(drillMode)) return false;
-      checkpoint = Object.assign(captureCar(G.player), { mode: drillMode });
+      checkpoint = { world: captureWorld(), mode: drillMode };
       practice = true; G.records.invalidate();
       G.announce("PRACTICE: " + goal() + " — LAPS NOT SAVED", 3, "practice");
       return true;
     }
     function retry() {
       if (!checkpoint || !canPractice()) return false;
-      restoreCar(G.player, checkpoint);
+      restoreWorld(checkpoint.world);
       drillMode = checkpoint.mode;
       insights.startDrill(drillMode);
       G.announce("TRY AGAIN: " + goal(), 2, "practice");
@@ -308,21 +365,27 @@ const DrivingCoach = (function () {
     // player who rewinds twice in a row should keep travelling backwards
     // instead of landing on the same spot.
     //
-    // WHAT DOES NOT REWIND, said plainly because a player will notice: the
-    // other cars. This restores ONE car, so in a duel or a race the rival
-    // keeps the ground it covered and you rejoin behind where you were
-    // relative to it. The alternative is a whole-world rewind, which the
-    // Rapier debris side-world (js/physics/debris-world.js) cannot do — it has
-    // reset() and prime(), no snapshot — so this stays honest about its scope
-    // and the session is unscored anyway.
+    // THE WHOLE RACE GOES BACK — every car, the clock and the sector state —
+    // so gaps, positions and deltas are the ones you actually had 10 s ago.
+    // See restoreWorld() for the two things that are RESET rather than
+    // restored (the Rapier debris field and any live incident).
     function rewind() {
       if (!canPractice() || !rewindBuf.length) return false;
       const e = rewindBuf.shift();
       rewindBuf = [];                 // everything after it is a future that no longer happened
       rewindAcc = 0;
       practice = true;                // rewinding IS practising, whether or not a checkpoint was set
-      restoreCar(G.player, e.snap);
-      G.announce("REWIND " + Math.round(clock - e.t) + "s", 2, "practice");
+      const n = (G.cars || []).length;
+      restoreWorld(e.world);
+      // RE-ARM THE DRILL, exactly as retry() does. RaceInsights fails any
+      // in-progress attempt when the clock or the arc jumps backwards
+      // (js/race/race-insights.js, "position jumped") — which is precisely what
+      // a rewind is. Without this the attempt you rewound in order to RETRY is
+      // silently marked dirty, with a reason that describes the mechanism
+      // rather than anything the driver did. startDrill() resets its `previous`
+      // sample so the next tick is not read as a teleport.
+      insights.startDrill(drillMode);
+      G.announce("REWIND " + Math.round(clock - e.t) + "s" + (n > 1 ? " — FULL GRID" : ""), 2, "practice");
       return true;
     }
     function reset() {
@@ -396,8 +459,13 @@ const DrivingCoach = (function () {
           braking: "Build speed before saving, then brake firmly and keep braking until the car stops. Coasting to a stop does not count.",
           trail: "Build speed before saving. Brake firmly, keep some brake on as the car turns in, then release it while the car is still turning.",
           slalom: "Make six direction changes while moving: the car must change direction, not just the stick. Stay on the track and avoid contact.",
-          launch: "Stop the car before saving, then launch to racing speed. Timed from your first throttle." };
-        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m" : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s" : s.toFixed(1) + "s";
+          launch: "Stop the car before saving, then launch to racing speed. Timed from your first throttle.",
+          start: "Set this on the grid before the lights. The run ends at the first corner and scores the places you gained off the line." };
+        // `start` is stored NEGATED so mastery's Math.min ranks more places
+        // higher (js/race/race-insights.js). The sign is undone here, once, at
+        // the only place a human reads the number.
+        const fmt = (mode, s) => mode === "braking" ? s.toFixed(0) + " m" : mode === "lap" ? G.fmtTime(s) : mode === "launch" ? s.toFixed(2) + "s"
+          : mode === "start" ? (-s >= 0 ? "+" : "") + (-s) + (Math.abs(s) === 1 ? " place" : " places") : s.toFixed(1) + "s";
         const last = summary.lastDrill, tries = insights.attempts(drillMode), clean = tries.filter(a => a.clean), saved = insights.mastery(drillMode);
         drillInfo.textContent = guide[drillMode]
           + (last && last.mode === drillMode ? " Last attempt: " + (last.clean ? "completed · " + last.text : "retry suggested · " + last.reason) + "." : "")

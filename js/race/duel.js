@@ -18,14 +18,28 @@ const Duel = (function () {
   // (js/physics/consts.js): a same-spec car out-dragging the player down a
   // straight reads as a cheat, so the straight stays the player's.
   //
-  // The difficulty lives in craft and awareness, which is what makes the rival
-  // defend, commit to a move and stop making mistakes under pressure
-  // (js/physics/ai-drive.js reads all four racecraft axes).
+  // The difficulty lives in CRAFT, which is the one axis that raises both
+  // halves of racecraft: attack fire-rate and pull (ai-drive.js otFireRate,
+  // otPull, attackOK, passHold) AND defend magnitude (defendPull). Experience
+  // adds attack persistence (shorter cooldown, faster retry) and consistency
+  // removes mistakes under pressure.
+  //
+  // AWARENESS IS DELIBERATELY NOT BUMPED, and this was a bug in the first cut of
+  // this table. It reads as "sharper driver", but in ai-drive.js it is the
+  // CAUTION axis and it runs the wrong way for a benchmark:
+  //     letPassDelay = lerp(4.2, 1.8, awareness)   -> raising it makes the
+  //         rival CONCEDE SOONER once a faster car is behind
+  //     awareMul     = lerp(1.25, 0.7, awareness)  -> raising it makes the
+  //         rival PULL THE TRIGGER LESS on its own overtakes
+  // So +10 awareness bought a rival that yields quicker and attacks less —
+  // the opposite of the intent. Left at 0: lowering it instead would buy a
+  // stubborn rival at the cost of its box-exit, launch reaction and
+  // pressure-error handling, which is a worse car rather than a harder one.
   //
   // Axes clamp at 100 inside DriverRatings.get, so a top-rated driver takes less
   // of this than a midfielder — the duel is hardest in a slower car, which is
   // the right way round for a benchmark.
-  const BUMP = { pace: 4, craft: 10, awareness: 10, consistency: 8, experience: 8 };
+  const BUMP = { pace: 4, craft: 10, awareness: 0, consistency: 8, experience: 8 };
 
   // Re-derive the five axes with the bump applied, through the SAME deltas
   // argument Career.devFor() already uses for driver development — so the lift

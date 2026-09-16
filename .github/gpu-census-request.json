@@ -1,8 +1,8 @@
 {
   "images": "macos-latest",
-  "track": "singapore",
+  "track": "spa",
   "census_only": false,
   "force": "",
-  "ls": "apex26.lightTune={\"perChunkLights\":0}",
-  "leg": "tlx-per-chunk-lamps-2026-09-15-e-REAL-knob-OFF"
+  "ls": "",
+  "leg": "occlusion-2026-09-16-spa-CONTROL-flag-off-for-the-luma-diff"
 }

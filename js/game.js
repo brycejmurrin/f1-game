@@ -889,6 +889,10 @@ let launchT0 = 0;
 let raceCtl = null;   // RaceControl.create(G), assigned once G exists (below)
 let tyres = null;     // TyreModel.create(G), same deferral
 let pits = null;      // PitLane.create(G), same deferral
+// The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
+// called in and still on your way to the box. Not `out`/`served`/`merge` — by
+// then you are leaving, and not `missed`.
+const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "square", "stop", "box"];
 let engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
@@ -1976,6 +1980,7 @@ function seedPlayerPose() {
 function clearRacingScratch(c) {
   c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null;
   c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1;
+  c.errCount = 0;   // mistakes THIS race, beside c.hits/c.cuts in gridUp — the instrument's denominator
 }
 
 // Car decal / effect-quad / cockpit-instrument geometry lives in
@@ -2167,6 +2172,17 @@ function _loadTrackBody(idx, def) {
     // procedural cloud coverage 0..1 (night skies stay clearer to show stars)
     cloud: pal.cloud !== undefined ? pal.cloud : (skyNight ? 0.22 : 0.4),
   };
+}
+
+// Set by the flyby sequencer on a shot boundary; consumed by the camera damping
+// one block later, which would otherwise smear the cut (see there).
+let camSnapNext = false;
+/** The loading screen's flyby progress, 0..1, or 0 when it is not running. The
+ *  menu camera also draws a couple of WARM-UP frames under the picker with no
+ *  screen open (scheduleFlybyTrack), and those should sit on the first shot
+ *  rather than somewhere arbitrary. */
+function flybyProgress() {
+  return (loadingScreen && loadingScreen.progress) ? loadingScreen.progress() : 0;
 }
 
 // Keep one prepared track, never a cache of whole circuits. A generation
@@ -2367,8 +2383,23 @@ function dropRaceWake() {
 // caller is a click handler that ignores the result and makes startRace() its
 // last statement, and the specs already poll `__apex.info().track != null`
 // rather than assuming race() returns built, so nothing downstream changes.
+// RACE-ENTRY PROFILE — the same stopwatch tracks.js keeps over the build, one
+// level out. Run 128/129 measured race entry on real hardware at 2193 ms of
+// contiguous main-thread block on the default backend and found the track
+// build is only 23 % of it; the other three-and-a-half seconds have no name
+// (docs/notes/MULTITHREADING-PLAN-2026-09-16.md §8). Two candidates were ruled
+// out by reading rather than by measuring — shader compilation, because glx.js
+// already takes KHR_parallel_shader_compile, and the lazy scenery fetch,
+// because the largest circuit module in the tree is 58 KB — so the rest has to
+// be attributed rather than guessed. Anything optimised before this row exists
+// is aimed at a quarter of the problem.
+let _raceProfile = [];
+function raceProfile() { return _raceProfile; }
 async function startRace() {
+  _raceProfile = []; let _rt = performance.now();
+  const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
   await ensureScenery(trackIdx);
+  rlap("scenery");
   // Completed seasons are readable, never raceable (also guarded by award()).
   if ((flow === "season" && !SeasonCal.canRace(season)) || (isCareer() && Career.conflicted())) {
     state = "menu"; $("race-settings").hidden = true;
@@ -2391,7 +2422,9 @@ async function startRace() {
   // shards, marbles and knocked-over cones — visible on the grid, and
   // RaceControl can fly a caution for debris nobody produced this race.
   DebrisWorld.reset();
+  rlap("resets");
   loadTrack(trackIdx);
+  rlap("loadTrack");
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
   // must never survive into the next — a race that silently did not count
   // because the last one was practice is the worst possible failure here. A
@@ -2399,7 +2432,8 @@ async function startRace() {
   // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
   // chosen on the settings sheet and meant to stick until the player changes it.
   practiceMode = false;
-  makeCars(); coach.reset(); PerfGov.resetFrameStats();
+  makeCars(); rlap("makeCars");
+  coach.reset(); PerfGov.resetFrameStats();
   // Qualifying keeps the full field for simulation, then drives one standing lap.
   if (isQuali()) {
     qualiField = cars;
@@ -2428,6 +2462,7 @@ async function startRace() {
     lapsTarget = SeasonCal.lapsFor(raceLaps, season);
   }
   applyRaceSettings();
+  rlap("settings");
   if (isWetRoad()) {           // "rain" = storm; "wet" = the DRIZZLE tier —
     initRainDrops();           // initRainDrops seeds sparse/short/slow streaks
     Particles.rainShow(true);  // per the drizzle* TUNE_DEFS. Gating this on
@@ -2436,8 +2471,10 @@ async function startRace() {
   }
   if (!isQuali() && gridFromQuali() && !quali.order(cars)) { openQuali(); return false; }
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
+  rlap("gridUp");
   startChangeable();
   recomputePlayerMods();
+  rlap("finish");
   if (isTimeTrial()) { records.begin(); Ghost.startLap(); }
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
@@ -2989,6 +3026,7 @@ const G = {
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP, COUNTDOWN_S,
+  raceProfile,   // the race-entry stopwatch (startRace), read by __apex.raceProfile()
   // The friction-circle constants, for js/race/quali-model.js: it runs a quasi-steady
   // lap simulation off the SAME numbers the driving model uses, so a simulated
   // qualifying time and a driven one are on one scale by construction.
@@ -3172,7 +3210,25 @@ raceSettings = RaceSettings.create({
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
   openQuali, startRace, enableTilt, getSteerMode: () => steerMode,
   getNetLobby: () => netLobby, buildSelect, els, openGarage, buildStandings,
+  raceIntro,
 });
+// PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
+// over the world scheduleFlybyTrack() already warmed, then holds a static card
+// while the caller's build runs — see that file for why the split matters.
+const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags });
+/** The RACE! button's route into a race. Not folded into startRace(): netplay
+ *  and __apex.race() both AWAIT that function, and neither should gain two
+ *  seconds of flourish. The button is the only place a human is watching. */
+function raceIntro(go) {
+  loadingScreen.run({
+    track: Tracks.LIST[trackIdx], laps: raceLaps,
+    weather: raceWeather, tod: raceTimeOfDay,
+    // Only fly over a world that is actually built. A missed pre-build (a
+    // circuit switched a moment ago, scenery still downloading) would put a
+    // black hold where the cinematic should be, which reads as a hang.
+    hasWorld: !!track && _menuGate.track === track,
+  }, go);
+}
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
@@ -3295,6 +3351,9 @@ function armConfirm(btn, armedText, action) {
 // title screen) and the two tuner panels predate the class and are named
 // individually.
 function clearMenuScreens() {
+  // Disarm the loading screen BEFORE the sweep hides it: it holds a pending
+  // timer that would otherwise fire its build callback into a running race.
+  loadingScreen.stop();
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
   for (const id of ["overlay", "lighting", "camtune"]) { const el = $(id); if (el) el.hidden = true; }
   // The garage's 3D turntable keeps rendering while #carsetup is up; a race
@@ -6462,15 +6521,19 @@ const _hazeWorld = [0, 0, 0];
 let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
-const _rsEl = $("race-settings");      // the one menu screen that shows the flyby
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
 function render(dt) {
   if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
-  // race-settings flyby, or the garage's car preview; under every other menu it is
-  // HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat behind the
-  // title, title → GARAGE → MENU). First, before every early return; written on change.
-  const menuBlank = state === "menu" && !setupPreviewOn && (!track || _rsEl.hidden);
+  // PRE-RACE LOADING SCREEN's flyby, or the garage's car preview; under every other
+  // menu it is HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat
+  // behind the title, title → GARAGE → MENU). First, before every early return.
+  // RACE SETTINGS USED TO BE ON THIS LIST (2026-09-16). The flyby played behind the
+  // settings sheet, which made the menu look like a paused race and gave the rows a
+  // moving, high-contrast backdrop to be read against. The world the picker warms is
+  // still built — it is just not SHOWN until the player commits to the race, where
+  // js/ui/loading-screen.js spends it as the cinematic it always wanted to be.
+  const menuBlank = state === "menu" && !setupPreviewOn && (!track || !loadingScreen.active());
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
   // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
@@ -6499,12 +6562,20 @@ function render(dt) {
   let eyeT, tgtT, fovT, roadCamRoll = 0;
   if (state === "menu") {
     _plOk = false; _plBodyOk = false;
-    const s = wrapS((performance.now() * 0.012) % track.total);
-    const bankCam = Tracks.banking(track, s, 0, _bankScratchCam, true);
-    _vantExtra.bankDy = bankCam ? bankCam.dy : 0; _vantExtra.deploy = false;
-    _vantExtra.slipLat = 0; _vantExtra.att = null; _vantExtra.carPos = null; _vantExtra.carHead = 0;
-    const vant = camVantage("cinematic", s, 0, (40 / VMAX) * vTop(), performance.now(), _vantExtra);
-    eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov; camAncNX = null;
+    // THE LOADING SCREEN'S FLYBY IS A SHOT SEQUENCE (js/camera/flyby-seq.js), not
+    // a crawl down the centreline. The old path solved camVantage("cinematic")
+    // around an `s` that advanced with the wall clock; that rig clamps its
+    // lateral offset only on STREET circuits, so on an open circuit it sat 22 m
+    // off the racing line with nothing checking what was standing there, and
+    // flew through buildings. The sequencer places every eye against the props
+    // registry instead. It is driven by PROGRESS through the flyby phase, so the
+    // sequence keeps its shape whatever the phase is retuned to.
+    const fb = FlybySeq.solve(track, flybyProgress());
+    eyeT = fb.eye; tgtT = fb.tgt; fovT = fb.fov; camAncNX = null;
+    // A shot boundary is a CUT. Without this the λ1.6 menu damping below smears
+    // the change of angle into a long swim between two vantages, which reads as
+    // one broken move rather than two shots.
+    if (fb.cut) camSnapNext = true;
   } else {
     if (!player) return;
     // Anchor the camera to the SAME (s, x) the car body samples — playerAnchor
@@ -6624,6 +6695,15 @@ function render(dt) {
   }
   camAncX = ancX; camAncZ = ancZ;
   camFov = damp(camFov, fovT, onboard ? 4 : 4 * cutEase, dt);
+  // A CUT LANDS WHOLE. Damping exists to smooth a moving vantage; across a shot
+  // boundary there is nothing to smooth — the two vantages are unrelated, and
+  // easing between them turns a cut into a long swim through whatever lies
+  // between. Set by the flyby sequencer at a shot boundary only.
+  if (camSnapNext) {
+    for (let i = 0; i < 3; i++) { camEye[i] = eyeT[i]; camTgt[i] = tgtT[i]; }
+    camFov = fovT;
+    camSnapNext = false;
+  }
 
   // Car-follow cameras counter-rotate by the road bank so the car and asphalt
   // read level while the horizon carries the banking cue. Slip adds a small
@@ -7177,7 +7257,14 @@ function render(dt) {
   drawWorldMeshes(frame, night, wet, _floodEmit, false);
   gfx.drawSky(frameSky);
   // The pit bay signs: one decal after the sky (opaque → sky → decal; it depth-tests, never writes).
-  if (typeof PitSigns !== "undefined") PitSigns.draw(gfx, track, MAT_IDENT, frame.eye, night, hideMeshes.pitSigns);
+  // …and the entrance lamps go GREEN over their steady red once you are called
+  // in and still on your way to the box (PitLane's own cue, so the lamps and
+  // the radio never disagree).
+  if (typeof PitSigns !== "undefined") {
+    const cue = pits && pits.lastCue ? pits.lastCue() : null;
+    PitSigns.draw(gfx, track, MAT_IDENT, frame.eye, night, hideMeshes.pitSigns,
+                  !!cue && PIT_LAMP_GREEN.indexOf(cue.phase) >= 0);
+  }
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the

@@ -102,7 +102,11 @@ test("one voice: while the pit cue gives a DIRECTION the engineer waits, and the
   eng.update(c, 1);
   assert.equal(said.length, 1, "the owed line was not said once the cue let go");
   assert.match(said[0], /TYRES AT/);
-  for (const p of E.DIRECTIONAL) assert.ok(["enter", "keep", "stop", "merge"].includes(p), p);
+  // SQUARE IT UP is a direction too — it is the cue telling a driver stopped on
+  // the right arc that the car is not in its bay, and the one moment a stop
+  // still depends on what they do next.
+  for (const p of E.DIRECTIONAL) assert.ok(["enter", "keep", "square", "stop", "merge"].includes(p), p);
+  assert.ok(E.DIRECTIONAL.includes("square"), "the engineer must not talk over SQUARE IT UP");
 });
 
 test("OFF: the engineer is silent, because there is nothing to be legible about", () => {
@@ -227,9 +231,9 @@ test("a NEW SET restarts the ladder, worked out from the stint counter alone", (
 // ── 5. The plan-aware lines (the player's reference plan) ────────────────────
 
 test("the plan lines sit between the tread and the tyre complaints, and each names a lap or a compound", () => {
-  // A tread call still beats BOX NEXT LAP; BOX THIS LAP beats the wear ladder.
+  // A tread call still beats BOX NEXT LAP; BOX BOX BOX beats the wear ladder.
   assert.match(line({ wrongTread: true, wet: true, lapsToStop: 1, nextCode: "H" }), /BOX FOR WETS/);
-  assert.match(line({ lapsToStop: 0, nextCode: "H", step: 1, wear: 0.8 }), /^BOX THIS LAP — H$/);
+  assert.match(line({ lapsToStop: 0, nextCode: "H", step: 1, wear: 0.8 }), /^BOX BOX BOX — H$/);
   assert.match(line({ lapsToStop: 1, nextCode: "S", step: 1, wear: 0.8 }), /^BOX NEXT LAP — S$/);
   assert.match(line({ lapsToStop: 2, step: 1, wear: 0.8 }), /TYRES AT/, "two laps out the wear ladder speaks");
   // The undercut: a rival behind, inside the pit loss, has boxed.
@@ -264,7 +268,7 @@ test("senseOf reads the plan and the field: the next stop lap, its compound, and
   c.lap = 12;
   assert.equal(eng.senseOf(c).lapsToStop, 0);
   eng.update(c, 1);
-  assert.ok(said.some((m) => /^BOX THIS LAP — H$/.test(m)), `the stop lap is called: ${said.join(" | ")}`);
+  assert.ok(said.some((m) => /^BOX BOX BOX — H$/.test(m)), `the stop lap is called: ${said.join(" | ")}`);
   c.pitArmed = true;
   assert.equal(eng.senseOf(c).lapsToStop, null, "a called stop needs no calling");
 });

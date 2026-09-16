@@ -254,7 +254,7 @@ plan-aware lines, above the wear ladder and below the tread/caution lines:
 | sense | line |
 |---|---|
 | `lapsToStop === 1` | "BOX NEXT LAP — <COMPOUND>" |
-| `lapsToStop === 0` | "BOX THIS LAP" |
+| `lapsToStop === 0` | "BOX BOX BOX" |
 | rival within `marginS` of you pitted this lap | "<CODE> HAS BOXED — UNDERCUT ON, BOX NOW OR PUSH 2 LAPS" |
 | `rainInLaps <= lapsToStop` | "RAIN BEFORE THE STOP — BOX LAP <n> FOR WETS" |
 | caution and `marginS > 0` | "CAUTION — STOP NOW LOSES NOTHING" |
@@ -278,7 +278,7 @@ is advice, so it may.
 - `tests/unit/ai-drive.test.mjs` (exists): `stintPlan` with `stops` pinned returns
   that many stops and keeps `lapsAt` inside `[1, laps−1]`.
 - `engineer.test.mjs`: the five plan lines in order against the existing
-  ladder (a tread call still beats "BOX NEXT LAP"; "BOX THIS LAP" beats the wear
+  ladder (a tread call still beats "BOX NEXT LAP"; "BOX BOX BOX" beats the wear
   ladder).
 - `pit-lane.test.mjs`: the player's plan never arms a stop — drive a human car
   through `think` and assert `pitArmed` stays false.

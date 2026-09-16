@@ -103,7 +103,10 @@ test("a street complex owns its side: no engine street barrier on the lane, the 
     const bar = p.side > 0 ? t.barR : t.barL;
     for (let k = 0; k < t.n; k++) {
       if (!(p.keep[k] > 0)) continue;
-      assert.ok(bar[k] >= t.hw[k] + p.off.outer * p.w[k] - 0.9 - 1e-6, `${id}: node ${k} boundary ${bar[k].toFixed(2)} inside the lane`);
+      // The LANE's edge, not the footprint's: it is the garage line where the
+      // bays are and the fast lane's far side elsewhere (TrackPit.outerAt).
+      const edge = t.hw[k] + ctxOnce().TrackPit.outerAt(p, k) - 0.9;
+      assert.ok(bar[k] >= edge - 1e-6, `${id}: node ${k} boundary ${bar[k].toFixed(2)} inside the lane (${edge.toFixed(2)})`);
     }
   }
   // Jeddah's 190 m window (its trace's corners sit against the line) compresses
@@ -195,13 +198,26 @@ test("the driving boundary is opened across the complex, on the pit side only", 
   const bar = p.side > 0 ? t.barR : t.barL, other = p.side > 0 ? t.barL : t.barR;
   const T = tracksOnce();
   const raw = T.buildCenterline(T.LIST.find((d) => d.id === FULL));
+  const P = ctxOnce().TrackPit;
   for (let k = 0; k < t.n; k++) {
     if (!(p.keep[k] > 0)) continue;
-    // …to 0.9 m short of the garage line for the car's centre: its side
+    // …to 0.9 m short of THE LANE'S OWN EDGE for the car's centre: its side
     // reaches the line, where the OUTER WALL stands wherever a bay does not.
-    assert.ok(bar[k] >= t.hw[k] + p.off.outer * p.w[k] - 0.9 - 1e-6,
-      `node ${k}: boundary ${bar[k].toFixed(2)} inside the complex's edge ${(t.hw[k] + p.off.outer * p.w[k] - 0.9).toFixed(2)}`);
+    // That edge is the garage line only where the bays are — on the entry
+    // road, the exit road and the stretches between, the lane is the fast lane
+    // and the wall comes in with it, so the boundary must come in too or a car
+    // drives through a wall into the apron behind it.
+    const edge = t.hw[k] + P.outerAt(p, k) - 0.9;
+    assert.ok(bar[k] >= edge - 1e-6,
+      `node ${k}: boundary ${bar[k].toFixed(2)} inside the lane's edge ${edge.toFixed(2)}`);
   }
+  // …and NOT out to the old full width where no bay stands: an entrance you
+  // can drive 6.5 m of working lane down is the width this change removed.
+  let narrowed = 0;
+  for (let k = 0; k < t.n; k++) {
+    if (p.w[k] > 0.98 && p.b[k] < 0.02) narrowed++;
+  }
+  assert.ok(narrowed > 10, `the window carries a fast-lane-only stretch (${narrowed} nodes)`);
   void other; void raw;
 });
 
@@ -312,6 +328,148 @@ test("neither end of the complex lies in a corner: the exit closes before the fi
   assert.equal(buildOnce("monza").pit.exitM, P.EXIT_M);
 });
 
+test("the entry road's MOUTH stands on the straight wherever the straight allows: the window leaves the road and a run-out after the corner", () => {
+  // The window opened as far back as the straight ran, and the 70 m entry
+  // road before it then peeled off INSIDE the last corner on 21 of 52
+  // circuits (Abu Dhabi's mouth on a 23 m radius, Sochi's on 20 m; surveyed
+  // 2026-09-16 — "the pit entrance is right off a turn"). Now the window
+  // opens ENTRY_ROAD + MOUTH_RUN short of where the straight ends, so from
+  // MOUTH_RUN before the mouth to the entry line not a node is cornering —
+  // on every circuit whose straight can hold the floor plus the road.
+  const T = tracksOnce(), P = ctxOnce().TrackPit;
+  const need = P.ENTRY_MIN + P.ENTRY_ROAD + P.MOUTH_RUN;
+  let held = 0;
+  for (const def of T.LIST) {
+    const t = buildOnce(def.id), p = t.pit, L = t.total;
+    if (!p || p.painted) continue;
+    let back = 0;
+    while (back < 700 && Math.abs(T.curvature(t, ((-back - 2) % L + L) % L)) <= P.PIT_K) back += 4;
+    if (back < need) continue;                      // the floor's circuits: not this rule's
+    held++;
+    assert.equal(p.entryRoadM, P.ENTRY_ROAD, `${def.id}: the road is the full ${P.ENTRY_ROAD} m (${p.entryRoadM})`);
+    // From MOUTH_RUN before the mouth (less the model's own 8 m sample step) to the line.
+    for (let d = -P.MOUTH_RUN + 8; d < p.entryRoadM; d += 4) {
+      const s = ((p.sA + d) % L + L) % L;
+      assert.ok(Math.abs(T.curvature(t, s)) <= P.PIT_K, `${def.id}: cornering ${d} m from the mouth (entryM ${p.entryM})`);
+    }
+  }
+  assert.ok(held >= 30, `the rule was exercised on ${held} circuits`);
+  // The shapes the survey named: a long straight keeps the full window; a
+  // straight that ends just before the old 260 gives the road its room.
+  assert.equal(buildOnce("monza").pit.entryM, P.ENTRY_MAX, "Monza's straight holds everything");
+  for (const id of ["abudhabi", "sochi", "spa"]) {
+    const p = buildOnce(id).pit;
+    assert.ok(p.entryM < P.ENTRY_MAX && p.entryM >= P.ENTRY_MIN, `${id}: the window gave the road its straight (entryM ${p.entryM})`);
+  }
+  // Bahrain's window is on the floor (T15's exit bends inside it): unchanged.
+  assert.equal(buildOnce(LEFT).pit.entryM, P.ENTRY_MIN);
+});
+
+test("two entrance lamps stand on the wall corners either side of the entry line, the lane's middle between them", () => {
+  // Asked: one lamp on each WALL CORNER either side of the entrance, with the
+  // middle of the lane between them. That pair of corners exists at exactly
+  // one arc — the ENTRY LINE. Down the entry road the peel is a wedge off the
+  // road edge with tarmac on its track side and only the OUTER wall beside it
+  // (scratch/pit-mouth-walls.cjs: Abu Dhabi's outer wall opens at sA+6 and the
+  // platform wall's nose is 70 m later), so a gate cannot stand at the mouth.
+  // At `sIn` the platform wall's nose is at 10.0 m and the outer wall at 22.0,
+  // the fast lane's middle between them at 13.8. Each carries the exit
+  // signal's head with a RED aspect and a light record AT it (a halo needs a
+  // fixture within 1 m — lamp-fixture-anchor). Tagged `entry`, so the canopy's
+  // count of six stays its own. docs/research/PIT-ENTRY-LAMPS-PLAN-2026-09.md.
+  //
+  // TWO RULES HERE ARE THE BUG THAT SHIPPED IN THE FIRST CUT, and both are
+  // measured, not described. (1) The aim must land on the LANE: it pointed at
+  // the lane's full width 15 m past the mouth, where the road has opened to
+  // `w` 0.26 and nothing is paved yet, so it lit 4.8 m of bare verge.
+  // (2) The radius must be the throw and no more: the pool window is a sphere
+  // around the lens, so a 24 m radius on a post 8.5 m off the centreline
+  // washed 16 m of racing line (abudhabi, bahrain, monza — a night shot).
+  const P = ctxOnce().TrackPit;
+  for (const id of [FULL, LEFT, "abudhabi"]) {
+    const t = buildOnce(id), p = t.pit, sd = p.side, L = t.total;
+    const lamps = (t.lampPosts || []).filter((l) => l.entry);
+    assert.equal(lamps.length, 2, `${id}: two entrance lamps`);
+    const latOf = (l) => ((l.x - t.px[l.k]) * t.rx[l.k] + (l.z - t.pz[l.k]) * t.rz[l.k]) * sd - t.hw[l.k];
+    const arcOf = (l) => ((l.k * L / t.n - p.sA) % L + L) % L;
+    const lats = lamps.map(latOf).sort((a, b) => a - b), arcs = lamps.map(arcOf);
+    // ONE AT EACH WALL: beside the platform wall (which spans verge →
+    // verge + 0.25) and beside the outer wall on the garage line (workOut +
+    // 0.02 → + 0.32). BESIDE, not on top: a post standing on a wall's top has
+    // only swept geometry under it and reads as a floating cluster
+    // (scenery-grounding caught exactly that on five circuits), so each stands
+    // on its own floor — the platform for one, the lane for the other.
+    assert.ok(Math.abs(lats[0] - (p.bands.verge + 0.55)) < 0.2,
+              `${id}: the track-side lamp is at the platform wall (${lats[0].toFixed(2)} vs ${(p.bands.verge + 0.55).toFixed(2)} m out)`);
+    assert.ok(Math.abs(lats[1] - (p.off.workOut - 0.45)) < 0.2,
+              `${id}: the far lamp is at the outer wall (${lats[1].toFixed(2)} vs ${(p.off.workOut - 0.45).toFixed(2)} m out)`);
+    assert.ok(lats[0] > p.bands.verge + 0.25 && lats[1] < p.off.workOut + 0.02,
+              `${id}: neither post stands inside its wall`);
+    // THE LANE'S MIDDLE IS BETWEEN THEM, and both stand at the same arc, so
+    // the pair reads as one gate rather than two posts down the road.
+    assert.equal(lamps[0].k, lamps[1].k, `${id}: the pair stands at one arc`);
+    const mid = (lats[0] + lats[1]) / 2, fastMid = (p.off.fastIn + p.off.fastOut) / 2;
+    assert.ok(mid > p.off.fastIn && mid < p.off.workOut,
+              `${id}: the lane runs between the lamps (midpoint ${mid.toFixed(1)} m out)`);
+    assert.ok(mid > fastMid, `${id}: …and the fast lane's middle is inside the gate`);
+    const nodeAt = (pt) => {                       // the centreline node the aim stands next to
+      let best = 0, bd = Infinity;
+      for (let i = 0; i < t.n; i++) {
+        const d = Math.hypot(t.px[i] - pt[0], t.pz[i] - pt[2]);
+        if (d < bd) { bd = d; best = i; }
+      }
+      return best;
+    };
+    for (const l of lamps) {
+      assert.equal(l.kind, "signal"); assert.equal(l.side, sd); assert.equal(l.pit, true);
+      // Head height is measured from the LANE floor, and each post is only as
+      // long as its own wall is short — the two heads finish level.
+      const h = l.y - t.py[l.k];
+      assert.ok(h > 2.1 && h < 3.1, `${id}: the aspect is head-high over the wall (${h.toFixed(2)} m)`);
+      assert.ok(l.aimAt && l.aimAt[1] < l.y - 1.5, `${id}: the lamp throws at the ground`);
+      // (1) ON THE LANE, between the two posts: at the aim's own node the
+      // complex is open, so the surface runs from fastIn out to workOut.
+      const kA = nodeAt(l.aimAt);
+      const aimLat = ((l.aimAt[0] - t.px[kA]) * t.rx[kA] + (l.aimAt[2] - t.pz[kA]) * t.rz[kA]) * sd - t.hw[kA];
+      assert.ok(p.w[kA] > 0.98 && p.v[kA] > 0.98, `${id}: the aim is inside the lane (w ${p.w[kA].toFixed(2)})`);
+      assert.ok(aimLat > p.off.fastIn - 0.2 && aimLat < p.off.fastOut + 0.2,
+                `${id}: the aim is the fast lane's middle (${aimLat.toFixed(2)} m out)`);
+      // (2) THE POOL IS THE THROW: r ≥ |lens→aim| or it lights nothing, and no
+      // more than a couple of metres over or it spills where it is not aimed.
+      const throwM = Math.hypot(l.x - l.aimAt[0], l.y - l.aimAt[1], l.z - l.aimAt[2]);
+      assert.ok(throwM < 22, `${id}: the lamp throws at the lane beside it (${throwM.toFixed(1)} m)`);
+      assert.ok(l.radius >= throwM && l.radius <= throwM + 2.5,
+                `${id}: the radius is the throw (r ${l.radius} vs ${throwM.toFixed(1)} m)`);
+    }
+    // THE GATE IS AT THE ENTRY LINE — where the lane legally begins, the limit
+    // starts and the "PIT LANE <limit>" board already stands on the platform.
+    const fromSA = arcs.map((a) => (a > L / 2 ? a - L : a));
+    for (const a of fromSA) {
+      assert.ok(Math.abs(a - p.entryRoadM) < 8,
+                `${id}: the gate stands at the entry line (${a.toFixed(0)} vs ${p.entryRoadM.toFixed(0)} m from sA)`);
+    }
+    // The GREEN aspect's decal: one quad per lamp, in its own buffer, on the
+    // atlas's GREEN signal cell, facing the oncoming driver. Red is what the
+    // props mesh paints; green is laid over it only while this car is called in.
+    const sig = t.pitSignal;
+    assert.ok(sig && sig.quads.length === 2, `${id}: two green aspects`);
+    assert.equal(sig.idx.length, 12); assert.equal(sig.pos.length, 24);
+    const S = P.SIGN, u0 = sig.uv[0], v0 = sig.uv[1];
+    assert.ok(u0 >= -1e-6 && u0 <= S.signalPx / S.w + 1e-6, `${id}: the GREEN cell (u ${u0.toFixed(3)})`);
+    assert.ok(v0 <= 1 - S.signalY / S.h + 1e-6, `${id}: …in the signal row (v ${v0.toFixed(3)})`);
+    const k0 = sig.quads[0].k;
+    assert.ok(sig.nrm[0] * t.tx[k0] + sig.nrm[2] * t.tz[k0] < -0.9, `${id}: the aspect faces the oncoming driver`);
+  }
+  // A WALLED lane has the gate wherever its entry line is — a street circuit's
+  // compressed complex included (Jeddah, Monaco). A PAINTED lane has neither
+  // wall, so it has neither lamp.
+  for (const id of ["jeddah", "monaco"]) {
+    const t = buildOnce(id), walled = !t.pit.painted && t.pit.hasWall;
+    assert.equal((t.lampPosts || []).filter((l) => l.entry).length, walled ? 2 : 0, `${id}: the gate follows the wall`);
+    assert.equal(t.pitSignal ? t.pitSignal.quads.length : 0, walled ? 2 : 0, `${id}: …and so does its green aspect`);
+  }
+});
+
 test("race control stands past the last bay, inside the row's keep-out, on a bending straight too", () => {
   // Placed 14.5 m of arc past the last bay at the garage line, the Nürburgring's
   // race control (whose row ran into T1) stood 7 m inside the last bay: on a
@@ -394,7 +552,7 @@ test("the complex lights its row: six canopy luminaires over the working lane, r
   const inArc = (s, a, b) => (a <= b ? (s >= a && s <= b) : (s >= a || s <= b));
   for (const id of [FULL, LEFT]) {
     const t = buildOnce(id), p = t.pit, sd = p.side, L = t.total, ds = L / t.n;
-    const pit = (t.lampPosts || []).filter((l) => l.pit);
+    const pit = (t.lampPosts || []).filter((l) => l.pit && !l.entry);   // the canopy's; the entrance pair is its own test
     assert.equal(pit.length, 6, `${id}: six luminaires, one per 22 m of row`);
     for (const l of pit) {
       assert.equal(l.kind, "led", `${id}: a canopy batten is an LED`);
@@ -410,8 +568,8 @@ test("the complex lights its row: six canopy luminaires over the working lane, r
         `${id}: the luminaire throws at the lane under it`);
     }
   }
-  assert.equal((buildOnce(STREET).lampPosts || []).filter((l) => l.pit).length, 6, "the street complex lights its row too");
-  assert.equal((narrowOnce().lampPosts || []).filter((l) => l.pit).length, 0, "a painted lane hangs no canopy");
+  assert.equal((buildOnce(STREET).lampPosts || []).filter((l) => l.pit && !l.entry).length, 6, "the street complex lights its row too");
+  assert.equal((narrowOnce().lampPosts || []).filter((l) => l.pit).length, 0, "a painted lane hangs no canopy, and no entrance lamps");
 });
 
 test("the row seats the custom team ONCE when the roster already carries it, as the game's does", () => {

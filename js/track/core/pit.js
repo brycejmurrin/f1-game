@@ -54,7 +54,14 @@ const TrackPit = (function () {
                  // road (SceneryPits walks each up to 24 m further back past
                  // whatever the circuit put on that verge), the last on the
                  // platform at the entry line.
-                 boards: 2, boardW: 2.4, boardH: 0.33, boardY: 1.5, boardM: [45, 110] };
+                 boards: 2, boardW: 2.4, boardH: 0.33, boardY: 1.5, boardM: [45, 110],
+                 // The ENTRANCE LAMPS' aspects (asked: two coloured lamps flanking
+                 // the pit entrance): two 64 px cells under the crests — GREEN
+                 // (the lane is open) and RED (a red flag). The green is also
+                 // painted on the head in the props mesh; the RED cell is a decal
+                 // the signs painter draws over it only under a red flag
+                 // (track.pitSignal, js/garage/pit-signs.js).
+                 signals: 2, signalPx: 64, signalY: 848, signalW: 0.34 };
   // The EXIT WALL (SceneryPits, game.js's clamp): the pit wall slides from the
   // platform's line to the road edge as the wall fades over the exit road, and
   // runs along the edge while the road keeps this share of its width — a
@@ -86,6 +93,7 @@ const TrackPit = (function () {
   const ENTRY_MAX = 260, ENTRY_MIN = 150, EXIT_M = 110, EXIT_MIN = 40;
   const PIT_K = 0.0035, STEP = 8;         // "not actively cornering" — see docs/PHYSICS.md
   const ENTRY_ROAD = 70, EXIT_ROAD = 90, ROAD_MIN = 30, WALL_GROW = 30;
+  const MOUTH_RUN = 20;   // straight the window leaves between the last corner and the entry road's mouth
   // The EXIT road's own floor: its blend is driven at the limiter with the
   // exit wall beside it to EXIT_WALL_W of its width, and what is left after
   // the wall must hold a car's move back inside the road edge — 25 m of it
@@ -97,6 +105,7 @@ const TrackPit = (function () {
   // Race control stands ROW_TAIL past the last bay (SceneryPits), inside the
   // same keep-out.
   const GRID_POLE_M = 14, GRID_CLEAR = 40, ROW_END = 30, ROW_TAIL = 16;
+  const BAY_FLARE = 24;   // …over which the working lane opens before the first box and closes after the last (two bay pitches)
 
   const wrap = (v, L) => ((v % L) + L) % L;
   const smooth = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
@@ -150,10 +159,37 @@ const TrackPit = (function () {
     const L = track.total;
     if (!(L > 0)) return { entryM: ENTRY_MAX, exitM: EXIT_M };
     const cap = L / 3;
-    const back = straightRun(track, curvature, 0, -1, ENTRY_MAX);
-    const entryM = Math.min(Math.max(back, ENTRY_MIN), ENTRY_MAX, cap * 0.7);
+    // THE ENTRY ROAD MUST FIT ON THE STRAIGHT TOO. The window opened as far
+    // back as the straight ran, and the 70 m road before it then had no
+    // straight left: on 21 of 52 circuits the mouth sat INSIDE the last
+    // corner, the road at its 30 m floor (Abu Dhabi's on a 23 m radius, Sochi's
+    // on 20 m; surveyed 2026-09-16, docs/research/PIT-NEXT-STEPS-2026-09.md §4).
+    // Leave the road and MOUTH_RUN of run-out after the corner on the straight
+    // wherever the straight allows; the floor still stands where it does not.
+    const back = straightRun(track, curvature, 0, -1, ENTRY_MAX + ENTRY_ROAD + MOUTH_RUN);
+    const entryM = Math.min(Math.max(back - ENTRY_ROAD - MOUTH_RUN, ENTRY_MIN), ENTRY_MAX, cap * 0.7);
     // The exit line closes before the first corner, leaving the exit road its
     // minimum run to blend back on the straight.
+    //
+    // THE MERGE ITSELF IS STILL IN A BEND ON 11 OF 52 CIRCUITS, and this is
+    // where that was measured and NOT fixed. `ROAD_MIN` here is 30 m while the
+    // exit road actually runs 80-90, so the road reaches past the straight and
+    // the car rejoins mid-corner — zero straight after the merge at Jerez,
+    // Mosport, Zolder, Baku, Monaco, Shanghai, Donington, Anderstorp, Brands
+    // Hatch, Mont-Tremblant and the Nürburgring, whose exit road peaks at |k|
+    // 0.0715, a 14 m radius (scratch/pit-exit-survey.cjs). It is the one thing
+    // a pit exit should not do — a car coming off the limiter cannot dodge, and
+    // the guidance for a real circuit is that entry and exit belong on a slow,
+    // straight section and must not put a rejoining car on the racing line.
+    //
+    // Closing the window earlier to pull the merge back was TRIED and reverted:
+    // the window is also what the twelve bays stand in, and shortening it took
+    // Bahrain's row under the 201 m it needs, compressed the pitch below a
+    // bay's width and placed NO BAYS AT ALL — taking the canopy, race control
+    // and the stop with them. The exit road cannot shorten either: its 80 m
+    // floor is what stops the AI running off the end of the blend. Moving the
+    // merge needs the row decoupled from the window first; the survey and the
+    // plan are in docs/research/PIT-NEXT-STEPS-2026-09.md.
     const fwd = straightRun(track, curvature, 0, 1, EXIT_M + ROAD_MIN);
     const exitM = Math.min(EXIT_M, cap * 0.3, Math.max(EXIT_MIN, fwd - ROAD_MIN));
     return { entryM, exitM };
@@ -210,7 +246,7 @@ const TrackPit = (function () {
     const sA = wrap(sIn - entryRoadM, L), sB = wrap(sOut + exitRoadM, L);
     const grow = Math.min(WALL_GROW, entryRoadM * 0.5, exitRoadM * 0.5);
 
-    const w = new Float32Array(n), v = new Float32Array(n), keep = new Float32Array(n);
+    const w = new Float32Array(n), v = new Float32Array(n), b = new Float32Array(n), keep = new Float32Array(n);
     const rows = row();
     // Through-window metres: 0 at the entry line, lenM at the exit line.
     const through = (s) => wrap(s - sIn, L);
@@ -220,7 +256,10 @@ const TrackPit = (function () {
     const count = rows.length;
     const lo = grow + 20, hi = Math.max(lo, lenM - ROW_END);
     let pitch = PITCH;
-    if ((count - 1) * pitch > hi - lo) pitch = Math.max(BOX_LEN + 1, (hi - lo) / (count - 1));
+    // The epsilon is load-bearing: a window sized to EXACTLY the row's length
+    // compresses by a float's width, and `pitch 11.00 < 11` then drops every
+    // bay on the circuit. A row that just fits is a row that fits.
+    if ((count - 1) * pitch > hi - lo + 1e-6) pitch = Math.max(BOX_LEN + 1, (hi - lo) / (count - 1));
     // A compressed row paints its boxes closer than a bay is wide (Jeddah's
     // 190 m window: 10.0 m against 10.8), so it places no bays — two would
     // interpenetrate by the difference on every party wall.
@@ -251,6 +290,20 @@ const TrackPit = (function () {
         wk = 1 - smooth((d - grow) / Math.max(1, exitRoadM - grow));
       }
       w[k] = wk; v[k] = vk;
+      // THE WORKING LANE EXISTS WHERE THE BAYS DO — and nowhere else. It used
+      // to run at its full width for the whole window, so the entrance and the
+      // exit were as wide as the service area with no garage beside them for
+      // 100-238 m of it (Monza 214 m before its first box, Abu Dhabi 128;
+      // scratch/pit-width-survey.cjs). The corridor and the working lane now
+      // FLARE in over BAY_FLARE before the first box and out after the last,
+      // and the entry road, the exit road and the stretches between carry the
+      // FAST LANE alone — which is what a pit entrance is. `b` never exceeds
+      // `w`, so a road that has not opened cannot grow a working lane.
+      if (hasBays) {
+        const span2 = wrap(rowS1 - rowS0, L) + 2 * BAY_FLARE;
+        const d = wrap(s - wrap(rowS0 - BAY_FLARE, L), L);
+        if (d <= span2) b[k] = Math.min(smooth(d / BAY_FLARE), smooth((span2 - d) / BAY_FLARE)) * wk;
+      }
       if (wk > 0) {
         // The keep-out reaches the garage line plus its own kerb: a landmark
         // may stand AT the lane's edge (Yas Marina's hotel legs stand 14.5 m
@@ -264,7 +317,7 @@ const TrackPit = (function () {
       side: r.side, mode: r.mode, limitKph: r.limitKph, bands: r.bands, off: r.off,
       painted: r.painted, hasWall: r.hasWall, hasBays,
       sA, sIn, sOut, sB, entryM: win.entryM, exitM: win.exitM, lenM, entryRoadM, exitRoadM, grow,
-      w, v, keep,
+      w, v, b, keep,
       row: { pitch, boxLen: BOX_LEN, first, count, boxes, s0: rowS0, s1: rowS1, tail: ROW_TAIL },
       bay: BAY,
     };
@@ -283,10 +336,14 @@ const TrackPit = (function () {
     const wk = p.w[k];
     if (!(wk > 0.01)) return null;
     const vk = p.v[k], sd = p.side, h = track.hw[k], o = p.off;
+    // The CORRIDOR and the WORKING lane ride `b`, not `w`: they exist where the
+    // bays do and flare to nothing before and after the row, so the entry road,
+    // the exit road and the stretches between are the FAST LANE alone.
+    const bk = p.b ? p.b[k] : wk;
     const fastIn = h + o.fastIn * vk;
     const fastOut = h + o.fastOut * wk;
-    const corrOut = h + o.corrOut * wk;
-    const workOut = h + o.workOut * wk;
+    const corrOut = fastOut + (o.corrOut - o.fastOut) * bk;
+    const workOut = corrOut + (o.workOut - o.corrOut) * bk;
     return {
       side: sd, w: wk, v: vk,
       inner: sd * fastIn, outer: sd * workOut,
@@ -295,6 +352,17 @@ const TrackPit = (function () {
       workCentre: sd * (corrOut + workOut) / 2,
       width: Math.max(0, workOut - fastIn),
     };
+  }
+
+  /** The LANE's outer edge at node `k`, beyond `hw` — the garage line where the
+   *  bays are, the fast lane's far side everywhere else. ONE expression, so the
+   *  ribbon, the outer wall and the driving boundary cannot disagree about
+   *  where the lane ends; `keep` is deliberately NOT this (the complex's
+   *  flattened FOOTPRINT stays the full width, and the apron paves it). */
+  function outerAt(p, k) {
+    if (!p) return 0;
+    const o = p.off, wk = p.w[k], bk = p.b ? p.b[k] : wk;
+    return o.fastOut * wk + (o.workOut - o.fastOut) * bk;
   }
 
   /** Push the driving boundary out to the complex's far edge across the
@@ -310,7 +378,7 @@ const TrackPit = (function () {
       // reaches the line, where the OUTER WALL stands wherever a bay does not
       // (SceneryPits). It was 1.5 m past it, and a car pushed out there stood
       // through that wall.
-      const lim = track.hw[k] + p.off.outer * p.w[k] - 0.9;
+      const lim = track.hw[k] + outerAt(p, k) - 0.9;
       if (bar[k] < lim) bar[k] = lim;
     }
   }
@@ -323,9 +391,10 @@ const TrackPit = (function () {
     return -1;
   }
 
-  return { BANDS, STREET, NARROW, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, EXIT_ROAD_MIN, WALL_GROW,
+  return { BANDS, STREET, NARROW, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, EXIT_ROAD_MIN, WALL_GROW, MOUTH_RUN,
            ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, LIMIT_KPH, LIMIT_KPH_STREET, GRID_POLE_M, GRID_CLEAR,
            ROW_END, ROW_TAIL,
-           resolve, window, row, build, at, openBoundary, rowOf };
+           BAY_FLARE,
+           resolve, window, row, build, at, outerAt, openBoundary, rowOf };
 })();
 Object.freeze(TrackPit);

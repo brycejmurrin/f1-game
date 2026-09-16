@@ -173,12 +173,14 @@ const FULL = [
   "js/physics/ai-corridor.js",
   "js/race/engineer.js",
   "js/camera/offsets.js",
+  "js/camera/flyby-seq.js",
   "js/garage/setup-tune.js",
   "js/garage/setup-sheet.js",
   "js/career/career-ui.js",
   "js/career/season-ui.js",
   "js/ui/flags.js",
   "js/ui/select-screen.js",
+  "js/ui/loading-screen.js",
   "js/ui/scroll-fade.js",
   "js/ui/css-zoom.js",
   "js/ui/sheet-shape.js",
@@ -221,7 +223,7 @@ const FULL = [
   "js/ui/onboard.js",
   "js/physics/debris-world.js",
   "js/physics/incident-sim.js",
-  "js/physics/contact-geometry.js", // oriented overlap, linear sweep and inelastic contact impulse
+  "js/physics/contact-geometry.js", // oriented overlap, linear sweep, contact impulse (restitution + Coulomb friction)
   "js/physics/collide.js",   // car-car contact resolver (Collide.create(G, collideFx)), extracted from game.js
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
   // ?apex=1 ask for __apex. Not on the player boot wall (PWA memory).
@@ -487,6 +489,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/race/engineer.js"],            // RaceEngineer binds M4.clamp at eval
   ["js/race/engineer.js", "js/game.js"],                 // game.js calls RaceEngineer.create(G) at eval
   ["js/core/mat4.js", "js/physics/brake-cue.js"],        // BrakeCue aliases M4.clamp at eval
+  ["js/physics/ai-drive.js", "js/physics/contact-geometry.js"],  // the impulse reads AiDrive.bumpRestitution (call time, keep ordered)
   ["js/core/mat4.js", "js/physics/collide.js"],          // Collide binds M4.clamp at eval
   ["js/physics/collide.js", "js/game.js"],                // game.js calls Collide.create(G, …) at eval
   ["js/physics/ai-drive.js", "js/game.js"],         // updateCar calls AiDrive for AI racecraft

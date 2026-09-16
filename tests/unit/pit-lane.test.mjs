@@ -517,9 +517,9 @@ test("the armed cue names the compound the crew will fit", () => {
   const c = car(0);
   c.tyreWear = 0.9; c.s = zone.sIn + 20; c.pitArmed = true;
   c.pitNext = { code: "S" };
-  assert.equal(pits.cue(c).text, "STAY IN LANE · BOX — S");
+  assert.equal(pits.cue(c).text, "STAY IN LANE · BOX BOX — S");
   c.pitNext = null;
-  assert.match(pits.cue(c).text, /^STAY IN LANE · BOX — [A-Z]+$/, "with no choice made, the crew's own pick is named");
+  assert.match(pits.cue(c).text, /^STAY IN LANE · BOX BOX — [A-Z]+$/, "with no choice made, the crew's own pick is named");
   // …and a stop that IS called is shown, whatever the wear gate thinks.
   c.tyreWear = 0;
   assert.equal(pits.cue(c).phase, "armed");
@@ -535,7 +535,10 @@ test("the first stop is taught in three lines — the road, the line, the gate �
   pits.cue(c); pits.cue(c);
   assert.equal(said.filter((m) => /STOP AT YOUR CREST/.test(m)).length, 1);
   const boxAt = pits.boxThroughFor(c);
-  c.s = ((zone.sIn + boxAt - 40) % 5386 + 5386) % 5386; c.x = hw * 0.95 * zone.side; c.speed = 6;
+  // Inside MOVE_M, which is where the gate line belongs: further out the cue is
+  // still counting the box down and the driver is right to hold the fast lane.
+  c.s = ((zone.sIn + boxAt - 20) % 5386 + 5386) % 5386;
+  c.x = pits.laneCentre(hw, zone.side, c.s); c.speed = 6;
   assert.equal(pits.cue(c).phase, "near-box");
   pits.cue(c);
   assert.equal(said.filter((m) => /GLOWING GATE/.test(m)).length, 1);
@@ -692,19 +695,25 @@ test("a car serving a stop is steered to the lane, and nobody else is", () => {
 test("the box will not latch on the racing line", () => {
   // The visible half of the old gap. A car stopped on the line has not reached
   // its box — the crew is not standing there — so the stop does not happen.
-  const mk = (over) => {
+  const mk = (place) => {
     const { pits, zone, hw } = commitSession();
     // AT ITS OWN BOX. zone.sBox is only the row's anchor INPUT now — the row is
     // positioned past the grid, so a car sitting on sBox is not at any box.
     const c = { local: true, human: true, pitArmed: true, pitState: "lane", speed: 0,
-                x: hw * over * zone.side, lap: 3, tyre: { code: "M", tread: 0 } };
+                x: 0, lap: 3, tyre: { code: "M", tread: 0 } };
     c.s = ((zone.sIn + pits.boxThroughFor(c)) % 5386 + 5386) % 5386;
+    c.x = place === "line" ? 0 : pits.laneCentre(hw, zone.side, c.s) + (place === "off" ? 2.4 * zone.side : 0);
     pits.update(c, 0.1);
     return c;
   };
-  assert.equal(mk(0).pitState, "lane", "a car stopped on the racing line served a stop");
-  assert.equal(mk(0.95).pitState, "box", "a car stopped IN the lane did not serve its stop");
-  assert.equal(mk(0.95).pitStops, 1);
+  assert.equal(mk("line").pitState, "lane", "a car stopped on the racing line served a stop");
+  assert.equal(mk("box").pitState, "box", "a car stopped IN its box did not serve its stop");
+  assert.equal(mk("box").pitStops, 1);
+  // SQUARE IN IT, and this is the half the latch used to miss: `inBoxLat` only
+  // asked that the car had REACHED the working lane, so a stop happened
+  // anywhere from the corridor edge to the garage wall. A car 2.4 m off its own
+  // box's centre is not parked in the bay and gets no crew.
+  assert.equal(mk("off").pitState, "lane", "a car parked wide of its box still served a stop");
 });
 
 test("the lane's lateral tolerance is a car's worth, not a lane's", () => {
@@ -790,13 +799,22 @@ test("the cue says which way when the box is coming and the car is not in the la
   // one made this test a hostage of wherever the row happened to be anchored.
   const L = 5386;
   const boxAt = pits.boxThroughFor({ s: 0, x: 0 });
-  const sAt = (((zone.sIn + boxAt - 40) % L) + L) % L;
-  const at = (over) => pits.cue({
-    local: true, s: sAt, x: hw * over * zone.side, speed: 20,
+  const sFor = (d) => (((zone.sIn + boxAt - d) % L) + L) % L;
+  const at = (over, d) => pits.cue({
+    local: true, s: sFor(d == null ? 20 : d), x: hw * over * zone.side, speed: 20,
     pitState: "lane", tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
   });
   assert.equal(at(0).text, zone.side > 0 ? "KEEP RIGHT" : "KEEP LEFT");
   assert.equal(at(0).phase, "keep");
+  // …BUT NOT BEFORE IT IS TIME TO TAKE IT. Reported, with a screenshot of the
+  // cue reading KEEP RIGHT at the top of the lane: "it's wrongly telling me to
+  // stay right before it's my time to pull over." A driver running down the
+  // fast lane with the box still 60 m away is doing the right thing, and the
+  // ask rode the whole 90 m countdown. Now it waits for MOVE_M.
+  const far = at(0, 60);
+  assert.equal(far.phase, "lane", `60 m out is not the moment to move over: ${far.text}`);
+  assert.ok(!/KEEP/.test(far.text), `no KEEP sign at 60 m: ${far.text}`);
+  assert.match(far.text, /BOX \d+m/, `…but the metres are still counted: ${far.text}`);
   // IN the lane and closing: the one number a driver cannot work out is where
   // their own box is — there is no mark on the road, and each team's box sits
   // at its own place in the row, so it is not even a fixed distance from the
@@ -1003,16 +1021,34 @@ test("the cue counts the box down and then says STOP HERE on it", () => {
   // chance: miss the box and the stop does not happen at all.
   const { pits, zone, hw } = commitSession();
   const boxAt = pits.boxThroughFor({ local: true });
-  const at = (m) => pits.cue({
-    local: true, s: ((zone.sIn + boxAt - m) % 5386 + 5386) % 5386,
-    x: hw * 0.95 * zone.side, speed: 6,
-    pitState: "lane", tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
-  });
-  const far = at(70), near = at(20), on = at(0);
-  assert.match(far.text, /PULL IN · 7\dm/, `expected a countdown, got ${far.text}`);
-  assert.match(near.text, /PULL IN · 2\dm/, `expected a countdown, got ${near.text}`);
+  // ON THE BOX'S OWN CENTRE, because STOP HERE now means the car is SQUARE in
+  // the bay, not merely somewhere past the working lane's line.
+  const at = (m) => {
+    const s = ((zone.sIn + boxAt - m) % 5386 + 5386) % 5386;
+    return pits.cue({
+      local: true, s, x: pits.laneCentre(hw, zone.side, s), speed: 6,
+      pitState: "lane", tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
+    });
+  };
+  const far = at(34), near = at(14), on = at(0);
+  assert.match(far.text, /PULL IN · 3\dm/, `expected a countdown, got ${far.text}`);
+  assert.match(near.text, /PULL IN · 1\dm/, `expected a countdown, got ${near.text}`);
   assert.equal(on.text, "STOP HERE");
   assert.equal(on.phase, "stop");
+  // Further out than MOVE_M the metres are still counted, but the instruction
+  // is the lane the car is already in — not PULL IN, and not KEEP.
+  const early = at(70);
+  assert.equal(early.phase, "lane", `70 m out is not PULL IN: ${early.text}`);
+  assert.match(early.text, /BOX 7\dm/, `…and still a countdown: ${early.text}`);
+  // CROOKED IN THE BAY is not a stop, and it says which problem it is: on the
+  // right arc, inside the working lane, but not centred on the box.
+  const off = pits.cue({
+    local: true, s: ((zone.sIn + boxAt) % 5386 + 5386) % 5386,
+    x: pits.laneCentre(hw, zone.side, (zone.sIn + boxAt) % 5386) + 2.4 * zone.side, speed: 6,
+    pitState: "lane", tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
+  });
+  assert.ok(off.phase === "square" || off.phase === "keep",
+            `a car off its box centre is not told it has arrived: ${off.phase} "${off.text}"`);
   // …and it counts DOWN: a number that grows as you approach is worse than none.
   assert.ok(far.dist > near.dist, `the countdown ran backwards: ${far.dist} -> ${near.dist}`);
 });
@@ -1046,7 +1082,7 @@ test("planInfo reads the plan for the HUD: the stops, the next box lap, and the 
   c.lap = 11; i = pits.planInfo(c);
   assert.equal(i.state, "soon"); assert.match(i.text, /^BOX NEXT LAP/);
   c.lap = 12; i = pits.planInfo(c);
-  assert.equal(i.state, "now"); assert.match(i.text, /^BOX THIS LAP/);
+  assert.equal(i.state, "now"); assert.match(i.text, /^BOX BOX BOX/);
   c.pitArmed = true; i = pits.planInfo(c);
   assert.equal(i.state, "", "a called stop carries no urgency of its own");
   c.pitArmed = false; c.pitStops = 1; i = pits.planInfo(c);

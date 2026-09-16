@@ -28,6 +28,16 @@ runs the sweeps and the selected specs.
 
 ## 1. Owed now (before anything new)
 
+> **§1.2 is CLOSED** (2026-09-16, evening, on the gate/mouth/BOX BOX BOX tree):
+> both specs ran locally as single specs, on an idle box, and both passed —
+> `pit-lane.spec.js` 6/6 in 2.4 min (the driven stop, on the shortened window)
+> and `hud-layout.spec.js` 32/32 in 10.9 min, with `#announce` now IN its
+> measured set, so the radio card is measured for collisions across all 12
+> landscape shapes rather than reasoned about. §1.1 is closed too: CI 4053 on
+> the merged deploy tip is green. §1.3, the real-GPU night frame, is still
+> open, and the entrance lamps make it worth more than before — a SwiftShader
+> frame is what caught the white pool they used to throw.
+
 1. **Read CI 4007 and the pages run it pokes.** If the fast tier is red, the
    Structural-guards job is the first suspect (ratchets: `shellNodes` +2 for
    the card, `cssClasses` +1 — both auto-raised in-diff). If the pages gate is
@@ -76,9 +86,9 @@ as one commit with the tests named; the radio card's compact anchor fix
    `rivalBoxed` (a rival whose `pitStops` rose this lap within `lossS + 2 s`
    behind), `marginS`, `lap`; `callFor` gains, in this order: caution with
    margin ("STOP NOW LOSES NOTHING", keyed `caution`), undercut, rain before
-   the stop, then after `gone`: BOX THIS LAP / BOX NEXT LAP — <compound>
+   the stop, then after `gone`: BOX BOX BOX / BOX NEXT LAP — <compound>
    (`js/race/engineer.js:76-103`). `engineer.test.mjs`'s `sense()` defaults
-   grow the five fields; tread still beats BOX NEXT LAP, BOX THIS LAP beats
+   grow the five fields; tread still beats BOX NEXT LAP, BOX BOX BOX beats
    the wear ladder.
 5. **Rivals' windows** — on the gap chips, not a tower (there is none:
    `.hud-gaps` `:398-401` is the only per-rival HUD element): `data-pit="P12"`
@@ -105,12 +115,27 @@ at the end.
 
 ## 3. Then: the entrance lamps
 
-`PIT-ENTRY-LAMPS-PLAN-2026-09.md`, two commits: the lit green pair with light
-records and the re-cut six-luminaire test, then the live red aspect through the
-pit-signs decal (which also gives the exit signal its live aspect). Needs the
-night frame from §1.3 before the halo option is chosen.
+**Built**, then re-cut TWICE the same evening, both times from a night shot and
+a measurement (see the plan's header for the numbers). Where it landed: the
+pair stands on the WALL CORNERS at the ENTRY LINE — the platform wall's nose on
+the track side, the outer wall opposite — one gate with the lane's middle
+between them, which is the only arc where a wall stands on both sides at all
+(down the entry road the peel is a wedge off the road edge with tarmac on its
+track side). They are RED by default, with GREEN as the called-in overlay, on a
+new `signal` lamp kind that is a signal rather than a road light; each aims at
+the fast lane's middle a car's length in, and the radius is the throw, not a
+flat 24/32 that washed 16 m of racing line white.
+
+Still open from it: the exit signal's live aspect on the same decal mechanism,
+and the real-GPU night frame (§1.3) — the SwiftShader frame is what caught the
+white pool, so the red one wants the same check on a real GPU.
 
 ## 4. Then: the entry road's mouth on the straight
+
+**Built** in the same commit as the lamps (`MOUTH_RUN` 20 in `TrackPit.window`;
+the pit-complex test walks every circuit whose straight can hold the floor
+plus the road). Abu Dhabi's window is 174 m (was 260) with the full 70 m road
+and 16 m of straight before the mouth; Sochi 174, Spa 214, Mosport 182.
 
 **Reported** (phone screenshots, 2026-09-16 evening): "the pit entrance is still
 right off a turn and should be shortened." Surveyed on every circuit
@@ -150,6 +175,49 @@ coplanar baseline (`tools/track/coplanar-baseline.json`) may need a re-cut with
 this cause, as the 2026-09 window shortening did); one orbit shot of the
 Abu Dhabi and Sochi mouths before/after (`tools/shot/shot.mjs <id> <frac of sA>
 orbit --dist 60 --el 35`). Cost: pit.js +6, a test +25, a baseline re-cut.
+
+## 4b. The EXIT MERGE is in a corner on 11 circuits — measured, not fixed
+
+Asked: "make sure entry and exit aren't on turns." The entrance was fixed in §4
+(`MOUTH_RUN`). The exit was surveyed the same way and is worse, and the fix was
+TRIED AND REVERTED — this section is the evidence and the reason.
+
+**The measurement** (`scratch/pit-exit-survey.cjs`: the straight run starting at
+the merge `sB`, the peak |k| along the exit road, and the peak |k| in the 80 m
+after the merge, at `PIT_K` 0.0035):
+
+| straight after the merge | circuits | worst |k| on the exit road |
+|---|---|---|
+| 0 m — the car rejoins mid-corner | 11: anderstorp, baku, brands_hatch, donington, jerez, monaco, mont_tremblant, mosport, nurburgring, shanghai, zolder | nurburgring 0.0715 (a 14 m radius), zolder 0.0544, baku 0.0463, jerez 0.0429 |
+| 4-32 m | 7: madrid, miami, spa, interlagos, sochi, abudhabi, bahrain, montreal | — |
+| 52 m or more | the rest | — |
+
+**Why it happens.** `window()` sizes the exit against `ROAD_MIN` (30 m) while
+`exitRoadM` actually runs 80-90, so the road reaches past the straight the
+window was fitted to. The merge is `sOut + exitRoadM`, so pulling it back means
+shrinking one of the two.
+
+**Why neither can shrink, today.** Both were tried on 2026-09-16:
+
+- **The window** is also what the twelve bays stand in. Closing it earlier took
+  Bahrain's exit from 106 m to 40, the window below the 201 m the row needs, and
+  the pitch below a bay's width — so the circuit placed NO BAYS AT ALL, and with
+  them went the canopy luminaires, race control and the stop itself (six suites
+  red). A floor at the row's own length puts the pitch on a knife edge
+  (`pitch 11.00 < 11`) and each circuit that clears it pushes another under.
+- **The exit road** has an 80 m floor (`EXIT_ROAD_MIN`) because a shorter blend
+  is what sent the AI off the end of it — 17 m of run left every stop 0.6 m on
+  the grass, measured, 21 of 21.
+
+**What it needs first.** Decouple the ROW from the WINDOW: let the row start
+before the entry line (it is anchored past pole's slot today) or lay it against
+the entry road, so the window's tail is free to close early. Then the exit rule
+is the mirror of `MOUTH_RUN` and costs nothing. Keep `scratch/pit-exit-survey.cjs`
+as the before/after.
+
+One guard-rail worth keeping from the attempt, and kept: the row's pitch
+comparison now carries an epsilon (`js/track/core/pit.js`), so a window sized to
+exactly the row's length no longer loses every bay to a float's width.
 
 ## 5. Smaller loose ends
 

@@ -47,6 +47,11 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
   "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
+  // 2026-09-16: `errCount` was written by the AI mistake model and read by
+  // nothing, so it leaked here silently — a short rollout rarely trips a
+  // mistake, which is why the guard above never caught it. It counts mistakes
+  // within ONE race, so a cold car has none.
+  "errCount",
   // 2026-09-16: found by tools/check/episode-diff.mjs, not a live repro — the
   // lazy `c.passPlan || (c.passPlan = {})` cache in game.js's overtake-attempt
   // block survives reset() untouched, and `!c.passPlan || c.passPlan.side`
@@ -222,6 +227,7 @@ const api = {
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;
     // playerAnchor()/renderPosOf() draw the HUMAN car from THESE (world), not the AI-only pair above — else it stays lerp'd toward the pre-teleport spot once park() freezes physics.
     G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;
+    G.player.rPrevHead = G.player.head;   // yaw anchor too, or the car swings into place over a frame
     if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(true);
     return { s: G.player.s, total: G.track.total };
   },
@@ -358,6 +364,31 @@ const api = {
     const v = camVantage(m, s, lat, speed, 0, { carPos: [px, pz], carHead: head });
     G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
     return { eye: v.eye, target: v.tgt, fov: +v.fov.toFixed(1), mode: m };
+  },
+  // flybyCam(u, shots?) — park the camera at progress `u` (0..1) through the
+  // PRE-RACE FLYBY's shot sequence (js/camera/flyby-seq.js) and report where it
+  // put the eye, what it is looking at, which shot that is, and whether the eye
+  // landed inside solid scenery. This is the authoring/inspection seam: the live
+  // sequence is driven by a phase timer that lasts a few seconds, which is not
+  // something a capture tool can aim at, so this drives the same solver
+  // deterministically through dbgCam (the override photo mode uses).
+  // Pass `shots` to preview an EDITED sequence without reloading.
+  flybyCam(u, shots) {
+    if (!G.track || typeof FlybySeq === "undefined") return false;
+    const v = FlybySeq.solve(G.track, +u || 0, shots);
+    G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
+    const hit = FlybySeq.insideProp(G.track, v.eye, 0);
+    return {
+      u: +(+u || 0).toFixed(4), shot: v.id, index: v.index, cut: v.cut,
+      eye: v.eye.map((n) => +n.toFixed(2)), target: v.tgt.map((n) => +n.toFixed(2)),
+      fov: +v.fov.toFixed(1),
+      inside: hit ? { kind: hit.kind, size: [hit.w, hit.h, hit.d] } : null,
+    };
+  },
+  // flybyShots() — the sequence the flyby is currently playing, as data. The
+  // authoring loop is: read this, edit it, hand it back to flybyCam(u, shots).
+  flybyShots() {
+    return typeof FlybySeq === "undefined" ? null : JSON.parse(JSON.stringify(FlybySeq.DEFAULT));
   },
   // camTune(mode?, obj?) — the CAMERA TUNER's per-camera-mode framing offsets
   // (js/camera/offsets.js), the camera counterpart of lightTune(). With no args
@@ -1146,8 +1177,33 @@ const api = {
     yaw: +(c.yawVis || 0).toFixed(4),
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2), lap: c.lap,
     ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
-    ax: +(c.aeroX || 0).toFixed(2),
+    ax: +(c.aeroX || 0).toFixed(2), err: c.errCount | 0,
   })),
+  // The track build TIMELINE (js/track/tracks.js, "BUILD PROFILE"): one row per
+  // phase in build order, `k` "geo" for emission and "up" for upload. It exists
+  // to answer the multithreading plan condition 2 — run 128 proved the
+  // main-thread block at race entry is JavaScript rather than upload
+  // back-pressure, and this says WHICH JavaScript, which is what decides
+  // whether moving the build off the main thread would move anything.
+  buildProfile: () => (G.track && G.track.buildProfile) || null,
+  // The RACE-ENTRY timeline (js/game.js, "RACE-ENTRY PROFILE"): one row per
+  // phase of startRace, the build being only one of them. buildProfile() says
+  // which part of the BUILD costs; this says whether the build is the part of
+  // race entry that costs at all — measured at 23 % of it on the default
+  // backend, so the rest of this list is where the freeze actually lives.
+  raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
+  // Occlusion culling (GLX only, ships OFF behind apex26.occlusionCull).
+  // occlusionCull(true|false) toggles it live; with no argument it reports the
+  // COUNTED oracle — chunks tested against the depth buffer, chunks skipped
+  // because a query said they contribute no pixel, and queries issued. Counted
+  // and not timed on purpose: this container has no GPU, so a frame rate here
+  // measures the box (docs/notes/CI-RENDERING-PERFORMANCE.md).
+  occlusionCull: (on) => {
+    if (!gfx || !gfx.occlusionCull) return { supported: false, on: false };
+    if (on === undefined) return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: false };
+    gfx.occlusionCull(!!on);
+    return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: !!on };
+  },
   // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
   // Distinct from curated FIA turns on track.def.turns / info().turns — use those
   // for official turn counts; this hook is for physics/parking at sharp bends.
@@ -2409,7 +2465,16 @@ const api = {
     c.vLat = 0; c.yawRateCur = 0;
     Tracks.sample(G.track, c.s, smp2);
     placeFromTrack(c, smp2);
-    c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
+    // THE SAME TELEPORT HYGIENE jump() carries, and for the same measured
+    // reason: the wall/rescue accumulators describe the OLD location, so a car
+    // placed after a wedge brings ~3 s of rescueT with it and auto-rescues
+    // itself somewhere it was never stuck. jump() gained this block after that
+    // was measured; aiPlace() never did, so every AI placement kept the bug.
+    c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
+    c.wrongT = 0; c.wrongWay = false; c.offT = 0;
+    // rPrevHead with the rest: without it the yaw interpolator tweens from the
+    // old heading and the car visibly swings into place over a frame.
+    c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevHead = c.head;
     return { id: idx, frac: +(c.s / G.track.total).toFixed(4), speed: +c.speed.toFixed(2), x: +c.x.toFixed(3) };
   },
 

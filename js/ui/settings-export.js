@@ -57,8 +57,10 @@ const SPEC = [
   { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 109% on touch)" },
   { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 124% on touch)" },
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
+  { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "resMode", lane: "json", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "low" : "auto", src: "js/ui/scale.js (LOW on a touch device)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
+  { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
   { k: "debris", lane: "raw", group: "display", def: "1", src: "js/ui/debris-opts.js + js/physics/debris-world.js create() (any value but \"1\" is off)" },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId" },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
@@ -106,6 +108,14 @@ const SPEC = [
   { k: "drivingLineOpacity", lane: "json", group: "driving", def: "normal", src: "js/ui/driving-line-opts.js" },
   { k: "lineBrakeCue", lane: "json", group: "driving", def: "off", src: "js/ui/driving-line-opts.js" },
   { k: "difficulty", lane: "json", group: "driving", def: "normal", src: "js/game.js" },
+  // Four keys real UI writes that this registry did not carry, so a settings
+  // file round-tripped everything EXCEPT them (found 2026-09-16 by reading the
+  // registry against every store.set call site). They are player preferences by
+  // the file's own definition — a toggle, a slider and two race rules that sit
+  // beside difficulty/raceGrid/caution, which were already here.
+  { k: "drivingCoach", lane: "json", group: "driving", def: false, src: "js/race/driving-coach.js" },
+  { k: "throttleLatch", lane: "json", group: "driving", def: false, src: "js/game.js" },
+  { k: "tyreWear", lane: "json", group: "driving", def: "light", src: "js/game.js" },
   { k: "raceGrid", lane: "json", group: "driving", def: "tier", src: "js/game.js" },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
   { k: "caution", lane: "json", group: "driving", def: true, src: "js/race/race-control.js" },
