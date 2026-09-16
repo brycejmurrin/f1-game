@@ -367,8 +367,19 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   padding-top: calc(var(--gap) / 3); border-top: 1px solid var(--card-line);
 }
 #fb-rows .fb-group:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-#fb-ops button, #fb-ops { flex-wrap: wrap; }
-#fb-ops button { min-height: var(--tap-min); }
+/* EIGHT chips share the rail, so each is ~42px and "landmark1" is one
+   unbreakable 54px word: `white-space: normal` above wraps at spaces and there
+   are none, so it overflowed its pill and printed over its neighbour. Measured
+   at 960x540; the base rule is right for the other two panels' shorter labels. */
+#fb-shots .lt-tab { overflow-wrap: anywhere; }
+/* SIX OPS, ONE ROW. As a wrapping flex row these took THREE rows (138 px) in a
+   docked panel whose height is the viewport's: at 960x540 and 844x390 that
+   pushed the shot's own controls down past the footer, which then painted over
+   them (measured; 1280x800 and 1440x900 were always clear). A six-column grid
+   is ~46 px whatever the width, and the labels are short enough to fit it —
+   each button's full meaning is in its title. */
+#fb-ops { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(var(--gap) / 3); }
+#fb-ops button { min-height: var(--tap-min); padding-inline: calc(var(--gap) / 6); white-space: nowrap; }
 #lt-json, #ct-json, #fb-json {
   /* field-sizing lets the export box grow to whatever COPY VALUES produced
      instead of scrolling inside a fixed 72px; the height stays as the fallback

@@ -365,7 +365,15 @@ function refreshChips() {
   list.forEach((s, i) => {
     const b = document.createElement("button");
     b.type = "button"; b.className = "lt-tab"; b.id = "fb-tab-" + i;
-    b.textContent = (i + 1) + ". " + (s.id || i);
+    // THE NUMBER ONLY. "1. landmark1" is one unbreakable word in a pill that is
+    // a rail-width eighth, so eight chips wrapped to four lines each and the
+    // block ate ~100 px of a docked panel whose height is the viewport's — at
+    // 960x540 that pushed this shot's own controls under the footer. The id is
+    // not lost: it is on the chip's title, in the status line above, and in the
+    // SHOT heading of the rows below.
+    b.textContent = String(i + 1);
+    b.title = (s.id || ("shot " + (i + 1))) + " — " + (s.dur || 0).toFixed(3) + " of the run";
+    b.setAttribute("aria-label", "Shot " + (i + 1) + ": " + (s.id || i));
     b.setAttribute("role", "tab");
     b.setAttribute("aria-controls", "fb-rows");
     b.setAttribute("aria-selected", i === sel ? "true" : "false");
@@ -468,8 +476,16 @@ function closeFlyby(showPauseMenu) {
   document.body.classList.remove("lt-open");
   // The preview parks the camera through dbgCam; leaving it parked would hand
   // the player back a frozen flyby camera instead of their own car.
-  if (typeof __apex !== "undefined" && __apex.freeCam) {
-    try { __apex.freeCam(false); } catch (_) { /* not in a race — nothing parked */ }
+  // view("chase") is the release, for two reasons that both matter here.
+  // __apex.freeCam does not exist — the guard reading it was always false, so
+  // NOTHING was unparking the camera and closing the panel left the player
+  // looking through the last previewed frame. And snapCam(), the other
+  // documented clear, returns early when there is no G.player — which is
+  // exactly the case this panel is most used in, the menu. view("chase") only
+  // needs a track, clears dbgCam outright, and does not change the player's
+  // chosen camera MODE the way camera() would.
+  if (typeof __apex !== "undefined" && __apex.view) {
+    try { __apex.view("chase"); } catch (_) { /* no track built — nothing parked */ }
   }
   if (showPauseMenu && G.paused) {
     els.pmsettings.hidden = false;   // back to the settings menu
