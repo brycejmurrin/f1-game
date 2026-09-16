@@ -46,11 +46,14 @@ const LAUNCH = {
   ],
 };
 
-// APEX_GL=llvmpipe is the CI EXPERIMENT (ci.yml `gl` dispatch input): Mesa's
-// llvmpipe through ANGLE's GL backend instead of SwiftShader. It does NOT work
-// in the dev container (no /dev/dri — docs/notes/CI-RENDERING-PERFORMANCE.md
-// §llvmpipe 2026-09-16); GitHub's ubuntu runners are the open question. The
-// SwiftShader pin above stays the committed default (ci-coverage guards it).
+// APEX_GL=llvmpipe: Mesa's llvmpipe through ANGLE's GL backend instead of
+// SwiftShader. CI's DEFAULT for the smoke gate, the `selected` shards and the
+// dispatched wide run since 2026-09-16 (ci.yml installs Mesa + Xvfb and sets
+// the env; `gl: swiftshader` is the opt-out) — measured 8-12x faster on the
+// rendering tests. It does NOT work in the dev container (no /dev/dri —
+// docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe 2026-09-16), so the
+// SwiftShader pin above stays the committed default for a local run and for
+// driving-model, the twins' parity anchor (ci-coverage guards both).
 if (process.env.APEX_GL === "llvmpipe") {
   LAUNCH.args = LAUNCH.args.map((a) => (a === "--use-angle=swiftshader" ? "--use-angle=gl" : a))
     .concat(["--use-gl=angle", "--ignore-gpu-blocklist"]);
