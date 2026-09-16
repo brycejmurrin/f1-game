@@ -9,6 +9,7 @@
 // So the substitution is checked, not asserted. This runs on the fast gate.
 // Run: node --test tests/unit/twinned-specs.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
+import { spawnSync } from "node:child_process";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -90,4 +91,33 @@ test("the LOCAL runner skips twins too, says so, and never hands Playwright an e
   assert.ok(!partitionArgs([twin, "--with-twinned"], {}).args.includes("--with-twinned"));
   // A no-spec invocation (flags only) is not "nothing to run" — it is Playwright's default.
   assert.equal(partitionArgs(["--project=render"], {}).nothingToRun, false);
+});
+
+test("a fully twinned group RUNS its twins, and an empty run never reports a pass", () => {
+  // THE REGRESSION. The first cut of the local skip printed the reporter's own
+  // terminal line — `= run passed  (0/0 done, 0 failed)` — when every spec
+  // named had a twin, so that test-bg and verify-change would read the group
+  // as green. They did, and so did a human: the `collisions` group is 32/32
+  // twinned, and within hours of the skip landing `node tools/ci/test-bg.mjs
+  // collisions` had been accepted as the gate for a change to the contact
+  // solver, having executed nothing. The twins are in test:game-vm rather than
+  // test:tooling-fast, so the cheap local gate had not covered them either.
+  //
+  // What this pins is not the wording but the ARITHMETIC: a verdict line that
+  // claims a pass must have run something. `0/0 done` is the shape of the bug.
+  const spec = "tests/specs/wake-lock.spec.js";       // the cheapest pair, ~4 s
+  assert.ok(isTwinned(spec), `${spec} is no longer twinned — pick another pair`);
+  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ci/run-playwright.mjs"), spec],
+    { cwd: ROOT, encoding: "utf8", timeout: 180000 });
+  const out = `${r.stdout || ""}${r.stderr || ""}`;
+  const m = /= run (\w+)\s+\((\d+)\/(\d+) done, (\d+) failed\)/.exec(out);
+  assert.ok(m, `no verdict line at all:\n${out.slice(-2000)}`);
+  assert.equal(m[1], "passed", out.slice(-2000));
+  assert.ok(+m[2] > 0 && +m[3] > 0,
+    `the verdict claims ${m[2]}/${m[3]} done — a run that executed nothing must never read as a pass`);
+  assert.equal(+m[4], 0);
+  assert.equal(r.status, 0, `exit ${r.status}`);
+  assert.ok(out.includes(TWINNED[spec]), "the twin that actually ran is named in the log");
+  // And no browser: the whole point is that this cost seconds, not SwiftShader.
+  assert.ok(!/\[playwright\] port=/.test(out), "a fully twinned group must not spawn Playwright");
 });
