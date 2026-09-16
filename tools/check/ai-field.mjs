@@ -32,6 +32,14 @@
  *   node tools/check/ai-field.mjs --track monaco --diff hard --seconds 300
  *   node tools/check/ai-field.mjs --runs 5        median + range over 5 seeds
  *   node tools/check/ai-field.mjs --json
+ *   node tools/check/ai-field.mjs --wear real     pit stops and stints ON
+ *
+ * --wear off|light|real, DEFAULT off (the game ships "light"). Off is what the
+ * VM harness pins and what every number in docs/notes/AI-FIELD-RESEARCH.md was
+ * taken with, so it stays the default; but with wear off the whole strategy
+ * layer (stintPlan / pitNow / compoundFor / degCost / pits.think) never runs,
+ * so a field measured that way never pits and never falls off a set of tyres.
+ * Turn it on before claiming anything about stints, pit windows or deg.
  *
  * ONE RUN IS NOT A MEASUREMENT (2026-09-09). The sim is deterministic, so a
  * repeat of one seed reproduces to the digit — and that is REPRODUCIBILITY, not
@@ -53,6 +61,8 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { wearArg } from "../lib/cli-args.mjs";
+
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
@@ -60,6 +70,9 @@ const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
 const argv = process.argv.slice(2);
 const flag = (n, d) => { const i = argv.indexOf("--" + n); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d; };
 const TRACK = flag("track", "monza"), DIFF = flag("diff", "normal");
+// Default OFF — the harness pin, so the tables already in the research notes
+// stay reproducible. --wear light|real turns the strategy seam on.
+const WEAR = wearArg(argv);
 const SECONDS = Math.max(60, +flag("seconds", 240));
 const RUNS = Math.max(1, Math.min(25, +flag("runs", 1) || 1));
 const SEED0 = +flag("seed", 1) || 1;
@@ -67,7 +80,7 @@ const DT = 1 / 60, SETTLE = 10;            // seconds of settling before measuri
 const CLOSE = 10;                          // metres that count as nose-to-tail
 
 async function measure(seed) {
-  const g = await createGame({ track: TRACK, storage: { difficulty: DIFF } });
+  const g = await createGame({ track: TRACK, storage: { difficulty: DIFF, tyreWear: WEAR } });
   // SEED, THEN REBUILD THE FIELD — in that order, and the order is the whole
   // point. Setting the seed alone changes NOTHING here: the AI's in-race
   // decisions are deterministic given the field, and the randomness enters at
@@ -134,7 +147,11 @@ async function measure(seed) {
   const flips = counts.reduce((a, b) => a + b, 0);
   const first = snaps[0] || { spread: 0 }, last = snaps[snaps.length - 1] || { spread: 0 };
   const out = {
-    track: TRACK, difficulty: DIFF, seconds: SECONDS, cars: cars.length,
+    track: TRACK, difficulty: DIFF, seconds: SECONDS, wear: WEAR, cars: cars.length,
+    // Strategy signal, and the tell that --wear reached the sim: with wear off
+    // pits.think()/stintPlan never arm a stop, so both of these stay 0.
+    pitStops: cars.reduce((a, c) => a + (c.pitStops || 0), 0),
+    meanTyreWear: +(cars.reduce((a, c) => a + (c.tyreWear || 0), 0) / cars.length).toFixed(3),
     paceSpreadPct: +spreadPct.toFixed(2),
     spreadStartM: Math.round(first.spread), spreadEndM: Math.round(last.spread),
     flips, settledPasses: settled, oscillationFlips: oscFlips,
@@ -155,23 +172,26 @@ const runs = [];
 for (let i = 0; i < RUNS; i++) runs.push(await measure(SEED0 + i));
 
 const KEYS = ["paceSpreadPct", "spreadStartM", "spreadEndM", "flips", "settledPasses",
-              "oscillationFlips", "oscillationShare", "dwellMedianS", "dwellMaxS", "noseToTailPct"];
+              "oscillationFlips", "oscillationShare", "dwellMedianS", "dwellMaxS", "noseToTailPct",
+              "pitStops", "meanTyreWear"];
 const stat = {};
 for (const k of KEYS) {
   const v = runs.map((r) => r[k]);
   stat[k] = { median: +med(v).toFixed(3), min: Math.min(...v), max: Math.max(...v) };
 }
-const out = Object.assign({}, runs[0], { runs: RUNS, seeds: runs.map((_, i) => SEED0 + i), stat });
+const out = Object.assign({}, runs[0], { wear: WEAR, runs: RUNS, seeds: runs.map((_, i) => SEED0 + i), stat });
 const one = RUNS === 1;
 const show = (k, dp = 0) => one ? runs[0][k] : `${stat[k].median.toFixed(dp)} [${stat[k].min}–${stat[k].max}]`;
 
 if (argv.includes("--json")) { console.log(JSON.stringify(one ? runs[0] : out, null, 2)); }
 else {
-  console.log(`${TRACK} / ${DIFF} / ${out.cars} AI cars / ${SECONDS} s` + (one ? "" : ` / ${RUNS} runs, seeds ${SEED0}–${SEED0 + RUNS - 1} (median [min–max])`));
+  console.log(`${TRACK} / ${DIFF} / ${out.cars} AI cars / ${SECONDS} s / wear ${WEAR}` + (one ? "" : ` / ${RUNS} runs, seeds ${SEED0}–${SEED0 + RUNS - 1} (median [min–max])`));
   console.log(`  pace spread      ${show("paceSpreadPct", 2)}%   (real F1 2025: ~1.7%, widest recent ~4%)`);
   console.log(`  field strings    ${show("spreadStartM")} m -> ${show("spreadEndM")} m`);
   console.log(`  order flips      ${show("flips")}   settled passes ${show("settledPasses")}   oscillation ${show("oscillationFlips")} (${(100 * stat.oscillationShare.median).toFixed(0)}%)`);
   console.log(`  nose-to-tail     median ${show("dwellMedianS", 1)} s, longest ${show("dwellMaxS", 1)} s, ${show("noseToTailPct", 1)}% of car-time`);
+  console.log(`  tyres           ${show("pitStops")} pit stop(s), mean wear ${show("meanTyreWear", 3)}` +
+              (WEAR === "off" ? "   (wear OFF — no strategy: --wear light|real to measure it)" : ""));
   if (stat.oscillationShare.median > 0.3) console.log(`  ! over a third of order changes are the SAME pairs swapping back and forth`);
   // The range is the point of --runs: a comparison inside it is not a result.
   if (!one) console.log(`  NOTE  compare MEDIANS across trees; a difference inside [min–max] is unproven.`);

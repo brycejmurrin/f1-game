@@ -1131,7 +1131,7 @@ const PitLane = (function () {
       // that gets closest and accept that there is another stop coming.
       const lapsLeft = Math.max(1, G.lapsTarget - (c.lap || 0));
       const lasts = right.filter(function (r) {
-        return TyreModel.lifeLaps(r.life, G.lapsTarget) >= lapsLeft;
+        return G.tyres.planLaps(r.life, G.lapsTarget) >= lapsLeft;
       });
       const pool = lasts.length ? lasts : right;
       return pool.reduce(function (best, r) {
@@ -1184,7 +1184,7 @@ const PitLane = (function () {
       const pin = player ? pinnedStops() : null;
       const plan = AiDrive.stintPlan({
         laps: n,
-        lifeLaps: (cls) => TyreModel.lifeLaps(TyreModel.AI_CLASS[cls].life, n),
+        lifeLaps: (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, n),
         pitLossLaps, roll, stops: pin,
       });
       if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; }
@@ -1300,7 +1300,7 @@ const PitLane = (function () {
       // plan. Without the first branch a car pits, fits another slick, is still
       // wrong, and pits again — a stop every lap.
       const wetCls = TyreModel.classForTread(wantTread);
-      const lifeLaps = (cls) => TyreModel.lifeLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
+      const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
       const lapsLeft = Math.max(1, G.lapsTarget - (c.lap || 0));
       const planned = plan.seq[(c.pitStops || 0) + 1];
       const want = wrongTread ? (wetCls || AiDrive.compoundFor(lapsLeft, lifeLaps))

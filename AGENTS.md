@@ -155,8 +155,8 @@ look; boot never awaits assets. GLX, TLX, and WGX implement it. `tools/gen/asset
 
 ## `window.__apex` dev API
 
-~185 hooks; `docs/DEBUG-HOOKS.md` is the reference and `__apex.agentHelp()`
-the machine-readable manifest — call it once per session. `obs()`/`physState()`
+`docs/DEBUG-HOOKS.md` is the reference (its generated index carries the count)
+and `__apex.agentHelp()` the machine-readable manifest — call it once a session. `obs()`/`physState()`
 need `player.px` initialised (`jump()` or `step()` after `race()`+`go()`).
 `node tools/shot/agent.mjs <track> <cmd>` is the same surface from a shell.
 

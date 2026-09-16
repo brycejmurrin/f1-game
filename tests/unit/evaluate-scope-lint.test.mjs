@@ -53,7 +53,7 @@ test("waitForFunction is checked too — same boundary, same trap", () => {
 
 // The exact shape 58614db2 shipped, kept inline so this file asserts something
 // real even where the commit is unreachable. CI's guards job checks out SHALLOW
-// (`actions/checkout@v4` with no fetch-depth), so a `git show <old-sha>` there
+// (`actions/checkout@v5` with no fetch-depth), so a `git show <old-sha>` there
 // fails outright — which is how the first version of this test turned CI red
 // while passing locally on a full clone. A guard that only works on one machine
 // is the same species of problem as a test that never runs.

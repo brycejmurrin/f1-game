@@ -248,7 +248,12 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
     // says 0 would let a broken cue pass every test below.
     tyres: { on: () => true, spent: (car) => (car && car.tyreWear) || 0, fit: () => {},
              classRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
-             optionRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }) },
+             optionRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
+             // How long a set lasts AT THE SETTING IN FORCE — what a strategy
+             // plans against. The stub stands in for TyreModel's own, which
+             // divides the nominal life by LEVELS[level]; this fixture runs at
+             // `real` (1.0), so nominal is the right answer here.
+             planLaps: (life, lapsTarget) => Math.max(4, (life || 0.88) * Math.max(1, lapsTarget || 1)) },
     cautionInfo: () => ({ level: 0 }),
     cars: [], ranked: [],
   };

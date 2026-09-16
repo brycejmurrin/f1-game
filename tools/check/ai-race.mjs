@@ -10,6 +10,11 @@
  *   node tools/check/ai-race.mjs line  [--track monza]
  *   node tools/check/ai-race.mjs human [--track monza] [--runs 3]
  *
+ * All four take --wear off|light|real (DEFAULT off, the VM harness pin). With
+ * wear off the strategy layer — stintPlan, pitNow, compoundFor, degCost,
+ * pits.think — never runs, so no measurement taken at the default says
+ * anything about stints, pit windows or degradation. Opt in before it does.
+ *
  * Direct paths still work (`ai-pace.mjs` / `ai-field.mjs` / `ai-line.mjs` / `ai-human.mjs`).
  * Not player physics — that is tune-physics.
  */
@@ -37,6 +42,8 @@ if (!cmd || map[cmd] === null || !(cmd in map)) {
   node tools/check/ai-race.mjs field [args]   # spread / passes / dwell / clumps
   node tools/check/ai-race.mjs line  [args]   # approach offset + apex depth
   node tools/check/ai-race.mjs human [args]   # how the AI races a PLAYER, not itself
+
+  every subcommand: --wear off|light|real  (default off — strategy/pit behaviour is OFF)
 
 Owned by ai-racecraft (not tune-physics).`);
   process.exit(cmd && map[cmd] === null ? 0 : 2);

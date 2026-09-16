@@ -121,3 +121,34 @@ test("every car's gear and rpm track its speed, not just the player's", () => {
   const p = g.G.cars.find((c) => c.human);
   assert.ok(p.rpm > IDLE_RPM || p.speed < 12, "the player's own rpm regressed");
 });
+
+// ── the tyre-wear seam the AI instruments ride on ───────────────────────────
+// The harness pins `tyreWear: "off"` (see the comment in game-vm.cjs) while
+// js/game.js ships "light", so everything downstream of wear — AiDrive's
+// stintPlan / pitNow / compoundFor / degCost and pits.think — is INERT here
+// unless a caller asks. tools/check/ai-{pace,field,line,human}.mjs expose that
+// as `--wear off|light|real` and default to off. These two tests are the
+// contract under that flag: the default really is a no-op, and naming a level
+// really does turn the model on. Without them the flag could parse, print
+// "wear real", and change nothing.
+test("the default seed pins tyre wear OFF (recorded AI numbers assume it)", () => {
+  assert.equal(g.G.raceTyreWear, "off");
+  assert.equal(g.G.tyres.on(), false, "wear is live on a default boot");
+  g.step(120);
+  assert.ok(g.G.cars.every((c) => !(c.tyreWear > 0)),
+    "a car accumulated wear with the model off");
+});
+
+test("opts.storage.tyreWear turns the model on — the seam --wear rides", async () => {
+  const w = await createGame({ track: "monza", storage: { tyreWear: "real" } });
+  try {
+    assert.equal(w.G.raceTyreWear, "real");
+    assert.ok(w.G.tyres.on(), "tyres.on() false after asking for real wear");
+    w.apex.setInput({ throttle: true, steer: 0 });
+    w.step(600);
+    w.apex.clearInput();
+    const worn = w.G.cars.filter((c) => (c.tyreWear || 0) > 0);
+    assert.ok(worn.length >= 5,
+      `only ${worn.length} cars accumulated any wear over 10 s of racing`);
+  } finally { w.close(); }
+});

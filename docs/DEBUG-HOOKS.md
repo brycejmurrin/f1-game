@@ -14,7 +14,8 @@ line, increasing in the racing direction. Internally that maps to an arc-length
 slip convention is `+steer → turns right (+x)`.
 
 > **Driving this as an LLM agent?** Skip to
-> [Agent world view](#agent-world-view). The ~185 hooks below are a dev console —
+> [Agent world view](#agent-world-view). The hooks below (the generated [Hook
+> index](#hook-index) carries the current count) are a dev console —
 > one narrow question each, `false`/`null` on failure. The agent layer composes
 > them into one egocentric snapshot per decision, renders the view as text
 > instead of a screenshot, and never returns `null`. Start with

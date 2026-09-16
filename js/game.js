@@ -978,6 +978,21 @@ const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (qualiGri
 function setFlow(v) { flow = v; Career.engage(v === "career"); SeasonCal.engage(v); }
 const isTimeTrial = () => session === "tt";
 const isQuali = () => session === "quali";
+// PRACTICE is not a fourth `session` value, it is a flag ACROSS them: the point
+// is to practise the session you are actually driving — a race start, a quali
+// lap — not a separate mode that drives differently. It means exactly one
+// thing: THIS SESSION IS UNSCORED. Everything that can rewind the player
+// (checkpoints, rewind) is gated on it, because every one of them is a scoring
+// exploit in a session that counts — `retry()` restores the car's own fields,
+// and `penalty`/`cuts` are ordinary fields on that car.
+// A Time Trial is always practisable, which is what the feature shipped as.
+// Cleared by startRace() so it can never leak from one session into the next.
+let practiceMode = false;
+const isPractice = () => practiceMode || isTimeTrial();
+// A DUEL is a practice race against ONE bumped rival. Same trim that Time Trial
+// and Quali already do to `cars` after makeCars(); the rival's stats come from
+// the deltas argument DriverRatings.get() already takes for career development.
+let duelMode = false;
 // The full field as it was before startRace() narrowed `cars` to the lone
 // qualifying car — Quali.simulate() needs every car to build a classification.
 let qualiField = null;
@@ -1717,7 +1732,7 @@ function makeCars() {
         // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
         // MY TEAM + hire share the saved build; everyone else uses factory.
         rollBalance: isP ? SetupTune.balance(team.id) : 0,
-        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, SetupTune.aero(team.id)) : Parts.aeroLoad(factoryParts.setup, team),
+        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, isP ? SetupTune.aero(team.id) : undefined) : Parts.aeroLoad(factoryParts.setup, team),   // the BUILD is shared, the SHEET is not: rollBalance/mods above are already isP-only, and an AI reads aeroLoad continuously (AiDrive.lateralScale), so the mate was the only car the player's rake moved
         ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
         ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
         color: team.color, tier: team.tier, seat: di, houseStats: Career.teamStats(team),
@@ -2378,12 +2393,25 @@ async function startRace() {
   // RaceControl can fly a caution for debris nobody produced this race.
   DebrisWorld.reset();
   loadTrack(trackIdx);
+  // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
+  // must never survive into the next — a race that silently did not count
+  // because the last one was practice is the worst possible failure here. A
+  // Time Trial needs no flag: isPractice() derives it.
+  // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
+  // chosen on the settings sheet and meant to stick until the player changes it.
+  practiceMode = false;
   makeCars(); coach.reset(); PerfGov.resetFrameStats();
   // Qualifying keeps the full field for simulation, then drives one standing lap.
   if (isQuali()) {
     qualiField = cars;
     cars = [player];
     lapsTarget = 1;
+  } else if (duelMode) {
+    // ONE RIVAL, BUMPED — the same trim Quali and Time Trial do on either side
+    // of this branch. js/race/duel.js owns what the format means.
+    const rival = Duel.pick(cars);
+    if (rival) { Duel.bump(rival, DriverRatings); cars = [player, rival]; }
+    lapsTarget = raceLaps;
   } else if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
     lapsTarget = raceLaps;
@@ -2728,6 +2756,12 @@ const G = {
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
   set timeTrial(v) { session = v ? "tt" : "race"; },
+  // DERIVED, like timeTrial: a Time Trial is always practice, and any other
+  // session becomes practice once the player arms it. The setter never turns
+  // a Time Trial OFF — there is no scored state for it to return to.
+  get practice() { return isPractice(); },
+  set practice(v) { practiceMode = !!v; },
+  get duel() { return duelMode; }, set duel(v) { duelMode = !!v; },
   get lapsTarget() { return lapsTarget; },
   // RELIABILITY: the race setting, the shared arming path (so a simulated career
   // round draws its retirements exactly as a driven race does), and the manual
@@ -3126,6 +3160,7 @@ raceSettings = RaceSettings.create({
   getRaceGrid: () => raceGrid, setRaceGrid: (v) => { raceGrid = v; },
   getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
   getRaceTyreWear: () => raceTyreWear, setRaceTyreWear: (v) => { G.raceTyreWear = v; },
+  getDuel: () => duelMode, setDuel: (v) => { duelMode = !!v; },
   getPits: () => pits,   // the STRATEGY row: the reference plan and the pin (PitLane.planFor)
   getRaceCtl: () => raceCtl,
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
@@ -3738,7 +3773,7 @@ function updateCar(c, dt, ranked) {
   // it moves with the table rather than pinning a literal here.
   if (!c.human && _leadHuman) {
     const gap = _leadHuman.prog - c.prog;
-    const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
+    const bandFactor = gap > 0 && gap < track.total * 0.5 && raceT - launchT0 > 8 ? Math.min(gap / 700, 1) * dd.band : 0;   // never off the START LINE (a P22 grid slot is 182 m back by itself = +4.7 % vmax on easy into T1, "the antithesis of what we want" — Game AI Pro ch.42) and never once LAPPED (the gap clamps the band to full, so an easy car a lap down took min(1, 0.93 x 1.18) = hard's corner authority and un-lapped itself). Both only ever REMOVE a boost, so the DIFF ladder cannot move.
     const bandCap = Math.max(1, BAND_CEIL / (c.tierV * c.skill * dd.ai));
     vmax *= Math.min(1 + bandFactor, bandCap); c._bandNow = bandFactor;   // the corner half of the band: read by the brake target below
   } else c._bandNow = 0;
@@ -4802,7 +4837,8 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
+    // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
+    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.onKerb ? 1 : lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1))) * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
       : (onThrottle
           ? ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);
@@ -4856,7 +4892,7 @@ function updateCar(c, dt, ranked) {
     // stops the fronts turning; a lock leaves a flat spot that wobbles the
     // wheel once per revolution and heals over ~90 s of rolling. The grip
     // model above is untouched — this is what the wheels SHOW.
-    c.wheelLock = braking && axFracF > 0.92 ? clamp((axFracF - 0.92) / 0.08, 0, 1) : 0;
+    c.wheelLock = braking && axFracF > 0.60 ? clamp((axFracF - 0.60) / 0.08, 0, 1) : 0;   // 0.92 is unreachable and the per-axle rewrite did not move it: measured peak axFracF 0.638 dry / 0.887 rain on a straight-line full stop, and 0.638 again at 62 % front bias, so no dry stop ever locked a wheel and the flat-spot system below (wobble, 90 s heal) was dead code
     c.flatSpot = clamp((c.flatSpot || 0) + c.wheelLock * dt * 0.4 - dt / 90, 0, 1);
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
