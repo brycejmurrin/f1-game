@@ -593,6 +593,17 @@
   margin-left: 0;
   pointer-events: none;
   z-index: 1;
+  /* CONTAINED, because the swatch is only 56px and clips. CHROME measures ~73px
+     at --fs-micro bold with --ls-4 tracking and 5px of padding, so the badge ran
+     17px past its own overflow:hidden parent and was sliced mid-glyph (measured
+     2026-09-16, ios-ipad-landscape and desktop-narrow-860x560, 7 tiles each).
+     No width fits CHROME here at a legible size, so the badge ellipsises like
+     every other label in the app instead of being cut by the box behind it;
+     the short tags this grid also carries are unaffected. */
+  max-width: calc(100% - 2px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 #cs-options.cs-liv-grid .cs-liv-swatch .cs-opt-tag + .cs-opt-tag {
   left: auto;
