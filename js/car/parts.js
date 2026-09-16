@@ -106,7 +106,13 @@ const Parts = (function () {
       ],
     },
     {
-      id: "suspension", label: "SUSPENSION",
+      // `tab` is the GARAGE TAB's label, used only when the full one does not
+      // fit it. SUSPENSION is the widest category name and the compact tab rail
+      // is a fixed 2-row grid whose columns shrink as the roster grows — at
+      // 852x393 it needs 46px of an 8px-font label in a 40px tab and ellipsised
+      // to "SUSPENS…". `label` stays the real name: the garage scene board
+      // (js/garage/scene.js) and the agent readout both print it.
+      id: "suspension", label: "SUSPENSION", tab: "SUSP",
       options: [
         { id: "comfort",         label: "Comfort",         cost:   0, desc: "Softer springs — forgiving over kerbs, less cornering bite",            accel: 1.02, cornering: 0.94, braking: 0.98, visual: {"ride": 0.055, "arm": 0.8, "push": 0}, visualTier: 0 },
         { id: "standard",        label: "Standard",        cost:   0, desc: "Factory road setup",                                                    visual: { ride: 0, arm: 1, push: 0, wishbone: 1, toe: 1 }, visualTier: 1 },
