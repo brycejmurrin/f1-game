@@ -509,9 +509,9 @@ test("the armed cue names the compound the crew will fit", () => {
   const c = car(0);
   c.tyreWear = 0.9; c.s = zone.sIn + 20; c.pitArmed = true;
   c.pitNext = { code: "S" };
-  assert.equal(pits.cue(c).text, "BOX — S");
+  assert.equal(pits.cue(c).text, "STAY IN LANE · BOX — S");
   c.pitNext = null;
-  assert.match(pits.cue(c).text, /^BOX — [A-Z]+$/, "with no choice made, the crew's own pick is named");
+  assert.match(pits.cue(c).text, /^STAY IN LANE · BOX — [A-Z]+$/, "with no choice made, the crew's own pick is named");
   // …and a stop that IS called is shown, whatever the wear gate thinks.
   c.tyreWear = 0;
   assert.equal(pits.cue(c).phase, "armed");
@@ -793,7 +793,7 @@ test("the cue says which way when the box is coming and the car is not in the la
   // their own box is — there is no mark on the road, and each team's box sits
   // at its own place in the row, so it is not even a fixed distance from the
   // line. The speed limit is the thing they can already read off the HUD.
-  assert.match(at(0.95).text, /BOX \d+m/, `a car in the lane must be told where its box is: ${at(0.95).text}`);
+  assert.match(at(0.95).text, /PULL IN · \d+m/, `a car in the lane must be told where its box is: ${at(0.95).text}`);
   assert.equal(at(0.95).phase, "near-box");
   // Far from the box it is the limit that matters, not the line — a KEEP sign
   // for 300 m is the wallpaper the cue exists to avoid.
@@ -1001,8 +1001,8 @@ test("the cue counts the box down and then says STOP HERE on it", () => {
     pitState: "lane", tyre: { code: "M", tread: 0 }, tyreWear: 0.8, lap: 3,
   });
   const far = at(70), near = at(20), on = at(0);
-  assert.match(far.text, /BOX 7\dm/, `expected a countdown, got ${far.text}`);
-  assert.match(near.text, /BOX 2\dm/, `expected a countdown, got ${near.text}`);
+  assert.match(far.text, /PULL IN · 7\dm/, `expected a countdown, got ${far.text}`);
+  assert.match(near.text, /PULL IN · 2\dm/, `expected a countdown, got ${near.text}`);
   assert.equal(on.text, "STOP HERE");
   assert.equal(on.phase, "stop");
   // …and it counts DOWN: a number that grows as you approach is worse than none.

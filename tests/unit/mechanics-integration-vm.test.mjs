@@ -137,7 +137,9 @@ test("the braking-into-turn tip fires from a full dry-track brake, which the fri
     assert.ok(fired.axFrac<.8,`axFrac ${fired.axFrac} never clears the old 0.8 gate in the dry`);
     assert.ok(fired.brakeUse>.8);
     assert.equal(fired.off,false,"the tip came on the tarmac, not as an off-track recovery");
-    assert.match(h.sandbox.document.getElementById("announce").textContent,/EASE THE BRAKE AS YOU TURN/);
+    // The banner is a radio card: the words live in #announce-text (the VM's
+    // inert DOM does not compose a parent's textContent from its children).
+    assert.match(h.sandbox.document.getElementById("announce-text").textContent,/EASE THE BRAKE AS YOU TURN/);
 
   } finally { h.close(); }
 });

@@ -238,6 +238,138 @@ test("the stop is seen: up on the jacks, four wheels off and on, down again — 
   assert.ok(boxS > 2 && boxS < 2.5, `the hold is ${boxS} s`);
 });
 
+// Step the sim under a controller until `pred` holds, and return the state the
+// cue was read in (read BEFORE the step, so what comes back is what was true).
+// `ctrl(ps, q, c)` → { x, throttle, brake }: the lateral to hold, and the pedals.
+function run(a, pits, ctrl, pred, maxS) {
+  for (let i = 0; i < Math.round(maxS * 60); i++) {
+    const ps = a.physState(), q = a.pit(), c = pits.cue(g.G.player);
+    if (pred(c, q, ps)) { a.clearInput(); return { c, q, ps, t: i / 60 }; }
+    const u = ctrl(ps, q, c) || {};
+    // Lateral by AIMING (aimTo's method): a steer under a heading re-aimed
+    // along the track every tick holds a lateral but cannot MOVE to one —
+    // measured, a car asked from the road edge onto the entry road's tarmac
+    // sat at the edge for the whole road.
+    a.aim(Math.max(-25, Math.min(25, ((u.x != null ? u.x : ps.x) - ps.x) * 8)) * AIM_SIGN);
+    a.setInput({ steer: 0, throttle: u.throttle !== false, brake: !!u.brake });
+    a.step(1 / 60, 1);
+  }
+  a.clearInput();
+  return null;
+}
+
+test("THE DIRECTIONS, FOLLOWED, MAKE THE STOP: every cue fires at the model's own distance, and a car that does what each one says is serviced", async () => {
+  // Not a message test. The cue is a driving instruction, so the check is a
+  // car that OBEYS it — the line, then the pit road, then the lane, then the
+  // working lane, then the gate — with every phase measured against the
+  // complex's own geometry (TrackPit sA/sIn/sOut/sB, this car's own box) and
+  // the module's own constants (cueM, BOX_CUE_M, BOX_TOL, servedS), and the
+  // stop actually served at the end of it.
+  const a = await fresh();
+  const G = g.G, t = G.track, p = t.pit, L = t.total, s = p.side, pits = G.pits;
+  const car = G.player;
+  const wrap = (v) => ((v % L) + L) % L;
+  const toIn = () => wrap(p.sIn - a.physState().s);
+  const inside = (arc, from, to) => wrap(arc - from) < wrap(to - from);
+  const hwAt = (arc) => t.hw[((Math.round(arc / L * t.n) % t.n) + t.n) % t.n];
+  // The peel, driven: the lane's own tarmac at the peel-off, the fast lane's
+  // centre by the line — the same line the AI's laneX draws, because a car
+  // still on the verge at the line is not IN the lane and races on.
+  const peelX = () => {
+    const ps = a.physState(), hw = hwAt(ps.s), u = Math.max(0, Math.min(1, wrap(ps.s - p.sA) / p.entryRoadM));
+    return (hw + 2.0 + (p.off.fastIn + p.bands.fast / 2 - 2.0) * u) * s;
+  };
+  // A used set, 700 m before the entry line, on the racing line: nothing yet.
+  a.jump(wrap(p.sIn - 700) / L, 45, 0); a.aim(0);
+  car.tyreWear = 0.9;
+  assert.equal(pits.cue(car), null, "700 m out is beyond the countdown");
+  assert.equal(pits.info(car).side, s, "the arrow's side is the model's pit side");
+
+  // 1. THE COUNTDOWN opens at cueM, in metres to the entry line, to the metre.
+  const first = run(a, pits, () => ({ x: 0 }), (c) => c != null, 20);
+  assert.ok(first, "no cue ever spoke on the approach");
+  assert.equal(first.c.phase, "near");
+  assert.match(first.c.text, /^PIT \d+m$/);
+  assert.ok(first.c.dist <= pits.cueM && first.c.dist > pits.cueM - 15, `the countdown must open at ${pits.cueM} m, opened at ${first.c.dist}`);
+  assert.ok(Math.abs(first.c.dist - wrap(p.sIn - first.ps.s)) < 1.5, `the metres are the metres to the line (${first.c.dist} vs ${wrap(p.sIn - first.ps.s).toFixed(1)})`);
+  assert.ok(first.c.frac >= 0 && first.c.frac < 0.1, `the bar starts empty (${first.c.frac})`);
+
+  // 2. …and counts DOWN on the line. From the boards a driver slows and moves
+  //    to the pit side of the road, so the peel is taken at pit-entry speed.
+  const boards = run(a, pits, () => ({ x: 0 }), (c, q, ps) => wrap(p.sA - ps.s) < 120, 20);
+  assert.ok(boards, "never reached the boards");
+  const edge = () => (hwAt(a.physState().s) - 1.5) * s;
+  const peel = run(a, pits, (ps) => ({ x: edge(), throttle: ps.speed < 18, brake: ps.speed > 22 }),
+                   (c, q, ps) => inside(ps.s, p.sA, p.sIn), 20);
+  assert.ok(peel, "never reached the entry road");
+  assert.ok(peel.c && peel.c.dist < first.c.dist - 100, `the countdown ran down (${first.c.dist} → ${peel.c && peel.c.dist})`);
+
+  // 3. THE ENTRY ROAD: the cue says HOLD THE LANE from the peel-off, before any commitment.
+  assert.equal(peel.c.phase, "enter", `on the entry road the instruction is the lane, got ${peel.c.phase} "${peel.c.text}"`);
+  assert.match(peel.c.text, /LANE/);
+  assert.equal(a.pit().armed, false, "nothing is armed by merely arriving");
+
+  // 4. HOLD IT: the lane's own tarmac for COMMIT_S arms the stop — and the cue names the compound.
+  const armed = run(a, pits, (ps) => ({ x: peelX(), throttle: ps.speed < 18 }), (c, q) => q.armed, 6);
+  assert.ok(armed, "holding the lane's tarmac on the entry road did not call the stop");
+  assert.ok(inside(armed.ps.s, p.sA, p.sIn), `armed ON the entry road (s ${armed.ps.s.toFixed(0)}, road ${p.sA.toFixed(0)}..${p.sIn.toFixed(0)})`);
+  assert.equal(armed.c.phase, "armed");
+  assert.match(armed.c.text, /^STAY IN LANE · BOX — [A-Z]$/, `the booked compound is named: "${armed.c.text}"`);
+  assert.equal(armed.q.state, "none", "the limiter waits for the line");
+
+  // 5. THE LINE: the state turns to LANE there, the cue says STAY IN LANE with the limit, and the limiter holds.
+  const lane = run(a, pits, (ps, q) => ({ x: q.driveX != null ? q.driveX : peelX(), throttle: ps.speed < 18 }), (c, q) => q.state === "lane", 10);
+  assert.ok(lane, "never reached the lane");
+  assert.ok(wrap(lane.ps.s - p.sIn) < 12, `the lane begins at the line (${wrap(lane.ps.s - p.sIn).toFixed(1)} m past it)`);
+  assert.equal(lane.c.phase, "lane");
+  assert.equal(lane.c.text, "STAY IN LANE · " + Math.round(lane.q.limitKph) + " LIMIT");
+  // (checked early in the lane: past atM 37 the box is inside BOX_CUE_M on Bahrain, and step 6 must see that edge)
+  const held = run(a, pits, (ps, q) => ({ x: q.driveX }), (c, q, ps) => ps.speed * 3.6 <= q.limitKph * 1.1 && q.atM > 8, 8);
+  assert.ok(held, "the limiter never brought the car to the limit");
+
+  // 6. PULL IN opens BOX_CUE_M before THIS car's box — and while the car is still
+  //    in the fast lane it says KEEP <side> instead, because the crew is not there.
+  const close = run(a, pits, (ps, q) => ({ x: q.driveX }), (c) => c && c.phase !== "lane", 30);
+  assert.ok(close, "the lane phase never ended");
+  const togo = () => a.pit().boxM - a.pit().atM;
+  assert.equal(close.c.phase, "keep", `in the fast lane at the box the cue must say which way, got ${close.c.phase}`);
+  assert.equal(close.c.text, s > 0 ? "KEEP RIGHT" : "KEEP LEFT");
+  const at = close.q.boxM - close.q.atM;
+  assert.ok(at <= 90 && at > 90 - 2.5, `it opens ${at.toFixed(1)} m from the box; BOX_CUE_M is 90`);
+  const pull = run(a, pits, (ps, q) => ({ x: q.laneX, throttle: ps.speed < 8 }), (c) => c && c.phase === "near-box", 6);
+  assert.ok(pull, "moving into the working lane did not turn KEEP into PULL IN");
+  assert.match(pull.c.text, /^PULL IN · \d+m$/);
+  assert.ok(Math.abs(pull.c.dist - (pull.q.boxM - pull.q.atM)) < 1, `PULL IN's metres are the metres to the box (${pull.c.dist} vs ${(pull.q.boxM - pull.q.atM).toFixed(1)})`);
+  assert.ok(pull.c.frac > 0 && pull.c.frac < 1, `the bar is filling (${pull.c.frac})`);
+
+  // 7. STOP HERE inside BOX_TOL of the box; stopped there, the stop latches and is served.
+  const gate = run(a, pits, (ps, q) => ({ x: q.laneX, throttle: ps.speed < 5 && togo() > 6, brake: togo() <= 6 && ps.speed > 0.3 }),
+                   (c) => c && c.phase === "stop", 20);
+  assert.ok(gate, "STOP HERE never came");
+  assert.equal(gate.c.text, "STOP HERE");
+  assert.ok(Math.abs(gate.q.boxM - gate.q.atM) <= 8, `STOP HERE is said within BOX_TOL of the box (${(gate.q.boxM - gate.q.atM).toFixed(1)} m)`);
+  const box = run(a, pits, (ps) => ({ x: a.pit().laneX, throttle: false, brake: ps.speed > 0.2 }), (c, q) => q.state === "box", 6);
+  assert.ok(box, "stopped on the gate, the stop did not latch");
+  assert.equal(box.c.phase, "box"); assert.equal(box.c.text, "STOP");
+  assert.equal(box.q.stops, 1);
+
+  // 8. THE RELEASE: GO for servedS, then the exit road's metres, counting down to its end — and then silence.
+  const go = run(a, pits, () => ({ x: a.pit().laneX, throttle: true }), (c, q) => q.state === "out", 6);
+  assert.ok(go, "the hold never released");
+  assert.equal(go.c.phase, "served"); assert.equal(go.c.text, "GO GO GO");
+  const out = run(a, pits, (ps, q) => ({ x: q.driveX != null ? q.driveX : ps.x }), (c) => c && c.phase !== "served", 4);
+  assert.ok(out, "GO GO GO never ended");
+  assert.ok(out.t >= pits.servedS - 0.1 && out.t <= pits.servedS + 0.3, `GO lasts servedS (${out.t.toFixed(2)} s vs ${pits.servedS})`);
+  assert.equal(out.c.phase, "out", `with the field away nothing is closing: ${out.c.phase}`);
+  assert.match(out.c.text, /^EXIT \d+m$/);
+  assert.ok(Math.abs(out.c.dist - wrap(p.sB - out.ps.s)) < 1.5, `EXIT's metres run to the end of the exit road (${out.c.dist} vs ${wrap(p.sB - out.ps.s).toFixed(1)})`);
+  const done = run(a, pits, (ps, q) => ({ x: q.driveX != null ? q.driveX : 0 }), (c, q) => q.state === "none", 40);
+  assert.ok(done, "never left the complex");
+  assert.ok(wrap(done.ps.s - p.sB) < 15, `the state clears where the exit road ends (${wrap(done.ps.s - p.sB).toFixed(1)} m past sB)`);
+  assert.equal(done.c, null, "a fresh set, off the road: nothing left to say");
+  assert.ok(a.tyres().wear < 0.05, `fresh tyres were fitted (${a.tyres().wear})`);
+});
+
 test("a car on the lane's own tarmac commits, and the limiter comes on", async () => {
   const a = await fresh();
   a.jump(0.985, 40, 0);

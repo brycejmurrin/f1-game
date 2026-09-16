@@ -450,7 +450,11 @@
   <span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span><span class="light"></span>
 </div>
 
-<div id="announce" role="status" hidden></div>
+<!-- THE RADIO. Every banner — the engineer, the coach, race control, the pit
+     cues' announcements — is a radio message now, not a billboard: a small
+     card with the channel it came in on (WHO) and the words in quotes, the
+     way a broadcast shows team radio. js/game.js showAnnounce fills both. -->
+<div id="announce" role="status" hidden><span id="announce-who"></span><span id="announce-text"></span></div>
 
 <!-- TOUCH-mode drag affordance: a ring at the point the finger went down, so
      the anchor of an otherwise invisible control is visible for a moment.

@@ -330,11 +330,7 @@ body.hud-prof-broadcast .hud-gaps {
 }
 /* Cinematic/broadcast cam + broadcast HUD: clean frame — tower carries timing. */
 body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none !important; }
-body.hud-prof-broadcast #announce[data-kind="race"] {
-  font-size: clamp(22px, calc(5.5 * var(--vwzh)), 48px);
-  font-style: normal;
-  top: calc(14svh / var(--hud-z));
-}
+body.hud-prof-broadcast #announce { top: calc(14svh / var(--hud-z)); }
 
 /* THE CHIP CROSSES TO THE LEFT COLUMN when the right one has no room below the
    sector box — see js/ui/hud.js. --hud-left-h is that column's measured
@@ -666,9 +662,11 @@ body[data-density="compact"] #hud-flag {
   font-size: var(--fs-micro);
   padding: calc(var(--gap) * 0.35) var(--gap);
 }
+/* Compact (every landscape phone): the timing row is shorter and the card
+   rides lower under it, same anchor as the sector box's own drop. */
 body[data-density="compact"] #announce {
   top: calc(36svh / var(--hud-z));
-  font-size: clamp(22px, calc(6 * var(--vwzh)), 40px);
+  font-size: var(--fs-2);
 }
 
 /* ---------- start lights ---------- */
@@ -692,72 +690,55 @@ body[data-density="compact"] #announce {
 .light { width: 26px; height: 26px; border-radius: 50%; background: #2a2a32; }
 .light.on { background: #ff1a1a; box-shadow: 0 0 18px rgba(255, 26, 26, 0.9); }
 
+/* THE RADIO CARD. Every banner used to be a billboard — 64px italic across the
+   middle of the screen, over the corner it was about, and a coach tip ran to
+   four lines covering half the height (measured 852x344). It is a radio
+   message now, the way a broadcast captions team radio: a small card under the
+   timing row, the channel on top (#announce-who: RUSSELL · RADIO · 63, RACE
+   CONTROL, COACH — js/game.js radioWho), the words in quotes under it. One
+   size for every kind; the KIND only picks the stripe and the WHO colour.
+   The stripe is the team's --accent, the same ornament .hud-box carries —
+   decoration, not state (tests/unit/nontext-contrast.test.mjs); the kinds
+   that DO carry state (a warning, a penalty) recolour it with their own
+   token, exactly as the old banners coloured their type. */
+#announce[hidden] { display: none; }   /* the author `display` below would beat the UA's [hidden] */
 #announce {
   position: fixed;
-  top: calc(30svh / var(--hud-z)); left: 50%; transform: translateX(-50%);
-  /* --vwzh, the HUD twin: this element IS zoomed by --hud-scale (see .hud-top zoom rule above),
-     so a bare 8vw renders as 9.2vw at the touch default. `nowrap` + a centring
-     translate means the longest banner ran off both edges of a 667px landscape
-     phone. The `top` above has always divided; the type had not. */
-  font-size: clamp(30px, calc(8 * var(--vwzh)), 64px);
-  font-weight: 800; font-style: italic;
-  text-shadow: 0 0 24px color-mix(in srgb, var(--red) 80%, transparent);
-  z-index: 15;
-  /* The 64px clamp ceiling re-breaks the divisor's reasoning above ~800px:
-     the type stops scaling while the string does not — 29 chars of
-     800-italic at 64px need ~950px against an 852px phone. Cap the box at
-     the visible width in this element's own zoom and let the longest banner
-     take a second centred line instead of running off both edges. */
-  max-width: calc(96 * var(--vwzh));
-  text-align: center;
-  text-wrap: balance;
-}
-#announce[data-kind="info"] {
-  font-size: clamp(22px, calc(5 * var(--vwzh)), 40px);
-  font-style: normal;
-  top: calc(22svh / var(--hud-z));
-  text-shadow: 0 0 16px rgba(0, 0, 0, 0.85);
-}
-/* The COACH and PRACTICE tiers are the smallest banners on the HUD, and they
-   are their own tier for a reason the other kinds do not share: they are
-   advisory SENTENCES rather than announcements. "TRACK LIMITS — KEEP THE CAR
-   INSIDE THE WHITE LINES" is 50 characters and a practice verdict runs to 66,
-   against an info tier sized for "GOLD MEDAL" — measured at 852x344, four
-   lines covering 53% of the screen height, over the corner the tip is about.
-   Same anchor and shadow as info above (no second colour literal); only the
-   type shrinks.
-   THE COMPACT PAIR IS NOT DUPLICATION. `body[data-density="compact"]
-   #announce` below scores one type selector higher than a bare
-   `#announce[data-kind]`, so without these two selectors the short-viewport
-   rule — i.e. every landscape phone, the one shape this tier exists for —
-   silently restored 40px. Measured: 40px in compact against 16px one pixel
-   the other side of the density switch. */
-#announce[data-kind="coach"],
-#announce[data-kind="practice"],
-body[data-density="compact"] #announce[data-kind="coach"],
-body[data-density="compact"] #announce[data-kind="practice"] {
-  font-size: clamp(16px, calc(3.2 * var(--vwzh)), 26px);
-  font-weight: 700;
-}
-#announce[data-kind="warning"],
-#announce[data-kind="penalty-warn"] {
-  font-size: clamp(20px, calc(4.5 * var(--vwzh)), 36px);
-  font-style: normal;
-  top: calc(18svh / var(--hud-z));
-  color: var(--sec-slow);
-  text-shadow: 0 0 18px color-mix(in srgb, var(--sec-slow) 75%, transparent);
-  background: var(--surf-1);
-  padding: calc(var(--gap) * 0.5) var(--gap);
-  border: 1px solid currentColor;
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 10px);
+  left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; gap: 2px;
+  min-width: 200px;
+  /* --vwzh, the HUD twin: this element IS zoomed by --hud-scale (see the
+     .hud-top zoom rule above), so the cap is in its own zoom. */
+  max-width: min(440px, calc(72 * var(--vwzh)));
+  padding: calc(var(--gap) * 0.45) var(--gap) calc(var(--gap) * 0.55);
+  background: rgba(8, 8, 14, 0.82);
+  border-left: 3px solid var(--accent);
   border-radius: var(--r-sm);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-hud);
+  font-size: var(--fs-3); font-weight: 600; font-style: normal; line-height: 1.25;
+  color: var(--text);
+  text-align: left;
+  text-wrap: pretty;
+  z-index: 15;
 }
-#announce[data-kind="penalty-hit"] {
-  font-size: clamp(26px, calc(6 * var(--vwzh)), 48px);
-  font-style: normal;
-  top: calc(24svh / var(--hud-z));
-  color: var(--slower);
-  text-shadow: 0 0 22px color-mix(in srgb, var(--slower) 85%, transparent);
+#announce-who {
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.1em;
+  color: var(--dim);
 }
+#announce-text::before { content: "\201C"; }
+#announce-text::after { content: "\201D"; }
+/* The kinds that carry state keep their own colour, on the stripe and the
+   channel line — never the accent (the dark team skins fail 1.4.11 on it). */
+#announce[data-kind="warning"],
+#announce[data-kind="penalty-warn"] { border-left-color: var(--sec-slow); }
+#announce[data-kind="warning"] #announce-who,
+#announce[data-kind="penalty-warn"] #announce-who { color: var(--sec-slow); }
+#announce[data-kind="penalty-hit"] { border-left-color: var(--slower); }
+#announce[data-kind="penalty-hit"] #announce-who { color: var(--slower); }
+#announce[data-kind="coach"] #announce-who,
+#announce[data-kind="practice"] #announce-who { color: var(--faster); }
 
 /* ---------- in-game metrics overlay (js/perf/metrics-overlay.js) ---------- */
 /* Position is data-pos=left|right (AUTO resolves in JS). Left is the
