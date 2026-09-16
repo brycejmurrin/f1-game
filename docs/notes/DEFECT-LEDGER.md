@@ -864,6 +864,25 @@ publishes; the tooling landing of 2026-09-16 (`docs/notes/AGENT-PROCESS-RESEARCH
 §5) is on the tip and its fast tier is green, so the site will pick it up with
 the first green train. Owner: the pit-lane session; this note is the hand-off.
 
+**Closed the same morning, in three parts.** The pit-lane session audited the
+six circuits and landed the coplanar baseline on `45fbd81`; its train
+(pages run 35070243183) then went red one job later on two other things.
+(1) `tools/track/float-audit.cjs abudhabi --why` named one floating cluster —
+the Yas hotel gridshell's last arch at frac 0.989, 18 m over prop cells with
+no leg beneath it after `5710a0c` moved both rear legs a node early —
+and `b3f3bb3` keeps the rear-left leg under the arch (audit: 0 elevated
+clusters). (2) `menu-baseline.spec.js` `garage-phone-landscape` was 6166 px
+(2 %) off its golden: `5903510` shrank the garage tab labels to 9 px and
+untrimmed a gap (SUSPENS… reads SUSP, the rows sit 3 px higher), so the golden
+was STALE, not the render. Re-blessed 2026-09-16 from the runner's own
+SwiftShader capture (artifact `golden-menus-runner`, run 35070786138) and
+confirmed on this container (the two agree to 1-17 px — table above,
+2026-09-01), with the diff reviewed by eye: labels and spacing only, every
+row, chip and price intact. (3) The `selected` shards moved to Mesa llvmpipe
+today; the shard carrying menu-baseline stays on SwiftShader, since the six
+goldens are SwiftShader captures (ci.yml carve-out, pinned by
+`tests/unit/ci-coverage.test.mjs`).
+
 ### 2026-09-01 general survey — fixed, recorded, and the player-facing list
 
 Fixed in the same session (each a two-line local change; browser groups
