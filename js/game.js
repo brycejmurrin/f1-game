@@ -1127,15 +1127,29 @@ let announceT = 0;
 // under them — before this it was "info", so the confirmation that you HAD
 // entered the pits outranked the call telling you to.
 const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, box: 4, race: 4, "penalty-hit": 5 };
+// THE FLOOR. Every card gets ANN_MIN_S on screen, whatever its caller asked for
+// and whatever arrives next. Callers passed durations from 1.4 s up, and 1.4 s
+// is not a message — it is a flash you notice after it has gone. The floor is
+// enforced at BOTH ends, which is the half easy to miss: showAnnounce lengthens
+// a short card, and announce() below refuses to let even a HIGHER priority evict
+// a card still inside its floor. A penalty therefore waits behind a wear report
+// instead of blinking it away — bounded by the longest duration any caller
+// passes, and a penalty the player could not read is worth less than one that
+// arrives a beat late.
+const ANN_MIN_S = 3;
 // THE QUEUE, which _annQueue now IS rather than holds. One slot meant a THIRD
 // message in a burst was dropped, and so was a second of EQUAL priority — a lap
 // crossing that set a record and earned a medal showed one of them and silently
 // ate the other. Two slots, highest priority first and arrival breaking ties,
 // so a burst plays out in the order it mattered. Two and not more on purpose:
-// each card holds the screen ~2.5 s, so a third would arrive seven seconds
-// after the thing it describes, by which time it is a lie, not a message.
+// under the floor above a third would arrive six seconds after the thing it
+// describes, by which time it is a lie, not a message.
 const ANN_QUEUE_MAX = 2;
-let _annPri = 0, _annQueue = [];
+// _annFloor is what is LEFT of the current card's floor, run down beside
+// announceT in tickBody. One `let` statement on purpose: the ratchet counts
+// column-0 declarations, so splitting these for a comment would raise it
+// without adding any state.
+let _annPri = 0, _annFloor = 0, _annQueue = [];
 // THE RADIO. A banner is a radio message: the WHO line names the channel it
 // came in on — race control for a penalty or a warning, the coach for a tip,
 // otherwise the driver's own pit-wall channel under their name — the words sit
@@ -1162,8 +1176,11 @@ function showAnnounce(msg, dur, kind) {
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
   els.announce.hidden = false;
-  // A card of small type takes a beat longer to read than a billboard did.
-  announceT = (dur || 1.6) + 0.5;
+  // A card of small type takes a beat longer to read than a billboard did, and
+  // ANN_MIN_S is the floor under every caller's number — the shortest asked for
+  // was 1.4 s, which nobody reads at racing speed.
+  announceT = Math.max(ANN_MIN_S, (dur || 1.6) + 0.5);
+  _annFloor = ANN_MIN_S;
 }
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
@@ -1258,7 +1275,12 @@ function announce(msg, dur, kind) {
       if (kind === "info" || kind === "coach") return false;
     }
   }
-  if (announceT > 0 && pri <= _annPri) {
+  // `_annFloor > 0` is the other half of the floor: a card still inside its
+  // three seconds is not evicted even by something that outranks it — the
+  // arrival queues at the head instead and takes over the moment the current
+  // one is done. Without this clause the floor would only be a promise to
+  // callers, not to the player, because the very next penalty would break it.
+  if (announceT > 0 && (pri <= _annPri || _annFloor > 0)) {
     // Into the queue, highest priority first, arrival breaking ties. Taking a
     // slot means the line still gets its turn, so that counts as accepted;
     // being pushed off the end means it is gone and the caller must offer it
@@ -3480,7 +3502,7 @@ function quitToMenu() {
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
-  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
+  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
@@ -8107,11 +8129,14 @@ function tickBody(now) {
   }
   if (announceT > 0) {
     announceT -= dt;
+    if (_annFloor > 0) _annFloor -= dt;
     if (announceT <= 0) {
       els.announce.hidden = true;
       els.announce.className = "";
       delete els.announce.dataset.kind;
-      _annPri = 0;
+      _annPri = 0; _annFloor = 0;
+      // showAnnounce re-arms both, so the card taken off the queue gets the
+      // same floor the one before it did.
       if (_annQueue.length) { const q = _annQueue.shift(); showAnnounce(q.msg, q.dur, q.kind); }
     }
   }
