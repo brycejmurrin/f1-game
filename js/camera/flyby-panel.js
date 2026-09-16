@@ -496,9 +496,17 @@ function closeFlyby(showPauseMenu) {
 
 // ---- wiring ---------------------------------------------------------------
 
-function flash(btn, msg, back) {
+/** Say something on the button itself, then put the button BACK. The label is
+ *  read from the button rather than passed in: the caller passing a literal was
+ *  a second copy of the markup's text, and it went stale the moment the labels
+ *  were shortened to fit the ops row on one line — a refused DELETE would have
+ *  restored "DELETE", which is wide enough to wrap the row it was shortened to
+ *  fit. Re-entrant calls keep the first captured label, not the message. */
+function flash(btn, msg) {
+  if (!btn._fbLabel) btn._fbLabel = btn.textContent;
   btn.textContent = msg;
-  setTimeout(() => { btn.textContent = back; }, 1800);
+  clearTimeout(btn._fbT);
+  btn._fbT = setTimeout(() => { btn.textContent = btn._fbLabel; btn._fbLabel = ""; }, 1800);
 }
 
 $("pm-flyby").onclick = openFlyby;
@@ -509,7 +517,7 @@ $("fb-dup").onclick = () => { shots = duplicateShot(ensure(), sel); sel += 1; se
 $("fb-del").onclick = () => {
   const before = ensure().length;
   shots = deleteShot(ensure(), sel);
-  if (shots.length === before) { flash($("fb-del"), "NEED ONE SHOT", "DELETE"); return; }
+  if (shots.length === before) { flash($("fb-del"), "NEED ONE"); return; }
   sel = Math.max(0, Math.min(shots.length - 1, sel)); setU(midOf(sel)); edited();
 };
 $("fb-up").onclick = () => {
