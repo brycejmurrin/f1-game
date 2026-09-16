@@ -43,9 +43,9 @@ Session shape — eleven rules that control wall time and waiting:
 2. Make ALL source edits first, then verify ONCE: tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.
-3. `npm run test:guards` before every commit; the commit hook runs it and
-   blocks red. The 14 guards check registries, generated files and ceilings,
-   and parse every manifest file.
+3. `npm run test:guards` (hook-enforced, every commit) is a CURATED 14-file
+   SUBSET of `test:tooling-fast` — not proof CI's "Structural guards" job
+   will be green; run `test:tooling-fast` before a push instead (incident: `docs/notes/PROCESS-SPEEDUP-2026-09-16.md` §1.1).
 4. Never block the foreground on a test run: background it (log in `artifacts/`).
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`.
    Anchor on `grep -E '= run (passed|failed|timedout|interrupted)'`, never a

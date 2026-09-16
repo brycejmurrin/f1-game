@@ -38,6 +38,15 @@ const AgentView = (function () {
 
   const r1 = (v) => Math.round(v * 10) / 10;
   const r2 = (v) => Math.round(v * 100) / 100;
+  // c.skill's real spread is ~0.965-0.972 (js/data/driver-ratings.js SKILL_BASE/
+  // SKILL_SPAN — compressed from 3.19% to ~0.6% across the field in the same
+  // rebalance that added that comment). r2's 2dp/0.01 resolution is coarser
+  // than that whole spread, so every driver's rounded pace collapsed to the
+  // same bucket — agent-view.spec.js caught it ("rivals carry pace" wants
+  // more than one distinct value across the grid). r3 (0.001) is fine
+  // resolution for a spread this size without exposing more precision than
+  // the "comparison, not a dial" framing below intends.
+  const r3 = (v) => Math.round(v * 1000) / 1000;
   const clamp = M4.clamp;                     // shared scalar helper (js/core/mat4.js)
 
   // Every comparison against NaN is false, so a non-numeric argument does not
@@ -552,8 +561,9 @@ const AgentView = (function () {
           closingMps: r1(closing),
           // AI pace, 0.92-1.02. Without it every rival looks equally fast and
           // an agent cannot tell a car it should hold off from one it will
-          // never keep behind. Rounded to 2dp — it is a comparison, not a dial.
-          pace: r2(c.skill != null ? c.skill : 1),
+          // never keep behind. Rounded to 3dp (see r3 above) — 2dp used to
+          // round the whole field's spread into one bucket.
+          pace: r3(c.skill != null ? c.skill : 1),
           threat: !ahead && gapM < 25 && closing > 0.5 ? "under attack"
                 : ahead && gapM < 25 && closing > 0.5 ? "closing"
                 : gapM < 25 ? "in range" : "clear",
@@ -604,7 +614,7 @@ const AgentView = (function () {
           row.speedKph = r1((c.speed || 0) * 3.6);
           row.gapToLeaderM = r1(gapLeadM);
           row.finished = !!c.finished;
-          row.pace = r2(c.skill != null ? c.skill : 1);
+          row.pace = r3(c.skill != null ? c.skill : 1);
           row.cuts = c.cuts || 0;
           row.timePenaltyS = c.penalty || 0;
         }
@@ -2011,6 +2021,10 @@ const AgentView = (function () {
           "render({what,cols,ss,...})":
             "SHOW IT — the one optional raster, APPROXIMATE. "
             + "what: 'view'|'map'|'circuit'|'car'. For intuition, not measurement",
+          "awaitPresent(timeoutMs)?":
+            "WAIT FOR THE PIXELS — resolve once the next real frame has "
+            + "reached the screen; a screenshot tool taken before this "
+            + "resolves can read a stale or black canvas under HeadlessChrome",
         },
         detail: {
           "describe(id)":
@@ -2081,7 +2095,7 @@ const AgentView = (function () {
           telemetry: "probe() physState() obs() scan() inputState() cars() carAt(i)",
           timing: "timing() sectorState() lapHistory() fieldState()",
           rendering: "camState() viewState() lightState() gpuTimer() lightTune()",
-          geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l)",
+          geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()",
           catalog: "tracks() teams() info()",
         },
         control: {

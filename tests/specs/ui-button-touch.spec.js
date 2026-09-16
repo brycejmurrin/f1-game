@@ -69,6 +69,8 @@ async function cycleToPauseSteerMode(page, targetText) {
 
 async function openLightingPhotoMode(page) {
   await openPauseSettings(page);
+  await page.locator("#pm-open-display").click();
+  await page.locator("#pm-visual-tuners > summary").click();
   await page.locator("#pm-lighting").click();
   await page.locator("#pc-toggle").click();
   await expect(page.locator("body")).toHaveClass(/lt-open/);
@@ -115,8 +117,8 @@ test.describe("Lighting tuner — pause lifecycle", () => {
     expect(await page.evaluate(() => document.getElementById("photo-controls").hidden)).toBe(true);
   });
 
-  // …and pressing it again walks the rest of the way out, one screen per press.
-  test("Escape walks free cam -> tuner -> settings -> pause -> racing", async ({ page }) => {
+  // …and pressing it again walks the real route back out, one screen per press.
+  test("Escape walks free cam -> tuner -> display -> settings -> pause -> racing", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openLightingPhotoMode(page);
@@ -125,18 +127,22 @@ test.describe("Lighting tuner — pause lifecycle", () => {
       return {
         photo: document.body.classList.contains("photo-mode"),
         lighting: !$("lighting").hidden,
+        display: !$("pm-panel-display").hidden,
+        settingsHome: !$("pm-settings-index").hidden,
         settings: !$("pmsettings").hidden,
         pause: !$("pausemenu").hidden,
       };
     });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: true, settings: false, pause: false });
+    expect(await where()).toEqual({ photo: false, lighting: true, display: false, settingsHome: false, settings: false, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, settings: true, pause: false });
+    expect(await where()).toEqual({ photo: false, lighting: false, display: true, settingsHome: false, settings: true, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, settings: false, pause: true });
+    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: true, settings: true, pause: false });
     await page.keyboard.press("Escape");
-    expect(await where()).toEqual({ photo: false, lighting: false, settings: false, pause: false });
+    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: false, settings: false, pause: true });
+    await page.keyboard.press("Escape");
+    expect(await where()).toEqual({ photo: false, lighting: false, display: false, settingsHome: false, settings: false, pause: false });
   });
 
   /* ESCAPE MUST BE ABLE TO PAUSE AT ALL, which is not as obvious as it sounds:

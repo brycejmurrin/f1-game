@@ -4,7 +4,11 @@ const GaragePrims = (function () {
 
 // Interior, metres. The car spans z -2.69..3.18 and x +/-0.95; its nose is +Z,
 // so +Z is the pit-lane end and the deep end of the bay is behind it.
-const HALF_W = 5.4, Z_BACK = -6.4, Z_DOOR = 6.4, CEIL_Y = 5.0;
+// THE ROOM IS THE TRACKSIDE GARAGE. js/track/core/pit.js owns the bay's
+// dimensions (TrackPit.BAY, read at eval — a HARD_EDGES pair in the manifest),
+// so the setup screen and the pit complex cannot disagree about the box you
+// drive into: 10.8 m of frontage, 12.8 m deep, 5 m to the ceiling.
+const HALF_W = TrackPit.BAY.w / 2, Z_BACK = -TrackPit.BAY.depth / 2, Z_DOOR = TrackPit.BAY.depth / 2, CEIL_Y = TrackPit.BAY.h;
 
 const PANEL  = [0.150, 0.156, 0.170];   // upper wall panels
 const STEEL  = [0.230, 0.235, 0.250];

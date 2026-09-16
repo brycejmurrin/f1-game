@@ -258,7 +258,10 @@
       const LAMP    = [0.96, 0.96, 0.82];
 
       const kpit = K(0.0);
-      pitTower(0.0, 1, 14);
+      // 32 m out (its 16 m bounds reach back to 31): the engine's pit complex
+      // owns the first 30 m on the pit side here — lane, garages, service road
+      // — and at 14 the tower stood inside the garages and was superseded.
+      pitTower(0.0, 1, 32);
       building(kpit, 1, 8, 14, 16, 32, { kind: "notch", wall: [0.62, 0.62, 0.64],
                window: [0.24, 0.32, 0.40], floor: 3.6 });
 

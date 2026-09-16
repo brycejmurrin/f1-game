@@ -356,6 +356,14 @@ function buildTrackLights(track, onlyAlways) {
     let ax = track.px[k] + track.rx[k] * nlOff - lx;
     let ay = track.py[k] - ly;
     let az = track.pz[k] + track.rz[k] * nlOff - lz;
+    // A fixture that lights something OTHER than the racing road names the
+    // point it throws at (`aimAt`): the pit canopy luminaires hang 5 m over
+    // the working lane, 16 m from the near-lane centre, and measured against
+    // the road they came out ~27× too hot (Monaco's tunnel soffits fudge the
+    // same thing with `energy`). The throw, the aim and the incidence below
+    // are all taken to that point instead.
+    const aimAt = post && post.aimAt;
+    if (aimAt) { ax = aimAt[0] - lx; ay = aimAt[1] - ly; az = aimAt[2] - lz; }
     // THROW DISTANCE (lens → the road it lights) drives the inverse-square energy
     // below and must be measured from this geometric vector, never from the beam
     // direction: a registered fixture may name its own aim, and those vectors are
@@ -374,7 +382,7 @@ function buildTrackLights(track, onlyAlways) {
     // beam needs more flux than a top-down one to land the same pool luminance.
     // The incidence divisor is CLAMPED so a mast beside banked/elevated road
     // (lens barely above the aim point) can't blow the energy up.
-    const hAim = Math.max(ly - track.py[k], 1);
+    const hAim = Math.max(ly - (aimAt ? aimAt[1] : track.py[k]), 1);
     const ePhys = intensity * bri * eMul * (al * al) * LT.poolEnergy / Math.max(hAim / al, 0.35)
                 * (post && post.energy != null ? post.energy : 1);
     lights.push(

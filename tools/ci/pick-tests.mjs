@@ -118,6 +118,7 @@ export const RULES = [
   [/^js\/data\/teams\.js/, ["car", "modes"], "the grid feeds season and career"],
   [/^js\/car\/ghost\.js/, ["modes"], "time-trial ghost"],
   [/^js\/car\//, ["car"], "the car's mesh, livery and parts"],
+  [/^js\/garage\/pit-signs\.js/, ["circuits", "sweeps"], "the pit bay signs' atlas + decal: pit-signs.spec.js rides in test:circuits, pit-signs.test.mjs in test:sweeps"],
   [/^js\/garage\//, ["car", "ui"], "the garage bay: the studio scene and the setup sheet the menu specs click through"],
 
   // ── the loop and the driving model ──────────────────────────────────────

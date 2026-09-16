@@ -81,7 +81,13 @@
       // break the alias without leaving a visible gap (along()'s own station
       // spacing here is ~8 m, four times this shim).
       const FULL_LAP = 1 - 1 / n;
-      wall(0.0, FULL_LAP, -1, 1.2, 0.8, ARMCO, 0.22);
+      // The harbour-side wall (authored -1 = racing +1) stops at the pit
+      // complex's window (authored .1526-.2570, descending) and resumes after
+      // it: at 1.2 m it survives the keep-out's placeable band and stood on
+      // the lane (measured 19 slabs). The complex's own pit wall owns that
+      // stretch — docs/research/STREET-PIT-LANES-PLAN-2026-09.md §4.
+      wall(0.0, 0.1526, -1, 1.2, 0.8, ARMCO, 0.22);
+      wall(0.2570, FULL_LAP, -1, 1.2, 0.8, ARMCO, 0.22);
       wall(0.0, FULL_LAP, 1, 1.2, 0.8, ARMCO, 0.22);
       guardrail(0.02, 0.07, -1, 0.5, ARMCO);
 
@@ -891,7 +897,8 @@
       guardrail(0.29, 0.34,  1, 0.5, ARMCO);
       guardrail(0.38, 0.43,  1, 0.5, ARMCO);
       guardrail(0.78, 0.84, -1, 0.5, ARMCO);
-      guardrail(0.15, 0.19, -1, 0.4, ARMCO);
+      // (0.15-0.19 on -1 was the pit straight: 32 posts measured on the lane
+      // and its exit road; the complex's wall stands there now.)
       guardrail(0.62, 0.68, -1, 0.4, ARMCO);
 
       const harbourStations = [0.365, 0.545, 0.59]; // racing fractions

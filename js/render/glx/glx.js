@@ -367,11 +367,7 @@ const GLX = (function () {
     const sh = gl.createShader(type);
     gl.shaderSource(sh, src);
     gl.compileShader(sh);
-    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-      Log.error("gfx", "GLX shader compile failed:\n" + gl.getShaderInfoLog(sh) + "\n" + src);
-      gl.deleteShader(sh);
-      return null;
-    }
+    // COMPILE_STATUS can stall. Defer diagnostics until link failure.
     return sh;
   }
 
@@ -389,10 +385,14 @@ const GLX = (function () {
   function checkLink(prog) {
     if (gl.getProgramParameter(prog, gl.LINK_STATUS)) return prog;
     Log.error("gfx", "GLX program link failed: " + gl.getProgramInfoLog(prog));
+    // Attached shaders stay alive until program deletion; inspect only failures.
+    for (const sh of gl.getAttachedShaders(prog) || []) {
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS))
+        Log.error("gfx", "GLX shader compile failed:\n" + gl.getShaderInfoLog(sh) + "\n" + gl.getShaderSource(sh));
+    }
     gl.deleteProgram(prog);
     return null;
   }
-  // Returns the Set of programs that FAILED; callers null their references.
   function resolveLinks() {
     const list = _pendingLinks || []; _pendingLinks = null;
     const bad = new Set();
@@ -716,7 +716,7 @@ const GLX = (function () {
       MOBILE_TIER,
       IS_MOBILE,
       ctxGone,
-      useProg, bindVAO, setBlend, setDepthMask,
+      useProg, bindVAO, setBlend, setDepthMask, setCull, setPolyOffset,
       compile, link, locs,
       toF32, createMesh, litMaterial,
       // ARITY 3 ON PURPOSE, and this is a REVERT, not the original oversight.

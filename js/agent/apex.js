@@ -36,7 +36,27 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "kerbSndT", "kerbHapT",
   // 2026-09-15: five the guard had been red on. The last three need a STREET
   // circuit with real contact to appear — sweep tracks, not just monza.
-  "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI"];
+  "_preColS", "_preColX", "collideT", "uslipHapT", "fxSparkI",
+  // 2026-09-15 (second pass): the tyre-force model (js/physics/tyre-model.js)
+  // and the smoothed control-demand fields (game.js "--- lateral ---") joined
+  // the sim after this list was last extended, every one already read with a
+  // `|| 0` / Number.isFinite fallback for the cold-car case (tyre-model.js's
+  // telemetry getter, collide.js's pre-collision speed read, and this file's
+  // own tyres() hook) — undefined was always a tolerated input, just never
+  // actually reached because nothing cleared it between episodes.
+  "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
+  "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
+  "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
+  // 2026-09-16: found by tools/check/episode-diff.mjs, not a live repro — the
+  // lazy `c.passPlan || (c.passPlan = {})` cache in game.js's overtake-attempt
+  // block survives reset() untouched, and `!c.passPlan || c.passPlan.side`
+  // (same file) reads `.side` straight off it without AiCorridor.choose()
+  // having run yet this tick whenever the attempt gate above it is closed. A
+  // cold car has no passPlan, so that read is always true; a warm one carries
+  // last episode's `.side`, which can be 0 (a previous "no lane" verdict) and
+  // flip the same read to false — an AI overtake decision that depends on
+  // which episode number it is.
+  "passPlan"];
 // openf1()/jolpica() — F1API.request: the Data Hub's queued, 15 s-timed, retried GET with caching
 // off, so a console probe cannot bypass the rate-limit queue. api.js is LAZY_DATA — hence the refusal.
 function apiHook(base, path, fix) {
@@ -648,6 +668,13 @@ const api = {
     if (out && c) { out.plan = c.pitPlan || null; out.why = c.pitWhy || ""; }
     return out;
   },
+  // The bay signs (js/garage/pit-signs.js): cells laid out on the row, whether
+  // the atlas and the texMesh uploaded, frames drawn and frames asked.
+  pitSigns() {
+    const t = G.track, q = t && t.pitSigns, m = t && t.meshes;
+    const s = typeof PitSigns !== "undefined" ? PitSigns.stats() : { drawn: 0, calls: 0 };
+    return { cells: q ? q.cells.length : 0, mesh: !!(m && m.pitSigns), tex: !!(m && m.pitSignTex), drawn: s.drawn, calls: s.calls };
+  },
   // The whole tyre picture for one car (default: the player) — compound, life
   // in laps at THIS race distance, wear, the grip it costs and the load that
   // caused it. `field: true` returns the same record for every car, which is
@@ -667,16 +694,19 @@ const api = {
   },
   wallStats() {
     if (!G.track || !G.track.barR) return null;
-    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false, tightSides = 0;
+    // Sides the PIT COMPLEX owns (TrackPit.openBoundary widens them to the garages after the scenery)
+    // count as `pitSides`, not as loose: Montreal's lap-long walls read 92.8 % with them in, floor 95 %.
+    const pit = G.track.pit, keep = pit && pit.keep;
+    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false, tightSides = 0, pitSides = 0;
     for (let k = 0; k < G.track.n; k++) {
-      const r = G.track.barR[k], l = G.track.barL[k];
+      const r = G.track.barR[k], l = G.track.barL[k], own = keep && keep[k] > 0 ? pit.side : 0;
       if (!Number.isFinite(r) || !Number.isFinite(l)) anyNaN = true;
       minB = Math.min(minB, r, l); maxB = Math.max(maxB, r, l);
       minOverHw = Math.min(minOverHw, r - G.track.hw[k], l - G.track.hw[k]);
-      if (r < G.track.hw[k] + 8.99) tightSides++;
-      if (l < G.track.hw[k] + 8.99) tightSides++;
+      if (own > 0) pitSides++; else if (r < G.track.hw[k] + 8.99) tightSides++;
+      if (own < 0) pitSides++; else if (l < G.track.hw[k] + 8.99) tightSides++;
     }
-    return { minB, maxB, minOverHw, anyNaN, tightFrac: tightSides / (G.track.n * 2), street: !!G.track.street, n: G.track.n };
+    return { minB, maxB, minOverHw, anyNaN, tightFrac: tightSides / Math.max(1, G.track.n * 2 - pitSides), pitSides, street: !!G.track.street, n: G.track.n };
   },
   modelDiagnostics() {
     if (!G.track || !G.track.modelDiagnostics) return null;
@@ -2608,6 +2638,19 @@ const api = {
   // APPROXIMATE — for intuition and debugging; read geometry from world()/
   // scene()/trackInfo(). The result carries an `aid` note saying so.
   render(opts) { return agentView.render(opts); },
+
+  // awaitPresent(timeoutMs)? — wait for the next composited frame before a
+  // screenshot tool reads the canvas. HeadlessChrome hides the raw WebGL/
+  // WebGPU canvas and blits the real frame onto an overlay ON DEMAND (GLX,
+  // TLX and WGX each implement awaitSoftPresent/softPresent under the same
+  // names — game.js copies the bound backend's descriptors onto GLX, so this
+  // one call is right whichever backend is active). Exists so a capture tool
+  // never has to know GLX is a bare lexical global, not window.GLX. A no-op
+  // outside HeadlessChrome, where the canvas composites for real.
+  async awaitPresent(timeoutMs) {
+    if (typeof GLX === "undefined" || !GLX.awaitSoftPresent) return null;
+    return GLX.awaitSoftPresent(timeoutMs);
+  },
 
   // carView({team, parts}?) — the car as JSON: team identity, livery colours,
   // the full parts spec and its stat effects, the per-team chassis silhouette

@@ -181,29 +181,25 @@ const CircuitKit = (function () {
       }
     }
 
-    // 2025 FIA Sporting 34.4: fast lane ≤ 3.5 m (the ribbon). Appendix O: a
-    // pit complex ≥ 12 m wide with garages on the start straight. Modern
-    // buildings are one hall + roller doors + a glazed hospitality floor, not
-    // a row of detached sheds. Bay pitch is ~8–9 m; F1 teams take two adjacent
-    // bays when the kit asks for ≥16 doors. Doors, pillars, lintels and the
-    // canopy emit INSIDE this modelGroup so clip-audit adjacency treats them
-    // as one assembly — a second row of addBox halls is what blew the ratchet.
-    const PIT_TEAM_COL = [
-      [0.00, 0.83, 0.87], [1.00, 0.11, 0.18], [1.00, 0.50, 0.00],
-      [0.14, 0.22, 0.55], [0.00, 0.35, 0.72], [0.40, 0.62, 0.90],
-      [0.72, 0.10, 0.16], [0.02, 0.22, 0.55], [0.90, 0.10, 0.12],
-      [0.00, 0.44, 0.30],
-    ];
+    // THE ENGINE BUILDS THE GARAGES NOW — js/track/scenery/pits.js places the
+    // setup screen's own bay once per team on the row track.pit laid out, so a
+    // circuit's pitBuilding() is honoured as a no-op wherever that complex
+    // exists (deps.pitBuilt). What is left below is the generic hall for a
+    // harness or a circuit that opted its bays out (def.pit.bays === false):
+    // one hall + roller doors + a glazed hospitality floor, emitted INSIDE one
+    // modelGroup so clip-audit adjacency treats it as one assembly. No team
+    // colours here: the grid's colours live in js/data/teams.js and only there.
     const PIT_DOOR = [0.10, 0.11, 0.13];
+    const PIT_LINTEL = [0.62, 0.64, 0.68];
     const PIT_GLASS = [0.20, 0.30, 0.40];
     function pitBuilding(spec) {
+      if (deps.pitBuilt) return true;
       const garages = boundedCount(spec && spec.garages, 12, 24);
       if (!garages) return false;
       return route("pitBuilding", spec, (stage, place) => {
         const W = place.size[0], H = place.size[1], L = place.size[2];
         const bay = L / garages;
         const inner = -spec.side * (W * 0.48);
-        const pairTeams = garages >= 16;
         // One hall so the kit reads as a pit building, not N separate boxes.
         if (!box(stage, place, [0, -H * 0.10, 0], [W, H * 0.68, L * 0.995], "shell")) {
           return false;
@@ -217,10 +213,8 @@ const CircuitKit = (function () {
           const z = -L / 2 + bay * (i + 0.5);
           if (!boxRgb(stage, place, [inner, -H * 0.20, z],
             [0.22, H * 0.40, Math.max(2.4, bay * 0.58)], PIT_DOOR)) return false;
-          const teamI = pairTeams ? (i >> 1) : i;
           if (!boxRgb(stage, place, [inner, H * 0.06, z],
-            [0.26, 0.20, Math.max(2.8, bay * 0.70)],
-            PIT_TEAM_COL[teamI % PIT_TEAM_COL.length])) return false;
+            [0.26, 0.20, Math.max(2.8, bay * 0.70)], PIT_LINTEL)) return false;
           if (i > 0) {
             const zP = -L / 2 + bay * i;
             if (!box(stage, place, [inner, -H * 0.14, zP],

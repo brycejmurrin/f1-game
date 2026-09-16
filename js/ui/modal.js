@@ -107,7 +107,10 @@ window.TopModal = (function () {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     const layer = window.UiLayers && window.UiLayers.top();
     if (!layer) return;
-    if (layer.tagName === "DIALOG") return;
+    // Route keyboard Escape before native cancel. Repeated Escapes can make
+    // cancel non-cancelable; its later close event would otherwise press BACK
+    // a second time and skip a page in the Settings stack. Native close
+    // requests still use wire()'s cancel/close handlers above.
     if (layer.getAttribute("data-esc") === "none") {
       e.preventDefault(); e.stopPropagation();
       return;

@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
 // ── iOS DOUBLE-TAP / GESTURE ZOOM ────────────────────────────────────────────
-// CSS `touch-action: manipulation` is not enough on its own: `pan-y` / `pan-x`
-// on scroll panes override the * reset — WebKit still double-tap-zooms those.
-// The touchend canceller below is what actually does the iOS work.
+// Controls use CSS `touch-action: manipulation` for fast native activation.
+// The touchend fallback below covers noninteractive areas only: cancelling
+// touchend on a button also suppresses its click, losing rapid BACK/step taps.
 //
 // NO ZOOM CAP IN THE VIEWPORT META, and that is two decisions, not one.
 // `user-scalable=no` went first: Safari ignored it anyway, and Android Chrome
@@ -24,9 +24,8 @@
 // intent one layer up. html/body stay `manipulation`, which drops double-tap
 // zoom and keeps pinch, and the in-race HUD chrome stays `none` so a second
 // thumb cannot pinch mid-corner. Nothing here relaxes the driving surface.
-// A second tap on the same spot within 350 ms is the zoom gesture; cancel it.
-// Control taps always keep their native click: BACK and steppers must accept
-// repeated presses. CSS manipulation already disables their double-tap zoom.
+// A second tap on the same noninteractive spot within 350 ms is cancelled.
+// Native controls keep every activation, including repeated taps on one button.
 // Another finger still down is driving (GAS+steer), not a double-tap.
 // iOS GestureEvents are the pinch-page path; the garage car viewer uses
 // TouchEvents, so cancelling gesture* does not steal that.
@@ -39,8 +38,10 @@
   document.addEventListener("gestureend", kill, { capture: true, passive: false });
   document.addEventListener("dblclick", kill, { capture: true });
   document.addEventListener("touchend", function (e) {
-    if (e.target.closest && e.target.closest("button, a[href], input, select, textarea, summary, [role=button]")) { lastT = 0; return; }
     if (e.touches && e.touches.length) return;
+    if (e.target && e.target.closest && e.target.closest("button,a[href],input,select,textarea,summary,label,[role=button]")) {
+      lastT = 0; return;
+    }
     var t = e.changedTouches && e.changedTouches[0];
     if (!t) return;
     var now = Date.now();
@@ -501,9 +502,8 @@
      at the top of css/components.css. -->
 <dialog id="pausemenu" class="screen dim" data-esc-close="pm-resume" aria-labelledby="dlg-pause" hidden>
   <div class="sheet">
-    <div class="sheet-head"><h2 id="dlg-pause">PAUSED</h2></div>
+    <div class="sheet-head"><h2 id="dlg-pause">PAUSED</h2><button id="pm-resume" autofocus>RESUME</button></div>
     <div class="sheet-body pane stack">
-      <button id="pm-resume" autofocus>RESUME</button>
       <button id="pm-restart">RESTART RACE</button>
       <button id="pm-settings">SETTINGS&hellip;</button>
       <button id="pm-howto">HOW TO PLAY&hellip;</button>
@@ -537,20 +537,18 @@
 </dialog>
 
 <!-- settings sub-menu — opened from pause or title. Door index, then
-     CONTROLS / DISPLAY / STEERING / MUSIC pages. Lighting and camera
-     tuners stay on the index as their own docks. -->
+     CONTROLS / DISPLAY / STEERING & ASSISTS / MUSIC pages. Lighting and
+     camera tuners open from DISPLAY's advanced visuals. -->
 <dialog id="pmsettings" class="screen dim" data-esc-close="pm-settings-close" aria-labelledby="dlg-settings" hidden>
   <div id="pmsettings-inner" class="sheet">
     <div class="sheet-head"><h2 id="dlg-settings">SETTINGS</h2></div>
     <div id="pm-settings-body" class="sheet-body pane">
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
-        <button id="pm-open-controls" type="button">CONTROLS&hellip;</button>
-        <button id="pm-open-driving" type="button">DRIVING&hellip;</button>
-        <button id="pm-open-display" type="button">DISPLAY&hellip;</button>
-        <button id="pm-advanced">STEERING&hellip;</button>
-        <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
-        <button id="pm-camtune">CAMERA TUNER&hellip;</button>
-        <button id="pm-audio">MUSIC &amp; SOUND&hellip;</button>
+        <button id="pm-open-controls" type="button">CONTROLS&hellip;<small>Input, pedals &amp; bindings</small></button>
+        <button id="pm-open-driving" type="button">DRIVING&hellip;<small>Coach, practice &amp; strategy</small></button>
+        <button id="pm-open-display" type="button">DISPLAY&hellip;<small>UI, HUD &amp; graphics</small></button>
+        <button id="pm-advanced">STEERING &amp; ASSISTS&hellip;<small>Presets, response &amp; aids</small></button>
+        <button id="pm-audio">MUSIC &amp; SOUND&hellip;<small>Playback, effects &amp; volume</small></button>
       </nav>
       <div class="pm-groups">
         <section id="pm-panel-controls" class="pm-group" role="region"
@@ -874,10 +872,16 @@
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
             </div>
           </details>
+          <details id="pm-visual-tuners">
+            <summary class="adv-more-btn">ADVANCED VISUALS</summary>
+            <p id="pm-visual-tuners-help" class="adv-help">Start a race, then pause to preview lighting and camera changes on track.</p>
+            <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
+            <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
+          </details>
         </section>
         <section id="advanced" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
-          <h3 class="pm-group-h">STEERING</h3>
+          <h3 class="pm-group-h">STEERING &amp; ASSISTS</h3>
           <div id="advanced-inner">
     <!-- Same shape as DISPLAY: one always-visible primary (presets + pace),
          then closed folds whose summaries carry the live choice. -->
@@ -2117,61 +2121,60 @@
       <a href="#htp-modes">MODES</a>
       <a href="#htp-friends">FRIENDS</a>
     </nav>
-    <dl class="sheet-body pane">
-      <dt id="htp-controls">PC / KEYBOARD</dt>
-      <dd>
-        <!-- js/ui/key-binds.js rewrites this span from the live key bindings;
-             the static text is the default map for a page whose script never ran. -->
-        <span id="htp-keys">Steer <span class="key">&larr;</span><span class="key">&rarr;</span> / <span class="key">A</span><span class="key">D</span> &nbsp;
-        Gas <span class="key">&uarr;</span> / <span class="key">W</span> &nbsp;
-        Brake <span class="key">&darr;</span> / <span class="key">S</span> &nbsp;
-        Boost <span class="key">SPACE</span> tap to toggle &nbsp;
-        Overtake <span class="key">X</span> &nbsp;
-        Active aero <span class="key">Z</span> &nbsp;
-        Camera <span class="key">C</span> cycles &nbsp;
-        Shift up <span class="key">E</span> &nbsp; Shift down <span class="key">Q</span> / <span class="key">SHIFT</span> when GEARS: MANUAL</span><br>
-        Pause <span class="key">P</span> &nbsp; Back <span class="key">Esc</span> (pauses only if nothing is open)<br>
-        Menus: arrows move in every direction — Left/Right leave a list for the header or column beside it. <span class="key">Enter</span> confirms. Keys always steer on a desktop, and every driving key can be changed under SETTINGS &rsaquo; CONTROLS &rsaquo; KEYBOARD. <span class="key">ADAPTIVE BUTTONS</span> (default ON) slows the keys at speed. <span class="key">BRAKE CUE</span> ticks faster when a corner needs the anchors — it never brakes for you
-      </dd>
-      <dt>CONTROLLER</dt>
-      <dd>
-        <span id="htp-pad">Steer left stick / D&#8209;pad &nbsp;&middot;&nbsp; Gas <span class="key">RT</span> / <span class="key">A</span> &nbsp;&middot;&nbsp; Brake <span class="key">LT</span> / <span class="key">B</span> (triggers are analog) &nbsp;&middot;&nbsp; Boost <span class="key">X</span> toggle &nbsp;&middot;&nbsp; Overtake <span class="key">Y</span> &nbsp;&middot;&nbsp; Active aero <span class="key">D&#8209;PAD &uarr;</span> &nbsp;&middot;&nbsp; Camera <span class="key">VIEW</span> cycles &nbsp;&middot;&nbsp; Shift up <span class="key">RB</span> &nbsp;&middot;&nbsp; Shift down <span class="key">LB</span> &nbsp;&middot;&nbsp; Pause MENU / START</span>
-        <br>PlayStation: Cross / Circle / Square / Triangle and L2 / R2 are the same slots. Every driving button can be changed under SETTINGS &rsaquo; CONTROLS &rsaquo; CONTROLLER. Adaptive Buttons does not change the stick.
-        <br>Menus: either stick / D-pad move in every direction (hold to repeat) — Left/Right leave a list for the header or column beside it. <span class="key">A</span> confirms, <span class="key">B</span> backs, triggers page. Start still pauses
-      </dd>
-      <dt>TOUCH / MOBILE</dt>
-      <dd>
-        Pause &rarr; <span class="key">SETTINGS</span> &rarr; <span class="key">STEER</span> cycles TILT / BUTTONS / TOUCH.
-        <br><span class="key">TILT</span> &mdash; roll the phone; <span class="key">GAS</span> + <span class="key">BRAKE</span> sit left. <span class="key">GEARS: MANUAL</span> (tilt only — BUTTONS already uses both thumbs) puts the shifter left and the pedals right. Calibrates at the lights. Allow motion when asked; deny switches to BUTTONS.
-        <br><span class="key">BUTTONS</span> &mdash; on-screen arrows left, pedals right. Hold an arrow; slide the thumb back to ease. <span class="key">ADAPTIVE BUTTONS</span> (default ON; 1 is OFF) makes that heavier at speed. <span class="key">BRAKE CUE</span> is the tick that says when to brake.
-        <br><span class="key">TOUCH</span> &mdash; drag on the track from where you put your finger (a tap does not steer). The car accelerates on its own; <span class="key">BRAKE</span> stays left. No GAS pedal
-      </dd>
-      <dt id="htp-racing">&#9889; BOOST</dt>
-      <dd>Toggle electric deploy on/off. Drains the energy bar; recharges when you lift or brake. Tapers off at very high speed &mdash; 2026 rules</dd>
-      <dt>&#8646; ACTIVE AERO</dt>
-      <dd>The 2026 moveable wings. <span class="key">Z-MODE</span> is the default: flaps shut, maximum downforce. Press <span class="key">Z</span> (or tap <span class="key">AERO</span>) in an <span class="key">ACTIVATION ZONE</span> for <span class="key">X-MODE</span> &mdash; the top elements of both wings rotate flat, cutting drag for a higher top speed but giving up grip. It slams shut the moment you brake or leave the zone. Costs no energy: unlike BOOST and OVERTAKE you pay for it in cornering, not charge.
-        <br><b>Zones are fixed per circuit</b>, like DRS boards &mdash; the chip counts the next one down in metres. A circuit with no straight worth 3 seconds gets none at all, and there the chip reads <span class="key">NO AERO ZONE</span>: that is Monaco.
-        <br><b>No proximity rule</b>, and no first-lap wait &mdash; unlike OVERTAKE, every driver gets it on every lap in every zone, leader and backmarker alike. Prefer not to think about it? <span class="key">SETTINGS &rarr; ACTIVE AERO: AUTO</span> takes every zone for you and removes the button</dd>
-      <dt>OVERTAKE</dt>
-      <dd>Within 1 s of the car ahead the OT light arms. Activate for 4 s of full-power deploy with no taper &mdash; the 2026 electrical overtaking aid that replaced DRS. Because it IS the overtaking aid it carries DRS's safety rules: nothing on the opening lap (it wakes when the leader starts lap 2) and nothing under a caution. The chip reads <span class="key">NO OVERTAKE</span> when it is switched off rather than merely unarmed</dd>
-      <dt>GEARS</dt>
-      <dd>Toggle <span class="key">GEARS: MANUAL</span> in <span class="key">SETTINGS</span> when thumbs are free (desktop, or TILT on a phone). Shift up near the redline, down for corner exits. BUTTONS and TOUCH on a phone stay automatic so a thumb is free. The tachometer + gear indicator sit bottom-centre</dd>
-      <dt id="htp-pits">PIT STOPS &mdash; TYRE WEAR RUNS THEM</dt>
-      <dd><span class="key">SETTINGS &rarr; TYRE WEAR</span> ships on <span class="key">LIGHT</span>: tyres wear at a little over half the rate the compounds are built around, so a set lasts roughly twice as long and stopping is a choice rather than a schedule. <span class="key">REAL</span> wears them at the full rate &mdash; a set will not reach the flag and a stop is part of the race.
-        <br>Turn it to <span class="key">OFF</span> and <b>there is no pit lane at all</b> &mdash; no prompt, no stop, and the AI never pits either. The lane is still built into the circuit; nothing that uses it runs</dd>
-      <dt>THERE IS NO PIT BUTTON</dt>
-      <dd>You call a stop the way a driver does: put the car <b>across the blue line on the pit side and keep it there</b> for about half a second. The limiter comes on by itself and the crew tells you which set is ready. A car that merely runs wide there, or is spun or stopped, calls nothing &mdash; it has to be deliberate and held. You can call it <b>anywhere from the entry up to your own box</b>, including from the grid on lap 1 &mdash; the grid sits inside the pit window, so a car starting further back is already past the entry road. Past your own box it is refused: there is nothing left to stop at this lap</dd>
-      <dt>FINDING THE LANE</dt>
-      <dd>On most circuits the pit lane is <b>a separate road of its own</b>, running alongside the track for the last few hundred metres before the start/finish line: a strip of grass, then a blue stripe, then its own tarmac with a white line on the far side. Steer across the blue and you are on it &mdash; it is real road, so there is no grass drag and no cut penalty out there. A handful of circuits have no room for one: Monaco, Baku, Las Vegas, Singapore and a few others put their walls right against the track. There the lane is painted on the road itself on the pit side, marked the same way, with <b>a blue bar across its mouth</b> where it begins.
-        <br>The HUD counts it down for you &mdash; <span class="key">PIT 340m</span> with an arrow to the pit side, then <span class="key">PIT ENTRY</span> once you are on the entry road. It deliberately stays quiet until a stop is worth making, so on a fresh set you will see nothing at all</dd>
-      <dt>THE LANE AND THE BOX</dt>
-      <dd>Inside the lane you are limited to 80 km/h (60 on a street circuit) &mdash; the limiter is automatic, you do not switch it on. Drive down to <b>your team&rsquo;s box</b> and stop there: each team has its own, spread along the lane, and team-mates share one. The boxes sit as far forward as the lane can hold them, so one is reachable on lap 1 from anywhere on the grid.
-        <br><b>You have to stop IN the lane.</b> Halt on the racing line and the stop does not happen &mdash; the crew is not standing there. Coming up to the box the HUD says <span class="key">KEEP RIGHT</span> (or LEFT) if you have drifted out. Blowing through at the limit misses it too: you have to actually stop.
-        <br>The stop itself is 2.4 s, then <span class="key">TYRES ON &mdash; GO GO GO</span></dd>
-      <dt>WHAT IT COSTS</dt>
-      <dd>The whole lap through the pits, against racing the same stretch, plus the time stood still &mdash; which is why it is worth different amounts at different circuits rather than a fixed penalty. A long pit straight costs more than a short one. That difference is what decides one stop against two</dd>
+    <div class="sheet-body pane">
+      <section id="htp-controls" aria-labelledby="htp-start">
+        <h3 id="htp-start" class="pm-group-h">QUICK START</h3>
+        <p>Wait for lights out, accelerate, then brake before turning. Ease off the brake as you steer and add throttle as the car straightens.</p>
+        <div id="htp-inputs">
+          <details data-input="keyboard" open>
+            <summary class="adv-more-btn">KEYBOARD</summary>
+            <p><span id="htp-keys">Steer ← → / A D · Gas ↑ / W · Brake ↓ / S · Boost Space · Overtake X · Active aero Z · Camera C · Pause P</span></p>
+            <p>Change driving keys in SETTINGS › CONTROLS › KEYBOARD. In menus, arrows move, Enter confirms and Esc goes back. Esc pauses when no menu is open.</p>
+          </details>
+          <details data-input="controller">
+            <summary class="adv-more-btn">CONTROLLER</summary>
+            <p><span id="htp-pad">Steer left stick / D-pad · Gas RT / A · Brake LT / B · Boost X · Overtake Y · Active aero D-pad ↑ · Camera View · Pause Menu / Start</span></p>
+            <p>Triggers give gradual throttle and braking. Change driving buttons and prompt labels in SETTINGS › CONTROLS › CONTROLLER. In menus, use either stick or the D-pad; the confirm button selects, the back button returns and triggers page.</p>
+          </details>
+          <details data-input="touch">
+            <summary class="adv-more-btn">TOUCH / MOBILE</summary>
+            <p>Choose SETTINGS › CONTROLS › STEERING INPUT. Rotate to landscape to drive.</p>
+            <p><b>TILT:</b> roll the phone to steer; use GAS and BRAKE. It calibrates at the lights. If motion permission is denied, the game switches to BUTTONS.</p>
+            <p><b>BUTTONS:</b> hold an on-screen arrow and slide back to ease steering. Pedals sit opposite the arrows.</p>
+            <p><b>TOUCH:</b> drag from where your finger lands on the track. Gas is automatic; use BRAKE to slow down. A tap alone does not steer.</p>
+            <p>CONTROLS also has pedal layout and handedness. DISPLAY lets you size the interface, HUD and touch buttons separately.</p>
+          </details>
+        </div>
+      </section>
+      <dl>
+        <dt id="htp-racing">BOOST</dt>
+        <dd>Toggle electric power on or off. It drains the energy bar, which recharges when you lift or brake. Power tapers at very high speed.</dd>
+        <dt>ACTIVE AERO</dt>
+        <dd>In MANUAL, press your active aero control (keyboard <span data-help-keys="aero">Z</span>, controller <span data-help-pad="aero">D-pad ↑</span>, or AERO on screen) inside an activation zone. X-MODE reduces drag and grip; braking or leaving the zone closes the wings.
+          <br>SETTINGS › CONTROLS › ACTIVE AERO: AUTO handles the wings for you. The HUD shows the automatic mode and zone status. Zones are available on every lap with no proximity rule; some circuits have none.</dd>
+        <dt>OVERTAKE</dt>
+        <dd>Follow within one second to arm it, then activate for four seconds of electric power. The HUD explains when it is unavailable: the opening lap, a caution or the cooldown. When ready, it shows OVERTAKE READY. Overtake becomes available when the leader starts lap two.</dd>
+        <dt>GEARS</dt>
+        <dd>Choose SETTINGS › CONTROLS › GEARS: MANUAL to shift yourself. Shift up near the redline and down before slow corners. Manual gears work on desktop and with TILT on a phone; BUTTONS and TOUCH keep gears automatic.</dd>
+        <!-- PIT STOPS came from the deploy branch while this branch restructured
+             the sheet around it. The nav above links #htp-pits, so the section is
+             carried over rather than lost to the restructure. -->
+        <dt id="htp-pits">PIT STOPS &mdash; TYRE WEAR RUNS THEM</dt>
+        <dd><span class="key">SETTINGS &rarr; TYRE WEAR</span> ships on <span class="key">LIGHT</span>: tyres wear at a little over half the rate the compounds are built around, so a set lasts roughly twice as long and stopping is a choice rather than a schedule. <span class="key">REAL</span> wears them at the full rate &mdash; a set will not reach the flag and a stop is part of the race.
+          <br>Turn it to <span class="key">OFF</span> and <b>there is no pit lane at all</b> &mdash; nothing painted on the road, no prompt, no stop, and the AI never pits either</dd>
+        <dt>THERE IS NO PIT BUTTON</dt>
+        <dd>You call a stop the way a driver does: put the car <b>in the pit lane at the entry and keep it there</b> for about half a second. The limiter comes on by itself and the crew tells you which set is ready. A car that merely runs wide at the entry, or is spun or stopped there, calls nothing &mdash; it has to be deliberate and held</dd>
+        <dt>FINDING THE LANE</dt>
+        <dd>The lane is the strip of road on the pit side with the <b>blue line</b> along its inner edge, and it exists only for the last few hundred metres before the start/finish line. <b>A blue bar across its mouth</b> marks where it begins &mdash; that is what you steer into.
+          <br>The HUD counts it down for you &mdash; <span class="key">PIT 340m</span> with an arrow to the pit side, then <span class="key">PIT ENTRY</span> once you are on the entry road. It deliberately stays quiet until a stop is worth making, so on a fresh set you will see nothing at all</dd>
+        <dt>THE LANE AND THE BOX</dt>
+        <dd>Inside the lane you are limited to 80 km/h (60 on a street circuit) &mdash; the limiter is automatic, you do not switch it on. Drive down to <b>your team&rsquo;s box</b> and stop there: each team has its own, spread along the lane, and team-mates share one.
+          <br><b>You have to stop IN the lane.</b> Halt on the racing line and the stop does not happen &mdash; the crew is not standing there. Coming up to the box the HUD says <span class="key">KEEP RIGHT</span> (or LEFT) if you have drifted out. Blowing through at the limit misses it too: you have to actually stop.
+          <br>The stop itself is 2.4 s, then <span class="key">TYRES ON &mdash; GO GO GO</span></dd>
+        <dt>WHAT IT COSTS</dt>
+        <dd>The whole lap through the pits, against racing the same stretch, plus the time stood still &mdash; which is why it is worth different amounts at different circuits rather than a fixed penalty. A long pit straight costs more than a short one. That difference is what decides one stop against two</dd>
       <dt id="htp-driving">DRIVING COACH</dt>
-      <dd>Open <span class="key">PAUSE &rarr; DRIVING</span> (or <span class="key">SETTINGS &rarr; DRIVING</span>) and turn the coach ON. Short text tips appear in the race-message area while you drive. The coach watches sustained braking, steering and tyre-slip conditions; it never changes your controls. Your ON/OFF choice is saved.
+      <dd>Open <b>SETTINGS &rarr; DRIVING</b> and turn the coach ON. Short text tips appear in the race-message area while you drive. The coach watches sustained braking, steering and tyre-slip conditions; it never changes your controls. Your ON/OFF choice is saved.
         <br><b>Where the lap went.</b> Once you have a saved best lap on a circuit, each completed lap is compared with it corner by corner, and the corner that cost the most time is named when you cross the line. The DRIVING page shows the lap total and the two worst corners. Each figure covers a corner and the straight after it, because a slow straight is usually paid for at the apex before it, and the comparison only exists against your own best lap in the same car.
         <br>It waits during flags, other race messages and pit stops, and spaces tips out so brief corrections do not cause a stream of messages. Reopen DRIVING to read the latest tip and its explanation. SESSION REVIEW counts the tips recorded this session; those counts are not a driving score.</dd>
       <dt>WHAT THE TIPS MEAN</dt>
@@ -2183,51 +2186,42 @@
         <br><b>X-mode in corners:</b> the active aero was open while cornering hard. Close it before you turn in.
         <br><b>Track limits:</b> a warning was recorded for leaving the track. Four in a row cost five seconds.</dd>
       <dt>PRACTICE A SECTION</dt>
-      <dd>Start a solo <span class="key">TIME TRIAL</span>. Drive to a useful starting point, open <span class="key">PAUSE &rarr; DRIVING</span>, expand <span class="key">PRACTICE A SECTION</span>, choose a <span class="key">PRACTICE GOAL</span>, then <span class="key">SAVE STARTING POINT</span>. Resume and drive the section. <span class="key">TRY AGAIN</span>, or your <span class="key">RECOVER</span> key (<span class="key">R</span> by default) while driving, restores the saved position, speed, car state and practice goal; it does not rewind the race clock.
+      <dd>Start a solo <b>TIME TRIAL</b>. Drive to a useful starting point, open <b>SETTINGS &rarr; DRIVING</b>, expand <b>PRACTICE A SECTION</b>, choose a <b>PRACTICE GOAL</b>, then <b>SAVE STARTING POINT</b>. Resume and drive the section. <b>TRY AGAIN</b>, or your <b>RECOVER</b> key (<b>R</b> by default) while driving, restores the saved position, speed, car state and practice goal; it does not rewind the race clock.
         <br><b>This makes the session unscored.</b> Laps and ghosts will not be saved after a starting point is set. Restart the session to set records again. Checkpoints are unavailable in races, daily challenges and multiplayer.</dd>
       <dt>PRACTICE GOALS</dt>
       <dd><b>Free practice:</b> repeat any section. <b>Sector:</b> cross the next sector line cleanly. <b>Corner:</b> drive through the next corner; the result shows your time, minimum speed and exit speed. <b>Full lap:</b> cross the line to start timing, then complete a clean lap; practice laps are never saved, so this is how to time one. <b>Braking:</b> build speed before saving, then brake firmly and keep braking until the car stops; a tap followed by coasting does not count, and the result is your stopping distance, plus how many metres of it were spent below the hardest braking the car managed on that attempt. <b>Trail braking:</b> brake firmly, keep some brake on as the car turns in, then release it while the car is still turning. <b>Slalom:</b> make six direction changes while moving; the car must change direction, not just the stick. <b>Launch:</b> stop the car before saving, then launch to racing speed, timed from your first throttle. Each goal judges what the car did and shows the result on screen when it ends. Contact or leaving the track marks an attempt for retry; clean completions are saved separately from lap records, and the DRIVING page shows this session's attempts and your saved best.</dd>
       <dt>PIT STRATEGY</dt>
-      <dd>With tyre wear enabled, <span class="key">DRIVING &rarr; PIT STRATEGY &rarr; NEXT TYRES</span> selects the compound fitted at your next stop; AUTO lets the game choose. Enter the pit lane yourself. Pit loss, tyre life and energy use are estimates based on the circuit and recent driving. More clean sectors and laps improve the available data.</dd>
+      <dd>With tyre wear enabled, <b>SETTINGS &rarr; DRIVING &rarr; PIT STRATEGY &rarr; NEXT TYRES</b> selects the compound fitted at your next stop; AUTO lets the game choose. Enter the pit lane yourself. Pit loss, tyre life and energy use are estimates based on the circuit and recent driving. More clean sectors and laps improve the available data.</dd>
       <dt>SESSION REVIEW</dt>
-      <dd>Review coaching tip counts, recent incidents and penalties after a run. Tips are listed most-repeated first and grouped by the turn they happened at, so one corner earning most of them is easy to see; when the same mistake comes up three times the review names the practice goal that drills it. Circuits without curated turn numbers simply show no location. <span class="key">TECHNICAL DATA</span> contains the optional <span class="key">DOWNLOAD SESSION DATA</span> JSON file and AI passing decisions. You do not need these tools to use the coach.</dd>
-      <dt id="htp-setup">&#127909; CAMERA</dt>
-      <dd>Tap <span class="key">CAM</span> or press <span class="key">C</span> to cycle 13 views &mdash; CHASE, COCKPIT, TV SIDE, CINEMATIC and the rest. Hold CAM about a third of a second, or right-click it, for the picker. Your choice is remembered</dd>
-      <dt>&#9881; SETTINGS</dt>
-      <dd>Pause (<span class="key">P</span> or the <span class="key">&#10074;&#10074;</span> button; <span class="key">Esc</span> only if nothing is open) then <span class="key">SETTINGS</span> for everything below &mdash; steering, gears, lighting, sound, music and HUD. <span class="key">BACK</span> returns to the pause screen</dd>
-      <dt>&#127918; CHANGE STEERING</dt>
-      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles tilt / buttons / touch on a phone. A keyboard and a plugged-in pad always work on desktop. <span class="key">STEERING</span> opens STEERING &amp; ASSISTS — presets, driving help, the racing line, <span class="key">ADAPTIVE BUTTONS</span> (keys and on-screen arrows only; 1 is OFF, default ON) and <span class="key">BRAKE CUE</span> (1 is OFF — a tick, never a takeover). The ADVANCED disclosure is lock, speed steer and the rest. Everything applies instantly and is saved</dd>
-      <dt>&#128161; LIGHTING</dt>
-      <dd>In <span class="key">SETTINGS</span> tap <span class="key">LIGHTING TUNER</span> for a live tuner &mdash; time of day, exposure, colour grade and more, with a real-time preview. Values are saved per track / time / weather</dd>
-      <dt>&#128266; SOUND &amp; HUD</dt>
-      <dd>In <span class="key">SETTINGS</span> open <span class="key">MUSIC &amp; SOUND</span> for the music and effects switches, their volumes, and what is playing &mdash; or <span class="key">DISPLAY · HUD: OFF</span> for a clean cinematic view (the small eye icon brings it back)</dd>
-      <dt>TRACK LIMITS</dt>
-      <dd>Grass is slow. Cutting the track repeatedly earns a +5 s penalty</dd>
-      <dt id="htp-modes">RACE</dt>
-      <dd>22 cars, five red lights, lights out. Points 25-18-15-12-10-8-6-4-2-1</dd>
-      <dt>SEASON</dt>
-      <dd>All 24 circuits in calendar order &mdash; championship standings saved between visits</dd>
-      <dt>TIME TRIAL</dt>
-      <dd>Solo on track, no rivals. Set your fastest lap; your track record is saved and shown on the circuit list</dd>
-      <!-- The two modes HOW TO PLAY never mentioned. It listed RACE, SEASON and
-           TIME TRIAL and stopped there, so the long game and the only way to
-           play against another person were both invisible from the one screen a
-           new player opens to find out what the game is. -->
-      <dt>CAREER</dt>
-      <dd>The long game. Sign for a team as a DRIVER and climb, or own the twelfth
-        team in MY TEAM and run it. Every weekend qualifies, prize money buys
-        parts, and the grid develops between seasons. Three save slots per mode,
-        and each mode has its own guide inside &mdash; press CAREER MODES</dd>
-      <dt>QUALIFYING</dt>
-      <dd>Championship weekends start with one flying lap. DRIVE MY LAP to set
-        your own time, or SIMULATE to take the modelled one &mdash; either way the
-        sheet is the grid you start from. You cannot do both</dd>
-      <dt id="htp-friends">&#128101; RACE A FRIEND</dt>
-      <dd>Two players, one race, no server. The host makes an invite code, the
-        guest sends one back, and those two pastes ARE the connection &mdash; so
-        anything you can send a message on will do. In the same room, scan the QR
-        code instead. Both of you need the same version of the game</dd>
-    </dl>
+      <dd>Review coaching tip counts, recent incidents and penalties after a run. Tips are listed most-repeated first and grouped by the turn they happened at, so one corner earning most of them is easy to see; when the same mistake comes up three times the review names the practice goal that drills it. Circuits without curated turn numbers simply show no location. <b>TECHNICAL DATA</b> contains the optional <b>DOWNLOAD SESSION DATA</b> JSON file and AI passing decisions. You do not need these tools to use the coach.</dd>
+        <dt>TRACK LIMITS</dt>
+        <dd>Repeatedly leaving the track gives three warnings, then a +5 s penalty on the fourth cut. The warning count then resets. The HUD shows warnings in every driving camera.</dd>
+        <dt id="htp-setup">CAMERA</dt>
+        <dd>Tap the camera button or press your camera binding (keyboard <span data-help-keys="camera">C</span>, controller <span data-help-pad="camera">View</span>) to cycle views. Hold the on-screen button briefly, or right-click it, to open the picker. Your choice is saved.</dd>
+        <dt>SETTINGS</dt>
+        <dd>Pause with your binding (keyboard <span data-help-keys="pause">P</span>, controller <span data-help-pad="pause">Menu / Start</span>) or the pause button, then open SETTINGS. You can also open it from the title menu. BACK returns to the previous page.</dd>
+        <dt>CONTROLS</dt>
+        <dd>Choose input, pedals, gears and active aero here. Rebind keyboard and controller actions, calibrate a controller, or set up a wheel. A keyboard or connected controller can be used alongside touch controls.</dd>
+        <dt>STEERING &amp; ASSISTS</dt>
+        <dd>Choose response presets, driving aids and the racing line here. ADAPTIVE BUTTONS changes keys and on-screen arrows at speed; it does not alter the analog stick. BRAKE CUE is an audio hint. Expand ADVANCED for detailed steering adjustments.</dd>
+        <dt>DISPLAY</dt>
+        <dd>Adjust UI, HUD and button sizes separately. HUD settings control layout, map and visibility; the eye icon restores a hidden HUD. During a race, ADVANCED VISUALS opens the lighting and camera tuners with a live preview.</dd>
+        <dt>MUSIC &amp; SOUND</dt>
+        <dd>Choose music and effects, their volumes and playback controls in SETTINGS › MUSIC &amp; SOUND.</dd>
+        <dt id="htp-modes">RACE</dt>
+        <dd>22 cars, five red lights, then lights out. Points go to the first ten: 25-18-15-12-10-8-6-4-2-1.</dd>
+        <dt>SEASON</dt>
+        <dd>Race the calendar in order. Championship progress is saved between visits.</dd>
+        <dt>TIME TRIAL</dt>
+        <dd>Drive solo for your fastest lap. Your track record is saved and shown on the circuit list.</dd>
+        <dt>CAREER</dt>
+        <dd>Sign for a team as a DRIVER or run your own in MY TEAM. Qualify, race, earn prize money and develop the car. Each mode has three save slots and its own guide under CAREER MODES.</dd>
+        <dt>QUALIFYING</dt>
+        <dd>Championship weekends start with a flying lap. DRIVE MY LAP sets your own time; SIMULATE calculates one. The result sets your starting grid.</dd>
+        <dt id="htp-friends">RACE A FRIEND</dt>
+        <dd>Create an invite, send it to your friend and paste their reply to connect. In the same room, you can scan QR codes instead. Everyone needs the same game version.</dd>
+      </dl>
+    </div>
     <div class="sheet-foot"><button id="htp-close" autofocus class="bigbtn alt">CLOSE</button></div>
   </div>
 </dialog>
@@ -2475,6 +2469,7 @@
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/geom.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/track/core/pit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/data.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/space.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/surface.js?v=dev"></script>
@@ -2490,6 +2485,7 @@
 <script defer crossorigin="anonymous" src="js/track/scenery/structures.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/city.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/identity.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/track/scenery/pits.js?v=dev"></script>
 <!-- circuit definitions (data) — must load before the tracks engine -->
 <script defer crossorigin="anonymous" src="js/circuits/bahrain.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/circuits/monaco.js?v=dev"></script>
@@ -2574,6 +2570,7 @@
 <script defer crossorigin="anonymous" src="js/garage/scene-equipment.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-live.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/pit-signs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/body-attitude.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/particles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/atmosphere.js?v=dev"></script>

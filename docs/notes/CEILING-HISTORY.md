@@ -7,6 +7,10 @@ Every raise and lower was recorded as a comment beside its number; those comment
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
 
+2026-09-15 UI integration: shell nodes 1568 → 1519 after consolidating Driving
+under Settings, removing duplicate pause controls and simplifying Help markup.
+The newer practice goals and session review remain. Shell slack is tightened to 25.
+
 ## Why a ratchet (the original header)
 
 ```

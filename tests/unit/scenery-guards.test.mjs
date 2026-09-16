@@ -77,6 +77,8 @@ test("the backdrop guard RECORDS its drops — it was the one emitter that did n
   // Ratchet: this number moving means the guard's behaviour moved. That is
   // allowed, but it must be a deliberate edit with a rendered look behind it,
   // not a side effect. Raise or lower it in the same commit that changes it.
+  // (A drop the pit complex causes is counted on `supersededByPit`, not
+  // here — this counter is the guard MARGIN's alone.)
   assert.equal(c.backdrop, 53,
     `spa backdrop drops = ${c.backdrop}, expected 53 — if you changed the ` +
     `guard, re-measure and update this with the reason`);

@@ -336,6 +336,7 @@
         "tests/specs/audit.spec.js",
         "tests/specs/*-foundation.spec.js",
         "tests/specs/props-over-road.spec.js",
+        "tests/specs/pit-signs.spec.js",
         "tests/specs/terrain-over-road.spec.js",
         "tests/specs/f1-track-accuracy.spec.js",
         "tests/specs/scenery-kits.spec.js"
@@ -562,6 +563,7 @@
         "tests/unit/elevation-tracks-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/determinism-replay-vm.test.mjs",
+        "tests/unit/episode-transients.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collision-ai-fixes-vm.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
@@ -612,7 +614,8 @@
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/car-front-wing-width.test.mjs",
         "tests/unit/grid-boxes.test.mjs",
-        "tests/unit/pit-ribbon.test.mjs",
+        "tests/unit/pit-complex.test.mjs",
+        "tests/unit/pit-signs.test.mjs",
         "tests/unit/driving-line.test.mjs",
         "tests/unit/driving-line-opts.test.mjs"
       ]

@@ -106,7 +106,7 @@ export function plan() {
 // The `npm run test:*` lines of ci.yml's "Pure-node unit suites" step — the
 // deploy gate's node half. Empty (and logged) if the step is ever renamed, so
 // a rename shows up as a missing verdict entry rather than a silent skip.
-function gateNodeSuites() {
+export function gateNodeSuites() {
   // THROWS rather than returning []. The comment above used to promise a rename
   // would "show up as a missing verdict entry rather than a silent skip" — but
   // verdict.verified simply omitted the nine scripts, nothing set ok:false, and
@@ -223,7 +223,7 @@ export function cureableConflicts(conflicted) {
   return { cureable, shellF, ratchetF, pkgF, toolsF };
 }
 
-function mergeDeployTip() {
+export function mergeDeployTip() {
   const r = git(["merge", "--no-edit", `${REMOTE}/${DEPLOY_BRANCH}`]);
   if (r.code === 0) return "merged";
   const conflicted = git(["diff", "--name-only", "--diff-filter=U"]).out.split("\n").filter(Boolean);

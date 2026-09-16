@@ -157,6 +157,16 @@ const TrackGraph = (function () {
           case "frustum": ok = emit.addFrustum(out, c, op.rB * rs, op.rT * rs, op.h * us, col, op.seg, basis); break;
         }
         if (ok) landed++;
+        // A model is ONE object: a cylinder the PIT COMPLEX kept out is its
+        // footing (a pine's trunk, a mast), and nothing of it stands without
+        // that — the crown tiers, which may overhang the complex on their
+        // own, shipped without a trunk on thirty circuits. Only on a pit
+        // rejection, and only while verdicts are being decided: the remaining
+        // ops record a culled verdict so the verdict replay agrees.
+        if (!ok && op.op === "cyl" && out._pitRejected && !out._replayVerdicts) {
+          if (out._recVerdicts) for (let r = m.ops.indexOf(op) + 1; r < m.ops.length; r++) out._recVerdicts[out._vIdx++] = 0;
+          break;
+        }
       }
       return landed;
     }

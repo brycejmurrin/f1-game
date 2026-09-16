@@ -4,7 +4,7 @@
 // @skill mcp-probe
 // and tests must agree or MCP probes read "no adapter" while wgx-shot passes.
 
-/** Playwright launch args (full Chromium binary — NOT the headless shell). */
+/** Software WebGPU launch args. Prefer full Chromium; verify adapter support. */
 const WEBGPU_CHROMIUM_ARGS = [
   "--headless=new",
   "--enable-unsafe-webgpu",

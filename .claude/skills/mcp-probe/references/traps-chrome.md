@@ -65,6 +65,41 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
 
 ---
 
+## A trap (measured 2026-09-15): Garage tab clicks and the black-canvas trap combine
+
+Driving the GARAGE screen (`#carsetup`) with `chrome_click` on a category tab
+(`role=tab`, e.g. LIVERY) — or a livery swatch button — hit two issues back to
+back, both reproduced twice in the same session:
+
+- **`click()` on a `role=tab` control timed out** ("did not become interactive
+  within the configured timeout") even though `take_snapshot` showed it as
+  `selectable`, not disabled, and not obscured (`#game-soft`'s computed style
+  is `pointer-events: none`, so it isn't the overlay eating the click). Root
+  cause not isolated — worked around by dispatching a real DOM click instead:
+  find the element by its visible text and call `.click()` on it from
+  `evaluate_script`, e.g. `Array.from(document.querySelectorAll('*')).find(e
+  => [...e.childNodes].some(n => n.nodeType===3 &&
+  n.textContent.trim()==='LIVERY'))`, then walk `.parentElement` up to the
+  nearest `BUTTON` before clicking. Immediate and reliable both times; try the
+  MCP `click` tool first, fall back to this rather than retrying it.
+- **Every UI-driven scene change (a livery swap, not just `jump()`/`park()`)
+  needs its own present-wait** before the next screenshot, same as the
+  black-canvas trap above — the frame on `#game-soft` is one blit behind the
+  DOM state until you await a new generation. Confirmed **you do not need
+  `snapCam()`/`invalidateSoftPresent()` first**: calling
+  `await __apex.awaitPresent(8000)` (added 2026-09-15 as the `__apex` front
+  door for what was `GLX.awaitSoftPresent()` — same wait, right whichever
+  backend is bound, no need to know `GLX` is a bare global) on its own is
+  enough to arm the wait (`softBlit()`'s guard is
+  `_softPresentWaiters.length || _softCaptureDue`, and the underlying
+  `awaitSoftPresent()` itself pushes a waiter) — `gen` advanced by exactly one
+  on every click-then-await round-trip in this session, with no camera helper
+  called in between. Loop per interaction: click (DOM-dispatch if
+  `chrome_click` times out) → `await __apex.awaitPresent(8000)` in one
+  `evaluate_script` call → `take_screenshot`.
+
+---
+
 ## A SIXTH trap (FIXED 2026-08-13): `jump()`/`park()` used to render the car mid-air
 
 `playerAnchor()`/`renderPosOf()` (js/game.js) draw the HUMAN car from

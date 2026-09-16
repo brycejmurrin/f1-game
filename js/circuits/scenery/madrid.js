@@ -497,7 +497,8 @@
         depth: 1.8,
         supportGap: 2.0,
         color: STEEL,
-              supports: false,
+        // Legs of its own: it used to rest on the pit building the engine's
+        // pit complex has since replaced, and hung in the air without them.
       });
       overheadSpan({
         id: "madrid-ifema-access-bridge",

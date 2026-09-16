@@ -45,10 +45,18 @@ function load() {
   // below touches it — a stub keeps the VM honest about that.
   ctx.Tracks = { sample: () => { throw new Error("pure geometry must not sample the track"); } };
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "mat4.js" });
+  // The pit complex model (TrackPit) is what PitLane reads its pitch and, on
+  // a built track, its window and row from — loaded beside it, as the game does.
+  vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: "pit.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: "pit-lane.js" });
   return vm.runInContext("PitLane", ctx);
 }
 const P = load();
+const TP = (() => {
+  const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
+  vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: "pit.js" });
+  return vm.runInContext("TrackPit", ctx);
+})();
 
 /** A built-track stand-in: n nodes, a constant half-width, a chosen length. */
 function fakeTrack({ total = 5386, n = 1346, hw = 7, runoff = 9, def = {} } = {}) {

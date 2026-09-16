@@ -109,7 +109,7 @@ function buildShell(out, liv) {
   // phase across the split instead of stepping at the seam. y stops at 4.80,
   // just under the parked slats' 4.77, so the shutter reads as filling the top
   // of its own opening.
-  const APX = 2.70, APY = 4.80;                  // k=4 and k=12 of 16
+  const APX = TrackPit.BAY.doorW / 2, APY = TrackPit.BAY.doorH;   // the model's door: 5.4 x 4.8 m of clear air
   for (const sx of [-1, 1])
     wallBands([sx > 0 ? APX : -W, 0, Z_DOOR], [W - APX, 0, 0], 4, walls[1][3], 0, CEIL_Y);
   wallBands([-APX, 0, Z_DOOR], [APX * 2, 0, 0], 8, walls[1][3], APY, CEIL_Y);
@@ -492,7 +492,7 @@ function lights(liv) {
   // and halo are set per frame from the hour (live() below) — at night they
   // are what you see through the door, by day they are unlit steel.
   for (const gx of [-9, -3, 3, 9])
-    _rig.push(gx, 3.6, 12.1, 0, 0, 0, 9, 0, -0.85, -0.53, 0.80, 0.45, 0.10, 0, 0);
+    _rig.push(gx, 3.6, PIT_Z1 + 0.2, 0, 0, 0, 9, 0, -0.85, -0.53, 0.80, 0.45, 0.10, 0, 0);
   // The inspection LAMP, aimed by spot(); off until a preset asks for it.
   _rig.push(0, 1.7, 0, 0, 0, 0, 7, 0, -1, 0, 0.92, 0.70, 0.05, 0, 0);
   _rigKey = key;
@@ -633,7 +633,14 @@ const BOX_HW = 2.20, BOX_ZF = 4.25, BOX_ZB = -4.00;
 // wall itself has back-faced away. Laid on the apron plane (y -0.04), not the
 // bay floor (y 0): the 4 cm step between them is the resin bay over the pit
 // apron, and through the doorway it reads as the threshold it is.
-const PIT_HW = 10.5, PIT_Z0 = 6.45, PIT_Z1 = 11.9;
+// THE FRONTAGE IS THE MODEL'S. The working lane, the corridor and the fast
+// lane at TrackPit.BANDS' widths, the wall beyond — so the lane seen through
+// the door is the lane the car pits in (js/track/core/mesh.js builds the real
+// one from the same numbers, and the box is the same 8 m).
+const PIT_B = TrackPit.BANDS;
+const PIT_HW = 10.5, PIT_Z0 = Z_DOOR + 0.05;
+const PIT_WORK1 = PIT_Z0 + PIT_B.work, PIT_CORR1 = PIT_WORK1 + PIT_B.corridor, PIT_Z1 = PIT_CORR1 + PIT_B.fast;
+const PIT_FAST_Z = (PIT_CORR1 + PIT_Z1) / 2;
 function buildPitLane(out, liv, night) {
   const APRON_Y = -0.04;
   // Outside at NIGHT: a darker lane under the gantry lights (lights() adds
@@ -660,23 +667,23 @@ function buildPitLane(out, liv, night) {
       const k = (0.94 + h * 0.10 + (1 - v) * 0.05) * NK;
       return [ASPHALT[0] * k, ASPHALT[1] * k, ASPHALT[2] * k];
     }, MAT.ASPHALT);
-  // Fast lane outside, working lane against the garages — the two boundary
-  // lines every pit straight has.
-  for (const z of [8.95, 11.70])
+  // Working lane against the garages, the corridor, the fast lane by the wall
+  // — the lines every pit straight has, at the model's widths.
+  for (const z of [PIT_WORK1, PIT_CORR1, PIT_Z1])
     tile(out, -PIT_HW, PIT_HW, z, z + 0.13, LINE, APRON_Y + 0.008, MAT.ASPHALT);
   // THE PIT BOX. A garage without its own box painted outside the door is a
   // shed: this is the one marking that says which bay this is. Team-coloured
-  // outline on the lane, centred on the door.
-  // The box sits in the WORKING lane (z 6.45..8.95), never across the fast lane.
-  const BX0 = PIT_Z0 + 0.30, BX1 = 8.80;
-  for (const q of [[-1.9, -1.78, BX0, BX1], [1.78, 1.9, BX0, BX1],
-                   [-1.9, 1.9, BX0, BX0 + 0.12], [-1.9, 1.9, BX1 - 0.12, BX1]])
+  // outline on the lane, centred on the door, the model's 8 m long.
+  // The box sits in the WORKING lane, never across the fast lane.
+  const BX0 = PIT_Z0 + 0.30, BX1 = PIT_WORK1 - 0.30, BH = TrackPit.BOX_LEN / 2;
+  for (const q of [[-BH, -BH + 0.12, BX0, BX1], [BH - 0.12, BH, BX0, BX1],
+                   [-BH, BH, BX0, BX0 + 0.12], [-BH, BH, BX1 - 0.12, BX1]])
     tile(out, q[0], q[1], q[2], q[3], c1, APRON_Y + 0.010, MAT.ASPHALT);
   // Bollards along the FAR edge, between the outer line and the wall — never
   // mid-lane, which is where a car drives. The vertical marks are what give the
   // lane depth from the low REAR camera.
   for (let i = -3; i <= 3; i++)
-    cyl(out, i * 2.9, APRON_Y + 0.008, 11.82, 0.055, 0.62,
+    cyl(out, i * 2.9, APRON_Y + 0.008, PIT_Z1 - 0.08, 0.055, 0.62,
         i % 2 ? [0.80, 0.80, 0.84] : [0.72, 0.30, 0.10], 6, MAT.METAL);
   // The garages opposite: a low run of blocks with lit fascias, so the far side
   // of the lane is a row of buildings rather than the end of the mesh.
@@ -1291,6 +1298,38 @@ const propMesh = {};
 // calls. Every primitive below takes an optional trailing `mid` defaulting to
 // 0, so the ~150 call sites that do not care are unchanged.
 const acc = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
+// THE BAY AS ONE PLAIN BUFFER — shell, floor, LED fixtures — for the trackside
+// garages: js/track/scenery/pits.js places it once per team with
+// TrackGeom.addMesh. Static only: the dress atlas, the live screens and the
+// moving props are the setup screen's, and a row of twelve bays does not
+// need twelve fans. `props` / `equipment` opt the furniture in.
+function appendBuf(out, b) {
+  const base = out.pos.length / 3;
+  for (let i = 0; i < b.pos.length; i++) out.pos.push(b.pos[i]);
+  for (let i = 0; i < b.nrm.length; i++) out.nrm.push(b.nrm[i]);
+  for (let i = 0; i < b.col.length; i++) out.col.push(b.col[i]);
+  for (let i = 0; i < b.mat.length; i++) out.mat.push(b.mat[i]);
+  for (let i = 0; i < b.idx.length; i++) out.idx.push(base + b.idx[i]);
+}
+function buildStatic(liv, opts) {
+  const o = opts || {};
+  const out = acc();
+  buildShell(out, liv);
+  buildBayFloor(out, liv);
+  const led = {};
+  for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
+  buildLed(led, liv);
+  for (let i = 0; i < SIDES.length; i++) appendBuf(out, led[SIDES[i]]);
+  if (o.props) {
+    const g = {};
+    for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
+    buildProps(g, liv);
+    if (o.equipment && typeof GarageEquipment !== "undefined") GarageEquipment.build(g, liv, o.ctx || {});
+    for (let i = 0; i < SIDES.length; i++) appendBuf(out, g[SIDES[i]]);
+  }
+  return out;
+}
+
 function rebuild(team, liv, info, ctx) {
   const drv = (team && team.drivers) || [];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
@@ -1433,7 +1472,7 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
   {
     const cyc = (now / 1000) % 34;
     if (cyc < 6.5 && passMesh)
-      _gfx.draw(passMesh, mk(_mPass, -24 + 48 * (cyc / 6.5), -0.04, 10.3, Math.PI / 2, 0), SHELL_OPTS);
+      _gfx.draw(passMesh, mk(_mPass, -24 + 48 * (cyc / 6.5), -0.04, PIT_FAST_Z, Math.PI / 2, 0), SHELL_OPTS);
   }
   // The engineers' traces tick over every 1.5 s: repaint one region of the
   // live atlas and re-upload it (1 MB, a quarter of the dress).
@@ -1600,7 +1639,7 @@ function debug() {
            geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
 }
 
-  return { init, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, draw, framingHull, recentre,
+  return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, draw, framingHull, recentre,
            previewMesh, dropPreviewMeshes, pulse, spot, debug };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;

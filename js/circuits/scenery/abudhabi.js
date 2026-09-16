@@ -12,7 +12,7 @@
         fence, guardrail, tyreWall, marshalPost, wall, along, recordBarrier,
         cityFront, forestEdge, backdrop, mountain, ferrisWheel, landmarkKit,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, circuitKit,
-        bleacher, sailCanopy } = api;
+        bleacher, sailCanopy, floodMast } = api;
 
       const LED_TEAL  = [0.20, 0.85, 0.95];
       const LED_MAG   = [0.95, 0.18, 0.72];
@@ -230,14 +230,10 @@
         // Softer halo ring around the pool
         addCyl(out, vadd(pa.c, pa.u, 0.05), 16, 0.12, POOL_SOFT, 10, [pa.r, pa.u, pa.t]);
       }
-      // Extra floodlights ringing pit straight for night look — with pools
-      for (let i = 0; i < 6; i++) {
-        const tk = K(0.0 + i * 0.012);
-        tower(tk, -1, 20, 4, 36, { col: DARK, seg: 4, cap: true, capCol: FLOOD });
-        const pa = anchor(tk, -1, 20);
-        addCyl(out, vadd(pa.c, pa.u, 0.1), 10, 0.25, POOL, 10, [pa.r, pa.u, pa.t]);
-        addCyl(out, vadd(pa.c, pa.u, 0.05), 18, 0.12, POOL_SOFT, 10, [pa.r, pa.u, pa.t]);
-      }
+      // Floodlights ringing the pit straight on the grandstand side (the pits
+      // are +1). Shared floodMast: it REGISTERS its lens, so these light the
+      // straight at night instead of standing over painted pool discs.
+      for (let i = 0; i < 6; i++) floodMast(K(0.0 + i * 0.012), -1, 20, { h: 36 });
       // Hairpin floodlights — both sides with pools
       for (const side of [-1, 1])
         for (let i = 0; i < 3; i++) {
@@ -337,7 +333,10 @@
         const k = K(0.88);
         const H = 100;
         for (const side of [-1, 1]) {
-          const a = anchor(k, side, 30);
+          // 33 m out, not 30: the tower's 18 m base radius reaches 15 m back
+          // toward the road, and at 30 it stood 2 m inside the pit complex's
+          // working lane (the engine builds the lane 14 m out on the pit side).
+          const a = anchor(k, side, 33);
           const b = [a.r, a.u, a.t];
           modelGroup(`yas-hotel-${side < 0 ? "left" : "right"}-tower`, {
             center: vadd(a.c, a.u, 54), size: [30, 108, 40], basis: b,

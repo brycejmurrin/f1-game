@@ -1098,7 +1098,7 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0;
-const ANN_PRI = { coach: 1, practice: 2, info: 2, "penalty-warn": 2, race: 4, "penalty-hit": 5 };
+const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, race: 4, "penalty-hit": 5 };
 let _annPri = 0, _annQueue = null;
 function showAnnounce(msg, dur, kind) {
   kind = kind || "race";
@@ -1186,7 +1186,7 @@ function announce(msg, dur, kind) {
   if (hudProfile !== "broadcast") {
     const camId = CAM_MODES[camMode].id;
     if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead") {
-      if (pri < 4) return;
+      if (kind === "info" || kind === "coach") return;
     }
   }
   if (announceT > 0 && pri <= _annPri) {
@@ -2081,6 +2081,7 @@ function _loadTrackBody(idx, def) {
       if (track.meshes.water) gfx.freeMesh(track.meshes.water);
       gfx.freeMesh(track.meshes.gate);
       gfx.freeMesh(track.meshes.startline);
+      if (typeof PitSigns !== "undefined") PitSigns.free(gfx, track);
     }
     // Drop the old track object BEFORE building the new one: the build's
     // transient peak (plain-JS geometry arrays for up to ~5 M verts) is the
@@ -4292,7 +4293,7 @@ function updateCar(c, dt, ranked) {
           if (soundOn) GameAudio.penalty();
         }
       } else if (c.isPlayer) {
-        if (hudProfile === "broadcast") announce("TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
+        announce("TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
         if (soundOn) GameAudio.offtrack();
       }
     }
@@ -5317,7 +5318,7 @@ function updateCar(c, dt, ranked) {
     else c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 2);
     c.wrongWay = c.wrongWay ? c.wrongT > 0.15 : c.wrongT > 0.4;
     if (c.wrongWay && (c.wrongCueT = (c.wrongCueT || 0) - dt) <= 0) {
-      if (c.local) announce("WRONG WAY", 1.0, "info");
+      if (c.local) announce("WRONG WAY", 1.0, "warning");
       c.wrongCueT = 1.0;
     }
     // Auto-rescue: stuck off-track, wrong-way, pinned to a wall, or simply
@@ -6951,6 +6952,8 @@ function render(dt) {
   //  LT.glareStr, default 0.12.)
   drawWorldMeshes(frame, night, wet, _floodEmit, false);
   gfx.drawSky(frameSky);
+  // The pit bay signs: one decal after the sky (opaque → sky → decal; it depth-tests, never writes).
+  if (typeof PitSigns !== "undefined") PitSigns.draw(gfx, track, MAT_IDENT, frame.eye, night, hideMeshes.pitSigns);
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
@@ -7967,7 +7970,7 @@ els.selBack.onclick = () => {
 $("sel-map-btn").onclick = openTrackDetail;
 $("sel-detail-chip").onclick = openTrackDetail;
 $("track-detail-close").onclick = closeTrackDetail;
-// ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
+// ── SETTINGS sub-menu ── separates preferences from pause actions;
 // every tuning + toggle control lives on this page. Opening it hides the pause
 // menu (one panel at a time); BACK (or resume) returns to it.
 // Some settings only mean anything with a race on screen: HIDE HUD toggles a
@@ -7990,7 +7993,7 @@ function openSettings() {
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }
-function closeSettings() { els.pmsettings.hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }
+function closeSettings() { els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free
 $("pm-settings").onclick = openSettings;
 $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings(); };
 // The same settings screen from the TITLE menu, so steering, audio and the
@@ -7999,7 +8002,7 @@ $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings()
 // actually paused, so from here it just closes back to the title.
 $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
 // STEERING and MUSIC are SettingsNav pages (js/ui/settings-tabs.js). Lighting
-// and camera tuners still open as their own docks from the door index.
+// and camera tuners open as their own docks from DISPLAY > ADVANCED VISUALS.
 // ── LIGHTING TUNER ── opened from the settings sub-menu; that menu hides while
 // it's open so the live preview is unobstructed (tick() keeps render() running
 // with physics paused), and DONE returns to it. Rows are generated
