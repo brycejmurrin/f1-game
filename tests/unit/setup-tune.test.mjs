@@ -97,3 +97,27 @@ test("a damaged sheet falls back per field, and reset restores the works numbers
   S.reset("haas");
   assert.deepEqual(host(S.get("haas")), host(S.defaults("haas")));
 });
+
+// The SHEET is the player's own, the BUILD is the team's. makeCars shares a MY
+// TEAM build with the teammate on purpose ("MY TEAM + hire share the saved
+// build"), but it used to hand that car SetupTune.aero() too. An AI reads
+// aeroLoad every step (AiDrive.lateralScale's load term, brakeTarget's latMax)
+// while the PLAYER's aeroLoad only reaches physics multiplied by the flap
+// position — so the rake sliders moved the teammate's cornering and nothing of
+// the player's. mods and rollBalance on the same object were already isP-only;
+// aeroLoad is now consistent with them.
+test("the rake sheet reaches the player alone: a shared MY TEAM build carries the parts, not the tune", () => {
+  const { Teams, Parts, S } = load();
+  const team = Teams.LIST[0], parts = Parts.DEFAULTS ? Parts.DEFAULTS : undefined;
+  const works = Parts.aeroLoad(parts, team);
+  const tuned = Parts.aeroLoad(parts, team, { rake: 1 });
+  assert.notEqual(tuned, works, "a rake tune must move aeroLoad, or this test proves nothing");
+  assert.equal(Parts.aeroLoad(parts, team, undefined), works, "no tune must read exactly as the works build");
+  // The call site itself: the tune argument is gated on the PLAYER, not on the
+  // shared build, so the teammate branch cannot pick the sheet back up.
+  const src = readFileSync(join(ROOT, "js", "game.js"), "utf8");
+  const line = src.split("\n").find((l) => l.includes("aeroLoad: (isP || mate)"));
+  assert.ok(line, "makeCars no longer has the shared-build aeroLoad line — re-point this test");
+  assert.ok(/isP \? SetupTune\.aero\(team\.id\) : undefined/.test(line),
+    "the teammate must not receive the player's setup sheet: " + line.trim().slice(0, 160));
+});

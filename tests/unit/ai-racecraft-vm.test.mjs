@@ -246,3 +246,38 @@ test("the AI drives a racing line: outside on the approach, inside at the apex, 
     assert.ok(apex > 3.5, `corner at s=${k.s0.toFixed(0)}: apex not inside (${apex.toFixed(2)} m)`);
   }
 });
+
+// THE RUBBER BAND IS OFF THE START LINE AND OFF A LAPPED CAR. The band scales
+// an AI's vmax (and, since the corner-authority fix, its brake target) by how
+// far the leading human is up the road. `prog` is cumulative and the grid is
+// laid out at -(14 + i*8), so P22 begins 182 m back and was banded from the
+// first frame — +4.7 % of vmax into Turn 1 on easy, which Game AI Pro ch.42
+// names as exactly the wrong place for it. At the other end the gap clamps the
+// band to full, so an easy car a lap down took min(1, 0.93 * 1.18) = 1.0, i.e.
+// HARD's corner authority, and un-lapped itself in front of the player.
+// Both guards only ever REMOVE a boost, so no DIFF row can move; and the
+// AI-only benches (ai-pace/field/line) have no human at all, so the band never
+// fires there and their tables are untouched by construction.
+test("the rubber band never fires off the start line, and never for a lapped car", async () => {
+  const a = g.apex;
+  await g.race("monza", "day", "dry");
+  a.go();
+  const ai = () => g.G.cars.filter((c) => !c.human);
+  const banded = () => ai().filter((c) => (c._bandNow || 0) > 0).length;
+
+  for (let i = 0; i < 60; i++) a.step(1 / 60, 1);
+  assert.equal(banded(), 0, `a car was banded ${g.G.raceT.toFixed(1)}s after green, off the grid`);
+  for (let i = 0; i < 60 * 6; i++) a.step(1 / 60, 1);
+  assert.ok(g.G.raceT < 8, "this leg must still be inside the 8 s start guard");
+  assert.equal(banded(), 0, `a car was banded ${g.G.raceT.toFixed(1)}s after green`);
+
+  for (let i = 0; i < 60 * 4; i++) a.step(1 / 60, 1);   // past the guard
+  const victim = ai()[0], L = g.G.track.total;
+  victim.prog = g.G.player.prog - (L + 200);            // a full lap down
+  a.step(1 / 60, 1);
+  assert.equal(victim._bandNow || 0, 0, "a lapped car must not be handed the band's full clamp");
+
+  victim.prog = g.G.player.prog - 600;                  // a real chase, well inside half a lap
+  a.step(1 / 60, 1);
+  assert.ok((victim._bandNow || 0) > 0, "the band must still work for a car the player is actually racing");
+});

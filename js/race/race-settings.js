@@ -15,6 +15,10 @@ const RaceSettings = (function () {
   // exists so a player can have the mechanic without it deciding the race.
   const RS_TYRES = [["off", "OFF"], ["light", "LIGHT"], ["real", "REAL"]];
   const RS_LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
+  // STRATEGY (js/race/pit-lane.js planFor): the player's reference plan for
+  // this circuit — the planner's own choice, or a pinned stop count. The pin
+  // is persisted per circuit (apex26.pitPlan.<id>) by PitLane.setPinnedStops.
+  const RS_PLAN = [["auto", "AUTO"], ["0", "NO STOP"], ["1", "1 STOP"], ["2", "2 STOPS"]];
 
   function create(hooks) {
     const {
@@ -25,7 +29,7 @@ const RaceSettings = (function () {
       getRaceTimeOfDay, setRaceTimeOfDay, getRaceChangeable, setRaceChangeable,
       setWxArcPlan, getDifficulty, setDifficulty,
       getRaceGrid, setRaceGrid, getRaceReliability, setRaceReliability,
-      getRaceTyreWear, setRaceTyreWear, getDuel, setDuel,
+      getRaceTyreWear, setRaceTyreWear, getDuel, setDuel, getPits,
       getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace,
       enableTilt, getSteerMode, getNetLobby, buildSelect, els, openGarage,
     } = hooks;
@@ -79,6 +83,38 @@ const RaceSettings = (function () {
       $("rs-tyres").hidden = tt;
       SettingRow.paint("rs-tyres", getRaceTyreWear(), RS_TYRES);
       SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
+      paintPlan(tt, raceLaps);
+    }
+
+    /** The STRATEGY row and its stint bar. Hidden with TYRE WEAR (a plan is a
+     *  consequence of wear existing) and in a time trial; degrades to the row
+     *  alone where no complex is built yet (no zone: no plan to draw). */
+    function paintPlan(tt, laps) {
+      const pits = typeof getPits === "function" ? getPits() : null;
+      const on = !tt && getRaceTyreWear() !== "off" && !!pits;
+      $("rs-plan").hidden = !on;
+      const bar = $("rs-plan-bar");
+      if (!on) { bar.hidden = true; return; }
+      const pin = pits.pinnedStops();
+      SettingRow.paint("rs-plan", pin == null ? "auto" : String(pin), RS_PLAN);
+      const plan = pits.zoneOf() ? pits.planFor(0.5, true, laps) : null;
+      bar.hidden = !plan;
+      if (!plan) return;
+      const stints = $("rs-plan-stints");
+      if (typeof stints.replaceChildren === "function") stints.replaceChildren(); else stints.innerHTML = "";
+      const total = plan.stints.reduce((a, v) => a + v, 0) || 1;
+      for (let i = 0; i < plan.stints.length; i++) {
+        const cls = plan.seq[i], rec = TyreModel.AI_CLASS[cls] || TyreModel.AI_CLASS.medium;
+        const seg = document.createElement("span");
+        seg.style.flexBasis = (plan.stints[i] / total * 100).toFixed(1) + "%";
+        seg.style.background = "rgb(" + rec.colour.map((v) => Math.round(Math.min(1, v) * 255)).join(",") + ")";
+        seg.textContent = rec.code + " " + plan.stints[i];
+        seg.title = cls + ", " + plan.stints[i] + " laps";
+        stints.appendChild(seg);
+      }
+      const stops = plan.stops || 0;
+      $("rs-plan-loss").textContent = (stops ? stops + (stops === 1 ? " STOP · BOX L" : " STOPS · BOX L") + plan.lapsAt.join(", L") : "NO STOP")
+        + " · PIT LOSS ≈ " + Math.round(pits.lossS()) + " s";
     }
 
     function wireRaceSettings() {
@@ -102,6 +138,8 @@ const RaceSettings = (function () {
       wire("rs-tyres", getRaceTyreWear, (v) => setRaceTyreWear(v));
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
       wire("rs-duel", () => (getDuel() ? "on" : "off"), (v) => setDuel(v === "on"));
+      wire("rs-plan", () => { const p = getPits && getPits(); const v = p ? p.pinnedStops() : null; return v == null ? "auto" : String(v); },
+           (v) => { const p = getPits && getPits(); if (p) p.setPinnedStops(v === "auto" ? null : +v); });
     }
 
     function setNetRoom(on) { netRoom = !!on; }

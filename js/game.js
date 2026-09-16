@@ -12,7 +12,7 @@ const els = {
   hud: $("hud"), pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"),
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
-  tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"),
+  tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"), plan: $("hud-plan"),
   pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
@@ -1728,7 +1728,7 @@ function makeCars() {
         // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
         // MY TEAM + hire share the saved build; everyone else uses factory.
         rollBalance: isP ? SetupTune.balance(team.id) : 0,
-        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, SetupTune.aero(team.id)) : Parts.aeroLoad(factoryParts.setup, team),
+        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, isP ? SetupTune.aero(team.id) : undefined) : Parts.aeroLoad(factoryParts.setup, team),   // the BUILD is shared, the SHEET is not: rollBalance/mods above are already isP-only, and an AI reads aeroLoad continuously (AiDrive.lateralScale), so the mate was the only car the player's rake moved
         ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
         ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
         color: team.color, tier: team.tier, seat: di, houseStats: Career.teamStats(team),
@@ -1934,8 +1934,10 @@ function gridUp(preOrder) {
     // An AI car's STARTING compound is the plan's, not the class draw's, when
     // wear is on; the class draw still stands in for the legacy fudge when it
     // is off. The player plans their own race.
-    c.pitPlan = (!c.human && tyres.on()) ? pits.planFor((h >>> 24) / 256) : null;
-    if (c.pitPlan) c.tyreClass = c.pitPlan.start;
+    // The PLAYER gets a plan too — a REFERENCE, the one the pit wall would run
+    // (PitLane.think never executes a human's; the HUD and the engineer read it).
+    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human) : null;
+    if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
     tyres.fit(c, c.tyreOpt ? tyres.optionRecord(c.tyreOpt) : tyres.classRecord(c.tyreClass));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
@@ -3155,6 +3157,7 @@ raceSettings = RaceSettings.create({
   getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
   getRaceTyreWear: () => raceTyreWear, setRaceTyreWear: (v) => { G.raceTyreWear = v; },
   getDuel: () => duelMode, setDuel: (v) => { duelMode = !!v; },
+  getPits: () => pits,   // the STRATEGY row: the reference plan and the pin (PitLane.planFor)
   getRaceCtl: () => raceCtl,
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
   openQuali, startRace, enableTilt, getSteerMode: () => steerMode,
@@ -3766,7 +3769,7 @@ function updateCar(c, dt, ranked) {
   // it moves with the table rather than pinning a literal here.
   if (!c.human && _leadHuman) {
     const gap = _leadHuman.prog - c.prog;
-    const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
+    const bandFactor = gap > 0 && gap < track.total * 0.5 && raceT - launchT0 > 8 ? Math.min(gap / 700, 1) * dd.band : 0;   // never off the START LINE (a P22 grid slot is 182 m back by itself = +4.7 % vmax on easy into T1, "the antithesis of what we want" — Game AI Pro ch.42) and never once LAPPED (the gap clamps the band to full, so an easy car a lap down took min(1, 0.93 x 1.18) = hard's corner authority and un-lapped itself). Both only ever REMOVE a boost, so the DIFF ladder cannot move.
     const bandCap = Math.max(1, BAND_CEIL / (c.tierV * c.skill * dd.ai));
     vmax *= Math.min(1 + bandFactor, bandCap); c._bandNow = bandFactor;   // the corner half of the band: read by the brake target below
   } else c._bandNow = 0;
@@ -4830,7 +4833,8 @@ function updateCar(c, dt, ranked) {
     // speed-limited the throttle is still held but real accel ≈ 0, so without
     // this the friction ellipse would shave cornering grip (and add rear weight
     // transfer) for an acceleration that isn't actually happening.
-    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
+    // The SURFACE brakes you too — surfMu below scaled LATERAL grip alone, so a tyre on grass retarded the car as hard as one on tarmac. Same lerp, same depth.
+    const axEstTarget = braking ? -BRAKE * tyres.tractionMul(c) * brakeLvl * (c.onKerb ? 1 : lerp(1, OFF_GRIP, clamp((Math.abs(c.x) - hw) / 1.5, 0, 1))) * (c.human ? (mods.braking || 1) * (gripMult(c) / gripMult()) : 1)
       : (onThrottle
           ? ACCEL * PACE * perfMul * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy
           : -COAST_DRAG);

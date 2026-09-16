@@ -566,6 +566,11 @@ async function createGame(opts) {
   // .test.mjs compares its trace against a BROWSER baseline number for number,
   // so the two harnesses have to pin the same thing or they cannot agree.
   // `opts.storage` still wins — a caller testing wear asks for it by name.
+  // That seam is what the AI instruments' `--wear off|light|real` flag rides
+  // on (tools/lib/cli-args.mjs wearArg): off here means AiDrive.stintPlan,
+  // pitNow, compoundFor, degCost and pits.think are all inert, so ai-pace /
+  // ai-field / ai-line / ai-human measure a field that never pits unless the
+  // caller asks for wear. They default to off so their recorded numbers hold.
   const seed = Object.assign({ tyreWear: "off" },
                              opts.track ? { trackId: opts.track } : {}, opts.storage || {});
   for (const k of Object.keys(seed)) {

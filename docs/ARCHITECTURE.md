@@ -1114,7 +1114,7 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `photomode.js` | `Photomode` | photo mode ONLY — the free-fly camera, its touch sticks / hold buttons and the enter/exit plumbing; the lighting tuner's `lt-*` buttons live in `tuner.js` |
 | `tuner.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel: slider rows from `TUNE_DEFS`, preview chips, COPY TO ALL TRACKS, the help toggle, RESET and the COPY VALUES export (`window.LightEdits`) |
 | `steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
-| `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
+| `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `inAeroZone(c)`/`aeroDfMult()` stay in game.js because they read car state |
 | `skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
 | `sheetshape.js` | `SheetShape` | self-initialising: measures every `.sheet` with a ResizeObserver and writes `data-shape="tall\|wide"` / `data-pair`. **Its consumer is CSS**, not JS — which is why a JS-only reference scan reports it as orphaned |
 | `topmodal.js` | `TopModal` | self-initialising: the top-layer/z-index ladder over the 19 `<dialog class="screen">` elements, reading `data-esc-close` / `data-esc`. Same CSS/DOM-contract shape as `sheetshape.js` |

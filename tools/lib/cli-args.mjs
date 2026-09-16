@@ -73,3 +73,36 @@ export function makeFlags(argv, known) {
     has: (name) => argv.includes(name) || argv.some((a) => a.startsWith(name + "=")),
   };
 }
+
+/** TYRE WEAR for the AI instruments (`ai-pace` / `ai-field` / `ai-line` /
+ *  `ai-human`), which parse at module scope and share a hand-rolled `flag()`
+ *  each, so this reads argv itself rather than going through makeFlags.
+ *
+ *  WHY IT EXISTS. tools/lib/game-vm.cjs seeds `tyreWear: "off"` so a physics
+ *  trace measures the driving model rather than this month's product default
+ *  (see the comment there). The shipped default is `store.get("tyreWear",
+ *  "light")`, so everything downstream of wear — AiDrive.stintPlan, pitNow,
+ *  compoundFor, degCost and pits.think — is INERT in all four instruments.
+ *  Every strategy claim measured with them is therefore a no-wear claim.
+ *  `--wear light|real` turns the seam on so it can be measured at all.
+ *
+ *  DEFAULT STAYS "off" on purpose: the numbers already recorded in
+ *  docs/notes/AI-FIELD-RESEARCH.md were taken with wear off, and a flag that
+ *  silently moved them would invalidate the record it is meant to extend.
+ *  The levels are TyreModel.LEVELS (js/physics/tyre-model.js); an unknown one
+ *  is the caller's typo and exits 1 rather than quietly racing on slicks. */
+export const WEAR_LEVELS = ["off", "light", "real"];
+export function wearArg(argv, dflt = "off") {
+  const eq = argv.find((a) => a.startsWith("--wear="));
+  let v = dflt;
+  if (eq) v = eq.slice("--wear=".length);
+  else {
+    const i = argv.indexOf("--wear");
+    if (i >= 0) v = argv[i + 1] !== undefined && !argv[i + 1].startsWith("-") ? argv[i + 1] : "";
+  }
+  if (!WEAR_LEVELS.includes(v)) {
+    console.error(`--wear: expected one of ${WEAR_LEVELS.join("|")}, got ${JSON.stringify(v)}`);
+    process.exit(1);
+  }
+  return v;
+}
