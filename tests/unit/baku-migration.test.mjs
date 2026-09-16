@@ -86,14 +86,22 @@ test("Baku builds finite grounded landmarks, water, and full street boundaries",
     assert.ok(emitted.has("baku-maiden-forecourt"));
     assert.ok([...emitted].some((id) => id.startsWith("baku-caspian-")));
 
-    const tightFraction = (barriers) => {
-      let tight = 0;
-      for (let i = 0; i < track.n; i++)
+    // The pit complex (TrackPit, the STREET set on +1) opens the driving
+    // boundary to its garages across its window — those nodes are the
+    // lane's, not loose walls, and stay out of the fraction (as
+    // __apex.wallStats' `pitSides` does).
+    const pitOwned = (i, side) => !!(track.pit && track.pit.side === side && track.pit.keep[i] > 0);
+    const tightFraction = (barriers, side) => {
+      let tight = 0, n = 0;
+      for (let i = 0; i < track.n; i++) {
+        if (pitOwned(i, side)) continue;
+        n++;
         if (barriers[i] <= track.hw[i] + 5.5) tight++;
-      return tight / track.n;
+      }
+      return tight / n;
     };
-    assert.ok(tightFraction(track.barL) > 0.97);
-    assert.ok(tightFraction(track.barR) > 0.97);
+    assert.ok(tightFraction(track.barL, -1) > 0.97);
+    assert.ok(tightFraction(track.barR, 1) > 0.97);
 
     let crest = -Infinity, crestFrac = 0;
     for (let i = 0; i < track.n; i++) {

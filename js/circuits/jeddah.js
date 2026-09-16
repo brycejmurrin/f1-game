@@ -13,6 +13,12 @@
     night: true,
     theme: "street_night",
     street: true,
+    // The pit complex (TrackPit): the STREET one on the inside (corniche side)
+    // by the permanent pit building. No bays: the trace's corners sit against
+    // the line (above), so the window is 190 m and compresses the row's pitch
+    // under a bay — the boxes are painted at 10 m and the kit building stands
+    // behind the garage line until the corner table is surveyed.
+    pit: { mode: "street", side: -1, bays: false },
     barrierGap: 3.4,
     terrainOuter: 28,
     sceneryCoordinates: "racing",

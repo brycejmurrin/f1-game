@@ -1691,9 +1691,16 @@ const Tracks = (function () {
           { kind: "streetBarrier", k: kA, side });
         return [cx, cz];
       };
+      // The panel stands ON the pit lane where the complex owns the ground
+      // (Baku: on the entry road's tarmac; Monaco, Singapore, Vegas: in the
+      // platform band 15-40 cm from the complex's own wall), so the pit side
+      // skips every node the keep-out covers — the complex's wall and
+      // TrackPit.openBoundary take over there.
+      const pitOwned = (k, side) => pitKeep && side === pitSide && pitKeep[k] > 0;
       for (const side of [-1, 1]) {
         for (let k = 0; k < n; k += STEP) {
           const kn = (k + STEP) % n, km = (k + 1) % n;
+          if (pitOwned(k, side) || pitOwned(kn, side)) continue;
           const col = NIGHT ? bt.night : btSeq[Math.floor(k / (STEP * 3)) % 3];
           // Every panel is the same 0.4 x 1.1 m cross-section; only its length
           // and livery colour vary. One model per colour (three by day, one at
@@ -1724,7 +1731,7 @@ const Tracks = (function () {
         }
       }
       const off = def.barrierGap != null ? def.barrierGap : 0.35;
-      for (let k = 0; k < n; k++) { markBarrier(k, -1, off); markBarrier(k, 1, off); }
+      for (let k = 0; k < n; k++) for (const side of [-1, 1]) if (!pitOwned(k, side)) markBarrier(k, side, off);
     }
     if (!def.street) {
       // findCorners returns every local curvature peak, and two peaks a few

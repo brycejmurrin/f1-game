@@ -16,8 +16,14 @@ const TrackPit = (function () {
   //   verge → platform+wall → fast lane → corridor → working lane → garage line
   const BANDS = { verge: 2.0, platform: 2.0, fast: 3.5, corridor: 1.0, work: 5.5 };
   // A street circuit (Monaco's 480 m lane at 60 km/h is the worked example):
-  // the same bands at the numbers a temporary lane between walls can hold —
-  // no platform, a bare kerb of verge, 7.6 m in all.
+  // the same bands at the numbers a temporary lane between walls can hold.
+  // STREET is BUILT — wall 0.6 m off the road edge (Albert Park's 2021
+  // precedent), a 1.6 m platform (FIM >= 1.5), fast <= 3.5, corridor >= 1, a
+  // 4.2 m working lane: 10.6 m in all, 10 m wall-to-garage (Monaco-real), and
+  // 2.5 m placeable beside the road for the circuit's own walls
+  // (docs/research/STREET-PIT-LANES-PLAN-2026-09.md). NARROW is the PAINTED
+  // opt-out a def may still declare: no ribbon, no wall, nothing kept out.
+  const STREET = { verge: 0.6, platform: 1.6, fast: 3.2, corridor: 1.0, work: 4.2 };
   const NARROW = { verge: 0.6, platform: 0.0, fast: 3.0, corridor: 0.6, work: 3.4 };
 
   // ONE BAY = the setup screen's room (js/garage/scene-prims.js reads these at
@@ -64,8 +70,8 @@ const TrackPit = (function () {
   function resolve(def) {
     const p = (def && def.pit) || {};
     const street = !!(def && def.street);
-    const mode = p.mode === "narrow" || p.mode === "full" ? p.mode : (street ? "narrow" : "full");
-    const b = Object.assign({}, mode === "narrow" ? NARROW : BANDS, p.bands || {});
+    const mode = p.mode === "narrow" || p.mode === "full" || p.mode === "street" ? p.mode : (street ? "street" : "full");
+    const b = Object.assign({}, mode === "narrow" ? NARROW : mode === "street" ? STREET : BANDS, p.bands || {});
     const off = {
       fastIn: b.verge + b.platform,
       fastOut: b.verge + b.platform + b.fast,
@@ -73,19 +79,21 @@ const TrackPit = (function () {
       workOut: b.verge + b.platform + b.fast + b.corridor + b.work,   // the garage line
     };
     off.outer = off.workOut;
+    // Only a NARROW lane is PAINTED on the racing surface by the lit shaders
+    // (PitLane.laneUniform): no ribbon, no wall, no garages, and nothing kept
+    // out of a complex that is not there. A street circuit builds the STREET
+    // complex — a lane beside the road behind a real pit wall — unless its
+    // def opts out; 80 km/h (F1 SR B1.7.3(a)) unless authored (Monaco and
+    // Singapore run 60), the painted lane keeps the old street 60.
+    const painted = mode === "narrow";
     return {
       side: p.side === -1 ? -1 : 1,
       mode,
-      limitKph: Number.isFinite(p.limitKph) ? p.limitKph : (street ? LIMIT_KPH_STREET : LIMIT_KPH),
+      limitKph: Number.isFinite(p.limitKph) ? p.limitKph : (painted ? LIMIT_KPH_STREET : LIMIT_KPH),
       bands: b, off,
-      // A STREET circuit has no room beside the road — its walls stand at the
-      // edge (Monaco, Baku, Vegas, Singapore, Jeddah) — so its lane is PAINTED
-      // on the racing surface by the lit shaders (PitLane.laneUniform), the
-      // way Monaco's real lane is a strip between the barriers. No ribbon, no
-      // wall, no garages, and nothing kept out of a complex that is not there.
-      painted: mode === "narrow",
-      hasWall: mode === "full" && b.platform > 0,
-      hasBays: mode === "full" && p.bays !== false,
+      painted,
+      hasWall: !painted && b.platform > 0,
+      hasBays: !painted && p.bays !== false,
     };
   }
 
@@ -166,6 +174,10 @@ const TrackPit = (function () {
     const lo = grow + 20, hi = Math.max(lo, lenM - ROW_END);
     let pitch = PITCH;
     if ((count - 1) * pitch > hi - lo) pitch = Math.max(BOX_LEN + 1, (hi - lo) / (count - 1));
+    // A compressed row paints its boxes closer than a bay is wide (Jeddah's
+    // 190 m window: 10.0 m against 10.8), so it places no bays — two would
+    // interpenetrate by the difference on every party wall.
+    const hasBays = r.hasBays && pitch >= PITCH - 1e-6;
     const span = (count - 1) * pitch;
     const poleT = through(wrap(-GRID_POLE_M, L));
     const first = Math.min(Math.max(poleT + GRID_CLEAR, lo), Math.max(lo, hi - span));
@@ -198,12 +210,12 @@ const TrackPit = (function () {
         // out, straddling track and lane alike); a metre of margin superseded
         // them. Behind the row the bays need their depth and a service road.
         keep[k] = r.off.outer * wk + 0.3;
-        if (r.hasBays && inArc(s, rowS0, rowKeepS1)) keep[k] += BAY.depth + 3.0;
+        if (hasBays && inArc(s, rowS0, rowKeepS1)) keep[k] += BAY.depth + 3.0;
       }
     }
     return {
       side: r.side, mode: r.mode, limitKph: r.limitKph, bands: r.bands, off: r.off,
-      painted: r.painted, hasWall: r.hasWall, hasBays: r.hasBays,
+      painted: r.painted, hasWall: r.hasWall, hasBays,
       sA, sIn, sOut, sB, entryM: win.entryM, exitM: win.exitM, lenM, entryRoadM, exitRoadM, grow,
       w, v, keep,
       row: { pitch, boxLen: BOX_LEN, first, count, boxes, s0: rowS0, s1: rowS1, tail: ROW_TAIL },
@@ -259,7 +271,7 @@ const TrackPit = (function () {
     return -1;
   }
 
-  return { BANDS, NARROW, BAY, SIGN, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, WALL_GROW,
+  return { BANDS, STREET, NARROW, BAY, SIGN, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, WALL_GROW,
            ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, LIMIT_KPH, LIMIT_KPH_STREET, GRID_POLE_M, GRID_CLEAR,
            ROW_END, ROW_TAIL,
            resolve, window, row, build, at, openBoundary, rowOf };

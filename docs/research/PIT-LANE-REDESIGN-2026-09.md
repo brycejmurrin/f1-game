@@ -217,7 +217,9 @@ Keep the ribbon (§3), change the profile:
 - Where a circuit cannot hold 14 m (street), `def.pit.mode = "narrow"` scales
   `work` down and drops `platform`, but the bands, the row and the lines are
   the same model at smaller numbers — Monaco's 480 m, 60 km/h lane is the
-  worked example, not a different code path.
+  worked example, not a different code path. (2026-09-16: street circuits now
+  BUILD the `STREET` set — 10.6 m, a 1.6 m platform, a real wall — per
+  `STREET-PIT-LANES-PLAN-2026-09.md`; `narrow` remains the painted opt-out.)
 
 ### 4.3 Room — the corridor is declared, the scenery yields
 
@@ -367,6 +369,8 @@ redesign proper. Phase 3 is where the screenshots change the most.
    `PerfGov` tier ≥ medium only.
 4. **Street circuits:** `narrow` mode (Monaco-like, 60 km/h, no platform) vs
    keeping the painted fallback. Recommendation: `narrow` — one code path.
+   Superseded 2026-09-16: the five build the `STREET` set
+   (`STREET-PIT-LANES-PLAN-2026-09.md`); `narrow` is the explicit opt-out.
 5. **Which side, per circuit.** Needs a survey pass; the default stays +1 until
    Phase 5 authors it.
 

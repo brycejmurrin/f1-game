@@ -12,6 +12,10 @@
     night: true,
     theme: "street_night",
     street: true,
+    // The pit complex (TrackPit): the STREET one, on +1 where this def's pit
+    // art has always stood (the real lane is on the inside — a survey-track
+    // job with the grandstands and the Caspian exclusion, not a key flip).
+    pit: { mode: "street", side: 1 },
     lengthKm: 6,
     baseHW: 6,
     sceneryCoordinates: "racing",

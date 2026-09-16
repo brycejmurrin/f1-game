@@ -18,6 +18,9 @@
     lengthKm: 6.2,
     baseHW: 7,
     street: true,
+    // The pit complex (TrackPit): the STREET one on the inside (left), where
+    // the purpose-built Paddock Building and this def's paddock kits stand.
+    pit: { mode: "street", side: -1 },
     sceneryCoordinates: "racing",
     terrainOuter: 26,
     barrierGap: 1.0,

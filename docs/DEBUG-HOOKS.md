@@ -2215,22 +2215,22 @@ half-width toward `side` within `COMMIT_M` of the entry and hold it for
 | `inLaneLat` | This car is laterally IN the painted strip. DIFFERENT from `inLane`, and the difference is the one that bites: `inLane` is the state machine, this is the position, and **a stop that will not latch is always this one**. `false` outside the window |
 | `laneX` | The lane's centre at THIS car's arc position — the number to aim at. `null` outside the window. Use it rather than a literal: the pit-window half-width runs 4.93 m (Monaco) to 8.0 m (Spa), so the lane centre moves over three metres across the calendar |
 
-**The lane is a STATE, and also a PLACE TO STOP — but not the place two earlier
-attempts went looking for.** A driveable lane out BEYOND the road edge was built
-and measured badly twice (a forced boundary went through Monaco's buildings;
-fitting to existing room found 2.4 m at Monza, because the scenery puts a pit
-WALL there, and a real lane sits on its far side). `js/race/pit-lane.js` records
-both measurements. The lane that exists is the outermost strip of the ROAD
-across the window, painted rather than built.
+**The lane is a STATE, and also a PLACE TO STOP.** Since the 2026-09 redesign
+every circuit carries the built complex (`TrackPit`, `js/track/core/pit.js`):
+a lane beside the road behind the pit wall and the bays on the row — the FULL
+set on permanent circuits, the STREET set between a street circuit's walls
+(10.6 m; Jeddah paints its row without bays). `lane` is `null` there because the
+road carries the geometry. The PAINTED strip on the road — the outermost strip
+across the window — survives only for a def that opts into `pit.mode: "narrow"`
+and for a track built without a model; `js/race/pit-lane.js` records the two
+earlier driveable-lane attempts that motivated it.
 
 So the limiter applies to a car that has CALLED a stop and is in the window —
 an unarmed car never sees a speed cap, and a car beached off the road never
-reads as pitting. The BOX additionally requires being in the strip: an AI is
+reads as pitting. The BOX additionally requires being in the lane: an AI is
 steered there, and a player is not (the lane is driven, so the car is never
 taken off you) — which means **a player who halts on the racing line is not
-serviced**, and `pit().inLaneLat` is how you see why. Garages, a crew and a lane
-behind the pit wall are still missing; those need a road that branches, which
-this one-ribbon engine cannot express.
+serviced**, and `pit().inLaneLat` is how you see why.
 
 **Pit loss is still emergent**: window length over the limit, against racing the
 same stretch, plus the stop. That is the property that made the driveable lane

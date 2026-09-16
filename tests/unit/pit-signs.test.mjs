@@ -82,8 +82,11 @@ test("every built complex lays out twelve fascia quads, one per bay, in row orde
   }
 });
 
-test("a painted lane has no signs", () => {
-  assert.equal(buildOnce(STREET).pitSigns, undefined);
+test("a painted lane has no signs; a street complex signs its bays like any other", () => {
+  const T = ctxOnce().Tracks;
+  const narrow = T.build(Object.assign({}, T.LIST.find((d) => d.id === STREET), { pit: { mode: "narrow" } }));
+  assert.equal(narrow.pitSigns, undefined, "no bays, no signs");
+  assert.equal(buildOnce(STREET).pitSigns.cells.length, 12, "Monaco's STREET complex has twelve bays to sign");
 });
 
 test("the row carries each team's code for the painter", () => {

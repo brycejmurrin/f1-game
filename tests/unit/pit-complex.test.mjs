@@ -39,24 +39,83 @@ const buildOnce = (() => {
   };
 })();
 const wrap = (v, L) => ((v % L) + L) % L;
+// Monaco with the PAINTED opt-out (`pit.mode: "narrow"`): the one lane that
+// is paint on the road, kept as a def's explicit choice and the model-less path.
+const narrowOnce = (() => { let t = null; return () => {
+  const T = tracksOnce();
+  return t || (t = T.build(Object.assign({}, T.LIST.find((d) => d.id === STREET), { pit: { mode: "narrow" } })));
+}; })();
+const keptNodes = (t) => { let n = 0; for (let k = 0; k < t.n; k++) n += t.pit.keep[k] > 0 ? 1 : 0; return n; };
 
-test("every circuit gets a complex; a street circuit gets the narrow one", () => {
-  const full = buildOnce(FULL), street = buildOnce(STREET);
+test("every circuit gets a complex; a street circuit gets the STREET one, built between its walls", () => {
+  const T = tracksOnce(), full = buildOnce(FULL), street = buildOnce(STREET);
   assert.ok(full.pit, `${FULL} must carry track.pit`);
   assert.equal(full.pit.mode, "full");
   assert.ok(full.pit.hasWall && full.pit.hasBays, "a permanent circuit has the wall and the garages");
-  assert.ok(street.pit, `${STREET} must carry track.pit too — the same model, painted`);
-  assert.equal(street.pit.mode, "narrow");
-  assert.equal(street.pit.painted, true, "a street circuit's lane is painted on the racing surface");
-  assert.equal(street.pit.hasWall, false, "no platform between street walls");
-  assert.equal(street.pit.hasBays, false, "no permanent garages on a street circuit");
-  assert.equal(street.pit.limitKph, 60, "Monaco's lane is 60 km/h");
   assert.equal(full.pit.limitKph, 80);
-  // …and a painted lane keeps NOTHING out: Monaco's walls stand where they stood.
-  let kept = 0;
-  for (let k = 0; k < street.n; k++) kept += street.pit.keep[k] > 0 ? 1 : 0;
-  assert.equal(kept, 0, "a street circuit's scenery must not be culled for a lane that is paint");
-  assert.equal(tracksOnce().pitLaneAt(street, street.pit.sIn + 10), null, "no ribbon on a painted lane");
+  // A street circuit builds the STREET set: a lane beside the road behind a
+  // real pit wall, sized for the room between temporary barriers
+  // (docs/research/STREET-PIT-LANES-PLAN-2026-09.md).
+  assert.ok(street.pit, `${STREET} must carry track.pit too`);
+  assert.equal(street.pit.mode, "street", `${STREET} builds the STREET complex`);
+  assert.equal(street.pit.painted, false, "a street lane is built beside the road, not painted on it");
+  assert.equal(street.pit.hasWall, true, "…behind a real pit wall");
+  assert.equal(street.pit.hasBays, true, "…with garages where the window holds them");
+  assert.equal(street.pit.limitKph, 60, "Monaco's lane is 60 km/h (authored; the STREET default is 80)");
+  const b = street.pit.bands;
+  assert.ok(street.pit.off.workOut <= 11 && b.platform >= 1.5 && b.fast <= 3.5 && b.corridor >= 1,
+    `the STREET set: ${street.pit.off.workOut} m wall-to-garage, platform ${b.platform}, fast ${b.fast}, corridor ${b.corridor}`);
+  assert.ok(keptNodes(street) > 0, "a street complex keeps its ground");
+  assert.ok(T.pitLaneAt(street, wrap(street.pit.sIn + 10, street.total)), "a ribbon on the street lane");
+  // NARROW stays as the explicit opt-out: painted on the racing surface, and
+  // keeping NOTHING out — Monaco's walls stand where they stood.
+  const narrow = narrowOnce();
+  assert.equal(narrow.pit.mode, "narrow");
+  assert.equal(narrow.pit.painted, true, "a narrow lane is painted on the racing surface");
+  assert.equal(narrow.pit.hasWall, false, "no platform between street walls");
+  assert.equal(narrow.pit.hasBays, false, "no garages on a painted lane");
+  assert.equal(narrow.pit.limitKph, 60, "the painted street lane keeps 60");
+  assert.equal(keptNodes(narrow), 0, "a painted lane must not cull scenery for a lane that is paint");
+  assert.equal(T.pitLaneAt(narrow, wrap(narrow.pit.sIn + 10, narrow.total)), null, "no ribbon on a painted lane");
+});
+
+test("a street complex owns its side: no engine street barrier on the lane, the boundary open, Jeddah's row painted without bays", () => {
+  // The lap-long instanced street panel (tracks.js, `def.barrierGap`) is
+  // guarded, so it was culled only past 2.5 m: at Baku it stood ON the entry
+  // road's tarmac and at Monaco/Singapore/Vegas in the platform band 15-40 cm
+  // from the complex's own wall. The pit side now skips every node the
+  // keep-out covers, and TrackPit.openBoundary owns the driving limit there.
+  const T = tracksOnce(), P = ctxOnce().TrackPit;
+  for (const id of ["monaco", "singapore", "vegas", "baku", "jeddah"]) {
+    const t = buildOnce(id), p = t.pit;
+    assert.equal(p.mode, "street", id);
+    assert.equal(p.painted, false, id);
+    const nodes = (t.graph && t.graph.nodes) || [];
+    let panels = 0, onLane = 0;
+    for (const nd of nodes) {
+      const m = nd.meta;
+      if (!m || m.kind !== "streetBarrier") continue;
+      panels++;
+      if (m.side === p.side && p.keep[m.k] > 0) onLane++;
+    }
+    assert.ok(panels > 0, `${id}: the street barrier is still instanced round the lap`);
+    assert.equal(onLane, 0, `${id}: ${onLane} street panel(s) stand on the pit lane`);
+    const bar = p.side > 0 ? t.barR : t.barL;
+    for (let k = 0; k < t.n; k++) {
+      if (!(p.keep[k] > 0)) continue;
+      assert.ok(bar[k] >= t.hw[k] + p.off.outer * p.w[k] + 1.5 - 1e-6, `${id}: node ${k} boundary ${bar[k].toFixed(2)} inside the lane`);
+    }
+  }
+  // Jeddah's 190 m window (its trace's corners sit against the line) compresses
+  // the row's pitch under a bay's width: the boxes are painted, no bay stands.
+  const j = buildOnce("jeddah").pit;
+  assert.equal(j.hasBays, false, "no garages on a row a bay cannot fit");
+  assert.ok(j.row.pitch < P.PITCH, `pitch ${j.row.pitch.toFixed(2)} < ${P.PITCH}`);
+  assert.ok(j.row.painted && j.row.painted.length === 12, "…but its twelve boxes are still painted");
+  assert.equal(j.row.placed.length, 0, "…and none placed");
+  // The GUARD decides, not the def's `bays: false`: the same def without the key gets none either.
+  const def = T.LIST.find((d) => d.id === "jeddah");
+  assert.equal(T.build(Object.assign({}, def, { pit: { mode: "street", side: -1 } })).pit.hasBays, false, "the pitch guard alone withholds the bays");
 });
 
 test("the bands are the regulation's: >= 12 m wall-to-garage, a <= 3.5 m fast lane, a >= 1 m corridor", () => {
@@ -335,5 +394,6 @@ test("the complex lights its row: six canopy luminaires over the working lane, r
         `${id}: the luminaire throws at the lane under it`);
     }
   }
-  assert.equal((buildOnce(STREET).lampPosts || []).filter((l) => l.pit).length, 0, "a painted lane hangs no canopy");
+  assert.equal((buildOnce(STREET).lampPosts || []).filter((l) => l.pit).length, 6, "the street complex lights its row too");
+  assert.equal((narrowOnce().lampPosts || []).filter((l) => l.pit).length, 0, "a painted lane hangs no canopy");
 });
