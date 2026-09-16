@@ -408,7 +408,26 @@ body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
    session has tyre wear on. Same trap as #lights, #nogl and the dock groups;
    caught at merge by the guard in tests/unit/css-layers.test.mjs. */
 #hud-tyre[hidden] { display: none; }
-#hud-tyre { width: 130px; display: flex; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3); }
+#hud-tyre { width: 130px; display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 2); margin-bottom: calc(var(--gap) * 2 / 3); }
+/* THE PLAN LINE (js/race/pit-lane.js planInfo): the reference plan under the
+   bar, its own row of the wrap — the stops and the next box lap. Amber the
+   lap before (the timing screen's "slower" yellow, as the sector row uses it),
+   --you on the lap and for a free stop under a caution. Empty text collapses
+   the row; the box's width does not move. */
+#hud-plan {
+  flex: 1 1 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--font-hud); font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.06em;
+  color: var(--dim); text-shadow: var(--hud-halo); line-height: 1.1;
+}
+#hud-plan:empty { display: none; }
+#hud-tyre[data-plan="soon"] #hud-plan { color: var(--sec-slow); }
+#hud-tyre[data-plan="now"] #hud-plan,
+#hud-tyre[data-plan="free"] #hud-plan { color: var(--you); }
+/* THE RIVALS' WINDOWS on the gap chips (PitLane.windowOf): "P12" when the
+   neighbour's planned stop is within three laps, "IN" while it is stopping —
+   a suffix painted here, so the spellings gapForm learns stay whole. */
+.hud-gaps > div[data-pit]::after { content: " " attr(data-pit); font-size: 0.85em; color: var(--dim); }
+.hud-gaps > div[data-pit="IN"]::after { color: var(--you); }
 #hud-tyre-bar {
   flex: 1; height: 14px;
   background: var(--plate-opaque);

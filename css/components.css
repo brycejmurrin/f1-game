@@ -1430,6 +1430,18 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    in a body that already carries overflow-y: auto by design. The trade was
    measured rather than argued; the numbers are here so it is not re-litigated. */
 .set-row > .tune-label { flex: 1 1 5rem; min-width: 0; margin: 0; }
+/* THE STRATEGY ROW's stint bar (RACE SETTINGS, js/race/race-settings.js
+   paintPlan): one segment per stint in the compound's own colour, its width
+   the stint's share of the distance, the stop laps and the lane's pit loss
+   in a line under it. Ids, not classes: one instance, one sheet. */
+#rs-plan-bar[hidden] { display: none; }
+#rs-plan-bar { display: flex; flex-direction: column; gap: 4px; padding: 0 0 calc(var(--gap) / 2); }
+#rs-plan-stints { display: flex; gap: 2px; height: 16px; border-radius: var(--r-xs); overflow: hidden; }
+#rs-plan-stints > span {
+  flex: 1 1 0; min-width: 0; overflow: hidden; white-space: nowrap; text-align: center;
+  font-family: var(--font-hud); font-size: var(--fs-micro); font-weight: 800; line-height: 16px; color: var(--bg);
+}
+#rs-plan-loss { font-family: var(--font-hud); font-size: var(--fs-micro); font-weight: 700; letter-spacing: 0.06em; color: var(--dim); }
 .set-row > div {
   display: flex;
   align-items: center;

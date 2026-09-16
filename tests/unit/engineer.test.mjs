@@ -119,6 +119,7 @@ const sense = (over) => Object.assign({
   wear: 0, step: -1, axle: 0, front: true, graining: 0, blistering: 0,
   belowWindow: 0, outLap: false, wrongTread: false, freeStop: false,
   wet: false, rainInLaps: null,
+  lap: 5, lapsToStop: null, nextCode: null, rivalBoxed: null, marginS: null,
 }, over);
 const line = (over) => (E.create({}).callFor(sense(over)) || ["", ""])[0];
 
@@ -221,4 +222,49 @@ test("a NEW SET restarts the ladder, worked out from the stint counter alone", (
   c.tyreWear = 0.95; c.tyreWearF = 0.95; c.tyreWearR = 0.95;
   for (let i = 0; i < 40; i++) eng.update(c, 1);
   assert.ok(said.length > before, "the new set inherited the old set's spent ladder");
+});
+
+// ── 5. The plan-aware lines (the player's reference plan) ────────────────────
+
+test("the plan lines sit between the tread and the tyre complaints, and each names a lap or a compound", () => {
+  // A tread call still beats BOX NEXT LAP; BOX THIS LAP beats the wear ladder.
+  assert.match(line({ wrongTread: true, wet: true, lapsToStop: 1, nextCode: "H" }), /BOX FOR WETS/);
+  assert.match(line({ lapsToStop: 0, nextCode: "H", step: 1, wear: 0.8 }), /^BOX THIS LAP — H$/);
+  assert.match(line({ lapsToStop: 1, nextCode: "S", step: 1, wear: 0.8 }), /^BOX NEXT LAP — S$/);
+  assert.match(line({ lapsToStop: 2, step: 1, wear: 0.8 }), /TYRES AT/, "two laps out the wear ladder speaks");
+  // The undercut: a rival behind, inside the pit loss, has boxed.
+  assert.match(line({ rivalBoxed: "VER", lapsToStop: 3 }), /^VER HAS BOXED — UNDERCUT ON, BOX NOW OR PUSH 2 LAPS$/);
+  // Rain before the planned stop names the lap; rain after it is the old line.
+  assert.match(line({ rainInLaps: 2, lapsToStop: 4, lap: 10 }), /^RAIN BEFORE THE STOP — BOX LAP 12 FOR WETS$/);
+  assert.match(line({ rainInLaps: 5, lapsToStop: 4, lap: 10 }), /^RAIN IN 5 LAPS — BE READY$/);
+  // A caution that fits the plan with margin says so; without margin, the cost.
+  assert.match(line({ freeStop: true, marginS: 3, pitLoss: 20 }), /STOP NOW LOSES NOTHING/);
+  assert.match(line({ freeStop: true, marginS: -3, pitLoss: 20 }), /CHEAPER STOP/);
+  // …and a stop already called silences all of it (senseOf nulls lapsToStop).
+  assert.equal(line({ lapsToStop: null, rivalBoxed: null }), "");
+});
+
+test("senseOf reads the plan and the field: the next stop lap, its compound, and a rival's undercut", () => {
+  const { eng, tyres, said, G } = sessionFor();
+  const c = carOn(tyres, { wear: 0.2, lap: 6, prog: 5000 });   // carOn adds the three laps of the stint: lap 9
+  c.pitPlan = { stops: 1, seq: ["medium", "hard"], stints: [12, 13], lapsAt: [12] };
+  c.pitStops = 0;
+  const rival = { code: "VER", prog: 4900, speed: 50, pitStops: 0, human: false };
+  G.cars = [c, rival];
+  G.pits = { estimate: () => ({ lossS: 22, gapS: 2, marginS: -20, caution: false }), lastCue: () => null };
+  let s = eng.senseOf(c);
+  assert.equal(s.lapsToStop, 3, "12 - 9");
+  assert.equal(s.nextCode, "H");
+  assert.equal(s.rivalBoxed, null, "nobody has boxed yet");
+  rival.pitStops = 1;                          // VER boxed this tick, 2 s behind: the undercut is on
+  s = eng.senseOf(c);
+  assert.equal(s.rivalBoxed, "VER");
+  s = eng.senseOf(c);
+  assert.equal(s.rivalBoxed, null, "…said once: the rise is consumed");
+  c.lap = 12;
+  assert.equal(eng.senseOf(c).lapsToStop, 0);
+  eng.update(c, 1);
+  assert.ok(said.some((m) => /^BOX THIS LAP — H$/.test(m)), `the stop lap is called: ${said.join(" | ")}`);
+  c.pitArmed = true;
+  assert.equal(eng.senseOf(c).lapsToStop, null, "a called stop needs no calling");
 });

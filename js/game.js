@@ -12,7 +12,7 @@ const els = {
   hud: $("hud"), pos: $("hud-pos"), lap: $("hud-lap"), time: $("hud-time"),
   best: $("hud-best"), speed: $("hud-speed-n"), energy: $("hud-energy-fill"),
   ot: $("hud-ot"), aero: $("hud-aero"),
-  tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"),
+  tyre: $("hud-tyre"), tyreCode: $("hud-tyre-code"), tyreFill: $("hud-tyre-fill"), plan: $("hud-plan"),
   pitCue: $("hud-pit"), pitCueArrow: $("hud-pit-arrow"), pitCueText: $("hud-pit-text"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
@@ -1919,8 +1919,10 @@ function gridUp(preOrder) {
     // An AI car's STARTING compound is the plan's, not the class draw's, when
     // wear is on; the class draw still stands in for the legacy fudge when it
     // is off. The player plans their own race.
-    c.pitPlan = (!c.human && tyres.on()) ? pits.planFor((h >>> 24) / 256) : null;
-    if (c.pitPlan) c.tyreClass = c.pitPlan.start;
+    // The PLAYER gets a plan too — a REFERENCE, the one the pit wall would run
+    // (PitLane.think never executes a human's; the HUD and the engineer read it).
+    c.pitPlan = tyres.on() ? pits.planFor(c.human ? 0.5 : (h >>> 24) / 256, !!c.human) : null;
+    if (c.pitPlan && !c.human) c.tyreClass = c.pitPlan.start;
     tyres.fit(c, c.tyreOpt ? tyres.optionRecord(c.tyreOpt) : tyres.classRecord(c.tyreClass));
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
@@ -3120,6 +3122,7 @@ raceSettings = RaceSettings.create({
   getRaceGrid: () => raceGrid, setRaceGrid: (v) => { raceGrid = v; },
   getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
   getRaceTyreWear: () => raceTyreWear, setRaceTyreWear: (v) => { G.raceTyreWear = v; },
+  getPits: () => pits,   // the STRATEGY row: the reference plan and the pin (PitLane.planFor)
   getRaceCtl: () => raceCtl,
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
   openQuali, startRace, enableTilt, getSteerMode: () => steerMode,

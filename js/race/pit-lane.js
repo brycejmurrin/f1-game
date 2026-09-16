@@ -471,11 +471,11 @@ const PitLane = (function () {
       if (flag >= 4) return null;
       const normal = G.vTop() * 0.75;
       const roadSpeed = Math.max(1, Math.min(normal, G.vTop() * (flag === 3 ? 0.45 : flag === 2 ? 0.6 : 1)));
-      const lossS = Math.max(zz.boxS, zz.lenM / Math.max(1, limit()) + zz.boxS - zz.lenM / roadSpeed);
+      const loss = Math.max(zz.boxS, zz.lenM / Math.max(1, limit()) + zz.boxS - zz.lenM / roadSpeed);
       const behind = (G.cars || []).filter(o => o !== c && !o.retired && !o.finished && o.prog < c.prog)
         .sort((a, b) => b.prog - a.prog)[0];
       const gapS = behind ? (c.prog - behind.prog) / Math.max(1, behind.speed || roadSpeed) : null;
-      return { lossS, gapS, marginS: gapS == null ? null : gapS - lossS, caution: flag >= 2, estimated: true };
+      return { lossS: loss, gapS, marginS: gapS == null ? null : gapS - loss, caution: flag >= 2, estimated: true };
     }
     function choices(c) {
       if (!G.tyres) return [];
@@ -990,6 +990,8 @@ const PitLane = (function () {
       const st = c.pitState || "none";
       const zz = z(), L = G.track.total;
       if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock
+      // The player's reference plan is re-cut once per lap (replan).
+      if (c.local && c.human && c.pitPlan && c.lap !== c._planLap) { c._planLap = c.lap; if ((c.lap || 0) > 1) replan(c); }
       // The commitment lands: armed, the crew told what to ready. With no
       // button there is no other moment the compound choice becomes visible.
       const commitNow = () => {
@@ -1163,7 +1165,7 @@ const PitLane = (function () {
     /** Draw a stint plan for one AI car. PIT LOSS IS DERIVED FROM THE LANE, in
      *  laps, so a circuit whose lane costs more really does see fewer stops —
      *  which is the whole reason pit loss was kept emergent. */
-    function planFor(roll) {
+    function planFor(roll, player, laps) {
       const zz = z();
       if (!zz) return null;
       // A representative racing speed for the pit straight, as a fraction of the
@@ -1171,12 +1173,96 @@ const PitLane = (function () {
       const raceV = Math.max(1, G.vTop() * 0.55);
       const lapRefS = G.track && G.track.total > 0 ? G.track.total / raceV : 100;
       const lossS = zz.lenM / Math.max(1, limit()) - zz.lenM / raceV + zz.boxS;
-      return AiDrive.stintPlan({
-        laps: G.lapsTarget,
-        lifeLaps: (cls) => TyreModel.lifeLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget),
-        pitLossLaps: clamp(lossS / Math.max(1, lapRefS), 0.02, 0.9),
-        roll,
+      const n = laps > 0 ? laps : G.lapsTarget;
+      const pitLossLaps = clamp(lossS / Math.max(1, lapRefS), 0.02, 0.9);
+      // THE PLAYER'S plan is a REFERENCE — the plan the pit wall would run —
+      // never executed (think() keeps its human guard): it honours the stop
+      // count the STRATEGY row pinned for this circuit, if any.
+      const pin = player ? pinnedStops() : null;
+      const plan = AiDrive.stintPlan({
+        laps: n,
+        lifeLaps: (cls) => TyreModel.lifeLaps(TyreModel.AI_CLASS[cls].life, n),
+        pitLossLaps, roll, stops: pin,
       });
+      if (plan) { plan.pitLossLaps = pitLossLaps; plan.pin = pin; }
+      return plan;
+    }
+    /** The STRATEGY row's pin for this circuit: a stop count, or null for AUTO. */
+    function pinKey() { const t = G.track, d = t && t.def; return "pitPlan." + ((d && d.id) || (t && t.id) || "track"); }
+    function pinnedStops() {
+      const v = G.store && G.store.get ? G.store.get(pinKey(), "auto") : "auto";
+      return v == null || v === "auto" ? null : Math.max(0, Math.min(2, v | 0));
+    }
+    function setPinnedStops(v) { if (G.store && G.store.set) G.store.set(pinKey(), v == null ? "auto" : (v | 0)); }
+    /** The lane's net cost in seconds at racing speed — the number that makes
+     *  a 2-stop at Monaco read as the mistake it is. `estimate` refines it
+     *  under a caution; this is the plain figure the STRATEGY row shows. */
+    function lossS() {
+      const zz = z();
+      if (!zz) return 0;
+      const normal = Math.max(1, G.vTop() * 0.75);
+      return Math.max(zz.boxS, zz.lenM / Math.max(1, limit()) + zz.boxS - zz.lenM / normal);
+    }
+
+    /** The player's plan, read for the HUD: the stops, the next box lap and
+     *  how the race stands against it. Pure of the DOM; hud.js paints it. */
+    function planInfo(c) {
+      const plan = c && c.pitPlan;
+      if (!plan || !enabled()) return null;
+      const done = c.pitStops || 0, lap = c.lap || 0, stops = plan.stops || 0;
+      const next = plan.lapsAt[done];
+      const cls = plan.seq[done + 1], code = cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : "";
+      const label = stops ? stops + "-STOP" : "NO STOP";
+      if (next == null) return { text: "PLAN " + label + (stops ? " · DONE" : ""), state: "", stops, next: null, lapsToStop: null, code };
+      const lapsToStop = next - lap;
+      const caution = G.cautionInfo ? G.cautionInfo() : null;
+      const est = caution && caution.level >= 2 && caution.level < 4 ? estimate(c) : null;
+      const busy = !!c.pitArmed || (c.pitState && c.pitState !== "none");
+      let state = "", text = "PLAN " + label + " · BOX L" + next + (code ? " " + code : "");
+      if (busy) state = "";
+      else if (est && est.marginS > 0 && lapsToStop <= (typeof AiDrive !== "undefined" && AiDrive.STRAT ? AiDrive.STRAT.CAUTION_REACH : 6)) { state = "free"; text = "FREE STOP · BOX NOW" + (code ? " " + code : ""); }
+      else if (lapsToStop <= 0) { state = "now"; text = "BOX THIS LAP" + (code ? " · " + code : ""); }
+      else if (lapsToStop === 1) { state = "soon"; text = "BOX NEXT LAP" + (code ? " · " + code : ""); }
+      return { text, state, stops, next, lapsToStop, code };
+    }
+    /** A rival's window, for the gap chips: "IN" while it is stopping, "P<lap>"
+     *  when its planned stop is within three laps, else "". */
+    function windowOf(o) {
+      if (!o || !o.pitPlan) return "";
+      if (o.pitState && o.pitState !== "none") return "IN";
+      const n = o.pitPlan.lapsAt[o.pitStops || 0];
+      if (n == null) return "";
+      const d = n - (o.lap || 0);
+      return d >= 0 && d <= 3 ? "P" + n : "";
+    }
+    /** Once per lap for the local player: re-cut the plan over the laps left,
+     *  on the set that is on the car and the life it has left. Adopted only
+     *  when the next stop moves by two laps or more — the stagger is a lap by
+     *  design — and said once when it is. Advice, so it may change its mind;
+     *  the AI's plan does not (its stop reasons are pitNow's three). */
+    function replan(c) {
+      const plan = c.pitPlan, zz = z();
+      if (!plan || !zz || !G.tyres || !c.tyre || typeof AiDrive === "undefined") return false;
+      const done = c.pitStops || 0, lap = Math.max(1, c.lap || 1);
+      const lapsLeft = G.lapsTarget - lap + 1;
+      const oldNext = plan.lapsAt[done];
+      if (lapsLeft < 2 || oldNext == null) return false;
+      const lifeLaps = (cls) => TyreModel.lifeLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
+      const cls = c.tyre.id && TyreModel.AI_CLASS[c.tyre.id] ? c.tyre.id : (c.tyreClass || "medium");
+      const firstLife = Math.max(1, lifeLaps(cls) * (1 - G.tyres.spent(c)));
+      const stops = plan.pin != null ? Math.max(0, plan.pin - done) : null;
+      const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || 0.18, roll: 0.5,
+                                      start: cls, firstLife, stops });
+      if (!rel) return false;
+      const newNext = rel.stops > 0 ? lap - 1 + rel.lapsAt[0] : null;
+      if (newNext != null && Math.abs(newNext - oldNext) < 2) return false;
+      if (newNext == null && rel.stops === 0 && plan.stops - done === 0) return false;
+      plan.seq = plan.seq.slice(0, done + 1).concat(rel.seq.slice(1));
+      plan.stints = plan.stints.slice(0, done).concat(rel.stints);
+      plan.stops = done + rel.stops;
+      plan.lapsAt = plan.lapsAt.slice(0, done).concat(rel.lapsAt.map((k) => lap - 1 + k));
+      if (G.announce) G.announce(newNext != null ? "NEW PLAN — BOX LAP " + newNext : "NEW PLAN — NO MORE STOPS", 2.2, "info");
+      return true;
     }
 
     /** Does this AI car call its stop this tick? The plan says WHEN; AiDrive.pitNow
@@ -1189,7 +1275,8 @@ const PitLane = (function () {
      *  as a stop that failed to happen. */
     function think(c) {
       const plan = c && c.pitPlan;
-      if (!plan || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
+      // A HUMAN's plan is advice (planFor): nothing here ever arms it.
+      if (!plan || c.human || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
       const stopsLeft = plan.stops - (c.pitStops || 0);
       const nextAt = plan.lapsAt[c.pitStops || 0];
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
@@ -1311,6 +1398,7 @@ const PitLane = (function () {
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
              worthStopping, cueM: CUE_M, servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
+             planInfo, windowOf, replan, lossS, pinnedStops, setPinnedStops,
              laneEdge, laneCentre, laneDrive, laneUniform, boxUniform, laneX, inLaneLat, inBoxLat,
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }
