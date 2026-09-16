@@ -333,10 +333,14 @@ whose grip term is `gripScale = 1 - clamp((vStd(speed) - 20)/(VMAX - 20), 0, 1)
 aero to the planner alone put planned grip (rising 65 %) and available grip
 (falling 28 %) on opposite slopes: the AI planned entry speeds it could not
 turn at and washed 0.60 m out of a short corner's apex at Monza while the long
-ones were unmoved. **The planner and the actuator disagreeing about how grip
-varies with speed is a real open defect**; until one of the two directions in
-`docs/notes/AI-FIELD-RESEARCH.md` is taken, flat `latMax` is the consistent
-choice because it does not contradict the actuator.
+ones were unmoved. That planner/actuator disagreement was CLOSED on
+2026-09-14 (`bf1979d`): `AiDrive.lateralScale` is now the one grip envelope
+(load ±8 %, grip, the 0.28 speed taper) that both the kinematic lateral step
+in `updateCar` and `brakeTarget` read, and `AiDrive.cornerSpeed` inverts the
+taper analytically so the planner's entry speed is one the actuator can turn
+at. `latMax` is no longer flat — it carries the aero-load term — but it still
+has no `aeroGrip` rise, on purpose: the actuator has none either. What remains
+open is the 12 m look-ahead start in the brake lookahead (`docs/notes/AI-FIELD-RESEARCH.md`).
 
 ### Racecraft: who passes, who yields
 

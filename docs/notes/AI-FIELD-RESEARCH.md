@@ -113,7 +113,13 @@ project does not have.
   easy, at gaps past ~640 m, and it is a monotonicity fix rather than a
   measurable pace change.
 
-## The AI's planner and its actuator disagree about grip (2026-09-09)
+## The AI's planner and its actuator disagree about grip (2026-09-09) — CLOSED 2026-09-14
+
+**Resolved by `bf1979d` (2026-09-14): `AiDrive.lateralScale` is now the one
+grip model both sides read, and `AiDrive.cornerSpeed` inverts its taper for
+the planner.** The "two honest directions" below were taken as a third — a
+shared function — so neither side contradicts the other. This section is
+kept as the record of the measurement that found it; the open item is gone.
 
 **A downforce term was added to the AI's corner model and then REVERTED the
 same day, because measuring it found a bigger defect underneath.** Read this

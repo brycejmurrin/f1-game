@@ -38,10 +38,12 @@ async function checkGrip(browser) {
   const ctx = await browser.newContext({ viewport: { width: 900, height: 600 } });
   const page = await ctx.newPage();
   await page.goto(BASE + "/");
-  await page.locator("#mb-race").click();
-  await page.locator("#sel-go").click();
-  await page.locator("#rs-go").click();
-  await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, POLL);
+  // __apex.race(), not the menu clicks: the picker's sheet-in animation and the
+  // season-complete NEXT state both intercept a bare click (checkBank and
+  // checkRoadfollow already boot this way).
+  await page.waitForFunction(() => window.__apex != null, POLL);
+  await page.evaluate(() => window.__apex.race("bahrain", "day", "dry"));
+  await page.waitForFunction(() => window.__apex.info().track != null, POLL);
   await page.evaluate(() => window.__apex.go());
   await page.evaluate(() => window.__apex.jump(0.0, 50, 0));
 
@@ -101,10 +103,9 @@ async function checkSteer(browser) {
     const ctx = await browser.newContext({ viewport: { width: 900, height: 600 } });
     const page = await ctx.newPage();
     await page.goto(BASE + "/");
-    await page.locator("#mb-race").click();
-    await page.locator("#sel-go").click();
-    await page.locator("#rs-go").click();
-    await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, POLL);
+    await page.waitForFunction(() => window.__apex != null, POLL);
+    await page.evaluate(() => window.__apex.race("bahrain", "day", "dry"));
+    await page.waitForFunction(() => window.__apex.info().track != null, POLL);
 
     const corners = await page.evaluate(() => window.__apex.corners());
     const frac = corners.length ? corners[0] : 0.15;
