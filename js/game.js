@@ -4917,9 +4917,16 @@ function updateCar(c, dt, ranked) {
     const Fyf = _tyreSat(CS_FRONT, slipF, muF) * sp;
     const Fyr = _tyreSat(csR, slipR, muR) * sp;
     const cosD = Math.cos(delta);
+    // Where each axle sits on its tyre curve: x = cs·α/mu, the curve's own
+    // abscissa (peak at TyreModel.CURVE_PEAK_X). MONOTONIC in slip, unlike
+    // |Fy|/mu, which peaks at 1 and FALLS past the peak — a consumer keyed on
+    // "utilisation > 0.9" would go quiet exactly when the driver has overdriven
+    // most. So frontUtil/rearUtil below are x / peak: 1.0 = at the peak, above
+    // it = past (the coach and obs() read them).
+    const sat = Math.abs(CS_FRONT * slipF) / Math.max(muF, 1e-3);
+    const satR = Math.abs(csR * slipR) / Math.max(muR, 1e-3);
     // Front saturation cue: feedback only; never writes the driving state.
     if (c.isPlayer && !c.offroad && sp > 0.5) {
-      const sat = Math.abs(CS_FRONT * slipF) / Math.max(muF, 1e-3);
       const asking = Math.abs(steer) > 0.15;
       if (sat > 1.15 && asking && (c.uslipHapT = (c.uslipHapT || 0) - dt) <= 0) {
         const bite = clamp((sat - 1.15) / 0.85, 0, 1);   // 0 at onset, 1 well past
@@ -4934,7 +4941,6 @@ function updateCar(c, dt, ranked) {
       // …and the REAR, past its peak (the curve's fall, not its approach): a
       // slower, heavier pulse than the front's so a pad or a phone can tell
       // which end has let go. Feedback only — reads the slip, writes nothing.
-      const satR = Math.abs(csR * slipR) / Math.max(muR, 1e-3);
       if (satR > TyreModel.CURVE_PEAK_X && (c.oslipHapT = (c.oslipHapT || 0) - dt) <= 0) {
         const bite = clamp((satR - TyreModel.CURVE_PEAK_X) / 1.5, 0, 1);
         Input.vibrate(18 + (bite * 22) | 0);
@@ -4947,7 +4953,7 @@ function updateCar(c, dt, ranked) {
     c.lateralAccel = ay;
     c.slipFront = slipF; c.slipRear = slipR; c.steerAngle = delta;
     c.gripFront = muF; c.gripRear = muR; c.forceFront = Fyf; c.forceRear = Fyr;
-    c.frontUtil = Math.abs(Fyf) / muF; c.rearUtil = Math.abs(Fyr) / muR;
+    c.frontUtil = sat / TyreModel.CURVE_PEAK_X; c.rearUtil = satR / TyreModel.CURVE_PEAK_X;
     // Floored: setPhysics({yawInertia:0}) would otherwise make the rdot below
     // divide by zero and NaN the whole car state.
     const kz2 = Math.max(1e-3, af * ar * YAW_INERTIA);   // yaw inertia / mass (scaled)

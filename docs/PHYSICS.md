@@ -64,7 +64,9 @@ at 16° of slip and a flick at full lock cost nothing. The peak slip angle is
 rising with aero load as it should. Never negative, never oscillating (a Magic
 Formula with a sharpening E goes negative at spin-sized slips, which this model
 reaches). The front-saturation haptic fires at `x > 1.15`, i.e. before the
-peak; a rear haptic fires past the rear's peak. Measured shapes and the
+peak; a rear haptic fires past the rear's peak. `c.frontUtil` / `c.rearUtil`
+(the coach, `obs()`) are `x / (π/2)` — 1.0 at the peak, above it past — because
+`|Fy| / mu` is not monotonic any more. Measured shapes and the
 literature: `docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md`; the shape is
 locked by `tests/unit/player-dynamics-vm.test.mjs`.
 
