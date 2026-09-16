@@ -3243,7 +3243,42 @@ const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags });
 /** The RACE! button's route into a race. Not folded into startRace(): netplay
  *  and __apex.race() both AWAIT that function, and neither should gain two
  *  seconds of flourish. The button is the only place a human is watching. */
+/** THE GRID, FOR THE FLYBY'S LAST SHOT. The menu builds a world but no field —
+ *  prepareMenuCarAssets only warms the car MESHES — so the closing shot up the
+ *  middle of the grid was an aisle of empty tarmac. This seats the cars for it.
+ *
+ *  IT MUST NOT COST THE SIM STREAM A SINGLE DRAW. makeCars() spends one simRnd()
+ *  per car, and the seeded stream's draw count is a contract the whole race
+ *  reproduces from (see gridUp, armReliability). So the state is snapshotted and
+ *  restored around the call, and the cars are seated on TrackMesh's own slots
+ *  directly rather than through gridUp(), which spends a draw per car of its own
+ *  for the grid jitter. startRace() then builds the real field from an untouched
+ *  stream moments later and throws this one away.
+ *
+ *  Only the fields the DRAW path reads are set: this is scenery, not a race. */
+function menuGridCars() {
+  if (!track || headlessMode || typeof TrackMesh === "undefined") return;
+  const rng = _simRngState;
+  try {
+    makeCars();
+    for (let i = 0; i < cars.length; i++) {
+      const c = cars[i], slot = TrackMesh.gridSlot(track, i);
+      c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
+      const w = worldFromTrack(c.s, c.x, smp);
+      c.px = w.x; c.pz = w.z;
+      c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x;
+      c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.steerVis = 0;
+      c.speed = 0; c.lap = 0; c.prog = -(14 + i * 8);
+    }
+  } catch (e) {
+    cars = [];                       // half a grid is worse than none
+    Log.warn("gfx", "menu grid failed", e);
+  }
+  _simRngState = rng;
+}
+
 function raceIntro(go) {
+  menuGridCars();
   loadingScreen.run({
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
@@ -7339,7 +7374,12 @@ function render(dt) {
     // boot renders the same screen with cars === [] — the asymmetry.
     // The setup/garage preview is not affected: renderSetupPreview() returns
     // out of render() well before this loop.
-    if (state === "menu") break;
+    // …EXCEPT for the pre-race flyby, whose closing shot is the grid itself.
+    // menuGridCars() seats the field deliberately for that shot, so here the
+    // field is the SUBJECT rather than the leftovers the guard above describes.
+    // Still nothing after quitToMenu: that leaves the loading screen inactive,
+    // which is the same break as before.
+    if (state === "menu" && !loadingScreen.active()) break;
     if (!c.isPlayer && player) {
       const ds = Math.abs(c.s - player.s);
       if (Math.min(ds, track.total - ds) > 550) continue;
