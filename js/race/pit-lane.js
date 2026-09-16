@@ -68,9 +68,9 @@ const PitLane = (function () {
   // backwards — a pit lane is a building, not a share of a circuit. Measured
   // from the start/finish line, which is where every circuit's pit straight is
   // (racing coordinates put the line at s = 0; see TrackSpace).
-  const ENTRY_M = 400;     // the LONGEST the lane may open before the line
+  const ENTRY_M = 260;     // the LONGEST the lane may open before the line (TrackPit.ENTRY_MAX; was 400)
   const ENTRY_MIN = 150;   // ...and the shortest that is still a lane
-  const EXIT_M = 130;      // where it closes, after the line
+  const EXIT_M = 110;      // where it closes, after the line (TrackPit.EXIT_M; was 130)
   const BOX_M = 40;        // the stop, this far before the line
 
   // ── WHERE THE LANE OPENS IS A PROPERTY OF THE CIRCUIT ─────────────────────
@@ -122,13 +122,13 @@ const PitLane = (function () {
   // sits at the same place on the dial, so the pit loss a player measures does
   // not move when they change the pace slider.
   const LIMIT_FRAC = 22.2 / 72;      // 80 km/h of a 259 km/h envelope
-  const LIMIT_FRAC_STREET = 16.7 / 72;   // 60 km/h — Monaco, Singapore, Melbourne, Zandvoort
+  const LIMIT_FRAC_STREET = 16.7 / 72;   // 60 km/h — the PAINTED street lane's fallback; a built complex carries its own limitKph (TrackPit)
 
   // How long the car is held in the box. Real stationary time is 2.0-2.5 s
   // (record 1.80 s); this is deterministic on purpose — a random stop time
   // would make a strategy call a coin flip and would break replay determinism,
   // which js/race/reliability.js is equally careful about.
-  const BOX_S = 2.4;
+  const BOX_S = 2.2;   // was 2.4: the 2025 field's median stationary time is ~2.2 s
 
   // How slow the car has to be at the box for the stop to count. A fraction of
   // the speed envelope, so it rides OVERALL SPEED like the limiter does.
@@ -277,6 +277,35 @@ const PitLane = (function () {
   // third of the pit straight for half a second armed the limiter on the
   // racing line — from the grid, in traffic, on every circuit.
   const COMMIT_IN = 0.5;
+  // A LOCAL car that committed and then held the racing surface again for this
+  // long has changed its mind: un-armed, limiter off. Without it a lane touched
+  // by mistake meant 80 km/h to the exit line with KEEP RIGHT on screen, and
+  // the limiter waiting at the line next lap too.
+  const ABORT_S = 1.0;
+  // An AI braking for its box never goes below this until it is laterally IN
+  // the box: lateral authority is zero at a standstill, so a car braked to
+  // nothing beside its box could never reach it — it sat there, rescue put it
+  // on the racing line, and Monaco's field gridlocked on the pit straight.
+  const CRAWL_V = 3;
+  // THE APPROACH (AI only — laneX and entryV, both applied to !c.human): an
+  // armed AI takes the pit side of the road for the last APPROACH_M before
+  // the entry road, and is capped to reach the limit AT the entry line on an
+  // ENTRY_BRAKE m/s² curve. Without both it turned in at the line, from the
+  // racing line at racing speed: it met the grown wall on the verge side
+  // (off-road, rescued into the lane — every stop on Bahrain, measured) and
+  // ran the first seconds of the lane over the limit. ROAD_IN is the line
+  // inside the road edge the peel starts on and the blend ends on.
+  const APPROACH_M = 200;
+  const ENTRY_BRAKE = 10;
+  const ROAD_IN = 1.6;
+  // The working lane only over the last WORK_IN_M into the box, on a DIAGONAL
+  // from the fast lane — the box before ours is one pitch (11 m) back and
+  // holds another team's car: a car that moved over 40 m out ran into it
+  // (Monaco, traced: 15 m/s to 0 in a second, welded for a minute) — and
+  // never out of it: a serviced car pulls into the fast lane at once, or it
+  // crawls behind the next box's stop at the queue floor (measured: 33 s
+  // from box to exit, by rescue pulses, with the whole field on one lap).
+  const WORK_IN_M = 20;
 
   // Resolve the lane for a built track: absolute arc positions, the side, the
   // width and the limit. A circuit def may override any field through
@@ -516,6 +545,8 @@ const PitLane = (function () {
             ? { phase: "stop", text: "STOP HERE", dist: 0 }
             : { phase: "near-box", text: "BOX " + Math.round(togo) + "m", dist: togo };
         }
+        // Past the box by more than the latch allows: no crew here, go round.
+        if (togo < -BOX_TOL * 2) return { phase: "missed", text: "BOX MISSED", dist: togo };
         return { phase: "lane", text: Math.round(limit() * 3.6) + " LIMIT", dist: 0 };
       }
       if (st === "out") return null;
@@ -550,9 +581,53 @@ const PitLane = (function () {
      *  stopped by the time it arrives. AI-ONLY by contract — game.js applies it
      *  only to `!c.human`, because braking onto the mark is the player's job. */
     function approachV(c) {
+      // Serviced (or being serviced): the envelope is spent. It used to hold a
+      // car that had stopped short of the box's centre — inside the tolerance,
+      // the stop latched — at ZERO after the tyres went on, until a rescue
+      // pulsed it past the mark (every stop, both circuits measured).
+      if (c.pitState === "out" || c.pitState === "box") return Infinity;
       const togo = toBox(c);
       if (togo < 0) return Infinity;                 // not in the window, or past the box
-      return Math.sqrt(2 * BOX_BRAKE * Math.max(0, togo - BOX_TOL * 0.5));
+      const v = Math.sqrt(2 * BOX_BRAKE * Math.max(0, togo - BOX_TOL * 0.5));
+      if (v >= CRAWL_V) return v;
+      // Not laterally in the box yet: keep crawling (CRAWL_V) so the lateral
+      // pull can still land it; past the box it goes round again.
+      Tracks.sample(G.track, c.s, _smp);
+      return inBoxLat(c, _smp.hw || 0, z().side) ? v : CRAWL_V;
+    }
+
+    /** The APPROACH envelope onto the entry line: how fast an armed car may be
+     *  HERE and still be at the limit when the limiter meets it. AI-ONLY by
+     *  contract, like approachV — game.js applies it to `!c.human` — and only
+     *  ahead of the line: a car armed a lap early keeps its racing speed. */
+    function entryV(c) {
+      const d = toEntry(c);
+      if (!(d > 0)) return Infinity;
+      const lim = limit();
+      return Math.sqrt(lim * lim + 2 * ENTRY_BRAKE * Math.max(0, d - 4));
+    }
+
+    /** The EXIT ROAD's hold: the limit until the blend has brought a serviced
+     *  car inside the road edge. Where the road turns in soon after the exit
+     *  line the blend is ROAD_MIN long (Bahrain: 30 m into T1), and a car
+     *  released to racing speed at the line ran off its end onto the grass
+     *  (21 of 21 exits, measured). AI-only by contract, like entryV. */
+    function exitV(c) {
+      if (!c || c.pitState !== "out" || roadOf(c) !== "exit") return Infinity;
+      Tracks.sample(G.track, c.s, _smp);
+      return Math.abs(c.x || 0) > (_smp.hw || 0) - 0.5 ? limit() : Infinity;
+    }
+
+    /** Which pit ROAD this car is on outside the window — "entry" (the peel,
+     *  sA→sIn) or "exit" (the blend, sOut→sB) — or null. The ribbon exists on
+     *  both, the limiter on neither. */
+    function roadOf(c) {
+      const p = G.track && G.track.pit;
+      if (!p || !c || p.painted) return null;
+      const L = G.track.total;
+      if (inWindow({ sIn: p.sA, sOut: p.sIn }, c.s, L)) return "entry";
+      if (inWindow({ sIn: p.sOut, sOut: p.sB }, c.s, L)) return "exit";
+      return null;
     }
 
     /** Is this car serving a stop right now? A STATE, not a position — so a car
@@ -617,10 +692,29 @@ const PitLane = (function () {
       return (hw - lw(hw) * 0.5) * side;
     }
     /** The FAST lane's centre — where a car transits the complex at the
-     *  limiter between the entry and its box. Falls back to the box line. */
-    function laneDrive(hw, side, s) {
+     *  limiter between the entry and its box — and, on the ENTRY and EXIT
+     *  ROADS, the line onto and off it: the wall line plus half the fast band
+     *  (the road edge plus the same, while the wall is still growing), blended
+     *  with a line ROAD_IN inside the road edge by the ribbon's width, so the
+     *  peel and the blend are ONE continuous target a yaw-limited heading can
+     *  follow. The ribbon's own centre was the target on both roads, and it
+     *  sits 3.75 m off the road edge the moment the ribbon exists: the AI
+     *  lagged it outward onto the grass on nearly every exit (15 of 18 stops
+     *  on Bahrain, rescued back onto the road). Falls back to the box line. */
+    function laneDrive(hw, side, s, lead) {
       const rib = ribbonAt(s);
-      return rib ? rib.centre : laneCentre(hw, side, s);
+      if (!rib) return laneCentre(hw, side, s);
+      const p = G.track.pit;
+      // `lead` (the ENTRY road): the wall line where the wall WILL stand, so
+      // the car is on the lane side of it before it grows — it grows over the
+      // road's last `grow` metres (16 m on Bahrain), faster than a heading can
+      // follow, and a car still on the road side when it stood was clamped to
+      // its track face and left on the verge (traced). Off the exit road the
+      // target follows the wall DOWN, the line a car can actually hold.
+      const inner = rib.inner * side + (lead ? p.off.fastIn * (1 - rib.v) : 0);
+      const fastC = inner + p.bands.fast * 0.5;
+      const roadC = hw - ROAD_IN;
+      return side * (roadC + (fastC - roadC) * rib.w);
     }
     /** Is this car laterally IN the lane (within BOX_LAT of it)? Written in
      *  "toward the pit side" coordinates — x * side — so one comparison serves
@@ -665,12 +759,38 @@ const PitLane = (function () {
      *  happen, exactly as it would not in the real thing. */
     function laneX(c, hw, want) {
       const zz = z();
-      if (!(zz && inLane(c))) return want;
+      if (!zz || !c) return want;
+      // GUIDED: a car serving a stop (the limiter's own set), a serviced car
+      // still on the EXIT ROAD, and an armed AI on the ENTRY ROAD — the lane
+      // peels off the racing surface there, and an AI that only turned in at
+      // the entry line crossed the verge and the wall band to reach it, then
+      // crossed them back the moment the exit line cleared its state.
+      const road = roadOf(c);
+      const guided = inLane(c) || (c.pitState === "out" && road === "exit") ||
+                     (!c.human && c.pitArmed && road === "entry");
+      if (!guided) {
+        // THE APPROACH: an armed AI holds the pit side of the road for the
+        // last APPROACH_M before the entry road, so the peel starts from the
+        // edge and not from the racing line. Not from a lap away: an AI armed
+        // past its own box stays on the racing line until next time round.
+        const p = G.track && G.track.pit;
+        if (!c.human && c.pitArmed && p && !p.painted && road == null && !inWindowOf(c)) {
+          const d = toEntry(c) - p.entryRoadM;
+          if (d > 0 && d < APPROACH_M) return (hw - ROAD_IN) * zz.side;
+        }
+        return want;
+      }
       // The FAST lane through the complex, the WORKING lane for the last
-      // stretch into the box and away from it — the move a real stop makes.
-      const togo = toBox(c);
-      if (togo > -BOX_TOL * 2 && togo < 60) return laneCentre(hw, zz.side, c && c.s);
-      return laneDrive(hw, zz.side, c && c.s);
+      // stretch into the box — and the fast lane again the moment the stop is
+      // done — the move a real stop makes.
+      const togo = inWindowOf(c) ? toBox(c) : -Infinity;
+      const fast = laneDrive(hw, zz.side, c.s, road === "entry");
+      if (c.pitState === "out" || !(togo > -BOX_TOL && togo < WORK_IN_M)) return fast;
+      // The diagonal: the fast lane WORK_IN_M out, the working lane's centre at
+      // the box (the AI halts BOX_TOL/2 short of it, four fifths of the way
+      // across — inside inBoxLat's line with a metre to spare on every band set).
+      const u = Math.min(1, Math.max(0, (WORK_IN_M - togo) / WORK_IN_M));
+      return fast + (laneCentre(hw, zz.side, c.s) - fast) * u;
     }
     function committing(c, zz, L) {
       if (c.offroad || c.wrongWay || c.rescueT > 0) return false;
@@ -690,7 +810,9 @@ const PitLane = (function () {
       // over the painted line, HELD for COMMIT_S, and moving forwards on the
       // road. Those are what carry the guard; the arc limit never did much
       // beyond excluding the grid.
-      const at = throughM(zz, c.s, L);
+      // (On the entry road, before the line, `at` would wrap to a lap: the box
+      // is ahead by construction.)
+      const at = inWindowOf(c) ? throughM(zz, c.s, L) : -1;
       if (at > boxThroughFor(c, zz, L) - COMMIT_CLEAR) return false;
       // ON THE LANE'S OWN TARMAC where there is one: the complex's entry road
       // peels off the racing surface, and a driver commits by driving onto it —
@@ -748,13 +870,46 @@ const PitLane = (function () {
     function update(c, dt) {
       if (!c || !enabled() || c.retired || c.finished) return;
       const st = c.pitState || "none";
+      const zz = z(), L = G.track.total;
+      // The commitment lands: armed, the crew told what to ready. With no
+      // button there is no other moment the compound choice becomes visible.
+      const commitNow = () => {
+        c.pitCommitT = 0; c.pitCommitted = true;
+        arm(c, true);
+        const next = pickFor(c);
+        if (G.announce) G.announce("PIT ENTRY — LIMITER ON" + (next ? " — " + next.code : ""), 1.6, "race");
+      };
       if (!inWindowOf(c)) {
+        // A serviced car keeps "out" down the EXIT ROAD past the exit line, so
+        // laneX guides it off the lane where the ribbon blends back (the
+        // limiter is already off: inLane's "out" clause needs the window).
+        if (st === "out" && roadOf(c) === "exit") return;
         // Left the window. A car that was in the box and never finished the stop
-        // (a red flag, a reset) is released rather than stuck holding.
-        if (st !== "none") { c.pitState = "none"; c.pitT = 0; }
+        // (a red flag, a reset) is released rather than stuck holding. A LOCAL
+        // car's commitment is per pass: a stop it did not make is not carried
+        // to the next lap, where the limiter would meet it at the line. An
+        // AI's plan (pitArmed) is, by design — it comes in next time round.
+        if (st !== "none") { c.pitState = "none"; c.pitT = 0; if (c.local) { c.pitArmed = false; c.pitCommitted = false; } }
+        // THE ENTRY ROAD, before the entry line: where a LOCAL car commits —
+        // holding the lane's tarmac arms the stop, and the limiter waits for
+        // the line — and where it can still change its mind, by holding the
+        // road again for ABORT_S; past the line the wall stands between the
+        // two. (An AI is armed by its plan and steered onto the road by laneX.)
+        if (c.local && roadOf(c) === "entry") {
+          if (!c.pitArmed) {
+            c.pitCommitT = committing(c, zz, L) ? (c.pitCommitT || 0) + dt : 0;
+            if (c.pitCommitT >= COMMIT_S) commitNow();
+          } else if (c.pitCommitted) {
+            Tracks.sample(G.track, c.s, _smp);
+            c.pitAbortT = inLaneLat(c, _smp.hw || 0, zz.side) ? 0 : (c.pitAbortT || 0) + dt;
+            if (c.pitAbortT >= ABORT_S) {
+              c.pitAbortT = 0; c.pitCommitted = false; c.pitArmed = false;
+              if (G.announce) G.announce("PIT ENTRY ABORTED", 1.4, "race");
+            }
+          }
+        }
         return;
       }
-      const zz = z(), L = G.track.total;
       if (st === "box") {
         c.pitT = (c.pitT || 0) - dt;
         if (c.pitT <= 0) { c.pitState = "out"; c.pitT = 0; }
@@ -767,24 +922,34 @@ const PitLane = (function () {
       // into a stop here.
       if (!c.pitArmed && c.local) {
         c.pitCommitT = committing(c, zz, L) ? (c.pitCommitT || 0) + dt : 0;
-        if (c.pitCommitT >= COMMIT_S) {
-          c.pitCommitT = 0;
-          arm(c, true);
-          // Say what the crew has ready. With no button to press there is no
-          // other moment where the compound choice becomes visible, and the
-          // limiter coming on wants an explanation the same tick it arrives.
-          const next = pickFor(c);
-          if (G.announce) G.announce("PIT ENTRY — LIMITER ON" + (next ? " — " + next.code : ""), 1.6, "race");
-        }
+        if (c.pitCommitT >= COMMIT_S) commitNow();
       }
       if (!c.pitArmed && !inLane(c)) return;          // not coming in
+      const at = throughM(zz, c.s, L), boxAt = boxThroughFor(c, zz, L);
+      // Armed but already PAST its own box — an AI's plan fires at the lap
+      // tick, and the line sits inside the window, past the row on most
+      // circuits: nothing to stop for this pass. Stay armed and unlimited, and
+      // come in next time round. (It used to take the limiter for the rest of
+      // the window, leave still armed, and stop a lap later.)
+      if (st === "none" && at > boxAt + BOX_TOL * 2) return;
+      // …and, on the complex, armed but NOT ON THE LANE: the wall stands past
+      // the entry line, so a car still on the racing surface here cannot get
+      // in this time round — it races on and takes the entry road next lap.
+      // An AI whose plan fired at the line (the grid sits inside the window,
+      // Bahrain: at 151 m, box ahead) used to turn in through the wall: on the
+      // limiter on the racing line, clamped to the wall's track face, off-road
+      // on the verge, and rescued into the lane (11 stops of 21, measured).
+      if (st === "none" && ribbonAt(c.s)) {
+        Tracks.sample(G.track, c.s, _smp);
+        if (!inLaneLat(c, _smp.hw || 0, zz.side)) return;
+      }
       // Called the stop and reached the window: the limiter is on from here.
       c.pitState = "lane";
-      // The box: reached when the car has driven far enough in, and only once
+      // The box: reached when the car has driven far enough in — and not too
+      // far: a car halted two garages down is not at its crew — and only once
       // slow enough to have actually STOPPED there. Blowing through the box at
       // the limit misses the stop, exactly as it would in the real thing.
-      const at = throughM(zz, c.s, L), boxAt = boxThroughFor(c, zz, L);
-      if (at >= boxAt - BOX_TOL && Math.abs(c.speed) < G.vTop() * BOX_SPEED_FRAC) {
+      if (at >= boxAt - BOX_TOL && at <= boxAt + BOX_TOL * 2 && Math.abs(c.speed) < G.vTop() * BOX_SPEED_FRAC) {
         // AND IN THE LANE. Sampled only here, after the two cheap tests, so the
         // spline read costs one car for one tick per stop. A car stopped on the
         // racing line has not reached its box — the crew is not standing there
@@ -932,10 +1097,31 @@ const PitLane = (function () {
 
     function resetCommit(c) { if (c) c.pitCommitT = 0; }
 
+    // ── THE STOP, SEEN: the jacks and the wheels ─────────────────────────
+    // Render-only numbers for a car HELD in its box, read off the hold's own
+    // clock (pitT counts boxS down): up on the jacks in the first 12 %, the
+    // four wheels off outward along their axles from 15 % to 27 %, the new
+    // set on from 68 % to 80 %, down in the last 12 %. Nothing here moves
+    // the physics; js/car/car-draw.js lifts and slides the wheels by these,
+    // js/game.js lifts the body. One shared record, no per-frame allocation.
+    const _anim = { lift: 0, off: 0, u: -1 };
+    const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+    function stopAnim(c) {
+      const zz = z();
+      _anim.lift = 0; _anim.off = 0; _anim.u = -1;
+      if (!c || c.pitState !== "box" || !zz || !(zz.boxS > 0)) return _anim;
+      const u = Math.min(1, Math.max(0, 1 - (c.pitT || 0) / zz.boxS));
+      _anim.u = u;
+      _anim.lift = 0.22 * (u < 0.5 ? ease(u / 0.12) : ease((1 - u) / 0.12));
+      _anim.off = 0.55 * (u < 0.5 ? ease((u - 0.15) / 0.12) : ease((0.80 - u) / 0.12));
+      return _anim;
+    }
+
     function reset(c) {
       if (!c) return;
       c.pitArmed = false; c.pitState = "none"; c.pitT = 0; c.pitNext = null; c.pitStops = 0; c.pitWhy = "";
-      c.pitCommitT = 0;
+      c.pitCommitT = 0; c.pitAbortT = 0; c.pitCommitted = false;
+      if (c.local) _saidEnter = false;   // the first-entry cue is per SESSION, not per page load
     }
 
     function info(c) {
@@ -993,7 +1179,7 @@ const PitLane = (function () {
       };
     }
 
-    return { zoneOf: () => z(), limit, toBox, approachV, inLane, inWindow: inWindowOf,
+    return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
              laneEdge, laneCentre, laneDrive, laneUniform, boxUniform, laneX, inLaneLat, inBoxLat,

@@ -77,19 +77,35 @@ test.describe("pit lane", () => {
     // than hard-coded, because it is a fraction of the speed envelope.
     const limited = await page.evaluate(() => {
       const A = window.__apex;
-      A.jump(0.93, 45, 0); A.aim(0);
+      // ON THE LANE: the pit wall stands past the entry line (TrackPit), so an
+      // armed car still on the racing surface there is not in the lane and
+      // races on — it takes the entry road next time round. The fast lane's
+      // centre is read from the model (driveX), not hard-coded: it moves with
+      // the road's half-width across the calendar.
+      // Found, not assumed: the window's start moves with the complex (it is
+      // not at 0.93 on Monza any more), and driveX is null outside it.
+      let f0 = null, dx = null;
+      for (const f of [0.93, 0.94, 0.95, 0.96, 0.97, 0.98]) {
+        A.jump(f, 45, 0); A.aim(0);
+        const p = A.pit();
+        if (p.inWindow && p.driveX != null) { f0 = f; dx = p.driveX; break; }
+      }
+      if (dx == null) return { settled: 0, cap: 1, sawLane: false, dx };
+      A.jump(f0, 45, dx); A.aim(0);
       A.pit({ arm: true });
       const cap = A.pit().limitKph / 3.6;
       let settled = 0, sawLane = false;
       for (let i = 0; i < 600; i++) {
-        A.setInput({ steer: 0, throttle: true, brake: false });
+        const ps = A.physState();
+        A.setInput({ steer: Math.max(-1, Math.min(1, (dx - ps.x) * 0.35)), throttle: true, brake: false });
         A.step(1 / 60, 1);
         const p = A.pit();
         if (p.inLane) { sawLane = true; settled = A.physState().speed; }
       }
-      return { settled, cap, sawLane };
+      return { settled, cap, sawLane, dx };
     });
-    expect(limited.sawLane, "arming and entering the window must put the car in the lane").toBe(true);
+    expect(limited.dx, "the fast lane's centre is a number inside the window").not.toBeNull();
+    expect(limited.sawLane, "arming ON the lane inside the window must put the car in the lane").toBe(true);
     // Bled toward the cap, never teleported, so allow a little overshoot.
     expect(limited.settled).toBeLessThan(limited.cap * 1.2);
   });
@@ -117,7 +133,13 @@ test.describe("pit lane", () => {
       // which is the position whose width actually matters.
       A.jump(0.99, 30, 0);
       const laneX = A.pit().laneX;
-      A.jump(0.93, 30, laneX); A.aim(0);
+      // …and START inside the window too, on the lane: the window is 260 m
+      // before the line at most now (TrackPit), so 0.93 of a Monza lap is
+      // before the entry road, and a car dropped on the lane's lateral there
+      // stands on the grass. The first frac from 0.93 that is inside it.
+      let f0 = 0.93;
+      for (const f of [0.93, 0.94, 0.95, 0.96, 0.97]) { A.jump(f, 30, 0); if (A.pit().inWindow && A.pit().laneX != null) { f0 = f; break; } }
+      A.jump(f0, 30, laneX); A.aim(0);
       A.pit({ arm: true });
       let sawBox = false, boxTicks = 0; const states = [];
       for (let i = 0; i < 60 * 60; i++) {
