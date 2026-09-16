@@ -407,11 +407,22 @@ let difficulty = store.get("difficulty", "normal");
 // save, so OFF is the only default that does not silently start retiring cars
 // in a game somebody was already halfway through.
 let raceReliability = store.get("reliability", "off");
-// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). Ships OFF for
-// exactly RELIABILITY's reason, plus one of its own: OFF is a true no-op through
-// the grip seam, so tests/specs/physics-characterization.spec.js stays
-// bit-identical until somebody turns this on.
-let raceTyreWear = store.get("tyreWear", "off");
+// TYRE WEAR — "off" | "light" | "real" (js/physics/tyre-model.js). SHIPS LIGHT.
+//
+// It shipped OFF, and off is not a quiet default here the way RELIABILITY's is:
+// it gates the ENTIRE pit feature — no lane, no box, no stop, no prompt, and the
+// AI never pits either — so a player who never opened SETTINGS had a pit lane
+// built into every circuit and no way to discover any of it existed.
+//
+// LIGHT rather than REAL: sets last roughly twice as long, so a stop is a choice
+// rather than a schedule. REAL is one click, OFF is still there, and a stored
+// preference beats this default, so nobody who already chose is overridden.
+//
+// OFF's other job was being a true no-op through the grip seam, which kept
+// tests/specs/physics-characterization.spec.js bit-identical. That is pinned
+// where it belongs now: tests/helpers/fixtures.js sets this key "off" for every
+// spec, so the baselines measure the DRIVING MODEL, not the current default.
+let raceTyreWear = store.get("tyreWear", "light");
 // ACTIVE AERO usage — "manual" (the driver's own switch, the default) or
 // "auto". Inside an activation zone X-mode has no cost or downside, so the
 // optimal play is unconditionally on — which is what the AI does in one line.
@@ -420,7 +431,7 @@ let raceTyreWear = store.get("tyreWear", "off");
 // AI's deal. Stays opt-in because pressing the button is the mechanic.
 let raceAeroMode = store.get("aeroMode", "manual");
 if (!Reliability.isLevel(raceReliability)) raceReliability = "off";
-if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "off";
+if (!TyreModel.isLevel(raceTyreWear)) raceTyreWear = "light";
 let soundOn = store.get("sound", true);
 let musicEnabled = store.get("music", true);    // music on/off, independent of sound
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
@@ -491,6 +502,7 @@ function gearsManual() {
    The TOUCH clause stays exactly as it was: there the drag already owns the
    thumb, so it is not a preference but a fact about the control scheme. */
 let autoThrottleOpt = store.get("autoThrottle", false);
+let throttleLatchOpt = store.get("throttleLatch", false);
 function autoThrottle() { return autoThrottleOpt || (Input.touchControlsNeeded() && steerMode === "touch"); }
 // Left/right-handed docks. F1 Mobile enumerates both as first-class control
 // schemes rather than hiding a toggle; the whole feature here is which dock
@@ -1014,6 +1026,13 @@ let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
 // and held constant so the sky doesn't shift mid-race (only the shader animates).
 let _cloudBase = 0.4;
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
+// OS REDUCE MOTION for GAME-WORLD motion, which no stylesheet can reach (the
+// CSS already honours it for menus; the shake that causes trouble is the 3D
+// camera at 300 km/h — XAG 117). Live: the OS toggle can flip mid-session.
+const _mq = (typeof window !== "undefined" && window.matchMedia)
+  ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+let motionReduced = !!(_mq && _mq.matches);
+if (_mq && _mq.addEventListener) _mq.addEventListener("change", (e) => { motionReduced = !!e.matches; });
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
@@ -1079,7 +1098,7 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0;
-const ANN_PRI = { coach: 1, info: 2, "penalty-warn": 2, race: 4, "penalty-hit": 5 };
+const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, race: 4, "penalty-hit": 5 };
 let _annPri = 0, _annQueue = null;
 function showAnnounce(msg, dur, kind) {
   kind = kind || "race";
@@ -1167,7 +1186,7 @@ function announce(msg, dur, kind) {
   if (hudProfile !== "broadcast") {
     const camId = CAM_MODES[camMode].id;
     if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead") {
-      if (pri < 4) return;
+      if (kind === "info" || kind === "coach") return;
     }
   }
   if (announceT > 0 && pri <= _annPri) {
@@ -2836,7 +2855,9 @@ const G = {
   // autoThrottle among them — so it calls this to re-read them and repaint.
   onAssistBundle() {
     autoThrottleOpt = store.get("autoThrottle", autoThrottleOpt);
-    SettingRow.paint($("pm-throttlemode"), autoThrottleOpt ? "auto" : "hold");
+    throttleLatchOpt = store.get("throttleLatch", throttleLatchOpt);
+    Input.setThrottleLatch(throttleLatchOpt);
+    SettingRow.paint($("pm-throttlemode"), autoThrottleOpt ? "auto" : (throttleLatchOpt ? "latch" : "hold"));
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
     announce("ROOKIE — the car brakes, steers and accelerates with you. Turn it down in SETTINGS as you get quicker.", 4, "coach");
@@ -3423,8 +3444,8 @@ function update(dt) {
      Race only: there is nothing to recover from during the countdown, and the
      same call mid-count would hand the player a free re-place on the grid. */
   if (state === "race" && Input.consumeRecover() && player && !player.retired) {
-    rescuePlayer(player);
-    announce("RECOVERED", 1.5, "coach");
+    // A saved practice checkpoint makes RECOVER the driver's TRY AGAIN; coach.retry() is false everywhere else.
+    if (!coach.retry()) { rescuePlayer(player); announce("RECOVERED", 1.5, "coach"); }
     Log.info("game", "manual recover");
   }
   if (state === "count") {
@@ -4211,7 +4232,14 @@ function updateCar(c, dt, ranked) {
   c.onKerb = Tracks.onKerb(track, c.s, c.x) > 0;
 
   // --- offroad ---
-  c.offroad = Math.abs(c.x) > hw && !c.onKerb;
+  // THE PIT LANE IS ROAD. On the 34 circuits that have room for a separate
+  // ribbon it sits beyond `hw`, so without this every car that drove into it
+  // would pick up grass drag, a cut count and eventually a rescue — i.e. the
+  // lane would be paint you get penalised for using. Tracks.inPitLane is the
+  // same fit the ribbon is built from, so the surface a driver can see and the
+  // surface the physics grants are the same strip by construction.
+  c.inPitLane = Math.abs(c.x) > hw && Tracks.inPitLane(track, c.s, c.x);
+  c.offroad = Math.abs(c.x) > hw && !c.onKerb && !c.inPitLane;
   if (c.offroad) {
     const offDepth = clamp((Math.abs(c.x) - hw) / 5, 0, 1);
     // Grass DRAG: slows you toward a crawl, and never speeds you up. The floor
@@ -4252,7 +4280,7 @@ function updateCar(c, dt, ranked) {
           if (soundOn) GameAudio.penalty();
         }
       } else if (c.isPlayer) {
-        if (hudProfile === "broadcast") announce("TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
+        announce("TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
         if (soundOn) GameAudio.offtrack();
       }
     }
@@ -4398,7 +4426,7 @@ function updateCar(c, dt, ranked) {
       _aiOtPull.street = !!track.street; _aiOtPull.traits = aiT; _aiOtPull.speed = c.speed;
       _aiOtPull.team = c.team; _aiOtPull.seat = c.seat; _aiOtPull.stats = c.houseStats;
       _aiOtPull.blockerSpeed = blocker.speed; _aiOtPull.blockerGap = blockerGap;
-      _aiOtPull.roomL = roomL; _aiOtPull.roomR = roomR; _aiOtPull.other = blocker;
+      _aiOtPull.roomL = roomL; _aiOtPull.roomR = roomR; _aiOtPull.other = blocker; _aiOtPull.roadL = roadL; _aiOtPull.roadR = roadR;
       // Side-pick + incentive inputs. kA is the same AI-only curvature read the
       // racing line above already makes — the arc reaches the AI's choice of
       // side, never the driver. blockerVmax is the car's PACE, not its speed
@@ -4409,23 +4437,22 @@ function updateCar(c, dt, ranked) {
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0); _aiOtPull.vTop = vTop();
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
-      // Engage: a clear lane on the chosen side, and no cooldown from a pass we
-      // just gave up on this same stretch.
+      // Engage only with a reachable lane and no cooldown on this stretch.
       // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
       // attack zone at its baked quality), and not on a car we just gave up on.
       _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.roll = c.phaseRoll || 0.5;
       const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
       const moveOn = !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
       if (!c.passOf && c.passCool <= 0 && moveOn && blockerGap <= AI_PASS_LATCH_M) {
-        const side = AiDrive.otSide(_aiOtPull);
-        if ((side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
+        const side = AiCorridor.choose(_aiOtPull, c, blocker, cars, track.total, CLEAR, c.passPlan || (c.passPlan = {})).side;
+        if (side && (side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
           c.passOf = blocker; c.passSide = side; c.passBest = blockerGap; c.passT = AiDrive.passHold(aiT);
         }
       }
       // Not on: FOLLOW, do not hang half alongside — the bias without the
       // commitment is what parked pairs side by side at monaco (standoffs
       // 0 -> 6 in the bench with the zone gate alone).
-      if (!c.passOf) overtake = moveOn ? AiDrive.otPull(_aiOtPull) : 0;
+      if (!c.passOf) overtake = moveOn && (!c.passPlan || c.passPlan.side) ? AiDrive.otPull(_aiOtPull) : 0;
     }
     if (c.passOf) overtake = AiDrive.passTarget(c.passOf.x, c.passSide, CLEAR, hw) - targetX;
     // LET PASS moves aside instead of defending; the `!letPass` below is what
@@ -5277,7 +5304,7 @@ function updateCar(c, dt, ranked) {
     else c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 2);
     c.wrongWay = c.wrongWay ? c.wrongT > 0.15 : c.wrongT > 0.4;
     if (c.wrongWay && (c.wrongCueT = (c.wrongCueT || 0) - dt) <= 0) {
-      if (c.local) announce("WRONG WAY", 1.0, "info");
+      if (c.local) announce("WRONG WAY", 1.0, "warning");
       c.wrongCueT = 1.0;
     }
     // Auto-rescue: stuck off-track, wrong-way, pinned to a wall, or simply
@@ -6282,7 +6309,10 @@ function render(dt) {
     eyeT = vant.eye; tgtT = vant.tgt; fovT = vant.fov;
     if (shake > 0) {
       shake = Math.max(0, shake - dt * 1.6);
-      const amt = shake * shake * 0.9;   // squared: grazes barely move, crashes slam
+      // squared: grazes barely move, crashes slam. REDUCE MOTION zeroes the
+      // OFFSET, not the trauma — shake still decays on its own clock, so cues
+      // keyed to it are untouched and only the camera stops moving.
+      const amt = motionReduced ? 0 : shake * shake * 0.9;
       eyeT[0] += (Math.random() - 0.5) * amt; eyeT[1] += (Math.random() - 0.5) * amt * 0.7;
       tgtT[0] += (Math.random() - 0.5) * amt * 0.6; tgtT[1] += (Math.random() - 0.5) * amt * 0.6;
     }
@@ -6583,6 +6613,7 @@ function render(dt) {
   // (js/race/pit-lane.js says what that cost). null until the tyre setting
   // arms a lane, and the shaders test the zero LENGTH, so nothing paints.
   frame.pitLane = pits.laneUniform();
+  frame.pitBox = pits.boxUniform();   // where YOUR box is, for roadMarkings to draw
   // Wet-road material (rain): ramp wetness in/out smoothly so the surface
   // darkens and starts mirroring lamps/sky over ~1s rather than popping.
   if (LT.wetness >= 0) {
@@ -7923,7 +7954,7 @@ els.selBack.onclick = () => {
 $("sel-map-btn").onclick = openTrackDetail;
 $("sel-detail-chip").onclick = openTrackDetail;
 $("track-detail-close").onclick = closeTrackDetail;
-// ── SETTINGS sub-menu ── keeps the pause screen down to RESUME/RESTART/QUIT;
+// ── SETTINGS sub-menu ── separates preferences from pause actions;
 // every tuning + toggle control lives on this page. Opening it hides the pause
 // menu (one panel at a time); BACK (or resume) returns to it.
 // Some settings only mean anything with a race on screen: HIDE HUD toggles a
@@ -7946,7 +7977,7 @@ function openSettings() {
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }
-function closeSettings() { els.pmsettings.hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }
+function closeSettings() { els.pmsettings.hidden = true; $("pm-settings-index").hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }   // index: openSettings()'s showCurrent() re-shows it unconditionally, so hiding it here is free
 $("pm-settings").onclick = openSettings;
 $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings(); };
 // The same settings screen from the TITLE menu, so steering, audio and the
@@ -7955,7 +7986,7 @@ $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings()
 // actually paused, so from here it just closes back to the title.
 $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
 // STEERING and MUSIC are SettingsNav pages (js/ui/settings-tabs.js). Lighting
-// and camera tuners still open as their own docks from the door index.
+// and camera tuners open as their own docks from DISPLAY > ADVANCED VISUALS.
 // ── LIGHTING TUNER ── opened from the settings sub-menu; that menu hides while
 // it's open so the live preview is unobstructed (tick() keeps render() running
 // with physics paused), and DONE returns to it. Rows are generated
@@ -8410,11 +8441,15 @@ function setSteerMode(mode) {
 }
 SettingRow.wire("pm-steer", { values: SettingRow.labels(STEER_MODES), read: () => steerMode,
   write: (v) => { if (STEER_MODES.indexOf(v) >= 0) setSteerMode(v); } });
-SettingRow.wire("pm-throttlemode", { values: SettingRow.labels(["hold", "auto"]),
-  read: () => (autoThrottleOpt ? "auto" : "hold"),
+// HOLD / LATCH / AUTO — the middle rung XAG 107 names; js/input/input.js owns it.
+SettingRow.wire("pm-throttlemode", { values: SettingRow.labels(["hold", "latch", "auto"]),
+  read: () => (autoThrottleOpt ? "auto" : (throttleLatchOpt ? "latch" : "hold")),
   write: (v) => {
     autoThrottleOpt = v === "auto";
+    throttleLatchOpt = v === "latch";
     store.set("autoThrottle", autoThrottleOpt);
+    store.set("throttleLatch", throttleLatchOpt);
+    Input.setThrottleLatch(throttleLatchOpt);
     refreshGearsBtn();
     if (state === "race" || state === "count") showTouchControls(true);
   } });
@@ -8654,6 +8689,7 @@ Input.onPointerKindChange(syncPointerKind);
     + (Input.touchControlsNeeded() ? ({buttons:"tap arrows to steer",touch:"drag to steer"}[steerMode] || "tilt to steer") : classics + " classics");
 }
 Input.setSteerMode(steerMode);
+Input.setThrottleLatch(throttleLatchOpt);
 // DataHub.init(els.datahub) used to run here. It moved into ensureDataHub(),
 // which the DATA button awaits — js/data is LAZY_DATA now and there is no
 // DataHub at boot to initialise.

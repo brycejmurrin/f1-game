@@ -80,6 +80,11 @@ const ALLOWED = [
 
   // ── sign tests: direction, not magnitude ──
   {
+    file: "js/race/driving-coach.js", expr: "c.speed <= 0",
+    code: 'if (!c || c.finished || c.retired || (c.pitState && c.pitState !== "none") || c.speed <= 0) return "";',
+    why: "sign test — driving advice applies only while moving forwards; zero and reverse are excluded at every pace",
+  },
+  {
     file: "js/game.js", expr: "c.speed > 0", code: "if (c.speed > 0) {",
     why: "sign test — braking forwards vs. dropping into the reverse crawl",
   },
@@ -206,6 +211,16 @@ const ALLOWED = [
     // the SAME number as the site above: normalising one and not the other would
     // make the debug hook and the driving model disagree about what a lift is.
     why: "mirrors js/game.js's exhaustPop gate and must carry the identical number",
+  },
+  // ── practice launch goal: the car must be STOPPED before the drill arms ──
+  {
+    file: "js/race/race-insights.js",
+    expr: "Math.abs(c.speed) > 1",
+    code: 'if (mode === "launch" && Math.abs(c.speed) > 1) { G.announce("STOP THE CAR BEFORE SETTING THIS DRILL", 2, "practice"); return false; }',
+    // A standing start is a standing start at every OVERALL SPEED setting: the
+    // gate asks "is the car still?", the same 1 m/s floor the braking goal's
+    // stop test uses, not a fraction of what the car can do.
+    why: "standstill test — a standing start must begin from rest, which carries no PACE term",
   },
 ];
 

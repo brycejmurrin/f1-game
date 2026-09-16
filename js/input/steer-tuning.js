@@ -8,6 +8,7 @@ Log.info("input", "SteerTuning.create");
 const { $, store, clamp } = G;
 if (window.BrakeCue && BrakeCue.create) BrakeCue.create(G);
 
+let hapRepaintWired = false;   // the gamepadconnected repaint is wired once
 const SLIDER_MIN = 1, SLIDER_MAX = 10;
 const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 
@@ -41,7 +42,12 @@ const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 // steps out — overcooking a corner washes the front wide, it never snaps round.
 // The simplified default-view controls (STEERING / TILT / DRIVING HELP / RACING
 // LINE) bundle these for players who don't want the detail — see refreshMacros().
-function tiltDegFromRange(v) { return Math.round(50 + (18 - 50) * (v - 1) / 9); }
+// TILT SENSITIVITY: the phone angle that means full lock, so sensitivity is 1/deg.
+// XAG 107 asks for at least ±50 % of the DEFAULT. The old 50°..18° ramp gave
+// -50 % at the lazy end (50/25) but only +39 % at the sharp end (25/18) — half
+// compliant. Solved for f(8) = 25 exactly, so the shipped default does NOT move,
+// with f(10) = 16 (+56 %) and f(1) = 57 (-56 %): 56.5 - 4.5(v-1).
+function tiltDegFromRange(v) { return Math.round(56.5 - 4.5 * (v - 1)); }
 const SMOOTH_LAG_LO = 55, SMOOTH_LAG_HI = 195;   // ms of lag at notch 1 / notch 10
 function lagFromSmooth(v) { return SMOOTH_LAG_LO + (SMOOTH_LAG_HI - SMOOTH_LAG_LO) * (v - 1) / 9; }
 function cutoffFromSmooth(v) { return 1000 / (2 * Math.PI * lagFromSmooth(v)); }
@@ -568,6 +574,21 @@ function applySteerTuning() {
   paintRow("pm-steerrate", steerRate2);
   paintRow("pm-analogspeed", analogSpd, adaptLabel(analogSpd));
   paintRow("pm-haptics", haptics, adaptLabel(haptics));
+  // HIDE the row outright where no haptic is possible. The help text already
+  // says iPhone and iPad can do neither — but a slider you can drag that cannot
+  // change anything is worse than an absent one, and navigator.vibrate has never
+  // shipped in any WebKit. A pad with an actuator can arrive later, so this is
+  // re-run rather than decided once (see the gamepadconnected repaint below).
+  const hapItem = $("pm-haptics-item");
+  if (hapItem && window.Input && Input.hapticsSupported) {
+    hapItem.hidden = !Input.hapticsSupported();
+    if (!hapRepaintWired && typeof window.addEventListener === "function") {
+      hapRepaintWired = true;
+      window.addEventListener("gamepadconnected", () => {
+        hapItem.hidden = !Input.hapticsSupported();
+      });
+    }
+  }
   paintRow("pm-paddz", padDz, pctLabel(padDz));
   paintRow("pm-padsat", padSat, pctLabel(padSat));
   refreshPresetButtons();

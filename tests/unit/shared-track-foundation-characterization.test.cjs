@@ -289,8 +289,21 @@ test("recordBarrier wraps partial ranges and treats 0 to 1 as a full lap", () =>
   const start = Math.round(0.98 * actual.n) % actual.n;
   const end = Math.round(0.02 * actual.n) % actual.n;
   const expectedWrappedCount = ((end - start + actual.n) % actual.n) + 1;
-
-  assert.equal(right.length, actual.n);
+  // The engine builds a PIT COMPLEX on the ring's right side (TrackPit, side
+  // +1 by default) and TrackPit.openBoundary pushes barR out across its
+  // footprint AFTER the scenery ran — in both builds alike — so the recorded
+  // 3 m wall is masked on the nodes the complex owns (all of the lane, and
+  // the entry/exit easing where the lane has grown past 3 m). The full-lap
+  // range therefore lowers every node the pit does NOT own, and ONLY the pit
+  // masks it; the left-hand partial range is on the far side and unaffected.
+  const owned = (k) => !!(actual.pit && actual.pit.keep[k] > 0);
+  let ownedCount = 0;
+  for (let k = 0; k < actual.n; k++) if (owned(k)) ownedCount++;
+  assert.ok(ownedCount > 0 && ownedCount < actual.n, `pit owns ${ownedCount} of ${actual.n}`);
+  const masked = actual.n - right.length;
+  assert.ok(masked > 0 && masked <= ownedCount, `masked ${masked} of ${ownedCount} owned`);
+  for (let k = 0; k < actual.n; k++)
+    if (!owned(k)) assert.ok(right.includes(k), `node ${k} is outside the pit and must be lowered`);
   assert.equal(left.length, expectedWrappedCount);
   assert.ok(left.includes(0));
   assert.ok(left.includes(actual.n - 1));
@@ -327,8 +340,12 @@ test("road-overlapping place helper is suppressed as a whole", () => {
   const suppressed = capture(circleDefinition("suppression-overlap", (api) => {
     api.place(0, 1, -api.hw[0], [4, 4, 4], [1, 0, 0]);
   }));
+  // Side -1: the ring's RIGHT side at node 0 is inside the pit complex the
+  // engine builds there, and a prop in that footprint is superseded (built by
+  // the complex, not the def) — which is a different suppression from the one
+  // this test characterises.
   const safe = capture(circleDefinition("suppression-safe", (api) => {
-    api.place(0, 1, 8, [4, 4, 4], [1, 0, 0]);
+    api.place(0, -1, 8, [4, 4, 4], [1, 0, 0]);
   }));
 
   assert.deepEqual(suppressed, baseline);

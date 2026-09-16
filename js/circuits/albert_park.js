@@ -23,6 +23,9 @@
     // mean of the seven measured circuits — docs/research/TYRE-STRATEGY-DESIGN.md §5.5.
     tyreSeverity: 0.61,  // Australia 0.030 s/lap
     baseHW: 7,
+    // S/F walls sit ~1.7 m off the road; 4.5 m of local setback is enough
+    // for a 2.4 m lane + verge without opening the rest of the lap.
+    pit: { side: 1 },   // the pit complex (TrackPit): lake side of the main straight
     sceneryCoordinates: "racing",
     flatTerrain: true,
     terrainOuter: 120,

@@ -115,6 +115,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/body-split.test.mjs",
   "tests/unit/helmets.test.mjs",
   "tests/unit/digital-steer.test.mjs",
+  // ...and THROTTLE = LATCH, which shares digital-steer's VM harness and runs
+  // in 0.1 s: the pedal is the one control that can be left ON, so the drop on
+  // blur/reset belongs in the edit loop rather than in a browser group.
+  "tests/unit/throttle-latch.test.mjs",
   // ...and the two steer-tuning tables that MUST agree: every PRESET bundle
   // lands exactly on its FEEL level, or clicking RELAX reads CUSTOM. Stated
   // in comments and checked by nothing until it drifted for a week. ~0.05 s.
@@ -237,6 +241,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   "tests/unit/road-lut-frame.test.mjs",
   "tests/unit/webgpu-lifecycle.test.mjs",
+  "tests/unit/wgsl-bindings.test.mjs",
   "tests/unit/renderer-soft-lifecycle.test.mjs",
   // that touches the LUT rather than on every edit.
   // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,
@@ -310,6 +315,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/metrics.test.mjs",
   "tests/unit/perf-try.test.mjs",
   "tests/unit/mechanics-coherence.test.mjs",
+  "tests/unit/contact-geometry.test.mjs",
+  "tests/unit/race-insights.test.mjs",
+  "tests/unit/driving-coach.test.mjs",
+  "tests/unit/ai-corridor.test.mjs",
   // @gen-test-groups:end
 ]);
 

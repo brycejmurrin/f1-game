@@ -809,7 +809,7 @@ const GLX = (function () {
       "uShadowMap", "uLightVP", "uShadowBias", "uShadowStr", "uShadowTexel", "uShadowRange", "uShadowCtr",
       "uCarShadowMap", "uCarLightVP", "uCarShadowOn", "uCarBiasScale",
       "uLampShadowMap", "uLampShadowVP", "uLampShadowOn", "uLampShadowIdx",
-      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uPitLane", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
+      "uSkyZenith", "uSkyHorizon", "uFogHeight", "uGroundMist", "uPitLane", "uPitBox", "uLampFog", "uBlockerMap", "uPcss", "uTime", "uCloudCover", "uCloudSpeed", "uCloudShadowDim",
       "uBounceK", "uMistShare", "uLampFogClip", "uGlowAmp", "uBloomBoost", "uPcssPen", "uKeyMul",
       "uFogTint", "uMistHeight", "uShadowTintAmt", "uWetDark",
       "uCarSunGlint", "uCarSparkle", "uFogSunCore",
@@ -1807,6 +1807,8 @@ const GLX = (function () {
     {
       const pl = frame.pitLane;
       gl.uniform4f(litU.uPitLane, pl ? pl[0] : 0, pl ? pl[1] : 0, pl ? pl[2] : 1, pl ? pl[3] : 1);
+      const pb = frame.pitBox;   // (through, halfLen) — zero halfLen = no box
+      gl.uniform4f(litU.uPitBox, pb ? pb[0] : 0, pb ? pb[1] : 0, 0, 0);
     }
     uf1(litU.uLampFog, _litUf, "lampFog", frame.lampFog != null ? frame.lampFog : 0.0);
     gl.uniform1f(litU.uTime,        frame.time  != null ? frame.time  : 0.0);

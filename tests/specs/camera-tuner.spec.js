@@ -193,7 +193,14 @@ test("values clamp to the slider range, persist, and reset", async ({ page }) =>
 
 test("the pause-menu panel edits the camera you are looking through", async ({ page }) => {
   await loadMonza(page);
-  await page.evaluate(() => { __apex.camera("hood"); document.getElementById("pm-camtune").click(); });
+  await page.evaluate(() => {
+    __apex.camera("hood");
+    document.getElementById("pausebtn").click();
+    document.getElementById("pm-settings").click();
+    document.getElementById("pm-open-display").click();
+    document.querySelector("#pm-visual-tuners > summary").click();
+    document.getElementById("pm-camtune").click();
+  });
   // The #camtune wrapper is a zero-width fixed shell (the docked .sheet inside
   // it is what has a box), so assert on the inner panel.
   await expect(page.locator("#camtune-inner")).toBeVisible();

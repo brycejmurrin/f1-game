@@ -53,6 +53,11 @@ const Input = (function () {
   let padMapWarned = false;
   let padSteer = 0;            // -1..1 from left stick / d-pad
   let padSteerAnalog = false;  // is padSteer a stick DEFLECTION (curve/speed-scale it) or the ramped d-pad?
+  // THROTTLE LATCH (tap on, tap off). XAG 107's Duration guidance names our exact
+  // case — holding accelerate for a whole race is a fatigue barrier — and lists
+  // toggles as the fix, between HOLD and full AUTO. `throttleLatch` is the mode,
+  // `throttleLatched` the state it keeps.
+  let throttleLatch = false, throttleLatched = false;
   let padThrottle = false;
   let padBrake = false;
   let padThrottleVal = 0;
@@ -125,7 +130,14 @@ const Input = (function () {
   // meaning for every existing reader.
   let gyroHardDenied = false;
   // single source of truth for how the player steers: "tilt" | "buttons" | "touch"
-  let steerMode = "tilt";
+  // BUTTONS, not tilt, so this module's pre-boot value matches the shipped
+  // default (js/game.js reads store "steerMode" defaulting to "buttons" and
+  // pushes it here at boot). They disagreed, harmlessly — game.js always wins
+  // before a player sees anything — but the disagreement made the file read as
+  // though we default to a motion control, which WCAG 2.2 SC 2.5.4 would fail:
+  // motion-operated functionality must also be operable by UI components. We
+  // pass, and now the code says so without needing game.js to prove it.
+  let steerMode = "buttons";
   let tiltSmoothed = 0;       // One-Euro-filtered tilt angle (deg)
   let lastOrientMs = 0;
   let OE_MIN_CUTOFF = 1.2;    // Hz — THE smoothing knob (set by the SMOOTHING slider)
@@ -621,6 +633,19 @@ const Input = (function () {
   // hid it (Input.keyboardSeen), the twin of padPresent for the pad table.
   let kbSeen = false;
   function keyboardSeen() { return kbSeen; }
+  // The Help sheet and first-run coach need the source the player is actually
+  // using, rather than whichever devices happen to be connected. This is a
+  // report of input activity only; it never participates in control priority.
+  let inputSource = null; // "keyboard" | "controller" | "touch"
+  let defaultInputSource = null;
+  function noteInputSource(source) {
+    if (source === "keyboard" || source === "controller" || source === "touch") inputSource = source;
+  }
+  function activeInputSource() {
+    if (inputSource) return inputSource;
+    if (!defaultInputSource) defaultInputSource = touchControlsNeeded() ? "touch" : "keyboard";
+    return defaultInputSource;
+  }
   const PAD_NAMES_XBOX = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "VIEW", "MENU", "LS", "RS", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "HOME"];
   const PAD_NAMES_PS = ["CROSS", "CIRCLE", "SQUARE", "TRIANGLE", "L1", "R1", "L2", "R2", "SHARE", "OPTIONS", "L3", "R3", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "PS"];
   // Nintendo's physical A/B and X/Y sit OPPOSITE the Xbox positions, so index 0
@@ -810,7 +835,10 @@ const Input = (function () {
     // BUTTON still counts (the menus keep one focused, and a key on it is a
     // keyboard); a field does not, because a phone's on-screen keyboard fires
     // there too.
-    if (down && e.isTrusted !== false && !(tag === "INPUT" || tag === "TEXTAREA" || (active && active.isContentEditable))) kbSeen = true;
+    if (down && e.isTrusted !== false && !(tag === "INPUT" || tag === "TEXTAREA" || (active && active.isContentEditable))) {
+      kbSeen = true;
+      noteInputSource("keyboard");
+    }
     /* COMMAND EATS THE KEY-UP, so Command going down is a release-all.
        On macOS the OS does not deliver key-up to an application while Command
        is held: press W, tap Cmd, let go of W, and NO keyup ever arrives. The
@@ -1009,6 +1037,7 @@ const Input = (function () {
 
   function onTouchStart(e) {
     if (!canvasTouchIsDriving()) return;
+    noteInputSource("touch");
     e.preventDefault();
     for (const t of e.changedTouches) {
       touches.set(t.identifier, { anchorX: t.clientX, x: t.clientX, seq: ++touchSeq });
@@ -1084,7 +1113,22 @@ const Input = (function () {
       if (h.ids.delete(pointerId) && h.ids.size === 0) { h.apply(false); h.level && h.level(0); }
     }
   }
+  // The pedal's pressed look is `#btn-throttle:active`, which follows the THUMB.
+  // A latch outlives the thumb, so the class carries it instead; aria-pressed
+  // exists only in latch mode, where the pedal really is a toggle button.
+  function paintLatch() {
+    const el = typeof document !== "undefined" && document.getElementById("btn-throttle");
+    if (!el) return;
+    el.classList.toggle("on", throttleLatch && throttleLatched);
+    if (throttleLatch) el.setAttribute("aria-pressed", throttleLatched ? "true" : "false");
+    else el.removeAttribute("aria-pressed");
+  }
   function holdReleaseAll() {
+    // A LATCH DROPS HERE. This is the everything-off path (window blur, page
+    // hidden, last touch up, Input.reset), and a latched throttle surviving a
+    // blur means the car accelerates while the player is not looking at it.
+    throttleLatched = false;
+    paintLatch();
     for (const h of holdBtns) {
       h.ids.clear();
       h.anchors && h.anchors.clear();
@@ -1296,6 +1340,7 @@ const Input = (function () {
       padNavDir = null;
       padNavSeeded = false;
       padNavSeedLayer = null;
+      if (inputSource === "controller") inputSource = null;
       return;
     }
     padConnected = true;
@@ -1323,6 +1368,17 @@ const Input = (function () {
     padBrakeVal = Math.max(padActVal(pad, "brake"), padPedalAxis(axes, "brake"));
     padThrottle = padThrottleVal > 0.12;
     padBrake = padBrakeVal > 0.12;
+    // A connected pad is not active input. Record only a real deflection or a
+    // newly pressed button, so an idle Bluetooth pad cannot steal Help/coach
+    // wording from the keyboard or touch player.
+    let padActive = Math.abs(stick) > 0.05 || Math.abs(dpad) > 0.05 ||
+      padThrottleVal > 0.12 || padBrakeVal > 0.12;
+    if (!padActive && pad.buttons) {
+      for (let i = 0; i < pad.buttons.length; i++) {
+        if (btnDown(pad, i) && !padPrevButtons[i]) { padActive = true; break; }
+      }
+    }
+    if (padActive) noteInputSource("controller");
     if (axisCaptureCb) {
       // The wheel wizard owns the frame: turning the wheel to answer "which
       // axis steers?" must not also steer the car sitting behind the sheet.
@@ -1580,6 +1636,33 @@ const Input = (function () {
   // the page has never been interacted with, and iOS Safari has no vibrate at
   // all (WebKit has never shipped it and formally opposes it), so every caller
   // must already survive this doing nothing.
+  // Can this device produce ANY haptic? navigator.vibrate is absent from every
+  // WebKit (so every iOS browser), and Gamepad.vibrationActuator is false there
+  // too — an iPhone can do neither from a web page. The HAPTICS slider says so
+  // in its help text, but a control that cannot do anything is better hidden
+  // than explained, so steer-tuning.js gates the row on this. Re-read on
+  // gamepadconnected: a pad arriving later can make it true.
+  function hapticsSupported() {
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    if (nav && typeof nav.vibrate === "function") return true;
+    const pad = activePad();
+    return !!(pad && pad.vibrationActuator);
+  }
+
+  // PRIME the vibrator from a real click. Chromium requires user activation for
+  // navigator.vibrate and no longer counts `touchstart` as one — so the first
+  // in-race buzz of a session is dropped with a console intervention and every
+  // later one works, which reads as "haptics are flaky" rather than "haptics
+  // were never armed". One zero-length call from the GO/START click arms it for
+  // the frame's lifetime. Safe everywhere: a no-op where vibrate is absent.
+  let hapticPrimed = false;
+  function primeHaptics() {
+    if (hapticPrimed) return;
+    hapticPrimed = true;
+    if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+    try { navigator.vibrate(1); } catch (_) { /* advisory only */ }
+  }
+
   function vibrate(ms) {
     if (hapticScale <= 0) return;
     if (typeof navigator === "undefined" || !navigator.vibrate) return;
@@ -1687,7 +1770,7 @@ const Input = (function () {
   // a stray pad axis.
   function throttleLevel() {
     if (keyThrottle) return 1;
-    if (btnThrottle) return btnThrottleVal;
+    if (btnThrottle) return throttleLatch && throttleLatched ? 1 : btnThrottleVal;
     return padThrottleVal > 0.12 ? padThrottleVal : 0;
   }
   function brakeLevel() {
@@ -1912,6 +1995,9 @@ const Input = (function () {
     loadLayoutMap();
     window.addEventListener("keydown", function (e) { onKey(e, true); });
     window.addEventListener("keyup", function (e) { onKey(e, false); });
+    window.addEventListener("pointerdown", function (e) {
+      if (e.isTrusted !== false && (e.pointerType === "touch" || e.pointerType === "pen")) noteInputSource("touch");
+    }, true);
     window.addEventListener("blur", reset);
     document.addEventListener("visibilitychange", function () {
       if (document.hidden) reset();
@@ -1963,7 +2049,13 @@ const Input = (function () {
     canvas.addEventListener("touchend", onTouchEnd, { passive: false });
     canvas.addEventListener("touchcancel", onTouchEnd, { passive: false });
 
-    wireHold("btn-throttle", function (v) { btnThrottle = v; }, function (l) { btnThrottleVal = l; });
+    wireHold("btn-throttle", function (v) {
+      // Toggle on the DOWN edge only: the matching up-edge must not undo it, and
+      // holdReleaseAll()'s apply(false) must not either — that path CLEARS the
+      // latch outright rather than toggling it (see holdReleaseAll).
+      if (throttleLatch) { if (v) { throttleLatched = !throttleLatched; paintLatch(); } btnThrottle = throttleLatched; }
+      else btnThrottle = v;
+    }, function (l) { btnThrottleVal = l; });
     wireHold("btn-brake", function (v) { btnBrake = v; }, function (l) { btnBrakeVal = l; });
     wireTap("btn-boost", function () { boostTogglePressed = true; });
     wireTap("btn-ot", function () { overtakePressed = true; });
@@ -2151,7 +2243,7 @@ const Input = (function () {
   return {
     init,
     reset,
-    keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, keyboardSeen,
+    keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, keyboardSeen, activeInputSource,
     padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel, padCapture, padPresent,
     debugState,
     poll: pollGamepad,
@@ -2195,6 +2287,10 @@ const Input = (function () {
     setKeyRampIn,
     setHaptics,
     vibrate,
+    hapticsSupported,
+    setThrottleLatch(on) { throttleLatch = !!on; throttleLatched = false; btnThrottle = false; paintLatch(); },
+    throttleLatched: () => throttleLatch && throttleLatched,
+    primeHaptics,
     setPadLabelMode, padLabelMode: padLabelModeOf,
     setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padRest,
     touchControlsNeeded,

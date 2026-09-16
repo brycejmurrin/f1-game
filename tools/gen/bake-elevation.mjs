@@ -114,13 +114,22 @@ async function elevations(lnglat) {
 //   2. a hard gradient clamp, iterated, because smoothing alone still leaves a
 //      sustained slope that is really an embankment the road cuts through.
 //
-// MAX_GRADE is 8%: steeper than any straight in the game's shipped fleet and
-// comfortably under the 17-18% of Spa's Raidillon, which is the sport's
-// extreme and is NOT what these circuits are. Both passes keep the loop closed
-// (sample 0 and sample SAMPLES-1 must still meet) — realPoints() de-trends any
-// residual, but a profile that needs de-trending has already lied about a
-// gradient somewhere.
-const MAX_GRADE = 0.08;
+// MAX_GRADE is 5.5%. It was 8%, and 8% was measurably wrong — not because any
+// single number was indefensible, but because THE CLAMP WAS DOING THE SHAPING.
+// Measured across all 52 circuits at the real 4 m node spacing (2026-09-15):
+// the eleven baked profiles had a MEDIAN max gradient of 7.04% against a cap of
+// 8%. Real terrain does not pile up just under a limit; a clamp that is binding
+// almost everywhere has stopped being a backstop and become the author. SRTM
+// 30 m carries several metres of vertical noise, and at this 60-70 m sample
+// spacing that noise manufactures slope the landscape does not have.
+// The shipped fleet's hand-authored bumps median 2.77%. 5.5% keeps these
+// genuinely hilly venues steeper than the fleet — which they are — while
+// leaving the cap slack on most of them, so the terrain decides and the clamp
+// only catches the outliers. Still far under the 17-18% of Spa's Raidillon.
+// Both passes keep the loop closed (sample 0 and sample SAMPLES-1 must still
+// meet) — realPoints() de-trends any residual, but a profile that needs
+// de-trending has already lied about a gradient somewhere.
+const MAX_GRADE = 0.055;
 // The gradient CHANGE allowed between adjacent samples. A road can sit inside
 // MAX_GRADE everywhere and still feel violent, because what a driver feels is
 // the second derivative, not the first: shipped 2026-09-14 with slope clamped
@@ -128,7 +137,20 @@ const MAX_GRADE = 0.08;
 // single 60 m step, 64 times a lap. That is a crest, and no amount of smooth
 // interpolation downstream can remove a kink the data really contains.
 // 2.5 points per ~60 m step is a vertical curve a real circuit would build.
-const MAX_KINK = 0.025;
+//
+// 0.025 was still twice too loose, and this is the number that decides whether
+// a lap feels dramatic. Measured as max |d2y/ds2| at 4 m spacing, x1e4: the
+// eleven baked at 0.025 came out at a median 7.74 against the shipped fleet's
+// 3.50 — every new circuit rode like Spa's worst compression for a whole lap,
+// while the fleet's steep circuits (Suzuka 26.0, Monaco 12.8) spend ONE corner
+// there and are otherwise calm. 0.012 lands the eleven at a median 3.10, i.e.
+// the fleet's own character, and costs almost none of the real relief:
+// Mosport 42.9 -> 40.3 m, Fuji 36.2 -> 33.3 m, Donington 32.0 -> 29.3 m. The
+// drama was high-frequency sampling noise, not landscape, which is exactly why
+// removing it leaves the hills standing. A tighter pass (0.010 with 6 smoothing
+// passes) was measured too: it shaved more real range without improving the
+// kink, so this is the stopping point, not the start of a slide toward flat.
+const MAX_KINK = 0.012;
 
 function smoothClosed(p, passes) {
   const n = p.length;
@@ -206,7 +228,12 @@ function toProfile(coords, ele) {
   const spacing = total / SAMPLES;
   // Kink first (it is the violent one and it also lowers the slope), then the
   // slope clamp, so the hard ceiling is what the output is measured against.
-  const eased = clampKink(smoothClosed(prof, 2), spacing);
+  // SIX passes, not two. Two [1,2,1]/4 passes barely dent SRTM's per-sample
+  // noise, which left the clamps below doing the shaping (see MAX_GRADE). Six
+  // is still a narrow low-pass at this spacing — it attenuates the 2-3 sample
+  // wiggles that are sampling artefacts and leaves anything spanning several
+  // hundred metres, which is every real gradient a circuit has, untouched.
+  const eased = clampKink(smoothClosed(prof, 6), spacing);
   const { prof: capped, worstRaw } = clampGrade(eased, spacing);
   const base = capped[0];
   return {

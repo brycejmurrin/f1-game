@@ -162,11 +162,9 @@ test("CamTune exports player edits as window.CameraEdits", () => {
   assert.match(panel, /window\.CameraEdits/);
 });
 
-test("announce suppresses low-priority banners on broadcast cameras unless broadcast HUD", () => {
-  const src = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
-  assert.match(src, /hudProfile !== "broadcast"/);
-  assert.match(src, /if \(pri < 4\) return;/);
-});
+// Announcement filtering across these cameras is exercised as behavior in
+// pause-hud-layout.test.mjs, including the driving warnings that stay visible.
+
 
 test("broadcast HUD profile keeps two-decimal gaps", () => {
   const src = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");

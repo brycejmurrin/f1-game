@@ -1,8 +1,8 @@
 {
   "images": "macos-latest",
-  "track": "montreal",
+  "track": "singapore",
   "census_only": false,
   "force": "",
-  "ls": "",
-  "leg": "local-webgpu-boot-2026-09-15"
+  "ls": "apex26.lightTune={\"perChunkLights\":0}",
+  "leg": "tlx-per-chunk-lamps-2026-09-15-e-REAL-knob-OFF"
 }

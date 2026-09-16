@@ -162,6 +162,9 @@ file changes a screen owned by another.
 
 **Deliberate sharing — one component, re-tuned elsewhere:**
 
+- `.q-time` — `career` + `components`. Shared timing text; race result gaps sit
+  on a second line inside the driver name so they remain readable on phones.
+
 - `.balanced-row` — `components` + `menus`. Flex wrap that derives its column
   count from `--balance-basis` / `--balance-min` instead of `repeat(N, ...)`.
 - `.bigbtn` — `components` + `menus` + `overlays` + `responsive` + `tokens`

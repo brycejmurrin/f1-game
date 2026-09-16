@@ -15,11 +15,10 @@ test.describe("Monza track-owned foundation migration", () => {
       const profile = window.__apex.trackProfile(240);
       // Centreline-only rebuild (spline + banking, no meshes) so the probes can
       // ask where the ROAD SURFACE is, not just where its centreline is. Same
-      // handle tests/specs/terrain-over-road.spec.js uses; note it needs the built
-      // Tracks.LIST entry (which carries `points`), not the authored TrackDefs
-      // one. Verified bit-identical to the live track's px/py/hw and banking().
-      const bankTrack = Tracks.buildCenterline(
-        Tracks.LIST.find((entry) => entry.id === "monza"));
+      // (The locally rebuilt `bankTrack` that used to stand here is gone:
+      // __apex.groundY() now applies the banking term itself. It was verified
+      // bit-identical to the live track's px/py/hw and banking(), which is why
+      // moving the arithmetic into the hook is a no-op for these numbers.)
       const out = {
         coordinates: def.sceneryCoordinates,
         terrainOuter: def.terrainOuter,
@@ -54,17 +53,11 @@ test.describe("Monza track-owned foundation migration", () => {
         // all twelve: the verge sits a uniform ~0.36 m below the road edge
         // everywhere on the lap, banked corners included. Only the four probes
         // inside a bankZone move at all; the other eight still equal `gap`.
+        // groundY() now returns roadSurfaceY and overRoad itself, so this no
+        // longer rebuilds the banked surface locally — that duplication is the
+        // thing the durable fix removes. Same arithmetic, one owner.
         edgeProbes: [0.04, 0.30, 0.48, 0.73, 0.78, 0.90].flatMap((frac) =>
-          [-11, 11].map((lat) => {
-            const ground = window.__apex.groundY(frac, lat);
-            const bank = Tracks.banking(bankTrack, frac * bankTrack.total, lat);
-            const roadSurfaceY = ground.roadY + (bank ? bank.dy : 0);
-            return {
-              frac, lat, ...ground,
-              roadSurfaceY: +roadSurfaceY.toFixed(3),
-              overRoad: ground.terrainY == null ? null : +(ground.terrainY - roadSurfaceY).toFixed(3),
-            };
-          })
+          [-11, 11].map((lat) => ({ frac, lat, ...window.__apex.groundY(frac, lat) }))
         ),
       };
       return out;

@@ -132,14 +132,85 @@ const Tracks = (function () {
     // it — findCorners/bankingProfile call curvature(), which now indexes this.
     track.curv = new Float32Array(n);
     { const cds = total / n; for (let k = 0; k < n; k++) track.curv[k] = curvatureRaw(track, k * cds); }
+    // ── THE PIT LANE IS REAL TARMAC, NOT A STRIP CARVED OUT OF THE ROAD ──────
+    // Until now the lane was painted INSIDE the racing surface: the road kept
+    // its width and the lane ate 3.2 m of it, which on a narrow circuit meant
+    // racing on less road because a pit lane existed. Widen the road across the
+    // pit window instead, by exactly the lane's width, so the racing surface is
+    // untouched and the lane is new tarmac beyond where the edge used to be.
+    //
+    // WHY HERE: the curvature LUT is baked two lines up and the mesh is not
+    // built until build(), so this is the one seam where the window can be
+    // derived from the arc AND still reach the road, the kerbs and the banking.
+    //
+    // WHY SYMMETRIC: `hw` is ONE half-width per node and every consumer — mesh,
+    // kerbs, banking, sampling, projection — builds from +/-hw about the
+    // centreline. A one-sided widening needs a centreline-offset array threaded
+    // through all of them, which is a different change. Widening both sides is
+    // what this engine can express, and it is not a fudge: real pit straights
+    // ARE wide, and the extra room on the far side is the start/finish straight
+    // getting the width it should have had.
+    //
+    // The taper matters more than the width. A step in `hw` is a step in the
+    // road mesh, the kerb line and the racing-line LUT all at once, so the
+    // window opens and closes over PIT_TAPER metres.
     TrackLine.bake(track);   // the racing line LUT (track.line / lineW / lineCorners), from curv + hw
     track.bankP = bankingProfile(track);
     return track;
   }
 
+  // THE PIT COMPLEX IS ONE MODEL — js/track/core/pit.js (TrackPit), built once
+  // per track in build() before the terrain profile and the scenery, both of
+  // which read it. The window, the lane, the wall, the row of boxes and the
+  // garages are all derived from that record; nothing below keeps a second
+  // copy of a width or a position (docs/research/PIT-LANE-REDESIGN-2026-09.md).
+
+  /** The limiter window: how far before the line it opens, how far after it
+   *  closes. Off the model once built; the same arithmetic before. */
+  function pitWindow(track) {
+    if (track && track.pit) return { entryM: track.pit.entryM, exitM: track.pit.exitM };
+    return TrackPit.window(track, curvature);
+  }
+
+  // THE ROAD NEVER MOVES. The complex is a second ribbon beside the racing
+  // surface — `hw`, the racing line, the kerbs and every sampler see exactly
+  // the road they saw before — and the SCENERY yields to it: onRoadHit /
+  // onTrack in buildProps treat the complex's footprint as road on the pit
+  // side, and the driving boundary is opened across it afterwards
+  // (TrackPit.openBoundary). The widening of `hw` that pushed the road through
+  // the scenery on a dozen circuits, and the fit-to-whatever-room-is-left that
+  // gave a 3.2 m strip, are both gone.
+
+  /** WHERE the lane is at one arc position, in the same lateral frame the
+   *  car's own `x` lives in — { side, inner, outer, centre, workCentre, … },
+   *  signed, or null outside the complex. Everything that has to agree about
+   *  the lane reads THIS: the physics exemption, PitLane's box and the AI's
+   *  lane line. The mesh is built from the same profile. */
+  function pitLaneAt(track, s) { return TrackPit.at(track, s); }
+
+  /** The lane's EXTENT between the entry line and the exit line, or null. */
+  function pitLaneSpan(track) {
+    const p = track && track.pit;
+    return p ? { sIn: p.sIn, lenM: p.lenM, side: p.side } : null;
+  }
+
+  /** Is this car's lateral position inside the lane? A TOLERANCE of half a
+   *  car is allowed at the inner edge, because the alternative is a car whose
+   *  inside wheels are over the line reading as beached on the grass. */
+  function inPitLane(track, s, x) {
+    const l = pitLaneAt(track, s);
+    if (!l) return false;
+    const a = Math.min(l.inner, l.outer) - (l.side > 0 ? 0.9 : 0);
+    const b = Math.max(l.inner, l.outer) + (l.side > 0 ? 0 : 0.9);
+    return x >= a && x <= b;
+  }
+
   function build(def, opts) {
     Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
     const track = buildCenterline(def);
+    // The pit complex FIRST: the terrain profile flattens under it and the
+    // scenery keeps out of it, so both need the model before they run.
+    track.pit = TrackPit.build(track, def, curvature);
     track.surface = TrackSurface.profile(def, track);
     track._night = opts && opts.night != null ? !!opts.night : !!def.night;
     // Façade wiring: the active renderer backend flows in through opts.gfx
@@ -185,7 +256,10 @@ const Tracks = (function () {
       const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
       track.terrainGeo = terrainSafe; buildRibbon(terrainSafe, "terrain"); // raw geometry kept for groundY/debug
       const _props = buildProps(track);
-      const propsGeo = safe("props", _props.out);
+      // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so
+      // opening the driving boundary across it puts nothing in a car's path.
+      TrackPit.openBoundary(track);
+      const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
       track.meshes.props = G.createChunkedMesh ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
@@ -401,14 +475,19 @@ const Tracks = (function () {
     // chase camera or wall off the track. Sub-grade slabs (water, the universal
     // ground floor) sit below road level and are exempt via the topY check.
     let _culled = 0;
-    const _suppressed = Object.create(null);
+    const _suppressed = Object.create(null), _superseded = Object.create(null);
     const noteSuppressed = (kind, msg) => {
-      _suppressed[kind] = (_suppressed[kind] || 0) + 1;
+      // A drop the PIT COMPLEX caused is not the guard margin's: the prop stood
+      // where the engine now builds the lane, the wall or the garages. It goes
+      // on its own counter so the guard suites keep measuring the guard.
+      const bag = _pitReject ? _superseded : _suppressed;
+      bag[kind] = (bag[kind] || 0) + 1;
       if (Log.enabled("scenery", Log.DEBUG)) Log.debug("scenery", msg);
     };
     const diagnostics = track.modelDiagnostics = {
       emitted: [], suppressed: [], invalid: [], unsafe: [],
       suppressedCounts: _suppressed,   // per-kind guard drops (tests/unit/scenery-guards)
+      supersededByPit: _superseded,    // per-kind drops the pit complex caused (js/track/core/pit.js)
     };
 
     // Everything buildProps places goes straight into vertex buffers and is then
@@ -549,14 +628,62 @@ const Tracks = (function () {
     };
     const grid = nodeGrid(track);              // shared node grid (built in buildRoad)
     const _hitCand = new Array(n), _trkCand = new Array(n);   // reusable query scratch
-    const onRoadHit = (cx, cz, topY, rad, arx, arz, afx, afz, hx, hz) => {
-      const mh = grid.maxHw;
+    // THE PIT COMPLEX IS ROAD to the guards: on the pit side, across the
+    // window, a node's half-width grows by the complex's footprint, so no prop
+    // — a tree, a hull, a kit building — can be placed on the lane, the wall,
+    // the apron or the garages. The complex's own furniture (SceneryPits) uses
+    // the RAW emitters and never asks.
+    const pitKeep = track.pit ? track.pit.keep : null, pitSide = track.pit ? track.pit.side : 0;
+    const pitV = track.pit ? track.pit.v : null, pitVerge = track.pit ? track.pit.bands.verge : 0;
+    const pitMax = (() => { let m = 0; if (pitKeep) for (let k = 0; k < n; k++) if (pitKeep[k] > m) m = pitKeep[k]; return m; })();
+    // The complex's footprint at node k as a lateral RANGE on the pit side,
+    // [beyond the verge, its far edge]: the verge itself stays placeable, so a
+    // gantry leg or a marshal post can still stand between the track and the
+    // wall exactly as it does on a real pit straight.
+    const pitFastIn = track.pit ? track.pit.off.fastIn : 0;
+    const inPitFootprint = (k, lat, halfLat, outerMargin) => {
+      if (!pitKeep || !(pitKeep[k] > 0)) return false;
+      // The verge AND the platform stay placeable (a gantry leg, a post, a
+      // marshal stand on a real pit straight); the lane tarmac onward is the
+      // complex's alone. `outerMargin` is a clearance a caller asks for from
+      // the OUTER edge only — clearTreeDist asks with the crown radius, so a
+      // tree pushes out until its crown clears the garages instead of
+      // standing at the line with its crown through the roofs. Nobody else
+      // asks: a lake's or a backdrop's road clearance is not a pit clearance
+      // (Shanghai's required lake was superseded the moment it was).
+      const a0 = hw[k] + Math.max(pitVerge, pitFastIn * pitV[k]) + 0.3, a1 = hw[k] + pitKeep[k];
+      const c = lat * pitSide;
+      return c + halfLat > a0 && c - halfLat - (outerMargin || 0) < a1;
+    };
+    // Set by onRoadHit when the hit was the PIT COMPLEX rather than the road,
+    // so a rejected model can be recorded as superseded rather than as a
+    // failure: a circuit's hand-placed pit block, tower or bay now stands
+    // where the engine builds the complex, and dropping it is the intent.
+    let _pitReject = false;
+    const onRoadHit = (cx, cz, topY, rad, arx, arz, afx, afz, hx, hz, botY) => {
+      const mh = grid.maxHw + pitMax;
+      // The complex keeps FOOTINGS out, not a crown: a RADIAL primitive (a
+      // tree's canopy tier) whose underside is well above the road may reach
+      // over the complex's edge, the way a crown reaches over a verge. Testing
+      // every tier of a tree at the edge dropped its middle and kept its top,
+      // which the float sweep reported on thirty circuits. Boxes never get
+      // the exemption: a building's upper storey over the complex with its
+      // ground floor superseded is the same float from the other side.
       const R = (rad > 0 ? rad + mh : __M.hypot(hx + mh, hz + mh)) + 2;
       const _cn = grid.query(cx, cz, R, _hitCand, false);
       for (let _ci = 0; _ci < _cn; _ci++) {
         const k = _hitCand[_ci];
         if (topY < py[k] - 0.3) continue;                 // sits below road here
         const w = hw[k];
+        if (pitKeep && pitKeep[k] > 0 && !(botY > py[k] + 2.5)) {
+          // The pit complex: the footprint's lateral reach at this node against
+          // the complex's range, provided the node lies along the footprint.
+          const lat = (cx - px[k]) * track.rx[k] + (cz - pz[k]) * track.rz[k];
+          const along = (cx - px[k]) * track.tx[k] + (cz - pz[k]) * track.tz[k];
+          const halfLat = rad > 0 ? rad : __M.abs(arx * track.rx[k] + arz * track.rz[k]) * hx + __M.abs(afx * track.rx[k] + afz * track.rz[k]) * hz;
+          const halfAlong = rad > 0 ? rad : __M.abs(arx * track.tx[k] + arz * track.tz[k]) * hx + __M.abs(afx * track.tx[k] + afz * track.tz[k]) * hz;
+          if (__M.abs(along) <= halfAlong + ds && inPitFootprint(k, lat, halfLat)) { _pitReject = true; return true; }
+        }
         const dxc = px[k] - cx, dzc = pz[k] - cz;
         // Reach to the farthest footprint point: an oriented box can extend to its
         // half-DIAGONAL, not just max(hx,hz), so the prefilter must use the diagonal
@@ -580,14 +707,21 @@ const Tracks = (function () {
       return false;
     };
     const rejBox = (c, sz, basis) => {
+      _pitReject = false;
       const r = basis ? basis[0] : [1, 0, 0], u = basis ? basis[1] : [0, 1, 0], f = basis ? basis[2] : [0, 0, 1];
       const topY = c[1] + __M.abs(sz[0] / 2 * r[1]) + __M.abs(sz[1] / 2 * u[1]) + __M.abs(sz[2] / 2 * f[1]);
       return onRoadHit(c[0], c[2], topY, 0, r[0], r[2], f[0], f[2], sz[0] / 2, sz[2] / 2);
     };
-    const rejRad = (c, rad, h, basis) => {
+    const rejRad = (c, rad, h, basis, crown) => {
+      _pitReject = false;
       const u = basis ? basis[1] : [0, 1, 0];
       const topY = c[1] + __M.max(0, h * u[1]) + rad;     // generous top estimate
-      return onRoadHit(c[0], c[2], topY, rad, 0, 0, 0, 0, 0, 0);
+      // A CROWN (cone, frustum) hands its underside over so it may reach over
+      // the complex's edge — the base centre, not `c - rad`: a 16 m tier 10 m
+      // up read as a footing with the radius taken off, and Monza's poplars
+      // lost their lowest tier. A cylinder is a post or a mast: a footing,
+      // whose head must not outlive it.
+      return onRoadHit(c[0], c[2], topY, rad, 0, 0, 0, 0, 0, 0, crown ? c[1] + __M.min(0, h * u[1]) : undefined);
     };
     const badPrimitive = (kind, c, size) => {
       // COPY c: graph.xform hands out a pooled triple, and this record outlives the op.
@@ -602,7 +736,7 @@ const Tracks = (function () {
       if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("box", c, sz); }
       else {
         if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("box", c, sz); }
-        if (rejBox(c, sz, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (rejBox(c, sz, basis)) { o._pitRejected = _pitReject; if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
         if (o._dryRun) return true;
       }
@@ -614,7 +748,7 @@ const Tracks = (function () {
       if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("cylinder", c, [rad, h]); }
       else {
         if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("cylinder", c, [rad, h]); }
-        if (rejRad(c, rad, h, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (rejRad(c, rad, h, basis)) { o._pitRejected = _pitReject; if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
         if (o._dryRun) return true;
       }
@@ -626,7 +760,7 @@ const Tracks = (function () {
       if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("cone", c, [rad, h]); }
       else {
         if (!finiteVec(c, 3, false) || !__isFinite(rad) || rad <= 0 || !__isFinite(h) || h <= 0) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("cone", c, [rad, h]); }
-        if (rejRad(c, rad, h, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (rejRad(c, rad, h, basis, true)) { o._pitRejected = _pitReject; if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
         if (o._dryRun) return true;
       }
@@ -638,7 +772,7 @@ const Tracks = (function () {
       if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("frustum", c, [rB, rT, h]); }
       else {
         if (!finiteVec(c, 3, false) || !__isFinite(rB) || rB <= 0 || !__isFinite(rT) || rT <= 0 || !__isFinite(h) || h <= 0) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("frustum", c, [rB, rT, h]); }
-        if (rejRad(c, __M.max(rB, rT), h, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (rejRad(c, __M.max(rB, rT), h, basis, true)) { o._pitRejected = _pitReject; if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
         if (o._dryRun) return true;
       }
@@ -651,7 +785,7 @@ const Tracks = (function () {
       if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("prism", c, sz); }
       else {
         if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("prism", c, sz); }
-        if (rejBox(c, sz, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (rejBox(c, sz, basis)) { o._pitRejected = _pitReject; if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
         if (o._dryRun) return true;
       }
@@ -663,7 +797,7 @@ const Tracks = (function () {
       if (tv) { const v = tv[o._vIdx++]; if (v !== 1) return v === 0 ? (_culled++, false) : badPrimitive("pyramid", c, sz); }
       else {
         if (!finiteVec(c, 3, false) || !finiteVec(sz, 3, true)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 2; return badPrimitive("pyramid", c, sz); }
-        if (rejBox(c, sz, basis)) { if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
+        if (rejBox(c, sz, basis)) { o._pitRejected = _pitReject; if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 0; if (!o._dryRun) _culled++; return false; }
         if (o._recVerdicts) o._recVerdicts[o._vIdx++] = 1;
         if (o._dryRun) return true;
       }
@@ -722,8 +856,8 @@ const Tracks = (function () {
     let pyMin = Infinity;
     for (let i = 0; i < n; i++) if (py[i] < pyMin) pyMin = py[i];
     const surface = track.surface || TrackSurface.profile(track.def, track);
-    const groundYAt = (k, dist) => {
-      return surface.heightAt(k, dist);
+    const groundYAt = (k, dist, side) => {
+      return surface.heightAt(k, dist, side);
     };
     // Universal ground floor: one big flat slab at the lap's low point, sized to
     // reach well past the farthest scenery. The terrain ribbon only extends ~120 m
@@ -742,8 +876,9 @@ const Tracks = (function () {
       addBox(out, [gx, pyMin - 5, gz], [grad * 2 + 1600, 4, grad * 2 + 1600],
              [gc[0] * 0.9, gc[1] * 0.9, gc[2] * 0.9]);
     }
-    const onTrack = (x, z, margin) => {
-      const R = grid.maxHw + margin + ds + 1;
+    const onTrack = (x, z, margin, pitMargin) => {
+      _pitReject = false;
+      const R = grid.maxHw + pitMax + margin + ds + 1;
       const _cn = grid.query(x, z, R, _trkCand, false);
       for (let _ci = 0; _ci < _cn; _ci++) {
         const i = _trkCand[_ci];
@@ -756,6 +891,26 @@ const Tracks = (function () {
         const lat = Math.hypot(x - cx, z - cz);
         const hwt = hw[i] + (hw[j] - hw[i]) * t;
         if (lat < hwt + margin) return true;
+        if (pitKeep && pitKeep[i] > 0) {
+          // The POINT against the complex — not the point plus the road
+          // margin, which is a clearance from the racing surface and would
+          // push a gantry leg or a post off the verge it belongs on — and only
+          // where the point lies ALONGSIDE this node: the query radius reaches
+          // the whole complex width, so without the along-track bound a post
+          // 40 m past the exit road read as inside the last easing node.
+          const al = (x - px[i]) * track.tx[i] + (z - pz[i]) * track.tz[i];   // along, from node i
+          if (al >= -ds && al <= ds) {
+            const sl = (x - px[i]) * track.rx[i] + (z - pz[i]) * track.rz[i];   // signed lateral
+            // The caller's road margin counts on the OUTER edge too, capped
+            // at 3 m: a hedge asks with its half-width and then emits a box of
+            // that width, and a base that passed as a point 15 cm outside
+            // the edge shipped the lump on top of a box the guard dropped.
+            // The cap keeps a lake's or a backdrop's half-width (their
+            // "margin") from superseding a required model whole.
+            const outer = __M.max(pitMargin || 0, __M.min(margin || 0, 3));
+            if (inPitFootprint(i, sl, 0, outer)) { _pitReject = true; return true; }
+          }
+        }
       }
       return false;
     };
@@ -771,8 +926,19 @@ const Tracks = (function () {
     };
     const models = TrackModels.create({
       out, water: waterBuf, diagnostics, n,
-      preflight: (bounds) => !rejBox(bounds.center, bounds.size, bounds.basis),
+      // true = clear; false = on the road; "pit" = inside the pit complex, which
+      // modelGroup records as superseded rather than as a required failure.
+      preflight: (bounds) => (!rejBox(bounds.center, bounds.size, bounds.basis) ? true : (_pitReject ? "pit" : false)),
       emitBox: (buf, c, size, col, basis) => RAW.addBox(buf, c, size, col, basis),
+      // A grounded point (node, side, metres beyond the edge, half-width)
+      // inside the pit complex: the RAW landform emitters ask this chord by
+      // chord, since they never pass the footprint guard.
+      inPit: (k, side, dist, halfLat) => {
+        const kk = ((Math.round(k) % n) + n) % n;
+        if (!inPitFootprint(kk, side * (hw[kk] + dist), halfLat)) return false;
+        _superseded.groundedSegments = (_superseded.groundedSegments || 0) + 1;
+        return true;
+      },
       frameAt,
       supportClear: (frame, spec) => {
         if (spec.supports === false) return true;
@@ -786,7 +952,10 @@ const Tracks = (function () {
             frame.c[1] + frame.r[1] * o + frame.u[1] * height / 2,
             frame.c[2] + frame.r[2] * o + frame.u[2] * height / 2,
           ];
-          if (rejBox(c, [width, height, spec.depth || 1.4], [frame.r, frame.u, frame.t])) return false;
+          // A leg on the pit complex is tolerated: a gantry or a bridge over
+          // the pit straight has to stand somewhere, and a pier on the apron
+          // is what a real one does.
+          if (rejBox(c, [width, height, spec.depth || 1.4], [frame.r, frame.u, frame.t]) && !_pitReject) return false;
         }
         return true;
       },
@@ -826,6 +995,9 @@ const Tracks = (function () {
         circuitKit = CircuitKit.create({
           models, landmarks: landmarkKit, theme: sceneryTheme,
           frameAt, groundHeight: groundYAt, hash,
+          // The engine builds the garages from track.pit now; a circuit's
+          // kit.pitBuilding() call is honoured as a no-op so nothing lands twice.
+          pitBuilt: !!(track.pit && track.pit.hasBays),
         });
       }
     } catch (_) {
@@ -1271,7 +1443,10 @@ const Tracks = (function () {
       // onTrack() is the world-space test against every segment, so a spot
       // that clears its own road but overhangs another one is rejected the
       // same way a fence conflict is: push out, or drop the tree.
-      const ok = (p) => barrierClear(p[0], p[1], crown) && !onTrack(p[0], p[1], crown);
+      // The crown is also the clearance from the PIT COMPLEX (the fourth
+      // argument): a tree planted at its trunk's radius stood at the garage
+      // line with its crown through the bay roofs.
+      const ok = (p) => barrierClear(p[0], p[1], crown) && !onTrack(p[0], p[1], crown, crown);
       let p = at(dist);
       if (ok(p)) return dist;
       for (let extra = 1.5; extra <= 12; extra += 1.5) {
@@ -2029,6 +2204,8 @@ const Tracks = (function () {
     {
       const sk = Object.keys(_suppressed);
       if (sk.length) Log.warn("scenery", def.id + ": suppressed " + sk.map((k) => k + "=" + _suppressed[k]).join(" "));
+      const pk = Object.keys(_superseded);
+      if (pk.length) Log.info("scenery", def.id + ": superseded by the pit complex " + pk.map((k) => k + "=" + _superseded[k]).join(" "));
       if (_culled) Log.info("track", `${def.id}: culled ${_culled} on-track primitive(s)`);
     }
     flushAsm();          // the last anonymous run has no successor to close it
@@ -2044,7 +2221,14 @@ const Tracks = (function () {
       delete rec._m;
     }
     Log.info("track", "buildProps done " + def.id + " verts=" + (out.pos.length / 3));
-    return { out: TrackModels.sealGeometry(out), glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
+    // THE PIT COMPLEX, last — after the bespoke scenery and the generic
+    // dressing have been kept out of it. Platform, wall, boards, lights and
+    // the row of garages, every position off track.pit (js/track/scenery/pits.js).
+    if (typeof SceneryPits !== "undefined" && track.pit) {
+      const pits = SceneryPits.build({ track, out, rawBox: RAW.addBox, upOf, bankOffsetAt, curvature: (s) => curvature(track, s) });
+      Log.info("track", `pits ${track.def.id}: ${pits.bays} bays, wall ${pits.wall}`);
+    }
+    return { out, glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
   }
 
   function buildGate(track) {
@@ -2106,7 +2290,14 @@ const Tracks = (function () {
         base += 4;
       }
     }
-    TrackMesh.buildGridBoxes(track, out);   // the grid rides the start-line decal
+    // The pit lane's tarmac rides this decal too — but BEFORE the grid, because
+    // tests/unit/grid-boxes.test.mjs reads the boxes as the TAIL of this buffer
+    // and that is a real invariant, not an accident of order: the grid is the
+    // last thing appended so a reader can slice it off without knowing what
+    // came before.
+    TrackMesh.buildPitLane(track, out);
+    TrackMesh.buildPitBoxes(track, out);
+    TrackMesh.buildGridBoxes(track, out);   // …and the grid stays the tail
     return out;
   }
 
@@ -2268,6 +2459,7 @@ const Tracks = (function () {
       sceneryTheme: d.sceneryTheme,
       sceneryThemeOverrides: d.sceneryThemeOverrides || null,
       ownPitStraight: !!d.ownPitStraight,
+      pit: d.pit || null,          // the pit complex's authored choices (TrackPit.resolve): side, mode, limitKph, bands, bays
       undulate: d.undulate,
       // bespoke per-circuit scenery (js/circuits/<id>.js); run by buildProps
       scenery: d.scenery || null,
@@ -2447,5 +2639,5 @@ const Tracks = (function () {
     return keepGeometry;
   }
 
-  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry };
+  return { LIST, SEASON, seasonIndex, build, buildCenterline, sample, curvature, onKerb, banking, bankAngle, project, wallAt, terrainY, setKeepGeometry, pitWindow, pitLaneAt, pitLaneSpan, inPitLane };
 })();

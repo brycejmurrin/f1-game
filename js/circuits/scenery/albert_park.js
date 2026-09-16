@@ -386,49 +386,11 @@
         crowdCols: [[0.86, 0.24, 0.18], [0.88, 0.86, 0.82], [0.18, 0.52, 0.36]],
       });
 
-      {
-        const aP = anchor(k(0.0), 1, 16), bP = [aP.r, aP.u, aP.t];
-        modelGroup("albert-pit-complex", {
-          center: vadd(aP.c, aP.u, 11),
-          size: [26, 30, 190],
-          basis: bP,
-        }, (stage) => {
-          const aG = anchor(k(0.0), 1, 12), bG = [aG.r, aG.u, aG.t];
-          stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(aG.c, aG.u, 3.6), [14, 7.2, 180], [0.88, 0.89, 0.91], bG);
-          // Roller-door rhythm along the pit lane — 26 garages, the AGP count.
-          const aD = anchor(k(0.0), 1, 5.4), bD = [aD.r, aD.u, aD.t];
-          for (let i = 0; i < 26; i++) {
-            const off = (i - 12.5) * 6.6;
-            addBox(stage, vadd(vadd(aD.c, aD.u, 2.3), aD.t, off),
-                   [0.5, 4.2, 4.4], [0.22, 0.24, 0.28], bD);
-          }
-          // Glazed media / team-office storey, set back above the garage roof.
-          stage._mat = 0;
-          addBox(stage, vadd(aP.c, aP.u, 9.2), [13, 3.6, 168], [0.24, 0.34, 0.44], bP);
-          stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(aP.c, aP.u, 11.4), [14.4, 0.8, 170], [0.90, 0.90, 0.92], bP);
-          stage._mat = MAT.METAL;
-          const PANELS = 24;
-          for (let i = 0; i < PANELS; i++) {
-            const f = (i + 0.5) / PANELS;
-            const y = 12.6 + Math.sin(f * Math.PI * 3) * 1.5;
-            addBox(stage, vadd(vadd(aP.c, aP.t, (f - 0.5) * 184), aP.u, y),
-                   [22, 0.55, 184 / PANELS + 0.4], [0.80, 0.82, 0.85], bP);
-          }
-          // Race control, stepped up at the pit-exit end.
-          const rc = vadd(aP.c, aP.t, 74);
-          stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(rc, aP.u, 9), [15, 18, 22], [0.84, 0.86, 0.88], bP);
-          stage._mat = 0;
-          addBox(stage, vadd(vadd(rc, aP.r, -7.4), aP.u, 15.5), [0.3, 3.2, 20],
-                 [0.22, 0.32, 0.42], bP);
-          stage._mat = MAT.METAL;
-          addBox(stage, vadd(rc, aP.u, 18.4), [17, 0.7, 24], [0.30, 0.32, 0.36], bP);
-          addCyl(stage, vadd(rc, aP.u, 18.7), 0.18, 9, [0.60, 0.62, 0.66], 5, bP);
-          stage._mat = 0;
-        }, { required: true });
-      }
+      // The pit complex — lane, wall, garages, race control — is the ENGINE's
+      // now (js/track/core/pit.js + js/track/scenery/pits.js), built from the
+      // def's `pit: { side: 1 }` on the row the grid is allocated in. The
+      // hand-anchored 26-bay hull that stood here carried its own copy of the
+      // team colours and its own bay pitch, 16 m from a lane that was elsewhere.
       // marquee tent caps beside the s≈0.62 grandstand — at dist 34/42/50, behind the stand line
       for (let j = 0; j < 3; j++) {
         const a = anchor(k(0.62), 1, 34 + j * 8);

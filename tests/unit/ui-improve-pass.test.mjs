@@ -551,15 +551,16 @@ test("How to Play names every input and drops the retired screen-half lie", () =
   const end = html.indexOf('id="spotifypanel"');
   assert.ok(start > 0 && end > start, "howtoplay sheet is in the shell");
   const htp = html.slice(start, end);
-  assert.match(htp, /<dt id="htp-controls">PC \/ KEYBOARD<\/dt>/);
-  assert.match(htp, /<dt>CONTROLLER<\/dt>/);
-  assert.match(htp, /<dt>TOUCH \/ MOBILE<\/dt>/);
-  for (const phrase of ["ADAPTIVE BUTTONS", "BRAKE CUE", "default ON", "STEERING &amp; ASSISTS", "ADVANCED disclosure", "TV SIDE",
-    "tap to toggle", "pauses only if nothing is open", "drag on the track", "a tap does not steer", "deny switches to BUTTONS",
-    "shifter left and the pedals right", "triggers are analog", "leave a list for the header or column beside it", "hold to repeat"]) {
+  assert.match(htp, /<section id="htp-controls"[^>]*aria-labelledby="htp-start"[\s\S]*<h3 id="htp-start"[^>]*>QUICK START<\/h3>/,
+    "Help opens with a short actionable quick start");
+  for (const mode of ["keyboard", "controller", "touch"])
+    assert.match(htp, new RegExp(`<details[^>]+data-input="${mode}"`), `Help has a ${mode} disclosure`);
+  assert.match(htp, /data-help-keys="(?:aero|camera|pause)"/);
+  assert.match(htp, /data-help-pad="(?:aero|camera|pause)"/);
+  for (const phrase of ["SETTINGS › CONTROLS › STEERING INPUT", "ADAPTIVE BUTTONS", "BRAKE CUE", "STEERING &amp; ASSISTS", "drag from where your finger lands"]) {
     assert.ok(htp.includes(phrase), `How to Play must say: ${phrase}`);
   }
-  assert.match(htp, /GEARS: MANUAL<\/span> \(tilt only/);
+  assert.doesNotMatch(htp, /SETTINGS[^<]{0,80}>\s*STEER\b/, "Help must not name the retired STEER door");
   assert.doesNotMatch(htp, /HALVES|TRACKSIDE|screen halves|tap left\/right/);
   const game = code("js/game.js");
   assert.match(game, /autoThrottle\(\s*\)\s*\?\s*1\s*:\s*Math\.max\(\s*0\s*,\s*Input\.throttleLevel\(\s*\)\s*\)/,
@@ -585,7 +586,9 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
   assert.match(html, /id="htp-contents"[^>]*aria-label="How to play sections"/);
   for (const id of ["controls", "racing", "setup", "modes", "friends"]) {
     assert.match(html, new RegExp(`href="#htp-${id}"`));
-    assert.match(html, new RegExp(`<dt id="htp-${id}">`));
+    assert.match(html, id === "controls"
+      ? /<section id="htp-controls"/
+      : new RegExp(`<dt id="htp-${id}">`));
   }
   const components = css("css/components.css");
   assert.equal(decl(components, /#htp-contents/, "overflow-x"), "auto");
@@ -951,13 +954,24 @@ function bootSettingsNav() {
   const dom = makeDom();
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
+  const index = dom.byId("pm-settings-index");
+  for (const id of ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-advanced", "pm-audio"])
+    index.appendChild(dom.byId(id));
+  const stale = dom.document.createElement("button");
+  stale.hidden = true;
   const steer = dom.document.createElement("button");
-  steer.id = "pm-steer";
-  dom.byId("pm-panel-controls").appendChild(steer);
+  const controls = dom.byId("pm-panel-controls");
+  controls.appendChild(stale); controls.appendChild(steer);
+  const driving = dom.byId("pm-panel-driving");
+  const drivingFirst = dom.document.createElement("button");
+  driving.appendChild(drivingFirst);
+  const audioFirst = dom.document.createElement("summary");
+  dom.byId("audioset").appendChild(audioFirst);
   let selected = 0;
   const nav = sb.SettingsNav.create({ get: (_k, d) => d, set() {} }, () => selected++);
   return {
     dom, nav, selected: () => selected,
+    firstControl: steer, drivingFirst, audioFirst,
     index: () => dom.byId("pm-settings-index"),
     panel: (id) => dom.byId(({ advanced: "advanced", audio: "audioset" })[id] || ("pm-panel-" + id)),
     door: (id) => dom.byId("pm-open-" + id),
@@ -979,19 +993,29 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(h.panel("controls").hidden, false);
   assert.equal(h.index().hidden, true);
   assert.equal(h.title().textContent, "CONTROLS");
-  assert.equal(h.dom.document.activeElement, h.panel("controls").querySelector("button, input, select")
-    || h.door("controls"), "show(id, true) focuses the page");
+  assert.equal(h.dom.document.activeElement, h.firstControl, "show(id, true) focuses the first visible page control");
   h.dom.document.activeElement = null;
   h.nav.showCurrent();
   assert.equal(h.index().hidden, false, "showCurrent() always returns home");
   assert.equal(h.panel("controls").hidden, true);
   assert.equal(h.dom.document.activeElement, null, "showCurrent() never focuses");
+  h.door("controls").focus();
+  h.door("controls").click();
+  assert.equal(h.dom.document.activeElement, h.firstControl, "a door focuses the visible page after its callback");
+  assert.equal(h.nav.back(), false, "BACK on a page pops to home");
+  assert.equal(h.dom.document.activeElement, h.door("controls"), "BACK restores the originating door");
   h.nav.show("advanced", false);
   assert.equal(h.panel("advanced").hidden, false);
-  assert.equal(h.title().textContent, "STEERING");
-  h.nav.show("audio", false);
+  assert.equal(h.title().textContent, "STEERING & ASSISTS");
+  h.nav.show("audio", true);
   assert.equal(h.panel("audio").hidden, false);
   assert.equal(h.title().textContent, "MUSIC & SOUND");
+  assert.equal(h.dom.document.activeElement, h.audioFirst, "audio can land on its visible disclosure door");
+  h.door("driving").click();
+  assert.equal(h.panel("driving").hidden, false);
+  assert.equal(h.title().textContent, "DRIVING");
+  assert.equal(h.panel("audio").hidden, true);
+  assert.equal(h.dom.document.activeElement, h.drivingFirst, "driving focuses its first visible control");
   h.nav.show("display", false);
   assert.equal(h.nav.back(), false, "BACK on a page pops to home");
   assert.equal(h.index().hidden, false);
@@ -1081,7 +1105,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "min-height"), "var(--chip-h)",
     "RENDERER summary matches the HUD / METRICS chip row");
-  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner #pm-display-adv > summary", "#pmsettings-inner #advanced-inner details > summary"]) {
+  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner #pm-display-adv > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
     assert.equal(decl(css("css/components.css"), sel, "height"), "auto", "fold summaries wrap instead of clipping their readout at 150%");
     assert.equal(decl(css("css/components.css"), sel, "flex-wrap"), "wrap");
   }
@@ -1098,7 +1122,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status, .set-row, .adv-help)", "grid-column"), "1 / -1",
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child, #advanced > .pm-group-h:first-child, #audioset > .pm-group-h:first-child", "display"), "none",
-    "sheet title already names CONTROLS / DISPLAY / STEERING / MUSIC; do not reprint the heading");
+    "sheet title already names CONTROLS / DISPLAY / STEERING & ASSISTS / MUSIC; do not reprint the heading");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--steel)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "opacity"), "1",
@@ -1132,9 +1156,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
   assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#advanced-inner, #pm-panel-driving\) details > summary/, "color"), "var(--steel)",
     "STEERING folds use the same disclosure chrome as DISPLAY");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary::after/, "content"), "none");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
   assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
     /25BE/,
     "MUSIC fold chevron sits on the left");
@@ -1274,7 +1298,14 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
   assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");
   assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
-  assert.match(shell, /id="pm-advanced">STEERING/, "settings door is STEERING, not ADVANCED STEERING");
+  assert.match(shell, /id="pm-advanced">STEERING &amp; ASSISTS/, "settings door is STEERING & ASSISTS");
+  const settingsIndex = shell.slice(shell.indexOf('id="pm-settings-index"'), shell.indexOf("</nav>", shell.indexOf('id="pm-settings-index"')));
+  assert.deepEqual([...settingsIndex.matchAll(/<button id="(pm-(?:open-controls|open-driving|open-display|advanced|audio))"/g)].map((m) => m[1]),
+    ["pm-open-controls", "pm-open-driving", "pm-open-display", "pm-advanced", "pm-audio"],
+    "Settings home has the five primary doors in order");
+  const pause = shell.slice(shell.indexOf('id="pausemenu"'), shell.indexOf("</dialog>", shell.indexOf('id="pausemenu"')));
+  assert.doesNotMatch(pause, /<button id="pm-driving"/, "DRIVING is a Settings page, not a pause shortcut");
+  assert.match(shell, /id="pm-panel-driving"/, "DRIVING has a dedicated Settings page");
   assert.match(shell, /id="cz-cancel"[^>]*>BACK</, "customize cancel is BACK beside SAVE");
   assert.match(shell, /id="lt-close"[^>]*class="bigbtn"/, "lighting tuner DONE stays a live-commit primary");
   assert.doesNotMatch(shell, /id="lt-close"[^>]*class="bigbtn alt"/);
@@ -1328,7 +1359,7 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
   assert.equal(decl(components, ".sheet-foot .bigbtn:only-child", "flex"), "0 1 auto");
   assert.equal(decl(components, ".pm-group .tune-row .tune-label", "position"), "static");
   assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="region"] button', "white-space"), "normal");
-  assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 360px)")));
+  assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 600px)")));
   assert.equal(decl(css("css/career.css"), ".cr-cheats .sel-chip", "min-width"), "0");
 });
 

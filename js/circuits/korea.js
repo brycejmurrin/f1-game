@@ -25,7 +25,15 @@
     gp: "Korean GP",
     country: "South Korea",
     night: false,
-    theme: "modern",
+    // "green", NOT "modern". `theme: "modern"` is not a palette hint — it puts
+    // tracks.js's GENERIC SKYLINE EMITTER (the street_day/street_night/modern
+    // branch) around the whole lap, and a visual pass on 2026-09-15 found
+    // Yeongam ringed in tower blocks. The real circuit sits on reclaimed tidal
+    // flats beside an unfinished marina: the emptiness IS the venue. Its own
+    // scenery() already authors the correct backdrop (channel beacon, shuttered
+    // podiums, the stalled waterfront), and the generic city was landing on top
+    // of it.
+    theme: "green",
     lengthKm: 5.613,
     baseHW: 8,
     sceneryCoordinates: "racing",
