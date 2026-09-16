@@ -1252,6 +1252,13 @@ body[data-density="compact"] #campicker {
    world stays legible while the edges carry the letterbox mood — which is why
    it is not `.dim`, whose whole job is to flatten what is behind it. */
 #loading {
+  /* ABOVE EVERY MENU SCREEN. The .screen class carries no z-index of its own,
+     so without this the plain div fell to auto and painted UNDER #overlay (20),
+     #select (25) and #carsetup (35) — caught in a capture where the title
+     screen's buttons drew straight over the card. 36 clears the tallest of
+     them; the iOS install banner at 40 stays above on purpose, and the modal
+     <dialog> screens are in the top layer where z-index is not consulted. */
+  z-index: 36;
   place-items: end center;
   pointer-events: auto;      /* swallow the click that skips the flyby */
   background: radial-gradient(ellipse at 50% 45%, transparent 38%, var(--scrim-heavy) 100%);
