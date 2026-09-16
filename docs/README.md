@@ -154,3 +154,4 @@ For day-to-day workflows, see the **skills** in `.claude/skills/`
 
 - [Mechanics opportunity survey](research/MECHANICS-OPPORTUNITY-SURVEY-2026-09-14.md): code survey, primary research and priorities.
 - [Mechanics coherence implementation](plans/2026-09-14-mechanics-coherence.md): completed behavior, validation and remaining opportunities.
+- [Process speed-up: the next fifteen](plans/2026-09-16-process-speedup-next.md): plans for what the 2026-09-16 research landing left — `selected` on llvmpipe, the elevation-tracks floor, a runner-side dispatch tool, more VM twins, the settings and docs items — each with evidence, files, verification and expected saving.
