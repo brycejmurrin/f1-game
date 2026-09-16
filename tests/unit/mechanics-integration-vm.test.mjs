@@ -88,6 +88,24 @@ test("a duel trims the grid to the player and one bumped rival",async()=>{
   assert.ok(rival.craft>0&&rival.craft<=1,"racecraft axes stay normalised 0..1");
   assert.ok(rival.awareness>0&&rival.awareness<=1);
   assert.ok(rival.skill>0&&rival.skill<=1,"skill stays a ground-speed scalar");
+  // THE BUMP MUST BE A REAL LIFT, not just a field that got written. Compared
+  // against the same driver's UNBUMPED rating, which is what the rest of the
+  // grid would have raced on.
+  const DR=g.sandbox.DriverRatings;
+  const base=DR.get(rival.code,rival.tier,null);
+  assert.ok(rival.craft>(base.craft||75)/100,"craft is lifted above the stock rating");
+  assert.ok(rival.awareness>(base.awareness||75)/100,"so is awareness");
+  // PACE IS THE SMALLEST LIFT on purpose (js/race/duel.js): a same-spec car
+  // out-dragging the player down a straight is the tell players catch first.
+  const dCraft=rival.craft-(base.craft||75)/100, dPace=rival.skill-DR.skill(base,0.5);
+  assert.ok(dCraft>dPace,"the difficulty is in racecraft, not top speed");
+  // AND IT HAS TO DRIVE. A 2-car field is a size the AI's gap logic has never
+  // raced at — the rival must actually cover ground, not stall on the grid.
+  const s0=rival.s, lap0=rival.lap|0;
+  g.step(900);                      // 15 s of racing
+  assert.ok(rival.s!==s0||((rival.lap|0)>lap0),"the rival moves under AI control");
+  assert.ok(Number.isFinite(rival.speed)&&rival.speed>0,"and carries a real speed");
+  assert.ok(Number.isFinite(g.G.player.s),"the player's arc stays finite beside it");
   g.G.duel=false;
   await g.race("monza");
   assert.ok(g.G.cars.length>2,"clearing the setting restores a full grid");
