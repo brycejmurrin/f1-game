@@ -306,6 +306,9 @@ const PitLane = (function () {
   // crawls behind the next box's stop at the queue floor (measured: 33 s
   // from box to exit, by rescue pulses, with the whole field on one lap).
   const WORK_IN_M = 20;
+  // Where the exit wall ends (TrackPit.EXIT_WALL_W, the ribbon's share of
+  // its width); the bare VM tests load this file without the model.
+  const EXIT_WALL_W = typeof TrackPit !== "undefined" && TrackPit.EXIT_WALL_W != null ? TrackPit.EXIT_WALL_W : 0.45;
 
   // Resolve the lane for a built track: absolute arc positions, the side, the
   // width and the limit. A circuit def may override any field through
@@ -714,7 +717,23 @@ const PitLane = (function () {
       const inner = rib.inner * side + (lead ? p.off.fastIn * (1 - rib.v) : 0);
       const fastC = inner + p.bands.fast * 0.5;
       const roadC = hw - ROAD_IN;
-      return side * (roadC + (fastC - roadC) * rib.w);
+      let x = roadC + (fastC - roadC) * rib.w;
+      // Off the exit road, while the EXIT WALL stands (the ribbon at least
+      // EXIT_WALL_W of its width), the line stays on the lane side of it —
+      // the wall slides to the road edge with its own fade (verge · v) — and
+      // from where the wall ends it blends from THAT line to the road, not
+      // from the lane's centre: a target that jumped inward when the wall
+      // ended left the car a heading to build and 2.8 m behind it (traced).
+      if (!lead) {
+        const hold = hw + p.bands.verge * rib.v + 1.45;
+        if (rib.w >= EXIT_WALL_W) x = Math.max(x, hold);
+        // Squared, so the target drops fastest the moment the wall ends and
+        // is inside the road edge with the ribbon still under the car: a
+        // sub-linear blend (0.6) held it out longest exactly where the car
+        // has the least road left, and every stop ended on the grass (traced).
+        else x = roadC + (hold - roadC) * Math.pow(rib.w / EXIT_WALL_W, 2);
+      }
+      return side * x;
     }
     /** Is this car laterally IN the lane (within BOX_LAT of it)? Written in
      *  "toward the pit side" coordinates — x * side — so one comparison serves
@@ -868,7 +887,11 @@ const PitLane = (function () {
     // on the road). Nothing here MOVES the car — the lane is driven, so entry and
     // exit are the driver's job and the only thing this owns is the stop itself.
     function update(c, dt) {
-      if (!c || !enabled() || c.retired || c.finished) return;
+      // A FINISHED car still runs the machine: one held in its box at the
+      // flag is serviced and released, one on the lane keeps its state to the
+      // exit (game.js coasts it down the lane). They used to freeze in
+      // whatever state the flag found them and pile up in the lane.
+      if (!c || !enabled() || c.retired) return;
       const st = c.pitState || "none";
       const zz = z(), L = G.track.total;
       // The commitment lands: armed, the crew told what to ready. With no
@@ -1179,7 +1202,7 @@ const PitLane = (function () {
       };
     }
 
-    return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, inWindow: inWindowOf,
+    return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, roadOf, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
              laneEdge, laneCentre, laneDrive, laneUniform, boxUniform, laneX, inLaneLat, inBoxLat,

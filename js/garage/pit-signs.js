@@ -80,6 +80,24 @@ const PitSigns = (function () {
         ctx.restore();
       }
     }
+    // The CRESTS (TrackPit.SIGN.crests): the crest alone, on an OPAQUE field
+    // of the team's colour — a plaque on the door's pier, not a fascia.
+    if (S.crests) {
+      const cp = S.crestPx / div;
+      for (let i = 0; i < boxes.length && i < S.crests; i++) {
+        const box = boxes[i], cell = crestRect(i), x = cell.x / div, y = cell.y / div;
+        const col = box.col || [0.6, 0.6, 0.65], col2 = box.col2 || [0.9, 0.9, 0.9];
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, cp, cp); ctx.clip();
+        ctx.fillStyle = css(col); ctx.fillRect(x, y, cp, cp);
+        const pad = Math.round(cp * 0.12);
+        try {
+          LiveryTex.paintTeamMark(ctx, box.team, { c1: col, c2: col2, logo3: box.logo3 || null },
+                                  { x: x + pad, y: y + pad, w: cp - pad * 2, h: cp - pad * 2 }, col, { fullLockup: true });
+        } catch (e) { /* an unpaintable crest leaves the plaque in the team's colour */ }
+        ctx.restore();
+      }
+    }
     return cv;
   }
 
@@ -87,6 +105,11 @@ const PitSigns = (function () {
   function cellRect(i) {
     const S = TrackPit.SIGN;
     return { x: (i % S.cols) * S.cellW, y: Math.floor(i / S.cols) * S.cellH, w: S.cellW, h: S.cellH };
+  }
+  /** …and of crest cell `i` (TrackPit.SIGN.crests, the atlas's lower half). */
+  function crestRect(i) {
+    const S = TrackPit.SIGN;
+    return { x: (i % S.crestCols) * S.crestPx, y: S.crestY + Math.floor(i / S.crestCols) * S.crestPx, w: S.crestPx, h: S.crestPx };
   }
 
   /** UV rect of cell `i`, V flipped as createTexture uploads with FLIP_Y
