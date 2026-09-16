@@ -1267,8 +1267,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "TODAY is a chip on the pan-x toolbar, first in the row");
   assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"] #sel-daily > span', "display"), "none",
     "compact TODAY drops its weather/tod/best span so the filters stay on screen");
-  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "calc(36svh / var(--hud-z))",
-    "compact race banners sit below the flag, not on top of it");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 6px)",
+    "compact radio cards sit right under the timing row, like every other density");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"]:has(#hud-flag:not([hidden])) #announce', "top"), "calc(72px + var(--sat) / var(--hud-z) + 34px)",
+    "…and step below the flag chip while a caution shows, never on top of it");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "calc(72px + var(--sat) / var(--hud-z))");
   assert.equal(decl(css("css/career.css"), '#quali .sheet[data-density="compact"] #q-foot', "display"), "grid");
   assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");

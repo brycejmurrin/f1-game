@@ -470,7 +470,7 @@ function _trackAtmoBias(def) {
   if (def.theme === "street_night") return -0.10;
   return 0;
 }
-return { applyRaceSettings, trackAtmoBias: _trackAtmoBias };
+return { applyRaceSettings };
 }
 
 return { create };

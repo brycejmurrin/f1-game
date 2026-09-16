@@ -13,7 +13,16 @@
 > the car STOPPED — and the three-line teach ended by `apex26.pitTaught`; the
 > browser walk of `__apex.pit().cue` down the exit road is NOT added: the unit
 > suite drives the ladder with stub cars, and a spec that no session runs is
-> not evidence). §4 is still a plan. Companions:
+> not evidence). **§4 is built**: the player's reference plan (`planFor(roll, player, laps)`,
+> honouring the STRATEGY row's pin; `think` keeps a human guard), `stintPlan`'s
+> `stops` / `start` / `firstLife` pins, the plan line under the tyre bar
+> (`planInfo`, `data-plan` soon/now/free), the engineer's plan lines (caution
+> with margin, the undercut, rain before the stop, BOX THIS / NEXT LAP), the
+> rivals' windows as a `data-pit` suffix on the gap chips (`windowOf` — there is
+> no timing tower; the chips are the per-rival HUD), once-per-lap re-planning
+> adopted only when the next stop moves by two laps (`replan`), and the
+> STRATEGY row with its stint bar and pit loss in RACE SETTINGS
+> (`js/race/race-settings.js paintPlan`, pin persisted as `apex26.pitPlan.<id>`). Companions:
 > `PIT-LANE-REDESIGN-2026-09.md` (the complex), `PIT-LIGHTING-PLAN-2026-09.md`,
 > `PIT-BAY-LOGOS-PLAN-2026-09.md`, `STREET-PIT-LANES-PLAN-2026-09.md`.
 

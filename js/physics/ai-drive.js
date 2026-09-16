@@ -711,10 +711,19 @@ const AiDrive = (function () {
     const bias = (roll - 0.5) * 0.66 * pitLossLaps;
     const soften = (roll - 0.5) * 0.006;
     const taste = { soft: soften, medium: 0, hard: -soften };
+    // THE PINS, for the PLAYER's reference plan (js/race/pit-lane.js): `stops`
+    // holds the stop count the STRATEGY row chose, `start` the compound
+    // already on the car when a plan is re-cut mid-race, and `firstLife` the
+    // laps that set has left — the first stint is run on what is on the car,
+    // not on a fresh set's life. An AI passes none of them.
+    const pinStops = ctx.stops != null && ctx.stops >= 0 ? Math.min(MAX_STOPS, ctx.stops | 0) : null;
+    let pinStart = ctx.start && TYRE[ctx.start] ? ctx.start : null;
     let best = null;
     const walk = (seq) => {
       const stops = seq.length - 1;
-      const lives = seq.map((cls) => lifeLaps(cls));
+      if (pinStops != null && stops !== pinStops) return;
+      if (pinStart && seq[0] !== pinStart) return;
+      const lives = seq.map((cls, i) => (i === 0 && ctx.firstLife > 0 ? ctx.firstLife : lifeLaps(cls)));
       const stints = splitStints(laps, lives);
       let cost = stops * pitLossLaps + stops * bias;
       let done = 0;
@@ -734,6 +743,9 @@ const AiDrive = (function () {
       for (const cls of CLASSES) rec(seq.concat(cls));
     };
     for (const cls of CLASSES) rec([cls]);
+    // A start pinned to a compound the planner does not enumerate (a wet on a
+    // drying track) matches no sequence: plan from the classes instead.
+    if (!best && pinStart) { pinStart = null; for (const cls of CLASSES) rec([cls]); }
     // Stop laps are the running totals of the stint lengths — STAGGERED by the
     // roll, a lap either way in thirds of the field. Without it a field on one
     // plan stopped on ONE lap: 22 cars into a twelve-box lane at once (Bahrain,

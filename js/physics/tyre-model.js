@@ -33,11 +33,15 @@ const TyreModel = (function () {
   const clamp = M4.clamp;
 
   // What the TYRE WEAR race setting means, as a scale on the wear rate. OFF is
-  // the shipped default and is a TRUE no-op: gripMul/tractionMul/fuelMul all
-  // return exactly 1, so tests/specs/physics-characterization.spec.js stays
-  // bit-identical until somebody turns this on. Same argument as
-  // js/race/reliability.js — an existing save must not start losing races
-  // because the game was updated.
+  // a TRUE no-op: gripMul/tractionMul/fuelMul all return exactly 1, so
+  // tests/specs/physics-characterization.spec.js stays bit-identical with it
+  // selected. It is NOT the shipped default any more — js/game.js ships
+  // `store.get("tyreWear", "light")`, and the source assertion at the foot of
+  // tests/unit/tyre-model.test.mjs exists to stop it going back to OFF, which
+  // would switch the whole pit lane off for every new player. The browser
+  // fixtures still pin OFF so a physics baseline measures the driving model
+  // rather than this month's default, which is why no spec would notice.
+  // A set's life is nominal / LEVELS[level] laps — see planLaps().
   const LEVELS = { off: 0, light: 0.55, real: 1 };
   function isLevel(v) { return Object.prototype.hasOwnProperty.call(LEVELS, v); }
 
@@ -495,6 +499,19 @@ const TyreModel = (function () {
 
     function on() { return LEVELS[level] > 0; }
     function setLevel(v) { if (isLevel(v)) level = v; return level; }
+    // How many laps a set ACTUALLY lasts at the setting in force — the number a
+    // STRATEGY has to plan against. lifeLaps() is the nominal, level-free life,
+    // and wear then accrues at LEVELS[level]/lifeLaps per lap, so a set survives
+    // lifeLaps / LEVELS[level] laps. The planner used to ask lifeLaps() direct,
+    // which is only right at `real` (1.0); at the SHIPPED DEFAULT `light` (0.55)
+    // a set lasts 1.82x longer and the AI pitted for tyres it had not used —
+    // measured identical first stops (lap 7) and stop counts at light and real,
+    // because the plan could not see the setting. At `off` nothing wears, so the
+    // honest answer is "the whole race".
+    function planLaps(life, lapsTarget) {
+      const k = LEVELS[level];
+      return k > 0 ? lifeLaps(life, lapsTarget) / k : Math.max(1, lapsTarget || 1);
+    }
 
     // Put a fresh set on a car. The ONLY place c.tyreWear is cleared, so a stop
     // and a re-grid cannot disagree about what "fresh" means.
@@ -672,7 +689,7 @@ const TyreModel = (function () {
       fit, update, gripMul, tractionMul, axleSplit, fuelAccelMul, fuelVmaxMul,
       stints, closeStints,
       lapsOn, spent, info, severity,
-      level: () => level, setLevel, on,
+      level: () => level, setLevel, on, planLaps,
       classRecord, optionRecord,
     };
   }

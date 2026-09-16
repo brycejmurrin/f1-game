@@ -659,6 +659,12 @@ function updateHud(force) {
         hText(els.pitCueArrow, (pit.info(player) || {}).side === -1 ? "\u25C0" : "\u25B6");
       }
     }
+    // THE PLAN LINE: the reference plan the pit wall would run (PitLane.planInfo),
+    // under the tyre bar \u2014 the stops, the next box lap, the compound; amber the
+    // lap before, --you on the lap, and FREE STOP under a caution that fits it.
+    const pl = pit && pit.planInfo ? pit.planInfo(player) : null;
+    if (els.plan) hText(els.plan, pl ? pl.text : "");
+    if (pl && pl.state) els.tyre.dataset.plan = pl.state; else delete els.tyre.dataset.plan;
   }
   // gear + tachometer
   hText(els.gear, "" + player.gear);
@@ -780,6 +786,14 @@ function updateHud(force) {
     hStyle(els.gapA, "--gap-team", a ? teamCss(a) : "");
     if (a && (player.towing || 0) > 0.5) els.gapA.dataset.tow = "1"; else delete els.gapA.dataset.tow;   // in the tow
     hStyle(els.gapB, "--gap-team", b ? teamCss(b) : "");
+    // THE RIVALS' WINDOWS: "P12" when the neighbour's planned stop is within
+    // three laps, "IN" while it is stopping (PitLane.windowOf) — a suffix the
+    // sheet paints as ::after, so gapForm's learned spellings stay whole.
+    const win = (el, o) => {
+      const w = o && G.pits && G.pits.windowOf ? G.pits.windowOf(o) : "";
+      if (w) { if (el.dataset.pit !== w) el.dataset.pit = w; } else if (el.dataset.pit != null) delete el.dataset.pit;
+    };
+    win(els.gapA, a); win(els.gapB, b);
   }
   // Sector split display (top-right) — cached span nodes, textContent per tick
   if (els.hudSectors) {

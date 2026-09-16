@@ -38,10 +38,18 @@
  *   node tools/check/ai-line.mjs                    monza, normal, 1 run
  *   node tools/check/ai-line.mjs --track spa --runs 5
  *   node tools/check/ai-line.mjs --json
+ *   node tools/check/ai-line.mjs --wear real      the line on worn tyres
+ *
+ * --wear off|light|real, DEFAULT off (the harness pin; the game ships "light").
+ * Off measures the line on fresh rubber, which is what every recorded run here
+ * used. With wear on, grip falls through the stint and the strategy layer runs,
+ * so compare like with like.
  */
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { wearArg } from "../lib/cli-args.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -50,12 +58,15 @@ const { createGame } = require(path.join(ROOT, "tools/lib/game-vm.cjs"));
 const argv = process.argv.slice(2);
 const flag = (n, d) => { const i = argv.indexOf("--" + n); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d; };
 const TRACK = flag("track", "monza"), DIFF = flag("diff", "normal");
+// Default OFF, the harness pin — a baked-line measurement wants fresh tyres.
+// --wear light|real shows where a worn car puts the car instead.
+const WEAR = wearArg(argv);
 const RUNS = Math.max(1, Math.min(25, +flag("runs", 1) || 1));
 const SEED0 = +flag("seed", 1) || 1;
 const DT = 1 / 60;
 
 async function measure(seed) {
-  const g = await createGame({ track: TRACK, storage: { difficulty: DIFF } });
+  const g = await createGame({ track: TRACK, storage: { difficulty: DIFF, tyreWear: WEAR } });
   const A = g.apex;
   if (A && typeof A.seed === "function") { A.seed(seed); await g.race(TRACK); }
   const cars = g.G.cars, pIdx = cars.findIndex((c) => c.isPlayer);
@@ -108,12 +119,12 @@ const rowsOut = keys.map((s0) => {
            approach: { median: +med(ap).toFixed(2), min: Math.min(...ap), max: Math.max(...ap) },
            apex: { median: +med(px).toFixed(2), min: Math.min(...px), max: Math.max(...px) } };
 });
-const out = { track: TRACK, difficulty: DIFF, runs: RUNS, corners: rowsOut };
+const out = { track: TRACK, difficulty: DIFF, wear: WEAR, runs: RUNS, corners: rowsOut };
 
 if (argv.includes("--json")) { console.log(JSON.stringify(out, null, 2)); }
 else {
   const one = RUNS === 1;
-  console.log(`${TRACK} / ${DIFF} / ${rowsOut.length} scored corner(s)` + (one ? "" : ` / ${RUNS} runs, seeds ${SEED0}–${SEED0 + RUNS - 1} (median [min–max])`));
+  console.log(`${TRACK} / ${DIFF} / wear ${WEAR} / ${rowsOut.length} scored corner(s)` + (one ? "" : ` / ${RUNS} runs, seeds ${SEED0}–${SEED0 + RUNS - 1} (median [min–max])`));
   console.log(`  + is toward the INSIDE — a racing line is NEGATIVE on the approach and deep POSITIVE at the apex`);
   for (const r of rowsOut) {
     const a = one ? r.approach.median.toFixed(2) : `${r.approach.median.toFixed(2)} [${r.approach.min}–${r.approach.max}]`;

@@ -281,3 +281,41 @@ test("a red flag re-grids in race order to re-run the current lap, keeps the clo
   assert.ok(A.fieldState().some((c) => c.speed > 5), "racing again");
   g.G.quitToMenu();
 });
+
+// ── The STRATEGY row ────────────────────────────────────────────────────────
+// The player's reference plan for this circuit (js/race/pit-lane.js planFor):
+// AUTO or a pinned stop count, shown only when TYRE WEAR is on, persisted per
+// circuit through PitLane.setPinnedStops.
+
+test("the STRATEGY row follows TYRE WEAR: hidden when wear is off, a pin persisted per circuit when on", () => {
+  // The inert DOM has no <select> children to step (SettingRow's parts walk
+  // finds nothing), so the pin is driven through the module the row wires:
+  // PitLane.setPinnedStops / pinnedStops, and the store it persists to.
+  const doc = g.sandbox.document, byId = (id) => doc.getElementById(id);
+  g.G.raceTyreWear = "off";
+  open("monza", false);
+  assert.equal(byId("rs-plan").hidden, true, "no plan without wear");
+  assert.equal(byId("rs-plan-bar").hidden, true);
+  g.G.raceTyreWear = "real";
+  open("monza", false);
+  assert.equal(byId("rs-plan").hidden, false, "wear on: the row shows");
+  assert.equal(g.G.pits.pinnedStops(), null, "AUTO by default");
+  g.G.pits.setPinnedStops(0);
+  assert.equal(g.G.pits.pinnedStops(), 0, "the pin is the module's");
+  assert.equal(g.G.store.get("pitPlan.monza", "auto"), 0, "…persisted per circuit");
+  g.G.pits.setPinnedStops(null);
+  assert.equal(g.G.pits.pinnedStops(), null, "AUTO clears it");
+  // Where the complex is built the stint bar is drawn from the plan.
+  if (g.G.pits.zoneOf()) {
+    open("monza", false);
+    assert.equal(byId("rs-plan-bar").hidden, false);
+    const plan = g.G.pits.planFor(0.5, true, g.G.raceLaps);
+    assert.equal(byId("rs-plan-stints").children.length, plan.stints.length, "one segment per stint");
+    assert.match(byId("rs-plan-loss").textContent, /PIT LOSS ≈ \d+ s/);
+    g.G.pits.setPinnedStops(2);
+    open("monza", false);
+    assert.equal(byId("rs-plan-stints").children.length, 3, "a pinned 2-stop draws three stints");
+    g.G.pits.setPinnedStops(null);
+  }
+  g.G.raceTyreWear = "off";
+});

@@ -499,10 +499,6 @@ function fmtTime(t) {
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3);
 }
 
-function pageTabs(cur) {
-  return PAGES.map((p) => (p === cur ? "▸" + p.toUpperCase() : p)).join("  ");
-}
-
 // Two-column row: label (padded to L chars) then value.
 const L = 8;
 function row(label, value) { return (label + ":").padEnd(L) + " " + value; }

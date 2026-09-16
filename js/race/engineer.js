@@ -85,12 +85,24 @@ const RaceEngineer = (function () {
       // §11 "live, not pre-planned" call made good. So nothing below arms a
       // stop — every one of these is a sentence.
       if (s.wrongTread) return [s.wet ? "RAIN — BOX FOR WETS" : "TRACK IS DRY — BOX FOR SLICKS", "tread"];
+      // THE PLAN-AWARE LINES (the player's reference plan, PitLane.planFor),
+      // between the tread and the tyre complaints: a caution that fits the plan
+      // with margin to spare, a rival's undercut, rain arriving before the
+      // planned stop, and the stop lap itself. Every one names a LAP or a
+      // compound — a sentence a driver can act on, never a status.
+      if (s.freeStop && s.marginS != null && s.marginS > 0) return ["CAUTION — STOP NOW LOSES NOTHING", "caution"];
       if (s.freeStop) return ["CAUTION — CHEAPER STOP" + (s.pitLoss != null ? ", ABOUT " + Math.round(s.pitLoss) + "s LOST" : " — CONSIDER BOXING"), "caution"];
+      if (s.rivalBoxed) return [s.rivalBoxed + " HAS BOXED — UNDERCUT ON, BOX NOW OR PUSH 2 LAPS", "undercut"];
+      if (s.rainInLaps != null && s.lapsToStop != null && s.rainInLaps <= s.lapsToStop) {
+        return ["RAIN BEFORE THE STOP — BOX LAP " + ((s.lap || 0) + s.rainInLaps) + " FOR WETS", "rainplan"];
+      }
       if (s.rainInLaps != null) {
         return ["RAIN IN " + s.rainInLaps + (s.rainInLaps === 1 ? " LAP" : " LAPS") + " — BE READY", "rain"];
       }
       if (s.blistering >= BLISTER_CALL) return ["BLISTERS — THAT SET IS DONE", "blister"];
       if (s.wear >= 1) return ["TYRES ARE GONE — BOX WHEN YOU CAN", "gone"];
+      if (s.lapsToStop === 0) return ["BOX THIS LAP" + (s.nextCode ? " — " + s.nextCode : ""), "plan0"];
+      if (s.lapsToStop === 1) return ["BOX NEXT LAP" + (s.nextCode ? " — " + s.nextCode : ""), "plan1"];
       if (s.graining >= GRAIN_CALL) return ["GRAINING — EASE OFF AND CLEAN THEM UP", "grain"];
       if (s.outLap && s.belowWindow >= COLD_CALL) return ["TYRES ARE COLD — TAKE A LAP", "cold"];
       // THE AXLE CALL, and the one that would not exist without per-axle wear.
@@ -137,8 +149,30 @@ const RaceEngineer = (function () {
       const arc = G.weatherArc;
       const lapS = c.lastLap > 0 ? c.lastLap : 0;
       const left = arc ? Math.max(0, arc.dur - arc.t) : 0;
+      // THE PLAN: the next planned stop lap and the compound it fits; and THE
+      // UNDERCUT — a rival BEHIND, inside pit loss plus two seconds, whose stop
+      // count rose since the last tick (remembered per rival in the bag).
+      const plan = c.pitPlan, done = c.pitStops || 0;
+      const nextAt = plan ? plan.lapsAt[done] : null;
+      const nextCls = plan ? plan.seq[done + 1] : null;
+      const nextCode = nextCls && TyreModel.AI_CLASS[nextCls] ? TyreModel.AI_CLASS[nextCls].code : null;
+      let rivalBoxed = null;
+      if (!b.stops) b.stops = new Map();
+      for (const o of (G.cars || [])) {
+        if (o === c) continue;
+        const now = o.pitStops || 0, prev = b.stops.has(o) ? b.stops.get(o) : now;
+        if (now > prev && pit && pit.lossS != null && !armed) {
+          const gap = (c.prog - o.prog) / Math.max(1, o.speed || 1);
+          if (gap > 0 && gap < pit.lossS + 2) rivalBoxed = o.code || "RIVAL";
+        }
+        b.stops.set(o, now);
+      }
       return {
         wear, step,
+        lap: c.lap || 0,
+        lapsToStop: !armed && nextAt != null ? nextAt - (c.lap || 0) : null,
+        nextCode, rivalBoxed,
+        marginS: pit ? pit.marginS : null,
         axle: Math.abs(ax.f - ax.r),
         front: ax.f < ax.r,
         // `graining`/`blistering`, not `grain`/`blister`: a property access
