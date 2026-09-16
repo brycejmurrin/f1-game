@@ -4888,7 +4888,7 @@ function updateCar(c, dt, ranked) {
     // stops the fronts turning; a lock leaves a flat spot that wobbles the
     // wheel once per revolution and heals over ~90 s of rolling. The grip
     // model above is untouched — this is what the wheels SHOW.
-    c.wheelLock = braking && axFracF > 0.92 ? clamp((axFracF - 0.92) / 0.08, 0, 1) : 0;
+    c.wheelLock = braking && axFracF > 0.60 ? clamp((axFracF - 0.60) / 0.08, 0, 1) : 0;   // 0.92 is unreachable and the per-axle rewrite did not move it: measured peak axFracF 0.638 dry / 0.887 rain on a straight-line full stop, and 0.638 again at 62 % front bias, so no dry stop ever locked a wheel and the flat-spot system below (wobble, 90 s heal) was dead code
     c.flatSpot = clamp((c.flatSpot || 0) + c.wheelLock * dt * 0.4 - dt / 90, 0, 1);
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
