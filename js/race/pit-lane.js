@@ -270,6 +270,13 @@ const PitLane = (function () {
   const GRID_CLEAR = COMMIT_CLEAR + 15;
   const COMMIT_S = 0.55;      // held, in seconds
   const COMMIT_V = 0.10;      // of the speed envelope: a parked car is not pitting
+  // ON THE COMPLEX the commitment is the lane's own tarmac: the car's centre
+  // this far past the lane's inner edge (the road edge at the peel, the wall
+  // line once it has grown), so most of the car is on the pit road. The old
+  // painted line sat 3.2 m INSIDE the road, and a car holding the pit-side
+  // third of the pit straight for half a second armed the limiter on the
+  // racing line — from the grid, in traffic, on every circuit.
+  const COMMIT_IN = 0.5;
 
   // Resolve the lane for a built track: absolute arc positions, the side, the
   // width and the limit. A circuit def may override any field through
@@ -589,14 +596,14 @@ const PitLane = (function () {
      *  whose walls leave room, Tracks builds a second road beside the racing
      *  surface and this is where it is; everywhere else there is only paint.
      *
-     *  TWO THINGS MOVE ONTO IT AND ONE DOES NOT. Where a car serving a stop
-     *  SITS, and where its box is, are the ribbon — that is the point of
-     *  building one. The COMMITMENT stays on the painted line inside the road,
-     *  because that line is the entry: a real driver takes the painted lane on
-     *  the track and it delivers them onto the pit road. Moving the commitment
-     *  out to the ribbon would ask a driver at racing speed to already be on a
-     *  surface they reach by committing, which is the "aim at nothing" failure
-     *  the painted line was drawn to end. */
+     *  EVERYTHING MOVES ONTO IT. Where a car serving a stop SITS, where its box
+     *  is, and — since the complex (TrackPit) gave the lane a real ENTRY ROAD
+     *  that peels off the racing surface — the COMMITMENT too: a driver takes
+     *  the entry road they can see, and being on it is the commitment
+     *  (`committing`, COMMIT_IN). The commitment stayed on the painted line
+     *  inside the road for a while after the ribbon existed, and that line,
+     *  3.2 m in from the edge, is racing surface: holding it for half a second
+     *  armed the limiter on the pit straight — from the grid, on every circuit. */
     function ribbonAt(s) {
       if (typeof Tracks === "undefined" || !Tracks.pitLaneAt || !G.track || s == null) return null;
       return Tracks.pitLaneAt(G.track, s);
@@ -685,9 +692,16 @@ const PitLane = (function () {
       // beyond excluding the grid.
       const at = throughM(zz, c.s, L);
       if (at > boxThroughFor(c, zz, L) - COMMIT_CLEAR) return false;
+      // ON THE LANE'S OWN TARMAC where there is one: the complex's entry road
+      // peels off the racing surface, and a driver commits by driving onto it —
+      // the car's centre COMMIT_IN past the lane's inner edge, which is the
+      // road edge at the peel and the wall line once the wall has grown. A car
+      // anywhere on the road, grid slots included, can never satisfy it.
+      const rib = ribbonAt(c.s);
+      if (rib) return (c.x || 0) * zz.side >= rib.inner * zz.side + COMMIT_IN;
       Tracks.sample(G.track, c.s, _smp);
       // INSIDE THE PAINTED LANE, not past an abstract fraction of the road. The
-      // commitment test and the stripe a driver can see are now the same line,
+      // commitment test and the stripe a driver can see are the same line,
       // which is the whole point of painting it: before this, the gesture asked
       // you to aim at nothing.
       const hw = _smp.hw || 0;
