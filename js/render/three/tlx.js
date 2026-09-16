@@ -2367,6 +2367,8 @@ const TLX = (function () {
         // inside GLX. Saying "not supported" is the honest version of that.
         occlusionCull: () => ({ supported: false, on: false }),
         occlusionStats: () => ({ supported: false, on: false }),
+        multiDraw: () => ({ supported: false, on: false }),
+        multiDrawStats: () => ({ supported: false, on: false }),
         get isWebGPU() { return !!(renderer.backend && renderer.backend.isWebGPUBackend); },
 
         // lifecycle / capability

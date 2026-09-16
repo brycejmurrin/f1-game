@@ -800,6 +800,12 @@ const GLX = (function () {
     // says the counted oracle is sane on hardware.
     try {
       if (localStorage.getItem("apex26.occlusionCull") === "1") CHK.occlusionCull(true);
+      // MULTI-DRAW, opt-in for now. The bound test says draw calls are what
+      // this frame pays for (RENDER-PERF-PLAN-2026-09-16 §2), so this is the
+      // lever with the evidence behind it — but it has not been A/B'd on
+      // hardware yet, and 1.4 % of Firefox has the extension, so it earns its
+      // default rather than assuming it.
+      if (localStorage.getItem("apex26.multiDraw") === "1") CHK.multiDraw(true);
     } catch (_) { /* storage blocked: stays off, which is the safe side */ }
 
     // The per-instance colour attribute is multiplied into vCol on EVERY lit
@@ -2596,6 +2602,11 @@ const GLX = (function () {
     // this box has no GPU and a frame rate here measures the box.
     occlusionCull: (on) => (CHK && CHK.occlusionCull ? CHK.occlusionCull(on) : { on: false, supported: false }),
     occlusionStats: () => (CHK && CHK.occlusionStats ? CHK.occlusionStats() : { supported: false, on: false }),
+    // WEBGL_multi_draw (js/render/glx/chunked.js). Counted, not timed: the
+    // oracle is drawElements calls AVOIDED, which this box can count exactly
+    // and whose time saving only a real GPU can price.
+    multiDraw: (on) => (CHK && CHK.multiDraw ? CHK.multiDraw(on) : { on: false, supported: false }),
+    multiDrawStats: () => (CHK && CHK.multiDrawStats ? CHK.multiDrawStats() : { supported: false, on: false }),
     softPresent: () => !!_softPresent,
     softPresentState,
     awaitSoftPresent,
