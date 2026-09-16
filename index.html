@@ -452,9 +452,12 @@
 
 <!-- THE RADIO. Every banner — the engineer, the coach, race control, the pit
      cues' announcements — is a radio message now, not a billboard: a small
-     card with the channel it came in on (WHO) and the words in quotes, the
-     way a broadcast shows team radio. js/game.js showAnnounce fills both. -->
-<div id="announce" role="status" hidden><span id="announce-who"></span><span id="announce-text"></span></div>
+     card with the car NUMBER on a plate of the channel's colour, the channel
+     it came in on (WHO) and the words in quotes, the way a broadcast shows
+     team radio. js/game.js showAnnounce fills all three. The number leads the
+     status text on purpose: "63 · RUSSELL · RADIO · <words>" is how the card
+     reads aloud, which is how it reads by eye. -->
+<div id="announce" role="status" hidden><span id="announce-num"></span><span id="announce-body"><span id="announce-who"></span><span id="announce-text"></span></span></div>
 
 <!-- TOUCH-mode drag affordance: a ring at the point the finger went down, so
      the anchor of an otherwise invisible control is visible for a moment.

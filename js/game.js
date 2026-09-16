@@ -18,7 +18,8 @@ const els = {
   hudSectors: $("hud-sectors"),
   hudLimits: $("hud-limits"),
   flag: $("hud-flag"), minimap: $("minimap"),
-  lights: $("lights"), announce: $("announce"), announceWho: $("announce-who"), announceText: $("announce-text"),
+  lights: $("lights"), announce: $("announce"), announceNum: $("announce-num"),
+  announceWho: $("announce-who"), announceText: $("announce-text"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
   lighting: $("lighting"), camtune: $("camtune"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
@@ -1121,20 +1122,26 @@ const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3,
 let _annPri = 0, _annQueue = null;
 // THE RADIO. A banner is a radio message: the WHO line names the channel it
 // came in on — race control for a penalty or a warning, the coach for a tip,
-// otherwise the driver's own pit-wall channel with their name and number, the
-// way a broadcast captions team radio — and the words sit under it in quotes.
+// otherwise the driver's own pit-wall channel under their name — the words sit
+// under it in quotes, and the car NUMBER sits on the plate beside both
+// (css/hud.css #announce-num), the way a broadcast captions team radio. The
+// number used to be the last token of the WHO line, in micro type at --dim: the
+// dimmest thing on a card that is always about that car. Every channel here is
+// addressed TO the player, so the one number serves all three.
 function radioWho(kind) {
-  const p = player, num = p && p.num != null ? " · " + p.num : "";
-  if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL" + num;
-  if (kind === "coach" || kind === "practice") return "COACH" + num;
+  if (kind === "penalty-hit" || kind === "penalty-warn" || kind === "warning") return "RACE CONTROL";
+  if (kind === "coach" || kind === "practice") return "COACH";
+  const p = player;
   const who = p && p.name ? String(p.name).split(" ").pop().toUpperCase() : (p && p.code) || "";
-  return (who ? who + " · " : "") + "RADIO" + num;
+  return (who ? who + " · " : "") + "RADIO";
 }
+const radioNum = () => (player && player.num != null ? String(player.num) : "");
 function showAnnounce(msg, dur, kind) {
   kind = kind || "race";
   _annPri = ANN_PRI[kind] || 2;
   els.announceText.textContent = msg;
   els.announceWho.textContent = radioWho(kind);
+  els.announceNum.textContent = radioNum();   // "" collapses the plate to the old 3px stripe
   els.announce.className = "";
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;

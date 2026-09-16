@@ -253,7 +253,7 @@ const ACCENT_DECOR = {
     "`.hud-box` border-left — the team stripe on a box whose value is the readout",
     "`body.hud-prof-broadcast .hud-gaps` border-left — the same stripe, broadcast skin",
     "`--accent-dim` on the sector rows — the same stripe again, dimmed",
-    "`#announce` border-left — the radio card's team stripe; the kinds that carry state (warning, penalty) recolour it with their own token",
+    "`#announce-num` background — the radio card's number PLATE. The team colour is the ground, not the message: the number on it is `--accent-ink`, picked per team to clear 4.5:1 (proved below), and the kinds that carry state (warning, penalty, coach) repaint the plate with their own token",
   ],
   "css/tokens.css": [
     "`--accent-dim` derivation",
@@ -285,16 +285,51 @@ test("every var(--accent) consumer is decoration, so the dark team skins are exe
 });
 
 test("a team accent may be dark, but --red and --focus must not follow it", () => {
-  // The team skin re-points --accent only. The two tokens that DO carry
-  // information — the selected border and the focus ring — are fixed, and a
-  // future "skin the whole UI" change would silently push both under 3:1.
+  // The team skin re-points --accent and the ink that stands on it, and
+  // nothing else. The two tokens that DO carry information — the selected
+  // border and the focus ring — are fixed, and a future "skin the whole UI"
+  // change would silently push both under 3:1.
   const skins = [...read("css/tokens.css").matchAll(/:root\[data-team="([\w-]+)"\]\s*\{([^}]*)\}/g)];
   assert.ok(skins.length >= 11, `expected the team skin blocks, found ${skins.length}`);
   for (const [, team, body] of skins) {
     const props = [...body.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]);
-    assert.deepEqual(props, ["--accent"],
-      `:root[data-team="${team}"] may only re-point --accent (found ${props.join(", ")}). ` +
+    assert.deepEqual(props, ["--accent", "--accent-ink"],
+      `:root[data-team="${team}"] may only re-point --accent and --accent-ink (found ${props.join(", ")}). ` +
       `Skinning --red or --focus would drop the selected border or the focus ring ` +
       `under 3:1 on the darker teams`);
+  }
+});
+
+test("every team's --accent-ink is READABLE on that team's --accent, and is the better of the two candidates", () => {
+  // The radio card's number plate is the one surface painted --accent, so the
+  // number on it is real text over a ground that ranges from #0f3cc9 to
+  // #f5f5f5. 4.5:1 is asserted rather than the 3:1 large-text allowance the
+  // 26px plate would earn, so the plate can shrink without this going quiet.
+  //
+  // The ink is also not a free choice: only --text and --bg are on offer, and
+  // the test recomputes both and insists the sheet named the winner. That is
+  // what makes adding a team mechanical instead of a judgement call.
+  const skins = [...read("css/tokens.css").matchAll(/:root\[data-team="([\w-]+)"\]\s*\{([^}]*)\}/g)];
+  const CANDIDATES = { "var(--text)": resolve(token("--text")), "var(--bg)": resolve(token("--bg")) };
+  for (const [, team] of skins) {
+    const sel = `:root[data-team="${team}"]`;
+    const accent = resolve(decl(tokens, sel, "--accent"));
+    const inkName = decl(tokens, sel, "--accent-ink");
+    assert.ok(CANDIDATES[inkName], `${sel} sets --accent-ink to ${inkName}; only var(--text) and var(--bg) are on offer`);
+    const scored = Object.entries(CANDIDATES)
+      .map(([name, c]) => [name, ratio(accent, c)])
+      .sort((a, b) => b[1] - a[1]);
+    const got = scored.find(([name]) => name === inkName)[1];
+    assert.ok(got >= 4.5,
+      `${team}: --accent-ink ${inkName} measures ${got.toFixed(2)}:1 on ${decl(tokens, sel, "--accent")} — ` +
+      `the car number on the radio card's plate would be unreadable`);
+    assert.equal(inkName, scored[0][0],
+      `${team}: --accent-ink is ${inkName} (${got.toFixed(2)}:1) but ${scored[0][0]} measures ` +
+      `${scored[0][1].toFixed(2)}:1 — the ink is whichever is further, not a preference`);
+  }
+  // The kinds that repaint the plate all ink it --bg (css/hud.css). Same floor.
+  for (const name of ["--sec-slow", "--slower", "--faster"]) {
+    const r = ratio(resolve(token(name)), resolve(token("--bg")));
+    assert.ok(r >= 4.5, `${name} plate inked --bg measures ${r.toFixed(2)}:1`);
   }
 });
