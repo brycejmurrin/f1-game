@@ -38,14 +38,30 @@ async function withTrack(id, fn) {
 test("the shipped flyby never puts the eye inside a building", async () => {
   for (const id of CIRCUITS) {
     const bad = await withTrack(id, (track, g) => {
-      const FlybySeq = g.sandbox.FlybySeq;
+      const FlybySeq = g.sandbox.FlybySeq, Tracks = g.sandbox.Tracks;
       const hits = [];
+      const shots = FlybySeq.DEFAULT;
       FlybySeq.reset();
       for (let i = 0; i <= SAMPLES; i++) {
         const u = i / SAMPLES;
         const v = FlybySeq.solve(track, u);
-        // A margin of 0: clearEye() already lifted with its own margin, so any
-        // containment at all here means the lift failed to find a way out.
+        const shot = shots[v.index];
+        // A SHOT THAT RUNS DOWN THE ROAD IS EXEMPT FROM CONTAINMENT, and has to
+        // earn it: props are stored as AXIS-ALIGNED boxes, so a long structure at
+        // an angle (Bahrain's 143 m grandstand) gets a box that reaches across
+        // the start straight, and the closing low shot was "inside" it. The
+        // claim being made is that the camera is over the ROAD, so test THAT —
+        // the track's own half-width — instead of exempting it silently.
+        if (FlybySeq.onRoadPose(shot.eye[0]) && FlybySeq.onRoadPose(shot.eye[1])) {
+          const pr = Tracks.project(track, v.eye[0], v.eye[2], null, v.eye[1]);
+          if (!pr || Math.abs(pr.lat) > 12) {
+            hits.push(`u=${u.toFixed(2)} shot=${v.id} claims to be on the road but sits ` +
+              `${pr ? pr.lat.toFixed(1) : "?"} m off the centreline`);
+          }
+          continue;
+        }
+        // Everywhere else, a margin of 0: clearEye() already lifted with its own
+        // margin, so any containment here means the lift found no way out.
         const hit = FlybySeq.insideProp(track, v.eye, 0);
         if (hit) hits.push(`u=${u.toFixed(2)} shot=${v.id} inside ${hit.kind} ` +
           `(${hit.w}x${hit.h}x${hit.d} at ${hit.x},${hit.y},${hit.z})`);
@@ -143,4 +159,26 @@ test("sparse scenery hulls are not treated as solid", async () => {
       "not every prop counts as solid, or the lift has nothing to aim for");
     return null;
   });
+});
+
+test("seating the menu grid costs the sim stream nothing", () => {
+  // menuGridCars() puts the field on the grid for the flyby's closing shot, and
+  // it calls makeCars(), which spends one simRnd() per car. The seeded stream's
+  // DRAW COUNT is a contract the whole race reproduces from — gridUp and
+  // armReliability both go out of their way to keep it — so a menu flourish that
+  // quietly advanced it would change every race that followed a flyby, with
+  // nothing to show which change did it. Source-level, because the function is
+  // module-scope inside the game.js IIFE and has no seam to call.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const i = game.indexOf("function menuGridCars()");
+  assert.ok(i > 0, "menuGridCars still exists — the flyby's last shot needs a field");
+  const body = game.slice(i, game.indexOf("\nfunction ", i + 10));
+  assert.match(body, /const rng = _simRngState;/, "it snapshots the RNG state");
+  assert.match(body, /_simRngState = rng;/, "…and restores it");
+  assert.ok(body.indexOf("const rng = _simRngState;") < body.indexOf("makeCars()"),
+    "the snapshot is taken BEFORE makeCars spends its draws");
+  assert.ok(body.lastIndexOf("_simRngState = rng;") > body.indexOf("makeCars()"),
+    "and the restore comes after");
+  assert.doesNotMatch(body, /gridUp\(/,
+    "it seats cars on TrackMesh slots directly: gridUp draws a simRnd() per car for grid jitter");
 });
