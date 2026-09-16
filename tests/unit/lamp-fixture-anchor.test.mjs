@@ -231,7 +231,7 @@ test("the pit canopy luminaires throw at the working lane, not at the racing roa
   // incidence from it. Monaco's hand-tuned soffits land ~250.
   for (const id of ["bahrain", "silverstone"]) {
     const { track, L } = nightLights(id);
-    const pit = (track.lampPosts || []).filter((p) => p.pit);
+    const pit = (track.lampPosts || []).filter((p) => p.pit && !p.entry);   // the canopy's; the entrance pair is pit-complex.test's
     assert.equal(pit.length, 6, `${id}: the row's six luminaires are registered`);
     for (const p of pit) {
       let o0 = -1, best = Infinity;

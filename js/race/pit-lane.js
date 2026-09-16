@@ -640,7 +640,10 @@ const PitLane = (function () {
         // driver could not tell a wet stop from a slick stop until the wheels
         // were on. Armed beats the wear gate: a stop that IS called is shown.
         const next = c.pitNext || pickFor(c);
-        return { phase: "armed", text: "STAY IN LANE · BOX" + (next && next.code ? " — " + next.code : ""), dist: 0, frac: 1 };
+        // "BOX BOX" as the engineer says it (see the note in engineer.js): the
+        // repeat is the call, and it reads as a radio instruction rather than
+        // as a label on the screen.
+        return { phase: "armed", text: "STAY IN LANE · BOX BOX" + (next && next.code ? " — " + next.code : ""), dist: 0, frac: 1 };
       }
       if (!worthStopping(c)) return null;
       // ON THE ENTRY ROAD — the peel on the complex (sA→sIn), or the first
@@ -1221,7 +1224,7 @@ const PitLane = (function () {
       let state = "", text = "PLAN " + label + " · BOX L" + next + (code ? " " + code : "");
       if (busy) state = "";
       else if (est && est.marginS > 0 && lapsToStop <= (typeof AiDrive !== "undefined" && AiDrive.STRAT ? AiDrive.STRAT.CAUTION_REACH : 6)) { state = "free"; text = "FREE STOP · BOX NOW" + (code ? " " + code : ""); }
-      else if (lapsToStop <= 0) { state = "now"; text = "BOX THIS LAP" + (code ? " · " + code : ""); }
+      else if (lapsToStop <= 0) { state = "now"; text = "BOX BOX BOX" + (code ? " · " + code : ""); }
       else if (lapsToStop === 1) { state = "soon"; text = "BOX NEXT LAP" + (code ? " · " + code : ""); }
       return { text, state, stops, next, lapsToStop, code };
     }

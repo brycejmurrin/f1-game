@@ -72,6 +72,20 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // chain (0.6 m vertical slack) does not join the top cones once uniform
 // scale stretches a 12 m reference mesh. Silverstone stayed 0 (the Y-only
 // scale attempt that floated it was not this remesh).
+//
+// jerez 2 → 0 (2026-09-16, evening): LOWERED, and the stale-entry test is what
+// caught it. `TrackPit.window` now leaves MOUTH_RUN of straight before the
+// entry road's mouth, so Jerez's complex opens later and the two floaters it
+// capped no longer build. A cap above the measured count permits a silent
+// regression back up to it, so it comes down the moment it can.
+//
+// A NOTE ON WHAT THIS TEST CAUGHT IN THE SAME COMMIT, and did not get a cap:
+// the pit ENTRANCE lamps were first stood on top of their walls, and a box
+// whose underside is 1.4 m up with only swept wall beneath it floats — all
+// four prims of the far one, on estoril, imola, interlagos, istanbul and
+// portimao. They were given ground (each post now stands on its own floor
+// beside its wall) rather than a baseline. That is the order: fix the
+// geometry, and only cap what you have established you cannot.
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "float-baseline.json"), "utf8"),
 );
