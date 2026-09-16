@@ -38,5 +38,21 @@ else
   status+=("chromium-headless-shell: MISSING — run bash tools/env/cloud-agent-install.sh")
 fi
 
+# ORIENTATION IN THE SAME LINE (2026-09-16): the branch, its distance from
+# the deploy tip, the dirty count, the load and whether a Playwright run is
+# already live — the four or five calls every session used to spend before
+# its first real one. Best effort; a missing remote ref prints "?".
+DEPLOY_BRANCH="claude/f1-game-project-26h3ng"
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")
+if git rev-parse --verify -q "origin/$DEPLOY_BRANCH" >/dev/null 2>&1; then
+  ab=$(git rev-list --left-right --count "HEAD...origin/$DEPLOY_BRANCH" 2>/dev/null | tr '\t' '/')
+else
+  ab="?/?"
+fi
+dirty=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+load=$(cut -d' ' -f1 /proc/loadavg 2>/dev/null || echo "?")
+if ps -eo args 2>/dev/null | grep -Eq 'playwright(\.js)?\s+test\b|run-playwright\.mjs'; then pw="LIVE — no js/css edits"; else pw="none"; fi
+status+=("branch $branch (ahead/behind deploy tip $ab, dirty $dirty)" "loadavg $load" "playwright $pw")
+
 printf 'apex26 session-start:'; printf ' %s;' "${status[@]}"; printf '\n'
 exit 0

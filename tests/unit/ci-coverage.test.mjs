@@ -450,6 +450,52 @@ test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
     "the selection report must make its delegated coverage visible");
 });
 
+test("the golden-menu trial is advisory AND never runs on the Pages call", () => {
+  // E3 (2026-09-16): its `if:` was `pull_request || workflow_dispatch` under a
+  // comment promising "never the Pages call" — but a called workflow sees the
+  // CALLER's event, and "deploy now" is a workflow_dispatch of pages.yml, so
+  // the trial ran in train #2348 (run 35066895398). An advisory job that leaks
+  // into the deploy gate is one `continue-on-error` deletion away from
+  // blocking it, so both halves of the contract are pinned here.
+  const trial = (ciWorkflow.split("\n  baseline-trial:")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
+  assert.ok(trial, "baseline-trial job missing");
+  assert.match(trial, /^    continue-on-error: true$/m, "the trial must stay non-blocking");
+  assert.match(trial, /inputs\.concurrency_key == ''/,
+    "a Pages call carries a concurrency_key whatever its caller's event; that is the only reliable tell");
+  assert.doesNotMatch(ciWorkflow, /needs: \[?[^\n\]]*baseline-trial/,
+    "nothing may depend on the trial");
+});
+
+test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: swiftshader` opts out", () => {
+  // 2026-09-16, second pass. llvmpipe reached the smoke shards first (run
+  // 35062479811: corner approach 17.8 s against a 214 s SwiftShader median,
+  // every frame assertion holding) while `selected`'s oversize shards were
+  // still 10-40 min of SwiftShader and were the gate's wall clock. A step that
+  // sets APEX_GL without the apt+Xvfb step above it launches against a display
+  // that is not there, so the two must travel together in every job — that
+  // pairing is the thing YAML cannot state and this test can.
+  const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
+  const drivingJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  driving-model:\n"), ciWorkflow.indexOf("\n  renderer-filter:\n"));
+  for (const [name, job] of [["smoke", smokeJob], ["selected", selectedJob]]) {
+    assert.match(job, /- name: Mesa llvmpipe \+ Xvfb\n\s+if: [^\n]*inputs\.gl != 'swiftshader'/,
+      `${name} must install Mesa + Xvfb, and skip it on the \`gl: swiftshader\` opt-out`);
+    assert.match(job, /Xvfb :99 -screen 0 1280x800x24[^\n]*&\n\s+echo "DISPLAY=:99" >> "\$GITHUB_ENV"/,
+      `${name}'s Xvfb must export DISPLAY so the pinned test command line is unchanged`);
+    assert.match(job, /APEX_GL: (llvmpipe|\$\{\{ \(?inputs\.gl != 'swiftshader'[^\n]*\}\})/,
+      `${name} installs llvmpipe but never asks the browser for it`);
+  }
+  // The one carve-out: menu-baseline's goldens are SwiftShader captures (the
+  // spec's own platform note), so a `selected` shard that carries it keeps the
+  // ANGLE default: on the deploy tip `selected` still ran SwiftShader, and this
+  // branch moves it to llvmpipe, so the carve-out lands with the swap.
+  assert.match(selectedJob, /APEX_GL: \$\{\{ \(inputs\.gl != 'swiftshader' && !contains\(matrix\.specs, 'menu-baseline'\)\) && 'llvmpipe' \|\| '' \}\}/,
+    "a selected shard carrying menu-baseline must stay on SwiftShader (its goldens are SwiftShader captures)");
+  // driving-model is the parity anchor for the VM twins (physics-baseline.json):
+  // a rasteriser swap under it is a separate, separately measured change.
+  assert.doesNotMatch(drivingJob, /APEX_GL|llvmpipe/,
+    "driving-model stays on SwiftShader — swap it deliberately, with its own measurement");
+});
+
 // THE RENDERER JOB (2026-09-01): the gfx group on macos-latest, the one runner
 // image with a hardware (Metal) adapter. Three things about it are load-bearing
 // and none of them is enforced by YAML: it must run on the macOS image, it must
@@ -725,6 +771,84 @@ test("ci.yml treats a Pages call as the gate it is, whatever the caller's event"
   assert.match(selectJob, /EVENT: \$\{\{ inputs\.concurrency_key != '' && 'push' \|\| github\.event_name \}\}/);
   assert.match(selectJob, /PUSH_BEFORE: \$\{\{ inputs\.concurrency_key != '' && inputs\.before_sha \|\| github\.event\.before \}\}/,
     "on a Pages call the plan's base is the train's live commit");
+});
+
+test("base-verdict.sh: the newest deploy-branch run strictly below this head, named jobs and all", () => {
+  // The base-red line (docs/plans/research-2026-09-16/ci.md §5). Three ways to
+  // get it wrong, all of them silent: take the newest run on the branch
+  // (a tip that was never merged says nothing about this tree), take THIS
+  // commit's own run (that is the push, not its base), or report a conclusion
+  // without the job names (which is the whole reason a session opens the run).
+  // A -> B -> C on the deploy line; X branches from A and is never merged.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "base-verdict-"));
+  const git = (...a) => cp.execFileSync("git", a, { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  git("init", "-q", "-b", "deploy"); git("config", "user.email", "t@t"); git("config", "user.name", "t");
+  const commit = (msg) => { fs.writeFileSync(path.join(dir, "f.txt"), msg); git("add", "."); git("commit", "-q", "-m", msg); return git("rev-parse", "HEAD"); };
+  const A = commit("A"), B = commit("B"), C = commit("C");
+  git("checkout", "-q", "-b", "feature", A); const X = commit("X"); git("checkout", "-q", "deploy");
+
+  const bin = path.join(dir, "bin"); fs.mkdirSync(bin);
+  fs.writeFileSync(path.join(bin, "gh"),
+    '#!/usr/bin/env bash\n[ "${FAKE_GH:-}" = fail ] && exit 1\n' +
+    'case "$2" in\n' +
+    '  */jobs*) node -e \'console.log(JSON.stringify({jobs:JSON.parse(process.env.FAKE_JOBS||"[]")}))\' ;;\n' +
+    '  *) node -e \'console.log(JSON.stringify({workflow_runs:JSON.parse(process.env.FAKE_RUNS||"[]")}))\' ;;\n' +
+    'esac\n');
+  fs.chmodSync(path.join(bin, "gh"), 0o755);
+  const script = new URL("../../tools/ci/base-verdict.sh", import.meta.url).pathname;
+  const ci = (sha, over = {}) => ({ id: 11, status: "completed", conclusion: "success", path: ".github/workflows/ci.yml", head_sha: sha, ...over });
+  const verdict = (runs, jobs = [], env = {}) => {
+    const summary = path.join(dir, `summary-${Math.random().toString(36).slice(2)}.md`);
+    const r = cp.spawnSync("bash", [script, C], {
+      cwd: dir, encoding: "utf8",
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH: "deploy",
+        GITHUB_STEP_SUMMARY: summary, FAKE_RUNS: JSON.stringify(runs), FAKE_JOBS: JSON.stringify(jobs), ...env },
+    });
+    return { status: r.status, out: r.stdout.trim(), summary: fs.existsSync(summary) ? fs.readFileSync(summary, "utf8") : "" };
+  };
+  const failed = [{ name: "Per-circuit geometry sweeps", conclusion: "failure" },
+    { name: "Selected specs (change-aware gate)", conclusion: "failure" },
+    { name: "Structural guards", conclusion: "success" },
+    { name: "Golden menus on a runner (trial, non-blocking)", conclusion: "skipped" }];
+
+  const green = verdict([ci(B)]);
+  assert.equal(green.out, `::notice::base ${B.slice(0, 7)} was green — ci.yml run 11`);
+  assert.match(green.summary, /### Base verdict/);
+  assert.match(green.summary, new RegExp(`base \`${B.slice(0, 7)}\` was \\*\\*green\\*\\*`));
+
+  const red = verdict([ci(B, { conclusion: "failure" })], failed);
+  assert.equal(red.out, `::notice::base ${B.slice(0, 7)} was red on: Per-circuit geometry sweeps, Selected specs (change-aware gate) — ci.yml run 11`);
+  assert.doesNotMatch(red.out, /Structural guards|Golden menus/, "a green or skipped job is not a failure");
+  assert.match(red.summary, /red on: Per-circuit geometry sweeps/);
+
+  // THIS commit's own run is not a base, and neither is an unmerged branch tip.
+  assert.match(verdict([ci(C, { id: 99, conclusion: "failure" }), ci(X, { id: 98, conclusion: "failure" }), ci(B)]).out,
+    new RegExp(`base ${B.slice(0, 7)} was green`),
+    "a run of this head, and a run on a commit that is not an ancestor, are both skipped");
+  assert.match(verdict([ci(B, { id: 7 })], [], { GITHUB_RUN_ID: "7" }).out, /no completed ci\.yml run/,
+    "a run never reads itself as its own base");
+  assert.match(verdict([ci(B, { path: ".github/workflows/pages.yml" })]).out, /no completed ci\.yml run/,
+    "another workflow's verdict is not this gate's base");
+  assert.match(verdict([ci(B, { status: "in_progress", conclusion: null })]).out, /no completed ci\.yml run/,
+    "a run still going has no verdict to report");
+  assert.match(verdict([ci(B, { conclusion: "cancelled" })], failed).out, /was red \(cancelled\) on: Per-circuit/,
+    "a cancelled base is red, and says which kind");
+  assert.match(verdict([ci(B, { conclusion: "failure" })], []).out, /no failing job named/,
+    "a red with no job list still reports something");
+  // Advisory: every failure path is one line and an exit 0.
+  const broken = verdict([ci(B)], [], { FAKE_GH: "fail" });
+  assert.match(broken.out, /^::notice::base verdict unavailable/);
+  for (const r of [green, red, broken]) assert.equal(r.status, 0, "base-verdict must never fail the job it reports in");
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("ci.yml runs the base verdict where the checkout can answer it, and never lets it decide", () => {
+  assert.match(selectJob, /fetch-depth: 0/, "ancestry is a git question; a shallow checkout answers it wrong");
+  assert.match(selectJob, /- name: Was the base already red\?\n\s+if: always\(\)\n\s+continue-on-error: true/,
+    "the base verdict reports on red runs too, and may never turn one red");
+  assert.match(selectJob, /run: bash tools\/ci\/base-verdict\.sh "\$GITHUB_SHA"/);
+  assert.match(selectJob, /actions: read/, "listing the deploy branch's runs needs actions:read on the job token");
+  assert.doesNotMatch(selectJob, /needs\.[\w-]*base/, "nothing may depend on the report");
 });
 
 test("pages-live-sha.sh: the live apex-sha or nothing, and never a failure", () => {

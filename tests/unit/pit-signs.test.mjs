@@ -45,12 +45,73 @@ test("every built complex lays out twelve fascia quads, one per bay, in row orde
     // …plus the BOARDS (TrackPit.SIGN.boards): two "PIT ENTRY" on the
     // approach and one "PIT LANE" at the entry line, each a quad on the same
     // atlas after the twelve fascias, each an anchor for the distance gate.
-    const nq = S.cells + q.boards.length;
+    // …and the PANELS: each bay's crest cell again on the pit wall opposite
+    // it, after the boards.
+    // …and the CRESTS: the crest alone, a square plaque on each door's
+    // approach-side pier, last in the quad order.
+    const nq = S.cells + q.boards.length + q.panels.length + q.crests.length;
     assert.ok(q.boards.length >= 1 && q.boards.length <= 3, `${id}: ${q.boards.length} boards`);
+    assert.equal(q.panels.length, S.cells, `${id}: a crest panel on the wall opposite every bay`);
+    assert.equal(q.crests.length, S.crests, `${id}: a crest plaque on every bay's pier`);
+    for (let b = 0; b < q.crests.length; b++) {
+      const i = S.cells + q.boards.length + q.panels.length + b, k = q.crests[b].k, box = p.row.boxes[b];
+      assert.equal(q.crests[b].cell, b, `${id}: crest ${b} is not bay ${b}'s cell`);
+      const n = [q.nrm[i * 12], q.nrm[i * 12 + 1], q.nrm[i * 12 + 2]];
+      assert.ok(dot(n, [-sd * t.rx[k], 0, -sd * t.rz[k]]) > 0.99, `${id}: crest ${b} faces away from the lane`);
+      const P = [0, 1, 2, 3].map((c) => [q.pos[(i * 4 + c) * 3], q.pos[(i * 4 + c) * 3 + 1], q.pos[(i * 4 + c) * 3 + 2]]);
+      const c = [0, 1, 2].map((a) => (P[0][a] + P[1][a] + P[2][a] + P[3][a]) / 4);
+      const lat = ((c[0] - t.px[k]) * t.rx[k] + (c[2] - t.pz[k]) * t.rz[k]) * sd - t.hw[k];
+      assert.ok(Math.abs(lat - (p.off.workOut - 0.265)) < 0.12, `${id}: crest ${b} at ${lat.toFixed(2)} m, the pier's face is at ${(p.off.workOut - 0.265).toFixed(3)}`);
+      // On the pier the driver reaches first: behind the bay's centre along
+      // the tangent, at the pier's middle. Measured from the BAY (box.s),
+      // which sits up to half a node from node k.
+      let off = box.s - k * (t.total / t.n);
+      off -= Math.round(off / t.total) * t.total;   // a bay at the lap seam: node 0 is at s = 0, the bay just under L
+      const along = (c[0] - t.px[k]) * t.tx[k] + (c[2] - t.pz[k]) * t.tz[k] - off;
+      const pier = (p.bay.w - p.bay.doorW) / 2;
+      assert.ok(Math.abs(-along - (p.bay.w / 2 - pier / 2)) < 0.3,
+        `${id}: crest ${b} ${along.toFixed(2)} m along the bay, the pier's middle is at ${(-(p.bay.w / 2 - pier / 2)).toFixed(2)}`);
+      for (const v of P) {
+        const hh = v[1] - t.py[k];
+        assert.ok(hh > S.crestY0 - 0.25 && hh < S.crestY0 + S.crestW + 0.25, `${id}: crest ${b} corner ${hh.toFixed(2)} m up`);
+      }
+      assert.ok(Math.abs(len(sub(P[1], P[0])) - S.crestW) < 0.01 && Math.abs(len(sub(P[3], P[0])) - S.crestW) < 0.01, `${id}: crest ${b} is not ${S.crestW} m square`);
+      assert.ok(dot(cross(sub(P[1], P[0]), sub(P[3], P[0])), n) > 0, `${id}: crest ${b} is mirrored`);
+      const cx = (b % S.crestCols) * S.crestPx, cy = S.crestY + Math.floor(b / S.crestCols) * S.crestPx;
+      assert.ok(cy + S.crestPx <= S.h, `${id}: crest cell ${b} is off the atlas`);
+      for (let c2 = 0; c2 < 4; c2++) {
+        const u = q.uv[(i * 4 + c2) * 2], v = q.uv[(i * 4 + c2) * 2 + 1];
+        assert.ok(u >= cx / S.w - 1e-9 && u <= (cx + S.crestPx) / S.w + 1e-9, `${id}: crest ${b} u ${u}`);
+        assert.ok(v >= 1 - (cy + S.crestPx) / S.h - 1e-9 && v <= 1 - cy / S.h + 1e-9, `${id}: crest ${b} v ${v}`);
+      }
+      void box;
+    }
     assert.equal(q.pos.length / 3, nq * 4);
     assert.equal(q.idx.length, nq * 6);
     assert.equal(q.uv.length, nq * 8);
     assert.equal(q.anchors.length, q.boards.length);
+    for (let b = 0; b < q.panels.length; b++) {
+      const i = S.cells + q.boards.length + b, k = q.panels[b].k;
+      assert.equal(q.panels[b].cell, b, `${id}: panel ${b} is not bay ${b}'s cell`);
+      const n = [q.nrm[i * 12], q.nrm[i * 12 + 1], q.nrm[i * 12 + 2]];
+      // Faces the LANE (away from the track), from the top of the pit wall.
+      assert.ok(dot(n, [sd * t.rx[k], 0, sd * t.rz[k]]) > 0.99, `${id}: panel ${b} does not face the lane`);
+      const P = [0, 1, 2, 3].map((c) => [q.pos[(i * 4 + c) * 3], q.pos[(i * 4 + c) * 3 + 1], q.pos[(i * 4 + c) * 3 + 2]]);
+      const c = [0, 1, 2].map((a) => (P[0][a] + P[1][a] + P[2][a] + P[3][a]) / 4);
+      const lat = ((c[0] - t.px[k]) * t.rx[k] + (c[2] - t.pz[k]) * t.rz[k]) * sd - t.hw[k];
+      assert.ok(Math.abs(lat - (p.bands.verge + 0.125)) < 0.12, `${id}: panel ${b} at ${lat.toFixed(2)} m, the wall is at ${(p.bands.verge + 0.125).toFixed(3)}`);
+      for (const v of P) {
+        const hh = v[1] - t.py[k];
+        assert.ok(hh > 1.35 && hh < 2.0, `${id}: panel ${b} corner ${hh.toFixed(2)} m up, the wall top is 1.42`);
+      }
+      assert.ok(dot(cross(sub(P[1], P[0]), sub(P[3], P[0])), n) > 0, `${id}: panel ${b} is mirrored`);
+      const cx = (b % S.cols) * S.cellW, cy = Math.floor(b / S.cols) * S.cellH;
+      for (let c2 = 0; c2 < 4; c2++) {
+        const u = q.uv[(i * 4 + c2) * 2], v = q.uv[(i * 4 + c2) * 2 + 1];
+        assert.ok(u >= cx / S.w - 1e-9 && u <= (cx + S.cellW) / S.w + 1e-9, `${id}: panel ${b} u ${u}`);
+        assert.ok(v >= 1 - (cy + S.cellH) / S.h - 1e-9 && v <= 1 - cy / S.h + 1e-9, `${id}: panel ${b} v ${v}`);
+      }
+    }
     assert.ok(Array.isArray(q.centre) && q.centre.length === 3, `${id}: a centre for the distance gate`);
     for (let b = 0; b < q.boards.length; b++) {
       const i = S.cells + b, k = q.boards[b].k;
@@ -122,7 +183,8 @@ test("the row carries each team's code for the painter", () => {
 
 // The painter, without a browser: a bare VM must report itself unsupported
 // and upload nothing; with a stub document and LiveryTex it paints twelve
-// cells and uploads one texture and one 48-vertex texMesh.
+// cells and uploads one texture and one texMesh of every quad (the twelve
+// fascias, the boards, the twelve wall panels).
 function loadPainter(sandbox) {
   const ctx = vm.createContext(Object.assign({ Math, Object, Array, Number, String, JSON, Error, Float32Array,
     console, Log: { warn() {}, info() {}, error() {}, debug() {} } }, sandbox));
@@ -157,15 +219,19 @@ test("with a canvas and the livery painter it paints twelve cells and uploads on
   const G = { createTexMesh: (d) => { up.push(["mesh", d]); return { id: 1 }; }, createTexture: (cv) => { up.push(["tex", cv]); return { id: 2 }; } };
   t.meshes = t.meshes || {};
   assert.equal(P.upload(G, t), true);
-  assert.equal(painted.length, 12, "one crest per bay");
+  assert.equal(painted.length, 24, "one crest per bay on its fascia, and one on its pier plaque");
   // Array.from: the boxes live in the track VM's realm, and a strict deepEqual
   // compares prototypes across realms.
-  assert.deepEqual(painted.map((x) => x.id), Array.from(t.pit.row.boxes, (b) => b.team));
+  const teams = Array.from(t.pit.row.boxes, (b) => b.team);
+  assert.deepEqual(painted.slice(0, 12).map((x) => x.id), teams);
+  assert.deepEqual(painted.slice(12).map((x) => x.id), teams);
+  const S0 = ctxOnce().TrackPit.SIGN;
+  for (const x of painted.slice(12)) assert.ok(x.R.y >= S0.crestY && x.R.w > S0.crestPx * 0.6, `a plaque crest fills its cell: ${JSON.stringify(x.R)}`);
   assert.ok(texts.includes("MER") && texts.includes("FER"), "the codes are lettered");
   assert.ok(texts.some((s) => /PIT ENTRY/.test(s)) && texts.some((s) => /PIT LANE \d+ km\/h/.test(s)), `the boards are lettered: ${texts.join("|")}`);
   assert.equal(up.length, 2);
   const mesh = up.find((u) => u[0] === "mesh")[1];
-  const nq = 12 + t.pitSigns.boards.length;
+  const nq = 12 + t.pitSigns.boards.length + t.pitSigns.panels.length + t.pitSigns.crests.length;
   assert.equal(mesh.pos.length / 3, nq * 4); assert.equal(mesh.uv.length, nq * 8); assert.equal(mesh.idx.length, nq * 6);
   const cv = up.find((u) => u[0] === "tex")[1];
   const S = ctxOnce().TrackPit.SIGN;

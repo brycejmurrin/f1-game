@@ -36,6 +36,11 @@ class LiveReporter {
     this.flaky = 0;        // tests that FAILED then PASSED on retry (hidden flakiness)
     this.failures = [];    // names of tests that ended red — replayed as an end summary
     this.inflight = new Map();   // test -> {name, start, worker}
+    // The run's START, which is also what Playwright stamps on each junit
+    // <testsuite>. tools/ci/spec-timings.mjs keys a sample by (bucket, run-start
+    // second), so recording the same run from HERE and from its junit.xml
+    // dedupes to one sample instead of two.
+    this.startedAt = Date.now();
     this.write(`[${ts()}] = run start: ${this.total} tests, ${config.workers} worker(s)` +
                (HEARTBEAT_S ? `, heartbeat ${HEARTBEAT_S}s` : ", heartbeat off"));
     this.startHeartbeat();
@@ -110,7 +115,7 @@ class LiveReporter {
     // summary) and flag it flaky if it only went green after a retry.
     if (result.status === "passed" || result.status === "skipped" ||
         test.results.length > test.retries) {
-      this.durations.push({ name: this.name(test), dur: result.duration });
+      this.durations.push({ name: this.name(test), dur: result.duration, ...this.key(test) });
       if (test.outcome && test.outcome() === "flaky") this.flaky++;
     }
     // On-failure diagnostics, echoed inline so a tailed log shows WHY without a
@@ -180,6 +185,10 @@ class LiveReporter {
     }
     if (this.flaky) this.write(`[${ts()}] = FLAKY: ${this.flaky} test(s) passed only on retry (deterministic suite — investigate)`);
     this.write(`[${ts()}] = run ${result.status}  (${this.done}/${this.total} done, ${this.failures.length} failed)`);
+    // LAST, and only under the flag: the verdict line above is what every
+    // `grep -E '= run (passed|failed…)'` anchors on (AGENTS.md rule 5) and must
+    // not move behind an await.
+    if (process.env.APEX_SPEC_TIMINGS === "1") return this.saveTimings();
   }
 
   name(test) {
@@ -187,6 +196,51 @@ class LiveReporter {
     const path = test.titlePath().filter(Boolean);
     const file = test.location?.file?.replace(/^.*\/(tests\/)/, "$1") || "";
     return `${file} › ${path.slice(-2).join(" › ")}`;
+  }
+
+  /** {spec, title} in JUNIT'S OWN SHAPE, so a duration recorded here and the
+   *  same duration read back out of junit.xml land on one key.
+   *  `titlePath()` is [project, file, ...describes, title]; junit's `name` is
+   *  everything AFTER the file. The display `name()` above takes the last two
+   *  instead, which for a test with no describe block would repeat the file. */
+  key(test) {
+    const parts = test.titlePath().filter(Boolean);
+    const i = parts.findIndex((p) => /\.spec\.js$/.test(p));
+    return {
+      spec: test.location?.file?.replace(/^.*\/(tests\/)/, "$1") || "",
+      title: (i >= 0 ? parts.slice(i + 1) : parts.slice(-1)).join(" › "),
+    };
+  }
+
+  /** APEX_SPEC_TIMINGS=1 only: fold this run's durations into
+   *  tests/data/spec-timings.json through the same merge the CLI uses.
+   *
+   *  OFF BY DEFAULT, and the import is dynamic, so an ordinary local run neither
+   *  loads the tool nor writes a byte — a reporter that rewrote a tracked file
+   *  on every `npm test` would make the working tree dirty behind the agent's
+   *  back, which is exactly the surprise AGENTS.md rule 2 exists to prevent.
+   *  Every failure here is REPORTED and swallowed: a bookkeeping file must
+   *  never be able to turn a green run red.
+   *
+   *  APEX_SPEC_TIMINGS_FILE redirects the write, which is how a CI job merges
+   *  into a scratch copy it then uploads, and how this is testable at all. */
+  async saveTimings() {
+    const stamp = ts();
+    try {
+      const mod = await import("../../tools/ci/spec-timings.mjs");
+      const target = process.env.APEX_SPEC_TIMINGS_FILE || undefined;
+      const at = mod.isoSecond(this.startedAt);
+      const rows = this.durations
+        .filter((d) => d.spec && d.title && Number.isFinite(d.dur))
+        .map((d) => ({ ts: at, spec: d.spec, title: d.title, sec: d.dur / 1000 }));
+      const db = mod.loadDb(target);
+      const r = mod.mergeRows(db, rows, { env: mod.envBucket() });
+      mod.saveDb(db, target);
+      this.write(`[${stamp}] = spec timings: ${r.added} new sample(s) across ${r.specs} spec(s) ` +
+        `-> ${target || mod.TIMINGS_FILE} [${mod.envBucket()}]`);
+    } catch (e) {
+      this.write(`[${stamp}] = spec timings: not recorded (${(e && e.message) || e})`);
+    }
   }
 
   write(line) {

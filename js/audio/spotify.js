@@ -1042,6 +1042,16 @@ window.SpotifyMusic = (function () {
         row.append(n, b);
         box.appendChild(row);
       }
+      // A SEARCH THAT MATCHED NOTHING IS NOT A BROKEN PANEL. An empty results
+      // box under a filled-in search field reads as "still loading" or "it
+      // broke". .dh-empty is the house empty state (css/data.css), so this
+      // costs no new class.
+      if (!box.childElementCount) {
+        const none = document.createElement("div");
+        none.className = "dh-empty";
+        none.textContent = "No tracks matched that search.";
+        box.appendChild(none);
+      }
     }
     // The pause-menu entry is only useful once there is something to control.
     const pm = el("as-sp-open");

@@ -1,0 +1,40 @@
+{
+ "//": "spec -> { s: [[ts, env, sec, tests]] whole-run wall, t: { title: [[ts, env, sec]] } }; ts = run start at second precision; env = swiftshader|llvmpipe|local; newest last; bounded to the last KEEP samples per key. Writer: tools/ci/spec-timings.mjs",
+ "keep": 10,
+ "specs": {
+  "tests/specs/smoke.spec.js": {
+   "s": [["2026-09-16T06:06:01Z","local",475.289,10]],
+   "t": {
+    "Apex 26 — HUD › minimap canvas has content after race starts": [["2026-09-16T06:06:01Z","local",10.078]],
+    "Apex 26 — HUD › speed readout updates after jump() at speed": [["2026-09-16T06:06:01Z","local",100.626]],
+    "Apex 26 — smoke › corner approach renders a non-blank frame": [["2026-09-16T06:06:01Z","local",95.818]],
+    "Apex 26 — smoke › grid start renders a non-blank frame": [["2026-09-16T06:06:01Z","local",30.438]],
+    "Apex 26 — smoke › jump() sets player speed and lateral offset": [["2026-09-16T06:06:01Z","local",85.368]],
+    "Apex 26 — smoke › page loads without WebGL error": [["2026-09-16T06:06:01Z","local",2.434]],
+    "Apex 26 — smoke › park() skips countdown and positions player": [["2026-09-16T06:06:01Z","local",96.787]],
+    "Apex 26 — smoke › race starts and __apex hook is available": [["2026-09-16T06:06:01Z","local",6.896]],
+    "Apex 26 — smoke › the DRIVING LINE is built for the circuit on the first frame it is on": [["2026-09-16T06:06:01Z","local",41.46]],
+    "Apex 26 — smoke › the select screen is a circuit picker, and YOUR CAR opens the garage": [["2026-09-16T06:06:01Z","local",5.384]]
+   }
+  },
+  "tests/specs/wake-lock.spec.js": {
+   "s": [["2026-09-16T06:06:01Z","local",510.104,8]],
+   "t": {
+    "Screen wake lock — held for the duration of a race › a late release event from an old sentinel cannot clear its replacement": [["2026-09-16T06:06:01Z","local",96.33]],
+    "Screen wake lock — held for the duration of a race › a lock granted after the race ended is released immediately": [["2026-09-16T06:06:01Z","local",51.874]],
+    "Screen wake lock — held for the duration of a race › a missing Wake Lock API (older iOS) degrades silently": [["2026-09-16T06:06:01Z","local",51.694]],
+    "Screen wake lock — held for the duration of a race › a rejecting request() (permission denied) degrades silently": [["2026-09-16T06:06:01Z","local",52.867]],
+    "Screen wake lock — held for the duration of a race › finishing the race releases it": [["2026-09-16T06:06:01Z","local",70.246]],
+    "Screen wake lock — held for the duration of a race › hiding the page releases it; becoming visible re-acquires it": [["2026-09-16T06:06:01Z","local",52.551]],
+    "Screen wake lock — held for the duration of a race › quitting mid-race (no results screen) also releases it": [["2026-09-16T06:06:01Z","local",61.499]],
+    "Screen wake lock — held for the duration of a race › starting a race requests the lock": [["2026-09-16T06:06:01Z","local",73.043]]
+   }
+  },
+  "tests/specs/webgl-probes.spec.js": {
+   "s": [["2026-09-16T06:23:23Z","local",64.016,1]],
+   "t": {
+    "WebGL renderer probes › scene({visible:true}) reports scenery chunks inside the camera frustum": [["2026-09-16T06:23:23Z","local",64.016]]
+   }
+  }
+ }
+}
