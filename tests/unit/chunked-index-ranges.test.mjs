@@ -418,20 +418,28 @@ test("the per-chunk merge only extends a run under all four guards", () => {
   // failing for the one reason a guard must not: the thing it protects was
   // still true. The force is unchanged, because what it is really asserting is
   // that the cull branch ENDS in flush() and never in a bare continue.
-  assert.match(loop, /> cd2\)[\s\S]{0,120}?\) \{ breakRun\(\); continue; \}/,
+  assert.match(loop, /> cd2\)[\s\S]{0,140}?\) \{ if \(!md\) flush\(\); continue; \}/,
     "an invisible chunk must break the open run — a bare continue would merge across it");
-  assert.doesNotMatch(loop, /> cd2\)[\s\S]{0,120}?\) \{ continue; \}/,
+  assert.doesNotMatch(loop, /> cd2\)[\s\S]{0,140}?\) \{ continue; \}/,
     "the cull branch must not `continue` without breaking the open run");
-  // breakRun exists because the two draw paths enforce the SAME invariant by
-  // different means: drawElements must flush, because its run is one
-  // contiguous span and a gap inside it would draw the culled chunk;
-  // multi-draw carries explicit ranges, so it enforces it by not adding an
-  // entry and may leave the group open across the gap. That is the whole
-  // saving — at vegas most chunks are culled, and flushing at every gap would
-  // hand multi-draw lists of one. Pin both halves, so neither can quietly
-  // become "skip the flush" for the drawElements path too.
-  assert.match(loop, /const breakRun = \(\) => \{ if \(!md\) flush\(\); \};/,
-    "breakRun must flush on the drawElements path and only skip it under multi-draw");
+  // The two draw paths enforce the SAME invariant by different means, and only
+  // one of them can be pinned by reading the source. drawElements must FLUSH,
+  // because its run is one contiguous span and a gap inside it would draw the
+  // culled chunk — that is the `if (!md) flush()` above. Multi-draw carries
+  // explicit ranges and no open span, so it enforces the invariant by never
+  // FILING the culled chunk under a group, which is a property of where the
+  // `continue` sits rather than of any statement a regex can name.
+  //
+  // So it is pinned where it can be: the bucketing statement must come after
+  // the cull's continue, never before it.
+  const file = loop.indexOf("GI.used[g] !== GI.epoch");
+  assert.ok(file > 0, "the multi-draw bucketing moved — this guard is reading the wrong slice");
+  assert.ok(file > loop.search(/> cd2\)[\s\S]{0,140}?\) \{ if \(!md\) flush\(\); continue; \}/),
+    "a chunk must be filed under its group only AFTER the cull test, or multi-draw draws what the cull removed");
+  // And the equivalence itself, which no source shape can establish, is proved
+  // by running both paths over a fixture with a culled hole in the middle of
+  // the chunk array: tests/unit/glx-multidraw.test.mjs, "the lamp branch
+  // submits exactly what drawElements would, holes included".
   // And _sameList must compare contents, not just identity: LampChunks is free
   // to hand back equal-but-distinct arrays, and an identity-only check would
   // silently stop merging (a perf regression nothing goes red for).

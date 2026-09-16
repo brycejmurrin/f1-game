@@ -21,6 +21,56 @@ const GLXChunked = (function () {
     for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
     return true;
   }
+  // Chunks that share a light set, found ONCE per baked table instead of by
+  // comparing neighbours. `ids[c]` is a dense group id; every chunk sharing a
+  // group shares its uploaded light set and therefore its shadow slot. Cached
+  // on the table object, which LampChunks already invalidates on the lights
+  // array identity and the cap.
+  //
+  // MEASURED at vegas, clock held at 02:00, player at 0.35 of a lap, counted
+  // per frame (the counters below, read through __apex.multiDraw()):
+  //
+  //     108.5 visible chunk draws -> 24.5 consecutive groups -> 15.0 sets
+  //
+  // So grouping by SET rather than by neighbour is worth about 9.5 calls a
+  // frame here, 1.63x fewer. Two things that number corrects, both of which
+  // were guesses of mine before it existed:
+  //   * Neighbour comparison is NOT hopeless. createChunkedMesh bins triangles
+  //     into a Map keyed gx*4096+gz, so chunk array order is triangle-emission
+  //     order and I expected consecutive entries to be spatially unrelated —
+  //     but they group 108.5 draws into 24.5, so emission order tracks space
+  //     much better than that.
+  //   * The key is sorted because a set is a set, not because the sorting pays:
+  //     LampChunks.buildTable orders each list by DISTANCE, so two chunks lit
+  //     by the same eight lamps can hold them in different orders, and I
+  //     expected that to be the main cause. Measured with the unsorted key the
+  //     same scene gives 22 -> 14: the canonical order is worth about one group
+  //     a frame, not the fourfold I predicted.
+  const _gidCache = new WeakMap();
+  function _groupIds(tbl) {
+    let e = _gidCache.get(tbl);
+    if (e) return e;
+    const lists = tbl.lists, nc = lists.length, ids = new Int32Array(nc), by = new Map();
+    let n = 0;
+    for (let c = 0; c < nc; c++) {
+      const li = lists[c];
+      // Sorted key: the set is what matters, the distance order is not. A copy
+      // per chunk, once per bake, over lists of at most CAP (24) entries.
+      const k = Array.prototype.slice.call(li).sort((a, b) => a - b).join(",");
+      let g = by.get(k);
+      if (g === undefined) { g = n++; by.set(k, g); }
+      ids[c] = g;
+    }
+    // head/tail/next: the per-frame bucket chains. `used` is a stamp against
+    // `epoch` so a frame never clears an array it did not touch, and `order`
+    // keeps the groups in first-seen order so the emit pass walks the index
+    // buffer roughly forwards.
+    e = { ids, count: n, epoch: 0,
+          head: new Int32Array(n), tail: new Int32Array(n), next: new Int32Array(nc),
+          used: new Int32Array(n), order: new Int32Array(n) };
+    _gidCache.set(tbl, e);
+    return e;
+  }
   function _shadowAllIdx(AL, lx, ly, lz) {
     if (AL === _saAL && lx === _saX && ly === _saY && lz === _saZ) return _saIdx;
     let r = -1;
@@ -67,7 +117,14 @@ const GLXChunked = (function () {
     // the drawElements one it has always been.
     let _mdExt = null, _mdOn = false, _mdTried = false;
     let _mdCounts = null, _mdOffsets = null;
-    const _mdStats = { supported: null, on: false, multiCalls: 0, rangesSubmitted: 0, drawElementsAvoided: 0 };
+    // perChunkDraws / consecutiveGroups / setGroups are the COUNTED oracle for
+    // the grouping itself, maintained whether or not the extension is on: how
+    // many visible chunks the lamp branch submitted, how many groups the old
+    // neighbour-comparison scheme would have made of them, and how many the
+    // content bucketing does make. The ratio between the last two is the whole
+    // claim multi-draw rests on, and it is a count, not a timing.
+    const _mdStats = { supported: null, on: false, multiCalls: 0, rangesSubmitted: 0, drawElementsAvoided: 0,
+                       perChunkDraws: 0, consecutiveGroups: 0, setGroups: 0 };
     function _mdInit() {
       if (_mdTried) return !!_mdExt;
       _mdTried = true;
@@ -84,6 +141,7 @@ const GLXChunked = (function () {
       if (want && !_mdInit()) { _mdOn = false; return { on: false, supported: false }; }
       _mdOn = want; _mdStats.on = want;
       if (!want) { _mdStats.multiCalls = _mdStats.rangesSubmitted = _mdStats.drawElementsAvoided = 0; }
+      _mdStats.perChunkDraws = _mdStats.consecutiveGroups = _mdStats.setGroups = 0;
       return { on: _mdOn, supported: _mdStats.supported };
     }
     function multiDrawStats() { return Object.assign({}, _mdStats, { on: _mdOn }); }
@@ -361,64 +419,74 @@ const GLXChunked = (function () {
         //   same slot — uLampShadowIdx is a slot in that set.
         //   contiguous + same index type — the merged draw is one range.
         let runOff = -1, runCount = 0, runType = 0, runLi = null, runSlot = -1;
-        // Multi-draw accumulates RANGES for the open light-set group instead of
-        // one contiguous span, so a group survives gaps.
+        // MULTI-DRAW DOES NOT GROUP BY NEIGHBOUR, IT GROUPS BY LIGHT SET.
+        //
+        // The first cut kept the run-merge's shape and merely let a group
+        // survive a culled gap, so it could still only ever group chunks that
+        // were ADJACENT in the array. Bucketing drops that: every visible chunk
+        // is filed under its group id and each group is one call, which is
+        // exactly the constraint the extension removes and the only reason to
+        // carry it. Draw ORDER inside a group is irrelevant — the chunked
+        // meshes are opaque and depth-tested, and a group shares one upload.
+        //
+        // WHAT IT IS WORTH, and it is not much: 24.5 calls a frame become 15.0
+        // (_groupIds above has the measurement). Nine and a half draw calls is
+        // not a frame time, so this makes multi-draw correct rather than
+        // valuable, and nothing here argues for turning the flag on.
+        //
+        // It does NOT explain gpu-census run 143, where the first cut reported
+        // 4,853 ranges in 4,709 calls — 1.03 a call, against the 4.4 the same
+        // counters give that scheme locally. That gap is unexplained: the
+        // census leg ran macos-latest at resMode=high and counts every
+        // drawChunked call, env-probe faces included, and a probe face that
+        // sees one chunk contributes a one-range call. Until a census carries
+        // these three counters, treat 1.03 as a number about that run and not
+        // about this branch.
+        //
+        // The group table is read on BOTH paths, because it is also the counted
+        // oracle: `consecutiveGroups` is how many groups the neighbour scheme
+        // makes of these chunks and `setGroups` how many the bucketing makes,
+        // both from the SAME frame, so the comparison never depends on two runs
+        // on two machines agreeing about a scene.
         const md = _mdOn && !!_mdExt;
-        let _mdN = 0;
+        const GI = _groupIds(_tbl);
+        GI.epoch = (GI.epoch | 0) + 1;
         if (md) _mdRoom(chunks.length);
-        // An invisible chunk must never be drawn. drawElements enforces that by
-        // FLUSHING the open run — a bare continue would merge across it — while
-        // multi-draw enforces it by simply not adding an entry, which is why it
-        // can leave the group open across a gap. That difference is the whole
-        // saving: at vegas most chunks are culled, so flushing at every gap
-        // would hand multi-draw lists of one and buy nothing.
-        const breakRun = () => { if (!md) flush(); };
-        // The program keeps its uniforms between runs, so a run whose lamp
-        // list matches the one already uploaded (same members, non-contiguous
-        // chunks — ~40 of ~150 pairs per frame, PERF-FINDINGS 2c) skips the
-        // uniform4fv. _sameList compares by content: chunk lists are distinct
-        // arrays with equal members more often than the same array.
+        let nUsed = 0, visible = 0, consec = 0, lastVisI = -2, lastVisG = -2;
         const flush = () => {
-          if (runOff < 0 && !_mdN) return;
+          if (runOff < 0) return;
           if (!_sameList(lastLi, runLi)) {
             core.uploadLightSet(F.allLights, runLi, runLi.length,
                                 F.lights, F.tailStart, F.tailCount);
             lastLi = runLi;
           }
           if (runSlot !== lastSlot) { core.setLampShadowSlot(runSlot); lastSlot = runSlot; }
-          if (_mdN) {
-            _mdExt.multiDrawElementsWEBGL(gl.TRIANGLES, _mdCounts, 0, runType, _mdOffsets, 0, _mdN);
-            _mdStats.multiCalls++; _mdStats.rangesSubmitted += _mdN; _mdStats.drawElementsAvoided += _mdN - 1;
-            _mdN = 0;
-          } else {
-            gl.drawElements(gl.TRIANGLES, runCount, runType, runOff);
-          }
+          gl.drawElements(gl.TRIANGLES, runCount, runType, runOff);
           runOff = -1; runCount = 0; runLi = null;
         };
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           if (!Frustum.aabbInFrustum(_fcPlanes, ch.min, ch.max) ||
               (cd > 0 && Frustum.aabbDist2(ch.min, ch.max, ex, ey, ez) > cd2) ||
-              !_occVisible(mesh, i)) { breakRun(); continue; }
+              !_occVisible(mesh, i)) { if (!md) flush(); continue; }
+          visible++;
+          const g = GI.ids[i];
+          if (!(lastVisI === i - 1 && lastVisG === g)) consec++;
+          lastVisI = i; lastVisG = g;
+          // First sighting of this group THIS frame: stamp it and record the
+          // order. Both paths do this, because nUsed is the setGroups count.
+          // Under multi-draw the chunk is also filed on the group's chain,
+          // appended so it stays in ascending chunk order — which is ascending
+          // byteOffset, so neighbours still fold into one RANGE below.
+          if (GI.used[g] !== GI.epoch) { GI.used[g] = GI.epoch; GI.head[g] = i; GI.order[nUsed++] = g; }
+          else if (md) GI.next[GI.tail[g]] = i;
+          if (md) { GI.tail[g] = i; GI.next[i] = -1; continue; }
           const li = _tbl.lists[i];
           let slot = -1;
           if (shadowAllIdx >= 0) {
             for (let j = 0; j < li.length; j++) if (li[j] === shadowAllIdx) { slot = j; break; }
           }
           const stride = ch.indexType === gl.UNSIGNED_INT ? 4 : 2;
-          if (md) {
-            // The group is (light set, shadow slot, index type) — contiguity
-            // is no longer part of it, which is the constraint multi-draw
-            // removes. Contiguous neighbours still fold into one RANGE, so the
-            // list stays as short as the geometry allows.
-            if (!(runOff >= 0 && runType === ch.indexType && runSlot === slot && _sameList(runLi, li))) {
-              flush();
-              runOff = ch.byteOffset; runCount = 0; runType = ch.indexType; runLi = li; runSlot = slot;
-            }
-            if (_mdN && _mdOffsets[_mdN - 1] + _mdCounts[_mdN - 1] * stride === ch.byteOffset) _mdCounts[_mdN - 1] += ch.count;
-            else { _mdCounts[_mdN] = ch.count; _mdOffsets[_mdN] = ch.byteOffset; _mdN++; }
-            continue;
-          }
           if (runOff >= 0 && runType === ch.indexType && runSlot === slot &&
               _sameList(runLi, li) && runOff + runCount * stride === ch.byteOffset) {
             runCount += ch.count;
@@ -428,7 +496,39 @@ const GLXChunked = (function () {
           runOff = ch.byteOffset; runCount = ch.count; runType = ch.indexType;
           runLi = li; runSlot = slot;
         }
-        flush();
+        _mdStats.perChunkDraws += visible;
+        _mdStats.consecutiveGroups += consec;
+        if (md) {
+          // One multiDrawElementsWEBGL per group, and the index type is
+          // mesh-wide (createChunkedMesh stamps the same value on every chunk),
+          // so it never varies inside one.
+          const stride = mesh.indexType === gl.UNSIGNED_INT ? 4 : 2;
+          for (let u = 0; u < nUsed; u++) {
+            const g = GI.order[u], first = GI.head[g], li = _tbl.lists[first];
+            let slot = -1;
+            if (shadowAllIdx >= 0) {
+              for (let j = 0; j < li.length; j++) if (li[j] === shadowAllIdx) { slot = j; break; }
+            }
+            if (!_sameList(lastLi, li)) {
+              core.uploadLightSet(F.allLights, li, li.length,
+                                  F.lights, F.tailStart, F.tailCount);
+              lastLi = li;
+            }
+            if (slot !== lastSlot) { core.setLampShadowSlot(slot); lastSlot = slot; }
+            let n = 0;
+            for (let i = first; i >= 0; i = GI.next[i]) {
+              const ch = chunks[i];
+              if (n && _mdOffsets[n - 1] + _mdCounts[n - 1] * stride === ch.byteOffset) _mdCounts[n - 1] += ch.count;
+              else { _mdCounts[n] = ch.count; _mdOffsets[n] = ch.byteOffset; n++; }
+            }
+            _mdExt.multiDrawElementsWEBGL(gl.TRIANGLES, _mdCounts, 0, mesh.indexType, _mdOffsets, 0, n);
+            _mdStats.multiCalls++; _mdStats.rangesSubmitted += n; _mdStats.drawElementsAvoided += n - 1;
+          }
+          _mdStats.setGroups += nUsed;
+        } else {
+          flush();
+          _mdStats.setGroups += nUsed;
+        }
       } else if (_mdOn && _mdExt) {
         // Contiguous chunks still merge into one RANGE — a shorter list is
         // still less for the driver to walk — but a break no longer costs a

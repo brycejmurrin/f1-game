@@ -177,3 +177,57 @@ should move on timing evidence.
 The counted oracles remain trustworthy because counting is exact here and timing
 is not — which was the lesson twice over before this, and is now the lesson
 three times.
+
+## 7. The grouping defect run 143 exposed, and what fixing it was worth
+
+Run 143's counted oracle said multi-draw was issuing **4,709 calls for 4,853
+ranges — 1.03 ranges a call**, paying the indirection and collecting none of the
+batching. The timing beside it (+20 %, against a 5.9 % floor) invited deleting
+the feature; the counter said the grouping was wrong instead, which is a thing
+to fix. That is the whole argument for printing a count next to every timing.
+
+**The cause.** The first cut kept the drawElements run-merge's shape and only
+let a group survive a culled gap, so it still walked chunks in ARRAY order and
+extended while the NEIGHBOUR matched. Multi-draw's one real capability —
+carrying ranges that need not be adjacent — was never used. The fix files every
+visible chunk under a group id baked once per lamp table (`_groupIds` in
+`js/render/glx/chunked.js`) and issues one call per group.
+
+**What it is worth**, measured per frame at vegas with the clock held at 02:00,
+player at 0.35 of a lap, counters read through `__apex.multiDraw()`:
+
+| | per frame |
+|---|---|
+| visible chunk draws in the lamp branch | 108.5 |
+| groups by NEIGHBOUR (what the first cut made) | 24.5 |
+| groups by SET (what it makes now) | 15.0 |
+
+**9.5 fewer draw calls a frame.** Real, and far too small to be a frame time.
+So the fix makes multi-draw correct, not valuable, and nothing here argues for
+moving its default.
+
+**Two predictions of mine the measurement refuted**, recorded because both were
+stated confidently before the counter existed:
+
+- *"Chunk array order is emission order, so neighbours are spatially unrelated
+  and almost never share a set."* They group 108.5 draws into 24.5. Emission
+  order tracks space far better than that.
+- *"The lists are distance-sorted, so chunks with the same lamps compare
+  unequal, and that is the main cause."* The same scene with the unsorted key
+  gives 22 → 14. Canonical order is worth about one group a frame. It stays
+  because a set is a set, not because it pays.
+
+**Still unexplained:** why run 143 saw 1.03 ranges a call where the same scheme
+gives 4.4 locally. The census leg ran `macos-latest` at `resMode=high` and its
+counters are cumulative over every `drawChunked` call, env-probe faces included,
+and a probe face that sees one chunk contributes a one-range call. Until a
+census carries `perChunkDraws`/`consecutiveGroups`/`setGroups`, 1.03 is a number
+about that run, not about this branch.
+
+**What the fix also bought, and is worth more than the nine calls:** the lamp
+branch now has an equivalence test. Every multi-draw test before this ran
+`perChunkLights: 0` — the PLAIN branch — so the branch that actually ships at
+night, and the one where a group left open across a culled chunk would undo the
+cull, was covered only by a regex on the source. It is now covered by running
+both paths over a fixture with a hole in the middle of the chunk array and
+requiring the identical index bytes (`tests/unit/glx-multidraw.test.mjs`).
