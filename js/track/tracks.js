@@ -397,6 +397,21 @@ const Tracks = (function () {
     return w;
   }
 
+  // Painted lens albedo per lamp kind (js/lighting/track-lights.js LAMP_KINDS):
+  // over-white at night so the head glows in the props draw, plain by day.
+  const LENS_NIGHT = {
+    flood_bank: [1.30, 1.33, 1.40], halide: [1.10, 1.20, 1.18],
+    sodium:     [1.32, 0.86, 0.42], halogen: [1.26, 1.06, 0.62],
+    led:        [1.16, 1.24, 1.36], globe:   [1.28, 1.00, 0.58],
+    work:       [1.12, 0.78, 0.40], fluor:   [1.06, 1.22, 1.02],
+  };
+  const LENS_DAY = {
+    flood_bank: [1.00, 1.01, 1.04], halide: [0.94, 0.99, 0.98],
+    sodium:     [1.04, 0.88, 0.62], halogen: [1.02, 0.94, 0.72],
+    led:        [0.96, 1.00, 1.05], globe:   [1.04, 0.94, 0.70],
+    work:       [0.98, 0.82, 0.58], fluor:   [0.92, 1.00, 0.90],
+  };
+
   function buildProps(track) {
     Log.info("track", "buildProps start " + (track.def && track.def.id));
     const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
@@ -1917,18 +1932,15 @@ const Tracks = (function () {
     // buildProps — including the neon two lines up — reads it. This one kept
     // the authored default, so the pit-straight crowd wore the wrong tint
     // whenever the override disagreed with the def.
+    // The pit building that stood here is the complex's row now (SceneryPits):
+    // on a +1 circuit it was superseded, on a -1 circuit it stood on the
+    // wrong side. Only the grandstand remains.
     const crowd = NIGHT ? [0.45, 0.28, 0.3] : [0.78, 0.42, 0.32];
     for (let i = 0; i < (def.ownPitStraight ? 0 : 7); i++) {
       const k = (i * 4) % n;
       place(k, -1, 14, [6, 11, 16], [0.5, 0.5, 0.56]);     // grandstand shell
       crowdBank(k, -1, 8, 16, 7, 4.2,                        // speckled tiered crowd
                 [crowd[0] * 0.4, crowd[1] * 0.4, crowd[2] * 0.4]);
-      place(k, 1, 12, [7, 5.5, 16], [0.83, 0.83, 0.86]);    // pit building
-      if (NIGHT) {
-        const pa = anchor(k, 1, 8.35), pb = [pa.r, pa.u, pa.t];
-        addBox(out, vadd(pa.c, pa.u, 2.0), [0.14, 1.3, 13], [1.34, 1.24, 0.96], pb);
-        addBox(out, vadd(pa.c, pa.u, 3.9), [0.14, 0.9, 13], [1.10, 1.14, 1.22], pb);
-      }
     }
 
     // Place a BAKED MODEL from the asset pack (assets/pack, built by
@@ -1961,41 +1973,45 @@ const Tracks = (function () {
       });
     }
 
-    const customLamps = [];
-    const CUSTOM_LAMP_CAP = 96;
-    const mastLamps = [];
-    const MAST_LAMP_CAP = 512;
+    // Three lamp registries, one record shape (js/lighting/track-lights.js
+    // reads them all off track.lampPosts): a circuit's own fixtures (`custom`),
+    // the shared masts (`mast`: radius is a FLOOR there) and the pit complex's
+    // canopy luminaires (`pit`, registered by SceneryPits after the build).
+    const customLamps = [], mastLamps = [], pitLamps = [];
+    const CUSTOM_LAMP_CAP = 96, MAST_LAMP_CAP = 512, PIT_LAMP_CAP = 32;
+    const lampRec = (spec, defKind, tag) => {
+      const p = spec.pos;
+      const k = Number.isFinite(spec.k) ? ((Math.round(spec.k) % n) + n) % n : 0;
+      const rec = { k, side: spec.side === -1 ? -1 : 1, x: p[0], y: p[1], z: p[2],
+                    kind: typeof spec.kind === "string" ? spec.kind : defKind, custom: true };
+      if (tag) rec[tag] = true;
+      if (spec.always) rec.always = true;
+      if (finiteVec(spec.aim, 3, false)) rec.aim = [spec.aim[0], spec.aim[1], spec.aim[2]];
+      if (finiteVec(spec.aimAt, 3, false)) rec.aimAt = [spec.aimAt[0], spec.aimAt[1], spec.aimAt[2]];
+      if (Number.isFinite(spec.energy)) rec.energy = Math.max(0, spec.energy);
+      if (Number.isFinite(spec.radius)) rec.radius = Math.max(1, spec.radius);
+      return rec;
+    };
     const lampPost = (spec) => {
       spec = spec || {};
-      const p = spec.pos;
-      if (!finiteVec(p, 3, false)) {
+      if (!finiteVec(spec.pos, 3, false)) {
         diagnostics.invalid.push({ id: spec.id || "lamp-post", reason: "non-finite lamp position" });
         return false;
       }
       if (customLamps.length >= CUSTOM_LAMP_CAP) return false;
-      const k = Number.isFinite(spec.k) ? ((Math.round(spec.k) % n) + n) % n : 0;
-      const rec = { k, side: spec.side === -1 ? -1 : 1, x: p[0], y: p[1], z: p[2],
-                    kind: typeof spec.kind === "string" ? spec.kind : "led",
-                    custom: true };
-      if (spec.always) rec.always = true;
-      if (finiteVec(spec.aim, 3, false)) rec.aim = [spec.aim[0], spec.aim[1], spec.aim[2]];
-      if (Number.isFinite(spec.energy)) rec.energy = Math.max(0, spec.energy);
-      if (Number.isFinite(spec.radius)) rec.radius = Math.max(1, spec.radius);
-      customLamps.push(rec);
+      customLamps.push(lampRec(spec, "led", null));
       return true;
     };
     const registerMastLamp = (spec) => {
       spec = spec || {};
-      const p = spec.pos;
-      if (!finiteVec(p, 3, false)) return false;
-      if (mastLamps.length >= MAST_LAMP_CAP) return false;
-      const k = Number.isFinite(spec.k) ? ((Math.round(spec.k) % n) + n) % n : 0;
-      const rec = { k, side: spec.side === -1 ? -1 : 1, x: p[0], y: p[1], z: p[2],
-                    kind: typeof spec.kind === "string" ? spec.kind : "flood_bank",
-                    custom: true, mast: true };
-      if (Number.isFinite(spec.energy)) rec.energy = Math.max(0, spec.energy);
-      if (Number.isFinite(spec.radius)) rec.radius = Math.max(1, spec.radius);
-      mastLamps.push(rec);
+      if (!finiteVec(spec.pos, 3, false) || mastLamps.length >= MAST_LAMP_CAP) return false;
+      mastLamps.push(lampRec(spec, "flood_bank", "mast"));
+      return true;
+    };
+    const registerPitLamp = (spec) => {
+      spec = spec || {};
+      if (!finiteVec(spec.pos, 3, false) || pitLamps.length >= PIT_LAMP_CAP) return false;
+      pitLamps.push(lampRec(spec, "led", "pit"));
       return true;
     };
     ctx.registerMastLamp = registerMastLamp;
@@ -2105,6 +2121,12 @@ const Tracks = (function () {
     for (const a of deferredFoliage) forestEdgeNow.apply(null, a);
     plantRoadsideTrees();
 
+    // The painted LENS of a fixture, per lamp kind: over-white at night (the
+    // props draw glows any over-white vertex colour, js/game.js floodEmit) so
+    // the head reads as lit, plain by day. The masts below and the pit
+    // canopy luminaires (SceneryPits) both paint from this one table, so the
+    // lens always matches the light track-lights.js emits for the kind.
+    const lensAlbedo = (kind) => (NIGHT ? LENS_NIGHT : LENS_DAY)[kind] || LENS_DAY.led;
     {
       const stTheme = theme === "street_night" || theme === "street_day" || theme === "modern";
       const mastH = stTheme ? 9 : 13;
@@ -2114,18 +2136,6 @@ const Tracks = (function () {
         ? LightTune.LT.lampDensity : 1;
       const mstride = Math.max(1, Math.round((22 / dens) / ds));  // matches buildTrackLights + LAMP DENSITY
       let mi = 0;
-      const LENS_NIGHT = {
-        flood_bank: [1.30, 1.33, 1.40], halide: [1.10, 1.20, 1.18],
-        sodium:     [1.32, 0.86, 0.42], halogen: [1.26, 1.06, 0.62],
-        led:        [1.16, 1.24, 1.36], globe:   [1.28, 1.00, 0.58],
-        work:       [1.12, 0.78, 0.40], fluor:   [1.06, 1.22, 1.02],
-      };
-      const LENS_DAY = {
-        flood_bank: [1.00, 1.01, 1.04], halide: [0.94, 0.99, 0.98],
-        sodium:     [1.04, 0.88, 0.62], halogen: [1.02, 0.94, 0.72],
-        led:        [0.96, 1.00, 1.05], globe:   [1.04, 0.94, 0.70],
-        work:       [0.98, 0.82, 0.58], fluor:   [0.92, 1.00, 0.90],
-      };
       const globeStreet = fz.lamp === "globe";
       const pickKind = (k, roll) => {
         const frac = k / n;
@@ -2146,7 +2156,7 @@ const Tracks = (function () {
         const a = anchor(k, side, 6);
         if (onTrack(a.c[0], a.c[2], 1.2)) continue;
         const kind = pickKind(k, hash(mi * 13.7 + 3.1));
-        const lensCol = (NIGHT ? LENS_NIGHT : LENS_DAY)[kind];
+        const lensCol = lensAlbedo(kind);
         const b = [a.r, a.u, a.t];
         addCyl(out, a.c, 0.26, mastH, poleCol, 6, b);
         const top = vadd(a.c, a.u, mastH);
@@ -2225,8 +2235,12 @@ const Tracks = (function () {
     // dressing have been kept out of it. Platform, wall, boards, lights and
     // the row of garages, every position off track.pit (js/track/scenery/pits.js).
     if (typeof SceneryPits !== "undefined" && track.pit) {
-      const pits = SceneryPits.build({ track, out, rawBox: RAW.addBox, upOf, bankOffsetAt, curvature: (s) => curvature(track, s) });
-      Log.info("track", `pits ${track.def.id}: ${pits.bays} bays, wall ${pits.wall}`);
+      const pits = SceneryPits.build({ track, out, rawBox: RAW.addBox, upOf, bankOffsetAt, curvature: (s) => curvature(track, s),
+                                       night: NIGHT, lensAlbedo, registerLamp: registerPitLamp });
+      // The mast/custom concat above has run; nothing reads lampPosts before
+      // buildProps returns (the bake is per frame), so the canopy goes on last.
+      for (const lamp of pitLamps) track.lampPosts.push(lamp);
+      Log.info("track", `pits ${track.def.id}: ${pits.bays} bays, wall ${pits.wall}, ${pitLamps.length} lamps`);
     }
     return { out, glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };
   }

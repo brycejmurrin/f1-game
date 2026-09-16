@@ -307,3 +307,33 @@ test("a tree is one object: a crown that would reach the complex takes its trunk
   assert.ok(tiers > 0, "there are crown tiers along the row to test");
   assert.equal(over, 0, `${over} crown tier(s) reach over the bays`);
 });
+
+test("the complex lights its row: six canopy luminaires over the working lane, registered as lamps", () => {
+  // The row of twelve bays was the darkest thing on a night pit straight: the
+  // generic verge masts are kept out of the complex, the circuits' own pit
+  // lighting is decoration without a light record, and the far side's masts
+  // are 14-28 m away. SceneryPits now hangs an LED luminaire under the
+  // canopy at every second party line — one per 22 m, the engine's own pool
+  // stride — and registers it at the lens (`pit: true` on track.lampPosts),
+  // throwing at the working lane's centre. docs/research/PIT-LIGHTING-PLAN-2026-09.md.
+  const inArc = (s, a, b) => (a <= b ? (s >= a && s <= b) : (s >= a || s <= b));
+  for (const id of [FULL, LEFT]) {
+    const t = buildOnce(id), p = t.pit, sd = p.side, L = t.total, ds = L / t.n;
+    const pit = (t.lampPosts || []).filter((l) => l.pit);
+    assert.equal(pit.length, 6, `${id}: six luminaires, one per 22 m of row`);
+    for (const l of pit) {
+      assert.equal(l.kind, "led", `${id}: a canopy batten is an LED`);
+      assert.equal(l.side, sd, `${id}: on the pit side`);
+      const k = l.k;
+      const lat = ((l.x - t.px[k]) * t.rx[k] + (l.z - t.pz[k]) * t.rz[k]) * sd - t.hw[k];
+      assert.ok(lat >= p.off.workOut - 3 && lat <= p.off.workOut,
+        `${id}: lens ${lat.toFixed(2)} m beyond the edge; the canopy spans [${p.off.workOut - 3}, ${p.off.workOut}]`);
+      const h = l.y - t.py[k];
+      assert.ok(h >= 5.0 && h <= 6.0, `${id}: lens ${h.toFixed(2)} m up, the soffit is at 5.3`);
+      assert.ok(inArc(k * ds, p.row.s0, p.row.s1), `${id}: lamp at node ${k} is off the row`);
+      assert.ok(l.aimAt && Math.hypot(l.aimAt[0] - l.x, l.aimAt[2] - l.z) < 3 && l.aimAt[1] < l.y - 4,
+        `${id}: the luminaire throws at the lane under it`);
+    }
+  }
+  assert.equal((buildOnce(STREET).lampPosts || []).filter((l) => l.pit).length, 0, "a painted lane hangs no canopy");
+});

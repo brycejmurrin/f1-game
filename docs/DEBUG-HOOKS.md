@@ -668,7 +668,10 @@ Lamp-slider probes (for Chromium MCP / `tools/mcp/cdmcp-lamps-tune.py`):
   else `track._alwaysLights` (daytime always-on fixtures — Monaco tunnel).
   Reading only `_lights` reports 0 on a day session that is still lighting
   the tunnel.
-- `lampPosts` — mast/lens registry length (`track.lampPosts`).
+- `lampPosts` — mast/lens registry length (`track.lampPosts`). On every
+  circuit with a built pit complex it includes the six canopy luminaires
+  over the working lane (`pit: true`, kind `led`, `aimAt` the lane centre;
+  `js/track/scenery/pits.js`).
 ```js
 __apex.race("singapore"); __apex.lightState();
 // → { ambientSky:[0.13,0.14,0.20], sunColor:[0.16,0.18,0.26], numLights:28,

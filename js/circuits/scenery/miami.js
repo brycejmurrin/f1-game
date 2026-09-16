@@ -313,19 +313,15 @@
       gantry(0.0,   6.6, [0.18, 0.20, 0.24]);   // dark scoring arch (start line)
       gantry(0.014, 7.0, CORAL);                  // coral timing gantry
 
-      // Lamp posts flanking the start line — both sides, every ~30 m along the pit straight
+      // Lamp posts along the pit straight, stadium side only: the pit side
+      // (left) is the engine's complex now, lit by its own canopy luminaires,
+      // and every post placed there was superseded (measured 0 of 10 standing).
       for (let i = 0; i < 10; i++) {
         const k = K(0.0 + i * 0.006);
-        // Right side lamp posts (stadium side)
         const aR = anchor(k, 1, 10);
         addCyl(out, aR.c, 0.18, 10, [0.68, 0.68, 0.70], 5, [aR.r, aR.u, aR.t]);
         addBox(out, vadd(aR.c, aR.u, 10.2), [3.0, 0.4, 0.4], [0.68, 0.68, 0.70], [aR.r, aR.u, aR.t]);
         addBox(out, vadd(aR.c, aR.u, 10.0), [1.6, 0.5, 1.2], LAMP_WARM, [aR.r, aR.u, aR.t]);
-        // Left side lamp posts (pit side)
-        const aL = anchor(k, -1, 10);
-        addCyl(out, aL.c, 0.18, 10, [0.68, 0.68, 0.70], 5, [aL.r, aL.u, aL.t]);
-        addBox(out, vadd(aL.c, aL.u, 10.2), [3.0, 0.4, 0.4], [0.68, 0.68, 0.70], [aL.r, aL.u, aL.t]);
-        addBox(out, vadd(aL.c, aL.u, 10.0), [1.6, 0.5, 1.2], LAMP_WARM, [aL.r, aL.u, aL.t]);
       }
 
       // Palms lining the pit straight
