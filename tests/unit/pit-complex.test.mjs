@@ -444,3 +444,28 @@ test("the row seats the custom team ONCE when the roster already carries it, as 
     delete env.sandbox.Teams;
   }
 });
+
+test("the entry hatch is paint inside the road edge, from the road's start to where the wall grows", () => {
+  // TrackMesh.pitHatch: the FIA no-go fill on the road side of the peel line,
+  // one stripe every 2 m, 1.2 m in from the edge, ending where the wall's
+  // fade begins (v reaching 0.5). Pure numbers, because the painted buffer
+  // cannot tell a stripe from a chevron.
+  const ctx = ctxOnce(), TM = ctx.TrackMesh;
+  assert.equal(typeof TM.pitHatch, "function");
+  for (const id of [FULL, LEFT, CORRIDOR]) {
+    const t = buildOnce(id), p = t.pit, L = t.total, n = t.n;
+    const hatch = TM.pitHatch(t);
+    assert.ok(hatch.length >= 5, `${id}: ${hatch.length} stripes on a ${p.entryRoadM} m entry road`);
+    let prev = null;
+    for (const h of hatch) {
+      const k = Math.round(h.s / L * n) % n;
+      assert.ok(h.x1 <= t.hw[k] && h.x0 >= t.hw[k] - 1.25, `${id}: a stripe at ${h.x0.toFixed(2)}..${h.x1.toFixed(2)} on a ${t.hw[k].toFixed(2)} m half-width`);
+      assert.ok(p.v[k] < 0.5, `${id}: a stripe where the wall has grown (v ${p.v[k].toFixed(2)})`);
+      const d = ((h.s - p.sA) % L + L) % L;
+      assert.ok(d > 0 && d < p.entryRoadM, `${id}: a stripe ${d.toFixed(0)} m into a ${p.entryRoadM} m road`);
+      if (prev != null) assert.ok(Math.abs((((h.s - prev) % L) + L) % L - 2) < 1e-6, `${id}: stripes are 2 m apart`);
+      prev = h.s;
+    }
+  }
+  assert.equal(TM.pitHatch(narrowOnce()).length, 0, "a painted lane has no entry road to hatch");   // .length: the array is the VM realm's
+});

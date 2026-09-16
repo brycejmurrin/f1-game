@@ -112,33 +112,39 @@ const SceneryPits = (function () {
     };
     // A team's crest PANEL on the pit wall opposite its bay (asked: the
     // team's logo on the wall outside): the bay's own atlas cell again, at
-    // the cell's aspect, standing on the wall's top and facing the lane
-    // (normal +sd·r; the reader's right is +sd·t), on a dark plate that sits
-    // on the wall. After the boards, so quad i is fascia i, then the boards,
-    // then a panel per bay: the painter and the tests index them so.
+    // the cell's aspect, standing on the wall's top on a dark plate, and
+    // read from BOTH sides — the lane face (normal +sd·r, the reader's right
+    // +sd·t) for the driver in the lane, the track face (normal -sd·r, right
+    // -sd·t) for the chase and TV cameras, the side a real pit wall shows
+    // its names to. After the boards, so quad i is fascia i, then the
+    // boards, then two quads per bay (lane, track): the painter and the
+    // tests index them so.
     const panelsWanted = [];
     const panelAt = (f, k, cell) => { if (S) panelsWanted.push([f, k, cell]); };
     const PANEL_SCALE = 0.46, WALL_TOP_Y = 1.42;
     const emitPanel = (f, k, cell) => {
       const pw = S.quadW * PANEL_SCALE, ph = S.quadH * PANEL_SCALE;
       const wallLat = sd * (f.hw + p.bands.verge + 0.125);
-      const c = atF(f, wallLat, WALL_TOP_Y + 0.03 + ph / 2, k);
-      const right = [sd * f.t[0], sd * f.t[1], sd * f.t[2]], up = f.u, nrm = [sd * f.r[0], sd * f.r[1], sd * f.r[2]];
-      const P = (sx, sy) => [c[0] + right[0] * sx * pw / 2 + up[0] * sy * ph / 2,
-                             c[1] + right[1] * sx * pw / 2 + up[1] * sy * ph / 2,
-                             c[2] + right[2] * sx * pw / 2 + up[2] * sy * ph / 2];
-      const corners = [P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)];
       const cx = (cell % S.cols) * S.cellW, cy = Math.floor(cell / S.cols) * S.cellH;
       const uL = cx / S.w, uR = (cx + S.cellW) / S.w, vT = 1 - cy / S.h, vB = 1 - (cy + S.cellH) / S.h;
       const uvs = [[uL, vB], [uR, vB], [uR, vT], [uL, vT]];
-      const base = signs.pos.length / 3;
-      for (let i = 0; i < 4; i++) {
-        signs.pos.push(corners[i][0], corners[i][1], corners[i][2]);
-        signs.nrm.push(nrm[0], nrm[1], nrm[2]);
-        signs.uv.push(uvs[i][0], uvs[i][1]);
+      for (const face of [1, -1]) {                       // +1 the lane face, -1 the track face
+        const c = atF(f, wallLat - sd * (face > 0 ? 0 : 0.08), WALL_TOP_Y + 0.03 + ph / 2, k);
+        const right = [face * sd * f.t[0], face * sd * f.t[1], face * sd * f.t[2]], up = f.u;
+        const nrm = [face * sd * f.r[0], face * sd * f.r[1], face * sd * f.r[2]];
+        const P = (sx, sy) => [c[0] + right[0] * sx * pw / 2 + up[0] * sy * ph / 2,
+                               c[1] + right[1] * sx * pw / 2 + up[1] * sy * ph / 2,
+                               c[2] + right[2] * sx * pw / 2 + up[2] * sy * ph / 2];
+        const corners = [P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)];
+        const base = signs.pos.length / 3;
+        for (let i = 0; i < 4; i++) {
+          signs.pos.push(corners[i][0], corners[i][1], corners[i][2]);
+          signs.nrm.push(nrm[0], nrm[1], nrm[2]);
+          signs.uv.push(uvs[i][0], uvs[i][1]);
+        }
+        signs.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+        signs.panels.push({ cell, k, face: face > 0 ? "lane" : "track" });
       }
-      signs.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-      signs.panels.push({ cell, k });
       // The plate: a centimetre behind the decal, and grounded THROUGH the
       // wall — its body runs from the ground to the panel's top inside the
       // wall's 25 cm (the wall is a swept strip the float sweep cannot see
@@ -297,15 +303,46 @@ const SceneryPits = (function () {
       // blank white square used to be the whole of it.
       const kIn = kOf(p.sIn), kOut = kOf(p.sOut);
       if (S && S.boards) {
-        // On the verge, its inner edge 0.4 m off the road, and only where the
+        // On the verge, its inner edge 0.3 m off the road, and only where the
         // barrier leaves the whole board room (a board through a fence post
         // is worse than no board; the arrows on the road remain).
+        // …and only where no single-object prop of the circuit's own scenery
+        // already stands on that verge — a trunk, a post, a hut. The circuit's
+        // scenery is built before the complex (tracks.js), and every emitter
+        // writes what it placed to track.props at placement, so the registry
+        // is complete here. A board that would share the verge with one walks
+        // a further 24 m back, 4 m at a time, and gives up rather than stand
+        // through it (Nürburgring's far board at 110 m did exactly that, and
+        // was moved to 95 m by hand before this walk existed). Multi-part
+        // records (a grandstand, a building, a backdrop) are skipped: their
+        // box is the assembly's bounding box — at Bahrain a stand 5 m out
+        // reaches the road with it and no board could stand anywhere — and
+        // the barrier test already keeps a board off what stands behind the
+        // fence. The mass hash (tracks.js massBlocked) is coarser still: a
+        // claim, not a footprint.
         const bar = sd > 0 ? track.barR : track.barL;
+        const SKIP = { structure: 1, building: 1, backdrop: 1, place: 1, grandstand: 1,
+                       mountain: 1, ridge: 1, peak: 1, plane: 1 };   // …and the landforms, whose boxes are the horizon
+        const props = (track.props && track.props.list) || [];
+        const clear = (k, off) => {
+          if (bar && bar[k] < off + S.boardW / 2 + 0.1) return false;   // a decimetre to spare: the board rides above barrier height
+          const c = at(k, sd * off, 0), reach = S.boardW / 2 + 0.4;
+          for (const r of props) {
+            if (SKIP[r.kind] || !Number.isFinite(r.x)) continue;
+            const rr = Math.max(r.w || 0, r.d || 0) / 2 + reach;
+            const dx = r.x - c[0], dz = r.z - c[2];
+            if (dx * dx + dz * dz < rr * rr) return false;
+          }
+          return true;
+        };
         for (const back of S.boardM) {
-          const k = kOf(p.sA - back);
-          const off = hw[k] + 0.4 + S.boardW / 2;
-          if (bar && bar[k] < off + S.boardW / 2 + 0.5) continue;
-          boardAt(k, sd * off, S.boardY, S.cells);
+          for (let extra = 0; extra <= 24; extra += 4) {
+            const k = kOf(p.sA - back - extra);
+            const off = hw[k] + 0.3 + S.boardW / 2;
+            if (!clear(k, off)) continue;
+            boardAt(k, sd * off, S.boardY, S.cells);
+            break;
+          }
         }
         if (p.v[kIn] >= 0.98) boardAt(kIn, sd * (hw[kIn] + v1 - 0.6), S.boardY, S.cells + 1);
       }

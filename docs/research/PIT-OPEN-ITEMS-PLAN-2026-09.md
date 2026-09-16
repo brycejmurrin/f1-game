@@ -35,7 +35,7 @@ table-driven check in the same file.
 **Cost.** pits.js +12, tracks.js +1 (the ctx field), pit.js `boardM` back to
 `[45, 110]`, test +15. Sweeps re-run (`npm run test:sweeps`).
 
-## 2. A planned stop arms a lap early
+## 2. A planned stop arms at the line and circulates a lap armed
 
 **Facts.** `PitLane.think` runs every tick for every AI car in the race
 (`js/game.js:3777`) and arms as soon as `AiDrive.pitNow` says so
@@ -45,26 +45,30 @@ window opens up to 260 m before it and closes 110 m after (`pit.js:73`) — so a
 car whose plan says "lap N" crosses the line, sees `lapsToStop === 0`, arms, and
 is already past the entry road. It circulates a whole lap armed and stops on lap
 N+1. The Bahrain hunts count it: `c_leftWindowArmed` is 17 of 21 stops on every
-run since the counter existed (`scratch/pit-hunt.cjs:206`), and the exit-lane
-tests never see it because they arm by hand at the approach.
+run since the counter existed (`scratch/pit-hunt.cjs:206`).
 
-**Design.** Arm on the APPROACH, not the line. In `think`, when the car is on
-the lap before its planned lap (`lapsToStop === 1`) and within `CUE_M` (550 m,
-`:523`) of the entry road with the entry still ahead (`toEntry(c) > 0`), treat
-`lapsToStop` as 0. Symmetrically, when `lapsToStop === 0` but the entry road is
-already behind on this lap, do NOT arm — `pitNow` runs again next tick and the
-approach rule catches it one lap later, which is what happens today anyway,
-minus the lap spent armed. The two non-plan reasons (wrong tread, the cliff,
-`ai-drive.js:784-788`) keep arming immediately: a car on slicks in the rain
-should show BOX the whole lap.
+**What it costs — nothing, measured against the code.** An armed AI is only
+held to the pit side within `APPROACH_M` of the entry road (`laneX`,
+`pit-lane.js:791-799`), and its speed cap `entryV` (`:606-611`) is
+`sqrt(limit² + 2·ENTRY_BRAKE·d)` — 288 km/h at 300 m out, unbounded inside the
+window — so a car armed at the line drives its lap at racing pace on the racing
+line and stops at the END of its planned lap, which is what "box on lap N"
+means in the real sport. The plan's `lapsAt` is therefore honoured, not off by
+one; what is off is the HUNT's expectation that arming inside the window means a
+stop that lap.
 
-**Tests.** `tests/unit/pit-lane.test.mjs` has the VM harness: a car with
-`pitPlan.lapsAt = [3]` placed 400 m before the entry on lap 2 arms; the same
-car placed 50 m past the entry road on lap 3 does not, and arms 400 m before
-the entry on lap 3. The hunt's counter reads 0 on a Bahrain run.
+**Design.** No engine change. Fix the counter: in `scratch/pit-hunt.cjs`, count
+`c_leftWindowArmed` only when the car armed BEFORE the entry road on that lap
+(`toEntry(c) > entryRoadM` at arming, or armed on a previous lap) and then
+passed the entry without stopping — the one case that would be a bug. Record the
+semantics in a comment on `think` (`:1087`): arming at the line is by design.
 
-**Cost.** pit-lane.js +10, test +25. One Bahrain hunt (`node
-scratch/pit-hunt.cjs bahrain 10 --only4`, ~8 min, VM).
+**Tests.** None beyond a clean counter on the next Bahrain hunt; a one-line note
+in `docs/TESTING.md`'s pit-lane row that a planned stop arms at the line and
+stops at the end of that lap.
+
+**Cost.** pit-hunt.cjs +6, pit-lane.js +3 (comment). One Bahrain hunt
+(`node scratch/pit-hunt.cjs bahrain 10 --only4`, ~8 min, VM).
 
 ## 3. The pit-wall crest panels face the lane only
 
@@ -144,8 +148,8 @@ temperature) — a `tune-physics` / `ai-racecraft` item, not this plan's.
 
 ## 7. Order
 
-1. §2 (a lap of pit loss on every planned AI stop, and a clean hunt counter).
-2. §1 (the board walk; puts the far board back where it reads best).
+1. §1 (the board walk; puts the far board back where it reads best).
+2. §2 (the counter, and the note that arming at the line is by design).
 3. §3 (panels toward the track: the TV side).
 4. §5 (the hatch), §4 (one real-GPU frame), §6 (hand off).
 

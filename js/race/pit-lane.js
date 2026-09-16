@@ -1083,7 +1083,13 @@ const PitLane = (function () {
     }
 
     /** Does this AI car call its stop this tick? The plan says WHEN; AiDrive.pitNow
-     *  owns the three reasons to ignore it, and this owns the state they read. */
+     *  owns the three reasons to ignore it, and this owns the state they read.
+     *  A PLANNED stop arms the moment the lap counter turns — at the line,
+     *  which is inside the window — and is served at the END of that lap, the
+     *  next time round: "box on lap N". The lap in between costs nothing (an
+     *  armed AI is only held to the pit side within APPROACH_M, and entryV is
+     *  unbounded that far out), so the hunt counts it as h_armedAtLine, not
+     *  as a stop that failed to happen. */
     function think(c) {
       const plan = c && c.pitPlan;
       if (!plan || c.pitArmed || (c.pitState && c.pitState !== "none")) return "";
