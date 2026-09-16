@@ -403,7 +403,18 @@ function buildStandings() {
   const cars = G.cars;
   const body = G.$("standings-body");
   body.textContent = "";
-  if (!season) return;
+  // A ONE-OFF RACE HAS NO CHAMPIONSHIP. The pause menu still offers STANDINGS,
+  // and this used to return with the body empty — a title, a CLOSE button and
+  // nothing between them, which reads as a broken screen rather than as "there
+  // is nothing to stand on". `.dh-empty` is the house empty state (css/data.css)
+  // so this costs no new class.
+  if (!season) {
+    const note = document.createElement("div");
+    note.className = "dh-empty";
+    note.textContent = "No championship is running — standings appear in a Season or a Career.";
+    body.appendChild(note);
+    return;
+  }
   const round = season.round;
   // Mid-weekend the sprint has scored but the round has not advanced, so
   // "AFTER ROUND r" would name the previous round while showing this one's
