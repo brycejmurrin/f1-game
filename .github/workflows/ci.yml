@@ -318,8 +318,12 @@ jobs:
       # import time even when they never launch a browser) but not the browser
       # binaries — those cost ~200 MB and only the smoke job needs them.
       - run: npm ci
+      # --jobs=3, not the serial `npm run test:tooling-fast`: the same 194 files
+      # measured 3.1-4.9 min one at a time on this job and 122 s at --jobs=3 on
+      # a 4-core box, which is what a public runner is (4 vCPU). Same tool, same
+      # START/PASS/FAIL lines; the npm script stays serial for a loaded dev box.
       - name: Structural guards
-        run: npm run test:tooling-fast
+        run: node tools/ci/tooling-fast.mjs --jobs=3
       - name: Every test file belongs to a topical group
         run: npm run test:audit
       # WHAT DOES THIS GATE ACTUALLY EXECUTE? A report, never a gate.
