@@ -835,6 +835,39 @@ on the 08-18 perf-hunt board, not this register.
   telemetry scrubber uses `CssZoom.viewportRect`.
 - **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
 
+### 2026-09-16 — the Monaco continuity test does not test continuity (found by building the fidelity gate)
+
+`tests/specs/physics-fixes.spec.js` test 1 says of itself: "a guard that the
+projection stays continuous (and that future changes don't reintroduce a
+teleport)". Measured, it guards none of that. THREE separate mutations of
+`project()` in `js/track/core/spline.js` leave it green:
+
+| mutation | what it should destroy | twin | browser |
+|---|---|---|---|
+| `CONT = 0` | the arc-length penalty, removed | 2/2 green | **2/2 green** |
+| `cost -= CONT * da * da` | the penalty INVERTED — snapping far from the last arc is now REWARDED | 2/2 green | **2/2 green** |
+| `W = track.n` | the ±16-node locality window opened to a global nearest-point search (the pre-hint behaviour that caused the original teleports) | 2/2 green | not measured; two browser columns already agreed |
+
+Both backends agree, so this is NOT a twin-fidelity hole — it is a hollow
+test, and it costs ~110 s of browser every time it runs. The likely reason is
+that `roadFollow: 0.7` holds the car close enough to the line that a hairpin
+is never ambiguous, so no mutation of the tie-break can change the answer.
+
+**Open, and deliberately not "fixed" by deleting it.** Before it can be cited
+as projection coverage, someone has to find driving that makes the projection
+genuinely ambiguous. The evidence is kept in `tests/data/mutants.json` under
+`openQuestions` (deleting the mutants would delete the finding), and
+`tests/unit/twin-fidelity.test.mjs` fails if that record is dropped.
+
+**Found by building the gate, not by reading the test.** `tools/check/twin-fidelity.mjs`
+exists because `tools/ci/twinned-specs.mjs`'s equal-test-count check is vacuous
+for an ADAPTED spec — the twin IS the spec, so the counts match by
+construction. The first mutant it ran reported "the twin SLEPT THROUGH this",
+and checking the BROWSER column before believing that is what turned a wrong
+conclusion ("the VM is blind") into the right one ("the test is hollow").
+The gate ships green on the one verified mutant (`m-wall-scrub-flat`: caught
+by the scrub test, correctly ignored by the continuity test).
+
 ### 2026-09-16 — Monaco now escalates to a RED FLAG where it raised no flag at all (product, found by benchmarking)
 
 **Reproduced twice on an idle box, byte-identical both times**, and the same

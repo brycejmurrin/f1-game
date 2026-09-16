@@ -82,7 +82,7 @@ jobs:
       run: ${{ steps.v.outputs.run }}
       fast_run: ${{ steps.v.outputs.fast_run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0        # the parents' trees and the live commit are the whole question
       - name: Refuse to run off the deploy branch
@@ -190,7 +190,7 @@ jobs:
     outputs:
       deploy: ${{ steps.pub.outputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0        # merge-base needs the history, not just the tip
       - name: Is this commit still worth publishing?
@@ -225,7 +225,7 @@ jobs:
       # GITHUB_SHA, checked out as-is: the commit the gate above tested is the
       # commit that gets staged, stamped and published. Nothing here re-reads
       # the branch tip.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # The generation is 2000 + the commit count (see "Stamp the shell
           # generation"); a depth-1 checkout would count 1.

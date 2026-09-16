@@ -553,7 +553,7 @@ test("the renderer job proves the adapter before trusting the run, and uploads i
   // the retry leaves the job green, and a green job uploaded nothing — the
   // frames image-grade "shadows" attaches were unretrievable on run 3495
   // exactly when they were the next step (docs/notes/DEFECT-LEDGER.md).
-  assert.match(rendererJob, /if: always\(\)\s*\n\s*uses: actions\/upload-artifact@v4/);
+  assert.match(rendererJob, /if: always\(\)\s*\n\s*uses: actions\/upload-artifact@v5/);
   assert.match(rendererJob, /name: playwright-artifacts-renderer-macos/);
   // The full browser, cached at macOS's path; never apt.
   assert.match(rendererJob, /id: pwcache/);

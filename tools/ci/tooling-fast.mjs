@@ -201,6 +201,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/cross-file-paths.test.mjs",
   "tests/unit/ci-coverage.test.mjs",
   "tests/unit/nightly-group.test.mjs",
+  "tests/unit/twin-fidelity.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,

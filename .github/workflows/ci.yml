@@ -309,10 +309,10 @@ jobs:
     # the ~5 min this line once claimed.
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       # `npm ci` installs the playwright PACKAGE (some tool modules require it at
       # import time even when they never launch a browser) but not the browser
@@ -379,10 +379,10 @@ jobs:
     # npm ci seen, the same 2x convention sweeps-parts uses below.
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       - name: Pure-node unit suites
@@ -443,10 +443,10 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       - run: npm run test:sweeps-parts
@@ -495,12 +495,12 @@ jobs:
       # fetch-depth: 0 because the filter below diffs against the PREVIOUS head,
       # and a depth-1 clone does not contain it. It costs a few seconds against
       # the 15 minutes it decides whether to spend.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       # SKIP THE SWEEPS WHEN THE DIFF CANNOT HAVE MOVED THE GEOMETRY.
@@ -679,12 +679,12 @@ jobs:
       # fetch-depth: 0 — the filter below diffs against the SHA that is currently
       # live on Pages, which is arbitrarily far back. Same reason the sweeps job
       # takes the full history.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       # DOES THIS DIFF CHANGE ANYTHING THAT ACTUALLY SHIPS?
@@ -817,7 +817,7 @@ jobs:
       - name: Cache Chromium
         if: steps.shipfilter.outputs.ships != 'false'
         id: pwcache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -980,7 +980,7 @@ jobs:
         run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
       - name: Failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           # Shard-scoped name: same-named artifacts from parallel matrix jobs
           # collide on upload-artifact@v4 (it hard-fails on duplicates).
@@ -1003,15 +1003,15 @@ jobs:
     # cold install on a slow shared runner.
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       - name: Cache Chromium
         id: pwcache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -1054,7 +1054,7 @@ jobs:
         run: npm test -- tests/specs/physics-characterization.spec.js --timeout=240000
       - name: Failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: playwright-artifacts-driving-model
           path: |
@@ -1109,7 +1109,7 @@ jobs:
     outputs:
       renderer: ${{ steps.filter.outputs.renderer }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       # Same shape as the sweeps filter, same rule: FAIL SAFE, NEVER FAIL OPEN.
@@ -1174,10 +1174,10 @@ jobs:
     # Re-time on the first green run and replace this number and the header's.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       # Same lockfile-keyed cache as smoke / driving-model, at macOS's browser
@@ -1185,7 +1185,7 @@ jobs:
       # runner.os, so it never collides with the Linux entries.
       - name: Cache Chromium
         id: pwcache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/Library/Caches/ms-playwright
           key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -1241,7 +1241,7 @@ jobs:
       # 3495 (2026-09-10) was exactly that; the pictures are the whole point.
       - name: Run artifacts (report, traces, attached frames)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: playwright-artifacts-renderer-macos
           path: |
@@ -1293,12 +1293,12 @@ jobs:
       shards: ${{ steps.sel.outputs.shards }}
       any: ${{ steps.sel.outputs.any }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       # PREVIOUSLY-FAILING SPECS, carried across runs. Fowler's TIA survey
@@ -1382,10 +1382,10 @@ jobs:
     # contention. See tools/ci/select-specs.mjs SELECTED_GATE for the numbers.
     timeout-minutes: ${{ matrix.timeout }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       # The same lockfile-keyed cache smoke and driving-model restore in 2-5 s;
@@ -1393,7 +1393,7 @@ jobs:
       # apt each time) until 2026-09-16.
       - name: Cache Chromium
         id: pwcache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -1467,7 +1467,7 @@ jobs:
           key: selected-failed-${{ github.ref_name }}-${{ github.run_id }}
       - name: Failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: playwright-artifacts-selected-${{ matrix.name }}
           path: |
@@ -1525,15 +1525,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
       - run: npm ci
       - name: Cache Chromium
         id: pwcache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -1547,7 +1547,7 @@ jobs:
       # rendered, because "it passed here once" is the evidence step (b) needs.
       - name: The rendered goldens, and any diff
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: golden-menus-runner
           path: |
