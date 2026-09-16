@@ -609,14 +609,18 @@ const PitLane = (function () {
           // place in the row, a player cannot even learn a fixed distance from
           // the line: it depends which car they are in.
           teach("gate", "STOP ON THE GLOWING GATE");
+          // PULL IN: the working lane is one more step toward the wall, and
+          // this is the moment to take it — the box is the next thing.
           return togo <= BOX_TOL
             ? { phase: "stop", text: "STOP HERE", dist: 0, frac: 1 }
-            : { phase: "near-box", text: "BOX " + Math.round(togo) + "m", dist: togo, frac };
+            : { phase: "near-box", text: "PULL IN · " + Math.round(togo) + "m", dist: togo, frac };
         }
         // Past the box by more than the latch allows: no crew here, go round.
         if (togo < -BOX_TOL * 2) return { phase: "missed", text: "BOX MISSED", dist: togo, frac: 0 };
         teach("line", "HOLD THE LANE — STOP AT YOUR CREST");
-        return { phase: "lane", text: Math.round(limit() * 3.6) + " LIMIT", dist: 0, frac: 0 };
+        // STAY IN LANE, all the way from the line to the box: the instruction
+        // is continuous, and the limit rides along with it.
+        return { phase: "lane", text: "STAY IN LANE · " + Math.round(limit() * 3.6) + " LIMIT", dist: 0, frac: 0 };
       }
       if (st === "out") {
         // THE EXIT ROAD used to be silence — and it is where a serviced car
@@ -636,12 +640,13 @@ const PitLane = (function () {
         // driver could not tell a wet stop from a slick stop until the wheels
         // were on. Armed beats the wear gate: a stop that IS called is shown.
         const next = c.pitNext || pickFor(c);
-        return { phase: "armed", text: "BOX" + (next && next.code ? " — " + next.code : ""), dist: 0, frac: 1 };
+        return { phase: "armed", text: "STAY IN LANE · BOX" + (next && next.code ? " — " + next.code : ""), dist: 0, frac: 1 };
       }
       if (!worthStopping(c)) return null;
-      // Inside the entry road: say GO, not a distance — the distance is zero and
-      // what the driver needs now is the direction.
-      if (d === 0 && throughM(z(), c.s, G.track.total) <= COMMIT_M) {
+      // ON THE ENTRY ROAD — the peel on the complex (sA→sIn), or the first
+      // COMMIT_M past the line on a painted lane — say what to DO, not a
+      // distance: the instruction is the lane, and holding it is the gesture.
+      if (roadOf(c) === "entry" || (d === 0 && throughM(z(), c.s, G.track.total) <= COMMIT_M)) {
         // SAY WHAT TO DO, not just where you are. "PIT ENTRY" names the place
         // and assumes you already know the gesture — and the gesture is the one
         // thing nobody can guess, because there is no button to find. The first
