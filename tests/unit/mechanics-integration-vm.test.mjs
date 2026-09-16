@@ -76,6 +76,32 @@ test("rewind steps the player back about ten seconds, and never rewinds a penalt
   assert.equal(g.G.coach.rewind(),false,"the buffer is spent, not replayed");
 });
 
+test("rewinding a race with other cars puts the WHOLE race back, not just the player",async()=>{
+  g.G.duel=true;                        // 2 cars is enough to prove a field rewinds
+  await g.race("monza");g.apex.go();g.step(2);
+  assert.equal(g.G.coach.armPractice(),true);
+  const p=g.G.player, rival=g.G.cars.find(c=>!c.isPlayer);
+  assert.ok(rival,"a rival is on track");
+  g.step(700);                          // fill the 10 s window
+  assert.equal(g.G.coach.rewindReady(),true);
+  const pS=p.s, rS=rival.s, t0=g.G.raceT;
+  g.step(240);                          // 4 s more, so everything has moved on
+  assert.ok(rival.s!==rS,"the rival covered ground before the rewind");
+  assert.ok(g.G.raceT>t0,"and the clock ran");
+  // The player picks up a penalty AFTER the sample; the rival picks one up too.
+  p.penalty=5; rival.penalty=3;
+  assert.equal(g.G.coach.rewind(),true);
+  // THE POINT OF THIS TEST: the rival goes back with the player.
+  assert.ok(p.s<=pS+1e-6,"the player is back where it was");
+  assert.ok(rival.s<=rS+1e-6,"AND SO IS THE RIVAL — not left where it drove to");
+  assert.ok(g.G.raceT<=t0+1e-6,"the race clock came back too, so gaps still read true");
+  // The asymmetry is deliberate: the player keeps the consequence of running
+  // wide (there is a lesson to protect), the rival is just part of the world.
+  assert.equal(p.penalty,5,"the player's penalty does not rewind");
+  assert.notEqual(rival.penalty,3,"the rival's DOES — it is part of the world being rewound");
+  g.G.duel=false;
+});
+
 test("a duel trims the grid to the player and one bumped rival",async()=>{
   g.G.duel=true;
   await g.race("monza");g.apex.go();g.step(2);
