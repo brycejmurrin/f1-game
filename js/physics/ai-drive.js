@@ -131,6 +131,18 @@ const AiDrive = (function () {
       const aReq = excess * excess / (2 * room);
       if (room / excess < 3 && aReq > 5 * vs) lvl = Math.max(lvl, clamp(aReq / (brakeRef || 22), 0.15, 1));
     }
+    // INSIDE the follow distance and still closing: a light brake sized to the
+    // closing rate and to how deep inside we are. A small excess reaches
+    // neither gate above — +1.5 m/s is under the +3 threshold, and with `room`
+    // floored at 0.5 m its aReq is 2.25, under the 5 the creep gate asks — so
+    // it was carried into the car ahead's tail: tools/check/ai-human.mjs
+    // measured rear-ends on a player 3 % under the field's pace at 4.7-4.9 m
+    // of arc, the car length. The vmax cap alone cannot do this: it lowers the
+    // TARGET, and a car coasting toward a lower target loses 1.5 m/s in the
+    // time it takes to close the last five metres.
+    if (gap != null && follow != null && gap < follow && excess > 0.3 * vs) {
+      lvl = Math.max(lvl, clamp(0.12 + (excess / (3 * vs)) * (1 - gap / follow), 0.12, 0.6));
+    }
     return lvl;
   }
 
@@ -845,6 +857,26 @@ const AiDrive = (function () {
   }
   function humanYieldTakes(t) { return (t || 0) > humanYieldGrace(); }
 
+  // THE AIM, NOT THE CONTACT. Every side-by-side rule above keys on where the
+  // two cars ARE (|dx| inside the clear gap), while the AI steers toward a
+  // point 8-25 m ahead on its line — so a car overlapping us by half a length
+  // and a lane over was aimed THROUGH until the boxes touched, and only then
+  // did the rub clamp (or, for a human, the grace timer) begin. Measured with
+  // tools/check/ai-human.mjs on 2026-09-16 (monza, a scripted player 3 %
+  // under the field's pace): 4-5 AI-to-player contacts per 100 s, nearly all
+  // "diagonal" — overlapping by 3-4 m on arc, first touch at 1.95 m lateral,
+  // the car width. This asks the question one step earlier: is the AIM inside
+  // the other car's clear gap, and on the other car's side of where we are —
+  // i.e. are we steering INTO them, as opposed to holding while they come to
+  // us (their move: hold, and the result is a rub, exactly as humanYieldT
+  // reasons). game.js applies it with the same clamp the rub constraint uses,
+  // but without the emergency (full-authority) controller: at aim distance the
+  // heading state has time to bend the line, and that is the point.
+  function aimIntrudes(desiredX, x, otherX, clear) {
+    if (Math.abs(desiredX - otherX) >= clear) return false;
+    return otherX <= x ? desiredX < x : desiredX > x;
+  }
+
   const SIDE_LEVEL = 2.4;
   function sideYieldsA(dProg, xA, xB) {
     if (dProg < -SIDE_LEVEL) return true;        // A is behind B
@@ -986,7 +1018,7 @@ const AiDrive = (function () {
     defendPull, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
-    otWant, passTarget, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes,
+    otWant, passTarget, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,

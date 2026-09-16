@@ -922,3 +922,37 @@ test("a lower difficulty corner factor lowers the brake target, and 1 is the def
   // limit by less than 7%.
   assert.ok(full - easy < full * 0.07, "the braking budget is not scaled with it");
 });
+
+test("queueBrake: a small closing rate INSIDE the follow distance gets a light brake", () => {
+  // +1.5 m/s at 8 m with a 6 m follow: outside the follow distance, absorbable.
+  assert.equal(A.queueBrake(41.5, 40, false, 8, 6, 22), 0);
+  // the same excess at 5 m — inside it, closing on the tail — is braked for,
+  // lightly, and harder the deeper inside we are.
+  const at5 = A.queueBrake(41.5, 40, false, 5, 6, 22), at3 = A.queueBrake(41.5, 40, false, 3, 6, 22);
+  assert.ok(at5 > 0 && at5 <= 0.6, `light brake at 5 m: ${at5}`);
+  assert.ok(at3 > at5, `deeper inside brakes harder: ${at3} vs ${at5}`);
+  // not closing: no brake, however close
+  assert.equal(A.queueBrake(40, 40, false, 3, 6, 22), 0);
+  // a real closing rate still gets the full brake the creep gate gives
+  assert.equal(A.queueBrake(50, 40, false, 5, 6, 22), 1);
+});
+
+// --- the aim, not the contact ----------------------------------------------
+// aimIntrudes(desiredX, x, otherX, clear): true only when the AIM is inside the
+// other car's clear gap AND on the other car's side of where we are — steering
+// into them, as opposed to holding our line while they come to us.
+test("aimIntrudes: an aim into the other car's gap, on their side of us, intrudes", () => {
+  const CLEAR = 2.8;
+  // other car a lane to our LEFT (x −1), we sit at +1.5
+  assert.equal(A.aimIntrudes(0.5, 1.5, -1, CLEAR), true, "aiming left, into the gap");
+  assert.equal(A.aimIntrudes(1.5, 1.5, -1, CLEAR), false, "holding our line is their move, not ours");
+  assert.equal(A.aimIntrudes(2.5, 1.5, -1, CLEAR), false, "aiming away never intrudes");
+  assert.equal(A.aimIntrudes(-3.9, 1.5, -1, CLEAR), false, "an aim clear on the far side is not inside the gap");
+  assert.equal(A.aimIntrudes(0.5, 1.5, -5, CLEAR), false, "a car two lanes over: the aim is clear of it");
+  // mirror: other car to our RIGHT
+  assert.equal(A.aimIntrudes(-0.5, -1.5, 1, CLEAR), true);
+  assert.equal(A.aimIntrudes(-2.5, -1.5, 1, CLEAR), false);
+  // already inside the gap: still only an aim TOWARD them intrudes
+  assert.equal(A.aimIntrudes(0.2, 0.5, -1, CLEAR), true, "inside the gap and still closing");
+  assert.equal(A.aimIntrudes(0.9, 0.5, -1, CLEAR), false, "inside the gap but opening it");
+});

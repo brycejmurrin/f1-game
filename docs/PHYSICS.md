@@ -495,6 +495,26 @@ the numbers):
   the seeded stream. This is rFactor 2's Composure-scheduled "bad driving
   zones" and AMS2's forced-mistake channel; F1 22's two or three lock-ups a
   race was what players called too many, so the rates sit well under it.
+- **The aim, not the contact** (`AiDrive.aimIntrudes`, 2026-09-16). Every
+  side-by-side rule keyed on where the cars ARE — the clear-gap election and
+  the rub clamp began when the boxes were 0.8 m apart, and against a human
+  only after a 0.3 s grace — while the AI steers toward a point 8–25 m ahead
+  on its line. A car overlapping by half a length and a lane over was aimed
+  THROUGH until they touched. Now, for a HUMAN neighbour, the question is
+  asked of the AIM: if the target point is inside the player's clear gap and
+  on their side of where we are (steering into them, not holding while they
+  come to us), the AI holds the gap at the aim — nobody else in the pair
+  will. Between AI cars the contact-time election stays: asked at the aim of
+  every neighbour it cost the AI-only field a quarter of its settled passes
+  (40 → 30 per 240 s at Monza), two cars each conceding a side-by-side
+  neither had lost. Measured with `tools/check/ai-human.mjs`
+  (a driven scripted player 3 % under the field's pace, 3 seeds × 240 s,
+  Monza): first touches per 100 s 5.6 → 4.9 with the player on the line, and
+  the share of alongside frames spent touching 25 → 13 %; 5.8 → 3.9 with the
+  player 1.5 m wide of it (rear-end 2.7 → 2.3, side 4.3 → 3.7, diagonal
+  7.0 → 3.3). `queueBrake` gained a light brake for a small closing rate
+  INSIDE the follow distance (a +1.5 m/s excess reached neither of its gates
+  and was carried into the tail of the car ahead).
 - **No moving under braking** (`AiDrive.holdLineGap`). Braking with a car
   within a second behind (eight metres at least), and not itself attacking,
   an AI freezes its offset from the racing line at what it was when the brakes
