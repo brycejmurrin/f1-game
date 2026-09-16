@@ -1,17 +1,19 @@
 {
-  "fuji": 13,
+  "fuji": 12,
   "nurburgring": 8,
   "hockenheim": 2,
   "jerez": 2,
   "madrid": 2,
   "albert_park": 1,
   "anderstorp": 1,
-  "buenos_aires": 1,
-  "catalunya": 1,
+  "buenos_aires": 0,
+  "catalunya": 0,
   "donington": 1,
-  "estoril": 1,
+  "estoril": 0,
   "imola": 1,
   "korea": 1,
   "mexico": 1,
-  "monza": 1
+  "monza": 1,
+  "miami": 1,
+  "portimao": 1
 }

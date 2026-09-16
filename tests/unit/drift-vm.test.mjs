@@ -67,7 +67,11 @@ function corner(drift, steer = 1, speed = 40, frames = 48) {
 
 test("default car is stable at the limit: full lock washes wide, never spins", async () => {
   await loadTrack();
-  const r = corner(0.15, 1, 50, 90);   // shipped-ish SLIDE, full lock, 1.5 s
+  // 27 frames, not 90: the pit WALL stands on Monza's right (TrackPit, hw + 2 m)
+  // and full lock at 50 m/s meets it at frame 31 (measured); the 1.5 s run had
+  // the open boundary to the garage line, and in the browser a wall hit is an
+  // incident-sim crash, which is not the tyre model this measures.
+  const r = corner(0.15, 1, 50, 27);   // shipped-ish SLIDE, full lock
   assert.equal(r.finite, true);
   lt(r.peakSlip, 45);                  // understeer wash, not a spin
   lt(Math.abs(r.x), 60);               // stayed in the track neighbourhood
@@ -98,9 +102,12 @@ test("slide self-aligns: release the steering and the slip decays", async () => 
 
 test("cornering is grip-limited: yaw rate doesn't run away with speed", async () => {
   await loadTrack();
-  // 36 frames: the window ends before any wall contact for both speeds.
-  const slow = corner(0.0, 1, 25, 36);
-  const fast = corner(0.0, 1, 65, 36);
+  // 24 frames: the window ends before any wall contact for both speeds. It
+  // was 36 until the pit WALL stood on Monza's right (TrackPit, hw + 2 m):
+  // the fast run pins on it at frame 27 (x 8.9, yaw 135°/s on the frame it
+  // hits), where the open boundary to the garage line had let it run to 39.
+  const slow = corner(0.0, 1, 25, 24);
+  const fast = corner(0.0, 1, 65, 24);
   assert.equal(fast.finite && slow.finite, true);
   lt(fast.steadyYaw, slow.steadyYaw * 1.3);
 });
