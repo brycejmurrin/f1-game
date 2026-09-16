@@ -98,10 +98,16 @@ export const isTwinned = (file) => Object.hasOwn(TWINNED, file);
  *  covers. Flags and non-spec paths pass through untouched; a twinned spec is
  *  dropped unless `--with-twinned` is on the command line or
  *  APEX_WITH_TWINNED=1 is set (CI's dispatched wide run sets it, so a
- *  dispatched `collisions` group still runs its browser copies). The caller
- *  prints one line per drop — the same honesty contract as select-specs —
- *  and, when every spec named was a twin, runs NOTHING rather than handing
- *  Playwright an empty list (which would run the whole suite). */
+ *  dispatched `collisions` group still runs its browser copies).
+ *
+ *  `nothingToRun` means every spec named was a twin, so Playwright must not be
+ *  spawned at all — an empty spec list runs the WHOLE suite. It does NOT mean
+ *  the group is green. run-playwright.mjs runs the dropped twins in node and
+ *  reports THEIR verdict. The first cut printed `= run passed  (0/0 done,
+ *  0 failed)` instead, and within hours a 32/32-twinned `collisions` group had
+ *  been read as a verified gate for a change to the contact solver, having
+ *  executed nothing. A twin that is named but never run is not a substitution,
+ *  it is a hole. */
 export function partitionArgs(argv, env = process.env) {
   const withTwinned = argv.includes("--with-twinned") || env.APEX_WITH_TWINNED === "1";
   const keep = [], dropped = [];

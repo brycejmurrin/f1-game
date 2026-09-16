@@ -2359,6 +2359,14 @@ const TLX = (function () {
       // the backend object (the ~40-member seam contract)
       const backend = {
         backend: "three",                    // WGX precedent: backend id marker
+        // Occlusion culling is a GLX feature (js/render/glx/chunked.js); these
+        // are DECLARED, not implemented. game.js installs a backend by
+        // descriptor-copy onto GLX, so a name omitted here keeps GLX's own
+        // function, which then runs against a null gl/CHK because GLX.init()
+        // never ran on this path — the feature test passes and the call throws
+        // inside GLX. Saying "not supported" is the honest version of that.
+        occlusionCull: () => ({ supported: false, on: false }),
+        occlusionStats: () => ({ supported: false, on: false }),
         get isWebGPU() { return !!(renderer.backend && renderer.backend.isWebGPUBackend); },
 
         // lifecycle / capability

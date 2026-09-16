@@ -47,6 +47,11 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
   "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
+  // 2026-09-16: `errCount` was written by the AI mistake model and read by
+  // nothing, so it leaked here silently — a short rollout rarely trips a
+  // mistake, which is why the guard above never caught it. It counts mistakes
+  // within ONE race, so a cold car has none.
+  "errCount",
   // 2026-09-16: found by tools/check/episode-diff.mjs, not a live repro — the
   // lazy `c.passPlan || (c.passPlan = {})` cache in game.js's overtake-attempt
   // block survives reset() untouched, and `!c.passPlan || c.passPlan.side`
@@ -1147,8 +1152,33 @@ const api = {
     yaw: +(c.yawVis || 0).toFixed(4),
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2), lap: c.lap,
     ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
-    ax: +(c.aeroX || 0).toFixed(2),
+    ax: +(c.aeroX || 0).toFixed(2), err: c.errCount | 0,
   })),
+  // The track build TIMELINE (js/track/tracks.js, "BUILD PROFILE"): one row per
+  // phase in build order, `k` "geo" for emission and "up" for upload. It exists
+  // to answer the multithreading plan condition 2 — run 128 proved the
+  // main-thread block at race entry is JavaScript rather than upload
+  // back-pressure, and this says WHICH JavaScript, which is what decides
+  // whether moving the build off the main thread would move anything.
+  buildProfile: () => (G.track && G.track.buildProfile) || null,
+  // The RACE-ENTRY timeline (js/game.js, "RACE-ENTRY PROFILE"): one row per
+  // phase of startRace, the build being only one of them. buildProfile() says
+  // which part of the BUILD costs; this says whether the build is the part of
+  // race entry that costs at all — measured at 23 % of it on the default
+  // backend, so the rest of this list is where the freeze actually lives.
+  raceProfile: () => (G.raceProfile && G.raceProfile()) || null,
+  // Occlusion culling (GLX only, ships OFF behind apex26.occlusionCull).
+  // occlusionCull(true|false) toggles it live; with no argument it reports the
+  // COUNTED oracle — chunks tested against the depth buffer, chunks skipped
+  // because a query said they contribute no pixel, and queries issued. Counted
+  // and not timed on purpose: this container has no GPU, so a frame rate here
+  // measures the box (docs/notes/CI-RENDERING-PERFORMANCE.md).
+  occlusionCull: (on) => {
+    if (!gfx || !gfx.occlusionCull) return { supported: false, on: false };
+    if (on === undefined) return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: false };
+    gfx.occlusionCull(!!on);
+    return gfx.occlusionStats ? gfx.occlusionStats() : { supported: false, on: !!on };
+  },
   // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
   // Distinct from curated FIA turns on track.def.turns / info().turns — use those
   // for official turn counts; this hook is for physics/parking at sharp bends.

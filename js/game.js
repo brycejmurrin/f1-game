@@ -892,7 +892,7 @@ let pits = null;      // PitLane.create(G), same deferral
 // The cue phases that turn the pit ENTRANCE lamps green (SceneryPits): you are
 // called in and still on your way to the box. Not `out`/`served`/`merge` — by
 // then you are leaving, and not `missed`.
-const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "stop", "box"];
+const PIT_LAMP_GREEN = ["near", "enter", "armed", "lane", "keep", "near-box", "square", "stop", "box"];
 let engineer = null;  // RaceEngineer.create(G), same deferral
 function setCautionEnabled(on) { return raceCtl.setEnabled(on); }
 function updateCaution(dt) { raceCtl.update(dt); }
@@ -1977,6 +1977,7 @@ function seedPlayerPose() {
 function clearRacingScratch(c) {
   c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null;
   c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1;
+  c.errCount = 0;   // mistakes THIS race, beside c.hits/c.cuts in gridUp — the instrument's denominator
 }
 
 // Car decal / effect-quad / cockpit-instrument geometry lives in
@@ -2368,8 +2369,23 @@ function dropRaceWake() {
 // caller is a click handler that ignores the result and makes startRace() its
 // last statement, and the specs already poll `__apex.info().track != null`
 // rather than assuming race() returns built, so nothing downstream changes.
+// RACE-ENTRY PROFILE — the same stopwatch tracks.js keeps over the build, one
+// level out. Run 128/129 measured race entry on real hardware at 2193 ms of
+// contiguous main-thread block on the default backend and found the track
+// build is only 23 % of it; the other three-and-a-half seconds have no name
+// (docs/notes/MULTITHREADING-PLAN-2026-09-16.md §8). Two candidates were ruled
+// out by reading rather than by measuring — shader compilation, because glx.js
+// already takes KHR_parallel_shader_compile, and the lazy scenery fetch,
+// because the largest circuit module in the tree is 58 KB — so the rest has to
+// be attributed rather than guessed. Anything optimised before this row exists
+// is aimed at a quarter of the problem.
+let _raceProfile = [];
+function raceProfile() { return _raceProfile; }
 async function startRace() {
+  _raceProfile = []; let _rt = performance.now();
+  const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
   await ensureScenery(trackIdx);
+  rlap("scenery");
   // Completed seasons are readable, never raceable (also guarded by award()).
   if ((flow === "season" && !SeasonCal.canRace(season)) || (isCareer() && Career.conflicted())) {
     state = "menu"; $("race-settings").hidden = true;
@@ -2392,7 +2408,9 @@ async function startRace() {
   // shards, marbles and knocked-over cones — visible on the grid, and
   // RaceControl can fly a caution for debris nobody produced this race.
   DebrisWorld.reset();
+  rlap("resets");
   loadTrack(trackIdx);
+  rlap("loadTrack");
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
   // must never survive into the next — a race that silently did not count
   // because the last one was practice is the worst possible failure here. A
@@ -2400,7 +2418,8 @@ async function startRace() {
   // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
   // chosen on the settings sheet and meant to stick until the player changes it.
   practiceMode = false;
-  makeCars(); coach.reset(); PerfGov.resetFrameStats();
+  makeCars(); rlap("makeCars");
+  coach.reset(); PerfGov.resetFrameStats();
   // Qualifying keeps the full field for simulation, then drives one standing lap.
   if (isQuali()) {
     qualiField = cars;
@@ -2424,6 +2443,7 @@ async function startRace() {
     lapsTarget = SeasonCal.lapsFor(raceLaps, season);
   }
   applyRaceSettings();
+  rlap("settings");
   if (isWetRoad()) {           // "rain" = storm; "wet" = the DRIZZLE tier —
     initRainDrops();           // initRainDrops seeds sparse/short/slow streaks
     Particles.rainShow(true);  // per the drizzle* TUNE_DEFS. Gating this on
@@ -2432,8 +2452,10 @@ async function startRace() {
   }
   if (!isQuali() && gridFromQuali() && !quali.order(cars)) { openQuali(); return false; }
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
+  rlap("gridUp");
   startChangeable();
   recomputePlayerMods();
+  rlap("finish");
   if (isTimeTrial()) { records.begin(); Ghost.startLap(); }
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
@@ -2984,6 +3006,7 @@ const G = {
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP, COUNTDOWN_S,
+  raceProfile,   // the race-entry stopwatch (startRace), read by __apex.raceProfile()
   // The friction-circle constants, for js/race/quali-model.js: it runs a quasi-steady
   // lap simulation off the SAME numbers the driving model uses, so a simulated
   // qualifying time and a driven one are on one scale by construction.

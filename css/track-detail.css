@@ -273,4 +273,16 @@ body.cockpit-cam #hud-speed,
 body.cockpit-cam #hud-energy,
 body.cockpit-cam #hud-ot,
 body.cockpit-cam #hud-aero { display: none; }
+
+/* …but the LCD only carries the read when it is big enough to READ. The wheel
+   is drawn in world space, so it shrinks with the viewport: measured at phone
+   landscape (844x390) its digits are a few pixels tall and the speed is simply
+   gone for that player, who is also the one most likely to be in cockpit view
+   (it is the default on touch). Below the 900x600 landscape breakpoint this
+   file already uses for the rest of the HUD, the floating speed readout comes
+   back. Gear stays on the LCD: it is one large glyph and survives the shrink,
+   and the gearbox chip is the HUD's widest element. */
+@media not all and (min-width: 900px) and (min-height: 600px) {
+  body.cockpit-cam #hud-speed { display: block; }
+}
 } /* @layer overlays */

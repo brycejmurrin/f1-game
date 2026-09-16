@@ -6273,6 +6273,16 @@ const WGX = (function () {
         firstFrameCount: _pipeAtFirstPresent,
       }),
       softPresent: () => !!_softGpu,
+      // Occlusion culling is a GLX feature (js/render/glx/chunked.js) and these
+      // are declared, not implemented. They exist because game.js installs a
+      // backend by DESCRIPTOR-COPY onto GLX: a name WGX omits keeps GLX's own
+      // function, which then runs against a null gl/CHK because GLX.init()
+      // never ran on this path — every feature test passes and then throws
+      // inside GLX. Answering "not supported" here is the honest version of
+      // that, and tests/unit/backend-surface-parity.test.mjs is why it is not
+      // forgotten. WebGPU has no occlusion-query equivalent wired here yet.
+      occlusionCull: () => ({ supported: false, on: false }),
+      occlusionStats: () => ({ supported: false, on: false }),
 
       // extension: lets a future __apex.gfxBackend() report the active path.
       backend: "webgpu",

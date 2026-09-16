@@ -20,13 +20,25 @@
  * a flourish that cannot be skipped is a wait.
  */
 const LoadingScreen = (function () {
-  const FLY_MS = 1500;    // cinematic hold before the card arrives
-  const CARD_MS = 420;    // card fade-in; the build starts when it lands
+  // A CINEMATIC NEEDS LONG ENOUGH TO READ AS ONE. The first cut was 1.5 s + 0.42 s
+  // and played as a flicker: the camera barely moved before the card took the
+  // screen. These are the budget for the whole screen, and it is skippable with
+  // any pointer or key — an intro nobody can cut past is a wait, not a flourish.
+  const FLY_MS = 5000;    // cinematic hold before the card arrives
+  // Fade (0.4 s, css) PLUS a hold: the card carries a lap outline now, and a
+  // map nobody has time to look at is decoration. The build starts when this
+  // elapses and then owns the screen for its ~1.1 s, so the card is readable
+  // for roughly 2.7 s in total.
+  const CARD_MS = 1600;
 
   function create(hooks) {
     const { $, Tracks, TrackMaps, Flags } = hooks;
 
     let timer = 0, phase = "", build = null, el = null;
+
+    // The map's slot in the card, in CSS px. fitCanvas keeps the circuit's own
+    // aspect inside it, so a wide circuit gets the width and a tall one the height.
+    const MAP_W = 210, MAP_H = 150;
 
     const WX = { dry: "DRY", wet: "WET", rain: "RAIN", overcast: "CLOUDY", fog: "FOG" };
     const TOD = { dawn: "DAWN", day: "DAY", dusk: "DUSK", night: "NIGHT" };
@@ -50,6 +62,7 @@ const LoadingScreen = (function () {
         ["WEATHER", WX[info.weather] || "DRY"],
         ["TIME", TOD[info.tod] || (t.night ? "NIGHT" : "DAY")],
       ];
+      drawMap(t);
       const meta = $("ld-meta");
       if (typeof meta.replaceChildren === "function") meta.replaceChildren(); else meta.textContent = "";
       for (const [k, v] of rows) {
@@ -59,6 +72,35 @@ const LoadingScreen = (function () {
         pair.append(dt, dd);
         meta.appendChild(pair);
       }
+    }
+
+    /** The lap outline, on the circuit picker's recipe: white line, dark casing,
+     *  red start marker, no corner/sector/DRS furniture. Sized from the
+     *  circuit's own aspect, and oversampled for HiDPI the way the picker's
+     *  preview is, with the line weight scaled by the same ratio so it keeps
+     *  its visual thickness. Wrapped: a map that will not draw must never stop
+     *  a race from starting. */
+    function drawMap(t) {
+      const cv = $("ld-map");
+      // TrackMaps comes from `hooks`, not window: every module here is a bare
+      // lexical `const` at script scope, so window.TrackMaps is undefined and a
+      // window-based guard would silently skip the map on every boot.
+      if (!cv || !TrackMaps || typeof TrackMaps.draw !== "function") return;
+      try {
+        const fit = TrackMaps.fitCanvas(cv, MAP_W, MAP_H, t, true);
+        const ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+        if (ratio > 1.01) {
+          cv.width = Math.round(fit.w * ratio);
+          cv.height = Math.round(fit.h * ratio);
+        }
+        const br = fit.w ? (cv.width / fit.w) : 1;
+        const lw = Math.max(2, Math.round(Math.min(fit.w, fit.h) / 42));
+        TrackMaps.draw(cv, t, {
+          color: "#ffffff", casing: "rgba(0,0,0,0.55)", startColor: "#e10600",
+          width: lw * br, pad: Math.round(lw * 1.5) * br,
+          corners: false, sectors: false, drs: false,
+        });
+      } catch (_) { /* no outline is a smaller loss than no race */ }
     }
 
     function setPhase(p) {

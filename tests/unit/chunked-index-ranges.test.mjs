@@ -410,8 +410,18 @@ test("the per-chunk merge only extends a run under all four guards", () => {
   assert.match(loop, /runOff \+ runCount \* stride === ch\.byteOffset/,
     "a run must stay contiguous in the index buffer");
   // The cull path must flush, not `continue` past an invisible chunk.
-  assert.match(loop, /Frustum\.aabbDist2\([^)]*\) > cd2\)\) \{ flush\(\); continue; \}/,
+  //
+  // Matched on the SHAPE — the radial term, then whatever else the cull grew,
+  // then the flush — rather than on the exact condition text. The first cut
+  // pinned `> cd2)) { flush(); continue; }` verbatim and went red the day a
+  // third cull term (occlusion, 2026-09-16) was appended, which is a guard
+  // failing for the one reason a guard must not: the thing it protects was
+  // still true. The force is unchanged, because what it is really asserting is
+  // that the cull branch ENDS in flush() and never in a bare continue.
+  assert.match(loop, /> cd2\)[\s\S]{0,120}?\) \{ flush\(\); continue; \}/,
     "an invisible chunk must FLUSH the open run — a bare continue would merge across it");
+  assert.doesNotMatch(loop, /> cd2\)[\s\S]{0,120}?\) \{ continue; \}/,
+    "the cull branch must not `continue` without flushing the open run");
   // And _sameList must compare contents, not just identity: LampChunks is free
   // to hand back equal-but-distinct arrays, and an identity-only check would
   // silently stop merging (a perf regression nothing goes red for).

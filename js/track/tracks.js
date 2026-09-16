@@ -205,13 +205,35 @@ const Tracks = (function () {
     return x >= a && x <= b;
   }
 
+  // BUILD PROFILE — a sequential timeline of the build, emission separated
+  // from upload, so `track.buildProfile` can answer the one question the
+  // multithreading plan still has open: is the main-thread block at race entry
+  // the TRACK BUILD, or something else in the same window
+  // (docs/notes/MULTITHREADING-PLAN-2026-09-16.md §7, condition 2). Run 128
+  // established on real hardware that the block is 1.8-3.0 s and is main-thread
+  // JavaScript rather than upload back-pressure; it could not say WHICH
+  // JavaScript, and a worker that moves the wrong half buys nothing.
+  //
+  // A stopwatch rather than wrappers: the build IS a sequence, so a lap between
+  // two points needs no restructuring of the call sites, which is what keeps
+  // this from being a refactor with a measurement attached. `performance.now`
+  // where it exists and Date.now otherwise — the Node-VM build guard
+  // (tools/track/verify-track.cjs) has to keep working, and a 1 ms clock is
+  // plenty for phases measured in tens.
+  const _now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
   function build(def, opts) {
     Log.info("track", "build start " + def.id + (opts && opts.night != null ? " night=" + !!opts.night : ""));
+    const _prof = []; let _t = _now();
+    const lap = (n, k) => { const now = _now(); _prof.push({ n, k, ms: +(now - _t).toFixed(2) }); _t = now; };
     const track = buildCenterline(def);
+    track.buildProfile = _prof;
+    lap("centerline", "geo");
     // The pit complex FIRST: the terrain profile flattens under it and the
     // scenery keeps out of it, so both need the model before they run.
     track.pit = TrackPit.build(track, def, curvature);
+    lap("pit", "geo");
     track.surface = TrackSurface.profile(def, track);
+    lap("surface", "geo");
     track._night = opts && opts.night != null ? !!opts.night : !!def.night;
     // Façade wiring: the active renderer backend flows in through opts.gfx
     // (game.js passes `gfx`). This ends tracks.js's reliance on reaching the
@@ -249,20 +271,26 @@ const Tracks = (function () {
         Log.warn("track", `${def.id}/${name} skipped: ${result.reason}`);
         return { pos: [], nrm: [], col: [], idx: [], mat: [] };
       };
-      track.meshes.floor = G.createMesh(safe("floor", buildFloor(track)));
+      const floorGeo = safe("floor", buildFloor(track)); lap("floor", "geo");
+      track.meshes.floor = G.createMesh(floorGeo); lap("floor", "up");
       const roadGeo = safe("road", buildRoad(track)); roadGeo._keepPositions = true; roadGeo._keepFullGeometry = keepGeometry;
-      track.roadGeo = roadGeo; buildRibbon(roadGeo, "road");
+      lap("road", "geo");
+      track.roadGeo = roadGeo; buildRibbon(roadGeo, "road"); lap("road", "up");
       const terrainGeo = buildTerrain(track);
       const terrainSafe = safe("terrain", terrainGeo); terrainSafe._keepPositions = true; terrainSafe._keepFullGeometry = keepGeometry;
+      lap("terrain", "geo");
       track.terrainGeo = terrainSafe; buildRibbon(terrainSafe, "terrain"); // raw geometry kept for groundY/debug
-      const _props = buildProps(track);
+      lap("terrain", "up");
+      const _props = buildProps(track); lap("props", "geo");
       // AFTER buildProps: the scenery kept out of the complex (onRoadHit), so
       // opening the driving boundary across it puts nothing in a car's path.
       TrackPit.openBoundary(track);
       const propsGeo = safe("props", TrackModels.sealGeometry(_props.out));
       track.propsGeo = propsGeo;
       propsGeo._keepPositions = propsGeo._keepFullGeometry = keepGeometry;
+      lap("propsSeal", "geo");
       track.meshes.props = G.createChunkedMesh ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
+      lap("props", "up");
       track.meshes.propBatches = null;
       if (track.graph && G.createInstancedBatch) {
         const { batches } = track.graph.batches({ instancedOnly: true });   // uploading the plain (capability) set ships glassBuf's panes twice — graph.js batches()
@@ -271,18 +299,22 @@ const Tracks = (function () {
             G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
         }
       }
+      lap("batches", "up");
       const glassGeo = safe("glass", _props.glass);
       const waterGeo = safe("water", _props.water);
       track.glassGeo = glassGeo;
       track.waterGeo = waterGeo;
       glassGeo._keepPositions = glassGeo._keepFullGeometry = keepGeometry;
+      lap("glassWater", "geo");
       track.meshes.glass = G.createChunkedMesh ? G.createChunkedMesh(glassGeo, 72) : G.createMesh(glassGeo);
       track.meshes.water = G.createMesh(waterGeo);
       track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
       track.meshes.startline = G.createMesh(safe("startline", buildStartLine(track)));
+      lap("trim", "up");
       // The bay signs: one painted atlas + one texMesh, where a canvas and the
       // livery painter exist (feature-detected inside; the VM builds skip it).
       if (typeof PitSigns !== "undefined") PitSigns.upload(G, track);
+      lap("pitSigns", "up");
     }
     Log.info("track", "build done " + def.id + " total=" + (track && track.total && +track.total.toFixed(1)) + " n=" + (track && track.n) + " night=" + !!(track && track._night));
     return track;

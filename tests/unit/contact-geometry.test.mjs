@@ -11,12 +11,13 @@ function setup() {
   for(const path of ["js/core/mat4.js","js/physics/ai-drive.js","js/physics/contact-geometry.js","js/physics/collide.js"])
     vm.runInContext(readFileSync(new URL(path,root),"utf8"),ctx);
   const geometry=vm.runInContext("ContactGeometry",ctx);
+  const ai=vm.runInContext("AiDrive",ctx);
   const G={track:{total:1000},player:null,netPlay:{owns:c=>!!c.remote},PACE:1,raceT:0,
     wrapS:s=>(s%1000+1000)%1000,worldFromTrack:(s,x)=>({x,z:s})};
   const collision=vm.runInContext("Collide",ctx).create(G,()=>{});
-  return {geometry,collision,G};
+  return {geometry,collision,G,ai};
 }
-const {geometry:C}=setup();
+const {geometry:C,ai:AI}=setup();
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
 test("SAT rejects rotated bounding-box overlap without touching bodywork",()=>{
   assert.equal(C.overlap(3,-3,Math.PI/3,Math.PI/3),null);
@@ -49,6 +50,50 @@ test("inelastic oblique impulses conserve momentum and do not create kinetic ene
     assert.ok(energy(aa)+energy(bb)<=energy(a)+energy(b)+1e-8);
     assert.ok(j.magnitude>0);
   }
+});
+test("an unyawed pair takes neither bounce nor side grip",()=>{
+  // The gate that keeps the shipped field bit-identical (contact-geometry.js,
+  // "CONTACT MATERIAL"): 20 m/s of closing and 6 m/s of slide, and the pair
+  // still ends at one speed with its lateral velocities untouched.
+  const a={angle:0,invMass:1,invInertia:0,vx:30,vy:3,omega:0};
+  const b={angle:0,invMass:1,invInertia:0,vx:10,vy:-3,omega:0};
+  const h=C.overlap(-4,.5,0,0);assert.ok(h);close(h.nx,-1);close(h.ny,0);
+  const j=C.impulse(a,b,-4,.5,h);
+  close(j.slide,0);close(j.ay,0);close(j.by,0);
+  close(a.vx+j.ax,b.vx+j.bx);
+});
+// The normals below are handed in rather than taken from overlap(), so the
+// arithmetic is checkable by hand: a pure longitudinal normal on a pair whose
+// only closing motion is along it.
+test("a yawed pair separates at the restitution fraction of its closing speed",()=>{
+  const n={nx:-1,ny:0};
+  const a={angle:.6,invMass:1,invInertia:0,vx:30,vy:0,omega:0};
+  const b={angle:.6,invMass:1,invInertia:0,vx:10,vy:0,omega:0};
+  const j=C.impulse(a,b,-4,0,n);
+  close(j.closing,20);close(j.slide,0);
+  close((b.vx+j.bx)-(a.vx+j.ax),AI.bumpRestitution(20)*20);
+  assert.ok(AI.bumpRestitution(20)>0,"the shared ramp is what supplies e");
+  // Under the ramp's floor a pair leaning on each other must not be pushed
+  // apart at all, or a settled contact jitters for as long as it lasts.
+  const s={angle:.6,invMass:1,invInertia:0,vx:11,vy:0,omega:0};
+  const t={angle:.6,invMass:1,invInertia:0,vx:10,vy:0,omega:0};
+  const k=C.impulse(s,t,-4,0,n);
+  close((t.vx+k.bx)-(s.vx+k.ax),0);
+});
+test("friction opposes the slide, clamps at the Coulomb limit, and yaws both cars",()=>{
+  const n={nx:-1,ny:0};
+  const mk=(angle,vx,vy)=>({angle,invMass:1,invInertia:1/C.INERTIA,vx,vy,omega:0});
+  // A 40 m/s slide against 2 m/s of closing: the clamp is what binds.
+  const a=mk(.6,12,20),b=mk(0,10,-20);
+  const j=C.impulse(a,b,-4,.5,n);
+  close(Math.abs(j.slide),C.FRICTION*j.magnitude);
+  assert.ok(j.ay<0&&j.by>0,"the impulse pulls the two lateral velocities together");
+  close(j.ay/a.invMass+j.by/b.invMass,0);
+  assert.ok(j.aw!==0&&j.bw!==0,"a rub yaws BOTH bodies, not only the one that is turned");
+  // A slide the normal impulse can afford is solved exactly instead.
+  const c=mk(.6,30,6),d=mk(0,10,5.4);
+  const k=C.impulse(c,d,-4,.5,n);
+  assert.ok(Math.abs(k.slide)<C.FRICTION*k.magnitude);
 });
 function car(prog,speed,x=0){return {prog,s:prog,x,speed,human:false,yawVis:0};}
 test("actual resolver stops a fast car crossing through another between steps",()=>{
