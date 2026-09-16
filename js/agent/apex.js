@@ -227,6 +227,7 @@ const api = {
     G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;
     // playerAnchor()/renderPosOf() draw the HUMAN car from THESE (world), not the AI-only pair above — else it stays lerp'd toward the pre-teleport spot once park() freezes physics.
     G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;
+    G.player.rPrevHead = G.player.head;   // yaw anchor too, or the car swings into place over a frame
     if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(true);
     return { s: G.player.s, total: G.track.total };
   },
@@ -2455,7 +2456,16 @@ const api = {
     c.vLat = 0; c.yawRateCur = 0;
     Tracks.sample(G.track, c.s, smp2);
     placeFromTrack(c, smp2);
-    c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz;
+    // THE SAME TELEPORT HYGIENE jump() carries, and for the same measured
+    // reason: the wall/rescue accumulators describe the OLD location, so a car
+    // placed after a wedge brings ~3 s of rescueT with it and auto-rescues
+    // itself somewhere it was never stuck. jump() gained this block after that
+    // was measured; aiPlace() never did, so every AI placement kept the bug.
+    c.rescueT = 0; c.wallT = 0; c.wasOnWall = false;
+    c.wrongT = 0; c.wrongWay = false; c.offT = 0;
+    // rPrevHead with the rest: without it the yaw interpolator tweens from the
+    // old heading and the car visibly swings into place over a frame.
+    c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevHead = c.head;
     return { id: idx, frac: +(c.s / G.track.total).toFixed(4), speed: +c.speed.toFixed(2), x: +c.x.toFixed(3) };
   },
 

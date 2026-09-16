@@ -293,7 +293,14 @@ const SceneryPits = (function () {
       // control to stand in it. With the platform wall, the exit wall and
       // this, the lane is walled on both sides from entrance to exit; the
       // driving boundary (TrackPit.openBoundary) stops a car's side at it.
-      const outerShift = (k) => o.workOut * p.w[k];
+      // …at the LANE's own outer edge (TrackPit.outerAt), which is the garage
+      // line where the bays are and the fast lane's far side on the entry and
+      // exit roads. The wall used to stand at the full width for the whole
+      // window, so an entrance with no garage beside it for 100-238 m was as
+      // wide as the service area. What it walls off now is the APRON, which is
+      // paved (TrackMesh.buildPitLane) rather than the grass it was.
+      const outerShift = (k) => (typeof TrackPit !== "undefined" && TrackPit.outerAt
+        ? TrackPit.outerAt(p, k) : o.workOut * p.w[k]);
       const outerWall = (ks2) => {
         sweep(ks2, [[0.02, 0], [0.32, 0], [0.32, 1.0], [0.02, 1.0]], WALL, MAT.CONCRETE, outerShift);
         sweep(ks2, [[0.0, 1.0], [0.34, 1.0], [0.34, 1.07], [0.0, 1.07]], WALL_TOP, MAT.METAL, outerShift);
