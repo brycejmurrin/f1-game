@@ -866,13 +866,42 @@ deliberately WIDE into the barriers (steer 0.3 / -0.3 / 0.6 with throttle,
 **running wide at Monaco for half a minute now triggers a full race stoppage
 and standing restart, where before it raised no flag at all.**
 
-`js/race/race-control.js` is UNCHANGED between the two refs. What changed is
-`js/race/pit-lane.js` (+333), `js/game.js` (+306), `js/race/driving-coach.js`
-(+232), `js/race/race-insights.js` (+184), `js/physics/ai-drive.js` (+56) and
-`js/physics/tyre-model.js` (+54) — so incidents are being RAISED where they
-were not before, and race control is escalating them correctly. Owner: the
-race-incidents-control / pit-lane session. Decide first whether the new
-incident rate is intended; only then whether the spec needs a guard against a
+**BISECTED to `d402fd7` — `fix(pit): the stop is driven end to end — approach,
+entry, box, queue, exit`** (146 commits, 8 steps, one commit between the last
+good and the first bad). `js/race/race-control.js` is UNCHANGED; the
+thresholds are untouched (YELLOW 3 / VSC 6 / SC 10 / **RED 16**).
+
+The mechanism, from that commit's own diff: it makes THE PIT WALL solid. Its
+comment says `TrackPit.openBoundary` had "left the wall itself as scenery a
+car running wide drove straight through", and it now grows the wall in
+(`wallR = Math.min(wallR, face - 1.1)`). The spec drives deliberately wide
+along the pit straight, so where it used to pass through the wall it now
+scrapes it, sheds debris, and the settled pieces are counted.
+
+Measured hazard totals through the spec's own driving (`caution({hazards:true})`,
+probe kept at `artifacts/bench/probe.spec.js`):
+
+| ref | max hazard total | vs RED_MIN 16 |
+|---|---|---|
+| `22ea30d` (pre-session) | **11** | under |
+| `13ee765` (tip, LIVE) | **17** | **over** |
+
+Every hazard sits in sector 0 around frac 0.081 — the pit straight.
+
+**Two hypotheses tested and REFUTED, recorded so nobody re-tests them.**
+(1) The new tyre curve (`CURVE_FLOOR` 0.75 / 0.80, a fall past the peak where
+tanh never fell): neutralised at the tip with `CURVE_FLOOR = 1.0`, and the red
+flag still fired at the same race time, `maxBackJump` 253.36. (2) Monaco's new
+`pit: { mode: "street", side: 1 }` def block: removed at the tip, red flag
+still fired, 253.27. Neither is the cause.
+
+**The design question is bigger than the commit.** The base was already at 11
+of the 16 hazards needed to STOP A RACE, so there was almost no headroom, and
+race control counts one car's own settled debris the same way it counts a
+pile-up. A single player scraping a wall for half a minute should not be able
+to red-flag a race. Owner: the race-incidents-control / pit-lane session —
+decide whether the new wall contact rate is intended and whether RED_MIN is
+still calibrated, before deciding whether the spec needs a guard against a
 legitimate re-grid (it has none today — `physics-fixes.spec.js:69`).
 
 **Two other things this measurement settled.** (1) The same file's OTHER test,
