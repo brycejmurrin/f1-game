@@ -49,7 +49,12 @@ test.describe("Apex 26 — dynamic bicycle model", () => {
   test("default car is stable at the limit: full lock washes wide, never spins", async ({ page, loadTrack }) => {
     await loadTrack();
     await pinPace(page);
-    const r = await corner(page, 0.15, 1, 50, 90);   // shipped-ish SLIDE, full lock, 1.5 s
+    // 27 frames, not 90: the pit WALL stands on Monza's right (TrackPit,
+    // hw + 2 m) and full lock at 50 m/s meets it at frame 31 (measured,
+    // tests/unit/drift-vm); the 1.5 s run had the open boundary to the garage
+    // line. A wall hit here is an incident-sim crash (peak slip 88°, the car
+    // backwards at x 14), not the tyre model this measures.
+    const r = await corner(page, 0.15, 1, 50, 27);   // shipped-ish SLIDE, full lock
     expect(r.finite).toBe(true);
     expect(r.peakSlip).toBeLessThan(45);             // understeer wash, not a spin
     expect(Math.abs(r.x)).toBeLessThan(60);          // stayed in the track neighbourhood
@@ -94,10 +99,12 @@ test.describe("Apex 26 — dynamic bicycle model", () => {
     // window measured WALL rotation, not cornering. It passed only while the
     // inverted noseIn gate silently skipped the straighten-to-tangent; with
     // that gate fixed, the wall-align (correct, documented) dominated the
-    // window. At 36 frames the window (24-36) ends before any wall contact
+    // window. At 36 frames the window (24-36) ended before any wall contact
     // for both speeds; the slow run never walls (x 8.2 max at frame 60).
-    const slow = await corner(page, 0.0, 1, 25, 36);
-    const fast = await corner(page, 0.0, 1, 65, 36);
+    // 24 now: the pit WALL stands on Monza's right (TrackPit, hw + 2 m) and
+    // the fast run pins on it at frame 27 (x 8.9, tests/unit/drift-vm).
+    const slow = await corner(page, 0.0, 1, 25, 24);
+    const fast = await corner(page, 0.0, 1, 65, 24);
     expect(fast.finite && slow.finite).toBe(true);
     expect(fast.steadyYaw).toBeLessThan(slow.steadyYaw * 1.3);
   });
