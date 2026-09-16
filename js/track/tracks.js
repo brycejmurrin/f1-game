@@ -407,12 +407,14 @@ const Tracks = (function () {
     sodium:     [1.32, 0.86, 0.42], halogen: [1.26, 1.06, 0.62],
     led:        [1.16, 1.24, 1.36], globe:   [1.28, 1.00, 0.58],
     work:       [1.12, 0.78, 0.40], fluor:   [1.06, 1.22, 1.02],
+    signal:     [1.55, 0.22, 0.18],
   };
   const LENS_DAY = {
     flood_bank: [1.00, 1.01, 1.04], halide: [0.94, 0.99, 0.98],
     sodium:     [1.04, 0.88, 0.62], halogen: [1.02, 0.94, 0.72],
     led:        [0.96, 1.00, 1.05], globe:   [1.04, 0.94, 0.70],
     work:       [0.98, 0.82, 0.58], fluor:   [0.92, 1.00, 0.90],
+    signal:     [1.15, 0.24, 0.20],
   };
 
   function buildProps(track) {
@@ -1995,6 +1997,7 @@ const Tracks = (function () {
       const rec = { k, side: spec.side === -1 ? -1 : 1, x: p[0], y: p[1], z: p[2],
                     kind: typeof spec.kind === "string" ? spec.kind : defKind, custom: true };
       if (tag) rec[tag] = true;
+      if (spec.entry) rec.entry = true;   // the pit ENTRANCE lamps (SceneryPits), told apart from the canopy's
       if (spec.always) rec.always = true;
       if (finiteVec(spec.aim, 3, false)) rec.aim = [spec.aim[0], spec.aim[1], spec.aim[2]];
       if (finiteVec(spec.aimAt, 3, false)) rec.aimAt = [spec.aimAt[0], spec.aimAt[1], spec.aimAt[2]];

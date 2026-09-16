@@ -517,9 +517,9 @@ test("the armed cue names the compound the crew will fit", () => {
   const c = car(0);
   c.tyreWear = 0.9; c.s = zone.sIn + 20; c.pitArmed = true;
   c.pitNext = { code: "S" };
-  assert.equal(pits.cue(c).text, "STAY IN LANE · BOX — S");
+  assert.equal(pits.cue(c).text, "STAY IN LANE · BOX BOX — S");
   c.pitNext = null;
-  assert.match(pits.cue(c).text, /^STAY IN LANE · BOX — [A-Z]+$/, "with no choice made, the crew's own pick is named");
+  assert.match(pits.cue(c).text, /^STAY IN LANE · BOX BOX — [A-Z]+$/, "with no choice made, the crew's own pick is named");
   // …and a stop that IS called is shown, whatever the wear gate thinks.
   c.tyreWear = 0;
   assert.equal(pits.cue(c).phase, "armed");
@@ -1046,7 +1046,7 @@ test("planInfo reads the plan for the HUD: the stops, the next box lap, and the 
   c.lap = 11; i = pits.planInfo(c);
   assert.equal(i.state, "soon"); assert.match(i.text, /^BOX NEXT LAP/);
   c.lap = 12; i = pits.planInfo(c);
-  assert.equal(i.state, "now"); assert.match(i.text, /^BOX THIS LAP/);
+  assert.equal(i.state, "now"); assert.match(i.text, /^BOX BOX BOX/);
   c.pitArmed = true; i = pits.planInfo(c);
   assert.equal(i.state, "", "a called stop carries no urgency of its own");
   c.pitArmed = false; c.pitStops = 1; i = pits.planInfo(c);

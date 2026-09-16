@@ -98,6 +98,23 @@ const PitSigns = (function () {
         ctx.restore();
       }
     }
+    // The ENTRANCE LAMPS' aspects (TrackPit.SIGN.signals): GREEN and RED, each
+    // an opaque disc on a dark square — the GREEN one is the decal SceneryPits
+    // lays over the lamps' painted RED face, drawn only while this car is
+    // called in.
+    if (S.signals) {
+      const sp = S.signalPx / div, cols = [[0.10, 0.95, 0.30], [1.0, 0.12, 0.08]];
+      for (let i = 0; i < S.signals; i++) {
+        const x = (S.signalPx * 1.25 * i) / div, y = S.signalY / div;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, sp, sp); ctx.clip();
+        ctx.fillStyle = "rgb(12,12,16)"; ctx.fillRect(x, y, sp, sp);
+        ctx.fillStyle = css(cols[i] || cols[0]);
+        if (typeof ctx.arc === "function") { ctx.beginPath(); ctx.arc(x + sp / 2, y + sp / 2, sp * 0.42, 0, Math.PI * 2); ctx.fill(); }
+        else ctx.fillRect(x + sp * 0.1, y + sp * 0.1, sp * 0.8, sp * 0.8);
+        ctx.restore();
+      }
+    }
     return cv;
   }
 
@@ -134,9 +151,14 @@ const PitSigns = (function () {
       const canvas = paintAtlas(track.pit.row.boxes, { mobile: !!G.mobileTier, side: track.pit.side, limitKph: track.pit.limitKph });
       track.meshes.pitSignTex = G.createTexture(canvas);
       track.meshes.pitSigns = G.createTexMesh({ pos: q.pos, nrm: q.nrm, uv: q.uv, idx: q.idx });
+      // The entrance lamps' RED aspects: a second mesh on the same texture,
+      // drawn only under a red flag (draw()).
+      const r = track.pitSignal;
+      track.meshes.pitSignal = r && r.idx && r.idx.length
+        ? G.createTexMesh({ pos: r.pos, nrm: r.nrm, uv: r.uv, idx: r.idx }) : null;
       return true;
     } catch (e) {
-      track.meshes.pitSigns = track.meshes.pitSignTex = null;
+      track.meshes.pitSigns = track.meshes.pitSignTex = track.meshes.pitSignal = null;
       Log.warn("track", `${track.def && track.def.id}: pit signs skipped: ${e && e.message}`);
       return false;
     }
@@ -146,8 +168,9 @@ const PitSigns = (function () {
     const m = track && track.meshes;
     if (!m) return;
     if (m.pitSigns && gfx.freeMesh) gfx.freeMesh(m.pitSigns);
+    if (m.pitSignal && gfx.freeMesh) gfx.freeMesh(m.pitSignal);
     if (m.pitSignTex && gfx.freeTexture) gfx.freeTexture(m.pitSignTex);
-    m.pitSigns = m.pitSignTex = null;
+    m.pitSigns = m.pitSignTex = m.pitSignal = null;
   }
 
   /** One decal draw, after the sky (opaque → sky → decal: the decal shader
@@ -155,7 +178,7 @@ const PitSigns = (function () {
    *  from the row's centre: the decal shader has no fog, and a sign that far
    *  off would float unfogged on a misty dusk. `glow` reads as a lit fascia
    *  at night (the garage's door sign draws at 0.62). */
-  function draw(gfx, track, model, eye, night, hidden) {
+  function draw(gfx, track, model, eye, night, hidden, called) {
     const m = track && track.meshes, q = track && track.pitSigns;
     _calls++;
     if (hidden || !m || !m.pitSigns || !m.pitSignTex || !q || typeof gfx.drawDecal !== "function") return false;
@@ -169,6 +192,8 @@ const PitSigns = (function () {
     }
     _opts.glow = night ? 0.5 : 0;
     gfx.drawDecal(m.pitSigns, model, m.pitSignTex, _opts);
+    // YOU ARE CALLED IN: the entrance lamps' GREEN aspects over their red.
+    if (called && m.pitSignal) gfx.drawDecal(m.pitSignal, model, m.pitSignTex, _opts);
     _drawn++;
     return true;
   }

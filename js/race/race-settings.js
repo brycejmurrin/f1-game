@@ -29,7 +29,7 @@ const RaceSettings = (function () {
       getRaceTimeOfDay, setRaceTimeOfDay, getRaceChangeable, setRaceChangeable,
       setWxArcPlan, getDifficulty, setDifficulty,
       getRaceGrid, setRaceGrid, getRaceReliability, setRaceReliability,
-      getRaceTyreWear, setRaceTyreWear, getPits,
+      getRaceTyreWear, setRaceTyreWear, getDuel, setDuel, getPits,
       getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace, raceIntro,
       enableTilt, getSteerMode, getNetLobby, buildSelect, els, openGarage,
     } = hooks;
@@ -59,6 +59,12 @@ const RaceSettings = (function () {
       $("rs-diff").hidden = tt;
       SettingRow.paint("rs-diff", getDifficulty(), RS_DIFF);
       const champ = isChampionship();
+      // DUEL is a one-off practice format: a 2-car race against the field's
+      // quickest driver with his stats lifted. Hidden in a Time Trial (which
+      // has no field at all) and in a championship, where the classification
+      // feeds points and standings — a 2-car GP would score a season.
+      $("rs-duel").hidden = tt || champ;
+      SettingRow.paint("rs-duel", getDuel() ? "on" : "off", RS_ONOFF);
       $("rs-quali").hidden = tt;
       const qForced = champ ? SeasonCal.quali() : null;
       const rules = qForced ? [["quali", "QUALIFYING"]]
@@ -131,6 +137,7 @@ const RaceSettings = (function () {
       wire("rs-reliab", getRaceReliability, (v) => { setRaceReliability(v); store.set("reliability", v); });
       wire("rs-tyres", getRaceTyreWear, (v) => setRaceTyreWear(v));
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
+      wire("rs-duel", () => (getDuel() ? "on" : "off"), (v) => setDuel(v === "on"));
       wire("rs-plan", () => { const p = getPits && getPits(); const v = p ? p.pinnedStops() : null; return v == null ? "auto" : String(v); },
            (v) => { const p = getPits && getPits(); if (p) p.setPinnedStops(v === "auto" ? null : +v); });
     }

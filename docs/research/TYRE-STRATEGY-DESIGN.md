@@ -634,7 +634,7 @@ go off, and a player who wants to plan should be able to.**
   coordinates (`index.html` carries the note explaining why); `shellNodes` is
   ratcheted at 1359 (slack 25), so this fits.
 - **Race engineer** via the existing `announce()` priority banner: "TYRES AT 20 %",
-  "BOX THIS LAP", "SAFETY CAR — BOX NOW", "RAIN IN 2 LAPS — INTERS READY". §2.11
+  "BOX BOX BOX", "SAFETY CAR — BOX NOW", "RAIN IN 2 LAPS — INTERS READY". §2.11
   says this is the most-requested missing thing in shipped F1 games, and Apex
   already has the banner.
 - ~~**PIT tap** beside BOOST/OT/AERO, arming like them.~~ **SUPERSEDED: there is

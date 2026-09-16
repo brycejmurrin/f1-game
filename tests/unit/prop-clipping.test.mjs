@@ -108,6 +108,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // stale-entry test is right that a cap above the measured count silently
 // permits regressions up to it.
 //
+// jerez 27 -> 29, mexico 88 -> 89, mont_tremblant 30 -> 32, spa 9 -> 10
+// (2026-09-16, evening): `TrackPit.window` now leaves MOUTH_RUN (20 m) of
+// straight between the last corner and the entry road's mouth, so on the 21
+// circuits whose mouth sat inside a corner the window opens later and is
+// shorter — these four among them — and the circuits' own masses stand again
+// where the complex used to supersede them, carrying the overlaps they always
+// had. The same trade, and the same class, as the coplanar note for the 2026-09
+// window shortening (tests/unit/coplanar-faces.test.mjs). Established, not
+// assumed: `clip-audit spa --why` names grandstands, motorhomes, backdrop cones
+// and nature — not one pits.js call site — and the counts read the same before
+// and after the entrance lamps moved in that commit, so the lamps are not in
+// them.
+//
 // PROCESS, and this is the second time: 1daf4a3 shipped the scenery change
 // without touching either baseline, so test:sweeps was red on the deploy branch
 // itself — exactly the failure the silverstone note above already records ("a

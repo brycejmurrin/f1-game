@@ -184,6 +184,32 @@ const SceneryPits = (function () {
       signs.crests.push({ cell: i, k });
     };
 
+    // The entrance lamps' GREEN aspect: a quad a centimetre proud of the RED
+    // face, on the atlas's green signal cell, in its OWN buffer
+    // (track.pitSignal) so the painter can draw it only while the lane is open
+    // TO YOU — the props mesh is built once, your pit stop is not. Red is the
+    // steady state, and the pair goes green on the lap you are called in.
+    const signal = { pos: [], nrm: [], uv: [], idx: [], quads: [] };
+    let entryLamps = 0;
+    const signalAt = (k, face, bs) => {
+      if (!S || !S.signals) return;
+      const w = S.signalW / 2, right = bs[0], up = bs[1], t = bs[2];
+      const c = [face[0] - t[0] * 0.07, face[1] - t[1] * 0.07, face[2] - t[2] * 0.07];   // the aspect is 0.12 deep: its −t face + 1 cm
+      const P = (sx, sy) => [c[0] + right[0] * sx * w + up[0] * sy * w, c[1] + right[1] * sx * w + up[1] * sy * w, c[2] + right[2] * sx * w + up[2] * sy * w];
+      const corners = [P(-1, -1), P(1, -1), P(1, 1), P(-1, 1)];
+      const cx = 0, cy = S.signalY;                                          // cell 0: GREEN (cell 1, RED, is the painted face)
+      const uL = cx / S.w, uR = (cx + S.signalPx) / S.w, vT = 1 - cy / S.h, vB = 1 - (cy + S.signalPx) / S.h;
+      const uvs = [[uL, vB], [uR, vB], [uR, vT], [uL, vT]];
+      const base = signal.pos.length / 3;
+      for (let q = 0; q < 4; q++) {
+        signal.pos.push(corners[q][0], corners[q][1], corners[q][2]);
+        signal.nrm.push(-t[0], -t[1], -t[2]);
+        signal.uv.push(uvs[q][0], uvs[q][1]);
+      }
+      signal.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      signal.quads.push({ k, cell: 0 });
+    };
+
     let wallBuilt = false;
     if (p.hasWall) {
       const b = p.bands;
@@ -345,6 +371,78 @@ const SceneryPits = (function () {
           }
         }
         if (p.v[kIn] >= 0.98) boardAt(kIn, sd * (hw[kIn] + v1 - 0.6), S.boardY, S.cells + 1);
+      }
+      // ── The ENTRANCE LAMPS (asked: two coloured lamps flanking the pit
+      // entrance, one on each WALL CORNER either side of it, with the middle
+      // of the lane between them). That pair of corners exists at exactly one
+      // arc, and it is the ENTRY LINE, not the mouth: measured down Abu
+      // Dhabi's entry road (scratch/pit-mouth-walls.cjs), the peel is a wedge
+      // off the road edge with tarmac on its track side and only the OUTER
+      // wall beside it, so a gate cannot stand at the mouth. At `sIn` the
+      // platform wall's NOSE stands at 10.0 m and the outer wall at 22.0, the
+      // fast lane's middle between them at 13.8 — a doorway the car drives
+      // through, where the lane legally begins and the limit starts (the
+      // "PIT LANE <limit>" board is already here, on the same platform).
+      //
+      // Each corner carries the exit signal's head on a short post off the
+      // wall top, with a RED aspect toward the oncoming driver and a smaller
+      // one on its lane face; a light record AT the aspect throwing at the
+      // lane between them (docs/research/PIT-ENTRY-LAMPS-PLAN-2026-09.md).
+      // RED is the steady state: it MARKS the entrance rather than permitting
+      // it. The GREEN aspect is a decal quad on the same atlas
+      // (track.pitSignal) that the signs painter lays over the red only while
+      // this car is called in — the props mesh is build-time, the stop is not.
+      // The gate stands on the WALL'S OWN first node, not on `kOf(sIn)`: the
+      // platform wall is swept from the first node at or past `sIn` whose
+      // `v` has reached 0.98, and node rounding can leave `kOf(sIn)` one step
+      // short of it (Monaco lost both lamps to exactly that).
+      let kGate = -1;
+      if (!p.painted && p.hasWall) {
+        for (let d = 0; d <= 24 && kGate < 0; d += 4) {
+          const kk = kOf(p.sIn + d);
+          if (p.v[kk] >= 0.98) kGate = kk;
+        }
+      }
+      if (kGate >= 0) {
+        const laneCentreAt = (kk) => {
+          const fIn = hw[kk] + o.fastIn * p.v[kk], fOut = hw[kk] + o.fastOut * p.w[kk];
+          return sd * (fIn + Math.max(fIn, fOut)) / 2;
+        };
+        // The aim is the lane's own middle a car's length in — both pools land
+        // BETWEEN the posts, on the lane, so neither reaches the racing line.
+        const kAim = kOf(p.sIn + 10);
+        const aim = at(kAim, laneCentreAt(kAim), 0);
+        // Each post stands ON ITS OWN FLOOR beside its wall, never on the
+        // wall's top: a box whose underside is 1.4 m up with only swept wall
+        // beneath it is a FLOATING CLUSTER, and float-audit named all four
+        // prims of the far one on five circuits when they were placed that way
+        // (estoril, imola, interlagos, istanbul, portimao). The fix is to give
+        // a prop ground, not to raise a baseline. The track-side post stands on
+        // the PLATFORM, 0.35 m up — the floor the exit signal's own post uses —
+        // just behind its wall; the far post on the lane floor just inside the
+        // outer wall. Both clear their wall's 0.30 m thickness.
+        const HEAD_Y = 2.55;                       // above the lane floor, the same on both
+        const posts = [{ lat: v0 + 0.55, foot: 0.35, toLane: 1 },        // the platform wall's nose, track side
+                       { lat: o.workOut - 0.45, foot: 0, toLane: -1 }];  // the outer wall opposite
+        for (const q of posts) {
+          const c = at(kGate, sd * (hw[kGate] + q.lat), q.foot), bs = basisAt(kGate);
+          const rise = HEAD_Y - q.foot;
+          rawBox(out, [c[0], c[1] + rise / 2, c[2]], [0.14, rise, 0.14], POST, bs);
+          rawBox(out, [c[0], c[1] + rise, c[2]], [0.5, 0.9, 0.34], DARK, bs);
+          const red = night ? [1.45, 0.22, 0.16] : [0.95, 0.14, 0.10];
+          const face = [c[0] - bs[2][0] * 0.2, c[1] + rise - bs[2][1] * 0.2, c[2] - bs[2][2] * 0.2];
+          rawBox(out, face, [S ? S.signalW : 0.34, S ? S.signalW : 0.34, 0.12], red, bs);
+          const lf = [c[0] + bs[0][0] * q.toLane * 0.28, c[1] + rise, c[2] + bs[0][2] * q.toLane * 0.28];
+          rawBox(out, lf, [0.12, 0.22, 0.22], red, bs);
+          // The radius is the throw it needs and no more: the pool window is 0
+          // past r, so the fixture-anchor rule wants r ≥ |lens→aim| (plus a
+          // metre of slack against the node rounding), and every metre beyond
+          // that is pool spilling where the lamp is not pointing.
+          const radius = Math.ceil(Math.hypot(face[0] - aim[0], face[1] - aim[1], face[2] - aim[2])) + 1;
+          if (typeof ctx.registerLamp === "function" &&
+              ctx.registerLamp({ pos: face, k: kGate, side: sd, kind: "signal", radius, aimAt: aim, entry: true })) entryLamps++;
+          signalAt(kGate, face, bs);
+        }
       }
       if (p.v[kOut] >= 0.98) {
         const c = at(kOut, sd * (hw[kOut] + v1 - 0.5), 0.35);
@@ -540,7 +638,8 @@ const SceneryPits = (function () {
     for (const q of panelsWanted) emitPanel(q[0], q[1], q[2]);
     for (const q of crestsWanted) emitCrest(q[0], q[1], q[2], q[3]);
     if (signs.cells.length || signs.boards.length) track.pitSigns = signs;
-    return { bays, wall: wallBuilt, lamps, signs: signs.cells.length, boards: signs.boards.length,
+    if (signal.quads.length) track.pitSignal = signal;
+    return { bays, wall: wallBuilt, lamps, entryLamps, signs: signs.cells.length, boards: signs.boards.length,
              panels: signs.panels.length, crests: signs.crests.length };
   }
 

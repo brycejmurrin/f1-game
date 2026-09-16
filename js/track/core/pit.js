@@ -54,7 +54,14 @@ const TrackPit = (function () {
                  // road (SceneryPits walks each up to 24 m further back past
                  // whatever the circuit put on that verge), the last on the
                  // platform at the entry line.
-                 boards: 2, boardW: 2.4, boardH: 0.33, boardY: 1.5, boardM: [45, 110] };
+                 boards: 2, boardW: 2.4, boardH: 0.33, boardY: 1.5, boardM: [45, 110],
+                 // The ENTRANCE LAMPS' aspects (asked: two coloured lamps flanking
+                 // the pit entrance): two 64 px cells under the crests — GREEN
+                 // (the lane is open) and RED (a red flag). The green is also
+                 // painted on the head in the props mesh; the RED cell is a decal
+                 // the signs painter draws over it only under a red flag
+                 // (track.pitSignal, js/garage/pit-signs.js).
+                 signals: 2, signalPx: 64, signalY: 848, signalW: 0.34 };
   // The EXIT WALL (SceneryPits, game.js's clamp): the pit wall slides from the
   // platform's line to the road edge as the wall fades over the exit road, and
   // runs along the edge while the road keeps this share of its width — a
@@ -86,6 +93,7 @@ const TrackPit = (function () {
   const ENTRY_MAX = 260, ENTRY_MIN = 150, EXIT_M = 110, EXIT_MIN = 40;
   const PIT_K = 0.0035, STEP = 8;         // "not actively cornering" — see docs/PHYSICS.md
   const ENTRY_ROAD = 70, EXIT_ROAD = 90, ROAD_MIN = 30, WALL_GROW = 30;
+  const MOUTH_RUN = 20;   // straight the window leaves between the last corner and the entry road's mouth
   // The EXIT road's own floor: its blend is driven at the limiter with the
   // exit wall beside it to EXIT_WALL_W of its width, and what is left after
   // the wall must hold a car's move back inside the road edge — 25 m of it
@@ -150,8 +158,15 @@ const TrackPit = (function () {
     const L = track.total;
     if (!(L > 0)) return { entryM: ENTRY_MAX, exitM: EXIT_M };
     const cap = L / 3;
-    const back = straightRun(track, curvature, 0, -1, ENTRY_MAX);
-    const entryM = Math.min(Math.max(back, ENTRY_MIN), ENTRY_MAX, cap * 0.7);
+    // THE ENTRY ROAD MUST FIT ON THE STRAIGHT TOO. The window opened as far
+    // back as the straight ran, and the 70 m road before it then had no
+    // straight left: on 21 of 52 circuits the mouth sat INSIDE the last
+    // corner, the road at its 30 m floor (Abu Dhabi's on a 23 m radius, Sochi's
+    // on 20 m; surveyed 2026-09-16, docs/research/PIT-NEXT-STEPS-2026-09.md §4).
+    // Leave the road and MOUTH_RUN of run-out after the corner on the straight
+    // wherever the straight allows; the floor still stands where it does not.
+    const back = straightRun(track, curvature, 0, -1, ENTRY_MAX + ENTRY_ROAD + MOUTH_RUN);
+    const entryM = Math.min(Math.max(back - ENTRY_ROAD - MOUTH_RUN, ENTRY_MIN), ENTRY_MAX, cap * 0.7);
     // The exit line closes before the first corner, leaving the exit road its
     // minimum run to blend back on the straight.
     const fwd = straightRun(track, curvature, 0, 1, EXIT_M + ROAD_MIN);
@@ -323,7 +338,7 @@ const TrackPit = (function () {
     return -1;
   }
 
-  return { BANDS, STREET, NARROW, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, EXIT_ROAD_MIN, WALL_GROW,
+  return { BANDS, STREET, NARROW, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, EXIT_ROAD_MIN, WALL_GROW, MOUTH_RUN,
            ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, LIMIT_KPH, LIMIT_KPH_STREET, GRID_POLE_M, GRID_CLEAR,
            ROW_END, ROW_TAIL,
            resolve, window, row, build, at, openBoundary, rowOf };

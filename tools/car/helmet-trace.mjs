@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // helmet-trace — read a driver's real paint off a reference photograph.
-// @doc Projects the js/car/helmets.js shell into a side-on reference photo and samples the real colour at every (t, az) of the mesh, writing a colour map plus a side-by-side verification sheet.
+// @doc Projects the helmet shell into a side-on photo, samples the real colour per (t, az), writes a colour map.
 // @skill playwright-probe
 //
 //   node tools/car/helmet-trace.mjs --sheet=scratch/refs/f1-2025-helmets.webp

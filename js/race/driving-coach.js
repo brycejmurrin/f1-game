@@ -39,6 +39,14 @@ const DrivingCoach = (function () {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;
     let trace = [], checkpoint = null, practice = false, drillMode = "free";
+    // REWIND: a rolling window of the same capture a checkpoint takes.
+    // 2 Hz, not 60: a rewind lands you on a corner approach, and the half
+    // second of granularity that buys is invisible against the 10 s jump —
+    // while 60 Hz would deep-clone three objects per car per frame on the
+    // physics path. 2 Hz x 12 s is 24 entries, so the buffer stays a plain
+    // array the ghost's own recorder shape (js/car/ghost.js) would recognise.
+    const REWIND_HZ = 2, REWIND_S = 10, REWIND_KEEP = (REWIND_S + 2) * REWIND_HZ;
+    let rewindBuf = [], rewindAcc = 0;
     let clock = 0, candidate = "", held = 0, latest = null, warnSeen = null, edge = null;
     const lastTip = new Map(), tipCounts = new Map();
     let log = [];   // one row per tip: which tip, which turn, when — the session's map
@@ -191,6 +199,16 @@ const DrivingCoach = (function () {
       // Every frame, not every sample: a boundary crossing is an edge, and at
       // racing speed a 0.1 s sample step steps over 7 m of road.
       if (G.state === "race" && G.player) trackLap(G.player); else prevS = null;
+      // Sample for rewind only while a rewind is actually possible. A scored
+      // session pays nothing for this feature — no capture, no clone, no array.
+      if (canPractice()) {
+        rewindAcc += step;
+        if (rewindAcc >= 1 / REWIND_HZ) {
+          rewindAcc = 0;
+          rewindBuf.push({ t: clock, snap: captureCar(G.player) });
+          if (rewindBuf.length > REWIND_KEEP) rewindBuf.shift();
+        }
+      } else if (rewindBuf.length) { rewindBuf = []; rewindAcc = 0; }
       if (elapsed >= 0.1) {
         elapsed %= 0.1;
         insights.update(G.player);
@@ -220,41 +238,96 @@ const DrivingCoach = (function () {
       G.announce(tip.text, 2.5, "coach"); quiet = 8; clearCandidate(); edge = null;
     }
     const goal = () => RaceInsights.DRILLS[drillMode].toUpperCase();
-    function canPractice() { return !!(G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && G.player && G.state === "race"); }
+    // G.practice, NOT G.timeTrial: a checkpoint is safe in any session the
+    // player has declared UNSCORED, and a Time Trial is simply always one
+    // (G.practice derives it). The other two clauses are NOT session-type
+    // checks and do not move with it — a daily challenge is scored against a
+    // shared standard, and a netplay car's laps are already mirrored to peers
+    // by netPlay.reportLap(), so neither can be made unscored from this side.
+    function canPractice() { return !!(G.practice && !G.daily.isActive() && !G.netPlay.active() && G.player && G.state === "race"); }
+    // ---- capture / restore: ONE pair, three callers -------------------------
+    // mark() (a checkpoint the player places), rewind() (the rolling buffer)
+    // and retry() all move the SAME state, so they share these rather than
+    // each growing their own field list that drifts out of step.
+    const PRIM = (v) => v == null || ["number", "boolean", "string"].includes(typeof v);
+    const DEEP = ["tyre", "tyreLog", "pitNext"];
+    // Single-car capture, not a whole-world one. Never a career, a remote car,
+    // or a queued race settlement. The generic sweep is deliberate: the car
+    // carries ~60 live primitives and an explicit list would rot silently —
+    // see EPISODE_TRANSIENTS in js/agent/apex.js, which had to be built by
+    // measurement rather than inspection for exactly that reason.
+    function captureCar(c) {
+      const fields = {};
+      for (const k of Object.keys(c)) if (PRIM(c[k])) fields[k] = c[k];
+      const objects = {};
+      for (const k of DEEP) objects[k] = c[k] == null ? c[k] : JSON.parse(JSON.stringify(c[k]));
+      return { fields, objects };
+    }
+    // PENALTIES AND CUTS DO NOT REWIND. They are ordinary primitives on the car,
+    // so the generic sweep captures them and a naive restore hands them back —
+    // which in a scored session is a way to undo a time penalty or reset the
+    // track-limits ladder by pressing RECOVER. Practice sessions are unscored,
+    // so it would not corrupt a result, but a practice tool that quietly erases
+    // the consequence of running wide is teaching the wrong lap. Carried
+    // forward across every restore instead.
+    const KEEP_FORWARD = ["penalty", "cuts", "cutWarn", "hits", "wallHits", "hitSev"];
+    function restoreCar(c, snap) {
+      IncidentSim.reset(); DebrisWorld.reset();
+      const keep = {};
+      for (const k of KEEP_FORWARD) if (Object.hasOwn(c, k)) keep[k] = c[k];
+      for (const k of Object.keys(c)) if (PRIM(c[k]) && !Object.hasOwn(snap.fields, k)) delete c[k];
+      Object.assign(c, snap.fields, keep);
+      for (const [k, v] of Object.entries(snap.objects)) c[k] = v == null ? v : JSON.parse(JSON.stringify(v));
+      // The lap is dead either way, and the interpolator must not tween the car
+      // across the gap it just jumped — it would draw a streak from where the
+      // car was to where it now is.
+      c.incidentInvalidLap = true; c._prevS = c.s;
+      c.rPrevPx = c.px; c.rPrevPz = c.pz;
+      c.rPrevHead = c.head; c.rPrevS = c.s; c.rPrevX = c.x;
+      G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
+    }
     function mark() {
       if (!canPractice()) return false;
       if (!insights.startDrill(drillMode)) return false;
-      // Single-car practice checkpoint, not a whole-world rewind. Never restore
-      // a career, a remote car, or a queued race settlement.
-      const c = G.player, fields = {};
-      for (const k of Object.keys(c)) if (c[k] == null || ["number", "boolean", "string"].includes(typeof c[k])) fields[k] = c[k];
-      const objects = {};
-      for (const k of ["tyre", "tyreLog", "pitNext"]) objects[k] = c[k] == null ? c[k] : JSON.parse(JSON.stringify(c[k]));
-      checkpoint = { fields, objects, mode: drillMode };
+      checkpoint = Object.assign(captureCar(G.player), { mode: drillMode });
       practice = true; G.records.invalidate();
       G.announce("PRACTICE: " + goal() + " — LAPS NOT SAVED", 3, "practice");
       return true;
     }
     function retry() {
       if (!checkpoint || !canPractice()) return false;
-      IncidentSim.reset(); DebrisWorld.reset();
-      for (const k of Object.keys(G.player)) {
-        const v = G.player[k];
-        if ((v == null || ["number", "boolean", "string"].includes(typeof v)) && !Object.hasOwn(checkpoint.fields, k)) delete G.player[k];
-      }
-      Object.assign(G.player, checkpoint.fields);
-      for (const [k, v] of Object.entries(checkpoint.objects)) G.player[k] = v == null ? v : JSON.parse(JSON.stringify(v));
-      G.player.incidentInvalidLap = true; G.player._prevS = G.player.s;
-      G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;
-      G.player.rPrevHead = G.player.head; G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;
-      G.records.invalidate(); trace = []; quiet = 2; clearCandidate();
+      restoreCar(G.player, checkpoint);
       drillMode = checkpoint.mode;
       insights.startDrill(drillMode);
       G.announce("TRY AGAIN: " + goal(), 2, "practice");
       return true;
     }
+    // REWIND ~10 s. Takes the OLDEST sample still inside the window rather than
+    // hunting the one nearest 10 s: the buffer is bounded at REWIND_KEEP, so
+    // the oldest entry is between 10 and 12 s old by construction, and a
+    // player who rewinds twice in a row should keep travelling backwards
+    // instead of landing on the same spot.
+    //
+    // WHAT DOES NOT REWIND, said plainly because a player will notice: the
+    // other cars. This restores ONE car, so in a duel or a race the rival
+    // keeps the ground it covered and you rejoin behind where you were
+    // relative to it. The alternative is a whole-world rewind, which the
+    // Rapier debris side-world (js/physics/debris-world.js) cannot do — it has
+    // reset() and prime(), no snapshot — so this stays honest about its scope
+    // and the session is unscored anyway.
+    function rewind() {
+      if (!canPractice() || !rewindBuf.length) return false;
+      const e = rewindBuf.shift();
+      rewindBuf = [];                 // everything after it is a future that no longer happened
+      rewindAcc = 0;
+      practice = true;                // rewinding IS practising, whether or not a checkpoint was set
+      restoreCar(G.player, e.snap);
+      G.announce("REWIND " + Math.round(clock - e.t) + "s", 2, "practice");
+      return true;
+    }
     function reset() {
       checkpoint = null; practice = false; trace = []; elapsed = 0; quiet = 0; warnSeen = null; edge = null;
+      rewindBuf = []; rewindAcc = 0;
       clock = 0; latest = null; log = []; clearCandidate(); lastTip.clear(); tipCounts.clear(); insights.reset();
       prevS = null; lastMark = null; segs = []; lapReport = null;
     }
@@ -299,13 +372,22 @@ const DrivingCoach = (function () {
       const markBtn = $("pm-practice-set"), retryBtn = $("pm-practice-retry");
       if (markBtn) markBtn.disabled = !canPractice();
       if (retryBtn) retryBtn.disabled = !canPractice() || !checkpoint;
+      const rewindBtn = $("pm-practice-rewind");
+      if (rewindBtn) rewindBtn.disabled = !canPractice() || !rewindBuf.length;
+      // ARM is the only control that shows OUTSIDE practice, and it hides again
+      // the moment the session is armed — it is one-way, so a live button that
+      // did nothing would be a lie.
+      const armBtn = $("pm-practice-arm");
+      if (armBtn) armBtn.hidden = !canArm();
       SettingRow.paint($("pm-drill"), drillMode);
       SettingRow.disable($("pm-drill"), !canPractice());
       const practiceState = $("pm-practice-state");
       if (practiceState) practiceState.textContent = !canPractice()
-        ? "Checkpoints are available in solo Time Trial. Start one from the main menu; races, daily challenges and multiplayer do not support checkpoints."
-        : practice ? "Practice active: laps and ghosts will not be saved. TRY AGAIN, or the RECOVER key while driving, restores your saved car state and practice goal. Restart the session to set records again."
-          : "Saving a starting point makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again.";
+        ? (canArm()
+          ? "This session is scored, so checkpoints and rewind are off. ARM PRACTICE makes it unscored and turns them on — it cannot be undone for this session."
+          : "Checkpoints are available in a Time Trial, or in a race or qualifying session you have armed for practice. Daily challenges and multiplayer are scored against others, so they cannot be armed.")
+        : practice ? "Practice active: laps and ghosts will not be saved. TRY AGAIN, or the RECOVER key while driving, restores your saved car state and practice goal. REWIND 10s steps back without a checkpoint — your car only, not the others. Restart the session to set records again."
+          : "Saving a starting point, or rewinding, makes this session unscored: laps and ghosts will not be saved. Restart the session to set records again.";
       const drillInfo = $("pm-drill-status"), summary = insights.summary();
       if (drillInfo) {
         const guide = { free: "Repeat any section at your own pace.", sector: "Finish the next sector without contact or leaving the track.",
@@ -379,6 +461,7 @@ const DrivingCoach = (function () {
     const bind = (id, fn) => { const b = $(id); if (b) b.onclick = () => { fn(); paint(); }; };
     bind("pm-driving-trace", downloadTrace);
     bind("pm-practice-set", mark); bind("pm-practice-retry", retry);
+    bind("pm-practice-rewind", rewind); bind("pm-practice-arm", armPractice);
     SettingRow.wire($("pm-coach"), { values: [["off", "OFF"], ["on", "ON"]],
       read: () => enabled ? "on" : "off", write: v => { if ((v === "on") !== !!enabled) toggle(); } });
     SettingRow.wire($("pm-drill"), { values: GOALS.map(g => g.slice()),
@@ -391,7 +474,24 @@ const DrivingCoach = (function () {
       observer.observe(menu, { attributes: true, attributeFilter: ["hidden"] });
       observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
     }
-    return { update, status, feedback, advice, mark, retry, reset, toggle, paint, practiceActive: () => practice,
+    // ARM PRACTICE in a session that is not a Time Trial. Declaring the session
+    // unscored is the player's call and it is ONE WAY: there is no disarm,
+    // because a session that has already been rewound cannot become scored
+    // again by flipping a flag back. Refused outright where "unscored" is not
+    // ours to declare — a daily challenge is scored against a shared standard,
+    // and netplay laps are already mirrored to peers.
+    function armPractice() {
+      if (G.timeTrial || G.daily.isActive() || G.netPlay.active()) return false;
+      if (G.state !== "race" || !G.player) return false;
+      if (G.practice) return true;
+      G.practice = true; G.records.invalidate();
+      G.announce("PRACTICE ARMED — THIS SESSION IS NOT SCORED", 3, "practice");
+      return true;
+    }
+    function canArm() { return !!(!G.timeTrial && !G.daily.isActive() && !G.netPlay.active() && G.state === "race" && G.player && !G.practice); }
+    return { update, status, feedback, advice, mark, retry, rewind, reset, toggle, paint, armPractice, canArm,
+      canPractice, rewindReady: () => canPractice() && rewindBuf.length > 0,
+      practiceActive: () => practice,
       trace: () => trace.map(row => ({ ...row })), insights };
   }
   return { create };
