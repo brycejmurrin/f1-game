@@ -156,10 +156,23 @@ window.PhysicsConsts = {
   // table it produced: docs/notes/AI-FIELD-RESEARCH.md. DIFF is unchanged.
   // game.js's BAND_CEIL caps a rubber-banded AI at this table's top scale:
   // easy's 0.851 x 1.18 = 1.004 used to beat hard's own 0.980.
+  // `corner` is the SECOND dimension of difficulty, added 2026-09-15 with the
+  // brake-look fix. Until then difficulty was one number: every level braked,
+  // defended, deployed and erred identically and differed only in top speed,
+  // which is the one lever players can catch a same-spec car using. `corner`
+  // scales the AI's corner-speed target, so an easier field genuinely drives
+  // further from the limit instead of just being slower down the straight.
+  // At or below 1.0 by policy: the AI never corners faster than its own grip
+  // model says it can.
   DIFF: {
-    easy:   { ai: 0.851, band: 0.18 },
-    normal: { ai: 0.911, band: 0.08 },
-    hard:   { ai: 0.980, band: 0.02 },  // band was 0.03 — smarter OT/ERS/brake cuts rubber-band need
+    easy:   { ai: 0.851, band: 0.18, corner: 0.93 },
+    normal: { ai: 0.911, band: 0.08, corner: 0.97 },
+    // 1.030 is a ceiling, not a taste: the fastest team's TIER_V is 0.9695 and
+    // the best driver's skill clamps at 1.0, so 0.9695 x 1.030 = 0.9986 keeps
+    // even the quickest AI just under the player's own top-speed scale. A
+    // same-spec car out-dragging the player down a straight is the one cheat
+    // players reliably catch, so the straight stays theirs.
+    hard:   { ai: 1.030, band: 0.02, corner: 1.00 },  // band was 0.03 — smarter OT/ERS/brake cuts rubber-band need
   },
 };
 // The top of that ladder: the fastest pace scale ANY level reaches with its
@@ -168,5 +181,10 @@ window.PhysicsConsts = {
 // stays monotonic. Lives with DIFF because it is a property of DIFF.
 window.PhysicsConsts.BAND_CEIL = (() => {
   const top = Object.values(window.PhysicsConsts.DIFF).reduce((a, d) => (d.ai > a.ai ? d : a));
-  return top.ai * (1 + top.band);
+  // …and never above the player's own scale. The ladder's top used to sit at
+  // 0.9996 by arithmetic accident, so the clamp was invisible; once `ai` rose
+  // past 1.0 with the brake-look fix, the derived value would have licensed a
+  // rubber-banded easy car to out-run the player outright. The cap is the
+  // property that was always intended, now written down.
+  return Math.min(1, top.ai * (1 + top.band));
 })();

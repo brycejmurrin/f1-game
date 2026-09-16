@@ -236,6 +236,20 @@ function buildResults(order) {
     line("Driver wages", -st.wages);
     addRow("res-settle-row total", "BALANCE", `${st.money.toLocaleString()} cr`);
     addRow("res-settle-row rep", "Reputation", `${Math.round(st.rep)} / 100`);
+    // Craft pays reputation, never money, so it sits BELOW the balance line and
+    // outside the credit column — a percentage there would read as an unpaid fee.
+    // A bare percentage is a score with no explanation, which is the thing this
+    // sheet already got wrong once, so the round debrief follows it: the same
+    // events RaceInsights logged all race, condensed to the ones that cost craft,
+    // with the laps to go and look at. Nothing when the race was faultless.
+    if (typeof st.craft === "number") {
+      addRow("res-settle-row rep", "Race craft", `${Math.round(st.craft * 100)}%`);
+      const debrief = G.coach && G.coach.insights ? G.coach.insights.debrief() : [];
+      for (const d of debrief) {
+        addRow("res-settle-row craft", `${d.label} × ${d.count}`,
+          `lap ${d.laps.slice(0, 4).join(", ")}${d.laps.length > 4 ? "…" : ""}`);
+      }
+    }
     if (st.unsaved) {
       const unsaved = document.createElement("div");
       unsaved.id = "res-settle-unsaved";

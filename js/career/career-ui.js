@@ -663,7 +663,30 @@ function create(G) {
       const obj = Career.objective();
       left.appendChild(head("THIS ROUND"));
       const objCard = el("div", "cr-card cr-objective");
-      objCard.append(el("div", "cr-obj-line", Career.objectiveLabel(obj)));
+      // THE BRIEF IS A CHOICE. Three, drawn from the seed, one of them the kind
+      // that used to be dealt — so this is a decision (take the points brief in a
+      // bad car, gamble the finish brief when it is quick) rather than an
+      // instruction. Once quali or a sprint has run the pick is locked, because
+      // some of these briefs measure things the weekend has already decided; the
+      // card then shows the chosen line alone, as it always did.
+      const choices = Career.objectiveChoices(c.season.round);
+      const picked = Career.objectivePick(c.season.round);
+      if (Career.objectiveLocked() || choices.length < 2) {
+        objCard.append(el("div", "cr-obj-line", Career.objectiveLabel(obj)));
+      } else {
+        for (let i = 0; i < choices.length; i++) {
+          const b = el("button", `cr-obj-pick${i === picked ? " on" : ""}`,
+            Career.objectiveLabel(choices[i]));
+          b.type = "button";
+          b.setAttribute("aria-pressed", i === picked ? "true" : "false");
+          b.onclick = () => {
+            if (!Career.chooseObjective(i)) return;
+            if (G.soundOn) GameAudio.uiTick();
+            build();
+          };
+          objCard.appendChild(b);
+        }
+      }
       if (c.deal) objCard.append(row("Season goal", `P${c.deal.goal.value} in the championship`));
       objCard.append(row("If you hit it", `+${Career.OBJ_BONUS} cr · +${Career.OBJ_REP} REP`));
       left.appendChild(objCard);

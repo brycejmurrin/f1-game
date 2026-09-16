@@ -216,8 +216,33 @@ const RaceInsights = (function () {
       return { connected: !!(n.net && n.net.alive), rttMs: rtt, delayMs: delay,
         text: n.net && !n.net.alive ? "Connection lost — return to the lobby" : "Online" + (Number.isFinite(rtt) ? " · RTT " + Math.round(rtt) + "ms" : "") + (delay == null ? "" : " · buffer " + Math.round(delay) + "ms") };
     }
+    // THE ROUND DEBRIEF. `journal()` is the full event stream — up to 128 rows,
+    // useful to a tool and useless on a results sheet. This condenses it to the
+    // few kinds a driver can act on, each with a count and the laps it happened
+    // on, so the career's race-craft percentage is shown next to WHAT COST IT
+    // rather than as a bare number. Ordered by how much craft the kind is worth
+    // (js/career/career.js), not by when it happened: the biggest cause first.
+    // `pit`, `tyres` and `invalid` are deliberately absent — a stop is strategy,
+    // not craft, and an invalidated lap is already counted as whatever caused it.
+    const DEBRIEF = [["limits", "Track-limits warnings"], ["penalty", "Time penalties"],
+      ["contact", "Car contact"], ["surface", "Off the track"], ["retirement", "Retired"]];
+    function debrief() {
+      const out = [];
+      for (const [kind, label] of DEBRIEF) {
+        const rows = events.filter((e) => e.kind === kind);
+        if (!rows.length) continue;
+        // `c.lap` IS the lap number the driver saw: the HUD prints
+        // `Math.min(player.lap || 1, lapsTarget)` (js/ui/hud.js), so the only
+        // adjustment is the same floor of 1 for an event before the first
+        // crossing. De-duplicated, because three warnings on one lap is still
+        // one lap to go and look at.
+        const laps = [...new Set(rows.map((e) => Math.max(1, e.lap | 0)))];
+        out.push({ kind, label, count: rows.length, laps });
+      }
+      return out;
+    }
     function summary() { return { distance, drill: drill ? { mode: drill.mode, done: drill.done, clean: drill.clean, changes: drill.changes, reason: drill.reason, phase: drill.phase } : null, lastDrill: lastDrill ? { ...lastDrill } : null }; }
-    return { update, reset, event, startDrill, forecast, network, summary, mastery, journal: () => events.map(e=>({...e})),
+    return { update, reset, event, startDrill, forecast, network, summary, mastery, debrief, journal: () => events.map(e=>({...e})),
       attempts: mode => (attempts[mode] || []).map(a => ({ ...a })) };
   }
   return Object.freeze({ create, DRILLS });

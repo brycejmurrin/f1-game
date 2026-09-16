@@ -22,20 +22,30 @@ function build(id) {
   assert.ok(def, `no circuit ${id}`);
   return Tracks.build(def);
 }
-// The offset curve's curvature: κ/(1+κx) − x'' (first order), per node.
-function lineCurv(t) {
-  const n = t.n, ds = t.total / n, x = t.line, k = t.curv, out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const a = (i - 1 + n) % n, b = (i + 1) % n;
-    out[i] = k[i] / (1 + k[i] * x[i]) - (x[a] - 2 * x[i] + x[b]) / (ds * ds);
-  }
-  return out;
-}
+// The offset curve's curvature, exactly — the expression the bake minimises.
+const lineCurv = (t) => Tracks._vmContext.TrackLine.lineCurvature(t);
 const cornerTime = (k, n, ds) => {
   let s = 0;
   for (let i = 0; i < n; i++) s += ds / Math.min(VMAX, Math.sqrt(LAT / Math.max(Math.abs(k[i]), 1e-5)));
   return s;
 };
+// The same under a brake / accel budget — the DRIVING LINE display's own
+// forward/backward sweep (js/render/shared/driving-line.js), so a straighter
+// corner EXIT counts. cornerTime is grip-limited at every node and cannot see
+// one; on the street circuits it reads the relaxed line as a hair slower than
+// the centreline while this reads it 7-11 % faster (tools/track/line-audit.mjs).
+const BRAKE = 22 * 0.85, ACCEL = 7;
+function lapTime(k, n, ds) {
+  const v = new Float64Array(n);
+  for (let i = 0; i < n; i++) v[i] = Math.min(VMAX, Math.sqrt(LAT / Math.max(Math.abs(k[i]), 1e-5)));
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = n - 1; i >= 0; i--) { const nx = (i + 1) % n; v[i] = Math.min(v[i], Math.sqrt(v[nx] * v[nx] + 2 * BRAKE * ds)); }
+    for (let i = 0; i < n; i++) { const pv = (i - 1 + n) % n; v[i] = Math.min(v[i], Math.sqrt(v[pv] * v[pv] + 2 * ACCEL * ds)); }
+  }
+  let s = 0;
+  for (let i = 0; i < n; i++) s += ds / v[i];
+  return s;
+}
 
 for (const id of ["monza", "spa", "silverstone"]) {
   test(`${id}: the line stays on the road, never lurches, and is no slower than the centreline`, () => {
@@ -53,6 +63,19 @@ for (const id of ["monza", "spa", "silverstone"]) {
     assert.ok(maxStep <= 0.5 * ds + 1e-6, `${id}: a ${maxStep.toFixed(2)} m step between nodes (${(maxStep / ds).toFixed(2)} m/m)`);
     const tLine = cornerTime(lineCurv(t), n, ds), tRoad = cornerTime(t.curv, n, ds);
     assert.ok(tLine <= tRoad, `${id}: the line's own curvature costs ${tLine.toFixed(1)} s of corner time against the centreline's ${tRoad.toFixed(1)} s`);
+  });
+}
+
+// Under the brake / accel sweep the line must beat the centreline on EVERY
+// circuit shape — the street layouts included, where the grip-only model
+// reads it as a wash (2026-09-16: +6.9 % zandvoort, +11 % baku / singapore).
+// 5 % is well under every measured value and well over what a re-bake moves.
+for (const id of ["monza", "spa", "silverstone", "monaco", "baku", "singapore", "zandvoort"]) {
+  test(`${id}: under a brake/accel budget the line is at least 5 % faster than the centreline`, () => {
+    const t = build(id);
+    const n = t.n, ds = t.total / n;
+    const lLine = lapTime(lineCurv(t), n, ds), lRoad = lapTime(t.curv, n, ds);
+    assert.ok(lLine <= 0.95 * lRoad, `${id}: ${lLine.toFixed(1)} s on the line against ${lRoad.toFixed(1)} s on the centreline (${(100 * (1 - lLine / lRoad)).toFixed(2)} %)`);
   });
 }
 

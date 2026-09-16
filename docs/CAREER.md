@@ -391,8 +391,9 @@ end-of-season sheet, the one screen that sits between two seasons.
 
 ## Objectives and reputation
 
-One objective per round, drawn with `Career.rnd(year, "obj", round)` from a table of
-five kinds. Meeting it pays **+150 cr and +2 rep**; missing it costs **2 rep**.
+**Three** objectives per round, drawn with `Career.rnd(year, "obj", round)` from a
+table of five kinds; the player takes one. Meeting it pays **+150 cr and +2 rep**;
+missing it costs **2 rep**.
 
 | Type | Met when | Value |
 |---|---|---|
@@ -406,6 +407,30 @@ five kinds. Meeting it pays **+150 cr and +2 rep**; missing it costs **2 rep**.
 `game.js` counts on a separate `cutWarn` that RESETS — three warnings, one +5 s
 penalty, reset — precisely so that "no cuts at all" cannot become satisfiable by
 cutting four more times. Do not merge the two counters.
+
+### Choosing the brief
+
+One dealt objective makes a round something that happens to you; three makes it a
+decision — the safe `points` brief in a bad car, the `finish` brief when the car is
+quick. `objectiveChoices(round)` walks forward through `OBJ_KINDS` from the kind the
+single draw used to return, so the three are distinct and **index 0 is exactly the
+old brief**: a save with no pick — every save written before this existed — keeps the
+brief it already had.
+
+Only the pick is stored, as `career.objPick = {round, i}`. That is what keeps the
+invariant below intact: `settleRound` still recomputes the brief from the seed and the
+pick rather than reading `career.obj`, so the settlement cannot disagree with what the
+hub showed, and reloading still cannot reroll the choices. A pick is keyed on its
+round, so a stale one — from an earlier round, or from last season after `rollover()`
+resets the counter — reads as unchosen and falls back to index 0 rather than silently
+applying to a round it was never for. No `CAREER_V` rung is owed: `migrateCareer`
+normalises the field the way it does `moves` and `paidSponsors`.
+
+`objectiveLocked()` freezes the pick once `season.stage`, `qualiOrder` or
+`sprintOrder` is set. Quali and a sprint have already decided part of what
+`outQualMate` and `finish` measure, so choosing after them is choosing with the
+answer in hand; the hub then shows the chosen line alone, as it did when the brief
+was dealt.
 
 The save stores four **scalars** — `{round, type, value, done}` — never the sentence.
 Wording comes from `OBJ_LABELS` at render time, because prose in a save can never be
@@ -421,15 +446,80 @@ cars, so the hire is the benchmark there like anywhere else; the branch still fi
 for a `myteam` save written before `career.roster` existed, which `migrateCareer`
 fills with nothing, leaving `gridDrivers()` on the custom team's single entry.
 
-Reputation has two channels, deliberately different in kind:
+Reputation has three channels, deliberately different in kind:
 
 ```js
 rep += clamp((expectedFinish(team) - finishPos) * 0.6, -4, +6)   // relative to the CAR
      + (objectiveMet ? +2 : -2)                                   // flat: met or not
+     + clamp((craft - 0.75) * 6, -0.75, +1.5)                     // HOW you got there
 ```
 
 `expectedFinish` already encodes the tier, so beating a bad car raises reputation and
 cruising in a good one does not.
+
+### Race craft
+
+The first two channels score the **result**. `craftScore(player)` scores **how it was
+obtained**, from four marks the driver's own inputs leave on the race:
+
+```js
+craft = 1 - (0.10*cuts + 0.07*penaltySeconds + 0.12*hits*worstImpact + 0.20*wallHits)
+```
+
+`cuts` and `penalty` come from track limits, `hits`/`hitSev` from `collideFx` and
+`wallHits` from the wall model — all four written in `js/game.js` and cleared by
+`gridUp()` beside `cuts` and `penalty`. Both counts are debounced at their source
+(`collideFx` is already player-only and gated at 0.35 s; the wall counts a fresh
+strike above a graze, not every frame in contact), so ten seconds scraping a barrier
+is a handful of strikes rather than six hundred.
+
+Three properties are load-bearing, and each has a test:
+
+- **It pays reputation and never money.** A scruffy race already cost positions and
+  therefore prize money; billing the balance again would charge it twice. Reputation
+  is the seat gate and money is the parts gate, so craft decides what you are offered,
+  not what you can build.
+- **There is no retirement term.** Every DNF here is a `Reliability.arm()` draw,
+  `"accident"` included (`js/race/reliability.js`) — nothing retires a car for how it
+  was driven, so a DNF term would price a dice roll.
+- **It is asymmetric in the clean run's favour.** A faultless race is +1.5; the floor
+  is −0.75, reached at craft ≤ 0.625. Contact is the one mark the sim cannot
+  apportion (being hit looks exactly like hitting), so it carries the lowest weight,
+  is scaled by the worst impact, and the downside is capped at half the upside.
+
+Bounded well inside the other two channels, craft colours a season rather than
+deciding one: a clean year is worth about a round's objective. `Career.state().craft`
+is the season average — rounds saved before craft existed carry no `craft` key and are
+skipped rather than counted as zero. `simCareerRound()` (`js/agent/apex.js`) draws the
+same fields from the awareness prior it already draws `cuts` from, or a simulated
+career and a driven one would diverge on reputation alone.
+
+### The round debrief
+
+A percentage on its own is a score with no explanation. Under the craft line the
+results sheet prints what cost it, from `RaceInsights.debrief()` — the same event
+journal the coach fills all race, condensed to the kinds that cost craft (track
+limits, penalties, contact, offs, a retirement), each with a count and the laps to
+go and look at. Ordered by what the kind costs, so the biggest cause is first; the
+laps are the numbers the HUD showed (`js/ui/hud.js` prints `c.lap` directly). A stop
+and a compound change stay out of it: strategy is not craft. A faultless race renders
+nothing.
+
+### Craft develops the driver
+
+`rolloverDrivers` infers every axis of every driver from the RESULT, because for an
+AI seat there is nothing else to go on. For the player there is, and the player's
+`craft` axis is the one exception: its winter drift comes from the season's measured
+craft, `clamp((seasonCraft - 0.75) * 12, -3, 3)`, on the same ±3 scale as FORM.
+
+That is what closes the loop. `ratingOf` feeds `overall()`, which ranks the grid in
+`rolloverMarket` and decides who moves in the silly season, and it feeds a simulated
+round's race-day swing. Drive cleanly for a year and the rating that decides those
+things moves with the driving instead of with a dice roll. Every other seat, and
+every other axis, keeps the inferred drift — a test asserts that a scruffy player
+season leaves every AI seat's development byte-identical. A season with no craft rows
+at all (raced before the channel existed) falls back to the inferred drift rather
+than reading as a season of zeroes.
 
 ## Reliability and retirements
 

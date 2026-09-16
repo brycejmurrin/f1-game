@@ -33,20 +33,23 @@
  * cosine swings and the 0.6–0.7 m/m lurch where two corner windows overlap
  * (Lesmos, Les Combes, Maggotts) cost 5–14 % of pure corner time against
  * driving the centreline. So the seed is relaxed node by node (Gauss-Seidel
- * with over-relaxation, coarse-to-fine so the long corners converge — 250
- * coarse passes then 60 fine, measured to give the same line as 400 + 300)
- * toward
- * the minimum of  Σ κ_line²  +  RELAX_LAM · Σ κ_road · x  over the lap, with
- * κ_line = κ/(1 + κ x) − x'' the offset curve's curvature to first order.
+ * with over-relaxation, alternating direction, coarse-to-fine so the long
+ * corners converge — every 4th node, then every 2nd, then all: 120 / 40 / 30
+ * passes, measured to give the same line as 250 / 60 / 60) toward
+ * the minimum of  Σ κ_line²  +  RELAX_LAM · Σ κ_road · x  +  SLOPE_NU · Σ x'²
+ * over the lap, κ_line the offset curve's EXACT curvature (relaxLine; until
+ * 2026-09-16 the first-order κ/(1+κx) − x'', which taxed a 0.45 m/m road
+ * crossing 1.3× — docs/notes/RACING-LINE-RESEARCH.md §11).
  * The first term is the minimum-curvature line (K1999, Coulom 2002; TUMFTM's
  * mincurv); the second is the path-length (shortest-path) term, and it is
  * what keeps a long constant-radius corner on the INSIDE — pure minimum
  * curvature runs the outside of Parabolica (measured: apex 3.8 m outside).
- * Relaxed, the line is 1–2 % faster than the centreline in the AI's own
- * corner-speed model, the lurches are gone (max lateral slope 0.46 m/m, at
- * Monza's first chicane where the road itself turns 90°), and the apexes sit
- * on the inside clamp. `pathK` (below) is unchanged: it is the AI's
- * calibrated brake model, not the line's geometry.
+ * The converged line is then held under the lurch cap SLOPE_MAX by projected
+ * relaxation (trimSlopes). Relaxed, the line is 1.5–4 % faster than the
+ * centreline in the AI's corner-speed model and 7–14 % under a brake/accel
+ * sweep (tools/track/line-audit.mjs), the lurches are gone (max lateral slope
+ * 0.45 m/m), and the apexes sit on the inside clamp. `pathK` (below) is
+ * unchanged: it is the AI's calibrated brake model, not the line's geometry.
  *
  * FAMILIES and HINTS (the same evening). Beside `track.line` the bake keeps
  * `lineIn` and `lineOut` — the racing line shifted FAM_SHIFT_M toward and
@@ -74,9 +77,31 @@ const TrackLine = (function () {
   const BLEND_M = 45;       // m over which the line's weight eases in/out at a corner window
   const RELAX_LAM = 0.001;  // 1/m² — path-length weight against curvature² (see header; 0.003 turns in too early)
   const RELAX_OMEGA = 1.5;  // over-relaxation
-  const RELAX_PASSES = 60;  // fine passes; 60 and 300 measure the same line (see the header)
+  const RELAX_PASSES = 30;  // fine passes (see the header: 120/40/30 measures the same line as 250/60/60)
   const RELAX_COARSE = 4;   // coarse stride (nodes) and its pass count — the long corners' wavelengths
-  const RELAX_CPASSES = 250;
+  const RELAX_CPASSES = 120;
+  const RELAX_MPASSES = 40; // a stride-2 level between: a 25 m road crossing is 1.5 cells on the 16 m
+                            // coarse grid, and the fine sweep relocates a crossing one node per pass
+  const SLOPE_NU = 1e-4;    // 1/m² — weight of Σ x'² (the crossing angle) against Σ κ² (relaxLine):
+                            // a light, smooth regulariser that keeps the sweep stable and the line
+                            // from wiggling on a straight; it is NOT what holds the crossings down
+                            // (measured: ×30 before it moved a hairpin exit's slope, and by then it
+                            // had halved the line's gain).
+  const SLOPE_MAX = 0.45;   // m/m — the steepest road crossing the line ships with (24°), held by
+  const TRIM_ROUNDS = 6;    // rounds of {TRIM_RELAX relaxation passes, TRIM_PASSES projected trims}
+  const TRIM_RELAX = 5;     // AFTER the relaxation has converged: projected relaxation, so a crossing
+  const TRIM_PASSES = 10;   // the trim lengthens is re-smoothed rather than left with a kink.
+                            // The exact curvature no longer overstates a steep crossing's cost the way
+                            // the first-order form did (its dropped (1+x'²)^{3/2} was a 1.3× tax at
+                            // 0.45 m/m), and the honest optimum at a hairpin or chicane EXIT is
+                            // 0.54–0.64 m/m (Monza's first chicane, Spa's La Source) — followable at
+                            // those corners' 15–25 m/s (lateral speed v·x' under STEER_VMAX) but
+                            // outside the lurch cap tests/unit/track-line-circuits pins. Trimming is
+                            // a last step on purpose: the same bound inside the sweep, as a projected
+                            // box, let a crossing relocate one node per pass and stalled in an
+                            // asymmetric chicane line; as a piecewise penalty it was stiff enough that
+                            // over-relaxing it sent a Spa crossing to 3.4 m/m and damping it stalled
+                            // the same way (2026-09-16, docs/notes/RACING-LINE-RESEARCH.md §11).
   const FAM_SHIFT_M = 1.5;       // m the INNER / OUTER families sit off the racing line inside a corner
   const HINT_SNAP_M = 80;        // a hint's turn must sit within this of a baked corner's apex
 
@@ -214,8 +239,14 @@ const TrackLine = (function () {
       }
     }
     for (let i = 0; i < n; i++) x[i] = clamp(x[i], lo[i], hi[i]);
-    relaxCoarse(x, curv, lo, hi, n, ds, RELAX_LAM, RELAX_CPASSES);
+    relaxCoarse(x, curv, lo, hi, n, ds, RELAX_LAM, RELAX_CPASSES, RELAX_COARSE);
+    relaxCoarse(x, curv, lo, hi, n, ds, RELAX_LAM, RELAX_MPASSES, 2);
     relaxLine(x, curv, lo, hi, n, ds, RELAX_PASSES, RELAX_LAM);
+    for (let r = 0; r < TRIM_ROUNDS; r++) {
+      trimSlopes(x, lo, hi, n, ds, TRIM_PASSES);
+      relaxLine(x, curv, lo, hi, n, ds, TRIM_RELAX, RELAX_LAM);
+    }
+    trimSlopes(x, lo, hi, n, ds, TRIM_PASSES);
     // FAMILIES — the racing line shifted FAM_SHIFT_M toward the inside of the
     // corner (INNER: the defensive line and the inside pass) and toward the
     // outside (OUTER: the pass around the outside), weighted by `lineW` so
@@ -270,32 +301,106 @@ const TrackLine = (function () {
     return out;
   }
 
+  // THE OFFSET CURVE'S CURVATURE, exactly. The line is p = c + x·n (n the
+  // right normal, +κ a left turn), so p' = (1+κx)·t − x'·n_L and
+  //   κ_line = [(1+κx)²κ − (1+κx)x'' + x'(κ'x + 2κx')] / ((1+κx)² + x'²)^{3/2}.
+  // The relaxation minimised the first-order form κ/(1+κx) − x'' until
+  // 2026-09-16 — the linearisation every min-curvature QP makes (TUMFTM's
+  // opt_min_curv re-linearises iteratively for the same reason). At a 0.45 m/m
+  // crossing the dropped (1+x'²)^{3/2} alone is a 1.3× overstatement, so the
+  // objective taxed every road crossing about a third more than the geometry
+  // does. This solver is already a nonlinear sweep, so the exact expression
+  // costs three square roots per node and nothing else. `lineCurvature`
+  // (exported) is the same expression for the audits and tests, so what they
+  // measure is what the bake minimises.
+  function lineCurvature(track) {
+    const n = track.n, ds = track.total / n, x = track.line, k = track.curv, out = new Float32Array(n);
+    if (!x || !k) return out;
+    const h = 0.5 / ds, inv2 = 1 / (ds * ds);
+    for (let i = 0; i < n; i++) {
+      const a = i ? i - 1 : n - 1, b = i + 1 < n ? i + 1 : 0;
+      const u = 1 + k[i] * x[i], xp = (x[b] - x[a]) * h, xpp = (x[a] - 2 * x[i] + x[b]) * inv2, kp = (k[b] - k[a]) * h;
+      out[i] = (u * u * k[i] - u * xpp + xp * (kp * x[i] + 2 * k[i] * xp)) / Math.pow(u * u + xp * xp, 1.5);
+    }
+    return out;
+  }
+
   // One SOR sweep per pass over the 3-node stencil of  Σ κ_line² + λ Σ κ x
-  // (header). κ at i−1, i, i+1 all depend on x[i]; the step is the 1-D Newton
-  // step of that local quadratic, over-relaxed and clamped to the road.
+  // (header). κ at i−1, i, i+1 all depend on x[i]; the step is the 1-D
+  // Gauss-Newton step of that local sum (Σ κ_j ∂κ_j/∂x_i + λκ_i/2 over
+  // Σ (∂κ_j/∂x_i)²), over-relaxed and clamped to the road. The partials are
+  // those of the exact κ_line above, written out per neighbour.
   function relaxLine(x, curv, lo, hi, n, ds, passes, lamK) {
-    const inv2 = 1 / (ds * ds), lam = 0.5 * lamK;
+    const inv2 = 1 / (ds * ds), h = 0.5 / ds, lam = 0.5 * lamK;
     for (let p = 0; p < passes; p++) {
-      for (let i = 0; i < n; i++) {
+      // Alternate the sweep direction (symmetric SOR). A one-way sweep settles a
+      // conflict the bounds cannot both satisfy — a chicane whose two apexes
+      // are closer than SLOPE_MAX lets the line cross — in favour of whichever
+      // corner it reaches second; measured on the synthetic chicane, first
+      // apex −3.4 m against the second's −5.5. Alternating sweeps hand that
+      // decision back to the objective.
+      const fwd = (p & 1) === 0;
+      for (let q = 0; q < n; q++) {
+        const i = fwd ? q : n - 1 - q;
         const a = i ? i - 1 : n - 1, b = i + 1 < n ? i + 1 : 0;
         const aa = a ? a - 1 : n - 1, bb = b + 1 < n ? b + 1 : 0;
         const ci = curv[i], ca = curv[a], cb = curv[b];
-        const di = Math.max(1 + ci * x[i], 0.2);
-        const ki = ci / di - (x[a] - 2 * x[i] + x[b]) * inv2;
-        const ka = ca / Math.max(1 + ca * x[a], 0.2) - (x[aa] - 2 * x[a] + x[i]) * inv2;
-        const kb = cb / Math.max(1 + cb * x[b], 0.2) - (x[i] - 2 * x[b] + x[bb]) * inv2;
-        const gi = 2 * inv2 - ci * ci / (di * di);           // ∂κ_i/∂x_i; ∂κ_{i±1}/∂x_i = −inv2
-        const num = ki * gi - (ka + kb) * inv2 + lam * ci;
-        const den = gi * gi + 2 * inv2 * inv2;
-        const xn = x[i] - RELAX_OMEGA * num / den;
+        const xi = x[i], xa = x[a], xb = x[b], xaa = x[aa], xbb = x[bb];
+        // node i: u depends on x_i, x'' does, x' does not
+        const ui = Math.max(1 + ci * xi, 0.2), xpi = (xb - xa) * h, xppi = (xa - 2 * xi + xb) * inv2, kpi = (cb - ca) * h;
+        const ri = Math.sqrt(ui * ui + xpi * xpi), Di = ri * ri * ri;
+        const ki = (ui * ui * ci - ui * xppi + xpi * (kpi * xi + 2 * ci * xpi)) / Di;
+        const gi = ((2 * ui * ci * ci - ci * xppi + 2 * ui * inv2 + xpi * kpi) - ki * 3 * ui * ci * ri) / Di;
+        // node a: x_i is its NEXT neighbour (∂x'_a = h, ∂x''_a = inv2)
+        const ua = Math.max(1 + ca * xa, 0.2), xpa = (xi - xaa) * h, xppa = (xaa - 2 * xa + xi) * inv2, kpa = (ci - curv[aa]) * h;
+        const ra = Math.sqrt(ua * ua + xpa * xpa), Da = ra * ra * ra;
+        const ka = (ua * ua * ca - ua * xppa + xpa * (kpa * xa + 2 * ca * xpa)) / Da;
+        const ga = ((-ua * inv2 + h * (kpa * xa + 4 * ca * xpa)) - ka * 3 * xpa * h * ra) / Da;
+        // node b: x_i is its PREVIOUS neighbour (∂x'_b = −h, ∂x''_b = inv2)
+        const ub = Math.max(1 + cb * xb, 0.2), xpb = (xbb - xi) * h, xppb = (xi - 2 * xb + xbb) * inv2, kpb = (curv[bb] - ci) * h;
+        const rb = Math.sqrt(ub * ub + xpb * xpb), Db = rb * rb * rb;
+        const kb = (ub * ub * cb - ub * xppb + xpb * (kpb * xb + 2 * cb * xpb)) / Db;
+        const gb = ((-ub * inv2 - h * (kpb * xb + 4 * cb * xpb)) + kb * 3 * xpb * h * rb) / Db;
+        // + the crossing-angle term: residuals √ν·(x_i − x_a)/ds and
+        // √ν·(x_b − x_i)/ds on the two edges, whose Gauss-Newton contribution
+        // is −ν·x''_i over 2ν/ds² — a Laplacian, linear and SPD, so the
+        // over-relaxed sweep stays stable.
+        const num = ki * gi + ka * ga + kb * gb + lam * ci - SLOPE_NU * xppi;
+        const den = gi * gi + ga * ga + gb * gb + 2 * SLOPE_NU * inv2;
+        const xn = xi - RELAX_OMEGA * num / den;
         x[i] = xn > hi[i] ? hi[i] : xn < lo[i] ? lo[i] : xn;
       }
     }
   }
-  // Coarse-to-fine: relax every RELAX_COARSE-th node as its own lap (long
-  // wavelengths converge in a fraction of the passes), then interpolate back.
-  function relaxCoarse(x, curv, lo, hi, n, ds, lamK, passes) {
-    const st = RELAX_COARSE, m = Math.floor(n / st);
+  // The lurch cap (SLOPE_MAX), as alternating projected sweeps over the EDGES
+  // of the converged line: an edge steeper than the cap has its two ends moved
+  // toward each other by half the excess, inside the road. Each sweep hands
+  // that excess to the neighbouring edges, so a crossing that is too steep
+  // gets LONGER rather than kinked — a per-node box (move x_i so both its
+  // edges fit) cannot do this, because on a uniform ramp above the cap every
+  // node's two neighbours are already further apart than two caps allow and
+  // its box is empty. Only the two or three steepest exits on a lap are
+  // touched; the rest of the line is already under the cap.
+  function trimSlopes(x, lo, hi, n, ds, passes) {
+    const sm = SLOPE_MAX * ds;
+    for (let p = 0; p < passes; p++) {
+      const fwd = (p & 1) === 0;
+      for (let q = 0; q < n; q++) {
+        const i = fwd ? q : n - 1 - q, b = i + 1 < n ? i + 1 : 0;
+        const d = x[b] - x[i], ad = d < 0 ? -d : d;
+        if (ad <= sm) continue;
+        const e = (ad - sm) * 0.5 * (d < 0 ? -1 : 1);
+        const xi = x[i] + e, xb = x[b] - e;
+        x[i] = xi > hi[i] ? hi[i] : xi < lo[i] ? lo[i] : xi;
+        x[b] = xb > hi[b] ? hi[b] : xb < lo[b] ? lo[b] : xb;
+      }
+    }
+  }
+
+  // Coarse-to-fine: relax every st-th node as its own lap (long wavelengths
+  // converge in a fraction of the passes), then interpolate back.
+  function relaxCoarse(x, curv, lo, hi, n, ds, lamK, passes, st) {
+    const m = Math.floor(n / st);
     if (m < 8) return;
     const xc = new Float32Array(m), kc = new Float32Array(m), loc = new Float32Array(m), hic = new Float32Array(m);
     for (let j = 0; j < m; j++) { const i = j * st; xc[j] = x[i]; kc[j] = curv[i]; loc[j] = lo[i]; hic[j] = hi[i]; }
@@ -431,6 +536,6 @@ const TrackLine = (function () {
     return _out;
   }
 
-  return { bake, at, attackAt, pathK, K_ON, MARGIN, ZONE_M, PATH_FLOOR };
+  return { bake, at, attackAt, pathK, lineCurvature, K_ON, MARGIN, ZONE_M, PATH_FLOOR, SLOPE_MAX };
 })();
 Object.freeze(TrackLine);

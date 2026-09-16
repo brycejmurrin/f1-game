@@ -285,3 +285,32 @@ test('ghost speed derives from recorded arc samples and refuses time outside the
   g.setTrack('test'); g.startLap(); for (let i=0;i<12;i++) g.record(i, 20*i, 0); g.finishLap(12);
   assert.equal(g.speedAt(4.5), 20); assert.equal(g.speedAt(-1), null); assert.equal(g.speedAt(13), null);
 });
+test('the round debrief condenses the journal to what costs race craft, biggest cause first', () => {
+  const { api, c, tick } = fixture();
+  // Two warnings on lap 1, one on lap 2, a penalty and contact on lap 2.
+  tick({ cutWarn: 1 }); tick({ cutWarn: 2 });
+  c.lap = 2;
+  tick({ cutWarn: 3 }); tick({ penalty: 5 }); tick({ contactT: 1 });
+  const d = api.debrief();
+  assert.deepEqual(Array.from(d, r => r.kind), ['limits', 'penalty', 'contact'],
+    'ordered by what the kind costs in career.js, not by when it happened');
+  const limits = d.find(r => r.kind === 'limits');
+  assert.equal(limits.count, 3, 'three warnings');
+  // JSON, not deepEqual: `laps` is built inside the VM realm, so a strict
+  // deepEqual fails on the array prototype even when every element matches.
+  assert.equal(JSON.stringify(limits.laps), '[1,2]',
+    'the laps the HUD showed (js/ui/hud.js prints c.lap), de-duplicated: two to look at');
+  // A stop and a compound change are strategy, not craft, and must not appear.
+  tick({ pitState: 'entry' }); tick({ tyre: { id: 'hard' }, pitState: 'none' });
+  assert.ok(api.journal().some(e => e.kind === 'pit'), 'the journal still logs them');
+  assert.equal(api.debrief().some(r => r.kind === 'pit' || r.kind === 'tyres'), false);
+});
+test('a faultless race has an empty debrief, and reset clears it', () => {
+  const { api, tick } = fixture();
+  tick({ prog: 40 }); tick({ prog: 80 });
+  assert.equal(JSON.stringify(api.debrief()), '[]', 'nothing happened, so there is nothing to show');
+  tick({ contactT: 1 });
+  assert.equal(api.debrief().length, 1);
+  api.reset();
+  assert.equal(JSON.stringify(api.debrief()), '[]');
+});

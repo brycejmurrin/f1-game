@@ -3144,3 +3144,52 @@ and says it is not a score, and a per-corner time analysis is a different claim
 about a different lap. Folding them into one sentence would have made both
 harder to read.
 
+
+## 2026-09-16 — `js/game.js` 8790 → 8803, `js/agent/apex.js` 2928 → 2936 (+4 code)
+
+Two unrelated changes, both of which had to live in `game.js` because that is
+where the field they touch is written.
+
+**+7 in `updateCar`'s AI brake look** — the deletion is one character
+(`(c.s + 12)` → `c.s`) and the rest is the comment that stops it coming back.
+The 12 m floor meant the nearest lookahead sample sat 12 m in front of the car,
+and `brakeTarget` admits a sample at `sqrt(vC² + 2·brake·0.85·d)`, so every AI
+had a standing `sqrt(vC² + 449)` allowance at the apex and never had to reach
+`vC` at all. Measured at Monza it was worth 8.2% of lap time — more than the
+whole easy→hard range was — and it bit hardest in slow corners, exactly where
+the constraint is supposed to. The difficulty ladder was re-cut against the
+corrected pace (`js/physics/consts.js`, `DIFF.corner`).
+
+**+6 for race craft** — one field-reset on `gridUp`'s existing line, two counts
+in `collideFx` (player-only and already debounced at 0.35 s, so a shunt counts
+once rather than once per relaxation pass), one in the wall model, and their
+comments. `js/career/career.js` scores them into reputation and never into
+money; `js/agent/apex.js` draws the same fields for a simulated round from the
+awareness prior it already draws cuts from, or a simulated career and a driven
+one would diverge on reputation alone.
+
+## 2026-09-16 — `cssClasses` 555 → 556
+
+One class: `.res-settle-row.craft`, the round debrief under the race-craft line
+on a career results sheet. The craft percentage on its own is a score with no
+explanation, which is the thing this sheet already got wrong once; the debrief
+is the same events `RaceInsights` logged all race (track limits, penalties,
+contact, offs, a retirement) condensed to the ones that cost craft, with the
+laps to go and look at. A faultless race renders none of it.
+
+It is a modifier on a row that already exists rather than a new block, and it
+carries no raw px: the indent is `padding-left: var(--gap)`, so the shorthand on
+`.res-settle-row` keeps the vertical rhythm and `rawSpacing` is unchanged.
+
+## 2026-09-16 — `cssClasses` 556 → 557
+
+One class: `.cr-obj-pick`, the round's three briefs on the career hub. The brief
+used to be dealt, which makes a round something that happens to you; three makes
+it a decision — the safe points brief in a bad car, the finish brief when it is
+quick. They are drawn purely from the career seed exactly as the single one was,
+and only the player's pick is stored, so `settleRound` still recomputes the brief
+instead of reading `career.obj` and the settlement cannot disagree with the hub.
+
+Buttons rather than rows, because a line you can press has to look like one; the
+chosen one keeps the `.cr-obj-line` weight so the card reads as it always did.
+No raw px: the vertical padding is `calc(var(--gap) / 2)`.

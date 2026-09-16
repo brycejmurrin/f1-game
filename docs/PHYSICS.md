@@ -450,7 +450,13 @@ the numbers):
   curvature plus a path-length term, `docs/notes/RACING-LINE-RESEARCH.md`);
   `pathK` and its 85% floor did not change, so the AI's brake model and the
   difficulty scales stay calibrated — the relaxation moves where the cars
-  are, not how fast the model lets them corner.
+  are, not how fast the model lets them corner. Since 2026-09-16 the
+  relaxation minimises the offset curve's EXACT curvature (the first-order
+  form taxed a road crossing up to 1.3×), converges through a stride-2 level
+  with alternating sweeps, and is held under a 0.45 m/m lurch cap by
+  projected relaxation afterwards (`RACING-LINE-RESEARCH.md` §11 — the
+  cap is load-bearing: an uncapped 0.54 m/m crossing at Monza's first
+  chicane cost the AI field 1.6 % of lap time).
 - **The compound is the strategy** (`AiDrive.tyreClass` / `tyrePace`) — **while
   TYRE WEAR is off**, which is the shipped default. Each AI car draws a class for
   the race distance (sprints on softs, long races mixed): a soft starts +0.4% and
