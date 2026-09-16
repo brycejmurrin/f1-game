@@ -28,27 +28,16 @@
 // harmless until a new lateral controller changed which cars are beside each
 // other on lap 1.
 import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
-const argv = process.argv.slice(2);
-const flag = (name, def) => {
-  const i = argv.indexOf("--" + name);
-  return i >= 0 && argv[i + 1] != null ? argv[i + 1] : def;
-};
-const has = (name) => argv.includes("--" + name);
-
-const track = flag("track", "monza");
-const seed = Number(flag("seed", 42));
-const episodes = Math.max(2, Number(flag("episodes", 3)));
-const seconds = Number(flag("seconds", 4));
-const asJson = has("json");
-
 // Every primitive on a car. Objects become a stable tag rather than being
 // walked: the leaks of this class have all been numbers and booleans, and a
 // deep walk would drown the diff in team/track back-references.
-function snapshot(cars) {
+export function snapshot(cars) {
   return cars.map((c) => {
     const o = {};
     for (const k of Object.keys(c)) {
@@ -62,49 +51,82 @@ function snapshot(cars) {
   });
 }
 
-const g = await createGame({ track });
-try {
-  await g.race(track);
-  const A = g.apex;
-  const digests = [], snaps = [];
+/**
+ * Replay `episodes` episodes of one seed in the VM and diff the first two
+ * post-reset snapshots. Returns every per-car field that differs between the
+ * cold (episode 0) and warm (episode 1) snapshot — the "leaks by construction"
+ * shape this file exists to name. `game`, when passed, is an already-booted
+ * `createGame()` handle (a test suite's `before()`), so callers that need
+ * several tracks don't each pay a fresh boot.
+ *
+ * @returns {Promise<{digestsMatch:boolean, rows:Array, fields:Array}>}
+ */
+export async function episodeLeaks({ track = "monza", seed = 42, episodes = 3, seconds = 4, game } = {}) {
+  const owned = !game;
+  const g = game || await createGame({ track });
+  try {
+    if (owned) await g.race(track);
+    const A = g.apex;
+    const digests = [], snaps = [];
 
-  for (let e = 0; e < episodes; e++) {
-    A.headless(true);
-    A.reset(0.02, 55, 0, seed);
-    // The snapshot is taken AFTER reset and BEFORE the first tick: that is the
-    // state the episode starts from, and the only place the leak is visible
-    // without being tangled up in the divergence it causes.
-    snaps.push(snapshot(g.G.cars));
-    const r = A.rollout({ seconds, input: { steer: 0.05, throttle: true } });
-    const f = A.field({ detail: "full" });
-    A.headless(false);
-    digests.push(JSON.stringify({
-      distanceM: r.distanceM, speed: r.speedKph, to: r.to,
-      grid: f.positions.map((p) => p.code + ":" + p.pace).join(","),
-    }));
-  }
+    for (let e = 0; e < episodes; e++) {
+      A.headless(true);
+      A.reset(0.02, 55, 0, seed);
+      // The snapshot is taken AFTER reset and BEFORE the first tick: that is the
+      // state the episode starts from, and the only place the leak is visible
+      // without being tangled up in the divergence it causes.
+      snaps.push(snapshot(g.G.cars));
+      const r = A.rollout({ seconds, input: { steer: 0.05, throttle: true } });
+      const f = A.field({ detail: "full" });
+      A.headless(false);
+      digests.push(JSON.stringify({
+        distanceM: r.distanceM, speed: r.speedKph, to: r.to,
+        grid: f.positions.map((p) => p.code + ":" + p.pace).join(","),
+      }));
+    }
 
-  const digestsMatch = digests.every((d) => d === digests[0]);
-  // Episode 1 is the cold one — it creates the scratch. Comparing it with
-  // episode 2 is what exposes the leak; later episodes agree with 2.
-  const fields = [];
-  for (let i = 0; i < snaps[0].length; i++) {
-    const cold = snaps[0][i], warm = snaps[1][i];
-    for (const k of new Set([...Object.keys(cold), ...Object.keys(warm)])) {
-      if (JSON.stringify(cold[k]) !== JSON.stringify(warm[k])) {
-        fields.push({ car: i, code: cold.code || warm.code || String(i), field: k,
-                      cold: cold[k], warm: warm[k] });
+    const digestsMatch = digests.every((d) => d === digests[0]);
+    // Episode 1 is the cold one — it creates the scratch. Comparing it with
+    // episode 2 is what exposes the leak; later episodes agree with 2.
+    const fields = [];
+    for (let i = 0; i < snaps[0].length; i++) {
+      const cold = snaps[0][i], warm = snaps[1][i];
+      for (const k of new Set([...Object.keys(cold), ...Object.keys(warm)])) {
+        if (JSON.stringify(cold[k]) !== JSON.stringify(warm[k])) {
+          fields.push({ car: i, code: cold.code || warm.code || String(i), field: k,
+                        cold: cold[k], warm: warm[k] });
+        }
       }
     }
+    // One row per FIELD for the human summary — 22 cars leaking the same field is
+    // one defect, not 22.
+    const byField = new Map();
+    for (const f of fields) {
+      const e = byField.get(f.field) || { field: f.field, cars: 0, example: f };
+      e.cars++; byField.set(f.field, e);
+    }
+    const rows = [...byField.values()].sort((a, b) => b.cars - a.cars);
+    return { digestsMatch, rows, fields };
+  } finally {
+    if (owned) g.close();
   }
-  // One row per FIELD for the human summary — 22 cars leaking the same field is
-  // one defect, not 22.
-  const byField = new Map();
-  for (const f of fields) {
-    const e = byField.get(f.field) || { field: f.field, cars: 0, example: f };
-    e.cars++; byField.set(f.field, e);
-  }
-  const rows = [...byField.values()].sort((a, b) => b.cars - a.cars);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const argv = process.argv.slice(2);
+  const flag = (name, def) => {
+    const i = argv.indexOf("--" + name);
+    return i >= 0 && argv[i + 1] != null ? argv[i + 1] : def;
+  };
+  const has = (name) => argv.includes("--" + name);
+
+  const track = flag("track", "monza");
+  const seed = Number(flag("seed", 42));
+  const episodes = Math.max(2, Number(flag("episodes", 3)));
+  const seconds = Number(flag("seconds", 4));
+  const asJson = has("json");
+
+  const { digestsMatch, rows } = await episodeLeaks({ track, seed, episodes, seconds });
 
   if (asJson) {
     console.log(JSON.stringify({ ok: true, track, seed, episodes, digestsMatch,
@@ -128,6 +150,4 @@ try {
     }
   }
   process.exit(digestsMatch ? 0 : 1);
-} finally {
-  g.close();
 }
