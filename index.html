@@ -1776,14 +1776,25 @@
 <div id="loading" class="screen" role="status" aria-label="Preparing race" hidden>
   <div id="ld-card">
     <h2 id="ld-wordmark">APEX&nbsp;26</h2>
-    <div id="ld-head">
-      <span id="ld-flag"></span>
-      <div id="ld-title">
-        <div id="ld-name"></div>
-        <div id="ld-gp"></div>
+    <div id="ld-body">
+      <!-- The lap outline, drawn by TrackMaps.draw the same way the circuit
+           picker draws its preview: a plain white line with a dark casing and a
+           red start marker. No corner numbers, sectors or DRS bands — this is a
+           three-second read on the way to a race, not the CIRCUIT DETAIL sheet.
+           Sized in JS from the circuit's own aspect (TrackMaps.fitCanvas), so
+           the width/height here are only the pre-layout placeholder. -->
+      <canvas id="ld-map" width="240" height="150" role="img" aria-label="Circuit layout"></canvas>
+      <div id="ld-text">
+        <div id="ld-head">
+          <span id="ld-flag"></span>
+          <div id="ld-title">
+            <div id="ld-name"></div>
+            <div id="ld-gp"></div>
+          </div>
+        </div>
+        <dl id="ld-meta"></dl>
       </div>
     </div>
-    <dl id="ld-meta"></dl>
   </div>
 </div>
 
