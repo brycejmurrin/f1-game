@@ -12,17 +12,24 @@ test.describe("pit signs", () => {
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => window.__apex.race("albert_park", "day", "dry", { laps: 3 }));
     await awaitTrackBuild(page);
-    const s0 = await page.evaluate(() => window.__apex.pitSigns());
+    // A CI runner renders Albert Park at ~12 s a frame under SwiftShader, so
+    // every wait below is ONE frame at half the render scale (its floor).
+    const s0 = await page.evaluate(() => {
+      const a = window.__apex;
+      if (typeof a.renderScale === "function") a.renderScale(0.5);
+      return a.pitSigns();
+    });
     expect(s0.cells).toBe(12);
     expect(s0.mesh).toBe(true);
     expect(s0.tex).toBe(true);
-    // The grid is inside the row's 350 m gate: the decal draws every frame.
-    await page.waitForFunction(() => window.__apex.pitSigns().drawn >= 2, null, { polling: 100, timeout: TRACK_MS });
-    // Hidden, it stops: three more frames ASK for the draw and none lands.
+    // The grid is inside the row's 350 m gate: the decal draws.
+    await page.waitForFunction(() => window.__apex.pitSigns().drawn >= 1, null, { polling: 100, timeout: TRACK_MS });
+    // Hidden, it stops: a frame ASKS for the draw and none lands.
     const h = await page.evaluate(() => { window.__apex.meshToggle({ pitSigns: true }); return window.__apex.pitSigns(); });
-    await page.waitForFunction((c) => window.__apex.pitSigns().calls >= c + 3, h.calls, { polling: 100, timeout: TRACK_MS });
+    await page.waitForFunction((c) => window.__apex.pitSigns().calls >= c + 1, h.calls, { polling: 100, timeout: TRACK_MS });
     const d2 = await page.evaluate(() => window.__apex.pitSigns().drawn);
     expect(d2).toBe(h.drawn);
+    // Shown again, it draws again.
     await page.evaluate(() => window.__apex.clearMeshes());
     await page.waitForFunction((d) => window.__apex.pitSigns().drawn > d, d2, { polling: 100, timeout: TRACK_MS });
   });
