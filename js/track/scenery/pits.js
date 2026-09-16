@@ -154,6 +154,15 @@ const SceneryPits = (function () {
     // ── 3. The garages: the setup screen's bay, once per team, on the row ──
     let bays = 0, lamps = 0;
     const placed = [];
+    // The team's SIGN on each lintel: a 5.2 x 0.7 m quad a centimetre proud
+    // of the fascia, laid out here as pure numbers (track.pitSigns — the
+    // headless builds see only these); js/garage/pit-signs.js paints the
+    // atlas and uploads the texMesh where a canvas exists, and game.js
+    // draws the twelve as ONE decal after the sky. Corners [BL, BR, TR, TL]
+    // as seen from the lane, V flipped for the FLIP_Y upload, U not (a
+    // world-space quad on the identity; a U flip would mirror the crests).
+    const S = typeof TrackPit !== "undefined" ? TrackPit.SIGN : null;
+    const signs = { pos: [], nrm: [], uv: [], idx: [], cells: [], centre: null };
     if (p.hasBays) {
       const B = p.bay, doorW = B.doorW || 5.4, doorH = B.doorH || 4.8;
       const garage = o.workOut;                 // the garage line, beyond the road edge
@@ -203,6 +212,24 @@ const SceneryPits = (function () {
         const lintH = B.h - doorH + 0.6;
         const cl = atF(f, sd * (h + garage - 0.14) - bump, doorH + lintH / 2, k);   // a centimetre proud of the jambs
         rawBox(out, cl, [0.25, lintH, doorW], box.col, bs);
+        if (S && i < S.cells) {
+          const right = [-sd * f.t[0], -sd * f.t[1], -sd * f.t[2]];   // the viewer's right, facing the bay from the lane
+          const lat = sd * (h + garage - S.proud) - bump, hw2 = S.quadW / 2;
+          const lo = atF(f, lat, S.y0, k), hi = atF(f, lat, S.y0 + S.quadH, k);
+          const cx = (i % S.cols) * S.cellW, cy = Math.floor(i / S.cols) * S.cellH;
+          const uL = cx / S.w, uR = (cx + S.cellW) / S.w, vT = 1 - cy / S.h, vB = 1 - (cy + S.cellH) / S.h;
+          const corners = [[lo, -1], [lo, 1], [hi, 1], [hi, -1]], uvs = [[uL, vB], [uR, vB], [uR, vT], [uL, vT]];
+          const base = signs.pos.length / 3;
+          for (let c2 = 0; c2 < 4; c2++) {
+            const P = corners[c2][0], s2 = corners[c2][1] * hw2;
+            signs.pos.push(P[0] + right[0] * s2, P[1] + right[1] * s2, P[2] + right[2] * s2);
+            signs.nrm.push(-bs[0][0], -bs[0][1], -bs[0][2]);
+            signs.uv.push(uvs[c2][0], uvs[c2][1]);
+          }
+          signs.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+          signs.cells.push({ i, team: box.team });
+          if (i === (count >> 1)) signs.centre = atF(f, sd * (h + garage), 3, k);
+        }
         const cr = atF(f, sd * (h + garage + B.depth / 2), B.h + 0.05 + 0.175 + lift, k);
         rawBox(out, cr, [B.depth + 0.5, 0.35, segAt(kap, sd * (h + garage + B.depth / 2))], ROOF, bs);
         const cb = atF(f, sd * (h + garage + B.depth + 0.2) + bump, (B.h + 0.4) / 2 + lift, k);
@@ -267,7 +294,8 @@ const SceneryPits = (function () {
       }
     }
     if (p.row) p.row.placed = placed;
-    return { bays, wall: wallBuilt, lamps };
+    if (signs.cells.length) track.pitSigns = signs;
+    return { bays, wall: wallBuilt, lamps, signs: signs.cells.length };
   }
 
   return { build };

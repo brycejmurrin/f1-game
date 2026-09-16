@@ -27,6 +27,13 @@ const TrackPit = (function () {
   const BAY = { w: 10.8, gap: 0.2, depth: 12.8, h: 5.0, doorW: 5.4, doorH: 4.8 };
   const PITCH = BAY.w + BAY.gap;          // 11.0 m: the ONE pitch (paint, stop, door)
   const BOX_LEN = 8;                      // the FIA grid slot, and a real box's frontage
+  // THE SIGN on each bay's lintel (SceneryPits lays the quad, js/garage/
+  // pit-signs.js paints the atlas cell): one table so geometry and painter
+  // agree. Twelve cells of 512 x 70 px on a 1024 x 512 canvas (~100 px/m on
+  // a 5.2 x 0.7 m quad), the quad a centimetre proud of the lintel's face
+  // (garage line - 0.265) inside its 0.8 m band over the door.
+  const SIGN = { w: 1024, h: 512, cols: 2, cells: 12, cellW: 512, cellH: 70,
+                 quadW: 5.2, quadH: 0.7, y0: 4.85, proud: 0.275 };
 
   // Along the arc. The LIMITER window (entry line → exit line) is the old
   // pitWindow: it walks back from the line to where the last corner lets go
@@ -116,11 +123,15 @@ const TrackPit = (function () {
     const out = [];
     const T = typeof Teams !== "undefined" ? Teams : null;
     const list = T && Array.isArray(T.LIST) ? T.LIST : [];
-    for (const t of list) out.push({ team: t.id, name: t.name || t.id, col: t.color || [0.6, 0.6, 0.65], col2: t.color2 || [0.9, 0.9, 0.9] });
+    // `short` and `logo3` ride along for the sign painter: the code beside the
+    // crest, and the crest's outline row (team data, js/data/teams.js).
+    for (const t of list) out.push({ team: t.id, name: t.name || t.id, short: t.short || t.id.slice(0, 3).toUpperCase(),
+                                     col: t.color || [0.6, 0.6, 0.65], col2: t.color2 || [0.9, 0.9, 0.9],
+                                     logo3: (t.livery && t.livery.logo3) || null });
     const custom = T && T.DEFAULT_CUSTOM;
-    out.push({ team: custom ? custom.id : "custom", name: custom ? custom.name : "MY TEAM",
-               col: (custom && custom.color) || [0.55, 0.55, 0.6], col2: (custom && custom.color2) || [0.9, 0.9, 0.9] });
-    while (out.length < 12) out.push({ team: "row" + out.length, name: "ROW " + out.length, col: [0.6, 0.6, 0.65], col2: [0.9, 0.9, 0.9] });
+    out.push({ team: custom ? custom.id : "custom", name: custom ? custom.name : "MY TEAM", short: (custom && custom.short) || "MY",
+               col: (custom && custom.color) || [0.55, 0.55, 0.6], col2: (custom && custom.color2) || [0.9, 0.9, 0.9], logo3: null });
+    while (out.length < 12) out.push({ team: "row" + out.length, name: "ROW " + out.length, short: "R" + out.length, col: [0.6, 0.6, 0.65], col2: [0.9, 0.9, 0.9], logo3: null });
     return out;
   }
 
@@ -248,7 +259,7 @@ const TrackPit = (function () {
     return -1;
   }
 
-  return { BANDS, NARROW, BAY, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, WALL_GROW,
+  return { BANDS, NARROW, BAY, SIGN, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, WALL_GROW,
            ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, LIMIT_KPH, LIMIT_KPH_STREET, GRID_POLE_M, GRID_CLEAR,
            ROW_END, ROW_TAIL,
            resolve, window, row, build, at, openBoundary, rowOf };

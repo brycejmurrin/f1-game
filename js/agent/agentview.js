@@ -2081,7 +2081,7 @@ const AgentView = (function () {
           telemetry: "probe() physState() obs() scan() inputState() cars() carAt(i)",
           timing: "timing() sectorState() lapHistory() fieldState()",
           rendering: "camState() viewState() lightState() gpuTimer() lightTune()",
-          geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l)",
+          geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()",
           catalog: "tracks() teams() info()",
         },
         control: {

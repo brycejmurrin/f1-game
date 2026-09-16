@@ -280,6 +280,9 @@ const Tracks = (function () {
       track.meshes.water = G.createMesh(waterGeo);
       track.meshes.gate = G.createMesh(safe("gate", buildGate(track)));
       track.meshes.startline = G.createMesh(safe("startline", buildStartLine(track)));
+      // The bay signs: one painted atlas + one texMesh, where a canvas and the
+      // livery painter exist (feature-detected inside; the VM builds skip it).
+      if (typeof PitSigns !== "undefined") PitSigns.upload(G, track);
     }
     Log.info("track", "build done " + def.id + " total=" + (track && track.total && +track.total.toFixed(1)) + " n=" + (track && track.n) + " night=" + !!(track && track._night));
     return track;
