@@ -148,3 +148,42 @@ against 41.4 frames per second on identical code, a 54 % spread, with the
 governor picking different rungs between runs. Draw calls, triangles,
 vertices and resolution passes are exact here. Frame rate is not, on this
 box or on that one.
+
+## 6. Step one shipped, 2026-09-16
+
+`ContactGeometry.impulse` now carries restitution and a friction-clamped
+tangential impulse. No call site changed.
+
+Three things came out differently from the plan, and the differences are the
+useful part.
+
+**The "bit-identical by construction" claim needed a gate after all.** The plan
+said only the oriented path reaches the resolver. It does not:
+`Collide.sweepContacts` reaches it for an UNYAWED pair too, because a linear
+time-of-impact catch does not care how the cars are pointing. So the material
+is switched on `a.angle !== 0 || b.angle !== 0` inside the resolver, which is
+zero for every AI car and for a player under the 20 degree yaw floor. With the
+gate the claim holds exactly; without it the AI field would have picked up
+bounce and side grip, which is the re-baseline §3 defers.
+
+**The restitution constant already existed.** `AiDrive.bumpRestitution` — zero
+under 1 m/s of closing, 0.1 by 3 m/s — has been the heuristic rear-end path's
+ramp since the bump was measured. The impulse calls the same function rather
+than introducing a second answer to the same question. Only the friction
+coefficient is new, at 0.5, and it has no measurement behind it yet; the clamp
+shape is what matters, and the number is a knob for whoever measures next.
+
+**The energy assertion did not need restating.** The plan expected to. It only
+holds because the tangential impulse is solved from the velocities AFTER the
+normal one: each impulse then lies along a single direction, and its energy
+change is a parabola through the origin whose minimum is the unclamped
+solution, so clamping toward zero stays inside it. Solving both from the same
+pre-velocities leaves the `j*jt*(n.K.t)` cross term unaccounted for and can
+create energy. Swept over 4000 randomised oriented pairs the worst energy gain
+is exactly 0.
+
+Gate as run: the contact-geometry suite green at 10 tests (7 existing untouched
+— including the energy assertion, which exercises the new path because both its
+bodies are yawed — plus three new ones for the gate, the restitution ramp and
+the Coulomb clamp); the determinism replay byte-identical; no episode-transient
+leak on monza or singapore; `test:tooling-fast`; the `collisions` browser group.

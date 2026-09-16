@@ -624,6 +624,23 @@ separation pass per step. Its rules, each with the measurement that set it
   a braking zone cannot launch the player, while the AI still pays its share.
   The human's inverse mass stays 0.5 (`AiDrive.humanInvMass`): the player is
   the heavy car in every exchange.
+- **A YAWED pair skips all of the above and goes through a real impulse**
+  (`ContactGeometry.impulse`, reached from `Collide.orientedResponse` whenever
+  either car's `psi * yawMix(psi)` is non-zero — the player past 20 degrees of
+  yaw, never an AI car, which has no real heading). Since 2026-09-16 that
+  impulse carries restitution and Coulomb friction: `e` is the SAME
+  `AiDrive.bumpRestitution` ramp as the rear-end bullet above, and a tangential
+  impulse clamped to `0.5 * j` is what lets leaning on a rival transfer lateral
+  momentum and yaw at all — before it, the resolver could only ever push along
+  the contact normal, so a rub was a shove and never a scrub. The tangential
+  half is solved from the velocities AFTER the normal one, which is what keeps
+  the pair's kinetic energy monotonically falling; solving both from the same
+  pre-velocities leaves the `j*jt*(n.K.t)` cross term unaccounted for and can
+  create energy. `FRICTION = 0.5` is a first value with no measurement behind
+  it. The gate is structural rather than numeric: the unyawed field is
+  bit-identical by construction, because `e` is zero and the friction block
+  does not run when both angles are zero, which is every AI pair and every
+  player under the yaw floor.
 - **A side rub is a small deceleration, taken once a frame**
   (`AiDrive.rubDecel`, 3 m/s² permanent / 3.5 street, on the yielder only). It
   was a 0.995 factor applied on every relaxation pass — 2 % a frame, 48 m/s² at

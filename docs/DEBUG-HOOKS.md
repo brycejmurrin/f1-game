@@ -1266,10 +1266,12 @@ movement should move its corresponding value here (and the car's behaviour).
 | `deadzone` | tilt dead zone (deg; fixed, not a slider) |
 | `tiltCutoff` | STEER SMOOTHING (One-Euro min-cutoff frequency, Hz) |
 
-### `cars() → [{id, x, xv, yaw, prog, speed, lap, ct, kerb, p}, …]`
+### `cars() → [{id, x, xv, yaw, prog, speed, lap, ct, kerb, p, ax, err}, …]`
 Telemetry for every car in `cars[]` order (grid/roster order, NOT position — use `fieldState()` for the running order): lateral `x` (and smoothed `xv`), visual
-`yaw`, `prog`ress, `speed`, `lap`, in-contact timer `ct`, `kerb` flag, and `p` =
-is-player. For measuring pack jitter / side-by-side stability.
+`yaw`, `prog`ress, `speed`, `lap`, in-contact timer `ct`, `kerb` flag, `p` =
+is-player, active-aero state `ax`, and `err` = driving mistakes this car has
+made THIS RACE (the AI mistake model; always 0 for the player, and cleared by a
+re-grid). For measuring pack jitter / side-by-side stability.
 
 ### `carState() → [{…every numeric/boolean field…}, …]`
 The WHOLE per-car state for every car, raw and unrounded, in `cars[]` order —

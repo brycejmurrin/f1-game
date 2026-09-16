@@ -47,6 +47,11 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "_preColSpd", "_tyreLoad", "brakeDemand", "throttleDemand", "steerCommand",
   "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
   "frontUtil", "rearUtil", "slipFront", "slipRear", "lateralAccel", "inPitLane",
+  // 2026-09-16: `errCount` was written by the AI mistake model and read by
+  // nothing, so it leaked here silently — a short rollout rarely trips a
+  // mistake, which is why the guard above never caught it. It counts mistakes
+  // within ONE race, so a cold car has none.
+  "errCount",
   // 2026-09-16: found by tools/check/episode-diff.mjs, not a live repro — the
   // lazy `c.passPlan || (c.passPlan = {})` cache in game.js's overtake-attempt
   // block survives reset() untouched, and `!c.passPlan || c.passPlan.side`
@@ -1142,7 +1147,7 @@ const api = {
     yaw: +(c.yawVis || 0).toFixed(4),
     prog: +c.prog.toFixed(2), speed: +c.speed.toFixed(2), lap: c.lap,
     ct: +(c.contactT || 0).toFixed(2), kerb: !!c.onKerb, p: !!c.isPlayer,
-    ax: +(c.aeroX || 0).toFixed(2),
+    ax: +(c.aeroX || 0).toFixed(2), err: c.errCount | 0,
   })),
   // Lap fractions of curvature-peak apexes (local maxima of |curvature|).
   // Distinct from curated FIA turns on track.def.turns / info().turns — use those

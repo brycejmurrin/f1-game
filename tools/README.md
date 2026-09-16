@@ -60,7 +60,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **check/ai-field.mjs** | Field behaviour of the AI race: pace spread, how fast it strings out, settled passes vs oscillation, nose-to-tail dwell. | ai-racecraft |
+| **check/ai-field.mjs** | Field behaviour of the AI race: pace spread, stringing out, settled vs oscillating passes, dwell, mistake rate. | ai-racecraft |
 | **check/ai-human.mjs** | Does the AI race a HUMAN as it races another AI? Yield elections, lean dwell and contact with a player on the line. | ai-racecraft |
 | **check/ai-line.mjs** | Where the AI actually puts the car in a corner: approach offset and apex depth per baked corner, with run-to-run range. | ai-racecraft |
 | **check/ai-pace.mjs** | How fast is the AI field, per circuit and per difficulty? Simulated laps in the VM, no browser, no renderer. | ai-racecraft |

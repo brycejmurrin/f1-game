@@ -1943,6 +1943,7 @@ function seedPlayerPose() {
 function clearRacingScratch(c) {
   c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null;
   c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1;
+  c.errCount = 0;   // mistakes THIS race, beside c.hits/c.cuts in gridUp — the instrument's denominator
 }
 
 // Car decal / effect-quad / cockpit-instrument geometry lives in

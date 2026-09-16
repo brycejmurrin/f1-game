@@ -189,3 +189,50 @@ contact share and the incident tests rather than lap time. And every
 measurement taken at three seeds in this repository has reversed at five or
 six, three times, always flattering the change: five seeds minimum, and a
 difference inside the range is unproven.
+
+## 10. Step one shipped, 2026-09-16 — and it fails its own gate
+
+`c.errCount` is cleared by `clearRacingScratch` (so a re-grid starts a race at
+zero, beside `c.hits` and `c.cuts`), listed in `EPISODE_TRANSIENTS` (the leak
+§2 predicted was real — the guard never caught it only because a four-second
+rollout rarely trips a mistake), exposed as `err` on `__apex.cars()`, and
+reported by `tools/check/ai-field.mjs` as mistakes per car per 100 s.
+
+**The gate was "the counter non-zero". On the shipped field it is zero.**
+
+Monza, normal, 21 AI cars, measured by wrapping `AiDrive.mistakeChance` to
+count rolls as well as hits:
+
+| window | rolls | mean chance | expected | observed |
+|---|---|---|---|---|
+| 300 s | 362 | 0.00248 | 0.90 | 0 |
+| a longer race | 465 | 0.00237 | 1.10 | 1 |
+| 5 seeds x 240 s | — | — | ~4.5 | 0 [0–3] |
+
+So the model is not broken and the plumbing works — the counter does tick, and
+zero against an expectation of 0.9 is exactly what a Poisson draw looks like.
+It is the RATE that makes it inert. The roll fires 5.5 to 6.1 times per car per
+lap (only in baked attack zones, never while alongside, never during an error
+already in progress) at about 0.0024 each, which is **0.013 mistakes per car
+per lap — one per car per 75 laps**. The shipped default race is three laps, so
+the whole 21-car field is expected to make about **0.8 mistakes per race**. A
+player will never see one.
+
+**What that does to the ranking in §5.** Composure (item 3) is an axis that
+scales the derivative of a rate this low; against 0.8 mistakes a race, any
+setting of it is invisible, and no instrument at any seed count could separate
+two values of it. It cannot be sold or gated as written. Either the base rate
+is revisited first — which is a behaviour change with its own baselines, not
+part of this instrumenting step — or composure moves below the axes that do not
+depend on it. Items 1, 2 and 4 are unaffected: decorrelation, aggression and
+energy bias all act on decisions that fire constantly.
+
+This is the instrument doing its job. Before it existed, "the AI makes
+mistakes under pressure" was a sentence in a design doc with no number behind
+it, and the first axis built on it would have shipped, measured nothing, and
+been tuned against noise.
+
+One defect found and fixed in the instrument itself on the way: the first cut
+divided by `--seconds x cars`, but the default race ends before a 240 s window
+does, so a finished car was charged for time it was not racing. The denominator
+is accumulated racing car-seconds now, and it is reported alongside the rate.
