@@ -938,11 +938,25 @@ jobs:
       # llvmpipe since 2026-09-16, for the smoke numbers measured above (corner
       # approach 17.8 s vs 214, grid start 21.4 vs 138, shard walls 1.1-1.6 min
       # vs 1.8-4.8); `gl: swiftshader` is the opt-OUT below.
+      # TONIGHT'S GROUP ROTATES. Pinning the nightly to `tiny` gave 4 of 118
+      # browser specs any scheduled coverage at all — the gate runs `smoke`
+      # unconditionally and everything else only when a change SELECTS it, so a
+      # spec could sit red indefinitely with nothing to notice. One did
+      # (docs/notes/DEFECT-LEDGER.md, 2026-09-16: physics-fixes was red on the
+      # deploy branch and a benchmarking run found it, not a gate). Rotating one
+      # group a night covers them all in ~11 nights for the minutes the nightly
+      # already spent. Deterministic by UTC day so a red night reproduces from
+      # its date; tests/unit/nightly-group.test.mjs proves the cycle covers
+      # every group and that a new browser group cannot silently skip it.
+      - name: Pick tonight's rotating group
+        id: rota
+        if: github.event_name == 'schedule'
+        run: node tools/ci/nightly-group.mjs >> "$GITHUB_OUTPUT"
       - name: Boot group (nightly) / dispatched group
         if: steps.shipfilter.outputs.ships != 'false' && inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.gl != 'swiftshader'
         env:
           APEX_WORKERS: 1
-          GROUP: ${{ github.event_name == 'workflow_dispatch' && inputs.group || 'tiny' }}
+          GROUP: ${{ (github.event_name == 'workflow_dispatch' && inputs.group) || steps.rota.outputs.GROUP || 'tiny' }}
           # A dispatched group runs its browser copies of the VM-twinned specs
           # too (locally run-playwright skips them; this is where they still run).
           APEX_WITH_TWINNED: 1

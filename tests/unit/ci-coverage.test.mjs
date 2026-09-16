@@ -610,10 +610,19 @@ test("the push-gate smoke spec is sharded four ways on separate runners (unshard
   assert.match(smokeJob, /^\s+shard: \[1, 2, 3, 4\]\s*$/m, "the smoke matrix must be a constant four shards");
   assert.doesNotMatch(smokeJob, /fromJSON\([^)]*'\[1\]'/, "no one-shard fallback on push");
   assert.match(smokeJob, /run: npm run test:smoke -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
-  // The nightly / dispatch step runs the boot group by default and, on
-  // dispatch, whichever browser group the `group` input names — the
-  // runner-side verification for specs the SwiftShader dev box cannot time.
-  assert.match(smokeJob, /GROUP: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.group \|\| 'tiny' \}\}/);
+  // The nightly / dispatch step: a dispatch runs whichever browser group the
+  // `group` input names, and a SCHEDULED run takes tonight's ROTATING group —
+  // the runner-side verification for specs the SwiftShader dev box cannot time.
+  // The rotation is the fix for a real hole: pinned to `tiny`, the nightly gave
+  // 4 of 118 browser specs any scheduled coverage, and one sat red on the
+  // deploy branch until a benchmarking run found it (DEFECT-LEDGER 2026-09-16).
+  // Three things are load-bearing and none is stated by YAML: a dispatch still
+  // WINS over the rotation, a scheduled run must actually consult the picker,
+  // and `tiny` remains the last-resort fallback so a picker failure cannot
+  // leave GROUP empty.
+  assert.match(smokeJob, /GROUP: \$\{\{ \(github\.event_name == 'workflow_dispatch' && inputs\.group\) \|\| steps\.rota\.outputs\.GROUP \|\| 'tiny' \}\}/);
+  assert.match(smokeJob, /- name: Pick tonight's rotating group\n\s+id: rota\n\s+if: github\.event_name == 'schedule'\n\s+run: node tools\/ci\/nightly-group\.mjs >> "\$GITHUB_OUTPUT"/,
+    "a scheduled run must pick its group from tools/ci/nightly-group.mjs");
   assert.match(smokeJob, /run: npm run "test:\$\{GROUP:-tiny\}" -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
   assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      group:\n/, "the dispatch declares the group input");
 });
