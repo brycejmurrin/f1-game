@@ -249,9 +249,13 @@ async function measure(seed) {
       byBranch: { playerBehindOnArc: pct(behind, along), playerAheadOnArc: pct(ahead, along), levelOnArc: pct(level, along) },
     },
     aiVsAiControl: { frames: aiAI, pairsWithAYielderPct: pct(aiAIelected, aiAI) },
-    // How long the AI leaned before conceding (AiDrive.humanYieldGrace). 0 on a
-    // tree without the grace: there, nothing ever takes the role over.
+    // The longest the per-car intrusion timer (c.hYieldT) ran. It keeps counting
+    // AFTER the AI takes the role at AiDrive.humanYieldGrace (the timer only
+    // clears on separation), so this is the longest intruding EPISODE, not the
+    // lean before conceding: 1.2 s here is a 0.3 s lean plus 0.9 s of yielding
+    // alongside. 0 on a tree without the grace: nothing ever takes the role.
     longestLeanSec: +leanMax.toFixed(2),
+    graceSec: Ai.humanYieldGrace(),
     // First-touch geometry, as counts and per 100 s of race (see the loop).
     reinserts, insertTimes,
     // Self-check on the player model: where the player actually sat relative
@@ -285,6 +289,6 @@ for (const r of rows) {
   console.log(`    elected to yield — AI ${r.elections.aiTakesIt}% / HUMAN ${r.elections.humanTakesIt}%` +
               `   (branches: behind ${r.elections.byBranch.playerBehindOnArc}% / ahead ${r.elections.byBranch.playerAheadOnArc}% / level ${r.elections.byBranch.levelOnArc}%)`);
   console.log(`    AI-vs-AI control: ${r.aiVsAiControl.frames} frames, a yielder in ${r.aiVsAiControl.pairsWithAYielderPct}%`);
-  console.log(`    longest lean before the AI took the role: ${r.longestLeanSec}s\n`);
+  console.log(`    longest intruding episode (the AI took the role at ${r.graceSec}s of it): ${r.longestLeanSec}s\n`);
 }
 console.log("  Counts are not comparable across a behaviour change (the race reshuffles); compare rates over several seeds.");

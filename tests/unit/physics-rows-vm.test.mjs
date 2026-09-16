@@ -358,3 +358,44 @@ test("TLX M6 skid stint still clears Monza hw with incidents off", async () => {
   assert.ok(p.speed > 10, `speed ${p.speed} > 10`);
   assert.ok(Math.abs(p.x) > 8, `|x| ${p.x} > 8 (do not lower the TLX spec gate)`);
 });
+
+// ---------------------------------------------------------------------------
+// 2026-09-16 tyre rows — the lateral curve lets go past its peak (TYRE_DROP in
+// js/physics/consts.js) and axle friction is load-sensitive (LOAD_SENS). The
+// probe reuses the TLX skid stint above: 55 frames of full-lock throttle from
+// 70 m/s leaves the rear at x ≈ 2.0, inside the drop window, where a bare tanh
+// sat at 0.96 and the curve now sits ~0.03 below it. Steering lock
+// alone (x ≈ 1.5 at racing grip) never reaches the window, so the steady-corner
+// characterisation rows are the other half of this pin.
+// ---------------------------------------------------------------------------
+test("past the peak the tyre lets go: a full-lock slide settles TYRE_DROP under the limit", async () => {
+  await startRace();
+  const a = g.apex, PC = g.ctx.PhysicsConsts;
+  a.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
+  a.headless(true);
+  a.park(0.1);
+  a.jump(0.1, 70);
+  a.act({ steer: 1, throttle: true }, 1 / 60, 55);
+  const p = g.G.player;
+  const xR = PC.CS_REAR * Math.abs(p.slipRear) / p.gripRear;   // normalised slip, DRIFT 0 so csR = CS_REAR
+  a.headless(false);
+  a.incident({ flags: { r2Airborne: true, r3Contact: true, c1Pileup: true } });
+  a.setPhysics(PHYS0);
+  assert.ok(p.speed > 3, `sp factor must be 1 (speed ${p.speed.toFixed(1)})`);
+  assert.ok(xR > PC.TYRE_PEAK_X + 0.3, `rear must be inside the drop window (x=${xR.toFixed(2)}, measured 2.0)`);
+  const q = Math.min(1, Math.max(0, (xR - PC.TYRE_PEAK_X) / PC.TYRE_DROP_W));
+  const want = Math.tanh(xR) - PC.TYRE_DROP * q * q * (3 - 2 * q);   // the curve in _tyreSat, util = |F| / mu
+  assert.ok(Math.abs(p.rearUtil - want) < 0.02, `rearUtil ${p.rearUtil.toFixed(3)} should follow the curve (${want.toFixed(3)})`);
+  assert.ok(p.rearUtil < Math.tanh(xR) - 0.01, `the drop must be live: util ${p.rearUtil.toFixed(3)} vs bare tanh ${Math.tanh(xR).toFixed(3)}`);
+});
+
+test("load sensitivity: both axles carry the LOAD_SENS factor, static balance is exactly 1, full braking costs ~1.3 %", () => {
+  const src = readFileSync(join(ROOT, "js", "game.js"), "utf8");
+  assert.ok(src.includes("loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1))"), "front axle lost its load-sensitivity factor");
+  assert.ok(src.includes("loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1))"), "rear axle lost its load-sensitivity factor");
+  const PC = g.ctx.PhysicsConsts, fw = PC.FRONT_WEIGHT, k = PC.LOAD_SENS;
+  const grip = (wt) => { const lf = fw + wt, lr = 1 - fw - wt; return lf * (1 - k * (lf / fw - 1)) + lr * (1 - k * (lr / (1 - fw) - 1)); };
+  assert.equal(grip(0), 1, "at rest the factor is 1 on both axles");
+  const braking = grip(0.18);   // the WT_LONG clamp's braking end (game.js: clamp(..., -0.16, 0.18))
+  assert.ok(braking < 0.995 && braking > 0.975, `full braking should cost ~1.3 % of lateral grip, got ${(100 * (1 - braking)).toFixed(2)} %`);
+});
