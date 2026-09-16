@@ -202,6 +202,12 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ci-coverage.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
+  // The duration HISTORY behind the budget: junit/live-reporter merge,
+  // the bounded rolling record, the CI-bucket fallback and the growth flag.
+  // Pure fixtures plus one pass over the committed tests/data/spec-timings.json,
+  // ~1 s — and it belongs in the edit loop because the file it guards is
+  // rewritten by a tool, so drift shows up as a commit nobody meant to make.
+  "tests/unit/spec-timings.test.mjs",
   "tests/unit/twinned-specs.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/gallery-capture-draws.test.mjs",
