@@ -138,6 +138,35 @@ try {
       const i = kv.indexOf("=");
       if (i > 0) { try { localStorage.setItem(kv.slice(0, i), kv.slice(i + 1)); } catch (_) { /* blocked */ } }
     }
+    // RACE-ENTRY ATTRIBUTION (2026-09-16), for the multithreading plan's gate
+    // (docs/notes/MULTITHREADING-PLAN-2026-09-16.md §4). That plan asks three
+    // questions about MAIN-THREAD JAVASCRIPT, not about the GPU, and says this
+    // container cannot answer them. Two of the three need only a real CPU;
+    // the third — is the block the track build, or upload back-pressure
+    // wearing a costume, which this repository has already caught once — needs
+    // a real driver, and macos-latest is the one image the census has measured
+    // as anyHardware:true (docs/notes/CI-RENDERING-PERFORMANCE.md).
+    //
+    // A long task is the browser own definition of a main-thread block: a task
+    // over 50 ms. `buffered: true` and an init script together mean the window
+    // starts before the first line of game code runs, so nothing is missed.
+    // Costs nothing on a run that does not read it.
+    window.__apexLongTasks = [];
+    window.__apexMarks = {};
+    window.__apexMark = (n) => { try { window.__apexMarks[n] = performance.now(); } catch (_) { /* no clock */ } };
+    try {
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries()) {
+          if (window.__apexLongTasks.length < 4000) window.__apexLongTasks.push([+e.startTime.toFixed(1), +e.duration.toFixed(1)]);
+        }
+      }).observe({ type: "longtask", buffered: true });
+      window.__apexLongTaskObserver = true;
+    } catch (_) {
+      // Absence must not read as "no blocking". The reader below reports
+      // supported:false rather than a zero, because a zero here would say the
+      // item is dead when nothing had looked.
+      window.__apexLongTaskObserver = false;
+    }
   }, [backend, path3, extraLs]);
 
   // Bounded: a wedged renderer must not turn the diagnosis into another blank.
@@ -170,7 +199,10 @@ try {
   // race() and park() were the last unbounded evaluates. A renderer that
   // wedges DURING the track load hangs them forever, and then the beats below
   // — the whole diagnosis — never run at all.
-  out.raceCall = await bounded(() => page.evaluate((t) => window.__apex.race(t), track), 60000, "race");
+  out.raceCall = await bounded(() => page.evaluate((t) => {
+    window.__apexMark("raceCall");
+    return window.__apex.race(t);
+  }, track), 60000, "race");
   checkpoint("race-called");
   // 300 s was a guess made against a software rasteriser; on a real GPU the
   // load is seconds, so a long wait here only delays the beats that carry the
@@ -179,7 +211,8 @@ try {
     () => page.waitForFunction(() => window.__apex.info().track != null, null,
       { polling: 100, timeout: 120000 }), 130000, "track-ready");
   checkpoint("track-ready");
-  out.parkCall = await bounded(() => page.evaluate(() => window.__apex.park(0.1)), 60000, "park");
+  await bounded(() => page.evaluate(() => window.__apexMark("trackReady")), 10000, "mark-track-ready");
+  out.parkCall = await bounded(() => page.evaluate(() => { window.__apexMark("parked"); return window.__apex.park(0.1); }), 60000, "park");
   checkpoint("racing", { track });
   // Poll instead of one blind sleep. The question after park() is whether the
   // page is STILL ANSWERING, and a single waitForTimeout cannot tell a healthy
@@ -235,6 +268,35 @@ try {
     await new Promise((r) => setTimeout(r, 1000));
   }
   checkpoint("settled");
+
+  // THE RACE-ENTRY WINDOW: race() called -> the track is there. Everything the
+  // multithreading plan calls "race entry" happens inside it.
+  //
+  // `longestBlockMs` is the plan condition 1 verbatim — CONTIGUOUS block, not
+  // the sum, because a worker overlaps a freeze and does nothing for a window
+  // that is already yielding. `otherBlockMs` is condition 3: main-thread work
+  // in the same window that a moved build could overlap WITH. Condition 2
+  // (build vs upload back-pressure) is NOT answered here and must not be
+  // guessed from these numbers; it needs per-subsystem attribution that does
+  // not exist yet.
+  out.raceEntry = await bounded(() => page.evaluate(() => {
+    const marks = window.__apexMarks || {}, tasks = window.__apexLongTasks || [];
+    const r = { supported: window.__apexLongTaskObserver === true, marks, longTasksSeen: tasks.length };
+    if (!r.supported) { r.note = "no longtask PerformanceObserver in this browser — nothing was measured"; return r; }
+    const a = marks.raceCall, b = marks.trackReady;
+    if (a == null || b == null) { r.note = "the window never closed (race or track-ready did not mark)"; return r; }
+    const win = tasks.filter((t) => t[0] + t[1] > a && t[0] < b);
+    const dur = win.map((t) => t[1]);
+    const total = dur.reduce((x, y) => x + y, 0), longest = dur.length ? Math.max.apply(null, dur) : 0;
+    r.entryMs = +(b - a).toFixed(1);
+    r.blockMs = +total.toFixed(1);
+    r.longestBlockMs = +longest.toFixed(1);
+    r.otherBlockMs = +(total - longest).toFixed(1);
+    r.tasks = win.length;
+    r.longest5 = win.slice().sort((x, y) => y[1] - x[1]).slice(0, 5).map((t) => ({ at: t[0], ms: t[1] }));
+    return r;
+  }), 20000, "race-entry");
+  checkpoint("race-entry-read");
 
   out.overlay = await bounded(() => page.evaluate(() => {
     const el = document.getElementById("gfx-debug");
