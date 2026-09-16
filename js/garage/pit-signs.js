@@ -62,6 +62,24 @@ const PitSigns = (function () {
       }
       ctx.restore();
     }
+    // The BOARDS (cells 12 and 13, TrackPit.SIGN.boards): opaque, blue, white
+    // lettering — a sign, not a fascia. "PIT ENTRY" carries an arrow at the
+    // pit side; the entry-line board names the limit the lane is authored at.
+    if (S.boards) {
+      const side = opts && opts.side != null ? opts.side : 1;
+      const lim = Math.round((opts && opts.limitKph) || 80);
+      const texts = [(side < 0 ? "◀ " : "") + "PIT ENTRY" + (side > 0 ? " ▶" : ""), "PIT LANE " + lim + " km/h"];
+      for (let b = 0; b < S.boards && b < texts.length; b++) {
+        const cell = cellRect(S.cells + b), x = cell.x / div, y = cell.y / div;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, cw, ch); ctx.clip();
+        ctx.fillStyle = "rgb(18,38,92)"; ctx.fillRect(x, y, cw, ch);
+        ctx.fillStyle = "#ffffff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.font = "800 " + Math.round(ch * 0.66) + "px system-ui, sans-serif";
+        ctx.fillText(texts[b], x + cw / 2, y + ch / 2 + 1, cw - 16 / div);
+        ctx.restore();
+      }
+    }
     return cv;
   }
 
@@ -90,7 +108,7 @@ const PitSigns = (function () {
     if (!q || !q.idx || !q.idx.length || !G || typeof G.createTexMesh !== "function" ||
         typeof G.createTexture !== "function" || !supported()) return false;
     try {
-      const canvas = paintAtlas(track.pit.row.boxes, { mobile: !!G.mobileTier });
+      const canvas = paintAtlas(track.pit.row.boxes, { mobile: !!G.mobileTier, side: track.pit.side, limitKph: track.pit.limitKph });
       track.meshes.pitSignTex = G.createTexture(canvas);
       track.meshes.pitSigns = G.createTexMesh({ pos: q.pos, nrm: q.nrm, uv: q.uv, idx: q.idx });
       return true;
@@ -118,9 +136,13 @@ const PitSigns = (function () {
     const m = track && track.meshes, q = track && track.pitSigns;
     _calls++;
     if (hidden || !m || !m.pitSigns || !m.pitSignTex || !q || typeof gfx.drawDecal !== "function") return false;
-    if (eye && q.centre) {
-      const dx = eye[0] - q.centre[0], dz = eye[2] - q.centre[2];
-      if (dx * dx + dz * dz > 350 * 350) return false;
+    if (eye) {
+      // Within 350 m of the row's centre OR of any board (the approach boards
+      // stand up to 400 m before the row).
+      const near = (a) => { const dx = eye[0] - a[0], dz = eye[2] - a[2]; return dx * dx + dz * dz <= 350 * 350; };
+      let ok = q.centre ? near(q.centre) : !q.anchors || !q.anchors.length;
+      if (!ok && q.anchors) for (let i = 0; i < q.anchors.length && !ok; i++) ok = near(q.anchors[i]);
+      if (!ok) return false;
     }
     _opts.glow = night ? 0.5 : 0;
     gfx.drawDecal(m.pitSigns, model, m.pitSignTex, _opts);

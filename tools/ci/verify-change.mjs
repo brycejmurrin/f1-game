@@ -20,7 +20,7 @@
 //   ... --json                                    # machine-readable verdict
 //
 // Phases:
-//   1 fast (inline, ~30 s): tooling-fast when the change warrants it;
+//   1 fast (inline, ~2 min at three files at a time): tooling-fast when the change warrants it;
 //     verify-track.cjs per changed circuit; graph-parity when js/track/scenery/graph.js
 //     moved; bump-cache --check. Any red here stops before browsers spin up.
 //   2 groups (background via test-bg.mjs): pick-tests selection, ONE group per
@@ -164,7 +164,13 @@ if (plan.fast.graphParity) {
   fastOk = run("graph-parity", "node", ["tools/track/graph-parity.cjs", "--all"]) && fastOk;
 }
 if (plan.fast.toolingFast) {
-  fastOk = run("tooling-fast", "npm", ["run", "--silent", "test:tooling-fast"]) && fastOk;
+  // Files at a time, by load. MEASURED 2026-09-16 on the 4-core box: 194 files
+  // take 317 s one at a time (loadavg 1.7 — three cores idle), 176 s at two
+  // (deploy.mjs's GATE_JOBS) and 117 s at three (peak loadavg 3.4). Three when
+  // the box is quiet; two when something else is already running — a live
+  // browser group has its own claim on the cores (AGENTS.md §Verification 5).
+  const jobs = os.loadavg()[0] < 1.5 ? 3 : 2;
+  fastOk = run("tooling-fast", "node", ["tools/ci/tooling-fast.mjs", `--jobs=${jobs}`]) && fastOk;
 }
 {
   // Advisory: confirms every shell tag reads ?v=dev and meta == version.json
@@ -176,13 +182,40 @@ if (plan.fast.toolingFast) {
   say(`phase1 ${cache.consistent ? "PASS" : "STALE"} cache-check (advisory)`);
 }
 
+// A PUSH OVER A LIVE ci.yml RUN CANCELS IT, and a cancelled job runs no
+// `if: always()` step, so its failures are never carried forward. Two of the
+// three cancelled runs inspected on 2026-09-16 had hidden a real red that way.
+// Best effort, unauthenticated (a public repo's runs list needs no token; the
+// GitHub API is reachable from the container through the proxy), 3 s cap, and
+// silent on any failure — an advisory, never a gate.
+async function liveCiRuns() {
+  try {
+    const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
+    const url = git(["remote", "get-url", "origin"]);
+    const m = url.match(/github\.com[:/]([^/]+\/[^/.]+)/);
+    if (!m || !branch || branch === "HEAD") return null;
+    const api = `https://api.github.com/repos/${m[1]}/actions/runs?branch=${encodeURIComponent(branch)}&status=in_progress&per_page=5`;
+    const res = await fetch(api, { signal: AbortSignal.timeout(3000), headers: { Accept: "application/vnd.github+json", "User-Agent": "apex26-verify-change" } });
+    if (!res.ok) return null;
+    const runs = ((await res.json()).workflow_runs || []).filter((r) => /ci\.yml$/.test(r.path || ""));
+    return { branch, runs: runs.map((r) => ({ id: r.id, sha: (r.head_sha || "").slice(0, 8), url: r.html_url })) };
+  } catch (_) { return null; }
+}
+
+// Looked up ONCE, before the verdict, so finish() stays synchronous: its call
+// sites exit the process, and an awaited fetch inside it would let the batch
+// code below run on past an "unmatched" or a red fast gate.
+const live = await liveCiRuns();
+
 const finish = (verdict, extra = {}) => {
   const out = { verdict, phases, batches, notRun: extra.notRun || [], ...extra };
+  if (live?.runs.length) out.liveCi = live;
   if (JSON_OUT) console.log(JSON.stringify(out, null, 2));
   else {
     say(`verdict: ${verdict} ${loadavgLine()}`);
     if (out.notRun.length) say(`not run: ${out.notRun.join(", ")}`);
     if (plan.sweepsBeforeDeployPush) say("deploy-push reminder: js/track|circuits|tools changed — run test:sweeps on the union first (.claude/skills/check-changes/references/deploy.md)");
+    if (live?.runs.length) say(`ci: ${live.runs.length} ci.yml run(s) LIVE on ${live.branch} (${live.runs.map((r) => r.sha).join(", ")}) — a push now cancels them, and a cancelled job hides its failures; wait for the verdict or batch the next push`);
   }
   process.exit(verdict === "pass" ? 0 : verdict === "fail" ? 1 : 2);
 };

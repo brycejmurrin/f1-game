@@ -12,7 +12,7 @@
 // document hidden, mirroring the platform's own behaviour ("the lock is
 // released whenever the page is hidden, and not given back"), so the
 // re-acquire-on-visible path is exercised for real rather than assumed.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, TRACK_MS, clickLive } from "../helpers/fixtures.js";
 
 async function mockWakeLock(page) {
   await page.addInitScript(() => {
@@ -50,6 +50,16 @@ async function mockWakeLock(page) {
   });
 }
 
+// EVERY wait after boot polls on the WALL CLOCK. This spec ran its post-boot
+// waits with Playwright's default rAF polling and default 60 s timeout, on a
+// page racing Bahrain under SwiftShader — the trap docs/TESTING.md §1 measures
+// (a declared 3 s wait ran 109 s on a rendering page): the predicate is polled
+// on frames the render loop starves, so the bound never fires and the test
+// dies of its budget instead. CI: "a late release event from an old sentinel
+// cannot clear its replacement" failed 4 of 5 `selected` runs this way
+// (2026-09-16), 18.6 min a shard, never on an assertion.
+const WAIT = { polling: 100, timeout: TRACK_MS };
+
 async function boot(page) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
@@ -64,7 +74,7 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
       window.__apex.race("bahrain");
       window.__apex.race("bahrain"); // a second hold while pending must coalesce
     });
-    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"));
+    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"), null, WAIT);
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen"]);
   });
 
@@ -72,7 +82,7 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     await mockWakeLock(page);
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"));
+    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"), null, WAIT);
     await page.evaluate(() => window.__apex.finishRace());
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release"]);
   });
@@ -85,17 +95,12 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     await mockWakeLock(page);
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"));
-    // Dispatched clicks, not locator.click(): Playwright's (and chrome-devtools
-    // MCP's) actionability check waits for the target's bounding box to be
-    // stable across two consecutive animation frames, which apex26's own live
-    // render loop never gives it — confirmed live via chrome-devtools MCP on
-    // this exact button, in BOTH "count" (pre-go()) and "race" state, on an
-    // otherwise idle box (not a load artifact). A raw .click() reaches the
-    // same onclick handler the game wires up and pauses/quits correctly.
-    await page.evaluate(() => document.getElementById("pausebtn").click());
-    await page.evaluate(() => document.getElementById("pm-quit").click());
-    await page.waitForFunction(() => window.__wakeLog.includes("release"));
+    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"), null, WAIT);
+    // clickLive, not locator.click(): the render loop is live, so Playwright's
+    // actionability poll never sees a stable box (fixtures.js has the measurement).
+    await clickLive(page, "pausebtn");
+    await clickLive(page, "pm-quit");
+    await page.waitForFunction(() => window.__wakeLog.includes("release"), null, WAIT);
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release"]);
   });
 
@@ -103,19 +108,19 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     await mockWakeLock(page);
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"));
+    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"), null, WAIT);
 
     await page.evaluate(() => {
       Object.defineProperty(document, "hidden", { configurable: true, value: true });
       document.dispatchEvent(new Event("visibilitychange"));
     });
-    await page.waitForFunction(() => window.__wakeLog.length >= 2);
+    await page.waitForFunction(() => window.__wakeLog.length >= 2, null, WAIT);
 
     await page.evaluate(() => {
       Object.defineProperty(document, "hidden", { configurable: true, value: false });
       document.dispatchEvent(new Event("visibilitychange"));
     });
-    await page.waitForFunction(() => window.__wakeLog.length >= 3);
+    await page.waitForFunction(() => window.__wakeLog.length >= 3, null, WAIT);
 
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release", "request:screen"]);
   });
@@ -133,7 +138,7 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     page.on("pageerror", (e) => errors.push(String(e)));
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().track != null);
+    await page.waitForFunction(() => window.__apex.info().track != null, null, WAIT);
     await page.evaluate(() => window.__apex.finishRace());
     expect(errors).toEqual([]);
   });
@@ -155,7 +160,7 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     page.on("pageerror", (e) => errors.push(String(e)));
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__apex.info().track != null);
+    await page.waitForFunction(() => window.__apex.info().track != null, null, WAIT);
     await page.evaluate(() => window.__apex.finishRace());
     expect(errors).toEqual([]);
   });
@@ -188,10 +193,10 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     });
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"));
+    await page.waitForFunction(() => window.__wakeLog.includes("request:screen"), null, WAIT);
     await page.evaluate(() => window.__apex.finishRace());
     await page.evaluate(() => window.__grantWake());
-    await page.waitForFunction(() => window.__wakeLog.includes("release"));
+    await page.waitForFunction(() => window.__wakeLog.includes("release"), null, WAIT);
     expect(await page.evaluate(() => window.__wakeLog)).toEqual(["request:screen", "release"]);
   });
 
@@ -223,17 +228,17 @@ test.describe("Screen wake lock — held for the duration of a race", () => {
     });
     await boot(page);
     await page.evaluate(() => window.__apex.race("bahrain"));
-    await page.waitForFunction(() => window.__wakeSentinels.length === 1);
+    await page.waitForFunction(() => window.__wakeSentinels.length === 1, null, WAIT);
     await page.evaluate(async () => {
       await window.__wakeSentinels[0].release();
       document.dispatchEvent(new Event("visibilitychange"));
     });
-    await page.waitForFunction(() => window.__wakeSentinels.length === 2);
+    await page.waitForFunction(() => window.__wakeSentinels.length === 2, null, WAIT);
     await page.evaluate(() => {
       window.__wakeSentinels[0].fire();
       window.__apex.finishRace();
     });
-    await page.waitForFunction(() => window.__wakeLog.includes("release:2"));
+    await page.waitForFunction(() => window.__wakeLog.includes("release:2"), null, WAIT);
     expect(await page.evaluate(() => window.__wakeLog)).toEqual([
       "request:1", "release:1", "request:2", "fire:1", "release:2",
     ]);

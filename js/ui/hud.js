@@ -924,6 +924,28 @@ function drawMinimap() {
         mc.stroke();
       }
     }
+    // THE PIT LANE: a light dashed run from where the entry road peels off
+    // to where the exit road rejoins, and a "P" at the entry line — the map
+    // used to say nothing about where the pits were.
+    const pit = track.pit;
+    if (pit && pit.entryRoadM != null) {
+      const L = track.total, fOf = (s) => (((s % L) + L) % L) / L;
+      const fa = fOf(pit.sA), fb = fOf(pit.sB);
+      const i0 = Math.floor(fa * n), steps = Math.max(2, Math.round((((fb - fa) % 1) + 1) % 1 * n));
+      mc.strokeStyle = "rgba(236,236,246,0.85)"; mc.lineWidth = 3; mc.setLineDash([3, 3]);
+      mc.beginPath();
+      for (let i = 0; i <= steps; i++) {
+        const p = map[(i0 + i) % n];
+        const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
+        i === 0 ? mc.moveTo(x, y) : mc.lineTo(x, y);
+      }
+      mc.stroke(); mc.setLineDash([]);
+      const pe = map[Math.floor(fOf(pit.sIn) * n) % n];
+      const ex = 8 + pe[0] * (cssW - 16), ey = 8 + pe[1] * (cssH - 16);
+      mc.fillStyle = "rgba(255,255,255,0.95)"; mc.beginPath(); mc.arc(ex, ey, 5, 0, Math.PI * 2); mc.fill();
+      mc.fillStyle = "#14161c"; mc.font = "700 7px system-ui, sans-serif"; mc.textAlign = "center"; mc.textBaseline = "middle";
+      mc.fillText("P", ex, ey + 0.5);
+    }
   }
   // Canvas resize resets 2D context state, so the transform is set every
   // draw, not once. The blit destination is in local px: under the ratio

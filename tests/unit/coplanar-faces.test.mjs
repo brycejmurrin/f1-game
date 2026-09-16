@@ -43,6 +43,19 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // rails, mullions — end up on one plane. That needs a PLACEMENT fix, not a
 // standoff constant, so the caps carry it until then.
 //
+// fuji 16 -> 17, hungaroring 18 -> 20, istanbul 4 -> 5, magny_cours 1 -> 2,
+// redbull 8 -> 9 (2026-09-16), and albert_park 8 -> 7 for the stale-cap test:
+// NOT raised to admit new work. Bisected to 80acf93's pit-lane lengths alone
+// (TrackPit ENTRY_MAX 400 -> 260, EXIT_M 130 -> 110; the same tree with only
+// those two constants restored reads istanbul 4 again, while its mesh.js and
+// pits.js hunks restored one at a time move nothing). A shorter lane slides
+// every circuit's complex along the road, and on these five two engine mesh
+// faces meet on one plane where the complex newly lands — istanbul's is 18 m
+// before the new entry road, 35 m off the pit side, both faces from the
+// track builder (no emitter stack). The lane length is a deliberate design
+// change, the coincidences are positional, and the fix is per-circuit or an
+// engine standoff between the complex and the landform: the pit-lane
+// lineage's to make. Recorded so the caps stop lying about the tree.
 // paul_ricard 9 -> 12 and montreal 7 -> 9 (2026-08-14): NOT raised to admit new
 // work. Both were already failing on the deploy lineage before the grounding
 // branch met it — measured on `origin/claude/f1-game-project-26h3ng` in an

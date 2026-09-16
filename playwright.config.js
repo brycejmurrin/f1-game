@@ -46,6 +46,16 @@ const LAUNCH = {
   ],
 };
 
+// APEX_GL=llvmpipe is the CI EXPERIMENT (ci.yml `gl` dispatch input): Mesa's
+// llvmpipe through ANGLE's GL backend instead of SwiftShader. It does NOT work
+// in the dev container (no /dev/dri — docs/notes/CI-RENDERING-PERFORMANCE.md
+// §llvmpipe 2026-09-16); GitHub's ubuntu runners are the open question. The
+// SwiftShader pin above stays the committed default (ci-coverage guards it).
+if (process.env.APEX_GL === "llvmpipe") {
+  LAUNCH.args = LAUNCH.args.map((a) => (a === "--use-angle=swiftshader" ? "--use-angle=gl" : a))
+    .concat(["--use-gl=angle", "--ignore-gpu-blocklist"]);
+}
+
 // The render suite: specs that take screenshots / pixel-diffs, drive real GL
 // rendering, or assert DOM visibility. SwiftShader renders on the CPU, so past
 // ~4-6 concurrent renderers a 16-core box THRASHES (measured) rather than speeds
@@ -71,7 +81,12 @@ const RENDER_SPECS = [
 
 // Default worker cap: every worker owns a Chromium + SwiftShader process.
 // Override with APEX_WORKERS or Playwright's --workers=N.
-const LOCAL_WORKERS = Math.max(2, Math.min(4, Math.floor(os.cpus().length / 2)));
+// ONE worker on a 4-core box — the same rule test-bg.mjs applies (AGENTS.md
+// §Verification 5). This read `max(2, …)` until 2026-09-16, so the documented
+// single-spec form, `npm test -- tests/specs/<file>.spec.js`, ran two
+// SwiftShader workers on 4 cores: the exact configuration docs/TESTING.md §3
+// measured at ~1.9x per test with false timeouts.
+const LOCAL_WORKERS = os.cpus().length <= 4 ? 1 : Math.min(4, Math.floor(os.cpus().length / 2));
 const REQUESTED_WORKERS = Number.parseInt(process.env.APEX_WORKERS || "", 10);
 const WORKERS = Number.isFinite(REQUESTED_WORKERS) && REQUESTED_WORKERS > 0
   ? REQUESTED_WORKERS

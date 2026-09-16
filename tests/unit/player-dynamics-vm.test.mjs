@@ -51,9 +51,16 @@ test("the throttle charges the driven rear axle, never the undriven front", () =
   assert.ok(lo > hi, `traction-limited at low speed, power-limited at high (${lo} vs ${hi})`);
 });
 
-test("planting the throttle at the limit steps the rear out (power-on oversteer)", () => {
-  assert.ok(Math.abs(m.powerOn.aR_power) > Math.abs(m.powerOn.aR_coast) + 1,
-    `rear slip must grow on the throttle (${m.powerOn.aR_coast}° → ${m.powerOn.aR_power}°)`);
+test("on the throttle the rear pays the ellipse and the front pays for the weight it loses — no power-on oversteer without a slip ratio", () => {
+  // The honest tier-1 shape (measured with the field parked, 2026-09-16): at
+  // a 28 m/s exit the rear's charge is at THR_FLOOR..THR_CAP, the front's is
+  // zero, and the throttle's rearward weight transfer costs the front MORE
+  // grip than the ellipse costs the rear — so the balance moves to understeer
+  // and the rear's slip does not grow. A rear that steps out on the pedal
+  // needs a slip ratio (tier 2 in docs/notes/PLAYER-PHYSICS-PLAN-TIER2-2026-09.md).
+  assert.equal(m.powerOn.axFracF, 0, "the front spends nothing on the throttle");
+  assert.ok(m.powerOn.axFracR >= 0.3, `the rear pays the ellipse on the throttle (axFracR=${m.powerOn.axFracR})`);
+  assert.ok(Math.abs(m.powerOn.aR_power - m.powerOn.aR_coast) < 3, `the rear must not snap either way at a corner exit (${m.powerOn.aR_coast}° → ${m.powerOn.aR_power}°)`);
 });
 
 test("lifting off near the limit rotates the car (lift-off oversteer)", () => {

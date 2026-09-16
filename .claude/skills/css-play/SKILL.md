@@ -1,6 +1,6 @@
 ---
 name: css-play
-description: Use when iterating on Apex 26 menu/HUD CSS for a specific screen or sheet, trying a token or class change, or wanting before/after screenshots of a page without a full layout-audit — and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, deciding whether to split index.html, designing height-responsive layout, or judging whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. Not for whole-matrix review (survey-ui-matrix), one-off layout bugs (ui-menu-a11y), or canvas/3D shots (playwright-probe).
+description: Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots without a full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting.
 ---
 
 # Playing with menu / HUD CSS

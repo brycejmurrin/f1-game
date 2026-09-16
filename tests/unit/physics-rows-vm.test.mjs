@@ -358,3 +358,46 @@ test("TLX M6 skid stint still clears Monza hw with incidents off", async () => {
   assert.ok(p.speed > 10, `speed ${p.speed} > 10`);
   assert.ok(Math.abs(p.x) > 8, `|x| ${p.x} > 8 (do not lower the TLX spec gate)`);
 });
+
+// ---------------------------------------------------------------------------
+// 2026-09-16 tyre rows — the lateral curve lets go past its peak
+// (TyreModel.lateralCurve) and axle friction is load-sensitive (LOAD_SENS). The
+// probe reuses the TLX skid stint above: 55 frames of full-lock throttle from
+// 70 m/s leaves the rear at x ≈ 2.0, past the peak (π/2) and on the plateau;
+// the curve reaches its floor by x ≈ 5. The steady-corner characterisation
+// rows are the other half of this pin.
+// ---------------------------------------------------------------------------
+test("past the peak the tyre lets go: a full-lock slide settles under the limit on the curve", async () => {
+  await startRace();
+  const a = g.apex, PC = g.ctx.PhysicsConsts, TM = g.ctx.TyreModel;
+  a.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
+  a.headless(true);
+  a.park(0.1);
+  a.jump(0.1, 70);
+  a.act({ steer: 1, throttle: true }, 1 / 60, 55);
+  const p = g.G.player;
+  const xR = PC.CS_REAR * Math.abs(p.slipRear) / p.gripRear;   // normalised slip, DRIFT 0 so csR = CS_REAR
+  const util = Math.abs(p.forceRear) / p.gripRear;             // |F| / mu (rearUtil itself is x / peak, monotonic)
+  a.headless(false);
+  a.incident({ flags: { r2Airborne: true, r3Contact: true, c1Pileup: true } });
+  a.setPhysics(PHYS0);
+  assert.ok(p.speed > 3, `sp factor must be 1 (speed ${p.speed.toFixed(1)})`);
+  assert.ok(xR > TM.CURVE_PEAK_X, `rear must be past its peak (x=${xR.toFixed(2)})`);
+  const rear = (x) => Math.abs(TM.lateralCurve(x, TM.CURVE_FLOOR_R, TM.CURVE_FALL_W_R, TM.CURVE_HOLD_R));
+  const want = rear(xR);
+  assert.ok(Math.abs(util - want) < 0.02, `rear |F|/mu ${util.toFixed(3)} should follow the rear's curve (${want.toFixed(3)})`);
+  assert.ok(rear(9) <= TM.CURVE_FLOOR_R + 0.01 && TM.CURVE_FLOOR_R <= 0.85, `far past the peak the rear must sit at its floor (${TM.CURVE_FLOOR_R}), under the limit`);
+  assert.ok(Math.abs(TM.lateralCurve(5)) <= TM.CURVE_FLOOR + 0.01 && TM.CURVE_FLOOR < TM.CURVE_FLOOR_R, `the front falls further than the rear (${TM.CURVE_FLOOR} vs ${TM.CURVE_FLOOR_R})`);
+  assert.ok(p.rearUtil > 1, `rearUtil is x / peak and must read past 1 here (${p.rearUtil.toFixed(3)})`);
+});
+
+test("load sensitivity: both axles carry the LOAD_SENS factor, static balance is exactly 1, full braking costs ~1.3 %", () => {
+  const src = readFileSync(join(ROOT, "js", "game.js"), "utf8");
+  assert.ok(src.includes("loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1))"), "front axle lost its load-sensitivity factor");
+  assert.ok(src.includes("loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1))"), "rear axle lost its load-sensitivity factor");
+  const PC = g.ctx.PhysicsConsts, fw = PC.FRONT_WEIGHT, k = PC.LOAD_SENS;
+  const grip = (wt) => { const lf = fw + wt, lr = 1 - fw - wt; return lf * (1 - k * (lf / fw - 1)) + lr * (1 - k * (lr / (1 - fw) - 1)); };
+  assert.equal(grip(0), 1, "at rest the factor is 1 on both axles");
+  const braking = grip(0.18);   // the WT_LONG clamp's braking end (game.js: clamp(..., -0.16, 0.18))
+  assert.ok(braking < 0.995 && braking > 0.975, `full braking should cost ~1.3 % of lateral grip, got ${(100 * (1 - braking)).toFixed(2)} %`);
+});

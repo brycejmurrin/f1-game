@@ -60,4 +60,13 @@ every tag and `pages.yml` stamps content hashes while staging. Nothing to
 bump after a `js/`/`css/` edit; after a `tools/manifest.cjs` change run
 `node tools/gen/gen-shell.mjs` (check-changes `references/bump.md`).
 
+**Routing that used to sit in the descriptions** (moved out 2026-09-16 — a
+description is loaded every turn; this table is not): hook catalogs →
+agent-view; a live canvas → mcp-probe; live `version.json` → deploy-research;
+editing a circuit → new-track; a picture-driven accuracy pass → survey-track;
+whole-UI review → survey-ui-matrix; a single layout bug → ui-menu-a11y;
+canvas/3D shots → playwright-probe; restructure decisions → css-play; a new
+lighting knob across backends → `../../docs/ARCHITECTURE.md` §Cross-backend
+parity.
+
 See individual `SKILL.md` files under this directory for full workflows.

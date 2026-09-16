@@ -23,6 +23,22 @@ every item names the bench number that must move.
   fraction had the same ceiling). Item 4 below makes lock-ups a consequence
   instead of retuning the threshold.
 
+- **Tier 1 does not produce power-on oversteer, and a bench with a live AI
+  field said it did.** With the field parked (retired, 80 m off the road —
+  the bench does this now), a planted throttle at any lock at 16–28 m/s
+  moves the balance to UNDERSTEER: the rearward weight transfer costs the
+  front 15–18 % of its grip while the ellipse costs the rear 7–13 % net of
+  its load gain, and at hairpin speeds the car is not grip-limited at full
+  lock anyway (utilisation ~0.5 at 24 m/s). The coast baseline is skewed
+  too: a flat `COAST_DRAG` of 6 m/s² is 0.6 g of lift-off at 60 km/h, three
+  times a real car's, loading the front before the throttle unloads it. So
+  item 12 (slip ratio → wheelspin) and §3.4 (engine braking ∝ v²) are what
+  a rear that steps out on the pedal actually needs; the rear-only charge
+  is the seam they plug into, not the effect itself.
+- **The rear tyre needs a wider limit zone than the front.** See the tier-1
+  note §6: with the front's fall on both axles, full lock while coasting at
+  32–44 m/s spun the car. Any tier-2 curve work keeps per-axle parameters.
+
 ## 2. Ranked ideas (brainstorm, 36 scored; score = impact × confidence ÷ cost)
 
 | # | Idea | Score | Measure |

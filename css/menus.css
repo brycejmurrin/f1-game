@@ -1200,8 +1200,32 @@ h3.sel-label {
    that rule is scoped to #pmsettings-inner .pm-group. */
 #rs-body .tune-label {
   color: var(--steel); font-weight: 700; font-style: italic;
-  letter-spacing: var(--ls-5); text-transform: uppercase;
+  /* --ls-3 ("label — dim uppercase labels, chips"), not --ls-5 ("display —
+     section labels, eyebrows"). These ARE dim uppercase row labels, so this is
+     the rung they belong on; --ls-5 also spent ~13px of pure tracking on
+     CONDITIONS, which is what pushed the label past its share of the row. */
+  letter-spacing: var(--ls-3); text-transform: uppercase;
 }
+/* RACE SETTINGS ONLY: a 7rem value, against the shared component's 8rem.
+   #rs-body is the one place .set-row lives in a TWO-COLUMN grid, so its rows
+   get half the sheet each and the one-line budget actually binds: at 8rem the
+   hypothetical row is ~309px, it shares a line while a column is >= 305px and
+   WRAPS below that (measured 2026-09-16: an 800px viewport gives 305px columns
+   and 0/10 wrap, 760px gives 285px and 10/10 wrap at 63px a row). A notched
+   landscape iPhone gives #rs-body 598px — 299px a column — so every row wrapped
+   and five of ten sat below the fold. At 7rem, 0/10 wrap and nothing is hidden.
+
+   SCOPED, not global: the same narrowing applied to the shared rule clipped
+   "PLAYSTATION" (102px into 99px) on the controls settings page, which has no
+   two-column grid and no budget problem. The tighter padding is the slack that
+   keeps the longest RACE-SETTINGS value, PACE ORDER, inside 7rem (95px into 98).
+   The label's own share comes from the --ls-3 tracking above. */
+#rs-body .set-row > div > select {
+  flex-basis: 7rem;
+  width: 7rem;
+  padding-inline: calc(var(--gap) * 0.3);
+}
+
 /* The row's own 8rem value, NOT wider for the long GRID names: at 9rem every
    row on a 393px portrait phone dropped its ‹ select › cluster to a second
    line (measured 2026-09-05, sheet 369px). The names were shortened to fit

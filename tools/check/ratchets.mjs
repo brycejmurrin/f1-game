@@ -137,11 +137,44 @@ export async function update(data = load()) {
   return rows;
 }
 
+/** The commit hook's form (2026-09-16). One commit in five on the deploy branch
+ *  hand-edited ratchets.json: `--update` writes the ceiling AT the value, so
+ *  every commit that adds a line to game.js or apex.js failed `test:guards`,
+ *  ran `--update` by hand, and re-ran the 16 s guards — then carried the most
+ *  conflict-prone file in the repo into every merge. The rule that a raise is
+ *  a deliberate edit with its reason in the commit is kept: the raise still
+ *  lands in the commit's DIFF, printed here and staged by the hook, where blame
+ *  and review see it. What goes is the manual round-trip, and only for small
+ *  growth — anything past `maxRaise` still blocks, and a LOOSE ceiling is
+ *  lowered on the way through (the direction the ratchet always allowed). */
+export async function autoRaise({ maxRaise = 40 } = {}) {
+  const data = load();
+  const v = verdict(await measure(data));
+  const big = v.over.filter((r) => r.over > maxRaise || r.missing);
+  if (big.length) return { ok: false, raised: [], lowered: [], blocked: big };
+  if (!v.over.length && !v.loose.length) return { ok: true, raised: [], lowered: [], blocked: [] };
+  const rows = await update(data);
+  const key = (r) => `${r.file} ${r.metric}`;
+  const raised = rows.filter((r) => v.over.some((o) => key(o) === key(r)));
+  const lowered = rows.filter((r) => v.loose.some((o) => key(o) === key(r)));
+  return { ok: true, raised, lowered, blocked: [] };
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--update")) {
     const rows = await update();
     for (const r of rows) console.log(`${r.file} ${r.metric}: ${r.ceiling} -> ${r.value}`);
+    return;
+  }
+  const auto = argv.find((a) => a.startsWith("--auto-raise"));
+  if (auto) {
+    const maxRaise = Number(auto.split("=")[1]) || 40;
+    const r = await autoRaise({ maxRaise });
+    for (const x of r.raised) console.log(`RAISED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value} (+${x.value - x.ceiling}, within the ${maxRaise}-line auto-raise; it is in this commit's diff)`);
+    for (const x of r.lowered) console.log(`LOWERED ${x.file} ${x.metric}: ${x.ceiling} -> ${x.value}`);
+    for (const x of r.blocked) console.log(`OVER   ${x.file} ${x.metric}: ${x.value} > ceiling ${x.ceiling} (+${x.over}) — past the ${maxRaise}-line auto-raise: extract, or raise it deliberately (node tools/check/ratchets.mjs --update) and say why in the commit`);
+    process.exitCode = r.ok ? 0 : 1;
     return;
   }
   let v;

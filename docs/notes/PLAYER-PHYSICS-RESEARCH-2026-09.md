@@ -15,7 +15,7 @@ are shipped, and its two standing negatives (no TC/ABS without a slip model,
 | Finding | Evidence | Decision |
 |---|---|---|
 | **The lateral tyre curve has no peak.** `-mu·tanh(cs·a/mu)` saturates and never falls, so the front can be driven to 16° of slip with the force still at 100 %. | Slip sweep at 45 m/s: front force 1.43 g at 10.6°, 1.51 g at 13.6°, still rising. Full lock for 0.6 s turns the car 29° against 12° for a moderate input, at no cost. | **Built (tier 1):** a curve with a linear range, a peak, a plateau and a post-peak floor. Every developer source says the width of the plateau and the steepness of the fall ARE the feel. |
-| **Throttle costs the front axle.** The combined-slip ellipse scales `muBase`, which both axles share, so a planted throttle takes grip from the undriven front exactly as it does from the rear. | Power-on test at 28 m/s: yaw 0.658 → 0.651 rad/s (no rotation); ellipse `slipFactor` 0.926 at every speed. | **Built (tier 1):** throttle and engine braking charge the REAR axle only; the charge is traction-limited at low speed and power-limited at high speed. Power-on oversteer becomes a technique, not a menu item. |
+| **Throttle costs the front axle.** The combined-slip ellipse scales `muBase`, which both axles share, so a planted throttle takes grip from the undriven front exactly as it does from the rear. | Ellipse `slipFactor` 0.926 at every speed, both axles. | **Built (tier 1):** throttle and engine braking charge the REAR axle only; the charge is traction-limited at low speed and power-limited at high speed. Measured afterwards with the AI field parked: this does NOT yet produce power-on oversteer — the throttle's rearward weight transfer costs the front more than the ellipse costs the rear, so the balance moves to understeer on the pedal. A rear that steps out on the throttle needs tier 2's slip ratio (and a lift-off decel that is not a flat 6 m/s²). |
 | **Lift-off and trail braking rotate the car by about 10 %.** Longitudinal transfer exists (`WT_LONG` 0.22) but the tyre had no post-peak drop for the lightened rear to fall into. | Lift-off at 45 m/s: yaw 0.406 → 0.446; turn-in at 55 m/s: coast 0.309 vs brake 0.342 rad/s. | Re-measured after tier 1 (the new curve changes both) — see §6. `WT_LONG` untouched. |
 | **No longitudinal slip state.** Braking is a scalar on `c.speed`; lockup and wheelspin are cosmetic (`c.wheelLock`, launch smoke). | Code map §A6, §A10. | **Tier 2** (the one structural item): one wheel-speed state per axle with a slip ratio. It is the prerequisite for real lockups, ABS/TC levels, and keyboard "pedal help". |
 | **Braking is a constant 2.2 g.** Real F1 braking falls from ~5 g at 300 km/h to ~2 g at 100 as downforce bleeds off. | Bench: 2.24 g from 100 km/h, 2.14 g from 200. | **Tier 2**, shared with the AI planner (`AiDrive.brakeTarget` assumes `BRAKE` is flat), so it is a pace rebalance, not a player tweak. |
@@ -149,15 +149,17 @@ sit on the `PACE` scale, so shapes matter, not absolutes.
    limited at ≤ 23 m/s (0.62 → 78 % of rear lateral grip left), power-limited
    above (0.31 at 45 m/s, 0.19 at 72). Replaces the flat `THR_ELLIPSE`
    charge (0.38 everywhere, both axles).
-3. **A rear-slip haptic** mirroring the front-saturation cue, with a slower,
+3. **The rear's own curve** — held peak to x = 2.6, gentler fall to a 0.80
+   floor (see §6 for why).
+4. **A rear-slip haptic** mirroring the front-saturation cue, with a slower,
    heavier pulse so a pad or phone can tell the two ends apart.
-4. **Bench promoted to `tools/check/player-dyn.mjs`** and a VM unit test
+5. **Bench promoted to `tools/check/player-dyn.mjs`** and a VM unit test
    (`tests/unit/player-dynamics-vm.test.mjs`) locking the invariants as
    relative assertions: force falls past the peak; a flick gains less heading
    than 1.6× a smooth input; throttle costs the rear more than the front;
-   power-on raises rear slip at low speed; lift-off and trail braking raise
-   yaw; full lock at 45 m/s does not spin; no NaN.
-5. `PhysicsConsts.REVISION` bumped (lap records and netplay key on it),
+   lift-off and trail braking raise yaw; full lock at 45 m/s does not spin;
+   the throttle does not snap the rear either way at a corner exit; no NaN.
+6. `PhysicsConsts.REVISION` bumped (lap records and netplay key on it),
    `tests/data/physics-baseline.json` regenerated in the browser and the diff
    read, `docs/PHYSICS.md` updated.
 
@@ -191,35 +193,47 @@ sit on the `PACE` scale, so shapes matter, not absolutes.
 
 ## 6. Tier 1 results
 
-Same bench, same tree otherwise (`node tools/check/player-dyn.mjs`). The
-technique tests were moved to the grip limit (lock 0.75–1.0) once the first
-run showed that in the linear range a grip change does not change the force —
-lift-off and power-on oversteer only exist near the peak, in a real car too.
+Same bench, same tree otherwise (`node tools/check/player-dyn.mjs`), with the
+AI field PARKED: the first runs of this bench let the field lap past the
+pinned car, and passing cars hit or shadowed it at run-dependent moments —
+the 23.9° "power-on step-out" an earlier draft reported was one of those
+runs. Every number below is from the parked-field bench on the pre-change
+tree and on the merged tree (which also carries the other session's
+`LOAD_SENS`, see the tier-2 note). The technique tests sit at the grip limit
+(lock 0.75–1.0) because in the linear range a grip change does not change
+the force — lift-off and power effects only exist near the peak, in a real
+car too.
 
 | Test | Before | After |
 |---|---|---|
-| Slip sweep 45 m/s, front normalised force | 0.98 at 10.6°, 0.995 at 13.6°, still rising | **1.00 at 10.4°, 0.98 at 13.2° — a peak** |
-| Skidpad 45 m/s, full lock | 2.90 g, front 13.8°, util 0.98 | 3.07 g, front 12.6°, util 0.99, rear 0.89 |
-| Skidpad 20 m/s, full lock | 1.87 g | 2.00 g (sin is stiffer than tanh below the peak) |
-| Throttle charge, front / rear, at 20 → 72 m/s | 0.38 / 0.38 flat | **0 / 0.52 → 0 / 0.34** |
-| Power-on at the limit (28 m/s, full lock, then planted) | rear slip 3.7°, yaw FELL on the throttle | **rear slip 12.7° → 23.9°: the rear steps out** |
-| Lift-off at the limit (45 m/s, lock 0.8) | yaw 0.557 → 0.840 | yaw 0.653 → 0.990 |
-| Turn-in 55 m/s, lock 0.75, coast vs brake | 0.776 vs 1.403 rad/s | 0.790 vs 1.790 rad/s |
-| Flick vs smooth (45 m/s, 0.6 s) | 28.8° vs 12.0° | 27.5° vs 12.3° |
-| Full lock at 45 m/s for 2 s | washes wide | washes wide, yaw ≤ 1.14 rad/s, rear ≤ 9° |
-| Keyboard hairpin (20 m/s, full lock + full throttle, 2 s) | — | no spin: rear ≤ 6°, yaw ≤ 1.3 rad/s |
-| Braking, acceleration, step steer | 2.2 g / 6.4 s / t90 100 ms | unchanged (tier 2 items) |
+| Slip sweep 45 m/s, front normalised force | still rising at 13.6° (0.995) | **1.00 at 10.4°, 0.98 at 13.2° — a peak** |
+| Skidpad 45 m/s, full lock | 2.90 g, front 13.8° | 3.07 g, front 12.6°, rear 6.2° (front util 1.2, rear 0.7 in x/peak) |
+| Skidpad 20 / 72 m/s, full lock | 1.87 g / 3.49 g | 2.00 g / 3.92 g (sin is stiffer than tanh below the peak) |
+| Throttle charge front / rear, 20 → 72 m/s | 0.38 / 0.38 flat | **0 / 0.52 → 0 / 0.34** |
+| Corner-exit throttle (28 m/s, lock 0.9) | rear slip 3.6° → 3.7° | rear slip 3.6° → 3.7° — no step-out either way (see §1) |
+| Lift-off at the limit (45 m/s, lock 0.8) | yaw 0.557 → 0.840 | yaw 0.656 → 0.912 |
+| Turn-in 55 m/s, lock 0.75, coast vs brake | 0.776 vs 1.403 rad/s | 0.769 vs 1.490 rad/s |
+| Step steer 50 m/s | overshoot 10.6 %, t90 100 ms | overshoot 8.2 %, t90 100 ms |
+| Flick vs smooth (45 m/s, 0.6 s) | 26.7° vs 11.9° | 27.8° vs 12.3° |
+| Full lock at 45 m/s for 2 s | yaw ≤ 1.01, rear ≤ 8.9° | yaw ≤ 1.15, rear ≤ 9.1° |
+| Full lock, COASTING, 24–44 m/s (peak rear slip) | 4–19° (a held drift) | 4–19° with the rear's own curve; 34–46° (a spin) when the rear was given the front's fall |
+| Braking, acceleration | 2.2 g / 6.4 s to 100 km/h | unchanged (tier 2 items) |
 
-What did NOT change, and why the flick still turns the car: the front's peak
-is at x = π/2, which at 45 m/s is ~11° of slip; full lock reaches 13–16°,
-inside the plateau (0.97–0.98). Narrowing the fall (width 0.7) took the flick
-from 27.6° to 25.1° — the curve shape is not where the flick's cost lives.
-Its real cost in a car is SCRUB: a sliding tyre's force has a component
-against the velocity (`Fy·sin α`, ~8 m/s² at full lock), and the game's
-`c.speed` never pays it. Adding scrub alone would make every fast corner slow,
-because the acceleration law only has ~1.5 m/s² to pay it back at 45 m/s
-(a real F1 engine has ~13). Scrub therefore ships together with the
-power-limited acceleration law in tier 2, not before.
+**The rear needed its own curve.** With the front's fall (floor 0.75, width
+1.4) on both axles, full lock while coasting at 32–44 m/s spun the car: the
+rear's peak slip angle is small at low speed (`(π/2)·muR/CS_REAR` ≈ 6–7°
+without aero), every turn-in overshoot carried it past the peak, and the
+fall did the rest. The rear now holds its peak out to x = 2.6 before a
+gentler fall to 0.80 (`CURVE_HOLD_R`, `CURVE_FALL_W_R`, `CURVE_FLOOR_R`):
+the wider, more progressive tyre, and the end nobody on a keyboard can feel
+letting go. The front keeps the sharp fall, which is what makes a flick cost
+grip and understeer legible.
+
+Why the flick still turns the car: the front's peak is at x = π/2, ~11° of
+slip at 45 m/s; full lock reaches 13–16°, inside the plateau. Its real cost
+in a car is SCRUB (`Fy·sin α`, ~8 m/s² at full lock), which `c.speed` never
+pays, and which can only ship with the power-limited acceleration law
+(tier 2) because today's law has ~1.5 m/s² to pay it back at 45 m/s.
 
 ## 7. Sources
 

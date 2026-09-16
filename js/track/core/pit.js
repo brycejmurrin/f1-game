@@ -39,7 +39,19 @@ const TrackPit = (function () {
   // a 5.2 x 0.7 m quad), the quad a centimetre proud of the lintel's face
   // (garage line - 0.265) inside its 0.8 m band over the door.
   const SIGN = { w: 1024, h: 512, cols: 2, cells: 12, cellW: 512, cellH: 70,
-                 quadW: 5.2, quadH: 0.7, y0: 4.85, proud: 0.275 };
+                 quadW: 5.2, quadH: 0.7, y0: 4.85, proud: 0.275,
+                 // The BOARDS, two more cells on the atlas's seventh row (the
+                 // twelve fascias fill six): cell 12 "PIT ENTRY" with an arrow
+                 // at the pit side, cell 13 "PIT LANE <limit> km/h". Laid on
+                 // 2.4 x 0.33 m boards (the cell's own 7.3:1) on posts, the
+                 // first two on the verge of the approach before the entry
+                 // road, the last on the platform at the entry line.
+                 boards: 2, boardW: 2.4, boardH: 0.33, boardY: 1.5, boardM: [45, 110] };
+  // The EXIT WALL (SceneryPits, game.js's clamp): the pit wall slides from the
+  // platform's line to the road edge as the wall fades over the exit road, and
+  // runs along the edge while the road keeps this share of its width — a
+  // serviced car rejoins where the wall ends, not through it.
+  const EXIT_WALL_W = 0.55;
 
   // Along the arc. The LIMITER window (entry line → exit line) is the old
   // pitWindow: it walks back from the line to where the last corner lets go
@@ -53,7 +65,12 @@ const TrackPit = (function () {
   // track over the last WALL_GROW metres of the entry road, and shrinks over
   // the first WALL_GROW of the exit road, so the lane is reachable from the
   // track exactly where it should be and nowhere else.
-  const ENTRY_MAX = 400, ENTRY_MIN = 150, EXIT_M = 130, EXIT_MIN = 40;
+  // 260 + 110 = a 370 m lane at most (was 400 + 130 = 530): at 80 km/h that is
+  // ~12 s of pit loss instead of ~16.5 (PitLane.estimate), a stop that still
+  // decides a strategy but no longer takes a quarter of a lap under the
+  // limiter. The row (12 x 11 m) needs 201 m, and the shortest windows
+  // (Jeddah's 190) were already at the floor, so nothing below moves.
+  const ENTRY_MAX = 260, ENTRY_MIN = 150, EXIT_M = 110, EXIT_MIN = 40;
   const PIT_K = 0.0035, STEP = 8;         // "not actively cornering" — see docs/PHYSICS.md
   const ENTRY_ROAD = 70, EXIT_ROAD = 90, ROAD_MIN = 30, WALL_GROW = 30;
   const LIMIT_KPH = 80, LIMIT_KPH_STREET = 60;   // F1 SR 2026 B1.7.3(a); Monaco / Melbourne
@@ -271,7 +288,7 @@ const TrackPit = (function () {
     return -1;
   }
 
-  return { BANDS, STREET, NARROW, BAY, SIGN, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, WALL_GROW,
+  return { BANDS, STREET, NARROW, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, WALL_GROW,
            ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, LIMIT_KPH, LIMIT_KPH_STREET, GRID_POLE_M, GRID_CLEAR,
            ROW_END, ROW_TAIL,
            resolve, window, row, build, at, openBoundary, rowOf };

@@ -24,6 +24,15 @@ window.PhysicsConsts = {
   CS_FRONT: 130,       // front cornering stiffness (accel per rad of slip)
   CS_REAR: 175,       // rear stiffer than front → understeer in the linear range too
   WT_LONG: 0.22,       // longitudinal load transfer (braking loads the front axle)
+  // TYRE PEAK: the lateral curve (peak, plateau, floor) lives in
+  // js/physics/tyre-model.js as TyreModel.lateralCurve — see there.
+  // LOAD SENSITIVITY. Axle friction used to scale linearly with axle load, so
+  // weight transfer moved balance without ever costing total grip. A real tyre's
+  // friction coefficient falls as its load rises: the loaded axle gains less
+  // than its share, the unloaded one loses less, and the pair under full braking
+  // has ~1.3 % less lateral grip than at rest. Static balance is untouched (the
+  // factor is 1 at each axle's static load).
+  LOAD_SENS: 0.10,
 
   // AERODYNAMIC DOWNFORCE. Grip used to FALL with speed (gripScale: 1.00 at 10 m/s
   // down to 0.72 at VMAX) — an arcade understeer taper, and backwards for a car

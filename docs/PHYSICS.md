@@ -57,7 +57,12 @@ each of the player's axles turns `x = cs·α/mu` into a normalised force —
 `sin(x)` up to the peak at `x = π/2` (slope 1 at the origin, so `CS_FRONT` /
 `CS_REAR` keep their meaning and the peak force is exactly `mu`), then a
 Gaussian fall to `CURVE_FLOOR` (0.75) of width `CURVE_FALL_W` (1.4): ≥ 0.97 of
-peak out to x ≈ 2.1, 0.85 at x = 3, the floor by x ≈ 5. It replaced `tanh(x)`,
+peak out to x ≈ 2.1, 0.85 at x = 3, the floor by x ≈ 5 — that is the FRONT.
+The rear holds its peak out to `CURVE_HOLD_R` (2.6) before a gentler fall
+(`CURVE_FALL_W_R` 2.0) to `CURVE_FLOOR_R` (0.80): with the front's fall on
+both axles, full lock while coasting at 32–44 m/s spun the car, because the
+rear's peak slip angle is only 6–7° without aero and every turn-in overshoot
+carried it past the peak. It replaced `tanh(x)`,
 which saturated and never fell, so an overdriven front kept 100 % of its force
 at 16° of slip and a flick at full lock cost nothing. The peak slip angle is
 `(π/2)·mu/cs` — about 9–11° front and 8–9° rear at 45 m/s, lower at low speed,
@@ -95,6 +100,17 @@ the front spends `bb / BB_REF` of it and the rear `(1 − bb) / (1 − BB_REF)`
 single `slipFactor` it always was — AI and remote cars carry no `brakeBias` and
 read `BB_REF`, so nothing outside the player's sheet moves. Forward bias spends
 the front's circle (entry understeer); rearward lightens the rear (rotation).
+
+**Load sensitivity** (2026-09-16, `LOAD_SENS` in `js/physics/consts.js`).
+`muF`/`muR` used to scale linearly with axle load; each now carries
+`1 − LOAD_SENS·(load/static − 1)`, so the loaded axle gains less than its
+share and the unloaded one loses less. Static balance is exactly unchanged
+(the factor is 1 at rest) and the pair under full braking has ~1.3 % less
+lateral grip than at rest — the braking front's gain trimmed, "hard braking
+mid-corner understeers" made slightly firmer. (The post-peak drop that landed
+with it, a 12 % smoothstep on `tanh`, was superseded by the peaked curve
+above in the same day's merge; `tests/unit/physics-rows-vm.test.mjs` pins
+both.)
 
 **ACTIVE AERO (X-mode / Z-mode)** is the THIRD straight-line lever, next to
 BOOST (spends the battery) and OVERTAKE (a free, proximity-gated push). It adds
@@ -359,10 +375,16 @@ whose grip term is `gripScale = 1 - clamp((vStd(speed) - 20)/(VMAX - 20), 0, 1)
 aero to the planner alone put planned grip (rising 65 %) and available grip
 (falling 28 %) on opposite slopes: the AI planned entry speeds it could not
 turn at and washed 0.60 m out of a short corner's apex at Monza while the long
-ones were unmoved. **The planner and the actuator disagreeing about how grip
-varies with speed is a real open defect**; until one of the two directions in
-`docs/notes/AI-FIELD-RESEARCH.md` is taken, flat `latMax` is the consistent
-choice because it does not contradict the actuator.
+ones were unmoved. That planner/actuator disagreement was CLOSED on
+2026-09-14 (`bf1979d`): `AiDrive.lateralScale` is now the one grip envelope
+(load ±8 %, grip, the 0.28 speed taper) that both the kinematic lateral step
+in `updateCar` and `brakeTarget` read, and `AiDrive.cornerSpeed` inverts the
+taper analytically so the planner's entry speed is one the actuator can turn
+at. `latMax` is no longer flat — it carries the aero-load term — but it still
+has no `aeroGrip` rise, on purpose: the actuator has none either. The 12 m
+look-ahead floor that let every AI carry `sqrt(vC² + 449)` into an apex was
+removed on 2026-09-15 with the `corner` difficulty dimension
+(`docs/notes/AI-FIELD-RESEARCH.md`).
 
 ### Racecraft: who passes, who yields
 
@@ -699,8 +721,12 @@ it on. `js/race/reliability.js` ships off for the same reason.
   are keyed to `pitState` and arc distance, with no geometry mutation at all
   (`docs/research/TYRE-STRATEGY-DESIGN.md` §5.2 erratum). **Pit loss is still
   emergent**: window length over the limiter against racing the same stretch,
-  plus the box. Measured **23.6 s at Monza**, inside the real 20-25 s band, and
-  it varies by circuit the way real strategy does.
+  plus the box. Measured **23.6 s at Monza** on the original 530 m window,
+  inside the real 20-25 s band, and it varies by circuit the way real strategy
+  does. The window was shortened on 2026-09-16 (`TrackPit` ENTRY_MAX 400→260,
+  EXIT_M 130→110, a 370 m lane at most; the box hold 2.4→2.2 s), which
+  `PitLane.estimate` puts at ~12 s at 80 km/h on a full-length lane — a stop
+  that still decides a strategy without a quarter of a lap under the limiter.
 - **Temperature is TWO states, and the second one is not decoration.** A real
   tyre fails in two opposite ways a single temperature cannot tell apart:
   **graining** is SURFACE damage from cold or sliding rubber, costs a couple of

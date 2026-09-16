@@ -422,7 +422,7 @@ function buildSetup() {
   }
   for (const cat of Parts.CATALOG) {
     const cur = resolveOpt(cat);
-    tabs.appendChild(pseudoTab(cat.id, cat.label, cur ? cur.label : "",
+    tabs.appendChild(pseudoTab(cat.id, cat.tab || cat.label, cur ? cur.label : "",
                                cur && cur.id !== Parts.DEFAULTS[cat.id]));
   }
   tabs.appendChild(pseudoTab("tune", "SETUP", SetupTune.isDefault(team.id) ? "WORKS" : "TUNED",

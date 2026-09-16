@@ -36,6 +36,11 @@ export function bench(g, frac = 0) {
   const s0 = frac * track.total;
   S.Tracks.sample(track, s0, smp);
   const head0 = Math.atan2(smp.t[0], smp.t[2]);
+  // Park the AI field out of the way: a live field laps past the pinned car
+  // and would hit or shadow it (dirty air) at run-dependent moments. Retired
+  // cars take no motion; 80 m off the road they are outside every contact
+  // bucket and every wake cone.
+  for (const c of g.G.cars) if (c !== P) { c.retired = true; c.x = 80; }
   const pin = () => { P.px = smp.p[0]; P.pz = smp.p[2]; P.s = s0; P.x = 0; };
   const reset = (speed) => {
     g.apex.jump(frac, speed, 0); P.axEstSm = 0; P.vertLoad = 0;
@@ -102,11 +107,19 @@ export function measure(g, frac = 0) {
     const a = state(); for (let i = 0; i < 30; i++) step({ steer: 0.8 });
     const z = state(); out.liftOff = { yaw_on: r3(a.yaw), yaw_off: r3(z.yaw), aR_on: r1(a.aR), aR_off: r1(z.aR) };
   }
-  // 7. power-on near the limit: 28 m/s, full lock coasting for 1 s, then planted for 0.5 s
+  // 7. power-on at a CORNER EXIT: 28 m/s, the most lock that keeps the front
+  // in its linear range after 1 s of coasting (utilisation ≤ 0.7, where its
+  // force is stiffness × slip and does not care what the throttle does to its
+  // load), then plant the throttle for 0.5 s. At full lock the front is near
+  // its peak and the throttle's rearward weight transfer makes it wash — power
+  // UNDERSTEER, in this model and the old one alike — so that is not where a
+  // rear step-out is measured. Reports the lock used.
   {
-    reset(28); for (let i = 0; i < 60; i++) step({ steer: 1.0 });
-    const a = state(); for (let i = 0; i < 30; i++) step({ steer: 1.0, throttle: true });
-    const z = state(); out.powerOn = { aR_coast: r1(a.aR), aR_power: r1(z.aR), uR_coast: r2(a.uR), axFracF: r2(z.axFracF), axFracR: r2(z.axFracR) };
+    let use = 0.5, uF = 0;
+    for (const st of [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]) { reset(28); for (let i = 0; i < 60; i++) step({ steer: st }); const s = state(); if (s.uF <= 0.7) { use = st; uF = s.uF; } else break; }
+    reset(28); for (let i = 0; i < 60; i++) step({ steer: use });
+    const a = state(); for (let i = 0; i < 30; i++) step({ steer: use, throttle: true });
+    const z = state(); out.powerOn = { lock: use, uF_coast: r2(uF), aR_coast: r1(a.aR), aR_power: r1(z.aR), uR_coast: r2(a.uR), uR_power: r2(z.uR), axFracF: r2(z.axFracF), axFracR: r2(z.axFracR) };
   }
   // 8. throttle charge by speed (straight, planted)
   out.throttleCharge = [];

@@ -287,17 +287,44 @@ function supersede(groups, { graceMs = 4000 } = {}) {
   if (still.length) sleepSync(500);   // let the kernel reap before the log is truncated
 }
 
-function spawnGroup(group, pkg) {
+/** --last-failed <group>: the port the group's previous run used, read from
+ *  its own log (run-playwright prints `[playwright] port=N`). Playwright keeps
+ *  `.last-run.json` in the run's outputDir, which this repo suffixes by port
+ *  (artifacts/test-results-<port>/), so the re-run has to be told where the
+ *  previous failures were recorded: APEX_LAST_RUN_FILE, which run-playwright
+ *  copies into the new run's outputDir before `playwright test --last-failed`. */
+function lastRunFile(group) {
+  const log = path.join(LOGDIR, `${group}.log`);
+  let text = "";
+  try { text = fs.readFileSync(log, "utf8"); } catch (_) { return null; }
+  const port = [...text.matchAll(/\[playwright\] port=(\d+)/g)].pop()?.[1];
+  if (!port) return null;
+  const file = path.join(ROOT, "artifacts", `test-results-${port}`, ".last-run.json");
+  return fs.existsSync(file) ? file : null;
+}
+
+function spawnGroup(group, pkg, { lastFailed = false } = {}) {
   const log = path.join(LOGDIR, `${group}.log`);
   const started = new Date().toISOString();
+  let lastRun = null;
+  if (lastFailed) {
+    lastRun = lastRunFile(group);
+    if (!lastRun) {
+      console.error(`[test-bg] --last-failed: no previous run of test:${group} recorded (need artifacts/logs/${group}.log with its port and that run's .last-run.json) — running the whole group`);
+    } else {
+      const failed = (() => { try { return JSON.parse(fs.readFileSync(lastRun, "utf8")).failedTests?.length ?? 0; } catch (_) { return 0; } })();
+      say(`--last-failed ${group}: ${failed} failed test id(s) from ${path.relative(ROOT, lastRun)}`);
+      if (!failed) { say(`nothing failed last time — nothing to re-run`); return null; }
+    }
+  }
   const header =
     `[test-bg] START group=${group} at=${started} ${loadavgLine()} workers=${WORKERS}\n`;
   fs.writeFileSync(log, header);
   const fd = fs.openSync(log, "a");
   // --workers is a Playwright flag. A `node --test` group would take it as a
   // FILE PATH, so only the browser groups get it.
-  const forward = /run-playwright/.test(pkg.scripts[`test:${group}`])
-    ? ["--", `--workers=${WORKERS}`] : [];
+  const isBrowser = /run-playwright/.test(pkg.scripts[`test:${group}`]);
+  const forward = isBrowser ? ["--", `--workers=${WORKERS}`, ...(lastRun ? ["--last-failed"] : [])] : [];
   // detached + ignored stdin: the run must outlive this process and must
   // never block waiting for a terminal that is no longer attached.
   // The `= bg exit N` trailer is the terminal line for groups that print
@@ -313,7 +340,7 @@ function spawnGroup(group, pkg) {
     cwd: ROOT,
     detached: true,
     stdio: ["ignore", fd, fd],
-    env: { ...process.env, APEX_HEARTBEAT: process.env.APEX_HEARTBEAT || "30" },
+    env: { ...process.env, APEX_HEARTBEAT: process.env.APEX_HEARTBEAT || "30", ...(lastRun ? { APEX_LAST_RUN_FILE: lastRun } : {}) },
   });
   child.unref();
   fs.closeSync(fd);
@@ -324,7 +351,7 @@ function spawnGroup(group, pkg) {
   return { group, pid: child.pid, log, started, browser: forward.length > 0 };
 }
 
-function start(groups, { force = false, parallel = false } = {}) {
+function start(groups, { force = false, parallel = false, lastFailed = false } = {}) {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
   if (unknown.length) {
@@ -391,7 +418,8 @@ function start(groups, { force = false, parallel = false } = {}) {
   say(`spawning ${groups.length} group(s) mode=${mode} maxConcurrent=${maxConcurrent === Infinity ? "∞" : maxConcurrent} ${loadavgLine()}`);
   const runs = [];
   for (const group of groups) {
-    runs.push(spawnGroup(group, pkg));
+    const r = spawnGroup(group, pkg, { lastFailed });
+    if (r) runs.push(r);
   }
   // MERGE WITH WHAT IS STILL RUNNING, don't clobber it. Starting a second batch
   // used to replace the whole list, which ORPHANED everything already in
@@ -453,6 +481,7 @@ async function waitChain(groups, { force = false } = {}) {
 
 const argv = process.argv.slice(2);
 const force = argv.includes("--force");
+const lastFailed = argv.includes("--last-failed");
 const parallel = argv.includes("--parallel");
 const groups = argv.filter((a) => !a.startsWith("--"));
 
@@ -466,8 +495,8 @@ else if (argv.includes("--tail")) {
   if (groups.length) await waitChain(groups, { force });
   else await waitForRunning();
 } else if (!groups.length) {
-  console.error("usage: node tools/ci/test-bg.mjs <group> [group...] [--parallel] [--force]");
+  console.error("usage: node tools/ci/test-bg.mjs <group> [group...] [--parallel] [--force] [--last-failed]");
   console.error("       node tools/ci/test-bg.mjs --wait [group...] [--keep-going] [--force]");
   console.error("       node tools/ci/test-bg.mjs --status | --stop | --tail <group>");
   process.exit(2);
-} else start(groups, { force, parallel });
+} else start(groups, { force, parallel, lastFailed });

@@ -518,7 +518,7 @@ function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season);
 // here. Everything slider- or harness-tunable stays a `let` below.
 const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         GRAVITY_SLOPE, LAT_MAX, STEER_VMAX, FRONT_WEIGHT, CS_FRONT, CS_REAR,
-        WT_LONG, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
+        WT_LONG, LOAD_SENS, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
         X_DF_LOSS_HI, X_COAST_CUT_LO, X_COAST_CUT_HI, X_OPEN_RATE, X_CLOSE_RATE,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
         LONG_GRIP, THR_FLOOR, THR_CAP, THR_VK, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
@@ -3639,7 +3639,7 @@ const _aiDefOnce = { defend: 0, side: 0 };
 const LCAR = Collide.LCAR, WCAR = Collide.WCAR;   // car box (js/physics/collide.js)
 // Soft-saturating lateral tyre force (accel units) — hoisted out of updateCar so
 // the human path does not allocate a closure every physics step (~60/s).
-const _tyreSat = (cs, a, mu) => -mu * TyreModel.lateralCurve(cs * a / mu);   // peak, plateau, floor — see tyre-model.js
+const _tyreSat = (cs, a, mu, floor, fallW, hold) => -mu * TyreModel.lateralCurve(cs * a / mu, floor, fallW, hold);   // peak, plateau, floor — see tyre-model.js
 const _floodRGB = [0, 0, 0];   // reused floodScale vector (was a fresh [r,g,b] each frame)
 const _alRGB = [0, 0, 0];   // always-on lights: the per-frame colour triple
 // Collision feedback when the player is involved, scaled by impact (0..1).
@@ -3720,8 +3720,8 @@ function updateCar(c, dt, ranked) {
     const gap = _leadHuman.prog - c.prog;
     const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
     const bandCap = Math.max(1, BAND_CEIL / (c.tierV * c.skill * dd.ai));
-    vmax *= Math.min(1 + bandFactor, bandCap);
-  }
+    vmax *= Math.min(1 + bandFactor, bandCap); c._bandNow = bandFactor;   // the corner half of the band: read by the brake target below
+  } else c._bandNow = 0;
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
   // racing speed — humans used to keep race pace while the AI was capped.
   // Cautions default ON (RaceControl store default true); a race with them
@@ -4023,7 +4023,7 @@ function updateCar(c, dt, ranked) {
       // signed/adverse bank must not boost the player while it cuts the AI.
       AiDrive.pushLook(d, onLine ? TrackLine.pathK(track, ss) : kk, Math.abs(Tracks.bankAngle(track, ss)));
     }
-    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = dd.corner;
+    _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX; _aiBr.diffCorner = Math.min(1, dd.corner * (1 + (c._bandNow || 0)));   // the band lifts corner authority too, never past 1.0: a banded car drives like a better driver, not a faster car
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE * tyres.tractionMul(c); _aiBr.pace = PACE; _aiBr.vmax = VMAX;
     _aiBr.grip = gripMult(c) * tyres.gripMul(c) * dirtyAirMul(c.wake || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
@@ -4883,8 +4883,8 @@ function updateCar(c, dt, ranked) {
     c.slipFactor = bbSlipR;   // the DRIVEN axle's circle: setEngine() reads it for slip01; unassigned it read a constant 1
     const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * marbleMu * tyreMu;
     const rollAx = SetupTune.axleGrip(c.rollBalance, c.lateralAccel || 0, loadF);
-    const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP * tyreAx.f * rollAx.f);
-    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
+    const muF = Math.max(0.5, muBase * bbSlipF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
+    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
@@ -4915,7 +4915,7 @@ function updateCar(c, dt, ranked) {
     // near centre, smoothly capped at the friction limit — how real tyres behave
     // and far more controllable on a noisy tilt signal than a hard clamp.
     const Fyf = _tyreSat(CS_FRONT, slipF, muF) * sp;
-    const Fyr = _tyreSat(csR, slipR, muR) * sp;
+    const Fyr = _tyreSat(csR, slipR, muR, TyreModel.CURVE_FLOOR_R, TyreModel.CURVE_FALL_W_R, TyreModel.CURVE_HOLD_R) * sp;   // the rear's wider limit zone and gentler fall
     const cosD = Math.cos(delta);
     // Where each axle sits on its tyre curve: x = cs·α/mu, the curve's own
     // abscissa (peak at TyreModel.CURVE_PEAK_X). MONOTONIC in slip, unlike
@@ -5062,6 +5062,15 @@ function updateCar(c, dt, ranked) {
         const face = track.hw[k] + p.bands.verge;
         if (c.x * pitSd < face + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, face - 1.1); else wallL = Math.min(wallL, face - 1.1); }
         else laneMin = track.hw[k] + p.off.fastIn + 1.0;
+      } else if (p.w[k] >= TrackPit.EXIT_WALL_W && ((c.s - p.sOut) % track.total + track.total) % track.total < p.exitRoadM) {
+        // THE EXIT WALL (SceneryPits): from the platform's line at the exit
+        // line to the road edge as the wall fades (verge · v), then along
+        // the edge while the exit road keeps EXIT_WALL_W of its width — a
+        // serviced car rejoins where the wall ends, not through it.
+        pitSd = p.side;
+        const wallLat = track.hw[k] + p.bands.verge * p.v[k];
+        if (c.x * pitSd < wallLat + 0.125) { if (pitSd > 0) wallR = Math.min(wallR, wallLat - 1.15); else wallL = Math.min(wallL, wallLat - 1.15); }
+        else laneMin = wallLat + 0.30 + 1.0;
       }
     }
   }
@@ -7232,6 +7241,9 @@ function render(dt) {
     // absorption). tmpMat carries the body mesh; _groundMat (wheels/contact/shadow)
     // was built from the un-offset tmpP, so the tyres stay planted on the road.
     if (_baHeave) tmpMat[13] += _baHeave;
+    // On the jacks (PitLane.stopAnim): the body rises with the wheels, which
+    // drawPlayerWheels lifts by the same number off _groundMat.
+    if (c.pitState === "box") { const a = pits.stopAnim(c); if (a.lift) tmpMat[13] += a.lift; }
     shadowPass.pushCaster(_groundMat, c.team, c);   // blob now; sun / lamp caster next frame
     // Side frustum: 8 m sphere, same planes as propBatches. After the
     // shadow enqueue so an off-camera rival still casts. Player never culled.

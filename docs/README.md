@@ -65,6 +65,7 @@ anything in here.
 | [notes/COCKPIT-DATUMS.md](notes/COCKPIT-DATUMS.md) | The FIA 2026 Technical Regulations numbers the first-person view is built on, with the three spec violations the table found — and the one number the regs do NOT give: driver eye height. |
 | [notes/PARALLEL-WORK.md](notes/PARALLEL-WORK.md) | Where to spend concurrency: read-only fan-out is free, worktrees isolate FILES but not CPU, the browser suite is serial on 4 cores. Written after parallelism produced ten confident, entirely fake test failures. |
 | [notes/PROCESS-SPEEDUP-2026-09.md](notes/PROCESS-SPEEDUP-2026-09.md) | Measured plan to make verification and deploys faster: where the minutes go, groups 30 → 12, CI-derived build numbers, `deploy.mjs`, the MCP/skill cut. |
+| [notes/AGENT-PROCESS-RESEARCH-2026-09-16.md](notes/AGENT-PROCESS-RESEARCH-2026-09-16.md) | Third pass, as research: what the two speed-up plans left open, live CI timings (60 runs), the box's own gate timings, and the ranked remaining sinks — twins run twice locally, serial node gates, the double deploy gate, ratchet churn, permission prompts — plus the ideas closed as not-applicable. |
 | [notes/ENGINEERING-PRACTICE-NOTES.md](notes/ENGINEERING-PRACTICE-NOTES.md) | Why the game loop's clamps and caps are load-bearing, what `seed()` can and cannot promise given float non-associativity, the characterization-test method, and the state of the no-build bet. |
 | [notes/BUG-HUNT-2026-09-02.md](notes/BUG-HUNT-2026-09-02.md) | Two rounds of read-only bug hunts (UI, GLX, WGX+TLX, memory, race-flow; then track engine, physics/AI, input/audio, net): every CONFIRMED row and what each fix batch landed. |
 | [notes/PERF-HUNT-2026-08-18.md](notes/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. WGX UBO flushes, `LAZY_AGENT`, DebrisWorld asleep-skip. |
@@ -153,3 +154,4 @@ For day-to-day workflows, see the **skills** in `.claude/skills/`
 
 - [Mechanics opportunity survey](research/MECHANICS-OPPORTUNITY-SURVEY-2026-09-14.md): code survey, primary research and priorities.
 - [Mechanics coherence implementation](plans/2026-09-14-mechanics-coherence.md): completed behavior, validation and remaining opportunities.
+- [Process speed-up: the next fifteen](plans/2026-09-16-process-speedup-next.md): plans for what the 2026-09-16 research landing left — `selected` on llvmpipe, the elevation-tracks floor, a runner-side dispatch tool, more VM twins, the settings and docs items — each with evidence, files, verification and expected saving.

@@ -70,11 +70,26 @@ const TyreModel = (function () {
   const CURVE_PEAK_X = Math.PI / 2;
   const CURVE_FLOOR = 0.75;
   const CURVE_FALL_W = 1.4;
-  function lateralCurve(x) {
+  // The REAR's fall is gentler and shallower than the front's. Two reasons,
+  // one physical and one for the hands on the controls: a rear tyre is the
+  // wider, more progressive one, and a rear that lets go as sharply as the
+  // front turns every yaw overshoot at a low-speed full-lock turn-in into a
+  // spin nobody on a keyboard or a pad can feel coming (measured: 32 m/s, full
+  // lock, coasting — rear 22° and gone with the front's parameters; held with
+  // these). The front keeps the sharper fall: that is what makes a flick cost
+  // grip and understeer legible. Both floors sit inside the "forgiving" range
+  // shipped titles use (0.73–0.8 of peak).
+  const CURVE_FLOOR_R = 0.80;
+  const CURVE_FALL_W_R = 2.0;
+  const CURVE_HOLD_R = 2.6;    // the rear holds its peak out to here before the fall starts (x; ≈ 11° at 30 m/s)
+  function lateralCurve(x, floor, fallW, hold) {
     const ax = Math.abs(x);
     if (ax <= CURVE_PEAK_X) return Math.sin(x);
-    const d = (ax - CURVE_PEAK_X) / CURVE_FALL_W;
-    const g = CURVE_FLOOR + (1 - CURVE_FLOOR) * Math.exp(-d * d);
+    const h = hold == null ? CURVE_PEAK_X : hold;
+    if (ax <= h) return x < 0 ? -1 : 1;
+    const fl = floor == null ? CURVE_FLOOR : floor, w = fallW == null ? CURVE_FALL_W : fallW;
+    const d = (ax - h) / w;
+    const g = fl + (1 - fl) * Math.exp(-d * d);
     return x < 0 ? -g : g;
   }
 
@@ -663,7 +678,7 @@ const TyreModel = (function () {
   }
 
   return {
-    LEVELS, isLevel, lateralCurve, CURVE_PEAK_X, CURVE_FLOOR, CURVE_FALL_W, deriveLife, lifeOf, lifeLaps, MIN_LIFE_LAPS,
+    LEVELS, isLevel, lateralCurve, CURVE_PEAK_X, CURVE_FLOOR, CURVE_FALL_W, CURVE_FLOOR_R, CURVE_FALL_W_R, CURVE_HOLD_R, deriveLife, lifeOf, lifeLaps, MIN_LIFE_LAPS,
     gripFor, longFor, humanLoad, aiLoad, fuelFrac,
     optTemp, warmRate, coolFor, stepTemp, tempGrip, stepGrain, stepBlister, defectGrip,
     axleShare, longSigned, AXLE_LONG, AXLE_REST, BB_REF,
