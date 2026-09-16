@@ -317,3 +317,29 @@ the flag off, a moving-camera check rather than a parked one (`park()` gives a
 static view, and the popping risk is entirely in motion), and a second circuit —
 spa is the floor of the range at 55.9 % and the one most likely to spend more on
 queries than it saves.
+
+## 8. Spa, in motion, with lag (run 134) — the two worries do not survive
+
+    glx   occl: ON  tested=155 culled=56  passes=507   -> 36 % skipped (parked)
+          query lag: max=3 avg=1.27 passes
+          moving:  tested=232 culled=215 lagMax=3 lagAvg=1.27  -> 93 % skipped
+          gpuErrors=0   meanLuma=87.7
+
+**The popping worry is dead.** A query answers in 1.27 passes on average and
+never later than 3. The fear was a flag so late that a chunk stays hidden into a
+scene that has moved; at one-and-a-bit frames there is no such window.
+
+**Motion pays MORE, not less.** 93 % skipped while driving against 36 % parked,
+and that is the right way round on reflection: driving into a circuit puts
+geometry between the camera and everything behind it, while a parked camera at
+`park(0.1)` happens to sit somewhere open. It also means the parked samples in
+§7 understate the feature rather than flattering it.
+
+**Spa was the worst case and it still pays.** 36 % parked on the circuit the
+estimator called the floor, and 93 % once moving.
+
+What is still missing is the one thing that would let this flag ship on: a
+same-circuit comparison with the flag OFF. `meanLuma` 87.7 here has nothing to
+be compared against, because every earlier baseline is vegas. That control run
+is the next request, and until it matches, "no gross over-cull" is a claim about
+vegas only.
