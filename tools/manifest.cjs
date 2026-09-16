@@ -146,6 +146,7 @@ const FULL = [
   "js/race/session-records.js",
   "js/race/race-insights.js",
   "js/race/driving-coach.js",
+  "js/race/duel.js",
   "js/physics/consts.js",
   "js/lighting/knobs.js",
   "js/lighting/track-lights.js",

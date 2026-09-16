@@ -974,6 +974,21 @@ const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (qualiGri
 function setFlow(v) { flow = v; Career.engage(v === "career"); SeasonCal.engage(v); }
 const isTimeTrial = () => session === "tt";
 const isQuali = () => session === "quali";
+// PRACTICE is not a fourth `session` value, it is a flag ACROSS them: the point
+// is to practise the session you are actually driving — a race start, a quali
+// lap — not a separate mode that drives differently. It means exactly one
+// thing: THIS SESSION IS UNSCORED. Everything that can rewind the player
+// (checkpoints, rewind) is gated on it, because every one of them is a scoring
+// exploit in a session that counts — `retry()` restores the car's own fields,
+// and `penalty`/`cuts` are ordinary fields on that car.
+// A Time Trial is always practisable, which is what the feature shipped as.
+// Cleared by startRace() so it can never leak from one session into the next.
+let practiceMode = false;
+const isPractice = () => practiceMode || isTimeTrial();
+// A DUEL is a practice race against ONE bumped rival. Same trim that Time Trial
+// and Quali already do to `cars` after makeCars(); the rival's stats come from
+// the deltas argument DriverRatings.get() already takes for career development.
+let duelMode = false;
 // The full field as it was before startRace() narrowed `cars` to the lone
 // qualifying car — Quali.simulate() needs every car to build a classification.
 let qualiField = null;
@@ -2372,12 +2387,25 @@ async function startRace() {
   // RaceControl can fly a caution for debris nobody produced this race.
   DebrisWorld.reset();
   loadTrack(trackIdx);
+  // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
+  // must never survive into the next — a race that silently did not count
+  // because the last one was practice is the worst possible failure here. A
+  // Time Trial needs no flag: isPractice() derives it.
+  // duelMode is NOT cleared: it is a race SETTING like difficulty or tyre wear,
+  // chosen on the settings sheet and meant to stick until the player changes it.
+  practiceMode = false;
   makeCars(); coach.reset(); PerfGov.resetFrameStats();
   // Qualifying keeps the full field for simulation, then drives one standing lap.
   if (isQuali()) {
     qualiField = cars;
     cars = [player];
     lapsTarget = 1;
+  } else if (duelMode) {
+    // ONE RIVAL, BUMPED — the same trim Quali and Time Trial do on either side
+    // of this branch. js/race/duel.js owns what the format means.
+    const rival = Duel.pick(cars);
+    if (rival) { Duel.bump(rival, DriverRatings); cars = [player, rival]; }
+    lapsTarget = raceLaps;
   } else if (isTimeTrial()) {
     cars = [player];          // solo against the clock — no AI on track
     lapsTarget = raceLaps;
@@ -2722,6 +2750,12 @@ const G = {
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
   set timeTrial(v) { session = v ? "tt" : "race"; },
+  // DERIVED, like timeTrial: a Time Trial is always practice, and any other
+  // session becomes practice once the player arms it. The setter never turns
+  // a Time Trial OFF — there is no scored state for it to return to.
+  get practice() { return isPractice(); },
+  set practice(v) { practiceMode = !!v; },
+  get duel() { return duelMode; }, set duel(v) { duelMode = !!v; },
   get lapsTarget() { return lapsTarget; },
   // RELIABILITY: the race setting, the shared arming path (so a simulated career
   // round draws its retirements exactly as a driven race does), and the manual
@@ -3120,6 +3154,7 @@ raceSettings = RaceSettings.create({
   getRaceGrid: () => raceGrid, setRaceGrid: (v) => { raceGrid = v; },
   getRaceReliability: () => raceReliability, setRaceReliability: (v) => { raceReliability = v; },
   getRaceTyreWear: () => raceTyreWear, setRaceTyreWear: (v) => { G.raceTyreWear = v; },
+  getDuel: () => duelMode, setDuel: (v) => { duelMode = !!v; },
   getRaceCtl: () => raceCtl,
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
   openQuali, startRace, enableTilt, getSteerMode: () => steerMode,

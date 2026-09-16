@@ -43,6 +43,56 @@ test("weather grip is continuous through the old discrete transition boundaries"
   g.apex.weather("dry");assert.equal(g.G.weatherArc,null);assert.equal(g.G.roadWetness(),0);
 });
 
+test("a race can be armed for practice, which unlocks checkpoints and spoils the session",async()=>{
+  await g.race("monza");g.apex.go();g.step(2);
+  // The gate the feature shipped with: a scored race offers nothing.
+  assert.equal(g.G.practice,false,"a race is scored until the player says otherwise");
+  assert.equal(g.G.coach.mark(),false);
+  assert.equal(g.G.coach.rewind(),false,"rewind is gated with everything else");
+  assert.equal(g.G.coach.canArm(),true,"but a plain race CAN be armed");
+  assert.equal(g.G.coach.armPractice(),true);
+  assert.equal(g.G.practice,true);
+  assert.equal(g.G.coach.canArm(),false,"arming is one-way, so the control retires");
+  // The reason this could not ship before: invalidate() was a no-op outside a
+  // time trial, so a rewound lap stayed eligible for the board.
+  assert.equal(g.G.records.accept(),false,"an armed session cannot set a record");
+  assert.equal(g.G.coach.mark(),true,"checkpoints follow the practice flag, not the session type");
+});
+
+test("rewind steps the player back about ten seconds, and never rewinds a penalty",async()=>{
+  await tt();g.apex.reset(.1,35,0);g.apex.go();g.step(2);
+  const p=g.G.player;
+  assert.equal(g.G.coach.rewind(),false,"nothing buffered yet");
+  g.step(700);                      // FRAMES, not seconds: 700/60 ~ 11.7 s, past the 10 s window
+  const sBefore=p.s;
+  assert.equal(g.G.coach.rewindReady(),true);
+  p.penalty=5;p.cuts=2;             // picked up AFTER the oldest sample
+  assert.equal(g.G.coach.rewind(),true);
+  assert.ok(p.s<sBefore,"the car is back up the road");
+  assert.equal(p.incidentInvalidLap,true,"the lap it lands on cannot count");
+  assert.equal(p.penalty,5,"a penalty is not undone by rewinding");
+  assert.equal(p.cuts,2,"nor is the track-limits ladder");
+  assert.equal(g.G.coach.practiceActive(),true,"rewinding is practising");
+  assert.equal(g.G.coach.rewind(),false,"the buffer is spent, not replayed");
+});
+
+test("a duel trims the grid to the player and one bumped rival",async()=>{
+  g.G.duel=true;
+  await g.race("monza");g.apex.go();g.step(2);
+  assert.equal(g.G.cars.length,2,"player plus one rival, like quali and TT trim to one");
+  const rival=g.G.cars.find(c=>!c.isPlayer);
+  assert.ok(rival,"the rival is a real entry from the built field");
+  assert.equal(rival.duelRival,true);
+  assert.ok(rival.code&&rival.team,"it keeps its driver code and team, not a synthetic seat");
+  // The bump has to reach the axes the AI actually drives on, or it is decoration.
+  assert.ok(rival.craft>0&&rival.craft<=1,"racecraft axes stay normalised 0..1");
+  assert.ok(rival.awareness>0&&rival.awareness<=1);
+  assert.ok(rival.skill>0&&rival.skill<=1,"skill stays a ground-speed scalar");
+  g.G.duel=false;
+  await g.race("monza");
+  assert.ok(g.G.cars.length>2,"clearing the setting restores a full grid");
+});
+
 test("practice restores the driving checkpoint and cannot be armed in a normal race or daily",async()=>{
   await g.race("monza");assert.equal(g.G.coach.mark(),false);
   await tt();g.apex.reset(.1,35,0);g.apex.go();g.step(2);

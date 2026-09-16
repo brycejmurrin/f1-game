@@ -357,6 +357,15 @@ interface GameCtx {
   readonly ttSessionTs: number;
   ttRecord: number;
   timeTrial: boolean;
+  /** THIS SESSION IS UNSCORED. Derived like timeTrial (a Time Trial is always
+   *  practice); the setter arms it for a race or a qualifying session, and
+   *  never disarms one — a session that has been rewound cannot become scored
+   *  again. Gates checkpoints and rewind in js/race/driving-coach.js and
+   *  spoils records in js/race/session-records.js. */
+  practice: boolean;
+  /** DUEL format: trim the grid to the player and one bumped rival
+   *  (js/race/duel.js). A race SETTING, so it persists between sessions. */
+  duel: boolean;
   readonly lapsTarget: number;
 
   // ── Reliability: the race setting, the arming path, the manual retire ──────
