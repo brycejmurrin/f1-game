@@ -818,6 +818,26 @@ jobs:
       - name: Install Chromium on cache miss
         if: steps.shipfilter.outputs.ships != 'false' && steps.pwcache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+      # MESA LLVMPIPE, NOT SWIFTSHADER, FOR THE SMOKE GATE (2026-09-16). MEASURED
+      # on the first dispatch (run 35062479811, all four shards green): corner
+      # approach 17.8 s against a 214 s SwiftShader median, grid start 21.4 s vs
+      # 138, jump() 9.7 s vs 171, DRIVING LINE 18.4 s vs 65 — every non-blank
+      # frame assertion held. Shard walls 1.1-1.6 min against 1.8-4.8 min on the
+      # SwiftShader push run of the same commit. llvmpipe is Mesa's software
+      # rasteriser reached through ANGLE's GL backend; it needs a display to
+      # bind through (Xvfb, started here and exported via DISPLAY so the pinned
+      # `npm run test:smoke` line below is unchanged) and the launch flags
+      # APEX_GL swaps in playwright.config.js. Dead in the dev container (no
+      # /dev/dri — docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe), alive on
+      # GitHub's runners. The dispatched wide run keeps SwiftShader unless
+      # `gl: llvmpipe` is passed, so a spec can still be measured on both.
+      - name: Mesa llvmpipe + Xvfb
+        if: steps.shipfilter.outputs.ships != 'false'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
+          Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
       # test:smoke, NOT test:tiny. This step said `test:tiny` against a
       # 20-minute cap and a "~3 min" estimate, and the arithmetic never worked:
       # test:tiny is smoke + dev-tools + logging = 71 tests, CI pins
@@ -904,26 +924,6 @@ jobs:
         run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/4
       # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
       # whichever browser group the `group` input names (default tiny).
-      # MESA LLVMPIPE, NOT SWIFTSHADER, FOR THE SMOKE GATE (2026-09-16). MEASURED
-      # on the first dispatch (run 35062479811, all four shards green): corner
-      # approach 17.8 s against a 214 s SwiftShader median, grid start 21.4 s vs
-      # 138, jump() 9.7 s vs 171, DRIVING LINE 18.4 s vs 65 — every non-blank
-      # frame assertion held. Shard walls 1.1-1.6 min against 1.8-4.8 min on the
-      # SwiftShader push run of the same commit. llvmpipe is Mesa's software
-      # rasteriser reached through ANGLE's GL backend; it needs a display to
-      # bind through (Xvfb, started here and exported via DISPLAY so the pinned
-      # `npm run test:smoke` line below is unchanged) and the launch flags
-      # APEX_GL swaps in playwright.config.js. Dead in the dev container (no
-      # /dev/dri — docs/notes/CI-RENDERING-PERFORMANCE.md §llvmpipe), alive on
-      # GitHub's runners. The dispatched wide run keeps SwiftShader unless
-      # `gl: llvmpipe` is passed, so a spec can still be measured on both.
-      - name: Mesa llvmpipe + Xvfb
-        if: steps.shipfilter.outputs.ships != 'false'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends mesa-utils libgl1-mesa-dri libegl1 libgles2 xvfb
-          Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
-          echo "DISPLAY=:99" >> "$GITHUB_ENV"
       - name: Boot group (nightly) / dispatched group
         if: steps.shipfilter.outputs.ships != 'false' && inputs.concurrency_key == '' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && inputs.gl != 'llvmpipe'
         env:
