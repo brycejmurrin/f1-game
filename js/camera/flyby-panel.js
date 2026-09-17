@@ -241,12 +241,21 @@ function fmt(d, v) {
 // ---- live preview ---------------------------------------------------------
 
 /* THE PREVIEW IS THE WHOLE POINT, and it is one call: FlybySeq solves the
-   edited list directly, so nothing here has to reimplement a pose. __apex is
-   the dev API (js/agent/apex.js) and is absent in the node tests that exercise
-   the list operations above, hence the typeof guard rather than a truthiness
-   test on an undeclared name. */
+   edited list directly, so nothing here has to reimplement a pose.
+
+   __apex IS NULL, NOT UNDEFINED, ON A PLAYER BOOT. js/game.js declares
+   `window.__apex = null` and only fills it after a lazy inject that a Pages
+   build never performs (wantAgentSurface() is false there by design). A
+   `typeof === "undefined"` test passes for null, so the next term dereferenced
+   it and the panel threw `null is not an object` on the live site the moment
+   anyone scrubbed. The typeof is still needed — the node tests exercise this
+   file with no such global declared at all — but it cannot be the whole guard. */
+function apiReady() {
+  return typeof __apex !== "undefined" && !!__apex && !!__apex.flybyCam;
+}
+
 function preview() {
-  if (typeof __apex === "undefined" || !__apex.flybyCam) { status(null, "no dev API — preview unavailable"); return; }
+  if (!apiReady()) { askApi(); status(null, "preview unavailable — loading the dev API…"); return; }
   let r = null;
   try { r = __apex.flybyCam(u, ensure()); } catch (e) { status(null, "preview failed: " + (e && e.message)); return; }
   if (!r) { status(null, "no track built yet — start a race, then pause"); return; }
@@ -453,8 +462,27 @@ function setU(v) {
 
 function isOpen() { return !$("flyby").hidden; }
 
+/* game.js's memoised loadAgentSurface, handed in after its boot chain — the
+   same deal js/perf/metrics-overlay.js has, and for the same reason: this panel
+   reads everything it previews through __apex, which a Pages build does not
+   fetch. Asking here rather than widening the boot gate keeps a player who
+   never opens the editor downloading nothing. Asked ONCE: a refused or failed
+   inject leaves the panel degraded with a message, never a retry loop. */
+let _apiLoad = null, _apiAsked = false;
+function setApiLoader(fn) {
+  _apiLoad = typeof fn === "function" ? fn : null;
+  if (_apiLoad && isOpen()) askApi();
+}
+function askApi() {
+  if (_apiAsked || !_apiLoad || apiReady()) return;
+  _apiAsked = true;
+  Promise.resolve(_apiLoad()).then(() => { if (isOpen()) { preview(); refreshRows(); } })
+    .catch((e) => { status(null, "the dev API did not load — preview unavailable"); Log.warn("game", "flyby panel: agent surface failed", e); });
+}
+
 function openFlyby() {
   Log.info("game", "FlybyPanel.open");
+  askApi();
   ensure();
   buildRows();
   sel = Math.max(0, Math.min(ensure().length - 1, sel));
@@ -484,7 +512,7 @@ function closeFlyby(showPauseMenu) {
   // exactly the case this panel is most used in, the menu. view("chase") only
   // needs a track, clears dbgCam outright, and does not change the player's
   // chosen camera MODE the way camera() would.
-  if (typeof __apex !== "undefined" && __apex.view) {
+  if (typeof __apex !== "undefined" && __apex && __apex.view) {
     try { __apex.view("chase"); } catch (_) { /* no track built — nothing parked */ }
   }
   if (showPauseMenu && G.paused) {
@@ -557,7 +585,7 @@ $("fb-copy").onclick = () => {
 };
 
 _refresh = () => { if (isOpen()) { refreshChips(); refreshRows(); } };
-return { openFlyby, closeFlyby, isOpen, list: () => clone(ensure()) };
+return { openFlyby, closeFlyby, isOpen, setApiLoader, list: () => clone(ensure()) };
 }
 
 return Object.assign({ create, refresh: () => { if (_refresh) _refresh(); } }, ops);
