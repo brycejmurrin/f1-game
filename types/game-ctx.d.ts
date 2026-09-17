@@ -383,6 +383,12 @@ interface GameCtx {
   readonly recordControls: () => Record<string, unknown>;
   readonly records: { key(): string | null; current(): string; config(): Record<string, unknown>; invalidate(): void; prepareDaily(): void; restoreDaily(): void; board(id: string): TTBoardRow[] };
   readonly coach: { status(): Record<string, unknown> | null };
+  /**
+   * The radio's VOICE — js/audio/radio-voice.js. Always an object: create()
+   * hands back a frozen no-op (RadioVoice.inert) where speechSynthesis is
+   * missing, so no caller needs a guard. AudioPanel owns the toggle.
+   */
+  readonly radio: { setEnabled(b: boolean): void; setVolume(v: number): number; available(): boolean; unlock(): void; stop(): void };
 
   readonly retireCar: (c: CarState, reason?: string) => void;
   readonly ranked: CarState[];
@@ -720,6 +726,7 @@ declare const AgentView: GameModuleFactory;
 declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;
 declare const AudioPanel: GameModuleFactory;
+declare const RadioVoice: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
 declare const BrakeCue: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;

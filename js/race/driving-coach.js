@@ -35,7 +35,8 @@ const DrivingCoach = (function () {
   // goal by the label the driver will actually look for. One list, two readers.
   const GOALS = Object.freeze([["free", "FREE PRACTICE"], ["sector", "SECTOR"], ["corner", "CORNER"], ["lap", "FULL LAP"],
     ["braking", "BRAKING"], ["trail", "TRAIL BRAKING"], ["slalom", "SLALOM"], ["launch", "LAUNCH"],
-    ["start", "RACE START"]]);
+    ["start", "RACE START"], ["slipstream", "SLIPSTREAM"], ["overtake", "OVERTAKE"], ["defend", "DEFEND"],
+    ["backmarkers", "TRAFFIC"]]);
   function create(G) {
     const insights = RaceInsights.create(G);
     let enabled = G.store.get("drivingCoach", false), elapsed = 0, quiet = 0;

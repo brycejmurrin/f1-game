@@ -1170,6 +1170,26 @@
         <p class="as-note">Engine, tyres, rain and menu clicks. Independent of the music.</p>
       </details>
 
+      <!-- THE RADIO, SPOKEN. The same cards, read out by the browser's own voice
+           (js/audio/radio-voice.js). Its own volume because speech sits OUTSIDE
+           the WebAudio graph entirely — the SFX slider physically cannot reach
+           it, and binding it there would look right and then desync the moment
+           somebody turned SFX off and left the radio on. -->
+      <details id="as-radio-details" class="as-sec">
+        <summary class="adv-more-btn" id="as-radio-sum">TEAM RADIO · OFF</summary>
+        <div id="as-radio" class="set-row" role="group" aria-labelledby="as-radio-label">
+          <span class="tune-label" id="as-radio-label">TEAM RADIO</span>
+          <div>
+            <button id="as-radio-prev" type="button" data-step="-1" aria-label="Previous team radio">&lsaquo;</button>
+            <select id="as-radio-sel" aria-labelledby="as-radio-label" aria-describedby="as-radio-note"></select>
+            <button id="as-radio-next" type="button" data-step="1" aria-label="Next team radio">&rsaquo;</button>
+          </div>
+        </div>
+        <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
+          <input id="as-rvol" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
+        <p id="as-radio-note" class="as-note"></p>
+      </details>
+
       <!-- ENGINE TONE: the player's own trim, layered OVER the manufacturer
            voice that team.engine already picks (js/audio/engine.js ENGINE_VOICES).
            A profile REPLACES the trims; moving any slider afterwards leaves
@@ -2687,6 +2707,7 @@
 <script defer crossorigin="anonymous" src="js/audio/music-lib.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/spotify.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/rivals.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/radio-voice.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/parts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liveries.js?v=dev"></script>

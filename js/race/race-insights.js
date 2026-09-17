@@ -4,7 +4,23 @@ const RaceInsights = (function () {
   const DRILLS = Object.freeze({ free: "Free practice", sector: "Finish this sector cleanly", corner: "Drive through the next corner",
     lap: "One full lap from the line", braking: "Brake to a controlled stop", trail: "Release the brake into a turn",
     slalom: "Six clean direction changes", launch: "Standing start to racing speed",
-    start: "Gain a place off the line" });
+    start: "Gain a place off the line",
+    // THE RIVAL DRILLS. Every drill above judges the car against the road; these
+    // three judge it against another car, which is a different and harder thing
+    // to measure honestly — see PARITY and the notes on each branch below.
+    slipstream: "Close on the car ahead in its wake", overtake: "Pass the car ahead",
+    defend: "Hold your place under attack",
+    // BACKMARKERS IS NOT AN OVERTAKING DRILL, and the goal text says so. A car
+    // you are 6% quicker than is BY DEFINITION inside letPassCase's margin, so
+    // it will concede on its own timer — which is a read of its awareness
+    // rating, not of your racecraft. Scoring "did you out-drive him" would
+    // therefore score the AI's stat sheet. What it scores instead is the thing
+    // lapping traffic actually costs you in a race: TIME, with any contact
+    // failing the attempt. That needs no per-pair identity (the engine has
+    // none — c.contactT is a 0.22 s scalar with no idea whose fault it was),
+    // because "I touched somebody while threading traffic" is the failure
+    // whoever it was.
+    backmarkers: "Clear three slower cars without contact" });
   // A drill judges what the CAR did, never the stick. Lateral acceleration says
   // the car changed direction: a pad deflection of 0.35 reads 0.11 after the
   // steer expo, so the old stick thresholds silently failed every analog driver
@@ -17,11 +33,36 @@ const RaceInsights = (function () {
   // A corner opens after 0.3 s of sustained cornering and closes after 0.5 s
   // without it, so the brief unload through a chicane's flip stays one corner.
   const CORNER_IN = 3, CORNER_OUT = 5;
+  // ── the rival drills' constants ────────────────────────────────────────────
+  // Metres, all of them. The PACE rule governs SPEEDS — a metre is a metre at
+  // every PACE — and these match the numbers the engine already races by:
+  // TOW_RANGE 34 is where the wake starts (js/physics/consts.js), 12 is the
+  // window an AI defends in and 9 the one it concedes in (js/game.js
+  // letPassCase), 2.4 is AiDrive.sideLevel(), and 8 is inside the 6 m where the
+  // wake saturates, so "you have the whole tow" is true rather than nearly true.
+  const TOW_RANGE = 34, ATTACK_M = 12, SIDE_M = 2.4, WAKE_DONE_M = 8, LANE_M = 4;
+  // PARITY IS NOT A FAIRNESS GESTURE — it is what makes the overtake real. An AI
+  // concedes (js/game.js letPassCase) once a chaser holds +2.5·PACE m/s inside
+  // 9 m for letPassDelay = lerp(4.2, 1.8, awareness) — 2.4 s at the default.
+  // Against a rival within 4% of your own _vmaxNow you cannot hold that margin
+  // for 2.4 continuous seconds, so the concession never fires and the drill
+  // measures your move instead of the rival's awareness RATING. Delete this and
+  // OVERTAKE quietly becomes a readout of an AI stat. Dimensionless: it is a
+  // ratio of two _vmaxNow values, so PACE cancels top and bottom.
+  const PARITY = 0.04, PARITY_MIN = 10;
+  // DEFEND arms only against a car that could actually pass: a fraction of
+  // vTop(), the same shape AiDrive.otWant uses for its own margin.
+  const THREAT = 0.02;
+  const HOLD_CAP = 30;         // seconds of pressure that count as a full defence
+  const SLOW = 0.06, TRAFFIC_N = 3;   // a "backmarker" is 6% down on your own _vmaxNow; three of them is a stint through traffic
+  const CLEAR_S = 1.5;         // held clear before a pass is a pass
   const kmh = v => Math.round(Math.abs(v) * 3.6);
+  const median = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[s.length >> 1] : null; };
   const boundedPush = (a, v, n) => { a.push(v); if (a.length > n) a.shift(); };
   function create(G) {
     let previous = null, events = [], sequence = 0, laps = [], sector = null, energy = [[], [], []];
     let tyreStart = null, drill = null, lastDrill = null, distance = 0, lapClean = false, weather = null, attempts = {};
+    let paceRef = null, paceWin = [];   // the car ahead, and the rolling pace read on it (samplePace)
     function event(kind, text) {
       boundedPush(events, { seq: ++sequence, time: G.raceT || 0, lap: G.player ? G.player.lap : 0, kind, text }, 128);
     }
@@ -39,11 +80,56 @@ const RaceInsights = (function () {
       if (["launch", "start"].includes(mode) && Math.abs(c.speed) > 1) { G.announce(mode === "start" ? "SET THIS ON THE GRID, BEFORE THE LIGHTS" : "STOP THE CAR BEFORE SETTING THIS DRILL", 2, "practice"); return false; }
       // …and a start drill also needs somebody to gain a place on.
       if (mode === "start" && placeOf(c) === 0) { G.announce("A START DRILL NEEDS OTHER CARS ON THE GRID", 2, "practice"); return false; }
+      // ── the rival drills refuse loudly, because every refusal names the thing
+      // the driver has to go and do before the drill means anything ───────────
+      let rival = null;
+      if (["slipstream", "overtake", "defend", "backmarkers"].includes(mode)) {
+        if (placeOf(c) === 0) { G.announce("THIS DRILL NEEDS OTHER CARS ON TRACK", 2, "practice"); return false; }
+        // A caution neutralises the whole field to a delta pace, so nothing
+        // rival-relative measured under one means anything.
+        if (G.cautionInfo && G.cautionInfo().level > 0) { G.announce("NO RACING UNDER A CAUTION", 2, "practice"); return false; }
+        if (mode === "backmarkers") {
+          // Any slower car up the road, not just the one in our lane — traffic
+          // is traffic wherever it sits.
+          const slower = (G.cars || []).filter(o => o !== c && !o.retired && !o.finished
+            && (gapTo(o, c) || 0) > 0 && (o._vmaxNow || 0) > 0 && (c._vmaxNow || 0) > 0
+            && (o._vmaxNow / c._vmaxNow) < 1 - SLOW);
+          if (!slower.length) { G.announce("NO SLOWER TRAFFIC AHEAD TO PASS", 2, "practice"); return false; }
+          rival = slower[0];
+        } else rival = mode === "defend" ? nearestBehind(c) : nearestAhead(c);
+        const gap = rival ? Math.abs(gapTo(rival, c)) : Infinity;
+        if (mode === "backmarkers") { /* the target list is the precondition; no gap test */ }
+        else if (mode === "defend") {
+          if (!rival || gap > ATTACK_M) { G.announce("NOBODY IS ATTACKING YOU YET", 2, "practice"); return false; }
+          // "Could actually pass" as a fraction of top speed — the AiDrive.otWant
+          // shape. NOT a c.speed-against-a-literal compare, which would be a
+          // PACE-rule violation (tests/unit/vstd-invariant.test.mjs) and wrong.
+          if (!((rival._vmaxNow || 0) >= (c._vmaxNow || 0) + THREAT * G.vTop())) {
+            G.announce("HE IS NOT QUICK ENOUGH TO DEFEND FROM", 2, "practice"); return false;
+          }
+        } else {
+          if (placeOf(c) === 1) { G.announce("YOU ARE LEADING — THERE IS NOBODY TO PASS", 2, "practice"); return false; }
+          if (!rival || gap > TOW_RANGE) { G.announce(mode === "overtake" ? "CLOSE ON THE CAR AHEAD FIRST" : "GET INTO THE WAKE OF THE CAR AHEAD", 2, "practice"); return false; }
+        }
+        if (mode === "slipstream" && gap < WAKE_DONE_M) { G.announce("ALREADY THERE — DROP BACK FIRST", 2, "practice"); return false; }
+        if (mode === "overtake") {
+          const par = paceParity();
+          if (par == null) { G.announce("HOLD THIS GAP A MOMENT LONGER", 2, "practice"); return false; }
+          if (Math.abs(par - 1) > PARITY) { G.announce("NOT ON YOUR PACE — NOT A FAIR FIGHT", 2, "practice"); return false; }
+        }
+      }
       previous = sector = tyreStart = null; laps = []; energy = [[], [], []]; lapClean = false;
       drill = { mode, time: G.raceT, sector: G.sectorIdx, startProg: c.prog, lap: c.lap,
         changes: 0, side: 0, brakeSeen: false, brakeProg: c.prog, brakeSpeed: 0, slowing: 0, held: 0, turnSeen: false,
         phase: 0, turnRun: 0, straightRun: 0, minSpeed: Infinity, exitSpeed: 0, peakDecel: 0, launchT: null, lapStart: null, lapDone: false,
         place0: placeOf(c), placeNow: placeOf(c), startProg0: c.prog,
+        // THE RIVAL FIELDS. `rival` is the car OBJECT, not an index: restoreWorld
+        // mutates the cars in place and G.cars order never changes, so the
+        // reference survives a rewind and still points at the right car.
+        rival, rivalCode: rival ? rival.code || "RIVAL" : "", rivalX0: rival ? rival.x || 0 : 0,
+        gap0: rival ? Math.abs(gapTo(rival, c)) : 0, gapMin: Infinity, gapNow: 0,
+        towS: 0, wakeS: 0, closed: 0, pressT: 0, escapeT: 0, clearT: 0, phase2: 0, lastT: null,
+        attacked: false, conceded: false, gifted: false, gaveUp: false, cleared: 0, passing: new Set(),
         clean: true, reason: "", done: false };
       event("practice", DRILLS[mode] + " — unscored");
       return true;
@@ -63,6 +149,43 @@ const RaceInsights = (function () {
       return ahead + 1;
     }
     const masteryKey = (mode, sectorIdx) => G.records.key() + ":" + mode + ":" + (mode === "sector" ? sectorIdx : "all");
+    // METRES UP THE ROAD, signed: + is ahead of us, − is behind. placeOf() sorts
+    // by CUMULATIVE arc and is right for a POSITION; it is useless for a gap,
+    // because a car a lap down sorts behind while sitting on your gearbox. Same
+    // wrap the AI's own traffic scan uses.
+    function gapTo(o, c) {
+      const L = G.track && G.track.total;
+      if (!o || !c || !(L > 0)) return null;
+      const d = (o.prog || 0) - (c.prog || 0);
+      return ((d + L / 2) % L + L) % L - L / 2;
+    }
+    // Nearest car in our lane, one direction. Positions only — no curvature, no
+    // racing line, nothing the arc rule forbids reaching the driver.
+    function nearestIn(c, sign) {
+      const cars = G.cars;
+      if (!c || !Array.isArray(cars)) return null;
+      let best = null, bestGap = Infinity;
+      for (const o of cars) {
+        if (o === c || o.retired || o.finished) continue;
+        if (Math.abs((o.x || 0) - (c.x || 0)) > LANE_M) continue;
+        const g = gapTo(o, c);
+        if (g == null || Math.sign(g) !== sign || Math.abs(g) >= bestGap) continue;
+        best = o; bestGap = Math.abs(g);
+      }
+      return best;
+    }
+    const nearestAhead = (c) => nearestIn(c, 1);
+    const nearestBehind = (c) => nearestIn(c, -1);
+    // The rolling pace read on whoever is in front. _vmaxNow is stashed for every
+    // car after every pace multiplier (js/game.js), which is the same cross-car
+    // comparison the AI itself makes. MEDIAN, not mean: one frame of tow or one
+    // caution sample must not move the verdict.
+    function samplePace(c) {
+      const ah = nearestAhead(c);
+      if (ah !== paceRef) { paceRef = ah; paceWin = []; }
+      if (ah && ah._vmaxNow > 0 && c._vmaxNow > 0) boundedPush(paceWin, ah._vmaxNow / c._vmaxNow, 20);
+    }
+    const paceParity = () => (paceWin.length >= PARITY_MIN ? median(paceWin) : null);
     function masteryEntries() {
       const raw = G.store.get("circuitMastery", null);
       return raw && raw.version === 1 && Array.isArray(raw.entries) ? raw.entries.filter(e => e && typeof e.key === "string").slice(-63) : [];
@@ -86,8 +209,14 @@ const RaceInsights = (function () {
       // ranks above -1. The sign is undone once, at the display edge, so
       // nothing else in the ledger needs a per-mode "which way is better".
       const placed = (drill.place0 || 0) - (drill.placeNow || 0);
+      // …and the rival drills add two more of the same shape: metres CLOSED and
+      // seconds HELD are both "more is better", so both are stored negated.
+      // OVERTAKE is the one that needs no sign work — it scores the time the
+      // move took, and less of that is better, like every drill above.
       const score = mode === "braking" ? stop : mode === "launch" && drill.launchT != null ? G.raceT - drill.launchT
-        : mode === "lap" ? lapTime : mode === "start" ? -placed : seconds;
+        : mode === "lap" ? lapTime : mode === "start" ? -placed
+        : mode === "slipstream" ? -Math.max(0, drill.closed)
+        : mode === "defend" ? -Math.min(HOLD_CAP, drill.pressT) : seconds;
       // v²/2a at the hardest deceleration the car actually produced: the distance
       // this stop WOULD have taken had the driver held that from the first brake.
       // The gap is what modulation cost, in metres, and it is the one number a
@@ -102,6 +231,18 @@ const RaceInsights = (function () {
         : mode === "launch" ? "0 to " + kmh(G.vTop() * .5) + " km/h in " + score.toFixed(2) + "s"
         : mode === "start" ? (placed > 0 ? "gained " + placed + (placed === 1 ? " place" : " places") : placed < 0 ? "lost " + (-placed) + (placed === -1 ? " place" : " places") : "held position")
           + " — P" + drill.place0 + " to P" + drill.placeNow
+        // SLIPSTREAM reports tow-seconds beside the metres rather than scoring
+        // them: the tow is a vmax multiplier, so below vmax it reads 1.0 and
+        // buys nothing. Metres closed is the EFFECT, and it is zero when the
+        // tow is inert. A run with 12 m closed and 0.4 s of tow is visibly not
+        // a slipstream, which is exactly what the pairing is for.
+        : mode === "slipstream" ? "closed " + Math.max(0, drill.closed).toFixed(0) + " m in " + drill.towS.toFixed(1) + "s of tow · nearest " + (Number.isFinite(drill.gapMin) ? drill.gapMin.toFixed(0) : "—") + " m"
+        : mode === "overtake" ? "passed " + drill.rivalCode + " in " + seconds.toFixed(1) + "s · closed from " + drill.gap0.toFixed(0) + " m" + (drill.gifted ? " · he moved over" : "")
+        // "he gave up the move", never "you forced him to": the AI's commitment
+        // also decays on its own cooldown, so the wording is the honest hedge.
+        : mode === "defend" ? "held P" + drill.place0 + " for " + Math.min(HOLD_CAP, drill.pressT).toFixed(1) + "s under attack"
+          + (drill.attacked ? "" : " — he never committed") + (drill.gaveUp ? " · he gave up the move" : "")
+        : mode === "backmarkers" ? "cleared " + drill.cleared + " of " + TRAFFIC_N + " in " + seconds.toFixed(1) + "s"
         : mode === "lap" ? "lap " + G.fmtTime(score) : seconds.toFixed(1) + "s";
       lastDrill = { mode, seconds, clean: drill.clean, changes: drill.changes, reason: drill.reason, score, text,
         limit: limit == null ? null : +limit.toFixed(1), slack: slack == null ? null : +slack.toFixed(1) };
@@ -179,6 +320,101 @@ const RaceInsights = (function () {
         if (drill.turnSeen && brake < .05 && turning && moving) finishDrill(current, c);
         else if (v < 1) { failDrill("stopped before releasing the brake"); finishDrill(current, c); }
       } else if (drill.mode === "slalom" && drill.changes >= 6) finishDrill(current, c);
+      else if (drill.rival) observeRival(c, current, v, moving, now);
+    }
+    // THE RIVAL BRANCHES. Two rules bind all three: everything read here is a
+    // car POSITION, a car SPEED or a stashed field another system already wrote
+    // (towing, wake, letPassT, passOf) — never Tracks.curvature and never the
+    // racing line, so no part of a drill's verdict can reach the player's
+    // physics. And nothing here writes to a car: drills only read.
+    function observeRival(c, current, v, moving, now) {
+      const r = drill.rival, mode = drill.mode;
+      // REAL elapsed seconds, not a per-tick constant. update() is driven at
+      // roughly 10 Hz today, but an accumulator that assumed it would silently
+      // score a tenth of the truth the day that cadence changed — and would be
+      // wrong by the same factor in any test that ticks at its own rate.
+      const step = Math.max(0, now - (drill.lastT != null ? drill.lastT : drill.time));
+      drill.lastT = now;
+      if (r.retired || r.finished) { failDrill("the rival dropped out"); finishDrill(current, c); return; }
+      if (G.cautionInfo && G.cautionInfo().level > 0) { failDrill("a caution neutralised the fight"); finishDrill(current, c); return; }
+      const gap = gapTo(r, c);
+      if (gap == null) return;
+      drill.gapNow = gap;
+      drill.gapMin = Math.min(drill.gapMin, Math.abs(gap));
+      // c.towing is the tow the player is ACTUALLY getting: js/game.js already
+      // gates it on driver state (not braking, not steering) rather than on
+      // curvature, so reading it here inherits that argument instead of asking
+      // "am I on a straight?" — which would drag the arc toward the driver.
+      drill.towS += step * (c.towing || 0);
+      drill.wakeS += step * (c.wake || 0);
+      if (mode === "slipstream") {
+        drill.closed = drill.gap0 - Math.abs(gap);
+        if (gap > 0 && Math.abs(gap) <= WAKE_DONE_M) { finishDrill(current, c); return; }
+        if (gap < -SIDE_M) { finishDrill(current, c); return; }   // went by: not the goal, not a failure
+        if (Math.abs(gap) > TOW_RANGE) { failDrill("dropped out of the wake"); finishDrill(current, c); return; }
+        if (!moving) { failDrill("the car stopped"); finishDrill(current, c); return; }
+        if (now - drill.time > 45) { failDrill("never closed the gap"); finishDrill(current, c); }
+        return;
+      }
+      if (mode === "overtake") {
+        // THE GIFT WATCH. letPassT is the AI's own concession timer; past its
+        // delay it has decided to move over, and a pass handed to you is not a
+        // pass. Parity makes this nearly unreachable, which is the point — this
+        // catches the case where it happens anyway.
+        const delay = 4.2 + (1.8 - 4.2) * (r.awareness != null ? r.awareness : 0.75);
+        if ((r.letPassT || 0) > delay && !drill.conceded) { drill.conceded = true; failDrill("he let you through"); }
+        if (drill.phase2 === 0 && Math.abs(gap) < SIDE_M) drill.phase2 = 1;
+        // A lateral proxy, and a deliberately WEAK one. js/game.js concedes room
+        // to a human at the aim point with no timer and no trace on the car, so
+        // this cannot be detected exactly — only suspected. It annotates the
+        // result instead of failing it, because a drill that refused every pass
+        // the player really earned would be worse than one that occasionally
+        // credits a gift.
+        if (drill.phase2 === 1 && Math.abs((r.x || 0) - drill.rivalX0) > 0.6) drill.gifted = true;
+        if (gap < -SIDE_M) { drill.clearT += step; if (drill.clearT >= CLEAR_S) { finishDrill(current, c); return; } }
+        else drill.clearT = 0;
+        if (gap > TOW_RANGE) { drill.escapeT += step; if (drill.escapeT > 3) { failDrill("lost touch with the car ahead"); finishDrill(current, c); return; } }
+        else drill.escapeT = 0;
+        if (now - drill.time > 60) { failDrill("never got the move done"); finishDrill(current, c); }
+        return;
+      }
+      if (mode === "backmarkers") {
+        // Count a car as cleared when it goes from ahead of us to behind us and
+        // stays there. `passing` latches the one being worked on so a car
+        // weaving either side of the boundary cannot be counted twice.
+        // A SET, not a single latch: you are past one car while alongside the
+        // next, which is what makes traffic traffic. A car counts once, when it
+        // goes from clearly ahead to clearly behind — the SIDE_M band between
+        // the two keeps a car weaving either side of the line from scoring
+        // twice, and dropping it from the set keeps it from scoring again if it
+        // re-passes you.
+        for (const o of (G.cars || [])) {
+          if (o === c || o.retired || o.finished) continue;
+          const g = gapTo(o, c);
+          if (g == null) continue;
+          if (g > SIDE_M) drill.passing.add(o);
+          else if (g < -SIDE_M && drill.passing.delete(o)) drill.cleared++;
+        }
+        if (drill.cleared >= TRAFFIC_N) { finishDrill(current, c); return; }
+        if (now - drill.time > 90) { failDrill("ran out of time in traffic"); finishDrill(current, c); }
+        return;
+      }
+      // DEFEND. passOf is the identity of the car an AI has committed to passing
+      // and passFailOf the one it gave up on — the only per-pair identity in the
+      // engine, and the difference between "I defended" and "nobody tried".
+      if (r.passOf === c) drill.attacked = true;
+      if (r.passFailOf === c) drill.gaveUp = true;
+      if (gap > -ATTACK_M) drill.pressT += step;   // time with the rival out of range does not count as pressure survived
+      drill.placeNow = placeOf(c) || drill.placeNow;
+      if (drill.pressT >= HOLD_CAP) { finishDrill(current, c); return; }
+      // Losing the place to a genuinely faster car is a RESULT, not a failure:
+      // the seconds you survived still bank.
+      if (drill.placeNow > drill.place0) { finishDrill(current, c); return; }
+      if (Math.abs(gap) > TOW_RANGE) { drill.escapeT += step; if (drill.escapeT > 3) { finishDrill(current, c); return; } }
+      else drill.escapeT = 0;
+      // A defence against a car that never tried is not a result. Same shape as
+      // the start drill's "the car never got away".
+      if (!drill.attacked && drill.pressT > 10) { failDrill("he never attacked"); finishDrill(current, c); }
     }
     function update(c) {
       if (!c || !G.track || G.state !== "race") return;
@@ -220,6 +456,10 @@ const RaceInsights = (function () {
         if (lapClean && c.lastLap > 0) boundedPush(laps, { seconds: c.lastLap, wear: current.wear, stint: current.stint }, 12);
         lapClean = !current.invalid && !current.off && current.pit === "track";
       }
+      // The pace read runs whether or not a drill is armed — OVERTAKE needs a
+      // second of history on the car ahead BEFORE it can judge whether the
+      // fight is fair, and asking for it at arming time would be too late.
+      samplePace(c);
       observeDrill(c, current);
       previous = current;
     }

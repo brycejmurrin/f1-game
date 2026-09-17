@@ -376,7 +376,9 @@ test("THREE PATH and SCREENSHOTS confirms expire back to their real labels", () 
 /* ── MUSIC & SOUND readout ────────────────────────────────────────────── */
 function bootAudio({ soundOn, musicEnabled }) {
   const dom = makeDom();
-  for (const id of ["as-mvol", "as-svol"]) {
+  // Every volume slider the panel syncs, each inside its own .tune-row the way
+  // index.html has them — the panel toggles "tune-off" on that ancestor.
+  for (const id of ["as-mvol", "as-svol", "as-rvol"]) {
     const row = dom.makeElement("label"); row.className = "tune-row";
     row.appendChild(dom.byId(id)); dom.body.appendChild(row);
   }

@@ -140,6 +140,7 @@ const FULL = [
   "js/audio/music-lib.js",
   "js/audio/spotify.js",
   "js/audio/rivals.js",
+  "js/audio/radio-voice.js",
   "js/audio/panel.js",
   "js/car/parts.js",
   "js/car/liveries.js",
@@ -474,6 +475,7 @@ const HARD_EDGES = [
   ["js/lighting/lighting.js", "js/lighting/profiles.js"],  // light-store destructures LightTune's TUNE_DEFS/LT inside create()
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/audio/panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time
+  ["js/audio/radio-voice.js", "js/game.js"],   // game.js calls RadioVoice.inert() at eval time
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
   ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
