@@ -3385,7 +3385,7 @@ const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 const { closeCamTuner } = CamTunerPanel.create(G);
 // FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
 // shot list; previews through __apex.flybyCam, touches no render-path state.
-FlybyPanel.create(G);
+const flybyPanel = FlybyPanel.create(G);
 // Steering-tuning sliders + presets (js/input/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,
@@ -9257,6 +9257,11 @@ await bootAgentSurface();
 // fetched until a player actually switches METRICS on.
 if (typeof GameMetrics !== "undefined" && GameMetrics.setTelemetryLoader)
   GameMetrics.setTelemetryLoader(loadAgentSurface);
+// The FLYBY SHOT EDITOR has exactly the same problem for exactly the same
+// reason: it previews every edit through __apex.flybyCam, which is null on a
+// Pages build until something asks. Same remedy — hand it the loader, and it
+// fetches only when a player actually opens the panel.
+if (flybyPanel && flybyPanel.setApiLoader) flybyPanel.setApiLoader(loadAgentSurface);
 
 // THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on
 // purpose: awaiting it here would put the 338 KB straight back on the
