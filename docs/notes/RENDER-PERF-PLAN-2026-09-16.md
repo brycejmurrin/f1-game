@@ -202,7 +202,9 @@ player at 0.35 of a lap, counters read through `__apex.multiDraw()`:
 | groups by NEIGHBOUR (what the first cut made) | 24.5 |
 | groups by SET (what it makes now) | 15.0 |
 
-**9.5 fewer draw calls a frame.** Real, and far too small to be a frame time.
+**9.5 fewer draw calls a frame** — on this container. **Superseded by §10**,
+which measures 2.7 a frame on the hardware that matters. Real either way, and
+far too small to be a frame time.
 So the fix makes multi-draw correct, not valuable, and nothing here argues for
 moving its default.
 
@@ -217,8 +219,9 @@ stated confidently before the counter existed:
   gives 22 → 14. Canonical order is worth about one group a frame. It stays
   because a set is a set, not because it pays.
 
-**Still unexplained:** why run 143 saw 1.03 ranges a call where the same scheme
-gives 4.4 locally. The census leg ran `macos-latest` at `resMode=high` and its
+**Was unexplained, now likely answered in §10:** run 143's 1.03 ranges a call.
+The original reasoning below guessed the env-probe faces; the lamp branch on
+real hardware gives 1.06, which fits better. The census leg ran `macos-latest` at `resMode=high` and its
 counters are cumulative over every `drawChunked` call, env-probe faces included,
 and a probe face that sees one chunk contributes a one-range call. Until a
 census carries `perChunkDraws`/`consecutiveGroups`/`setGroups`, 1.03 is a number
@@ -288,3 +291,46 @@ built at night the next run will show which one is still binding.
 
 So the census now passes `--tod`, and time of day is a BUILD input in the
 request file rather than something a render-time clock can fake.
+
+## 10. The lamp branch measured at last, and it refutes §7's number
+
+Census 154, vegas BUILT at night, macos-latest, resMode=high. First run in which
+the per-chunk lamp branch has ever executed under measurement:
+
+```
+counted:  4451 multi-draw calls, 4698 ranges, 247 drawElements AVOIDED over 78 frames
+          -> 60.2 ranges/frame in 57.1 calls/frame
+grouping: 67.1 visible chunks/frame -> 57.9 by NEIGHBOUR -> 55.2 by SET  (1.05x fewer)
+```
+
+**1.05x, not the 1.63x §7 reports.** On this hardware 67.1 visible chunks carry
+55.2 distinct light sets — about 1.2 chunks per set — so there is almost nothing
+to bucket. Locally the same scene gives 108.5 chunks in 15.0 sets, 7.2 per set.
+The two machines disagree about the SHAPE of the scene, not just its speed, and
+the local number is the optimistic one. §7's "about 9.5 draw calls a frame" is
+**2.7 a frame** where it counts, out of 57.9.
+
+The likely cause is the shed, and it is the unkind one. `tierShed` cuts the lamp
+slot budget at tier >= 1; the runner sits at tier 3-4 while the local container
+is at tier 0. A smaller per-chunk cap means each chunk keeps fewer of its
+nearest lamps, and nearest-K sets that overlapped heavily at the full cap stop
+overlapping when truncated. So the sets fragment exactly on the machines that
+are already struggling — which are the only machines multi-draw was ever for.
+
+**Run 143's 1.03 is no longer a mystery.** 4451 calls for 4698 ranges is 1.06 a
+call, on the same runner, same circuit, lamp branch live. §7 labelled 1.03 "a
+number about that run" and guessed it was the plain branch; 1.06 here says it
+was almost certainly this regime instead — nearly one light set per chunk, so
+nearly one range per call. I cannot prove the two runs shared a configuration
+(143 predates both the clock and the tod parameters), so this is the likely
+reading rather than the proven one, but "unexplained" no longer fits.
+
+**What this does and does not change.** The grouping fix stays: it is correct,
+it is now the only tested path through the lamp branch, and 1.05x is small but
+never negative against a cached bake and one stamp write per visible chunk. What
+goes is the claim of value. Multi-draw's own oracle, on the hardware that
+matters, says it batches 1.06 ranges per call — and a call that carries one
+range is the indirection with none of the point.
+
+The timings that run: occlusion +2.7 % against a -8.6 % floor, multi-draw
++10.5 % against a -29.6 % floor. Consistent with §8 and worth nothing.
