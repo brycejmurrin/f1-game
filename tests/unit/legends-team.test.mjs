@@ -96,3 +96,55 @@ test("an out-of-range or junk pick still grids one car", () => {
     assert.ok(seats[0] && seats[0].code, `pick ${String(bad)} gridded a seat with no driver`);
   }
 });
+
+// ── THE TEAM TILE ────────────────────────────────────────────────────────────
+// A tile is built for the two names every other team has. LEGENDS carries all
+// twelve so the driver picker can offer them, and the select screen joined all
+// twelve into one line: on a real screen that overflowed the card and pushed it
+// over Aston Martin's (2026-09-17). These pin the data the tile leans on.
+
+test("only a SOURCED racing number exists; the rest are a neutral placeholder", () => {
+  // Array.from: a map() over a vm-realm array stays in that realm, and a strict
+  // deepEqual then fails on prototype identity alone with the values matching.
+  const numbered = Array.from(Legends.LIST).filter((l) => l.num);
+  assert.deepEqual(numbered.map((l) => l.code).sort(), ["MAN", "SEN"],
+    "only Senna's 12 and Mansell's 5 are sourced — a new one needs a source, not a guess");
+  for (const l of Legends.LIST) {
+    if (!l.num) continue;
+    assert.ok(l.num > 1, `${l.id}: a sourced number of 1 is indistinguishable from the placeholder`);
+  }
+});
+
+test("the tile's driver line stays one line's worth for a legend", () => {
+  // The bug was a 12-entry join. Whatever the tile shows, it must be derived
+  // from ONE seat, so the line cannot grow with the roster.
+  const t = Legends.team("senna");
+  const line = (seat) => {
+    const d = t.drivers[seat];
+    return (d.num > 1 ? "#" + d.num + " " : "") + d.name.split(" ").pop() + "  ·  " + t.engine;
+  };
+  for (let i = 0; i < t.drivers.length; i++) {
+    assert.ok(line(i).length < 48, `seat ${i} renders ${line(i).length} chars: "${line(i)}"`);
+  }
+});
+
+test("a legend wears a real marque crest or none — never a borrowed one", () => {
+  // js/car/crest-paths.js has eight hand-drawn crests and no others (the PNG
+  // logos were dropped as unusable traces). Putting a live team's badge on a
+  // car that team never built is worse than showing no badge.
+  const HAVE = new Set(["ferrari", "mclaren", "williams", "redbull", "alpine",
+                        "astonmartin", "racingbulls", "cadillac"]);
+  let withCrest = 0;
+  for (const l of Legends.LIST) {
+    if (l.marque == null) continue;
+    withCrest++;
+    assert.ok(HAVE.has(l.marque), `${l.id}: "${l.marque}" is not a crest the game draws`);
+    // …and it must be the marque the CAR is, not a nearby one.
+    const car = l.car.toLowerCase();
+    const brand = l.marque === "redbull" ? "red bull" : l.marque;
+    assert.ok(car.includes(brand), `${l.id}: crest "${l.marque}" against car "${l.car}"`);
+  }
+  assert.ok(withCrest >= 7, `only ${withCrest} legends carry a crest — the mapping has regressed`);
+  assert.equal(Legends.team("fangio").crest, null, "a Mercedes W196 has no crest in this game; none is correct");
+  assert.equal(Legends.team("senna").crest, "mclaren");
+});
