@@ -214,17 +214,30 @@ const SceneryPits = (function () {
     if (p.hasWall) {
       const b = p.bands;
       // Nodes from `s0` forward while `keep(k)` holds, over at most `maxM`.
-      const nodesFrom = (s0, keep, maxM) => {
+      // `seekM` lets the run SEARCH for its start: without it the walk breaks
+      // on the first node, so a start that lands one step short of the keep
+      // yields an EMPTY list and sweep() builds nothing at all.
+      // Without `seekM` the start is taken as given, so the runs that already
+      // begin on a satisfied node are untouched.
+      const nodesFrom = (s0, keep, maxM, seekM) => {
+        let s0b = s0;
+        for (let d = 0; d < (seekM || 0) && !keep(kOf(s0b)); d += ds) s0b = wrap(s0b + ds);
         const list = [];
-        for (let s = s0; ; s = wrap(s + ds)) {
+        for (let s = s0b; ; s = wrap(s + ds)) {
           const k = kOf(s);
           if (!keep(k)) break;
           if (!(list.length && list[list.length - 1] === k)) list.push(k);
-          if (wrap(s - s0) >= maxM || list.length > n) break;
+          if (wrap(s - s0b) >= maxM || list.length > n) break;
         }
         return list;
       };
-      const ks = nodesFrom(p.sIn, (k) => p.v[k] >= 0.98, p.lenM);
+      // The wall's fade FINISHES at `sIn`, so whether the node at `sIn` has
+      // reached 0.98 is node-grid luck: Magny-Cours sat at 0.954, Mexico and
+      // Monaco at 0.97, and all three lost the platform, the wall, its rail
+      // and the lane-side barrier — every sweep below — to an empty run.
+      // Seek forward to the wall's own first node, the way the lamp gate
+      // already does a few dozen lines down (`kGate`).
+      const ks = nodesFrom(p.sIn, (k) => p.v[k] >= 0.98, p.lenM, 24);
       // `shift(k)`, when given, slides the whole profile laterally per node.
       const sweep = (ks, profile, col, mat, shift) => {
         if (ks.length < 2) return;

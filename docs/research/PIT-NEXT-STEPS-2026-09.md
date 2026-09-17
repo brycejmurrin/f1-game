@@ -270,6 +270,38 @@ lateral from `laneX`. Next step is a lane-specific spacing rule, not a speed
 ceiling. Re-run `scratch/pit-traffic.cjs bahrain 9 6`; the numbers to move are
 closestPairM and overlapTicks, with stallCount held at 0.
 
+## 4d. THREE CIRCUITS HAD NO PIT WALL AT ALL — fixed
+
+Reported: "some pit lane walls are broken, like on Magny-Cours." Three of 52
+circuits — magny_cours, mexico, monaco — built NO pit wall: not a gap, the
+whole thing.
+
+The platform, the wall, its rail and the lane-side barrier are four `sweep()`
+calls over ONE node run, and `sweep()` returns early for a run shorter than two
+nodes. The run started at `sIn` and its walker broke on the FIRST node that
+failed `v >= 0.98` — but the wall's fade FINISHES at `sIn`, so whether the node
+landing there has reached 0.98 is node-grid luck. Magny-Cours sat at 0.954,
+Mexico and Monaco at 0.97; every other circuit happened to land at or past it
+(Bahrain's node falls 2 m early, where v is already 1.000). One failed node,
+empty list, four sweeps build nothing.
+
+`nodesFrom` now takes a `seekM` and the platform run passes 24 m, so it finds
+the wall's own first node — exactly what the lamp gate's `kGate` already did a
+few dozen lines below, for exactly this reason (Monaco had lost both lamps to
+the same rounding). Runs now match the lane: Magny-Cours 65 nodes / 260 m,
+Mexico 65, Monaco 60. `test:sweeps` moved no coplanar, clip or float baseline.
+
+The defect was invisible from the vertex buffers, so `SceneryPits.build`'s
+report is now kept on the track as `track.pitBuilt` rather than only logged,
+and `tests/unit/pit-signs.test.mjs` asserts every circuit with `hasWall` builds
+one. Negative control: with the seek disabled the test names exactly those
+three circuits. `scratch/pit-wall-survey.cjs` prints all four wall runs per
+circuit.
+
+**Worth checking next.** The same walker still starts the EXIT wall at `sOut`
+and the OUTER wall at `sA + 6` with no seek. Both had non-empty runs on all 52
+today, but they are one node-grid roll from the same defect.
+
 ## 5. Smaller loose ends
 
 - The `served` chip and the release banner both say the stop is over; the
