@@ -21,7 +21,7 @@ const CustomTeam = (function () {
       $, store, Teams, DEFAULT_CUSTOM, hexToRgb, rgbToHex, hexToArr, clamp,
       invalidateDecalTextures, invalidateCustomMeshCaches, spMeshBust,
       getLivDraftOverride, setLivDraftOverride, getSoundOn, GameAudio,
-      getEls, getTeamIdx, setTeamIdx, setDriverIdx, buildSelect, buildSetup,
+      getEls, getTeamIdx, setTeamIdx, getDriverIdx, setDriverIdx, buildSelect, buildSetup,
       isCarsetupVisible,
     } = hooks;
 
@@ -36,6 +36,44 @@ const CustomTeam = (function () {
       Teams.LIST.push(loadCustomTeam());
       invalidateDecalTextures("custom");
       invalidateCustomMeshCaches();
+      syncLegendsTeam();      // …and LEGENDS stays the entry after it
+    }
+
+    function legendsTeamIndex() { return Teams.LIST.findIndex((t) => t.id === "legends"); }
+
+    /* THE LEGENDS TEAM — its own entry beside the custom one, so MY TEAM stays
+     * the player's. Rebuilt in place rather than appended once, because a team
+     * record carries colours, stats, tier and livery and every one of those is
+     * per-legend: Fangio is a tier-0 silver car, Graham Hill a tier-3 gold one.
+     *
+     * `drivers` is the whole roster either way, so the select screen's ordinary
+     * DRIVER picker is the legend picker and there is no second screen to build.
+     * The team still grids ONE car (js/game.js seatsFor).
+     *
+     * `seat` is a roster INDEX — what the picker moves — not an id. It clamps
+     * rather than throwing, because a saved pick outlives a roster edit. */
+    function syncLegendsTeam(seat) {
+      if (typeof Legends === "undefined" || !Legends.LIST.length) return;
+      const n = Legends.LIST.length;
+      const want = Math.min(Math.max((seat != null ? seat : legendSeat()) | 0, 0), n - 1);
+      const t = Legends.team(Legends.LIST[want].id);
+      if (!t) return;
+      const i = legendsTeamIndex();
+      if (i >= 0) Teams.LIST.splice(i, 1);
+      Teams.LIST.push(t);
+      invalidateDecalTextures("legends");
+      invalidateCustomMeshCaches();
+    }
+
+    // Which legend the team is fielding: driverIdx when Legends is the selected
+    // team, otherwise whatever it was last built with — so browsing other teams
+    // does not silently repaint the Legends car.
+    function legendSeat() {
+      const i = legendsTeamIndex();
+      if (i >= 0 && getTeamIdx() === i) return getDriverIdx ? getDriverIdx() : 0;
+      const cur = i >= 0 ? Teams.LIST[i] : null;
+      const was = cur && typeof Legends !== "undefined" ? Legends.seatOf(cur.legend) : -1;
+      return was >= 0 ? was : 0;
     }
 
     function loadCustomLogo() { try { return store.get(CUSTOM_LOGO_KEY, null); } catch (_) { return null; } }
@@ -141,52 +179,7 @@ const CustomTeam = (function () {
 
     function czClearPreview() { setLivDraftOverride(null); spMeshBust(); }
 
-    /* LEGENDS: fill the dialog from js/data/legends.js, then stop. Deliberately
-     * NOT a second save path — the rows below are the real state and the
-     * existing SAVE writes them, so an applied legend stays fully editable and
-     * a legend with no fields of its own cannot desync from the stored team.
-     * Guarded on `typeof`: liveries/dialog code is reachable from tools that
-     * load a subset of the roster, and a missing Legends must cost the picker
-     * its rows, never throw. */
-    function czFillLegends() {
-      const sel = $("cz-legend");
-      if (!sel || typeof Legends === "undefined") return;
-      if (sel.options.length) return;                 // built once
-      for (const l of Legends.LIST) {
-        const o = document.createElement("option");
-        o.value = l.id;
-        o.textContent = l.name;   // the car shows as the ENGINE label once applied
-        sel.appendChild(o);
-      }
-    }
-
-    /* The period parts APPLY staged for the next SAVE, or null. Held rather
-     * than written straight through because APPLY only fills the dialog: a
-     * player who then hits CANCEL must get their own car back, and parts.custom
-     * is a real garage sheet, not a preview. */
-    let czLegendParts = null;
-
-    function czApplyLegend() {
-      const sel = $("cz-legend");
-      if (!sel || typeof Legends === "undefined") return;
-      const t = Legends.team(sel.value);
-      if (!t) return;
-      czLegendParts = Legends.parts(sel.value);
-      $("cz-name").value = t.name;
-      $("cz-short").value = t.short;
-      $("cz-color").value = rgbToHex(t.color);
-      $("cz-color2").value = rgbToHex(t.color2);
-      $("cz-driver").value = t.drivers[0].name;
-      $("cz-code").value = t.drivers[0].code;
-      $("cz-num").value = t.drivers[0].num;
-      const liv = t.livery || {};
-      CZ_LIV_FIELDS.forEach(([domId, key]) => czSetLivField(domId, liv[key] || null));
-      czSetFinish(liv.finish);
-      czPreview();
-    }
-
     function openCustomize() {
-      czLegendParts = null;      // a fresh visit stages nothing
       const ct = loadCustomTeam();
       $("cz-name").value = ct.name;
       $("cz-short").value = ct.short;
@@ -199,13 +192,11 @@ const CustomTeam = (function () {
       CZ_LIV_FIELDS.forEach(([domId, key]) => czSetLivField(domId, liv[key] || null));
       czSetFinish(liv.finish);
       refreshCustomLogoUi(loadCustomLogo());
-      czFillLegends();
       czPreview();
       getEls().customize.hidden = false;
     }
 
     function wireDialog() {
-      if ($("cz-legend-apply")) $("cz-legend-apply").onclick = czApplyLegend;
       ["cz-name", "cz-short", "cz-color", "cz-color2", "cz-code", "cz-num"].forEach((id) => {
         $(id).addEventListener("input", czPreview);
       });
@@ -244,13 +235,6 @@ const CustomTeam = (function () {
         };
         ct.livery = czLivFromDialog();
         store.set("customTeam", ct);
-        // The period car. Written only on SAVE, and only when APPLY staged one,
-        // so a player who builds their own team keeps the sheet they fitted.
-        if (czLegendParts) {
-          store.set("parts.custom", czLegendParts);
-          invalidateCustomMeshCaches();
-          czLegendParts = null;
-        }
         syncCustomTeam();
         setTeamIdx(customTeamIndex());
         setDriverIdx(0);
@@ -324,6 +308,8 @@ const CustomTeam = (function () {
       init,
       loadCustomTeam,
       syncCustomTeam,
+      syncLegendsTeam,
+      legendsTeamIndex,
       openCustomize,
       czLivFromDialog,
       refreshCustomLogoUi,

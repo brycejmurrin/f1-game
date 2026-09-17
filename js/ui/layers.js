@@ -45,6 +45,7 @@ window.UiLayers = (function () {
     { id: "track-detail" },
     { id: "lighting" },
     { id: "camtune" },
+    { id: "flyby" },
     { id: "photo-controls" },
     { id: "datahub" },
   ];
