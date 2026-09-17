@@ -2216,6 +2216,20 @@ const Tracks = (function () {
         if (roll < 0.07) return "work";
         return roll < 0.50 ? "halide" : roll < 0.78 ? "halogen" : "sodium";
       };
+      // `lamp: "none"` MEANS NONE. This pass ran unconditionally and read
+      // fz.lamp only to pick a STYLE, so the 31 circuits that declare no
+      // lighting got a 13 m floodlight mast every 22 m anyway — measured, Spa
+      // 345 of them and Watkins Glen 266, both daylight circuits whose whole
+      // character is trees at arm's length and no run-off. Singapore, a night
+      // race that actually wants lamps, carries 245. docs/SCENERY-API.md has
+      // always said this pass is "keyed off `fz.lamp`"; it was not, and this is
+      // the line that makes the document true.
+      //
+      // The START-LINE FLOOD BANKS survive the gate: every circuit lights its
+      // own pit lane, and that is what pickKind returns for the first and last
+      // 1.5% of the lap. No night race declares "none" (checked across all 52),
+      // so nothing here can put a circuit in the dark.
+      const noMasts = fz.lamp === "none";
       track.lampPosts = [];
       for (let k = 0; k < n; k += mstride, mi++) {
         const side = (mi % 2 === 0) ? 1 : -1;
@@ -2223,6 +2237,7 @@ const Tracks = (function () {
         const a = anchor(k, side, 6);
         if (onTrack(a.c[0], a.c[2], 1.2)) continue;
         const kind = pickKind(k, hash(mi * 13.7 + 3.1));
+        if (noMasts && kind !== "flood_bank") continue;
         const lensCol = lensAlbedo(kind);
         const b = [a.r, a.u, a.t];
         addCyl(out, a.c, 0.26, mastH, poleCol, 6, b);
