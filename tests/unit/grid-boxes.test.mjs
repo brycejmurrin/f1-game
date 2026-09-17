@@ -39,11 +39,11 @@ const ctxOnce = (() => {
   return () => (c || (c = buildContext()));
 })();
 
-function built(id) {
+function built(id, gridSlots) {
   const { Tracks, TrackMesh } = ctxOnce();
   const def = Tracks.LIST.find((d) => d.id === id);
   assert.ok(def, `circuit "${id}" not found`);
-  const track = Tracks.build(def);
+  const track = Tracks.build(def, gridSlots ? { gridSlots } : undefined);
   const cap = track.meshes.startline && track.meshes.startline.__cap;
   assert.ok(cap && cap.pos && cap.pos.length, `${id}: startline mesh ships empty`);
   return { track, TrackMesh, pos: cap.pos };
@@ -75,7 +75,7 @@ test("every slot gets a box, appended to the start-line decal", () => {
   for (const id of IDS) {
     const { TrackMesh, pos } = built(id);
     const n = TrackMesh.GRID_SLOTS;
-    assert.equal(n, 22, "the field is 11 teams x 2 seats — every car needs a box");
+    assert.equal(n, 22, "the DEFAULT is 11 teams x 2 seats — what a build with no field gets");
     const added = n * QUADS_PER_SLOT * 4;
     assert.ok(pos.length / 3 > added,
       `${id}: startline holds ${pos.length / 3} verts, fewer than the ${added} the grid alone needs`);
@@ -185,4 +185,44 @@ test("slots follow the real 8 m pitch, staggered, pole 14 m before the line", ()
       assert.ok(Math.abs(b.x) <= 3.0001, `${id}: slot ${i} is ${b.x.toFixed(2)} m off centre, past the 3 m cap`);
     }
   }
+});
+
+// ── THE PAINT FOLLOWS THE FIELD ──────────────────────────────────────────────
+// The box count used to be a hard 22 while the FIELD was not: selecting MY TEAM
+// grids 23 cars (measured 2026-09-16), so the last car lined up on bare tarmac.
+// It went unnoticed because that box is behind you on the formation lap.
+// js/game.js now passes the size of the field it is about to grid, and these
+// pin the plumbing end to end — a count that silently ignored the option would
+// leave the same car unpainted with the bug reported as fixed.
+
+const SLOT_VERTS = QUADS_PER_SLOT * 4;
+
+test("the painted grid is as long as the field the track was built for", () => {
+  const id = IDS[0];
+  const base = built(id).pos.length / 3;
+  for (const n of [22, 23, 24, 26]) {
+    const grown = built(id, n).pos.length / 3;
+    assert.equal(grown - base, (n - 22) * SLOT_VERTS,
+      `gridSlots:${n} painted ${(grown - base) / SLOT_VERTS + 22} boxes, not ${n}`);
+  }
+});
+
+test("a build with no field still paints the default, so tools and sweeps are unchanged", () => {
+  const id = IDS[0];
+  assert.equal(built(id).pos.length, built(id, 22).pos.length,
+    "omitting gridSlots must be identical to asking for the 22 default");
+});
+
+test("the extra boxes are real slots, on the grid, not degenerate quads", () => {
+  // A count that grew the buffer but emitted junk would pass the length checks
+  // above. Slot 22 (the 23rd) must sit one pitch further back than slot 21 and
+  // be the same size as the boxes that were already there.
+  const { pos } = built(IDS[0], 24);
+  const q21 = slotQuads(pos, 24, 21), q22 = slotQuads(pos, 24, 22);
+  const c21 = mid(q21[0]), c22 = mid(q22[0]);
+  const gap = dist(c21, c22);
+  assert.ok(gap > 6 && gap < 10, `slot 22 sits ${gap.toFixed(2)} m from slot 21 — the pitch is 8 m`);
+  const w = (q) => dist(mid(q[1]), mid(q[2]));
+  assert.ok(Math.abs(w(q22) - w(q21)) < 0.5,
+    `slot 22 is ${w(q22).toFixed(2)} m wide against slot 21's ${w(q21).toFixed(2)} m`);
 });

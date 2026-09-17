@@ -1407,7 +1407,7 @@ const GameAudio = (function () {
     // hit; threshold it instead. Below 0.5% of full scale the 250 ms ramp is
     // inaudible, so re-scheduling buys nothing and costs a cross-thread
     // timeline insertion per physics step.
-    const duckTgt = musicVol * MUSIC_FULL * (1 - 0.25 * rev);
+    const duckTgt = musicVol * MUSIC_FULL * (1 - 0.25 * rev) * radioDuck;
     if (musicGain && !(Math.abs((musicGain._apexDuckTgt ?? -1) - duckTgt) < 0.005)) {
       musicGain.gain.setTargetAtTime(duckTgt, t, 0.25);
       musicGain._apexDuckTgt = duckTgt;
@@ -2187,6 +2187,20 @@ const GameAudio = (function () {
     }
     return sfxEnabled;
   }
+  // THE RADIO DUCK. Speech bypasses sfxBus, master and the limiter entirely —
+  // nothing in this graph gets out of its own way — so the music has to be told.
+  // A factor inside the per-frame duck expression rather than a direct write to
+  // musicGain, because that expression is recomputed every frame and would stomp
+  // an external write within 16 ms. The engine deliberately does NOT duck: the
+  // engine is the game.
+  let radioDuck = 1;
+  function setRadioDuck(on) {
+    const want = on ? 0.35 : 1;
+    if (want === radioDuck) return radioDuck;
+    radioDuck = want;
+    if (musicGain) musicGain._apexDuckTgt = null;   // invalidate the equality cache so the ramp re-aims
+    return radioDuck;
+  }
   function setMusicVolume(v) {
     musicVol = clamp01(typeof v === "number" ? v : 0.5);
     if (musicGain) { musicGain.gain.value = musicVol * MUSIC_FULL; musicGain._apexDuckTgt = null; }   // a direct write invalidates the duck cache
@@ -2327,6 +2341,7 @@ const GameAudio = (function () {
 
   return {
     init,
+    setRadioDuck,
     setEnabled,
     enabled,
     startEngine,

@@ -318,6 +318,26 @@ export const SCREENS = [
       await p.waitForFunction(() => !document.querySelector("#camtune").hidden, null, { timeout: 15000 });
       await p.waitForTimeout(400); } },
 
+  // The FLYBY SHOT EDITOR, reached the same way and for the same reason: it is
+  // the third panel in DISPLAY -> ADVANCED VISUALS and shares the docked-sheet
+  // layout, so it inherits every shape the other two have ever broken in. Its
+  // rows are the tallest of the three (four poses x nine sliders behind one
+  // anchor picker each), which makes it the worst case for the short-viewport
+  // scroll rung rather than a duplicate of the camera tuner's cell.
+  { id: "flybyeditor", name: "Flyby shot editor", root: "#flyby", open: async (p) => {
+      await p.evaluate(async () => { await window.__apex.race("monza"); });
+      await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000, polling: 100 });
+      await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
+      await p.evaluate(() => { document.getElementById("pausemenu").hidden = false; });
+      await p.waitForTimeout(200);
+      await p.evaluate(() => document.getElementById("pm-settings")?.click());
+      await p.waitForFunction(() => !document.getElementById("pmsettings").hidden,
+        null, { timeout: 15000, polling: 100 });
+      await p.waitForTimeout(250);
+      await openVisualTuner(p, "pm-flyby");
+      await p.waitForFunction(() => !document.querySelector("#flyby").hidden, null, { timeout: 15000, polling: 100 });
+      await p.waitForTimeout(400); } },
+
   // ---- THE LIGHTING TUNER WHILE FLYING, a DIFFERENT LAYOUT, not a mood ----
   //
   // The panel changes shape in FREE CAMERA and nothing here ever opened it. In
@@ -466,7 +486,7 @@ export const OVERLAY_IDS = [
   "select", "carsetup", "career", "career-offers", "career-history",
   "career-guide", "teampicker", "race-settings", "quali", "standings", "results", "customize",
   "season-setup", "howtoplay", "advanced", "pmsettings", "pausemenu", "datahub", "track-detail", "vsfriend",
-  "audioset", "spotifypanel", "lighting", "camtune", "photo-controls",
+  "audioset", "spotifypanel", "lighting", "camtune", "flyby", "photo-controls",
 ];
 
 export function listScreenIds() {

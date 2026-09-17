@@ -905,7 +905,15 @@ const TrackMesh = (function () {
   // 8 m between slots is the real FIA pitch. Pole sits 14 m before the line.
   // The lateral stagger is symmetric here, unlike a real grid: 40% of the local
   // half-width, capped at 3 m, P1 left.
-  const GRID_SLOTS = 22;          // 11 teams x 2 seats — the full field gets a box
+  // The DEFAULT box count — 11 fixed teams x 2 seats. It is a default and not a
+  // constant because the field is not always 22: selecting MY TEAM adds a car
+  // (and a MY TEAM career adds two), so the painted grid has to follow the
+  // field or the last car lines up on bare tarmac. It did exactly that until
+  // 2026-09-16 — measured, 23 cars against 22 boxes — and nobody noticed,
+  // because the box is behind you on the formation lap. buildGridBoxes() takes
+  // the count; callers that do not know the field (tools, the VM builds, the
+  // circuit sweeps) get this.
+  const GRID_SLOTS = 22;
   const _gsSmp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
   function gridSlot(track, i) {
     let s = track.total - 14 - i * 8;
@@ -919,7 +927,7 @@ const TrackMesh = (function () {
   // same depthBias, same free path, same hideMeshes toggle, no new draw call.
   //
   // Open-coded quads ON PURPOSE — TrackGeom's emitters are traced by
-  // tools/track/coplanar-audit.cjs, and 22 boxes of addBox would land in every
+  // tools/track/coplanar-audit.cjs, and a grid of addBox would land in every
   // circuit's coplanar baseline. buildStartLine open-codes for the same reason.
   //
   // Real geometry: a 2.7 m box (widened 20 cm in 2023), front and side lines
@@ -948,10 +956,11 @@ const TrackMesh = (function () {
   const PAINT_W = 0.20, GUIDE_GAP = 0.06, GUIDE_W = 0.20, GUIDE_OUT = 0.6;
   const GRID_LIFT = 0.05;         // along the road normal, matching buildStartLine
   const GUIDE_COL = [0.92, 0.78, 0.12];
-  function buildGridBoxes(track, out) {
+  function buildGridBoxes(track, out, slots) {
+    const n = Math.max(2, Math.round(slots > 0 ? slots : (track._gridSlots || GRID_SLOTS)));
     const white = track.def.palette.line || [0.95, 0.95, 0.98];
     const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
-    for (let i = 0; i < GRID_SLOTS; i++) {
+    for (let i = 0; i < n; i++) {
       const slot = gridSlot(track, i);
       TrackSpline.sample(track, slot.s, smp);
       const r = TrackGeom.norm(smp.r), t = TrackGeom.norm(smp.t);

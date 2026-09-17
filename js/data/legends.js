@@ -205,15 +205,23 @@ const Legends = (function () {
     return l ? ratingsFor(l.record) : null;
   }
 
-  /* THE LEGENDS TEAM occupies the CUSTOM slot rather than adding a twelfth
-   * entry to Teams.LIST, and that is a hard constraint, not a preference:
-   * js/game.js's wireId() packs a team index and seat into ONE byte on the
-   * assumption of "eleven fixed teams plus exactly one appended custom entry"
-   * (so the grid fits inside 0..23), and tests/unit/grid-boxes.test.mjs pins
-   * the field at eleven teams x two seats. A twelfth grid team is a netcode
-   * and grid-geometry change, not a data edit. Taking the custom slot gives
-   * the player a Legends car with a legend's own settings and leaves both
-   * invariants untouched.
+  /* THE LEGENDS TEAM IS ITS OWN ENTRY, appended to Teams.LIST beside the custom
+   * one, so MY TEAM stays the player's.
+   *
+   * CORRECTION, recorded because it was written here as fact and was not: an
+   * earlier version of this comment claimed the Legends team HAD to take the
+   * custom slot because wireId() packs a team index and seat into one byte with
+   * a 0..23 ceiling. That is false. wireId() is `ti * 2 + seat` as a plain
+   * number, used only as a Map key and a sort key in js/net/netplay.js, and
+   * nothing in js/net/ ever packs it into a byte. The field was also already
+   * 23 cars whenever MY TEAM was selected, against 22 painted grid boxes —
+   * so the ceiling the claim leaned on was being exceeded by the shipped game.
+   * The lesson is the one this file is otherwise built around: a constraint
+   * asserted from memory is not a measurement.
+   *
+   * What IS real: the painted grid has to be as long as the field, which is now
+   * plumbed (js/game.js fieldSize -> Tracks.build opts.gridSlots), and the team
+   * grids ONE car — the legend the driver picker has selected.
    *
    * SETTINGS, derived — the four garage stats come from the same five axes as
    * the ratings, so a legend's car matches the driver rather than being typed
@@ -239,7 +247,10 @@ const Legends = (function () {
     const st = statsFor(r);
     const head = (st.speed + st.cornering) / 2;
     return {
-      id: "custom", custom: true, legend: l.id,
+      // ITS OWN TEAM ID, not "custom" — the decal atlas, the mesh caches and the
+      // parts sheet are all keyed by it (js/car/liverytex.js), so "legends" is
+      // what keeps a legend's car from overwriting the player's own.
+      id: "legends", legends: true, legend: l.id,
       name: "Legends", short: "LGD", engine: l.car,
       tier: head >= 95 ? 0 : head >= 90 ? 1 : head >= 85 ? 2 : 3,
       color: l.livery.c1.slice(), color2: l.livery.c2.slice(),
@@ -249,8 +260,19 @@ const Legends = (function () {
       // fall back to 1 rather than being invented — a plausible-looking wrong
       // number is worse than an obviously neutral one, and this file's whole
       // discipline is that a fact is either sourced or is not stated.
-      drivers: [{ name: l.name, code: l.code, num: l.num || 1 }]
+      // ALL TWELVE, so the ordinary DRIVER picker on the select screen becomes
+      // the legend picker and no new screen is needed — driverIdx already means
+      // "which of this team's drivers am I". The team still GRIDS one of them
+      // (js/game.js seatsFor); twelve legends on one grid is a different game.
+      // Roster order, so the index is stable and a saved pick keeps its meaning.
+      drivers: LIST.map((d) => ({ name: d.name, code: d.code, num: d.num || 1 }))
     };
+  }
+
+  /** The roster index of a legend id, for seating the driver picker. -1 if unknown. */
+  function seatOf(idOrCode) {
+    const l = byId(idOrCode) || byCode(idOrCode);
+    return l ? LIST.indexOf(l) : -1;
   }
 
   /* PERIOD CAR SHAPES. Every entry below is an EXISTING option id from the
@@ -347,6 +369,6 @@ const Legends = (function () {
     return LIST.map((l) => Object.assign({ id: `legend_${l.id}`, legend: l.id }, l.livery));
   }
 
-  return { LIST, PERIOD, ERA_YEAR, ratings, ratingsFor, statsFor, team, parts, liveries, byId, byCode };
+  return { LIST, PERIOD, ERA_YEAR, seatOf, ratings, ratingsFor, statsFor, team, parts, liveries, byId, byCode };
 })();
 Object.freeze(Legends);

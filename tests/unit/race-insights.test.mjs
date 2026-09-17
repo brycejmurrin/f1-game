@@ -366,3 +366,133 @@ test('a race start that never gets away fails with that reason rather than scori
   assert.equal(last.clean, false);
   assert.equal(last.reason, 'the car never got away');
 });
+
+// ── the rival drills ────────────────────────────────────────────────────────
+// Every drill above judges the car against the road. These three judge it
+// against another car, and the whole difficulty is that the AI can HAND you the
+// result: it concedes on a timer (js/game.js letPassCase) whose length is a
+// straight read of the rival's awareness rating. What each test below really
+// pins is that the drill measures the driver and not that stat.
+function rivalFixture({ aheadAt = 20, behindAt = -6 } = {}) {
+  const f = fixture();
+  // _vmaxNow on every car: the cross-car pace comparison the AI itself uses.
+  // Equal here, so the pair is at parity and OVERTAKE is armable.
+  const lead = { prog: aheadAt, x: 0, retired: false, code: 'VER', _vmaxNow: 70, awareness: 0.75, letPassT: 0 };
+  const back = { prog: behindAt, x: 0, retired: false, code: 'HAM', _vmaxNow: 70, awareness: 0.75 };
+  f.G.cars = [lead, f.c, back];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;
+  return { ...f, lead, back };
+}
+// OVERTAKE will not arm until the pace window has samples, and the window only
+// fills from update() — which is the point: fairness is judged on history.
+const settle = (f, n = 12) => { for (let i = 0; i < n; i++) f.tick({}, 0.1); };
+
+test('the rival drills refuse with the reason, and OVERTAKE refuses a mismatched pace outright', () => {
+  const f = rivalFixture(); const { api, G, c } = f;
+  G.cars = [c];
+  assert.equal(api.startDrill('overtake'), false, 'no field at all');
+  assert.match(f.announcements.at(-1)[0], /NEEDS OTHER CARS/);
+  const f2 = rivalFixture({ aheadAt: 200 });          // far up the road, outside the wake
+  settle(f2);
+  assert.equal(f2.api.startDrill('slipstream'), false);
+  assert.match(f2.announcements.at(-1)[0], /GET INTO THE WAKE/);
+  const f3 = rivalFixture({ aheadAt: 4 });            // already on his gearbox
+  settle(f3);
+  assert.equal(f3.api.startDrill('slipstream'), false);
+  assert.match(f3.announcements.at(-1)[0], /ALREADY THERE/);
+  // THE ONE THAT MATTERS: a rival 10% quicker is not a fight, it is a stat check.
+  const f4 = rivalFixture(); f4.lead._vmaxNow = 77;
+  settle(f4);
+  assert.equal(f4.api.startDrill('overtake'), false);
+  assert.match(f4.announcements.at(-1)[0], /NOT ON YOUR PACE/);
+  // …and at parity it arms.
+  const f5 = rivalFixture(); settle(f5);
+  assert.equal(f5.api.startDrill('overtake'), true);
+});
+
+test('SLIPSTREAM scores METRES CLOSED, negated so mastery ranks more as better', () => {
+  const f = rivalFixture({ aheadAt: 30 }); settle(f);
+  assert.equal(f.api.startDrill('slipstream'), true);
+  // Close from 30 m to inside the wake, carrying a real tow the whole way.
+  for (const p of [10, 15, 18, 21, 23]) f.tick({ prog: p, towing: 1 }, 0.5);
+  const d = f.api.summary().lastDrill;
+  assert.ok(d, 'the drill ended when the wake was reached');
+  assert.equal(d.clean, true);
+  assert.ok(d.score < 0, `metres closed must be stored NEGATED, got ${d.score}`);
+  assert.ok(Math.abs(d.score) > 20, `should have closed most of 30 m, got ${-d.score}`);
+  assert.match(d.text, /closed \d+ m in [\d.]+s of tow/);
+});
+
+test('OVERTAKE fails the attempt when the AI simply let you through', () => {
+  const f = rivalFixture({ aheadAt: 10 }); settle(f);
+  assert.equal(f.api.startDrill('overtake'), true);
+  // letPassDelay = lerp(4.2, 1.8, awareness) = 2.4 s at the default 0.75.
+  f.lead.letPassT = 3;
+  f.tick({ prog: 8 }, 0.5);
+  f.tick({ prog: 14 }, 0.5);           // through and clear
+  for (let i = 0; i < 4; i++) f.tick({ prog: 16 + i }, 0.5);
+  const d = f.api.summary().lastDrill;
+  assert.ok(d, 'the pass completed');
+  assert.equal(d.clean, false, 'a pass you were given is not a pass you made');
+  assert.equal(d.reason, 'he let you through');
+});
+
+test('DEFEND needs a real attack, and banks the seconds you survived', () => {
+  const f = rivalFixture({ behindAt: -6 }); const { api, c, back } = f;
+  back._vmaxNow = 73;                  // quick enough to be a threat (2% of vTop 100)
+  settle(f);
+  assert.equal(api.startDrill('defend'), true);
+  // Nobody commits: passOf is never set, so ten seconds of "pressure" is not a
+  // defence, it is a car sitting behind you.
+  for (let i = 0; i < 12; i++) f.tick({}, 1);
+  let d = api.summary().lastDrill;
+  assert.equal(d.clean, false);
+  assert.equal(d.reason, 'he never attacked');
+  // Now a real one: passOf names the player, which is the only per-pair identity
+  // the engine carries.
+  const f2 = rivalFixture({ behindAt: -6 });
+  f2.back._vmaxNow = 73; settle(f2);
+  assert.equal(f2.api.startDrill('defend'), true);
+  f2.back.passOf = f2.c;
+  for (let i = 0; i < 8; i++) f2.tick({}, 1);
+  f2.back.passFailOf = f2.c;           // he gave up
+  for (let i = 0; i < 26; i++) f2.tick({}, 1);
+  d = f2.api.summary().lastDrill;
+  assert.equal(d.clean, true);
+  assert.ok(d.score < 0, 'seconds held are stored negated');
+  assert.match(d.text, /held P\d for [\d.]+s under attack/);
+  assert.match(d.text, /gave up the move/);
+});
+
+test('BACKMARKERS counts cars cleared and scores the TIME, not the racecraft', () => {
+  // The honest scope: a car you are 6% quicker than concedes on its own timer,
+  // so "did you out-drive him" would score the AI's awareness rating. This
+  // scores what lapping traffic costs in a race — seconds — and fails on any
+  // contact, which needs no per-pair identity to be true.
+  const f = fixture();
+  const slow = (prog) => ({ prog, x: 0, retired: false, _vmaxNow: 60, code: 'BAK' });
+  const t1 = slow(10), t2 = slow(20), t3 = slow(30);
+  f.G.cars = [t1, t2, t3, f.c];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;   // 14% quicker: they are traffic
+  f.api.update(f.c);
+  assert.equal(f.api.startDrill('backmarkers'), true);
+  // Drive past all three, sampled the way the game samples: a car has to be
+  // SEEN ahead before it can be counted past, which is what stops a teleport
+  // or a rewind from banking three free passes.
+  for (let p = 2; p <= 40; p += 2) f.tick({ prog: p }, 0.4);
+  const d = f.api.summary().lastDrill;
+  assert.ok(d, 'three cleared ends the drill');
+  assert.equal(d.clean, true);
+  assert.ok(d.score > 0, 'time is scored straight — less is better, no negation');
+  assert.match(d.text, /cleared 3 of 3 in [\d.]+s/);
+});
+
+test('BACKMARKERS refuses when nothing ahead is actually slower', () => {
+  const f = fixture();
+  const peer = { prog: 10, x: 0, retired: false, _vmaxNow: 70 };
+  f.G.cars = [peer, f.c];
+  f.c.prog = 0; f.c._vmaxNow = 70; f.c.x = 0;
+  f.api.update(f.c);
+  assert.equal(f.api.startDrill('backmarkers'), false);
+  assert.match(f.announcements.at(-1)[0], /NO SLOWER TRAFFIC/);
+});

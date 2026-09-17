@@ -213,6 +213,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // named legend has to round-trip through two setters, and the inert VM DOM
   // builds no SettingRow children, so painting the row would assert nothing.
   "tests/unit/duel-row.test.mjs",
+  // The LEGENDS TEAM as a grid entry: its own id (not the custom slot), the
+  // whole roster in `drivers` so the driver picker is the legend picker, and
+  // the one-seat rule — drivers.length is 12, so anything counting seats by
+  // it puts twelve legends on the grid.
+  "tests/unit/legends-team.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,
@@ -290,6 +295,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/debris-step-skip.test.mjs",
   "tests/unit/camera-ride.test.mjs",
   "tests/unit/flyby-shots.test.mjs",
+  // The FLYBY SHOT EDITOR's list algebra and the bake validator that stands
+  // between a pasted blob and the shipped DEFAULT. Pure data, ~0.1 s, and it
+  // belongs in the edit loop because tools/gen/bake-flyby.mjs is a FULL REPLACE.
+  "tests/unit/flyby-panel.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/hooks-documented.test.mjs",
   "tests/unit/source-integrity.test.mjs",
@@ -339,6 +348,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/race-insights.test.mjs",
   "tests/unit/driving-coach.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
+  "tests/unit/radio-voice.test.mjs",
   // @gen-test-groups:end
 ]);
 

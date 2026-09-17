@@ -63,6 +63,7 @@ export const RUNTIME_IDS = {
   "pm-metrics-logns":  "metrics-overlay makeMetricsBtn()",
   "pm-metrics-loglvl": "metrics-overlay makeMetricsBtn()",
   "pm-halo":           "cockpit-opts builds its rows from a table whose entries carry `id`",
+  "fb-in-ease":        "flyby-panel selectRow() builds it from a concatenated id; the one read is null-guarded",
   // Runtime soft-present overlay: GLX (HeadlessChrome) and TLX (WebGPU soft
   // path) insert #game-soft; reads are null-guarded with a documented else.
   "game-soft":         "js/render/glx/glx.js + js/render/three/tlx.js — null-guarded soft-present overlay",
