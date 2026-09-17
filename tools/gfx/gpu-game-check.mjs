@@ -199,10 +199,24 @@ try {
   // race() and park() were the last unbounded evaluates. A renderer that
   // wedges DURING the track load hangs them forever, and then the beats below
   // — the whole diagnosis — never run at all.
-  out.raceCall = await bounded(() => page.evaluate((t) => {
+  // TIME OF DAY IS A BUILD INPUT, NOT A RENDER ONE — which is what census 153
+  // established, by printing the gate instead of leaving it to be inferred:
+  //
+  //   LAMP BRANCH DID NOT RUN — 0 lamp draws vs 312 plain;
+  //   perChunkLights=0 allLights=-1
+  //
+  // allLights null means the track carries no baked lamps at all. Lamps are
+  // baked when the track is BUILT, and this called race(t) with no time of day,
+  // so no clock setting afterwards can add them. The --clock work of the
+  // previous commit pins the SKY, and pinning the sky at 02:00 over a track
+  // built without lamps is a dark scene with nothing to light it — which is why
+  // the night leg looked exactly like noon.
+  const tod = flag("--tod", "");
+  out.raceCall = await bounded(() => page.evaluate(([t, d]) => {
     window.__apexMark("raceCall");
-    return window.__apex.race(t);
-  }, track), 60000, "race");
+    return d ? window.__apex.race(t, d) : window.__apex.race(t);
+  }, [track, tod]), 60000, "race");
+  out.timeOfDay = tod || "(default)";
   checkpoint("race-called");
   // 300 s was a guess made against a software rasteriser; on a real GPU the
   // load is seconds, so a long wait here only delays the beats that carry the
