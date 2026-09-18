@@ -232,7 +232,8 @@ const RaceSettings = (function () {
         else if (id === "on") meta.textContent = "CURRENT FIELD · FASTEST CAR";
         else {
           const l = typeof Legends !== "undefined" && Legends.byId ? Legends.byId(id) : null;
-          meta.textContent = l ? [l.code, l.years, l.record && l.record.titles + "× CHAMPION"].filter(Boolean).join(" · ") : "";
+          const titles = l && l.record ? l.record.titles : 0;
+          meta.textContent = l ? [l.code, l.years, titles ? titles + "× CHAMPION" : "NO TITLES"].filter(Boolean).join(" · ") : "";
         }
         b.setAttribute("aria-label", meta.textContent ? label + " — " + meta.textContent : label);
         b.append(name, meta);
