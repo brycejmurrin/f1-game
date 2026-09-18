@@ -2,8 +2,13 @@
 "use strict";
 
 const Ghost = (function () {
-  const KEY = "apex26.ghost.v1";
+  const STORE_KEY = "ghost.v1";
+  const KEY = "apex26." + STORE_KEY;
   const OLD_KEY = "apex_ghost_v1";   // pre-convention key; migrated once on load
+  // One full trace measures about 40 KiB at 20 Hz. Reserve at most 512 KiB
+  // (roughly twelve traces) in the shared localStorage bucket so ghosts cannot
+  // crowd out career/settings saves.
+  const MAX_STORE_BYTES = 512 * 1024;
   const HZ = 20;                 // samples per second while recording
   const MIN_SAMPLES = 8;         // ignore degenerate "laps"
 
@@ -14,8 +19,9 @@ const Ghost = (function () {
       if (localStorage.getItem(KEY) === null) {
         const old = localStorage.getItem(OLD_KEY);
         if (old !== null) {
-          localStorage.setItem(KEY, old);
-          localStorage.removeItem(OLD_KEY);
+          const parsed = JSON.parse(old);
+          const result = GameStore.store.write(STORE_KEY, parsed);
+          if (result.durable) localStorage.removeItem(OLD_KEY);
         }
       }
     } catch { /* storage disabled — nothing to migrate */ }
@@ -38,24 +44,48 @@ const Ghost = (function () {
   // `store[id] = snap` then threw for the rest of the session. The `{}`
   // fallback is memoised too, so a corrupt key costs one parse.
   let storeCache = null;
+  let accessClock = Date.now();
   function loadStore() {
     if (storeCache) return storeCache;
-    let parsed = null;
-    try {
-      if (typeof localStorage !== "undefined") parsed = JSON.parse(localStorage.getItem(KEY));
-    } catch { /* corrupt or unreadable: start empty (memoised below) */ }
+    let parsed = GameStore.store.get(STORE_KEY, null);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       if (parsed !== null) Log.warn("car", "ghost store was not an object; starting empty");
       parsed = {};
     }
+    for (const g of Object.values(parsed)) {
+      if (g && Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
+    }
     storeCache = parsed;
     return storeCache;
   }
+  function touch(g) {
+    accessClock = Math.max(accessClock + 1, Date.now());
+    g._used = accessClock;
+  }
+  function byteLength(json) {
+    if (typeof TextEncoder === "function") return new TextEncoder().encode(json).byteLength;
+    // Ghost payloads are numeric arrays plus ASCII ids in normal play. Twice
+    // UTF-16 length is a conservative fallback where TextEncoder is absent.
+    return json.length * 2;
+  }
+  function trimStore(store) {
+    let json = JSON.stringify(store);
+    if (byteLength(json) <= MAX_STORE_BYTES) return json;
+    const oldest = Object.keys(store).sort((a, b) => {
+      const at = Number.isFinite(store[a] && store[a]._used) ? store[a]._used : 0;
+      const bt = Number.isFinite(store[b] && store[b]._used) ? store[b]._used : 0;
+      return at - bt;
+    });
+    while (oldest.length && byteLength(json) > MAX_STORE_BYTES) {
+      delete store[oldest.shift()];
+      json = JSON.stringify(store);
+    }
+    return json;
+  }
   function saveStore(store) {
     storeCache = store;
-    try {
-      if (typeof localStorage !== "undefined") localStorage.setItem(KEY, JSON.stringify(store));
-    } catch { Log.warn("car", "ghost save fail"); }
+    trimStore(store);
+    return GameStore.store.write(STORE_KEY, store);
   }
 
   // Canonical JSON is collision-free and stable across object insertion order.
@@ -75,6 +105,7 @@ const Ghost = (function () {
     trackId = id; context = eventContext;
     storageId = context == null ? id : "v2:" + id + ":" + context;
     const g = loadStore()[storageId];
+    if (g && typeof g === "object") touch(g);
     best = valid(g) ? g : null;
     rec = null;
     lastSampleT = -1;
@@ -109,12 +140,14 @@ const Ghost = (function () {
   // circuit's ghost (~40 KB each) and finishLap runs inside updateCar on the
   // lap-line frame of a new record — the one-frame hitch PERF-FINDINGS §2 records.
   function scheduleSave(id, snap) {
+    touch(snap);
     loadStore()[id] = snap;   // immediately visible if another class is selected before idle
     const write = () => {
       try {
         const store = loadStore();
-        saveStore(store);
-        Log.info("car", `ghost save ${id}`);
+        const result = saveStore(store);
+        if (result.durable) Log.info("car", `ghost save ${id}`);
+        else Log.warn("car", `ghost save ${id} is session-only`);
       } catch { Log.warn("car", "ghost save fail"); }
     };
     if (typeof requestIdleCallback === "function") requestIdleCallback(write, { timeout: 2000 });

@@ -17,14 +17,22 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function createHarness() {
+function createHarness(opts = {}) {
   const store = new Map();
   const mockLocalStorage = {
     getItem(k) { return store.has(k) ? store.get(k) : null; },
-    setItem(k, v) { store.set(k, String(v)); },
+    setItem(k, v) {
+      if (opts.failWrites) {
+        const error = new Error("quota full");
+        error.name = "QuotaExceededError";
+        throw error;
+      }
+      store.set(k, String(v));
+    },
     removeItem(k) { store.delete(k); },
     clear() { store.clear(); },
   };
@@ -32,13 +40,20 @@ function createHarness() {
   const sandbox = {
     localStorage: mockLocalStorage,
     module: { exports: {} },
+    TextEncoder,
     console,
   };
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
+  seedSaveMigrate(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js", "core", "store.js"), "utf8"), ctx);
   const src = readFileSync(join(ROOT, "js", "car", "ghost.js"), "utf8");
   vm.runInContext(src, ctx);
-  return { Ghost: sandbox.module.exports || vm.runInContext("Ghost", ctx), store: mockLocalStorage };
+  return {
+    Ghost: sandbox.module.exports || vm.runInContext("Ghost", ctx),
+    GameStore: vm.runInContext("GameStore", ctx),
+    store: mockLocalStorage,
+  };
 }
 
 test("Ghost lap recording and playback basics", () => {
@@ -180,4 +195,41 @@ test("a ghost store that is not a plain object starts empty and still saves", ()
     assert.equal(typeof saved, "object");
     assert.equal(saved.monza.time, 90, `${raw}: the ghost lap was written`);
   }
+});
+
+test("ghost persistence is capped by UTF-8 bytes and evicts the least-recently-used context", () => {
+  const { Ghost, store } = createHarness();
+  const save = (id, context, marker) => {
+    Ghost.setTrack(id, context);
+    Ghost.startLap();
+    for (let i = 0; i < 500; i++) Ghost.record(i * 0.1, i * 10, marker);
+    assert.equal(Ghost.finishLap(1000 + marker), true);
+  };
+
+  for (let i = 0; i < 149; i++) save("track-" + i, "setup-" + i, i);
+  const before = JSON.parse(store.getItem("apex26.ghost.v1"));
+  const byUse = Object.keys(before).sort((a, b) => before[a]._used - before[b]._used);
+  const touched = byUse[0];
+  const nextOldest = byUse[1];
+  const match = touched.match(/^v2:track-(\d+):setup-(\d+)$/);
+  assert.ok(match, "the oldest stored context has the expected key shape");
+  Ghost.setTrack("track-" + match[1], "setup-" + match[2]);
+  save("track-149", "setup-149", 149);
+
+  const raw = store.getItem("apex26.ghost.v1");
+  assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024, "the complete stored blob stays within its byte budget");
+  const saved = JSON.parse(raw);
+  assert.ok(Object.keys(saved).length < 150, "old contexts are evicted once the budget is reached");
+  assert.ok(saved[touched], "reading an old context refreshes its LRU position");
+  assert.equal(saved[nextOldest], undefined, "the untouched least-recently-used context is evicted first");
+  assert.ok(saved["v2:track-149:setup-149"], "the newest context remains");
+});
+
+test("ghost quota failures flow through GameStore persistence health", () => {
+  const { Ghost, GameStore } = createHarness({ failWrites: true });
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) Ghost.record(i * 0.1, i * 10, 0);
+  assert.equal(Ghost.finishLap(40), true, "the current session still keeps the personal best");
+  assert.equal(GameStore.store.broken, "QuotaExceededError", "persistState can report the failed ghost write");
 });
