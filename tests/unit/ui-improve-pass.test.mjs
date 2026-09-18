@@ -215,28 +215,14 @@ test("garage stacked categories are a horizontal strip", () => {
   const carsetup = css("css/carsetup.css");
   assert.ok(!declares(carsetup, "#cs-tabs", "max-height", "48%"),
     "stacked tabs must not keep the wrapping 48% vertical catalogue");
-  assert.ok(ruleFor(carsetup, /^#cs-inner:not\(\[data-pair="on"\]\) #cs-tabs \.cs-tab\b/),
-    "the strip is keyed on data-pair, not portrait orientation");
-  assert.equal(decl(carsetup, "#cs-tabs", "overflow-x"), "auto", "stacked tabs pan sideways");
-  assert.equal(decl(carsetup, "#cs-tabs", "overflow-y"), "hidden", "…and override .pane overflow-y");
+  assert.ok(ruleFor(carsetup, /^#cs-tabs \.cs-tab-row\b/),
+    "the two named category tiers own their horizontal strips");
+  assert.equal(decl(carsetup, "#cs-tabs .cs-tab-row", "overflow-x"), "auto", "each stacked tier pans sideways");
+  assert.equal(decl(carsetup, "#cs-tabs .cs-tab-row", "overflow-y"), "hidden", "…and never becomes a nested vertical pane");
   assert.equal(decl(carsetup, '#cs-inner[data-pair="on"] #cs-tabs', "overflow-y"), "auto",
     "pair-on rail may still scroll vertically");
-  assert.equal(decl(css("css/components.css"), ".pane-pair", "--pair-compact"), "off",
-    "compact garage / season stack to the horizontal strip via --pair-compact");
-  const packed = '#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs';
-  // THE COLUMN COUNT IS DERIVED, NOT WRITTEN DOWN. This assertion used to pin
-  // the literal `repeat(7, …)` — 14 slots — and that is precisely how the
-  // defect shipped: the roster grew to 15 tabs (TEAM + 12 catalogue categories
-  // + SETUP + LIVERY), the fifteenth landed on an implicit third row that the
-  // two-row max-height clips, and LIVERY rendered 53x6 px with 0 % visible and
-  // no scrollable ancestor at 852x393. A guard that pins a number cannot notice
-  // the number going stale; pin the mechanism instead, and let
-  // garage-interior-gate.test.mjs assert the arithmetic against the real count.
-  assert.equal(decl(carsetup, packed, "grid-template-columns"), "repeat(var(--cs-tab-cols, 7), minmax(0, 1fr))",
-    "short wide stacked garage takes its column count from the tab roster, two rows deep");
-  assert.ok(decl(carsetup, packed, "max-height"), "wrapped play-shape tabs cap at two rows so #cs-options keeps a list");
-  assert.ok(!declares(carsetup, /^#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs$/, "flex-wrap", "wrap"),
-    "tall stacked garage must keep the horizontal strip — wrapping 14 tabs starved options");
+  assert.equal(decl(carsetup, '#cs-inner[data-pair="on"] #cs-tabs .cs-tab-row', "display"), "contents",
+    "pair-on flattens both tiers into one vertical rail");
   assert.match(code("js/garage/setup-sheet.js"), /scrollIntoView\(\s*\{[^}]*\bblock:\s*"nearest"[^}]*\}\s*\)/, "the active tab is scrolled into view (nearest)");
   assert.match(code("js/garage/setup-sheet.js"), /scrollIntoView\(\s*\{[^}]*\binline:\s*"center"[^}]*\}\s*\)/, "…and centred sideways along the strip");
 });
