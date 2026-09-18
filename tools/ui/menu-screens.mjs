@@ -116,6 +116,11 @@ export const SCREENS = [
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
       await p.click("#sel-go");
       await p.waitForSelector("#race-settings:not([hidden])", { timeout: 15000 }); } },
+  { id: "duelpicker", name: "Duel rival picker", root: "#duel-picker", open: async (p) => {
+      await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
+      await p.click("#sel-go"); await p.waitForSelector("#race-settings:not([hidden])", { timeout: 15000 });
+      await p.click("#rs-duel-open");
+      await p.waitForSelector("#duel-picker:not([hidden])", { timeout: 15000 }); } },
   { id: "results", name: "Results", root: "#results", open: async (p) => {
       await p.evaluate(async () => { await window.__apex.race("monza"); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
