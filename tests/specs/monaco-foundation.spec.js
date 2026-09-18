@@ -8,11 +8,22 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
 
-  const result = await page.evaluate(() => {
+  const result = await page.evaluate(async () => {
     const definition = window.TrackDefs.find((entry) => entry.id === "monaco");
     window.__apex.trackGeometry(true);
-    const inspect = (timeOfDay) => {
-      window.__apex.race("monaco", timeOfDay, "dry");
+    // AWAIT THE RACE. __apex.race() returns a THENABLE (js/agent/apex.js
+    // settled()), not a finished build: the fields are there immediately and
+    // the track arrives later. Reading trackProfile() on the next line
+    // measured WHATEVER WAS LOADED BEFORE — at the first call, the boot track.
+    // That is why this spec reported an elevation range of 5.248 m for a
+    // circuit whose measured range is 39.93: 5.248 is Bahrain (5.259), not
+    // Monaco. redbull-foundation.spec.js has the identical bug and reports
+    // 5.252 for a 59.85 m circuit.
+    //
+    // montreal:79 and bahrain:185 do the same thing and pass by luck, because
+    // the stale track is the same circuit they are about to ask for.
+    const inspect = async (timeOfDay) => {
+      await window.__apex.race("monaco", timeOfDay, "dry");
       const profile = window.__apex.trackProfile(400);
       const models = window.__apex.modelDiagnostics();
       const geometry = window.__apex.geometryDiagnostics();
@@ -58,20 +69,37 @@ test("Monaco owns safe terrain, models, water, overheads, and walls", async ({ p
         sceneryCoordinates: definition.sceneryCoordinates,
         dressingExclusions: definition.dressingExclusions,
       },
-      day: inspect("day"),
-      night: inspect("night"),
+      day: await inspect("day"),
+      night: await inspect("night"),
     };
   });
 
   expect(result.definition.terrainOuter).toBe(28);
   expect(result.definition.sceneryCoordinates).toBe("source");
-  expect(result.definition.dressingExclusions.length).toBeGreaterThanOrEqual(3);
-  expect(result.definition.dressingExclusions).toContainEqual({
-    kinds: ["city", "foliage"],
-    s0: 0.29,
-    s1: 0.70,
-    side: 1,
-  });
+  // SOURCE-TRACE FRACTIONS, because the line above says so. This asserted
+  // { s0: 0.29, s1: 0.70, side: 1 } — the value the def carried before
+  // b73b7a95 converted it, and it has been failing ever since. The def is
+  // right and the assertion was left behind: with sceneryCoordinates "source"
+  // and reverse true, the engine runs every window through
+  // TrackSpace.sceneryRange and flips the side, so a def frac is not a racing
+  // frac. 0.29-0.70 R is what this entry still RESOLVES to... it is just not
+  // what it is written as any more.
+  //
+  // Pinned exactly, not by length or by one member, so the next frame
+  // conversion has to come through here. Resolved racing windows, measured on
+  // this build (_sceneryShift 0.9380, startFrac 0.2516) and matching the
+  // comment in js/circuits/monaco.js line for line:
+  //
+  //   0.6516-0.7516        -> 0.4380-0.5380 both   tunnel (bore 0.449-0.524)
+  //   0.0116-0.0816        -> 0.1080-0.1780 both   Casino sightline
+  //   0.5516-0.9616 side-1 -> 0.2280-0.6380 R
+  //   0.1116-0.2516 side-1 -> 0.9380-0.0780 R
+  expect(result.definition.dressingExclusions).toEqual([
+    { kinds: ["city", "foliage", "lighting"], s0: 0.6516, s1: 0.7516 },
+    { kind: "city", s0: 0.0116, s1: 0.0816 },
+    { kinds: ["city", "foliage"], s0: 0.5516, s1: 0.9616, side: -1 },
+    { kinds: ["city", "foliage"], s0: 0.1116, s1: 0.2516, side: -1 },
+  ]);
 
   for (const session of [result.day, result.night]) {
     expect(session.elevation.range).toBeGreaterThanOrEqual(38);
@@ -148,9 +176,9 @@ test("Monaco remains within the 1.4 m prop-over-road cap", async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
-  const max = await page.evaluate(() => {
+  const max = await page.evaluate(async () => {
     window.__apex.trackGeometry(true);
-    window.__apex.race("monaco", "day", "dry");
+    await window.__apex.race("monaco", "day", "dry");   // thenable — see the note above
     const caps = window.__apex.trackGeometry();
     const count = 1200;
     const px = new Float64Array(count), py = new Float64Array(count);

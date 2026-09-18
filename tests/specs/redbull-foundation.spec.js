@@ -13,9 +13,15 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
 
-  const result = await page.evaluate(() => {
-    const inspectSession = (time) => {
-      window.__apex.race("redbull", time, "dry");
+  const result = await page.evaluate(async () => {
+    // AWAIT THE RACE. __apex.race() returns a thenable (js/agent/apex.js
+    // settled()), not a finished build. Read on the next line, this measured
+    // whatever was loaded BEFORE — the boot track on the first call — and
+    // reported an elevation swing of 5.252 m for a circuit whose measured
+    // swing is 59.85. 5.252 is Bahrain (5.259). Same bug and same wrong number
+    // as monaco-foundation.spec.js, which read 5.248 for a 39.93 m circuit.
+    const inspectSession = async (time) => {
+      await window.__apex.race("redbull", time, "dry");
       const diagnostics = window.__apex.modelDiagnostics();
       return {
         geometry: window.__apex.geometryDiagnostics(),
@@ -30,8 +36,8 @@ test("Red Bull Ring owns a safe migrated alpine foundation", async ({ page }) =>
     };
 
     const def = Tracks.LIST.find((track) => track.id === "redbull");
-    const day = inspectSession("day");
-    const night = inspectSession("night");
+    const day = await inspectSession("day");
+    const night = await inspectSession("night");
     const profile = window.__apex.trackProfile(800);
     const peak = profile.reduce((best, point) => point.y > best.y ? point : best);
     const low = profile.reduce((best, point) => point.y < best.y ? point : best);
