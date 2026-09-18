@@ -7,6 +7,10 @@
 //                                       #   circuits) → push HEAD to the deploy branch (retry ×3)
 //   node tools/ci/deploy.mjs --pr          # same checks, then push the session branch and open /
 //                                       #   update a PR into the deploy branch (never pushes there)
+//   node tools/ci/deploy.mjs --gate-only   # run the DEPLOY GATE and stop: tooling-fast + ci.yml's
+//                                       #   node suites + verify-track. Pushes nothing, allows a
+//                                       #   dirty tree. THE pre-push check: test:tooling-fast is a
+//                                       #   subset and does not run 69 of the 277 unit files.
 //   node tools/ci/deploy.mjs --json        # machine verdict on stdout, log on stderr
 //
 // What it replaces: the prose protocol in the deploy-merge skill — fetch, look,
@@ -344,9 +348,73 @@ function openPr(branch) {
   return { pr: url, note: "auto-merge (merge commit) enabled; GitHub creates the merge so the PR is a real record" };
 }
 
+/* THE GATE, WITHOUT THE DEPLOY. `npm run test:tooling-fast` is the documented
+   edit-loop check and it is a SUBSET — 69 of 277 unit files are not on its
+   list — so "tooling-fast is green" has never meant "the deploy gate is
+   green". Two deploys went red on that gap in 2026-09-02 (which is why
+   gateNodeSuites() exists) and another in 2026-09-18, and in every case the
+   only way to learn it was to start a deploy.
+   This runs exactly what main() runs before it pushes, and pushes nothing, so
+   the pre-push answer comes from the same code path as the deploy's — not from
+   a second list that can drift from it. */
+export function gateOnly() {
+  const t0 = Date.now();
+  const verified = [];
+  run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite"); verified.push("tooling-fast");
+  for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verified.push(script); }
+  // Against the deploy tip, same as a real deploy: the circuits OUR side
+  // touched (three-dot), not every circuit that moved on the branch.
+  let circuits = [];
+  try {
+    must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
+    circuits = touchedCircuits(must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "rev-parse"));
+  } catch (e) { log(`verify-track skipped: cannot reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message})`); }
+  for (const id of circuits) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verified.push(`verify-track:${id}`); }
+  return { gate: "only", verified, pushed: false, seconds: Math.round((Date.now() - t0) / 1000) };
+}
+
+/* IS THE TRAIN ALREADY RED? A deploy inherits the branch it lands on, and a red
+   tip means your green push still ships nothing: on 2026-09-18 pages.yml runs
+   2416 and 2417 both failed and the branch went ~2 h without publishing, which
+   no session noticed until one read the run list by hand. Two unauthenticated
+   API calls answer it up front, so "my deploy did not go live" is distinguishable
+   from "the train was down before I got here".
+   ADVISORY, never a refusal: the fix for a red train is usually the next push,
+   and this must not stand between a session and it. Any failure to reach the
+   API is silent for the same reason — an offline box still deploys. */
+function trainHealth() {
+  const api = (wf) => {
+    const url = `https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/${wf}/runs`
+      + `?branch=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1&exclude_pull_requests=true`;
+    const r = spawnSync("curl", ["-sS", "--max-time", "10", "-H", "Accept: application/vnd.github+json", url], { encoding: "utf8" });
+    if (r.status !== 0) return null;
+    try {
+      const run = JSON.parse(r.stdout).workflow_runs?.[0];
+      return run ? { status: run.status, conclusion: run.conclusion, sha: (run.head_sha || "").slice(0, 7), url: run.html_url } : null;
+    } catch { return null; }
+  };
+  for (const [wf, label] of [["ci.yml", "ci"], ["pages.yml", "pages"]]) {
+    const r = api(wf);
+    if (!r) { log(`train ${label}: unknown (no API answer)`); continue; }
+    const state = r.status === "completed" ? r.conclusion : r.status;
+    log(`train ${label}: ${state} @ ${r.sha}${state === "failure" ? "  <- the deploy branch was ALREADY red before this push: " + r.url : ""}`);
+  }
+}
+
 export function main() {
   const t0 = Date.now();
   if (flag("--help") || flag("-h")) { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 26).join("\n")); return 0; }
+  if (flag("--gate-only")) {
+    // NOT preflight(): that refuses a dirty tree because merging and pushing one
+    // is wrong. Gating one is the entire point — this is the check you run with
+    // the edit still in your working tree. The load and Playwright refusals do
+    // carry over, because they are about whether a verdict means anything.
+    const problems = preflight().filter((x) => !x.startsWith("working tree is dirty"));
+    if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
+    const v = gateOnly();
+    if (JSON_OUT) console.log(JSON.stringify(v, null, 2)); else log(JSON.stringify(v));
+    return 0;
+  }
   const p = plan();
   if (flag("--plan")) {
     if (JSON_OUT) console.log(JSON.stringify(p, null, 2));
@@ -362,6 +430,7 @@ export function main() {
   }
   const problems = preflight();
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
+  trainHealth();
   const verdict = { branch: p.branch, merge: "none", verified: [], pushed: false, pr: null };
   if (!p.fastForward) verdict.merge = mergeDeployTip();
   run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite on the union"); verdict.verified.push("tooling-fast");
