@@ -137,14 +137,10 @@ window.SettingRow = (function () {
     return p.el;
   }
 
-  /* THE CHEVRONS ARE POINTER AFFORDANCES. The <select> between them already
-     answers Left/Right (natively on a keyboard, stepped by the pad in
-     js/input/input.js padNavKey), so a focusable ‹ › pair beside it is a
-     duplicate — and a trap: the select owns the arrows, so the walker could
-     never enter the › column (from every row above, Down preferred the ‹ or
-     the select; measured on the DISPLAY page 2026-09-08: no arrow reached
-     any -next). Out of the focus order and the accessibility tree; the click
-     still works for a finger or a mouse. */
+  /* The chevrons are pointer affordances for the native <select>, not a second
+     pair of controls. The select already exposes the setting's accessible name
+     and owns keyboard/pad Left/Right; duplicate focus targets made the spatial
+     walker promise controls it could never reach. */
   function pointerOnly(p) {
     for (const x of [p.prev, p.next]) {
       if (!x) continue;

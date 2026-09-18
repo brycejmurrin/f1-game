@@ -5,6 +5,25 @@
 window.TopModal = (function () {
   const wired = new WeakSet();
 
+  // A top sheet is a sibling of the title page, not its child. Native
+  // showModal() traps Tab, but browse-mode screen readers may still traverse
+  // the visible title controls behind it; non-dialog sheets such as CAREER and
+  // the pointer-through GARAGE receive no native isolation at all.
+  function syncMenuIsolation() {
+    const menu = document.getElementById("overlay");
+    if (!menu) return false;
+    const ids = (window.UiLayers && window.UiLayers.LAYER_IDS) || [];
+    const covered = ids.some((id) => {
+      if (id === "overlay" || id === "rotate-device" || id === "photo-controls") return false;
+      const el = document.getElementById(id);
+      return !!el && !el.hidden;
+    });
+    menu.inert = covered;
+    if (covered) menu.setAttribute("aria-hidden", "true");
+    else menu.removeAttribute("aria-hidden");
+    return covered;
+  }
+
   function sync(el) {
     const wantOpen = !el.hidden;
     if (wantOpen && !el.open) {
@@ -14,6 +33,7 @@ window.TopModal = (function () {
       try { el.close(); } catch (_) {}
       try { Log.info("ui", `TopModal close #${el.id || "?"}`); } catch (_) { /* Log absent */ }
     }
+    syncMenuIsolation();
   }
 
   function wire(el) {
@@ -247,7 +267,10 @@ window.TopModal = (function () {
   function wireLayer(el) {
     if (!el || wired.has(el) || typeof el.showModal === "function") return;
     wired.add(el);
-    new MutationObserver(() => (el.hidden ? onLayerHide(el) : onLayerShow(el)))
+    new MutationObserver(() => {
+      if (el.hidden) onLayerHide(el); else onLayerShow(el);
+      syncMenuIsolation();
+    })
       .observe(el, { attributes: true, attributeFilter: ["hidden"] });
   }
 
@@ -264,6 +287,7 @@ window.TopModal = (function () {
     Log.info("ui", "TopModal.init");
     scan();
     scanLayers();
+    syncMenuIsolation();
     document.addEventListener("keydown", onEscape, true);
     document.addEventListener("focusin", onFocusIn, true);
   }
@@ -273,5 +297,5 @@ window.TopModal = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing };
+  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, syncMenuIsolation };
 })();
