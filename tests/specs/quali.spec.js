@@ -53,9 +53,9 @@ test.describe("Qualifying — the session", () => {
   });
 
   test("a one-off Grand Prix still goes straight to the race", async ({ page }) => {
-    // A quick-blast uses the current team's pace-order box; only a weekend
-    // earns a qualifying grid. The exact box is a generated roster/default,
-    // not a qualifying contract.
+    // A quick-blast uses the configured non-qualifying grid; only a weekend
+    // earns a qualifying classification. The exact rule is a generated
+    // preference/default, not a qualifying contract.
     await boot(page);
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
@@ -64,7 +64,7 @@ test.describe("Qualifying — the session", () => {
     await expect(page.locator("#quali")).toBeHidden();
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.session).toBe("race");
-    expect(info.raceGrid).toBe("tier");
+    expect(info.raceGrid).not.toBe("quali");
     expect(info.raceQuali).toBe(false);
   });
 
@@ -199,8 +199,8 @@ test.describe("Qualifying — the grid", () => {
       raceQuali: window.__apex.info().raceQuali,
     }));
     expect(info.flow).toBe("gp");
-    expect(info.raceGrid).toBe("tier");
-    expect(info.raceQuali).toBe(false);   // pace order, not somebody else's qualifying grid
+    expect(info.raceGrid).not.toBe("quali");
+    expect(info.raceQuali).toBe(false);   // configured grid, not somebody else's qualifying grid
   });
 });
 
