@@ -66,6 +66,24 @@ const AgentView = (function () {
     return a < 1e-6 ? 99999 : Math.min(99999, 1 / a);
   }
 
+  // Render-interpolation anchors, for any harness that pumps update() by hand.
+  // The render loop snapshots these SIX before each step and lerps from them, so
+  // a hand-driven step that skips the snapshot draws the car at a stale pose:
+  // the PLAYER is drawn from WORLD space (rPrevPx/rPrevPz/rPrevHead), not from
+  // the (s, x) pair the AI cars interpolate, so snapshotting only (s, x) put a
+  // jump()+act()+frozen render — and the camera-anchored cockpit rig with it —
+  // somewhere else entirely, with no error to show for it. It lives here rather
+  // than in apex.js because agentview.js loads FIRST (ApexRoster.LAZY_AGENT).
+  function syncRenderAnchors(cars) {
+    const list = Array.isArray(cars) ? cars : [cars];
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      c.rPrevS = c.s; c.rPrevX = c.x;
+      c.rPrevPx = c.px; c.rPrevPz = c.pz;
+      c.rPrevYawVis = c.yawVis; c.rPrevHead = c.head;
+    }
+  }
+
   function create(G) {
     Log.info("game", "AgentView.create");
     const { wrapS, gripMult, LONG_GRIP, update, els, camVantage } = G;
@@ -1816,6 +1834,7 @@ const AgentView = (function () {
       // Promote out of the countdown, exactly as act() does, so physics advances.
       if (G.state === "count") {
         G.state = "race"; G.raceT = 0;
+        G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
         if (els && els.lights) {
           els.lights.hidden = true;
           for (const l of els.lights.children) l.classList.remove("on");
@@ -1853,9 +1872,7 @@ const AgentView = (function () {
           if (inp && !isNum(inp.steer)) inp = Object.assign({}, inp, { steer: 0 });
           G._testInput = inp || null;
         }
-        for (let j = 0; j < G.cars.length; j++) {
-          const c = G.cars[j]; c.rPrevS = c.s; c.rPrevX = c.x;
-        }
+        syncRenderAnchors(G.cars);
         update(dt);
 
         const sp = p.speed || 0;
@@ -2462,6 +2479,6 @@ const AgentView = (function () {
              API_VERSION, PHYSICS_VERSION };
   }
 
-  return { create };
+  return { create, syncRenderAnchors };
 })();
 Object.freeze(AgentView);

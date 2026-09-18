@@ -223,11 +223,11 @@ const api = {
     // new spot and fired a surprise auto-rescue mid-drive (measured).
     G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
     G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0;
-    // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of renderAlpha.
-    G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;
-    // playerAnchor()/renderPosOf() draw the HUMAN car from THESE (world), not the AI-only pair above — else it stays lerp'd toward the pre-teleport spot once park() freezes physics.
-    G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;
-    G.player.rPrevHead = G.player.head;   // yaw anchor too, or the car swings into place over a frame
+    // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of
+    // renderAlpha — the WORLD pair too: playerAnchor()/renderPosOf() draw the
+    // HUMAN car from those, so without them it stays lerp'd toward the
+    // pre-teleport spot once park() freezes physics.
+    AgentView.syncRenderAnchors(G.player);
     if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(true);
     return { s: G.player.s, total: G.track.total };
   },
@@ -1505,21 +1505,10 @@ const api = {
   step(dt, n) {
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
     for (let i = 0; i < count; i++) {
-      // Keep the render-interpolation anchors in sync (the render-driven loop
-      // snapshots these before each step; a manual pump must too, or a frozen
-      // render afterwards lerps toward a stale pre-teleport position).
-      // ALL FOUR, matching the loop: the player renders from WORLD space, so
-      // rPrevPx/rPrevPz drive its drawn position and rPrevHead its drawn heading.
-      // Snapshotting only (s, x) left those two holding whatever the grid or the
-      // previous session put there, so a headless jump()+step()+frozen render put
-      // the car — and with it the whole camera-anchored cockpit rig — somewhere
-      // else entirely, with no error to show for it.
-      for (let j = 0; j < G.cars.length; j++) {
-        const c = G.cars[j];
-        c.rPrevS = c.s; c.rPrevX = c.x;
-        c.rPrevPx = c.px; c.rPrevPz = c.pz;
-        c.rPrevYawVis = c.yawVis; c.rPrevHead = c.head;
-      }
+      // Keep the render-interpolation anchors in sync: the render-driven loop
+      // snapshots them before each step, so a manual pump must too or a frozen
+      // render afterwards lerps toward a stale pre-teleport pose.
+      AgentView.syncRenderAnchors(G.cars);
       update(d);
     }
   },
@@ -2019,11 +2008,12 @@ const api = {
     if (G.state === "count") {
       G.state = "race"; G.raceT = 0;
       resetStartLights(true);
+      G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     }
     if (input !== undefined) G._testInput = input || null;
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
     for (let i = 0; i < count; i++) {
-      for (let j = 0; j < G.cars.length; j++) { const c = G.cars[j]; c.rPrevS = c.s; c.rPrevX = c.x; }
+      AgentView.syncRenderAnchors(G.cars);   // all six, exactly as step() does
       update(d);
     }
     return this.obs();
@@ -2541,7 +2531,7 @@ const api = {
     c.wrongT = 0; c.wrongWay = false; c.offT = 0;
     // rPrevHead with the rest: without it the yaw interpolator tweens from the
     // old heading and the car visibly swings into place over a frame.
-    c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevHead = c.head;
+    AgentView.syncRenderAnchors(c);
     return { id: idx, frac: +(c.s / G.track.total).toFixed(4), speed: +c.speed.toFixed(2), x: +c.x.toFixed(3) };
   },
 
@@ -2700,7 +2690,7 @@ const api = {
     // seed world-space position + heading from (s, x) immediately, same as jump()
     Tracks.sample(G.track, G.player.s, smp);
     placeFromTrack(G.player, smp);
-    G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;   // sync render anchors (see jump)
+    AgentView.syncRenderAnchors(G.cars);   // sync render anchors (see jump); gridUp() moved every car
     // Per-episode DRIVETRAIN + smoothing state. gridUp() clears the race-level
     // fields (energy, cuts, penalty, wallT, vLat…) but not these, so without
     // this block the engine and smoothed inputs leak across episodes: the first
