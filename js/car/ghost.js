@@ -45,12 +45,9 @@ const Ghost = (function () {
   // fallback is memoised too, so a corrupt key costs one parse.
   let storeCache = null;
   let accessClock = Date.now();
-  let lruDirty = false;
-  function loadStore(preferId) {
-    if (storeCache) {
-      if (preferId && storeCache[preferId] && typeof storeCache[preferId] === "object") touch(storeCache[preferId]);
-      return storeCache;
-    }
+  let repairQueued = false;
+  function loadStore() {
+    if (storeCache) return storeCache;
     let parsed = GameStore.store.get(STORE_KEY, null);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       if (parsed !== null) Log.warn("car", "ghost store was not an object; starting empty");
@@ -59,20 +56,12 @@ const Ghost = (function () {
     for (const g of Object.values(parsed)) {
       if (g && Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
     }
-    if (preferId && parsed[preferId] && typeof parsed[preferId] === "object") touch(parsed[preferId]);
     storeCache = parsed;
-    const repaired = trimStore(parsed);
-    if (repaired.changed) {
-      const result = GameStore.store.write(STORE_KEY, parsed);
-      if (result.durable) lruDirty = false;
-      else Log.warn("car", "ghost budget repair is session-only");
-    }
     return storeCache;
   }
   function touch(g) {
     accessClock = Math.max(accessClock + 1, Date.now());
     g._used = accessClock;
-    lruDirty = true;
   }
   function byteLength(json) {
     if (typeof TextEncoder === "function") return new TextEncoder().encode(json).byteLength;
@@ -95,6 +84,10 @@ const Ghost = (function () {
     let json = JSON.stringify(store);
     if (byteLength(json) <= MAX_STORE_BYTES) return { changed: false };
     let changed = false;
+    for (const id of Object.keys(store)) {
+      if (!valid(store[id])) { delete store[id]; changed = true; }
+    }
+    json = JSON.stringify(store);
     const oldest = Object.keys(store).sort((a, b) => {
       const at = Number.isFinite(store[a] && store[a]._used) ? store[a]._used : 0;
       const bt = Number.isFinite(store[b] && store[b]._used) ? store[b]._used : 0;
@@ -116,17 +109,29 @@ const Ghost = (function () {
     }
     return { changed };
   }
+  function queueRepair() {
+    if (repairQueued) return;
+    repairQueued = true;
+    const run = () => {
+      repairQueued = false;
+      if (!storeCache) return;
+      const repaired = trimStore(storeCache);
+      if (!repaired.changed) return;
+      const result = GameStore.store.write(STORE_KEY, storeCache);
+      if (!result.durable) Log.warn("car", "ghost budget repair is session-only");
+    };
+    // loadTrack selects the plain circuit first; time-trial records.begin()
+    // selects its comparable context later in the same task. Repair afterward
+    // so that final entry gets its LRU promotion before anything is evicted.
+    if (typeof queueMicrotask === "function") queueMicrotask(run);
+    else if (typeof setTimeout === "function") setTimeout(run, 0);
+    else run();
+  }
   function saveStore(store) {
     storeCache = store;
     trimStore(store);
     const result = GameStore.store.write(STORE_KEY, store);
-    if (result.durable) lruDirty = false;
     return result;
-  }
-  if (typeof window !== "undefined" && window.addEventListener) {
-    window.addEventListener("pagehide", () => {
-      if (lruDirty && storeCache) saveStore(storeCache);
-    });
   }
 
   // Canonical JSON is collision-free and stable across object insertion order.
@@ -145,8 +150,11 @@ const Ghost = (function () {
   function setTrack(id, eventContext = null) {
     trackId = id; context = eventContext;
     storageId = context == null ? id : "v2:" + id + ":" + context;
-    const g = loadStore(storageId)[storageId];
-    best = valid(g) ? g : null;
+    const g = loadStore()[storageId];
+    const good = valid(g);
+    if (good) touch(g);
+    queueRepair();
+    best = good ? g : null;
     rec = null;
     lastSampleT = -1;
     Log.info("car", `ghost load ${id}${best ? " ok" : " none"}`);

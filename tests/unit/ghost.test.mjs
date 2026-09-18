@@ -23,7 +23,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function createHarness(opts = {}) {
   const store = new Map(Object.entries(opts.disk || {}));
-  const listeners = new Map();
+  const microtasks = [];
   const mockLocalStorage = {
     getItem(k) { return store.has(k) ? store.get(k) : null; },
     setItem(k, v) {
@@ -42,12 +42,8 @@ function createHarness(opts = {}) {
     localStorage: mockLocalStorage,
     module: { exports: {} },
     TextEncoder,
+    queueMicrotask: (fn) => { microtasks.push(fn); },
     console,
-  };
-  sandbox.window = sandbox;
-  sandbox.addEventListener = (type, fn) => {
-    if (!listeners.has(type)) listeners.set(type, []);
-    listeners.get(type).push(fn);
   };
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
@@ -59,7 +55,7 @@ function createHarness(opts = {}) {
     Ghost: sandbox.module.exports || vm.runInContext("Ghost", ctx),
     GameStore: vm.runInContext("GameStore", ctx),
     store: mockLocalStorage,
-    fire: (type) => { for (const fn of listeners.get(type) || []) fn({ type }); },
+    flushMicrotasks: () => { while (microtasks.length) microtasks.shift()(); },
   };
 }
 
@@ -244,7 +240,7 @@ test("ghost quota failures flow through GameStore persistence health", () => {
 test("loading an inherited over-budget store trims it before other saves compete for quota", () => {
   const inherited = {};
   for (let n = 0; n < 100; n++) {
-    inherited["track-" + n] = {
+    inherited["v2:track-" + n + ":setup-" + n] = {
       time: 100 + n,
       t: Array.from({ length: 500 }, (_, i) => i * 0.1),
       s: Array.from({ length: 500 }, (_, i) => i * 10),
@@ -252,15 +248,18 @@ test("loading an inherited over-budget store trims it before other saves compete
       _used: n,
     };
   }
-  const { Ghost, store } = createHarness({
+  const { Ghost, store, flushMicrotasks } = createHarness({
     disk: { "apex26.ghost.v1": JSON.stringify(inherited) },
   });
 
   Ghost.setTrack("track-0");
+  Ghost.setTrack("track-0", "setup-0");
+  flushMicrotasks();
 
   const raw = store.getItem("apex26.ghost.v1");
   assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024, "first load repairs the inherited blob");
-  assert.ok(JSON.parse(raw)["track-0"], "the context being loaded is promoted before LRU eviction");
+  assert.ok(JSON.parse(raw)["v2:track-0:setup-0"],
+    "repair waits for the final comparable context and promotes it before LRU eviction");
 });
 
 test("one oversized valid trace is thinned to fit instead of evicting its own personal best", () => {
@@ -281,20 +280,18 @@ test("one oversized valid trace is thinned to fit instead of evicting its own pe
   assert.equal(saved.t.length, saved.x.length);
 });
 
-test("a read-only LRU touch is persisted at pagehide without writing on every circuit browse", () => {
-  const first = createHarness();
-  first.Ghost.setTrack("monza");
-  first.Ghost.startLap();
-  for (let i = 0; i < 12; i++) first.Ghost.record(i * 0.1, i * 10, 0);
-  first.Ghost.finishLap(40);
-  const disk = { "apex26.ghost.v1": first.store.getItem("apex26.ghost.v1") };
-
-  const second = createHarness({ disk });
-  const before = JSON.parse(second.store.getItem("apex26.ghost.v1")).monza._used;
-  second.Ghost.setTrack("monza");
-  assert.equal(JSON.parse(second.store.getItem("apex26.ghost.v1")).monza._used, before,
-    "browsing a circuit does not synchronously rewrite the full ghost blob");
-  second.fire("pagehide");
-  assert.ok(JSON.parse(second.store.getItem("apex26.ghost.v1")).monza._used > before,
-    "the refreshed recency survives the next reload");
+test("an invalid selected entry is discarded before valid ghosts during budget repair", () => {
+  const inherited = {
+    broken: { time: 10, t: [], s: [], x: [], pad: "x".repeat(600_000), _used: Number.MAX_SAFE_INTEGER },
+    sound: { time: 10, t: [0, 1, 2, 3, 4, 5, 6, 7], s: [0, 1, 2, 3, 4, 5, 6, 7],
+      x: [0, 0, 0, 0, 0, 0, 0, 0], _used: 1 },
+  };
+  const { Ghost, store, flushMicrotasks } = createHarness({
+    disk: { "apex26.ghost.v1": JSON.stringify(inherited) },
+  });
+  Ghost.setTrack("broken");
+  flushMicrotasks();
+  const repaired = JSON.parse(store.getItem("apex26.ghost.v1"));
+  assert.equal(repaired.broken, undefined);
+  assert.ok(repaired.sound, "valid history wins space over a malformed preferred entry");
 });
