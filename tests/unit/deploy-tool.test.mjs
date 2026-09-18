@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
-  sweepSuites, touchesGeometry, notCovered } from "../../tools/ci/deploy.mjs";
+  sweepSuites, touchesGeometry, notCovered, anyGeometry } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -213,4 +213,27 @@ test("the verdict names what it did NOT measure", () => {
     "sweeps that RAN must not be reported as uncovered");
   assert.ok(without.some((x) => /test:sweeps/.test(x)),
     "sweeps that were SKIPPED must be named — that silence is the whole defect");
+});
+
+/* THE RETRY PATH, which the gate forgot for its first hours. main() sweeps the
+ * union it measured; a landing session then makes that union stale, and
+ * deploy12 (2026-09-18) lost its push, re-merged six circuit scenery files and
+ * pushed them WITHOUT a sweep — while its verdict still listed test:sweeps as
+ * verified. anyGeometry() is the predicate both paths now share, so the answer
+ * cannot differ between the union and the re-merge. */
+test("anyGeometry answers for a file LIST, so the retry asks what the union asked", () => {
+  // The exact set that slipped through deploy12.
+  assert.equal(anyGeometry([
+    "js/circuits/scenery/estoril.js", "js/circuits/scenery/fuji.js", "js/circuits/scenery/jerez.js",
+  ]), true, "circuit scenery re-merged by a retry must route the sweeps");
+
+  assert.equal(anyGeometry(["docs/README.md", "tools/ci/deploy.mjs", ".github/workflows/ci.yml"]), false,
+    "a retry that brings no geometry must not pay the 10 minutes");
+
+  // GEOMETRY WITHOUT SHIPPED CODE. reverifyUnion's older question was "did js/
+  // or css/ arrive?"; a sweep suite's own baseline is neither, and moving it
+  // changes what the sweeps measure — which is why the geometry question is
+  // asked separately from the shipped-code one.
+  assert.equal(anyGeometry([sweepSuites()[0]]), true,
+    "a sweep suite's own file is geometry for this purpose, though it ships nothing");
 });

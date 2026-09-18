@@ -178,13 +178,19 @@ export function sweepSuites() {
   return suites;
 }
 
-export function touchesGeometry(base, cwd) {
-  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
-  if (r.code !== 0) return true;                        // unresolvable diff -> run them
-  const files = r.out.split("\n").filter(Boolean);
+/** Can THIS set of paths move circuit geometry? Shared by the union check and
+ *  by the push-rejection retry, which re-merges a new union that main() has
+ *  already swept past — see reverifyUnion(). */
+export function anyGeometry(files) {
   if (files.some((f) => GEOMETRY_PATHS.test(f))) return true;
   const suites = new Set(sweepSuites());
   return files.some((f) => suites.has(f));              // a moved baseline counts too
+}
+
+export function touchesGeometry(base, cwd) {
+  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
+  if (r.code !== 0) return true;                        // unresolvable diff -> run them
+  return anyGeometry(r.out.split("\n").filter(Boolean));
 }
 
 /* What this deploy did NOT measure. A green verdict that lists only what ran
@@ -377,28 +383,51 @@ const GATE_JOBS = "--jobs=2";
    ~3.6 more pushes at the measured median gap of 165 s, so a full-gate retry
    makes losing the next attempt MORE likely, not less. One deploy this session
    ran the full 157-suite gate three times and won on the last attempt. */
+/* A REJECTED PUSH MEANS A DIFFERENT TREE. main() sweeps the union it measured,
+ * then a landing session makes that union stale — so whatever the re-merge
+ * brings has to face the same questions, geometry included.
+ *
+ * It did not, for the first hours of this gate's life: deploy12 (2026-09-18)
+ * swept its union, lost the push, re-merged six circuit scenery files
+ * (estoril, fuji, jerez +3) and pushed them WITHOUT a sweep, while its verdict
+ * still listed test:sweeps as verified and named only the browser groups as
+ * uncovered. A gate reporting coverage it does not have is the exact defect
+ * this gate exists to stop, so it does not get an exception for being mine. */
 function reverifyUnion(before) {
   const changed = git(["diff", "--name-only", `${before}..HEAD`]).out.split("\n").filter(Boolean);
   const ships = changed.filter((f) => /^(js|css)\//.test(f) || f === "index.html");
+  const geom = anyGeometry(changed);
+  let label;
   if (ships.length) {
     run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS],
         `re-verify the new union in full — it brings shipped code (${ships.slice(0, 3).join(", ")}${ships.length > 3 ? ` +${ships.length - 3}` : ""})`);
-    return "full gate";
+    label = "full gate";
+  } else {
+    run("node", ["tools/ci/tooling-fast.mjs", ...MERGE_GUARDS],
+        `re-verify the new union: ${changed.length} file(s), no shipped code, so the cross-file guards`);
+    label = `${MERGE_GUARDS.length} merge guards`;
   }
-  run("node", ["tools/ci/tooling-fast.mjs", ...MERGE_GUARDS],
-      `re-verify the new union: ${changed.length} file(s), no shipped code, so the cross-file guards`);
-  return `${MERGE_GUARDS.length} merge guards`;
+  // Geometry can arrive WITHOUT shipped code — a sweep suite's own baseline is
+  // neither js/ nor css/ — so this is asked of the re-merge either way.
+  if (geom) {
+    run("npm", ["run", "test:sweeps"], "re-verify: test:sweeps (the re-merged union can move geometry)");
+    label += " + sweeps";
+  }
+  return { label, sweeps: geom };
 }
 
 function pushWithRetry() {
+  let swept = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     const r = git(["push", REMOTE, `HEAD:${DEPLOY_BRANCH}`]);
-    if (r.code === 0) return attempt;
+    if (r.code === 0) return { attempts: attempt, swept };
     log(`push rejected (attempt ${attempt}): ${r.err.split("\n").pop()}`);
     const before = git(["rev-parse", "HEAD"]).out.trim();
     must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
     mergeDeployTip();
-    log(`re-verified: ${reverifyUnion(before)}`);
+    const rv = reverifyUnion(before);
+    swept = swept || rv.sweeps;
+    log(`re-verified: ${rv.label}`);
   }
   throw new Error("push rejected three times — another session keeps landing; stop and look");
 }
@@ -512,14 +541,19 @@ export function main() {
   // Conditional, for the reason recorded above touchesGeometry(): ci.yml runs
   // the sweeps AFTER the push, so skipping them here buys 10 minutes with a
   // broken tip on a branch other sessions build on.
-  const ranSweeps = touchesGeometry(p.tip);
+  let ranSweeps = touchesGeometry(p.tip);
   if (ranSweeps) { run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verdict.verified.push("test:sweeps"); }
   for (const id of touchedCircuits(p.tip)) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verdict.verified.push(`verify-track:${id}`); }
   if (flag("--pr")) {
     Object.assign(verdict, openPr(p.branch));
   } else {
-    verdict.pushAttempts = pushWithRetry();
+    const push = pushWithRetry();
+    verdict.pushAttempts = push.attempts;
     verdict.pushed = true;
+    // A retry can sweep a union main() never saw, so the verdict learns it here
+    // rather than reporting the answer it computed before the re-merge.
+    if (push.swept && !verdict.verified.includes("test:sweeps")) verdict.verified.push("test:sweeps");
+    ranSweeps = ranSweeps || push.swept;
   }
   verdict.notCovered = notCovered(ranSweeps);
   verdict.next = "the push's FAST ci.yml run is your verdict (minutes) and, when green, pokes pages.yml, which gates the tip, stamps the build (2000 + commit count) and verify-live confirms the CDN serves it — a commit is live once it is an ancestor of the live shell's apex-sha (deploy-research)";
