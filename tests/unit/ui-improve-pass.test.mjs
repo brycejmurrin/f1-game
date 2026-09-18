@@ -249,7 +249,7 @@ test("circuit catalogue has a searchable filter toolbar", () => {
   assert.match(js, /function\s+applyTrackSearch\s*\(/);
   assert.match(js, /setAttribute\(\s*"role"\s*,\s*"group"\s*\)/,
     "filters plus search are controls for one list, not a tablist");
-  assert.match(js, /\.tabIndex\s*=\s*trackFilter\s*===\s*id\s*\?\s*0\s*:\s*-1/,
+  assert.match(js, /\.tabIndex\s*=\s*visibleTrackFilter\(\)\s*===\s*id\s*\?\s*0\s*:\s*-1/,
     "filter chips keep a roving tab stop; search is its own");
   assert.equal(decl(css("css/menus.css"), "#sel-track-search", "min-height"), "var(--chip-h)");
 });
