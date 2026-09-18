@@ -8403,14 +8403,38 @@ function refreshCareerButton() {
   // menu's whole layout shift. docs/PERF-FINDINGS.md 4a.
   const sub = $("mb-career-sub");
   if (!sub) return;
-  if (!c) { sub.textContent = "DRIVER CAREER  ·  MY TEAM"; return; }
-  const team = Teams.LIST.find((t) => t.id === c.team);
-  const who = c.flavour === "myteam" ? "MY TEAM" : (c.driver ? c.driver.code : "YOU");
-  sub.textContent = who + " · " + (team ? team.name : c.team).toUpperCase()
-    + " · " + c.year + " R" + Math.min(c.season.round + 1, Tracks.SEASON.length)
-    + (used > 1 ? "  ·  " + used + " SAVED" : "");
+  if (!c) sub.textContent = "DRIVER CAREER  ·  MY TEAM";
+  else {
+    const team = Teams.LIST.find((t) => t.id === c.team);
+    const who = c.flavour === "myteam" ? "MY TEAM" : (c.driver ? c.driver.code : "YOU");
+    sub.textContent = who + " · " + (team ? team.name : c.team).toUpperCase()
+      + " · " + c.year + " R" + Math.min(c.season.round + 1, Tracks.SEASON.length)
+      + (used > 1 ? "  ·  " + used + " SAVED" : "");
+  }
+  btn.setAttribute("aria-label", "Career modes — " + sub.textContent);
+
+  const cont = $("mb-continue"), contSub = $("mb-continue-sub");
+  if (cont && contSub) {
+    cont.hidden = !c;
+    if (c) {
+      const next = Tracks.SEASON[Math.min(c.season.round, Tracks.SEASON.length - 1)];
+      contSub.textContent = c.year + " · ROUND " + Math.min(c.season.round + 1, Tracks.SEASON.length)
+        + (next ? " · " + next.name : "");
+      cont.setAttribute("aria-label", "Continue career — " + contSub.textContent);
+    }
+  }
+
+  const dailyBtn = $("mb-daily"), dailySub = $("mb-daily-sub");
+  if (dailyBtn && dailySub) {
+    const p = daily.plan(), st = daily.data().streak;
+    dailySub.textContent = p.trackName + " · " + p.weather.toUpperCase()
+      + (st.count > 0 ? " · STREAK " + st.count : "");
+    dailyBtn.setAttribute("aria-label", "Daily challenge — " + dailySub.textContent);
+  }
 }
 $("mb-career").onclick = () => openCareerSlots();
+$("mb-continue").onclick = () => openCareer();
+$("mb-daily").onclick = () => { if (soundOn) GameAudio.uiSelect(); daily.open(); };
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => {

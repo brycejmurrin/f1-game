@@ -160,6 +160,10 @@ test("career: a NEW CAREER draft does not survive leaving the screen", () => {
   const { dom, ui, $ } = loadCareerUi();
   ui.openSlots();
   assert.equal($("cr-title").textContent, "CAREER MODES");
+  assert.equal($("cr-left").querySelectorAll(".cr-slot-main")[0].getAttribute("aria-label"),
+    "Driver career slot 1, empty");
+  assert.equal($("cr-right").querySelectorAll(".cr-slot-main")[0].getAttribute("aria-label"),
+    "My Team slot 1, empty");
   // Open an EMPTY driver slot -> the setup form, with a draft behind it.
   const emptySlot = $("cr-left").querySelectorAll(".cr-slot.empty")[0];
   emptySlot.querySelector(".cr-slot-main").onclick();

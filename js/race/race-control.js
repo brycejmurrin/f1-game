@@ -185,8 +185,12 @@ const RaceControl = (function () {
       queryT -= QUERY_EVERY;
 
       const hz = DebrisWorld.hazards();
+      // DebrisWorld proves a RED-worthy picture has at least two source cars.
+      // `total` deliberately remains the lower-caution/HUD count: one scraping
+      // car can still need a safety car, but cannot cause a standing restart.
+      const redTotal = hz.redTotal == null ? hz.total : hz.redTotal;
       let desired = 0, dsector = -1, dfrac = 0, dcause = "";
-      if (hz.total >= RED_MIN) { desired = 4; dcause = "RED FLAG"; }
+      if (redTotal >= RED_MIN) { desired = 4; dcause = "RED FLAG"; }
       else if (hz.total >= SC_MIN) { desired = 3; dcause = "SAFETY CAR"; }
       else if (hz.total >= VSC_MIN) { desired = 2; dcause = "VSC"; }
       else if (hz.worst.count >= YELLOW_MIN) {

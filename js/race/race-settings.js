@@ -32,6 +32,22 @@ const RaceSettings = (function () {
   // is persisted per circuit (apex26.pitPlan.<id>) by PitLane.setPinnedStops.
   const RS_PLAN = [["auto", "AUTO"], ["0", "NO STOP"], ["1", "1 STOP"], ["2", "2 STOPS"]];
 
+  function presetValues(id, full) {
+    if (id === "quick") return {
+      laps: Math.min(5, full), weather: "dry", mixed: false, time: "day",
+      difficulty: "normal", grid: "tier", caution: true, reliability: "off", tyres: "off",
+    };
+    if (id === "weekend") return {
+      laps: full, weather: "dry", mixed: false, time: "default",
+      difficulty: "normal", grid: "quali", caution: true, reliability: "real", tyres: "real",
+    };
+    if (id === "endurance") return {
+      laps: Math.min(25, full), weather: "overcast", mixed: true, time: "dusk",
+      difficulty: "hard", grid: "tier", caution: true, reliability: "real", tyres: "real",
+    };
+    return null;
+  }
+
   function create(hooks) {
     const {
       $, store, GameAudio, getSoundOn, Tracks, SettingRow, DrivingLine,
@@ -58,6 +74,8 @@ const RaceSettings = (function () {
       const trackIdx = getTrackIdx();
       let raceLaps = getRaceLaps();
       const full = (Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps) || 57;
+      const presets = $("rs-presets");
+      if (presets) presets.hidden = tt || isChampionship() || netRoom;
       const lapOpts = tt ? [3, 4, 5, 8] : [3, 5, 10, 25].filter((n) => n < full).concat(full);
       if (!tt && !lapOpts.includes(raceLaps)) {
         raceLaps = full;
@@ -96,6 +114,7 @@ const RaceSettings = (function () {
       SettingRow.paint("rs-tyres", getRaceTyreWear(), RS_TYRES);
       SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
       paintPlan(tt, raceLaps);
+      paintPresetState(full);
     }
 
     /** The STRATEGY row and its stint bar. Hidden with TYRE WEAR (a plan is a
@@ -155,6 +174,49 @@ const RaceSettings = (function () {
       });
       wire("rs-plan", () => { const p = getPits && getPits(); const v = p ? p.pinnedStops() : null; return v == null ? "auto" : String(v); },
            (v) => { const p = getPits && getPits(); if (p) p.setPinnedStops(v === "auto" ? null : +v); });
+      for (const b of body.querySelectorAll ? body.querySelectorAll("[data-rs-preset]") : []) {
+        b.onclick = () => {
+          applyPreset(b.getAttribute("data-rs-preset"));
+          after();
+        };
+      }
+    }
+
+    function currentPresetValues() {
+      return {
+        laps: getRaceLaps(), weather: getRaceWeather(), mixed: getRaceChangeable(),
+        time: getRaceTimeOfDay(), difficulty: getDifficulty(), grid: getRaceGrid(),
+        caution: !!getRaceCtl().enabled, reliability: getRaceReliability(), tyres: getRaceTyreWear(),
+      };
+    }
+
+    function paintPresetState(full) {
+      const now = currentPresetValues();
+      const row = $("rs-presets");
+      for (const b of row && row.querySelectorAll ? row.querySelectorAll("[data-rs-preset]") : []) {
+        const p = presetValues(b.getAttribute("data-rs-preset"), full);
+        const on = p && Object.keys(p).every((k) => now[k] === p[k]);
+        b.classList.toggle("active", !!on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      }
+    }
+
+    function applyPreset(id) {
+      const track = Tracks.LIST[getTrackIdx()];
+      const p = presetValues(id, (track && track.gpLaps) || 57);
+      if (!p || isTimeTrial() || isChampionship() || netRoom) return false;
+      setRaceLaps(p.laps);
+      setRaceWeather(p.weather);
+      setRaceChangeable(p.mixed);
+      setWxArcPlan(null);
+      setRaceTimeOfDay(p.time);
+      setDifficulty(p.difficulty); store.set("difficulty", p.difficulty);
+      setRaceGrid(p.grid); store.set("raceGrid", p.grid);
+      setCautionEnabled(p.caution);
+      setRaceReliability(p.reliability); store.set("reliability", p.reliability);
+      setRaceTyreWear(p.tyres);
+      scheduleFlybyTrack();
+      return true;
     }
 
     function setNetRoom(on) { netRoom = !!on; }
@@ -227,6 +289,7 @@ const RaceSettings = (function () {
       openRaceSetup,
       setNetRoom,
       wireButtons,
+      applyPreset,
       get netRoom() { return netRoom; },
       get rsReturn() { return rsReturn; },
     };
@@ -235,6 +298,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, duelOpts, duelValue };
+  return { create, duelOpts, duelValue, presetValues };
 })();
 Object.freeze(RaceSettings);

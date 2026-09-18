@@ -456,7 +456,26 @@ test("TopModal.scanLayers wires every non-dialog UiLayers layer except the two t
   const s = code("js/ui/modal.js");
   assert.match(s, /"rotate-device":\s*1,\s*"photo-controls":\s*1/, "LAYER_SKIP names exactly the rotate blocker and the fly-cam");
   assert.match(s, /el\.tagName !== "DIALOG"\) wireLayer\(el\)/, "dialogs keep showModal()/close() focus handling");
-  assert.match(s, /return \{ scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing \}/);
+  assert.match(s, /return \{ scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, syncMenuIsolation \}/);
+});
+
+test("TopModal isolates the title menu behind dialog and non-dialog sheets", () => {
+  const h = bootTopModal(["overlay", "vsfriend", "carsetup"]);
+  const menu = h.layer("overlay"), friend = h.layer("vsfriend"), garage = h.layer("carsetup");
+  friend.hidden = true; garage.hidden = true;
+  h.TopModal.scanLayers();
+  assert.equal(h.TopModal.syncMenuIsolation(), false);
+  assert.equal(menu.inert, false);
+  assert.equal(menu.getAttribute("aria-hidden"), null);
+
+  h.flip(friend, false);
+  assert.equal(menu.inert, true, "a top dialog removes the visible title controls from interaction");
+  assert.equal(menu.getAttribute("aria-hidden"), "true");
+  h.flipAll([[friend, true], [garage, false]]);
+  assert.equal(menu.inert, true, "the non-showModal garage gets the same background isolation");
+  h.flip(garage, true);
+  assert.equal(menu.inert, false);
+  assert.equal(menu.getAttribute("aria-hidden"), null, "closing the last sheet restores the title");
 });
 
 /* ── 6. The shell: every screen has a name; announcements are live ───────── */
@@ -515,6 +534,16 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
   const tm = code("js/ui/modal.js");
   assert.match(tm, /el\.addEventListener\("cancel"[\s\S]*?getAttribute\("data-esc-close"\)[\s\S]*?btn\.click\(\)/);
   assert.match(tm, /function onEscape[\s\S]*?getAttribute\("data-esc-close"\)[\s\S]*?btn\.click\(\)/);
+});
+
+test("setting-row chevrons are named controls, never aria-hidden interactive buttons", () => {
+  const rows = read("js/ui/setting-row.js");
+  assert.doesNotMatch(rows, /setAttribute\("aria-hidden",\s*"true"\)/);
+  assert.doesNotMatch(rows, /tabIndex\s*=\s*-1/);
+  for (const tag of HTML.matchAll(/<button\b[^>]*\bdata-step="(?:-1|1)"[^>]*>/g)) {
+    assert.match(tag[0], /\baria-label="[^"]+"/, tag[0]);
+    assert.doesNotMatch(tag[0], /\baria-hidden=/, tag[0]);
+  }
 });
 
 /* ── 7. Lockstep: the layer lists agree ──────────────────────────────────── */

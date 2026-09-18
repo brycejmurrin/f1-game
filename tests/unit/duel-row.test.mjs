@@ -75,3 +75,21 @@ test("a stale legend left in the store still reads as ON, never as OFF", () => {
   assert.equal(RS.duelValue(() => true, () => "nobody"), "nobody");
   assert.equal(RS.duelValue(() => true, null), "on", "no getter at all is the plain duel");
 });
+
+test("race presets are complete, distinct settings bundles", () => {
+  const quick = RS.presetValues("quick", 57);
+  const weekend = RS.presetValues("weekend", 57);
+  const endurance = RS.presetValues("endurance", 57);
+  assert.deepEqual({ ...quick }, {
+    laps: 5, weather: "dry", mixed: false, time: "day",
+    difficulty: "normal", grid: "tier", caution: true, reliability: "off", tyres: "off",
+  });
+  assert.equal(weekend.laps, 57);
+  assert.equal(weekend.grid, "quali");
+  assert.equal(weekend.reliability, "real");
+  assert.equal(weekend.tyres, "real");
+  assert.equal(endurance.laps, 25);
+  assert.equal(endurance.mixed, true);
+  assert.equal(endurance.difficulty, "hard");
+  assert.equal(RS.presetValues("unknown", 57), null);
+});

@@ -115,7 +115,25 @@
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
 #menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 100%); }
-#menu-hero { display: grid; }
+#menu-hero { display: grid; gap: calc(var(--gap) * 0.55); }
+#menu-retention {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: calc(var(--gap) * 0.7);
+}
+#menu-retention .bigbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65em;
+  min-width: 0;
+  padding-block: calc(var(--gap) * 0.65);
+}
+#menu-retention .mb-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Shared gap / stretch. Column count lives on each row: primary is a
    forced 2x2, secondary wraps from local space (see the two rules below). */
 #menu-primary, #menu-secondary {
@@ -1193,6 +1211,13 @@ h3.sel-label {
   align-content: start;
   overflow-y: auto; overscroll-behavior-y: contain;
 }
+#rs-presets {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.6);
+}
+#rs-presets .sel-chip { width: 100%; min-width: 0; }
 @container sheet (min-width: 440px) {
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
