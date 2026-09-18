@@ -73,37 +73,64 @@ test("#pm-renderer is visible in the SETTINGS markup (not hidden)", () => {
   assert.doesNotMatch(m[0], /\bhidden\b/, "hidden on the tag hid RENDERER until game.js finished an async backend load");
 });
 
-test("no stored renderer means WebGL2 on touch and desktop alike", () => {
+test("no stored renderer means Three.js on touch and desktop alike", () => {
   const game = code("js/game.js");
-  const select = game.slice(game.indexOf("let pref = null;"), game.indexOf("const PROBE_KEY"));
+  const select = game.slice(game.indexOf("function backendPreference()"), game.indexOf("const PROBE_KEY"));
   assert.ok(select.length > 0, "renderer preference selection block found");
   assert.doesNotMatch(select, /matchMedia\s*\([^)]*pointer:\s*coarse/,
-    "a coarse pointer must not silently opt every fresh phone into the larger deferred THREE stack");
-  assert.doesNotMatch(select, /if\s*\(\s*!pref\s*\)[^]*?pref\s*=\s*"three"/,
-    "absence of a preference must remain the WebGL2 default");
+    "touch and desktop must use the same default");
+  assert.match(select, /pref\s*==\s*null\s*\?\s*"three"\s*:\s*pref/,
+    "an absent stored preference resolves to THREE");
+  assert.match(select, /pref\s*=\s*backendPreference\(\)/,
+    "the boot selection must resolve an absent preference to THREE");
   const picker = code("js/perf/renderer-picker.js");
   const def = picker.slice(picker.indexOf("function defaultBackend()"), picker.indexOf("function readBackend()"));
   assert.doesNotMatch(def, /matchMedia\s*\([^)]*pointer:\s*coarse/,
-    "renderer-picker defaultBackend must agree with game.js — no touch THREE default");
-  assert.match(def, /return\s+"webgl2"/, "unset picker read falls back to WebGL2");
+    "renderer-picker defaultBackend must agree with game.js on every device");
+  assert.match(def, /return\s+"three"/, "unset picker read falls back to THREE");
 });
 
-test("renderer-picker readBackend is WebGL2 on coarse pointer when unset", () => {
+test("renderer-picker readBackend is Three.js when unset and preserves explicit picks", () => {
   const src = read("js/perf/renderer-picker.js");
-  const ls = makeStorage({});
-  const ctx = vm.createContext({
-    window: { matchMedia: () => ({ matches: true }) },
-    document: { readyState: "loading", addEventListener() {} },
-    localStorage: ls,
-    sessionStorage: makeStorage({}),
-    navigator: { gpu: {} },
-    ApexRoster: { DEFERRED: { webgpu: ["js/render/webgpu/wgx.js"], three: ["js/render/three/tlx.js"] } },
-  });
-  seedLog(ctx);
-  seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
-  const G = vm.runInContext("RendererPicker", ctx);
-  assert.equal(G.readBackend(), "webgl2");
+  for (const [stored, expected] of [[null, "three"], ["webgl2", "webgl2"], ["three", "three"], ["webgpu", "webgpu"], ["unknown", "webgl2"]]) {
+    const ls = makeStorage(stored == null ? {} : { "apex26.gfxBackend": stored });
+    const ctx = vm.createContext({
+      window: { matchMedia: () => ({ matches: true }) },
+      document: { readyState: "loading", addEventListener() {} },
+      localStorage: ls,
+      sessionStorage: makeStorage({}),
+      navigator: { gpu: {} },
+      ApexRoster: { DEFERRED: { webgpu: ["js/render/webgpu/wgx.js"], three: ["js/render/three/tlx.js"] } },
+    });
+    seedLog(ctx);
+    seedStore(ctx);
+    vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
+    const G = vm.runInContext("RendererPicker", ctx);
+    assert.equal(G.readBackend(), expected, `stored ${stored} resolves to ${expected}`);
+  }
+});
+
+test("Gfx binds TLX when the preference is unset and honours explicit backends", async () => {
+  const src = read("js/render/gfx.js");
+  async function bind(stored) {
+    const ls = makeStorage(stored == null ? {} : { "apex26.gfxBackend": stored });
+    const tlxBackend = { name: "tlx" };
+    const wgxBackend = { name: "wgx" };
+    const ctx = vm.createContext({
+      window: {},
+      localStorage: ls,
+      navigator: { gpu: {} },
+      TLX: { async create() { return tlxBackend; } },
+      WGX: { async create() { return wgxBackend; } },
+    });
+    seedLog(ctx);
+    vm.runInContext(src, ctx, { filename: "js/render/gfx.js" });
+    const G = vm.runInContext("Gfx", ctx);
+    return G.create({}, {});
+  }
+  assert.equal((await bind(null)).name, "tlx", "unset preference takes the TLX seam");
+  assert.equal(await bind("webgl2"), null, "explicit WEBGL2 remains the fallback request");
+  assert.equal((await bind("webgpu")).name, "wgx", "explicit WEBGPU still takes WGX");
 });
 
 test("boot canary disarms after a successful bind, not only after present()", () => {
@@ -120,6 +147,8 @@ test("first world present re-arms the canary so a jetsam mid-frame still reverts
   const game = code("js/game.js");
   const present = game.search(/gfx\.present\(\s*po\s*\)/);
   const window = game.slice(present - 600, present + 400);
+  assert.match(window, /backendPreference\(\)/,
+    "canary re-arm must resolve an unset preference to the default THREE pick");
   assert.match(window, /setItem\(\s*"apex26\.gfxBackendProbe"/);
   assert.match(window, /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/);
 });
@@ -317,6 +346,8 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   const game = code("js/game.js");
   assert.match(game, /apex26\.gfxClaimFail/);
   assert.match(game, /armed\s*&&\s*!skipClaim\b/);
+  assert.match(game, /const p = backendPreference\(\);\s*backendTried = p === "webgpu" \|\| p === "three"/,
+    "claim-fail recovery must include the unset default THREE attempt");
   // The claim-fail reload must READ THE SKIP BACK first: with sessionStorage
   // blocked, removing the probe + reloading replays the claim-and-die boot
   // forever (the probe was the only other escape). And it must reload at most
@@ -630,7 +661,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.equal(ss.getItem("apex26.gfxBound"), null);
   assert.equal(ss.getItem("apex26.ctxLostReloads"), null);
   assert.equal(ss.getItem("apex26.tlxAutoGL"), null);
-  assert.equal(G.readBackend(), "webgl2");
+  assert.equal(G.readBackend(), "three");
 });
 
 test("applyBackend clears session renderer latches before reload", () => {
