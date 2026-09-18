@@ -53,9 +53,10 @@ function hazards(total, worstCount, sector = 1, redTotal = total) {
 }
 
 /** Minimal world: single-player (owns race control), racing, empty grid. */
-function makeCtx(over = {}, savedCaution = true) {
+function makeCtx(over = {}, savedCaution) {
   const saved = new Map();
-  if (savedCaution !== undefined) saved.set("caution", savedCaution);
+  const initial = arguments.length < 2 ? true : savedCaution;
+  if (initial !== undefined) saved.set("caution", initial);
   return Object.assign({
     state: "race",
     ranked: [],
