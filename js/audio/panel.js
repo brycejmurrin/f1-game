@@ -209,9 +209,15 @@ const AudioPanel = (() => {
       // at wire time because getVoices() is empty on Chrome's first read and
       // fills in later — opening the panel is when we know what is installed.
       buildVoiceRows();
+      // CAPABILITY, not existence. $() here answers from a DOM that is a STUB in
+      // the node suites — tests/unit/async-lifecycle.test.mjs hands back a
+      // truthy element with only the handful of members the audio path needed
+      // before this row existed. `if (vh)` passed and vh.querySelectorAll threw,
+      // taking three unrelated audio-boot tests down with it and failing the
+      // deploy. Ask for what is about to be called.
       const vh = $("as-voices");
-      if (vh) {
-        vh.classList.toggle("tune-off", !radioLive);
+      if (vh && vh.classList) vh.classList.toggle("tune-off", !radioLive);
+      if (vh && typeof vh.querySelectorAll === "function") {
         for (const el of vh.querySelectorAll("select,input,button")) el.disabled = !radioLive;
       }
       const rnote = $("as-radio-note");
@@ -357,7 +363,14 @@ const AudioPanel = (() => {
 
     function buildVoiceRows() {
       const host = $("as-voices");
-      if (!host || typeof RadioVoice === "undefined") return;
+      // The same capability guard as the sync block below, and for the same
+      // reason: $() answers from a STUB element in the node suites, with only
+      // the members the audio path happened to need. This one escaped by luck —
+      // its harness never defines RadioVoice, so the check below returned first
+      // — and would have thrown on host.children the moment a suite loaded both.
+      if (!host || typeof host.appendChild !== "function" || !host.children) return;
+      if (typeof RadioVoice === "undefined" || typeof document === "undefined"
+          || typeof document.createElement !== "function") return;
       const n = (G.radio && G.radio.voiceList && G.radio.voiceList().length) || 0;
       if (voiceRowsFor === n && host.children.length > 1) return;   // already right for this list
       voiceRowsFor = n;
