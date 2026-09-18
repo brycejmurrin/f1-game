@@ -1280,6 +1280,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "daily chip labels the standard class and circuit; weather/tod/best live in a child span");
   assert.match(selectJs, /bar\.insertBefore\(\s*b\s*,\s*bar\.firstChild\s*\)/,
     "TODAY leads the filter bar so a wrapping sheet paints it as the banner");
+  assert.match(selectJs, /trackFilters[\s\S]*\["daily-open",\s*"DAILY OPEN"\]/,
+    "DAILY OPEN participates in the same filter semantics as ALL / SEASON / CLASSICS");
+  assert.match(selectJs, /G\.daily\.select\(/, "daily controls stage a plan on the picker");
+  assert.doesNotMatch(selectJs, /onclick\s*=\s*\([^)]*\)\s*=>\s*\{[^}]*G\.daily\.open\(/,
+    "a picker chip must never bypass NEXT, Race Settings and RACE!");
   assert.match(code("js/garage/setup-sheet.js"), /rakeOut\.id\s*=\s*"cs-rake-readout"/);
   const resultsJs = code("js/ui/results-sheet.js");
   assert.match(resultsJs, /btn\.id\s*=\s*"res-daily-share"/);

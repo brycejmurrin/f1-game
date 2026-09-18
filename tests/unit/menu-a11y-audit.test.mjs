@@ -546,6 +546,17 @@ test("setting-row chevrons are named controls, never aria-hidden interactive but
   }
 });
 
+test("the steering Advanced disclosure exposes button and expanded state semantics", () => {
+  const summary = HTML.match(/<summary[^>]*\bid="adv-more"[^>]*>/);
+  assert.ok(summary, "#adv-more exists");
+  assert.match(summary[0], /\brole="button"/);
+  assert.match(summary[0], /\baria-expanded="false"/);
+  assert.match(summary[0], /\baria-controls="adv-extra"/);
+  assert.match(read("js/input/steer-tuning.js"),
+    /adv-details[\s\S]*toggle[\s\S]*adv-more[\s\S]*aria-expanded/,
+    "the native details toggle mirrors its open state explicitly");
+});
+
 /* ── 7. Lockstep: the layer lists agree ──────────────────────────────────── */
 
 function stringConst(file, name) {
