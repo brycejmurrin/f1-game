@@ -9,6 +9,7 @@ const RaceSettings = (function () {
   const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]];
   const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
   const RS_ONOFF = [["off", "OFF"], ["on", "ON"]];
+  const DUEL_BASE = [["off", "OFF"], ["on", "FASTEST RIVAL"]];
   /* DUEL is OFF / ON / a named legend — one control rather than a second row.
    * ON keeps the original meaning (the fastest car on the grid, bumped); a
    * legend replaces that rival's driver with his own five axes
@@ -16,8 +17,18 @@ const RaceSettings = (function () {
    * roster file this module must not hard-require: with it absent the row
    * degrades to the OFF/ON it always was. */
   function duelOpts() {
-    if (typeof Legends === "undefined" || !Legends.LIST) return RS_ONOFF.slice();
-    return RS_ONOFF.concat(Legends.LIST.map((l) => [l.id, l.name.toUpperCase()]));
+    if (typeof Legends === "undefined" || !Legends.LIST) return DUEL_BASE.slice();
+    return DUEL_BASE.concat(Legends.LIST.map((l) => [l.id, l.name.toUpperCase()]));
+  }
+  function duelMatches(query) {
+    const q = String(query || "").trim().toLocaleLowerCase();
+    if (!q) return duelOpts();
+    return duelOpts().filter(([id, label]) => {
+      if (id === "off" || id === "on") return label.toLocaleLowerCase().includes(q);
+      const l = typeof Legends !== "undefined" && Legends.byId ? Legends.byId(id) : null;
+      return [label, id, l && l.code, l && l.years, l && l.teams].filter(Boolean)
+        .join(" ").toLocaleLowerCase().includes(q);
+    });
   }
   const duelValue = (getDuel, getDuelLegend) =>
     !getDuel() ? "off" : ((getDuelLegend && getDuelLegend()) || "on");
@@ -32,6 +43,22 @@ const RaceSettings = (function () {
   // is persisted per circuit (apex26.pitPlan.<id>) by PitLane.setPinnedStops.
   const RS_PLAN = [["auto", "AUTO"], ["0", "NO STOP"], ["1", "1 STOP"], ["2", "2 STOPS"]];
 
+  function presetValues(id, full) {
+    if (id === "quick") return {
+      laps: Math.min(5, full), weather: "dry", mixed: false, time: "day",
+      difficulty: "normal", grid: "tier", caution: true, reliability: "off", tyres: "off",
+    };
+    if (id === "weekend") return {
+      laps: full, weather: "dry", mixed: false, time: "default",
+      difficulty: "normal", grid: "quali", caution: true, reliability: "real", tyres: "real",
+    };
+    if (id === "endurance") return {
+      laps: Math.min(25, full), weather: "overcast", mixed: true, time: "dusk",
+      difficulty: "hard", grid: "tier", caution: true, reliability: "real", tyres: "real",
+    };
+    return null;
+  }
+
   function create(hooks) {
     const {
       $, store, GameAudio, getSoundOn, Tracks, SettingRow, DrivingLine,
@@ -43,7 +70,7 @@ const RaceSettings = (function () {
       getRaceGrid, setRaceGrid, getRaceReliability, setRaceReliability,
       getRaceTyreWear, setRaceTyreWear, getDuel, setDuel, getDuelLegend, setDuelLegend, getPits,
       getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace, raceIntro,
-      enableTilt, getSteerMode, getNetLobby, buildSelect, els, openGarage,
+      enableTilt, getSteerMode, getNetLobby, getDaily, buildSelect, els, openGarage,
     } = hooks;
 
     let rsReturn = "select";
@@ -55,9 +82,12 @@ const RaceSettings = (function () {
       $("rs-go").textContent = netRoom ? "CONFIRM" : "RACE!";
       wireRaceSettings();
       const tt = isTimeTrial();
+      const daily = tt && getDaily ? getDaily() : null;
       const trackIdx = getTrackIdx();
       let raceLaps = getRaceLaps();
       const full = (Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps) || 57;
+      const presets = $("rs-presets");
+      if (presets) presets.hidden = tt || isChampionship() || netRoom;
       const lapOpts = tt ? [3, 4, 5, 8] : [3, 5, 10, 25].filter((n) => n < full).concat(full);
       if (!tt && !lapOpts.includes(raceLaps)) {
         raceLaps = full;
@@ -65,9 +95,12 @@ const RaceSettings = (function () {
       }
       SettingRow.paint("rs-laps", raceLaps, lapOpts.map((n) => [n, !tt && n === full ? full + " (FULL)" : String(n)]));
       SettingRow.paint("rs-weather", getRaceWeather(), RS_WEATHER);
+      SettingRow.disable("rs-laps", !!daily);
+      SettingRow.disable("rs-weather", !!daily);
       $("rs-mixed").hidden = tt;
       SettingRow.paint("rs-mixed", getRaceChangeable() ? "mixed" : "stable", RS_CONDITIONS);
       SettingRow.paint("rs-time", getRaceTimeOfDay(), RS_TIME);
+      SettingRow.disable("rs-time", !!daily);
       $("rs-diff").hidden = tt;
       SettingRow.paint("rs-diff", getDifficulty(), RS_DIFF);
       const champ = isChampionship();
@@ -76,7 +109,7 @@ const RaceSettings = (function () {
       // has no field at all) and in a championship, where the classification
       // feeds points and standings — a 2-car GP would score a season.
       $("rs-duel").hidden = tt || champ;
-      SettingRow.paint("rs-duel", duelValue(getDuel, getDuelLegend), duelOpts());
+      paintDuel();
       $("rs-quali").hidden = tt;
       const qForced = champ ? SeasonCal.quali() : null;
       const rules = qForced ? [["quali", "QUALIFYING"]]
@@ -96,6 +129,7 @@ const RaceSettings = (function () {
       SettingRow.paint("rs-tyres", getRaceTyreWear(), RS_TYRES);
       SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
       paintPlan(tt, raceLaps);
+      paintPresetState(full);
     }
 
     /** The STRATEGY row and its stint bar. Hidden with TYRE WEAR (a plan is a
@@ -149,12 +183,116 @@ const RaceSettings = (function () {
       wire("rs-reliab", getRaceReliability, (v) => { setRaceReliability(v); store.set("reliability", v); });
       wire("rs-tyres", getRaceTyreWear, (v) => setRaceTyreWear(v));
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
-      wire("rs-duel", () => duelValue(getDuel, getDuelLegend), (v) => {
-        setDuel(v !== "off");
-        if (setDuelLegend) setDuelLegend(v === "off" || v === "on" ? "" : v);
-      });
       wire("rs-plan", () => { const p = getPits && getPits(); const v = p ? p.pinnedStops() : null; return v == null ? "auto" : String(v); },
            (v) => { const p = getPits && getPits(); if (p) p.setPinnedStops(v === "auto" ? null : +v); });
+      for (const b of body.querySelectorAll ? body.querySelectorAll("[data-rs-preset]") : []) {
+        b.onclick = () => {
+          applyPreset(b.getAttribute("data-rs-preset"));
+          after();
+        };
+      }
+      $("rs-duel-open").onclick = openDuelPicker;
+      $("duel-close").onclick = closeDuelPicker;
+      $("duel-search").oninput = () => buildDuelPicker($("duel-search").value);
+    }
+
+    function paintDuel() {
+      const value = duelValue(getDuel, getDuelLegend);
+      const opt = duelOpts().find(([id]) => id === value);
+      const label = opt ? opt[1] : "FASTEST RIVAL";
+      $("rs-duel-value").textContent = label;
+      $("rs-duel-open").setAttribute("aria-label", "Duel rival: " + label);
+    }
+
+    function chooseDuel(value) {
+      setDuel(value !== "off");
+      if (setDuelLegend) setDuelLegend(value === "off" || value === "on" ? "" : value);
+      paintDuel();
+      closeDuelPicker();
+      if (getSoundOn()) GameAudio.uiSelect();
+    }
+
+    function buildDuelPicker(query) {
+      const list = $("duel-list");
+      if (typeof list.replaceChildren === "function") list.replaceChildren(); else list.innerHTML = "";
+      const current = duelValue(getDuel, getDuelLegend);
+      const matches = duelMatches(query);
+      for (const [id, label] of matches) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "duel-option" + (id === current ? " active" : "");
+        b.setAttribute("role", "option");
+        b.setAttribute("aria-selected", id === current ? "true" : "false");
+        const name = document.createElement("span");
+        name.className = "duel-option-name";
+        name.textContent = label;
+        const meta = document.createElement("span");
+        meta.className = "duel-option-meta";
+        if (id === "off") meta.textContent = "FULL GRID";
+        else if (id === "on") meta.textContent = "CURRENT FIELD · FASTEST CAR";
+        else {
+          const l = typeof Legends !== "undefined" && Legends.byId ? Legends.byId(id) : null;
+          const titles = l && l.record ? l.record.titles : 0;
+          meta.textContent = l ? [l.code, l.years, titles ? titles + "× CHAMPION" : "NO TITLES"].filter(Boolean).join(" · ") : "";
+        }
+        b.setAttribute("aria-label", meta.textContent ? label + " — " + meta.textContent : label);
+        b.append(name, meta);
+        b.onclick = () => chooseDuel(id);
+        list.appendChild(b);
+      }
+      $("duel-empty").hidden = matches.length > 0;
+    }
+
+    function openDuelPicker() {
+      const search = $("duel-search");
+      search.value = "";
+      buildDuelPicker("");
+      $("duel-picker").hidden = false;
+      queueMicrotask(() => search.focus());
+      if (getSoundOn()) GameAudio.uiSelect();
+    }
+
+    function closeDuelPicker() {
+      $("duel-picker").hidden = true;
+      const open = $("rs-duel-open");
+      if (open) open.focus();
+    }
+
+    function currentPresetValues() {
+      return {
+        laps: getRaceLaps(), weather: getRaceWeather(), mixed: getRaceChangeable(),
+        time: getRaceTimeOfDay(), difficulty: getDifficulty(), grid: getRaceGrid(),
+        caution: !!getRaceCtl().enabled, reliability: getRaceReliability(), tyres: getRaceTyreWear(),
+      };
+    }
+
+    function paintPresetState(full) {
+      const now = currentPresetValues();
+      const row = $("rs-presets");
+      for (const b of row && row.querySelectorAll ? row.querySelectorAll("[data-rs-preset]") : []) {
+        const p = presetValues(b.getAttribute("data-rs-preset"), full);
+        const on = p && Object.keys(p).every((k) => now[k] === p[k]);
+        b.classList.toggle("active", !!on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      }
+    }
+
+    function applyPreset(id) {
+      const track = Tracks.LIST[getTrackIdx()];
+      const p = presetValues(id, (track && track.gpLaps) || 57);
+      if (!p || isTimeTrial() || isChampionship() || netRoom) return false;
+      setRaceLaps(p.laps);
+      setRaceWeather(p.weather);
+      setRaceChangeable(p.mixed);
+      setWxArcPlan(null);
+      setRaceTimeOfDay(p.time);
+      setDifficulty(p.difficulty); store.set("difficulty", p.difficulty);
+      setRaceGrid(p.grid); store.set("raceGrid", p.grid);
+      setCautionEnabled(p.caution);
+      setRaceReliability(p.reliability); store.set("reliability", p.reliability);
+      setRaceTyreWear(p.tyres);
+      scheduleFlybyTrack();
+      return true;
     }
 
     function setNetRoom(on) { netRoom = !!on; }
@@ -169,9 +307,10 @@ const RaceSettings = (function () {
     function openRaceSettings(from) {
       rsReturn = from || "select";
       if (!netRoom) {
+        const daily = isTimeTrial() && getDaily ? getDaily() : null;
         setRaceLaps(isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS));
-        setRaceWeather("dry");
-        setRaceTimeOfDay("default");
+        setRaceWeather(daily ? daily.weather : "dry");
+        setRaceTimeOfDay(daily ? daily.tod : "default");
       }
       buildRaceSettings();
       $(rsReturn).hidden = true;
@@ -227,6 +366,7 @@ const RaceSettings = (function () {
       openRaceSetup,
       setNetRoom,
       wireButtons,
+      applyPreset,
       get netRoom() { return netRoom; },
       get rsReturn() { return rsReturn; },
     };
@@ -235,6 +375,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, duelOpts, duelValue };
+  return { create, duelOpts, duelMatches, duelValue, presetValues };
 })();
 Object.freeze(RaceSettings);

@@ -1731,7 +1731,8 @@ test.describe("Career — the modes screen", () => {
     await page.locator("#mb-career").click();
     // The second MY TEAM slot — so both halves of the address have to survive.
     await page.locator("#cr-right .cr-slot").nth(1).locator(".cr-slot-main").click();
-    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+    await expect(page.locator("#cr-title")).toHaveText("NEW MY TEAM");
+    await expect(page.locator("#cr-go")).toHaveText("START MY TEAM");
     // The form opens on MY TEAM rather than asking which mode again.
     await expect(page.locator(".cr-flavour").nth(1)).toHaveAttribute("aria-pressed", "true");
     await page.locator("#cr-go").click();
@@ -1818,7 +1819,8 @@ test.describe("Career — new and deleted", () => {
     await expect(page.locator("#cr-left .cr-slot.empty")).toHaveCount(0);
     await expect(page.locator("#cr-right .cr-slot.empty")).toHaveCount(3);
     await page.locator("#cr-right .cr-slot").nth(0).locator(".cr-slot-main").click();
-    await expect(page.locator("#cr-title")).toHaveText("NEW CAREER");
+    await expect(page.locator("#cr-title")).toHaveText("NEW MY TEAM");
+    await expect(page.locator("#cr-go")).toHaveText("START MY TEAM");
   });
 
   test("deleting frees that slot, and only that slot", async ({ page }) => {

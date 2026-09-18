@@ -46,8 +46,8 @@ function load(debris) {
 }
 
 /** A hazard picture: `total` on the surface, and the worst single sector. */
-function hazards(total, worstCount, sector = 1) {
-  return { total, sectors: [0, worstCount, 0], worst: { count: worstCount, sector, frac: 0.4 } };
+function hazards(total, worstCount, sector = 1, redTotal = total) {
+  return { total, redTotal, sectors: [0, worstCount, 0], worst: { count: worstCount, sector, frac: 0.4 } };
 }
 
 /** Minimal world: single-player (owns race control), racing, empty grid. */
@@ -365,6 +365,19 @@ test("sixteen settled hazards raise RED, which outranks the safety car and holds
   assert.equal(rc.info().phase, "stopping");
   assert.equal(rc.otEnabled(), false);
   assert.equal(rc.takeRestart(), false, "no restart while the flag is out");
+});
+
+test("one scraping car's settled debris can call a safety car but never a red flag", () => {
+  // Monaco measured 17 total after one wall scrape (RED_MIN is 16), with only
+  // 11 hazards in the pre-scrape picture. DebrisWorld now withholds those
+  // single-source shards from redTotal while preserving every lower-caution
+  // count, so the response is SC rather than a standing restart.
+  const rc = load({ active: () => true, hazards: () => hazards(17, 4, 1, 0) }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().total, 17, "the settled hazards still count for marshal response and HUD");
+  assert.equal(rc.info().level, 3);
+  assert.equal(rc.info().label, "SAFETY CAR");
+  assert.equal(rc.takeRestart(), false);
 });
 
 test("the red procedure: stopping, held, then exactly ONE restart request and a re-arm hold", () => {

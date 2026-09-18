@@ -253,9 +253,10 @@ const ScrollFadeRefresh = () => { if (window.ScrollFade) window.ScrollFade.refre
 // Circuit list filter: all / championship calendar / retired classics.
 // Persisted so a player who only races classics does not re-tap every open.
 let trackFilter = store.get("trackFilter", "all");
-if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic") trackFilter = "all";
-const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"]];
+if (trackFilter !== "all" && trackFilter !== "season" && trackFilter !== "classic" && trackFilter !== "daily-open") trackFilter = "all";
+const trackFilters = [["all", "ALL"], ["season", "SEASON"], ["classic", "CLASSICS"], ["daily-open", "DAILY OPEN"]];
 let trackQuery = "";
+const visibleTrackFilter = () => (!G.timeTrial && trackFilter === "daily-open" ? "all" : trackFilter);
 
 function applyTrackSearch(value) {
   trackQuery = String(value || "").trim().toLocaleLowerCase();
@@ -269,9 +270,10 @@ function applyTrackSearch(value) {
   ScrollFadeRefresh();
 }
 
-function setTrackFilter(id, focus) {
+function setTrackFilter(id, focus, keepDaily) {
   trackFilter = id;
-  store.set("trackFilter", id);
+  if (id !== "daily-open") store.set("trackFilter", id);
+  if (!keepDaily && G.daily && G.daily.isActive()) G.daily.stop();
   if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
   vt(() => {
     buildSelect(); tickUi();
@@ -294,38 +296,48 @@ function trackFilterBar() {
   bar.className = "sel-chip-row";
   bar.setAttribute("role", "group");
   bar.setAttribute("aria-label", "Circuit list controls");
-  trackFilters.forEach(([id, label], index) => {
+  const filters = trackFilters.filter(([id]) => id !== "daily-open" || G.timeTrial);
+  filters.forEach(([id, label], index) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "sel-chip" + (trackFilter === id ? " active" : "");
+    b.className = "sel-chip" + (visibleTrackFilter() === id ? " active" : "");
     b.dataset.filter = id;
-    b.setAttribute("aria-pressed", trackFilter === id ? "true" : "false");
-    b.tabIndex = trackFilter === id ? 0 : -1;
+    b.setAttribute("aria-pressed", visibleTrackFilter() === id ? "true" : "false");
+    b.tabIndex = visibleTrackFilter() === id ? 0 : -1;
     b.textContent = label;
     b.onclick = (e) => {
       e.stopPropagation();
-      setTrackFilter(id, false);
+      if (id === "daily-open") {
+        G.daily.select(undefined, "open");
+        setTrackFilter(id, false, true);
+      } else setTrackFilter(id, false, false);
     };
     b.onkeydown = (e) => {
       let next = null;
-      if (e.key === "ArrowRight") next = (index + 1) % trackFilters.length;
-      else if (e.key === "ArrowLeft") next = (index - 1 + trackFilters.length) % trackFilters.length;
+      if (e.key === "ArrowRight") next = (index + 1) % filters.length;
+      else if (e.key === "ArrowLeft") next = (index - 1 + filters.length) % filters.length;
       else if (e.key === "Home") next = 0;
-      else if (e.key === "End") next = trackFilters.length - 1;
+      else if (e.key === "End") next = filters.length - 1;
       if (next == null) return;
       e.preventDefault(); e.stopPropagation();
-      setTrackFilter(trackFilters[next][0], true);
+      const nextId = filters[next][0];
+      if (nextId === "daily-open") {
+        G.daily.select(undefined, "open");
+        setTrackFilter(nextId, true, true);
+      } else setTrackFilter(nextId, true, false);
     };
     bar.appendChild(b);
   });
-  // TODAY'S CHALLENGE — time trial only. The plan is the day's (UTC), the same
-  // for every player; one tap stages it and starts. Dynamic: no shell nodes.
+  // TODAY'S CHALLENGE — time trial only. Selection is intentionally separate
+  // from starting: NEXT → RACE SETTINGS → RACE! is the one start grammar.
   if (G.timeTrial && G.daily) {
     const p = G.daily.plan();
     const done = G.daily.today();
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "sel-chip";
+    const current = G.daily.current();
+    const selected = !!current && current.day === p.day && current.class === "standard";
+    b.className = "sel-chip" + (selected ? " active" : "");
     b.id = "sel-daily";
     const extraBits = [p.weather.toUpperCase(), p.tod.toUpperCase()];
     if (done && done.best != null) extraBits.push("ALL SETUPS ★ " + fmtTime(done.best));
@@ -334,14 +346,14 @@ function trackFilterBar() {
     extra.textContent = " · " + extraBits.join(" · ");
     b.appendChild(extra);
     b.setAttribute("aria-label", "Today: " + p.trackName + " · " + extraBits.join(" · "));
+    b.setAttribute("aria-pressed", selected ? "true" : "false");
     b.title = "Today's challenge (" + p.day + " UTC): fixed McLaren works build and physics; input assists are recorded separately";
-    b.onclick = (e) => { e.stopPropagation(); tickUi(); G.daily.open(); };
+    b.onclick = (e) => {
+      e.stopPropagation();
+      G.daily.select();
+      setTrackFilter("all", false, true);
+    };
     bar.insertBefore(b, bar.firstChild);
-    const open = document.createElement("button");
-    open.type = "button"; open.className = "sel-chip"; open.textContent = "DAILY OPEN";
-    open.title = "Today’s circuit and weather with your own car and setup; records stay in matching classes";
-    open.onclick = (e) => { e.stopPropagation(); tickUi(); G.daily.open(undefined, "open"); };
-    bar.appendChild(open);
   }
   const search = document.createElement("input");
   search.id = "sel-track-search";
@@ -481,8 +493,10 @@ function buildSelect() {
     // Tracks.LIST — selection still indexes into the full list.
     let group = null;
     Tracks.LIST.forEach((t, i) => {
-      if (trackFilter === "season" && t.classic) return;
-      if (trackFilter === "classic" && !t.classic) return;
+      const filter = visibleTrackFilter();
+      if (filter === "season" && t.classic) return;
+      if (filter === "classic" && !t.classic) return;
+      if (filter === "daily-open" && (!G.daily || t.id !== G.daily.plan().trackId)) return;
       const g = t.classic ? "CLASSIC CIRCUITS" : "CURRENT SEASON";
       if (g !== group) {
         group = g;
@@ -513,6 +527,15 @@ function buildSelect() {
         // The headline choice of this screen was the one silent control on it
         // (the filter chips beside it click) — a soundless tap reads as a miss.
         if (G.soundOn && window.GameAudio) GameAudio.uiSelect();
+        const armedDaily = G.daily && G.daily.current();
+        if (armedDaily && armedDaily.trackId !== t.id) {
+          G.daily.stop();
+          const dailyChip = mountedToolbar() && mountedToolbar().querySelector("#sel-daily");
+          if (dailyChip) {
+            dailyChip.classList.remove("active");
+            dailyChip.setAttribute("aria-pressed", "false");
+          }
+        }
         G.trackIdx = i;
         store.set("trackId", t.id);
         // Keep the legacy index warm for an older cached build opened after this
