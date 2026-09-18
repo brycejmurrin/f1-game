@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_187 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_188 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -179,6 +179,7 @@ _187 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
+| `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
 | `onboard.js` | `Onboard` | tag | first-run COACH MARKS: three one-shot prompts (brake, overtake, active aero) shown through the existing #announce channel the first time each situation… |
 
@@ -575,8 +576,8 @@ its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 
 ## js/render/glx/glx.js (+ js/render/glx/) / js/render/gfx.js — renderers
 
-(GLX is the only renderer in the shipped tree. WGX and TLX live in
-`spike/backends/`; the subsections below describe them for re-attach work.)
+GLX, WGX, and TLX all ship behind the `Gfx` seam. TLX is the unset default,
+GLX is the explicit WebGL2 choice and fallback, and WGX is opt-in.
 
 Boot / pipeline / parity map: **[RENDERERS.md](RENDERERS.md)**. This section
 is the module contract and GLX API sketch.

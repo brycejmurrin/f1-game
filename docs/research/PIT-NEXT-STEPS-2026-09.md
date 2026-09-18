@@ -176,7 +176,7 @@ this cause, as the 2026-09 window shortening did); one orbit shot of the
 Abu Dhabi and Sochi mouths before/after (`tools/shot/shot.mjs <id> <frac of sA>
 orbit --dist 60 --el 35`). Cost: pit.js +6, a test +25, a baseline re-cut.
 
-## 4b. The EXIT MERGE is in a corner on 11 circuits — measured, not fixed
+## 4b. The EXIT MERGE is in a corner — 7 of 17 now fixed (and §4j says why the rest are not)
 
 Asked: "make sure entry and exit aren't on turns." The entrance was fixed in §4
 (`MOUTH_RUN`). The exit was surveyed the same way and is worse, and the fix was
@@ -262,13 +262,7 @@ leaves. Reverted; `approachV` asks `inBoxLat`, which a rail can satisfy.
 Dropping the queue's crawl floor to zero inside the lane moved nothing and
 carries a deadlock risk (a queued car is exempt from the unstuck rescue).
 
-**Still open.** Overlap ticks roughly DOUBLED: with nobody stalled, more cars
-reach the bays and run nose to tail there. That is the original spacing
-question, untouched — the lane has a speed cap (`game.js`, `capBlocks`/`queued`,
-4869 hits in this run) but no held longitudinal gap, and every car shares one
-lateral from `laneX`. Next step is a lane-specific spacing rule, not a speed
-ceiling. Re-run `scratch/pit-traffic.cjs bahrain 9 6`; the numbers to move are
-closestPairM and overlapTicks, with stallCount held at 0.
+**Then closed — the lane now queues.** See §4g.
 
 ## 4d. THREE CIRCUITS HAD NO PIT WALL AT ALL — fixed
 
@@ -404,7 +398,11 @@ hard 10, medium 1) instead of the old monotone. Nobody finishes over the cliff
 plans were all 2-stop; at the measured 0.121 they are all 1-stop and several are
 MIXED compounds.
 
-### 3. Still open — the wear rate runs ~20 % hotter than the life model
+### 3. CLOSED — the wear rate ran ~23 % hot on the AI side only (see §4h)
+
+Original text kept for the trail:
+
+#### (was) Still open — the wear rate runs ~20 % hotter than the life model
 
 An 8-lap Bahrain on a hard (life 8.4 laps) finished at wear **1.17**, i.e. the
 car consumed ~1.23 laps of life per lap. `TyreModel.lifeLaps` only means what it
@@ -421,6 +419,183 @@ compounds' raw lives while `degCost` prices each stint against a FUEL-ADJUSTED
 life, so the stint lengths cannot respond to the fuel effect the comment says
 makes plans mix ("harder rubber early and softer late"). Mixed plans now appear
 on cost alone; making the split fuel-aware would be the principled version.
+
+## 4g. THE LANE QUEUES INSTEAD OF SHOVING — closed
+
+The spacing half of the original "AI are getting caught up in the pit lane"
+report, left open by §4c.
+
+**First, a correction to §4c's own numbers.** Its measurement (overlap 94 → 194)
+was taken on a 6-lap Bahrain that produced TWO-STOP plans — a scenario the pit
+loss fix in §4f removed. At the corrected pit loss a 6-lap race is a no-stop
+race and nobody enters the lane at all, so that figure describes a race the game
+no longer runs. Re-measured on a 20-lap Bahrain, which stops 19 of 22 cars once.
+
+**The mechanism.** A car held behind another took the RACING follow distance —
+`followBase` 6 m, which between 4.8 m cars is a metre of clear air — and then
+the crawl floor (`AiDrive.queueFloor`, 3.5 m/s) overrode the gap-holding cap
+entirely. So a car behind one stopped on the jacks was *commanded* to keep
+closing at 3.5 m/s. The floor exists so a car declared stuck can shuffle out of
+trouble; on the lane rail there is nowhere to shuffle to and nothing to gain.
+
+**The rule.** New `AiDrive.laneFollow()` (9 m — a car length plus air) replaces
+the racing gap, and the crawl floor is dropped to zero, when BOTH cars are
+pit-held (`PitLane.held`). A lane queue is the one place the AI may come to a
+complete rest. Racing traffic is untouched: the branch needs both ends held.
+
+Bahrain, 20 laps, 19 stops, like for like:
+
+| measure | before | after |
+|---|---|---|
+| ticks with a pair inside a car length | 427 | **56** |
+| ticks driving INTO the car ahead | 664 | **92** |
+| distinct overlapping pairs | 4 | **1** |
+| closest pair | 1.52 m | 1.96 m |
+| STALLS (the deadlock risk of dropping the floor) | 0 | **0** |
+| stops completed | 19 | 19 |
+| most cars in the lane at once | 5 | 5 |
+
+The deadlock was the real risk — a queued car is exempt from the unstuck rescue,
+so a queue that cannot restart is stuck forever. It did not happen: stalls stayed
+at zero and every stop completed.
+
+**Residual, and not chased.** 56 ticks (~0.9 s of 146 s of lane time) on ONE
+pair, closest 1.96 m. That is the entry, where a car arrives at the limit behind
+one already slowed and the cap has not yet bitten. Worth a braking-envelope
+approach on the entry road if it ever shows on screen; at this size it is below
+what the earlier defects were costing.
+
+## 4h. THE AI WORE ITS TYRES A FIFTH FAST — closed
+
+§4f item 3 left this open and guessed at ~20 %. Measured, it was 23 %, and it
+was the AI path ALONE — which is why it could be fixed without touching how the
+player's car feels.
+
+`scratch/tyre-load-check.cjs` measures the thing that matters: life-laps
+actually consumed per racing lap, which is 1.00 exactly when `lifeLaps` means
+what its name says. 20-lap races, ~200 lap samples each:
+
+| | before | after |
+|---|---|---|
+| monza | 1.216 | **0.988** |
+| bahrain | 1.231 | **1.011** |
+| monaco | 1.248 | **1.014** |
+
+**Why.** `humanLoad` divides a raw weighted sum by `LOAD_REF`, and `LOAD_REF`
+was re-anchored to absorb the fuel multiplier when the fuel term landed (the
+comment says so). `aiLoad` has no divisor — its constants are "authored directly
+on the normalised scale" at ~1.03 for a mid driver. But that 1.03 is the base
+and style terms ALONE: the longitudinal term adds on every lap, and
+`fuelLoadMul` then multiplies the whole thing by ~1.11 over a race. Nothing
+absorbed either on the AI side, so the field ran a fifth hot and the two paths
+stopped being calibrated to the same mean — which the file itself says is "what
+keeps a strategy fight fair".
+
+**The fix.** `LOAD_AI_REF = 1.23`, applied after the clamp exactly as
+`humanLoad` applies `LOAD_REF`. One divisor fits the whole calendar here where
+`LOAD_REF` had to straddle 0.35–0.535, because the AI path carries no geometry
+— only consistency and longitudinal accel. The player's path is not touched and
+`tests/data/physics-baseline.json` does not move.
+
+**Downstream**, on a 20-lap Bahrain: stop reasons went from 11 planned / 10
+worn to **14 planned / 5 worn** — the planner and the sim now mostly agree about
+when a set is done, which was the symptom. Two cars took a no-stop where none
+did before, so the strategy spread widened. Nobody finishes over the cliff
+(max wear 0.65).
+
+**Residual.** Five stops still fire as "worn" a little before their planned lap.
+The planner's stint split can still land marginally past a set's life (§4f
+notes `splitStints` is fuel-blind while `degCost` is fuel-aware), so the two
+disagree at the margin rather than systematically. Smaller than it was; the
+fuel-aware split is the principled next step.
+
+## 4i. THE SPLIT NOW ANSWERS THE FUEL TERM — closed, and the stops all fire as planned
+
+The last of the strategy thread, and the named cause of §4h's residual.
+
+`degCost` charges every stint against a FUEL-ADJUSTED life while `splitStints`
+divided the race by the compounds' RAW lives. So the cost knew a full tank eats
+tyres and the stint lengths could not answer — which is exactly the mechanism
+the planner's own comment says makes plans MIX ("the planner reaches for harder
+rubber early and softer late. That is the real pattern, arrived at from the real
+cause"). It could not act: a hard first stint could not take the longer share
+its durability earns while the car is heavy.
+
+`splitStints(laps, lives, fuelWear)` now iterates — the fuel aboard a stint
+depends on where the stint falls, which depends on the split, so it is solved by
+three passes, which converges in two at these sizes. Omitting the argument is
+byte-for-byte the old behaviour.
+
+**The pattern the comment promised, finally showing.** At the measured pit loss,
+the WINNING plan at 50 and 70 laps is now `medium/soft/soft` — harder early,
+softer late — where every winner used to be a single compound. Stint lengths now
+grow through the race as the car lightens:
+
+| laps | winner | stints |
+|---|---|---|
+| 50 | medium/soft/soft | 20, 14, 16 |
+| 70 | medium/soft/soft | 28, 20, 22 |
+
+**And the stops all fire as planned.** 20-lap Bahrain, across the three fixes in
+order — the pit-loss pricing (§4f), the AI wear calibration (§4h) and this:
+
+| | plan | worn | stops on a set already over the cliff |
+|---|---|---|---|
+| before §4f | 11 | 10 | 10 |
+| after §4h | 14 | 5 | 7 |
+| after this | **19** | **0** | **1** |
+
+The planner and the sim now agree about when a set is done, which is what the
+whole thread was about: the engineer calls you in on the lap the plan said,
+rather than reacting to rubber that died early.
+
+## 4j. THE EXIT MERGE — the budget is a closed form, and §4b's premise was wrong
+
+§4b concluded "neither can shrink" and asked for the row to be decoupled from
+the window first. That premise does not survive measurement.
+
+**`first` is pinned to the window's ceiling on EVERY circuit.** The row is laid
+between `lo = grow + 20` and `hi = lenM - ROW_END` starting at
+`poleT + GRID_CLEAR`, and that pole-slot anchor never binds — `first = hi - span`
+on all 49 circuits with bays (`scratch/pit-row-window.cjs`). So closing the
+window's tail by X simply moves the row back by X, and the room to do it is a
+closed form:
+
+    budget = lenM - ROW_END - span - grow - 20
+
+**Every circuit has room.** The tightest is Mosport at 21 m; the median is 155 m.
+§4b's attempt did not fail because there was no budget — it failed because it
+was a BLANKET rule. It spent 66 m on Bahrain, whose budget is 55.
+
+**What shipped.** `window()` now pulls the exit line back by the SMALLEST
+multiple of 4 m that puts `MERGE_RUN` (40 m) of straight past the merge, capped
+at that budget. Capped, so no circuit can lose a bay to it by construction —
+which is the failure mode that killed the first attempt.
+
+Surveyed at `PIT_K` before and after (`scratch/pit-exit-budget.cjs`):
+**17 circuits rejoined inside a bend, now 10.** Fixed: abudhabi, interlagos,
+madrid, miami, montreal, sochi, spa.
+
+**Why the other 10 are not, and it is NOT the row.** Five have no straight to
+reach at any pullback (anderstorp, bahrain, brands_hatch, monaco, mosport) —
+their pit straight is simply not long enough. The other five are blocked by
+`EXIT_MIN`, the 40 m floor on how far the window reaches PAST the start line:
+Baku needs 76 m of pullback and the floor allows 70, the Nürburgring needs 92
+and can have 18. That floor governs where the exit line sits relative to the
+GRID, so lowering it is a separate decision with its own risk, not a constant to
+nudge. Also learned: pulling `sOut` back re-runs `straightRun` from the new
+line, so the exit road can LENGTHEN and push the merge forward again — the merge
+does not move back 1:1 with the line, which is why the first estimate of 12
+fixable came out at 7.
+
+**The cost, recorded rather than hidden.** Moving the window reshuffles what the
+pit keep-out suppresses, and through it the procedural scenery stream: madrid's
+coplanar count fell 66 → 65 (lowered, as the stale-baseline test demands) and
+miami's prop interpenetration rose 24 → 25. The four worst Miami spots are
+byte-identical before and after, so the new one is marginal and in the outfield,
+not a new conflict at the pit. One extra prop overlap against seven circuits
+that no longer deliver a car off the limiter into a corner is a trade worth
+making, but it is a baseline RAISE and it is named here for that reason.
 
 ## 5. Smaller loose ends
 

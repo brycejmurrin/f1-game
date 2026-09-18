@@ -71,6 +71,7 @@ let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint
 let csLivEditId = null;    // id of the custom livery being edited in-place (null = creating new)
 
 const PSEUDO_CATS = ["team", "tune", "livery"];
+const SECONDARY_CATS = new Set(["floor", "cockpit", "wheels", "tune", "livery"]);
 
 // ONE DRAFT SHAPE, THREE DOORS INTO THE EDITOR. New, edit-in-place and
 // "customize a copy" each used to spell the whole field list out by hand, and
@@ -265,6 +266,7 @@ function pseudoTab(id, label, sub, flagged) {
   const lbl = document.createElement("span"); lbl.className = "cs-tab-lbl"; lbl.textContent = label;
   const cur = document.createElement("span"); cur.className = "cs-tab-cur"; cur.textContent = sub || "";
   tab.append(lbl, cur);
+  tab.setAttribute("aria-label", sub ? label + " — " + sub : label);
   tab.onclick = () => activateCsCat(id, false);
   tab.onkeydown = (e) => csTabKey(id, e);
   return tab;
@@ -416,34 +418,31 @@ function buildSetup() {
   tabs.textContent = "";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "Garage categories");
+  const primaryTabs = document.createElement("div");
+  primaryTabs.className = "cs-tab-row";
+  primaryTabs.setAttribute("role", "group");
+  primaryTabs.setAttribute("aria-label", "Performance categories");
+  const secondaryTabs = document.createElement("div");
+  secondaryTabs.className = "cs-tab-row";
+  secondaryTabs.setAttribute("role", "group");
+  secondaryTabs.setAttribute("aria-label", "Finishing and setup categories");
+  tabs.append(primaryTabs, secondaryTabs);
+  const appendTab = (id, tab) => (SECONDARY_CATS.has(id) ? secondaryTabs : primaryTabs).appendChild(tab);
   {
     const d = team.drivers[G.driverIdx] || team.drivers[0];
-    tabs.appendChild(pseudoTab("team", "TEAM", d ? d.name.split(" ").pop() : team.short));
+    appendTab("team", pseudoTab("team", "TEAM", d ? d.name.split(" ").pop() : team.short));
   }
   for (const cat of Parts.CATALOG) {
     const cur = resolveOpt(cat);
-    tabs.appendChild(pseudoTab(cat.id, cat.tab || cat.label, cur ? cur.label : "",
-                               cur && cur.id !== Parts.DEFAULTS[cat.id]));
+    appendTab(cat.id, pseudoTab(cat.id, cat.tab || cat.label, cur ? cur.label : "",
+                                cur && cur.id !== Parts.DEFAULTS[cat.id]));
   }
-  tabs.appendChild(pseudoTab("tune", "SETUP", SetupTune.isDefault(team.id) ? "WORKS" : "TUNED",
-                             !SetupTune.isDefault(team.id)));
+  appendTab("tune", pseudoTab("tune", "SETUP", SetupTune.isDefault(team.id) ? "WORKS" : "TUNED",
+                              !SetupTune.isDefault(team.id)));
   {
-    tabs.appendChild(pseudoTab("livery", "LIVERY", "",
-                               getLiveryId(team.id) !== "default"));
+    const custom = getLiveryId(team.id) !== "default";
+    appendTab("livery", pseudoTab("livery", "LIVERY", custom ? "CUSTOM" : "DEFAULT", custom));
   }
-  // THE GRID GETS ITS COLUMN COUNT FROM THE ROSTER, NOT FROM A LITERAL.
-  // On the short-wide play shape css/carsetup.css lays this strip out as a
-  // fixed TWO-ROW grid with `overflow: hidden` — the right trade there, since a
-  // sideways pan hides half the catalogue. But the column count was written as
-  // `repeat(7, ...)`, i.e. exactly 14 slots for the 14 tabs that existed when
-  // it was measured. The roster has since grown to 15 (TEAM + 12 catalogue
-  // categories + SETUP + LIVERY), so the LAST tab appended — LIVERY — landed on
-  // an implicit third row that the max-height clips away: measured 2026-09-04 at
-  // 852x393, `#cs-tab-livery` 53x6 px with 0 % of it visible and no scrollable
-  // ancestor to reach it. A whole screen of the game, unreachable in landscape.
-  // Ceiling of half the count keeps it two rows for any roster, so adding a
-  // category can never silently push one off the sheet again.
-  tabs.style.setProperty("--cs-tab-cols", String(Math.ceil(tabs.childElementCount / 2)));
 
   const optsEl = $("cs-options");
   optsEl.textContent = "";

@@ -2,8 +2,13 @@
 "use strict";
 
 const Ghost = (function () {
-  const KEY = "apex26.ghost.v1";
+  const STORE_KEY = "ghost.v1";
+  const KEY = "apex26." + STORE_KEY;
   const OLD_KEY = "apex_ghost_v1";   // pre-convention key; migrated once on load
+  // One full trace measures about 40 KiB at 20 Hz. Reserve at most 512 KiB
+  // (roughly twelve traces) in the shared localStorage bucket so ghosts cannot
+  // crowd out career/settings saves.
+  const MAX_STORE_BYTES = 512 * 1024;
   const HZ = 20;                 // samples per second while recording
   const MIN_SAMPLES = 8;         // ignore degenerate "laps"
 
@@ -14,8 +19,9 @@ const Ghost = (function () {
       if (localStorage.getItem(KEY) === null) {
         const old = localStorage.getItem(OLD_KEY);
         if (old !== null) {
-          localStorage.setItem(KEY, old);
-          localStorage.removeItem(OLD_KEY);
+          const parsed = JSON.parse(old);
+          const result = GameStore.store.write(STORE_KEY, parsed);
+          if (result.durable) localStorage.removeItem(OLD_KEY);
         }
       }
     } catch { /* storage disabled — nothing to migrate */ }
@@ -38,24 +44,123 @@ const Ghost = (function () {
   // `store[id] = snap` then threw for the rest of the session. The `{}`
   // fallback is memoised too, so a corrupt key costs one parse.
   let storeCache = null;
+  let accessClock = Date.now();
+  let repairQueued = false;
+  const pending = new Map();
   function loadStore() {
     if (storeCache) return storeCache;
-    let parsed = null;
-    try {
-      if (typeof localStorage !== "undefined") parsed = JSON.parse(localStorage.getItem(KEY));
-    } catch { /* corrupt or unreadable: start empty (memoised below) */ }
+    let parsed = GameStore.store.get(STORE_KEY, null);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       if (parsed !== null) Log.warn("car", "ghost store was not an object; starting empty");
       parsed = {};
     }
+    for (const g of Object.values(parsed)) {
+      if (g && Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
+    }
     storeCache = parsed;
     return storeCache;
   }
+  function touch(g) {
+    accessClock = Math.max(accessClock + 1, Date.now());
+    g._used = accessClock;
+  }
+  function byteLength(json) {
+    if (typeof TextEncoder === "function") return new TextEncoder().encode(json).byteLength;
+    // Ghost payloads are numeric arrays plus ASCII ids in normal play. Twice
+    // UTF-16 length is a conservative fallback where TextEncoder is absent.
+    return json.length * 2;
+  }
+  function thinTrace(g) {
+    if (!g || !Array.isArray(g.t) || !Array.isArray(g.s) || !Array.isArray(g.x)) return false;
+    const n = g.t.length;
+    if (n <= MIN_SAMPLES || g.s.length !== n || g.x.length !== n) return false;
+    const count = Math.max(MIN_SAMPLES, Math.ceil(n / 2));
+    const indices = Array.from({ length: count }, (_, i) => Math.round(i * (n - 1) / (count - 1)));
+    g.t = indices.map(i => g.t[i]);
+    g.s = indices.map(i => g.s[i]);
+    g.x = indices.map(i => g.x[i]);
+    return true;
+  }
+  function trimStore(store) {
+    let json = JSON.stringify(store);
+    if (byteLength(json) <= MAX_STORE_BYTES) return { changed: false };
+    let changed = false;
+    for (const id of Object.keys(store)) {
+      if (!valid(store[id])) { delete store[id]; changed = true; }
+    }
+    json = JSON.stringify(store);
+    const oldest = Object.keys(store).sort((a, b) => {
+      const at = Number.isFinite(store[a] && store[a]._used) ? store[a]._used : 0;
+      const bt = Number.isFinite(store[b] && store[b]._used) ? store[b]._used : 0;
+      return at - bt;
+    });
+    while (oldest.length > 1 && byteLength(json) > MAX_STORE_BYTES) {
+      delete store[oldest.shift()];
+      changed = true;
+      json = JSON.stringify(store);
+    }
+    const last = oldest[0];
+    while (last && byteLength(json) > MAX_STORE_BYTES && thinTrace(store[last])) {
+      changed = true;
+      json = JSON.stringify(store);
+    }
+    if (last && byteLength(json) > MAX_STORE_BYTES) {
+      delete store[last];
+      changed = true;
+    }
+    return { changed };
+  }
+  function queueRepair() {
+    if (repairQueued) return;
+    repairQueued = true;
+    const run = () => {
+      repairQueued = false;
+      if (!storeCache) return;
+      const repaired = trimStore(storeCache);
+      if (!repaired.changed) return;
+      const result = GameStore.store.write(STORE_KEY, storeCache);
+      if (!result.durable) Log.warn("car", "ghost budget repair is session-only");
+    };
+    // loadTrack selects the plain circuit first; time-trial records.begin()
+    // selects its comparable context later in the same task. Repair afterward
+    // so that final entry gets its LRU promotion before anything is evicted.
+    if (typeof queueMicrotask === "function") queueMicrotask(run);
+    else if (typeof setTimeout === "function") setTimeout(run, 0);
+    else run();
+  }
+  function betterGhost(a, b) {
+    const av = valid(a), bv = valid(b);
+    if (!av) return bv ? b : null;
+    if (!bv) return a;
+    const winner = a.time <= b.time ? a : b;
+    winner._used = Math.max(Number(a._used) || 0, Number(b._used) || 0);
+    return winner;
+  }
+  function onStoreChange(change) {
+    if (!change || !change.foreign) return;
+    if (change.clear) {
+      pending.clear();
+      storeCache = null;
+      best = null;
+      return;
+    }
+    if (change.key !== STORE_KEY) return;
+    let fresh = GameStore.store.get(STORE_KEY, {});
+    if (!fresh || typeof fresh !== "object" || Array.isArray(fresh)) fresh = {};
+    for (const [id, snap] of pending) {
+      const winner = betterGhost(fresh[id], snap);
+      if (winner) fresh[id] = winner;
+    }
+    storeCache = fresh;
+    const current = storageId == null ? null : fresh[storageId];
+    best = valid(current) ? current : null;
+  }
+  if (typeof GameStore.store.subscribe === "function") GameStore.store.subscribe(onStoreChange);
   function saveStore(store) {
     storeCache = store;
-    try {
-      if (typeof localStorage !== "undefined") localStorage.setItem(KEY, JSON.stringify(store));
-    } catch { Log.warn("car", "ghost save fail"); }
+    trimStore(store);
+    const result = GameStore.store.write(STORE_KEY, store);
+    return result;
   }
 
   // Canonical JSON is collision-free and stable across object insertion order.
@@ -75,7 +180,10 @@ const Ghost = (function () {
     trackId = id; context = eventContext;
     storageId = context == null ? id : "v2:" + id + ":" + context;
     const g = loadStore()[storageId];
-    best = valid(g) ? g : null;
+    const good = valid(g);
+    if (good) touch(g);
+    queueRepair();
+    best = good ? g : null;
     rec = null;
     lastSampleT = -1;
     Log.info("car", `ghost load ${id}${best ? " ok" : " none"}`);
@@ -109,12 +217,19 @@ const Ghost = (function () {
   // circuit's ghost (~40 KB each) and finishLap runs inside updateCar on the
   // lap-line frame of a new record — the one-frame hitch PERF-FINDINGS §2 records.
   function scheduleSave(id, snap) {
+    touch(snap);
+    pending.set(id, snap);
     loadStore()[id] = snap;   // immediately visible if another class is selected before idle
     const write = () => {
+      if (pending.get(id) !== snap) return;   // cleared or superseded before the deferred write
       try {
         const store = loadStore();
-        saveStore(store);
-        Log.info("car", `ghost save ${id}`);
+        const result = saveStore(store);
+        if (result.durable) {
+          if (pending.get(id) === snap) pending.delete(id);
+          Log.info("car", `ghost save ${id}`);
+        }
+        else Log.warn("car", `ghost save ${id} is session-only`);
       } catch { Log.warn("car", "ghost save fail"); }
     };
     if (typeof requestIdleCallback === "function") requestIdleCallback(write, { timeout: 2000 });
@@ -187,12 +302,15 @@ const Ghost = (function () {
 
   function clear(id) {
     if (id == null) {
+      pending.clear();
       saveStore({});
       best = null;
       return;
     }
     const store = loadStore();
-    delete store[context != null && id === trackId ? storageId : id];
+    const target = context != null && id === trackId ? storageId : id;
+    pending.delete(target);
+    delete store[target];
     saveStore(store);
     if (id === trackId) best = null;
   }

@@ -234,10 +234,8 @@ const UiScale = (() => {
     }
     function applyUpscale(on) {
       const gfx = G.gfx;
+      store.rawSet("spatialUpscale", on ? "1" : "0");
       if (gfx && typeof gfx.setSpatialUpscale === "function") gfx.setSpatialUpscale(!!on);
-      else {
-        try { store.rawSet("spatialUpscale", on ? "1" : "0"); } catch (_) { /* blocked */ }
-      }
     }
     // OCCLUSION CULLING — hardware depth queries skip scenery chunks that
     // contribute no pixel (js/render/glx/chunked.js). Same raw key GLX reads at

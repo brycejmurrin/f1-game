@@ -56,7 +56,7 @@ function goodList() {
 test("the module freezes and exports its pure operations", () => {
   assert.ok(Object.isFrozen(FP), "FlybyPanel is frozen");
   for (const fn of ["create", "addShot", "duplicateShot", "deleteShot", "moveShot",
-                    "normaliseDurs", "validateShots", "switchPoseAt", "toBlob"]) {
+                    "normaliseDurs", "shotErrors", "validateShots", "switchPoseAt", "toBlob"]) {
     assert.equal(typeof FP[fn], "function", `FlybyPanel.${fn} is exported`);
   }
 });
@@ -205,4 +205,83 @@ test("the bake replaces the DEFAULT literal and nothing else", () => {
   assert.ok(out.includes('{ at: "start"|"pole"|"grid"|"corner", n, off, x, y }'),
     "the header comment is untouched — the regex is anchored at two-space indent for this reason");
   assert.equal(out.match(/^ {2}const DEFAULT = \[/gm).length, 1, "still exactly one DEFAULT");
+});
+
+/* ── DO THE EDITS REACH THE FLYBY? ────────────────────────────────────────────
+ *
+ * Reported 2026-09-18: "once I hit done in the editor it doesn't actually change
+ * the start shots." They did not. DONE only closed the sheet — the edited list
+ * lived in the panel's closure, nothing wrote it anywhere, and js/game.js called
+ * FlybySeq.solve(track, progress) with NO third argument, so the pre-race flyby
+ * played the shipped DEFAULT however long the author spent framing it. The
+ * preview was honest and everything after it was thrown away.
+ *
+ * Source guards, because the thing they protect is a WIRE between two files that
+ * no data test can see: the panel's own persistence lives behind create(G) and a
+ * DOM this container cannot boot, and the flyby itself needs a GPU to look at.
+ */
+
+/** Every `FlybySeq.solve(...)` call in `src`, paren-balanced. A `[^)]*` match
+ *  stops at the first `)`, which here is `flybyProgress()`'s — it would report a
+ *  correct three-argument call as a two-argument one. */
+function solveCalls(src) {
+  const out = [];
+  for (let at = src.indexOf("FlybySeq.solve("); at >= 0; at = src.indexOf("FlybySeq.solve(", at + 1)) {
+    let depth = 0;
+    for (let i = src.indexOf("(", at); i < src.length; i++) {
+      if (src[i] === "(") depth++;
+      else if (src[i] === ")" && --depth === 0) { out.push(src.slice(at, i + 1)); break; }
+    }
+  }
+  return out;
+}
+
+/** The top-level arguments of one such call. */
+function argsOf(call) {
+  const inner = call.slice(call.indexOf("(") + 1, -1);
+  const args = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const c = inner[i];
+    if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") depth--;
+    else if (c === "," && depth === 0) { args.push(inner.slice(start, i).trim()); start = i + 1; }
+  }
+  args.push(inner.slice(start).trim());
+  return args;
+}
+
+test("solve() is handed the saved list, not just a track and a progress", () => {
+  const calls = solveCalls(read("js/game.js"));
+  assert.ok(calls.length, "js/game.js no longer solves the flyby — this guard is reading the wrong file");
+  for (const call of calls) {
+    assert.equal(argsOf(call).length, 3,
+      "FlybySeq.solve() falls back to the shipped DEFAULT when it is handed no shot list, so a two-argument " +
+      "call here means the editor's saved shots are silently ignored: " + call);
+  }
+});
+
+test("the panel saves on every edit, and a pristine list clears the key", () => {
+  const src = read("js/camera/flyby-panel.js");
+  assert.match(src, /function edited\(\)\s*\{\s*persist\(\);/,
+    "edited() is the one funnel every mutation goes through — persisting anywhere else means DONE, ESCAPE or " +
+    "QUIT can still lose an afternoon of framing");
+  assert.match(src, /store\.set\("flybyShots", pristine \? null : list\)/,
+    "storing a COPY of the shipped default would pin this player to today's shots and ignore every later " +
+    "change to them — an unedited list has to clear the key instead");
+});
+
+test("a saved list is read back through shotErrors, not the bake's sum rule", () => {
+  // solve() normalises by the durations' own total, so a list nobody pressed
+  // NORMALISE on plays exactly as the editor previewed it. Holding a SAVED list
+  // to the bake rule would throw the edit away and fall back to the shipped
+  // sequence — the very defect this pass fixed, one layer down.
+  const loose = FP.normaliseDurs(goodList()).map((s) => ({ ...s, dur: s.dur * 3 }));
+  // Spread both: the panel is evaluated in a vm sandbox, so its arrays carry the
+  // SANDBOX's Array.prototype and deepStrictEqual compares prototypes.
+  assert.deepEqual([...FP.shotErrors(loose)], [], "an un-normalised but structurally sound list is playable");
+  assert.ok([...FP.validateShots(loose)].some((m) => /sum/.test(m)),
+    "...and still refused by the BAKE validator");
+  assert.match(read("js/camera/flyby-panel.js"), /const bad = shotErrors\(saved\);/,
+    "loadSaved() must use the playable rule set, not the bake one");
 });

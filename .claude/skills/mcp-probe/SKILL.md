@@ -50,8 +50,15 @@ vs playwright-official).
 
 1. **Never render Chrome MCP while Playwright runs** — park to `about:blank`,
    then `chrome-stop`, then check CPU; see [`references/traps.md`](references/traps.md) (chrome / camera / scene slices).
-2. **github.io is unreachable from any container browser or curl** (egress
-   proxy) — `deploy-research` with the host fetch tool is the only path.
+2. **github.io is unreachable from any container BROWSER** (egress proxy) —
+   route it to `deploy-research`. This said "or curl", and that half was FALSE:
+   measured 2026-09-18, `curl` gets HTTP 200 from github.io in 0.36 s, because
+   curl trusts the agent proxy's CA bundle and Chrome does not. So curl is the
+   RIGHT tool for the deployed shell's exact bytes — a `<meta name="apex-sha">`,
+   a `?v=` hash — which the host fetch tool cannot read at all: it renders to
+   markdown and drops every `<meta>` tag silently, answering "NO META TAGS
+   VISIBLE" about a page that has them. The fetch tool stays correct for plain
+   JSON (`version.json`) and prose.
    Measured 2026-09-15: `chrome-devtools` navigating to ANY external HTTPS
    (not just github.io — plain `https://example.com` too) fails
    `net::ERR_CERT_AUTHORITY_INVALID`, since Chrome here does not trust the

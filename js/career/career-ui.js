@@ -65,6 +65,8 @@ function create(G) {
     const live = s.used && s.live;
     const card = el("div", `cr-slot${s.used ? " used" : " empty"}${live ? " active" : ""}`);
     const open = el("button", "cr-slot-main");
+    const modeName = s.flavour === "myteam" ? "My Team" : "Driver career";
+    open.setAttribute("aria-label", `${modeName} slot ${s.i + 1}, ${s.used ? "saved" : "empty"}${live ? ", playing" : ""}`);
     open.append(el("span", "cr-slot-n", `SLOT ${s.i + 1}${live ? " · PLAYING" : ""}`));
     if (s.used) {
       const who = s.flavour === "myteam" ? s.teamName : `${s.code} · ${s.teamName}`;
@@ -600,10 +602,11 @@ function create(G) {
     learn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openGuide(draft.flavour); };
     right.appendChild(learn);
 
-    $("cr-title").textContent = "NEW CAREER";
+    const myTeam = draft.flavour === "myteam";
+    $("cr-title").textContent = myTeam ? "NEW MY TEAM" : "NEW CAREER";
     $("cr-sub").textContent = "";
     $("cr-meters").textContent = "";
-    $("cr-go").textContent = "START CAREER";
+    $("cr-go").textContent = myTeam ? "START MY TEAM" : "START CAREER";
     $("cr-go").hidden = false;
     $("cr-go").disabled = false;
     $("cr-garage").hidden = true;

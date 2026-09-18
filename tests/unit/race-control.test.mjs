@@ -28,8 +28,10 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const DEBRIS_SRC = readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8");
 
 // The module declares `const RaceControl`, which lands in the context's global
 // LEXICAL scope rather than on the global object — so it is read back by
@@ -46,13 +48,15 @@ function load(debris) {
 }
 
 /** A hazard picture: `total` on the surface, and the worst single sector. */
-function hazards(total, worstCount, sector = 1) {
-  return { total, sectors: [0, worstCount, 0], worst: { count: worstCount, sector, frac: 0.4 } };
+function hazards(total, worstCount, sector = 1, redTotal = total) {
+  return { total, redTotal, sectors: [0, worstCount, 0], worst: { count: worstCount, sector, frac: 0.4 } };
 }
 
 /** Minimal world: single-player (owns race control), racing, empty grid. */
-function makeCtx(over = {}) {
+function makeCtx(over = {}, savedCaution) {
   const saved = new Map();
+  const initial = arguments.length < 2 ? true : savedCaution;
+  if (initial !== undefined) saved.set("caution", initial);
   return Object.assign({
     state: "race",
     ranked: [],
@@ -276,9 +280,8 @@ test("the enabled flag reads BOTH storage formats", () => {
   // player who turned them off.
   const debris = { active: () => true, hazards: () => hazards(0, 0) };
   for (const [stored, expected] of [[0, false], ["0", false], [false, false],
-                                    [1, true], ["1", true], [true, true], [undefined, true]]) {
-    const ctx = makeCtx();
-    if (stored !== undefined) ctx.store.set("caution", stored);
+                                    [1, true], ["1", true], [true, true], [undefined, false]]) {
+    const ctx = makeCtx({}, stored);
     assert.equal(load(debris).create(ctx).info().enabled, expected,
       `stored ${JSON.stringify(stored)}`);
   }
@@ -365,6 +368,28 @@ test("sixteen settled hazards raise RED, which outranks the safety car and holds
   assert.equal(rc.info().phase, "stopping");
   assert.equal(rc.otEnabled(), false);
   assert.equal(rc.takeRestart(), false, "no restart while the flag is out");
+});
+
+test("one scraping car's settled debris can call a safety car but never a red flag", () => {
+  // Monaco measured 17 total after one wall scrape (RED_MIN is 16), with only
+  // 11 hazards in the pre-scrape picture. DebrisWorld now withholds those
+  // single-source shards from redTotal while preserving every lower-caution
+  // count, so the response is SC rather than a standing restart.
+  const rc = load({ active: () => true, hazards: () => hazards(17, 4, 1, 0) }).create(makeCtx());
+  run(rc, 1);
+  assert.equal(rc.info().total, 17, "the settled hazards still count for marshal response and HUD");
+  assert.equal(rc.info().level, 3);
+  assert.equal(rc.info().label, "SAFETY CAR");
+  assert.equal(rc.takeRestart(), false);
+});
+
+test("RED eligibility counts attributed shards, never source-less furniture", () => {
+  const src = fnSource(DEBRIS_SRC, "function redHazardTotal(sourceCount, sourcedTotal)");
+  const calc = new Function(src + ";return redHazardTotal;");
+  const redTotal = calc();
+  assert.equal(redTotal(1, 18), 0, "one source cannot make a pile-up");
+  assert.equal(redTotal(2, 7), 7, "two source cars qualify only their seven attributed shards");
+  assert.notEqual(redTotal(2, 7), 20, "thirteen cones/panels in total cannot pad seven shards to RED_MIN");
 });
 
 test("the red procedure: stopping, held, then exactly ONE restart request and a re-arm hold", () => {

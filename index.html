@@ -904,12 +904,14 @@
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
             </div>
           </details>
-          <details id="pm-visual-tuners">
-            <summary class="adv-more-btn">ADVANCED VISUALS</summary>
-            <p id="pm-visual-tuners-help" class="adv-help">Start a race, then pause to preview lighting and camera changes on track.</p>
-            <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
-            <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
-            <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
+          <details id="pm-visual-tuners" class="pm-renderer-sub">
+            <summary class="adv-more-btn" id="pm-visual-tuners-sum">ADVANCED VISUALS · 3 TOOLS</summary>
+            <div id="pm-visual-tuners-body" role="group" aria-label="Advanced visual tools">
+              <p id="pm-visual-tuners-help" class="adv-help">Start a race, then pause to preview lighting and camera changes on track.</p>
+              <button id="pm-lighting" aria-describedby="pm-visual-tuners-help">LIGHTING TUNER&hellip;</button>
+              <button id="pm-camtune" aria-describedby="pm-visual-tuners-help">CAMERA TUNER&hellip;</button>
+              <button id="pm-flyby" aria-describedby="pm-visual-tuners-help">FLYBY SHOT EDITOR&hellip;</button>
+            </div>
           </details>
         </section>
         <section id="advanced" class="pm-group" role="region"
@@ -999,7 +1001,7 @@
          come from the element for free, and the JS handler in
          steer-tuning.js only has to play the click sound. -->
     <details id="adv-details">
-    <summary id="adv-more" class="adv-more-btn">ADVANCED</summary>
+    <summary id="adv-more" class="adv-more-btn" role="button" aria-expanded="false" aria-controls="adv-extra">ADVANCED</summary>
     <div id="adv-extra">
     <h3 class="adv-sec">TILT INPUT <span>how phone motion becomes steering (tilt mode)</span></h3>
     <div class="adv-item">
@@ -1417,15 +1419,19 @@
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
     <div id="menu-hero">
-    <button id="mb-career" class="bigbtn" data-menu-default><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
+    <button id="mb-career" class="bigbtn" data-menu-default aria-label="Career modes — Driver Career and My Team"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg><span><span class="mb-label">CAREER</span><span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
+    <div id="menu-retention" class="balanced-row">
+      <button id="mb-continue" class="bigbtn alt minibtn" hidden><span>CONTINUE</span><span id="mb-continue-sub" class="mb-sub"></span></button>
+      <button id="mb-daily" class="bigbtn alt minibtn"><span>DAILY</span><span id="mb-daily-sub" class="mb-sub">TODAY'S TIME TRIAL</span></button>
+    </div>
     </div>
     <!-- PLAY NOW: the four one-sitting modes, 2x2 so four entries cost two rows
          rather than four. Same red family as the hero, one step down in size. -->
     <div id="menu-primary" class="balanced-row">
-    <button id="mb-race" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg><span>RACE<span class="mb-sub">ONE GRAND PRIX</span></span></button>
-    <button id="mb-tt" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg><span>TIME TRIAL<span class="mb-sub">YOU AGAINST THE CLOCK</span></span></button>
-    <button id="mb-vs" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>RACE A FRIEND<span class="mb-sub">PRIVATE 2&ndash;4 PLAYER RACE</span></span></button>
-    <button id="mb-season" class="bigbtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"/><path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"/><path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg><span>SEASON<span class="mb-sub">A CHAMPIONSHIP, YOUR RULES</span></span></button>
+    <button id="mb-race" class="bigbtn" aria-label="Race — One Grand Prix"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg><span>RACE<span class="mb-sub">ONE GRAND PRIX</span></span></button>
+    <button id="mb-tt" class="bigbtn" aria-label="Time Trial — You against the clock"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/></svg><span>TIME TRIAL<span class="mb-sub">YOU AGAINST THE CLOCK</span></span></button>
+    <button id="mb-vs" class="bigbtn" aria-label="Race a Friend — Private 2 to 4 player race"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>RACE A FRIEND<span class="mb-sub">PRIVATE 2&ndash;4 PLAYER RACE</span></span></button>
+    <button id="mb-season" class="bigbtn" aria-label="Season — A championship, your rules"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2"/><path d="M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2"/><path d="M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3"/><path d="M4 22h16"/><path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z"/><path d="M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg><span>SEASON<span class="mb-sub">A CHAMPIONSHIP, YOUR RULES</span></span></button>
     </div>
     <!-- SECONDARY: everything that is not a way to play. Half-height,
          two across, so the rooms never compete with the modes for the eye. -->
@@ -1876,6 +1882,11 @@
          is offered in every flow: a time trial is where it teaches most.
          Ships FULL; CORNERS is the reduced form. -->
     <div class="sheet-body pane" id="rs-body">
+      <div id="rs-presets" class="preset-row balanced-row" role="group" aria-label="Race setting presets">
+        <button id="rs-preset-quick" type="button" class="preset-btn" data-rs-preset="quick">QUICK RACE</button>
+        <button id="rs-preset-weekend" type="button" class="preset-btn" data-rs-preset="weekend">FULL WEEKEND</button>
+        <button id="rs-preset-endurance" type="button" class="preset-btn" data-rs-preset="endurance">ENDURANCE</button>
+      </div>
       <div id="rs-laps" class="set-row" role="group" aria-labelledby="rs-laps-label">
         <span class="tune-label" id="rs-laps-label">LAPS</span>
         <div>
@@ -1935,12 +1946,11 @@
       <div id="rs-duel" class="set-row" role="group" aria-labelledby="rs-duel-label">
         <span class="tune-label" id="rs-duel-label">DUEL</span>
         <div>
-          <button id="rs-duel-prev" type="button" data-step="-1" aria-label="Previous duel setting">&lsaquo;</button>
-          <select id="rs-duel-sel" aria-labelledby="rs-duel-label" aria-describedby="rs-duel-help"></select>
-          <button id="rs-duel-next" type="button" data-step="1" aria-label="Next duel setting">&rsaquo;</button>
+          <button id="rs-duel-open" type="button" aria-haspopup="dialog" aria-controls="duel-picker"
+                  aria-describedby="rs-duel-help"><span id="rs-duel-value">OFF</span><span aria-hidden="true">&rsaquo;</span></button>
         </div>
+        <p id="rs-duel-help" class="adv-help">One rival instead of a full grid, with his driver rating lifted. A practice benchmark, not a championship race.</p>
       </div>
-      <p id="rs-duel-help" class="adv-help">One rival instead of a full grid, with his driver rating lifted. A practice benchmark, not a championship race.</p>
       <div id="rs-line" class="set-row" role="group" aria-labelledby="rs-line-label">
         <span class="tune-label" id="rs-line-label">DRIVING LINE</span>
         <div>
@@ -1983,6 +1993,18 @@
       <button id="rs-cancel" autofocus class="bigbtn alt">BACK</button>
       <button id="rs-go" class="bigbtn">RACE!</button>
     </div>
+  </div>
+</dialog>
+
+<dialog id="duel-picker" class="screen dim" data-esc-close="duel-close" aria-labelledby="duel-picker-title" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="duel-picker-title">CHOOSE DUEL RIVAL</h2></div>
+    <div class="sheet-body pane">
+      <input id="duel-search" type="search" placeholder="Search legends" aria-label="Search duel rivals" autocomplete="off">
+      <div id="duel-list" role="listbox" aria-label="Duel rivals"></div>
+      <p id="duel-empty" class="adv-help" hidden>No rivals match that search.</p>
+    </div>
+    <div class="sheet-foot"><button id="duel-close" class="bigbtn alt">BACK</button></div>
   </div>
 </dialog>
 
@@ -2496,8 +2518,11 @@
      behind it is the live preview — every edit re-solves the sequence through
      __apex.flybyCam(u, editedShots) and parks the camera there, so the panel shows
      the real solver rather than a second copy of it. Rows are generated in
-     js/camera/flyby-panel.js from its own pose-field registry; COPY VALUES emits
-     `window.FlybyShots = [...]` for tools/gen/bake-flyby.mjs. -->
+     js/camera/flyby-panel.js from its own pose-field registry. Every edit is
+     SAVED (apex26.flybyShots) and the next race flies it — DONE used to close the
+     sheet and discard the lot. COPY VALUES still emits `window.FlybyShots = [...]`
+     for tools/gen/bake-flyby.mjs, which is how an edit becomes the shipped
+     default for everyone rather than for this browser. -->
 <div id="flyby" role="region" aria-label="Flyby shot editor" data-esc-close="fb-close" hidden>
   <div id="flyby-inner" class="sheet">
     <!-- #fb-rail mirrors #ct-rail: the wide-and-short RAIL layout in css/tuner.css
@@ -2530,9 +2555,9 @@
     <div id="fb-rows" class="pane" role="tabpanel"></div>
     <textarea id="fb-json" readonly hidden aria-label="Exported flyby shot list"></textarea>
     <div class="sheet-foot balanced-row">
-      <button id="fb-reset" title="Throw away every edit and reload the shipped DEFAULT shot list from js/camera/flyby-seq.js.">RESET</button>
+      <button id="fb-reset" title="Throw away every edit, here and saved, and go back to the shipped DEFAULT shot list from js/camera/flyby-seq.js.">RESET</button>
       <button id="fb-copy">COPY VALUES</button>
-      <button id="fb-close" class="bigbtn">DONE</button>
+      <button id="fb-close" class="bigbtn" title="Close the editor. Every edit is already saved — the next race flies these shots.">DONE</button>
     </div>
   </div>
 </div>
@@ -2800,6 +2825,7 @@
 <script defer crossorigin="anonymous" src="js/ui/results-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/quali-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/daily-challenge.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/title-menu.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/quali-net.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-settings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/custom-team.js?v=dev"></script>

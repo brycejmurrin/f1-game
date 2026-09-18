@@ -241,6 +241,16 @@ const AiDrive = (function () {
   function queueFloor(street) {
     return street ? 2.5 : 3.5;
   }
+  // …and NEITHER FLOOR APPLIES ON THE PIT LANE, where the gap below is held
+  // instead. A queue in the lane is the one place the AI should be able to come
+  // to a complete REST: the floors exist so a car declared stuck can shuffle
+  // out of trouble, and a car on the lane rail has nowhere to shuffle to and
+  // nothing to gain by closing. Held at a CAR LENGTH PLUS clear air rather than
+  // the racing follow distance (6 m between 4.8 m cars is a metre of air, which
+  // at pit speed is a tailgate): measured on a 20-lap Bahrain with 19 stops,
+  // the lane's closest pair was 1.52 m and 427 of 8702 lane ticks had a pair
+  // inside a car length.
+  function laneFollow() { return 9; }
   function unstuckLatFloor(street) {
     return street ? 0.10 : 0.16;
   }
@@ -673,13 +683,39 @@ const AiDrive = (function () {
   // Split `laps` into `k` stints in proportion to the compounds' lives, so the
   // marginal degradation at each stop is roughly equal — the classic result for
   // linear deg, and the reason real stint lengths come out similar.
-  function splitStints(laps, lives) {
-    const total = lives.reduce((a, v) => a + v, 0) || 1;
-    const out = lives.map((v) => Math.max(1, Math.round(laps * v / total)));
-    let drift = out.reduce((a, v) => a + v, 0) - laps;
-    for (let i = out.length - 1; i >= 0 && drift !== 0; i--) {
-      const take = Math.min(Math.abs(drift), out[i] - 1) * Math.sign(drift);
-      out[i] -= take; drift -= take;
+  // `fuelWear`, when given, makes the split FUEL-AWARE. Without it the split
+  // divided the race by the compounds' RAW lives while `degCost` priced every
+  // stint against a fuel-ADJUSTED one — so the cost knew a full tank eats tyres
+  // and the stint lengths could not answer. That is the mechanism the comment
+  // above claims makes plans MIX ("harder rubber early and softer late"), and
+  // it could not act: with the split fixed, a hard first stint could not take
+  // the longer share its durability earns while the car is heavy.
+  //
+  // The dependency is circular — the fuel aboard a stint depends on where the
+  // stint falls, which depends on the split — so it is solved by iterating. It
+  // converges in two passes at these sizes; three is cheap and leaves margin.
+  function splitStints(laps, lives, fuelWear) {
+    const share = (v) => {
+      const total = v.reduce((a, x) => a + x, 0) || 1;
+      const out = v.map((x) => Math.max(1, Math.round(laps * x / total)));
+      let drift = out.reduce((a, x) => a + x, 0) - laps;
+      for (let i = out.length - 1; i >= 0 && drift !== 0; i--) {
+        const take = Math.min(Math.abs(drift), out[i] - 1) * Math.sign(drift);
+        out[i] -= take; drift -= take;
+      }
+      return out;
+    };
+    let out = share(lives);
+    if (fuelWear > 0 && lives.length > 1) {
+      for (let pass = 0; pass < 3; pass++) {
+        let done = 0;
+        const eff = lives.map((v, i) => {
+          const fuel = 1 - (done + out[i] / 2) / laps;   // mean fuel across THIS stint
+          done += out[i];
+          return Math.max(0.5, v * (1 - fuelWear * fuel));
+        });
+        out = share(eff);
+      }
     }
     return out;
   }
@@ -724,7 +760,7 @@ const AiDrive = (function () {
       if (pinStops != null && stops !== pinStops) return;
       if (pinStart && seq[0] !== pinStart) return;
       const lives = seq.map((cls, i) => (i === 0 && ctx.firstLife > 0 ? ctx.firstLife : lifeLaps(cls)));
-      const stints = splitStints(laps, lives);
+      const stints = splitStints(laps, lives, FUEL_WEAR);
       let cost = stops * pitLossLaps + stops * bias;
       let done = 0;
       for (let i = 0; i < seq.length; i++) {
@@ -1048,7 +1084,7 @@ const AiDrive = (function () {
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
-    letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
+    letPassDelay, letPassPull, letPassEase, queueFloor, laneFollow, unstuckLatFloor,
     otWant, passTarget, passHold, passCooldown, sideYieldsA, humanYieldGrace, humanYieldBand, humanYieldT, humanYieldTakes, aimIntrudes,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,

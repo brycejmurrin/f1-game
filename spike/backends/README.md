@@ -1,9 +1,9 @@
 # spike/backends — WGX (WebGPU) and TLX (three.js/TSL)
 
-Both backends behind the Gfx seam were opt-in only (`apex26.gfxBackend=
-"webgpu"|"three"`) and moved out of the shipped tree on Phase 2b of the
-2026-09 restructure (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2).
-GLX (WebGL2) is and remains the only shipped renderer.
+These backends were temporarily moved out of the shipped tree during Phase 2b
+of the 2026-09 restructure (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2)
+and later restored. TLX/Three is now the unset shipped default; WGX remains
+opt-in, and GLX (WebGL2) is the explicit choice and fallback.
 
 **Status: LANDED 2026-09-03.** 46 files moved by
 `node tools/gen/move-tree.mjs tools/moves/spike-backends.json`; the non-move

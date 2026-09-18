@@ -270,10 +270,12 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const opts = document.getElementById("cs-options");
     const body = document.getElementById("cs-body");
     const tcs = getComputedStyle(tabsEl);
+    const rowOX = [...tabsEl.querySelectorAll(".cs-tab-row")].map((row) => getComputedStyle(row).overflowX);
     return {
       pair: document.getElementById("cs-inner").dataset.pair,
       tabsOY: tcs.overflowY,
       tabsOX: tcs.overflowX,
+      rowOX,
       optsOY: getComputedStyle(opts).overflowY,
       bodyOY: getComputedStyle(body).overflowY,
       tabsSf: tabsEl.classList.contains("sf-scroll"),
@@ -283,7 +285,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   });
   expect(stackedGarage.pair).not.toBe("on");
   expect(["auto", "scroll"]).not.toContain(stackedGarage.tabsOY);
-  expect(["auto", "scroll"]).toContain(stackedGarage.tabsOX);
+  expect(stackedGarage.tabsOX).toBe("hidden");
+  expect(stackedGarage.rowOX.every((v) => ["auto", "scroll"].includes(v))).toBe(true);
   expect(["auto", "scroll", "overlay"]).toContain(stackedGarage.optsOY);
   expect(["auto", "scroll"]).not.toContain(stackedGarage.bodyOY);
   expect(stackedGarage.tabsSf).toBe(false);
@@ -538,6 +541,37 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     document.getElementById("pausebtn").click();
   });
   expect(await page.evaluate(() => document.getElementById("campicker").hidden)).toBe(true);
+});
+
+test("race settings uses a searchable duel rival sheet", async ({ page }) => {
+  await waitReady(page);
+  await page.locator("#mb-race").click();
+  await page.locator("#sel-go").click();
+  await expect(page.locator("#race-settings")).toBeVisible();
+  await page.locator("#rs-duel-open").click();
+  await expect(page.locator("#duel-picker")).toBeVisible();
+  await expect(page.locator("#duel-list .duel-option")).toHaveCount(14);
+  await page.locator("#duel-search").fill("senna");
+  await expect(page.locator("#duel-list .duel-option")).toHaveCount(1);
+  await expect(page.locator("#duel-list .duel-option")).toContainText("AYRTON SENNA");
+  await page.locator("#duel-list .duel-option").click();
+  await expect(page.locator("#duel-picker")).toBeHidden();
+  await expect(page.locator("#rs-duel-value")).toHaveText("AYRTON SENNA");
+  await expect(page.locator("#rs-duel-open")).toHaveAttribute("aria-label", "Duel rival: AYRTON SENNA");
+});
+
+test("garage categories separate performance from finishing and setup", async ({ page }) => {
+  await waitReady(page);
+  await page.locator("#mb-garage").click();
+  await expect(page.locator("#carsetup")).toBeVisible();
+  const rows = page.locator("#cs-tabs .cs-tab-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toHaveAttribute("aria-label", "Performance categories");
+  await expect(rows.nth(1)).toHaveAttribute("aria-label", "Finishing and setup categories");
+  await expect(rows.nth(0)).toContainText("ENGINE");
+  for (const label of ["FLOOR", "COCKPIT", "WHEELS", "SETUP", "LIVERY"])
+    await expect(rows.nth(1)).toContainText(label);
+  await expect(page.locator("#cs-tab-livery")).toHaveAttribute("aria-label", /LIVERY — (DEFAULT|CUSTOM)/);
 });
 
 test("How to Play contents rail jumps within its single scroller", async ({ page }) => {

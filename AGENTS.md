@@ -180,7 +180,7 @@ Work happens on a `claude/<topic>` branch. The deploy branch is
 `claude/f1-game-project-26h3ng`: never push there without review; only it ships
 (https://brycejmurrin.github.io/f1-game/). Other sessions develop directly on
 it, so a deploy is a merge of THEIR work — re-measure on the merged tree, never
-force-push. Catch a branch up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
+force-push; they also all see one red at once, so before fixing a red you did NOT cause, check whether a fix is already pushed and whether a session is already on it (`docs/notes/SHARED-BRANCH-COORDINATION.md` — three sessions fixed one bug on 2026-09-18, one revert). Catch a branch up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
 merge (ratchets + generated files conflict; it cures both, but leaves you ON `sync-pr-<branch>` and pushes nothing without `--push` — recovery in check-changes). `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
 `test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it prints the branch's last ci/pages conclusions first, so an INHERITED red is visible before you blame your push; `--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops); it cures GENERATED-file conflicts, stops on any
 other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in
@@ -194,7 +194,7 @@ A green PR does not prove Pages will pass: Pages calls `ci.yml` with a `before_s
 Poll by `head_sha`, ignore cancelled runs superseded on that SHA, and after merge watch both ship-push CI and Pages.
 On red, read failed-job logs for `Expected`, `Received`, `x FAIL`, `Timeout` and `timed out`.
 Name the exact test title, assertion and lane (`Selected specs`, sweeps, pure-node, smoke, or nested Pages `ci / …`), not just the wrapper.
-Diagnose first: `caution().enabled=false` is the intentional `SettingsDefaults` default, not a reason to pin WebGL2 or raise `BOOT_MS`.
+Diagnose first: `caution().enabled=false` is the listed `SettingsDefaults` default (and the race-control call-site fallback), not a reason to pin WebGL2 or raise `BOOT_MS`.
 A one-ULP Suzuka arc mismatch in sweeps needs an epsilon; `test:tooling-fast` green does not prove Pages suites or sweeps are green.
 Redeploy through `node tools/ci/deploy.mjs` or a Pages dispatch; claim live only after Pages and `version.json` confirm it.
 Report the SHA, run URL, green/red verdict, failing test/assertion when red, train, and next action.

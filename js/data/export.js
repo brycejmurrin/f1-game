@@ -87,6 +87,7 @@ const DataExport = (function () {
         const missed = [];
         list.forEach(function (m, i) {
           chain = chain.then(function () {
+            log("Circuit " + (i + 1) + "/" + list.length + " · " + (m.circuit || m.name || "unknown"));
             return tryMeeting(m, false).then(function (ok) { if (!ok) missed.push(m); });
           }).then(function () { return i < list.length - 1 ? sleepCk(GAP) : null; });
         });
@@ -228,7 +229,10 @@ const DataExport = (function () {
       row.appendChild(dlBtn);
       wrap.appendChild(row);
 
-      const status = el("pre", "dh-export-status", "Ready.");
+      const status = el("pre", "dh-export-status",
+        "Not gathered yet. Choose a season, press Gather, and keep Data Hub open for about 10 minutes. Download unlocks when gathering completes.");
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
       wrap.appendChild(status);
 
       let result = null, running = false;

@@ -47,9 +47,11 @@ const DailyChallenge = (function () {
     }
     function today() { return data().days[dayKey()] || null; }
 
-    // Stage the plan as a TIME TRIAL and start it. The seed is set BEFORE
-    // startRace so the one grid draw and the start hold are the day's.
-    function open(day, mode = "standard") {
+    // Stage the plan as a TIME TRIAL without starting it. The circuit picker
+    // uses this so DAILY follows the same select → NEXT → RACE SETTINGS → RACE!
+    // contract as every circuit button; open() remains the explicit direct-start
+    // API for the title door and scripted hooks.
+    function select(day, mode = "standard") {
       const p = plan(day);
       const idx = Tracks.LIST.findIndex((t) => t.id === p.trackId);
       if (idx < 0) return null;
@@ -62,7 +64,15 @@ const DailyChallenge = (function () {
       active = p;
       p.class = mode === "standard" && G.records ? "standard" : "open";
       if (p.class === "standard") G.records.prepareDaily();
-      Log.info("game", "DailyChallenge.open " + p.day + " " + p.trackId + " " + p.weather + " " + p.tod);
+      Log.info("game", "DailyChallenge.select " + p.day + " " + p.trackId + " " + p.weather + " " + p.tod);
+      return p;
+    }
+
+    // Explicit direct start (main-menu DAILY and developer hooks). The seed is
+    // staged before startRace so the one grid draw and start hold are the day's.
+    function open(day, mode = "standard") {
+      const p = select(day, mode);
+      if (!p) return null;
       G.startRace();
       return p;
     }
@@ -109,7 +119,7 @@ const DailyChallenge = (function () {
     function stop() { if (G.records) G.records.restoreDaily(); active = null; }
     function isActive() { return !!active; }
     function current() { return active; }
-    return { plan, dayKey, open, record, shareText, stop, isActive, current, data, today };
+    return { plan, dayKey, select, open, record, shareText, stop, isActive, current, data, today };
   }
 
   return { create, plan, dayKey, prevDay };

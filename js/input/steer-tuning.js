@@ -720,7 +720,9 @@ Input.setSpeedProvider(function () {
   if (!p) return 0;
   return Math.abs(p.speed || 0) / Math.max(G.PACE || 1, 0.05);
 });
-$("advanced-inner").addEventListener("toggle", () => {
+const advDetails = $("adv-details");
+advDetails.addEventListener("toggle", () => {
+  $("adv-more").setAttribute("aria-expanded", advDetails.open ? "true" : "false");
   if (G.soundOn) GameAudio.uiSelect();
 });
 // Any granular Advanced edit refreshes the simplified controls (events bubble up).

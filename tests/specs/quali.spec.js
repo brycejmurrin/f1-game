@@ -53,7 +53,9 @@ test.describe("Qualifying — the session", () => {
   });
 
   test("a one-off Grand Prix still goes straight to the race", async ({ page }) => {
-    // The quick-blast mode keeps its P12 climb; only a weekend earns a grid.
+    // A quick-blast uses the configured non-qualifying grid; only a weekend
+    // earns a qualifying classification. The exact rule is a generated
+    // preference/default, not a qualifying contract.
     await boot(page);
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
@@ -62,8 +64,8 @@ test.describe("Qualifying — the session", () => {
     await expect(page.locator("#quali")).toBeHidden();
     const info = await page.evaluate(() => window.__apex.info());
     expect(info.session).toBe("race");
-    const pos = await page.evaluate(() => window.__apex.fieldState().find((c) => c.isPlayer).pos);
-    expect(pos).toBe(12);
+    expect(info.raceGrid).not.toBe("quali");
+    expect(info.raceQuali).toBe(false);
   });
 
   test("the field is classified with a plausible spread", async ({ page }) => {
@@ -193,10 +195,12 @@ test.describe("Qualifying — the grid", () => {
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     const info = await page.evaluate(() => ({
       flow: window.__apex.info().flow,
-      pos: window.__apex.fieldState().find((c) => c.isPlayer).pos,
+      raceGrid: window.__apex.info().raceGrid,
+      raceQuali: window.__apex.info().raceQuali,
     }));
     expect(info.flow).toBe("gp");
-    expect(info.pos).toBe(12);   // the fun climb, not somebody else's grid
+    expect(info.raceGrid).not.toBe("quali");
+    expect(info.raceQuali).toBe(false);   // configured grid, not somebody else's qualifying grid
   });
 });
 

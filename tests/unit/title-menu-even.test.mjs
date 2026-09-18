@@ -84,3 +84,21 @@ test("title overlay columns grow with --vwz instead of a pixel cap", () => {
   assert.doesNotMatch(menus, /minmax\(0, 1\.35fr\)/);
   assert.doesNotMatch(menus, /43vw|53vw/);
 });
+
+test("title hero exposes returning-player and daily doors with explicit names", () => {
+  const html = read("index.html");
+  const title = read("js/ui/title-menu.js");
+  assert.match(html, /id="menu-retention"[\s\S]*id="mb-continue"[\s\S]*id="mb-daily"/);
+  for (const id of ["mb-career", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
+    assert.match(html, new RegExp(`id="${id}"[^>]*aria-label="[^"]+"`), `${id} has a readable name independent of text-node spacing`);
+  }
+  assert.match(title, /const careerBtn = \$\("mb-career"\)[\s\S]*if \(careerBtn\) careerBtn\.onclick/,
+    "optional retention nodes cannot prevent the existing Career door wiring");
+  assert.match(title, /const continueBtn = \$\("mb-continue"\)[\s\S]*if \(continueBtn\) continueBtn\.onclick/);
+  assert.match(title, /const dailyBtn = \$\("mb-daily"\)[\s\S]*if \(dailyBtn\) dailyBtn\.onclick/);
+  assert.doesNotMatch(title, /\$\("mb-tt"\)\.click\(\)/,
+    "Daily does not enter through free-play restore and its speculative flyby");
+  assert.match(title, /G\.openDailyPicker\(\)/, "the title uses the dedicated staged-daily picker path");
+  assert.match(title, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
+  assert.match(read("js/race/daily-challenge.js"), /Log\.info\("game", "DailyChallenge\.select "/);
+});

@@ -24,6 +24,16 @@ const DataLive = (function () {
     return state.intervals;
   }
 
+  function sessionStatus(meta, now) {
+    const start = Date.parse(meta && meta.dateStart);
+    if (!isFinite(start)) return "LIVE";
+    const at = now == null ? Date.now() : now;
+    if (start > at) return "UPCOMING";
+    const type = String((meta && meta.type) || "").toLowerCase();
+    const liveHours = type === "race" ? 4 : 2;
+    return at - start <= liveHours * 60 * 60 * 1000 ? "LIVE" : "COMPLETED";
+  }
+
   function create({
     el, clear, emptyMsg, spinner, ensureSession, sel, buildPicker,
     invalidateOther, fmtDateTime, findTeam, cssColor, textColorOn, NO_LIVE_MSG
@@ -117,6 +127,10 @@ const DataLive = (function () {
       const infoTitle = el("div", "dh-live-title");
       infoTitle.appendChild(el("span", null, meta.name || meta.type || "Session"));
       if (meta.type && meta.type !== meta.name) infoTitle.appendChild(el("span", "dh-live-type", meta.type));
+      const phase = sessionStatus(meta);
+      const stateBadge = el("span", "dh-live-state", phase);
+      stateBadge.setAttribute("data-state", phase.toLowerCase());
+      infoTitle.appendChild(stateBadge);
       info.appendChild(infoTitle);
       const place = [meta.circuit, meta.country].filter(Boolean).join(" · ");
       if (place) info.appendChild(el("div", "dh-live-sub", place));
@@ -362,6 +376,6 @@ const DataLive = (function () {
 
     return { loadLive, stopLiveAuto, disarmLiveAuto };
   }
-  return { create, _mergePositionBatch: mergePositionBatch, _mergeIntervalBatch: mergeIntervalBatch };
+  return { create, _mergePositionBatch: mergePositionBatch, _mergeIntervalBatch: mergeIntervalBatch, _sessionStatus: sessionStatus };
 })();
 Object.freeze(DataLive);

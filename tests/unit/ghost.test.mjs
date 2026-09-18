@@ -17,14 +17,24 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-function createHarness() {
-  const store = new Map();
+function createHarness(opts = {}) {
+  const store = new Map(Object.entries(opts.disk || {}));
+  const microtasks = [];
+  const timers = [];
   const mockLocalStorage = {
     getItem(k) { return store.has(k) ? store.get(k) : null; },
-    setItem(k, v) { store.set(k, String(v)); },
+    setItem(k, v) {
+      if (opts.failWrites) {
+        const error = new Error("quota full");
+        error.name = "QuotaExceededError";
+        throw error;
+      }
+      store.set(k, String(v));
+    },
     removeItem(k) { store.delete(k); },
     clear() { store.clear(); },
   };
@@ -32,13 +42,24 @@ function createHarness() {
   const sandbox = {
     localStorage: mockLocalStorage,
     module: { exports: {} },
+    TextEncoder,
+    queueMicrotask: (fn) => { microtasks.push(fn); },
     console,
   };
+  if (opts.deferWrites) sandbox.setTimeout = (fn) => { timers.push(fn); return timers.length; };
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
+  seedSaveMigrate(ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js", "core", "store.js"), "utf8"), ctx);
   const src = readFileSync(join(ROOT, "js", "car", "ghost.js"), "utf8");
   vm.runInContext(src, ctx);
-  return { Ghost: sandbox.module.exports || vm.runInContext("Ghost", ctx), store: mockLocalStorage };
+  return {
+    Ghost: sandbox.module.exports || vm.runInContext("Ghost", ctx),
+    GameStore: vm.runInContext("GameStore", ctx),
+    store: mockLocalStorage,
+    flushMicrotasks: () => { while (microtasks.length) microtasks.shift()(); },
+    flushTimers: () => { while (timers.length) timers.shift()(); },
+  };
 }
 
 test("Ghost lap recording and playback basics", () => {
@@ -180,4 +201,159 @@ test("a ghost store that is not a plain object starts empty and still saves", ()
     assert.equal(typeof saved, "object");
     assert.equal(saved.monza.time, 90, `${raw}: the ghost lap was written`);
   }
+});
+
+test("ghost persistence is capped by UTF-8 bytes and evicts the least-recently-used context", () => {
+  const { Ghost, store } = createHarness();
+  const save = (id, context, marker) => {
+    Ghost.setTrack(id, context);
+    Ghost.startLap();
+    for (let i = 0; i < 500; i++) Ghost.record(i * 0.1, i * 10, marker);
+    assert.equal(Ghost.finishLap(1000 + marker), true);
+  };
+
+  for (let i = 0; i < 149; i++) save("track-" + i, "setup-" + i, i);
+  const before = JSON.parse(store.getItem("apex26.ghost.v1"));
+  const byUse = Object.keys(before).sort((a, b) => before[a]._used - before[b]._used);
+  const touched = byUse[0];
+  const nextOldest = byUse[1];
+  const match = touched.match(/^v2:track-(\d+):setup-(\d+)$/);
+  assert.ok(match, "the oldest stored context has the expected key shape");
+  Ghost.setTrack("track-" + match[1], "setup-" + match[2]);
+  save("track-149", "setup-149", 149);
+
+  const raw = store.getItem("apex26.ghost.v1");
+  assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024, "the complete stored blob stays within its byte budget");
+  const saved = JSON.parse(raw);
+  assert.ok(Object.keys(saved).length < 150, "old contexts are evicted once the budget is reached");
+  assert.ok(saved[touched], "reading an old context refreshes its LRU position");
+  assert.equal(saved[nextOldest], undefined, "the untouched least-recently-used context is evicted first");
+  assert.ok(saved["v2:track-149:setup-149"], "the newest context remains");
+});
+
+test("ghost quota failures flow through GameStore persistence health", () => {
+  const { Ghost, GameStore } = createHarness({ failWrites: true });
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) Ghost.record(i * 0.1, i * 10, 0);
+  assert.equal(Ghost.finishLap(40), true, "the current session still keeps the personal best");
+  assert.equal(GameStore.store.broken, "QuotaExceededError", "persistState can report the failed ghost write");
+});
+
+test("loading an inherited over-budget store trims it before other saves compete for quota", () => {
+  const inherited = {};
+  for (let n = 0; n < 100; n++) {
+    inherited["v2:track-" + n + ":setup-" + n] = {
+      time: 100 + n,
+      t: Array.from({ length: 500 }, (_, i) => i * 0.1),
+      s: Array.from({ length: 500 }, (_, i) => i * 10),
+      x: Array(500).fill(n),
+      _used: n,
+    };
+  }
+  const { Ghost, store, flushMicrotasks } = createHarness({
+    disk: { "apex26.ghost.v1": JSON.stringify(inherited) },
+  });
+
+  Ghost.setTrack("track-0");
+  Ghost.setTrack("track-0", "setup-0");
+  flushMicrotasks();
+
+  const raw = store.getItem("apex26.ghost.v1");
+  assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024, "first load repairs the inherited blob");
+  assert.ok(JSON.parse(raw)["v2:track-0:setup-0"],
+    "repair waits for the final comparable context and promotes it before LRU eviction");
+});
+
+test("one oversized valid trace is thinned to fit instead of evicting its own personal best", () => {
+  const { Ghost, store } = createHarness();
+  Ghost.setTrack("endurance");
+  Ghost.startLap();
+  for (let i = 0; i < 40_000; i++) Ghost.record(i * 0.1, i * 10, i % 7);
+  assert.equal(Ghost.finishLap(5000), true);
+
+  const raw = store.getItem("apex26.ghost.v1");
+  assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024, "the single trace respects the total budget");
+  const saved = JSON.parse(raw).endurance;
+  assert.ok(saved, "the newest personal best remains durable");
+  assert.ok(saved.t.length >= 8 && saved.t.length < 40_000, "samples are thinned but remain a valid trace");
+  assert.equal(saved.t[0], 0);
+  assert.equal(saved.t.at(-1), 3999.9, "the finish sample survives thinning");
+  assert.equal(saved.t.length, saved.s.length);
+  assert.equal(saved.t.length, saved.x.length);
+});
+
+test("an invalid selected entry is discarded before valid ghosts during budget repair", () => {
+  const inherited = {
+    broken: { time: 10, t: [], s: [], x: [], pad: "x".repeat(600_000), _used: Number.MAX_SAFE_INTEGER },
+    sound: { time: 10, t: [0, 1, 2, 3, 4, 5, 6, 7], s: [0, 1, 2, 3, 4, 5, 6, 7],
+      x: [0, 0, 0, 0, 0, 0, 0, 0], _used: 1 },
+  };
+  const { Ghost, store, flushMicrotasks } = createHarness({
+    disk: { "apex26.ghost.v1": JSON.stringify(inherited) },
+  });
+  Ghost.setTrack("broken");
+  flushMicrotasks();
+  const repaired = JSON.parse(store.getItem("apex26.ghost.v1"));
+  assert.equal(repaired.broken, undefined);
+  assert.ok(repaired.sound, "valid history wins space over a malformed preferred entry");
+});
+
+test("a pending PB rebases onto a foreign tab's newer ghost blob", () => {
+  const trace = (time, x = 0) => ({
+    time,
+    t: [0, 1, 2, 3, 4, 5, 6, 7],
+    s: [0, 10, 20, 30, 40, 50, 60, 70],
+    x: [x, x, x, x, x, x, x, x],
+    _used: 1,
+  });
+  const { Ghost, GameStore, store, flushTimers } = createHarness({
+    disk: { "apex26.ghost.v1": JSON.stringify({ monza: trace(50) }) },
+    deferWrites: true,
+  });
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) Ghost.record(i, i * 10, 0);
+  assert.equal(Ghost.finishLap(40), true);
+
+  store.setItem("apex26.ghost.v1", JSON.stringify({ monza: trace(35), spa: trace(60, 1) }));
+  GameStore.store.onForeignWrite({ key: "apex26.ghost.v1" });
+  assert.equal(Ghost.bestTime(), 35, "the other tab's faster same-context PB wins immediately");
+  flushTimers();
+
+  const saved = JSON.parse(store.getItem("apex26.ghost.v1"));
+  assert.equal(saved.monza.time, 35, "the pending slower PB cannot overwrite the newer durable one");
+  assert.equal(saved.spa.time, 60, "unrelated ghosts written by the other tab survive the local save");
+});
+
+test("a foreign site-data clear cancels pending PBs instead of recreating the ghost blob", () => {
+  const { Ghost, GameStore, store, flushTimers } = createHarness({ deferWrites: true });
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) Ghost.record(i, i * 10, 0);
+  Ghost.finishLap(40);
+
+  store.clear();
+  GameStore.store.onForeignWrite({ key: null });
+  assert.equal(Ghost.hasGhost(), false);
+  flushTimers();
+  assert.equal(store.getItem("apex26.ghost.v1"), null, "the cancelled callback leaves cleared storage clear");
+});
+
+test("clearing one ghost cancels its pending PB before a foreign merge", () => {
+  const trace = { time: 60, t: [0, 1, 2, 3, 4, 5, 6, 7], s: [0, 10, 20, 30, 40, 50, 60, 70],
+    x: [0, 0, 0, 0, 0, 0, 0, 0], _used: 1 };
+  const { Ghost, GameStore, store, flushTimers } = createHarness({ deferWrites: true });
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) Ghost.record(i, i * 10, 0);
+  Ghost.finishLap(40);
+  Ghost.clear("monza");
+
+  store.setItem("apex26.ghost.v1", JSON.stringify({ spa: trace }));
+  GameStore.store.onForeignWrite({ key: "apex26.ghost.v1" });
+  flushTimers();
+  const saved = JSON.parse(store.getItem("apex26.ghost.v1"));
+  assert.equal(saved.monza, undefined, "the cleared pending PB is not merged back");
+  assert.equal(saved.spa.time, 60);
 });

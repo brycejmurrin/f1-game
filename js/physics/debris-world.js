@@ -24,7 +24,7 @@ let _worldGen = 0;       // bumped every buildWorld — the incident sim aborts 
 // mirror-sync loop SKIPS these (a dynamic body must not be pose-driven), so the
 // bespoke->Rapier handover keeps a single authority for the duration.
 let _dynCars = new Set();
-let _slots = [];         // fixed debris pool: { body, live, scale, restT, spawnTick }
+let _slots = [];         // fixed debris pool: { body, live, scale, restT, spawnTick, sourceCars }
 let _cap = 0;            // pool size for the CURRENT world (48 desktop / 16 mobile tier)
 let _queue = [];         // impacts queued by the game-side hooks, consumed next step
 
@@ -156,7 +156,7 @@ function _load() {
   if (_loadState !== 0) return;
   _loadState = 1;
   import(RAPIER_URL)
-    .then((m) => m.default.init({}).then(() => {
+    .then((m) => m.default.init().then(() => {
       RAPIER = m.default;
       _loadState = 2;
       _active = _enabled;
@@ -178,8 +178,8 @@ function setEnabled(on) {
 function create(ctx) {
   Log.info("game", "DebrisWorld.create");
   G = ctx;
-  // Default ON, as originally intended — and worth recording why it spent
-  // builds 897-902 off.
+  // SettingsDefaults owns the player-facing default; only an explicit raw
+  // "1" starts this optional side-world.
   //
   // Until build 893 this module had never run on the deployed site at all: the
   // Pages workflow staged an allow-list of directories and vendor/ was not on
@@ -195,11 +195,9 @@ function create(ctx) {
   // build 900. Turning this off never moved that number; the two changes only
   // happened to land together.
   //
-  // So it comes back. What remains true is that it has still never run on a
-  // phone, so the escape hatch stays one call wide: apex26.debris = "0", or
+  // The escape hatch stays one call wide: apex26.debris = "0", or
   // __apex.debris(false).
-  let opt = "1";
-  try { opt = localStorage.getItem("apex26.debris") || opt; } catch (e) { /* storage blocked (private mode) — keep the default */ }
+  const opt = GameStore.store.raw("debris");
   // Group B disable flags — default ON, read once at boot (any value but "0" is on).
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
   try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
@@ -373,7 +371,7 @@ function buildWorld(track, cars) {
     // `s` is the arc the shard was thrown from, stamped on spawn — the hazard
     // query's projection hint (see projectHazard). Nothing else reads it, so it
     // is safe to be approximate; it is a search seed, never a position.
-    _slots.push({ body, live: false, scale: (hx + hz) * 5.0, restT: 0, spawnTick: 0, s: 0 });
+    _slots.push({ body, live: false, scale: (hx + hz) * 5.0, restT: 0, spawnTick: 0, s: 0, sourceCars: null });
   }
   // A2: marble sub-pool — created AFTER the debris pool (fixed insertion order →
   // determinism). Tiny high-friction, low-restitution cuboids: they settle and
@@ -461,13 +459,20 @@ function wallImpact(c, side, xOver) {
   if (sev < WALL_SEV_MIN) return;
   const mi = G.cars ? G.cars.indexOf(c) : -1;
   _queue.push({ kind: "wall", s: c.s, x: c.x, side, sev,
-                speed: Math.abs(c.speed || 0), carIdx: c.num | 0, mi });
+                speed: Math.abs(c.speed || 0), carIdx: c.num | 0, mi,
+                sourceCars: mi >= 0 ? [mi] : null });
 }
 
 function carImpact(a, b, relV) {
   if (relV < CAR_SEV_MIN) return;
+  const ai = G.cars ? G.cars.indexOf(a) : -1;
+  const bi = G.cars ? G.cars.indexOf(b) : -1;
+  const sourceCars = [];
+  if (ai >= 0) sourceCars.push(ai);
+  if (bi >= 0 && bi !== ai) sourceCars.push(bi);
   _queue.push({ kind: "car", s: b.s, x: (a.x + b.x) * 0.5, side: a.x >= b.x ? 1 : -1,
-                sev: relV, speed: Math.abs(b.speed || 0), carIdx: (a.num | 0) + (b.num | 0) });
+                sev: relV, speed: Math.abs(b.speed || 0), carIdx: (a.num | 0) + (b.num | 0),
+                sourceCars: sourceCars.length ? sourceCars : null });
 }
 
 // B2 game-side hook — called at the barrier clamp site (game.js wallImpact site)
@@ -630,6 +635,9 @@ function spawnImpact(imp, track) {
     b.setRotation(_q, true);
     slot.live = true; slot.restT = 0; slot.spawnTick = _tick;
     slot.s = imp.s;              // hazard-projection hint only (see projectHazard)
+    // Race control distinguishes one car shedding many shards from a pile-up.
+    // Copy this tiny list because the queued impact is discarded after spawn.
+    slot.sourceCars = imp.sourceCars ? imp.sourceCars.slice() : null;
     _seq++; _spawnedTotal++;
   }
   _lastImpact = { kind: imp.kind, carIdx: imp.carIdx, sev: +imp.sev.toFixed(2), tick: _tick, spawned: n };
@@ -945,17 +953,22 @@ function projectHazard(track, x, y, z, hint) {
 // an untouched apex cone is scene dressing, not a yellow-flag hazard. Returns
 // per-sector counts + the worst sector with a representative track fraction.
 // READ-ONLY: never writes a car / (s,x) / px / pz / head.
+function redHazardTotal(sourceCount, sourcedTotal) {
+  return sourceCount >= 2 ? sourcedTotal : 0;
+}
 function hazards() {
-  const out = { sectors: [0, 0, 0], total: 0, worst: { sector: -1, count: 0, frac: 0 } };
+  const out = { sectors: [0, 0, 0], total: 0, redTotal: 0, worst: { sector: -1, count: 0, frac: 0 } };
   if (!world || !G.track) return out;
   const track = G.track, total = track.total || 1;
   const sec = track.def && track.def.sectors;
   const splits = (sec && sec.length === 2) ? [sec[0], sec[1]] : [1 / 3, 2 / 3];
   const secFrac = [0, 0, 0];
+  const redSources = new Set();
+  let sourcedTotal = 0;
   // `hint` is the record's OWN placed arc — a slot's spawn s, a cone's placed s,
   // a panel's promoted s. Never the player's, never a shared value: the window is
   // only ±64 m wide, so one record's arc is meaningless for another's.
-  const consider = (body, hint) => {
+  const consider = (body, hint, sourceCars) => {
     if (!body || !body.isSleeping()) return;
     const t = body.translation();
     const pr = projectHazard(track, t.x, t.y, t.z, hint);
@@ -966,8 +979,12 @@ function hazards() {
     const si = frac < splits[0] ? 0 : frac < splits[1] ? 1 : 2;
     if (out.sectors[si] === 0) secFrac[si] = +frac.toFixed(4);
     out.sectors[si]++; out.total++;
+    if (sourceCars && sourceCars.length) {
+      sourcedTotal++;
+      for (const i of sourceCars) redSources.add(i);
+    }
   };
-  for (const s of _slots) if (s.live) consider(s.body, s.s);
+  for (const s of _slots) if (s.live) consider(s.body, s.s, s.sourceCars);
   for (const f of _furn) {
     const t = f.body.translation();
     const dx = t.x - f.home.x, dz = t.z - f.home.z;
@@ -978,6 +995,12 @@ function hazards() {
   for (let i = 0; i < 3; i++)
     if (out.sectors[i] > out.worst.count)
       out.worst = { sector: i, count: out.sectors[i], frac: secFrac[i] };
+  // A red flag represents a blocked circuit from a multi-car incident, not
+  // one scraping car repeatedly filling the shard pool. Lower cautions still
+  // use every settled hazard; only RED_MIN requires attributed shards from at
+  // least two source cars. Cones and broken panels remain in total for SC/VSC,
+  // but can never pad a small two-car contact into a false red.
+  out.redTotal = redHazardTotal(redSources.size, sourcedTotal);
   return out;
 }
 

@@ -76,6 +76,19 @@ test("open() stages the day's time trial by circuit ID with the day's seed, then
   assert.equal(d.isActive(), false);
 });
 
+test("select() stages a daily class without starting the countdown", () => {
+  const { D, d, G, calls } = load();
+  const p = d.select("2026-09-03", "open");
+  assert.equal(p.trackId, D.plan("2026-09-03").trackId);
+  assert.equal(p.class, "open");
+  assert.equal(G.timeTrial, true);
+  assert.equal(G.trackIdx, ["bahrain", "jeddah", "melbourne", "suzuka", "monaco", "montreal", "monza", "spa"].indexOf(p.trackId));
+  assert.equal(G.raceWeather, p.weather);
+  assert.equal(G.raceTimeOfDay, p.tod);
+  assert.deepEqual(calls, [], "the picker owns selection; only RACE! starts");
+  assert.equal(d.isActive(), true, "NEXT may carry the armed daily into race settings");
+});
+
 test("record() keeps the day's best and counts a streak of consecutive UTC days", () => {
   const { d } = load();
   assert.equal(d.record(80), null, "no active session, nothing recorded");
