@@ -347,6 +347,81 @@ Probes: `scratch/pit-limit-check.cjs` (the three numbers per circuit),
 `scratch/pit-boost-check.cjs` (armed/live ticks in the lane vs on track, with a
 negative control), `scratch/pit-aero-overlap.cjs`.
 
+## 4f. STRATEGY AND TYRE CHOICE — three defects, all measured
+
+Reported: "there's bugs with our strategies and how to pick which tyre to use."
+There were. `scratch/strategy-survey.cjs` (plan sweep), `strategy-cost.cjs`
+(cost per candidate), `strategy-race.cjs` (a real race) and `pit-loss-check.cjs`
+(model vs sim) are the probes.
+
+### 1. Cars pitted on the LAST LAP
+
+The headline. `AiDrive.pitNow` rule 3 fired on wear alone — no regard for how
+much race was left — so a set that went past its life near the flag sent the
+car down the lane to lose 15 s it had no laps to win back.
+
+**Measured, 8-lap Bahrain: TWELVE of 22 cars pitted on LAP 8.** Every one for
+"worn". After: **zero**.
+
+New `AiDrive.wornPays(ctx)`: fresh rubber pays back the cliff it replaces, so
+the laps left must cover the stop — gain per lap is the cliff rate over how far
+past life the set is, against `pitLossLaps`. Below break-even the flag comes
+first and the car drives it home, which is what a real team does. A caller that
+passes no `lapsLeft` behaves exactly as before.
+
+### 2. A pit stop was priced at half what it costs — by three different formulas
+
+There were THREE formulas for one number, all different, all under:
+
+| | formula | Bahrain |
+|---|---|---|
+| the planner (`planFor`) | lane / (0.55·vTop) | 7.3 s |
+| the player's STRATEGY row (`lossS`) | lane / (0.75·vTop) | 9.0 s |
+| the caution estimate | a third one | — |
+| **what the race actually charged** | measured lap-time delta | **15.0 s** |
+
+Two causes. The loss counted only `lenM` (Bahrain 256 m) when the limiter holds
+the car over the entry road and the exit road too (406 m — `PitLane.held` is the
+span). And it compared against a flat fraction of TOP speed rather than the pit
+straight, which is one of the fastest parts of a circuit.
+
+Now ONE function, `lossAt(roadFrac)`: the whole complex at the limit, less what
+the straight would have taken, plus the brake-down and drive-back-up either side
+(a speed change costs (v1-v2)²/2v1 per unit of accel). `lossS()` is the green
+case, `estimate()` the same formula at a slower road. **Model 16.2 s against a
+measured 16.5 s — was 9.0 against 15.0.**
+
+The reference lap moved too: `total / (0.55·vTop)` is a flat fraction of top
+speed and cannot tell Monaco from Monza — 2 % long at Monaco, 16 % at Spa,
+always in the direction that made a stop look cheap. `G.referencePole()` is the
+curvature-integrated lap (`Quali.lapTime`); at race pace (×1.03) it puts Bahrain
+at 123.9 s against a measured 124.8.
+
+**What it changed.** A 20-lap Bahrain went from 2-stop plans with 7-lap stints
+to 1-stop plans across the field, with all three compounds in play (soft 11,
+hard 10, medium 1) instead of the old monotone. Nobody finishes over the cliff
+(was 6 of 22 at 8 laps). The cost table shows why: at the old 0.066 the top six
+plans were all 2-stop; at the measured 0.121 they are all 1-stop and several are
+MIXED compounds.
+
+### 3. Still open — the wear rate runs ~20 % hotter than the life model
+
+An 8-lap Bahrain on a hard (life 8.4 laps) finished at wear **1.17**, i.e. the
+car consumed ~1.23 laps of life per lap. `TyreModel.lifeLaps` only means what it
+says if a clean racing lap scores ~1.0 of load, and on the AI path it does not.
+That makes every plan optimistic by about a stint's tail, and it is why 10 of 21
+stops in the 20-lap race still fire as "worn" a few tenths of a lap before their
+planned lap rather than as "plan". The outcome is right — the car stops at
+about the right time — but the two systems should agree. Calibrating the AI
+load path is the next piece of work; it is not a blind constant to nudge, since
+the same load feeds the player's tyres.
+
+Also noted and NOT changed: `splitStints` divides a race in proportion to the
+compounds' raw lives while `degCost` prices each stint against a FUEL-ADJUSTED
+life, so the stint lengths cannot respond to the fuel effect the comment says
+makes plans mix ("harder rubber early and softer late"). Mixed plans now appear
+on cost alone; making the split fuel-aware would be the principled version.
+
 ## 5. Smaller loose ends
 
 - The `served` chip and the release banner both say the stop is over; the

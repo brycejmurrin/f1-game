@@ -122,6 +122,11 @@ const PitLane = (function () {
   // sits at the same place on the dial, so the pit loss a player measures does
   // not move when they change the pace slider.
   const LIMIT_FRAC = 22.2 / 72;      // 80 km/h of a 259 km/h envelope
+  // The speed a car would carry through the pit complex if it stayed out, as a
+  // fraction of the envelope. A pit straight is a STRAIGHT, so this is near the
+  // top of the range and well above the lap average (0.56 at Monaco to 0.64 at
+  // Spa, from the pole model) — see lossS().
+  const STRAIGHT_V = 0.85;
   const LIMIT_FRAC_STREET = 16.7 / 72;   // 60 km/h — the PAINTED street lane's fallback; a built complex carries its own limitKph (TrackPit)
 
   // How long the car is held in the box. Real stationary time is 2.0-2.5 s
@@ -491,12 +496,14 @@ const PitLane = (function () {
       if (!zz) return null;
       const flag = G.cautionInfo ? G.cautionInfo().level : 0;
       if (flag >= 4) return null;
-      const normal = G.vTop() * 0.75;
-      const roadSpeed = Math.max(1, Math.min(normal, G.vTop() * (flag === 3 ? 0.45 : flag === 2 ? 0.6 : 1)));
-      const loss = Math.max(zz.boxS, zz.lenM / Math.max(1, limit()) + zz.boxS - zz.lenM / roadSpeed);
+      // The road the car would be on instead: slowed by the flag, never above
+      // the pit straight's own speed. Same loss formula, slower road — which is
+      // exactly why a stop under a caution is cheap.
+      const roadFrac = Math.min(STRAIGHT_V, flag === 3 ? 0.45 : flag === 2 ? 0.6 : 1);
+      const loss = lossAt(roadFrac);
       const behind = (G.cars || []).filter(o => o !== c && !o.retired && !o.finished && o.prog < c.prog)
         .sort((a, b) => b.prog - a.prog)[0];
-      const gapS = behind ? (c.prog - behind.prog) / Math.max(1, behind.speed || roadSpeed) : null;
+      const gapS = behind ? (c.prog - behind.prog) / Math.max(1, behind.speed || G.vTop() * roadFrac) : null;
       return { lossS: loss, gapS, marginS: gapS == null ? null : gapS - loss, caution: flag >= 2, estimated: true };
     }
     function choices(c) {
@@ -1323,16 +1330,32 @@ const PitLane = (function () {
     /** Draw a stint plan for one AI car. PIT LOSS IS DERIVED FROM THE LANE, in
      *  laps, so a circuit whose lane costs more really does see fewer stops —
      *  which is the whole reason pit loss was kept emergent. */
+    /** The lap the pit loss is measured against. `G.referencePole()` is the
+     *  curvature-integrated lap (Quali.lapTime), so it knows Monaco from Monza;
+     *  the old `total / (0.55·vTop)` was a flat fraction of TOP speed and could
+     *  not — it ran 2 % long at Monaco and 16 % at Spa, always in the direction
+     *  that made a stop look cheap. Race pace is a few per cent off a pole lap
+     *  (fuel, tyres, no tow): 1.03 puts Bahrain at 123.9 s against a measured
+     *  124.1. Falls back to the old estimate where no pole model is wired. */
+    const RACE_PACE = 1.03;
+    function referenceLapS() {
+      const pole = G.referencePole ? G.referencePole() : 0;
+      if (pole > 0) return pole * RACE_PACE;
+      const t = G.track;
+      return t && t.total > 0 ? t.total / Math.max(1, G.vTop() * 0.6) : 100;
+    }
+
     function planFor(roll, player, laps) {
       const zz = z();
       if (!zz) return null;
-      // A representative racing speed for the pit straight, as a fraction of the
-      // envelope: fast enough to be a straight, slow enough not to be a peak.
-      const raceV = Math.max(1, G.vTop() * 0.55);
-      const lapRefS = G.track && G.track.total > 0 ? G.track.total / raceV : 100;
-      const lossS = zz.lenM / Math.max(1, limit()) - zz.lenM / raceV + zz.boxS;
+      // ONE loss, the same one the STRATEGY row shows. This used to carry its
+      // own second formula (a 0.55·vTop reference against the HUD's 0.75), so
+      // the planner priced a stop at 7.3 s, the player was told 9.0, and the
+      // race charged 15.0 — measured, docs/research/PIT-NEXT-STEPS-2026-09.md §4f.
+      const loss = lossS();
       const n = laps > 0 ? laps : G.lapsTarget;
-      const pitLossLaps = clamp(lossS / Math.max(1, lapRefS), 0.02, 0.9);
+      const lapRefS = referenceLapS();
+      const pitLossLaps = clamp(loss / Math.max(1, lapRefS), 0.02, 0.9);
       // THE PLAYER'S plan is a REFERENCE — the plan the pit wall would run —
       // never executed (think() keeps its human guard): it honours the stop
       // count the STRATEGY row pinned for this circuit, if any.
@@ -1355,11 +1378,30 @@ const PitLane = (function () {
     /** The lane's net cost in seconds at racing speed — the number that makes
      *  a 2-stop at Monaco read as the mistake it is. `estimate` refines it
      *  under a caution; this is the plain figure the STRATEGY row shows. */
-    function lossS() {
+    function lossS() { return lossAt(STRAIGHT_V); }
+    /** …at a given fraction of the envelope for the road outside the lane, so
+     *  the caution estimate is the SAME formula at a slower road rather than a
+     *  third copy of it (there were three, all different, all under). */
+    function lossAt(roadFrac) {
       const zz = z();
       if (!zz) return 0;
-      const normal = Math.max(1, G.vTop() * 0.75);
-      return Math.max(zz.boxS, zz.lenM / Math.max(1, limit()) + zz.boxS - zz.lenM / normal);
+      // THE WHOLE COMPLEX IS DRIVEN AT THE LIMIT, not just the lane: game.js
+      // clamps the entry road and the exit road off the same number. Counting
+      // only `lenM` charged Bahrain 256 m where the car is actually slow for
+      // 406, and the planner then bought stops it could not afford.
+      const p = G.track && G.track.pit;
+      const slowM = p && !p.painted ? p.lenM + p.entryRoadM + p.exitRoadM : zz.lenM;
+      // On track that span is taken at PIT-STRAIGHT speed. The lap average is
+      // the wrong reference — the pit straight is one of the fastest parts of
+      // any circuit, and using the average understates what the lane costs.
+      const straight = Math.max(1, G.vTop() * roadFrac);
+      // …and the stop also costs the brake down to the limit and the drive back
+      // up, which happen OUTSIDE the span. Lost time for a speed change is
+      // (v1-v2)^2 / (2*v1) per unit of accel, both ways.
+      const aUp = G.aTop ? Math.max(1, G.aTop()) : 12, aDn = G.BRAKE ? Math.max(1, G.BRAKE) : 35;
+      const dv = Math.max(0, straight - Math.max(1, limit()));
+      const swing = (dv * dv) / (2 * straight) * (1 / aUp + 1 / aDn);
+      return Math.max(zz.boxS, slowM / Math.max(1, limit()) + zz.boxS - slowM / straight + swing);
     }
 
     /** The player's plan, read for the HUD: the stops, the next box lap and
@@ -1449,6 +1491,10 @@ const PitLane = (function () {
         cautionLevel: caution ? caution.level : 0,
         wear: G.tyres.spent(c),
         wrongTread,
+        // …so the worn rule can ask whether the stop has laps left to pay for
+        // itself (AiDrive.wornPays).
+        lapsLeft: Math.max(0, (G.lapsTarget || 0) - (c.lap || 0)),
+        pitLossLaps: plan.pitLossLaps,
       });
       if (!why) return "";
       // A weather stop fits what the WEATHER wants; any other stop follows the
