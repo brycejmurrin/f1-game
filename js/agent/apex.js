@@ -572,9 +572,26 @@ const api = {
     return out;
   },
   // World position and orientation of a track node by fraction (0-1).
-  nodeAt(frac) {
+  // `{ scenery: true }` asks the question a CIRCUIT FILE asks. A scenery frac
+  // is not a racing frac: transformSceneryApi wraps every node-taking helper
+  // with TrackSpace.sceneryNode, so `anchor(K(0.45))` in js/circuits/scenery/
+  // and a bare nodeAt(0.45) here land on different nodes on any circuit
+  // carrying _sceneryShift — at Montreal that is 337 against 489, 152 nodes
+  // and 600 m apart.
+  //
+  // This is not hypothetical. montreal-foundation.spec.js sampled props within
+  // 2.2 m of nodeAt(0.45) and called them the casino footbridge's piers; the
+  // piers are 600 m away, and what it had been measuring for months was the
+  // floodlight masts, which ran the whole lap every 22 m. Every careful comment
+  // in that spec about which pier landed on the rougher patch and a 5 cm
+  // tolerance failing at 6.3 cm was tuning against lamp posts. It only came to
+  // light when `lamp: "none"` started being honoured and the masts went away.
+  nodeAt(frac, opts) {
     if (!G.track) return null;
-    const k = Math.round(frac * G.track.n) % G.track.n;
+    const raw = Math.round(frac * G.track.n) % G.track.n;
+    const k = opts && opts.scenery && typeof TrackSpace !== "undefined" && TrackSpace
+      ? TrackSpace.sceneryNode(G.track.def, raw, G.track.n)
+      : raw;
     return { k, frac: +(k / G.track.n).toFixed(4), x: +G.track.px[k].toFixed(3), y: +G.track.py[k].toFixed(3), z: +G.track.pz[k].toFixed(3), tx: +G.track.tx[k].toFixed(3), tz: +G.track.tz[k].toFixed(3), rx: +G.track.rx[k].toFixed(3), rz: +G.track.rz[k].toFixed(3) };
   },
   // Player telemetry for steering tests: lateral offset x (m, +=right of centre),
@@ -731,17 +748,40 @@ const api = {
     if (!G.track || !G.track.barR) return null;
     // Sides the PIT COMPLEX owns (TrackPit.openBoundary widens them to the garages after the scenery)
     // count as `pitSides`, not as loose: Montreal's lap-long walls read 92.8 % with them in, floor 95 %.
+    //
+    // `maxB` NOW EXCLUDES THEM TOO, and that is a bug fix, not a loosened test.
+    // The line above has always said a pit-owned side is not a loose barrier —
+    // it just applied that to `tightFrac` and not to its neighbour, so the
+    // widest-limit statistic went on reporting the garage line as though a wall
+    // had run away. Once the complex shipped, 44 of the 52 circuits read
+    // maxB > 20 and EVERY ONE of them was over solely because of the pit side;
+    // drop it and the whole fleet sits at 17.0 or less.
+    //
+    // Three specs written at different times encode the old meaning and were
+    // left failing or accidentally passing by the change: monaco asserts
+    // maxB < 6 against a pit-opened 14.7 (5.9 without it), bahrain <= 20 and
+    // hungaroring < 20 against 20.1 (17.0 without it). They were right about
+    // their circuits; the quantity moved underneath them.
+    //
+    // The pit extent is not hidden, just named: `maxPitB` reports it so it can
+    // still be bounded, which is what the specs below now do. null when the
+    // track has no pit-owned side at all.
     const pit = G.track.pit, keep = pit && pit.keep;
-    let minB = Infinity, maxB = -Infinity, minOverHw = Infinity, anyNaN = false, tightSides = 0, pitSides = 0;
+    let minB = Infinity, maxB = -Infinity, maxPitB = -Infinity;
+    let minOverHw = Infinity, anyNaN = false, tightSides = 0, pitSides = 0;
     for (let k = 0; k < G.track.n; k++) {
       const r = G.track.barR[k], l = G.track.barL[k], own = keep && keep[k] > 0 ? pit.side : 0;
       if (!Number.isFinite(r) || !Number.isFinite(l)) anyNaN = true;
-      minB = Math.min(minB, r, l); maxB = Math.max(maxB, r, l);
+      minB = Math.min(minB, r, l);
+      if (own > 0) maxPitB = Math.max(maxPitB, r); else maxB = Math.max(maxB, r);
+      if (own < 0) maxPitB = Math.max(maxPitB, l); else maxB = Math.max(maxB, l);
       minOverHw = Math.min(minOverHw, r - G.track.hw[k], l - G.track.hw[k]);
       if (own > 0) pitSides++; else if (r < G.track.hw[k] + 8.99) tightSides++;
       if (own < 0) pitSides++; else if (l < G.track.hw[k] + 8.99) tightSides++;
     }
-    return { minB, maxB, minOverHw, anyNaN, tightFrac: tightSides / Math.max(1, G.track.n * 2 - pitSides), pitSides, street: !!G.track.street, n: G.track.n };
+    return { minB, maxB, maxPitB: Number.isFinite(maxPitB) ? maxPitB : null,
+      minOverHw, anyNaN, tightFrac: tightSides / Math.max(1, G.track.n * 2 - pitSides),
+      pitSides, street: !!G.track.street, n: G.track.n };
   },
   modelDiagnostics() {
     if (!G.track || !G.track.modelDiagnostics) return null;
