@@ -179,6 +179,26 @@ test("a car with no stops left still ignores the plan for a tyre that cannot do 
   assert.equal(now({ stopsLeft: 0, lapsToStop: -5 }), "");
 });
 
+test("a worn stop needs laps left to pay for itself", () => {
+  // Rule 3 fired on wear alone, with no regard for how much race was left, so a
+  // set that went over its life near the flag sent the car down the lane to
+  // lose 15 s it had no laps to win back. MEASURED on an 8-lap Bahrain: TWELVE
+  // of 22 cars pitted on LAP 8 — the last lap — every one for "worn".
+  const worn = (o) => now(Object.assign({ wear: 1.1, pitLossLaps: 0.13 }, o));
+  assert.equal(worn({ lapsLeft: 1 }), "", "never on the last lap");
+  assert.equal(worn({ lapsLeft: 2 }), "", "nor with two to go");
+  assert.equal(worn({ lapsLeft: 40 }), "worn", "but a whole race ahead is worth the stop");
+  // The deeper past its life the set is, the sooner the stop pays back — a
+  // rag is worth changing with fewer laps left than a set just over the line.
+  const rag = (left) => now({ wear: 2.0, pitLossLaps: 0.13, lapsLeft: left });
+  assert.equal(rag(6), "worn", "a destroyed set is worth it with six to go");
+  assert.ok(worn({ lapsLeft: 6 }) === "", "…where one barely over its life is not");
+  // A caller that does not say how many laps are left behaves exactly as before,
+  // so nothing that never knew about this rule silently changes.
+  assert.equal(now({ wear: 1.4 }), "worn", "no lapsLeft, no new gate");
+  assert.equal(A.wornPays({ wear: 1.4 }), true);
+});
+
 test("the free stop under a caution pulls a planned stop forward", () => {
   // Worth 8-12 s — the biggest single lever in the sport. VSC is level 2.
   assert.equal(now({ cautionLevel: 2, lapsToStop: A.STRAT.CAUTION_REACH }), "caution");

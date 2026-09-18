@@ -1115,6 +1115,40 @@ test("lossS is the lane's net cost in seconds, and estimate agrees with it off a
   assert.ok(Math.abs(est.lossS - s) < 1e-9, `estimate's lossS is the same number off a caution (${est.lossS} vs ${s})`);
 });
 
+// THE PIT LOSS IS ONE NUMBER. There were THREE formulas for it — the planner's
+// (0.55·vTop over the lane), the STRATEGY row's (0.75·vTop over the lane) and
+// the caution estimate's (a third) — so the planner priced a stop at 7.3 s, the
+// player was told 9.0, and a measured stop on Bahrain cost 15.0. Buying stops
+// at half price is what put two of them in a 20-lap race.
+test("the pit loss counts the WHOLE complex, not just the lane", () => {
+  const { pits, G } = commitSession();
+  const lane = pits.zoneOf().lenM;
+  // No pit model on the stub track: the loss falls back to the lane alone.
+  const bare = pits.lossS();
+  // …and with one, the entry and exit roads count too, because the limiter
+  // holds the car over all three (PitLane.held).
+  G.track.pit = { lenM: lane, entryRoadM: 70, exitRoadM: 80, painted: false };
+  const whole = pits.lossS();
+  assert.ok(whole > bare, `the roads cost something (${whole.toFixed(2)} vs ${bare.toFixed(2)})`);
+  // 150 m more at the limit, minus what it would have taken on the straight.
+  const atLimit = 150 / (G.vTop() * pits.zoneOf().limitFrac);
+  assert.ok(whole - bare > atLimit * 0.5 && whole - bare < atLimit,
+    `and it costs about the extra span at the limit (+${(whole - bare).toFixed(2)} s vs ${atLimit.toFixed(2)} s gross)`);
+  delete G.track.pit;
+});
+
+test("a caution makes the same stop cheaper, by the same formula", () => {
+  const { pits, car, G } = commitSession();
+  const green = pits.lossS();
+  let level = 0;
+  G.cautionInfo = () => ({ level });
+  level = 2; const vsc = pits.estimate(car(0)).lossS;
+  level = 3; const sc = pits.estimate(car(0)).lossS;
+  assert.ok(vsc < green, `a VSC stop costs less than a green one (${vsc.toFixed(2)} vs ${green.toFixed(2)})`);
+  assert.ok(sc < vsc, `and a safety car less still (${sc.toFixed(2)})`);
+  assert.ok(sc >= pits.zoneOf().boxS, "never less than the time on the jacks");
+});
+
 // ── `held`: how long the lane's rules apply ──────────────────────────────────
 // One predicate for everything the lane forbids — the speed cap, and now
 // overtake and X-mode, which are not a driver's to use between the lines. It is
