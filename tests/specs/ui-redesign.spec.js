@@ -270,10 +270,12 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const opts = document.getElementById("cs-options");
     const body = document.getElementById("cs-body");
     const tcs = getComputedStyle(tabsEl);
+    const rowOX = [...tabsEl.querySelectorAll(".cs-tab-row")].map((row) => getComputedStyle(row).overflowX);
     return {
       pair: document.getElementById("cs-inner").dataset.pair,
       tabsOY: tcs.overflowY,
       tabsOX: tcs.overflowX,
+      rowOX,
       optsOY: getComputedStyle(opts).overflowY,
       bodyOY: getComputedStyle(body).overflowY,
       tabsSf: tabsEl.classList.contains("sf-scroll"),
@@ -283,7 +285,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   });
   expect(stackedGarage.pair).not.toBe("on");
   expect(["auto", "scroll"]).not.toContain(stackedGarage.tabsOY);
-  expect(["auto", "scroll"]).toContain(stackedGarage.tabsOX);
+  expect(stackedGarage.tabsOX).toBe("hidden");
+  expect(stackedGarage.rowOX.every((v) => ["auto", "scroll"].includes(v))).toBe(true);
   expect(["auto", "scroll", "overlay"]).toContain(stackedGarage.optsOY);
   expect(["auto", "scroll"]).not.toContain(stackedGarage.bodyOY);
   expect(stackedGarage.tabsSf).toBe(false);
