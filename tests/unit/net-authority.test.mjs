@@ -51,12 +51,13 @@ const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 /** A session NetPlay can bind to, with a hand-fed inbound event channel. */
 function fakeSession() {
   const handlers = new Map();
+  const closeHandlers = [];
   const sent = [];
   return {
     sent, closed: 0,
-    clearHandlers() { handlers.clear(); return this; },
+    clearHandlers() { handlers.clear(); closeHandlers.length = 0; return this; },
     onState() { return this; },
-    onClose() { return this; },
+    onClose(fn) { closeHandlers.push(fn); return this; },
     onEvent(type, fn) {
       if (!handlers.has(type)) handlers.set(type, []);
       handlers.get(type).push(fn);
@@ -72,9 +73,12 @@ function fakeSession() {
     peerToLocal: (t) => t,
     localToPeer: (t) => t,
     stats: () => ({}),
-    close() { this.closed++; handlers.clear(); return true; },
+    close() { this.closed++; handlers.clear(); closeHandlers.length = 0; return true; },
+    disconnect(why = "transport") {
+      for (const fn of [...closeHandlers]) fn(why);
+    },
     handlerCount() {
-      let n = 0;
+      let n = closeHandlers.length;
       for (const list of handlers.values()) n += list.length;
       return n;
     },
@@ -124,9 +128,10 @@ function stubG(n) {
     caughtCautions: [],
     caughtQuali: [],
     caughtQLive: [],
+    announcements: [],
     wireId: (c) => c.idx,
     setCarRole: (c, human, local) => { c.human = human; c.local = local; },
-    announce: () => {},
+    announce: (message) => { G.announcements.push(message); },
     applyCaution: (d) => { G.caughtCautions.push(d); },
     onPeerQuali: (d) => { G.caughtQuali.push(d); },
     onPeerQualiLive: (d) => { G.caughtQLive.push(d); },
@@ -155,6 +160,19 @@ test("the harness itself works — a GUEST obeys the host's START", () => {
   assert.ok(G.netStart, "a guest must obey a START from the host");
   assert.equal(G.netStart.at, 12345);
   assert.equal(G.netStart.hold, 1.0);
+});
+
+test("a guest keeps racing after the host leaves and is told that rivals are now AI", () => {
+  const { G, net, s } = started("guest");
+  const rival = G.cars[1];
+  assert.equal(rival.human, true, "the connected host owns the rival before disconnect");
+
+  s.disconnect("transport");
+
+  assert.equal(net.active(), false, "the network session ends");
+  assert.equal(rival.human, false, "the host's car returns to local AI");
+  assert.ok(G.announcements.some((m) => /HOST LEFT — RIVALS NOW AI/.test(m)),
+    `the continuing race needs an honest visible announcement: ${G.announcements.join(" | ")}`);
 });
 
 test("a HOST ignores a START arriving from a guest", () => {
