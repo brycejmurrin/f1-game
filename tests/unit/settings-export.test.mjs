@@ -119,11 +119,14 @@ test("a tuner that saves its whole table reports only the fields the player move
   const { collect } = boot({ disk: {
     "apex26.sndTune": JSON.stringify({ gain: 1, bass: 0.9, air: 0.2 }),
     "apex26.sndLayers": JSON.stringify({ wind: true, turbo: true }),
+    "apex26.voiceTune": JSON.stringify({ radio: { name: "Samantha", pitch: 1.1 } }),
   } });
   const f = collect("changes");
-  assert.deepEqual(f.changed, ["audio.sndTune"], "a full table equal to the defaults is not a change");
+  assert.deepEqual(f.changed, ["audio.voiceTune", "audio.sndTune"], "audio tuners differ independently");
   assert.deepEqual(f.settings.audio.sndTune, { bass: 0.9 });
   assert.deepEqual(f.defaults.audio.sndTune, { gain: 1, bass: 0.5, air: 0.2 });
+  assert.deepEqual(f.settings.audio.voiceTune, { radio: { name: "Samantha", pitch: 1.1 } });
+  assert.deepEqual(f.defaults.audio.voiceTune, {}, "an absent channel uses the shipped voice/prosody defaults");
 });
 
 test("the binding tables count as changed by Input's word, not by value", () => {
@@ -294,6 +297,7 @@ test("a file round-trips: save it, load it into a fresh store, get the same valu
     "apex26.volMusic": "0.8",
     "apex26.radioVoice": "true",
     "apex26.volRadio": "0.4",
+    "apex26.voiceTune": JSON.stringify({ control: { name: "Daniel", rate: 1.2, pitch: 0.9 } }),
     "apex26.pace": "14",
     "apex26.cockpitHalo": "1",
   };
@@ -306,6 +310,8 @@ test("a file round-trips: save it, load it into a fresh store, get the same valu
   assert.equal(b2.disk.get("apex26.volMusic"), "0.8");
   assert.equal(b2.disk.get("apex26.radioVoice"), "true");
   assert.equal(b2.disk.get("apex26.volRadio"), "0.4");
+  assert.deepEqual(JSON.parse(b2.disk.get("apex26.voiceTune")),
+    { control: { name: "Daniel", rate: 1.2, pitch: 0.9 } });
   assert.equal(b2.disk.get("apex26.pace"), "14");
   assert.equal(b2.disk.get("apex26.cockpitHalo"), "1");
   const g1 = boot({ disk: GARAGE }).garage();
