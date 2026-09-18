@@ -204,6 +204,16 @@ const AudioPanel = (() => {
       $("as-rvol").closest(".tune-row").classList.toggle("tune-off", !radioLive);
       $("as-rvol").value = String(Math.round(radioVol * 10));
       $("as-rvol-v").textContent = String(Math.round(radioVol * 10));
+      // The voice rows follow the same live gate as the volume: tuning a voice
+      // that cannot speak is a control that does nothing. Built here rather than
+      // at wire time because getVoices() is empty on Chrome's first read and
+      // fills in later — opening the panel is when we know what is installed.
+      buildVoiceRows();
+      const vh = $("as-voices");
+      if (vh) {
+        vh.classList.toggle("tune-off", !radioLive);
+        for (const el of vh.querySelectorAll("select,input,button")) el.disabled = !radioLive;
+      }
       const rnote = $("as-radio-note");
       if (rnote) rnote.textContent = !radioReady ? "This browser has no speech voices, so the radio stays written."
         : !G.soundOn ? "Master sound is off — TEAM RADIO ON turns it on."
@@ -254,6 +264,113 @@ const AudioPanel = (() => {
     // ticks first, while the bus is still open.
     SettingRow.wire("as-radio", { values: ONOFF, read: () => (radioOn ? "on" : "off"),
       write: (v) => { if (v === "on") { setRadio(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setRadio(false); } } });
+    /* THE PER-CHANNEL VOICE ROWS, built rather than written into the shell: the
+     * voice list is the machine's installed voices, so the <option>s cannot be
+     * static markup. Three groups, one per speaker in RadioVoice.SPEAKERS.
+     *
+     * Built ONCE and then only re-synced. getVoices() is famously empty on the
+     * first read in Chrome and fills in later, so the rebuild is driven by the
+     * voice list actually changing — not by a timer, and not by a re-open that
+     * would throw away a half-made selection. */
+    const VOICE_CHANNELS = [
+      ["control", "RACE CONTROL", "Penalties, warnings and flags."],
+      ["coach", "COACH", "Practice drills and driving advice."],
+      ["radio", "TEAM RADIO", "Your engineer: box calls, position, tyres."],
+    ];
+    let voiceRowsFor = null;   // the voice-list length the rows were built against
+
+    function voiceRow(ch, label, blurb) {
+      const wrap = document.createElement("div");
+      wrap.className = "as-voice";
+      const list = (G.radio && G.radio.voiceList && G.radio.voiceList()) || [];
+      const tune = (G.radio && G.radio.tuneFor && G.radio.tuneFor(ch)) || { pitch: 1, rate: 1, name: "" };
+
+      const head = document.createElement("div");
+      head.className = "set-row";
+      const name = document.createElement("span");
+      name.className = "tune-label"; name.id = "as-v-" + ch + "-label"; name.textContent = label;
+      const sel = document.createElement("select");
+      sel.id = "as-v-" + ch;
+      sel.setAttribute("aria-labelledby", name.id);
+      // SYSTEM DEFAULT is a real choice, not a placeholder: on iOS getVoices()
+      // returns nothing and the platform picks for itself, so this is the only
+      // entry there and the pitch/rate below are what carry the channel.
+      const auto = document.createElement("option");
+      auto.value = ""; auto.textContent = list.length ? "DEFAULT" : "SYSTEM DEFAULT";
+      sel.appendChild(auto);
+      for (const v of list) {
+        const o = document.createElement("option");
+        o.value = v.name; o.textContent = v.name;
+        sel.appendChild(o);
+      }
+      sel.value = list.some((v) => v.name === tune.name) ? tune.name : "";
+      sel.onchange = () => { setTune(ch, { name: sel.value }); preview(ch); };
+      const test = document.createElement("button");
+      test.type = "button"; test.className = "cz-liv-none"; test.id = "as-v-" + ch + "-test";
+      test.textContent = "TEST";
+      test.setAttribute("aria-label", "Hear " + label);
+      test.onclick = () => preview(ch);
+      const box = document.createElement("div");
+      box.append(sel, test);
+      head.append(name, box);
+
+      wrap.append(head, slider(ch, "pitch", "PITCH", tune.pitch, RadioVoice.PITCH_MIN, RadioVoice.PITCH_MAX),
+                  slider(ch, "rate", "RATE", tune.rate, RadioVoice.RATE_MIN, RadioVoice.RATE_MAX));
+      const note = document.createElement("p");
+      note.className = "as-note"; note.textContent = blurb;
+      wrap.appendChild(note);
+      return wrap;
+    }
+
+    // Sliders speak in HUNDREDTHS. The range is 0.5..1.6 for pitch and 0.6..1.35
+    // for rate — a step of 0.05 in float steps is where <input type=range> starts
+    // handing back 1.0500000000000003, and the store then carries that forever.
+    function slider(ch, key, label, value, lo, hi) {
+      const row = document.createElement("label");
+      row.className = "tune-row";
+      const cap = document.createElement("span");
+      cap.className = "tune-label";
+      const b = document.createElement("b");
+      b.id = "as-v-" + ch + "-" + key + "-v";
+      b.textContent = value.toFixed(2);
+      cap.append(document.createTextNode(label + " "), b);
+      const inp = document.createElement("input");
+      inp.type = "range"; inp.id = "as-v-" + ch + "-" + key;
+      inp.min = String(Math.round(lo * 100)); inp.max = String(Math.round(hi * 100));
+      inp.step = "5"; inp.value = String(Math.round(value * 100));
+      inp.setAttribute("aria-label", label + " for " + ch);
+      inp.oninput = () => {
+        const v = (+inp.value || 0) / 100;
+        b.textContent = v.toFixed(2);
+        setTune(ch, { [key]: v });
+      };
+      // The change, not every drag frame: speaking on `input` would queue a
+      // sample per pixel of thumb travel and the synth would stutter through
+      // them long after the drag stopped.
+      inp.onchange = () => preview(ch);
+      row.append(cap, inp);
+      return row;
+    }
+
+    const setTune = (ch, patch) => { if (G.radio && G.radio.setTune) G.radio.setTune(ch, patch); };
+    const preview = (ch) => { if (G.radio && G.radio.preview) G.radio.preview(ch); };
+
+    function buildVoiceRows() {
+      const host = $("as-voices");
+      if (!host || typeof RadioVoice === "undefined") return;
+      const n = (G.radio && G.radio.voiceList && G.radio.voiceList().length) || 0;
+      if (voiceRowsFor === n && host.children.length > 1) return;   // already right for this list
+      voiceRowsFor = n;
+      while (host.children.length > 1) host.removeChild(host.lastChild);
+      for (const [ch, label, blurb] of VOICE_CHANNELS) host.appendChild(voiceRow(ch, label, blurb));
+      const note = $("as-voices-note");
+      if (note) {
+        note.textContent = n
+          ? n + " system voices. A long message is sped up to fit its card, so RATE is a floor, not a promise."
+          : "This browser does not list its voices, so it picks one itself — PITCH and RATE are what separate the three channels here.";
+      }
+    }
+
     $("as-rvol").oninput = (e) => {
       radioVol = G.radio ? G.radio.setVolume((+e.target.value || 0) / 10) : (+e.target.value || 0) / 10;
       store.set("volRadio", radioVol);
