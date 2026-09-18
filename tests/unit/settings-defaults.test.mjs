@@ -13,7 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { check, readSpec, readDefaults, REVIEW } from "../../tools/gen/settings-defaults.mjs";
+import { check, readSpec, readDefaults, reviewKeys } from "../../tools/gen/settings-defaults.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 
 const DEFAULTS_SRC = new URL("../../js/data/settings-defaults.js", import.meta.url);
@@ -81,12 +81,32 @@ test("the defaults file loads before the store that reads it", () => {
   assert.ok(a < b, "settings-defaults.js must load BEFORE js/core/store.js, which consults it on every miss");
 });
 
-test("REVIEW keys are never silently promoted to shipped defaults", () => {
+test("a SUBSYSTEM key is never silently promoted to a shipped default", () => {
   const { obj } = readDefaults();
-  const spec = new Map(readSpec().map((r) => [r.k, r]));
-  for (const k of Object.keys(REVIEW)) {
-    assert.ok(spec.has(k) || true, k);
+  const review = reviewKeys();
+  assert.ok(Object.keys(review).length > 0,
+    "settings-export.js marks no key `subsystem:` — the classification was lost, and nothing now stops an export shipping the driving model");
+  for (const [k, why] of Object.entries(review)) {
     assert.equal(Object.prototype.hasOwnProperty.call(obj, k), false,
-      `${k} is in the shipped defaults: ${REVIEW[k]}. It needs --include and a deliberate decision, not a drive-by export.`);
+      `${k} is in the shipped defaults: ${why}. It needs --include and a deliberate decision, not a drive-by export.`);
   }
+});
+
+test("the classification lives on the SPEC row, not in the tool", () => {
+  // The point of the move: adding a key makes you answer the question, instead
+  // of the tool's author having answered it for keys that existed that day.
+  const src = fs.readFileSync(new URL("../../js/ui/settings-export.js", import.meta.url), "utf8");
+  assert.match(src, /subsystem: "/, "no SPEC row declares `subsystem:` any more");
+  const tool = fs.readFileSync(new URL("../../tools/gen/settings-defaults.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(tool, /export const REVIEW = \{/,
+    "the tool is carrying its own hand-kept review list again — derive it from SPEC instead");
+});
+
+test("every key the driving model owns is marked", () => {
+  // These four moved every scenario in tests/data/physics-baseline.json when
+  // they briefly shipped as defaults. Naming them is what stops a future export
+  // re-running that experiment silently.
+  const review = reviewKeys();
+  for (const k of ["preset", "steerRate", "tiltDeg", "adaptiveButtons", "pace"])
+    assert.ok(review[k], `${k} is a steering default and must be marked \`subsystem:\` in settings-export.js`);
 });
