@@ -16,7 +16,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus, handshake, parts } = {}) {
+function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transportStatus, handshake, parts,
+                   href = "https://x.test/play?renderer=glx#keep=1&vs=invite" } = {}) {
   const elements = new Map();
   const element = (id) => {
     const el = { id, hidden: true, value: "", textContent: "", focus() {} };
@@ -44,9 +45,22 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     },
   };
   const transports = [];
+  const replacements = [];
+  const location = { href, hash: href.includes("#") ? href.slice(href.indexOf("#")) : "" };
+  const history = {
+    state: { route: "menu" },
+    replaceState(state, _title, next) {
+      replacements.push({ state, next: String(next) });
+      location.href = String(next);
+      location.hash = location.href.includes("#") ? location.href.slice(location.href.indexOf("#")) : "";
+    },
+  };
   const context = vm.createContext({
     console,
     document,
+    history,
+    location,
+    URL,
     navigator: { wakeLock, clipboard: {} },
     performance,
     setTimeout,
@@ -61,6 +75,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
       createInvite: async () => ({ ok: true, code: "invite" }),
       inviteFromUrl: () => null,
       inviteUrl: (code) => "https://x.test/#vs=" + code,
+      consumeInviteUrl: () => false,
     }, handshake || null),
     NetQr: { draw: () => false },
     Parts: parts || { BUDGET: 780, getFactorySetup: () => "factory", getCost: () => 0 },
@@ -88,7 +103,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
     return { status: transportStatus || "new", onClose() {}, close() {} };
   });
   return {
-    lobby, elements, scan, video, transports, G, room, status,
+    lobby, elements, scan, video, transports, replacements, location, G, room, status,
     click(id) { const el = elements.get(id); return el && el.onclick ? el.onclick() : undefined; },
     emit(type) { for (const fn of listeners.get(type) || []) fn(); },
   };
@@ -99,6 +114,34 @@ test("peer leave refreshes the friend-quali gate so a dropped rival unlocks the 
   assert.match(SOURCE, /if \(!sessions\.size\) \{ clearInterval\(pumpTimer\); pumpTimer = null; close\(\); return; \}/);
   assert.match(SOURCE, /if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
   assert.match(SOURCE, /cancel\(\);\s*\n\s*if \(G\.quitToMenu\) G\.quitToMenu\(\)/);
+});
+
+test("a consumed or cancelled URL invite is removed without losing unrelated URL state", async () => {
+  let consumed = 0;
+  const handshake = {
+    inviteFromUrl: () => "invite",
+    withoutInviteUrl: () => "https://x.test/play?renderer=glx#keep=1",
+    consumeInviteUrl: () => { consumed++; return true; },
+    acceptInvite: async () => ({ ok: true, code: "answer", peer: null }),
+  };
+  const accepted = harness({ handshake, scanFactory: () => ({ stop() {}, start() {} }) });
+  try {
+    await accepted.lobby.join();
+    assert.equal((await accepted.lobby.makeAnswer("invite")).ok, true);
+    assert.equal(consumed, 1, "successful acceptance consumes the invite");
+  } finally { accepted.lobby.cancel(); }
+
+  consumed = 0;
+  const cancelled = harness({ handshake, scanFactory: () => ({ stop() {}, start() {} }) });
+  cancelled.lobby.wire();
+  await new Promise((resolve) => setImmediate(resolve));
+  cancelled.click("vs-close");
+  assert.ok(consumed >= 1, "cancelling the URL-opened lobby consumes the invite");
+});
+
+test("host-leave copy is honest about the AI takeover", () => {
+  assert.doesNotMatch(SOURCE, /host left[^"\n]*race is over/i);
+  assert.match(SOURCE, /host left[^"\n]*rivals (?:are )?now AI/i);
 });
 
 test("a newer join operation prevents a late host continuation", async () => {
