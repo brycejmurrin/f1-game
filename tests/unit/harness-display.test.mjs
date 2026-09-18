@@ -26,7 +26,8 @@ test("harness exports display helpers and clears a dead DISPLAY for headless", a
   assert.equal(x11SocketPath(":1"), "/tmp/.X11-unix/X1");
   assert.equal(x11SocketPath("localhost:0.0"), null, "remote DISPLAY left alone");
   assert.equal(displaySocketAlive(""), false);
-  assert.equal(displaySocketAlive(undefined), false);
+  assert.equal(displaySocketAlive(undefined), displaySocketAlive(process.env.DISPLAY),
+    "an omitted display probes the process environment");
 
   const env = { DISPLAY: ":1" };
   const logs = [];

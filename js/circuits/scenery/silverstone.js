@@ -453,8 +453,18 @@
             // The barrel. addCyl extrudes along basis[1], so the roll axis is
             // the shed's LENGTH — the same [r, t, u] basis the museum's
             // repainted T2 roof uses thirty lines below.
+            //
+            // VERGE, and it is not a fudge. Flush with the gable, the cylinder's
+            // END CAP lands on exactly the plane of the shed's end wall, facing
+            // the same way: two faces, one depth, both rasterised, z-fighting at
+            // every distance. That is what coplanar-faces.test.mjs counts, and
+            // five hangars flush took silverstone 15 -> 20 spots and the deploy
+            // branch red (pages 2424-2426). A T2's roof oversails its gable, so
+            // the fix is the real detail rather than a nudge: the caps move 0.3 m
+            // proud of the end walls and share no plane with anything.
+            const VERGE = 0.3;
             stage._mat = MAT.RUST;
-            addCyl(stage, vadd(vadd(c, a.u, EAVE), a.t, -LEN / 2), W / 2, LEN,
+            addCyl(stage, vadd(vadd(c, a.u, EAVE), a.t, -(LEN / 2 + VERGE)), W / 2, LEN + VERGE * 2,
               T2_OLIVE_D, 7, [a.r, a.t, a.u]);
             // Sliding door bays at the trackside gable — the one detail that
             // survives at this range, because it breaks the flat end wall.

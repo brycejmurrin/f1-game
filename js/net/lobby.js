@@ -178,7 +178,7 @@ const NetLobby = (function () {
         if (!sessions.size) {
           clearInterval(pumpTimer); pumpTimer = null;
           say(role === "guest"
-            ? "The host left, so the race is over. Everyone connects through them."
+            ? "Host left — rivals are now AI. Keep racing."
             : "Connection closed.", true);
         } else {
           say("A player left. The rest of you are still in.");
@@ -211,7 +211,7 @@ const NetLobby = (function () {
     }
 
     function teardown() {
-      clearInterval(pollTimer);
+      NetHandshake.consumeInviteUrl(); clearInterval(pollTimer);
       clearInterval(pumpTimer);
       pumpTimer = null;
       clearTimeout(codeReopenTimer); codeReopenTimer = null;
@@ -849,7 +849,7 @@ const NetLobby = (function () {
       if (e.editRace) e.editRace.hidden = !host;
       if (e.raceNote) {
         e.raceNote.textContent = host ? ""
-          : "The host chooses the circuit and conditions — and everyone connects through them, so if they leave, the race ends.";
+          : "The host chooses the circuit and conditions. If they leave, their rivals continue as AI.";
         e.raceNote.hidden = host;
       }
       if (e.me) replace(e.me, driverLine(localProfile(), "You", selfReady));
@@ -1073,7 +1073,7 @@ const NetLobby = (function () {
       }
       if (!operationCurrent(gen) || transport !== pending) return cancelledResult();
       if (!res.ok) { say(res.message || "That invite could not be read.", true); return res; }
-      if (res.peer) _peers.set(PEER_ONE, res.peer);
+      NetHandshake.consumeInviteUrl(); if (res.peer) _peers.set(PEER_ONE, res.peer);
       if (e.answer) e.answer.value = res.code;
       if (e.answerHint) e.answerHint.hidden = false;
       if (e.answerActions) e.answerActions.hidden = false;
@@ -1594,7 +1594,7 @@ const NetLobby = (function () {
     }
 
     function close() {
-      invalidateOperations();
+      invalidateOperations(); NetHandshake.consumeInviteUrl();
       clearInterval(pollTimer);
       Log.info("net", "lobby close");
       stopScan();
