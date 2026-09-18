@@ -134,7 +134,9 @@ interface StoreApi {
   /** Parsed value for `k`, or `d` when absent/unreadable. */
   get<T>(k: string, d: T): T;
   get(k: string, d?: unknown): unknown;
-  set(k: string, v: unknown): void;
+  /** `false` when the value is cached for this session but did not reach
+      localStorage (write() returns `.durable`; store.js). Most callers ignore it. */
+  set(k: string, v: unknown): boolean;
   /** The raw string lane: bare "1"/"0" flags and ids, read live (no cache), key with or without the prefix. */
   raw(k: string): string | null;
   rawSet(k: string, v: string): boolean;
@@ -238,12 +240,15 @@ interface GameEls {
   hud: HTMLElement; pos: HTMLElement; lap: HTMLElement; time: HTMLElement;
   best: HTMLElement; speed: HTMLElement; energy: HTMLElement;
   ot: HTMLElement; aero: HTMLElement;
+  tyre: HTMLElement; tyreCode: HTMLElement; tyreFill: HTMLElement; plan: HTMLElement;
+  pitCue: HTMLElement; pitCueArrow: HTMLElement; pitCueText: HTMLElement; workBtn: HTMLElement;
   gapA: HTMLElement; gapB: HTMLElement;
   hudSectors: HTMLElement; hudLimits: HTMLElement;
   flag: HTMLElement; minimap: HTMLElement;
   lights: HTMLElement; announce: HTMLElement;
+  announceNum: HTMLElement; announceWho: HTMLElement; announceText: HTMLElement;
   overlay: HTMLElement; subtitle: HTMLElement; audiostate: HTMLElement;
-  lighting: HTMLElement; camtune: HTMLElement;
+  lighting: HTMLElement; camtune: HTMLElement; flyby: HTMLElement;
   select: HTMLElement; selTitle: HTMLElement; selTeams: HTMLElement;
   selTracks: HTMLElement;
   selPreviewMap: HTMLElement; selPreviewName: HTMLElement;
@@ -272,7 +277,7 @@ type GameState = string;
 type FlowMode = string;
 /** "race" | "tt" — session is the authority, timeTrial a derived view. */
 type SessionMode = string;
-/** "dry" | "wet" | "rain". */
+/** "dry" | "overcast" | "wet" | "rain" | "fog" — game.js `_WX_VALID`. */
 type Weather = string;
 /** "default" | "day" | "dusk" | "dawn" | "night". */
 type TimeOfDay = string;
