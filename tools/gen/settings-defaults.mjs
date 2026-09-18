@@ -5,6 +5,7 @@
  *
  *   node tools/gen/settings-defaults.mjs <export.json>          # apply
  *   node tools/gen/settings-defaults.mjs <export.json> --dry    # print, write nothing
+ *   node tools/gen/settings-defaults.mjs --drop pace,tiltDeg    # back to the as-shipped default
  *   node tools/gen/settings-defaults.mjs --check                # the file still agrees with SPEC
  *
  * WHY. A player exports SETTINGS from SETTINGS > DISPLAY > RENDERER > FILES.
@@ -144,6 +145,24 @@ export function apply(exportFile, { force = false, dry = false, include = [], ro
 }
 
 /** Drift: every key in the file must be a SPEC key, and must not be adaptive. */
+/** Remove keys, so the call-site literal is the default again. The file's own
+ *  header tells you not to hand-edit the block, which has to include taking a
+ *  key back out — otherwise the one edit the tool cannot do is the one you make
+ *  by hand, and the rule stops being true. */
+export function drop(keys, { dry = false, root = ROOT } = {}) {
+  const spec = readSpec(root), cur = readDefaults(root);
+  const next = { ...cur.obj }, removed = [], missing = [];
+  for (const k of keys) {
+    if (!Object.prototype.hasOwnProperty.call(next, k)) { missing.push(k); continue; }
+    removed.push(`${k}: ${fmt(next[k])} -> as-shipped`);
+    delete next[k];
+  }
+  const block = render(next, spec);
+  const out = cur.src.slice(0, cur.a + START.length) + "\n" + block + "\n" + cur.src.slice(cur.b);
+  if (!dry && out !== cur.src) fs.writeFileSync(path.join(root, TARGET), out);
+  return { removed, missing, keys: Object.keys(next).length };
+}
+
 export function check(root = ROOT) {
   const spec = readSpec(root), byKey = new Map(spec.map((r) => [r.k, r]));
   const { obj } = readDefaults(root);
@@ -165,8 +184,18 @@ function main() {
     process.exitCode = r.ok ? 0 : 1;
     return;
   }
-  const file = argv.find((a) => !a.startsWith("-"));
-  if (!file) { console.log("usage: settings-defaults.mjs <export.json> [--dry] [--force] [--include k1,k2] | --check"); process.exitCode = 2; return; }
+  const dropIdx = argv.indexOf("--drop");
+  const dropEq = (argv.find((a) => a.startsWith("--drop=")) || "").split("=")[1];
+  const dropKeys = (dropEq || (dropIdx >= 0 ? argv[dropIdx + 1] : "") || "").split(",").filter(Boolean);
+  if (dropKeys.length) {
+    const r = drop(dropKeys, { dry: argv.includes("--dry") });
+    for (const x of r.removed) console.log("  " + x);
+    for (const m of r.missing) console.log(`SKIPPED  ${m}: not a shipped default — already as-shipped`);
+    console.log(`${r.removed.length} default(s) dropped, ${r.keys} keys remain in ${TARGET}`);
+    return;
+  }
+  const file = argv.find((a) => !a.startsWith("-") && a !== dropKeys.join(","));
+  if (!file) { console.log("usage: settings-defaults.mjs <export.json> [--dry] [--force] [--include k1,k2] | --drop k1,k2 | --check"); process.exitCode = 2; return; }
   const incIdx = argv.indexOf("--include");
   const incEq = (argv.find((a) => a.startsWith("--include=")) || "").split("=")[1];
   const include = (incEq || (incIdx >= 0 ? argv[incIdx + 1] : "") || "").split(",").filter(Boolean);

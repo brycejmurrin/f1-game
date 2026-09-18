@@ -6,7 +6,7 @@
    across js/game.js, js/audio/panel.js, js/input/steer-tuning.js,
    js/race/driving-coach.js, js/race/race-control.js, js/ui/debris-opts.js and
    js/perf/metrics-overlay.js. "Make my settings the defaults" was therefore a
-   hunt through seven files for fourteen literals, with nothing checking that
+   hunt through those files for one literal each, with nothing checking that
    js/ui/settings-export.js's SPEC still agreed with any of them — and SPEC's
    agreement is what makes the CHANGED list in an exported settings file true.
    A default edited in one place and not the other does not fail anything; it
@@ -21,6 +21,17 @@
    the call-site literal, untouched. That matters most on the RAW lane, where
    `store.raw()` answers null for "never set" and some call sites read null as
    meaningful; only a key written here ever gets a different answer.
+
+   NOT HERE ON PURPOSE: the steering block (preset, steerRate, tiltDeg,
+   adaptiveButtons, pace). Those four-plus-one are not preferences in the sense
+   the rest of this file is — they are the DRIVING MODEL. Carrying them moved
+   every scenario in tests/data/physics-baseline.json: straight-line accel
+   +12 %, trail brake into rotation -28 % with its yaw going from -0.628 rad to
+   exactly zero, off-track recovery +34 %, and pace 11 -> 7 is 1.06^(v-14), so
+   84 % -> 67 % of reference pace for every new player. They were dropped for
+   that reason, not because the tool could not carry them. Re-adding one is a
+   handling change to the default car and physics-core is the gate that says so
+   — which is why tools/ci/pick-tests.mjs routes this file there.
 
    TO CHANGE A DEFAULT: play the game, set it how it should ship, export
    SETTINGS from SETTINGS › DISPLAY › RENDERER › FILES, then
@@ -43,12 +54,6 @@ const SettingsDefaults = (function () {
     "raceGrid": "random",
     "drivingCoach": true,
     "caution": false,
-    // STEERING (js/input/steer-tuning.js)
-    "preset": "custom",
-    "steerRate": 1,
-    "tiltDeg": 7,
-    "adaptiveButtons": 8,
-    "pace": 7,
     // AUDIO (js/audio/panel.js)
     "volMusic": 0.6,
     "volSfx": 0.2,

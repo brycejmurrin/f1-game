@@ -193,12 +193,14 @@ export const RULES = [
   [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],
   [/^js\/ui\/debris-opts\.js/, ["state-unit"], "debris-opts.test.mjs"],
   // The SHIPPED default for any preference. Its own suite is settings-defaults
-  // .test.mjs in steering-unit, but the file reaches much further than that:
-  // it outranks the call-site literal for every key it names, and the first
-  // fourteen keys it carried included steerRate, tiltDeg, adaptiveButtons and
-  // pace. Changing them moved every scenario in the driving-model baseline —
-  // trail-brake rotation went from -0.628 rad of yaw to zero — so physics-core
-  // is not optional here, it is the gate that noticed.
+  // .test.mjs in steering-unit, but the file reaches further than that: it
+  // outranks the call-site literal for every key it names, and some of those
+  // keys are the driving model. It briefly carried steerRate, tiltDeg,
+  // adaptiveButtons and pace, and that moved every scenario in the
+  // characterization baseline — trail-brake rotation went from -0.628 rad of
+  // yaw to exactly zero. They were dropped, so the file is handling-neutral
+  // TODAY; physics-core stays on the rule because the next key added could put
+  // them back, and this is the gate that noticed the first time.
   [/^js\/data\/settings-defaults\.js/, ["steering-unit", "physics-core"],
    "settings-defaults.test.mjs, plus the driving model: a steering default moves the characterization baseline"],
   [/^js\/ui\/key-binds\.js/, ["steering-unit"], "key-binds.test.mjs"],
