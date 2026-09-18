@@ -153,18 +153,21 @@ test("the ungated set is derived, and is the exact complement of the gated one",
   }
 });
 
-test("deploy.mjs runs the ungated files before it pushes", () => {
-  const src = fs.readFileSync(new URL("../../tools/ci/deploy.mjs", import.meta.url), "utf8");
-  assert.match(src, /import \{ ungatedNodeFiles \}/, "deploy.mjs no longer imports ungatedNodeFiles");
-  const call = src.indexOf("ungatedNodeFiles()");
-  // The CALL SITE, not the definition — `function pushWithRetry()` is declared
-  // hundreds of lines above where it runs, and matching that had this guard
-  // failing on correct code the first time it ran.
-  const push = src.indexOf("verdict.pushAttempts = pushWithRetry()");
-  assert.ok(call > 0, "deploy.mjs imports ungatedNodeFiles but never calls it");
-  assert.ok(push > 0, "deploy.mjs no longer pushes via `verdict.pushAttempts = pushWithRetry()` — this guard is reading the wrong anchor");
-  assert.ok(call < push,
-    "deploy.mjs computes the ungated set AFTER it pushes — it has to gate the push, not describe it");
-  assert.match(src, /run\("node", \["--test", \.\.\.ungated\]/,
-    "deploy.mjs must actually RUN the ungated files; naming them in the plan is not a gate");
+test("every ungated file is inside test:sweeps — the assumption deploy.mjs rests on", () => {
+  // deploy.mjs gates the publish by running test:sweeps WHEN the union can move
+  // geometry (f6d8de2). That is the right shape — conditional, and derived from
+  // pick-tests' own rules — and it rests on one thing being true: that the
+  // files no other gate runs are all IN test:sweeps. Today all 14 are.
+  //
+  // Nothing else checks that. Add a node test file tomorrow to a group that is
+  // in neither tooling-fast nor ci.yml's "Pure-node unit suites" nor
+  // test:sweeps, and it runs in no gate before a publish AND is not picked up
+  // by the conditional sweep — the same hole that blocked the release train on
+  // 2026-09-18, in a place the fix for that does not reach. This names it.
+  const groups = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", import.meta.url), "utf8"));
+  const sweeps = new Set((groups.groups["test:sweeps"] || {}).files || []);
+  const stranded = ungatedNodeFiles().filter((f) => !sweeps.has(f));
+  assert.deepEqual(stranded, [],
+    "these run in NO pre-publish gate and are not in test:sweeps either, so deploy.mjs's conditional sweep " +
+    "cannot cover them: " + stranded.join(", ") + " — put each in a gated group, or in test:sweeps");
 });

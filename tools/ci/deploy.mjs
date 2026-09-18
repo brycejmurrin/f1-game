@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // deploy.mjs — the ONE deploy command (2026-09-01).
-// @doc the ONE deploy: fetch → merge → tooling-fast → verify-track → push the deploy branch (or --pr); pages.yml stamps it
+// @doc the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry → verify-track → push the deploy branch (or --pr); pages.yml stamps it
 //
 //   node tools/ci/deploy.mjs --plan        # print the steps + the union diffstat, run nothing
-//   node tools/ci/deploy.mjs               # fetch → merge → tooling-fast → verify-track (touched
-//                                       #   circuits) → push HEAD to the deploy branch (retry ×3)
+//   node tools/ci/deploy.mjs               # fetch → merge → tooling-fast → the Pages gate's node
+//                                       #   suites → test:sweeps (only if the union can move
+//                                       #   geometry) → verify-track (touched circuits) → push
+//                                       #   HEAD to the deploy branch (retry ×3)
 //   node tools/ci/deploy.mjs --pr          # same checks, then push the session branch and open /
 //                                       #   update a PR into the deploy branch (never pushes there)
 //   node tools/ci/deploy.mjs --json        # machine verdict on stdout, log on stderr
@@ -15,8 +17,12 @@
 // What changed underneath it (see pages.yml "Stamp the shell generation"): the
 // build number is stamped by the deploy from the commit count, so there is no
 // union re-bump; version.json/index.html conflicts resolve to EITHER side plus a
-// a `gen-shell` regeneration (tags read ?v=dev; the deploy stamps hashes). Sweeps are CI's (ci.yml runs them on the
-// same diff, conditionally); running them here only duplicated 10 minutes.
+// a `gen-shell` regeneration (tags read ?v=dev; the deploy stamps hashes). Sweeps ran here again from
+// 2026-09-18, conditionally: they are CI's too, but CI runs them AFTER the
+// push, and one float-equality failure that only test:sweeps could catch broke
+// Pages for hours past a green deploy (the reversal is argued at
+// touchesGeometry()). The verdict also carries notCovered[] — what this gate
+// did NOT measure — so a green here stops implying more than it checked.
 // The live check is pages.yml's `verify-live` job — this box cannot reach
 // github.io, the runner can.
 //
@@ -29,7 +35,6 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { ungatedNodeFiles } from "./twinned-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -97,7 +102,8 @@ export function plan() {
       ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers)",
       `tools/ci/tooling-fast.mjs ${GATE_JOBS} (the full node gate, two files at a time)`,
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
-      "the UNGATED node files — in a topical group but in no pre-publish gate (twinned-specs.ungatedNodeFiles)",
+      touchesGeometry(tip) ? "test:sweeps (~10 min — this union can move geometry)"
+                           : "test:sweeps SKIPPED (nothing in this union can move geometry)",
       "verify-track for touched circuits",
       flag("--pr") ? "push the session branch and open/update a PR into the deploy branch"
                    : "git push origin HEAD:" + DEPLOY_BRANCH + " (fast-forward, retry ×3)",
@@ -124,6 +130,68 @@ export function gateNodeSuites() {
   const scripts = [...body.matchAll(/^\s+npm run (test:[\w-]+)\s*$/gm)].map((m) => m[1]);
   if (!scripts.length) throw new Error("deploy: the 'Pure-node unit suites' step parsed to ZERO scripts — refusing to push on a gate that measured nothing.");
   return scripts;
+}
+
+/* THE GEOMETRY HALF OF THE GATE — and a REVERSAL, recorded on purpose.
+ *
+ * This file used to say: "Sweeps are CI's (ci.yml runs them on the same diff,
+ * conditionally); running them here only duplicated 10 minutes." That was true
+ * and it was still the wrong call, for a reason the sentence does not contain:
+ * ci.yml runs the sweeps AFTER the push, so the duplication it saves is paid
+ * for by shipping a broken tip to a branch other sessions develop directly on.
+ *
+ * 2026-09-18 is the bill. d9ae0ab moved Suzuka, debris-hazard-hint compared a
+ * computed float with assert.equal, the two paths landed one ULP apart
+ * (4893.275779224587 vs 4893.2757792245875), and Pages failed for HOURS — past
+ * a deploy that had run tooling-fast and all twelve "Pure-node unit suites"
+ * and reported green, because the only suite that could catch it lives in
+ * test:sweeps and nothing here ran test:sweeps.
+ *
+ * The 10 minutes are real, so they are CONDITIONAL: paid only when the union
+ * can actually move geometry, which is the same condition ci.yml applies. What
+ * this does NOT cover is a session pushing straight to the deploy branch
+ * without deploy.mjs — that path still learns from CI after the fact. Hence
+ * notCovered() below: the other half of this fix is that a gate says what it
+ * did not measure instead of reporting a bare green.
+ *
+ * Both halves of the filter are DERIVED, never retyped: the prefixes are
+ * pick-tests.mjs's sweeps RULES, and the suite list is read out of
+ * package.json's test:sweeps by the same match ci.yml uses. ci.yml's own copy
+ * drifted exactly once by being hand-written — scenery-grounding was missing
+ * from it, so a diff touching only that suite skipped the sweep it belongs to.
+ *
+ * FAIL SAFE, NEVER FAIL OPEN: a diff we cannot resolve RUNS them, and a suite
+ * list that parses to nothing THROWS rather than quietly matching nothing. */
+const GEOMETRY_PATHS =
+  /^(?:js\/track\/|js\/circuits\/|tools\/(?:track|lib)\/|js\/car\/|js\/game\.js$|js\/game\/debrisworld\.js$)/;
+
+export function sweepSuites() {
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")); }
+  catch (e) { throw new Error("deploy: cannot read package.json — the sweep suite list is undefined: " + e.message); }
+  const suites = String((pkg.scripts && pkg.scripts["test:sweeps"]) || "").match(/tests\/unit\/[^\s]+/g) || [];
+  if (!suites.length) throw new Error("deploy: package.json's test:sweeps names ZERO suites — refusing to derive a geometry filter from nothing.");
+  return suites;
+}
+
+export function touchesGeometry(base, cwd) {
+  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
+  if (r.code !== 0) return true;                        // unresolvable diff -> run them
+  const files = r.out.split("\n").filter(Boolean);
+  if (files.some((f) => GEOMETRY_PATHS.test(f))) return true;
+  const suites = new Set(sweepSuites());
+  return files.some((f) => suites.has(f));              // a moved baseline counts too
+}
+
+/* What this deploy did NOT measure. A green verdict that lists only what ran
+ * is how both of 2026-09-18's breakages got past a gate: tooling-fast reported
+ * 207/207 while knowing nothing about test:sweeps or test:lifecycle-unit. The
+ * browser groups are never run here (SwiftShader: 10-40 min each) and a
+ * non-geometry union skips the sweeps, so both are named rather than implied. */
+export function notCovered(ranSweeps) {
+  const out = ["browser smoke groups (ci.yml runs them after the push)"];
+  if (!ranSweeps) out.push("test:sweeps (nothing in this union can move geometry)");
+  return out;
 }
 
 // tools/manifest.cjs MOVED (written by tools/gen/move-tree.mjs): old path -> new.
@@ -372,20 +440,11 @@ export function main() {
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
   // from ci.yml so the two lists cannot drift apart.
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
-  // ...AND THE FILES NEITHER GATE RUNS. The comment above records that the
-  // Pages gate runs more than tooling-fast because deploys went red on pins
-  // tooling-fast never runs; this is the same bug one level further out. A
-  // sweeps-only file is in no gate at all, and on 2026-09-18 one of them — a
-  // float compared bit-for-bit — failed every Pages publish from 01:44 while
-  // CI stayed green, because the job that runs it only runs when the diff
-  // touches geometry, and a DEPLOY merges other sessions' geometry by
-  // definition. ~5 min on a ~13 min protocol, to stop shipping into a gate
-  // nothing checked.
-  const ungated = ungatedNodeFiles();
-  if (ungated.length) {
-    run("node", ["--test", ...ungated], `ungated node files (${ungated.length}, in no pre-publish gate)`);
-    verdict.verified.push(`ungated:${ungated.length}`);
-  }
+  // Conditional, for the reason recorded above touchesGeometry(): ci.yml runs
+  // the sweeps AFTER the push, so skipping them here buys 10 minutes with a
+  // broken tip on a branch other sessions build on.
+  const ranSweeps = touchesGeometry(p.tip);
+  if (ranSweeps) { run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verdict.verified.push("test:sweeps"); }
   for (const id of touchedCircuits(p.tip)) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verdict.verified.push(`verify-track:${id}`); }
   if (flag("--pr")) {
     Object.assign(verdict, openPr(p.branch));
@@ -393,6 +452,7 @@ export function main() {
     verdict.pushAttempts = pushWithRetry();
     verdict.pushed = true;
   }
+  verdict.notCovered = notCovered(ranSweeps);
   verdict.next = "the push's FAST ci.yml run is your verdict (minutes) and, when green, pokes pages.yml, which gates the tip, stamps the build (2000 + commit count) and verify-live confirms the CDN serves it — a commit is live once it is an ancestor of the live shell's apex-sha (deploy-research)";
   verdict.seconds = Math.round((Date.now() - t0) / 1000);
   if (JSON_OUT) console.log(JSON.stringify(verdict, null, 2));
