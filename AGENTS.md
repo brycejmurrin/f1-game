@@ -198,3 +198,26 @@ other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in
 minutes (your verdict) and, if green, pokes `pages.yml`, which gates the tip
 once and publishes exactly that commit (dispatch = "deploy now"; ≤ ~25 min).
 "Live?" = ancestor of the live `apex-sha` (deploy-research; `docs/TESTING.md` §Release train).
+
+### Watching CI and Pages
+
+Do not conflate the three trains: PR CI (`ci.yml`, pull-request head), ship-push
+CI (`ci.yml`, deploy-branch head), and Pages (`pages.yml`, workflow `295002043`).
+A green PR does not prove Pages will pass: Pages calls `ci.yml` with a
+`before_sha` that is often the last live tip, so it may select specs the PR
+never ran. Poll runs by `head_sha`, ignore cancelled runs superseded by a newer
+run on that SHA, and after merge watch both the ship-push CI and the Pages run.
+
+On red, read the failed job logs and search for `Expected`, `Received`, `x FAIL`,
+`Timeout` and `timed out`. Report the exact test title, assertion and job lane
+(`Selected specs`, `Per-circuit geometry sweeps`, pure-node, smoke, or a nested
+Pages `ci / …` job), not only the wrapper's conclusion. Diagnose before fixing:
+`caution().enabled` false is the intentional `SettingsDefaults` caution default,
+not a reason to pin WebGL2 or raise `BOOT_MS`; a one-ULP Suzuka arc mismatch in
+sweeps needs an epsilon, not a product change. `test:tooling-fast` green does not
+prove the larger Pages node suites or geometry sweeps are green.
+
+Redeploy through `node tools/ci/deploy.mjs` or a Pages workflow dispatch; never
+claim the change is live until Pages and `version.json` confirm it. Every status
+report names the SHA, run URL, green/red verdict, failing test and assertion
+when red, which train ran, and the next action.
