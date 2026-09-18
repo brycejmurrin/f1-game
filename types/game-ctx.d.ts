@@ -449,6 +449,10 @@ interface GameCtx {
   raceTimeOfDay: TimeOfDay;
   /** The FLYBY SHOT EDITOR's saved shot list, or null for the shipped sequence. */
   readonly flybyShots: object[] | null;
+  /** True when the last gridUp() laid the grid from a pre-order (qualifying),
+   *  which is peer-identical — false for the pace grid, which seats the LOCAL
+   *  player at P12 and so differs per machine. js/net/netplay.js reads it. */
+  readonly gridPreOrdered: boolean;
   /** What the LAST rendered frame's projection was built with — near, far, the
    *  post-cap vertical FOV in radians, the fog multiplier (null = unscaled), the
    *  cull radius, and whether it was the pre-race cinematic. Read by

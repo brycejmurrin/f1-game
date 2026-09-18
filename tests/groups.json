@@ -547,6 +547,7 @@
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-authority.test.mjs",
+    "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-stub-surface.test.mjs"
