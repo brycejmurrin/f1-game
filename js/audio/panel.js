@@ -43,6 +43,21 @@ const AudioPanel = (() => {
     }
     els.soundbtn.onclick = () => setSound(!G.soundOn, true);
 
+    // TEAM RADIO — the banner spoken aloud (js/audio/radio-voice.js). Same shape
+    // as SOUND EFFECTS above, including the ordering: the master gates it, so
+    // asking for it mid-race lifts SOUND rather than leaving a switch that reads
+    // ON over silence. OFF by default — the reasons are in radio-voice.js, and
+    // the short one is that #announce is already role="status", so a screen
+    // reader user hears every card twice if we default this on.
+    let radioOn = store.get("radioVoice", false);
+    let radioVol = store.get("volRadio", 0.8);
+    function setRadio(b) {
+      if (b && !G.soundOn) setSound(true, true);
+      radioOn = b; store.set("radioVoice", b);
+      if (G.radio) { G.radio.setEnabled(b); if (b) G.radio.unlock(); }   // this click IS the gesture iOS wants
+      syncAudioPanel();
+    }
+
     function setMusic(b, fromGesture = true) {
       // The master gates both buses and its only button lives on the title
       // screen, so asking for music mid-race has to lift it — otherwise the
@@ -111,6 +126,10 @@ const AudioPanel = (() => {
         ["k", "SOUND"],
         [sfxOn ? "on" : "off", sfxOn ? "ON" : "OFF"],
       ]);
+      Dom.paintFold($("as-radio-sum"), [
+        ["k", "TEAM RADIO"],
+        [radioOn ? "on" : "off", radioOn ? "ON" : "OFF"],
+      ]);
       const prof = (typeof GameAudio !== "undefined" && GameAudio.profile) ? GameAudio.profile() : "team";
       Dom.paintFold($("as-engine-sum"), [
         ["k", "ENGINE TONE"],
@@ -175,6 +194,20 @@ const AudioPanel = (() => {
       $("as-mvol-v").textContent = String(Math.round(musicVol * 10));
       $("as-svol").value = String(Math.round(sfxVol * 10));
       $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
+      // The radio row explains WHICH of the three reasons it is unusable for,
+      // because "greyed out" with no sentence is the worst version of this.
+      const radioReady = !!(G.radio && G.radio.available());
+      const radioLive = radioOn && G.soundOn && radioReady;
+      SettingRow.paint($("as-radio"), radioOn ? "on" : "off", ONOFF);
+      SettingRow.disable($("as-radio"), !radioReady);
+      $("as-rvol").disabled = !radioLive;
+      $("as-rvol").closest(".tune-row").classList.toggle("tune-off", !radioLive);
+      $("as-rvol").value = String(Math.round(radioVol * 10));
+      $("as-rvol-v").textContent = String(Math.round(radioVol * 10));
+      const rnote = $("as-radio-note");
+      if (rnote) rnote.textContent = !radioReady ? "This browser has no speech voices, so the radio stays written."
+        : !G.soundOn ? "Master sound is off — TEAM RADIO ON turns it on."
+        : "Race control, your engineer and the coach read their messages aloud. The cards are unchanged.";
       // The master gate is what silences music when SOUND is off, and the MUSIC
       // switch still reads ON then — so the readout names the gate that is
       // actually shut instead of contradicting the switch beside it. The title
@@ -219,6 +252,13 @@ const AudioPanel = (() => {
       write: (v) => { setMusic(v === "on"); if (G.soundOn) GameAudio.uiTick(); } });
     // ON enables before the tick so the tick has a context to play in; OFF
     // ticks first, while the bus is still open.
+    SettingRow.wire("as-radio", { values: ONOFF, read: () => (radioOn ? "on" : "off"),
+      write: (v) => { if (v === "on") { setRadio(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setRadio(false); } } });
+    $("as-rvol").oninput = (e) => {
+      radioVol = G.radio ? G.radio.setVolume((+e.target.value || 0) / 10) : (+e.target.value || 0) / 10;
+      store.set("volRadio", radioVol);
+      $("as-rvol-v").textContent = String(Math.round(radioVol * 10));
+    };
     SettingRow.wire("as-sound", { values: ONOFF, read: () => (sfxOn ? "on" : "off"),
       write: (v) => { if (v === "on") { setSfx(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setSfx(false); } } });
     // `input` not `change`: the level should follow the thumb while dragged.

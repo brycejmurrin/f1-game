@@ -235,6 +235,11 @@ const Tracks = (function () {
     track.surface = TrackSurface.profile(def, track);
     lap("surface", "geo");
     track._night = opts && opts.night != null ? !!opts.night : !!def.night;
+    // How many grid boxes to paint. game.js passes the SIZE OF THE FIELD IT IS
+    // ABOUT TO GRID, because that varies with the selected team; anything that
+    // builds a track without a field (tools, VM builds, the circuit sweeps)
+    // leaves it null and gets TrackMesh's 22-car default.
+    track._gridSlots = opts && opts.gridSlots > 0 ? Math.round(opts.gridSlots) : null;
     // Façade wiring: the active renderer backend flows in through opts.gfx
     // (game.js passes `gfx`). This ends tracks.js's reliance on reaching the
     // GLX global directly — the injected handle is the WebGL2/TLX/WGX backend
@@ -2302,6 +2307,7 @@ const Tracks = (function () {
       // The mast/custom concat above has run; nothing reads lampPosts before
       // buildProps returns (the bake is per frame), so the canopy goes on last.
       for (const lamp of pitLamps) track.lampPosts.push(lamp);
+      track.pitBuilt = pits;   // kept, not just logged: `wall` false is invisible from the buffers
       Log.info("track", `pits ${track.def.id}: ${pits.bays} bays, wall ${pits.wall}, ${pitLamps.length} lamps`);
     }
     return { out, glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };

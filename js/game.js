@@ -393,6 +393,16 @@ function driverSeatCount(ti) {
     ? Career.gridDrivers(team) : team.drivers;
   return (seats && seats.length) || 1;
 }
+// THE one place driverIdx moves. On the LEGENDS team the driver picker is
+// choosing a different legend, which changes that team's colours, stats, tier
+// and livery, so the entry is rebuilt here. There are two ways in — the G
+// accessor and the RaceSettings/CustomTeam hook — and when the rebuild lived in
+// only one of them the picker silently kept painting the first legend.
+function setDriverIdxAt(v) {
+  driverIdx = v;
+  const t = Teams.LIST[teamIdx];
+  if (t && t.legends && customTeam && customTeam.syncLegendsTeam) customTeam.syncLegendsTeam(v);
+}
 function clampDriverIdx() {
   if (!(driverIdx >= 0 && driverIdx < driverSeatCount(teamIdx))) driverIdx = 0;
 }
@@ -873,6 +883,11 @@ function dirtyAirMul(wake, speed) {
 // ---------- state ----------
 let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
+// The field size the painted grid was built for. In the rebuild guard with
+// id and night because the box paint is baked into the start-line decal:
+// racing the same circuit again with MY TEAM selected changes the field
+// without changing either of the other two, and the paint would be stale.
+let builtGridSlots = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 // THE LIGHTS-OUT INSTANT ON THE RACE CLOCK. AiDrive.launchMul/launchDone read
@@ -1120,9 +1135,36 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 // module-scope so updateCar's per-car binding never allocates.
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
-let announceT = 0;
-const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, race: 4, "penalty-hit": 5 };
-let _annPri = 0, _annQueue = null;
+let announceT = 0, radioVoice = RadioVoice.inert();   // the real instance lands at the module wires; inert() means no call site needs a guard
+// "box" is the engineer's PIT CALL and nothing else (js/race/engineer.js): an
+// instruction the player has one lap to act on, where every other engineer line
+// is a report. It ranks with the pit-lane messages it belongs to rather than
+// under them — before this it was "info", so the confirmation that you HAD
+// entered the pits outranked the call telling you to.
+const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, box: 4, race: 4, "penalty-hit": 5 };
+// THE FLOOR. Every card gets ANN_MIN_S on screen, whatever its caller asked for
+// and whatever arrives next. Callers passed durations from 1.4 s up, and 1.4 s
+// is not a message — it is a flash you notice after it has gone. The floor is
+// enforced at BOTH ends, which is the half easy to miss: showAnnounce lengthens
+// a short card, and announce() below refuses to let even a HIGHER priority evict
+// a card still inside its floor. A penalty therefore waits behind a wear report
+// instead of blinking it away — bounded by the longest duration any caller
+// passes, and a penalty the player could not read is worth less than one that
+// arrives a beat late.
+const ANN_MIN_S = 3;
+// THE QUEUE, which _annQueue now IS rather than holds. One slot meant a THIRD
+// message in a burst was dropped, and so was a second of EQUAL priority — a lap
+// crossing that set a record and earned a medal showed one of them and silently
+// ate the other. Two slots, highest priority first and arrival breaking ties,
+// so a burst plays out in the order it mattered. Two and not more on purpose:
+// under the floor above a third would arrive six seconds after the thing it
+// describes, by which time it is a lie, not a message.
+const ANN_QUEUE_MAX = 2;
+// _annFloor is what is LEFT of the current card's floor, run down beside
+// announceT in tickBody. One `let` statement on purpose: the ratchet counts
+// column-0 declarations, so splitting these for a comment would raise it
+// without adding any state.
+let _annPri = 0, _annFloor = 0, _annQueue = [];
 // THE RADIO. A banner is a radio message: the WHO line names the channel it
 // came in on — race control for a penalty or a warning, the coach for a tip,
 // otherwise the driver's own pit-wall channel under their name — the words sit
@@ -1149,8 +1191,19 @@ function showAnnounce(msg, dur, kind) {
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
   els.announce.hidden = false;
-  // A card of small type takes a beat longer to read than a billboard did.
-  announceT = (dur || 1.6) + 0.5;
+  // A card of small type takes a beat longer to read than a billboard did, and
+  // ANN_MIN_S is the floor under every caller's number — the shortest asked for
+  // was 1.4 s, which nobody reads at racing speed.
+  announceT = Math.max(ANN_MIN_S, (dur || 1.6) + 0.5);
+  _annFloor = ANN_MIN_S;
+  // THE ONLY PLACE THE RADIO SPEAKS. showAnnounce is the one place a line
+  // reaches the screen, so hooking it inherits the whole ANN_PRI / _annQueue
+  // policy for free: a line the cinematic camera dropped never arrives here and
+  // is never spoken, a queued line is spoken when its turn comes, and a preempt
+  // interrupts. There is no second priority table anywhere in the voice.
+  // announceT — the card's ACTUAL life, not a second copy of the expression
+  // above — is the utterance's whole budget.
+  radioVoice.say(msg, announceT, kind);
 }
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
@@ -1237,19 +1290,30 @@ function announce(msg, dur, kind) {
     if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead") {
       // The cinematic cameras drop the two quiet channels so a film shot is not
       // captioned. That is a LOOK choice, and it must not silence the engineer:
-      // every RaceEngineer line is "info", so before this returned a verdict a
-      // player who pressed the camera button stopped being told to BOX for the
-      // rest of the session — the call was consumed unseen and a wear step,
-      // once advanced, never re-crosses.
+      // the engineer's REPORTS are "info", so before this returned a verdict a
+      // player who pressed the camera button stopped hearing them for the rest
+      // of the session — the call was consumed unseen and a wear step, once
+      // advanced, never re-crosses. The PIT CALL is "box" and is not on this
+      // list at all: a camera angle is a look, and a look must not cost a stop.
       if (kind === "info" || kind === "coach") return false;
     }
   }
-  if (announceT > 0 && pri <= _annPri) {
-    // The queue is a single slot. Taking it means the line still gets its turn,
-    // so that counts as accepted; losing it to a higher priority means the line
-    // is gone and the caller has to offer it again.
-    if (!_annQueue || pri > (_annQueue.pri || 0)) { _annQueue = { msg, dur, kind, pri }; return true; }
-    return false;
+  // `_annFloor > 0` is the other half of the floor: a card still inside its
+  // three seconds is not evicted even by something that outranks it — the
+  // arrival queues at the head instead and takes over the moment the current
+  // one is done. Without this clause the floor would only be a promise to
+  // callers, not to the player, because the very next penalty would break it.
+  if (announceT > 0 && (pri <= _annPri || _annFloor > 0)) {
+    // Into the queue, highest priority first, arrival breaking ties. Taking a
+    // slot means the line still gets its turn, so that counts as accepted;
+    // being pushed off the end means it is gone and the caller must offer it
+    // again (RaceEngineer does, on its next tick).
+    const entry = { msg, dur, kind, pri };
+    let at = _annQueue.length;
+    while (at > 0 && _annQueue[at - 1].pri < pri) at--;
+    _annQueue.splice(at, 0, entry);
+    const dropped = _annQueue.splice(ANN_QUEUE_MAX);
+    return dropped.indexOf(entry) < 0;
   }
   showAnnounce(msg, dur, kind);
   return true;
@@ -1705,13 +1769,37 @@ function buildPace(built, works) {
   return sum / 4;
 }
 
+// The teams that will actually grid, and how many cars they field. Shared by
+// makeCars() and the track build so the PAINT cannot disagree with the CARS —
+// they used to be two independent constants and the grid outgrew the boxes.
+function gridTeams() {
+  // MY TEAM and LEGENDS are both "yours" — each enters the grid only when it is
+  // the one you picked, so the field grows by one car, never by two teams.
+  return Teams.LIST.filter((t, ti) => (!t.custom && !t.legends) || ti === teamIdx);
+}
+// The seats a team actually GRIDS. Everything except LEGENDS is gridDrivers().
+//
+// The Legends team carries all twelve in `drivers` so the ordinary DRIVER picker
+// doubles as the legend picker (js/data/legends.js team()), but it fields ONE —
+// the one selected. Twelve legends on a single grid is a different game, and it
+// would need eleven more boxes besides.
+function seatsFor(team) {
+  if (!team || !team.legends) return Career.gridDrivers(team);
+  const d = team.drivers || [];
+  if (!d.length) return [];
+  return [d[Math.min(Math.max(driverIdx | 0, 0), d.length - 1)]];
+}
+function fieldSize() {
+  return gridTeams().reduce((s, t) => s + seatsFor(t).length, 0);
+}
+
 function makeCars() {
   cars = [];
   // the custom team only enters the grid when the player has selected it
-  const grid = Teams.LIST.filter((t, ti) => !t.custom || ti === teamIdx);
+  const grid = gridTeams();
   // Counted through the same accessor the loop below iterates, or MY TEAM's second
   // car would be missing from the lane spread it feeds.
-  const total = grid.reduce((s, t) => s + Career.gridDrivers(t).length, 0);
+  const total = grid.reduce((s, t) => s + seatsFor(t).length, 0);
   let idx = 0;
   grid.forEach((team) => {
     const ti = Teams.LIST.indexOf(team);
@@ -1720,8 +1808,11 @@ function makeCars() {
     // MY TEAM enters TWO cars — you and the driver you hired — where the custom
     // team ships with one. gridDrivers() returns team.drivers unchanged in every
     // other case, so free play and driver careers are untouched.
-    Career.gridDrivers(team).forEach((dSeat, di) => {
-      const isP = ti === teamIdx && di === driverIdx;
+    seatsFor(team).forEach((dSeat, di) => {
+      // The Legends team's single seat IS yours: driverIdx picked WHICH legend,
+      // so it is not also a seat index here and `di === driverIdx` would put you
+      // in nobody's car for any pick past the first.
+      const isP = ti === teamIdx && (team.legends ? true : di === driverIdx);
       // MY TEAM's second car is YOUR car. `team.custom` plus a seat that is not
       // yours is the hire by construction: the custom team fields one entry
       // everywhere except a MY TEAM career (see gridDrivers), so free play and
@@ -2127,7 +2218,8 @@ function _loadTrackBody(idx, def) {
   // glowing skyline, and a night-default circuit raced by day looks like daytime.
   const sessionDark = raceTimeOfDay === "night" || raceTimeOfDay === "dusk" ||
     raceTimeOfDay === "dawn" || (raceTimeOfDay === "default" && def.night);
-  if (builtTrackId !== def.id || builtTrackNight !== sessionDark) {
+  const wantSlots = fieldSize();
+  if (builtTrackId !== def.id || builtTrackNight !== sessionDark || builtGridSlots !== wantSlots) {
     if (track && track.meshes) {
       gfx.freeMesh(track.meshes.floor);
       gfx.freeMesh(track.meshes.road);
@@ -2156,13 +2248,14 @@ function _loadTrackBody(idx, def) {
     // (opts.gfx) instead of reaching the GLX global directly. On the default
     // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
     // onto GLX, so object identity is preserved either way).
-    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3 });
+    track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots: wantSlots });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
     // the side-world is disabled/loading so it's ready once rapier is live.
     DebrisWorld.registerFurniture(track);
     builtTrackId = def.id;
     builtTrackNight = sessionDark;
+    builtGridSlots = wantSlots;
     aeroZ.build();              // fixed ACTIVATION ZONES for this circuit
     // Env probe still holds the previous circuit — fall back to the analytic
     // sky until a fresh 6-face cycle has captured the new one.
@@ -2817,6 +2910,7 @@ const G = {
   get ttSessionTs() { return ttSessionTs; },
   get records() { return records; },
   get coach() { return coach; },
+  get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
   recordControls: () => ({ autoThrottle: autoThrottle(), gearsManual: gearsManual(), steerMode, aero: raceAeroMode }),
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
@@ -2991,7 +3085,7 @@ const G = {
   invalidateDecalTextures: (id) => carDraw.invalidateDecalTextures(id),   // const from CarDraw.create(G) below — defer
   armConfirm,
   // Mutable state + helpers consumed by js/ui/select-screen.js.
-  get driverIdx() { return driverIdx; }, set driverIdx(v) { driverIdx = v; },
+  get driverIdx() { return driverIdx; }, set driverIdx(v) { setDriverIdxAt(v); },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
   store, tickUi, scheduleFlybyTrack,
   // Same deferred-arrow trick for the garage <-> select plumbing: setup-ui.js is
@@ -3143,6 +3237,10 @@ pits = PitLane.create(G);
 // The race engineer (js/race/engineer.js): the voice that makes all of the
 // above legible to a driver who never opens a menu. Reads both, so it is last.
 engineer = RaceEngineer.create(G);
+// The radio's VOICE (js/audio/radio-voice.js) — speechSynthesis over the banner
+// the engineer, the coach and race control already write. Off by default, and
+// inert wherever the API, a voice or the setting is missing.
+radioVoice = RadioVoice.create(G);
 const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
@@ -3183,7 +3281,8 @@ customTeam = CustomTeam.create({
   getEls: () => els,
   getTeamIdx: () => teamIdx,
   setTeamIdx: (v) => { teamIdx = v; },
-  setDriverIdx: (v) => { driverIdx = v; },
+  getDriverIdx: () => driverIdx,
+  setDriverIdx: setDriverIdxAt,
   buildSelect,
   buildSetup,
   isCarsetupVisible: () => !$("carsetup").hidden,
@@ -3319,6 +3418,9 @@ const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 // CAMERA TUNER panel UI (js/camera/tuner-panel.js) — per-camera-mode framing offsets.
 const { closeCamTuner } = CamTunerPanel.create(G);
+// FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
+// shot list; previews through __apex.flybyCam, touches no render-path state.
+const flybyPanel = FlybyPanel.create(G);
 // Steering-tuning sliders + presets (js/input/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,
@@ -3461,7 +3563,7 @@ function quitToMenu() {
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
-  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annQueue = null;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
+  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
@@ -8088,12 +8190,15 @@ function tickBody(now) {
   }
   if (announceT > 0) {
     announceT -= dt;
+    if (_annFloor > 0) _annFloor -= dt;
     if (announceT <= 0) {
       els.announce.hidden = true;
       els.announce.className = "";
       delete els.announce.dataset.kind;
-      _annPri = 0;
-      if (_annQueue) { const q = _annQueue; _annQueue = null; showAnnounce(q.msg, q.dur, q.kind); }
+      _annPri = 0; _annFloor = 0;
+      // showAnnounce re-arms both, so the card taken off the queue gets the
+      // same floor the one before it did.
+      if (_annQueue.length) { const q = _annQueue.shift(); showAnnounce(q.msg, q.dur, q.kind); }
     }
   }
   // hit-stop: slow the simulation to a crawl for a few frames after a hard
@@ -8184,6 +8289,10 @@ function firstGesture() {
   // Tilt permission is requested at race start (rs-go click), not here — so the
   // gyro prompt and button fallback don't appear on the title screen.
   if (soundOn) { GameAudio.init(); GameAudio.startMusic(-1); }
+  // Unconditional, not gated on soundOn: unlock() is silent and idempotent, and
+  // the alternative means a player who turns the radio on from a KEYBOARD-driven
+  // pause menu never gets the priming gesture iOS wants.
+  radioVoice.unlock();
 }
 let gestured = false;
 document.addEventListener("pointerdown", () => {
@@ -9190,6 +9299,11 @@ await bootAgentSurface();
 // fetched until a player actually switches METRICS on.
 if (typeof GameMetrics !== "undefined" && GameMetrics.setTelemetryLoader)
   GameMetrics.setTelemetryLoader(loadAgentSurface);
+// The FLYBY SHOT EDITOR has exactly the same problem for exactly the same
+// reason: it previews every edit through __apex.flybyCam, which is null on a
+// Pages build until something asks. Same remedy — hand it the loader, and it
+// fetches only when a player actually opens the panel.
+if (flybyPanel && flybyPanel.setApiLoader) flybyPanel.setApiLoader(loadAgentSurface);
 
 // THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on
 // purpose: awaiting it here would put the 338 KB straight back on the

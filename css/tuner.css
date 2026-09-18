@@ -29,7 +29,8 @@
    the full-width arrangement with no extra rule. */
 :root { --dock-w: 0px; --dock-px: 0px; }
 body:has(#lighting:not([hidden])),
-body:has(#camtune:not([hidden])) {
+body:has(#camtune:not([hidden])),
+body:has(#flyby:not([hidden])) {
   /* `88 * --vwz`, NOT `88vw`. This value is in the panel's own ZOOMED local
      space (see --dock-px below), and a bare viewport unit resolves against the
      UNZOOMED viewport and is then multiplied by the zoom — so 88vw paints as
@@ -67,7 +68,7 @@ body:has(#camtune:not([hidden])) {
      repeating this formula. */
   --dock-px: calc((var(--dock-w) + 8px + var(--sar)) * var(--ui-scale));
 }
-#lighting-inner, #camtune-inner { --fit-at: 200px; }
+#lighting-inner, #camtune-inner, #flyby-inner { --fit-at: 200px; }
 /* FLYING: the dock gives width back to the controls, at every size.
    `:has()` takes the specificity of its argument, so `body:has(#lighting…)` is
    ID-level — a plain `body.photo-mode` override loses to it no matter how many
@@ -162,8 +163,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 
 /* Docked to the RIGHT edge with no backdrop: the game keeps rendering while the
    panel is open, so the left of the screen is the live preview. */
-#lighting, #camtune { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
-#lighting-inner, #camtune-inner {
+#lighting, #camtune, #flyby { position: fixed; top: 0; right: 0; bottom: 0; z-index: 42; pointer-events: none; }
+#lighting-inner, #camtune-inner, #flyby-inner {
   /* Docked, not centred: .sheet gives the head/body/foot shape and the query
      container, and these override the sheet's centred sizing. */
   pointer-events: auto;
@@ -201,7 +202,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    the end of this file). Everywhere else it must not exist as a box at all, or
    it would become the flex item and the panel would size its head/tabs/rows as
    one block instead of letting #lt-rows be the only thing that gives. */
-#lt-rail, #ct-rail { display: contents; }
+#lt-rail, #ct-rail, #fb-rail { display: contents; }
 
 /* min-height must be a real floor, not 0. Every other child is intrinsically
    sized (flex-shrink can't take a flex item below its content height), so
@@ -212,7 +213,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 /* padding-right buys the scroll indicator its own lane. Without it the thumb
    is drawn on the content-box edge, which is where each row's VALUE sits — the
    0.55 beside KEY LIGHT had a red bar through it. */
-#lt-rows, #ct-rows {
+#lt-rows, #ct-rows, #fb-rows {
   /* max() with a painted floor: the 84px local minimum shrank with the sheet
      zoom to 33.6 painted px at UI SIZE 40% — the audit's `starved` finding
      (a scroll region under its 44 device-px threshold). 44/scale keeps the
@@ -222,9 +223,9 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   touch-action: pan-y;
   padding-right: 10px;
 }
-#lt-rows.sf-scroll::before, #ct-rows.sf-scroll::before { margin-right: -8px; }
-#lt-json, #ct-json { flex-shrink: 0; }
-#lighting-inner .adv-item, #camtune-inner .adv-item { margin: 7px 0; }
+#lt-rows.sf-scroll::before, #ct-rows.sf-scroll::before, #fb-rows.sf-scroll::before { margin-right: -8px; }
+#lt-json, #ct-json, #fb-json { flex-shrink: 0; }
+#lighting-inner .adv-item, #camtune-inner .adv-item, #flyby-inner .adv-item { margin: 7px 0; }
 #lighting-inner .adv-help, #camtune-inner .adv-help { display: none; }        /* hidden unless "Show explanations" is on… */
 #lighting-inner.lt-show-help .adv-help,
 #camtune-inner.lt-show-help .adv-help { display: block; }   /* …then every row explains itself */
@@ -256,7 +257,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   border-bottom: 1px solid var(--card-line);
   flex-shrink: 0;
 }
-#lt-tabs .lt-tab, #ct-modes .lt-tab {
+#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab {
   /* No explicit height before: padding + 10px text came to ~24, which is ON the
      floor and therefore under it at any scale below 100%. 225 cells of the
      1900-cell matrix failed on this one selector. */
@@ -273,10 +274,10 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   white-space: normal; text-align: center; line-height: 1.15;
 }
 @media (hover: hover) {
-  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { color: var(--text); }
+  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover, #fb-shots .lt-tab:hover { color: var(--text); }
 }
-#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { color: var(--text); }
-#lt-tabs .lt-tab.active, #ct-modes .lt-tab.active {
+#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active, #fb-shots .lt-tab:active { color: var(--text); }
+#lt-tabs .lt-tab.active, #ct-modes .lt-tab.active, #fb-shots .lt-tab.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
 .lt-group { display: none; }
@@ -294,8 +295,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 .lt-group .lt-section:first-of-type { margin-top: calc(var(--gap) * 0.5); }
 /* panel header: title + FREE CAMERA button on one line */
-#lt-head, #ct-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: calc(var(--gap) / 3); }
-#lt-head h2, #ct-head h2 { margin: 0; }
+#lt-head, #ct-head, #fb-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: calc(var(--gap) / 3); }
+#lt-head h2, #ct-head h2, #fb-head h2 { margin: 0; }
 /* preview time/weather: one compact line each — small inline label + tight chips */
 .lt-preview-row { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) / 3); margin: calc(var(--gap) * 0.25) 0; }
 .lt-preview-lbl { flex: 0 0 auto; width: 56px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); color: var(--dim); }
@@ -312,12 +313,13 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    rule as a gradient ::before (css/components.css) — re-adding a solid border
    painted BOTH, so these two panels were the only feet in the app with a
    hairline and a solid line stacked at the same edge. */
-#lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
+#lighting-inner .sheet-foot, #camtune-inner .sheet-foot, #flyby-inner .sheet-foot {
   display: flex; gap: calc(var(--gap) * 2 / 3); flex-shrink: 0;
   margin-top: 10px; padding-top: 10px;
 }
 #lighting-inner .sheet-foot button,
-#camtune-inner .sheet-foot button {
+#camtune-inner .sheet-foot button,
+#flyby-inner .sheet-foot button {
   margin: 0;
   /* Same WCAG floor the compact rung already carries (see its note further
      down): these are padding-driven (~45 local px), which is 19 painted px
@@ -337,7 +339,48 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    way to see at a glance which of the 13 you have already tuned. */
 #ct-modes .lt-tab.tuned { border-color: var(--red); color: var(--text); }
 #ct-modes .lt-tab.tuned.active { border-color: var(--red); }
-#lt-json, #ct-json {
+
+/* ---------- flyby shot editor ----------
+   Same docked shell again (the selectors above are extended, not duplicated);
+   only the two things this panel has and the others do not live here: the
+   group headings that separate a shot's four poses, and the status line. */
+#fb-profile {
+  font-size: var(--fs-micro); letter-spacing: var(--ls-3); font-weight: 700;
+  color: var(--red); margin: calc(var(--gap) / 6) 0 calc(var(--gap) / 3);
+}
+/* The verdict line. It is the only place the panel can say "this eye is inside
+   a grandstand", which is the defect the sequencer exists to prevent, so it
+   turns red rather than sitting in the same grey as the shot count. */
+#fb-status {
+  font-size: var(--fs-micro); line-height: 1.35; color: var(--muted);
+  margin: 0 0 calc(var(--gap) / 3);
+  min-height: 2.7em;                 /* two lines reserved: no reflow per scrub frame */
+  overflow-wrap: anywhere;
+}
+#fb-status.fb-inside { color: var(--red); font-weight: 700; }
+#fb-scrub { margin: calc(var(--gap) / 3) 0; }
+/* EYE FROM / EYE TO / LOOK FROM / LOOK TO. Four poses of nine sliders read as
+   one undifferentiated column without them. */
+#fb-rows .fb-group {
+  font-size: var(--fs-micro); letter-spacing: var(--ls-3); font-weight: 700;
+  color: var(--red); margin: var(--gap) 0 calc(var(--gap) / 3);
+  padding-top: calc(var(--gap) / 3); border-top: 1px solid var(--card-line);
+}
+#fb-rows .fb-group:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+/* EIGHT chips share the rail, so each is ~42px and "landmark1" is one
+   unbreakable 54px word: `white-space: normal` above wraps at spaces and there
+   are none, so it overflowed its pill and printed over its neighbour. Measured
+   at 960x540; the base rule is right for the other two panels' shorter labels. */
+#fb-shots .lt-tab { overflow-wrap: anywhere; }
+/* SIX OPS, ONE ROW. As a wrapping flex row these took THREE rows (138 px) in a
+   docked panel whose height is the viewport's: at 960x540 and 844x390 that
+   pushed the shot's own controls down past the footer, which then painted over
+   them (measured; 1280x800 and 1440x900 were always clear). A six-column grid
+   is ~46 px whatever the width, and the labels are short enough to fit it —
+   each button's full meaning is in its title. */
+#fb-ops { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(var(--gap) / 3); }
+#fb-ops button { min-height: var(--tap-min); padding-inline: calc(var(--gap) / 6); white-space: nowrap; }
+#lt-json, #ct-json, #fb-json {
   /* field-sizing lets the export box grow to whatever COPY VALUES produced
      instead of scrolling inside a fixed 72px; the height stays as the fallback
      where it is unsupported, and the max keeps it from swallowing the panel.
@@ -571,8 +614,8 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    `--rail-at` is 640, above the 560px the rail-on dock grows to, so a compact
    wide dock keeps the horizontal chip strip and the sliders keep the full
    dock width. Rail-on only when the sheet is already wider than that dock. */
-#lighting-inner, #camtune-inner { --compact-at: 620px; --rail-at: 640px; }
-#lighting-inner > .sheet-foot, #camtune-inner > .sheet-foot {
+#lighting-inner, #camtune-inner, #flyby-inner { --compact-at: 620px; --rail-at: 640px; }
+#lighting-inner > .sheet-foot, #camtune-inner > .sheet-foot, #flyby-inner > .sheet-foot {
   position: sticky; bottom: 0; z-index: 2;
 }
 

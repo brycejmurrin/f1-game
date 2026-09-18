@@ -279,3 +279,22 @@ test("with a canvas and the livery painter it paints twelve cells and uploads on
   P.free(gfx, t);
   assert.equal(t.meshes.pitSigns, null);
 });
+
+// ── EVERY circuit's pit wall actually gets built ─────────────────────────────
+// The platform, the wall, its rail and the lane-side barrier are four sweeps
+// over ONE node run, and sweep() emits nothing for a run shorter than two
+// nodes. The run started at `sIn` and broke on its first failing node, but the
+// wall's fade FINISHES at `sIn`, so whether that node had reached v >= 0.98 was
+// node-grid luck: Magny-Cours sat at 0.954, Mexico and Monaco at 0.97, and all
+// three shipped with no pit wall at all — invisible in the vertex buffers,
+// which is why `wall` is now kept on the track rather than only logged.
+test("every circuit with a pit wall builds one", () => {
+  const T = ctxOnce().Tracks;
+  const missing = [];
+  for (const def of T.LIST) {
+    const t = T.build(def);
+    if (!t.pit || !t.pit.hasWall) continue;
+    if (!t.pitBuilt || t.pitBuilt.wall !== true) missing.push(def.id);
+  }
+  assert.deepEqual(missing, [], `no pit wall built on: ${missing.join(", ")}`);
+});

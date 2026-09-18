@@ -18,6 +18,12 @@ test("a time trial binds records after the fitted car is ready and segregates ch
   Ghost.startLap();for(let i=0;i<12;i++)Ghost.record(i*7, i*100,0);
   R.finish(90,[],100);
   assert.equal(Ghost.bestTime(),90);assert.equal(g.G.ttRecord,90);
+  // ONE CARD FOR ONE LAP. A 90 s lap against a 100 s pole earns a medal AND
+  // beats an unset record, and these were two announce() calls — five seconds
+  // of banner for one line crossing, and before the queue took a second entry
+  // of equal priority, one of them was simply eaten.
+  assert.match(vm.runInContext('document.getElementById("announce-text").textContent',g.ctx),
+    /MEDAL — NEW RECORD 1:30\.00$/,"the medal and the record must arrive as one sentence");
   const first=R.key(), old=g.G.WHEELBASE;
   g.G.WHEELBASE=old+.1;
   assert.equal(R.accept(),false,"a modified lap must not enter either class");
@@ -422,5 +428,49 @@ test("a driven race fills in the race-craft fields, debounced", async () => {
     }
     assert.equal(p.hits, 1, "car contact counts once, not once per relaxation pass");
     assert.ok(p.hitSev > 0 && p.hitSev <= 1, `severity is graded 0..1, got ${p.hitSev}`);
+  } finally { h.close(); }
+});
+
+test("the radio queue keeps a burst in priority order, and drops only what would arrive too late", async () => {
+  // THE BANNER IS A QUEUE, and it used to be ONE slot guarded by
+  // `pri > queued.pri` — so a second message of EQUAL priority was not queued
+  // behind the first, it was silently eaten. A lap that set a record and earned
+  // a medal, a caution that armed a flag and a call in the same tick: one of
+  // them simply never existed. announce() returns whether the line will be
+  // heard, so what each verdict below asserts is a message the player gets.
+  //
+  // NOTE ON WHAT THIS CANNOT SEE: the DRAIN lives in tickBody(), the frame
+  // loop, and __apex.step() calls update() — so the banner clock does not
+  // advance here and no card ever expires. The enqueue side is the logic that
+  // changed; the drain is `shift()` where it was `= null`.
+  // Its OWN handle: the shared `g` carries whatever banner an earlier test
+  // left up, and with no drain here that card never expires.
+  const h = await createGame({ track: "monza" });
+  try {
+  await h.race("monza"); h.apex.go(); h.step(10);
+  const A = (msg, kind) => h.G.announce(msg, 1, kind);
+  assert.equal(A("FIRST", "info"), true, "an idle banner shows at once");
+  assert.equal(A("SECOND", "info"), true, "…the next one waits its turn");
+  assert.equal(A("THIRD", "info"), true,
+    "a THIRD message of equal priority was the one the single slot ate");
+  assert.equal(A("FOURTH", "info"), false,
+    "two deep is the cap: under the floor a fourth card would land six seconds after its event");
+  // A higher priority does not wait behind two reports — it takes the HEAD of
+  // the queue, and the cost is paid by the oldest LOWEST, not by itself.
+  assert.equal(A("LIMITS", "warning"), true, "a warning must never be refused behind two info lines");
+  // …and the engineer's pit call outranks the pit lane's own confirmations,
+  // which is the whole point of the "box" kind: at "info" it lost to
+  // "PIT ENTRY — LIMITER ON", so the confirmation that you HAD pitted beat the
+  // call telling you to.
+  assert.equal(A("BOX BOX BOX — H", "box"), true);
+  // THE FLOOR, and the half of it a return value cannot show. Outranking the
+  // card on screen no longer EVICTS it while it is inside ANN_MIN_S: the
+  // banner still reads FIRST, and every one of those higher-priority lines is
+  // waiting its turn rather than having blinked this one away.
+  const shown = () => vm.runInContext('document.getElementById("announce-text").textContent', h.ctx);
+  assert.equal(shown(), "FIRST", "a card inside its floor was evicted by a higher priority");
+  assert.equal(A("5 SECOND PENALTY", "penalty-hit"), true, "…and the penalty is queued, not refused");
+  assert.equal(shown(), "FIRST", "even a penalty waits out the floor — a card nobody can read is worth less");
+  assert.equal(h.G.announceBusy, true);
   } finally { h.close(); }
 });

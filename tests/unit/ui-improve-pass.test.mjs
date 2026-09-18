@@ -1342,7 +1342,7 @@ test("neutral buttons share the settings tab-header plate", () => {
     "term-rail selected uses the one chip look (plate-on + red ring, no glow)");
   assert.equal(decl(components, /#htp-contents a\[aria-current/, "box-shadow"), null);
   assert.equal(decl(css("css/overlays.css"), /#results-table > \.sel-label/, "margin-top"), "calc(var(--gap) * 1.2)");
-  assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab", "color"), "var(--text)");
+  assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab, #fb-shots .lt-tab", "color"), "var(--text)");
   const narrowTabs = rulesFor(css("css/tuner.css"), /^\.lt-tabs$/).find((r) =>
     r.context.includes("@container sheet (max-width: 480px)"));
   assert.ok(narrowTabs, "narrow lighting tabs become a pan strip without waiting for compact");

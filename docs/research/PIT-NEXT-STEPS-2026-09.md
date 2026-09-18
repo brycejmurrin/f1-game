@@ -219,50 +219,88 @@ One guard-rail worth keeping from the attempt, and kept: the row's pitch
 comparison now carries an epsilon (`js/track/core/pit.js`), so a window sized to
 exactly the row's length no longer loses every bay to a float's width.
 
-## 4c. THE AI PILE UP IN THE LANE — reproduced and measured, NOT fixed
+## 4c. THE AI PILE UP IN THE LANE — the stalls were MINE, and are fixed
 
 Reported: "AI are getting caught up in the pit lane and bays — we need to space
-them out or they have to wait their turn somehow." True, and worse than it
-looks. `scratch/pit-traffic.cjs` (new) runs a race in the VM with the field
-stopping and samples every car in the complex each tick. Bahrain, 6 laps, 9 sim
-minutes, 12 of 22 cars stopping:
+them out or they have to wait their turn somehow." True, and the cause was a
+regression introduced earlier the same session, not a missing queue.
 
-| measure | reading |
-|---|---|
-| most cars in the lane at once | 8 |
-| closest two cars ever came | 0.02 m |
-| ticks with a pair inside a car length | 619 (~10 s) |
-| cars that STALLED (< 0.5 m/s for 3 s in the lane, not on the jacks) | 12 of 12 |
-| ticks with a car within 16 m ahead in the lane | 6878 |
-| …of those, closing on it by more than 1 m/s | 1232 |
-| teams with BOTH cars in the complex at once | audi, cadillac |
+**The measurement tool first, because the first diagnosis was wrong.**
+`scratch/pit-traffic.cjs` (new) runs a race in the VM with the field stopping
+and samples every car in the complex each tick. Its first `overlapTicks` metric
+compared ARC ONLY, so two cars side by side in a 24 m-wide bay row — the normal,
+correct picture — counted as overlapping, and every reading built on it read as
+a pile-up. The metric now also requires `|A.x − B.x| < 2.0 m`. Any number below
+is post-fix metric; the older table's 619 "overlap ticks" was that bug.
 
-**What was fixed.** `PitLane.boxBusy` — a car may not latch a stop on a box
-another car is already on the jacks in. Teammates SHARE a box (one bay per
-team, by design), so two cars of one team stopping on the same lap aimed at the
-same patch of tarmac. The second now keeps its limiter and its lane, misses the
-latch and comes round again. Free: all 12 stops still complete.
+**Root cause.** `PitLane.boxSquare` — added this session so the player must be
+square in the bay before the jacks drop — also gated the AI's latch. On Bahrain
+the box centre is x = −18.25 and `BOX_SQUARE_LAT` is 1.2, but the AI rail puts a
+car at x ≈ −15.5: the test could never be satisfied. Every AI halted ~4 m short
+of its box, and a stopped car cannot steer, so it sat there and the cars behind
+stacked up against it. All 12 stalls, one per stopping car.
 
-**What is NOT fixed, and this is the honest part.** The numbers above are
-IDENTICAL with that rule in place. The pile-up is not the teammate case and it
-is not the AI's queue cap either: instrumented, the "held behind a car serving a
-stop" branch (`game.js`, `capBlocks`/`queued`) fires 4869 times in this run and
-the cars still end up 0.02 m apart. So the dominant cause is BELOW the speed
-cap — whatever separates two cars in contact does not separate them in the
-lane, where every car is steered to one lateral by `laneX` and the cap can ask
-for a slower speed but nothing holds a gap.
+**The fix.** The strict centre-and-nose test is the DRIVER'S: `boxSquare` now
+returns true for any car without `c.local` once it is laterally inside the bay
+(`inBoxLat`). The player still has to line the car up; the AI, which is already
+on a rail aimed at the bay, does not get asked to hit a lateral its rail cannot
+reach.
 
-**Tried and reverted.** Dropping the queue's crawl floor to zero inside the
-lane (the floor exists so a stopped AI on the circuit can still steer out, which
-does not apply on rails) moved NOTHING in the measurements and carries a
-deadlock risk, since a queued car is already exempt from the unstuck rescue. Not
-worth shipping unproven.
+Bahrain, 6 laps, 9 sim minutes, 12 of 22 cars stopping, like for like:
 
-**Next.** Start at the contact layer, not the AI: find why two cars at the same
-lateral and the same arc in the lane are not pushed apart, and give the lane its
-own longitudinal spacing rule (a held gap, not a speed ceiling). Re-run
-`scratch/pit-traffic.cjs bahrain 9 6` — the four numbers that must move are
-closestPairM, overlapTicks, stallCount and maxCarsInLaneAtOnce.
+| measure | before | after |
+|---|---|---|
+| cars that STALLED (< 0.5 m/s for 3 s in the lane, not on the jacks) | 12 of 12 | **0** |
+| stops completed | 12 | 12 |
+| most cars in the lane at once | 8 | 7 |
+| overlap ticks (arc AND lateral, corrected metric) | 94 | 194 |
+
+**Tried and reverted.** Crawling instead of stopping until square (`approachV`
+asking `boxSquare` rather than `inBoxLat`) cleared the stalls at 9 minutes but
+left 14 cars piled in the lane by 16 — a car that never satisfies the test never
+leaves. Reverted; `approachV` asks `inBoxLat`, which a rail can satisfy.
+Dropping the queue's crawl floor to zero inside the lane moved nothing and
+carries a deadlock risk (a queued car is exempt from the unstuck rescue).
+
+**Still open.** Overlap ticks roughly DOUBLED: with nobody stalled, more cars
+reach the bays and run nose to tail there. That is the original spacing
+question, untouched — the lane has a speed cap (`game.js`, `capBlocks`/`queued`,
+4869 hits in this run) but no held longitudinal gap, and every car shares one
+lateral from `laneX`. Next step is a lane-specific spacing rule, not a speed
+ceiling. Re-run `scratch/pit-traffic.cjs bahrain 9 6`; the numbers to move are
+closestPairM and overlapTicks, with stallCount held at 0.
+
+## 4d. THREE CIRCUITS HAD NO PIT WALL AT ALL — fixed
+
+Reported: "some pit lane walls are broken, like on Magny-Cours." Three of 52
+circuits — magny_cours, mexico, monaco — built NO pit wall: not a gap, the
+whole thing.
+
+The platform, the wall, its rail and the lane-side barrier are four `sweep()`
+calls over ONE node run, and `sweep()` returns early for a run shorter than two
+nodes. The run started at `sIn` and its walker broke on the FIRST node that
+failed `v >= 0.98` — but the wall's fade FINISHES at `sIn`, so whether the node
+landing there has reached 0.98 is node-grid luck. Magny-Cours sat at 0.954,
+Mexico and Monaco at 0.97; every other circuit happened to land at or past it
+(Bahrain's node falls 2 m early, where v is already 1.000). One failed node,
+empty list, four sweeps build nothing.
+
+`nodesFrom` now takes a `seekM` and the platform run passes 24 m, so it finds
+the wall's own first node — exactly what the lamp gate's `kGate` already did a
+few dozen lines below, for exactly this reason (Monaco had lost both lamps to
+the same rounding). Runs now match the lane: Magny-Cours 65 nodes / 260 m,
+Mexico 65, Monaco 60. `test:sweeps` moved no coplanar, clip or float baseline.
+
+The defect was invisible from the vertex buffers, so `SceneryPits.build`'s
+report is now kept on the track as `track.pitBuilt` rather than only logged,
+and `tests/unit/pit-signs.test.mjs` asserts every circuit with `hasWall` builds
+one. Negative control: with the seek disabled the test names exactly those
+three circuits. `scratch/pit-wall-survey.cjs` prints all four wall runs per
+circuit.
+
+**Worth checking next.** The same walker still starts the EXIT wall at `sOut`
+and the OUTER wall at `sA + 6` with no seek. Both had non-empty runs on all 52
+today, but they are one node-grid roll from the same defect.
 
 ## 5. Smaller loose ends
 
