@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { TWINNED, verify, gatedNodeFiles, isTwinned } from "../../tools/ci/twinned-specs.mjs";
+import { TWINNED, verify, gatedNodeFiles, ungatedNodeFiles, isTwinned } from "../../tools/ci/twinned-specs.mjs";
 import { fit } from "../../tools/ci/select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -120,4 +120,54 @@ test("a fully twinned group RUNS its twins, and an empty run never reports a pas
   assert.ok(out.includes(TWINNED[spec]), "the twin that actually ran is named in the log");
   // And no browser: the whole point is that this cost seconds, not SwiftShader.
   assert.ok(!/\[playwright\] port=/.test(out), "a fully twinned group must not spawn Playwright");
+});
+
+/* ── THE UNGATED SET ──────────────────────────────────────────────────────
+ *
+ * gatedNodeFiles() answers "what runs before a publish". Its complement is the
+ * interesting half, and it cost the project a blocked release train on
+ * 2026-09-18: tests/unit/debris-hazard-hint.test.mjs is in `test:sweeps` only,
+ * which is in neither tooling-fast nor ci.yml's "Pure-node unit suites", so a
+ * float compared bit-for-bit failed every Pages publish from 01:44 while CI
+ * stayed green and every local gate passed.
+ *
+ * deploy.mjs now runs that complement. These two tests are what keep it there:
+ * the set must be derived (not a list that rots), and the deploy must actually
+ * run it (not merely import it).
+ */
+test("the ungated set is derived, and is the exact complement of the gated one", () => {
+  const gated = gatedNodeFiles();
+  const ungated = ungatedNodeFiles();
+  assert.ok(Array.isArray(ungated), "ungatedNodeFiles must return a list");
+  for (const f of ungated)
+    assert.equal(gated.has(f), false, `${f} is reported ungated but the Pages gate runs it — the two derivations disagree`);
+  // Every node file in a topical group is in exactly one of the two halves.
+  const groups = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", import.meta.url), "utf8"));
+  for (const grp of Object.values(groups.groups || {})) {
+    if ((grp.kind || "node") === "browser") continue;
+    for (const f of grp.files || []) {
+      if (f.startsWith("//")) continue;
+      assert.ok(gated.has(f) || ungated.includes(f),
+        `${f} is in a topical group but in neither the gated nor the ungated half — the split has a hole`);
+    }
+  }
+});
+
+test("every ungated file is inside test:sweeps — the assumption deploy.mjs rests on", () => {
+  // deploy.mjs gates the publish by running test:sweeps WHEN the union can move
+  // geometry (f6d8de2). That is the right shape — conditional, and derived from
+  // pick-tests' own rules — and it rests on one thing being true: that the
+  // files no other gate runs are all IN test:sweeps. Today all 14 are.
+  //
+  // Nothing else checks that. Add a node test file tomorrow to a group that is
+  // in neither tooling-fast nor ci.yml's "Pure-node unit suites" nor
+  // test:sweeps, and it runs in no gate before a publish AND is not picked up
+  // by the conditional sweep — the same hole that blocked the release train on
+  // 2026-09-18, in a place the fix for that does not reach. This names it.
+  const groups = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", import.meta.url), "utf8"));
+  const sweeps = new Set((groups.groups["test:sweeps"] || {}).files || []);
+  const stranded = ungatedNodeFiles().filter((f) => !sweeps.has(f));
+  assert.deepEqual(stranded, [],
+    "these run in NO pre-publish gate and are not in test:sweeps either, so deploy.mjs's conditional sweep " +
+    "cannot cover them: " + stranded.join(", ") + " — put each in a gated group, or in test:sweeps");
 });

@@ -38,9 +38,26 @@ const FORMAT = "apex26-settings-v1";
 // whose stored form is not comparable to the default by value (the binding
 // tables save a full map even when it is the default one), info = carried in
 // ALL for context but never counted as a change.
+//
+// subsystem = THIS KEY IS NOT A PREFERENCE. A player may set it, and it still
+// must not become a SHIPPED default from someone's export, because what it
+// switches is a whole system rather than a taste: the driving model, the career
+// economy, race control. The string is the reason, and it is read by
+// tools/gen/settings-defaults.mjs, which refuses such a key unless it is named
+// with --include, and by tests/unit/settings-defaults.test.mjs, which fails if
+// one reaches js/data/settings-defaults.js anyway.
+//
+// It lives HERE, on the row, and not in a list inside the tool, because the
+// tool's list was mine and the next person has to remember it exists. Three
+// keys were learned the hard way in one sitting — steering (the physics
+// baseline went red), unlimitedBudget (caught before it shipped), caution (CI
+// went red and the release train never fired) — and each time the question was
+// asked at the wrong moment. Asked at the ROW, it is asked when the key is
+// added.
 const SPEC = [
   // MUSIC & SOUND (js/audio/panel.js)
-  { k: "sound", lane: "json", group: "audio", def: true, src: "js/game.js" },
+  { k: "sound", lane: "json", group: "audio", def: true, src: "js/game.js",
+    subsystem: "ships the game MUTED for every new player — an export from a silenced phone looks exactly like this" },
   { k: "sfx", lane: "json", group: "audio", def: true, src: "js/audio/panel.js" },
   { k: "music", lane: "json", group: "audio", def: true, src: "js/game.js" },
   { k: "volMusic", lane: "json", group: "audio", def: 0.9, src: "js/audio/panel.js" },
@@ -120,22 +137,29 @@ const SPEC = [
   { k: "tyreWear", lane: "json", group: "driving", def: "light", src: "js/game.js" },
   { k: "raceGrid", lane: "json", group: "driving", def: "tier", src: "js/game.js" },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
-  { k: "caution", lane: "json", group: "driving", def: true, src: "js/race/race-control.js" },
-  { k: "unlimitedBudget", lane: "json", group: "driving", def: false, src: "js/game.js" },
+  { k: "caution", lane: "json", group: "driving", def: true, src: "js/race/race-control.js",
+    subsystem: "switches the whole RACE CONTROL layer off — cautions, VSC, the safety car. race-control.spec.js asserts the layer is ON by default" },
+  { k: "unlimitedBudget", lane: "json", group: "driving", def: false, src: "js/game.js",
+    subsystem: "removes the career economy constraint for everyone — a design change, not a preference" },
   { k: "bodyAttitude", lane: "raw", group: "driving", def: null, src: "js/physics/body-attitude.js (null = on)" },
   // STEERING (js/input/steer-tuning.js applySteerTuning)
-  { k: "preset", lane: "json", group: "steering", def: "standard", src: "js/input/steer-tuning.js" },
-  { k: "steerRate", lane: "json", group: "steering", def: 2, src: "js/input/steer-tuning.js" },
+  { k: "preset", lane: "json", group: "steering", def: "standard", src: "js/input/steer-tuning.js",
+    subsystem: "selects a whole steering sheet, i.e. the driving model — see pace below" },
+  { k: "steerRate", lane: "json", group: "steering", def: 2, src: "js/input/steer-tuning.js",
+    subsystem: "the driving model: moves tests/data/physics-baseline.json" },
   { k: "steerExpo", lane: "json", group: "steering", def: 6, src: "js/input/steer-tuning.js" },
   { k: "steerSmooth", lane: "json", group: "steering", def: 3, src: "js/input/steer-tuning.js" },
-  { k: "tiltDeg", lane: "json", group: "steering", def: 8, src: "js/input/steer-tuning.js" },
+  { k: "tiltDeg", lane: "json", group: "steering", def: 8, src: "js/input/steer-tuning.js",
+    subsystem: "the driving model: moves tests/data/physics-baseline.json" },
   { k: "steerLock", lane: "json", group: "steering", def: 7, src: "js/input/steer-tuning.js" },
   { k: "steerSpeed", lane: "json", group: "steering", def: 7, src: "js/input/steer-tuning.js" },
   { k: "carWeight", lane: "json", group: "steering", def: (G) => (G && G.gfx && G.gfx.isMobile) ? 10 : 5, src: "js/input/steer-tuning.js (10 on a touch device, 5 on a pointer — see the comment there)" },
-  { k: "adaptiveButtons", lane: "json", group: "steering", def: 5, src: "js/input/steer-tuning.js" },
+  { k: "adaptiveButtons", lane: "json", group: "steering", def: 5, src: "js/input/steer-tuning.js",
+    subsystem: "the driving model: moves tests/data/physics-baseline.json" },
   { k: "brakeCue", lane: "json", group: "steering", def: 4, src: "js/input/steer-tuning.js" },
   { k: "drivingHelp", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js (1 = OFF)" },
-  { k: "pace", lane: "json", group: "steering", def: 11, src: "js/input/steer-tuning.js PACE_DEF" },
+  { k: "pace", lane: "json", group: "steering", def: 11, src: "js/input/steer-tuning.js PACE_DEF",
+    subsystem: "GROUND-SPEED SCALE for every car: 1.06^(v-14), so notch 11 is 84% of reference and notch 7 is 67% — a 21% slower game" },
   { k: "raceLine", lane: "json", group: "steering", def: 0, src: "js/input/steer-tuning.js" },
   { k: "steerSchema", lane: "json", group: "steering", def: 1, info: true, src: "js/input/steer-tuning.js STEER_SCHEMA (migration version — boot writes the current one, so never a change)" },
   // CONTROLS (js/input/input.js tables, js/ui/key-binds.js)
