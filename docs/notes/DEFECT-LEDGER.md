@@ -1602,6 +1602,45 @@ throwaway measurement before it showed, for the record: with raw
 read 60 → 78 → 82 with only time between them — a capture that lags the
 knob write is a measurement of nothing.
 
+### 2026-09-18 — two `steering.spec.js` ASSERTIONS are red, and the table above is stale about it
+
+The 2026-09-14 row reads `9 (steering.spec.js) | every one 103-142 s against a
+120 s test timeout | box, not code`. That population was fixed at source in
+`20e57ea174` (rAF-starved actionability, now DOM clicks). These two are not
+that: they are assertion failures with stable numbers, and the row above reads
+as "steering is a box problem" to anyone who greps this file for it.
+
+Measured on the deploy tip `5a1a07fc`, alone, `--workers=1`, loadavg < 1 — so
+NOT the box, by the same standard the 2026-09-14 entry sets:
+
+| test | expected | received |
+|---|---|---|
+| `steering has authority to fight the curvature drift` | > 2 | **0.22689791898006817** |
+| `symmetry: opposite inputs turn the heading by opposite, equal amounts` | < 0.012237385817734392 | **0.0254971875287886** |
+
+**THE TWO HAVE DIFFERENT AGES, and that is the useful part.** Re-run in an
+isolated worktree at `bdec4b123f` (2026-09-17 ~12:00, about 24 h earlier):
+`curvature drift` fails there with the BYTE-IDENTICAL 0.22689791898006817, and
+`symmetry` **passes**. So one is ≥ 24 h old and stable, the other regressed
+inside a one-day window. Bisecting them as one thing would be a waste.
+
+Why nothing reported either: `steering.spec.js` declares a 480 s test budget
+against the change-aware gate's 180 s cap, so `select-specs.mjs` EXCLUDES it on
+every push; its group `test:input` gets scheduled coverage only from the
+nightly rota, which reaches `input` on **2026-09-22**. The rota (landed
+2026-09-18, `tools/ci/nightly-group.mjs`) is what will surface these — this
+entry exists so that night is a bisect of one day and a characterisation, not a
+rediscovery from zero.
+
+Not yet diagnosed, and deliberately not guessed at here. Two facts to start
+from: the `driving-model` characterization job is GREEN on this tip, so
+whatever moved is outside `physics-baseline.json`; and `curvature drift`
+measures the DRIVER's authority with `roadFollow: 0`, where held lock moves the
+car 0.23 m further than coasting over 75 ticks at 22 m/s against 2 m wanted —
+so either its premise moved under it (as `OVERALL SPEED`'s hardcoded "straight"
+did above) or player steering authority is genuinely near zero with assists
+off, which the physics reference makes a product defect, not a test one.
+
 
 ## 8. Backlog
 
