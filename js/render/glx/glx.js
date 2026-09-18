@@ -2236,7 +2236,7 @@ const GLX = (function () {
     if (batch.shadowCbo) { gl.deleteBuffer(batch.shadowCbo); batch.shadowCbo = null; }
     batch._shadowPacked = null;
     batch._shadowColors = null;
-    if (freeMesh) freeMesh(batch);
+    freeMesh(batch);   // a hoisted same-scope declaration; the old `if` could not be false
   }
 
   function draw(mesh, modelMat, opts) {
