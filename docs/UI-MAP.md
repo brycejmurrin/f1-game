@@ -13,9 +13,9 @@ agent can inspect.
 
 The navigation half records what the live Pages build exposed on that date; it
 is observation, not a promise that every action was exercised. Garage's deep
-part/livery panels, the full How to Play contents, and the in-race pause chrome
-remain **partial**. The DOM half is source-derived and deliberately inventories
-major regions rather than every setting, button and generated row.
+panels and the in-race pause chrome remain **partial**. The DOM half is
+source-derived and deliberately inventories major regions rather than every
+setting, button and generated row.
 
 ## A. Navigation sitemap and mode web
 
@@ -44,36 +44,84 @@ walked in the live pass.
 
 ### Title (`#overlay`)
 
-The title exposes:
+| Action | Button | Destination |
+|---|---|---|
+| Career Modes | `#mb-career` | Driver Career or My Team |
+| Race | `#mb-race` | One Grand Prix |
+| Time Trial | `#mb-tt` | Player against the clock |
+| Race a Friend | `#mb-vs` | Private 2–4 player race |
+| Season | `#mb-season` | Configurable championship |
+| Data Hub | `#mb-data` | Schedule, standings, results, live data, telemetry and export |
+| Garage | `#mb-garage` | Car setup/customisation |
+| Settings | `#mb-settings` | Settings index |
+| How to Play | `#mb-help` | Anchored help sheet |
 
-- `CAREER MODES` — Driver Career or My Team
-- `RACE` — one Grand Prix
-- `TIME TRIAL` — player against the clock
-- `RACE A FRIEND` — private 2–4 player race
-- `SEASON` — configurable championship
-- `DATA HUB`, `GARAGE`, `SETTINGS`, and `HOW TO PLAY`
-- sound toggle, Apex 26 branding, grid/circuit summary and unofficial disclaimer
+The title also carries the sound toggle, Apex 26 branding, grid/circuit summary
+and unofficial disclaimer.
 
 #### Settings (`#pmsettings`)
 
 Settings opens at an index, then pushes one page at a time:
 
-| Door | Panel root | Page title |
-|---|---|---|
-| Controls | `#pm-panel-controls` | CONTROLS |
-| Driving | `#pm-panel-driving` | DRIVING |
-| Display | `#pm-panel-display` | DISPLAY |
-| Steering & Assists | `#advanced` | STEERING & ASSISTS |
-| Music & Sound | `#audioset` | MUSIC & SOUND |
+| Door | Trigger | Panel root | Page title |
+|---|---|---|---|
+| Controls | `#pm-open-controls` | `#pm-panel-controls` | CONTROLS |
+| Driving | `#pm-open-driving` | `#pm-panel-driving` | DRIVING |
+| Display | `#pm-open-display` | `#pm-panel-display` | DISPLAY |
+| Steering & Assists | — | `#advanced` | STEERING & ASSISTS |
+| Music & Sound | `#pm-audio` | `#audioset` | MUSIC & SOUND |
 
-Back pops to the Settings index; Escape closes the sheet. Lighting, camera and
-flyby tuning are separate in-race docks, not Settings pages.
+Back pops to the Settings index; Back from the index returns to the title.
+Escape closes the sheet. Values below are the observed live state, not a
+defaults contract.
 
-#### How to Play (`#howtoplay`) — partial
+**Controls.** Throttle `HOLD`; Left-handed `OFF`; Gears `AUTO`; Active Aero
+`MANUAL`. Other actions are Reset Keys, Button Names `AUTO`, Calibrate Stick,
+Set Up a Wheel and Reset Controller.
 
-The title opens a help sheet with section navigation at `#htp-contents`; Back
-returns to the title. The live pass confirmed the controls/help surface but did
-not catalogue every slide or instruction.
+| Device | Bindings shown |
+|---|---|
+| Keyboard | `←/A` and `→/D` steer; `↑/W` gas; `↓/S` brake; `SPACE` boost; `X` overtake; `Z` active aero; `E` upshift; `Q/SHIFT` downshift; `C` camera; `B` look back; `R` recover; `P` pause |
+| Controller | `RT/A` gas; `LT/B` brake; `X` boost; `Y` overtake; D-pad Up active aero; `RB/LB` shift; View camera; right stick look back; left stick recover; Menu pause |
+
+**Driving.** Driving Coach `ON`. Doors lead to Practice a Section, Pit Strategy
+(Next Tyres `AUTO`) and an empty Session Review.
+
+**Display.**
+
+- UI Size `100%`; HUD `ON`; Style `STANDARD`; Layout `FULL`; Map `ON`;
+  Gaps `ON`; Line Colour `F1`; Line Opacity `NORMAL`; Brake Cue `OFF`.
+- HUD and touch size/opacity `100%`; Metrics Overlay `OFF`; Page `GOV`;
+  Side `AUTO`; Size `S`.
+- Renderer `THREE.JS`; Resolution `AUTO`; Fullscreen `OFF`; Upscale `OFF`;
+  Occlusion `OFF`; Debris `ON`; Graphics `HIGH`.
+- Cockpit Halo `ON`; Turn Chasing `40%`.
+- `#pm-display-adv` holds Advanced Visuals. Lighting Tuner, Camera Tuner and
+  Flyby Shot Editor are disabled outside a race and open separate docks.
+
+**Steering & Assists.** Preset `STANDARD`; Overall Speed `84%`; Feel `NORMAL`;
+Tilt `8`; Aids `OFF`; Driving Help `LOW`; Racing Line `OFF`, plus an Advanced
+door.
+
+**Music & Sound.** Music `ON`, source `ALL`, volume `6`; SFX `ON`, volume `2`;
+Team Radio `OFF`; Engine Tone `TEAM` with pitch/roughness sliders; Spotify
+`OFF`.
+
+#### How to Play (`#howtoplay`)
+
+`#htp-contents` is an anchor index, not a Next/Back slide sequence.
+
+| Anchor | Section |
+|---|---|
+| `#htp-controls` | Quick Start — Keyboard, Controller and Touch/Mobile expanders |
+| `#htp-racing` | Boost |
+| `#htp-pits` | Pit Stops — Tyre Wear Runs Them |
+| `#htp-driving` | Driving Coach |
+| `#htp-setup` | Camera |
+| `#htp-modes` | Race |
+| `#htp-friends` | Race a Friend |
+
+`#htp-close` closes the sheet and returns to the title.
 
 #### Data Hub (`#datahub`)
 
@@ -155,18 +203,17 @@ state. No race was started.
 
 ### Garage (`#carsetup` / `#customize`) — partial
 
-Garage is reachable from the title or any `YOUR CAR` action. The confirmed
-surface includes camera, active aero, free build, setup works, livery,
-team/driver selection, team editing, save/load, Back and Done. Its category
-rail includes team, engine, aero, suspension, brakes, tyres, ERS, gearbox,
-fuel, exhaust, floor, cockpit and wheels.
-
-Repeated deep-panel exploration exhausted the browser tab, so part editors,
-livery subpanels and save/load depth are not a complete navigation contract.
+Garage is reachable from the title or any `YOUR CAR` action. Opening it
+discarded the Chrome tab before the category rail rendered, so no deep control
+or navigation claim is live-walk evidence. Only the source-derived structure
+in part B — `#carsetup`, `#cs-tabs` and `#cs-options` — is mapped here until a
+lighter walk succeeds.
 
 ### In-race and end-of-session layers — partial
 
-The live walk did not start a race. Source establishes the following roots:
+The walk reached `RACE!`, but local `127.0.0.1:3456` reported “this game needs
+WebGL2”; no race or pause menu could be opened on this box. Source establishes
+the following roots:
 
 - `#hud` and `#pausebtn`; pause opens `#pausemenu`.
 - `#pmsettings` can be used as the pause/title Settings sheet.
@@ -175,9 +222,9 @@ The live walk did not start a race. Source establishes the following roots:
 - `#quali`, `#standings` and `#results` cover session flow.
 - `#rotate-device` blocks portrait race presentation.
 
-The exact pause actions, nested pause chrome and all session-to-session edges
-remain intentionally undocumented until a complete in-race walk replaces this
-partial section.
+The exact pause actions, quit path, nested pause chrome and all
+session-to-session edges remain intentionally undocumented until a successful
+in-race walk replaces this partial section.
 
 ## B. DOM layer and ID inventory
 
@@ -241,10 +288,10 @@ screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#photo-controls`,
 
 | Root | Important descendants |
 |---|---|
-| `#overlay` | `#menu-brand`, `#menu-buttons`, `#menu-hero`, `#menu-primary`, `#menu-secondary` |
+| `#overlay` | `#menu-brand`, `#menu-buttons`, `#menu-hero`, `#menu-primary`, `#menu-secondary`; title actions `#mb-career`, `#mb-race`, `#mb-tt`, `#mb-vs`, `#mb-season`, `#mb-data`, `#mb-garage`, `#mb-settings`, `#mb-help` |
 | `#pmsettings` | `#pmsettings-inner`, `#dlg-settings`, `#pm-settings-body`, `#pm-settings-index` |
-| Settings pages | `#pm-panel-controls`, `#pm-panel-driving`, `#pm-panel-display`, `#advanced`, `#audioset` |
-| `#howtoplay` | `#howtoplay-inner`, `#htp-contents` |
+| Settings pages | `#pm-panel-controls`, `#pm-panel-driving`, `#pm-panel-display`, `#pm-display-adv`, `#advanced`, `#audioset` |
+| `#howtoplay` | `#howtoplay-inner`, `#htp-contents`, `#htp-controls`, `#htp-racing`, `#htp-pits`, `#htp-driving`, `#htp-setup`, `#htp-modes`, `#htp-friends`, `#htp-close` |
 | `#spotifypanel` | `#spotifypanel-inner` |
 
 `#dlg-settings` is mutable: `SettingsNav` updates it as the page stack changes.
