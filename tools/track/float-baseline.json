@@ -1,6 +1,6 @@
 {
-  "fuji": 12,
-  "nurburgring": 8,
+  "fuji": 14,
+  "nurburgring": 10,
   "hockenheim": 2,
   "jerez": 0,
   "madrid": 2,
@@ -15,5 +15,8 @@
   "mexico": 1,
   "monza": 1,
   "miami": 1,
-  "portimao": 1
+  "portimao": 1,
+  "redbull": 1,
+  "spa": 2,
+  "watkins_glen": 1
 }
