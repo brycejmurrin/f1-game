@@ -3040,6 +3040,7 @@ const G = {
   // The FLYBY SHOT EDITOR's saved list, or null for the shipped sequence.
   // Read-only here: flybyPanel writes it, reloadFlybyShots() reads it back.
   get flybyShots() { return flybyShots; },
+  get lens() { return _lens; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
   get fieldSectorBests() { return fieldSectorBests; },
@@ -6748,6 +6749,8 @@ let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
+// The lens the last frame was built with — see where it is filled, below.
+const _lens = { near: 0, far: 0, fovY: 0, fog: null, cull: 0, cine: false };
 function render(dt) {
   if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
@@ -6937,10 +6940,19 @@ function render(dt) {
     camSnapNext = false;
   }
 
+  // The EDITOR's preview is the same cinematic, parked (js/agent/apex.js stamps
+  // `cine` on its dbgCam). From here down, everything gated on `cine` is a thing
+  // the live screen and the preview have to do IDENTICALLY — that is the whole
+  // point of the flag, and the reason it is widened here rather than read as two
+  // separate conditions at four sites that can drift apart one at a time.
+  if (dbgCam && dbgCam.cine) cine = true;
+
   // Car-follow cameras counter-rotate by the road bank so the car and asphalt
   // read level while the horizon carries the banking cue. Slip adds a small
-  // dynamic lean on top; broadcast/debug cameras remain world-level.
-  if (dbgCam) {
+  // dynamic lean on top; broadcast/debug and cinematic cameras stay world-level
+  // (the flyby's own roll would otherwise be whatever the last race left behind,
+  // decaying over the first half-second of a shot the editor showed level).
+  if (dbgCam || cine) {
     camRoll = 0;
   } else {
     // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
@@ -6961,23 +6973,27 @@ function render(dt) {
   // scenery draw-distance cull that derives from it). dbgCam overwrites
   // farPlane with its own value right below, so debug/photo-mode is untouched.
   let fovY, farPlane = 900 * (LT.renderDistMul != null ? LT.renderDistMul : 1);
+  if (cine) farPlane = FlybySeq.FAR;   // flat, not scaled by RENDER DISTANCE: the editor previews ONE number
   if (dbgCam) {
     camEye[0] = dbgCam.eye[0]; camEye[1] = dbgCam.eye[1]; camEye[2] = dbgCam.eye[2];
     camTgt[0] = dbgCam.target[0]; camTgt[1] = dbgCam.target[1]; camTgt[2] = dbgCam.target[2];
     fovY = dbgCam.fov * Math.PI / 180;
-    farPlane = dbgCam.far;
+    if (!cine) farPlane = dbgCam.far;
   } else {
     // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
     // blows the horizontal field out past ~100°, which makes the car look tiny and
     // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
     // readable size; portrait (narrow) is unaffected.
     fovY = camFov * Math.PI / 180;
-    const HFOV_MAX = 86 * Math.PI / 180;
-    const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
-    fovY = Math.min(fovY, fovYCap);
-    // The cinematic's far plane is FLAT, not scaled by RENDER DISTANCE: the
-    // editor previews one number, so the screen has to render that number.
-    if (cine) farPlane = FlybySeq.FAR;
+    // The HFOV cap keeps the CAR a readable size on a wide screen. A crane shot
+    // has no car in it, the editor previews the authored angle uncapped, and a
+    // shot authored at 60° would arrive on a 21:9 screen squeezed to 45° — so
+    // the cinematic takes the number it was framed at.
+    if (!cine) {
+      const HFOV_MAX = 86 * Math.PI / 180;
+      const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
+      fovY = Math.min(fovY, fovYCap);
+    }
   }
 
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
@@ -6996,7 +7012,8 @@ function render(dt) {
   // of depth resolution for free.
   const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
   const _nearM = (_projMode === "cockpit" || _projMode === "hood") ? 0.3 : 0.9;
-  M4.perspectiveTo(_mProj, fovY, gfx.aspect, dbgCam ? 0.3 : _nearM, farPlane);
+  const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
+  M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
   // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
   // module-scope scratch vectors (no per-frame V3 array allocation); same math.
   {
@@ -7088,8 +7105,8 @@ function render(dt) {
   // cull right underneath has to know that this frame's fog wall is not where
   // frame.fogDensity says it is — thinning the draw while culling scenery at the
   // unthinned wall is a hard edge of missing world instead of a vista.
-  const _fogMul = dbgCam ? (dbgCam.fog != null ? dbgCam.fog : FlybySeq.FOG)
-    : (cine ? FlybySeq.FOG : null);
+  const _fogMul = cine ? FlybySeq.FOG
+    : (dbgCam ? (dbgCam.fog != null ? dbgCam.fog : 0.15) : null);
   const _fogDens = (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
   const _fogCull = _fogDens > 3 / farPlane ? Math.ceil(3 / _fogDens) : 0;
   // Sphere that contains the perspective frustum (far-plane corners sit
@@ -7102,6 +7119,13 @@ function render(dt) {
   // is not a risk worth a nicer horizon.
   frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0)
     : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : (_fogCull || _farCull));
+
+  // WHAT THIS FRAME WAS ACTUALLY BUILT WITH, for __apex.camState().lens. Not a
+  // debug nicety: the live flyby and the EDITOR'S preview of the same shot ran
+  // different lenses for months with nothing able to see it, because every hook
+  // reported where the camera POINTED. Written after all five are resolved.
+  _lens.near = _near; _lens.far = farPlane; _lens.fovY = fovY;
+  _lens.fog = _fogMul; _lens.cull = frame.cullDist; _lens.cine = cine;
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
   // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.

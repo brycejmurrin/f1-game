@@ -111,13 +111,43 @@ test("the cinematic's render numbers live in one place, as numbers", () => {
   assert.ok(FS.FOG > 0 && FS.FOG < 1, "the fog is THINNED for the flyby — 0 would flatten it, 1 is the defect");
 });
 
+test("one flag decides the whole lens, and the preview carries it", () => {
+  // `cine` is what makes the two paths one path. Every lens term below reads it;
+  // if any of them went back to asking `dbgCam` instead, the editor would be
+  // rendering a debug free camera again and the screen would be rendering
+  // gameplay — which is what the two screenshots in the report showed.
+  const body = bodyOf("function render(");
+  assert.match(body, /if \(dbgCam && dbgCam\.cine\) cine = true;/,
+    "the editor's preview must be recognised as the cinematic it is previewing");
+  assert.match(body, /if \(dbgCam \|\| cine\) \{\s*\n\s*camRoll = 0;/,
+    "the live flyby would otherwise inherit the roll the last race left behind, and decay it over the " +
+    "first half-second of a shot the editor showed level");
+  assert.match(body, /const _near = cine \? FlybySeq\.NEAR/,
+    "an inherited near plane is whichever camera MODE the player last raced in — 0.3 for cockpit, 0.9 " +
+    "otherwise — so the same shot would render with two different depth budgets");
+  assert.match(body, /const _fogMul = cine \? FlybySeq\.FOG/,
+    "cine must be asked BEFORE dbgCam: a plain debug free camera keeps its own fog default, and photo " +
+    "mode passes 1.0 explicitly");
+  assert.match(body, /frame\.cullDist = \(dbgCam \|\| cine\)/,
+    "thinning the fog while culling scenery at the unthinned fog wall trades haze for a hard edge of " +
+    "missing world");
+
+  const apex = fs.readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8");
+  assert.match(apex, /fog: FlybySeq\.FOG, cine: true,/, "flybyCam must stamp the marker on its dbgCam");
+});
+
 test("both the live screen and the editor's preview read them", () => {
   const body = bodyOf("function render(");
   assert.match(body, /farPlane = FlybySeq\.FAR/,
     "the live flyby renders at gameplay's 900 m far plane, so a shot the editor framed across a whole " +
     "circuit arrives as a wall of fog");
-  assert.match(body, /cine \? FlybySeq\.FOG : null/,
+  assert.match(body, /const _fogMul = cine \? FlybySeq\.FOG/,
     "the live flyby renders at the session's full fog density while the editor previews it thinned");
+  // The wide-screen FOV cap keeps the CAR a readable size. A crane shot has no
+  // car in it, the editor previews the authored angle, and an 80 deg shot on a
+  // 2:1 screen would arrive squeezed to 50 — MEASURED live before this landed.
+  assert.match(body, /if \(!cine\) \{[\s\S]{0,200}fovYCap/,
+    "the cinematic must fly the angle it was framed at, not the gameplay cap");
 
   const apex = fs.readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8");
   const at = apex.indexOf("flybyCam(u, shots)");
