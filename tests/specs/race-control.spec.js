@@ -23,12 +23,12 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.describe("race control in a page", () => {
-  test("the layer is ON by default and reports a coherent GREEN", async ({ loadTrack, page }) => {
+  test("the layer is OFF by default and reports a coherent GREEN", async ({ loadTrack, page }) => {
     // These assertions inspect state, never pixels. Stop software rendering
     // before building the race and before this worker creates its next context.
     await loadTrack("monza", "day", "dry", { headless: true });
     const c = await page.evaluate(() => window.__apex.caution());
-    expect(c.enabled).toBe(true);
+    expect(c.enabled).toBe(false);
     expect(c.level).toBe(0);
     expect(c.label).toBe("GREEN");
     expect(c.sector).toBe(-1);
