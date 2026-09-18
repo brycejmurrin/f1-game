@@ -1428,6 +1428,7 @@ test.describe("Parts module — team signatures and factory presets", () => {
       );
       return {
         id: team.id,
+        constructorTeam: !team.legends,
         deterministic: JSON.stringify(first) === JSON.stringify(second),
         key: Parts.factoryKey(team),
         invalid,
@@ -1438,7 +1439,21 @@ test.describe("Parts module — team signatures and factory presets", () => {
       expect(team.deterministic, team.id).toBe(true);
       expect(team.key, team.id).toBeTruthy();
       expect(team.invalid, team.id).toEqual([]);
-      expect(team.signatures.length, team.id).toBeGreaterThanOrEqual(1);
+      // A SIGNATURE is a CONSTRUCTOR's own hardware, and LEGENDS is not one —
+      // custom-team.js pushes it into Teams.LIST beside MY TEAM as the player's
+      // race-as-a-legend car, so `!team.custom` alone let it through here.
+      // Parts.FACTORY_PRESETS holds exactly the eleven constructors and
+      // factoryResolved() falls back to DEFAULTS, so the Legends car resolves a
+      // valid deterministic preset (the three assertions above pass for it) made
+      // entirely of catalog parts. Its identity is the marque crest and the
+      // per-legend livery, not bespoke 2026 geometry — a tribute car wearing
+      // sig_mclaren_flex would be wrong twice over.
+      // ZERO, not skipped: if Legends is ever given a parts programme, this line
+      // is what says the contract above has to be revisited rather than silently
+      // widened. Shipping code already pairs the two (js/game.js seatsFor reads
+      // `!t.custom && !t.legends`).
+      if (team.constructorTeam) expect(team.signatures.length, team.id).toBeGreaterThanOrEqual(1);
+      else expect(team.signatures, team.id).toEqual([]);
     }
   });
 
@@ -1469,7 +1484,18 @@ test.describe("Parts module — team signatures and factory presets", () => {
     const result = await page.evaluate(() => {
       const factoryEngineTeams = [];
       const gaps = [];
-      for (const team of Teams.LIST.filter((t) => !t.custom)) {
+      // LEGENDS is the player's race-as-a-legend car, not a constructor, so it
+      // has no entry in Parts.FACTORY_PRESETS and factoryResolved() hands it
+      // DEFAULTS. Held to its OWN contract below rather than dropped: the
+      // twelve ids it fields must be exactly the catalog defaults, so a stray
+      // signature or a drifted default is still a failure here.
+      const legendsTeam = Teams.LIST.find((t) => t.legends);
+      const legendsSetup = legendsTeam ? Parts.getFactorySetup(legendsTeam) : null;
+      const legendsOffCatalog = legendsSetup
+        ? Parts.CATALOG.flatMap((cat) => (legendsSetup[cat.id] === Parts.DEFAULTS[cat.id]
+          ? [] : [`${cat.id}:${legendsSetup[cat.id]}`]))
+        : [];
+      for (const team of Teams.LIST.filter((t) => !t.custom && !t.legends)) {
         const setup = Parts.getFactorySetup(team);
         for (const cat of Parts.CATALOG) {
           const opt = cat.options.find((o) => o.id === setup[cat.id]);
@@ -1483,9 +1509,12 @@ test.describe("Parts module — team signatures and factory presets", () => {
           gaps.push(`${team.id}:${cat.id}:${setup[cat.id]}`);
         }
       }
-      return { gaps, factoryEngineTeams };
+      return { gaps, factoryEngineTeams, legendsOffCatalog };
     });
     expect(result.gaps).toEqual([]);
+    // The Legends car is the baseline car in a legend's colours: every category
+    // at the catalog default, distinguished by livery and crest, never by parts.
+    expect(result.legendsOffCatalog).toEqual([]);
     // Cadillac is Ferrari-powered and must NOT be in this list — without its own
     // signature engine it would render the exact same power unit as Ferrari.
     expect(result.factoryEngineTeams.sort())
