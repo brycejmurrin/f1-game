@@ -26,6 +26,26 @@ const RadioVoice = (function () {
     coach: { pitch: 1.0, rate: 0.95 },
     radio: { pitch: 1.05, rate: 1.15 },
   });
+  /* PLAYER TUNING sits OVER those defaults rather than replacing them, which is
+   * what makes "reset" a delete and not a second table to keep in step. A tune
+   * is {name, pitch, rate}: `name` picks a system voice, the other two scale
+   * nothing — they ARE the pitch and rate, in the same units as TONE.
+   *
+   * Every field is optional and every field is clamped, because this comes out
+   * of localStorage: a hand-edited store, a save from a future build, or a
+   * voice that existed on the machine the save was made on and does not exist
+   * here. None of those may silence a channel — the written card is the game's
+   * floor and the voice is the extra. */
+  // One real line per channel for the settings preview — each the shape that
+  // channel actually carries, so the sample exercises the same speakable()
+  // path (a penalty's "+5s", the coach's plain prose, the pit call's caps).
+  const SAMPLE = Object.freeze({
+    control: "Car 44, track limits — +5s penalty",
+    coach: "Brake a little earlier here and get the car straight",
+    radio: "BOX BOX, P3 on the exit",
+  });
+  const PITCH_MIN = 0.5, PITCH_MAX = 1.6;
+  const RATE_MIN = 0.6;
   const RATE_MAX = 1.35;
   // Seconds held back for the engine's lead-in. Remote voices are excluded
   // outright (see voicesFor), so what is left is a local engine's startup —
@@ -44,6 +64,19 @@ const RadioVoice = (function () {
   // letter. A real initialism is a closed set; a heuristic over ALL-CAPS copy is
   // a guess about every word that will ever be written here.
   const KEEP_CAPS = /^(DRS|ERS|VSC|SC|MGU|PB|P\d{1,2})$/;
+
+  /** The prosody a channel actually speaks with: the shipped default, with any
+   *  stored tune laid over it and clamped. Pure — no store, no synth. */
+  function toneFor(speaker, tune) {
+    const base = TONE[speaker] || TONE.radio;
+    const t = tune && tune[speaker];
+    if (!t) return { pitch: base.pitch, rate: base.rate };
+    const num = (v, lo, hi, fb) => (Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : fb);
+    return {
+      pitch: num(t.pitch, PITCH_MIN, PITCH_MAX, base.pitch),
+      rate: num(t.rate, RATE_MIN, RATE_MAX, base.rate),
+    };
+  }
 
   /** The words only, normalised for a speech engine. Pure; tested directly. */
   function speakable(msg) {
@@ -79,7 +112,7 @@ const RadioVoice = (function () {
     // be read aloud at somebody browsing menus.
     if (o.state !== "race" && o.state !== "count") { out.reason = "not-racing"; return out; }
     const speaker = SPEAKERS[kind] || "radio";
-    const tone = TONE[speaker];
+    const tone = toneFor(speaker, o.tune);
     const text = speakable(o.msg);
     if (!text) { out.reason = "empty"; return out; }
     const budget = (o.life || 0) - LEAD_RESERVE_S;
@@ -94,7 +127,8 @@ const RadioVoice = (function () {
   /** A live instance's shape, with every method a no-op. */
   function inert() {
     return Object.freeze({
-      say: () => false, stop: () => {}, unlock: () => {},
+      say: () => false, stop: () => {}, unlock: () => {}, preview: () => false,
+      voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
       debug: () => ({ available: false, enabled: false, voices: 0, last: null }),
     });
@@ -107,7 +141,16 @@ const RadioVoice = (function () {
     if (!api) { Log.info("audio", "RadioVoice: no speechSynthesis — the radio stays written"); return inert(); }
     let enabled = !!G.store.get("radioVoice", false);
     let volume = G.store.get("volRadio", 0.8);
+    // ONE store key holding all three channels, not nine flat ones: the repo
+    // guards that a key means exactly one type (store-key-types), and a channel
+    // is naturally a record. Absent keys and absent channels both mean "the
+    // shipped default", so a fresh save and a reset are the same state.
+    let tune = readTune();
     let voices = null, deadline = null, last = null;
+    function readTune() {
+      const t = G.store.get("voiceTune", null);
+      return t && typeof t === "object" ? t : {};
+    }
     // NEVER called from create(): boot must not wait on a voice list, and on
     // Chrome the first read is empty anyway.
     function voicesFor() {
@@ -126,9 +169,22 @@ const RadioVoice = (function () {
     // An EMPTY list is not a refusal. Safari returns nothing from getVoices()
     // and picks a system default itself, so voice = null is the Safari path and
     // it must still speak — prosody alone then carries the channel.
+    /* The player's pick by NAME, else the shipped spread.
+     *
+     * BY NAME AND NOT BY INDEX, because the index is not stable: the list is
+     * the machine's installed voices, so it changes with an OS update, a
+     * language pack, or simply opening the save on another computer. A stored
+     * index would silently become a different voice; a stored name that is gone
+     * falls back here to the default spread, which is the same thing a fresh
+     * save gets. A missing voice must never silence the channel. */
     function voiceFor(speaker) {
       const v = voicesFor();
-      if (!v.length) return null;
+      if (!v.length) return null;                       // Safari: prosody carries it alone
+      const want = tune[speaker] && tune[speaker].name;
+      if (want) {
+        const hit = v.find((x) => x && x.name === want);
+        if (hit) return hit;
+      }
       const i = { control: 0, coach: 1, radio: 2 }[speaker] || 0;
       return v[i % v.length];
     }
@@ -139,7 +195,7 @@ const RadioVoice = (function () {
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
     }
     function say(msg, life, kind) {
-      const p = plan({ msg, life, kind, enabled, soundOn: !!G.soundOn, state: G.state, api: true, volume });
+      const p = plan({ msg, life, kind, enabled, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs };
       if (!p.speak) return false;
       stop();
@@ -193,8 +249,46 @@ const RadioVoice = (function () {
       try { synth.onvoiceschanged = () => { voices = null; }; } catch (e) { /* not every engine exposes it */ }
     }
     Log.info("audio", "RadioVoice.create enabled=" + enabled);
+    /* SPEAK A SAMPLE, from the settings panel, where no race is running.
+     *
+     * It cannot go through say(): plan() refuses anything outside "race"/"count"
+     * on purpose — the title screen's save-conflict card must not be read at
+     * somebody browsing menus — and a preview is exactly that refused case. So
+     * this borrows the prosody and the voice and speaks directly, which is also
+     * what makes it honest: you hear the channel you are tuning, at the pitch
+     * and rate you just set, not an approximation of it.
+     *
+     * The RATE you hear is the one you chose. In a race a long line is sped up
+     * to RATE_MAX to fit its card and dropped if it still will not fit, so the
+     * preview is the floor of what you get, never the ceiling. */
+    function preview(speaker, text) {
+      if (!enabled || !G.soundOn) return false;
+      const sp = TONE[speaker] ? speaker : "radio";
+      const t = toneFor(sp, tune);
+      const words = speakable(text || SAMPLE[sp] || SAMPLE.radio);
+      if (!words) return false;
+      stop();
+      const u = new Utter(words);
+      u.voice = voiceFor(sp);
+      u.rate = t.rate; u.pitch = t.pitch; u.volume = volume;
+      try { synth.speak(u); synth.resume(); } catch (e) { return false; }
+      return true;
+    }
+
     return {
-      say, stop, unlock,
+      say, stop, unlock, preview,
+      /** The installed voices a channel may be given, as plain rows for a <select>. */
+      voiceList: () => voicesFor().map((v) => ({ name: v.name, lang: v.lang })),
+      /** The stored tune, or the shipped default for a channel with none. */
+      tuneFor: (speaker) => Object.assign(toneFor(speaker, tune), { name: (tune[speaker] && tune[speaker].name) || "" }),
+      /** Patch one channel. A null patch RESETS it — see the readTune note. */
+      setTune(speaker, patch) {
+        if (!TONE[speaker]) return false;
+        if (patch == null) delete tune[speaker];
+        else tune[speaker] = Object.assign({}, tune[speaker], patch);
+        G.store.set("voiceTune", tune);
+        return true;
+      },
       setEnabled(b) { enabled = !!b; if (!enabled) stop(); },
       setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
       available: () => true,
@@ -202,6 +296,7 @@ const RadioVoice = (function () {
     };
   }
 
-  return { create, inert, plan, speakable, estimate, SPEAKERS, TONE, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S };
+  return { create, inert, plan, speakable, estimate, toneFor, SPEAKERS, TONE, SAMPLE,
+           PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S };
 })();
 Object.freeze(RadioVoice);
