@@ -90,9 +90,13 @@ function paintRendererSummary(pref, liveFallback) {
     ? document.getElementById("pm-renderer-details-sum")
     : null;
   if (!sum) return;
+  const fallbackChip = liveFallback === "webgl2"
+    ? '<span data-fold="sep"> · </span><span data-fold="val">WEBGL2</span>'
+    : (liveFallback
+      ? '<span data-fold="sep"> · </span><span data-fold="val">' + backendLabel(liveFallback) + "</span>"
+      : "");
   sum.innerHTML = '<span data-fold="k">RENDERER</span><span data-fold="sep"> · </span><span data-fold="val">' +
-    backendLabel(pref) + "</span>" + (liveFallback
-      ? '<span data-fold="sep"> · </span><span data-fold="val">' + backendLabel(liveFallback) + "</span>" : "");
+    backendLabel(pref) + "</span>" + fallbackChip;
 }
 function markReloading(rb, next) {
   const msg = backendLabel(next) + " — RELOADING…";
