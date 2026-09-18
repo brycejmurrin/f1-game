@@ -61,13 +61,17 @@ resolution.
    list and the walk nests team → paint → parts → view → framing, cheapest
    innermost:
    ```sh
-   node tools/shot/garage-angles.mjs --team=ferrari,mclaren --parts=factory,stock \
-     --livery=default --spine-side=logo,duo --views=hero,side --zoom=0,8 --dry-run
+   node tools/shot/garage-angles.mjs --team=ferrari,mclaren --part.engine=all \
+     --livery=default --spine-side=logo,duo --views=hero,side --zoom=0,8 --plan
    ```
-   `--dry-run` prints the matrix and exits before Chromium — do that first, the
-   product multiplies fast. `--parts` takes `current` / `stock` / `factory` /
-   `cat:opt+cat:opt`; ids are checked against `isOptionAvailable` for the team
-   being shot, because a part locked to another team resolves to the DEFAULT
+   `--plan` prints the matrix as JSON and exits before Chromium — do that
+   first, the product multiplies fast. (It is `--plan`, not `--dry-run`: the
+   parser takes any unknown `--x=y` as a livery-field AXIS, so a misremembered
+   flag does not error, it silently adds a dimension and then launches.)
+   Parts are `--part.<category>=<id>[,<id>]`, one flag per category, with
+   `--part.<category>=all` expanding to the catalog; ids are checked against
+   `isOptionAvailable` for the team being shot, because a part locked to
+   another team resolves to the DEFAULT
    silently (the trap that made an early audit report 100+ dead options).
    A `--spine-side` design is applied on top of the `--livery` it is crossed
    with, so a design can be seen on every paint job, not just the team default.

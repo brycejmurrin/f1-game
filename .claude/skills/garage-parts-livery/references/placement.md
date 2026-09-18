@@ -192,7 +192,9 @@ the right 33%. The preview compensates with an OFF-AXIS frustum
 the gap the sheet does not cover; measured `panelFrac` is 0.328, matching the
 sheet exactly. `screenshotGameCanvas` captures the canvas alone, so the car
 reads as shoved off-centre with dead space on the sheet side. That is correct
-framing photographed wrongly. Shoot `--visible-only` and the car is centred.
+framing photographed wrongly — judge it against the canvas, not the sheet.
+There is no `--visible-only`; to photograph the region the player actually
+sees, cut it with `--crop=x,y,w,h` (fractions of the canvas).
 
 **2. A side-on car in a near-square frame leaves big vertical margins.**
 The car is ~5.4 m long and ~1.0 m tall. Framed to fill the visible WIDTH, it
