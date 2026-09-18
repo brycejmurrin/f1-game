@@ -27,7 +27,7 @@ test("assets() reports a coherent state", async ({ page }) => {
   expect(s).toBeTruthy();
   expect(typeof s.supported).toBe("boolean");
   expect(typeof s.pack).toBe("boolean");
-  // GLX is the default backend and implements the texture-array path.
+  // The fixture pins GLX for native WebGL2 texture-array coverage.
   expect(s.supported).toBe(true);
 });
 

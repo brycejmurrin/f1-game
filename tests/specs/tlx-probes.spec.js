@@ -2,8 +2,8 @@
 // TLX backend probes — the three.js/TSL renderer behind apex26.gfxBackend="three".
 // Mirrors webgl-probes.spec.js's role for GLX: boot integrity, backend identity
 // (the descriptor-copy install onto the GLX object), and a console/GL-error
-// scrape. CI runs three's WebGL2 fallback on SwiftShader (no WebGPU headless),
-// pinned via apex26.tlxForceGL so local repros match CI exactly.
+// scrape. CI pins three's WebGL2 fallback via apex26.tlxForceGL so local
+// repros match even though Chromium also enables software WebGPU.
 // Grows per milestone: M2 pixel-nonblank, M3+ __tlx shader-dump/?viz= hooks.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { awaitPresentedFrame, screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
@@ -79,14 +79,14 @@ test.describe("TLX — boot", () => {
     expect(errors).toEqual([]);
   });
 
-  test("falls back to GLX when the backend key is absent", async ({ page }) => {
+  test("the shipped unset backend boots TLX/Three", async ({ page }) => {
     await page.addInitScript(() => {
       try { localStorage.removeItem("apex26.gfxBackend"); } catch (_) {}
     });
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     const backend = await page.evaluate(() => GLX.backend);
-    expect(backend).toBeUndefined();   // plain GLX carries no backend id
+    expect(backend).toBe("three");
   });
 
   test("the canvas is OPAQUE — the tag in alpha can never become opacity", async ({ page }) => {

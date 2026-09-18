@@ -8,8 +8,9 @@ description: Use when WebGPU/WGX rendering is wrong — black screen, missing ro
 WGX lives in `js/render/webgpu/` — `wgx.js`, `wgsl-chunks.js`, `wgsl-fx.js`,
 `wgsl-post.js`.
 DEFERRED: no `<script>` tag; `js/game.js` injects it when
-`apex26.gfxBackend === "webgpu"`. GLX stays the shipped default; every WGX
-failure must degrade to GLX, never a dead canvas.
+`apex26.gfxBackend === "webgpu"`. Unset ships TLX/Three; GLX is the explicit
+WebGL2 choice and universal fallback. Every WGX failure must degrade to GLX,
+never a dead canvas.
 
 ## 1. First probe — static, then Dawn
 
