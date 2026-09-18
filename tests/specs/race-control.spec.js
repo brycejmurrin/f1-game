@@ -27,20 +27,29 @@ test.describe("race control in a page", () => {
     // These assertions inspect state, never pixels. Stop software rendering
     // before building the race and before this worker creates its next context.
     await loadTrack("monza", "day", "dry", { headless: true });
-    // NOT a hard-coded true. This read is `store.get("caution", true)` in
-    // race-control.js, and js/data/settings-defaults.js OUTRANKS that call-site
-    // argument — so the shipped default is whatever that file says, and it says
-    // false today (ab1a334b7, the exported settings). Pinning `true` here made
-    // a deliberate product decision look like a broken layer and took the
-    // deploy branch red. What this test actually owns is that the page and its
-    // own shipped default AGREE, which holds whichever way the default goes.
-    const c = await page.evaluate(() => ({
-      ...window.__apex.caution(),
-      // A BARE IDENTIFIER, not window.SettingsDefaults: the module is a
-      // top-level `const` in a classic script, and const/let never become
-      // properties of window.
-      shipped: SettingsDefaults.get("caution"),
-    }));
+    // NOT a hard-coded true, and not a hard-coded SettingsDefaults read either.
+    // race-control.js asks for `store.get("caution", true)`, and GameStore
+    // resolves that in TWO steps: js/data/settings-defaults.js wins when it
+    // LISTS the key, otherwise the call-site argument stands. Both halves have
+    // moved under this spec within one hour — ab1a334b7 listed the key as
+    // false, b80dd83df's successor dropped it again — and each move took the
+    // deploy branch red against an assertion pinning one number. So resolve it
+    // the way the store does and assert the layer AGREES with its own shipped
+    // default, which is the contract this test actually owns.
+    //
+    // SettingsDefaults is a BARE IDENTIFIER, not window.SettingsDefaults: the
+    // module is a top-level `const` in a classic script, and const never lands
+    // on window.
+    const c = await page.evaluate(() => {
+      const listed = typeof SettingsDefaults !== "undefined" && SettingsDefaults.has("caution");
+      return {
+        ...window.__apex.caution(),
+        // `true` mirrors race-control.js's own call-site default; if that
+        // argument ever changes, this line changes with it.
+        shipped: listed ? SettingsDefaults.get("caution") : true,
+        listed,
+      };
+    });
     expect(typeof c.shipped).toBe("boolean");
     expect(c.enabled).toBe(c.shipped);
     expect(c.level).toBe(0);
