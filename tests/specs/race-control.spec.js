@@ -23,12 +23,26 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 test.describe("race control in a page", () => {
-  test("the layer is ON by default and reports a coherent GREEN", async ({ loadTrack, page }) => {
+  test("the layer boots at the shipped default and reports a coherent GREEN", async ({ loadTrack, page }) => {
     // These assertions inspect state, never pixels. Stop software rendering
     // before building the race and before this worker creates its next context.
     await loadTrack("monza", "day", "dry", { headless: true });
-    const c = await page.evaluate(() => window.__apex.caution());
-    expect(c.enabled).toBe(true);
+    // NOT a hard-coded true. This read is `store.get("caution", true)` in
+    // race-control.js, and js/data/settings-defaults.js OUTRANKS that call-site
+    // argument — so the shipped default is whatever that file says, and it says
+    // false today (ab1a334b7, the exported settings). Pinning `true` here made
+    // a deliberate product decision look like a broken layer and took the
+    // deploy branch red. What this test actually owns is that the page and its
+    // own shipped default AGREE, which holds whichever way the default goes.
+    const c = await page.evaluate(() => ({
+      ...window.__apex.caution(),
+      // A BARE IDENTIFIER, not window.SettingsDefaults: the module is a
+      // top-level `const` in a classic script, and const/let never become
+      // properties of window.
+      shipped: SettingsDefaults.get("caution"),
+    }));
+    expect(typeof c.shipped).toBe("boolean");
+    expect(c.enabled).toBe(c.shipped);
     expect(c.level).toBe(0);
     expect(c.label).toBe("GREEN");
     expect(c.sector).toBe(-1);
