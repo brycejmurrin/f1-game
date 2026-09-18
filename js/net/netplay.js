@@ -476,7 +476,11 @@ const NetPlay = (function () {
         r.car.dnfAt = null; r.car.dnfWhy = null;
         remotes.delete(G.wireId(r.car));
       }
-      if (reason && gone.length && G.announce) G.announce("RIVAL DISCONNECTED", 2);
+      if (reason && gone.length && G.announce) {
+        G.announce(role === "guest" && id == null
+          ? "HOST LEFT — RIVALS NOW AI"
+          : "RIVAL DISCONNECTED", 2);
+      }
     }
 
     function start(opts) {

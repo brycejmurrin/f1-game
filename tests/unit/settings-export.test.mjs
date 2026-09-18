@@ -290,12 +290,22 @@ test("loading a garage file writes garage-shaped keys only", () => {
 });
 
 test("a file round-trips: save it, load it into a fresh store, get the same values", () => {
-  const disk = { "apex26.volMusic": "0.8", "apex26.pace": "14", "apex26.cockpitHalo": "1" };
+  const disk = {
+    "apex26.volMusic": "0.8",
+    "apex26.radioVoice": "true",
+    "apex26.volRadio": "0.4",
+    "apex26.pace": "14",
+    "apex26.cockpitHalo": "1",
+  };
   const saved = boot({ disk }).collect("all");
+  assert.equal(saved.settings.audio.radioVoice, true);
+  assert.equal(saved.settings.audio.volRadio, 0.4);
   const b2 = boot();
   const r = b2.loadSettings(saved);
   assert.equal(r.ok, true);
   assert.equal(b2.disk.get("apex26.volMusic"), "0.8");
+  assert.equal(b2.disk.get("apex26.radioVoice"), "true");
+  assert.equal(b2.disk.get("apex26.volRadio"), "0.4");
   assert.equal(b2.disk.get("apex26.pace"), "14");
   assert.equal(b2.disk.get("apex26.cockpitHalo"), "1");
   const g1 = boot({ disk: GARAGE }).garage();
