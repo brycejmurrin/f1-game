@@ -177,7 +177,7 @@ const RENDERER_LS_KEYS = [
   // real failure.
   "apex26.gfxProbeStrikes",
   "apex26.envProbeOff", "apex26.perChunkOff",
-  "apex26.tlxForceGL", "apex26.tlxViz",
+  "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
   "apex26.wgxCapture",
 ];
 // wgxHoldPresent is written by WGX itself (holdSoftPresent), so a tab that
@@ -351,7 +351,7 @@ function shotReloadLive() {
   const be = readBackend();
   if (be === "webgpu") return true;
   // THREE PATH: WEBGPU uses the same SCREENSHOTS key for the LDR 2D blit.
-  return be === "three" && readThreePath() === "webgpu";
+  return be === "three" && (readThreePath() === "webgpu" || liveThreeApi() === "webgpu");
 }
 function applyShotMode(next, opts) {
   if (shotReloadLive() && !(opts && opts.noReload) &&

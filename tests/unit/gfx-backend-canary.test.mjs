@@ -143,6 +143,21 @@ test("boot canary disarms after a successful bind, not only after present()", ()
     "PROBE_KEY must be cleared after Gfx.create() binds, before the first present — title has no track");
 });
 
+test("every successful game.js GLX fallback publishes the live backend", () => {
+  const game = code("js/game.js");
+  const fallback = game.slice(game.indexOf("if (!gfx) {"), game.indexOf("// Baked asset pack"));
+  assert.match(fallback, /gfx\s*=\s*GLX[\s\S]*sessionStorage\.setItem\(\s*"apex26\.gfxBound"\s*,\s*"webgl2"\s*\)/,
+    "claim-fail, first-strike and null-create all converge on the successful GLX attach");
+  assert.match(fallback, /dispatchEvent\(\s*new Event\(\s*"apex-gfx-live"\s*\)\s*\)/,
+    "the picker must repaint immediately when GLX takes over");
+});
+
+test("the shared Playwright fixture pins native GLX coverage", () => {
+  const fixture = code("tests/helpers/fixtures.js");
+  const install = fixture.slice(fixture.indexOf("async function installMocks"), fixture.indexOf("const consoleByPage"));
+  assert.match(install, /localStorage\.setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+});
+
 test("first world present re-arms the canary so a jetsam mid-frame still reverts", () => {
   const game = code("js/game.js");
   const present = game.search(/gfx\.present\(\s*po\s*\)/);
@@ -519,6 +534,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.envProbeOff": "1",
     "apex26.perChunkOff": "1",
     "apex26.tlxForceGL": "0",
+    "apex26.tlxEnvProbe": "1",
     "apex26.tlxViz": "lit",
     "apex26.wgxCapture": "1",
     "apex26.gfxHigh": "1",
@@ -554,7 +570,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // is what the WRITER check below now catches.)
     "apex26.gfxProbeStrikes",
     "apex26.envProbeOff", "apex26.perChunkOff",
-    "apex26.tlxForceGL", "apex26.tlxViz",
+    "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
     "apex26.wgxCapture",
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
@@ -652,6 +668,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.equal(ls.getItem("apex26.envProbeOff"), null);
   assert.equal(ls.getItem("apex26.perChunkOff"), null);
   assert.equal(ls.getItem("apex26.tlxForceGL"), null);
+  assert.equal(ls.getItem("apex26.tlxEnvProbe"), null);
   assert.equal(ls.getItem("apex26.tlxViz"), null);
   assert.equal(ls.getItem("apex26.wgxCapture"), null);
   assert.equal(ss.getItem("apex26.wgxCapture"), null);
@@ -1379,7 +1396,7 @@ function bootPicker(opts) {
     navigator: { gpu: opts.gpu || undefined },
     PerfGov: { setUserTier() {}, sentinelArm() {} },
     GameStore: { store: { get() { return null; }, set() {} } },
-    GLX: { isMobile: true },
+    GLX: opts.glx || { isMobile: true },
     // The picker asks the roster whether a backend's files are in the tree, so
     // a stop whose files are gone can say UNAVAILABLE rather than write a pref
     // boot would ignore. These tests are about picker SEMANTICS, so the default
@@ -1580,6 +1597,15 @@ test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () =>
   assert.match(d.byId["pm-screenshots"].textContent, /RELOADING/);
   d.timers.forEach((fn) => fn());
   assert.equal(d.reloaded(), 1, "SCREENSHOTS reloads when THREE.JS WebGPU is live");
+
+  const e = bootPicker({
+    ls: { "apex26.gfxBackend": "three" },
+    glx: { isMobile: true, __tlx: { backendState: () => ({ api: "webgpu" }) } },
+  });
+  e.byId["pm-screenshots"].onclick();
+  assert.match(e.byId["pm-screenshots"].textContent, /RELOADING/);
+  e.timers.forEach((fn) => fn());
+  assert.equal(e.reloaded(), 1, "SCREENSHOTS reloads when THREE AUTO actually bound WebGPU");
 });
 
 test("presentStatus names the three screenshot paths in plain language", () => {
