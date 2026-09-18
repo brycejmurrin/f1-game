@@ -58,6 +58,7 @@ const START = "  // @gen-settings-defaults start";
 export const REVIEW = {
   sound: "ships the game MUTED for every new player — an export from a silenced phone looks exactly like this",
   unlimitedBudget: "removes the career economy constraint for everyone — a design change, not a preference",
+  caution: "switches the whole RACE CONTROL layer off — cautions, VSC and the safety car. race-control.spec.js asserts it is ON by default (\"the layer is ON by default and reports a coherent GREEN\"), and that guarantee is not a preference to override from an export",
 };
 const END = "  // @gen-settings-defaults end";
 
