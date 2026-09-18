@@ -3387,6 +3387,15 @@ function menuGridCars() {
 
 function raceIntro(go) {
   menuGridCars();
+  // LIGHT THE FLYBY WITH WHAT THE MENU CHOSE, BEFORE IT STARTS. run() fires `go`
+  // (startRace) "once the card is up", and startRace only reaches
+  // applyRaceSettings() after loadTrack() and makeCars() — so the whole cinematic
+  // played over a world nothing had lit for THIS session yet: pick dawn, watch a
+  // day loading screen. The TIME chip only calls scheduleFlybyTrack(), which
+  // rebuilds geometry and resolves no lighting at all. applyRaceSettings() is
+  // idempotent by construction (every lighting-slider tick re-runs it), so this
+  // costs one pass and startRace still re-applies after its rebuild.
+  if (track) applyRaceSettings();
   loadingScreen.run({
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,

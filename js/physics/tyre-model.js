@@ -233,11 +233,29 @@ const TyreModel = (function () {
   const LOAD_AI_BASE = 0.92;
   const LOAD_AI_STYLE = 0.45;   // full spread across the consistency axis
   const LOAD_AI_LONG = 0.30;
+  // …AND THE AI NEEDS ITS OWN DIVISOR, for the reason the player has LOAD_REF.
+  // The three constants above were authored to read ~1.03 for a mid driver, but
+  // that is the base and the style term ALONE: the longitudinal term adds to
+  // every lap, and `fuelLoadMul` then multiplies the whole thing by ~1.11 over a
+  // race. LOAD_REF absorbed that fuel factor for the player when the fuel term
+  // landed; nothing absorbed it here, so the field quietly ran a fifth hot and
+  // `lifeLaps` stopped meaning what its name says on the AI side only.
+  //
+  // MEASURED (scratch/tyre-load-check.cjs, 20-lap races, life-laps actually
+  // consumed per racing lap, ~200 lap samples each):
+  //
+  //   monza 1.216      bahrain 1.231      monaco 1.248
+  //
+  // Tight, because unlike the player's path this one carries no geometry — only
+  // consistency and longitudinal accel — so one divisor fits the calendar
+  // instead of straddling a range the way LOAD_REF must. Divided AFTER the
+  // clamp, exactly as humanLoad does, so the two paths stay the same shape.
+  const LOAD_AI_REF = 1.23;
   function aiLoad(c, aTop) {
     const cons = clamp(c.consistency != null ? c.consistency : 0.75, 0, 1);
     const lng = clamp(Math.abs(c.accSm || 0) / Math.max(1, aTop), 0, 1);
     return clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng
-      + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX);
+      + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX) / LOAD_AI_REF;
   }
 
   // ── GRIP ──────────────────────────────────────────────────────────────────
