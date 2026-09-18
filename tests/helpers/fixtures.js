@@ -115,6 +115,10 @@ async function installMocks(context) {
   await context.addInitScript((spec) => {
     window.__TEST_MODE = true;
     if (spec) { try { localStorage.setItem("apex26.logLevel", spec); } catch (_) {} }
+    // Shared CI coverage is native GLX: it is cheaper under SwiftShader and
+    // keeps webgl-probes on the implementation they name. TLX product coverage
+    // lives in tlx-probes, including an explicit unset shipped-default smoke.
+    try { localStorage.setItem("apex26.gfxBackend", "webgl2"); } catch (_) {}
     // TYRE WEAR OFF FOR EVERY SPEC, pinned rather than inherited. It ships ON
     // now, and OFF is the only level that is a true no-op through the grip seam
     // — so every physics baseline in the suite, tests/specs/
