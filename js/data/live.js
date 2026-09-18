@@ -128,7 +128,9 @@ const DataLive = (function () {
       infoTitle.appendChild(el("span", null, meta.name || meta.type || "Session"));
       if (meta.type && meta.type !== meta.name) infoTitle.appendChild(el("span", "dh-live-type", meta.type));
       const phase = sessionStatus(meta);
-      infoTitle.appendChild(el("span", "dh-live-state dh-live-state-" + phase.toLowerCase(), phase));
+      const stateBadge = el("span", "dh-live-state", phase);
+      stateBadge.setAttribute("data-state", phase.toLowerCase());
+      infoTitle.appendChild(stateBadge);
       info.appendChild(infoTitle);
       const place = [meta.circuit, meta.country].filter(Boolean).join(" · ");
       if (place) info.appendChild(el("div", "dh-live-sub", place));
