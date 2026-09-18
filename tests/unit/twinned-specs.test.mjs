@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { TWINNED, verify, gatedNodeFiles, isTwinned } from "../../tools/ci/twinned-specs.mjs";
+import { TWINNED, verify, gatedNodeFiles, ungatedNodeFiles, isTwinned } from "../../tools/ci/twinned-specs.mjs";
 import { fit } from "../../tools/ci/select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -120,4 +120,51 @@ test("a fully twinned group RUNS its twins, and an empty run never reports a pas
   assert.ok(out.includes(TWINNED[spec]), "the twin that actually ran is named in the log");
   // And no browser: the whole point is that this cost seconds, not SwiftShader.
   assert.ok(!/\[playwright\] port=/.test(out), "a fully twinned group must not spawn Playwright");
+});
+
+/* ── THE UNGATED SET ──────────────────────────────────────────────────────
+ *
+ * gatedNodeFiles() answers "what runs before a publish". Its complement is the
+ * interesting half, and it cost the project a blocked release train on
+ * 2026-09-18: tests/unit/debris-hazard-hint.test.mjs is in `test:sweeps` only,
+ * which is in neither tooling-fast nor ci.yml's "Pure-node unit suites", so a
+ * float compared bit-for-bit failed every Pages publish from 01:44 while CI
+ * stayed green and every local gate passed.
+ *
+ * deploy.mjs now runs that complement. These two tests are what keep it there:
+ * the set must be derived (not a list that rots), and the deploy must actually
+ * run it (not merely import it).
+ */
+test("the ungated set is derived, and is the exact complement of the gated one", () => {
+  const gated = gatedNodeFiles();
+  const ungated = ungatedNodeFiles();
+  assert.ok(Array.isArray(ungated), "ungatedNodeFiles must return a list");
+  for (const f of ungated)
+    assert.equal(gated.has(f), false, `${f} is reported ungated but the Pages gate runs it — the two derivations disagree`);
+  // Every node file in a topical group is in exactly one of the two halves.
+  const groups = JSON.parse(fs.readFileSync(new URL("../../tests/groups.json", import.meta.url), "utf8"));
+  for (const grp of Object.values(groups.groups || {})) {
+    if ((grp.kind || "node") === "browser") continue;
+    for (const f of grp.files || []) {
+      if (f.startsWith("//")) continue;
+      assert.ok(gated.has(f) || ungated.includes(f),
+        `${f} is in a topical group but in neither the gated nor the ungated half — the split has a hole`);
+    }
+  }
+});
+
+test("deploy.mjs runs the ungated files before it pushes", () => {
+  const src = fs.readFileSync(new URL("../../tools/ci/deploy.mjs", import.meta.url), "utf8");
+  assert.match(src, /import \{ ungatedNodeFiles \}/, "deploy.mjs no longer imports ungatedNodeFiles");
+  const call = src.indexOf("ungatedNodeFiles()");
+  // The CALL SITE, not the definition — `function pushWithRetry()` is declared
+  // hundreds of lines above where it runs, and matching that had this guard
+  // failing on correct code the first time it ran.
+  const push = src.indexOf("verdict.pushAttempts = pushWithRetry()");
+  assert.ok(call > 0, "deploy.mjs imports ungatedNodeFiles but never calls it");
+  assert.ok(push > 0, "deploy.mjs no longer pushes via `verdict.pushAttempts = pushWithRetry()` — this guard is reading the wrong anchor");
+  assert.ok(call < push,
+    "deploy.mjs computes the ungated set AFTER it pushes — it has to gate the push, not describe it");
+  assert.match(src, /run\("node", \["--test", \.\.\.ungated\]/,
+    "deploy.mjs must actually RUN the ungated files; naming them in the plan is not a gate");
 });

@@ -29,6 +29,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { ungatedNodeFiles } from "./twinned-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -96,6 +97,7 @@ export function plan() {
       ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers)",
       `tools/ci/tooling-fast.mjs ${GATE_JOBS} (the full node gate, two files at a time)`,
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
+      "the UNGATED node files — in a topical group but in no pre-publish gate (twinned-specs.ungatedNodeFiles)",
       "verify-track for touched circuits",
       flag("--pr") ? "push the session branch and open/update a PR into the deploy branch"
                    : "git push origin HEAD:" + DEPLOY_BRANCH + " (fast-forward, retry ×3)",
@@ -370,6 +372,20 @@ export function main() {
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
   // from ci.yml so the two lists cannot drift apart.
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
+  // ...AND THE FILES NEITHER GATE RUNS. The comment above records that the
+  // Pages gate runs more than tooling-fast because deploys went red on pins
+  // tooling-fast never runs; this is the same bug one level further out. A
+  // sweeps-only file is in no gate at all, and on 2026-09-18 one of them — a
+  // float compared bit-for-bit — failed every Pages publish from 01:44 while
+  // CI stayed green, because the job that runs it only runs when the diff
+  // touches geometry, and a DEPLOY merges other sessions' geometry by
+  // definition. ~5 min on a ~13 min protocol, to stop shipping into a gate
+  // nothing checked.
+  const ungated = ungatedNodeFiles();
+  if (ungated.length) {
+    run("node", ["--test", ...ungated], `ungated node files (${ungated.length}, in no pre-publish gate)`);
+    verdict.verified.push(`ungated:${ungated.length}`);
+  }
   for (const id of touchedCircuits(p.tip)) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verdict.verified.push(`verify-track:${id}`); }
   if (flag("--pr")) {
     Object.assign(verdict, openPr(p.branch));

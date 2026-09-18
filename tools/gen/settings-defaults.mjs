@@ -51,15 +51,16 @@ const TARGET = "js/data/settings-defaults.js";
 const SPEC_SRC = "js/ui/settings-export.js";
 const START = "  // @gen-settings-defaults start";
 
-/** Keys a player can set, that this tool will not promote to a SHIPPED default
- *  without being named. Not about the value being wrong — about the question
- *  being a product one. The first export this tool ever ran on carried both:
- *  the phone was on silent, and the budget had been lifted to try something. */
-export const REVIEW = {
-  sound: "ships the game MUTED for every new player — an export from a silenced phone looks exactly like this",
-  unlimitedBudget: "removes the career economy constraint for everyone — a design change, not a preference",
-  caution: "switches the whole RACE CONTROL layer off — cautions, VSC and the safety car. race-control.spec.js asserts it is ON by default (\"the layer is ON by default and reports a coherent GREEN\"), and that guarantee is not a preference to override from an export",
-};
+/** Keys a player can set that must not become a SHIPPED default from an export.
+ *  DERIVED from settings-export.js's `subsystem:` field, not kept here: the
+ *  list used to live in this file, which meant the question "is this a
+ *  preference or a system?" was asked by whoever ran the tool, long after the
+ *  key was added. On the row it is asked by whoever adds the key. */
+export function reviewKeys(root = ROOT) {
+  const out = {};
+  for (const r of readSpec(root)) if (r.subsystem) out[r.k] = r.subsystem;
+  return out;
+}
 const END = "  // @gen-settings-defaults end";
 
 /** SPEC as data: {k, lane, group, def, adaptive}. Parsed from the source rather
@@ -69,11 +70,18 @@ const END = "  // @gen-settings-defaults end";
 export function readSpec(root = ROOT) {
   const src = fs.readFileSync(path.join(root, SPEC_SRC), "utf8");
   const rows = [];
-  const re = /\{ k: "([^"]+)", lane: "(\w+)", group: "(\w+)", def: (.*?), src: "/g;
+  // `subsystem` is optional and sits after src, so a row without one still
+  // matches: [\s\S]*? stops at the first `}` that ends the row.
+  // src may itself contain ESCAPED QUOTES — js/ui/debris-opts.js's row says
+  // `(any value but \"1\" is off)` — so the src capture has to skip \X pairs
+  // rather than stop at the first quote. A naive [^"]* dropped that row from
+  // the parse entirely and the file's own key then read as "not in SPEC".
+  const re = /\{ k: "([^"]+)", lane: "(\w+)", group: "(\w+)", def: (.*?), src: "((?:[^"\\]|\\.)*)"(,\s*\n?\s*subsystem: "((?:[^"\\]|\\.)*)")?\s*\}/g;
   let m;
   while ((m = re.exec(src))) {
-    const [, k, lane, group, def] = m;
-    rows.push({ k, lane, group, def: def.trim(), adaptive: def.trim() === "null" || def.trim().startsWith("(") });
+    const [, k, lane, group, def, , , subsystem] = m;
+    rows.push({ k, lane, group, def: def.trim(), subsystem: subsystem || null,
+                adaptive: def.trim() === "null" || def.trim().startsWith("(") });
   }
   if (!rows.length) throw new Error(`${SPEC_SRC}: parsed no SPEC rows — the row shape changed`);
   return rows;
@@ -132,7 +140,7 @@ export function apply(exportFile, { force = false, dry = false, include = [], ro
       continue;
     }
     if (v !== null && typeof v === "object") { refused.push(`${full}: value is a ${Array.isArray(v) ? "list" : "blob"}, not a scalar default`); continue; }
-    if (REVIEW[k] && !include.includes(k)) { refused.push(`${full}: ${REVIEW[k]} (--include ${k} if you mean it)`); continue; }
+    if (row.subsystem && !include.includes(k)) { refused.push(`${full}: ${row.subsystem} (--include ${k} if you mean it)`); continue; }
     const was = Object.prototype.hasOwnProperty.call(cur.obj, k) ? cur.obj[k] : (exp.defaults || {})[group]?.[k];
     if (next[k] === v) continue;
     next[k] = v;
@@ -172,6 +180,7 @@ export function check(root = ROOT) {
     const row = byKey.get(k);
     if (!row) { problems.push(`${k}: in ${TARGET} but not in SPEC — an export would never report it`); continue; }
     if (row.adaptive) problems.push(`${k}: SPEC declares a device-adaptive default (${row.def}) — pinning it here makes other devices wrong`);
+    if (row.subsystem) problems.push(`${k}: SPEC marks this a SUBSYSTEM, not a preference — ${row.subsystem}`);
   }
   return { ok: problems.length === 0, problems, keys: Object.keys(obj).length };
 }
