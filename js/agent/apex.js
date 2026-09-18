@@ -1862,12 +1862,16 @@ const api = {
   },
 
   // spatialUpscale(v?) — GLX + WGX + TLX SGSR1 (docs/research/UPSCALING-2026-09.md §6–7).
-  // Flag OFF by default. Number/bool sets localStorage apex26.spatialUpscale;
+  // Flag OFF by default. Number/bool persists through GameStore's raw lane;
   // active only when flag on AND renderScale < ~1 AND the SGSR program linked.
   spatialUpscale(v) {
     const has = !!(gfx && typeof gfx.setSpatialUpscale === "function" && typeof gfx.getSpatialUpscale === "function");
     if (!has) return { on: false, active: false, scale: gfx && gfx.getRenderScale ? gfx.getRenderScale() : null, available: false };
-    if (v !== undefined) gfx.setSpatialUpscale(!!(+v || v === true || v === "1"));
+    if (v !== undefined) {
+      const on = !!(+v || v === true || v === "1");
+      GameStore.store.rawSet("spatialUpscale", on ? "1" : "0");
+      gfx.setSpatialUpscale(on);
+    }
     const on = !!gfx.getSpatialUpscale();
     const scale = gfx.getRenderScale();
     const out = { on, active: !!(on && scale < 0.98), scale, available: true };

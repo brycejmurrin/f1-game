@@ -3967,6 +3967,23 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   assert.match(wgx, /getSpatialUpscaleGather/, "WGX must export gather active state");
 });
 
+test("spatial upscale persists once through GameStore at the UI boundary", () => {
+  const scale = read("js/ui/scale.js");
+  const writes = scale.match(/rawSet\("spatialUpscale"/g) || [];
+  assert.equal(writes.length, 1, "UiScale owns the one persistence write");
+  const apply = scale.slice(scale.indexOf("function applyUpscale"), scale.indexOf("// OCCLUSION CULLING"));
+  assert.ok(apply.indexOf('rawSet("spatialUpscale"') < apply.indexOf("setSpatialUpscale"),
+    "persistence is attempted before the active renderer changes session state");
+  const apex = read("js/agent/apex.js");
+  const hook = apex.slice(apex.indexOf("spatialUpscale(v)"), apex.indexOf("perf() {"));
+  assert.ok(hook.indexOf('rawSet("spatialUpscale"') < hook.indexOf("setSpatialUpscale(on)"),
+    "the dev API uses the same health-reporting persistence lane before changing state");
+  for (const file of ["js/render/glx/glx.js", "js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
+    assert.doesNotMatch(read(file), /localStorage\.setItem\("apex26\.spatialUpscale"/,
+      `${file} setter must remain state-only so failures cannot bypass GameStore health`);
+  }
+});
+
 // Execute the bundled API: mocks alone cannot catch a renamed/wrong owner API.
 test("TLX timing enables the bundled backend, not a shadow renderer property", async () => {
   const THREE = await import("../../vendor/three-0.185.1/three.webgpu.min.js");

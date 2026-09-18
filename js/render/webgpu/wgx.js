@@ -2240,7 +2240,6 @@ const WGX = (function () {
     }
     function setSpatialUpscale(on) {
       spatialUpscale = !!on;
-      try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
       if (spatialUpscale) _ensureSpatial();
       resize();
       _syncSpatialAa();
