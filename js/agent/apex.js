@@ -376,7 +376,13 @@ const api = {
   flybyCam(u, shots) {
     if (!G.track || typeof FlybySeq === "undefined") return false;
     const v = FlybySeq.solve(G.track, +u || 0, shots);
-    G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
+    // FlybySeq.FAR/FOG, not photo mode's own numbers: this preview IS the
+    // editor's picture, and it has to be rendered the way the loading screen
+    // renders the same shot or the editor lies about the haze (it did).
+    G.dbgCam = {
+      eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov,
+      far: FlybySeq.FAR, fog: FlybySeq.FOG,
+    };
     const hit = FlybySeq.insideProp(G.track, v.eye, 0);
     return {
       u: +(+u || 0).toFixed(4), shot: v.id, index: v.index, cut: v.cut,

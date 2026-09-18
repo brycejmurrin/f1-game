@@ -6780,6 +6780,11 @@ function render(dt) {
 
   // camera
   let eyeT, tgtT, fovT, roadCamRoll = 0;
+  // Is THIS frame the pre-race cinematic? It is rendered like photo mode rather
+  // than like gameplay — far plane out, fog thinned, scenery not culled to the
+  // fog wall — because its shots are whole-circuit vistas from a few hundred
+  // metres up. See FlybySeq.FAR / FlybySeq.FOG for why both numbers live there.
+  let cine = false;
   if (state === "menu") {
     _plOk = false; _plBodyOk = false;
     // THE LOADING SCREEN'S FLYBY IS A SHOT SEQUENCE (js/camera/flyby-seq.js), not
@@ -6796,6 +6801,7 @@ function render(dt) {
     // the change of angle into a long swim between two vantages, which reads as
     // one broken move rather than two shots.
     if (fb.cut) camSnapNext = true;
+    cine = true;
   } else {
     if (!player) return;
     // Anchor the camera to the SAME (s, x) the car body samples — playerAnchor
@@ -6963,6 +6969,9 @@ function render(dt) {
     const HFOV_MAX = 86 * Math.PI / 180;
     const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
     fovY = Math.min(fovY, fovYCap);
+    // The cinematic's far plane is FLAT, not scaled by RENDER DISTANCE: the
+    // editor previews one number, so the screen has to render that number.
+    if (cine) farPlane = FlybySeq.FAR;
   }
 
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
@@ -7068,12 +7077,24 @@ function render(dt) {
   // Cull off the density the SHADER renders — glx.js uploads frame.fogDensity *
   // FOG DENSITY. Off the raw base, FOG DENSITY 0 ("off") still culled scenery at
   // 250 m with no fog drawn. (FOG BOOST bakes in upstream; it was unaffected.)
+  // The THINNING the cinematic and the debug camera render through, or null for
+  // an ordinary frame. Read by gfx.begin() far below; named here because the
+  // cull right underneath has to know that this frame's fog wall is not where
+  // frame.fogDensity says it is — thinning the draw while culling scenery at the
+  // unthinned wall is a hard edge of missing world instead of a vista.
+  const _fogMul = dbgCam ? (dbgCam.fog != null ? dbgCam.fog : FlybySeq.FOG)
+    : (cine ? FlybySeq.FOG : null);
   const _fogDens = (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
   const _fogCull = _fogDens > 3 / farPlane ? Math.ceil(3 / _fogDens) : 0;
   // Sphere that contains the perspective frustum (far-plane corners sit
   // farther from the eye than farPlane). Look-identical pre-reject; not 300 m.
   const _farCull = farPlane * Math.hypot(1, Math.tan(fovY * 0.5) * Math.hypot(1, gfx.aspect || 1));
-  frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0)
+  // The cinematic takes the debug camera's rule for the same reason it takes its
+  // far plane — and the same MOBILE CAP. loadTrack()'s own comment calls the
+  // build's transient peak "the moment a near-limit phone gets jetsam killed",
+  // and this frame runs seconds after it; framing a whole ~5 M-vert city there
+  // is not a risk worth a nicer horizon.
+  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0)
     : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : (_fogCull || _farCull));
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
@@ -7451,9 +7472,11 @@ function render(dt) {
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
   let _b;
-  if (dbgCam) {
+  if (_fogMul != null) {
+    // Restored immediately: frame.fogDensity is the SESSION's value, which
+    // applyRaceSettings owns and every other reader expects unscaled.
     const bf = frame.fogDensity;
-    frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
+    frame.fogDensity = bf * _fogMul;
     _b = gfx.begin(frame);
     frame.fogDensity = bf;
   } else _b = gfx.begin(frame);
