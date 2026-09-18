@@ -29,9 +29,29 @@ ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 # --- pkill -f / killall on the browser or test tree ---------------------------
 # Command position only (start of line or after ; & | ( ), so a commit message
 # or echo that merely MENTIONS the words is not blocked.
-if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)(pkill[[:space:]]+(-[a-zA-Z]*f[a-zA-Z]*|--full)|killall)[[:space:]]' \
+#
+# The flag walk `([[:space:]]+-[A-Za-z0-9]+)*` before the -f is load-bearing:
+# the pattern used to require -f as the FIRST flag, so `pkill -9 -f node` and
+# `pkill -TERM -f chrome` — the two forms anyone reaches for when a plain pkill
+# "did not work" — walked straight past a guard whose whole point is that they
+# match the guard's own shell. `sudo`/`env` are hoisted for the same reason.
+if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)((sudo|env)[[:space:]]+)*(pkill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+(-[a-zA-Z]*f[a-zA-Z]*|--full)|killall)[[:space:]]' \
    && printf '%s' "$CMD" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; then
   echo "BLOCKED: pkill -f / killall matches your own shell (its command line contains the pattern) and orphans Playwright's browsers. Stop a run with 'node tools/ci/test-bg.mjs --stop'; kill orphan Chrome by PID from a listed set: ps -eo pid,comm | awk '\$2==\"chrome\"{print \$1}'" >&2
+  exit 2
+fi
+
+# --- pgrep -f … reaching kill through a pipe or a substitution -----------------
+# A pgrep -f list piped into xargs kill, or substituted into kill, orphans the
+# same browsers as a bare pkill -f, and the literal-PID walk below cannot see
+# them: the pids are not in the command text. Command position on the leading
+# verb, exactly like the pkill rule above — a commit message or a doc that
+# QUOTES either form is prose, not an invocation. (This guard blocked its own
+# commit before the anchor went in.)
+PGREP_F='pgrep([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+(-[a-zA-Z]*f[a-zA-Z]*|--full)'
+if printf '%s' "$CMD" | grep -Eq "(^|[;&|(][[:space:]]*)(${PGREP_F}[^|]*\|[[:space:]]*xargs[^|]*kill|kill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+\\\$\([[:space:]]*${PGREP_F})" \
+   && printf '%s' "$CMD" | grep -Eiq 'chrom|playwright|node|test-bg|npm'; then
+  echo "BLOCKED: pgrep -f piped or substituted into kill orphans Playwright's browsers exactly as pkill -f does. Stop a run with 'node tools/ci/test-bg.mjs --stop'; kill orphan Chrome by PID from a listed set: ps -eo pid,comm | awk '\$2==\"chrome\"{print \$1}'" >&2
   exit 2
 fi
 
