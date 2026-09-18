@@ -2322,6 +2322,7 @@ const Tracks = (function () {
       // The mast/custom concat above has run; nothing reads lampPosts before
       // buildProps returns (the bake is per frame), so the canopy goes on last.
       for (const lamp of pitLamps) track.lampPosts.push(lamp);
+      track.pitBuilt = pits;   // kept, not just logged: `wall` false is invisible from the buffers
       Log.info("track", `pits ${track.def.id}: ${pits.bays} bays, wall ${pits.wall}, ${pitLamps.length} lamps`);
     }
     return { out, glass: TrackModels.sealGeometry(glassBuf), water: TrackModels.sealGeometry(waterBuf) };

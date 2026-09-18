@@ -3420,7 +3420,7 @@ const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 const { closeCamTuner } = CamTunerPanel.create(G);
 // FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
 // shot list; previews through __apex.flybyCam, touches no render-path state.
-FlybyPanel.create(G);
+const flybyPanel = FlybyPanel.create(G);
 // Steering-tuning sliders + presets (js/input/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,
@@ -4197,8 +4197,16 @@ function updateCar(c, dt, ranked) {
   // Measured: X-mode armed at 35 % of the envelope at every pace while overtake
   // armed at 42 % at pace 0.5 and 16 % at pace 1.3 — the slower you set the
   // game, the less of the lap had overtake. Same class as the beached gate (A5).
+  // …and never while the pit limiter holds the car (pits.held: entry line to
+  // exit). A queue puts a car inside OT_GAP and the limit is over
+  // OT_MIN_SPEED, so overtake armed AND fired in the lane, AI and player alike
+  // (measured: docs/research/PIT-NEXT-STEPS-2026-09.md §4e). An active
+  // deployment ends at the line; its cooldown was charged in full when it
+  // fired, so nothing is banked.
+  const pitHeld = pits.held(c);
+  if (pitHeld) c.otT = 0;
   c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
-              && !c.finished && vStd(c.speed) > OT_MIN_SPEED;
+              && !c.finished && !pitHeld && vStd(c.speed) > OT_MIN_SPEED;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
                       : (c.otArmed && (_aiOtFire.traits = aiT,
                           _aiOtFire.blockerGap = blocker ? blockerGap : gapAhead * (c.speed || 1),
@@ -4386,8 +4394,12 @@ function updateCar(c, dt, ranked) {
   // Note the AI needs no separate "close before the corner" rule: its braking
   // scan looks 1.7 s ahead and the arming scan looks 3 s ahead, so the mode has
   // already un-armed by the time the AI decides to brake for a corner.
+  // `!pitHeld`: no flaps in the lane. X_MIN_SPEED (25 vStd) already blocked
+  // most of this by accident, the limit being 22.2 vStd at every pace; what
+  // this closes is the bleed past the entry line, where a driver who merely
+  // lifts is not `braking`. Small but not zero — §4e has the count.
   c.xArmed = !c.offroad && !braking && vStd(c.speed) > X_MIN_SPEED
-    && !c.finished && state === "race" && inAeroZone(c);
+    && !c.finished && !pitHeld && state === "race" && inAeroZone(c);
   if (c.human && raceAeroMode === "auto") {
     // Same rule the AI runs: take every zone the circuit offers.
     c.xOn = c.xArmed;
@@ -5962,7 +5974,7 @@ function coast(c, dt) {
   // down the LANE at the limit (pits.update still runs for it): held in the
   // box, on the lane's line to the exit road's end. It used to cruise the
   // inside line straight through the wall and pile up on the others.
-  const onLane = pits.inLane(c) || (c.pitState === "out" && pits.roadOf(c) === "exit");
+  const onLane = pits.held(c);   // the lane plus the exit road — PitLane.held
   if (c.pitState === "box") c.speed = 0;
   else if (onLane) c.speed = Math.min(c.speed, pits.limit());
   c.s = wrapS(c.s + c.speed * dt);
@@ -9299,6 +9311,11 @@ await bootAgentSurface();
 // fetched until a player actually switches METRICS on.
 if (typeof GameMetrics !== "undefined" && GameMetrics.setTelemetryLoader)
   GameMetrics.setTelemetryLoader(loadAgentSurface);
+// The FLYBY SHOT EDITOR has exactly the same problem for exactly the same
+// reason: it previews every edit through __apex.flybyCam, which is null on a
+// Pages build until something asks. Same remedy — hand it the loader, and it
+// fetches only when a player actually opens the panel.
+if (flybyPanel && flybyPanel.setApiLoader) flybyPanel.setApiLoader(loadAgentSurface);
 
 // THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on
 // purpose: awaiting it here would put the 338 KB straight back on the

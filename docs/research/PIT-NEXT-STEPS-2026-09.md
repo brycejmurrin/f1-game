@@ -270,6 +270,83 @@ lateral from `laneX`. Next step is a lane-specific spacing rule, not a speed
 ceiling. Re-run `scratch/pit-traffic.cjs bahrain 9 6`; the numbers to move are
 closestPairM and overlapTicks, with stallCount held at 0.
 
+## 4d. THREE CIRCUITS HAD NO PIT WALL AT ALL — fixed
+
+Reported: "some pit lane walls are broken, like on Magny-Cours." Three of 52
+circuits — magny_cours, mexico, monaco — built NO pit wall: not a gap, the
+whole thing.
+
+The platform, the wall, its rail and the lane-side barrier are four `sweep()`
+calls over ONE node run, and `sweep()` returns early for a run shorter than two
+nodes. The run started at `sIn` and its walker broke on the FIRST node that
+failed `v >= 0.98` — but the wall's fade FINISHES at `sIn`, so whether the node
+landing there has reached 0.98 is node-grid luck. Magny-Cours sat at 0.954,
+Mexico and Monaco at 0.97; every other circuit happened to land at or past it
+(Bahrain's node falls 2 m early, where v is already 1.000). One failed node,
+empty list, four sweeps build nothing.
+
+`nodesFrom` now takes a `seekM` and the platform run passes 24 m, so it finds
+the wall's own first node — exactly what the lamp gate's `kGate` already did a
+few dozen lines below, for exactly this reason (Monaco had lost both lamps to
+the same rounding). Runs now match the lane: Magny-Cours 65 nodes / 260 m,
+Mexico 65, Monaco 60. `test:sweeps` moved no coplanar, clip or float baseline.
+
+The defect was invisible from the vertex buffers, so `SceneryPits.build`'s
+report is now kept on the track as `track.pitBuilt` rather than only logged,
+and `tests/unit/pit-signs.test.mjs` asserts every circuit with `hasWall` builds
+one. Negative control: with the seek disabled the test names exactly those
+three circuits. `scratch/pit-wall-survey.cjs` prints all four wall runs per
+circuit.
+
+**Worth checking next.** The same walker still starts the EXIT wall at `sOut`
+and the OUTER wall at `sA + 6` with no seek. Both had non-empty runs on all 52
+today, but they are one node-grid roll from the same defect.
+
+## 4e. THE LIMIT NUMBER, AND BOOST IN THE LANE — both fixed
+
+Reported: "the speed limit number is inaccurate, and me and the AI shouldn't be
+able to use overtake or boost in the pit lane until exit."
+
+**The number.** Three things claimed to be the limit and one disagreed:
+
+| | source | Bahrain | Monaco |
+|---|---|---|---|
+| board on the wall | `track.pit.limitKph` (authored) | 80 | 60 |
+| speedo while limited | `dashKph` = vStd · 3.6 | 80.0 | 60.0 |
+| **HUD cue "… LIMIT"** | **`limit() * 3.6`, RAW m/s** | **67.2** | **50.4** |
+
+`limit()` returns m/s at the CURRENT pace (`vTop() · limitFrac`), and the speedo
+reads `dashKph`, where PACE cancels — so the one number a driver compares
+against the speedo was the only one not on the speedo's scale, and at the
+shipped pace 0.84 it read 13 km/h low. New `limitKphShown()` (`pit-lane.js`);
+the cue prints it. `__apex.pit().limitKph` deliberately stays RAW, matching
+`physState().speed`'s raw m/s — it is the enforced cap a spec compares a speed
+against, and `tests/specs/pit-lane.spec.js` uses it that way.
+
+**The boost.** New `PitLane.held(c)` — `inLane` plus the exit road — is now the
+ONE predicate for everything the lane forbids: the speed cap (game.js's `onLane`
+was the same expression written out longhand, and now calls it) and both
+boosts. It lifts at the exit, not at the box.
+
+- **Overtake WAS leaking, measurably.** A pit queue puts a car well inside
+  `OT_GAP` and the limit is well over `OT_MIN_SPEED`, so it armed and fired in
+  the lane. Bahrain, 9 sim minutes, 13 stops: **1416 armed ticks and 1760 live
+  deployment ticks in the lane ungated, 0 gated**, with on-track arming
+  unchanged (54.8k). An active deployment ends at the entry line; the cooldown
+  was charged in full when it fired, so nothing is banked.
+- **X-mode was a much smaller hole, and the honest number is small.**
+  `X_MIN_SPEED` is 25 m/s vStd and the limit is 22.2 m/s vStd at every pace, so
+  the speed gate was already blocking it by accident. What the gate closes is
+  the bleed from racing speed just past the entry line, where a driver who
+  merely lifts is not `braking`: **3 of 17630 in-lane ticks** were over the
+  threshold (peak 32.9). Not zero, and 48 of 52 circuits put an aero zone over
+  their pit window (`scratch/pit-aero-overlap.cjs`), because the lane runs
+  along the main straight.
+
+Probes: `scratch/pit-limit-check.cjs` (the three numbers per circuit),
+`scratch/pit-boost-check.cjs` (armed/live ticks in the lane vs on track, with a
+negative control), `scratch/pit-aero-overlap.cjs`.
+
 ## 5. Smaller loose ends
 
 - The `served` chip and the release banner both say the stop is over; the
