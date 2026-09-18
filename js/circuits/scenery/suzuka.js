@@ -236,7 +236,7 @@
       }
       guardrail(0.965, 0.04, 1, 2.5, [0.88, 0.88, 0.90]);
       overheadSpan({ id: "suzuka-start-gantry", frac: 0.0, clearance: 7.2,
-        thickness: 0.9, depth: 1.8, supportGap: 2.5, supportWidth: 1.0,
+        thickness: 0.9, depth: 1.8, supportGap: 2.8, supportWidth: 1.0,
         color: [0.14, 0.14, 0.18], required: true });
 
       // Pit-straight lamp posts (right side)
@@ -435,22 +435,26 @@
       }
 
       // ── Figure-8 crossover ────────────────────────────────────────────────────
-      // The road bridge is raised by `bridges` at racing s≈0.817. The LOWER road
-      // passes beneath it at racing s≈0.226 (measured self-crossing — NOT 0.37;
-      // the deck used to float there over open road). This intentional span
-      // supplies the visible green deck and guarantees a safe 6.5 m underside
-      // instead of relying on unguarded raw boxes. The shared bridge builder
-      // supplies grounded piers beside the upper racing line.
-      // Deck top must stay BELOW the upper ribbon (8.07 m above the lower road
-      // at the crossing): clearance 5 + thickness 1.7 puts the top at 6.7 m —
-      // ~1.4 m of tuck — so it reads as girder structure under the bridge, not
-      // a grass platform level with the racing surface. Girder green, not turf.
-      overheadSpan({ id: "suzuka-crossover-deck", frac: 0.226, clearance: 5.0,
-        minimumClearance: 4.8, thickness: 1.7, depth: 20, span: hw[Math.round(0.226 * n) % n] * 2 + 8,
+      // THE DECK GOES ON THE ROAD THAT PASSES UNDER, because a flyover's deck
+      // is the thing you drive BENEATH. Measured self-crossing: racing 0.437
+      // (Degner to the hairpin, the lower road) and racing 0.845 (the back
+      // straight, which `bridges` now lifts to y 9.1).
+      //
+      // In the scenery frame that is 0.8172, not 0.226 — this file is shifted
+      // by _sceneryShift 0.6198 and `bridges` is not, which is the whole reason
+      // the crossover was upside down. At 0.226 the deck landed at racing 0.846,
+      // i.e. on top of the flying road rather than under it, and its piers tried
+      // to stand on the road below; verify-track rejected all three footprints.
+      //
+      // Clearance 5.5 + thickness 1.7 puts the deck top at 7.2 m — beneath the
+      // 9.1 m upper ribbon, above the lower road, so it reads as girder
+      // structure under the bridge. Girder green, not turf.
+      overheadSpan({ id: "suzuka-crossover-deck", frac: 0.8172, clearance: 5.5,
+        minimumClearance: 4.8, thickness: 1.7, depth: 20, span: hw[Math.round(0.8172 * n) % n] * 2 + 8,
         supportGap: 2.8, supportWidth: 1.8, color: [0.13, 0.33, 0.21],
         required: true });
       for (const side of [-1, 1]) {
-        const ca = anchor(K(0.226), side, 8.5), cb = [ca.r, ca.u, ca.t];
+        const ca = anchor(K(0.8172), side, 8.5), cb = [ca.r, ca.u, ca.t];
         const cc = vadd(ca.c, ca.u, 2.6);
         modelGroup(`suzuka-crossover-abutment-${side < 0 ? "left" : "right"}`, {
           center: cc, size: [7.6, 6.2, 12.8], basis: cb,

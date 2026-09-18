@@ -316,7 +316,7 @@ test("an unconfirmed in-race RENDERER tap keeps the picker's options, and the qu
   h.fire(h.Gfx.ARM_MS);
   assert.equal(h.sel.dataset.armed, undefined, "the arm expires");
   assert.deepEqual(h.optText(), ["WEBGL2", "THREE.JS", "WEBGPU"], "and the labels come back");
-  assert.equal(h.sel.value, "webgl2", "the picker snaps back to the saved renderer");
+  assert.equal(h.sel.value, "three", "the picker snaps back to the unset default renderer");
 });
 
 test("a stale arm never carries into the next race; out of a race it is cleared, not consumed", () => {

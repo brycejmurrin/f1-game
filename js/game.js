@@ -1,7 +1,7 @@
 /* Apex 26 — main game: state machine, physics, AI, race logic.
    Contract: docs/ARCHITECTURE.md. Depends on globals M4,V3,GLX,Teams,Tracks,
-   Car3D,Input,GameAudio,F1API,DataHub; Gfx selects the opt-in TLX (three.js)
-   or WGX (WebGPU) backends, injected at boot — GLX otherwise. */
+   Car3D,Input,GameAudio,F1API,DataHub; Gfx selects TLX (three.js) by default
+   or the explicit WGX (WebGPU) pick, injected at boot — GLX on fallback. */
 (async function () {
 "use strict";
 
@@ -42,13 +42,12 @@ const els = {
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
 
-// Renderer selection: TLX (three.js) when apex26.gfxBackend="three", WGX
-// (WebGPU) when ="webgpu" and the browser supports it. Anything else, or any
-// opt-in init failure, uses GLX (WebGL2), keeping the default path
-// byte-for-byte identical — this async IIFE only actually awaits when opted
-// into a deferred backend, or when the lazy __apex surface loads (localhost /
-// tests / ?apex=1). `gfx` is the handle every later renderer call goes
-// through; on the default path gfx===GLX.
+// Renderer selection: an unset apex26.gfxBackend or ="three" uses TLX
+// (three.js); ="webgpu" uses WGX when the browser supports it; ="webgl2"
+// uses GLX. Any deferred-backend init failure also falls back to GLX. This
+// async IIFE awaits while loading TLX/WGX, or when the lazy __apex surface
+// loads (localhost / tests / ?apex=1). `gfx` is the handle every later
+// renderer call goes through.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch — see PROVE_FRAMES below
 // One presented frame is not proof a backend works: disarming on the first
@@ -209,7 +208,7 @@ function wantAgentSurface() {
   const h = typeof location !== "undefined" ? location.hostname : "";
   return h === "127.0.0.1" || h === "localhost" || h === "[::1]";
 }
-// Warm the vendored three island for a stored THREE pick, so TLX is not
+// Warm the vendored three island for the default or a stored THREE pick, so TLX is not
 // waiting on a cold module fetch after the roster injects it.
 function preloadThreeVendor() {
   for (const href of ["vendor/three-0.185.1/three.webgpu.min.js", "vendor/three-0.185.1/three.tsl.min.js"]) {
@@ -220,12 +219,19 @@ function preloadThreeVendor() {
     document.head.appendChild(el);
   }
 }
+function backendPreference() {
+  try {
+    const pref = localStorage.getItem("apex26.gfxBackend");
+    return pref == null ? "three" : pref;
+  } catch (_) {
+    return "three";
+  }
+}
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
-  let pref = null;
-  try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
-  // Unset means WebGL2 on every device; the boot canary below still protects
-  // any stored THREE/WEBGPU pick.
+  let pref = backendPreference();
+  // Unset means THREE on every device; the boot canary below protects the
+  // default as well as stored THREE/WEBGPU picks.
   // Last load claimed the canvas then died — skip opt-in THIS tab only
   // (sessionStorage). Do not wipe the pick: Safari's navigator.gpu can be on
   // while WGX/TLX still refuse, and writing webgl2 bounced the RENDERER
@@ -282,9 +288,9 @@ try {
     // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
     try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
     // FETCH THE BACKEND ONLY NOW: neither alternate has a <script> tag, so the
-    // ~550 KB is fetched only by visitors who opted in — `optIn` resolves
-    // synchronously from localStorage, so the default GLX path never awaits
-    // anything. The list is DEFERRED in tools/manifest.cjs (load-order.test.mjs
+    // ~550 KB is fetched only for the resolved deferred pick — `optIn` resolves
+    // synchronously from localStorage. The list is DEFERRED in
+    // tools/manifest.cjs (load-order.test.mjs
     // asserts loader/manifest/sw.js precache agree); eval-time edges
     // (BACKEND_EDGES === DEFERRED_EDGES) are the only waits. No error path is
     // needed beyond this: a failed fetch leaves the backend global absent,
@@ -316,7 +322,8 @@ if (!gfx) {
     // session skip so THIS tab attaches GLX; keep the pick and disarm the
     // canary or the next boot writes webgl2 (Safari WebGPU's usual path).
     let backendTried = false;
-    try { const p = localStorage.getItem("apex26.gfxBackend"); backendTried = p === "webgpu" || p === "three"; } catch (_) {}
+    const p = backendPreference();
+    backendTried = p === "webgpu" || p === "three";
     let skipped = false;
     if (backendTried) {
       // Read the skip back before reloading — with sessionStorage blocked the
@@ -2245,9 +2252,9 @@ function _loadTrackBody(idx, def) {
     // null between here and the assignment below.
     track = null;
     // Pass the active backend so tracks.js builds its meshes through the façade
-    // (opts.gfx) instead of reaching the GLX global directly. On the default
-    // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
-    // onto GLX, so object identity is preserved either way).
+    // (opts.gfx) instead of reaching the GLX global directly. On the explicit
+    // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
+    // (descriptor-copied onto GLX, so object identity is preserved either way).
     track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots: wantSlots });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
@@ -4197,8 +4204,16 @@ function updateCar(c, dt, ranked) {
   // Measured: X-mode armed at 35 % of the envelope at every pace while overtake
   // armed at 42 % at pace 0.5 and 16 % at pace 1.3 — the slower you set the
   // game, the less of the lap had overtake. Same class as the beached gate (A5).
+  // …and never while the pit limiter holds the car (pits.held: entry line to
+  // exit). A queue puts a car inside OT_GAP and the limit is over
+  // OT_MIN_SPEED, so overtake armed AND fired in the lane, AI and player alike
+  // (measured: docs/research/PIT-NEXT-STEPS-2026-09.md §4e). An active
+  // deployment ends at the line; its cooldown was charged in full when it
+  // fired, so nothing is banked.
+  const pitHeld = pits.held(c);
+  if (pitHeld) c.otT = 0;
   c.otArmed = otEnabled() && gapAhead < OT_GAP && c.otCool <= 0 && c.otT <= 0
-              && !c.finished && vStd(c.speed) > OT_MIN_SPEED;
+              && !c.finished && !pitHeld && vStd(c.speed) > OT_MIN_SPEED;
   const fire = c.human ? (c.local ? Input.consumeOvertake() : !!inp.overtake)
                       : (c.otArmed && (_aiOtFire.traits = aiT,
                           _aiOtFire.blockerGap = blocker ? blockerGap : gapAhead * (c.speed || 1),
@@ -4386,8 +4401,12 @@ function updateCar(c, dt, ranked) {
   // Note the AI needs no separate "close before the corner" rule: its braking
   // scan looks 1.7 s ahead and the arming scan looks 3 s ahead, so the mode has
   // already un-armed by the time the AI decides to brake for a corner.
+  // `!pitHeld`: no flaps in the lane. X_MIN_SPEED (25 vStd) already blocked
+  // most of this by accident, the limit being 22.2 vStd at every pace; what
+  // this closes is the bleed past the entry line, where a driver who merely
+  // lifts is not `braking`. Small but not zero — §4e has the count.
   c.xArmed = !c.offroad && !braking && vStd(c.speed) > X_MIN_SPEED
-    && !c.finished && state === "race" && inAeroZone(c);
+    && !c.finished && !pitHeld && state === "race" && inAeroZone(c);
   if (c.human && raceAeroMode === "auto") {
     // Same rule the AI runs: take every zone the circuit offers.
     c.xOn = c.xArmed;
@@ -5962,7 +5981,7 @@ function coast(c, dt) {
   // down the LANE at the limit (pits.update still runs for it): held in the
   // box, on the lane's line to the exit road's end. It used to cruise the
   // inside line straight through the wall and pile up on the others.
-  const onLane = pits.inLane(c) || (c.pitState === "out" && pits.roadOf(c) === "exit");
+  const onLane = pits.held(c);   // the lane plus the exit road — PitLane.held
   if (c.pitState === "box") c.speed = 0;
   else if (onLane) c.speed = Math.min(c.speed, pits.limit());
   c.s = wrapS(c.s + c.speed * dt);
@@ -8094,7 +8113,7 @@ function render(dt) {
   // Re-arm around the first world present so a jetsam mid-frame still reverts.
   // Title already disarmed after bind; this window is only the first flyby/race.
   if (!_backendProved && _backendBound && !_probeArmed) {
-    try { const p = localStorage.getItem("apex26.gfxBackend");
+    try { const p = backendPreference();
       if (p === "three" || p === "webgpu") { localStorage.setItem("apex26.gfxBackendProbe", p); _probeArmed = true; } }
     catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
   }

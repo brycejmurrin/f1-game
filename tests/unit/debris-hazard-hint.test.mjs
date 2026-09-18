@@ -213,7 +213,7 @@ test("suzuka crosses itself, and the height test is what keeps the legs apart", 
   assert.ok(arcOff(bareMid.s) < 20 && verdict(bareMid, mid.y),
     `premise: the unhinted scan should get this one right (got s=${bareMid.s.toFixed(0)})`);
   const stale = projectHazard(track, mid.x, mid.y, mid.z, sWrong);
-  assert.equal(stale.s, bareMid.s,
+  assert.ok(Math.abs(stale.s - bareMid.s) < 1e-9,
     `a cross-leg hint was TRUSTED (s=${stale.s.toFixed(0)} instead of the full scan's ` +
     `${bareMid.s.toFixed(0)}) — the height half of the trust test is not holding`);
   Tracks.sample(track, stale.s, _smp);
