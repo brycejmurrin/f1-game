@@ -99,10 +99,10 @@ what exists. Per-directory module tables: `docs/ARCHITECTURE.md`.
 - `js/game.js` is the entry (loop, physics, AI, race flow); it hands the `G`
   façade to the extracted modules — one `Module.create(G)` per file, and a
   module never reaches into game.js. `js/agent/apex.js` is the `__apex` dev API.
-- `js/render/` — `gfx.js` façade → GLX (WebGL2, the default) in `glx/`;
-  `shared/` is the backend-agnostic half; WGX (`webgpu/`) and TLX (`three/`)
-  are opt-in alternates with no `<script>` tag, injected by `js/game.js` from
-  `ApexRoster.DEFERRED` when `apex26.gfxBackend` names them.
+- `js/render/` — `gfx.js` façade → TLX (`three/`) by default, with GLX
+  (`glx/`) as the explicit WebGL2 pick and fallback; `shared/` is the
+  backend-agnostic half. TLX and opt-in WGX (`webgpu/`) have no `<script>` tag
+  and are injected by `js/game.js` from `ApexRoster.DEFERRED` for the resolved pick.
 - `js/track/` — `core/`, `scenery/`, `tracks.js`; only GENERIC tables live
   here (the 112-member `scenery(api)` contract is test-frozen).
 - `js/car/`, `js/data/`, `js/net/` (2-4 player WebRTC, no backend), `js/ui/`,

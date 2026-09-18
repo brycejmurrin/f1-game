@@ -174,7 +174,14 @@ function readStored(row) {
   const v = s.get(row.k, undefined);
   return v === undefined ? null : v;
 }
-function defaultOf(row, G) { return typeof row.def === "function" ? row.def(G) : row.def; }
+// The SHIPPED default, which is what makes CHANGED honest. js/data/settings-defaults.js
+// outranks the row's own `def` for any key it names — otherwise moving a default
+// into that file would leave this reporting the old value, and every exported
+// file would list a key as "changed" that the player never touched.
+function defaultOf(row, G) {
+  if (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(row.k)) return SettingsDefaults.get(row.k);
+  return typeof row.def === "function" ? row.def(G) : row.def;
+}
 
 // collect(mode, G) → the file's object. mode "changes" (default) lists only
 // what differs from the shipped default; "all" lists every key's effective

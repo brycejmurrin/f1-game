@@ -1,7 +1,7 @@
 /* Apex 26 — main game: state machine, physics, AI, race logic.
    Contract: docs/ARCHITECTURE.md. Depends on globals M4,V3,GLX,Teams,Tracks,
-   Car3D,Input,GameAudio,F1API,DataHub; Gfx selects the opt-in TLX (three.js)
-   or WGX (WebGPU) backends, injected at boot — GLX otherwise. */
+   Car3D,Input,GameAudio,F1API,DataHub; Gfx selects TLX (three.js) by default
+   or the explicit WGX (WebGPU) pick, injected at boot — GLX on fallback. */
 (async function () {
 "use strict";
 
@@ -21,7 +21,7 @@ const els = {
   lights: $("lights"), announce: $("announce"), announceNum: $("announce-num"),
   announceWho: $("announce-who"), announceText: $("announce-text"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
-  lighting: $("lighting"), camtune: $("camtune"),
+  lighting: $("lighting"), camtune: $("camtune"), flyby: $("flyby"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
   selTracks: $("sel-tracks"),
   selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
@@ -42,13 +42,12 @@ const els = {
   gear: $("hud-gear"), rpmFill: $("hud-rpm-fill"), tach: $("hud-tach"),
 };
 
-// Renderer selection: TLX (three.js) when apex26.gfxBackend="three", WGX
-// (WebGPU) when ="webgpu" and the browser supports it. Anything else, or any
-// opt-in init failure, uses GLX (WebGL2), keeping the default path
-// byte-for-byte identical — this async IIFE only actually awaits when opted
-// into a deferred backend, or when the lazy __apex surface loads (localhost /
-// tests / ?apex=1). `gfx` is the handle every later renderer call goes
-// through; on the default path gfx===GLX.
+// Renderer selection: an unset apex26.gfxBackend or ="three" uses TLX
+// (three.js); ="webgpu" uses WGX when the browser supports it; ="webgl2"
+// uses GLX. Any deferred-backend init failure also falls back to GLX. This
+// async IIFE awaits while loading TLX/WGX, or when the lazy __apex surface
+// loads (localhost / tests / ?apex=1). `gfx` is the handle every later
+// renderer call goes through.
 let gfx = null;
 let _backendProved = false;   // boot-canary latch — see PROVE_FRAMES below
 // One presented frame is not proof a backend works: disarming on the first
@@ -209,7 +208,7 @@ function wantAgentSurface() {
   const h = typeof location !== "undefined" ? location.hostname : "";
   return h === "127.0.0.1" || h === "localhost" || h === "[::1]";
 }
-// Warm the vendored three island for a stored THREE pick, so TLX is not
+// Warm the vendored three island for the default or a stored THREE pick, so TLX is not
 // waiting on a cold module fetch after the roster injects it.
 function preloadThreeVendor() {
   for (const href of ["vendor/three-0.185.1/three.webgpu.min.js", "vendor/three-0.185.1/three.tsl.min.js"]) {
@@ -220,12 +219,19 @@ function preloadThreeVendor() {
     document.head.appendChild(el);
   }
 }
+function backendPreference() {
+  try {
+    const pref = localStorage.getItem("apex26.gfxBackend");
+    return pref == null ? "three" : pref;
+  } catch (_) {
+    return "three";
+  }
+}
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
-  let pref = null;
-  try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
-  // Unset means WebGL2 on every device; the boot canary below still protects
-  // any stored THREE/WEBGPU pick.
+  let pref = backendPreference();
+  // Unset means THREE on every device; the boot canary below protects the
+  // default as well as stored THREE/WEBGPU picks.
   // Last load claimed the canvas then died — skip opt-in THIS tab only
   // (sessionStorage). Do not wipe the pick: Safari's navigator.gpu can be on
   // while WGX/TLX still refuse, and writing webgl2 bounced the RENDERER
@@ -282,9 +288,9 @@ try {
     // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
     try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
     // FETCH THE BACKEND ONLY NOW: neither alternate has a <script> tag, so the
-    // ~550 KB is fetched only by visitors who opted in — `optIn` resolves
-    // synchronously from localStorage, so the default GLX path never awaits
-    // anything. The list is DEFERRED in tools/manifest.cjs (load-order.test.mjs
+    // ~550 KB is fetched only for the resolved deferred pick — `optIn` resolves
+    // synchronously from localStorage. The list is DEFERRED in
+    // tools/manifest.cjs (load-order.test.mjs
     // asserts loader/manifest/sw.js precache agree); eval-time edges
     // (BACKEND_EDGES === DEFERRED_EDGES) are the only waits. No error path is
     // needed beyond this: a failed fetch leaves the backend global absent,
@@ -316,7 +322,8 @@ if (!gfx) {
     // session skip so THIS tab attaches GLX; keep the pick and disarm the
     // canary or the next boot writes webgl2 (Safari WebGPU's usual path).
     let backendTried = false;
-    try { const p = localStorage.getItem("apex26.gfxBackend"); backendTried = p === "webgpu" || p === "three"; } catch (_) {}
+    const p = backendPreference();
+    backendTried = p === "webgpu" || p === "three";
     let skipped = false;
     if (backendTried) {
       // Read the skip back before reloading — with sessionStorage blocked the
@@ -2245,9 +2252,9 @@ function _loadTrackBody(idx, def) {
     // null between here and the assignment below.
     track = null;
     // Pass the active backend so tracks.js builds its meshes through the façade
-    // (opts.gfx) instead of reaching the GLX global directly. On the default
-    // path gfx===GLX; on a TLX/WGX opt-in it's that backend (descriptor-copied
-    // onto GLX, so object identity is preserved either way).
+    // (opts.gfx) instead of reaching the GLX global directly. On the explicit
+    // or fallback WebGL2 path gfx===GLX; on TLX/WGX it is that backend
+    // (descriptor-copied onto GLX, so object identity is preserved either way).
     track = Tracks.build(def, { night: sessionDark, gfx, chunkRibbons: PerfGov.tier() < 3, gridSlots: wantSlots });
     // Rapier debris side-world: register the circuit's near-apex clippable cones
     // (A3). Cheap pure derivation from track.def.turns; stores the list even when
@@ -3516,7 +3523,7 @@ function clearMenuScreens() {
   // timer that would otherwise fire its build callback into a running race.
   loadingScreen.stop();
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
-  for (const id of ["overlay", "lighting", "camtune"]) { const el = $(id); if (el) el.hidden = true; }
+  for (const id of ["overlay", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }
   // The garage's 3D turntable keeps rendering while #carsetup is up; a race
   // starting under it must stop that, or the preview draws over the track.
   setupPreviewOn = false;
@@ -3550,7 +3557,7 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
-  closeCamTuner(false); exitPhotoMode();
+  closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   state = "menu"; paused = false; raceCtl.reset(); weatherArc = null; endChangeable(); daily.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
@@ -8106,7 +8113,7 @@ function render(dt) {
   // Re-arm around the first world present so a jetsam mid-frame still reverts.
   // Title already disarmed after bind; this window is only the first flyby/race.
   if (!_backendProved && _backendBound && !_probeArmed) {
-    try { const p = localStorage.getItem("apex26.gfxBackend");
+    try { const p = backendPreference();
       if (p === "three" || p === "webgpu") { localStorage.setItem("apex26.gfxBackendProbe", p); _probeArmed = true; } }
     catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
   }
@@ -8182,15 +8189,20 @@ function tickBody(now) {
     // so drop them rather than let a pause-menu button-mash queue up and fire
     // in one burst on the first frame after RESUME (see Input.clearEdges).
     Input.clearEdges();
-    // LIGHTING / CAMERA TUNER live preview: keep RENDERING (physics stays
-    // paused) while either panel is open so every slider change shows on the
-    // held frame — a camera angle is unjudgeable on a frozen picture.
+    // LIGHTING / CAMERA / FLYBY tuner live preview: keep RENDERING (physics
+    // stays paused) while any of the three panels is open so every slider
+    // change shows on the held frame — a camera angle is unjudgeable on a
+    // frozen picture. The flyby editor is the sharpest case: its whole job is
+    // to place shots in the world, and without this gate it parked dbgCam on a
+    // frame nothing was redrawing, so the screen kept showing the race the
+    // player paused out of.
     // THIS IS THE ONLY updatePhotoCam CALL SITE, and that is on purpose: the
     // free camera is a sub-mode OF the tuner, only reachable from it, and the
     // tuner is only reachable from the pause menu. Resuming tears it down
     // (setPaused -> closeLightTuner -> exitPhotoMode), so there is no unpaused
     // state in which it should still be flying.
-    if ((state === "race" || state === "count") && (!els.lighting.hidden || !els.camtune.hidden)) {
+    if ((state === "race" || state === "count") &&
+        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden)) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
@@ -8481,16 +8493,17 @@ $("track-detail-close").onclick = closeTrackDetail;
 // menu (one panel at a time); BACK (or resume) returns to it.
 // Some settings only mean anything with a race on screen: HIDE HUD toggles a
 // HUD that does not exist yet (and the state would carry into the next race,
-// which starts with no HUD and no clue why), and both tuners preview a scene
-// that is not being rendered. Disabled rather than hidden — the same rule the
-// mode-dependent driving controls follow, so the grid never reflows under a
-// thumb mid-tap.
+// which starts with no HUD and no clue why), and all three visual tuners
+// preview a scene that is not being rendered. Disabled rather than hidden —
+// the same rule the mode-dependent driving controls follow, so the grid never
+// reflows under a thumb mid-tap.
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
 function syncSettingsAvailability() {
   const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* RendererPicker's reload buttons arm a two-tap confirm while this is set */ }
   SettingRow.disable($("pm-hidehud"), !inRace);
   $("pm-lighting").disabled = !inRace;
   $("pm-camtune").disabled = !inRace;
+  $("pm-flyby").disabled = !inRace;
 }
 function openSettings() {
   // AUTO is always the full set; re-read the LAYOUT note on open so "Here
@@ -8916,7 +8929,7 @@ els.resNext.onclick = () => {
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
   paused = p;
-  if (!p) { closeLightTuner(false); closeCamTuner(false); exitPhotoMode(); }
+  if (!p) { closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode(); }
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());
