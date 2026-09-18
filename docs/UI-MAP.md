@@ -4,8 +4,10 @@ This is the lookup map for Apex 26's menu web: where a title-screen action
 leads, which overlays can appear along the way, and which stable DOM roots an
 agent can inspect.
 
-> **Source date:** 2026-09-18  
-> **Live walk:** [brycejmurrin.github.io/f1-game/](https://brycejmurrin.github.io/f1-game/)  
+> **Source date:** 2026-09-18
+>
+> **Live walk:** [brycejmurrin.github.io/f1-game/](https://brycejmurrin.github.io/f1-game/)
+>
 > **Source cross-check:** `js/ui/layers.js`, `js/ui/settings-tabs.js` and
 > `index.html` on `claude/f1-game-project-26h3ng`
 
