@@ -97,7 +97,7 @@ test("more drivers: three lanes load, each with its own colour and map dot", asy
   // pick three drivers
   for (const c of ["NOR", "RUS", "LEC"]) await page.locator(".dh-dchip", { hasText: c }).click();
   await expect(page.locator(".dh-livecard .dh-row")).toHaveCount(3);   // three lanes in the tray
-  await page.locator(".dh-livebtn", { hasText: "COMPARE 3 LANES" }).click();
+  await page.locator(".dh-livebtn", { hasText: "COMPARE 3 LAPS" }).click();
 
   // popup: three legend chips, three map-legend chips, and a drawn map
   await expect(page.locator(".dh-tpopup")).toBeVisible();
@@ -151,7 +151,7 @@ test("cross-session: one driver's race lap vs qualifying lap", async ({ page }) 
   const badges = await page.locator(".dh-lane-ses").allTextContents();
   expect(badges.sort()).toEqual(["Q", "R"]);
 
-  await page.locator(".dh-livebtn", { hasText: "COMPARE 2 LANES" }).click();
+  await page.locator(".dh-livebtn", { hasText: "COMPARE 2 LAPS" }).click();
   await expect(page.locator(".dh-tpopup")).toBeVisible();
   // title tags each NORRIS with its session; subtitle marks it cross-session
   await expect(page.locator(".dh-tpopup-title")).toContainText("Norris R");
