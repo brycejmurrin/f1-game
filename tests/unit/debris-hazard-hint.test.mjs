@@ -213,9 +213,31 @@ test("suzuka crosses itself, and the height test is what keeps the legs apart", 
   assert.ok(arcOff(bareMid.s) < 20 && verdict(bareMid, mid.y),
     `premise: the unhinted scan should get this one right (got s=${bareMid.s.toFixed(0)})`);
   const stale = projectHazard(track, mid.x, mid.y, mid.z, sWrong);
-  assert.equal(stale.s, bareMid.s,
-    `a cross-leg hint was TRUSTED (s=${stale.s.toFixed(0)} instead of the full scan's ` +
-    `${bareMid.s.toFixed(0)}) — the height half of the trust test is not holding`);
+  /* SAME ARC, not the same BITS.
+   *
+   * This was assert.equal on a computed float and it broke the whole release
+   * train on 2026-09-18: d9ae0ab ("Suzuka: the figure-of-eight was upside
+   * down") moved the geometry just enough to land the two paths one ULP apart
+   * — 4893.275779224587 against 4893.2757792245875 — and every Pages publish
+   * failed on it for hours. Bisected: 3/3 at d9ae0ab~1, 1 fail at d9ae0ab.
+   *
+   * The Suzuka change was not wrong and neither was the intent here. Rejecting
+   * the hint and re-running the scan is not required to reproduce the unhinted
+   * float bit for bit; it is required to land in the same PLACE. The defect
+   * this guards is a hint trusted onto the wrong leg, and the test measures
+   * that same defect as arcOff > 1000 three lines up — a KILOMETRE. The noise
+   * is 1e-12 m. EPS sits six orders above the noise and nine below the defect,
+   * so this is not a widened tolerance: at 1 mm it would still catch a
+   * cross-leg trust by a factor of a million.
+   *
+   * Never turn this back into a bit comparison. It cannot hold across a
+   * geometry edit, and the failure it produces names a circuit rather than the
+   * assertion, which is how it cost a day the first time. */
+  const EPS = 1e-3;
+  assert.ok(Math.abs(stale.s - bareMid.s) < EPS,
+    `a cross-leg hint was TRUSTED (s=${stale.s} instead of the full scan's ` +
+    `${bareMid.s}, off by ${Math.abs(stale.s - bareMid.s)}) — the height half ` +
+    `of the trust test is not holding`);
   Tracks.sample(track, stale.s, _smp);
   assert.ok(verdict(stale, mid.y), "and the body is still counted as the hazard it is");
 
