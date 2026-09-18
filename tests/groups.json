@@ -472,6 +472,7 @@
         "tests/specs/ui-resize.spec.js",
         "tests/specs/ui-scale.spec.js",
         "tests/specs/ui-redesign.spec.js",
+        "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/hud-layout.spec.js",
         "tests/specs/hud-audit.spec.js",
         "tests/specs/menu-survey.spec.js",

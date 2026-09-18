@@ -1273,8 +1273,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");
   const selectJs = code("js/ui/select-screen.js");
   assert.match(selectJs, /b\.id\s*=\s*"sel-daily"/);
-  assert.match(selectJs, /textContent\s*=\s*"DAILY STANDARD · "\s*\+\s*p\.trackName/,
-    "daily chip labels the standard class and circuit; weather/tod/best live in a child span");
+  assert.match(selectJs, /selected\s*\?\s*"DAILY STANDARD"\s*:\s*"TODAY'S CHALLENGE"/,
+    "daily chip distinguishes the selected standard from the idle challenge action");
+  assert.match(selectJs, /firstChild\.nodeValue\s*=\s*"TODAY'S CHALLENGE · "/,
+    "choosing another circuit clears the selected Daily Standard chrome in place");
   assert.match(selectJs, /bar\.insertBefore\(\s*b\s*,\s*bar\.firstChild\s*\)/,
     "TODAY leads the filter bar so a wrapping sheet paints it as the banner");
   assert.match(selectJs, /trackFilters[\s\S]*\["daily-open",\s*"DAILY OPEN"\]/,

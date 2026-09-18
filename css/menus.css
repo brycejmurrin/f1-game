@@ -1230,6 +1230,10 @@ h3.sel-label {
   overflow: hidden;
 }
 #rs-duel-value { overflow: hidden; text-overflow: ellipsis; }
+#rs-duel-help {
+  flex: 1 0 100%;
+  margin: 0;
+}
 #duel-picker { --sheet-w: 620px; }
 #duel-search {
   width: 100%;
