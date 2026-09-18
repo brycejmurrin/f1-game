@@ -94,6 +94,6 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   }
   assert.match(title, /\$\("mb-career"\)\.onclick = \(\) => G\.openCareerSlots\(\)/);
   assert.match(title, /\$\("mb-continue"\)\.onclick = \(\) => G\.openCareer\(\)/);
-  assert.match(title, /\$\("mb-daily"\)\.onclick = \(\) => \{[\s\S]*G\.daily\.open\(\)/);
+  assert.match(title, /\$\("mb-daily"\)\.onclick = \(\) => \{[\s\S]*\$\("mb-tt"\)\.click\(\)[\s\S]*G\.daily\.select\(\)[\s\S]*G\.buildSelect\(\)/);
   assert.match(title, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
 });

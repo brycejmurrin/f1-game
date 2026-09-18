@@ -59,7 +59,7 @@ const RaceSettings = (function () {
       getRaceGrid, setRaceGrid, getRaceReliability, setRaceReliability,
       getRaceTyreWear, setRaceTyreWear, getDuel, setDuel, getDuelLegend, setDuelLegend, getPits,
       getRaceCtl, gridFromQuali, getSeason, qualiResults, openQuali, startRace, raceIntro,
-      enableTilt, getSteerMode, getNetLobby, buildSelect, els, openGarage,
+      enableTilt, getSteerMode, getNetLobby, getDaily, buildSelect, els, openGarage,
     } = hooks;
 
     let rsReturn = "select";
@@ -71,6 +71,7 @@ const RaceSettings = (function () {
       $("rs-go").textContent = netRoom ? "CONFIRM" : "RACE!";
       wireRaceSettings();
       const tt = isTimeTrial();
+      const daily = tt && getDaily ? getDaily() : null;
       const trackIdx = getTrackIdx();
       let raceLaps = getRaceLaps();
       const full = (Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps) || 57;
@@ -83,9 +84,12 @@ const RaceSettings = (function () {
       }
       SettingRow.paint("rs-laps", raceLaps, lapOpts.map((n) => [n, !tt && n === full ? full + " (FULL)" : String(n)]));
       SettingRow.paint("rs-weather", getRaceWeather(), RS_WEATHER);
+      SettingRow.disable("rs-laps", !!daily);
+      SettingRow.disable("rs-weather", !!daily);
       $("rs-mixed").hidden = tt;
       SettingRow.paint("rs-mixed", getRaceChangeable() ? "mixed" : "stable", RS_CONDITIONS);
       SettingRow.paint("rs-time", getRaceTimeOfDay(), RS_TIME);
+      SettingRow.disable("rs-time", !!daily);
       $("rs-diff").hidden = tt;
       SettingRow.paint("rs-diff", getDifficulty(), RS_DIFF);
       const champ = isChampionship();
@@ -231,9 +235,10 @@ const RaceSettings = (function () {
     function openRaceSettings(from) {
       rsReturn = from || "select";
       if (!netRoom) {
+        const daily = isTimeTrial() && getDaily ? getDaily() : null;
         setRaceLaps(isTimeTrial() ? TT_LAPS : SeasonCal.formatLaps(GAME_LAPS));
-        setRaceWeather("dry");
-        setRaceTimeOfDay("default");
+        setRaceWeather(daily ? daily.weather : "dry");
+        setRaceTimeOfDay(daily ? daily.tod : "default");
       }
       buildRaceSettings();
       $(rsReturn).hidden = true;

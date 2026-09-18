@@ -35,6 +35,33 @@ test.describe("Time Trial — mode flags", () => {
   });
 });
 
+test.describe("Time Trial — daily picker flow", () => {
+  test.use({ viewport: LANDSCAPE });
+
+  for (const [name, selector] of [
+    ["Daily Standard", "#sel-daily"],
+    ["Daily Open", '[data-filter="daily-open"]'],
+  ]) {
+    test(`${name} selects the daily plan but leaves NEXT and RACE! in control`, async ({ page }) => {
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.locator("#mb-tt").click();
+      await expect(page.locator("#select")).toBeVisible();
+      await page.locator(selector).click();
+      await expect(page.locator("#select")).toBeVisible();
+      expect(await page.evaluate(() => window.__apex.info().state)).toBe("menu");
+      await expect(page.locator(selector)).toHaveAttribute("aria-pressed", "true");
+
+      await page.locator("#sel-go").click();
+      await expect(page.locator("#race-settings")).toBeVisible();
+      expect(await page.evaluate(() => window.__apex.info().state)).toBe("menu");
+      await expect(page.locator("#rs-weather-sel")).toBeDisabled();
+      await expect(page.locator("#rs-time-sel")).toBeDisabled();
+      await expect(page.locator("#rs-go")).toHaveText("RACE!");
+    });
+  }
+});
+
 // ── Ghost delta HUD ───────────────────────────────────────────────────────────
 
 test.describe("Time Trial — ghost delta HUD", () => {

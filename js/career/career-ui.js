@@ -602,10 +602,11 @@ function create(G) {
     learn.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); openGuide(draft.flavour); };
     right.appendChild(learn);
 
-    $("cr-title").textContent = "NEW CAREER";
+    const myTeam = draft.flavour === "myteam";
+    $("cr-title").textContent = myTeam ? "NEW MY TEAM" : "NEW CAREER";
     $("cr-sub").textContent = "";
     $("cr-meters").textContent = "";
-    $("cr-go").textContent = "START CAREER";
+    $("cr-go").textContent = myTeam ? "START MY TEAM" : "START CAREER";
     $("cr-go").hidden = false;
     $("cr-go").disabled = false;
     $("cr-garage").hidden = true;

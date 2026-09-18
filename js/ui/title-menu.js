@@ -48,8 +48,9 @@ const TitleMenu = (function () {
     $("mb-career").onclick = () => G.openCareerSlots();
     $("mb-continue").onclick = () => G.openCareer();
     $("mb-daily").onclick = () => {
-      if (G.soundOn) GameAudio.uiSelect();
-      G.daily.open();
+      $("mb-tt").click();
+      G.daily.select();
+      G.buildSelect();
     };
 
     return { refresh };

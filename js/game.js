@@ -3333,7 +3333,7 @@ raceSettings = RaceSettings.create({
   getRaceCtl: () => raceCtl,
   gridFromQuali, getSeason: () => season, qualiResults: () => quali.results(),
   openQuali, startRace, enableTilt, getSteerMode: () => steerMode,
-  getNetLobby: () => netLobby, buildSelect, els, openGarage, buildStandings,
+  getNetLobby: () => netLobby, getDaily: () => daily.current(), buildSelect, els, openGarage, buildStandings,
   raceIntro,
 });
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
@@ -8428,6 +8428,7 @@ $("tp-close").onclick = () => { $("teampicker").hidden = true; };
 // was simply dead (surfaced by the button-walk audit; the wiring lived on an
 // unmerged branch).
 els.selBack.onclick = () => {
+  if (daily.isActive()) daily.stop();
   vt(() => {
     els.select.hidden = true;
     if (raceSettings.netRoom) $("vsfriend").hidden = false; else els.overlay.hidden = false;
