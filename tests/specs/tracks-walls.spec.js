@@ -76,6 +76,16 @@ test.describe("Apex 26 — track boundaries", () => {
       expect(s.anyNaN, `${id} no NaN boundary`).toBe(false);
       expect(s.minB, `${id} keeps some track`).toBeGreaterThan(1);     // never collapses
       expect(s.maxB, `${id} bounded`).toBeLessThan(60);               // never runs away
+      // The pit side is EXCLUDED from maxB (TrackPit.openBoundary legitimately
+      // opens it to the garage line), so it needs its own bound or the complex
+      // could grow unwatched — which is exactly how it reached 22.5 m before
+      // being trimmed to 20.1. Measured across all 52 circuits: 14.70-21.10 m.
+      // 24 leaves headroom for a wider paddock without letting a real runaway
+      // hide behind the exemption.
+      if (s.maxPitB != null) {
+        expect(s.maxPitB, `${id} pit complex bounded`).toBeLessThan(24);
+        expect(s.maxPitB, `${id} pit complex reaches past the road`).toBeGreaterThan(s.minB);
+      }
       // a barrier never sits absurdly far inside the tarmac edge
       expect(s.minOverHw, `${id} boundary not deep inside edge`).toBeGreaterThan(-1.5);
     });
