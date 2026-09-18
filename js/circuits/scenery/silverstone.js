@@ -442,7 +442,7 @@
         // is not the place to reinvent the failure mode.
         const hangar = (kk, side, dist, tOff, col) => {
           const a = anchor(kk, side, dist);
-          const W = 35, LEN = 73, EAVE = 7.5, RIDGE = 3.6;   // 11.1 m to the ridge
+          const W = 35, LEN = 73, EAVE = 7.5, RIDGE = 3.6, ROOF_LEN = LEN + 0.4;
           const c = vadd(a.c, a.t, tOff);
           const b = [a.r, a.u, a.t];
           modelGroup(`silverstone-t2-hangar-${kk}`, {
@@ -454,7 +454,9 @@
             // the shed's LENGTH — the same [r, t, u] basis the museum's
             // repainted T2 roof uses thirty lines below.
             stage._mat = MAT.RUST;
-            addCyl(stage, vadd(vadd(c, a.u, EAVE), a.t, -LEN / 2), W / 2, LEN,
+            // A 0.2 m overhang keeps addCyl's positive cap off the body's
+            // same-facing gable plane; exact overlap adds one z-fight per shed.
+            addCyl(stage, vadd(vadd(c, a.u, EAVE), a.t, -ROOF_LEN / 2), W / 2, ROOF_LEN,
               T2_OLIVE_D, 7, [a.r, a.t, a.u]);
             // Sliding door bays at the trackside gable — the one detail that
             // survives at this range, because it breaks the flat end wall.
