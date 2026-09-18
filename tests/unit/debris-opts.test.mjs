@@ -30,7 +30,7 @@ function load({ stored = {}, readyState = "complete", world = true } = {}) {
   const sb = {
     Math, console, Object, Array, JSON, String, Number,
     GameStore: { store: {
-      raw: (k) => (k in stored ? stored[k] : null),
+      raw: (k) => (k in stored ? stored[k] : "0"),
       rawSet: (k, v) => { stored[k] = String(v); return true; },
     } },
     SettingRow: {
@@ -54,22 +54,20 @@ test("it claims pm-debris, and the shell declares that row with its select", () 
   assert.ok(SHELL.includes('id="pm-debris-label">DEBRIS<'), "the row must be labelled DEBRIS");
 });
 
-test("an unset key reads ON — the shipped default, and what create() would do", () => {
+test("an unset key reads OFF from the shipped SettingsDefaults value", () => {
   const { M, rows } = load();
-  assert.equal(M.on(), true);
-  assert.equal(rows.get("pm-debris").read(), "on");
+  assert.equal(M.on(), false);
+  assert.equal(rows.get("pm-debris").read(), "off");
 });
 
 test("the key is read the way debris-world.js create() reads it", () => {
-  // create(): `opt = getItem("apex26.debris") || "1"` then `if (opt === "1")`.
-  // So null and "" fall to the default and EVERY other spelling is off — a
-  // `!== "0"` here would agree on the two values anyone writes and disagree
-  // with the world on the rest, which is the shape of a row that lies.
+  // Both consumers must use the store's raw lane so SettingsDefaults can
+  // supply the same value when no player override exists.
   const src = fs.readFileSync(path.join(ROOT, "js/physics/debris-world.js"), "utf8");
-  assert.match(src, /getItem\("apex26\.debris"\)\s*\|\|\s*opt/,
-    "create() must still read the key this row writes");
-  for (const [raw, want] of [[null, true], ["", true], ["1", true], ["0", false], ["yes", false], ["true", false]]) {
-    const { M } = load({ stored: raw === null ? {} : { "apex26.debris": raw } });
+  assert.match(src, /GameStore\.store\.raw\("debris"\)/,
+    "create() must resolve debris through SettingsDefaults");
+  for (const [raw, want] of [["", false], ["1", true], ["0", false], ["yes", false], ["true", false]]) {
+    const { M } = load({ stored: { "apex26.debris": raw } });
     assert.equal(M.on(), want, `raw ${JSON.stringify(raw)} must read ${want}`);
   }
 });

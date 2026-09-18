@@ -391,8 +391,16 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 
 /* live */
 .dh-livecard, .dh-card.dh-livecard { display: flex; flex-direction: column; gap: calc(var(--gap) / 3); }
-.dh-live-title { font-size: 17px; font-weight: 800; font-style: italic; color: var(--text); }
+.dh-live-title { display: flex; align-items: center; flex-wrap: wrap; gap: calc(var(--gap) * 0.5); font-size: 17px; font-weight: 800; font-style: italic; color: var(--text); }
 .dh-live-type { font-size: var(--fs-2); color: var(--red); letter-spacing: var(--ls-4); }
+.dh-live-state {
+  padding: calc(var(--gap) / 6) calc(var(--gap) * 0.5);
+  border: 1px solid currentColor; border-radius: var(--r-pill);
+  font-size: var(--fs-micro); font-style: normal; letter-spacing: var(--ls-3);
+  color: var(--steel);
+}
+.dh-live-state[data-state="live"] { color: var(--faster); }
+.dh-live-state[data-state="upcoming"] { color: var(--gold); }
 .dh-live-sub { font-size: var(--fs-2); color: var(--dim); margin-top: calc(var(--gap) / 6); white-space: normal; overflow-wrap: anywhere; }
 .dh-live-team { color: var(--dim); font-size: var(--fs-2); }
 .dh-live-gapwrap { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex: 1; min-width: 100px; justify-content: flex-end; }
@@ -736,10 +744,10 @@ body[data-density="compact"][data-width="wide"] .dh-race-grid {
 .dh-pick-fields .dh-pick-select { max-width: none; width: 100%; }
 
 /* ── Two-pane split layout (Live + Telemetry) ─────────── */
-.dh-split { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
-.dh-split-L { display: flex; flex-direction: column; gap: 10px; flex: 0 0 auto; }
+.dh-split { display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0; min-height: 0; }
+.dh-split-L { display: flex; flex-direction: column; gap: 10px; flex: 0 0 auto; min-width: 0; }
 .dh-split-R {
-  display: flex; flex-direction: column; gap: var(--gap); flex: 1;
+  display: flex; flex-direction: column; gap: var(--gap); flex: 1; min-width: 0;
   /* what .pane gives every other scroll region in the app */
   overflow-y: auto; overscroll-behavior-y: contain; touch-action: pan-y;
 }

@@ -480,7 +480,10 @@ contact sheet from a shell, and exits non-zero if any frame is inside scenery.
 
 ### `flybyShots() → [shot, …] | null`
 The flyby's shot list as plain data — a deep copy, so editing it cannot corrupt
-the sequence the screen plays. Each shot is `{id, dur, ease, eye:[from,to],
+the sequence the screen plays. The FLYBY SHOT EDITOR's saved list
+(`apex26.flybyShots`) when there is one, and the shipped `FlybySeq.DEFAULT`
+otherwise: this reports what a race would actually fly, which stopped being the
+same thing as what ships when the editor learned to save its edits. Each shot is `{id, dur, ease, eye:[from,to],
 look:[from,to], fov:[from,to]}`, and every pose is track-relative
 (`{at:"start"|"pole"|"grid"|"corner", n, off, x, y}`), which is what lets one
 list mean the same thing on every circuit.

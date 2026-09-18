@@ -2309,6 +2309,16 @@ function flybyProgress() {
   return (loadingScreen && loadingScreen.progress) ? loadingScreen.progress() : 0;
 }
 
+// The shot list the FLYBY SHOT EDITOR saved, or null for the shipped sequence.
+// Read when a run STARTS, not per frame: solve() runs every frame and a store
+// miss parses JSON. flybyPanel owns the reading and the validation (it owns the
+// writing); this is the copy the render path is allowed to touch.
+let flybyShots = null;
+function reloadFlybyShots() {
+  try { flybyShots = flybyPanel.loadSaved(); }
+  catch (e) { flybyShots = null; Log.warn("game", "flyby shots did not load", e); }
+}
+
 // Keep one prepared track, never a cache of whole circuits. A generation
 // prevents late scenery downloads (including A -> B -> A) from committing.
 const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
@@ -2906,6 +2916,7 @@ const G = {
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
   openCareerSlots: (...a) => openCareerSlots(...a),
+  openDailyPicker: () => openTimeTrial(true),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   // The stateless-draw round, resolved EXACTLY as armReliability() does: the
@@ -3020,6 +3031,9 @@ const G = {
   get skyT() { return _skyT; }, set skyT(v) { _skyT = v; },
   get skyHold() { return _skyHold; }, set skyHold(v) { _skyHold = !!v; },
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
+  // The FLYBY SHOT EDITOR's saved list, or null for the shipped sequence.
+  // Read-only here: flybyPanel writes it, reloadFlybyShots() reads it back.
+  get flybyShots() { return flybyShots; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
   get fieldSectorBests() { return fieldSectorBests; },
@@ -3395,6 +3409,9 @@ function raceIntro(go) {
   // idempotent by construction (every lighting-slider tick re-runs it), so this
   // costs one pass and startRace still re-applies after its rebuild.
   if (track) applyRaceSettings();
+  // And fly the shots the EDITOR saved, for the same reason: a list edited in
+  // the pause menu is only read here, so every run picks up the latest one.
+  reloadFlybyShots();
   loadingScreen.run({
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
@@ -3438,6 +3455,7 @@ const { closeCamTuner } = CamTunerPanel.create(G);
 // FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
 // shot list; previews through __apex.flybyCam, touches no render-path state.
 const flybyPanel = FlybyPanel.create(G);
+reloadFlybyShots();          // the menu's warm-up frames fly the saved list too
 // Steering-tuning sliders + presets (js/input/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,
@@ -6772,7 +6790,7 @@ function render(dt) {
     // flew through buildings. The sequencer places every eye against the props
     // registry instead. It is driven by PROGRESS through the flyby phase, so the
     // sequence keeps its shape whatever the phase is retuned to.
-    const fb = FlybySeq.solve(track, flybyProgress());
+    const fb = FlybySeq.solve(track, flybyProgress(), flybyShots);
     eyeT = fb.eye; tgtT = fb.tgt; fovT = fb.fov; camAncNX = null;
     // A shot boundary is a CUT. Without this the λ1.6 menu damping below smears
     // the change of angle into a long swim between two vantages, which reads as
@@ -8369,14 +8387,18 @@ if ($("mb-vs")) $("mb-vs").onclick = () => {
   ensureNet().then((ok) => { if (ok) netLobby.open(); });
   if (soundOn) GameAudio.uiSelect();
 };
-$("mb-tt").onclick = () => {
+function openTimeTrial(selectDaily) {
   setFlow("gp"); session = "tt";
-  restoreFreePlaySelection();
+  if (selectDaily) daily.select();
+  else restoreFreePlaySelection();
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
-};
+  // Daily selection already names the exact circuit/weather/time. Do not first
+  // arm a free-play scene that is immediately discarded.
+  if (!selectDaily) scheduleFlybyTrack(true);
+}
+$("mb-tt").onclick = () => openTimeTrial(false);
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
   // Replace any career alias with the repaired standalone save; finished stays readable.
