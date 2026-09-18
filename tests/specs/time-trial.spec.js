@@ -416,6 +416,11 @@ for (const device of drivingDevices) test.describe(`Driving zoom matrix ${device
         await press('#pm-settings-close'); await press('#pm-open-driving');
         await expect(page.locator('#pm-panel-driving')).toBeVisible();
         await page.waitForFunction(() => document.getElementById('pmsettings-inner').dataset.shape, null, {polling:100});
+        // The shipped coach default is generated policy and may be ON. This
+        // matrix tests that both step buttons remain reachable at each scale,
+        // so establish the first rung instead of assuming a product default.
+        await page.locator('#pm-coach-sel').selectOption('off');
+        await expect(page.locator('#pm-coach-sel')).toHaveValue('off');
         await press('#pm-coach-next'); await expect(page.locator('#pm-coach-sel')).toHaveValue('on');
         await press('#pm-coach-next'); await expect(page.locator('#pm-coach-sel')).toHaveValue('off');
         await press('#pm-coach-next'); await expect(page.locator('#pm-coach-sel')).toHaveValue('on');
