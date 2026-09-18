@@ -115,7 +115,25 @@
 /* 78vw via --vwz, not bare: this group is inside #menu-buttons, which is
    `#overlay > *` and therefore zoomed. See the --vwz note in tokens.css. */
 #menu-hero, #menu-primary, #menu-secondary { width: min(calc(78 * var(--vwz)), 100%); }
-#menu-hero { display: grid; }
+#menu-hero { display: grid; gap: calc(var(--gap) * 0.55); }
+#menu-retention {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: calc(var(--gap) * 0.7);
+}
+#menu-retention .bigbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65em;
+  min-width: 0;
+  padding-block: calc(var(--gap) * 0.65);
+}
+#menu-retention .mb-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* Shared gap / stretch. Column count lives on each row: primary is a
    forced 2x2, secondary wraps from local space (see the two rules below). */
 #menu-primary, #menu-secondary {
@@ -1193,6 +1211,52 @@ h3.sel-label {
   align-content: start;
   overflow-y: auto; overscroll-behavior-y: contain;
 }
+#rs-presets {
+  grid-column: 1 / -1;
+  --balance-basis: 8rem;
+  --balance-min: 6rem;
+  margin: 0;
+}
+#rs-presets > .preset-btn { min-height: var(--chip-h); }
+#rs-body #rs-duel-open {
+  flex: 0 0 7rem;
+  width: 7rem;
+  padding-inline: calc(var(--gap) * 0.7);
+  justify-content: space-between;
+  gap: calc(var(--gap) * 0.5);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-3);
+  white-space: nowrap;
+  overflow: hidden;
+}
+#rs-duel-value { overflow: hidden; text-overflow: ellipsis; }
+#duel-picker { --sheet-w: 620px; }
+#duel-search {
+  width: 100%;
+  min-height: var(--chip-h);
+  margin-bottom: var(--gap);
+}
+#duel-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+  gap: calc(var(--gap) * 0.6);
+}
+.duel-option {
+  min-height: var(--tap);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: calc(var(--gap) * 0.7) var(--gap);
+  text-align: left;
+  background: var(--plate);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
+}
+.duel-option.active { background: var(--plate-on); border-color: var(--red); }
+.duel-option-name { font-weight: 800; letter-spacing: var(--ls-3); }
+.duel-option-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
 @container sheet (min-width: 440px) {
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }

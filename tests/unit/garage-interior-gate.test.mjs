@@ -50,41 +50,24 @@ describe("garage-interior gate", () => {
   });
 });
 
-/* ── the category strip fits every tab it builds ─────────────────────────────
-   On the short-wide play shape css/carsetup.css lays #cs-tabs out as a fixed
-   TWO-ROW grid with `overflow: hidden` and a two-row max-height. That is the
-   right trade there — a sideways pan hides half the catalogue — but it means
-   the grid must have a slot for every tab, or the surplus lands on an implicit
-   third row that is clipped away with no scrollable ancestor to reach it.
-
-   It did. The column count was the literal `repeat(7, …)`, i.e. 14 slots for
-   the 14 tabs that existed when the rows were measured; the roster grew to 15
-   (TEAM + the parts catalogue + SETUP + LIVERY) and LIVERY, appended last,
-   rendered 53x6 px with 0 % of it visible at 852x393 — a whole screen of the
-   game unreachable in landscape, on the primary play shape.
-
-   So the count is DERIVED now, and this pins the derivation rather than a
-   number: the strip must ask for ceil(tabs / 2) columns, and the stylesheet
-   must consume that instead of a literal. Both halves, because either one
-   alone silently reverts to the fallback. */
-it("the garage tab grid has a slot for every tab it builds", () => {
+/* ── category information architecture ─────────────────────────────────────
+   Performance parts remain the primary rail. Presentation/setup categories
+   get a second named row, so they no longer compete with ENGINE in one flat
+   strip. Stacked rows pan independently; pair layout flattens both rows into
+   one vertical keyboard rail. */
+it("garage tabs split performance and finishing work into named rows", () => {
   const rd = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
   const sheet = rd("js/garage/setup-sheet.js");
   const css = rd("css/carsetup.css");
-  assert.match(sheet, /setProperty\("--cs-tab-cols", String\(Math\.ceil\(tabs\.childElementCount \/ 2\)\)\)/,
-    "the strip publishes ceil(tabs / 2) columns as it builds");
-  assert.match(css, /grid-template-columns: repeat\(var\(--cs-tab-cols, \d+\), minmax\(0, 1fr\)\)/,
-    "the two-row play-shape grid takes its column count from that var");
-  assert.doesNotMatch(css, /grid-template-columns: repeat\(7, minmax\(0, 1fr\)\)/,
-    "no literal column count may come back — that is the defect this pins");
-  // And the roster really is bigger than the old literal, so the fallback is
-  // not quietly the right answer by accident.
-  const parts = rd("js/car/parts.js");
-  const cats = (parts.match(/^ {6}id: "[a-z_]+", label: "[A-Z]/gm) || []).length;
-  assert.ok(cats > 0, "the parts catalogue parses");
-  const tabs = cats + 3;   // TEAM + catalogue + SETUP + LIVERY
-  assert.ok(tabs > 14, `the roster is ${tabs} tabs — past the 14 the old literal allowed`);
-  assert.ok(Math.ceil(tabs / 2) * 2 >= tabs, "ceil(tabs / 2) columns over two rows seats every tab");
+  assert.match(sheet, /SECONDARY_CATS\s*=\s*new Set\(\["floor",\s*"cockpit",\s*"wheels",\s*"tune",\s*"livery"\]\)/);
+  assert.match(sheet, /className = "cs-tab-row"/);
+  assert.match(sheet, /aria-label", "Performance categories"/);
+  assert.match(sheet, /aria-label", "Finishing and setup categories"/);
+  assert.match(css, /#cs-tabs \.cs-tab-row\s*\{[^}]*overflow-x:\s*auto/s,
+    "each stacked row can pan without hiding the other tier");
+  assert.match(css, /#cs-inner\[data-pair="on"\] #cs-tabs \.cs-tab-row\s*\{[^}]*display:\s*contents/s,
+    "the split-pane rail remains one vertical keyboard list");
+  assert.doesNotMatch(sheet, /--cs-tab-cols/, "the old count-derived packing is gone");
 });
 
 /* A GATE THAT CANNOT FAIL ON BLACK IS NOT A GATE (2026-09-08).
