@@ -341,7 +341,7 @@ function trackFilterBar() {
     b.id = "sel-daily";
     const extraBits = [p.weather.toUpperCase(), p.tod.toUpperCase()];
     if (done && done.best != null) extraBits.push("ALL SETUPS ★ " + fmtTime(done.best));
-    b.textContent = "DAILY STANDARD · " + p.trackName.toUpperCase();
+    b.textContent = (selected ? "DAILY STANDARD" : "TODAY'S CHALLENGE") + " · " + p.trackName.toUpperCase();
     const extra = document.createElement("span");
     extra.textContent = " · " + extraBits.join(" · ");
     b.appendChild(extra);
@@ -534,6 +534,7 @@ function buildSelect() {
           if (dailyChip) {
             dailyChip.classList.remove("active");
             dailyChip.setAttribute("aria-pressed", "false");
+            dailyChip.firstChild.nodeValue = "TODAY'S CHALLENGE · " + G.daily.plan().trackName.toUpperCase();
           }
         }
         G.trackIdx = i;
