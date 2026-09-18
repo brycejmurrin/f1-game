@@ -11,6 +11,8 @@ const TitleMenu = (function () {
       if (!btn) return;
       const c = Career.data() || Career.load();
       const used = Career.slots().filter((s) => s.used).length;
+      const label = btn.querySelector(".mb-label");
+      if (label) label.textContent = "CAREER MODES";
       const sub = $("mb-career-sub");
       if (!sub) return;
       if (!c) sub.textContent = "DRIVER CAREER  ·  MY TEAM";
