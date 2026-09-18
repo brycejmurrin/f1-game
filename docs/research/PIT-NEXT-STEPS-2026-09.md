@@ -262,13 +262,7 @@ leaves. Reverted; `approachV` asks `inBoxLat`, which a rail can satisfy.
 Dropping the queue's crawl floor to zero inside the lane moved nothing and
 carries a deadlock risk (a queued car is exempt from the unstuck rescue).
 
-**Still open.** Overlap ticks roughly DOUBLED: with nobody stalled, more cars
-reach the bays and run nose to tail there. That is the original spacing
-question, untouched — the lane has a speed cap (`game.js`, `capBlocks`/`queued`,
-4869 hits in this run) but no held longitudinal gap, and every car shares one
-lateral from `laneX`. Next step is a lane-specific spacing rule, not a speed
-ceiling. Re-run `scratch/pit-traffic.cjs bahrain 9 6`; the numbers to move are
-closestPairM and overlapTicks, with stallCount held at 0.
+**Then closed — the lane now queues.** See §4g.
 
 ## 4d. THREE CIRCUITS HAD NO PIT WALL AT ALL — fixed
 
@@ -421,6 +415,51 @@ compounds' raw lives while `degCost` prices each stint against a FUEL-ADJUSTED
 life, so the stint lengths cannot respond to the fuel effect the comment says
 makes plans mix ("harder rubber early and softer late"). Mixed plans now appear
 on cost alone; making the split fuel-aware would be the principled version.
+
+## 4g. THE LANE QUEUES INSTEAD OF SHOVING — closed
+
+The spacing half of the original "AI are getting caught up in the pit lane"
+report, left open by §4c.
+
+**First, a correction to §4c's own numbers.** Its measurement (overlap 94 → 194)
+was taken on a 6-lap Bahrain that produced TWO-STOP plans — a scenario the pit
+loss fix in §4f removed. At the corrected pit loss a 6-lap race is a no-stop
+race and nobody enters the lane at all, so that figure describes a race the game
+no longer runs. Re-measured on a 20-lap Bahrain, which stops 19 of 22 cars once.
+
+**The mechanism.** A car held behind another took the RACING follow distance —
+`followBase` 6 m, which between 4.8 m cars is a metre of clear air — and then
+the crawl floor (`AiDrive.queueFloor`, 3.5 m/s) overrode the gap-holding cap
+entirely. So a car behind one stopped on the jacks was *commanded* to keep
+closing at 3.5 m/s. The floor exists so a car declared stuck can shuffle out of
+trouble; on the lane rail there is nowhere to shuffle to and nothing to gain.
+
+**The rule.** New `AiDrive.laneFollow()` (9 m — a car length plus air) replaces
+the racing gap, and the crawl floor is dropped to zero, when BOTH cars are
+pit-held (`PitLane.held`). A lane queue is the one place the AI may come to a
+complete rest. Racing traffic is untouched: the branch needs both ends held.
+
+Bahrain, 20 laps, 19 stops, like for like:
+
+| measure | before | after |
+|---|---|---|
+| ticks with a pair inside a car length | 427 | **56** |
+| ticks driving INTO the car ahead | 664 | **92** |
+| distinct overlapping pairs | 4 | **1** |
+| closest pair | 1.52 m | 1.96 m |
+| STALLS (the deadlock risk of dropping the floor) | 0 | **0** |
+| stops completed | 19 | 19 |
+| most cars in the lane at once | 5 | 5 |
+
+The deadlock was the real risk — a queued car is exempt from the unstuck rescue,
+so a queue that cannot restart is stuck forever. It did not happen: stalls stayed
+at zero and every stop completed.
+
+**Residual, and not chased.** 56 ticks (~0.9 s of 146 s of lane time) on ONE
+pair, closest 1.96 m. That is the entry, where a car arrives at the limit behind
+one already slowed and the cap has not yet bitten. Worth a braking-envelope
+approach on the entry road if it ever shows on screen; at this size it is below
+what the earlier defects were costing.
 
 ## 5. Smaller loose ends
 

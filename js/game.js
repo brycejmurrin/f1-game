@@ -3386,6 +3386,15 @@ function menuGridCars() {
 
 function raceIntro(go) {
   menuGridCars();
+  // LIGHT THE FLYBY WITH WHAT THE MENU CHOSE, BEFORE IT STARTS. run() fires `go`
+  // (startRace) "once the card is up", and startRace only reaches
+  // applyRaceSettings() after loadTrack() and makeCars() — so the whole cinematic
+  // played over a world nothing had lit for THIS session yet: pick dawn, watch a
+  // day loading screen. The TIME chip only calls scheduleFlybyTrack(), which
+  // rebuilds geometry and resolves no lighting at all. applyRaceSettings() is
+  // idempotent by construction (every lighting-slider tick re-runs it), so this
+  // costs one pass and startRace still re-applies after its rebuild.
+  if (track) applyRaceSettings();
   loadingScreen.run({
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
@@ -4367,13 +4376,19 @@ function updateCar(c, dt, ranked) {
       // — the pit-lane rescue reads this. Only a lane car: a car welded to
       // anything else in there still gets its rescue.
       queued = pits.inLane(blocker);
-      const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
+      // ON THE LANE THE CARS QUEUE (AiDrive.laneFollow): a wider held gap, and
+      // the crawl floor dropped so a car behind one on the jacks comes to REST
+      // instead of being commanded into its gearbox. BOTH ends must be pit-held,
+      // so nothing about racing traffic changes.
+      const onLane = queued && pits.held(c);
+      const follow = onLane ? AiDrive.laneFollow()
+        : AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
       // Floored (AiDrive.queueFloor): the cap may match the blocker's pace but
       // must never command a STANDSTILL — which it did behind a stopped car,
       // and a stopped AI can never steer out. The crawl is itself capped at the
       // vmax race control already granted, so VSC and red flag still win.
       const q = blocker.speed + clamp(blockerGap - follow, -6, 8);
-      const crawl = Math.min(AiDrive.queueFloor(!!track.street) * Math.max(PACE, 0.05), vmax);
+      const crawl = onLane ? 0 : Math.min(AiDrive.queueFloor(!!track.street) * Math.max(PACE, 0.05), vmax);
       vmax = Math.min(vmax, Math.max(q, crawl));
       const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street, blockerGap, follow, BRAKE, vTop() / VMAX);
       if (qb) { braking = true; brakeLvl = qb; }
