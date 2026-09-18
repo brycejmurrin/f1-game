@@ -148,7 +148,7 @@ const Ghost = (function () {
     const current = storageId == null ? null : fresh[storageId];
     best = valid(current) ? current : null;
   }
-  GameStore.store.subscribe(onStoreChange);
+  if (typeof GameStore.store.subscribe === "function") GameStore.store.subscribe(onStoreChange);
   function saveStore(store) {
     storeCache = store;
     trimStore(store);
