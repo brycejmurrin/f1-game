@@ -1,8 +1,10 @@
 # Bug hunt pass 3 — 2026-09-18
 
 Source-only audit of ship tip `cceb9d615` on
-`claude/f1-game-project-26h3ng`, followed by a re-check at `cd82107d9` after
-PR #148 landed. This pass did not modify or deploy product source.
+`claude/f1-game-project-26h3ng`, followed by re-checks after PR #148 and PR
+#156 landed. The latest re-check uses full deploy tip
+`73b1a1f03f5ae749d490edbe65eabfcae6577e99`. This pass did not modify or
+deploy product source.
 
 ## Executive summary
 
@@ -14,30 +16,34 @@ Five findings survived independent re-verification on the original audited tip:
 | Medium | 4 |
 | Low | 0 |
 
-After PR #148 landed, the High solo red-flag finding is fixed on tip. Four
-Medium findings remain confirmed; two persistence paths can still report a
-healthy save system after dropping player state.
+All five findings are now fixed. PR #148 fixed finding 1, the High solo
+red-flag path. PR #156 fixed findings 2–5: foundation diagnostics now await
+their requested race rebuilds, ghost storage has a bounded failure-reporting
+write path, custom voice tuning round-trips through settings export, and
+spatial-upscale writes report persistence failures. All four Medium fixes are
+present on deploy tip `73b1a1f03f5ae749d490edbe65eabfcae6577e99`.
 
 Four source-only re-verifiers checked the candidate ledger by race/pit,
 records/storage, async test honesty, and net/UI/persistence. They rejected 16
 claim or site checks. The focused existing unit suites for race control, ghosts,
 and Daily passed 32/32 on the original tip; that run did not cover provenance,
 capacity, or cross-subsystem persistence-health gaps. PR #148 added the
-single-source race-control regression case cited in the re-check below.
+single-source race-control regression case, and PR #156 added the Medium-fix
+coverage cited in the re-check below.
 
-## Re-check after #148 land
+## Re-check after #148 and #156 landed
 
-Fetched and checked out `origin/claude/f1-game-project-26h3ng` at full tip
-`cd82107d95558020df370266b0624a409e2b03d9`, then synced this report branch with
-`tools/ci/sync-pr.mjs`. Current status:
+Fetched `origin/claude/f1-game-project-26h3ng` at full tip
+`73b1a1f03f5ae749d490edbe65eabfcae6577e99`. PR #148's merge commit and PR
+#156's merge commit are both ancestors of that tip. Current status:
 
 | Finding | New-tip verdict | Current evidence |
 |---|---|---|
-| 1. Solo standing red from one car's mixed debris | **FIXED-ON-TIP** | Wall impacts now stamp one source and car impacts stamp both sources (`js/physics/debris-world.js:461-477`); slots retain the source list (`js/physics/debris-world.js:638-642`). `hazards()` initializes `redTotal` to zero and only promotes it after at least two distinct source cars (`js/physics/debris-world.js:958-996`). Race control applies `RED_MIN` to `redTotal`, while the mixed `total` still drives lower cautions (`js/race/race-control.js:187-200`). The new unit case pins 17 single-source hazards to Safety Car rather than RED (`tests/unit/race-control.test.mjs:370-382`). |
-| 2. Foundation specs inspect the previous race build | **CONFIRMED** | All seven same-callback stale reads remain: `tests/specs/bahrain-foundation.spec.js:184-189`, `tests/specs/montreal-foundation.spec.js:76-81`, `tests/specs/monaco-foundation.spec.js:11-19`, `tests/specs/monaco-foundation.spec.js:54-63`, `tests/specs/monaco-foundation.spec.js:149-155`, `tests/specs/new-hooks.spec.js:893-901`, and `tests/specs/new-hooks.spec.js:915-918`. The awaitable thenable remains at `js/agent/apex.js:17-20` and `js/agent/apex.js:1285-1301`; `startRace()` still yields before rebuild at `js/game.js:2522-2526`. |
-| 3. Ghost traces grow without a budget and bypass save health | **CONFIRMED** | The full context-keyed blob and direct swallowed write remain unchanged (`js/car/ghost.js:54-58`, `js/car/ghost.js:74-78`, `js/car/ghost.js:108-136`); persistence health still reports only `GameStore.store.broken` (`js/agent/apex.js:2862-2877`). |
-| 4. Settings export drops custom radio-voice tuning | **CONFIRMED** | `SPEC` still contains `radioVoice` and `volRadio` but no `voiceTune` (`js/ui/settings-export.js:57-70`), while the live editor still writes `voiceTune` (`js/audio/radio-voice.js:149-152`, `js/audio/radio-voice.js:283-290`). |
-| 5. Spatial-upscale persistence failures are swallowed | **CONFIRMED** | The normal settings path still delegates to a renderer (`js/ui/scale.js:230-240`); GLX, TLX, and WGX still write directly and swallow errors (`js/render/glx/glx.js:937-942`, `js/render/three/tlx.js:847-851`, `js/render/webgpu/wgx.js:2241-2247`) instead of using the failure-reporting raw lane (`js/core/store.js:96-100`). |
+| 1. Solo standing red from one car's mixed debris | **FIXED via #148** | Wall impacts now stamp one source and car impacts stamp both sources (`js/physics/debris-world.js:461-477`); slots retain the source list (`js/physics/debris-world.js:638-642`). `hazards()` initializes `redTotal` to zero and only promotes it after at least two distinct source cars (`js/physics/debris-world.js:958-996`). Race control applies `RED_MIN` to `redTotal`, while the mixed `total` still drives lower cautions (`js/race/race-control.js:187-200`). The unit case pins 17 single-source hazards to Safety Car rather than RED (`tests/unit/race-control.test.mjs:370-382`). |
+| 2. Foundation specs inspect the previous race build | **FIXED-ON-TIP via #156** | The affected callbacks now await `window.__apex.race(...)` before reading diagnostics: Bahrain (`tests/specs/bahrain-foundation.spec.js:184-190`), Montreal (`tests/specs/montreal-foundation.spec.js:76-88`), Monaco day/night and prop audit (`tests/specs/monaco-foundation.spec.js:25-29`, `tests/specs/monaco-foundation.spec.js:72-73`, `tests/specs/monaco-foundation.spec.js:179-183`), Madrid (`tests/specs/new-hooks.spec.js:895-901`), and Shanghai (`tests/specs/new-hooks.spec.js:915-917`). Verified at `73b1a1f03f5ae749d490edbe65eabfcae6577e99`. |
+| 3. Ghost traces grow without a budget and bypass save health | **FIXED-ON-TIP via #156** | Ghost storage now has a 512 KiB budget, evicts least-recently-used entries, thins an oversized remaining trace, and writes through `GameStore.store.write` so durability failures reach store health (`js/car/ghost.js:9-11`, `js/car/ghost.js:86-121`, `js/car/ghost.js:148-162`). Verified at `73b1a1f03f5ae749d490edbe65eabfcae6577e99`. |
+| 4. Settings export drops custom radio-voice tuning | **FIXED-ON-TIP via #156** | The audio export/import `SPEC` now includes `voiceTune` with an effective `{}` default beside `radioVoice` and `volRadio` (`js/ui/settings-export.js:65-67`). Verified at `73b1a1f03f5ae749d490edbe65eabfcae6577e99`. |
+| 5. Spatial-upscale persistence failures are swallowed | **FIXED-ON-TIP via #156** | Settings and the dev API now persist through `GameStore.store.rawSet` (`js/ui/scale.js:228-238`, `js/agent/apex.js:1877-1886`), while GLX, TLX, and WGX setters only change renderer state (`js/render/glx/glx.js:930-943`, `js/render/three/tlx.js:840-852`, `js/render/webgpu/wgx.js:2239-2248`). Verified at `73b1a1f03f5ae749d490edbe65eabfcae6577e99`. |
 
 Finding 1's original one-car path is closed. The landed implementation sets
 `redTotal = total` once two source cars exist, so furniture can still contribute
@@ -45,7 +51,7 @@ to a genuinely multi-car picture; that is a narrower calibration question, not
 evidence that the original solo finding survives, and is not promoted here
 without a separate reproduction.
 
-## Confirmed findings
+## Original confirmed findings
 
 ### 1. One car's mixed debris can trigger a solo standing red flag
 
@@ -95,6 +101,9 @@ restart chain. No hidden provenance guard existed on the original audited tip.
 
 **Severity: Medium (test honesty)**
 
+**Post-#156 status: FIXED-ON-TIP at `73b1a1f03`; the evidence below describes
+the original `cceb9d615` audit.**
+
 **Repro / evidence**
 
 `__apex.race()` returns an awaitable thenable around asynchronous `startRace()`
@@ -137,6 +146,9 @@ as safe.
 
 **Severity: Medium**
 
+**Post-#156 status: FIXED-ON-TIP at `73b1a1f03`; the evidence below describes
+the original `cceb9d615` audit.**
+
 **Repro / evidence**
 
 1. Every circuit/comparable-context pair gets a distinct full trace entry in the
@@ -175,6 +187,9 @@ deferred-read test problem and now poll correctly
 
 **Severity: Medium**
 
+**Post-#156 status: FIXED-ON-TIP at `73b1a1f03`; the evidence below describes
+the original `cceb9d615` audit.**
+
 **Repro / evidence**
 
 1. Settings export includes the radio enable and volume rows, but no `voiceTune`
@@ -206,6 +221,9 @@ the panel's actual writes with the export allowlist.
 ### 5. Spatial-upscale persistence failures are swallowed by every renderer
 
 **Severity: Medium**
+
+**Post-#156 status: FIXED-ON-TIP at `73b1a1f03`; the evidence below describes
+the original `cceb9d615` audit.**
 
 **Repro / evidence**
 
@@ -293,7 +311,10 @@ The following claims were falsified or narrowed out of the main list:
     `tests/specs/abudhabi-foundation.spec.js:28-38`,
     `tests/specs/new-hooks.spec.js:9-21`).
 
-## Verification ledger
+## Original verification ledger
+
+These verdicts record the original `cceb9d615` audit. The current post-land
+verdicts are in the re-check table.
 
 | Candidate | Verdict | Severity |
 |---|---|---:|
@@ -327,4 +348,5 @@ machines still satisfy their encoded contracts; it also exposes the coverage
 boundary behind findings 1 and 3: race-control tests inject only a scalar hazard
 count on the original tip, and ghost tests do not exercise storage budget or
 `GameStore` health. PR #148 subsequently added the single-source `redTotal`
-regression case cited in the post-land re-check.
+regression case cited in the post-land re-check. PR #156 subsequently added
+coverage for the four Medium fixes and all are present at `73b1a1f03`.
