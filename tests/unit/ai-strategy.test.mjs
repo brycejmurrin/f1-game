@@ -321,3 +321,25 @@ test("the lane's follow distance is a car length plus air, and wider than the ra
   // this spacing must still fit inside the shortest complex in the game.
   assert.ok(lane * 5 < 190, `five cars queue inside a short lane (${lane * 5} m)`);
 });
+
+// ── The split answers the fuel term the cost already priced ─────────────────
+// `degCost` charges every stint against a FUEL-ADJUSTED life, and the split
+// divided the race by the RAW lives — so the cost knew a full tank eats tyres
+// and the stint lengths could not answer. That is the mechanism the planner's
+// own comment says makes plans MIX ("harder rubber early and softer late") and
+// it could not act: a hard first stint could not take the longer share its
+// durability earns while the car is heavy.
+test("a fuel-aware split gives the early stints less of the race", () => {
+  const laps = 50, lives = [37, 24, 24];   // medium, soft, soft at this distance
+  const raw = A.splitStints(laps, lives);
+  const fuelled = A.splitStints(laps, lives, A.STRAT.FUEL_WEAR);
+  assert.equal(raw.reduce((a, v) => a + v, 0), laps, "the raw split still covers the race");
+  assert.equal(fuelled.reduce((a, v) => a + v, 0), laps, "and so does the fuel-aware one");
+  assert.ok(fuelled[0] < raw[0], `the first stint shortens on a heavy car (${fuelled[0]} vs ${raw[0]})`);
+  assert.ok(fuelled[2] > fuelled[1], `and the last runs longest on a light one (${JSON.stringify(fuelled)})`);
+  // Omitting the term is exactly the old behaviour, so nothing that never
+  // passed it changes.
+  assert.deepEqual([...A.splitStints(laps, lives, 0)], [...raw], "no fuel term, no change");
+  // A single stint has nothing to trade against, and must not be disturbed.
+  assert.deepEqual([...A.splitStints(30, [40], A.STRAT.FUEL_WEAR)], [30], "a no-stop plan is one stint");
+});

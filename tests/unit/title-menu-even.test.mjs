@@ -92,8 +92,13 @@ test("title hero exposes returning-player and daily doors with explicit names", 
   for (const id of ["mb-career", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*aria-label="[^"]+"`), `${id} has a readable name independent of text-node spacing`);
   }
-  assert.match(title, /\$\("mb-career"\)\.onclick = \(\) => G\.openCareerSlots\(\)/);
-  assert.match(title, /\$\("mb-continue"\)\.onclick = \(\) => G\.openCareer\(\)/);
-  assert.match(title, /\$\("mb-daily"\)\.onclick = \(\) => \{[\s\S]*\$\("mb-tt"\)\.click\(\)[\s\S]*G\.daily\.select\(\)[\s\S]*G\.buildSelect\(\)/);
+  assert.match(title, /const careerBtn = \$\("mb-career"\)[\s\S]*if \(careerBtn\) careerBtn\.onclick/,
+    "optional retention nodes cannot prevent the existing Career door wiring");
+  assert.match(title, /const continueBtn = \$\("mb-continue"\)[\s\S]*if \(continueBtn\) continueBtn\.onclick/);
+  assert.match(title, /const dailyBtn = \$\("mb-daily"\)[\s\S]*if \(dailyBtn\) dailyBtn\.onclick/);
+  assert.doesNotMatch(title, /\$\("mb-tt"\)\.click\(\)/,
+    "Daily does not enter through free-play restore and its speculative flyby");
+  assert.match(title, /G\.openDailyPicker\(\)/, "the title uses the dedicated staged-daily picker path");
   assert.match(title, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
+  assert.match(read("js/race/daily-challenge.js"), /Log\.info\("game", "DailyChallenge\.select "/);
 });
