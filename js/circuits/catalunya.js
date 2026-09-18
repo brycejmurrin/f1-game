@@ -18,7 +18,7 @@
     gp: "Spanish GP",
     country: "Spain",
     night: false,
-    theme: "modern",
+    theme: "green",
     lengthKm: 4.7,
     baseHW: 7.5,
     sceneryCoordinates: "racing",

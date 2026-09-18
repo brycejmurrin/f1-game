@@ -576,8 +576,8 @@ its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 
 ## js/render/glx/glx.js (+ js/render/glx/) / js/render/gfx.js — renderers
 
-(GLX is the only renderer in the shipped tree. WGX and TLX live in
-`spike/backends/`; the subsections below describe them for re-attach work.)
+GLX, WGX, and TLX all ship behind the `Gfx` seam. TLX is the unset default,
+GLX is the explicit WebGL2 choice and fallback, and WGX is opt-in.
 
 Boot / pipeline / parity map: **[RENDERERS.md](RENDERERS.md)**. This section
 is the module contract and GLX API sketch.

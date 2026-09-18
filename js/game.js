@@ -344,6 +344,12 @@ if (!gfx) {
     $("nogl").hidden = false; return;
   }
   gfx = GLX;
+  // Every path above converges here after GLX successfully attaches: an
+  // explicit WEBGL2 pick, claim-fail recovery, a canary first strike, or an
+  // alternate whose create() returned null. Publish what is actually drawing
+  // so SETTINGS and metrics never keep labelling the stored THREE/WGX pick.
+  try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label stays at the pick */ }
+  try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window/event surface */ }
   // Live tab, create() refused. Keep the pick and disarm the canary so a
   // refresh retries instead of reverting to WEBGL2. Jetsam during create()
   // never reaches here — the probe stays armed and the next boot reverts.
