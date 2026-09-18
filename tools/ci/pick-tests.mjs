@@ -100,7 +100,6 @@ export const RULES = [
   [/^js\/track\/circuit-elevations\.js/,
    ["circuits", "physics-core", "sweeps"],
    "surveyed road elevation: re-shapes the road surface of every circuit listed in it"],
-  [/^js\/track\/maps\.js/, ["hooks", "circuits"], "layout metadata"],
   [/^js\/circuits\/.*\.js$/, ["circuits"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
 
   // ── DIRECTORY rules (Phase 2b) ──────────────────────────────────────────
@@ -110,7 +109,7 @@ export const RULES = [
   // remembers to extend a regex. The blanket-route count in
   // tests/data/ratchets.json is what catches a file no rule names.
   [/^tools\/lib\/game-vm\.cjs/, ["game-vm"], "the Node VM game harness and its parity test"],
-  [/^tools\/slider-effect\.mjs/, ["node-slow"], "slider-effect.test.mjs spawns this tool per test"],
+  [/^tools\/lighting\/slider-effect\.mjs/, ["node-slow"], "slider-effect.test.mjs spawns this tool per test"],
 
   // ── car ─────────────────────────────────────────────────────────────────
   [/^js\/car\/parts\.js/, ["car", "sweeps-parts"], "the catalog, budgets, recipes and their physics; sweeps-parts is the option-resolution census (~70 s across four worker threads)"],
@@ -182,16 +181,16 @@ export const RULES = [
   // to guard it. `js/ui/driving-line-opts.js` is the one that proved it: it
   // matches "js/ui/ -> ui", its suite is in `sweeps`, and a rename of the store
   // key it owns went green locally and red in CI on that very suite.
-  // tests/unit/pick-tests.test.mjs holds the invariant, so a twelfth cannot
-  // appear in silence — these eleven are what it measured.
+  // tests/unit/pick-tests.test.mjs holds the invariant, so a thirteenth cannot
+  // appear in silence — these twelve are what it measured.
   [/^js\/race\/race-settings\.js/, ["game-vm"], "race-settings-vm.test.mjs"],
   [/^js\/career\/custom-team\.js/, ["car"], "custom-team.spec.js"],
   [/^js\/car\/helmets\.js/, ["garage-unit"], "helmets.test.mjs"],
   [/^js\/garage\/setup-tune\.js/, ["garage-unit"], "setup-tune.test.mjs"],
-  [/^js\/lighting\/presets\.js/, ["input"], "presets.test.mjs"],
   [/^js\/render\/shared\/driving-line\.js/, ["sweeps"], "driving-line.test.mjs"],
   [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],
   [/^js\/ui\/debris-opts\.js/, ["state-unit"], "debris-opts.test.mjs"],
+  [/^js\/ui\/track-maps\.js/, ["hooks", "circuits"], "map-hooks.spec.js reads __apex.mapPts; the layout metadata is per circuit"],
   // The SHIPPED default for any preference. Its own suite is settings-defaults
   // .test.mjs in steering-unit, but the file reaches further than that: it
   // outranks the call-site literal for every key it names, and some of those

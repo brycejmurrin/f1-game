@@ -351,7 +351,7 @@ export function mergeDeployTip() {
 // joined. A physics suite cannot newly fail because someone else's docs commit
 // landed. Read from tests/groups.json rather than listed here: a second copy of
 // a registry is the class of problem this whole change is about, and
-// `npm run test:guards` is the same 14 files for a human before a commit.
+// `npm run test:guards` is that same group for a human before a commit.
 const MERGE_GUARDS = Object.freeze(
   JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups["test:guards"].files);
 

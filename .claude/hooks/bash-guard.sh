@@ -78,7 +78,7 @@ if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:spa
   mkdir -p "$ROOT/artifacts"
   LOG="$ROOT/artifacts/pre-commit-guards.log"
   # DOCS-ONLY COMMITS SKIP TO docs-integrity. The deploy branch takes a lot of
-  # note-only commits (one 2026-09-16 session made four), and the 14 guards and
+  # note-only commits (one 2026-09-16 session made four), and the guards and
   # the ratchets have nothing to say about prose — worse, --auto-raise can stage
   # tests/data/ratchets.json into a commit that changed no code at all. The path
   # set is deliberately narrow: docs/, any .md, skills and agents. A GENERATED
