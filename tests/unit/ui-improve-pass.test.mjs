@@ -1051,10 +1051,17 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
     "HUD fold is its own row, not under a reprint HUD heading");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
-  assert.equal(decl(css("css/tuner.css"), "#pm-panel-display #pm-visual-tuners", "display"), "contents",
-    "ADVANCED VISUALS flattens into DISPLAY instead of creating a nested layout");
-  assert.equal(decl(css("css/tuner.css"), "#pm-panel-display #pm-visual-tuners > :is(summary, .adv-help)", "grid-column"), "1 / -1",
-    "its heading and explanation span the panel before the three tuner doors");
+  assert.match(read("index.html"), /id="pm-visual-tuners" class="pm-renderer-sub"/,
+    "ADVANCED VISUALS joins the same compact Display fold family as RENDERER");
+  const componentsSrc = read("css/components.css");
+  assert.match(componentsSrc,
+    /:is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary[\s\S]*?background-color:\s*transparent;[\s\S]*?border:\s*none;/,
+    "ADVANCED VISUALS shares the borderless transparent summary rule");
+  assert.match(componentsSrc,
+    /:is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary::after\s*\{\s*content:\s*none;/);
+  assert.match(componentsSrc,
+    /:is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary::before\s*\{\s*content:\s*"\\25BE";/,
+    "all four Display folds put the chevron before the label");
   assert.doesNotMatch(read("index.html"), /id="pm-hud-h"/);
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
@@ -1089,13 +1096,13 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
   assert.match(read("index.html"), /id="pm-display-adv"/,
     "the RENDERER fold is the shell host; RESET / shots still inject into its body");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-display-adv)', "grid-column"), "1 / -1",
-    "setting rows and ADVANCED span the wide DISPLAY grid; none is a fourth named area");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-display-adv, #pm-visual-tuners)', "grid-column"), "1 / -1",
+    "setting rows and both Display disclosures span the wide grid");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "min-height"), "var(--chip-h)",
-    "RENDERER summary matches the HUD / METRICS chip row");
-  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner #pm-display-adv > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner :is(#pm-display-adv, #pm-visual-tuners) > summary", "min-height"), "var(--chip-h)",
+    "RENDERER and ADVANCED VISUALS summaries match the HUD / METRICS chip row");
+  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner :is(#pm-display-adv, #pm-visual-tuners) > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
     assert.equal(decl(css("css/components.css"), sel, "height"), "auto", "fold summaries wrap instead of clipping their readout at 150%");
     assert.equal(decl(css("css/components.css"), sel, "flex-wrap"), "wrap");
   }
@@ -1103,9 +1110,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "a summary breaks between readout words, never inside TILT 6");
   // The body is addressed by id (#pm-display-adv-body): RESOLUTION is a chip
   // row inside it, its own role=group, and a descendant match would grid it.
-  assert.equal(decl(css("css/components.css"), "#pm-display-adv-body", "display"), "flex",
-    "ADVANCED body defaults to a column; wide/compact override to a 2-up grid");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv-body/, "display"), "grid",
+  assert.equal(decl(css("css/components.css"), "#pm-display-adv-body, #pm-visual-tuners-body", "display"), "flex",
+    "Display disclosure bodies default to columns; wide/compact override to grids");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] :is\(#pm-display-adv-body, #pm-visual-tuners-body\)/, "display"), "grid",
     "compact ADVANCED packs 2-up via SheetShape density, not a height media");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag)", "background"), "transparent",
     "SCREENSHOTS / SAVE / COPY DIAG are secondary rows, not peer plates of RESET");
@@ -1113,15 +1120,15 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child, #advanced > .pm-group-h:first-child, #audioset > .pm-group-h:first-child", "display"), "none",
     "sheet title already names CONTROLS / DISPLAY / STEERING & ASSISTS / MUSIC; do not reprint the heading");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary/, "color"), "var(--steel)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "opacity"), "1",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary/, "opacity"), "1",
     ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay readable");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "transparent",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary/, "background-color"), "transparent",
     "fold summaries drop the plate so they do not copy HALO / TURN CHASING");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::after/, "content"), "none",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary::after/, "content"), "none",
     "right-side chevron is the dropdown mark — disclosures do not use it");
-  assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::before$/, "content") || "",
+  assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary::before$/, "content") || "",
     /25BE/,
     "disclosure chevron sits on the left, like a tree, not a select");
   const settingsHtml = read("index.html");

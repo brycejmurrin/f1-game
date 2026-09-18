@@ -1598,7 +1598,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    so folding the ids in with the classes would silently promote .tune-row
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-display-adv, #pm-visual-tuners) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
 /* DISPLAY: UI SIZE, then HUD / METRICS / RENDERER each on their own row.
    Named areas so an open fold cannot steal the hole. */
@@ -1608,7 +1608,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     "uis uis"
     "hudopts hudopts"
     "metrics metrics"
-    "renopts renopts";
+    "renopts renopts"
+    "visual visual";
   grid-auto-flow: dense;
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
@@ -1625,6 +1626,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv {
   grid-area: renopts;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-visual-tuners {
+  grid-area: visual;
+  margin: 0;
+  min-width: 0;
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h { grid-area: uih; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: uis; }
@@ -1725,24 +1731,27 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 /* DISPLAY ADVANCED: same disclosure primitive as METRICS (summary.adv-more-btn
    + [role=group]), ID-scoped so the class ratchet does not move. Auto-places
    after RESOLUTION / RENDERER / GRAPHICS — do not add a named "adv" area. */
-#pm-display-adv {
+#pm-display-adv,
+#pm-visual-tuners {
   margin: 0;
   min-width: 0;
 }
-#pm-display-adv-body {
+#pm-display-adv-body,
+#pm-visual-tuners-body {
   display: flex;
   flex-direction: column;
   gap: calc(var(--gap) / 3);
   padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
 }
-#pm-display-adv-body > button {
+#pm-display-adv-body > button,
+#pm-visual-tuners-body > button {
   width: 100%;
   margin: 0;
 }
 #pm-display-adv-body > :is(.set-row, .adv-help, #pm-gfx-status) {
   grid-column: 1 / -1;
 }
-#pmsettings-inner #pm-display-adv > summary {
+#pmsettings-inner :is(#pm-display-adv, #pm-visual-tuners) > summary {
   height: auto;
   min-height: var(--chip-h);
   flex-wrap: wrap;
@@ -1759,8 +1768,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 /* Fold summaries are disclosures, not plates: steel + rule + left chevron
    (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate made
    HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary,
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:active {
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners) > summary,
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners) > summary:active {
   color: var(--steel);
   font-style: italic;
   opacity: 1;
@@ -1774,7 +1783,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   box-shadow: none;
 }
 @media (hover: hover) {
-  #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:hover {
+  #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners) > summary:hover {
     color: var(--text);
     background-color: transparent;
     background-image: var(--grad-rule);
@@ -1785,13 +1794,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     box-shadow: none;
   }
 }
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary::after {
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners) > summary::after {
   content: none;
 }
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary::before {
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners) > summary::before {
   content: "\25BE";
 }
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners)[open] > summary::before {
   content: "\25B4";
 }
 #pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary,
@@ -1891,15 +1900,19 @@ button:has(> [data-fold]) {
   margin-top: calc(var(--gap) * 0.5);
   padding-top: calc(var(--gap) / 3);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv-body,
-#pmsettings-inner[data-density="compact"] #pm-display-adv-body {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display :is(#pm-display-adv-body, #pm-visual-tuners-body),
+#pmsettings-inner[data-density="compact"] :is(#pm-display-adv-body, #pm-visual-tuners-body) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv-body > button,
-#pmsettings-inner[data-density="compact"] #pm-display-adv-body > button {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display :is(#pm-display-adv-body, #pm-visual-tuners-body) > button,
+#pmsettings-inner[data-density="compact"] :is(#pm-display-adv-body, #pm-visual-tuners-body) > button {
   width: auto;
+}
+#pm-visual-tuners-body > .adv-help { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-visual-tuners-body {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 /* Capture / diag sit under RESET | THREE PATH as secondary rows, not
    a third pair of equally loud plates. They always span — when
