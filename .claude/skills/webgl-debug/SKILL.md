@@ -6,7 +6,8 @@ description: Use when the user reports a blank/dark/black GLX canvas, lights wro
 # Debug WebGL2 / GLX renderer issues
 
 The renderer lives in `js/render/glx/glx.js` (the `GLX` IIFE). It uses WebGL2 with
-uniform-array point lights, a 2048² sun shadow map (+ 512² PCSS blocker map),
+interleaved point lights, a 2048² sun shadow map (its PCSS blocker pass is a
+half-res R16F downsample; 512² is the separate LAMP spot map),
 ACES tone-map, bloom, and lens flare. Most rendering bugs fall into a small set
 of root causes — start with the probes below before reading shader source.
 
@@ -77,9 +78,11 @@ There is **no UBO**. `frame.lights` is a flat JS array of 15-float records:
 ```
 
 `setFrameLights()` (game.js) culls to the nearest CAP lamps each frame
-(`LT.lampCull` def 28 with traffic, else 32) and GLX
-uploads plain uniform arrays (`uLightPos[i]`, `uLightCol[i]`, `uNumLights`,
-plus per-lamp cone/volumetric/glare arrays for the god-ray pass). If light
+(`LT.lampCull` def 40 with traffic, else `LightBudget.MAX` = 48) and GLX
+uploads ONE interleaved `uLight[]` — 16 floats per lamp in a single
+`uniform4fv`, not parallel arrays. (`uLightPos[i]`/`uLightCol[i]` survive only
+in the god-ray pass, `glx/post.js`; grepping for them in the lit shader finds
+nothing.) If light
 positions look scrambled, the usual culprit is a record pushed with the wrong
 field COUNT in `buildTrackLights` — every `lights.push(...)` must be exactly
 15 values (`frame.lights.length` must be a multiple of 15).

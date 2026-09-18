@@ -67,8 +67,10 @@ WGX is a device/feature miss, not "WGX has no arrays."
    Visual: **lighting-tuner** or **webgl-debug** / **webgpu-debug** on a track
    with varied surfaces.
 
-7. **Ship** — commit `assets/pack/` when regenerated. Do not hand-bump `?v=N` +
-   `version.json` only if you changed `js/` or `css/` (`node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump)). Pack
+7. **Ship** — commit `assets/pack/` when regenerated. There is nothing to
+   bump: committed shell tags stay `?v=dev` and the deploy stamps content
+   hashes ([shell/cache](../../check-changes/references/bump.md)); run
+   `node tools/gen/gen-shell.mjs --check` if you touched `js/` or `css/`. Pack
    URLs rely on SW cache generation + revalidation, not shell `?v=`.
 
 ## Common mistakes

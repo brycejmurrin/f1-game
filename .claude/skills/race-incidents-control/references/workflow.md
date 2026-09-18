@@ -61,7 +61,7 @@ Load from the SKILL.md index when the task needs this detail.
    **"SC never comes out" checklist:**
    1. `DebrisWorld.active` / `apex26.debris` — side-world enabled?
    2. `caution({hazards:true})` — hazard `total` vs thresholds (`VSC_MIN=6`,
-      `SC_MIN=10` in `racecontrol.js`)?
+      `SC_MIN=10` in `js/race/race-control.js`)?
    3. `caution({enabled:true})` — cautions not disabled?
    4. Multiplayer: only the **host** computes flags; guests adopt host `apply()`.
       **`__apex.net()` does NOT carry caution** — compare `__apex.caution()` on

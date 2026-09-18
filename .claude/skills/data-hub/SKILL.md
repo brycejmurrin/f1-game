@@ -15,7 +15,7 @@ In-race slip/grip/timing is **agent-view** (`references/state.md`), not this ove
 |---|---|---|
 | schedule | `loadSchedule` | 6 h |
 | standings | `loadStandings` | 60 min |
-| lastrace | `loadLastRace` | 60 min |
+| results | `loadResults` | 60 min |
 | live | `loadLive` | 5 min |
 | telemetry | `loadTelemetry` | 15 min |
 | export | `loadExport` | 24 h |
@@ -36,5 +36,7 @@ that kills DataHub.
 node tools/ci/test-bg.mjs hooks
 ```
 
-`js/data/` routes to `api` + `hooks`. Layout of the hub chrome →
+`js/data/` routes to `hooks` + `lifecycle-unit` (there is no `api` group).
+An empty tab with no error is usually `NO_RESULT_MSG` / `NO_LIVE_MSG` /
+`NO_TELEM_MSG`, not a fetch failure. Layout of the hub chrome →
 **ui-menu-a11y** / **survey-ui-matrix**.

@@ -7,7 +7,7 @@ Load from traps.md when debugging this class of failure.
 A live game page in the MCP browser holds ~20% CPU (survey-ui-matrix measured
 21.7%). On this 4-core box that is enough to starve a concurrently-running
 Playwright render and produce **false failures**, not just timeouts. Measured
-2026-08-12: rendering one Portimão frame here while `test:webgl` ran turned two
+2026-08-12: rendering one Portimão frame here while `test:gfx` ran turned two
 passing specs red — a 120 s timeout AND an assertion miss (`dynamic player shadow`
 read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
 
@@ -21,7 +21,7 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
   session proving out a shadow-acne fix, the very last verification screenshot's
   `navigate_page(about:blank)` call got skipped — attention had moved to writing
   up the finding — and the live game page sat there actively rendering (frozen
-  car, but the render loop keeps running) through a `test-bg.mjs gfx` (then `ab webgl`)
+  car, but the render loop keeps running) through a `test-bg.mjs gfx`
   launch. Load average climbed to 8–12 (guidance: < 3) and produced a real
   `page.screenshot: Timeout 60000ms exceeded` failure plus several more in the
   second group — a genuine false failure that took a `ps -eo pid,etimes,args`
@@ -36,7 +36,7 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
   The bullet above reads as though `about:blank` ends the problem. It does not.
   MEASURED 2026-08-14: after a mobile-emulation session, `navigate_page` to
   `about:blank` returned success and the page WAS blank, yet the MCP browser's
-  GPU process still held **174% CPU** five minutes later, and a `test:webgl`
+  GPU process still held **174% CPU** five minutes later, and a `test:gfx`
   launched on top of it inherited that load. (A plausible contributor: CPU
   throttling / device-metrics overrides set via `emulate` survive the
   navigation — the emulation banner is re-printed on every subsequent call —

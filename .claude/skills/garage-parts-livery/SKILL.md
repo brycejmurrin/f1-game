@@ -6,7 +6,7 @@ description: Use when editing the GARAGE parts catalog, livery/finish/shark fin,
 # Garage — parts, livery, and car mesh
 
 The GARAGE (`#carsetup`, `js/garage/setup-sheet.js`) is who you are, what you
-drive (12 categories + 600 cr), and how it looks. Catalog: `js/car/parts.js`.
+drive (12 categories + 780 cr, `Parts.BUDGET`), and how it looks. Catalog: `js/car/parts.js`.
 Paint: `js/car/liveries.js` + `js/car/liverytex.js`. Geometry: `js/car/car3d.js`.
 
 `Parts.CATALOG` is an **ordered array**. SIGNATURE = mesh-only clone of
@@ -37,7 +37,7 @@ cover/draft lockstep, paint-sheet rules) → [references/livery-fields.md](refer
 
 | Item | Contract |
 |---|---|
-| Catalog | Ordered 12-category array; budget 600 cr |
+| Catalog | Ordered 12-category array; budget 780 cr (`Parts.BUDGET`) |
 | SIGNATURE | Same cost/stats as `equivalent`; mesh-only |
 | FACTORY_PRESETS | AI visual setup only |
 | `_resolve` | Career-blind; supplier/team lock only |
