@@ -36,10 +36,10 @@ consult the manifest for the full, current order:
 js/core/log.js                -> Log        (levelled logging; loads FIRST)
 js/core/mat4.js               -> M4, V3
 js/render/shaders/*      -> GLXChunks, GLXShaders   (pure data, before glx.js)
-js/render/glx/glx.js + glx/* -> GLX        (default WebGL2 renderer + its passes)
+js/render/glx/glx.js + glx/* -> GLX        (explicit WebGL2 renderer + fallback passes)
 js/render/gfx.js         -> Gfx        (renderer selection seam; the WGX and
                                         TLX backends are DEFERRED — no script
-                                        tag, injected at boot when opted into)
+                                        tag, injected at boot for the resolved pick)
 js/data/teams.js          -> Teams      (2026 grid data + TIER_V pace ladder + the MY TEAM seed)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
 js/circuits/*.js         -> TrackDefs  (one def per circuit; its scenery(api) closure is
@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_186 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_187 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -133,6 +133,7 @@ _186 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `teams.js` | `Teams` | tag | Teams: hardcoded, verified 2026 grid (11 teams, 22 drivers). |
 | `driver-ratings.js` | `DriverRatings` | tag | DRIVER RATINGS: the five-axis skill table for the 2026 grid. |
 | `legends.js` | `Legends` | tag | LEGENDS: twelve historic drivers, their record, a tribute livery and the period car each of them raced. |
+| `settings-defaults.js` | `SettingsDefaults` | tag | SettingsDefaults: the SHIPPED DEFAULT for any player preference, in one file, as data. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica (Ergast) + OpenF1 clients. |
 | `telemetry.js` | `DataTelemetry` | LAZY_DATA | the data hub's TELEMETRY tab (trace viewer, delta, map, playback). |
 | `export.js` | `DataExport` | LAZY_DATA | the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… |
@@ -364,7 +365,7 @@ _186 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `tlx-shadow.js` | `TLXShaders` | DEFERRED:three | TLXShaders.shadowSys: the three-map shadow subsystem for the TLX backend (M4). |
 | `tlx-chunked.js` | `TLXShaders` | DEFERRED:three | TLXShaders.chunked: the chunked-mesh subsystem for the TLX backend (M7). |
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
-| `tlx.js` | `TLX` | DEFERRED:three | TLX: three.js/TSL renderer backend. |
+| `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
 
 **`js/agent/`**
 
@@ -589,15 +590,15 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 
 | `apex26.gfxBackend` | Backend | Notes |
 |---|---|---|
-| unset / `"webgl2"` | **GLX** | WebGL2 — the shipped default |
-| `"three"` | **TLX** | three.js r185.1 + TSL; WebGPU with automatic WebGL2 fallback inside three |
+| unset / `"three"` | **TLX** | three.js r185.1 + TSL — the shipped default; WebGPU with automatic WebGL2 fallback inside three |
+| `"webgl2"` | **GLX** | Explicit WebGL2 pick and fallback backend |
 | `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) |
 
-GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
+TLX is the default when the key is absent; explicit GLX and WGX picks still
+win. The pause-menu
 **RENDERER** control is a 3-state cycle (WEBGL2 → THREE → WEBGPU) that writes
 the key and reloads. WEBGPU without `navigator.gpu` flashes UNAVAILABLE and
-does not persist. The eventual flip of the default and the deletion of
-GLX/WGX is "Phase D" — future work, out of scope here.
+does not persist.
 
 **Every device may select every backend, phones included.** Boot used to refuse
 both alternates whenever `GLX.isMobile` and the RENDERER button hid there, after
@@ -643,9 +644,7 @@ function. The 2026-08 parity pass (recipes in
 - `applyMaterial*` / `roadMarkings` / heat haze / car-paint SSR scene-alpha tag
 - SSAO denoise + god-ray separable 5-tap blur (GLX `BLUR_FS`)
 
-GLX stays the default. Nothing here flips that.
-
-**TLX (`spike/backends/three/`, SPIKE)** is the three.js/TSL backend: classic-IIFE scripts
+**TLX (`js/render/three/`)** is the default three.js/TSL backend: classic-IIFE scripts
 (`tlx.js` core + `tlx-shadow.js` / `tlx-post.js` / `tlx-chunked.js` passes +
 `tsl-*.js` shader-node factories on a `TLXShaders` global) that dynamically
 `import("three/webgpu")` inside `TLX.create()`. The `import` never touches
@@ -656,7 +655,7 @@ game.js. Vendored three r185.1 lives OUTSIDE `js/` at top-level
 transitive `three.core` import would break the uniform-`?v=` rule otherwise);
 an inline `<script type="importmap">` in `index.html` maps the `three`/`three/*`
 specifiers to that dir (invisible to the load-order regex and the sw.js precache
-parser). GLX users fetch zero vendor bytes; a dynamic-import failure resolves
+parser). Explicit GLX users fetch zero vendor bytes; a dynamic-import failure resolves
 `TLX.create()` to `null` → GLX fallback, never a throw.
 
 **Façade wiring (TLX M10):** game.js talks to whichever backend `Gfx.create`
@@ -677,7 +676,7 @@ patch for the engine's own code.
 
 ### GLX internals
 
-GLX is the default WebGL2 renderer. `js/render/glx/glx.js` is the core; the
+GLX is the explicit WebGL2 renderer and fallback. `js/render/glx/glx.js` is the core; the
 heavier passes live beside it in `js/render/glx/` — `post.js` (`GLXPost`, the
 HDR post chain), `shadow.js` (`GLXShadow`, sun/car shadow maps), `chunked.js`
 (`GLXChunked`, the chunked-mesh path) — each created with a shared `GLXCore`
@@ -1239,7 +1238,7 @@ apex26.gfxBackend (localStorage)
         │
    ┌────┼──────────────────────────────┐
    │    │                              │
-webgl2  three                    webgpu (+ navigator.gpu)
+ webgl2  three / unset            webgpu (+ navigator.gpu)
  /fail  │                              │
  /skip  ▼                              ▼
    loadBackendScripts            loadBackendScripts
@@ -1261,7 +1260,7 @@ webgl2  three                    webgpu (+ navigator.gpu)
 ```
 
 **One contract, three implementers.** Game code talks to `gfx` (bound to
-`GLX` after a successful opt-in descriptor-copy). Backends must match the
+`GLX` after a successful deferred-backend descriptor-copy). Backends must match the
 seam documented in `js/render/gfx.js`: lifecycle, mesh/texture resources,
 shadow/env/begin/draw/present. Feature-detected APIs may be `undefined`
 when a backend honestly lacks them — never omit the name (descriptor-copy
@@ -1271,9 +1270,9 @@ would keep GLX’s dead closure).
 
 | Backend | Role | Entry | Shaders |
 |---|---|---|---|
-| **GLX** | Default always-tagged WebGL2 | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
+| **GLX** | Explicit/fallback always-tagged WebGL2 | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
 | **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `spike/backends/webgpu/wgsl-{chunks,post,fx}.js` |
-| **TLX** | Opt-in Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
+| **TLX** | Default Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/shared/gltf.js`,
 `js/render/shared/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
@@ -1295,7 +1294,7 @@ TSL post chain; stamps `renderOrder` for FX/glass.
 
 | Key | Role |
 |---|---|
-| `apex26.gfxBackend` | Pick: `webgl2` / `three` / `webgpu` (picked in `js/perf/renderer-picker.js`) |
+| `apex26.gfxBackend` | Pick: unset / `three` = TLX default; explicit `webgl2` / `webgpu` still win (picked in `js/perf/renderer-picker.js`) |
 | `apex26.gfxBackendProbe` | Canary armed around claim / first world `present()` |
 | `apex26.gfxClaimFail` (session) | Skip opt-in after canvas claim-and-die |
 | `apex26.gfxBound` (session) | Live fallback label while the pick stays |
@@ -1346,7 +1345,7 @@ RENDERER so the body-node ratchet stays put.
 
 | Control | What it does |
 |---|---|
-| **RENDERER** | `WEBGL2` (default) / `THREE.JS` / `WEBGPU`. Reloads. |
+| **RENDERER** | `WEBGL2` / `THREE.JS` (default) / `WEBGPU`. Reloads. |
 | **THREE PATH** | three.js GPU: `AUTO` / `WEBGL2` / `WEBGPU` (`apex26.tlxForceGL`). Reloads only if RENDERER is THREE.JS. |
 | **SCREENSHOTS** | WebGPU present: `AUTO` / `2D BLIT` / `NATIVE` (`apex26.wgxCapture`). Reloads only if RENDERER is WEBGPU. |
 | **SAVE SCREENSHOT** | Waits for `awaitSoftPresent`, then downloads `#game` as a PNG. |

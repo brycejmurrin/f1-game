@@ -791,6 +791,25 @@ const AiDrive = (function () {
   // Returns a REASON string (or "") rather than a boolean, so the caller can say
   // why on the radio and a test can assert which rule fired.
   const CAUTION_REACH = 6;    // laps of the plan a free stop is worth pulling forward
+  // A STOP YOU CANNOT RECOVER IS NOT WORTH MAKING. Rule 3 fired on wear alone,
+  // with no regard for how much race was left, so a set that went over its life
+  // near the flag sent the car down the lane to lose 15 s it had no laps to win
+  // back: measured on an 8-lap Bahrain, TWELVE of 22 cars pitted on LAP 8 —
+  // the last lap — every one of them for "worn".
+  //
+  // Fresh rubber pays back the cliff it replaces, so the laps left have to
+  // cover the stop: gain per lap is the cliff rate over how far past life the
+  // set is, and the stop costs `pitLossLaps`. Below the break-even the flag
+  // comes first and the car drives it home, which is what a real team does.
+  // The 0.1 floor keeps a set only just over its life from claiming an
+  // enormous payback window and pitting on lap one past it.
+  function wornPays(ctx) {
+    if (ctx.lapsLeft == null) return true;            // caller has not said; behave as before
+    const over = Math.max(0.1, (ctx.wear || 0) - 1);
+    const gainPerLap = DEG_CLIFF * GRIP_TO_LAP * over;
+    const payback = (ctx.pitLossLaps > 0 ? ctx.pitLossLaps : 0.12) / Math.max(1e-3, gainPerLap);
+    return ctx.lapsLeft >= payback;
+  }
   function pitNow(ctx) {
     if (!ctx) return "";
     // TWO RULES IGNORE THE PLAN'S STOP BUDGET, because both are about a tyre
@@ -799,7 +818,7 @@ const AiDrive = (function () {
     // change a set it has run off the cliff — gating these on `stopsLeft` left
     // every 0-stop car circulating on the wrong rubber, measured.
     if (ctx.wrongTread) return "weather";
-    if (ctx.wear >= 1) return "worn";
+    if (ctx.wear >= 1 && wornPays(ctx)) return "worn";
     if (ctx.stopsLeft <= 0) return "";
     if (ctx.cautionLevel >= 2 && ctx.lapsToStop <= CAUTION_REACH) return "caution";
     if (ctx.lapsToStop <= 0) return "plan";
@@ -1034,7 +1053,7 @@ const AiDrive = (function () {
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
-    tyreClass, tyrePace, stintPlan, pitNow, degCost, splitStints, compoundFor,
+    tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor,
     STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR },
   };
 })();
