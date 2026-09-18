@@ -364,7 +364,7 @@ _186 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `tlx-shadow.js` | `TLXShaders` | DEFERRED:three | TLXShaders.shadowSys: the three-map shadow subsystem for the TLX backend (M4). |
 | `tlx-chunked.js` | `TLXShaders` | DEFERRED:three | TLXShaders.chunked: the chunked-mesh subsystem for the TLX backend (M7). |
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
-| `tlx.js` | `TLX` | DEFERRED:three | TLX: three.js/TSL renderer backend. |
+| `tlx.js` | `TLX` | DEFERRED:three | TLX: default three.js/TSL renderer behind js/render/gfx.js. |
 
 **`js/agent/`**
 
@@ -1344,7 +1344,7 @@ RENDERER so the body-node ratchet stays put.
 
 | Control | What it does |
 |---|---|
-| **RENDERER** | `WEBGL2` (default) / `THREE.JS` / `WEBGPU`. Reloads. |
+| **RENDERER** | `WEBGL2` / `THREE.JS` (default) / `WEBGPU`. Reloads. |
 | **THREE PATH** | three.js GPU: `AUTO` / `WEBGL2` / `WEBGPU` (`apex26.tlxForceGL`). Reloads only if RENDERER is THREE.JS. |
 | **SCREENSHOTS** | WebGPU present: `AUTO` / `2D BLIT` / `NATIVE` (`apex26.wgxCapture`). Reloads only if RENDERER is WEBGPU. |
 | **SAVE SCREENSHOT** | Waits for `awaitSoftPresent`, then downloads `#game` as a PNG. |
