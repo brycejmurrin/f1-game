@@ -301,3 +301,23 @@ test("firstLife shortens the FIRST stint only: a re-plan runs the set that is on
   assert.ok(worn.lapsAt[0] <= 9, `…and soon: lap ${worn.lapsAt[0]}`);
   assert.equal(worn.stints.reduce((a, v) => a + v, 0), 53);
 });
+
+// ── The pit lane queues ─────────────────────────────────────────────────────
+// The held gap on the lane, and the reason it is not the racing one. game.js
+// picks between them (the `onLane` branch in the capBlocks block); what is
+// checkable here is that the lane's number is a real gap for a 4.8 m car and
+// that it is wider than what racing traffic uses, which is the whole point.
+test("the lane's follow distance is a car length plus air, and wider than the racing one", () => {
+  const CAR_L = 4.8;
+  const lane = A.laneFollow();
+  assert.ok(lane > CAR_L, `a held gap must clear a car length (${lane} vs ${CAR_L})`);
+  // Racing follow is base + pad; the pad is bounded, so compare against the
+  // most generous racing figure there is.
+  const t = { craft: 1, awareness: 1, experience: 1, skill: 1, consistency: 1 };
+  const widestRacing = A.followBase(false) + A.followPad(t, false, null, 0, null, null);
+  assert.ok(lane > widestRacing,
+    `the lane holds more than racing traffic does (${lane} vs ${widestRacing.toFixed(2)})`);
+  // …and it is not so wide that a short lane cannot hold a queue: five cars at
+  // this spacing must still fit inside the shortest complex in the game.
+  assert.ok(lane * 5 < 190, `five cars queue inside a short lane (${lane * 5} m)`);
+});

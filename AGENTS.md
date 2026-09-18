@@ -180,7 +180,7 @@ Work happens on a `claude/<topic>` branch. The deploy branch is
 `claude/f1-game-project-26h3ng`: never push there without review; only it ships
 (https://brycejmurrin.github.io/f1-game/). Other sessions develop directly on
 it, so a deploy is a merge of THEIR work — re-measure on the merged tree, never
-force-push. Catch a branch up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
+force-push; they also all see one red at once, so before fixing a red you did NOT cause, check whether a fix is already pushed and whether a session is already on it (`docs/notes/SHARED-BRANCH-COORDINATION.md` — three sessions fixed one bug on 2026-09-18, one revert). Catch a branch up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
 merge (ratchets + generated files conflict; it cures both, but leaves you ON `sync-pr-<branch>` and pushes nothing without `--push` — recovery in check-changes). `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
 `test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it prints the branch's last ci/pages conclusions first, so an INHERITED red is visible before you blame your push; `--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops); it cures GENERATED-file conflicts, stops on any
 other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in
