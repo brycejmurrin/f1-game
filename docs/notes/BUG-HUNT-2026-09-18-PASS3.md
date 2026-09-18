@@ -1,12 +1,12 @@
 # Bug hunt pass 3 — 2026-09-18
 
 Source-only audit of ship tip `cceb9d615` on
-`claude/f1-game-project-26h3ng`. This pass did not inspect, modify, sync, or
-deploy PR #148. No product source was changed.
+`claude/f1-game-project-26h3ng`, followed by a re-check at `cd82107d9` after
+PR #148 landed. This pass did not modify or deploy product source.
 
 ## Executive summary
 
-Five findings survived independent re-verification:
+Five findings survived independent re-verification on the original audited tip:
 
 | Severity | Count |
 |---|---:|
@@ -14,22 +14,45 @@ Five findings survived independent re-verification:
 | Medium | 4 |
 | Low | 0 |
 
-The strongest product defect remains the solo red-flag provenance gap: the
-threshold receives one mixed count of shards, moved cones, and broken panels,
-with no requirement that more than one car caused the blockage. Two persistence
-paths can also report a healthy save system after dropping player state.
+After PR #148 landed, the High solo red-flag finding is fixed on tip. Four
+Medium findings remain confirmed; two persistence paths can still report a
+healthy save system after dropping player state.
 
 Four source-only re-verifiers checked the candidate ledger by race/pit,
 records/storage, async test honesty, and net/UI/persistence. They rejected 16
 claim or site checks. The focused existing unit suites for race control, ghosts,
-and Daily passed 32/32; those suites do not cover the confirmed provenance,
-capacity, or cross-subsystem persistence-health gaps.
+and Daily passed 32/32 on the original tip; that run did not cover provenance,
+capacity, or cross-subsystem persistence-health gaps. PR #148 added the
+single-source race-control regression case cited in the re-check below.
+
+## Re-check after #148 land
+
+Fetched and checked out `origin/claude/f1-game-project-26h3ng` at full tip
+`cd82107d95558020df370266b0624a409e2b03d9`, then synced this report branch with
+`tools/ci/sync-pr.mjs`. Current status:
+
+| Finding | New-tip verdict | Current evidence |
+|---|---|---|
+| 1. Solo standing red from one car's mixed debris | **FIXED-ON-TIP** | Wall impacts now stamp one source and car impacts stamp both sources (`js/physics/debris-world.js:461-477`); slots retain the source list (`js/physics/debris-world.js:638-642`). `hazards()` initializes `redTotal` to zero and only promotes it after at least two distinct source cars (`js/physics/debris-world.js:958-996`). Race control applies `RED_MIN` to `redTotal`, while the mixed `total` still drives lower cautions (`js/race/race-control.js:187-200`). The new unit case pins 17 single-source hazards to Safety Car rather than RED (`tests/unit/race-control.test.mjs:370-382`). |
+| 2. Foundation specs inspect the previous race build | **CONFIRMED** | All seven same-callback stale reads remain: `tests/specs/bahrain-foundation.spec.js:184-189`, `tests/specs/montreal-foundation.spec.js:76-81`, `tests/specs/monaco-foundation.spec.js:11-19`, `tests/specs/monaco-foundation.spec.js:54-63`, `tests/specs/monaco-foundation.spec.js:149-155`, `tests/specs/new-hooks.spec.js:893-901`, and `tests/specs/new-hooks.spec.js:915-918`. The awaitable thenable remains at `js/agent/apex.js:17-20` and `js/agent/apex.js:1285-1301`; `startRace()` still yields before rebuild at `js/game.js:2522-2526`. |
+| 3. Ghost traces grow without a budget and bypass save health | **CONFIRMED** | The full context-keyed blob and direct swallowed write remain unchanged (`js/car/ghost.js:54-58`, `js/car/ghost.js:74-78`, `js/car/ghost.js:108-136`); persistence health still reports only `GameStore.store.broken` (`js/agent/apex.js:2862-2877`). |
+| 4. Settings export drops custom radio-voice tuning | **CONFIRMED** | `SPEC` still contains `radioVoice` and `volRadio` but no `voiceTune` (`js/ui/settings-export.js:57-70`), while the live editor still writes `voiceTune` (`js/audio/radio-voice.js:149-152`, `js/audio/radio-voice.js:283-290`). |
+| 5. Spatial-upscale persistence failures are swallowed | **CONFIRMED** | The normal settings path still delegates to a renderer (`js/ui/scale.js:230-240`); GLX, TLX, and WGX still write directly and swallow errors (`js/render/glx/glx.js:937-942`, `js/render/three/tlx.js:847-851`, `js/render/webgpu/wgx.js:2241-2247`) instead of using the failure-reporting raw lane (`js/core/store.js:96-100`). |
+
+Finding 1's original one-car path is closed. The landed implementation sets
+`redTotal = total` once two source cars exist, so furniture can still contribute
+to a genuinely multi-car picture; that is a narrower calibration question, not
+evidence that the original solo finding survives, and is not promoted here
+without a separate reproduction.
 
 ## Confirmed findings
 
 ### 1. One car's mixed debris can trigger a solo standing red flag
 
 **Severity: High**
+
+**Post-#148 status: FIXED-ON-TIP at `cd82107d9`; the evidence below describes
+the original `cceb9d615` audit.**
 
 **Repro / evidence**
 
@@ -48,7 +71,7 @@ capacity, or cross-subsystem persistence-health gaps.
 
 The existing Monaco reproduction in `docs/notes/DEFECT-LEDGER.md:904-991`
 already measured one deliberately wide-running car producing 17 hazards and a
-standing restart. The current source still permits that path.
+standing restart. The originally audited source still permitted that path.
 
 **Why it matters**
 
@@ -66,7 +89,7 @@ all furniture in `total` for Yellow/VSC/Safety Car.
 **Re-verifier notes**
 
 Confirmed independently across the complete spawn, hazard-query, flag, and
-restart chain. No hidden provenance guard exists on the current tip.
+restart chain. No hidden provenance guard existed on the original audited tip.
 
 ### 2. Several foundation specs inspect the previous race build
 
@@ -302,4 +325,6 @@ the worktree.
 tests/unit/daily-challenge.test.mjs` passed 32/32. This proves the existing
 machines still satisfy their encoded contracts; it also exposes the coverage
 boundary behind findings 1 and 3: race-control tests inject only a scalar hazard
-count, and ghost tests do not exercise storage budget or `GameStore` health.
+count on the original tip, and ghost tests do not exercise storage budget or
+`GameStore` health. PR #148 subsequently added the single-source `redTotal`
+regression case cited in the post-land re-check.
