@@ -42,18 +42,16 @@ const FORMAT = "apex26-settings-v1";
 // subsystem = THIS KEY IS NOT A PREFERENCE. A player may set it, and it still
 // must not become a SHIPPED default from someone's export, because what it
 // switches is a whole system rather than a taste: the driving model, the career
-// economy, race control. The string is the reason, and it is read by
+// economy, or another non-preference system. The string is the reason, and it is read by
 // tools/gen/settings-defaults.mjs, which refuses such a key unless it is named
 // with --include, and by tests/unit/settings-defaults.test.mjs, which fails if
 // one reaches js/data/settings-defaults.js anyway.
 //
 // It lives HERE, on the row, and not in a list inside the tool, because the
-// tool's list was mine and the next person has to remember it exists. Three
-// keys were learned the hard way in one sitting — steering (the physics
-// baseline went red), unlimitedBudget (caught before it shipped), caution (CI
-// went red and the release train never fired) — and each time the question was
-// asked at the wrong moment. Asked at the ROW, it is asked when the key is
-// added.
+// tool's list was mine and the next person has to remember it exists. Steering
+// (the physics baseline went red) and unlimitedBudget (caught before it
+// shipped) were learned the hard way because the subsystem question was asked
+// at the wrong moment. Asked at the ROW, it is asked when the key is added.
 const SPEC = [
   // MUSIC & SOUND (js/audio/panel.js)
   { k: "sound", lane: "json", group: "audio", def: true, src: "js/game.js",
@@ -135,8 +133,7 @@ const SPEC = [
   { k: "tyreWear", lane: "json", group: "driving", def: "light", src: "js/game.js" },
   { k: "raceGrid", lane: "json", group: "driving", def: "tier", src: "js/game.js" },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
-  { k: "caution", lane: "json", group: "driving", def: true, src: "js/race/race-control.js",
-    subsystem: "switches the whole RACE CONTROL layer off — cautions, VSC, the safety car. race-control.spec.js asserts the SettingsDefaults override is OFF" },
+  { k: "caution", lane: "json", group: "driving", def: true, src: "js/race/race-control.js" },
   { k: "unlimitedBudget", lane: "json", group: "driving", def: false, src: "js/game.js",
     subsystem: "removes the career economy constraint for everyone — a design change, not a preference" },
   { k: "bodyAttitude", lane: "raw", group: "driving", def: null, src: "js/physics/body-attitude.js (null = on)" },
