@@ -218,6 +218,7 @@ const FULL = [
   "js/ui/results-sheet.js",
   "js/race/quali-model.js",
   "js/race/daily-challenge.js",
+  "js/ui/title-menu.js",
   "js/race/quali-net.js",
   "js/race/race-settings.js",
   "js/career/custom-team.js",
@@ -463,6 +464,7 @@ const HARD_EDGES = [
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create(G) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
+  ["js/ui/title-menu.js", "js/game.js"],          // game.js calls TitleMenu.create(G) at eval time
   ["js/race/quali-net.js", "js/game.js"],         // game.js calls QualiNet.create(hooks) after quali wiring
   ["js/race/race-settings.js", "js/game.js"],      // game.js calls RaceSettings.create(hooks) after quali wiring
   ["js/data/teams.js", "js/career/custom-team.js"], // DEFAULT_CUSTOM + Teams.LIST

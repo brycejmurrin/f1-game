@@ -2872,8 +2872,7 @@ let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
 // getters/setters + stable helpers. Getters read the current value at call
 // time; setters write back into the closure. Grown as extractions need it —
 // add a getter here rather than passing state ad hoc.
-let raceSettings = null;
-let customTeam = null;
+let raceSettings = null, customTeam = null, titleMenu = null;
 
 const G = {
   $, els,
@@ -2899,6 +2898,7 @@ const G = {
   get career() { return Career.data(); },
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
+  openCareerSlots: (...a) => openCareerSlots(...a),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   // The stateless-draw round, resolved EXACTLY as armReliability() does: the
@@ -3244,6 +3244,7 @@ radioVoice = RadioVoice.create(G);
 const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
+titleMenu = TitleMenu.create(G);           // returning-player + daily doors (js/ui/title-menu.js)
 const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
@@ -8381,60 +8382,10 @@ function openCareerSlots() {
   els.overlay.hidden = true;
   if (soundOn) GameAudio.uiSelect();
 }
-// The title-screen button reads CONTINUE once a career exists, so the player can
-// tell at a glance whether pressing it resumes or starts something.
 function refreshCareerButton() {
   seasonUi.refreshTitle();
-  const btn = $("mb-career");
-  if (!btn) return;
-  const c = Career.data() || Career.load();
-  const label = btn.querySelector(".mb-label");
-  const used = Career.slots().filter((s) => s.used).length;
-  // ONE door, always the same words. It used to read CONTINUE CAREER once
-  // anything was saved and go straight into that save — which meant a player
-  // with one driver career had no way in to MY TEAM, to their other saves, or to
-  // the delete that makes room. The button opens the modes screen now, and the
-  // line under it says what is behind it.
-  if (label) label.textContent = "CAREER MODES";
-  // The second line says WHICH career, because with up to three saved,
-  // "CONTINUE" on its own does not answer the only question that matters. The
-  // shell ships the no-save text so this only ever REWRITES a line that is
-  // already laid out — it used to ship empty and grow on boot, which was the
-  // menu's whole layout shift. docs/PERF-FINDINGS.md 4a.
-  const sub = $("mb-career-sub");
-  if (!sub) return;
-  if (!c) sub.textContent = "DRIVER CAREER  ·  MY TEAM";
-  else {
-    const team = Teams.LIST.find((t) => t.id === c.team);
-    const who = c.flavour === "myteam" ? "MY TEAM" : (c.driver ? c.driver.code : "YOU");
-    sub.textContent = who + " · " + (team ? team.name : c.team).toUpperCase()
-      + " · " + c.year + " R" + Math.min(c.season.round + 1, Tracks.SEASON.length)
-      + (used > 1 ? "  ·  " + used + " SAVED" : "");
-  }
-  btn.setAttribute("aria-label", "Career modes — " + sub.textContent);
-
-  const cont = $("mb-continue"), contSub = $("mb-continue-sub");
-  if (cont && contSub) {
-    cont.hidden = !c;
-    if (c) {
-      const next = Tracks.SEASON[Math.min(c.season.round, Tracks.SEASON.length - 1)];
-      contSub.textContent = c.year + " · ROUND " + Math.min(c.season.round + 1, Tracks.SEASON.length)
-        + (next ? " · " + next.name : "");
-      cont.setAttribute("aria-label", "Continue career — " + contSub.textContent);
-    }
-  }
-
-  const dailyBtn = $("mb-daily"), dailySub = $("mb-daily-sub");
-  if (dailyBtn && dailySub) {
-    const p = daily.plan(), st = daily.data().streak;
-    dailySub.textContent = p.trackName + " · " + p.weather.toUpperCase()
-      + (st.count > 0 ? " · STREAK " + st.count : "");
-    dailyBtn.setAttribute("aria-label", "Daily challenge — " + dailySub.textContent);
-  }
+  titleMenu.refresh();
 }
-$("mb-career").onclick = () => openCareerSlots();
-$("mb-continue").onclick = () => openCareer();
-$("mb-daily").onclick = () => { if (soundOn) GameAudio.uiSelect(); daily.open(); };
 $("mb-standings").onclick = () => { buildStandings(); $("standings").hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("standings-close").onclick = () => { $("standings").hidden = true; };
 $("mb-data").onclick = () => {

@@ -87,12 +87,13 @@ test("title overlay columns grow with --vwz instead of a pixel cap", () => {
 
 test("title hero exposes returning-player and daily doors with explicit names", () => {
   const html = read("index.html");
-  const game = read("js/game.js");
+  const title = read("js/ui/title-menu.js");
   assert.match(html, /id="menu-retention"[\s\S]*id="mb-continue"[\s\S]*id="mb-daily"/);
   for (const id of ["mb-career", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*aria-label="[^"]+"`), `${id} has a readable name independent of text-node spacing`);
   }
-  assert.match(game, /\$\("mb-continue"\)\.onclick = \(\) => openCareer\(\)/);
-  assert.match(game, /\$\("mb-daily"\)\.onclick = \(\) => \{[^}]*daily\.open\(\)/);
-  assert.match(game, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
+  assert.match(title, /\$\("mb-career"\)\.onclick = \(\) => G\.openCareerSlots\(\)/);
+  assert.match(title, /\$\("mb-continue"\)\.onclick = \(\) => G\.openCareer\(\)/);
+  assert.match(title, /\$\("mb-daily"\)\.onclick = \(\) => \{[\s\S]*G\.daily\.open\(\)/);
+  assert.match(title, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
 });
