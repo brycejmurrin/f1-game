@@ -57,7 +57,17 @@ test.describe("Imola track-owned foundation", () => {
     expect(result.geometry.every((entry) => entry.ok)).toBe(true);
     expect(result.geometry.find((entry) => entry.name === "water")?.vertices).toBeGreaterThan(0);
     expect(result.models.invalid).toEqual([]);
-    expect(result.models.suppressed).toEqual([]);
+    // A PIT SUPERSEDE IS BY DESIGN, AND IS STILL PINNED EXACTLY.
+    // js/track/scenery/pits.js builds the garages from track.pit, so a circuit's
+    // own hand-placed pit block is honoured as a no-op and reported with reason
+    // "superseded by the pit complex" (required is downgraded to false on that
+    // path, which is why a bare `.filter(e => e.required)` cannot see it either).
+    // Listing the ids rather than excusing the reason keeps the assertion sharp:
+    // the complex over-claiming and eating real scenery — it has reported a
+    // Monaco fountain 308 m from the nearest pit node — shows up here as a new
+    // id, not as a count that quietly grows.
+    expect(result.models.suppressed.map((entry) => entry.id).sort())
+      .toEqual(["acque-mist-0", "acque-mist-2"]);
     expect(result.models.unsafe).toEqual([]);
     const required = result.models.emitted.filter((entry) => entry.required).map((entry) => entry.id);
     expect(required).toEqual(expect.arrayContaining([

@@ -193,7 +193,29 @@ const CircuitKit = (function () {
     const PIT_LINTEL = [0.62, 0.64, 0.68];
     const PIT_GLASS = [0.20, 0.30, 0.40];
     function pitBuilding(spec) {
-      if (deps.pitBuilt) return true;
+      if (deps.pitBuilt) {
+        // RECORD IT. A bare `return true` here was a lie the diagnostics could
+        // not see through: six circuits (bahrain, miami, montreal, silverstone,
+        // spa, suzuka) declare `required: true` on this call, and since the
+        // complex shipped not one of them appeared in `emitted`, `suppressed`,
+        // `invalid` OR `unsafe` — the model simply ceased to exist while
+        // verify-track went on printing OK. Bahrain's own foundation spec
+        // caught it only because it pins the required list EXACTLY, and it
+        // took bisecting three days of history to learn the cause was this
+        // line rather than the circuit.
+        //
+        // The no-op itself is right — the engine lays the garages out from
+        // track.pit and a second hall would land on top of them. Saying so out
+        // loud is the fix. Same wording and the same required:false downgrade
+        // that js/track/scenery/models.js already uses for a pit verdict, so
+        // the two paths read identically in a diagnostics dump.
+        if (models.diagnostics && models.diagnostics.suppressed && spec && spec.id) {
+          models.diagnostics.suppressed.push({
+            id: spec.id, required: false, reason: "superseded by the pit complex",
+          });
+        }
+        return true;
+      }
       const garages = boundedCount(spec && spec.garages, 12, 24);
       if (!garages) return false;
       return route("pitBuilding", spec, (stage, place) => {

@@ -464,8 +464,28 @@
             // proud of the end walls and share no plane with anything.
             const VERGE = 0.3;
             stage._mat = MAT.RUST;
-            addCyl(stage, vadd(vadd(c, a.u, EAVE), a.t, -(LEN / 2 + VERGE)), W / 2, LEN + VERGE * 2,
-              T2_OLIVE_D, 7, [a.r, a.t, a.u]);
+            // RIDGE, NOT W/2. addCyl draws a FULL cylinder, so a radius of W/2
+            // sprang the barrel from the eaves and rose the same 17.5 m again:
+            // each shed built to 25 m against the 11.1 m its own RIDGE, its
+            // comment and its modelGroup box (EAVE + RIDGE + 1) all declare —
+            // a real T2 is ~7.5 m to the eaves and ~11 m to the ridge, so these
+            // stood at twice the building they were measured from.
+            //
+            // A T2's roof is a shallow segmental arch, and addCyl cannot draw
+            // one: the arc through the eaves at +/-W/2 rising RIDGE needs
+            // r = ((W/2)^2 + RIDGE^2) / (2*RIDGE) = 44.3 m centred 33.2 m BELOW
+            // the eaves, and a full cylinder of that radius is 58.7 m wide at
+            // ground level — 11.8 m of it through each side wall. The honest
+            // choices are an arc strip or a gable, and at the 95-112 m these
+            // are built to read at, the ridge HEIGHT is the silhouette and the
+            // profile between eave and ridge is a metre of shading. Gable, and
+            // the 2x height error goes rather than being redrawn in place.
+            //
+            // The oversail survives the swap: sz[2] carries VERGE at both ends,
+            // so the gables still stand 0.3 m proud of the end walls (the
+            // coplanar pair fixed above), and addPrism emits NO base face, so
+            // nothing lands on the shed box's roof plane either.
+            addPrism(stage, vadd(c, a.u, EAVE), [W, RIDGE, LEN + VERGE * 2], T2_OLIVE_D, b);
             // Sliding door bays at the trackside gable — the one detail that
             // survives at this range, because it breaks the flat end wall.
             stage._mat = MAT.METAL;
