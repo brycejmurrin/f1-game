@@ -572,9 +572,26 @@ const api = {
     return out;
   },
   // World position and orientation of a track node by fraction (0-1).
-  nodeAt(frac) {
+  // `{ scenery: true }` asks the question a CIRCUIT FILE asks. A scenery frac
+  // is not a racing frac: transformSceneryApi wraps every node-taking helper
+  // with TrackSpace.sceneryNode, so `anchor(K(0.45))` in js/circuits/scenery/
+  // and a bare nodeAt(0.45) here land on different nodes on any circuit
+  // carrying _sceneryShift — at Montreal that is 337 against 489, 152 nodes
+  // and 600 m apart.
+  //
+  // This is not hypothetical. montreal-foundation.spec.js sampled props within
+  // 2.2 m of nodeAt(0.45) and called them the casino footbridge's piers; the
+  // piers are 600 m away, and what it had been measuring for months was the
+  // floodlight masts, which ran the whole lap every 22 m. Every careful comment
+  // in that spec about which pier landed on the rougher patch and a 5 cm
+  // tolerance failing at 6.3 cm was tuning against lamp posts. It only came to
+  // light when `lamp: "none"` started being honoured and the masts went away.
+  nodeAt(frac, opts) {
     if (!G.track) return null;
-    const k = Math.round(frac * G.track.n) % G.track.n;
+    const raw = Math.round(frac * G.track.n) % G.track.n;
+    const k = opts && opts.scenery && typeof TrackSpace !== "undefined" && TrackSpace
+      ? TrackSpace.sceneryNode(G.track.def, raw, G.track.n)
+      : raw;
     return { k, frac: +(k / G.track.n).toFixed(4), x: +G.track.px[k].toFixed(3), y: +G.track.py[k].toFixed(3), z: +G.track.pz[k].toFixed(3), tx: +G.track.tx[k].toFixed(3), tz: +G.track.tz[k].toFixed(3), rx: +G.track.rx[k].toFixed(3), rz: +G.track.rz[k].toFixed(3) };
   },
   // Player telemetry for steering tests: lateral offset x (m, +=right of centre),
