@@ -13,7 +13,7 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
   });
   await page.waitForFunction(() => window.__apex.info().track === "montreal", null, { polling: 100, timeout: BOOT_MS });
 
-  const result = await page.evaluate(() => {
+  const result = await page.evaluate(async () => {
     const def = Tracks.LIST.find((track) => track.id === "montreal");
     const profile = window.__apex.trackProfile(240);
     const probes = [0, 0.55].flatMap((frac) =>
@@ -76,7 +76,7 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
       return { geometry, models, supports };
     };
     const day = captureSession();
-    window.__apex.race("montreal", "night", "dry");
+    await window.__apex.race("montreal", "night", "dry");
     const night = captureSession();
     return {
       def: {

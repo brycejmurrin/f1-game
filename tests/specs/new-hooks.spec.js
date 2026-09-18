@@ -892,8 +892,8 @@ test.describe("Madrid track foundation migration", () => {
     };
     assertSession(result.day);
 
-    const night = await page.evaluate(() => {
-      window.__apex.race("madrid", "night", "dry");
+    const night = await page.evaluate(async () => {
+      await window.__apex.race("madrid", "night", "dry");
       return {
         geometry: window.__apex.geometryDiagnostics(),
         models: window.__apex.modelDiagnostics(),
@@ -904,7 +904,7 @@ test.describe("Madrid track foundation migration", () => {
 
   test("Shanghai declares safe required heroes and reflective water", async ({ page }) => {
     await load(page, "shanghai");
-    const sessions = await page.evaluate(() => {
+    const sessions = await page.evaluate(async () => {
       const inspect = () => ({
         models: window.__apex.modelDiagnostics(),
         geometry: window.__apex.geometryDiagnostics(),
@@ -913,7 +913,7 @@ test.describe("Madrid track foundation migration", () => {
           [-6, 0, 6].map((lat) => window.__apex.groundY(frac, lat).gap)),
       });
       const day = inspect();
-      window.__apex.race("shanghai", "night", "dry");
+      await window.__apex.race("shanghai", "night", "dry");
       return { day, night: inspect() };
     });
     for (const [time, state] of Object.entries(sessions)) {

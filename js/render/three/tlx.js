@@ -846,7 +846,6 @@ const TLX = (function () {
       } catch (_) { spatialUpscale = false; }
       function setSpatialUpscale(on) {
         spatialUpscale = !!on;
-        try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
         resize();
         return spatialUpscale;
       }
