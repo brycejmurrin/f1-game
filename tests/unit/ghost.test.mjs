@@ -325,3 +325,35 @@ test("a pending PB rebases onto a foreign tab's newer ghost blob", () => {
   assert.equal(saved.monza.time, 35, "the pending slower PB cannot overwrite the newer durable one");
   assert.equal(saved.spa.time, 60, "unrelated ghosts written by the other tab survive the local save");
 });
+
+test("a foreign site-data clear cancels pending PBs instead of recreating the ghost blob", () => {
+  const { Ghost, GameStore, store, flushTimers } = createHarness({ deferWrites: true });
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) Ghost.record(i, i * 10, 0);
+  Ghost.finishLap(40);
+
+  store.clear();
+  GameStore.store.onForeignWrite({ key: null });
+  assert.equal(Ghost.hasGhost(), false);
+  flushTimers();
+  assert.equal(store.getItem("apex26.ghost.v1"), null, "the cancelled callback leaves cleared storage clear");
+});
+
+test("clearing one ghost cancels its pending PB before a foreign merge", () => {
+  const trace = { time: 60, t: [0, 1, 2, 3, 4, 5, 6, 7], s: [0, 10, 20, 30, 40, 50, 60, 70],
+    x: [0, 0, 0, 0, 0, 0, 0, 0], _used: 1 };
+  const { Ghost, GameStore, store, flushTimers } = createHarness({ deferWrites: true });
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) Ghost.record(i, i * 10, 0);
+  Ghost.finishLap(40);
+  Ghost.clear("monza");
+
+  store.setItem("apex26.ghost.v1", JSON.stringify({ spa: trace }));
+  GameStore.store.onForeignWrite({ key: "apex26.ghost.v1" });
+  flushTimers();
+  const saved = JSON.parse(store.getItem("apex26.ghost.v1"));
+  assert.equal(saved.monza, undefined, "the cleared pending PB is not merged back");
+  assert.equal(saved.spa.time, 60);
+});

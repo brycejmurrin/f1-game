@@ -137,7 +137,14 @@ const Ghost = (function () {
     return winner;
   }
   function onStoreChange(change) {
-    if (!change || !change.foreign || change.key !== STORE_KEY) return;
+    if (!change || !change.foreign) return;
+    if (change.clear) {
+      pending.clear();
+      storeCache = null;
+      best = null;
+      return;
+    }
+    if (change.key !== STORE_KEY) return;
     let fresh = GameStore.store.get(STORE_KEY, {});
     if (!fresh || typeof fresh !== "object" || Array.isArray(fresh)) fresh = {};
     for (const [id, snap] of pending) {
@@ -214,6 +221,7 @@ const Ghost = (function () {
     pending.set(id, snap);
     loadStore()[id] = snap;   // immediately visible if another class is selected before idle
     const write = () => {
+      if (pending.get(id) !== snap) return;   // cleared or superseded before the deferred write
       try {
         const store = loadStore();
         const result = saveStore(store);
@@ -294,12 +302,15 @@ const Ghost = (function () {
 
   function clear(id) {
     if (id == null) {
+      pending.clear();
       saveStore({});
       best = null;
       return;
     }
     const store = loadStore();
-    delete store[context != null && id === trackId ? storageId : id];
+    const target = context != null && id === trackId ? storageId : id;
+    pending.delete(target);
+    delete store[target];
     saveStore(store);
     if (id === trackId) best = null;
   }
