@@ -70,7 +70,11 @@ git push origin HEAD:claude/f1-game-project-26h3ng
 
 Live `version.json`: subagent **deploy-research**, or
 `https://brycejmurrin.github.io/f1-game/version.json` via MCP fetch / WebFetch —
-not curl from this container. Pages runs take ~5–10 min. A NEWER push to the
+or `curl`, which DOES reach github.io from this container (HTTP 200 in 0.36 s,
+measured 2026-09-18; this line used to say it does not). For "is MY commit
+live?" curl is the only option that works, because the answer is a `<meta
+name="apex-sha">` in the shell and the fetch tool drops every meta tag:
+`curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. Pages runs take ~5–10 min. A NEWER push to the
 deploy branch CANCELS the pending run (concurrency group) —
 `gh run list --workflow pages.yml` when a build seems missing. A user reporting
 a just-fixed bug is usually on the previous build: check live version FIRST.
