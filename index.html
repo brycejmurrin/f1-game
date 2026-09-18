@@ -1930,9 +1930,8 @@
       <div id="rs-duel" class="set-row" role="group" aria-labelledby="rs-duel-label">
         <span class="tune-label" id="rs-duel-label">DUEL</span>
         <div>
-          <button id="rs-duel-prev" type="button" data-step="-1" aria-label="Previous duel setting">&lsaquo;</button>
-          <select id="rs-duel-sel" aria-labelledby="rs-duel-label" aria-describedby="rs-duel-help"></select>
-          <button id="rs-duel-next" type="button" data-step="1" aria-label="Next duel setting">&rsaquo;</button>
+          <button id="rs-duel-open" type="button" aria-haspopup="dialog" aria-controls="duel-picker"
+                  aria-describedby="rs-duel-help"><span id="rs-duel-value">OFF</span><span aria-hidden="true">&rsaquo;</span></button>
         </div>
       </div>
       <p id="rs-duel-help" class="adv-help">One rival instead of a full grid, with his driver rating lifted. A practice benchmark, not a championship race.</p>
@@ -1978,6 +1977,18 @@
       <button id="rs-cancel" autofocus class="bigbtn alt">BACK</button>
       <button id="rs-go" class="bigbtn">RACE!</button>
     </div>
+  </div>
+</dialog>
+
+<dialog id="duel-picker" class="screen dim" data-esc-close="duel-close" aria-labelledby="duel-picker-title" hidden>
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="duel-picker-title">CHOOSE DUEL RIVAL</h2></div>
+    <div class="sheet-body pane">
+      <input id="duel-search" type="search" placeholder="Search legends" aria-label="Search duel rivals" autocomplete="off">
+      <div id="duel-list" role="listbox" aria-label="Duel rivals"></div>
+      <p id="duel-empty" class="adv-help" hidden>No rivals match that search.</p>
+    </div>
+    <div class="sheet-foot"><button id="duel-close" class="bigbtn alt">BACK</button></div>
   </div>
 </dialog>
 

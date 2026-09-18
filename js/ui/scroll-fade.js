@@ -39,13 +39,13 @@ window.ScrollFade = (function () {
     "#overlay", "#menu-buttons",
     // The circuit picker's flag strip and its toolbar: sideways scrollers.
     "#sel-tracks", "#sel-track-filter", "#htp-contents", "#cg-contents", "#ch-contents",
-    ".dh-tabs", ".dh-pick-years", "#pm-settings-index", ".lt-tabs",
+    ".dh-tabs", ".dh-pick-years", "#pm-settings-index", ".lt-tabs", ".cs-tab-row",
   ].join(",");
   // Overlays whose [hidden] flip is what first gives their regions a box. The
   // data hub (#datahub) and track detail (#track-detail) are toggled by the
   // hidden attribute like the rest.
   const SCREENS = "#select,#season-setup,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#pmsettings," +
-    "#lighting,#camtune,#flyby,#results,#quali,#standings,#race-settings,#customize,#pausemenu," +
+    "#lighting,#camtune,#flyby,#results,#quali,#standings,#race-settings,#duel-picker,#customize,#pausemenu," +
     "#datahub,#track-detail,#vsfriend,#spotifypanel," +
     // The title screen hides for a race and returns with it; its #menu-buttons
     // column is a region (SEL above), so its own flip must trigger a settle

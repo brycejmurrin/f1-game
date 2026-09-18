@@ -288,16 +288,25 @@
   gap: calc(var(--gap) * 0.5);
 }
 #cs-tabs {
-  /* Horizontal strip, not a wrapping vertical catalogue. Overrides .pane's
-     overflow-y:auto — this axis pans sideways; #cs-options owns vertical. */
+  /* Two named horizontal tiers: performance first, finishing/setup second.
+     Each row owns its sideways overflow; #cs-options owns vertical scrolling. */
   flex: 0 0 auto; min-height: 0; max-height: none;
-  display: flex; flex-wrap: nowrap; align-items: stretch; align-content: normal;
+  display: grid; align-items: stretch; align-content: start;
   gap: calc(var(--gap) * 0.5);
-  overflow-x: auto; overflow-y: hidden;
+  overflow: hidden;
+}
+#cs-tabs .cs-tab-row {
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: calc(var(--gap) * 0.5);
+  overflow-x: auto;
+  overflow-y: hidden;
   overscroll-behavior-x: contain; touch-action: pan-x;
   scrollbar-width: none; scrollbar-gutter: auto;
 }
-#cs-tabs::-webkit-scrollbar { display: none; }
+#cs-tabs .cs-tab-row::-webkit-scrollbar { display: none; }
 #cs-inner:not([data-pair="on"]) #cs-tabs .cs-tab {
   flex: 0 0 auto; white-space: nowrap;
 }
@@ -308,28 +317,12 @@
    (compact already drops .cs-tab-cur). */
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
   display: grid;
-  /* COLUMNS COME FROM THE ROSTER (js/garage/setup-sheet.js sets --cs-tab-cols
-     to ceil(tabs / 2) as it builds the strip). It was `repeat(7, ...)` — 14
-     slots, exactly the 14 tabs that existed when the two rows below were
-     measured. The catalogue has since grown to 15, and the fifteenth fell onto
-     an implicit third row that the max-height clips: LIVERY rendered 53x6 px,
-     0 % visible, with no scrollable ancestor, on the primary play shape.
-     A count that is derived cannot go stale; the 7 stays only as the fallback
-     for a strip that is somehow rendered before the setter runs. */
-  grid-template-columns: repeat(var(--cs-tab-cols, 7), minmax(0, 1fr));
-  /* Two fixed rows sized at 28px each (instead of chip-h ~40px): 14 tabs fit
-     7+7 and the total tab strip shrinks from chip-h*2+gap (~88px) to 60px,
-     freeing ~28px extra for #cs-options on a 343px landscape phone. The label
-     font is var(--fs-micro) at ~11px, so 28px leaves ~17px for top+bottom
-     padding — tight but readable and touch-target-safe (28/1.15 = 24.3px
-     own px, just above WCAG 2.5.8's 24px minimum). */
-  /* Row height: tap-min (24px at 100%, 20.9px at 115%) + 4px = 28px / 24.9px.
-     Expressed as calc so the row tracks --tap-min rather than being a bare literal. */
   grid-template-rows: repeat(2, calc(var(--tap-min) + 4px));
-  overflow-x: hidden;
-  overflow-y: hidden;
   max-height: calc((var(--tap-min) + 4px) * 2 + var(--gap));
   align-content: start;
+}
+#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab-row {
+  min-height: 0;
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab {
   /* 14 tabs in 7×2 grid. Stretch to fill the fixed 28px row; centre the
@@ -971,6 +964,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   grid-auto-rows: min-content;
   align-content: start;
 }
+#cs-inner[data-pair="on"] #cs-tabs .cs-tab-row { display: contents; }
 #cs-inner[data-pair="on"] #cs-tabs .cs-tab {
   flex: initial; white-space: normal;
 }

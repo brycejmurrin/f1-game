@@ -9,6 +9,7 @@ const RaceSettings = (function () {
   const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]];
   const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
   const RS_ONOFF = [["off", "OFF"], ["on", "ON"]];
+  const DUEL_BASE = [["off", "OFF"], ["on", "FASTEST RIVAL"]];
   /* DUEL is OFF / ON / a named legend — one control rather than a second row.
    * ON keeps the original meaning (the fastest car on the grid, bumped); a
    * legend replaces that rival's driver with his own five axes
@@ -16,8 +17,18 @@ const RaceSettings = (function () {
    * roster file this module must not hard-require: with it absent the row
    * degrades to the OFF/ON it always was. */
   function duelOpts() {
-    if (typeof Legends === "undefined" || !Legends.LIST) return RS_ONOFF.slice();
-    return RS_ONOFF.concat(Legends.LIST.map((l) => [l.id, l.name.toUpperCase()]));
+    if (typeof Legends === "undefined" || !Legends.LIST) return DUEL_BASE.slice();
+    return DUEL_BASE.concat(Legends.LIST.map((l) => [l.id, l.name.toUpperCase()]));
+  }
+  function duelMatches(query) {
+    const q = String(query || "").trim().toLocaleLowerCase();
+    if (!q) return duelOpts();
+    return duelOpts().filter(([id, label]) => {
+      if (id === "off" || id === "on") return label.toLocaleLowerCase().includes(q);
+      const l = typeof Legends !== "undefined" && Legends.byId ? Legends.byId(id) : null;
+      return [label, id, l && l.code, l && l.years, l && l.teams].filter(Boolean)
+        .join(" ").toLocaleLowerCase().includes(q);
+    });
   }
   const duelValue = (getDuel, getDuelLegend) =>
     !getDuel() ? "off" : ((getDuelLegend && getDuelLegend()) || "on");
@@ -98,7 +109,7 @@ const RaceSettings = (function () {
       // has no field at all) and in a championship, where the classification
       // feeds points and standings — a 2-car GP would score a season.
       $("rs-duel").hidden = tt || champ;
-      SettingRow.paint("rs-duel", duelValue(getDuel, getDuelLegend), duelOpts());
+      paintDuel();
       $("rs-quali").hidden = tt;
       const qForced = champ ? SeasonCal.quali() : null;
       const rules = qForced ? [["quali", "QUALIFYING"]]
@@ -172,10 +183,6 @@ const RaceSettings = (function () {
       wire("rs-reliab", getRaceReliability, (v) => { setRaceReliability(v); store.set("reliability", v); });
       wire("rs-tyres", getRaceTyreWear, (v) => setRaceTyreWear(v));
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
-      wire("rs-duel", () => duelValue(getDuel, getDuelLegend), (v) => {
-        setDuel(v !== "off");
-        if (setDuelLegend) setDuelLegend(v === "off" || v === "on" ? "" : v);
-      });
       wire("rs-plan", () => { const p = getPits && getPits(); const v = p ? p.pinnedStops() : null; return v == null ? "auto" : String(v); },
            (v) => { const p = getPits && getPits(); if (p) p.setPinnedStops(v === "auto" ? null : +v); });
       for (const b of body.querySelectorAll ? body.querySelectorAll("[data-rs-preset]") : []) {
@@ -184,6 +191,70 @@ const RaceSettings = (function () {
           after();
         };
       }
+      $("rs-duel-open").onclick = openDuelPicker;
+      $("duel-close").onclick = closeDuelPicker;
+      $("duel-search").oninput = () => buildDuelPicker($("duel-search").value);
+    }
+
+    function paintDuel() {
+      const value = duelValue(getDuel, getDuelLegend);
+      const opt = duelOpts().find(([id]) => id === value);
+      const label = opt ? opt[1] : "FASTEST RIVAL";
+      $("rs-duel-value").textContent = label;
+      $("rs-duel-open").setAttribute("aria-label", "Duel rival: " + label);
+    }
+
+    function chooseDuel(value) {
+      setDuel(value !== "off");
+      if (setDuelLegend) setDuelLegend(value === "off" || value === "on" ? "" : value);
+      paintDuel();
+      closeDuelPicker();
+      if (getSoundOn()) GameAudio.uiSelect();
+    }
+
+    function buildDuelPicker(query) {
+      const list = $("duel-list");
+      if (typeof list.replaceChildren === "function") list.replaceChildren(); else list.innerHTML = "";
+      const current = duelValue(getDuel, getDuelLegend);
+      const matches = duelMatches(query);
+      for (const [id, label] of matches) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "duel-option" + (id === current ? " active" : "");
+        b.setAttribute("role", "option");
+        b.setAttribute("aria-selected", id === current ? "true" : "false");
+        const name = document.createElement("span");
+        name.className = "duel-option-name";
+        name.textContent = label;
+        const meta = document.createElement("span");
+        meta.className = "duel-option-meta";
+        if (id === "off") meta.textContent = "FULL GRID";
+        else if (id === "on") meta.textContent = "CURRENT FIELD · FASTEST CAR";
+        else {
+          const l = typeof Legends !== "undefined" && Legends.byId ? Legends.byId(id) : null;
+          meta.textContent = l ? [l.code, l.years, l.record && l.record.titles + "× CHAMPION"].filter(Boolean).join(" · ") : "";
+        }
+        b.setAttribute("aria-label", meta.textContent ? label + " — " + meta.textContent : label);
+        b.append(name, meta);
+        b.onclick = () => chooseDuel(id);
+        list.appendChild(b);
+      }
+      $("duel-empty").hidden = matches.length > 0;
+    }
+
+    function openDuelPicker() {
+      const search = $("duel-search");
+      search.value = "";
+      buildDuelPicker("");
+      $("duel-picker").hidden = false;
+      queueMicrotask(() => search.focus());
+      if (getSoundOn()) GameAudio.uiSelect();
+    }
+
+    function closeDuelPicker() {
+      $("duel-picker").hidden = true;
+      const open = $("rs-duel-open");
+      if (open) open.focus();
     }
 
     function currentPresetValues() {
@@ -303,6 +374,6 @@ const RaceSettings = (function () {
   /* duelOpts/duelValue are EXPORTED, not private, so the DUEL row's rules can be
    * tested without a DOM: the inert VM DOM does not build SettingRow children,
    * so painting the row asserts nothing (tests/unit/duel-row.test.mjs). */
-  return { create, duelOpts, duelValue, presetValues };
+  return { create, duelOpts, duelMatches, duelValue, presetValues };
 })();
 Object.freeze(RaceSettings);

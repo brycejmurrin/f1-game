@@ -540,6 +540,37 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(await page.evaluate(() => document.getElementById("campicker").hidden)).toBe(true);
 });
 
+test("race settings uses a searchable duel rival sheet", async ({ page }) => {
+  await waitReady(page);
+  await page.locator("#mb-race").click();
+  await page.locator("#sel-go").click();
+  await expect(page.locator("#race-settings")).toBeVisible();
+  await page.locator("#rs-duel-open").click();
+  await expect(page.locator("#duel-picker")).toBeVisible();
+  await expect(page.locator("#duel-list .duel-option")).toHaveCount(14);
+  await page.locator("#duel-search").fill("senna");
+  await expect(page.locator("#duel-list .duel-option")).toHaveCount(1);
+  await expect(page.locator("#duel-list .duel-option")).toContainText("AYRTON SENNA");
+  await page.locator("#duel-list .duel-option").click();
+  await expect(page.locator("#duel-picker")).toBeHidden();
+  await expect(page.locator("#rs-duel-value")).toHaveText("AYRTON SENNA");
+  await expect(page.locator("#rs-duel-open")).toHaveAttribute("aria-label", "Duel rival: AYRTON SENNA");
+});
+
+test("garage categories separate performance from finishing and setup", async ({ page }) => {
+  await waitReady(page);
+  await page.locator("#mb-garage").click();
+  await expect(page.locator("#carsetup")).toBeVisible();
+  const rows = page.locator("#cs-tabs .cs-tab-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toHaveAttribute("aria-label", "Performance categories");
+  await expect(rows.nth(1)).toHaveAttribute("aria-label", "Finishing and setup categories");
+  await expect(rows.nth(0)).toContainText("ENGINE");
+  for (const label of ["FLOOR", "COCKPIT", "WHEELS", "SETUP", "LIVERY"])
+    await expect(rows.nth(1)).toContainText(label);
+  await expect(page.locator("#cs-tab-livery")).toHaveAttribute("aria-label", /LIVERY — (DEFAULT|CUSTOM)/);
+});
+
 test("How to Play contents rail jumps within its single scroller", async ({ page }) => {
   await waitReady(page);
   await page.setViewportSize({ width: 393, height: 852 });

@@ -35,6 +35,7 @@ window.UiLayers = (function () {
     { id: "teampicker" },
     { id: "vsfriend" },
     { id: "race-settings" },
+    { id: "duel-picker" },
     { id: "quali" },
     { id: "standings" },
     { id: "results" },
