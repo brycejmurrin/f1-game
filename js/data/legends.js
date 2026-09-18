@@ -63,7 +63,7 @@ const Legends = (function () {
                 stripe: [0.86, 0.06, 0.09], accent: [0.98, 0.78, 0.06],
                 finShape: "none", spineHeight: "dorsal", spineLogo: "number" } },
 
-    { id: "fangio", code: "FAN", marque: null, era: "front50", name: "Juan Manuel Fangio", nat: "AR",
+    { id: "fangio", code: "FAN", marque: "mercedes", era: "front50", name: "Juan Manuel Fangio", nat: "AR",
       years: "1950–1958", teams: "Alfa Romeo, Maserati, Mercedes, Ferrari", car: "Mercedes-Benz W196",
       record: { starts: 51, wins: 24, poles: 29, podiums: 35, titles: 5 },
       trait: "Won at the slowest speed that still won — the car always finished.",
@@ -251,12 +251,25 @@ const Legends = (function () {
       // parts sheet are all keyed by it (js/car/liverytex.js), so "legends" is
       // what keeps a legend's car from overwriting the player's own.
       id: "legends", legends: true, legend: l.id,
-      // THE MARQUE CREST, where the game has one. js/car/crest-paths.js carries
-      // eight hand-drawn vector crests and no others — the PNG logos were
-      // dropped as unusable traces (js/car/liverytex.js) — so Ferrari, McLaren,
-      // Williams and Red Bull legends wear their real badge and the rest wear
-      // none. A wrong crest is worse than no crest: it would put a live team's
-      // mark on a car that team never built.
+      /* THE MARQUE CREST, where the game has one — so a legend wears the badge of
+       * the car he is: Ferrari, McLaren, Williams, Red Bull, Mercedes.
+       *
+       * CORRECTION. This said the game had "eight hand-drawn vector crests and
+       * no others", wrong twice. The eight in js/car/crest-paths.js are TRACED
+       * from bitmaps, not hand-drawn — and they are not all of them: mercedes,
+       * haas and audi keep GEOMETRIC constructions in js/car/liverytex.js
+       * (MARK_PARTS), because a ring and a three-point star are exact as maths
+       * and only approximate as a trace. Eleven marks exist, not eight. The
+       * error was reading one file and generalising, and it cost Fangio his
+       * Silver Arrow badge for a deploy.
+       *
+       * Four still wear none, and that is a SOURCE problem, not an oversight:
+       * Lotus (Clark, Hill), Tyrrell (Stewart) and Vanwall (Moss) are
+       * TYPOGRAPHIC marks — a roundel with script, a wordmark — and
+       * tools/car/trace-logo.mjs is explicit that memory is the wrong source
+       * (hand-drawing Red Bull from memory produced "a pair of pigs"). A
+       * geometric badge can be constructed; a wordmark cannot be remembered,
+       * and a wrong crest is worse than none. */
       crest: l.marque || null,
       name: "Legends", short: "LGD", engine: l.car,
       tier: head >= 95 ? 0 : head >= 90 ? 1 : head >= 85 ? 2 : 3,

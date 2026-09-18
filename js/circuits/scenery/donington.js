@@ -44,7 +44,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
         billboard, sponsorHoarding, gantry, motorhome, groundPatch,
-        place, ridge } = api;
+        place, ridge, circuitKit } = api;
 
       // ---------------------------------------------------------------------
       // 1. PALETTE + LOCAL HELPERS
@@ -332,6 +332,13 @@
       sponsorHoarding(0.440, 0.472, -1, 12);
       place(K(0.4552), 1, 15, [4.0, 6.0, 14], CONCRETE);
       place(K(0.4552), -1, 15, [4.0, 6.0, 14], CONCRETE);
+      // THE DECK. Both abutments existed and nothing crossed between them —
+      // a landmark named "Bridge" that was a gap in the sky. The belief that
+      // blocked it (copied into mosport.js as "there is no `bridge` emitter in
+      // the scenery(api) contract") was simply wrong: circuitKit.pedestrianBridge
+      // is on the frozen 112-member contract.
+      circuitKit.pedestrianBridge({ id: "kit:donington:starkeys", frac: 0.4552,
+        clearance: 5.6, depth: 4, thickness: 0.9, required: true });
       slopeRidge(K(0.452), 1, 44, 60, 16, 6.5, GRASS);
       slopeRidge(K(0.452), -1, 44, 60, 16, 6.0, GRASS);
       marshalPost(K(0.470), 1, 13);
