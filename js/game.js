@@ -21,7 +21,7 @@ const els = {
   lights: $("lights"), announce: $("announce"), announceNum: $("announce-num"),
   announceWho: $("announce-who"), announceText: $("announce-text"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
-  lighting: $("lighting"), camtune: $("camtune"),
+  lighting: $("lighting"), camtune: $("camtune"), flyby: $("flyby"),
   select: $("select"), selTitle: $("select-title"), selTeams: $("sel-teams"),
   selTracks: $("sel-tracks"),
   selPreviewMap: $("sel-preview-map"), selPreviewName: $("sel-preview-name"),
@@ -3516,7 +3516,7 @@ function clearMenuScreens() {
   // timer that would otherwise fire its build callback into a running race.
   loadingScreen.stop();
   for (const el of document.querySelectorAll(".screen")) el.hidden = true;
-  for (const id of ["overlay", "lighting", "camtune"]) { const el = $(id); if (el) el.hidden = true; }
+  for (const id of ["overlay", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }
   // The garage's 3D turntable keeps rendering while #carsetup is up; a race
   // starting under it must stop that, or the preview draws over the track.
   setupPreviewOn = false;
@@ -3550,7 +3550,7 @@ else if (rotateBlockMql.addListener) rotateBlockMql.addListener(() => syncRotate
 function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
-  closeCamTuner(false); exitPhotoMode();
+  closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
   state = "menu"; paused = false; raceCtl.reset(); weatherArc = null; endChangeable(); daily.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
@@ -8170,15 +8170,20 @@ function tickBody(now) {
     // so drop them rather than let a pause-menu button-mash queue up and fire
     // in one burst on the first frame after RESUME (see Input.clearEdges).
     Input.clearEdges();
-    // LIGHTING / CAMERA TUNER live preview: keep RENDERING (physics stays
-    // paused) while either panel is open so every slider change shows on the
-    // held frame — a camera angle is unjudgeable on a frozen picture.
+    // LIGHTING / CAMERA / FLYBY tuner live preview: keep RENDERING (physics
+    // stays paused) while any of the three panels is open so every slider
+    // change shows on the held frame — a camera angle is unjudgeable on a
+    // frozen picture. The flyby editor is the sharpest case: its whole job is
+    // to place shots in the world, and without this gate it parked dbgCam on a
+    // frame nothing was redrawing, so the screen kept showing the race the
+    // player paused out of.
     // THIS IS THE ONLY updatePhotoCam CALL SITE, and that is on purpose: the
     // free camera is a sub-mode OF the tuner, only reachable from it, and the
     // tuner is only reachable from the pause menu. Resuming tears it down
     // (setPaused -> closeLightTuner -> exitPhotoMode), so there is no unpaused
     // state in which it should still be flying.
-    if ((state === "race" || state === "count") && (!els.lighting.hidden || !els.camtune.hidden)) {
+    if ((state === "race" || state === "count") &&
+        (!els.lighting.hidden || !els.camtune.hidden || !els.flyby.hidden)) {
       // NO governor here: paused preview frames are vsync-cheap, so the governor
       // only ever stepped the scale UP toward full res — each step a complete
       // render-target reallocation. The scale simply stays where the race left it
@@ -8469,16 +8474,17 @@ $("track-detail-close").onclick = closeTrackDetail;
 // menu (one panel at a time); BACK (or resume) returns to it.
 // Some settings only mean anything with a race on screen: HIDE HUD toggles a
 // HUD that does not exist yet (and the state would carry into the next race,
-// which starts with no HUD and no clue why), and both tuners preview a scene
-// that is not being rendered. Disabled rather than hidden — the same rule the
-// mode-dependent driving controls follow, so the grid never reflows under a
-// thumb mid-tap.
+// which starts with no HUD and no clue why), and all three visual tuners
+// preview a scene that is not being rendered. Disabled rather than hidden —
+// the same rule the mode-dependent driving controls follow, so the grid never
+// reflows under a thumb mid-tap.
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
 function syncSettingsAvailability() {
   const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* RendererPicker's reload buttons arm a two-tap confirm while this is set */ }
   SettingRow.disable($("pm-hidehud"), !inRace);
   $("pm-lighting").disabled = !inRace;
   $("pm-camtune").disabled = !inRace;
+  $("pm-flyby").disabled = !inRace;
 }
 function openSettings() {
   // AUTO is always the full set; re-read the LAYOUT note on open so "Here
@@ -8904,7 +8910,7 @@ els.resNext.onclick = () => {
 function setPaused(p) {
   if (state !== "race" && state !== "count") return; hideCamPicker();
   paused = p;
-  if (!p) { closeLightTuner(false); closeCamTuner(false); exitPhotoMode(); }
+  if (!p) { closeLightTuner(false); closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode(); }
   els.pausemenu.hidden = !p;
   if (!p) els.pmsettings.hidden = true;   // never leave the settings sub-menu up after resume
   if (els.pmStandings) els.pmStandings.hidden = !(isChampionship() && SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds());

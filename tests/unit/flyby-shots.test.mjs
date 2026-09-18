@@ -182,3 +182,42 @@ test("seating the menu grid costs the sim stream nothing", () => {
   assert.doesNotMatch(body, /gridUp\(/,
     "it seats cars on TrackMesh slots directly: gridUp draws a simRnd() per car for grid jitter");
 });
+
+test("the flyby editor keeps the world rendering while it is open", () => {
+  // Physics pauses on the pause menu, and so does the render loop — the last
+  // race frame simply stays on screen. The lighting and camera tuners carve an
+  // exception for themselves so their live preview has something to preview;
+  // the flyby editor shipped without one, so parking dbgCam through
+  // __apex.flybyCam() changed a camera that nothing was redrawing and the
+  // player kept looking at the race they paused out of. Source-level: the gate
+  // is inside tickBody's paused branch, module-scope in the game.js IIFE.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const i = game.indexOf("if (paused && !netPlay.active())");
+  assert.ok(i > 0, "tickBody still parks on a paused frame");
+  const branch = game.slice(i, i + 2400);
+  const gate = branch.match(/if \(\(state === "race" \|\| state === "count"\) &&[\s\S]{0,200}?\) \{/);
+  assert.ok(gate, "the paused branch still gates its preview render");
+  for (const panel of ["lighting", "camtune", "flyby"]) {
+    assert.match(gate[0], new RegExp("!els\\." + panel + "\\.hidden"),
+      "#" + panel + " keeps rendering while it is open");
+  }
+  assert.ok(branch.indexOf("render(") > 0, "…and that gate still calls render()");
+});
+
+test("resuming releases the flyby editor's parked camera", () => {
+  // closeFlyby() hands the camera back with __apex.view("chase"). Resume and
+  // quit have to call it, or a player who resumed with the panel open drives
+  // the race from a parked flyby vantage.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  for (const fn of ["function setPaused(p)", "function quitToMenu()"]) {
+    const i = game.indexOf(fn);
+    assert.ok(i > 0, fn + " still exists");
+    const body = game.slice(i, game.indexOf("\nfunction ", i + 10));
+    assert.match(body, /flybyPanel\.closeFlyby\(false\)/, fn + " closes the flyby editor");
+  }
+  const panel = fs.readFileSync(path.join(ROOT, "js/camera/flyby-panel.js"), "utf8");
+  const j = panel.indexOf("function closeFlyby(");
+  const body = panel.slice(j, panel.indexOf("\n}", j));
+  assert.match(body, /if \(!isOpen\(\)\) return;/,
+    "…and a blind close on a shut panel touches no camera");
+});
