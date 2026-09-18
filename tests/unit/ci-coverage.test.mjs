@@ -93,6 +93,34 @@ const selectJob = ciWorkflow.split("\n  select:")[1]?.split("\n  selected:")[0];
 const selectedJob = (ciWorkflow.split("\n  selected:")[1] || "").split(/^  [a-z][\w-]*:$/m)[0];
 const selectStep = fs.readFileSync(new URL("../../tools/ci/ci-select-specs-step.sh", import.meta.url), "utf8");
 
+test("every path a ci.yml change filter names still exists", () => {
+  // The job filters are `grep -qE` alternations over the changed-file list, and
+  // a branch of one that names a moved file simply never matches: the job it
+  // guards is skipped for exactly the diffs it was written to catch, and the run
+  // is green. Two were dead when this was written — the geometry sweeps filtered
+  // on a debris world under js/game/ and the renderer job on six js/game/
+  // lighting paths, none of which survived the move to js/physics/ and
+  // js/lighting/ — so a debris-world edit skipped the sweeps and no lighting
+  // edit could ever select the renderer specs.
+  //
+  // Only LITERAL branches are checked: a prefix like `js/render/` must be a real
+  // directory, a `foo/bar.js$` a real file. Branches with character classes or
+  // groups are left alone; they are patterns, not citations.
+  const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+  const dead = [];
+  for (const m of ciWorkflow.matchAll(/grep -qE '\^\(([^']+)\)'/g)) {
+    for (const branch of m[1].split("|")) {
+      const b = branch.replace(/\$$/, "");
+      if (/[[\](){}*+?^]/.test(b)) continue;             // a pattern, not a path
+      const rel = b.replace(/\\\./g, ".");
+      if (!/^[\w.\-/]+$/.test(rel)) continue;
+      if (!fs.existsSync(path.join(ROOT, rel))) dead.push(rel);
+    }
+  }
+  assert.deepEqual(dead, [],
+    "a ci.yml change filter names a path that does not exist — the job it gates can never be selected by it");
+});
+
 test("the change-aware gate blocks pushes, pull requests AND the deploy gate", () => {
   assert.ok(selectJob && selectedJob, "select / selected jobs missing");
   assert.deepEqual(report.selectionGate, {
@@ -580,7 +608,12 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   assert.deepEqual(report.jobs.filter((j) => !j.deployGate).map((j) => j.name).sort(), ["renderer-filter", "renderer-macos"]);
   // The path filter: every renderer backend plus the lighting modules the
   // gfx specs pin, the spec list DERIVED from package.json, fail-safe to run.
-  for (const p of ["js/render/", "js/game/lighting[^/]*\\.js$", "js/game/track-lights\\.js$", "js/game/frame-lights\\.js$", "js/game/light-presets\\.js$", "js/game/atmosphere\\.js$", "js/game/tuner\\.js$"]) {
+  // js/lighting/ as a DIRECTORY, not the six filenames this listed until
+  // 2026-09-18: those still carried their pre-move js/game/ paths, so the
+  // alternation could not match a lighting edit at all and this guard was
+  // pinning the dead patterns in place. A directory prefix also routes the next
+  // lighting module the day it lands.
+  for (const p of ["js/render/", "js/lighting/"]) {
     assert.ok(rendererFilter.includes(p), `renderer filter does not route ${p}`);
   }
   assert.match(rendererFilter, /scripts\["test:gfx"\]/);
