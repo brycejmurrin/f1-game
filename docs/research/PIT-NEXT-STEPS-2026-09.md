@@ -509,6 +509,46 @@ notes `splitStints` is fuel-blind while `degCost` is fuel-aware), so the two
 disagree at the margin rather than systematically. Smaller than it was; the
 fuel-aware split is the principled next step.
 
+## 4i. THE SPLIT NOW ANSWERS THE FUEL TERM — closed, and the stops all fire as planned
+
+The last of the strategy thread, and the named cause of §4h's residual.
+
+`degCost` charges every stint against a FUEL-ADJUSTED life while `splitStints`
+divided the race by the compounds' RAW lives. So the cost knew a full tank eats
+tyres and the stint lengths could not answer — which is exactly the mechanism
+the planner's own comment says makes plans MIX ("the planner reaches for harder
+rubber early and softer late. That is the real pattern, arrived at from the real
+cause"). It could not act: a hard first stint could not take the longer share
+its durability earns while the car is heavy.
+
+`splitStints(laps, lives, fuelWear)` now iterates — the fuel aboard a stint
+depends on where the stint falls, which depends on the split, so it is solved by
+three passes, which converges in two at these sizes. Omitting the argument is
+byte-for-byte the old behaviour.
+
+**The pattern the comment promised, finally showing.** At the measured pit loss,
+the WINNING plan at 50 and 70 laps is now `medium/soft/soft` — harder early,
+softer late — where every winner used to be a single compound. Stint lengths now
+grow through the race as the car lightens:
+
+| laps | winner | stints |
+|---|---|---|
+| 50 | medium/soft/soft | 20, 14, 16 |
+| 70 | medium/soft/soft | 28, 20, 22 |
+
+**And the stops all fire as planned.** 20-lap Bahrain, across the three fixes in
+order — the pit-loss pricing (§4f), the AI wear calibration (§4h) and this:
+
+| | plan | worn | stops on a set already over the cliff |
+|---|---|---|---|
+| before §4f | 11 | 10 | 10 |
+| after §4h | 14 | 5 | 7 |
+| after this | **19** | **0** | **1** |
+
+The planner and the sim now agree about when a set is done, which is what the
+whole thread was about: the engineer calls you in on the lap the plan said,
+rather than reacting to rubber that died early.
+
 ## 5. Smaller loose ends
 
 - The `served` chip and the release banner both say the stop is over; the
