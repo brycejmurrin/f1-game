@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import fs from "node:fs";
+const HTML = fs.readFileSync(new URL("../../index.html", import.meta.url), "utf8");
 
 // Arrays built inside the vm realm have that realm's prototype, so a strict
 // deepEqual against a literal here fails on identity alone. Compare the shape.
@@ -34,7 +35,7 @@ function pick(RSmod, v) {
 
 test("the row still offers OFF and ON, in that order, before any legend", () => {
   const opts = RS.duelOpts();
-  assert.deepEqual(flat(opts).slice(0, 2), ["off:OFF", "on:ON"]);
+  assert.deepEqual(flat(opts).slice(0, 2), ["off:OFF", "on:FASTEST RIVAL"]);
   assert.equal(opts.length, 2 + Legends.LIST.length);
 });
 
@@ -64,7 +65,7 @@ test("OFF and ON clear the legend; a legend turns the duel on", () => {
 });
 
 test("without the roster the row degrades to the OFF/ON it always was", () => {
-  assert.deepEqual(flat(RSbare.duelOpts()), ["off:OFF", "on:ON"]);
+  assert.deepEqual(flat(RSbare.duelOpts()), ["off:OFF", "on:FASTEST RIVAL"]);
   assert.equal(RSbare.duelValue(() => false, () => ""), "off");
   assert.equal(RSbare.duelValue(() => true, () => ""), "on");
 });
@@ -74,4 +75,37 @@ test("a stale legend left in the store still reads as ON, never as OFF", () => {
   // that no longer exists must not paint OFF while duelMode is still true.
   assert.equal(RS.duelValue(() => true, () => "nobody"), "nobody");
   assert.equal(RS.duelValue(() => true, null), "on", "no getter at all is the plain duel");
+});
+
+test("the duel control opens a searchable rival sheet instead of a mega select", () => {
+  assert.doesNotMatch(HTML, /id="rs-duel-sel"/);
+  assert.match(HTML, /id="rs-duel-open"[^>]*aria-haspopup="dialog"[^>]*aria-controls="duel-picker"/);
+  assert.match(HTML, /<dialog id="duel-picker"[^>]*aria-labelledby="duel-picker-title"/);
+  assert.match(HTML, /id="duel-search"[^>]*type="search"[^>]*aria-label="Search duel rivals"/);
+  assert.match(HTML, /id="duel-list"[^>]*role="listbox"/);
+});
+
+test("duel search matches legends without dropping OFF or fastest-rival choices", () => {
+  assert.deepEqual(flat(RS.duelMatches("")), flat(RS.duelOpts()));
+  assert.deepEqual(flat(RS.duelMatches("senna")), ["senna:AYRTON SENNA"]);
+  assert.deepEqual(flat(RS.duelMatches("fastest")), ["on:FASTEST RIVAL"]);
+  assert.deepEqual(flat(RS.duelMatches("off")), ["off:OFF"]);
+});
+
+test("race presets are complete, distinct settings bundles", () => {
+  const quick = RS.presetValues("quick", 57);
+  const weekend = RS.presetValues("weekend", 57);
+  const endurance = RS.presetValues("endurance", 57);
+  assert.deepEqual({ ...quick }, {
+    laps: 5, weather: "dry", mixed: false, time: "day",
+    difficulty: "normal", grid: "tier", caution: true, reliability: "off", tyres: "off",
+  });
+  assert.equal(weekend.laps, 57);
+  assert.equal(weekend.grid, "quali");
+  assert.equal(weekend.reliability, "real");
+  assert.equal(weekend.tyres, "real");
+  assert.equal(endurance.laps, 25);
+  assert.equal(endurance.mixed, true);
+  assert.equal(endurance.difficulty, "hard");
+  assert.equal(RS.presetValues("unknown", 57), null);
 });
