@@ -41,7 +41,7 @@ const Legends = (function () {
   "use strict";
 
   const LIST = [
-    { id: "schumacher", code: "MSC", era: "vten04", name: "Michael Schumacher", nat: "DE",
+    { id: "schumacher", code: "MSC", marque: "ferrari", era: "vten04", name: "Michael Schumacher", nat: "DE",
       years: "1991–2012", teams: "Benetton, Ferrari", car: "Ferrari F2004",
       record: { starts: 306, wins: 91, poles: 68, podiums: 155, titles: 7 },
       trait: "Relentless over a stint, and the era's benchmark in the wet.",
@@ -54,7 +54,7 @@ const Legends = (function () {
                 stripe: [0.98, 0.82, 0.10], accent: [0.10, 0.10, 0.12],
                 finShape: "none", spineHeight: "dorsal", spineLogo: "cap" } },
 
-    { id: "senna", code: "SEN", era: "turbo88", name: "Ayrton Senna", nat: "BR",
+    { id: "senna", code: "SEN", marque: "mclaren", era: "turbo88", name: "Ayrton Senna", nat: "BR",
       years: "1984–1994", teams: "Toleman, Lotus, McLaren, Williams", car: "McLaren MP4/4",
       num: 12,   // SOURCED: the 1988 MP4/4 ran Prost #11 and Senna #12.
       record: { starts: 161, wins: 41, poles: 65, podiums: 80, titles: 3 },
@@ -63,7 +63,7 @@ const Legends = (function () {
                 stripe: [0.86, 0.06, 0.09], accent: [0.98, 0.78, 0.06],
                 finShape: "none", spineHeight: "dorsal", spineLogo: "number" } },
 
-    { id: "fangio", code: "FAN", era: "front50", name: "Juan Manuel Fangio", nat: "AR",
+    { id: "fangio", code: "FAN", marque: null, era: "front50", name: "Juan Manuel Fangio", nat: "AR",
       years: "1950–1958", teams: "Alfa Romeo, Maserati, Mercedes, Ferrari", car: "Mercedes-Benz W196",
       record: { starts: 51, wins: 24, poles: 29, podiums: 35, titles: 5 },
       trait: "Won at the slowest speed that still won — the car always finished.",
@@ -73,7 +73,7 @@ const Legends = (function () {
                 accent: [0.55, 0.57, 0.60], finish: "brushed",
                 finShape: "none", spineHeight: "low", spineLogo: "number" } },
 
-    { id: "clark", code: "CLK", era: "slim60", name: "Jim Clark", nat: "GB",
+    { id: "clark", code: "CLK", marque: null, era: "slim60", name: "Jim Clark", nat: "GB",
       years: "1960–1968", teams: "Lotus", car: "Lotus 25",
       record: { starts: 72, wins: 25, poles: 33, podiums: 32, titles: 2 },
       trait: "Never bullied a car — caressed it, and wore it out slower than anyone.",
@@ -85,7 +85,7 @@ const Legends = (function () {
                 stripe: [0.90, 0.76, 0.28], accent: [0.93, 0.94, 0.96],
                 finShape: "none", spineHeight: "low", spineLogo: "fade" } },
 
-    { id: "lauda", code: "LAU", era: "wing70", name: "Niki Lauda", nat: "AT",
+    { id: "lauda", code: "LAU", marque: "ferrari", era: "wing70", name: "Niki Lauda", nat: "AT",
       years: "1971–1985", teams: "March, BRM, Ferrari, Brabham, McLaren", car: "Ferrari 312T",
       record: { starts: 171, wins: 25, poles: 24, podiums: 54, titles: 3 },
       trait: "Engineer first: tested more than he raced and drove to the number.",
@@ -96,7 +96,7 @@ const Legends = (function () {
                 stripe: [0.92, 0.93, 0.95], accent: [0.86, 0.72, 0.20],
                 finShape: "none", spineHeight: "low", spineLogo: "carbon" } },
 
-    { id: "prost", code: "PRO", era: "active92", name: "Alain Prost", nat: "FR",
+    { id: "prost", code: "PRO", marque: "williams", era: "active92", name: "Alain Prost", nat: "FR",
       years: "1980–1993", teams: "McLaren, Renault, Ferrari, Williams", car: "Williams FW15C",
       record: { starts: 199, wins: 51, poles: 33, podiums: 106, titles: 4 },
       trait: "The Professor: tyres and brakes saved early, the race taken late.",
@@ -107,7 +107,7 @@ const Legends = (function () {
                 stripe: [0.93, 0.94, 0.96], accent: [0.96, 0.74, 0.12],
                 finShape: "swept", spineHeight: "dorsal", spineLogo: "fade" } },
 
-    { id: "stewart", code: "STE", era: "wing70", name: "Jackie Stewart", nat: "GB",
+    { id: "stewart", code: "STE", marque: null, era: "wing70", name: "Jackie Stewart", nat: "GB",
       years: "1965–1973", teams: "BRM, Matra, Tyrrell", car: "Tyrrell 003",
       record: { starts: 99, wins: 27, poles: 17, podiums: 43, titles: 3 },
       trait: "Ruthless in the wet, and the reason half the safety rules exist.",
@@ -116,7 +116,7 @@ const Legends = (function () {
                 stripe: [0.90, 0.20, 0.20], accent: [0.96, 0.96, 0.98],
                 finShape: "none", spineHeight: "low", spineLogo: "number" } },
 
-    { id: "moss", code: "MOS", era: "front50", name: "Stirling Moss", nat: "GB",
+    { id: "moss", code: "MOS", marque: null, era: "front50", name: "Stirling Moss", nat: "GB",
       years: "1951–1961", teams: "HWM, Mercedes, Vanwall, Rob Walker, Lotus", car: "Vanwall VW5",
       // THE ONE LEGEND WITH NO TITLE, and the reason the roster's "champions
       // only" rule has an exception rather than a quiet omission: four
@@ -132,7 +132,7 @@ const Legends = (function () {
                 stripe: [0.90, 0.76, 0.28], accent: [0.10, 0.12, 0.14],
                 finShape: "none", spineHeight: "low", spineLogo: "number" } },
 
-    { id: "ghill", code: "GHL", era: "wing68", name: "Graham Hill", nat: "GB",
+    { id: "ghill", code: "GHL", marque: null, era: "wing68", name: "Graham Hill", nat: "GB",
       years: "1958–1975", teams: "BRM, Lotus, Brabham, Embassy Hill", car: "Lotus 49B",
       record: { starts: 176, wins: 14, poles: 13, podiums: 36, titles: 2 },
       // Still the ONLY driver to take the Triple Crown — Indianapolis 500
@@ -142,7 +142,7 @@ const Legends = (function () {
                 stripe: [0.80, 0.08, 0.10], accent: [0.15, 0.13, 0.10],
                 finShape: "none", spineHeight: "low", spineLogo: "cap" } },
 
-    { id: "hakkinen", code: "HAK", era: "narrow98", name: "Mika Häkkinen", nat: "FI",
+    { id: "hakkinen", code: "HAK", marque: "mclaren", era: "narrow98", name: "Mika Häkkinen", nat: "FI",
       years: "1991–2001", teams: "Lotus, McLaren", car: "McLaren MP4/13",
       record: { starts: 161, wins: 20, poles: 26, podiums: 51, titles: 2 },
       trait: "An oversteering driver who came alive late in a season.",
@@ -150,7 +150,7 @@ const Legends = (function () {
                 stripe: [0.88, 0.09, 0.10], accent: [0.90, 0.92, 0.95],
                 finish: "brushed", finShape: "none", spineHeight: "dorsal", spineLogo: "fade" } },
 
-    { id: "vettel", code: "VET", era: "blown13", name: "Sebastian Vettel", nat: "DE",
+    { id: "vettel", code: "VET", marque: "redbull", era: "blown13", name: "Sebastian Vettel", nat: "DE",
       years: "2007–2022", teams: "BMW Sauber, Toro Rosso, Red Bull, Ferrari, Aston Martin", car: "Red Bull RB9",
       record: { starts: 299, wins: 53, poles: 57, podiums: 122, titles: 4 },
       trait: "Youngest champion at 23, and nine wins in a row in 2013.",
@@ -158,7 +158,7 @@ const Legends = (function () {
                 stripe: [0.85, 0.08, 0.10], accent: [0.93, 0.94, 0.96],
                 finShape: "swept", spineHeight: "dorsal", spineLogo: "number" } },
 
-    { id: "mansell", code: "MAN", era: "active92", name: "Nigel Mansell", nat: "GB",
+    { id: "mansell", code: "MAN", marque: "williams", era: "active92", name: "Nigel Mansell", nat: "GB",
       years: "1980–1995", teams: "Lotus, Williams, Ferrari, McLaren", car: "Williams FW14B",
       num: 5,    // SOURCED: "Red 5" is his trademark, the red number 5 he carried across teams.
       record: { starts: 187, wins: 31, poles: 32, podiums: 59, titles: 1 },
@@ -251,6 +251,13 @@ const Legends = (function () {
       // parts sheet are all keyed by it (js/car/liverytex.js), so "legends" is
       // what keeps a legend's car from overwriting the player's own.
       id: "legends", legends: true, legend: l.id,
+      // THE MARQUE CREST, where the game has one. js/car/crest-paths.js carries
+      // eight hand-drawn vector crests and no others — the PNG logos were
+      // dropped as unusable traces (js/car/liverytex.js) — so Ferrari, McLaren,
+      // Williams and Red Bull legends wear their real badge and the rest wear
+      // none. A wrong crest is worse than no crest: it would put a live team's
+      // mark on a car that team never built.
+      crest: l.marque || null,
       name: "Legends", short: "LGD", engine: l.car,
       tier: head >= 95 ? 0 : head >= 90 ? 1 : head >= 85 ? 2 : 3,
       color: l.livery.c1.slice(), color2: l.livery.c2.slice(),
