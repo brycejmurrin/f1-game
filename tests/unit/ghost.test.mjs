@@ -24,6 +24,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 function createHarness(opts = {}) {
   const store = new Map(Object.entries(opts.disk || {}));
   const microtasks = [];
+  const timers = [];
   const mockLocalStorage = {
     getItem(k) { return store.has(k) ? store.get(k) : null; },
     setItem(k, v) {
@@ -45,6 +46,7 @@ function createHarness(opts = {}) {
     queueMicrotask: (fn) => { microtasks.push(fn); },
     console,
   };
+  if (opts.deferWrites) sandbox.setTimeout = (fn) => { timers.push(fn); return timers.length; };
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
   seedSaveMigrate(ctx);
@@ -56,6 +58,7 @@ function createHarness(opts = {}) {
     GameStore: vm.runInContext("GameStore", ctx),
     store: mockLocalStorage,
     flushMicrotasks: () => { while (microtasks.length) microtasks.shift()(); },
+    flushTimers: () => { while (timers.length) timers.shift()(); },
   };
 }
 
@@ -294,4 +297,31 @@ test("an invalid selected entry is discarded before valid ghosts during budget r
   const repaired = JSON.parse(store.getItem("apex26.ghost.v1"));
   assert.equal(repaired.broken, undefined);
   assert.ok(repaired.sound, "valid history wins space over a malformed preferred entry");
+});
+
+test("a pending PB rebases onto a foreign tab's newer ghost blob", () => {
+  const trace = (time, x = 0) => ({
+    time,
+    t: [0, 1, 2, 3, 4, 5, 6, 7],
+    s: [0, 10, 20, 30, 40, 50, 60, 70],
+    x: [x, x, x, x, x, x, x, x],
+    _used: 1,
+  });
+  const { Ghost, GameStore, store, flushTimers } = createHarness({
+    disk: { "apex26.ghost.v1": JSON.stringify({ monza: trace(50) }) },
+    deferWrites: true,
+  });
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 12; i++) Ghost.record(i, i * 10, 0);
+  assert.equal(Ghost.finishLap(40), true);
+
+  store.setItem("apex26.ghost.v1", JSON.stringify({ monza: trace(35), spa: trace(60, 1) }));
+  GameStore.store.onForeignWrite({ key: "apex26.ghost.v1" });
+  assert.equal(Ghost.bestTime(), 35, "the other tab's faster same-context PB wins immediately");
+  flushTimers();
+
+  const saved = JSON.parse(store.getItem("apex26.ghost.v1"));
+  assert.equal(saved.monza.time, 35, "the pending slower PB cannot overwrite the newer durable one");
+  assert.equal(saved.spa.time, 60, "unrelated ghosts written by the other tab survive the local save");
 });

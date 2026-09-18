@@ -46,6 +46,7 @@ const Ghost = (function () {
   let storeCache = null;
   let accessClock = Date.now();
   let repairQueued = false;
+  const pending = new Map();
   function loadStore() {
     if (storeCache) return storeCache;
     let parsed = GameStore.store.get(STORE_KEY, null);
@@ -127,6 +128,27 @@ const Ghost = (function () {
     else if (typeof setTimeout === "function") setTimeout(run, 0);
     else run();
   }
+  function betterGhost(a, b) {
+    const av = valid(a), bv = valid(b);
+    if (!av) return bv ? b : null;
+    if (!bv) return a;
+    const winner = a.time <= b.time ? a : b;
+    winner._used = Math.max(Number(a._used) || 0, Number(b._used) || 0);
+    return winner;
+  }
+  function onStoreChange(change) {
+    if (!change || !change.foreign || change.key !== STORE_KEY) return;
+    let fresh = GameStore.store.get(STORE_KEY, {});
+    if (!fresh || typeof fresh !== "object" || Array.isArray(fresh)) fresh = {};
+    for (const [id, snap] of pending) {
+      const winner = betterGhost(fresh[id], snap);
+      if (winner) fresh[id] = winner;
+    }
+    storeCache = fresh;
+    const current = storageId == null ? null : fresh[storageId];
+    best = valid(current) ? current : null;
+  }
+  GameStore.store.subscribe(onStoreChange);
   function saveStore(store) {
     storeCache = store;
     trimStore(store);
@@ -189,12 +211,16 @@ const Ghost = (function () {
   // lap-line frame of a new record — the one-frame hitch PERF-FINDINGS §2 records.
   function scheduleSave(id, snap) {
     touch(snap);
+    pending.set(id, snap);
     loadStore()[id] = snap;   // immediately visible if another class is selected before idle
     const write = () => {
       try {
         const store = loadStore();
         const result = saveStore(store);
-        if (result.durable) Log.info("car", `ghost save ${id}`);
+        if (result.durable) {
+          if (pending.get(id) === snap) pending.delete(id);
+          Log.info("car", `ghost save ${id}`);
+        }
         else Log.warn("car", `ghost save ${id} is session-only`);
       } catch { Log.warn("car", "ghost save fail"); }
     };

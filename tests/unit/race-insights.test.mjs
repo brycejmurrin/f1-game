@@ -281,7 +281,7 @@ test('network status reports measured values and clear disconnected guidance', (
 test('ghost speed derives from recorded arc samples and refuses time outside the lap', () => {
   const ctx = vm.createContext({
     Log: { info() {}, warn() {} },
-    GameStore: { store: { get: () => null, write: () => ({ durable: true }) } },
+    GameStore: { store: { get: () => null, write: () => ({ durable: true }), subscribe: () => () => {} } },
   });
   vm.runInContext(readFileSync(new URL('../../js/car/ghost.js', import.meta.url), 'utf8'), ctx);
   const g = vm.runInContext('Ghost', ctx); assert.equal(g.speedAt(1), null);
