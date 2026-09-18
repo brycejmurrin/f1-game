@@ -379,9 +379,14 @@ const api = {
     // FlybySeq.FAR/FOG, not photo mode's own numbers: this preview IS the
     // editor's picture, and it has to be rendered the way the loading screen
     // renders the same shot or the editor lies about the haze (it did).
+    // `cine` is the MARKER, and it is what makes the preview honest: render()
+    // reads it and builds this frame's whole lens — near, far, fog, cull, and an
+    // uncapped FOV — the way the loading screen builds it, instead of the way a
+    // debug free camera is built. Without it the preview is only a dbgCam, and
+    // a dbgCam is photo mode.
     G.dbgCam = {
       eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov,
-      far: FlybySeq.FAR, fog: FlybySeq.FOG,
+      far: FlybySeq.FAR, fog: FlybySeq.FOG, cine: true,
     };
     const hit = FlybySeq.insideProp(G.track, v.eye, 0);
     return {
@@ -442,9 +447,18 @@ const api = {
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
   }),
-  camState: () => G.dbgCam
+  // `lens` is what the LAST FRAME was actually built with — near, far, the
+  // post-cap vertical FOV, the fog multiplier, the cull radius — as opposed to
+  // the camera INTENT the rest of this reports. They are different questions,
+  // and the difference is a defect class: the pre-race flyby and the flyby shot
+  // EDITOR aimed the same camera and rendered it through two different lenses
+  // for months (far 900 vs 6000, fog 1.0 vs 0.15), which reads as "why is the
+  // loading screen so much foggier than the editor" and is invisible to any
+  // hook that only reports where the camera is pointed.
+  camState: () => Object.assign(G.dbgCam
     ? { eye: Array.from(G.dbgCam.eye), tgt: Array.from(G.dbgCam.target), fov: G.dbgCam.fov, roll: 0, debug: true }
     : { eye: Array.from(G.camEye), tgt: Array.from(G.camTgt), fov: G.camFov, roll: G.camRoll, debug: false },
+  { lens: G.lens ? Object.assign({}, G.lens) : null }),
   garageCam: () => ({
     on: G.setupPreviewOn, spin: G.setupPreviewSpin,
     az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,

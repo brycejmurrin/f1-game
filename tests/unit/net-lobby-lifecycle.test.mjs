@@ -458,3 +458,29 @@ test("a pc that already took an offer is not answered again", async () => {
     assert.equal((await h.lobby.makeAnswer("APEX1.s.X")).error, "already_answered");
   } finally { h.lobby.cancel(); }
 });
+
+/* ── READY survives a later guest (source guard) ──────────────────────────────
+ *
+ * Found by survey 2026-09-18. openRoom() is onConnected()'s last line, so it
+ * runs on EVERY connection, and it began `selfReady = false; _ready.clear()`.
+ * In a 3-4 player room that threw away the READY of everyone already in when
+ * the next guest arrived. Nothing asks a peer to re-announce, and peersReady()
+ * needs every id in peerIds() truthy, so START could never enable again unless
+ * each earlier guest happened to toggle READY a second time. Two players never
+ * saw it — there is nobody "already in the room" there — which is why it shipped.
+ *
+ * A SOURCE GUARD, AND THAT IS A LIMITATION, not a preference. Everything else in
+ * this file drives ONE guest joining; proving this behaviourally needs a host
+ * harness holding two sequential guest connections plus an observable for the
+ * ready set, and status() exposes neither. Building that is a bigger change than
+ * the fix, so this pins the invariant rather than the behaviour, and says so.
+ */
+test("openRoom resets READY only for a FRESH room, not on every connection", () => {
+  const open = SOURCE.slice(SOURCE.indexOf("function openRoom()"));
+  const body = open.slice(0, open.indexOf("\n    }"));
+  assert.match(body, /if \(sessions\.size <= 1\) \{ selfReady = false; _ready\.clear\(\); \}/,
+    "openRoom must clear the ready set only when it is opening a fresh room — an unconditional clear discards " +
+    "the READY of every guest already in a 3-4 player room each time another one connects");
+  assert.doesNotMatch(body, /^\s*_ready\.clear\(\);\s*$/m,
+    "no unconditional _ready.clear() may remain in openRoom");
+});
