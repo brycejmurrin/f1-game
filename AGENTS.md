@@ -9,10 +9,9 @@ that must hold every time are hooks in `.claude/hooks/`; renderer rules load wit
 their files from `.claude/rules/`. `CLAUDE.md` imports this; Cursor and Codex read it.
 
 ## Key commands
-
 ```sh
 npx serve -l 3456 .                 # run locally (or: python3 -m http.server 3456)
-npm run test:tooling-fast           # the no-browser guard suite (~3 min)
+npm run test:tooling-fast           # edit-loop check (~3 min) — a SUBSET; whole gate: deploy.mjs --gate-only
 node tools/ci/verify-change.mjs     # ONE command: fast gate + batched groups (--wait/--plan/--fast)
 node tools/track/verify-track.cjs <id>    # 2 s headless build check for track edits
 node tools/ci/pick-tests.mjs        # which test GROUPS does this change need? (select-specs.mjs: per-SPEC)
@@ -20,7 +19,6 @@ node tools/ci/test-bg.mjs <groups>  # run browser groups in the background
 ```
 
 ## Verification — scale it to the change
-
 One browser GROUP costs 10–40 minutes of serialized SwiftShader here, so
 running more than the change needs is slower feedback, not extra safety
 (`docs/TESTING.md`; the measurements behind every rule below:
@@ -42,8 +40,9 @@ Session shape — eleven rules that control wall time and waiting:
 2. Make ALL source edits first, then verify ONCE: tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.
-3. `npm run test:guards` (hook-enforced, every commit) is a CURATED 14-file SUBSET of
-   `test:tooling-fast` — not proof CI's "Structural guards" job will be green; run `test:tooling-fast` before a push (incident: `docs/notes/PROCESS-SPEEDUP-2026-09-16.md` §1.1). A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
+3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above:
+   `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (208 of 278 unit files)
+   ⊂ `deploy.mjs --gate-only`, the only pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine). The other 70 have taken deploys red three times — `docs/notes/PREPUSH-GATE-LADDER.md`. A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
 4. Never block the foreground on a test run: background it (log in `artifacts/`). Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs).
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`.
    Anchor on `grep -E '= run (passed|failed|timedout|interrupted)'`, never a
@@ -70,7 +69,6 @@ Session shape — eleven rules that control wall time and waiting:
     `js/roster.js`, `tools/carview.html`. Edit the SOURCE, then `npm run gen` (`gen:check` names drift).
 
 ## Seeing the game (cheapest first)
-
 1. `__apex` JSON hooks (`info/probe/physState/world/scene/field`) —
    assertable, deterministic, always the first choice.
 2. `render({what:"view"|"map"|"circuit"|"car"})` — the character raster of the
@@ -89,7 +87,6 @@ confirm one positive signal (`docs/ARCHITECTURE.md` §Boot evidence,
 `.claude/rules/render-wgx.md` / `render-tlx.md`).
 
 ## Layout
-
 `js/track/` is the ENGINE, `js/circuits/` is the DATA (one file per circuit;
 script-tag order == `Tracks.LIST` == picker order). The module roster and load
 order live in `tools/manifest.cjs` — read that, not this file, to enumerate
@@ -99,10 +96,10 @@ what exists. Per-directory module tables: `docs/ARCHITECTURE.md`.
 - `js/game.js` is the entry (loop, physics, AI, race flow); it hands the `G`
   façade to the extracted modules — one `Module.create(G)` per file, and a
   module never reaches into game.js. `js/agent/apex.js` is the `__apex` dev API.
-- `js/render/` — `gfx.js` façade → GLX (WebGL2, the default) in `glx/`;
-  `shared/` is the backend-agnostic half; WGX (`webgpu/`) and TLX (`three/`)
-  are opt-in alternates with no `<script>` tag, injected by `js/game.js` from
-  `ApexRoster.DEFERRED` when `apex26.gfxBackend` names them.
+- `js/render/` — `gfx.js` façade → TLX (`three/`) by default, with GLX
+  (`glx/`) as the explicit WebGL2 pick and fallback; `shared/` is the
+  backend-agnostic half. TLX and opt-in WGX (`webgpu/`) have no `<script>` tag
+  and are injected by `js/game.js` from `ApexRoster.DEFERRED` for the resolved pick.
 - `js/track/` — `core/`, `scenery/`, `tracks.js`; only GENERIC tables live
   here (the 112-member `scenery(api)` contract is test-frozen).
 - `js/car/`, `js/data/`, `js/net/` (2-4 player WebRTC, no backend), `js/ui/`,
@@ -110,7 +107,6 @@ what exists. Per-directory module tables: `docs/ARCHITECTURE.md`.
   precache derives from it. `types/game-ctx.d.ts` is the `G` contract.
 
 ## Critical conventions
-
 - Cache busting is the deploy's job: every asset tag in the committed shell
   reads `?v=dev` and `pages.yml` rewrites them to content hashes while staging.
   There is no bump after a js/css edit.
@@ -132,7 +128,6 @@ what exists. Per-directory module tables: `docs/ARCHITECTURE.md`.
 - Regenerable output goes in `artifacts/` or `scratch/` only, never `/tmp`.
 
 ## Physics
-
 Full reference `docs/PHYSICS.md`. Two rules bind everywhere:
 
 - `PACE` is a ground-speed scale, not a cap: compare speeds through
@@ -147,21 +142,18 @@ Read `c.aeroX` (or `aeroDfMult(c)`), never `c.xOn`. Immutable numbers live in
 `tests/specs/physics-characterization.spec.js` is the master gate near game.js.
 
 ## Baked asset pack
-
 `assets/pack/`: PBR material arrays, one `TEXTURE_2D_ARRAY` whose layer index
 IS the `MAT` id, blended (`albedo * tex.rgb * 2.0`). **Ships ON.** (`matTexMix` def 1.0;
 `__apex.matTex(0)` is the A/B off-switch.) Every failure degrades to the procedural
 look; boot never awaits assets. GLX, TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
 
 ## `window.__apex` dev API
-
 `docs/DEBUG-HOOKS.md` is the reference (its generated index carries the count)
 and `__apex.agentHelp()` the machine-readable manifest — call it once a session. `obs()`/`physState()`
 need `player.px` initialised (`jump()` or `step()` after `race()`+`go()`).
 `node tools/shot/agent.mjs <track> <cmd>` is the same surface from a shell.
 
 ## Agent extensions (skills / subagents / hooks / MCP)
-
 Available workflows are skills (`.claude/skills/`, index
 `.claude/skills/README.md`): they say when and how, and load only when
 matched. Subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURFACE.md`
@@ -177,7 +169,6 @@ PID kills of a test-bg run; `touch .claude/allow-protected` is the escape hatch
 for an assigned edit. Never duplicate skills or agents under `.cursor/`.
 
 ## Cursor Cloud specific instructions
-
 `.cursor/environment.json` bootstraps every Cloud VM (`tools/env/cloud-agent-install.sh`,
 Chromium at `/opt/pw-browsers/chromium`, `mcpServerAllowlist` = `.mcp.json`'s three
 servers). Cursor enters via `.cursor/rules/apex-shared.mdc`; Codex reads this file with
@@ -185,16 +176,25 @@ servers). Cursor enters via `.cursor/rules/apex-shared.mdc`; Codex reads this fi
 repairs them). Checklist: `docs/AGENT-SURFACE.md` §Bootstrap.
 
 ## Git branch & deploy
-
 Work happens on a `claude/<topic>` branch. The deploy branch is
 `claude/f1-game-project-26h3ng`: never push there without review; only it ships
 (https://brycejmurrin.github.io/f1-game/). Other sessions develop directly on
 it, so a deploy is a merge of THEIR work — re-measure on the merged tree, never
 force-push. Catch a branch up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
 merge (ratchets + generated files conflict; it cures both, but leaves you ON `sync-pr-<branch>` and pushes nothing without `--push` — recovery in check-changes). `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
-`test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens a
-PR, `--plan` prints the union); it cures GENERATED-file conflicts, stops on any
+`test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it prints the branch's last ci/pages conclusions first, so an INHERITED red is visible before you blame your push; `--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops); it cures GENERATED-file conflicts, stops on any
 other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in
 minutes (your verdict) and, if green, pokes `pages.yml`, which gates the tip
 once and publishes exactly that commit (dispatch = "deploy now"; ≤ ~25 min).
 "Live?" = ancestor of the live `apex-sha` (deploy-research; `docs/TESTING.md` §Release train).
+
+### Watching CI and Pages
+Do not conflate PR CI (`ci.yml`, PR head), ship-push CI (`ci.yml`, deploy head), and Pages (`pages.yml`, workflow `295002043`).
+A green PR does not prove Pages will pass: Pages calls `ci.yml` with a `before_sha` (often the last live tip) and may select different specs.
+Poll by `head_sha`, ignore cancelled runs superseded on that SHA, and after merge watch both ship-push CI and Pages.
+On red, read failed-job logs for `Expected`, `Received`, `x FAIL`, `Timeout` and `timed out`.
+Name the exact test title, assertion and lane (`Selected specs`, sweeps, pure-node, smoke, or nested Pages `ci / …`), not just the wrapper.
+Diagnose first: `caution().enabled=false` is the intentional `SettingsDefaults` default, not a reason to pin WebGL2 or raise `BOOT_MS`.
+A one-ULP Suzuka arc mismatch in sweeps needs an epsilon; `test:tooling-fast` green does not prove Pages suites or sweeps are green.
+Redeploy through `node tools/ci/deploy.mjs` or a Pages dispatch; claim live only after Pages and `version.json` confirm it.
+Report the SHA, run URL, green/red verdict, failing test/assertion when red, train, and next action.

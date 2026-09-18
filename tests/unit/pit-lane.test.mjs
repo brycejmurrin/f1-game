@@ -215,7 +215,7 @@ test("the commitment gesture is deliberate to make and still possible to make", 
 
 // A live session whose track samples a constant half-width. `committing` is the
 // ONE place this module samples the track, so a counting stub proves that too.
-function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
+function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry" } = {}) {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
   seedLog(ctx);
   ctx.window = ctx;
@@ -223,9 +223,15 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
   ctx.Tracks = { sample: (t, s2, out) => { samples++; out.hw = hw; return out; } };
   // Committing picks the set the crew will fit, which reaches both of these at
   // call time. Minimal stubs: the choice itself is tyre-model.test.mjs's job.
-  ctx.TyreModel = { treadFor: () => 0, classForTread: () => null, lifeLaps: () => 30,
-                    AI_CLASS: { medium: { life: 0.74 } } };
-  ctx.Parts = { CATALOG: [{ id: "tyres", options: [{ id: "medium", cost: 0 }] }] };
+  ctx.TyreModel = {
+    treadFor: (w) => w === "rain" ? 2 : 0,
+    classForTread: (t) => t === 2 ? "wet" : "medium",
+    lifeLaps: () => 30,
+    AI_CLASS: { medium: { life: 0.74 }, wet: { life: 0.72 } },
+  };
+  ctx.Parts = { CATALOG: [{ id: "tyres", options: [
+    { id: "medium", cost: 0 }, { id: "soft", cost: 0 }, { id: "wet", cost: 0 },
+  ] }] };
   // The AI's planner, for think(): the plan fires on its lap and not before.
   ctx.AiDrive = { pitNow: (x) => (x.wrongTread ? "weather" : x.wear >= 1 ? "worn" : x.lapsToStop <= 0 && x.stopsLeft > 0 ? "plan" : ""),
                   compoundFor: () => "medium", STRAT: { CAUTION_REACH: 6 } };
@@ -240,15 +246,25 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
   const Pl = vm.runInContext("PitLane", ctx);
   const track = { total, n: 1346, def: {} };
   const said = [];
+  const fitted = [];
+  const records = {
+    medium: { id: "medium", code: "M", life: 0.74, tread: 0 },
+    soft: { id: "soft", code: "S", life: 0.55, tread: 0 },
+    wet: { id: "wet", code: "W", life: 0.72, tread: 2 },
+  };
   const G = {
-    track, vTop: () => vTop, lapsTarget: 25, raceWeather: "dry",
+    track, vTop: () => vTop, lapsTarget: 25, raceWeather: weather,
+    // The speedo's scale (vStd · 3.6, VMAX 72): PACE cancels, so a limit of
+    // 22.2 m/s at this stub's vTop 60 still reads the painted 80 km/h. The cue
+    // prints this, not raw m/s — see limitKphShown.
+    dashKph: (v) => (v * 72 / vTop) * 3.6,
     announce: (m) => said.push(m),
     // spent() reads the CAR, not a constant: the cue's whole job is to stay
     // quiet on a fresh set and speak on a used one, and a stub that always
     // says 0 would let a broken cue pass every test below.
-    tyres: { on: () => true, spent: (car) => (car && car.tyreWear) || 0, fit: () => {},
-             classRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
-             optionRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
+    tyres: { on: () => true, spent: (car) => (car && car.tyreWear) || 0, fit: (_car, record) => fitted.push(record),
+             classRecord: (id) => records[id] || records.medium,
+             optionRecord: (o) => records[o.id] || records.medium,
              // How long a set lasts AT THE SETTING IN FORCE — what a strategy
              // plans against. The stub stands in for TyreModel's own, which
              // divides the nominal life by LEVELS[level]; this fixture runs at
@@ -265,7 +281,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
     x: hw * over * zone.side, offroad: false, wrongWay: false, rescueT: 0,
     tyre: { code: "M", tread: 0 }, pitState: "none",
   });
-  return { Pl, pits, zone, car, said, hw, G, samples: () => samples };
+  return { Pl, pits, zone, car, said, fitted, records, hw, G, samples: () => samples };
 }
 
 test("holding the line into the pits calls the stop", () => {
@@ -523,6 +539,21 @@ test("the armed cue names the compound the crew will fit", () => {
   // …and a stop that IS called is shown, whatever the wear gate thinks.
   c.tyreWear = 0;
   assert.equal(pits.cue(c).phase, "armed");
+});
+
+test("a weather change replaces a stale selected tread and every announcement names the fitted set", () => {
+  const { pits, car, said, fitted, records } = commitSession({ weather: "rain" });
+  const c = car(0.95);
+  c.pitNext = records.soft;                 // selected while the race was dry
+  pits.update(c, P.COMMIT_S + 0.1);
+  assert.match(said.at(-1), / — W$/, `entry radio must name the weather set: ${said.join(" | ")}`);
+  pits.serviceCar(c);
+  assert.equal(fitted.at(-1).code, "W", "a stale slick selection must not be fitted in rain");
+
+  const chosenWet = { id: "wet_alt", code: "WX", life: 0.6, tread: 2 };
+  c.pitNext = chosenWet;
+  pits.serviceCar(c);
+  assert.equal(fitted.at(-1), chosenWet, "a same-tread player selection remains authoritative");
 });
 
 test("the first stop is taught in three lines — the road, the line, the gate — each once", () => {
@@ -1109,4 +1140,58 @@ test("lossS is the lane's net cost in seconds, and estimate agrees with it off a
   assert.ok(s > 5 && s < 60, `a plausible pit loss: ${s}`);
   const est = pits.estimate(car(0));
   assert.ok(Math.abs(est.lossS - s) < 1e-9, `estimate's lossS is the same number off a caution (${est.lossS} vs ${s})`);
+});
+
+// THE PIT LOSS IS ONE NUMBER. There were THREE formulas for it — the planner's
+// (0.55·vTop over the lane), the STRATEGY row's (0.75·vTop over the lane) and
+// the caution estimate's (a third) — so the planner priced a stop at 7.3 s, the
+// player was told 9.0, and a measured stop on Bahrain cost 15.0. Buying stops
+// at half price is what put two of them in a 20-lap race.
+test("the pit loss counts the WHOLE complex, not just the lane", () => {
+  const { pits, G } = commitSession();
+  const lane = pits.zoneOf().lenM;
+  // No pit model on the stub track: the loss falls back to the lane alone.
+  const bare = pits.lossS();
+  // …and with one, the entry and exit roads count too, because the limiter
+  // holds the car over all three (PitLane.held).
+  G.track.pit = { lenM: lane, entryRoadM: 70, exitRoadM: 80, painted: false };
+  const whole = pits.lossS();
+  assert.ok(whole > bare, `the roads cost something (${whole.toFixed(2)} vs ${bare.toFixed(2)})`);
+  // 150 m more at the limit, minus what it would have taken on the straight.
+  const atLimit = 150 / (G.vTop() * pits.zoneOf().limitFrac);
+  assert.ok(whole - bare > atLimit * 0.5 && whole - bare < atLimit,
+    `and it costs about the extra span at the limit (+${(whole - bare).toFixed(2)} s vs ${atLimit.toFixed(2)} s gross)`);
+  delete G.track.pit;
+});
+
+test("a caution makes the same stop cheaper, by the same formula", () => {
+  const { pits, car, G } = commitSession();
+  const green = pits.lossS();
+  let level = 0;
+  G.cautionInfo = () => ({ level });
+  level = 2; const vsc = pits.estimate(car(0)).lossS;
+  level = 3; const sc = pits.estimate(car(0)).lossS;
+  assert.ok(vsc < green, `a VSC stop costs less than a green one (${vsc.toFixed(2)} vs ${green.toFixed(2)})`);
+  assert.ok(sc < vsc, `and a safety car less still (${sc.toFixed(2)})`);
+  assert.ok(sc >= pits.zoneOf().boxS, "never less than the time on the jacks");
+});
+
+// ── `held`: how long the lane's rules apply ──────────────────────────────────
+// One predicate for everything the lane forbids — the speed cap, and now
+// overtake and X-mode, which are not a driver's to use between the lines. It is
+// a STATE plus the exit road, never a half-plane: a car running wide on the pit
+// straight must not read as held, which is the same invariant `inLane` carries.
+test("held is the lane's own states, and never a position on the road", () => {
+  const { pits, zone } = commitSession();
+  const at = (pitState, s) => ({ local: true, pitState, s: s == null ? zone.sIn + 20 : s });
+  assert.equal(pits.held(at("lane")), true, "rolling down the lane");
+  assert.equal(pits.held(at("box")), true, "on the jacks");
+  assert.equal(pits.held(at("none")), false, "a car on the racing line is never held");
+  assert.equal(pits.held(at("armed")), false, "armed is the approach, before the line");
+  assert.equal(pits.held(null), false, "no car, nothing held");
+  // A served car is held until the exit — but only while it is still in the
+  // complex. Past the window with no exit road under it, the rules are off.
+  assert.equal(pits.held(at("out", zone.sIn + 20)), true, "served, still inside the window");
+  const half = ((zone.sIn + 5386 / 2) % 5386 + 5386) % 5386;
+  assert.equal(pits.held(at("out", half)), false, "half a lap away, the stop is over");
 });

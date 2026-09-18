@@ -572,6 +572,43 @@ test("the complex lights its row: six canopy luminaires over the working lane, r
   assert.equal((narrowOnce().lampPosts || []).filter((l) => l.pit).length, 0, "a painted lane hangs no canopy, and no entrance lamps");
 });
 
+/* THE SAME DEFECT, SECOND TIME, BY A DIFFERENT DOOR. The test below was written
+ * when MY TEAM got seated twice and built a 13-bay row 11 m long. On 2026-09-18
+ * js/career/custom-team.js began appending a SECOND runtime entry — `legends` —
+ * beside `custom`, and TrackPit.row seated that too: 13 bays again, the whole
+ * complex moved, and a car entering Monza's lane wedged against the wall with
+ * the throttle open (tests/specs/pit-lane.spec.js, bisected to 7b2d56b).
+ *
+ * LEGENDS IS NOT A THIRTEENTH GARAGE. It is the player's own entry wearing a
+ * historic livery — gridTeams() lets only one of {custom, legends} race — so a
+ * bay for it is a bay for a car that cannot be on the grid. The defect was in
+ * the geometry and invisible to every node suite, because the only thing that
+ * measures it is a browser spec no local gate runs. This is the node-side
+ * guard that should have existed the first time. */
+test("a LEGENDS entry beside custom seats no thirteenth bay, and the row does not move", () => {
+  const env = ctxOnce(), T = env.Tracks;
+  const def = T.LIST.find((d) => d.id === FULL);
+  const bare = buildOnce(FULL);
+  const eleven = ["mercedes", "ferrari", "mclaren", "redbull", "alpine", "racingbulls", "haas", "williams", "audi", "astonmartin", "cadillac"]
+    .map((id) => ({ id, name: id, color: [0.5, 0.5, 0.5] }));
+  const custom = { id: "custom", name: "MY TEAM", short: "MY", color: [0.55, 0.55, 0.6] };
+  const legends = { id: "legends", legends: true, name: "LEGENDS", short: "LGD", color: [0.7, 0.6, 0.2] };
+  try {
+    env.sandbox.Teams = { LIST: eleven.concat([custom, legends]), DEFAULT_CUSTOM: custom };
+    const t = T.build(def);
+    const teams = t.pit.row.boxes.map((b) => b.team);
+    assert.ok(!teams.includes("legends"), `LEGENDS must get no bay of its own (${teams.join(",")})`);
+    assert.equal(teams.length, 12, `twelve bays, not ${teams.length} (${teams.join(",")})`);
+    assert.equal(t.pit.row.count, 12);
+    assert.equal(teams[11], "custom", "MY TEAM's bay is still the last");
+    // THE ONE THAT MATTERS: an extra bay lengthens the row and drags the whole
+    // complex with it. Same anchor as the VM's twelve, or the lane has moved.
+    assert.equal(t.pit.row.s0, bare.pit.row.s0, "the row stands where the VM's twelve unnamed bays stand");
+  } finally {
+    delete env.sandbox.Teams;
+  }
+});
+
 test("the row seats the custom team ONCE when the roster already carries it, as the game's does", () => {
   // js/career/custom-team.js pushes the custom team INTO Teams.LIST, so in the
   // game the list TrackPit.row reads already ends with it; appending MY TEAM

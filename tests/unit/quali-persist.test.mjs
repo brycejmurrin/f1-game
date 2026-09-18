@@ -185,8 +185,13 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
     "openQualiForNet must NOT assign qualiNetDone — the async reset would wipe it");
   assert.match(QUALI_NET, /RIVAL LEFT — TO THE GRID/);
   assert.match(QUALI_NET, /qualiHadRivals/);
-  assert.match(GAME, /if \(!p\) \{ closeLightTuner\(false\); closeCamTuner\(false\); exitPhotoMode\(\); \}/);
-  assert.match(GAME, /closeCamTuner\(false\); exitPhotoMode\(\);/);
+  // RESUME AND QUIT TEAR DOWN EVERY LIVE PREVIEW, on one line each, because
+  // that line is exactly where a new panel gets forgotten: the flyby shot
+  // editor shipped without its closer here, and resuming left the player
+  // driving the race from a camera parked on a flyby vantage. A fourth panel
+  // JOINS this list; it does not replace anyone on it.
+  assert.match(GAME, /if \(!p\) \{ closeLightTuner\(false\); closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\); \}/);
+  assert.match(GAME, /closeCamTuner\(false\); flybyPanel\.closeFlyby\(false\); exitPhotoMode\(\);/);
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
   // The caution pace cap, now four levels deep: RED (4) stops the field at a
   // walking-pace floor rather than 0, so every "approaches vmax" fade stays

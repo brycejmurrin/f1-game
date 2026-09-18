@@ -34,10 +34,12 @@
         marshal posts (§5, §6)
 
    Substitutions the emitter set forced (reported, not hidden):
-   - There is no `bridge` emitter in the scenery(api) contract, so the two
-     pedestrian crossings (§4 rows 0.1483 and 0.8017) are built the way
-     donington.js builds Starkey's Bridge: a `place()` abutment tower either
-     side of the track. No deck spans the road.
+   - CORRECTED 2026-09-17: the claim that "there is no `bridge` emitter in the
+     scenery(api) contract" was FALSE, and it cost this circuit both of its
+     bridges. `circuitKit.pedestrianBridge` is on the frozen 112-member
+     contract and silverstone.js was already using `overheadSpan` directly.
+     The two crossings (§4, 0.1483 and 0.7930) had abutment towers either side
+     and open sky between them. They now span.
    - The Whites spectator TUNNEL is likewise a pair of `place()` portal
      headwalls plus a sunken `groundPatch` approach; nothing bores terrain.
    - `grandstandEx` crowd/shell are colour arrays, so the Moss "crowd" of §4
@@ -57,7 +59,7 @@
         building, grandstandEx, spectatorHill, terrace,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,
         billboard, sponsorHoarding, gantry, motorhome, groundPatch,
-        place, ridge } = api;
+        place, ridge, circuitKit } = api;
 
       // ---------------------------------------------------------------------
       // 1. PALETTE + LOCAL HELPERS
@@ -128,9 +130,13 @@
         forestEdge(s0 + q * 0.4, s1 - q * 0.4, side, gap + depth * 0.5, { col: CONIF, spacing: sp + 3 });
         forestEdge(s0 + q, s1 - q, side, gap + depth, { col: LEAF_D, spacing: sp + 5 });
       };
-      // Pedestrian crossing: abutment towers only (no `bridge` emitter).
+      // The 2011 pedestrian crossings at Turns 2 and 7 — the circuit's only
+      // built verticals over the road. Abutments AND a deck: a bridge you can
+      // see daylight through is not a bridge.
       const footbridge = (s, seed) => {
         const k = K(s);
+        circuitKit.pedestrianBridge({ id: "kit:mosport:foot-" + seed, frac: s,
+          clearance: 5.5, depth: 3, thickness: 0.9, required: true });
         place(k, 1, 12, [3.2, 6.5, 4.5], CONCRETE);
         place(k, -1, 12, [3.2, 6.5, 4.5], CONCRETE);
         place(K(s + 0.0015), 1, 16, [2.4, 3.0, 3.0], WALL_2);

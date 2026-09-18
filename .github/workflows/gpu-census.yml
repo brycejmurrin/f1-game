@@ -70,6 +70,14 @@ on:
         description: "Extra localStorage for ALL game checks, space-separated apex26.k=v — how a flagged renderer path gets tested on real hardware (e.g. apex26.instCellCache=1)"
         required: false
         default: ""
+      clock:
+        description: "Hour the in-run A/B pins (0-23). Pins the SKY only — it cannot add lamps to a track built without them."
+        required: false
+        default: "12"
+      tod:
+        description: "Time of day the track is BUILT with (day|night|dawn|dusk). This is what bakes the lamps, and so what decides whether the per-chunk lamp branch can run at all. Empty = the circuit's own default."
+        required: false
+        default: ""
   push:
     branches: ["cursor/**", "claude/**"]
     paths: [".github/gpu-census-request.json"]
@@ -91,6 +99,8 @@ jobs:
       images: ${{ steps.split.outputs.images }}
       track: ${{ steps.split.outputs.track }}
       ls: ${{ steps.split.outputs.ls }}
+      clock: ${{ steps.split.outputs.clock }}
+      tod: ${{ steps.split.outputs.tod }}
       force: ${{ steps.split.outputs.force }}
       census_only: ${{ steps.split.outputs.census_only }}
     steps:
@@ -111,6 +121,19 @@ jobs:
           print("images=" + json.dumps(picked or ["ubuntu-latest"]))
           print("track=" + str(req.get("track") or os.environ.get("INPUT_TRACK") or "montreal"))
           print("ls=" + str(req.get("ls") or os.environ.get("INPUT_LS") or ""))
+          # The HOUR the in-run A/B pins. 12 is noon, which has no lamps and so
+          # measures the PLAIN draw branch; 2 is night, where the per-chunk lamp
+          # branch runs. Census 146 showed every earlier run took the former
+          # without anyone choosing it. Clamped to 0..23, default 12 so old runs
+          # stay comparable.
+          try: ck = int(req.get("clock", os.environ.get("INPUT_CLOCK") or 12))
+          except (TypeError, ValueError): ck = 12
+          print("clock=" + str(ck if 0 <= ck <= 23 else 12))
+          # The time of day the track is BUILT with, which is what decides
+          # whether it carries baked lamps at all. Empty keeps race(t) as it
+          # was, so every earlier run stays comparable.
+          td = str(req.get("tod") or os.environ.get("INPUT_TOD") or "")
+          print("tod=" + (td if td in ("day", "night", "dawn", "dusk") else ""))
           print("force=" + str(req.get("force") or os.environ.get("INPUT_FORCE") or ""))
           co = req.get("census_only")
           if co is None:
@@ -123,6 +146,8 @@ jobs:
           INPUT_IMAGES: ${{ inputs.images || 'ubuntu-latest,macos-latest,windows-latest' }}
           INPUT_TRACK: ${{ inputs.track || 'montreal' }}
           INPUT_LS: ${{ inputs.ls || '' }}
+          INPUT_CLOCK: ${{ inputs.clock || '' }}
+          INPUT_TOD: ${{ inputs.tod || '' }}
           INPUT_FORCE: ${{ inputs.force || '' }}
           INPUT_CENSUS_ONLY: ${{ inputs.census_only || false }}
 
@@ -137,6 +162,8 @@ jobs:
     env:
       CENSUS_TRACK: ${{ needs.plan.outputs.track }}
       CENSUS_LS: ${{ needs.plan.outputs.ls }}
+      CENSUS_CLOCK: ${{ needs.plan.outputs.clock }}
+      CENSUS_TOD: ${{ needs.plan.outputs.tod }}
       CENSUS_FORCE: ${{ needs.plan.outputs.force }}
       CENSUS_ONLY: ${{ needs.plan.outputs.census_only }}
     steps:
@@ -213,7 +240,7 @@ jobs:
         run: |
           FORCE="${CENSUS_FORCE}"
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
             --backend three --path webgpu \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
@@ -227,7 +254,7 @@ jobs:
         run: |
           FORCE="${CENSUS_FORCE}"
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
             --backend three --path webgl2 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
@@ -245,7 +272,7 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
             --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
@@ -265,7 +292,7 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" \
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
             --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
@@ -493,7 +520,7 @@ jobs:
               } else if (ab.off && ab.on) {
                 const pr = ab.paired || {};
                 rows.push(`${" ".repeat(8)}${tag} A/B: gpu off=${pr.off != null ? pr.off : ab.off.median}ms on=${pr.on != null ? pr.on : ab.on.median}ms  delta=${ab.gpuDeltaPct}% (interleaved, ${pr.samples || 0} samples)  `
-                  + `clockPinned=${ab.clockPinned} simFrozen=${ab.simFrozen}`
+                  + `clock=${ab.clock != null ? ab.clock + ":00" : "?"} clockPinned=${ab.clockPinned} simFrozen=${ab.simFrozen}`
                   + (ab.gpuDeltaPct != null && ab.gpuDeltaPct > 0 ? "   <- COSTS time here" : "   <- saves time here"));
             // THE FLOOR FIRST. off against off2 is the same state twice, so it
             // is what this run cannot hold still; the effect below only means
@@ -527,6 +554,13 @@ jobs:
             // makes of them, and the groups their light SETS make. Locally at
             // vegas night that reads 108.5 -> 24.5 -> 15.0 a frame; this is the
             // same three numbers on real hardware.
+            // When the lamp branch did NOT run, say why rather than leaving a
+            // missing row to be inferred from. perChunkKnob and allLightsLen are
+            // the two halves of the `perChunk` gate in drawChunked.
+                if (st.plainFrames != null && !st.perChunkDraws) {
+                  rows.push(`${" ".repeat(8)}       grouping: LAMP BRANCH DID NOT RUN — ${st.lampFrames} lamp draws vs ${st.plainFrames} plain;`
+                    + ` perChunkLights=${st.perChunkKnob} allLights=${st.allLightsLen} (gate needs knob>0 AND a lights array)`);
+                }
                 if (st.perChunkDraws) {
                   rows.push(`${" ".repeat(8)}       grouping: ${per(st.perChunkDraws)} visible chunks/frame -> ${per(st.consecutiveGroups)} groups by NEIGHBOUR -> ${per(st.setGroups)} by SET`
                     + (st.setGroups > 0 ? `  (${(st.consecutiveGroups / st.setGroups).toFixed(2)}x fewer calls)` : ""));

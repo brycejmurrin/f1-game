@@ -14,7 +14,7 @@
     theme: "green",
     lengthKm: 4.3,
     baseHW: 7,
-    terrainOuter: 45,
+    terrainOuter: 120,
     dressingExclusions: [
       { kind: "city", s0: 0, s1: 1 },
       { kinds: ["foliage", "lighting"], s0: 0.30, s1: 0.42, side: -1 },

@@ -204,9 +204,17 @@ const TrackPit = (function () {
     const list = T && Array.isArray(T.LIST) ? T.LIST : [];
     // `short` and `logo3` ride along for the sign painter: the code beside the
     // crest, and the crest's outline row (team data, js/data/teams.js).
-    for (const t of list) out.push({ team: t.id, name: t.name || t.id, short: t.short || t.id.slice(0, 3).toUpperCase(),
+    // LEGENDS GETS NO BAY OF ITS OWN. js/career/custom-team.js appends a
+    // `legends` entry to Teams.LIST beside `custom`, but it is the PLAYER's
+    // entry wearing a historic livery — gridTeams() lets only one of the two
+    // race — so a bay for it is a bay for a car that cannot be on the grid.
+    // Giving it one rebuilt the 13-bay row the note below records, 11 m longer
+    // than the twelve every VM-side test measures: measured 2026-09-18, it
+    // moved Monza's whole complex and left a car entering the lane wedged
+    // against the wall (tests/specs/pit-lane.spec.js, bisected to 7b2d56b).
+    for (const t of list) { if (t.legends) continue; out.push({ team: t.id, name: t.name || t.id, short: t.short || t.id.slice(0, 3).toUpperCase(),
                                      col: t.color || [0.6, 0.6, 0.65], col2: t.color2 || [0.9, 0.9, 0.9],
-                                     logo3: (t.livery && t.livery.logo3) || null });
+                                     logo3: (t.livery && t.livery.logo3) || null }); }
     const custom = T && T.DEFAULT_CUSTOM;
     // Once only: the career module pushes the custom team INTO Teams.LIST
     // (js/career/custom-team.js), so in the game the list above already ends

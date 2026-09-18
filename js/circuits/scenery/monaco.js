@@ -59,6 +59,54 @@
       const CANYON = [CREAM, OCHRE, DUSTY, [0.92, 0.86, 0.72]];
       const { pastelStreetRow } = api;
 
+      // ── WHY THE SIX NAMED LANDMARKS ARE `required` MODEL GROUPS ───────────
+      // The Casino, the Hôtel de Paris, the Café de Paris, the Massenet, the
+      // Casino Square fountain and the Rocher palace used to emit raw
+      // primitives straight into `out` behind an `if (!onTrack(...))` guard.
+      // That guard is all-or-nothing and it is SILENT: when it trips, the
+      // landmark draws nothing, the build succeeds, and verify-track prints a
+      // cheerful OK. This file already carries two comments from the two times
+      // that happened and had to be caught by diffing vertex counts by hand
+      // (the Café at dist 11.5; the whole floating-decoration episode).
+      //
+      // A `required` modelGroup turns that silence into a thrown build: the
+      // footprint test runs, and a rejection is reported by id instead of
+      // leaving a hole in Monte-Carlo. The onTrack guards are kept in front of
+      // it — they are cheaper and they still express the author's intent — so
+      // this only changes what happens when something DOES go wrong.
+      //
+      // One switch, so the next person can find them all at once. Five of the
+      // six take it; the Casino Square fountain is documented at its own site.
+      const LANDMARK_REQUIRED = true;
+
+      // ── MEASURED, NOT FIXED: CASINO SQUARE SPANS TWO ORIGIN FRAMES ───────
+      // Written down because the numbers cost an afternoon and the next person
+      // should not have to re-derive them.
+      //
+      // The square's five landmarks do not share a frame. The Casino reads raw
+      // px/rx/tx and therefore goes through KOLD (+800 nodes); the Hôtel de
+      // Paris, the Café, the Massenet and the fountain all go through
+      // anchor(), which transformSceneryApi wraps with TrackSpace.sceneryNode
+      // (+773, the arc shift). The two differ by 27 nodes — about 108 m of
+      // this lap. Built positions, measured in the Node build:
+      //
+      //   Massenet   anchor K(0.185)   node 101  arc 404 m  y 29.7
+      //   Hôtel      anchor K(0.21)    node 122  arc 488 m  y 24.3
+      //   fountain   anchor K(0.215)   node 126  arc 504 m  y 22.3
+      //   Café       anchor K(0.228)   node 137  arc 548 m  y 16.5
+      //   Casino     raw    KOLD(0.20) node 141  arc 564 m  y 14.5
+      //
+      // So the Casino stands 76 m from the Hôtel de Paris, which in Monte
+      // Carlo faces it across one square, and 15 m below the lap's own high
+      // plateau (nodes 90-110, y 29.4-29.8) that IS Casino Square. Putting the
+      // Casino on anchor() would move it to node 114 — 8 m from the Hôtel, up
+      // on the plateau — but it would also pull it 60 m off the Café that
+      // currently stands beside it, and all five were hand-tuned against the
+      // onTrack guards where they are. That is a rendered-lap call, not a
+      // headless one, so nothing was moved. Re-seating the whole square on ONE
+      // node with metre offsets is the right shape of fix when someone can
+      // actually look at it.
+
       // ── Continuous Armco lining both sides — tight street feel ───────────
       // 1.2 m leaves the collision limit just outside the authored 5 m road,
       // instead of narrowing the usable tarmac while remaining Monaco-tight.
@@ -164,29 +212,33 @@
         if (!onTrack(a.c[0], a.c[2], 26)) {
           const b = [a.r, a.u, a.t];
           // Beaux-Arts cream limestone + oxidised-copper roofs (Garnier/Dutrou).
-          out._mat = MAT.STONE;
-          addBox(out, vadd(a.c, a.u, 13), [44, 26, 30], CREAM, b);
-          for (const o of [-13, 13]) {
-            addBox(out, vadd(vadd(a.c, a.t, o), a.u, 30), [9, 18, 9], [0.90, 0.85, 0.74], b);
-          }
-          out._mat = MAT.METAL;
-          addBox(out, vadd(a.c, a.u, 28), [46, 4, 32], [0.30, 0.45, 0.38], b);
-          for (const o of [-13, 13]) {
-            addPrism(out, vadd(vadd(a.c, a.t, o), a.u, 40.5), [9.2, 5, 9.2], [0.28, 0.42, 0.36], b);
-          }
-          // window bands + lit evening glow
-          out._mat = MAT.GLASS;
-          for (let f = 0; f < 4; f++) {
-            addBox(out, vadd(a.c, a.u, 5 + f * 6), [44.4, 2.2, 30.4], WIN, b);
-            addBox(out, vadd(a.c, a.u, 6.0 + f * 6), [44.6, 1.1, 30.6], WINLIT, b);
-          }
-          out._mat = MAT.METAL;
-          for (const o of [-8, 8]) {
-            const lc = vadd(vadd(a.c, a.t, o), a.u, 0);
-            addCyl(out, lc, 0.10, 5.5, [0.72, 0.74, 0.76], 5, b);
-            addCyl(out, vadd(lc, a.u, 5.3), 0.55, 0.18, LAMP, 6, b);
-          }
-          out._mat = 0;
+          modelGroup("monaco-casino", {
+            center: vadd(a.c, a.u, 22), size: [48, 46, 34], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.STONE;
+            addBox(stage, vadd(a.c, a.u, 13), [44, 26, 30], CREAM, b);
+            for (const o of [-13, 13]) {
+              addBox(stage, vadd(vadd(a.c, a.t, o), a.u, 30), [9, 18, 9], [0.90, 0.85, 0.74], b);
+            }
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(a.c, a.u, 28), [46, 4, 32], [0.30, 0.45, 0.38], b);
+            for (const o of [-13, 13]) {
+              addPrism(stage, vadd(vadd(a.c, a.t, o), a.u, 40.5), [9.2, 5, 9.2], [0.28, 0.42, 0.36], b);
+            }
+            // window bands + lit evening glow
+            stage._mat = MAT.GLASS;
+            for (let f = 0; f < 4; f++) {
+              addBox(stage, vadd(a.c, a.u, 5 + f * 6), [44.4, 2.2, 30.4], WIN, b);
+              addBox(stage, vadd(a.c, a.u, 6.0 + f * 6), [44.6, 1.1, 30.6], WINLIT, b);
+            }
+            stage._mat = MAT.METAL;
+            for (const o of [-8, 8]) {
+              const lc = vadd(vadd(a.c, a.t, o), a.u, 0);
+              addCyl(stage, lc, 0.10, 5.5, [0.72, 0.74, 0.76], 5, b);
+              addCyl(stage, vadd(lc, a.u, 5.3), 0.55, 0.18, LAMP, 6, b);
+            }
+            stage._mat = 0;
+          }, { required: LANDMARK_REQUIRED });
         }
       }
 
@@ -197,19 +249,23 @@
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
           // Cream limestone palace + terracotta mansard (Hôtel de Paris, 1864).
-          out._mat = MAT.STONE;
-          addBox(out, vadd(a.c, a.u, 20), [22, 40, 18], HOTEL, b);
-          addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 14), [14, 28, 12], HOTEL, b);
-          out._mat = MAT.GLASS;
-          for (let f = 0; f < 7; f++) {
-            addBox(out, vadd(a.c, a.u, 5 + f * 5), [22.3, 1.8, 18.3], WIN, b);
-          }
-          for (let f = 0; f < 5; f++) {
-            addBox(out, vadd(vadd(a.c, a.t, 14), a.u, 4 + f * 5), [14.3, 1.6, 12.3], WIN, b);
-          }
-          out._mat = MAT.ROOF;
-          addBox(out, vadd(a.c, a.u, 41), [23, 3.2, 19], OCHRE, b);
-          out._mat = 0;
+          modelGroup("monaco-hotel-de-paris", {
+            center: vadd(vadd(a.c, a.u, 22), a.t, 5.5), size: [24, 45, 31], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.STONE;
+            addBox(stage, vadd(a.c, a.u, 20), [22, 40, 18], HOTEL, b);
+            addBox(stage, vadd(vadd(a.c, a.t, 14), a.u, 14), [14, 28, 12], HOTEL, b);
+            stage._mat = MAT.GLASS;
+            for (let f = 0; f < 7; f++) {
+              addBox(stage, vadd(a.c, a.u, 5 + f * 5), [22.3, 1.8, 18.3], WIN, b);
+            }
+            for (let f = 0; f < 5; f++) {
+              addBox(stage, vadd(vadd(a.c, a.t, 14), a.u, 4 + f * 5), [14.3, 1.6, 12.3], WIN, b);
+            }
+            stage._mat = MAT.ROOF;
+            addBox(stage, vadd(a.c, a.u, 41), [23, 3.2, 19], OCHRE, b);
+            stage._mat = 0;
+          }, { required: LANDMARK_REQUIRED });
         }
       }
 
@@ -229,30 +285,34 @@
         if (!onTrack(a.c[0], a.c[2], 12)) {
           const b = [a.r, a.u, a.t];
           // Cream pavilion, glazed barrel, terracotta cornice, canvas terrace.
-          out._mat = MAT.STONE;
-          addBox(out, vadd(a.c, a.u, 9.5), [16, 19, 34], CAFE, b);
-          out._mat = MAT.GLASS;
-          for (let f = 0; f < 4; f++) {
-            addBox(out, vadd(a.c, a.u, 3.5 + f * 4), [16.3, 1.6, 34.3], WIN, b);
-          }
-          // addCyl extrudes along basis[1]; the glazed barrel runs the roof's
-          // LENGTH (t), ring in the r-u plane — the old basis sent 32 m of
-          // glass across-track out of the facade.
-          addCyl(out, vadd(vadd(a.c, a.t, -16), a.u, 21.4), 3.6, 32, [0.72, 0.80, 0.84], 9,
-            [a.r, a.t, a.u]);
-          out._mat = MAT.ROOF;
-          addBox(out, vadd(a.c, a.u, 19.6), [17, 1.4, 35], OCHRE, b);
-          for (let i = 0; i < 7; i++) {
-            const p = vadd(vadd(a.c, a.t, (i - 3) * 4.6), a.r, -8.5);
-            out._mat = MAT.FABRIC;
-            addBox(out, vadd(p, a.u, 3.5), [5.2, 0.35, 4.2],
-              i % 2 ? AWN_R : AWN_W, b);
-            addCone(out, vadd(vadd(p, a.r, -1.6), a.u, 2.1), 1.5, 0.7, AWN_W, 7, b);
-            out._mat = MAT.METAL;
-            addCyl(out, p, 0.10, 3.4, [0.66, 0.64, 0.60], 4, b);
-            addCyl(out, vadd(p, a.r, -1.6), 0.08, 2.3, [0.72, 0.70, 0.66], 4, b);
-          }
-          out._mat = 0;
+          modelGroup("monaco-cafe-de-paris", {
+            center: vadd(vadd(a.c, a.u, 11.5), a.r, -3), size: [30, 25, 36], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.STONE;
+            addBox(stage, vadd(a.c, a.u, 9.5), [16, 19, 34], CAFE, b);
+            stage._mat = MAT.GLASS;
+            for (let f = 0; f < 4; f++) {
+              addBox(stage, vadd(a.c, a.u, 3.5 + f * 4), [16.3, 1.6, 34.3], WIN, b);
+            }
+            // addCyl extrudes along basis[1]; the glazed barrel runs the roof's
+            // LENGTH (t), ring in the r-u plane — the old basis sent 32 m of
+            // glass across-track out of the facade.
+            addCyl(stage, vadd(vadd(a.c, a.t, -16), a.u, 21.4), 3.6, 32, [0.72, 0.80, 0.84], 9,
+              [a.r, a.t, a.u]);
+            stage._mat = MAT.ROOF;
+            addBox(stage, vadd(a.c, a.u, 19.6), [17, 1.4, 35], OCHRE, b);
+            for (let i = 0; i < 7; i++) {
+              const p = vadd(vadd(a.c, a.t, (i - 3) * 4.6), a.r, -8.5);
+              stage._mat = MAT.FABRIC;
+              addBox(stage, vadd(p, a.u, 3.5), [5.2, 0.35, 4.2],
+                i % 2 ? AWN_R : AWN_W, b);
+              addCone(stage, vadd(vadd(p, a.r, -1.6), a.u, 2.1), 1.5, 0.7, AWN_W, 7, b);
+              stage._mat = MAT.METAL;
+              addCyl(stage, p, 0.10, 3.4, [0.66, 0.64, 0.60], 4, b);
+              addCyl(stage, vadd(p, a.r, -1.6), 0.08, 2.3, [0.72, 0.70, 0.66], 4, b);
+            }
+            stage._mat = 0;
+          }, { required: LANDMARK_REQUIRED });
         }
       }
 
@@ -261,16 +321,20 @@
         if (!onTrack(a.c[0], a.c[2], 7)) {
           const b = [a.r, a.u, a.t];
           const STONE = [0.82, 0.80, 0.74], BRONZE = [0.34, 0.30, 0.20];
-          out._mat = MAT.STONE;
-          addBox(out, vadd(a.c, a.u, 0.22), [3.4, 0.45, 3.4], STONE, b);
-          addBox(out, vadd(a.c, a.u, 0.72), [2.6, 0.55, 2.6], STONE, b);
-          addBox(out, vadd(a.c, a.u, 2.05), [1.5, 2.1, 1.5], [0.86, 0.84, 0.78], b);
-          out._mat = MAT.METAL;
-          // Seated composer: torso, head, and the cloak mass behind him.
-          addBox(out, vadd(a.c, a.u, 3.75), [1.0, 1.3, 0.9], BRONZE, b);
-          addCyl(out, vadd(a.c, a.u, 4.45), 0.26, 0.42, BRONZE, 6, b);
-          addBox(out, vadd(vadd(a.c, a.u, 3.6), a.r, 0.5), [0.4, 1.5, 1.1], BRONZE, b);
-          out._mat = 0;
+          modelGroup("monaco-massenet", {
+            center: vadd(a.c, a.u, 2.4), size: [4.0, 5.2, 4.0], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.STONE;
+            addBox(stage, vadd(a.c, a.u, 0.22), [3.4, 0.45, 3.4], STONE, b);
+            addBox(stage, vadd(a.c, a.u, 0.72), [2.6, 0.55, 2.6], STONE, b);
+            addBox(stage, vadd(a.c, a.u, 2.05), [1.5, 2.1, 1.5], [0.86, 0.84, 0.78], b);
+            stage._mat = MAT.METAL;
+            // Seated composer: torso, head, and the cloak mass behind him.
+            addBox(stage, vadd(a.c, a.u, 3.75), [1.0, 1.3, 0.9], BRONZE, b);
+            addCyl(stage, vadd(a.c, a.u, 4.45), 0.26, 0.42, BRONZE, 6, b);
+            addBox(stage, vadd(vadd(a.c, a.u, 3.6), a.r, 0.5), [0.4, 1.5, 1.1], BRONZE, b);
+            stage._mat = 0;
+          }, { required: LANDMARK_REQUIRED });
         }
       }
 
@@ -286,6 +350,18 @@
         const k = K(0.215), a = anchor(k, -1, 14);
         if (!onTrack(a.c[0], a.c[2], 8)) {
           const b = [a.r, a.u, a.t];
+          // THE ONE THAT STAYS RAW, and the reason is a finding, not a taste.
+          // Wrapped in a modelGroup like its five neighbours, this fountain is
+          // refused by preflight with reason "superseded by the pit complex" —
+          // and models.js downgrades a pit verdict to required:false, so the
+          // build still prints a cheerful OK while the fountain silently
+          // disappears (-182 verts, measured). It sits at node 126, xz
+          // [68, 81]; the nearest node with pitKeep > 0 is 308 m away in plan,
+          // at the far end of the lap — Monaco's pit.keep covers s 0.943-0.051
+          // and nothing else. Whatever produces that verdict, a fountain in
+          // Casino Square is not inside the pit complex, so wrapping it would
+          // trade a silent-failure RISK for an actual silent failure. Left raw
+          // deliberately; the engine question belongs in js/track/, not here.
           addCyl(out, vadd(a.c, a.u, 0.5), 3.0, 1.0, [0.70, 0.72, 0.76], 10, b);
           addCyl(out, vadd(a.c, a.u, 1.6), 0.5, 2.2, [0.78, 0.80, 0.84], 8, b);
           addCyl(out, vadd(a.c, a.u, 3.4), 1.2, 0.4, [0.85, 0.90, 0.96], 8, b);
@@ -550,21 +626,25 @@
         if (!onTrack(a.c[0], a.c[2], 30)) {
           const b = [a.r, a.u, a.t];
           const ROCK = [0.48, 0.46, 0.40], ROCK2 = [0.54, 0.52, 0.44];
-          // Rock cliff climbing from the waterline (organic frustum tiers).
-          // addFrustum/addBox anchor at the BASE (js/track/core/geom.js); these
-          // offsets were authored as centres, floating the whole stack 21 m.
-          addFrustum(out, vadd(a.c, a.u, 0), 46, 32, 42, ROCK, 8, b);
-          addFrustum(out, vadd(a.c, a.u, 21), 32, 22, 16, ROCK2, 8, b);
-          // Palace fortress crowning the rock — everything within the r=22 top.
-          const py0 = 29;
-          addFrustum(out, vadd(a.c, a.u, py0 + 10), 18, 12, 20, CREAM, 8, b);
-          for (const sd of [-1, 1]) {
-            addBox(out, vadd(vadd(a.c, a.r, sd * 10), a.u, py0 + 8), [7, 16, 14], [0.92, 0.88, 0.82], b);
-            addCyl(out, vadd(vadd(a.c, a.r, sd * 13), a.u, py0 + 18), 2.0, 10, [0.72, 0.70, 0.66], 7, b);
-          }
-          addBox(out, vadd(a.c, a.u, py0 + 3), [24, 1.2, 26], [0.86, 0.85, 0.82], b);
-          // lit palace windows (reads at any time of day as a warm accent)
-          addBox(out, vadd(a.c, a.u, py0 + 16), [24.4, 3.6, 16], WINLIT, b);
+          modelGroup("monaco-rocher-palace", {
+            center: vadd(a.c, a.u, 30), size: [96, 62, 96], basis: b,
+          }, (stage) => {
+            // Rock cliff climbing from the waterline (organic frustum tiers).
+            // addFrustum/addBox anchor at the BASE (js/track/core/geom.js); these
+            // offsets were authored as centres, floating the whole stack 21 m.
+            addFrustum(stage, vadd(a.c, a.u, 0), 46, 32, 42, ROCK, 8, b);
+            addFrustum(stage, vadd(a.c, a.u, 21), 32, 22, 16, ROCK2, 8, b);
+            // Palace fortress crowning the rock — everything within the r=22 top.
+            const py0 = 29;
+            addFrustum(stage, vadd(a.c, a.u, py0 + 10), 18, 12, 20, CREAM, 8, b);
+            for (const sd of [-1, 1]) {
+              addBox(stage, vadd(vadd(a.c, a.r, sd * 10), a.u, py0 + 8), [7, 16, 14], [0.92, 0.88, 0.82], b);
+              addCyl(stage, vadd(vadd(a.c, a.r, sd * 13), a.u, py0 + 18), 2.0, 10, [0.72, 0.70, 0.66], 7, b);
+            }
+            addBox(stage, vadd(a.c, a.u, py0 + 3), [24, 1.2, 26], [0.86, 0.85, 0.82], b);
+            // lit palace windows (reads at any time of day as a warm accent)
+            addBox(stage, vadd(a.c, a.u, py0 + 16), [24.4, 3.6, 16], WINLIT, b);
+          }, { required: LANDMARK_REQUIRED });
         }
       }
 
@@ -1107,5 +1187,44 @@
           }
           stage._mat = 0;
         });
+      }
+
+      // ── THE AMPHITHEATRE BEHIND THE PRINCIPALITY ─────────────────────────
+      // Monaco had no terrain layer at all beyond its buildings: the pastel
+      // blocks simply stopped and the sky started. The real place is a shelf
+      // 300 m wide pinned between the sea and a limestone wall, and that wall
+      // is in every frame shot from the harbour looking inland. Without it the
+      // circuit reads as a town on a plain, which is the one thing Monte Carlo
+      // is not.
+      //
+      // Three masses, measured from the circuit at 43.7347 N 7.4206 E.
+      // +X is WEST and +Z is NORTH (tools/track/import-circuit-path.mjs), so a
+      // compass bearing θ is (-sin θ, cos θ):
+      //
+      //   Tête de Chien   43.7422 N 7.4103 E   550 m   1.18 km   bearing 315°
+      //   La Turbie ridge 43.7450 N 7.4008 E   480 m   1.96 km   bearing 306°
+      //   Mont Agel       43.7639 N 7.4239 E  1148 m   3.26 km   bearing   5°
+      //
+      // Heights are relief above the harbour, and the harbour is this lap's
+      // low point, so pyMin is the right base. `terrainOuter: 28` does not
+      // reach these — mountain() places in world XZ and stands on the floor
+      // plane, the same way Fuji's cone does at 9.4 km.
+      //
+      // NOTHING SOUTH OR EAST. That half is the Mediterranean, and a hill
+      // there would close the one open horizon the circuit has.
+      {
+        const bear = (deg) => { const r = deg * Math.PI / 180; return [-Math.sin(r), Math.cos(r)]; };
+        for (const [deg, dist, w, h, sd, rock] of [
+          [315.2, 1180, 1500,  560, 5,  [0.62, 0.59, 0.52]],   // Tête de Chien
+          [305.7, 1960, 2100,  490, 11, [0.58, 0.56, 0.50]],   // the La Turbie shelf
+          [  5.2, 3260, 3200, 1160, 17, [0.52, 0.51, 0.48]],   // Mont Agel, hazed
+          [ 340.0, 2400, 1700,  620, 23, [0.56, 0.54, 0.48]],  // the Moyenne Corniche flank
+          [  35.0, 2600, 1800,  700, 29, [0.54, 0.53, 0.47]],  // the Roquebrune side
+        ]) {
+          const [dx, dz] = bear(deg);
+          api.mountain(dx * dist, dz * dist, pyMin - 6, w, h,
+            { seg: 14, seed: sd, rough: 0.26, snowline: 1.8,
+              forest: [0.23, 0.30, 0.20], rock });
+        }
       }
     };

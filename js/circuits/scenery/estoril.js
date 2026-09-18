@@ -7,8 +7,8 @@
 (window.TrackScenery = window.TrackScenery || {})["estoril"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
-        tree, bush, ridge, grandstandEx, spectatorHill, sponsorHoarding,
-        broadcastCompound, billboard, gantry, marshalPost, motorhome, waterBand,
+        tree, bush, ridge, mountain, grandstandEx, spectatorHill, sponsorHoarding,
+        broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         addBox, addCyl, addFrustum, forestEdge } = api;
 
@@ -220,16 +220,19 @@
       }
 
       const { cx, cz, radius: rad } = lapBounds();
-      // The ocean sheet, laid along the outside of the back section.
-      waterBand(0.52, 0.72, -1, 210, 640, 20, [0.16, 0.32, 0.44],
-        { id: "estoril-atlantic" });
-      const seaC = anchor(K(0.62), -1, 380).c;
-      const seaAng = Math.atan2(seaC[2] - cz, seaC[0] - cx);
-      const seaward = (ang) => {
-        let d = Math.abs(ang - seaAng) % 6.2832;
-        if (d > 3.1416) d = 6.2832 - d;
-        return d < 0.95;
-      };
+      // ── NO ATLANTIC. THE CIRCUIT IS INLAND. ──────────────────────────────
+      // There used to be a waterBand here, 210 m off the back section, with a
+      // matching `seaward` wedge that punched a hole in the hill ring so you
+      // could see it. Both are gone. Estoril sits on the Alcabideche plateau
+      // at 38.7506 N 9.3942 W; the nearest water is Guincho at 7.2 km on
+      // bearing 254° and Cascais bay at 7.1 km on 198°, and the Malveira
+      // ridge stands between. A sheet of sea two hundred metres from the
+      // Parabolica is not a stylisation of that, it is a different place —
+      // and the hole it cut in the ring removed the one thing you really can
+      // see from the track, which is hills in every direction.
+      //
+      // The lighthouse that stood next to it went the same way; see
+      // `estoril-deposito` below.
       for (const [extra, count, len, w, hMin, hVar, col] of [
         [120, 42, 130, 42, 14, 8, [0.24, 0.34, 0.19]],
         [220, 32, 180, 58, 26, 16, [0.26, 0.31, 0.21]],
@@ -237,11 +240,29 @@
       ]) {
         for (let i = 0; i < count; i++) {
           const a = i / count * 6.2832, h = hash(i * 7 + extra);
-          if (seaward(a)) continue;
           const r = rad + extra + h * 32;
           const tx = cx + Math.cos(a) * r, tz = cz + Math.sin(a) * r;
           if (onTrack(tx, tz, 32)) continue;
           ridge(tx, tz, pyMin, a + 1.5708, len, w, hMin + h * hVar, col);
+        }
+      }
+      // ── SERRA DE SINTRA ──────────────────────────────────────────────────
+      // What actually closes the skyline here, and the reason the plateau is
+      // called one. Cruz Alta (528 m) is at 38.7878 N 9.4283 W: 5.09 km from
+      // the circuit on bearing 324.4°, and the circuit stands at ~180 m, so
+      // 348 m of relief subtending 3.9°. +X is WEST and +Z is NORTH
+      // (tools/track/import-circuit-path.mjs), so bearing θ is (-sin θ, cos θ).
+      {
+        const bear = (deg) => { const r = deg * Math.PI / 180; return [-Math.sin(r), Math.cos(r)]; };
+        for (const [deg, dist, w, h, sd] of [
+          [324.4, 5090, 3400, 348, 7],    // Cruz Alta, the massif's high point
+          [312.0, 5400, 2300, 262, 13],   // the eastern shoulder toward Pena
+          [336.5, 5600, 2100, 224, 19],   // the western fall to Peninha
+        ]) {
+          const [dx, dz] = bear(deg);
+          mountain(cx + dx * dist, cz + dz * dist, pyMin - 10, w, h,
+            { seg: 14, seed: sd, rough: 0.34, snowline: 1.6,
+              forest: [0.17, 0.26, 0.17], rock: [0.38, 0.36, 0.33] });
         }
       }
 
@@ -272,22 +293,30 @@
         });
       }
       {
+        // A DEPÓSITO DE ÁGUA, not the lighthouse that used to stand here.
+        // The farol was the other half of the coastal fiction removed above:
+        // Cabo Raso and Santa Marta are 7 km away on the actual coast, and one
+        // 150 m off the back section put a navigation light on an inland
+        // plateau. What does stand over every Portuguese town of this size is
+        // the elevated water tank — same tall pale cylinder the author wanted
+        // as an outfield accent, and it is really there.
         const a = anchor(K(0.62), -1, 150), b = [a.r, a.u, a.t];
-        modelGroup("estoril-farol", {
-          center: vadd(a.c, a.u, 14), size: [20, 34, 40], basis: b,
+        modelGroup("estoril-deposito", {
+          center: vadd(a.c, a.u, 13), size: [20, 32, 40], basis: b,
         }, (stage) => {
           stage._mat = MAT.CONCRETE;
-          addFrustum(stage, a.c, 3.4, 2.2, 22, LIME, 10, b);
-          for (const y of [6.5, 13.5])                       // the red bands
-            addFrustum(stage, vadd(a.c, a.u, y), 3.05, 2.85, 2.6, [0.78, 0.20, 0.16], 10, b);
-          seat.cyl(stage, vadd(a.c, a.u, 22), 3.2, 1.0, [0.36, 0.36, 0.38], 10, b);  // gallery
-          stage._mat = MAT.GLASS;
-          seat.cyl(stage, vadd(a.c, a.u, 23), 2.1, 3.0, [0.86, 0.84, 0.62], 8, b);   // lantern
+          addFrustum(stage, a.c, 2.6, 2.1, 17, LIME, 10, b);                        // shaft
+          seat.cyl(stage, vadd(a.c, a.u, 8.5), 2.35, 0.5, LIME_D, 10, b);           // mid collar
+          addFrustum(stage, vadd(a.c, a.u, 17), 3.0, 4.6, 5.4, LIME, 12, b);        // flared tank underside
+          seat.cyl(stage, vadd(a.c, a.u, 22.4), 4.6, 2.6, LIME, 12, b);             // tank barrel
+          seat.cyl(stage, vadd(a.c, a.u, 21.2), 4.75, 0.35, LIME_D, 12, b);         // shadow band
           stage._mat = MAT.ROOF;
-          seat.cone(stage, vadd(a.c, a.u, 26), 2.6, 2.2, [0.30, 0.30, 0.32], 8, b);
+          seat.cyl(stage, vadd(a.c, a.u, 25.0), 4.8, 0.4, TILE_D, 12, b);           // cap slab
+          seat.cone(stage, vadd(a.c, a.u, 25.4), 3.6, 1.6, TILE_D, 12, b);
           stage._mat = MAT.CONCRETE;
+          seat.cyl(stage, vadd(a.c, a.u, 27.0), 0.5, 1.4, [0.42, 0.42, 0.44], 6, b); // vent stack
           const cot = vadd(a.c, a.t, 11);
-          seat.box(stage, cot, [9, 4.2, 12], LIME, b);
+          seat.box(stage, cot, [9, 4.2, 12], LIME, b);                              // pump house
           stage._mat = MAT.ROOF;
           seat.prism(stage, vadd(cot, a.u, 4.2), [9.5, 1.5, 12.5], TILE, b);
           stage._mat = 0;
