@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
-  sweepSuites, touchesGeometry, notCovered, anyGeometry } from "../../tools/ci/deploy.mjs";
+  sweepSuites, touchesGeometry, notCovered, anyGeometry, proseOnly } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -236,4 +236,30 @@ test("anyGeometry answers for a file LIST, so the retry asks what the union aske
   // asked separately from the shipped-code one.
   assert.equal(anyGeometry([sweepSuites()[0]]), true,
     "a sweep suite's own file is geometry for this purpose, though it ships nothing");
+});
+
+/* THE OTHER HALF OF THE RE-VERIFY QUESTION (2026-09-18).
+ * reverifyUnion asked only "did the INCOMING delta ship code?" and never "does
+ * OURS?" — so a deploy carrying three .md files re-ran the full gate plus a
+ * 10-minute sweep on every lost race, re-proving the other session's code for
+ * it. Measured that morning: six landings in 30 minutes against a re-verify of
+ * ~14, so a prose-only deploy lost three races and stopped with nothing wrong
+ * with it. proseOnly() is the predicate that ends that, and it is NARROW on
+ * purpose — the interaction it claims does not exist has to actually not exist. */
+test("proseOnly is true for prose and false for anything that can interact", () => {
+  assert.equal(proseOnly(["docs/notes/SHARED-BRANCH-COORDINATION.md", "AGENTS.md"]), true);
+  assert.equal(proseOnly(["docs/TESTING.md"]), true);
+
+  // TESTS AND TOOLS ARE NOT PROSE. A guard this session added really can be
+  // broken by code another session landed — prepush-gate-coverage fails on a
+  // unit file added anywhere in the tree — and that is an interaction the full
+  // gate is for.
+  assert.equal(proseOnly(["tests/unit/prepush-gate-coverage.test.mjs"]), false,
+    "a test we added can be broken by code they landed");
+  assert.equal(proseOnly(["tools/ci/deploy.mjs"]), false, "tooling runs against their tree");
+  assert.equal(proseOnly(["js/game.js"]), false);
+  assert.equal(proseOnly(["docs/README.md", "js/game.js"]), false, "one shipped file is enough");
+
+  // An EMPTY delta is not prose: nothing to reason about means take the gate.
+  assert.equal(proseOnly([]), false, "an empty or unresolvable diff must not buy the shortcut");
 });
