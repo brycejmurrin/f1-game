@@ -351,6 +351,7 @@ interface GameCtx {
   readonly careerSettlement: CareerSettlement | null;
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
+  readonly openDailyPicker: () => void;
   seasonMode: boolean;
   /** The championship round in a season/career, else the session race counter. */
   readonly seasonRound: number;

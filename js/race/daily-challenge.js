@@ -64,7 +64,7 @@ const DailyChallenge = (function () {
       active = p;
       p.class = mode === "standard" && G.records ? "standard" : "open";
       if (p.class === "standard") G.records.prepareDaily();
-      Log.info("game", "DailyChallenge.open " + p.day + " " + p.trackId + " " + p.weather + " " + p.tod);
+      Log.info("game", "DailyChallenge.select " + p.day + " " + p.trackId + " " + p.weather + " " + p.tod);
       return p;
     }
 
