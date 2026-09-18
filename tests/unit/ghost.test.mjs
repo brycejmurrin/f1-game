@@ -22,7 +22,8 @@ import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function createHarness(opts = {}) {
-  const store = new Map();
+  const store = new Map(Object.entries(opts.disk || {}));
+  const listeners = new Map();
   const mockLocalStorage = {
     getItem(k) { return store.has(k) ? store.get(k) : null; },
     setItem(k, v) {
@@ -43,6 +44,11 @@ function createHarness(opts = {}) {
     TextEncoder,
     console,
   };
+  sandbox.window = sandbox;
+  sandbox.addEventListener = (type, fn) => {
+    if (!listeners.has(type)) listeners.set(type, []);
+    listeners.get(type).push(fn);
+  };
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
   seedSaveMigrate(ctx);
@@ -53,6 +59,7 @@ function createHarness(opts = {}) {
     Ghost: sandbox.module.exports || vm.runInContext("Ghost", ctx),
     GameStore: vm.runInContext("GameStore", ctx),
     store: mockLocalStorage,
+    fire: (type) => { for (const fn of listeners.get(type) || []) fn({ type }); },
   };
 }
 
@@ -232,4 +239,62 @@ test("ghost quota failures flow through GameStore persistence health", () => {
   for (let i = 0; i < 12; i++) Ghost.record(i * 0.1, i * 10, 0);
   assert.equal(Ghost.finishLap(40), true, "the current session still keeps the personal best");
   assert.equal(GameStore.store.broken, "QuotaExceededError", "persistState can report the failed ghost write");
+});
+
+test("loading an inherited over-budget store trims it before other saves compete for quota", () => {
+  const inherited = {};
+  for (let n = 0; n < 100; n++) {
+    inherited["track-" + n] = {
+      time: 100 + n,
+      t: Array.from({ length: 500 }, (_, i) => i * 0.1),
+      s: Array.from({ length: 500 }, (_, i) => i * 10),
+      x: Array(500).fill(n),
+      _used: n,
+    };
+  }
+  const { Ghost, store } = createHarness({
+    disk: { "apex26.ghost.v1": JSON.stringify(inherited) },
+  });
+
+  Ghost.setTrack("track-0");
+
+  const raw = store.getItem("apex26.ghost.v1");
+  assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024, "first load repairs the inherited blob");
+  assert.ok(JSON.parse(raw)["track-0"], "the context being loaded is promoted before LRU eviction");
+});
+
+test("one oversized valid trace is thinned to fit instead of evicting its own personal best", () => {
+  const { Ghost, store } = createHarness();
+  Ghost.setTrack("endurance");
+  Ghost.startLap();
+  for (let i = 0; i < 40_000; i++) Ghost.record(i * 0.1, i * 10, i % 7);
+  assert.equal(Ghost.finishLap(5000), true);
+
+  const raw = store.getItem("apex26.ghost.v1");
+  assert.ok(Buffer.byteLength(raw, "utf8") <= 512 * 1024, "the single trace respects the total budget");
+  const saved = JSON.parse(raw).endurance;
+  assert.ok(saved, "the newest personal best remains durable");
+  assert.ok(saved.t.length >= 8 && saved.t.length < 40_000, "samples are thinned but remain a valid trace");
+  assert.equal(saved.t[0], 0);
+  assert.equal(saved.t.at(-1), 3999.9, "the finish sample survives thinning");
+  assert.equal(saved.t.length, saved.s.length);
+  assert.equal(saved.t.length, saved.x.length);
+});
+
+test("a read-only LRU touch is persisted at pagehide without writing on every circuit browse", () => {
+  const first = createHarness();
+  first.Ghost.setTrack("monza");
+  first.Ghost.startLap();
+  for (let i = 0; i < 12; i++) first.Ghost.record(i * 0.1, i * 10, 0);
+  first.Ghost.finishLap(40);
+  const disk = { "apex26.ghost.v1": first.store.getItem("apex26.ghost.v1") };
+
+  const second = createHarness({ disk });
+  const before = JSON.parse(second.store.getItem("apex26.ghost.v1")).monza._used;
+  second.Ghost.setTrack("monza");
+  assert.equal(JSON.parse(second.store.getItem("apex26.ghost.v1")).monza._used, before,
+    "browsing a circuit does not synchronously rewrite the full ghost blob");
+  second.fire("pagehide");
+  assert.ok(JSON.parse(second.store.getItem("apex26.ghost.v1")).monza._used > before,
+    "the refreshed recency survives the next reload");
 });

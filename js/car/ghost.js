@@ -45,8 +45,12 @@ const Ghost = (function () {
   // fallback is memoised too, so a corrupt key costs one parse.
   let storeCache = null;
   let accessClock = Date.now();
-  function loadStore() {
-    if (storeCache) return storeCache;
+  let lruDirty = false;
+  function loadStore(preferId) {
+    if (storeCache) {
+      if (preferId && storeCache[preferId] && typeof storeCache[preferId] === "object") touch(storeCache[preferId]);
+      return storeCache;
+    }
     let parsed = GameStore.store.get(STORE_KEY, null);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       if (parsed !== null) Log.warn("car", "ghost store was not an object; starting empty");
@@ -55,12 +59,20 @@ const Ghost = (function () {
     for (const g of Object.values(parsed)) {
       if (g && Number.isFinite(g._used)) accessClock = Math.max(accessClock, g._used);
     }
+    if (preferId && parsed[preferId] && typeof parsed[preferId] === "object") touch(parsed[preferId]);
     storeCache = parsed;
+    const repaired = trimStore(parsed);
+    if (repaired.changed) {
+      const result = GameStore.store.write(STORE_KEY, parsed);
+      if (result.durable) lruDirty = false;
+      else Log.warn("car", "ghost budget repair is session-only");
+    }
     return storeCache;
   }
   function touch(g) {
     accessClock = Math.max(accessClock + 1, Date.now());
     g._used = accessClock;
+    lruDirty = true;
   }
   function byteLength(json) {
     if (typeof TextEncoder === "function") return new TextEncoder().encode(json).byteLength;
@@ -68,24 +80,53 @@ const Ghost = (function () {
     // UTF-16 length is a conservative fallback where TextEncoder is absent.
     return json.length * 2;
   }
+  function thinTrace(g) {
+    if (!g || !Array.isArray(g.t) || !Array.isArray(g.s) || !Array.isArray(g.x)) return false;
+    const n = g.t.length;
+    if (n <= MIN_SAMPLES || g.s.length !== n || g.x.length !== n) return false;
+    const count = Math.max(MIN_SAMPLES, Math.ceil(n / 2));
+    const indices = Array.from({ length: count }, (_, i) => Math.round(i * (n - 1) / (count - 1)));
+    g.t = indices.map(i => g.t[i]);
+    g.s = indices.map(i => g.s[i]);
+    g.x = indices.map(i => g.x[i]);
+    return true;
+  }
   function trimStore(store) {
     let json = JSON.stringify(store);
-    if (byteLength(json) <= MAX_STORE_BYTES) return json;
+    if (byteLength(json) <= MAX_STORE_BYTES) return { changed: false };
+    let changed = false;
     const oldest = Object.keys(store).sort((a, b) => {
       const at = Number.isFinite(store[a] && store[a]._used) ? store[a]._used : 0;
       const bt = Number.isFinite(store[b] && store[b]._used) ? store[b]._used : 0;
       return at - bt;
     });
-    while (oldest.length && byteLength(json) > MAX_STORE_BYTES) {
+    while (oldest.length > 1 && byteLength(json) > MAX_STORE_BYTES) {
       delete store[oldest.shift()];
+      changed = true;
       json = JSON.stringify(store);
     }
-    return json;
+    const last = oldest[0];
+    while (last && byteLength(json) > MAX_STORE_BYTES && thinTrace(store[last])) {
+      changed = true;
+      json = JSON.stringify(store);
+    }
+    if (last && byteLength(json) > MAX_STORE_BYTES) {
+      delete store[last];
+      changed = true;
+    }
+    return { changed };
   }
   function saveStore(store) {
     storeCache = store;
     trimStore(store);
-    return GameStore.store.write(STORE_KEY, store);
+    const result = GameStore.store.write(STORE_KEY, store);
+    if (result.durable) lruDirty = false;
+    return result;
+  }
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("pagehide", () => {
+      if (lruDirty && storeCache) saveStore(storeCache);
+    });
   }
 
   // Canonical JSON is collision-free and stable across object insertion order.
@@ -104,8 +145,7 @@ const Ghost = (function () {
   function setTrack(id, eventContext = null) {
     trackId = id; context = eventContext;
     storageId = context == null ? id : "v2:" + id + ":" + context;
-    const g = loadStore()[storageId];
-    if (g && typeof g === "object") touch(g);
+    const g = loadStore(storageId)[storageId];
     best = valid(g) ? g : null;
     rec = null;
     lastSampleT = -1;
