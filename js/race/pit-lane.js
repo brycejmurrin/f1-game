@@ -405,6 +405,17 @@ const PitLane = (function () {
       return zz ? G.vTop() * zz.limitFrac : Infinity;
     }
 
+    /** The limit as a NUMBER TO SHOW: `limit()` is raw m/s at the current pace,
+     *  so `limit() * 3.6` is not the speedo's km/h — the speedo reads `dashKph`
+     *  (vStd, where PACE cancels). The board on the wall paints the authored 80
+     *  or 60, the speedo reads 80 while the limiter holds, and the cue printed
+     *  67: the one number the driver compares against the speedo was the odd
+     *  one out, and at pace 0.84 it was 13 km/h low. */
+    function limitKphShown() {
+      const l = limit();
+      return Number.isFinite(l) ? G.dashKph(l) : Infinity;
+    }
+
     /** Where THIS CAR's box sits, as a distance into the window. The zone's
      *  sBox is the row's ANCHOR; a team's garage is offset from it by its row,
      *  centred so the row straddles the anchor rather than growing off one end.
@@ -653,7 +664,7 @@ const PitLane = (function () {
         teach("line", "HOLD THE LANE — STOP AT YOUR CREST");
         // STAY IN LANE, all the way from the line to the box: the instruction
         // is continuous, and the limit rides along with it.
-        return { phase: "lane", text: "STAY IN LANE · " + Math.round(limit() * 3.6) + " LIMIT", dist: 0, frac: 0 };
+        return { phase: "lane", text: "STAY IN LANE · " + Math.round(limitKphShown()) + " LIMIT", dist: 0, frac: 0 };
       }
       if (st === "out") {
         // THE EXIT ROAD used to be silence — and it is where a serviced car
@@ -761,6 +772,16 @@ const PitLane = (function () {
       // there is a wall between it and the track. update() clears the state
       // the moment the car leaves the window.
       return c.pitState === "out" && inWindowOf(c);
+    }
+
+    /** Is the pit limiter holding this car? `inLane` plus the EXIT ROAD, which
+     *  a served car is still on after the window ends — one predicate, because
+     *  everything the lane forbids it forbids for exactly this long: the speed
+     *  cap (game.js), and overtake and X-mode, which are not a driver's to use
+     *  between the entry line and the exit. It lifts at the exit, not at the
+     *  box, so a car cannot light the boost up on its way out of the complex. */
+    function held(c) {
+      return inLane(c) || (!!c && c.pitState === "out" && roadOf(c) === "exit");
     }
 
     /** Inside the window at all — the arc test alone, without the lateral one. */
@@ -1496,6 +1517,9 @@ const PitLane = (function () {
         // box is to crawl the whole lane looking for it.
         boxM: +boxThroughFor(car, zz, L || 1).toFixed(1),
         atM: +at.toFixed(1),
+        // RAW m/s * 3.6, matching physState().speed's raw m/s — this is the
+        // enforced CAP an agent or a spec compares a speed against, not the
+        // number on the HUD (limitKphShown, the speedo's scale).
         limitKph: +(limit() * 3.6).toFixed(1),
         boxS: zz.boxS,
         armed: !!(car && car.pitArmed),
@@ -1531,7 +1555,7 @@ const PitLane = (function () {
       };
     }
 
-    return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, roadOf, inWindow: inWindowOf,
+    return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
              pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S, boxBusy,

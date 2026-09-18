@@ -242,6 +242,10 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
   const said = [];
   const G = {
     track, vTop: () => vTop, lapsTarget: 25, raceWeather: "dry",
+    // The speedo's scale (vStd · 3.6, VMAX 72): PACE cancels, so a limit of
+    // 22.2 m/s at this stub's vTop 60 still reads the painted 80 km/h. The cue
+    // prints this, not raw m/s — see limitKphShown.
+    dashKph: (v) => (v * 72 / vTop) * 3.6,
     announce: (m) => said.push(m),
     // spent() reads the CAR, not a constant: the cue's whole job is to stay
     // quiet on a fresh set and speak on a used one, and a stub that always
@@ -1109,4 +1113,24 @@ test("lossS is the lane's net cost in seconds, and estimate agrees with it off a
   assert.ok(s > 5 && s < 60, `a plausible pit loss: ${s}`);
   const est = pits.estimate(car(0));
   assert.ok(Math.abs(est.lossS - s) < 1e-9, `estimate's lossS is the same number off a caution (${est.lossS} vs ${s})`);
+});
+
+// ── `held`: how long the lane's rules apply ──────────────────────────────────
+// One predicate for everything the lane forbids — the speed cap, and now
+// overtake and X-mode, which are not a driver's to use between the lines. It is
+// a STATE plus the exit road, never a half-plane: a car running wide on the pit
+// straight must not read as held, which is the same invariant `inLane` carries.
+test("held is the lane's own states, and never a position on the road", () => {
+  const { pits, zone } = commitSession();
+  const at = (pitState, s) => ({ local: true, pitState, s: s == null ? zone.sIn + 20 : s });
+  assert.equal(pits.held(at("lane")), true, "rolling down the lane");
+  assert.equal(pits.held(at("box")), true, "on the jacks");
+  assert.equal(pits.held(at("none")), false, "a car on the racing line is never held");
+  assert.equal(pits.held(at("armed")), false, "armed is the approach, before the line");
+  assert.equal(pits.held(null), false, "no car, nothing held");
+  // A served car is held until the exit — but only while it is still in the
+  // complex. Past the window with no exit road under it, the rules are off.
+  assert.equal(pits.held(at("out", zone.sIn + 20)), true, "served, still inside the window");
+  const half = ((zone.sIn + 5386 / 2) % 5386 + 5386) % 5386;
+  assert.equal(pits.held(at("out", half)), false, "half a lap away, the stop is over");
 });
