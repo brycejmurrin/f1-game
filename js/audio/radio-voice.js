@@ -146,7 +146,14 @@ const RadioVoice = (function () {
     // is naturally a record. Absent keys and absent channels both mean "the
     // shipped default", so a fresh save and a reset are the same state.
     let tune = readTune();
-    let voices = null, deadline = null, last = null;
+    // `current` is the utterance THIS instance is speaking, and it exists because
+    // every utterance shares one handler over module state (`deadline`, the music
+    // duck). speechSynthesis fires a cancelled line's end/error ASYNCHRONOUSLY —
+    // after the replacement has already started — so without an identity check
+    // the dead line's callback cleared the LIVE line's hard stop and un-ducked
+    // the music underneath it. That lands on exactly the lines that preempt:
+    // a penalty cutting off the coach is the case this module was built for.
+    let voices = null, deadline = null, last = null, current = null;
     function readTune() {
       const t = G.store.get("voiceTune", null);
       return t && typeof t === "object" ? t : {};
@@ -191,6 +198,9 @@ const RadioVoice = (function () {
     function clearDeadline() { if (deadline != null) { clearTimeout(deadline); deadline = null; } }
     function stop() {
       clearDeadline();
+      // Before cancel(): the callback it triggers must already see itself as
+      // stale, whether the engine fires it synchronously or a turn later.
+      current = null;
       try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
     }
@@ -202,8 +212,29 @@ const RadioVoice = (function () {
       const u = new Utter(p.text);
       u.voice = voiceFor(p.speaker);
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
-      u.onend = u.onerror = () => { clearDeadline(); if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false); };
-      try { synth.speak(u); } catch (e) { Log.info("audio", "RadioVoice speak failed"); return false; }
+      // Only the LIVE line may release the duck and the deadline — see `current`.
+      u.onend = u.onerror = () => {
+        if (u !== current) return;
+        current = null;
+        clearDeadline();
+        if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+      };
+      // CLAIMED AND DUCKED BEFORE speak(), both for the same reason: an engine
+      // may end — or refuse — an utterance synchronously from inside speak().
+      // Claiming after it would make the line's own end run as a stranger;
+      // ducking after it would overwrite the release that end just performed and
+      // leave the music down with nothing speaking until the deadline healed it.
+      // Down-then-up is also simply the right order for the ear.
+      current = u;
+      if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
+      try {
+        synth.speak(u);
+      } catch (e) {
+        current = null;
+        if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+        Log.info("audio", "RadioVoice speak failed");
+        return false;
+      }
       // Bugzilla 1522074 (open, Firefox AND Chrome): a speak() directly after a
       // cancel() is silently dropped, and resume() is the reporter's fix. We
       // take that rather than the 500 ms delay also suggested there — 500 ms is
@@ -212,7 +243,6 @@ const RadioVoice = (function () {
       // preempt path is exactly a cancel-then-speak, so without this the line
       // that goes missing is the PENALTY that interrupted, not the wear report.
       try { synth.resume(); } catch (e) { /* nothing was paused; harmless */ }
-      if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       // The hard stop, armed from the card's ACTUAL remaining life rather than a
       // second copy of showAnnounce's expression. A duplicated constant is how
       // "spoken after it left the screen" gets reintroduced by a later edit.
