@@ -50,6 +50,27 @@ test("the store answers from the file, not from the call-site literal", () => {
   }
 });
 
+test("raw defaults resolve from short and apex26-prefixed keys", () => {
+  const { GameStore, SettingsDefaults } = load();
+  const store = GameStore.store;
+  for (const k of SettingsDefaults.keys().filter((x) => typeof SettingsDefaults.get(x) === "string")) {
+    assert.equal(store.raw(k), SettingsDefaults.get(k), `${k}: short raw key missed its default`);
+    assert.equal(store.raw("apex26." + k), SettingsDefaults.get(k), `${k}: prefixed raw key missed its default`);
+  }
+});
+
+test("cautions ship off and SPEC documents every authoritative default", () => {
+  const { SettingsDefaults } = load();
+  assert.equal(SettingsDefaults.has("caution"), true);
+  assert.equal(SettingsDefaults.get("caution"), false);
+  const spec = new Map(readSpec().map((row) => [row.k, row]));
+  for (const k of SettingsDefaults.keys()) {
+    assert.equal(spec.get(k)?.def, JSON.stringify(SettingsDefaults.get(k)),
+      `${k}: SPEC def drifted from SettingsDefaults`);
+  }
+  assert.equal(spec.get("caution")?.subsystem, null, "caution is a sticky preference, not an unexportable subsystem");
+});
+
 test("a stored value still beats the shipped default", () => {
   const { GameStore, SettingsDefaults } = load();
   const store = GameStore.store;

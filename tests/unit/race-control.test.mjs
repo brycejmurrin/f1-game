@@ -53,8 +53,10 @@ function hazards(total, worstCount, sector = 1, redTotal = total) {
 }
 
 /** Minimal world: single-player (owns race control), racing, empty grid. */
-function makeCtx(over = {}) {
+function makeCtx(over = {}, savedCaution) {
   const saved = new Map();
+  const initial = arguments.length < 2 ? true : savedCaution;
+  if (initial !== undefined) saved.set("caution", initial);
   return Object.assign({
     state: "race",
     ranked: [],
@@ -278,9 +280,8 @@ test("the enabled flag reads BOTH storage formats", () => {
   // player who turned them off.
   const debris = { active: () => true, hazards: () => hazards(0, 0) };
   for (const [stored, expected] of [[0, false], ["0", false], [false, false],
-                                    [1, true], ["1", true], [true, true], [undefined, true]]) {
-    const ctx = makeCtx();
-    if (stored !== undefined) ctx.store.set("caution", stored);
+                                    [1, true], ["1", true], [true, true], [undefined, false]]) {
+    const ctx = makeCtx({}, stored);
     assert.equal(load(debris).create(ctx).info().enabled, expected,
       `stored ${JSON.stringify(stored)}`);
   }

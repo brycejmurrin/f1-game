@@ -447,6 +447,8 @@ interface GameCtx {
   skyT: number;
   skyHold: boolean;
   raceTimeOfDay: TimeOfDay;
+  /** The FLYBY SHOT EDITOR's saved shot list, or null for the shipped sequence. */
+  readonly flybyShots: object[] | null;
   raceWeather: Weather;
   sectorBests: [number, number, number];
   readonly fieldSectorBests: [number, number, number];
