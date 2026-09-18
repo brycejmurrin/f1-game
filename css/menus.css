@@ -1213,11 +1213,11 @@ h3.sel-label {
 }
 #rs-presets {
   grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: calc(var(--gap) * 0.6);
+  --balance-basis: 8rem;
+  --balance-min: 6rem;
+  margin: 0;
 }
-#rs-presets .sel-chip { width: 100%; min-width: 0; }
+#rs-presets > .preset-btn { min-height: var(--chip-h); }
 @container sheet (min-width: 440px) {
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
