@@ -936,7 +936,6 @@ const GLX = (function () {
   } catch (_) { spatialUpscale = false; }
   function setSpatialUpscale(on) {
     spatialUpscale = !!on;
-    try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
     if (on && PST && PST.ensureSpatial) PST.ensureSpatial();
     resize();
     return spatialUpscale;
@@ -2237,7 +2236,7 @@ const GLX = (function () {
     if (batch.shadowCbo) { gl.deleteBuffer(batch.shadowCbo); batch.shadowCbo = null; }
     batch._shadowPacked = null;
     batch._shadowColors = null;
-    if (freeMesh) freeMesh(batch);
+    freeMesh(batch);   // a hoisted same-scope declaration; the old `if` could not be false
   }
 
   function draw(mesh, modelMat, opts) {

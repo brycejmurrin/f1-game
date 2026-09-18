@@ -44,7 +44,7 @@ function create(G) {
   const el = Dom.el;   // js/ui/dom.js — the one createElement helper
 
   function starterTeams() {
-    return Teams.LIST.filter((t) => !t.custom && t.tier >= STARTER_TIER_MIN);
+    return Teams.LIST.filter((t) => Teams.isReal(t) && t.tier >= STARTER_TIER_MIN);
   }
 
   function freshDraft() {
@@ -953,7 +953,7 @@ function create(G) {
         const bar = Career.offerBar(tier);
         const openSeat = mv >= bar;
         const r = el("div", "cr-ladder" + (openSeat ? " open" : ""));
-        const names = Teams.LIST.filter((t) => !t.custom && t.tier === tier)
+        const names = Teams.LIST.filter((t) => Teams.isReal(t) && t.tier === tier)
           .map((t) => t.short || t.name).join(" · ");
         r.append(
           el("span", "cr-ladder-k", label),
@@ -1211,7 +1211,11 @@ function create(G) {
     close();
     els.overlay.hidden = false;
     G.flow = "gp"; G.session = "race";
-    G.season = G.store.get("season", null);
+    // Same two statements as game.js's own return-to-menu: resume() repairs a
+    // career alias and sanitises the round, and the repair is persisted. Reading
+    // the raw key handed the menu an unsanitised save.
+    G.season = SeasonCal.resume(G.store.get("season", null));
+    G.store.set("season", G.season);
     G.refreshCareerButton();
     { const mb = $("mb-standings"); if (mb) mb.hidden = !(SeasonCal.hasProgress(G.season) && G.season && G.season.round < SeasonCal.rounds()); }
     if (G.soundOn) GameAudio.uiSelect();

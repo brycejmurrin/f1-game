@@ -178,8 +178,8 @@ function setEnabled(on) {
 function create(ctx) {
   Log.info("game", "DebrisWorld.create");
   G = ctx;
-  // Default ON, as originally intended — and worth recording why it spent
-  // builds 897-902 off.
+  // SettingsDefaults owns the player-facing default; only an explicit raw
+  // "1" starts this optional side-world.
   //
   // Until build 893 this module had never run on the deployed site at all: the
   // Pages workflow staged an allow-list of directories and vendor/ was not on
@@ -195,11 +195,9 @@ function create(ctx) {
   // build 900. Turning this off never moved that number; the two changes only
   // happened to land together.
   //
-  // So it comes back. What remains true is that it has still never run on a
-  // phone, so the escape hatch stays one call wide: apex26.debris = "0", or
+  // The escape hatch stays one call wide: apex26.debris = "0", or
   // __apex.debris(false).
-  let opt = "1";
-  try { opt = localStorage.getItem("apex26.debris") || opt; } catch (e) { /* storage blocked (private mode) — keep the default */ }
+  const opt = GameStore.store.raw("debris");
   // Group B disable flags — default ON, read once at boot (any value but "0" is on).
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
   try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
@@ -228,7 +226,6 @@ function create(ctx) {
 // side-world is bit-identical to before.
 function rapierReady() { return _loadState === 2 && !!world; }
 function worldGen() { return _worldGen; }
-function isCarDynamic(i) { return _dynCars.has(i); }
 
 function promoteCarDynamic(i, lin, ang) {
   if (!world || !RAPIER || i < 0 || i >= _mirrors.length) return false;
@@ -955,6 +952,9 @@ function projectHazard(track, x, y, z, hint) {
 // an untouched apex cone is scene dressing, not a yellow-flag hazard. Returns
 // per-sector counts + the worst sector with a representative track fraction.
 // READ-ONLY: never writes a car / (s,x) / px / pz / head.
+function redHazardTotal(sourceCount, sourcedTotal) {
+  return sourceCount >= 2 ? sourcedTotal : 0;
+}
 function hazards() {
   const out = { sectors: [0, 0, 0], total: 0, redTotal: 0, worst: { sector: -1, count: 0, frac: 0 } };
   if (!world || !G.track) return out;
@@ -963,6 +963,7 @@ function hazards() {
   const splits = (sec && sec.length === 2) ? [sec[0], sec[1]] : [1 / 3, 2 / 3];
   const secFrac = [0, 0, 0];
   const redSources = new Set();
+  let sourcedTotal = 0;
   // `hint` is the record's OWN placed arc — a slot's spawn s, a cone's placed s,
   // a panel's promoted s. Never the player's, never a shared value: the window is
   // only ±64 m wide, so one record's arc is meaningless for another's.
@@ -977,7 +978,10 @@ function hazards() {
     const si = frac < splits[0] ? 0 : frac < splits[1] ? 1 : 2;
     if (out.sectors[si] === 0) secFrac[si] = +frac.toFixed(4);
     out.sectors[si]++; out.total++;
-    if (sourceCars) for (const i of sourceCars) redSources.add(i);
+    if (sourceCars && sourceCars.length) {
+      sourcedTotal++;
+      for (const i of sourceCars) redSources.add(i);
+    }
   };
   for (const s of _slots) if (s.live) consider(s.body, s.s, s.sourceCars);
   for (const f of _furn) {
@@ -992,8 +996,10 @@ function hazards() {
       out.worst = { sector: i, count: out.sectors[i], frac: secFrac[i] };
   // A red flag represents a blocked circuit from a multi-car incident, not
   // one scraping car repeatedly filling the shard pool. Lower cautions still
-  // use every settled hazard; only RED_MIN requires at least two source cars.
-  if (redSources.size >= 2) out.redTotal = out.total;
+  // use every settled hazard; only RED_MIN requires attributed shards from at
+  // least two source cars. Cones and broken panels remain in total for SC/VSC,
+  // but can never pad a small two-car contact into a false red.
+  out.redTotal = redHazardTotal(redSources.size, sourcedTotal);
   return out;
 }
 
@@ -1271,5 +1277,5 @@ function _panelLive() { let n = 0; for (const p of _panels) if (p.live) n++; ret
 
 return { create, active, prime, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
          registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags,
-         rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose, isCarDynamic };
+         rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose };
 })();

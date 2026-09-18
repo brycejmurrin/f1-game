@@ -53,7 +53,7 @@ function makeGL(opts) {
     getProgramInfoLog: () => "stub link failure",
     getUniformLocation: () => ({}), useProgram() {}, uniformMatrix4fv() {}, uniform3f() {},
     getParameter() { return null; },
-    colorMask() {}, depthFunc() {},
+    colorMask() {}, depthFunc(f) { this._depthFunc = f; },
     createQuery() { return { n: 0 }; },
     beginQuery() { this._inQuery = true; this._queries++; },
     endQuery() { this._inQuery = false; },
@@ -168,4 +168,19 @@ test("every way of not knowing resolves to VISIBLE", async (t) => {
     gl._draws = 0; C.drawChunked(mesh, null, {});
     assert.ok(gl._draws > 0, "turning it off must not strand a hidden chunk — nothing re-tests it now");
   });
+});
+
+test("the occlusion pass hands the context back at LEQUAL", () => {
+  // The sky is a fullscreen triangle at depth EXACTLY 1.0, drawn after the
+  // opaque pass against a depth buffer cleared to 1.0 — it needs LEQUAL, which
+  // glx.js sets once at init and nothing re-sets per frame. This pass ran with
+  // LESS and restored LESS in its `finally`, so every frame after the first
+  // occlusion pass drew a black sky. Only reachable with the flag on, which is
+  // why it shipped: the flag is OFF by default.
+  const { gl, C, mesh } = setup();
+  C.occlusionCull(true);
+  C.drawChunked(mesh, null, {});
+  C.occlusionPass();
+  assert.equal(gl._depthFunc, gl.LEQUAL,
+    "the pass must leave the context on the baseline depth test, not on LESS");
 });

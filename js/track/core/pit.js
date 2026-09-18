@@ -99,6 +99,10 @@ const TrackPit = (function () {
   // the wall must hold a car's move back inside the road edge — 25 m of it
   // at 80 m, measured against 14 m at 60 (the AI still ran off the end).
   const EXIT_ROAD_MIN = 80;
+  // The straight a REJOINING car must see past the merge. A car coming off the
+  // limiter has no room to dodge, so the exit may not deliver it into a bend —
+  // see window(), which buys this out of the bay row's own slack.
+  const MERGE_RUN = 40;
   const LIMIT_KPH = 80, LIMIT_KPH_STREET = 60;   // F1 SR 2026 B1.7.3(a); Monaco / Melbourne
   // The row starts past POLE's grid slot (14 m before the line, TrackMesh.gridSlot)
   // plus the run-up a commitment needs, and ends ROW_END short of the exit line.
@@ -182,16 +186,52 @@ const TrackPit = (function () {
     // the guidance for a real circuit is that entry and exit belong on a slow,
     // straight section and must not put a rejoining car on the racing line.
     //
-    // Closing the window earlier to pull the merge back was TRIED and reverted:
-    // the window is also what the twelve bays stand in, and shortening it took
-    // Bahrain's row under the 201 m it needs, compressed the pitch below a
-    // bay's width and placed NO BAYS AT ALL — taking the canopy, race control
-    // and the stop with them. The exit road cannot shorten either: its 80 m
-    // floor is what stops the AI running off the end of the blend. Moving the
-    // merge needs the row decoupled from the window first; the survey and the
-    // plan are in docs/research/PIT-NEXT-STEPS-2026-09.md.
+    // Closing the window earlier was tried once as a BLANKET rule and reverted:
+    // the window is also what the twelve bays stand in, and shortening every
+    // circuit's took Bahrain's row under the length it needs, compressed the
+    // pitch below a bay's width and placed NO BAYS AT ALL. The mistake was the
+    // blanket, not the idea — each circuit has its own budget and Bahrain's is
+    // 55 m against the 66 m that attempt spent.
+    //
+    // THE BUDGET IS A CLOSED FORM, which is what makes this safe. The row sits
+    // between `lo = grow + 20` and `hi = lenM - ROW_END`, and `first` is pinned
+    // to `hi - span` on every circuit in the game (measured — the pole-slot
+    // anchor never binds), so closing the tail by X moves the row back by X and
+    // the room to do it is `lenM - ROW_END - span - grow - 20`. Cap the pullback
+    // there and no circuit can lose a bay to it, by construction.
     const fwd = straightRun(track, curvature, 0, 1, EXIT_M + ROAD_MIN);
-    const exitM = Math.min(EXIT_M, cap * 0.3, Math.max(EXIT_MIN, fwd - ROAD_MIN));
+    let exitM = Math.min(EXIT_M, cap * 0.3, Math.max(EXIT_MIN, fwd - ROAD_MIN));
+    // What the exit road and the merge look like for a candidate exit line.
+    const roadFor = (eM) => {
+      const room = Math.max(ROAD_MIN, (L / 3 - (entryM + eM)) * 0.4);
+      return Math.min(EXIT_ROAD, room,
+        Math.max(EXIT_ROAD_MIN, straightRun(track, curvature, wrap(eM, L), 1, EXIT_ROAD)));
+    };
+    const entryRoad0 = Math.min(ENTRY_ROAD, Math.max(ROAD_MIN, (L / 3 - (entryM + exitM)) * 0.4),
+      Math.max(ROAD_MIN, straightRun(track, curvature, wrap(-entryM, L), -1, ENTRY_ROAD)));
+    const span = (12 - 1) * PITCH;
+    const budgetFor = (eM) => {
+      const grow = Math.min(WALL_GROW, entryRoad0 * 0.5, roadFor(eM) * 0.5);
+      return (entryM + eM) - ROW_END - span - grow - 20;
+    };
+    // A REJOINING CAR MUST SEE A STRAIGHT. It comes off the limiter with no
+    // room to dodge, and the guidance for a real circuit is that the exit must
+    // not put it on the racing line mid-corner. Surveyed at PIT_K, 17 of the 49
+    // circuits with bays rejoined inside a bend, 11 of them with NO straight at
+    // all (the Nürburgring's exit road peaked at |k| 0.0715, a 14 m radius).
+    const mergeRun = (eM) => straightRun(track, curvature, wrap(eM + roadFor(eM), L), 1, MERGE_RUN);
+    if (mergeRun(exitM) < MERGE_RUN) {
+      const room = Math.max(0, budgetFor(exitM));
+      for (let back = 4; back <= room; back += 4) {
+        const cand = exitM - back;
+        if (cand < EXIT_MIN || budgetFor(cand) < 0) break;
+        if (mergeRun(cand) >= MERGE_RUN) { exitM = cand; break; }
+      }
+      // No reduction inside the budget reaches a straight on five circuits
+      // (anderstorp, bahrain, brands_hatch, monaco, mosport): their pit straight
+      // is simply not long enough, and those keep today's exit rather than a
+      // shorter one that is no better. Nothing is made worse.
+    }
     return { entryM, exitM };
   }
 

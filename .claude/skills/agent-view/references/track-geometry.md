@@ -20,7 +20,7 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 
 | Hook | Returns |
 |---|---|
-| `groundY(frac, lat)` | `{x,z, roadY, terrainY, gap}` — **gap finder**: `gap<0` = terrain *below* road (fine); `gap>0` = terrain poking *above* the racing surface (a defect) |
+| `groundY(frac, lat)` | `{x,z, roadY, roadSurfaceY, bankDy, terrainY, gap, overRoad}` — read **`overRoad`**: `>0` = terrain poking above the BANKED racing surface (a defect). `gap` is the trap it replaces — it measures against the raw centreline plane, so inside a bankZone (Lesmo 1 lifts the outer edge 0.66 m) terrain correctly tucked under the road reads as proud of it |
 | `scan([d1,d2,...])` | look-ahead `Array` of `{s,k,hw,slope}` at each distance ahead |
 | `wallStats()` | `{minB, maxB, minOverHw, anyNaN, street, n}` — **barrier envelope vs road edge** (`barR`/`barL` lateral limits minus `hw[k]`); NOT road half-width. `anyNaN:true` or tiny `minOverHw` = bad geometry |
 

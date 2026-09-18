@@ -38,7 +38,7 @@ Load from the SKILL.md index when the task needs this detail.
    - **The roster count is asserted, in two places.**
      `tests/unit/shared-track-foundation-characterization.test.cjs` and
      `tests/unit/circuit-def-fields.test.mjs` both pin `Tracks.LIST.length`
-     (51 as of 2026-09-14). It is a forcing function, not a budget — raise it
+     (52 as of 2026-09-18). It is a forcing function, not a budget — raise it
      deliberately, in the commit that adds the circuit, and say why. It read 40
      until eleven circuits were recovered from OpenStreetMap
      (`tools/track/osm-circuits.json`).
@@ -108,9 +108,11 @@ Load from the SKILL.md index when the task needs this detail.
 - **`turns` are RACING-LAP fractions**, never fmap'd: when `startFrac` moves the
   line, re-seat them with `tools/track/rotate-markings.cjs --check` / `--write` (once
   per circuit). A def without `turns` falls back to **curvature-peak**
-  `__apex.corners()` for corner boards — not the curated FIA apexes. The 16
-  classics carry `turns` (the N strongest curvature peaks, N = the real turn
-  count) but no researched `sectors`; every consumer falls back to thirds.
+  `__apex.corners()` for corner boards — not the curated FIA apexes. The 28
+  `classic: true` circuits carry `turns` (the N strongest curvature peaks,
+  N = the real turn count) but mostly no researched `sectors`; those consumers
+  fall back to thirds. (The 16 in `import-circuit-path --classics` are the
+  subset that tool holds traces for, not the classic roster.)
 - **`apex26.track` is a positional index** into `Tracks.LIST` (same order as
   `tools/manifest.cjs` `CIRCUITS`). Do not reorder the circuit block casually —
   saved track picks and season routing will point at the wrong def.

@@ -234,7 +234,7 @@ Full recipes + measured LCP/heap/a11y numbers:
 
 ### When NOT to use it
 
-Regression coverage, anything that must assert-and-gate, the 113-spec batch, or
+Regression coverage, anything that must assert-and-gate, the full spec batch, or
 anything in CI. It is one stateful browser driven by the model — no assertion
 framework, no parallelism, no reporter. Use Playwright (`tools/ci/test-bg.mjs`).
 

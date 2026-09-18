@@ -21,13 +21,18 @@ What changed underneath it, and why the old steps are gone:
    land the same build; `index.html`/`version.json` were the only files that
    ever conflicted and `deploy.mjs` resolves them to either side + a hash-only
    `--apply`. Pinned by `tests/unit/deploy-stamp.test.mjs`.
-2. **No local sweeps.** `ci.yml` runs `test:sweeps` (and the split-out
-   `sweeps-parts`) on the same diff, conditionally; a local run duplicated
-   10 minutes. `deploy.mjs` still runs `verify-track` for touched circuits (2 s each).
+2. **Sweeps only when the union can move geometry.** `ci.yml` runs
+   `test:sweeps` (and the split-out `sweeps-parts`) on the same diff, so a
+   local run duplicated 10 minutes for most changes — but `deploy.mjs` does
+   run `test:sweeps` itself when the merged union touches geometry (its own
+   `--plan` prints which of the two it chose, and one float-equality failure
+   that only the sweeps catch is why). `verify-track` runs for touched
+   circuits either way (2 s each).
 3. **No tinyfish live check.** `pages.yml`'s `verify-live` job polls the Pages
    CDN for the stamped build and fails the run if it never appears; read the
    run in the Actions tab. From a session, the host's fetch tool can read
-   `version.json` — never curl from the container, never the in-repo wrapper.
+   `version.json`, and `curl` reaches github.io too (see below) — never the
+   in-repo wrapper.
 4. **`--pr` is the path that never pushes to the deploy branch** (the agent
    permission classifier blocks that push). GitHub creates the merge commit,
    so the PR is a real record — a local fast-forward auto-closes the PR

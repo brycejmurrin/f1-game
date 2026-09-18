@@ -16,6 +16,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -122,6 +123,60 @@ test("settings.json registers the hooks that enforce the rules, and each hook ex
   assert.match(agents, /allow-protected/);
   for (const hook of ["protect-files.sh", "bash-guard.sh"])
     assert.match(read(`.claude/hooks/${hook}`), /allow-protected|APEX_SKIP_GUARDS/, `${hook} needs its escape hatch`);
+});
+
+test("the Bash guard blocks every shape of the kill that orphans browsers", () => {
+  // These are RUN, not grepped: the pattern that shipped required -f as the
+  // FIRST flag, so `pkill -9 -f node` — what anyone types when a plain pkill
+  // "did not work" — walked past a guard whose whole purpose is that pkill -f
+  // matches the guard's own shell. A regex assertion would have passed on the
+  // broken pattern; only executing the hook catches it.
+  const run = (command) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
+    encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  for (const cmd of [
+    "pkill -f chrome",                     // the original form
+    "pkill -9 -f node",                    // signal before -f
+    "pkill -TERM -f chrome",               // named signal before -f
+    "pkill --full playwright",             // long flag
+    "sudo pkill -f chrome",                // privileged prefix
+    "killall chrome",
+    "kill -9 $(pgrep -f chrome)",          // substitution: no literal pid
+    "pgrep -f chrome | xargs kill -9",     // pipe: no literal pid
+  ]) assert.equal(run(cmd).status, 2, `bash-guard must block: ${cmd}`);
+  // …and stays out of the way of ordinary work, including a command that only
+  // MENTIONS the words outside command position. The heredoc case is not
+  // hypothetical: the pgrep rule went in unanchored and blocked the very
+  // commit that added it, because the message described what it blocks.
+  for (const cmd of [
+    "git status",
+    "ps -eo pid,comm",
+    'echo "pkill -f chrome"',
+    "git commit -F - <<'MSG'\nthe guard now covers a pgrep -f list piped into xargs kill\nMSG",
+  ]) assert.equal(run(cmd).status, 0, `bash-guard must allow: ${cmd}`);
+});
+
+test("the edit guard refuses a generated package.json block through Write as well as Edit", () => {
+  // The test:* scripts are generated from tests/groups.json. The guard matched
+  // on old_string, which a whole-file Write does not carry, so a Write rewrote
+  // the generated block unguarded — the one tool call that can drop a whole
+  // test group from the gate.
+  const hook = path.join(ROOT, ".claude/hooks/protect-files.sh");
+  const pkg = path.join(ROOT, "package.json");
+  const current = read("package.json");
+  const run = (payload) => spawnSync("bash", [hook], {
+    input: JSON.stringify(payload), encoding: "utf8",
+    env: { ...process.env, CLAUDE_PROJECT_DIR: ROOT },
+  });
+  const mangled = JSON.parse(current);
+  mangled.scripts["test:guards"] = "echo nope";
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: pkg, content: JSON.stringify(mangled, null, 2) } }).status, 2,
+    "a Write that rewrites a test:* script must be blocked");
+  assert.equal(run({ tool_name: "Edit", tool_input: { file_path: pkg, old_string: '"test:guards":', new_string: '"test:guards":' } }).status, 2,
+    "the Edit path must still be blocked");
+  assert.equal(run({ tool_name: "Write", tool_input: { file_path: pkg, content: current } }).status, 0,
+    "a Write that leaves the generated block alone is not the guard's business");
 });
 
 test("the commit guard's docs-only fast path keeps its two exclusions", () => {

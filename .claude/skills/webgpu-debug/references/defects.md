@@ -48,7 +48,8 @@ up + one reload:
 
 - rung 0 full — desktop (MSAA 4, timestamp-query, 2048 shadows)
 - rung 1 lite — phone parity (MSAA 1, 1024 shadows). Phones/WebKit apply the
-  lite stack immediately via `WGX_LITE = IS_MOBILE || IS_WEBKIT` while
+  lite stack immediately via `WGX_LITE = IS_MOBILE || IS_WEBKIT || _litePref`
+  (`_litePref` is the persisted `apex26.gfxWgxLite`) while
   persisted `apex26.gfxWgxLevel` stays 0 on first launch; rung 1 is the
   device-loss escalation floor, not the stored key on first boot
   (`js/render/webgpu/wgx.js`)

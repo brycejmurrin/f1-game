@@ -564,3 +564,63 @@ test("the SHIPPED default turns the pit feature on", () => {
   assert.ok(f, "could not find the TYRE WEAR validation fallback");
   assert.equal(f[1], m[1], "the fallback level disagrees with the shipped default");
 });
+
+// ── The two load paths are calibrated to the same mean ───────────────────────
+// `lifeLaps` only means what its name says if a racing lap scores ~1.0, and the
+// file's own claim is that the player's path and the AI's are held to the same
+// figure — "which is what keeps a strategy fight fair". They were not: aiLoad's
+// constants read ~1.03 for a mid driver counting the base and style terms
+// alone, while the longitudinal term adds on every lap and fuelLoadMul then
+// multiplies by ~1.11 over a race. LOAD_REF absorbs that for the player;
+// nothing did for the AI, so the field wore a fifth fast (measured 1.216 monza
+// / 1.231 bahrain / 1.248 monaco, scratch/tyre-load-check.cjs).
+test("a mid-grid AI on a clean lap scores about one, like the player's path", () => {
+  const aTop = 12;
+  // A mid driver, driving cleanly: the consistency default, no off-track, and
+  // the longitudinal load a lap of braking and traction actually averages.
+  const mid = { consistency: 0.75, accSm: aTop * 0.5, offroad: false };
+  const load = T.aiLoad(mid, aTop);
+  // Before the divisor this read ~1.11 BEFORE fuel, and fuel took it past 1.23.
+  assert.ok(load > 0.85 && load < 1.05, `a clean AI lap is about one lap of life: ${load.toFixed(3)}`);
+  // The axis still means something: a ragged driver wears more than a tidy one.
+  const ragged = T.aiLoad({ consistency: 0.2, accSm: aTop * 0.5 }, aTop);
+  const tidy = T.aiLoad({ consistency: 1.0, accSm: aTop * 0.5 }, aTop);
+  assert.ok(ragged > load && load > tidy, `consistency still spreads the field (${tidy.toFixed(3)} < ${load.toFixed(3)} < ${ragged.toFixed(3)})`);
+  // …and going off is still the most expensive thing a car can do.
+  assert.ok(T.aiLoad({ consistency: 0.75, accSm: 0, offroad: true }, aTop) > ragged, "off-track outweighs a ragged lap");
+});
+
+// ── The HUD letter, over the whole catalog ──────────────────────────────────
+// There used to be two ladders. AI_CLASS codes its soft at life 0.48 "S";
+// optionRecord's own inline ternary cut at 0.40, so EVERY soft a player can
+// buy — Soft 0.67, Super Soft 0.50, Sprint Soft 0.44, C5 0.52, P Zero Red 0.56
+// — printed "M" on the HUD and the stint strip, while an AI running a
+// longer-lived compound printed "S". Only the two one-lap specials fell under
+// the old cut. One classifier now, checked against the catalog it describes.
+test("every catalog compound prints the letter its life says", () => {
+  const WANT = {
+    hard: "H", endurance_tyre: "H", compound_c3: "M", medium: "M",
+    slick_track: "M", compound_c4: "M", soft: "S", compound_c5: "S",
+    supersoft: "S", p_zero_red: "S", qualigum: "S", hypersoft: "S",
+    sprint_soft: "S", intermediate: "I", wet_full: "W",
+  };
+  const seen = [];
+  for (const opt of TYRES) {
+    const rec = T.optionRecord(opt);
+    seen.push(opt.id);
+    const want = WANT[opt.id];
+    if (want == null) continue;               // signature clones follow their base
+    assert.equal(rec.code, want,
+      `${opt.id} (life ${rec.life}) prints ${rec.code}, expected ${want}`);
+  }
+  // The softs are the rows the old ladder got wrong — make sure they were here.
+  for (const id of ["soft", "supersoft", "sprint_soft", "compound_c5", "p_zero_red"])
+    assert.ok(seen.includes(id), `${id} must be in the catalog for this test to mean anything`);
+});
+
+test("the AI's compound classes agree with the same classifier", () => {
+  // Two ladders is the defect; this is the assertion that keeps it one.
+  for (const [name, cls] of Object.entries(T.AI_CLASS))
+    assert.equal(T.codeForLife(cls.life, cls.tread), cls.code,
+      `AI_CLASS.${name} codes "${cls.code}" at life ${cls.life}`);
+});

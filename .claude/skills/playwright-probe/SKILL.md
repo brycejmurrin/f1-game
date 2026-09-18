@@ -46,7 +46,7 @@ node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
 node tools/car/render-car.mjs --team=redbull --preset=spine   # needs :3456
 node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=scratch/renders/garage-spine
 # every axis is a LIST — one boot walks the product (--plan prints it first):
-node tools/shot/garage-angles.mjs --team=redbull,ferrari --parts=factory,stock --views=hero,side --plan
+node tools/shot/garage-angles.mjs --team=redbull,ferrari --part.engine=all --views=hero,side --plan
 node tools/car/carshot.mjs 40 day 2 artifacts/tmp/carshot.jpg  # tiny cropped JPEG
 ```
 

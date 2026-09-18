@@ -19,7 +19,9 @@ Load from the SKILL.md index when the task needs this detail.
 3. **Preserve authority boundaries.**
    - A player's own car is never corrected by the host.
    - Remote cars are posed from replicated state; local physics must early-out
-     when `netPlay.owns(c)` is false.
+     when `netPlay.owns(c)` is **true** — `owns()` answers "the wire owns this
+     car", so it is the REMOTE cars it returns true for (`js/net/netplay.js`
+     `owns`, and the `updateCar` early-out in `js/game.js`).
    - The host owns AI and race control and relays guest snapshots without
      changing authority.
    - Key rivals by content-derived ids (`wireId` / driver id), not `cars[]`
@@ -40,11 +42,12 @@ Load from the SKILL.md index when the task needs this detail.
      up (both peers show `net().active`/roles correctly), stop probing ICE and
      look at countdown *consumption* instead: `js/game.js` reads `netStart`
      (`{ at, hold, now() }`) each frame and derives `countT` from it
-     (`countT = (COUNTDOWN_S + startHold) - (netStart.at - netStart.now()) / 1000`,
-     ~line 2970), which drives `lightsLit` (~line 2993) and only clears
-     `netStart` once `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S +
-     startHold` (~line 3008-3012, the "consumed; never carry it into the next
-     race" comment). A guest stuck with lights lit but the race never starting
+     (grep `countT = (COUNTDOWN_S`), which drives `lightsLit` (grep
+     `lightsLit === COUNTDOWN_S`) and only clears `netStart` once
+     `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold` — the
+     "consumed; never carry it into the next race" comment. (Grep, never a line
+     number: game.js moves every week and the three numbers that used to sit
+     here were ~800 lines stale.) A guest stuck with lights lit but the race never starting
      means that consumption path never satisfied its exit condition — check the
      guest's own `countT`/`lightsLit` progression via `G.countT`/`G.lightsLit`
      (test-only accessors) or step through `netStartArm`/`netHostStart`, not the
@@ -69,8 +72,11 @@ Load from the SKILL.md index when the task needs this detail.
      succeeded-but-not-nominated pair means something else ended first.
 
 7. **Respect build handshakes.**
-   - Handshake refuses mismatched `version.json` builds because physics/track
-     constants can differ.
+   - Handshake refuses mismatched builds because physics/track constants can
+     differ. The build it compares is the shell's own
+     `<meta name="apex-build">` (`js/net/handshake.js`, error `build_mismatch`)
+     — it deliberately does NOT fetch `version.json`, so a peer that cannot
+     read the meta tag fails as `build_unknown`.
    - If JS/CSS changed, run `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump); stale builds can make peers unable to
      connect by design.
 
@@ -115,7 +121,8 @@ scripts above rather than three background tabs.
   invites sequential so pasted answers are matchable by humans.
 - Running browser net tests before `test:net-unit`, making deterministic unit
   failures look like WebRTC flake.
-- Forgetting `version.json` in build handshakes after JS/CSS edits.
+- Reaching for `version.json` when a build handshake refuses: the handshake
+  reads `<meta name="apex-build">` from the shell, not the deploy stamp.
 - Debugging a guest stuck mid-countdown (lights already lit) as an ICE/relay
   problem when signalling already succeeded — check `countT`/`lightsLit`
   consumption of `netStart` in `js/game.js`, not candidates. `startPending` is

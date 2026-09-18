@@ -210,6 +210,19 @@ const Teams = (function () {
      Evidence: docs/notes/AI-FIELD-RESEARCH.md. */
   const TIER_V = [0.9695, 0.9674, 0.9648, 0.9622, 0.9594];
 
+  /* Is this one of the eleven REAL constructors?
+     Teams.LIST is appended to at boot: custom-team.js splices in the MY TEAM
+     record (`custom: true`) and then pushes the twelve-driver LEGENDS entry
+     (`legends: true`, js/data/legends.js). Both are grid furniture for one
+     screen, not championship entrants — so every rule that walks the field
+     (standings, the driver market, contract offers, winter development, a
+     lobby seat move, the menu car warm-up) has to exclude them.
+     Filtering on `custom` ALONE, which is what the career rules did, admitted
+     Legends everywhere: a driver career at Haas opened with twelve legends in
+     its own standings. One predicate so the next append is excluded by
+     default rather than by remembering. */
+  const isReal = (t) => !!t && !t.custom && !t.legends;
+
   /* The MY TEAM custom entry — same record shape as LIST, the seed a fresh
      apex26.customTeam save starts from (game.js loadCustomTeam). */
   const DEFAULT_CUSTOM = {
@@ -220,6 +233,6 @@ const Teams = (function () {
     drivers: [{ name: "Your Name", code: "YOU", num: 99 }],
   };
 
-  return { LIST, POINTS, TIER_V, DEFAULT_CUSTOM };
+  return { LIST, POINTS, TIER_V, DEFAULT_CUSTOM, isReal };
 })();
 Object.freeze(Teams);

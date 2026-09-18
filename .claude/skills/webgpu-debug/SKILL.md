@@ -8,8 +8,9 @@ description: Use when WebGPU/WGX rendering is wrong — black screen, missing ro
 WGX lives in `js/render/webgpu/` — `wgx.js`, `wgsl-chunks.js`, `wgsl-fx.js`,
 `wgsl-post.js`.
 DEFERRED: no `<script>` tag; `js/game.js` injects it when
-`apex26.gfxBackend === "webgpu"`. GLX stays the shipped default; every WGX
-failure must degrade to GLX, never a dead canvas.
+`apex26.gfxBackend === "webgpu"`. Unset ships TLX/Three; GLX is the explicit
+WebGL2 choice and universal fallback. Every WGX failure must degrade to GLX,
+never a dead canvas.
 
 ## 1. First probe — static, then Dawn
 
@@ -67,8 +68,9 @@ Live session: **mcp-probe** with
 `localStorage.setItem("apex26.gfxBackend","webgpu")` before reload.
 `render({what:"view"})` is the cheap scene truth; for visible WGX pixels use
 `node tools/gfx/gfx-probe.mjs --backend webgpu <track>` (`#game` after
-`awaitSoftPresent`). Multi-track gallery: `node tools/gfx/wgx-shot.mjs --gallery`
-(or `npm run wgx:gallery`).
+`awaitSoftPresent`). Multi-track gallery: `node tools/gfx/wgx-shot.mjs --gallery --lite`
+(`npm run wgx:gallery` is exactly that pair — bare `--gallery` is a different,
+full-tier run).
 (`wgx-capture.mjs` / `wgx-lavapipe-probe.mjs` are aliases — prefer `gfx-probe`.)
 
 ## Load on demand

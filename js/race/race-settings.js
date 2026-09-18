@@ -46,15 +46,15 @@ const RaceSettings = (function () {
   function presetValues(id, full) {
     if (id === "quick") return {
       laps: Math.min(5, full), weather: "dry", mixed: false, time: "day",
-      difficulty: "normal", grid: "tier", caution: true, reliability: "off", tyres: "off",
+      difficulty: "normal", grid: "tier", reliability: "off", tyres: "off",
     };
     if (id === "weekend") return {
       laps: full, weather: "dry", mixed: false, time: "default",
-      difficulty: "normal", grid: "quali", caution: true, reliability: "real", tyres: "real",
+      difficulty: "normal", grid: "quali", reliability: "real", tyres: "real",
     };
     if (id === "endurance") return {
       laps: Math.min(25, full), weather: "overcast", mixed: true, time: "dusk",
-      difficulty: "hard", grid: "tier", caution: true, reliability: "real", tyres: "real",
+      difficulty: "hard", grid: "tier", reliability: "real", tyres: "real",
     };
     return null;
   }
@@ -109,6 +109,7 @@ const RaceSettings = (function () {
       // has no field at all) and in a championship, where the classification
       // feeds points and standings — a 2-car GP would score a season.
       $("rs-duel").hidden = tt || champ;
+      $("rs-duel-help").hidden = tt || champ;
       paintDuel();
       $("rs-quali").hidden = tt;
       const qForced = champ ? SeasonCal.quali() : null;
@@ -288,7 +289,6 @@ const RaceSettings = (function () {
       setRaceTimeOfDay(p.time);
       setDifficulty(p.difficulty); store.set("difficulty", p.difficulty);
       setRaceGrid(p.grid); store.set("raceGrid", p.grid);
-      setCautionEnabled(p.caution);
       setRaceReliability(p.reliability); store.set("reliability", p.reliability);
       setRaceTyreWear(p.tyres);
       scheduleFlybyTrack();

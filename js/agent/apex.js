@@ -223,11 +223,11 @@ const api = {
     // new spot and fired a surprise auto-rescue mid-drive (measured).
     G.player.rescueT = 0; G.player.wallT = 0; G.player.wasOnWall = false;
     G.player.wrongT = 0; G.player.wrongWay = false; G.player.offT = 0;
-    // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of renderAlpha.
-    G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;
-    // playerAnchor()/renderPosOf() draw the HUMAN car from THESE (world), not the AI-only pair above — else it stays lerp'd toward the pre-teleport spot once park() freezes physics.
-    G.player.rPrevPx = G.player.px; G.player.rPrevPz = G.player.pz;
-    G.player.rPrevHead = G.player.head;   // yaw anchor too, or the car swings into place over a frame
+    // Sync render-interpolation anchors so lerpS(rPrevS,s,alpha)==s regardless of
+    // renderAlpha — the WORLD pair too: playerAnchor()/renderPosOf() draw the
+    // HUMAN car from those, so without them it stays lerp'd toward the
+    // pre-teleport spot once park() freezes physics.
+    AgentView.syncRenderAnchors(G.player);
     if ((G.state === "race" || G.state === "count") && G.refreshHud) G.refreshHud(true);
     return { s: G.player.s, total: G.track.total };
   },
@@ -376,7 +376,18 @@ const api = {
   flybyCam(u, shots) {
     if (!G.track || typeof FlybySeq === "undefined") return false;
     const v = FlybySeq.solve(G.track, +u || 0, shots);
-    G.dbgCam = { eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov, far: 6000 };
+    // FlybySeq.FAR/FOG, not photo mode's own numbers: this preview IS the
+    // editor's picture, and it has to be rendered the way the loading screen
+    // renders the same shot or the editor lies about the haze (it did).
+    // `cine` is the MARKER, and it is what makes the preview honest: render()
+    // reads it and builds this frame's whole lens — near, far, fog, cull, and an
+    // uncapped FOV — the way the loading screen builds it, instead of the way a
+    // debug free camera is built. Without it the preview is only a dbgCam, and
+    // a dbgCam is photo mode.
+    G.dbgCam = {
+      eye: v.eye.slice(), target: v.tgt.slice(), fov: v.fov,
+      far: FlybySeq.FAR, fog: FlybySeq.FOG, cine: true,
+    };
     const hit = FlybySeq.insideProp(G.track, v.eye, 0);
     return {
       u: +(+u || 0).toFixed(4), shot: v.id, index: v.index, cut: v.cut,
@@ -387,8 +398,12 @@ const api = {
   },
   // flybyShots() — the sequence the flyby is currently playing, as data. The
   // authoring loop is: read this, edit it, hand it back to flybyCam(u, shots).
+  // The EDITOR's saved list when there is one, so this reports what a race would
+  // actually fly rather than what ships — they stopped being the same thing when
+  // the editor learned to save.
   flybyShots() {
-    return typeof FlybySeq === "undefined" ? null : JSON.parse(JSON.stringify(FlybySeq.DEFAULT));
+    if (typeof FlybySeq === "undefined") return null;
+    return JSON.parse(JSON.stringify(G.flybyShots || FlybySeq.DEFAULT));
   },
   // camTune(mode?, obj?) — the CAMERA TUNER's per-camera-mode framing offsets
   // (js/camera/offsets.js), the camera counterpart of lightTune(). With no args
@@ -432,9 +447,18 @@ const api = {
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
   }),
-  camState: () => G.dbgCam
+  // `lens` is what the LAST FRAME was actually built with — near, far, the
+  // post-cap vertical FOV, the fog multiplier, the cull radius — as opposed to
+  // the camera INTENT the rest of this reports. They are different questions,
+  // and the difference is a defect class: the pre-race flyby and the flyby shot
+  // EDITOR aimed the same camera and rendered it through two different lenses
+  // for months (far 900 vs 6000, fog 1.0 vs 0.15), which reads as "why is the
+  // loading screen so much foggier than the editor" and is invisible to any
+  // hook that only reports where the camera is pointed.
+  camState: () => Object.assign(G.dbgCam
     ? { eye: Array.from(G.dbgCam.eye), tgt: Array.from(G.dbgCam.target), fov: G.dbgCam.fov, roll: 0, debug: true }
     : { eye: Array.from(G.camEye), tgt: Array.from(G.camTgt), fov: G.camFov, roll: G.camRoll, debug: false },
+  { lens: G.lens ? Object.assign({}, G.lens) : null }),
   garageCam: () => ({
     on: G.setupPreviewOn, spin: G.setupPreviewSpin,
     az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
@@ -1495,21 +1519,10 @@ const api = {
   step(dt, n) {
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
     for (let i = 0; i < count; i++) {
-      // Keep the render-interpolation anchors in sync (the render-driven loop
-      // snapshots these before each step; a manual pump must too, or a frozen
-      // render afterwards lerps toward a stale pre-teleport position).
-      // ALL FOUR, matching the loop: the player renders from WORLD space, so
-      // rPrevPx/rPrevPz drive its drawn position and rPrevHead its drawn heading.
-      // Snapshotting only (s, x) left those two holding whatever the grid or the
-      // previous session put there, so a headless jump()+step()+frozen render put
-      // the car — and with it the whole camera-anchored cockpit rig — somewhere
-      // else entirely, with no error to show for it.
-      for (let j = 0; j < G.cars.length; j++) {
-        const c = G.cars[j];
-        c.rPrevS = c.s; c.rPrevX = c.x;
-        c.rPrevPx = c.px; c.rPrevPz = c.pz;
-        c.rPrevYawVis = c.yawVis; c.rPrevHead = c.head;
-      }
+      // Keep the render-interpolation anchors in sync: the render-driven loop
+      // snapshots them before each step, so a manual pump must too or a frozen
+      // render afterwards lerps toward a stale pre-teleport pose.
+      AgentView.syncRenderAnchors(G.cars);
       update(d);
     }
   },
@@ -1862,12 +1875,16 @@ const api = {
   },
 
   // spatialUpscale(v?) — GLX + WGX + TLX SGSR1 (docs/research/UPSCALING-2026-09.md §6–7).
-  // Flag OFF by default. Number/bool sets localStorage apex26.spatialUpscale;
+  // Flag OFF by default. Number/bool persists through GameStore's raw lane;
   // active only when flag on AND renderScale < ~1 AND the SGSR program linked.
   spatialUpscale(v) {
     const has = !!(gfx && typeof gfx.setSpatialUpscale === "function" && typeof gfx.getSpatialUpscale === "function");
     if (!has) return { on: false, active: false, scale: gfx && gfx.getRenderScale ? gfx.getRenderScale() : null, available: false };
-    if (v !== undefined) gfx.setSpatialUpscale(!!(+v || v === true || v === "1"));
+    if (v !== undefined) {
+      const on = !!(+v || v === true || v === "1");
+      GameStore.store.rawSet("spatialUpscale", on ? "1" : "0");
+      gfx.setSpatialUpscale(on);
+    }
     const on = !!gfx.getSpatialUpscale();
     const scale = gfx.getRenderScale();
     const out = { on, active: !!(on && scale < 0.98), scale, available: true };
@@ -2005,11 +2022,12 @@ const api = {
     if (G.state === "count") {
       G.state = "race"; G.raceT = 0;
       resetStartLights(true);
+      G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     }
     if (input !== undefined) G._testInput = input || null;
     const d = dt != null ? dt : 1 / 60, count = n != null ? n : 1;
     for (let i = 0; i < count; i++) {
-      for (let j = 0; j < G.cars.length; j++) { const c = G.cars[j]; c.rPrevS = c.s; c.rPrevX = c.x; }
+      AgentView.syncRenderAnchors(G.cars);   // all six, exactly as step() does
       update(d);
     }
     return this.obs();
@@ -2527,7 +2545,7 @@ const api = {
     c.wrongT = 0; c.wrongWay = false; c.offT = 0;
     // rPrevHead with the rest: without it the yaw interpolator tweens from the
     // old heading and the car visibly swings into place over a frame.
-    c.rPrevS = c.s; c.rPrevX = c.x; c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevHead = c.head;
+    AgentView.syncRenderAnchors(c);
     return { id: idx, frac: +(c.s / G.track.total).toFixed(4), speed: +c.speed.toFixed(2), x: +c.x.toFixed(3) };
   },
 
@@ -2686,7 +2704,7 @@ const api = {
     // seed world-space position + heading from (s, x) immediately, same as jump()
     Tracks.sample(G.track, G.player.s, smp);
     placeFromTrack(G.player, smp);
-    G.player.rPrevS = G.player.s; G.player.rPrevX = G.player.x;   // sync render anchors (see jump)
+    AgentView.syncRenderAnchors(G.cars);   // sync render anchors (see jump); gridUp() moved every car
     // Per-episode DRIVETRAIN + smoothing state. gridUp() clears the race-level
     // fields (energy, cuts, penalty, wallT, vLat…) but not these, so without
     // this block the engine and smoothed inputs leak across episodes: the first

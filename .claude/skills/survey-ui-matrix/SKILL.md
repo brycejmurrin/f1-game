@@ -29,6 +29,9 @@ node tools/ui/layout-audit.mjs --screen=settings # one cell
 node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
 # Numbers companion (type/spacing floors): node tools/ui/fit-audit.mjs
 # Notch insets only: node tools/ui/menu-fit.mjs 852x393 --safe=59,0,59,21
+# Both of those LAUNCH CHROMIUM on any argv — they have no --help, so a
+# probe for usage starts a browser. `layout-audit.mjs --list` is the
+# browser-free way to see what a sweep would cover.
 ```
 
 This skill is the **interactive** complement: Playwright MCP for resize / DOM /

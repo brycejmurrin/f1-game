@@ -60,10 +60,11 @@ const SPEC = [
     subsystem: "ships the game MUTED for every new player — an export from a silenced phone looks exactly like this" },
   { k: "sfx", lane: "json", group: "audio", def: true, src: "js/audio/panel.js" },
   { k: "music", lane: "json", group: "audio", def: true, src: "js/game.js" },
-  { k: "volMusic", lane: "json", group: "audio", def: 0.9, src: "js/audio/panel.js" },
-  { k: "volSfx", lane: "json", group: "audio", def: 0.7, src: "js/audio/panel.js" },
+  { k: "volMusic", lane: "json", group: "audio", def: 0.6, src: "js/audio/panel.js" },
+  { k: "volSfx", lane: "json", group: "audio", def: 0.2, src: "js/audio/panel.js" },
   { k: "radioVoice", lane: "json", group: "audio", def: false, src: "js/audio/panel.js" },
   { k: "volRadio", lane: "json", group: "audio", def: 0.8, src: "js/audio/panel.js" },
+  { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
   { k: "musicSource", lane: "json", group: "audio", def: "all", src: "js/audio/panel.js" },
   { k: "sndProfile", lane: "json", group: "audio", def: "team", src: "js/audio/panel.js" },
   { k: "sndTune", lane: "json", group: "audio", def: () => (typeof GameAudio !== "undefined" && GameAudio.tuneDefaults) ? GameAudio.tuneDefaults() : {}, src: "js/audio/engine.js TUNE_DEF" },
@@ -74,16 +75,16 @@ const SPEC = [
   // phone is right on its FIRST paint, and js/ui/scale.js mirrors them. null is
   // the honest default to report — a stored number is the change.
   { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 109% on touch)" },
-  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 124% on touch)" },
+  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, scale.js scaleDefault)" },
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "resMode", lane: "json", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "low" : "auto", src: "js/ui/scale.js (LOW on a touch device)" },
   { k: "spatialUpscale", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 §6–7; OFF by default)" },
   { k: "occlusionCull", lane: "raw", group: "display", def: "0", src: "js/ui/scale.js OCCLUSION row + GLX hardware depth queries (js/render/glx/chunked.js; GLX only, OFF by default)" },
-  { k: "debris", lane: "raw", group: "display", def: "1", src: "js/ui/debris-opts.js + js/physics/debris-world.js create() (any value but \"1\" is off)" },
+  { k: "debris", lane: "raw", group: "display", def: "0", src: "js/ui/debris-opts.js + js/physics/debris-world.js create() (only \"1\" is on)" },
   { k: "gfxPreset", lane: "json", group: "display", def: (G) => (typeof GfxQuality !== "undefined" && GfxQuality.defaultId) ? GfxQuality.defaultId(!!(G && G.gfx && G.gfx.isMobile)) : "high", src: "js/perf/quality-preset.js defaultId" },
   { k: "gfxHigh", lane: "raw", group: "display", def: null, src: "js/perf/quality-preset.js (legacy mobile tier)" },
-  { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/game.js boot (unset = WebGL2 on every device)" },
+  { k: "gfxBackend", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js + js/game.js boot (unset = TLX/Three on every device)" },
   { k: "tlxForceGL", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js (null = AUTO)" },
   { k: "tlxEnvProbe", lane: "raw", group: "display", def: null, src: "js/perf/renderer-picker.js CAR REFLECTIONS (null = OFF)" },
   // HUD (js/game.js)
@@ -126,19 +127,18 @@ const SPEC = [
   { k: "drivingLinePalette", lane: "json", group: "driving", def: "f1", src: "js/ui/driving-line-opts.js" },
   { k: "drivingLineOpacity", lane: "json", group: "driving", def: "normal", src: "js/ui/driving-line-opts.js" },
   { k: "lineBrakeCue", lane: "json", group: "driving", def: "off", src: "js/ui/driving-line-opts.js" },
-  { k: "difficulty", lane: "json", group: "driving", def: "normal", src: "js/game.js" },
+  { k: "difficulty", lane: "json", group: "driving", def: "hard", src: "js/game.js" },
   // Four keys real UI writes that this registry did not carry, so a settings
   // file round-tripped everything EXCEPT them (found 2026-09-16 by reading the
   // registry against every store.set call site). They are player preferences by
   // the file's own definition — a toggle, a slider and two race rules that sit
   // beside difficulty/raceGrid/caution, which were already here.
-  { k: "drivingCoach", lane: "json", group: "driving", def: false, src: "js/race/driving-coach.js" },
+  { k: "drivingCoach", lane: "json", group: "driving", def: true, src: "js/race/driving-coach.js" },
   { k: "throttleLatch", lane: "json", group: "driving", def: false, src: "js/game.js" },
-  { k: "tyreWear", lane: "json", group: "driving", def: "light", src: "js/game.js" },
-  { k: "raceGrid", lane: "json", group: "driving", def: "tier", src: "js/game.js" },
+  { k: "tyreWear", lane: "json", group: "driving", def: "real", src: "js/game.js" },
+  { k: "raceGrid", lane: "json", group: "driving", def: "random", src: "js/game.js" },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },
-  { k: "caution", lane: "json", group: "driving", def: true, src: "js/race/race-control.js",
-    subsystem: "switches the whole RACE CONTROL layer off — cautions, VSC, the safety car. race-control.spec.js asserts the layer is ON by default" },
+  { k: "caution", lane: "json", group: "driving", def: false, src: "js/race/race-control.js" },
   { k: "unlimitedBudget", lane: "json", group: "driving", def: false, src: "js/game.js",
     subsystem: "removes the career economy constraint for everyone — a design change, not a preference" },
   { k: "bodyAttitude", lane: "raw", group: "driving", def: null, src: "js/physics/body-attitude.js (null = on)" },
@@ -168,7 +168,7 @@ const SPEC = [
   // METRICS PANEL (js/perf/metrics-overlay.js)
   { k: "metrics", lane: "raw", group: "metrics", def: null, src: "js/perf/metrics-overlay.js (null = off)" },
   { k: "metricsPage", lane: "raw", group: "metrics", def: "gov", src: "js/perf/metrics-overlay.js" },
-  { k: "metricsPos", lane: "raw", group: "metrics", def: "auto", src: "js/perf/metrics-overlay.js" },
+  { k: "metricsPos", lane: "raw", group: "metrics", def: "left", src: "js/perf/metrics-overlay.js" },
   { k: "metricsSize", lane: "raw", group: "metrics", def: "s", src: "js/perf/metrics-overlay.js" },
   { k: "metricsLogNs", lane: "raw", group: "metrics", def: "*", src: "js/perf/metrics-overlay.js" },
   { k: "metricsLogLvl", lane: "raw", group: "metrics", def: "warn", src: "js/perf/metrics-overlay.js" },

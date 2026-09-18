@@ -17,14 +17,16 @@ node tools/track/verify-track.cjs <id>            # after every edit
 node .claude/skills/survey-track/ground-profile.mjs <id>   # numbers only
 ```
 
-Hands off: **scenery-dress** (`js/circuits/<id>.js` `scenery(api)`),
+Hands off: **scenery-dress** (`js/circuits/scenery/<id>.js` `scenery(api)`),
+**new-track** (the def itself — `path`, `turns`/`sectors`, elevation, banking,
+widths: a survey that finds the LAYOUT wrong hands over here, not to dressing),
 **agent-view** (geometry hooks), **playwright-probe** (`shot.mjs`),
 **check-changes** (ship). Subagent: **track-surveyor** (writes only that
-circuit file; no browser runs).
+circuit's pair — def + scenery closure; no browser runs).
 
 ## Where the truth lives
 
-1. **`docs/tracks/<id>.md`** — per-circuit brief (all 40): theme, elevation,
+1. **`docs/tracks/<id>.md`** — per-circuit brief (all 52): theme, elevation,
    landmarks-by-lap-position. Start here.
 2. Real-place photos: `WebSearch` / image search. Treat heights/distances as
    best-effort.
@@ -35,7 +37,8 @@ circuit file; no browser runs).
 2. `survey-track.mjs <id> before` — aerial + orbit/EYE at 0/25/50/75 % +
    flagged probe (`--` holes, >1 m steps, sag). Add `--oblique` when you need
    a bounds-fitted topdown and N/E/S/W high obliques (floating props, floor voids).
-3. Edit dressing in `js/circuits/<id>.js`. New terrain `def` flags need
+3. Edit dressing in `js/circuits/scenery/<id>.js` (the closure; the def
+   `js/circuits/<id>.js` is the other half of the pair). New terrain `def` flags need
    `buildTerrain` **and** `groundYAt` plus the `LIST` whitelist in
    `js/track/tracks.js` — that is **engine** work (parent / not
    **track-surveyor**).

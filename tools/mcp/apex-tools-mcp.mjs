@@ -5,7 +5,7 @@
  * apex-tools-mcp — wrap committed tools/ CLIs as MCP tools (apex_* only).
  *
  * One of the THREE .mcp.json servers (beside chrome-devtools and
- * playwright-official; catalog trimmed 7 → 3 and wraps 30 → 12 on 2026-09).
+ * playwright-official; catalog trimmed 7 → 3 and wraps 30 → 11 on 2026-09).
  * Never chrome_* / tinyfish_*. Local working tree only; no github.io.
  * Design: docs/research/APEX-TOOLS-MCP.md — map: docs/AGENT-SURFACE.md
  *

@@ -233,11 +233,29 @@ const TyreModel = (function () {
   const LOAD_AI_BASE = 0.92;
   const LOAD_AI_STYLE = 0.45;   // full spread across the consistency axis
   const LOAD_AI_LONG = 0.30;
+  // …AND THE AI NEEDS ITS OWN DIVISOR, for the reason the player has LOAD_REF.
+  // The three constants above were authored to read ~1.03 for a mid driver, but
+  // that is the base and the style term ALONE: the longitudinal term adds to
+  // every lap, and `fuelLoadMul` then multiplies the whole thing by ~1.11 over a
+  // race. LOAD_REF absorbed that fuel factor for the player when the fuel term
+  // landed; nothing absorbed it here, so the field quietly ran a fifth hot and
+  // `lifeLaps` stopped meaning what its name says on the AI side only.
+  //
+  // MEASURED (scratch/tyre-load-check.cjs, 20-lap races, life-laps actually
+  // consumed per racing lap, ~200 lap samples each):
+  //
+  //   monza 1.216      bahrain 1.231      monaco 1.248
+  //
+  // Tight, because unlike the player's path this one carries no geometry — only
+  // consistency and longitudinal accel — so one divisor fits the calendar
+  // instead of straddling a range the way LOAD_REF must. Divided AFTER the
+  // clamp, exactly as humanLoad does, so the two paths stay the same shape.
+  const LOAD_AI_REF = 1.23;
   function aiLoad(c, aTop) {
     const cons = clamp(c.consistency != null ? c.consistency : 0.75, 0, 1);
     const lng = clamp(Math.abs(c.accSm || 0) / Math.max(1, aTop), 0, 1);
     return clamp(LOAD_AI_BASE + LOAD_AI_STYLE * (1 - cons) + LOAD_AI_LONG * lng * lng
-      + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX);
+      + (c.offroad ? W_OFF : 0), LOAD_MIN, LOAD_MAX) / LOAD_AI_REF;
   }
 
   // ── GRIP ──────────────────────────────────────────────────────────────────
@@ -447,6 +465,20 @@ const TyreModel = (function () {
   // a dry->rain arc: it pits for the weather, fits another slick, is still on
   // the wrong tyre, and pits again — measured as a stop every lap. The two wet
   // rows are what make the weather call terminate.
+  // The HUD/strip letter for a compound, from its LIFE and tread. One
+  // classifier, because there were two: AI_CLASS below codes its soft at life
+  // 0.48 "S", while optionRecord's inline ladder cut at 0.40 — so every soft in
+  // the player's catalog (Soft 0.67, Super Soft 0.50, Sprint Soft 0.44,
+  // C5 0.52, P Zero Red 0.56) read "M" on the strip while an AI on a longer-
+  // lived compound read "S". Only the two one-lap specials fell under 0.40.
+  // The boundaries sit in the catalog's own gaps (parts.js): softs run
+  // 0.30-0.67, mediums 0.76-0.92, hards 1.00 up.
+  function codeForLife(life, tread) {
+    if (tread === 2) return "W";
+    if (tread === 1) return "I";
+    return life < 0.70 ? "S" : life < 0.95 ? "M" : "H";
+  }
+
   const AI_CLASS = {
     soft:   { code: "S", life: 0.48, off: 0.004,  tread: 0, colour: [0.92, 0.12, 0.10] },
     medium: { code: "M", life: 0.74, off: 0,      tread: 0, colour: [0.96, 0.80, 0.10] },
@@ -486,7 +518,7 @@ const TyreModel = (function () {
     const life = lifeOf(opt);
     const tread = opt.wetTread || 0;
     return {
-      id: opt.id, code: tread === 2 ? "W" : tread === 1 ? "I" : life < 0.40 ? "S" : life < 0.90 ? "M" : "H",
+      id: opt.id, code: codeForLife(life, tread),
       life, off: 0, tread,
       colour: (opt.visual && opt.visual.band) || [0.9, 0.9, 0.93],
     };
@@ -701,7 +733,7 @@ const TyreModel = (function () {
     axleShare, longSigned, AXLE_LONG, AXLE_REST, BB_REF,
     T_AMBIENT, T_BLANKET, T_OPT_MID, T_OPT_SPAN, T_WINDOW, TEMP_FLOOR,
     GRAIN_GRIP, BLIST_GRIP, BLIST_OVER,
-    classRecord, optionRecord, AI_CLASS, treadFor, classForTread, wetness, weatherGrip,
+    classRecord, optionRecord, AI_CLASS, codeForLife, treadFor, classForTread, wetness, weatherGrip,
     DROP_LIN, DROP_CLIFF, GRIP_FLOOR, LONG_SHARE, LIFE_MIN, LIFE_MAX, FUEL_LOAD,
     create,
   };

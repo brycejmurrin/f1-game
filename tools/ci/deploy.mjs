@@ -351,7 +351,7 @@ export function mergeDeployTip() {
 // joined. A physics suite cannot newly fail because someone else's docs commit
 // landed. Read from tests/groups.json rather than listed here: a second copy of
 // a registry is the class of problem this whole change is about, and
-// `npm run test:guards` is the same 14 files for a human before a commit.
+// `npm run test:guards` is that same group for a human before a commit.
 const MERGE_GUARDS = Object.freeze(
   JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups["test:guards"].files);
 
@@ -393,10 +393,27 @@ const GATE_JOBS = "--jobs=2";
  * still listed test:sweeps as verified and named only the browser groups as
  * uncovered. A gate reporting coverage it does not have is the exact defect
  * this gate exists to stop, so it does not get an exception for being mine. */
-function reverifyUnion(before) {
+/* IS OUR OWN SIDE PURE PROSE? The re-verify below exists for the INTERACTION
+   between our change and the one that beat us — and prose has none to have. A
+   commit that adds only docs cannot be broken by their new renderer, and cannot
+   break it; AGENTS.md rule 3 already carves the same class out of the commit
+   hook. Deliberately NARROW: tests/ and tools/ are excluded from "prose",
+   because a guard this session added really can be broken by code they landed
+   (prepush-gate-coverage fails on a unit file added anywhere), and that is an
+   interaction worth the full gate.
+   MEASURED, 2026-09-18: six landings in 30 minutes, one every ~5 min, against a
+   full re-verify of 4 min plus a 10 min sweeps leg. A prose-only deploy lost
+   three races in a row and stopped — not because anything was wrong with it,
+   but because it kept re-proving their code for them. */
+export function proseOnly(files) {
+  return files.length > 0 && files.every((f) => /^docs\//.test(f) || /\.md$/.test(f));
+}
+
+function reverifyUnion(before, oursProse) {
   const changed = git(["diff", "--name-only", `${before}..HEAD`]).out.split("\n").filter(Boolean);
-  const ships = changed.filter((f) => /^(js|css)\//.test(f) || f === "index.html");
-  const geom = anyGeometry(changed);
+  const ships = oursProse ? [] : changed.filter((f) => /^(js|css)\//.test(f) || f === "index.html");
+  // Their geometry was swept by the session that pushed it; ours cannot move any.
+  const geom = !oursProse && anyGeometry(changed);
   let label;
   if (ships.length) {
     run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS],
@@ -404,8 +421,10 @@ function reverifyUnion(before) {
     label = "full gate";
   } else {
     run("node", ["tools/ci/tooling-fast.mjs", ...MERGE_GUARDS],
-        `re-verify the new union: ${changed.length} file(s), no shipped code, so the cross-file guards`);
-    label = `${MERGE_GUARDS.length} merge guards`;
+        `re-verify the new union: ${changed.length} file(s), ` +
+        (oursProse ? "and OUR side is prose — no interaction to have, so the cross-file guards"
+                   : "no shipped code, so the cross-file guards"));
+    label = `${MERGE_GUARDS.length} merge guards` + (oursProse ? " (ours is prose)" : "");
   }
   // Geometry can arrive WITHOUT shipped code — a sweep suite's own baseline is
   // neither js/ nor css/ — so this is asked of the re-merge either way.
@@ -416,7 +435,7 @@ function reverifyUnion(before) {
   return { label, sweeps: geom };
 }
 
-function pushWithRetry() {
+function pushWithRetry(oursProse = false) {
   let swept = false;
   for (let attempt = 1; attempt <= 3; attempt++) {
     const r = git(["push", REMOTE, `HEAD:${DEPLOY_BRANCH}`]);
@@ -425,7 +444,7 @@ function pushWithRetry() {
     const before = git(["rev-parse", "HEAD"]).out.trim();
     must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
     mergeDeployTip();
-    const rv = reverifyUnion(before);
+    const rv = reverifyUnion(before, oursProse);
     swept = swept || rv.sweeps;
     log(`re-verified: ${rv.label}`);
   }
@@ -547,7 +566,11 @@ export function main() {
   if (flag("--pr")) {
     Object.assign(verdict, openPr(p.branch));
   } else {
-    const push = pushWithRetry();
+    // OUR side only (three-dot), computed from the tip BEFORE any merge, so a
+    // lost race cannot make a prose deploy look like it ships code.
+    const oursProse = proseOnly(git(["diff", "--name-only", `${p.tip}...HEAD`]).out.split("\n").filter(Boolean));
+    if (oursProse) log("our side is prose only — a lost race re-verifies the cross-file guards, not the whole gate");
+    const push = pushWithRetry(oursProse);
     verdict.pushAttempts = push.attempts;
     verdict.pushed = true;
     // A retry can sweep a union main() never saw, so the verdict learns it here

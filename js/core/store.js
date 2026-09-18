@@ -88,8 +88,9 @@ const GameStore = (function () {
       // meaningful — so a shipped default is substituted only for a key
       // js/data/settings-defaults.js actually names. Everything else still
       // answers null exactly as before.
-      const def = () => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
-        ? SettingsDefaults.get(k) : null;
+      const short = shortKey(k);
+      const def = () => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(short))
+        ? SettingsDefaults.get(short) : null;
       try { const v = localStorage.getItem(fullKey(k)); return v === null ? def() : v; }
       catch (e) { noteBroken(e, "read " + k); return def(); }
     },
@@ -155,7 +156,8 @@ const GameStore = (function () {
     window.addEventListener("storage", (e) => { store.onForeignWrite(e); });
   }
 
-  function fullKey(k) { return k.indexOf("apex26.") === 0 ? k : "apex26." + k; }
+  function shortKey(k) { return k.indexOf("apex26.") === 0 ? k.slice("apex26.".length) : k; }
+  function fullKey(k) { return "apex26." + shortKey(k); }
 
   // THE DURABLE MIRROR:
   // localStorage stays the synchronous source of truth and the cache above is

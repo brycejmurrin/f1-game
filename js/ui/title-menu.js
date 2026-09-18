@@ -8,22 +8,24 @@ const TitleMenu = (function () {
 
     function refresh() {
       const btn = $("mb-career");
-      if (!btn) return;
       const c = Career.data() || Career.load();
       const used = Career.slots().filter((s) => s.used).length;
-      const label = btn.querySelector(".mb-label");
-      if (label) label.textContent = "CAREER MODES";
-      const sub = $("mb-career-sub");
-      if (!sub) return;
-      if (!c) sub.textContent = "DRIVER CAREER  ·  MY TEAM";
-      else {
-        const team = Teams.LIST.find((t) => t.id === c.team);
-        const who = c.flavour === "myteam" ? "MY TEAM" : (c.driver ? c.driver.code : "YOU");
-        sub.textContent = who + " · " + (team ? team.name : c.team).toUpperCase()
-          + " · " + c.year + " R" + Math.min(c.season.round + 1, Tracks.SEASON.length)
-          + (used > 1 ? "  ·  " + used + " SAVED" : "");
+      if (btn) {
+        const label = btn.querySelector(".mb-label");
+        if (label) label.textContent = "CAREER MODES";
+        const sub = $("mb-career-sub");
+        if (sub) {
+          if (!c) sub.textContent = "DRIVER CAREER  ·  MY TEAM";
+          else {
+            const team = Teams.LIST.find((t) => t.id === c.team);
+            const who = c.flavour === "myteam" ? "MY TEAM" : (c.driver ? c.driver.code : "YOU");
+            sub.textContent = who + " · " + (team ? team.name : c.team).toUpperCase()
+              + " · " + c.year + " R" + Math.min(c.season.round + 1, Tracks.SEASON.length)
+              + (used > 1 ? "  ·  " + used + " SAVED" : "");
+          }
+          btn.setAttribute("aria-label", "Career modes — " + sub.textContent);
+        }
       }
-      btn.setAttribute("aria-label", "Career modes — " + sub.textContent);
 
       const cont = $("mb-continue"), contSub = $("mb-continue-sub");
       if (cont && contSub) {
@@ -45,13 +47,12 @@ const TitleMenu = (function () {
       }
     }
 
-    $("mb-career").onclick = () => G.openCareerSlots();
-    $("mb-continue").onclick = () => G.openCareer();
-    $("mb-daily").onclick = () => {
-      $("mb-tt").click();
-      G.daily.select();
-      G.buildSelect();
-    };
+    const careerBtn = $("mb-career");
+    if (careerBtn) careerBtn.onclick = () => G.openCareerSlots();
+    const continueBtn = $("mb-continue");
+    if (continueBtn) continueBtn.onclick = () => G.openCareer();
+    const dailyBtn = $("mb-daily");
+    if (dailyBtn) dailyBtn.onclick = () => G.openDailyPicker();
 
     return { refresh };
   }

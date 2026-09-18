@@ -16,7 +16,7 @@ float z = sc.z - biasTerm;
 ```
 
 Acne on flat surfaces → raise the SHADOW BIAS slider (`uShadowBias`, TUNE_DEFS
-def 0.001, **max 0.01**). Peter-Panning (shadows detach from feet) → lower it.
+def 0.001, **max 0.004**). Peter-Panning (shadows detach from feet) → lower it.
 Do NOT hand-edit the clamp constants first; the tuner knob exists for this.
 
 ### Shadow shimmer / edge flicker while driving

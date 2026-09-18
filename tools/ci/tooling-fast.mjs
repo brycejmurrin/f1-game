@@ -294,6 +294,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/brake-cue.test.mjs",
   "tests/unit/factory-ai-setup.test.mjs",
   "tests/unit/career-settle.test.mjs",
+  "tests/unit/career-legends.test.mjs",
   "tests/unit/career-seat-rollover.test.mjs",
   "tests/unit/season-cal.test.mjs",
   "tests/unit/setup-screens-state.test.mjs",
@@ -305,6 +306,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // between a pasted blob and the shipped DEFAULT. Pure data, ~0.1 s, and it
   // belongs in the edit loop because tools/gen/bake-flyby.mjs is a FULL REPLACE.
   "tests/unit/flyby-panel.test.mjs",
+  // The ORDERING that lights the flyby: raceIntro() applies the race settings
+  // before the loading screen starts, so a dawn race stops showing a day sky.
+  "tests/unit/flyby-lighting.test.mjs",
   "tests/unit/camera-defaults.test.mjs",
   "tests/unit/hooks-documented.test.mjs",
   "tests/unit/source-integrity.test.mjs",

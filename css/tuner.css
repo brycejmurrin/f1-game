@@ -352,7 +352,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    a grandstand", which is the defect the sequencer exists to prevent, so it
    turns red rather than sitting in the same grey as the shot count. */
 #fb-status {
-  font-size: var(--fs-micro); line-height: 1.35; color: var(--muted);
+  font-size: var(--fs-micro); line-height: 1.35; color: var(--dim);
   margin: 0 0 calc(var(--gap) / 3);
   min-height: 2.7em;                 /* two lines reserved: no reflow per scrub frame */
   overflow-wrap: anywhere;

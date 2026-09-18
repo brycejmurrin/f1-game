@@ -344,6 +344,12 @@ if (!gfx) {
     $("nogl").hidden = false; return;
   }
   gfx = GLX;
+  // Every path above converges here after GLX successfully attaches: an
+  // explicit WEBGL2 pick, claim-fail recovery, a canary first strike, or an
+  // alternate whose create() returned null. Publish what is actually drawing
+  // so SETTINGS and metrics never keep labelling the stored THREE/WGX pick.
+  try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label stays at the pick */ }
+  try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window/event surface */ }
   // Live tab, create() refused. Keep the pick and disarm the canary so a
   // refresh retries instead of reverting to WEBGL2. Jetsam during create()
   // never reaches here — the probe stays armed and the next boot reverts.
@@ -890,6 +896,7 @@ function dirtyAirMul(wake, speed) {
 // ---------- state ----------
 let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
+let gridPreOrdered = false;   // set by gridUp(); read by js/net/netplay.js — see there
 // The field size the painted grid was built for. In the rebuild guard with
 // id and night because the box paint is baked into the start-line decal:
 // racing the same circuit again with MY TEAM selected changes the field
@@ -1782,7 +1789,7 @@ function buildPace(built, works) {
 function gridTeams() {
   // MY TEAM and LEGENDS are both "yours" — each enters the grid only when it is
   // the one you picked, so the field grows by one car, never by two teams.
-  return Teams.LIST.filter((t, ti) => (!t.custom && !t.legends) || ti === teamIdx);
+  return Teams.LIST.filter((t, ti) => Teams.isReal(t) || ti === teamIdx);
 }
 // The seats a team actually GRIDS. Everything except LEGENDS is gridDrivers().
 //
@@ -2003,6 +2010,13 @@ function redFlagRestart() {
   return true;
 }
 function gridUp(preOrder) {
+  // WHERE THIS GRID CAME FROM, and the reason it is worth a variable: the
+  // else-branch below SPLICES THE LOCAL PLAYER TO P12, which is a per-peer
+  // adjustment — car X ends up at a different gridPos on each machine. A
+  // pre-ordered grid (qualifying) takes no such step, so every car holds the
+  // same slot everywhere. js/net/netplay.js's separateGrid() has to know which
+  // it is: the collision it exists to fix can only happen on the P12 branch.
+  gridPreOrdered = !!(preOrder && preOrder.length === cars.length);
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
     // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
     // comparator is inconsistent and its draw count engine-defined.
@@ -2307,6 +2321,16 @@ let camSnapNext = false;
  *  rather than somewhere arbitrary. */
 function flybyProgress() {
   return (loadingScreen && loadingScreen.progress) ? loadingScreen.progress() : 0;
+}
+
+// The shot list the FLYBY SHOT EDITOR saved, or null for the shipped sequence.
+// Read when a run STARTS, not per frame: solve() runs every frame and a store
+// miss parses JSON. flybyPanel owns the reading and the validation (it owns the
+// writing); this is the copy the render path is allowed to touch.
+let flybyShots = null;
+function reloadFlybyShots() {
+  try { flybyShots = flybyPanel.loadSaved(); }
+  catch (e) { flybyShots = null; Log.warn("game", "flyby shots did not load", e); }
 }
 
 // Keep one prepared track, never a cache of whole circuits. A generation
@@ -2906,6 +2930,7 @@ const G = {
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
   openCareerSlots: (...a) => openCareerSlots(...a),
+  openDailyPicker: () => openTimeTrial(true),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   // The stateless-draw round, resolved EXACTLY as armReliability() does: the
@@ -3020,6 +3045,14 @@ const G = {
   get skyT() { return _skyT; }, set skyT(v) { _skyT = v; },
   get skyHold() { return _skyHold; }, set skyHold(v) { _skyHold = !!v; },
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
+  // The FLYBY SHOT EDITOR's saved list, or null for the shipped sequence.
+  // Read-only here: flybyPanel writes it, reloadFlybyShots() reads it back.
+  get flybyShots() { return flybyShots; },
+  // True when the last gridUp() laid the grid from a pre-order (qualifying) —
+  // the same slots on every peer — rather than from the pace order, which seats
+  // the LOCAL player at P12 and so differs per machine.
+  get gridPreOrdered() { return gridPreOrdered; },
+  get lens() { return _lens; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
   get fieldSectorBests() { return fieldSectorBests; },
@@ -3386,6 +3419,18 @@ function menuGridCars() {
 
 function raceIntro(go) {
   menuGridCars();
+  // LIGHT THE FLYBY WITH WHAT THE MENU CHOSE, BEFORE IT STARTS. run() fires `go`
+  // (startRace) "once the card is up", and startRace only reaches
+  // applyRaceSettings() after loadTrack() and makeCars() — so the whole cinematic
+  // played over a world nothing had lit for THIS session yet: pick dawn, watch a
+  // day loading screen. The TIME chip only calls scheduleFlybyTrack(), which
+  // rebuilds geometry and resolves no lighting at all. applyRaceSettings() is
+  // idempotent by construction (every lighting-slider tick re-runs it), so this
+  // costs one pass and startRace still re-applies after its rebuild.
+  if (track) applyRaceSettings();
+  // And fly the shots the EDITOR saved, for the same reason: a list edited in
+  // the pause menu is only read here, so every run picks up the latest one.
+  reloadFlybyShots();
   loadingScreen.run({
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
@@ -3429,6 +3474,7 @@ const { closeCamTuner } = CamTunerPanel.create(G);
 // FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
 // shot list; previews through __apex.flybyCam, touches no render-path state.
 const flybyPanel = FlybyPanel.create(G);
+reloadFlybyShots();          // the menu's warm-up frames fly the saved list too
 // Steering-tuning sliders + presets (js/input/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,
@@ -4367,13 +4413,19 @@ function updateCar(c, dt, ranked) {
       // — the pit-lane rescue reads this. Only a lane car: a car welded to
       // anything else in there still gets its rescue.
       queued = pits.inLane(blocker);
-      const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
+      // ON THE LANE THE CARS QUEUE (AiDrive.laneFollow): a wider held gap, and
+      // the crawl floor dropped so a car behind one on the jacks comes to REST
+      // instead of being commanded into its gearbox. BOTH ends must be pit-held,
+      // so nothing about racing traffic changes.
+      const onLane = queued && pits.held(c);
+      const follow = onLane ? AiDrive.laneFollow()
+        : AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
       // Floored (AiDrive.queueFloor): the cap may match the blocker's pace but
       // must never command a STANDSTILL — which it did behind a stopped car,
       // and a stopped AI can never steer out. The crawl is itself capped at the
       // vmax race control already granted, so VSC and red flag still win.
       const q = blocker.speed + clamp(blockerGap - follow, -6, 8);
-      const crawl = Math.min(AiDrive.queueFloor(!!track.street) * Math.max(PACE, 0.05), vmax);
+      const crawl = onLane ? 0 : Math.min(AiDrive.queueFloor(!!track.street) * Math.max(PACE, 0.05), vmax);
       vmax = Math.min(vmax, Math.max(q, crawl));
       const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street, blockerGap, follow, BRAKE, vTop() / VMAX);
       if (qb) { braking = true; brakeLvl = qb; }
@@ -6709,6 +6761,8 @@ let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
+// The lens the last frame was built with — see where it is filled, below.
+const _lens = { near: 0, far: 0, fovY: 0, fog: null, cull: 0, cine: false };
 function render(dt) {
   if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
@@ -6747,6 +6801,11 @@ function render(dt) {
 
   // camera
   let eyeT, tgtT, fovT, roadCamRoll = 0;
+  // Is THIS frame the pre-race cinematic? It is rendered like photo mode rather
+  // than like gameplay — far plane out, fog thinned, scenery not culled to the
+  // fog wall — because its shots are whole-circuit vistas from a few hundred
+  // metres up. See FlybySeq.FAR / FlybySeq.FOG for why both numbers live there.
+  let cine = false;
   if (state === "menu") {
     _plOk = false; _plBodyOk = false;
     // THE LOADING SCREEN'S FLYBY IS A SHOT SEQUENCE (js/camera/flyby-seq.js), not
@@ -6757,12 +6816,13 @@ function render(dt) {
     // flew through buildings. The sequencer places every eye against the props
     // registry instead. It is driven by PROGRESS through the flyby phase, so the
     // sequence keeps its shape whatever the phase is retuned to.
-    const fb = FlybySeq.solve(track, flybyProgress());
+    const fb = FlybySeq.solve(track, flybyProgress(), flybyShots);
     eyeT = fb.eye; tgtT = fb.tgt; fovT = fb.fov; camAncNX = null;
     // A shot boundary is a CUT. Without this the λ1.6 menu damping below smears
     // the change of angle into a long swim between two vantages, which reads as
     // one broken move rather than two shots.
     if (fb.cut) camSnapNext = true;
+    cine = true;
   } else {
     if (!player) return;
     // Anchor the camera to the SAME (s, x) the car body samples — playerAnchor
@@ -6892,10 +6952,19 @@ function render(dt) {
     camSnapNext = false;
   }
 
+  // The EDITOR's preview is the same cinematic, parked (js/agent/apex.js stamps
+  // `cine` on its dbgCam). From here down, everything gated on `cine` is a thing
+  // the live screen and the preview have to do IDENTICALLY — that is the whole
+  // point of the flag, and the reason it is widened here rather than read as two
+  // separate conditions at four sites that can drift apart one at a time.
+  if (dbgCam && dbgCam.cine) cine = true;
+
   // Car-follow cameras counter-rotate by the road bank so the car and asphalt
   // read level while the horizon carries the banking cue. Slip adds a small
-  // dynamic lean on top; broadcast/debug cameras remain world-level.
-  if (dbgCam) {
+  // dynamic lean on top; broadcast/debug and cinematic cameras stay world-level
+  // (the flyby's own roll would otherwise be whatever the last race left behind,
+  // decaying over the first half-second of a shot the editor showed level).
+  if (dbgCam || cine) {
     camRoll = 0;
   } else {
     // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
@@ -6916,20 +6985,27 @@ function render(dt) {
   // scenery draw-distance cull that derives from it). dbgCam overwrites
   // farPlane with its own value right below, so debug/photo-mode is untouched.
   let fovY, farPlane = 900 * (LT.renderDistMul != null ? LT.renderDistMul : 1);
+  if (cine) farPlane = FlybySeq.FAR;   // flat, not scaled by RENDER DISTANCE: the editor previews ONE number
   if (dbgCam) {
     camEye[0] = dbgCam.eye[0]; camEye[1] = dbgCam.eye[1]; camEye[2] = dbgCam.eye[2];
     camTgt[0] = dbgCam.target[0]; camTgt[1] = dbgCam.target[1]; camTgt[2] = dbgCam.target[2];
     fovY = dbgCam.fov * Math.PI / 180;
-    farPlane = dbgCam.far;
+    if (!cine) farPlane = dbgCam.far;
   } else {
     // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
     // blows the horizontal field out past ~100°, which makes the car look tiny and
     // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
     // readable size; portrait (narrow) is unaffected.
     fovY = camFov * Math.PI / 180;
-    const HFOV_MAX = 86 * Math.PI / 180;
-    const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
-    fovY = Math.min(fovY, fovYCap);
+    // The HFOV cap keeps the CAR a readable size on a wide screen. A crane shot
+    // has no car in it, the editor previews the authored angle uncapped, and a
+    // shot authored at 60° would arrive on a 21:9 screen squeezed to 45° — so
+    // the cinematic takes the number it was framed at.
+    if (!cine) {
+      const HFOV_MAX = 86 * Math.PI / 180;
+      const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
+      fovY = Math.min(fovY, fovYCap);
+    }
   }
 
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
@@ -6948,7 +7024,8 @@ function render(dt) {
   // of depth resolution for free.
   const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
   const _nearM = (_projMode === "cockpit" || _projMode === "hood") ? 0.3 : 0.9;
-  M4.perspectiveTo(_mProj, fovY, gfx.aspect, dbgCam ? 0.3 : _nearM, farPlane);
+  const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
+  M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
   // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
   // module-scope scratch vectors (no per-frame V3 array allocation); same math.
   {
@@ -7035,13 +7112,32 @@ function render(dt) {
   // Cull off the density the SHADER renders — glx.js uploads frame.fogDensity *
   // FOG DENSITY. Off the raw base, FOG DENSITY 0 ("off") still culled scenery at
   // 250 m with no fog drawn. (FOG BOOST bakes in upstream; it was unaffected.)
+  // The THINNING the cinematic and the debug camera render through, or null for
+  // an ordinary frame. Read by gfx.begin() far below; named here because the
+  // cull right underneath has to know that this frame's fog wall is not where
+  // frame.fogDensity says it is — thinning the draw while culling scenery at the
+  // unthinned wall is a hard edge of missing world instead of a vista.
+  const _fogMul = cine ? FlybySeq.FOG
+    : (dbgCam ? (dbgCam.fog != null ? dbgCam.fog : 0.15) : null);
   const _fogDens = (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
   const _fogCull = _fogDens > 3 / farPlane ? Math.ceil(3 / _fogDens) : 0;
   // Sphere that contains the perspective frustum (far-plane corners sit
   // farther from the eye than farPlane). Look-identical pre-reject; not 300 m.
   const _farCull = farPlane * Math.hypot(1, Math.tan(fovY * 0.5) * Math.hypot(1, gfx.aspect || 1));
-  frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0)
+  // The cinematic takes the debug camera's rule for the same reason it takes its
+  // far plane — and the same MOBILE CAP. loadTrack()'s own comment calls the
+  // build's transient peak "the moment a near-limit phone gets jetsam killed",
+  // and this frame runs seconds after it; framing a whole ~5 M-vert city there
+  // is not a risk worth a nicer horizon.
+  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0)
     : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : (_fogCull || _farCull));
+
+  // WHAT THIS FRAME WAS ACTUALLY BUILT WITH, for __apex.camState().lens. Not a
+  // debug nicety: the live flyby and the EDITOR'S preview of the same shot ran
+  // different lenses for months with nothing able to see it, because every hook
+  // reported where the camera POINTED. Written after all five are resolved.
+  _lens.near = _near; _lens.far = farPlane; _lens.fovY = fovY;
+  _lens.fog = _fogMul; _lens.cull = frame.cullDist; _lens.cine = cine;
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
   // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
@@ -7418,9 +7514,11 @@ function render(dt) {
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
   let _b;
-  if (dbgCam) {
+  if (_fogMul != null) {
+    // Restored immediately: frame.fogDensity is the SESSION's value, which
+    // applyRaceSettings owns and every other reader expects unscaled.
     const bf = frame.fogDensity;
-    frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
+    frame.fogDensity = bf * _fogMul;
     _b = gfx.begin(frame);
     frame.fogDensity = bf;
   } else _b = gfx.begin(frame);
@@ -8354,14 +8452,18 @@ if ($("mb-vs")) $("mb-vs").onclick = () => {
   ensureNet().then((ok) => { if (ok) netLobby.open(); });
   if (soundOn) GameAudio.uiSelect();
 };
-$("mb-tt").onclick = () => {
+function openTimeTrial(selectDaily) {
   setFlow("gp"); session = "tt";
-  restoreFreePlaySelection();
+  if (selectDaily) daily.select();
+  else restoreFreePlaySelection();
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
-};
+  // Daily selection already names the exact circuit/weather/time. Do not first
+  // arm a free-play scene that is immediately discarded.
+  if (!selectDaily) scheduleFlybyTrack(true);
+}
+$("mb-tt").onclick = () => openTimeTrial(false);
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
   // Replace any career alias with the repaired standalone save; finished stays readable.

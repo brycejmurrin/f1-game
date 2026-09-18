@@ -42,7 +42,9 @@ before/after counts (`bloat-scan.mjs --json`).
 ## 3. Split the tree (new directory / file family)
 
 - Engine vs data: `js/track/` vs `js/circuits/<id>.js`.
-- New `js/game/` file: hyphenated name; grandfathered squashed names stay.
+- New module: it goes in the DOMAIN directory (`js/physics/`, `js/race/`,
+  `js/ui/`, …) — `js/game/` was dissolved in the 2026-09 restructure.
+  Hyphenated name; grandfathered squashed names stay.
 - `tools/` subdir: `tools/README.md` must name the file (or `family/`).
 - `tests/` split is done — do not invent a third layout. Guards in
   `load-order.test.mjs` / `docs-integrity.test.mjs`.
