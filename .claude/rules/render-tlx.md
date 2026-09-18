@@ -5,7 +5,8 @@ paths:
 
 # TLX (three.js / TSL) — loads with js/render/three/
 
-- Opt-in via `apex26.gfxBackend=three`. Probes and tests pin WebGL2 with
+- Default when `apex26.gfxBackend` is unset; also selected explicitly with
+  `apex26.gfxBackend=three`. Probes and tests pin three's WebGL2 path with
   `apex26.tlxForceGL=1` — three's WebGPU path dies under SwiftShader
   (`mappedAtCreation`); use `--tlx-webgpu` only on purpose.
 - Canvas alpha must be opaque for correct compositing (the transparent-cars

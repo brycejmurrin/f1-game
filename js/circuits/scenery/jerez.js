@@ -46,7 +46,8 @@
         tree, palm, bush, building, tower, grandstandEx,
         spectatorHill, terrace, guardrail, fence, tyreWall, marshalPost,
         cameraTower, broadcastCompound, billboard, sponsorHoarding, gantry,
-        motorhome, groundPatch, runoffApron, place, ridge } = api;
+        motorhome, groundPatch, runoffApron, place, ridge,
+        modelGroup, vadd, addBox, addCyl, addFrustum, MAT } = api;
 
       // ---------------------------------------------------------------
       // 1. PALETTE + HELPERS  (§2 bleached, §6 sparse olive / pale concrete)
@@ -583,4 +584,42 @@
 
       gantry(0.0, 8, CONC);
       gantry(0.0345, 7.5, CONC_ALT);
+
+      // ── EL OVNI ──────────────────────────────────────────────────────────
+      // Jerez's one unmistakable building, and it was missing. The brief's own
+      // summary ends "pale concrete terracing is the built landmark", which is
+      // true of every Spanish circuit of the period and true of none of them
+      // the way this thing is: a white disc on a single stem standing in the
+      // infield, so plainly a flying saucer that nobody has called it anything
+      // else since 1986. Photograph the stadium section from any angle and it
+      // is in the frame.
+      //
+      // Infield at s 0.75, 50 m out: measured 57.5 m to the nearest other road
+      // node, which a 28 m disc needs (0.73 and 0.78 both come within 20-32 m
+      // of the lap folding back, and 0.70 within 1.8 m).
+      {
+        const a = anchor(K(0.75), 1, 50);
+        const b = [a.r, a.u, a.t];
+        const R = 14, STEM = 13;                      // 28 m across, deck 13 m up
+        const OVNI_W = [0.93, 0.93, 0.91], OVNI_S = [0.80, 0.80, 0.78];
+        const OVNI_G = [0.16, 0.22, 0.28];
+        modelGroup("jerez-ovni", {
+          center: vadd(a.c, a.u, STEM * 0.62), size: [R * 2 + 2, STEM + 9, R * 2 + 2], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addCyl(stage, a.c, 3.4, STEM, OVNI_S, 12, b);                     // the stem
+          addBox(stage, a.c, [9, 0.6, 9], OVNI_S, b);                       // plinth
+          // Underside cone, glazed drum, overhanging roof disc — the three
+          // pieces that make the silhouette read as a saucer and not a tank.
+          addFrustum(stage, vadd(a.c, a.u, STEM - 3.2), R * 0.42, R * 0.92, 3.2, OVNI_S, 16, b);
+          stage._mat = MAT.GLASS;
+          addCyl(stage, vadd(a.c, a.u, STEM), R * 0.92, 3.6, OVNI_G, 16, b);
+          stage._mat = MAT.CONCRETE;
+          addCyl(stage, vadd(a.c, a.u, STEM + 3.6), R, 1.1, OVNI_W, 16, b); // the brim
+          addFrustum(stage, vadd(a.c, a.u, STEM + 4.7), R * 0.8, R * 0.3, 2.4, OVNI_W, 16, b);
+          stage._mat = MAT.METAL;
+          addCyl(stage, vadd(a.c, a.u, STEM + 7.1), 0.16, 4.5, [0.55, 0.56, 0.58], 5, b);
+          stage._mat = 0;
+        }, { required: true });
+      }
   };

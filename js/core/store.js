@@ -9,6 +9,14 @@ const GameStore = (function () {
     _listeners: new Set(),
     rev: 0,              // bumped on every set — memo caches key off this to self-invalidate
     broken: null,
+    // `d` is the CALL-SITE default; js/data/settings-defaults.js outranks it when
+    // it names this key, so a shipped default lives in one file instead of in
+    // whichever module happened to read the key first. Opt-in per key, and
+    // guarded on typeof so store.js still loads alone in a unit test.
+    _def(k, d) {
+      return (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
+        ? SettingsDefaults.get(k) : d;
+    },
     get(k, d) {
       const key = "apex26." + k;
       let v = this._cache.get(key);
@@ -20,11 +28,11 @@ const GameStore = (function () {
           // — but say so once, because "your settings reset themselves" is otherwise
           // reported as a game bug with nothing in the console to go on.
           noteBroken(e, "read " + k);
-          return d;
+          return this._def(k, d);
         }
         this._cache.set(key, v);
       }
-      return v === undefined ? d : v;
+      return v === undefined ? this._def(k, d) : v;
     },
     // THE CACHE IS WRITTEN EVEN WHEN THE DISK WRITE FAILS, AND THAT IS DELIBERATE —
     // but it used to be silent, which made it a data-loss bug that looked like
@@ -76,8 +84,14 @@ const GameStore = (function () {
     // they gain is `broken`: a failed raw write is recorded and reported once,
     // the same as a failed JSON write, instead of vanishing.
     raw(k) {
-      try { return localStorage.getItem(fullKey(k)); }
-      catch (e) { noteBroken(e, "read " + k); return null; }
+      // null means NEVER SET on this lane, and several call sites read that as
+      // meaningful — so a shipped default is substituted only for a key
+      // js/data/settings-defaults.js actually names. Everything else still
+      // answers null exactly as before.
+      const def = () => (typeof SettingsDefaults !== "undefined" && SettingsDefaults.has(k))
+        ? SettingsDefaults.get(k) : null;
+      try { const v = localStorage.getItem(fullKey(k)); return v === null ? def() : v; }
+      catch (e) { noteBroken(e, "read " + k); return def(); }
     },
     rawSet(k, v) {
       const key = fullKey(k);

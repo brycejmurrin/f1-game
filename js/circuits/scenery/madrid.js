@@ -586,15 +586,45 @@
         avenueOffice(`madrid-avenue-right-${i}`, frac + 0.006, 1, 26, 21 - i * 2);
       }
 
-      for (let i = 0; i < 4; i++) {
-        const frac = 0.30 + i * (0.10 / 3);
-        const h = [54, 68, 62, 58][i];
-        venueGroup(`madrid-cuatro-torres-${i}`, frac, -1, 38,
-          [17, h + 8, 17], false, (stage, a) => {
+      // ── CUATRO TORRES, ON THE HORIZON WHERE THEY ACTUALLY ARE ────────────
+      // These used to be four 54-68 m towers strung along s 0.30-0.40 at 38 m
+      // from the road edge, which put Madrid's tallest buildings closer to the
+      // circuit than its own grandstands and contradicted this brief's own
+      // rule — docs/tracks/madrid.md rejects the Estadio Metropolitano at 3 km
+      // as "too far to belong on this skyline", and the CTBA is twice that.
+      //
+      // Measured, not guessed: IFEMA 40.4653 N 3.6156 W to the CTBA
+      // 40.4760 N 3.6890 W is 6.33 km on bearing 280.8°. The outboard normal
+      // at s 0.40 runs 279.6° (tools: scratch bearing probe over track.rx/rz,
+      // +X west / +Z north), so ONE anchor there carries the whole cluster on
+      // a true sightline — the old spread across s 0.30-0.40 smeared it over
+      // 25° of bearing as well as standing it on the track.
+      //
+      // Real heights at the real distance, so the apparent size is right by
+      // construction rather than by taste: Torre de Cristal 249 m subtends
+      // 2.26° at 6.33 km, which is what you see from Valdebebas. The towers
+      // spread ~450 m N-S along the Castellana, which is what `a.t` runs here.
+      {
+        const TORRES = [
+          // name              height  half-width  offset along the cluster
+          ["espacio",  224, 17.5, -215],
+          ["cristal",  249, 18.5,  -75],
+          ["pwc",      236, 17.0,   65],
+          ["cepsa",    248, 17.5,  205],
+          // Caleido, finished 2021 — the fifth tower that keeps the group from
+          // reading as a tidy row of four.
+          ["caleido",  181, 14.0,  330],
+        ];
+        venueGroup("madrid-cuatro-torres", 0.40, -1, 6330,
+          [40, 260, 760], false, (stage, a) => {
             const b = basis(a);
-            addFrustum(stage, a.c, 7.4, 5.0, h, i === 1 ? GLASS : DARK_GLASS, 6, b);
-            addFrustum(stage, vadd(a.c, a.u, h), 5.0, 1.6, 7, GLASS, 6, b);
-            addCyl(stage, vadd(a.c, a.u, h + 7), 0.18, 4, STEEL, 5, b);
+            for (const [name, h, hw, along] of TORRES) {
+              const foot = vadd(a.c, a.t, along);
+              addFrustum(stage, foot, hw, hw * 0.74, h,
+                name === "cristal" ? GLASS : DARK_GLASS, 6, b);
+              addFrustum(stage, vadd(foot, a.u, h), hw * 0.74, hw * 0.24, h * 0.055, GLASS, 6, b);
+              addCyl(stage, vadd(foot, a.u, h + h * 0.055), 0.5, h * 0.04, STEEL, 5, b);
+            }
           });
       }
 

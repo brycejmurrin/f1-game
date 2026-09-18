@@ -21,14 +21,15 @@ const hasBackendFiles = (b) => b === "webgl2" ||
   !!(typeof ApexRoster !== "undefined" && ApexRoster.DEFERRED &&
      (ApexRoster.DEFERRED[b] || []).length);
 const available = (b) => hasBackendFiles(b) && (b !== "webgpu" || hasWebGPU());
-// The stored pick, or WebGL2 when nothing is stored — must match js/game.js's
+// The stored pick, or Three.js when nothing is stored — must match js/game.js's
 // boot read or SETTINGS shows a backend that is not the one bound.
 function defaultBackend() {
-  return "webgl2";
+  return "three";
 }
 function readBackend() {
   const v = GameStore.store.raw("apex26.gfxBackend");
-  return v === "webgpu" || v === "three" ? v : defaultBackend();
+  if (v == null) return defaultBackend();
+  return v === "webgl2" || v === "webgpu" || v === "three" ? v : "webgl2";
 }
 function backendLabel(v) { return v === "three" ? "THREE.JS" : String(v).toUpperCase(); }
 // What is actually DRAWING, as opposed to what is stored. readBackend() is the
@@ -502,7 +503,7 @@ function ensureAdvHost() {
   const summary = document.createElement("summary");
   summary.id = "pm-renderer-details-sum";
   summary.className = "adv-more-btn";
-  summary.textContent = "RENDERER · WEBGL2";
+  summary.textContent = "RENDERER · THREE.JS";
   summary.title = "Resolution, backend, quality, recovery, screenshots, and diagnostics";
   const body = document.createElement("div");
   body.id = "pm-display-adv-body";
@@ -646,7 +647,7 @@ function initReset() {
   const btn = document.createElement("button");
   btn.id = "pm-renderer-reset";
   btn.textContent = "RESET RENDERER";
-  btn.title = "Forget the saved renderer pick, THREE PATH, SCREENSHOTS, and the crash/fallback flags, then reload on WebGL2. Use this if THREE.JS or WEBGPU crashed or will not load, especially on iPhone.";
+  btn.title = "Forget the saved renderer pick, THREE PATH, SCREENSHOTS, and crash/fallback flags, then reload on the default Three.js renderer. Pick WEBGL2 directly if THREE.JS or WEBGPU will not load.";
   if (typeof host.appendChild === "function") host.appendChild(btn);
   btn.onclick = () => {
     uiSelect();

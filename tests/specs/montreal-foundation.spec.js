@@ -23,11 +23,22 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
       const geometry = window.__apex.geometryDiagnostics();
       const models = window.__apex.modelDiagnostics();
       const props = window.__apex.trackGeometry().props.pos;
-      const node = window.__apex.nodeAt(0.45);
+      // { scenery: true } — THE PIERS ARE NOT WHERE A RACING FRAC SAYS.
+      // js/circuits/scenery/montreal.js builds these supports at
+      // anchor(K(0.45), side, 5), and anchor() is shift-wrapped by
+      // transformSceneryApi. Montreal carries _sceneryShift 0.8598, so the
+      // scenery's node is 337 while a bare nodeAt(0.45) returns 489 — 152
+      // nodes and roughly 600 m apart. This sampled the wrong end of the
+      // island for months and passed anyway, because what sat within 2.2 m
+      // there was a floodlight mast (they ran the whole lap every 22 m). The
+      // comments below about which pier landed on the rougher patch were
+      // tuned against lamp posts. Honouring `lamp: "none"` removed the masts
+      // and left this reading zero vertices, which is how it was found.
+      const node = window.__apex.nodeAt(0.45, { scenery: true });
       const supportLat = 12; // 7 m road half-width + 5 m support clearance
       const supports = [-1, 1].map((side) => {
         const lat = side * supportLat;
-        const ground = window.__apex.groundY(0.45, lat);
+        const ground = window.__apex.groundY(node.frac, lat);
         // MEASURE THE CONTRACT foundation() ACTUALLY OFFERS. It fills from the
         // cap DOWN TO THE LOWEST terrain sample under the leg's own footprint
         // (js/circuits/montreal.js, the casino footbridge) — so the foot sits
@@ -44,7 +55,7 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
         let lowest = Infinity;
         for (const df of [-dFrac, 0, dFrac])
           for (const dl of [-0.35, 0, 0.35])
-            lowest = Math.min(lowest, window.__apex.groundY(0.45 + df, lat + dl).terrainY);
+            lowest = Math.min(lowest, window.__apex.groundY(node.frac + df, lat + dl).terrainY);
         const footX = node.x + node.rx * lat;
         const footZ = node.z + node.rz * lat;
         const ys = [];
@@ -106,7 +117,17 @@ test("Montreal island foundation stays grounded, clear, and bounded", async ({ p
 
     expect(session.models.invalid).toEqual([]);
     expect(session.models.unsafe).toEqual([]);
-    expect(session.models.suppressed).toEqual([]);
+    // A PIT SUPERSEDE IS BY DESIGN, AND IS STILL PINNED EXACTLY.
+    // js/track/scenery/pits.js builds the garages from track.pit, so a circuit's
+    // own hand-placed pit block is honoured as a no-op and reported with reason
+    // "superseded by the pit complex" (required is downgraded to false on that
+    // path, which is why a bare `.filter(e => e.required)` cannot see it either).
+    // Listing the ids rather than excusing the reason keeps the assertion sharp:
+    // the complex over-claiming and eating real scenery — it has reported a
+    // Monaco fountain 308 m from the nearest pit node — shows up here as a new
+    // id, not as a count that quietly grows.
+    expect(session.models.suppressed.map((entry) => entry.id).sort())
+      .toEqual(["kit:montreal:pit-building", "montreal-park-lawn-l-0", "montreal-park-lawn-l-1"]);
     const bridge = session.models.emitted.find((entry) => entry.id === "montreal-casino-footbridge");
     expect(bridge).toMatchObject({ required: true, overhead: true, clearance: 8 });
     const supportModels = session.models.emitted.filter((entry) =>

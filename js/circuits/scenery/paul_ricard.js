@@ -17,6 +17,7 @@
       const SCRUB = [0.36, 0.40, 0.22], SCRUB_D = [0.30, 0.34, 0.19];
       const BLUE = [0.36, 0.42, 0.66], RED = [0.62, 0.28, 0.26];
       const BLUE_D = [0.29, 0.34, 0.56], LINE = [0.90, 0.90, 0.88];
+      const RED_D = [0.52, 0.23, 0.22];
       const ALU = [0.76, 0.78, 0.80], WHITE = [0.94, 0.94, 0.92];
 
       for (const [id, s, side, w, l] of [
@@ -26,12 +27,19 @@
         ["pr-runoff-beausset", 0.720, -1, 66, 120],
         ["pr-runoff-village", 0.905, 1, 64, 120],
       ]) {
-        groundPatch(K(s), side, 4, [w * 0.30, 0.18, l], RED,
-          { id: id + "-red", samples: 8 });
-        groundPatch(K(s), side, 4 + w * 0.30, [w * 0.42, 0.18, l * 1.08], BLUE,
+        // BLUE FIRST, RED BEYOND IT — the order is the whole point and it was
+        // backwards. The Blue Zone is the FIRST run-off a car reaches: asphalt
+        // loaded with tungsten, moderate extra friction, meant to slow you
+        // while you still have a chance. The Red Zone is the SECOND, deeper
+        // one, far more abrasive, and it is what you hit if the blue did not
+        // stop you. Shipped with red as the 9 m strip against the kerb and blue
+        // filling the outfield, which reads as the opposite circuit.
+        groundPatch(K(s), side, 4, [w * 0.30, 0.18, l], BLUE,
           { id: id + "-blue", samples: 8 });
-        groundPatch(K(s), side, 4 + w * 0.72, [w * 0.28, 0.18, l * 1.14], BLUE_D,
+        groundPatch(K(s), side, 4 + w * 0.30, [w * 0.42, 0.18, l * 1.08], BLUE_D,
           { id: id + "-blue-outer", samples: 8 });
+        groundPatch(K(s), side, 4 + w * 0.72, [w * 0.28, 0.18, l * 1.14], RED,
+          { id: id + "-red", samples: 8 });
       }
 
       // The corner patches alone leave the rest of the lap green, which is the
@@ -45,10 +53,12 @@
         let i = 0;
         along(0.0, 1.0, 15, (k, spacing) => {
           const seg = spacing * 1.05;   // slight overlap so the run reads unbroken
-          runoffApron(k, side, 2.5, [9, 0.16, seg], RED);
+          // Same order as the corner patches above: blue from the kerb out, red
+          // as the deep band before the barrier.
+          runoffApron(k, side, 2.5, [9, 0.16, seg], BLUE);
           runoffApron(k, side, 11.5, [30, 0.14, seg], (i & 1) ? BLUE : BLUE_D);
-          runoffApron(k, side, 41.5, [26, 0.12, seg], (i & 1) ? BLUE_D : [0.33, 0.38, 0.60]);
-          runoffApron(k, side, 67.5, [22, 0.10, seg], (i & 1) ? [0.31, 0.36, 0.58] : BLUE_D);
+          runoffApron(k, side, 41.5, [26, 0.12, seg], (i & 1) ? RED : RED_D);
+          runoffApron(k, side, 67.5, [22, 0.10, seg], (i & 1) ? RED_D : [0.47, 0.21, 0.20]);
           if (i % 3 === 0) {
             const a = anchor(k, side, 26);
             addBox(out, vadd(a.c, a.u, 0.22), [28, 0.10, 0.9], LINE, [a.r, a.u, a.t]);

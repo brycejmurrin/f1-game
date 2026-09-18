@@ -415,6 +415,82 @@
       forestEdge(0.18, 0.28,  1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
       forestEdge(0.18, 0.28, -1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
 
+      // ── THE HANGARS THE HANGAR STRAIGHT IS NAMED AFTER ───────────────────
+      // The line above has thinned this outfield to 8% density since the
+      // circuit was written, with a comment saying why: to leave sky for the
+      // hangar silhouettes. docs/tracks/silverstone.md asks for them twice
+      // ("barrel WWII hangar silhouettes ~95-112 m", "place barrel hangars at
+      // mid-distance so they read as silhouettes"). They were never placed, so
+      // for as long as this file has existed the Hangar Straight has been a
+      // stretch of thinned trees named after buildings that are not there —
+      // on a circuit whose whole identity is the bomber station underneath it.
+      //
+      // RAF Silverstone flew Wellingtons from 1943 and its hangars were Type
+      // T2s: a 240 x 115 ft steel shed, about 73 x 35 m, ~7.5 m to the eaves
+      // and ~11 m to the ridge, in drab olive-green. They stood in a line off
+      // the perimeter track, which is what this straight used to be — so they
+      // run PARALLEL to it, spaced along the tangent, not scattered.
+      //
+      // Silhouettes, not scenery: no glazing, no detail, one flat colour per
+      // shed at 95-112 m where the eye reads only the outline.
+      {
+        const T2_OLIVE = [0.34, 0.36, 0.30], T2_OLIVE_D = [0.28, 0.30, 0.26];
+        const T2_DOOR  = [0.24, 0.26, 0.23];
+        // NO HAND-ROLLED onTrack PRE-GUARD. The first cut had one and it
+        // silently ate three of five hangars — modelGroup's own footprint test
+        // reports a rejection by id, a bare `return` does not, and this file
+        // is not the place to reinvent the failure mode.
+        const hangar = (kk, side, dist, tOff, col) => {
+          const a = anchor(kk, side, dist);
+          const W = 35, LEN = 73, EAVE = 7.5, RIDGE = 3.6;   // 11.1 m to the ridge
+          const c = vadd(a.c, a.t, tOff);
+          const b = [a.r, a.u, a.t];
+          modelGroup(`silverstone-t2-hangar-${kk}`, {
+            center: vadd(c, a.u, (EAVE + RIDGE) / 2), size: [W + 2, EAVE + RIDGE + 1, LEN + 2], basis: b,
+          }, (stage) => {
+            stage._mat = MAT.CONCRETE;
+            addBox(stage, vadd(c, a.u, EAVE / 2), [W, EAVE, LEN], col, b);
+            // The barrel. addCyl extrudes along basis[1], so the roll axis is
+            // the shed's LENGTH — the same [r, t, u] basis the museum's
+            // repainted T2 roof uses thirty lines below.
+            //
+            // VERGE, and it is not a fudge. Flush with the gable, the cylinder's
+            // END CAP lands on exactly the plane of the shed's end wall, facing
+            // the same way: two faces, one depth, both rasterised, z-fighting at
+            // every distance. That is what coplanar-faces.test.mjs counts, and
+            // five hangars flush took silverstone 15 -> 20 spots and the deploy
+            // branch red (pages 2424-2426). A T2's roof oversails its gable, so
+            // the fix is the real detail rather than a nudge: the caps move 0.3 m
+            // proud of the end walls and share no plane with anything.
+            const VERGE = 0.3;
+            stage._mat = MAT.RUST;
+            addCyl(stage, vadd(vadd(c, a.u, EAVE), a.t, -(LEN / 2 + VERGE)), W / 2, LEN + VERGE * 2,
+              T2_OLIVE_D, 7, [a.r, a.t, a.u]);
+            // Sliding door bays at the trackside gable — the one detail that
+            // survives at this range, because it breaks the flat end wall.
+            stage._mat = MAT.METAL;
+            addBox(stage, vadd(vadd(c, a.u, EAVE * 0.46), a.t, -(LEN / 2 + 0.2)),
+              [W * 0.84, EAVE * 0.86, 0.4], T2_DOOR, b);
+            stage._mat = 0;
+          }, { required: true });
+        };
+        // ONE rank, on the LEFT only, and that is a measurement rather than a
+        // choice. The brief says "both" sides, but Silverstone folds: the
+        // outfield off the right of the Hangar Straight at 96-108 m is the
+        // Stowe/Vale section of this same lap, 11-18 m away (measured at
+        // s 0.196/0.242 -> road at s 0.36-0.40). A 73 m shed there stands on
+        // the Stowe run-off. The left side clears by 70-112 m all the way
+        // along, and one rank off one side of the old perimeter track is what
+        // an RAF dispersal actually looked like.
+        for (const [s, dist, col] of [
+          [0.185,  98, T2_OLIVE],
+          [0.205, 101, T2_OLIVE_D],
+          [0.228, 104, T2_OLIVE],
+          [0.252, 100, T2_OLIVE_D],
+          [0.272,  96, T2_OLIVE],
+        ]) hangar(k(s), -1, dist, 0, col);
+      }
+
       for (const [s, side, d, w, h, ln] of [
         [0.50,  1, 145, 24, 5, 34],
         [0.74,  1, 150, 20, 5, 26],

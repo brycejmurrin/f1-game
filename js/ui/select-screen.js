@@ -126,10 +126,29 @@ function fittedLivery(t) {
   return list.find((l) => l.id === id) || list[0] || null;
 }
 
+// "#12 Senna", or just "Senna" where the number is not a fact.
+//
+// ONLY for legends. Ten of the twelve have no SOURCED racing number — only
+// Senna's 12 and Mansell's 5 are — and js/data/legends.js parks the rest at 1
+// as a neutral placeholder rather than inventing one, so the tile printed "#1"
+// ten times as if it meant something. A real driver's number IS a fact and is
+// always shown: #1 Norris is the reigning champion, not a missing value, and an
+// `n > 1` rule applied to everyone would have quietly hidden it.
+function driverLabel(d, placeholderNum) {
+  const last = d.name.split(" ").pop();
+  return (placeholderNum && !(d.num > 1)) ? last : "#" + d.num + " " + last;
+}
+
 function teamSwatch(t) {
   const sw = document.createElement("span");
   sw.className = "tm-colour";
   const liv = fittedLivery(t);
+  // A team may wear a crest that is not its own id: a LEGENDS car carries the
+  // marque badge of the car it is (Ferrari for Schumacher, McLaren for Senna),
+  // and legends whose marque has no crest in js/car/crest-paths.js carry none
+  // rather than a borrowed one. `crest` is absent on every other team, so they
+  // keep resolving by id exactly as before.
+  const crestId = t.crest || t.id;
   const c1 = (liv && liv.c1) || t.color;
   const c2 = (liv && liv.c2) || t.color2 || t.color;
   // Fitted scheme, not the factory pair: a player who painted the car should
@@ -139,7 +158,7 @@ function teamSwatch(t) {
     const c = document.createElement("canvas");
     c.width = 48; c.height = 48;
     c.setAttribute("aria-hidden", "true");
-    LiveryTex.paintSwatch(c.getContext("2d"), t.id, liv || { c1, c2 }, c.width, c.height);
+    LiveryTex.paintSwatch(c.getContext("2d"), crestId, liv || { c1, c2 }, c.width, c.height);
     sw.appendChild(c);
   } else {
     sw.style.background = "linear-gradient(135deg," + cssCol(c1) + " 62%," + cssCol(c2) + " 62%)";
@@ -179,9 +198,22 @@ function buildTeamPicker() {
     // what keeps every solo mode exactly as it was.
     const taken = G.peerSeats ? G.peerSeats() : [];
     const isTaken = (si) => taken.some((s) => s.team === t.id && s.driver === si);
-    sub.textContent = t.drivers
-      .map((d, si) => "#" + d.num + " " + d.name.split(" ").pop() + (isTaken(si) ? " (TAKEN)" : ""))
-      .join("  ·  ");
+    // ONE LINE, and a team with a long roster must not be allowed to write a
+    // paragraph into it. LEGENDS carries all twelve drivers so the driver picker
+    // can offer them, and joining all twelve here overflowed the tile and pushed
+    // the card over its neighbour (seen on a real screen, 2026-09-17): the grid
+    // is built for the two names every other team has.
+    //
+    // So the Legends tile says WHO YOU ARE and WHAT YOU ARE IN, which is the
+    // useful thing anyway — the roster lives one tap away in the driver picker.
+    const seatName = (d, si) => driverLabel(d, !!t.legends) + (isTaken(si) ? " (TAKEN)" : "");
+    if (t.legends) {
+      const seat = Math.min(Math.max(G.teamIdx === i ? (G.driverIdx | 0) : 0, 0), t.drivers.length - 1);
+      const d = t.drivers[seat];
+      sub.textContent = d ? seatName(d, seat) + "  ·  " + (t.engine || "") : "";
+    } else {
+      sub.textContent = t.drivers.map(seatName).join("  ·  ");
+    }
     body.append(name, sub);
     b.append(teamSwatch(t), body);
     b.onclick = () => {

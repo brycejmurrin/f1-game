@@ -228,3 +228,155 @@ test("the setting round-trips, and turning it off stops a line in flight", () =>
   assert.equal(blank.RV.create(blank.G).say("BOX BOX BOX", 3, "info"), false, "the radio ships OFF");
   assert.equal(blank.saved.has("radioVoice"), false, "create() must not write the setting; the panel owns it");
 });
+
+// ── 8. PER-CHANNEL TUNING ────────────────────────────────────────────────────
+// sameTone, not deepEqual: toneFor() builds its result inside the vm realm the
+// module is loaded in, so a strict deepEqual against a host-realm literal fails
+// on prototype identity with every value matching. That has now cost three
+// tests in this repo; compare the numbers.
+const sameTone = (got, want, msg) => {
+  assert.equal(got.pitch, want.pitch, `${msg}: pitch`);
+  assert.equal(got.rate, want.rate, `${msg}: rate`);
+};
+// The three channels were always distinct (SPEAKERS/TONE); what is new is that
+// a player may re-voice and re-tune each one. The risk is not a crash — it is a
+// stored value silencing a channel, because the tune comes out of localStorage
+// and can be stale, hand-edited, or from a machine with different voices.
+
+test("toneFor is the shipped default until a tune overrides it, per channel", () => {
+  for (const sp of Object.keys(RV.TONE)) {
+    sameTone(RV.toneFor(sp, null), RV.TONE[sp], `${sp}: no tune must be the shipped prosody`);
+    sameTone(RV.toneFor(sp, {}), RV.TONE[sp], `${sp}: an empty tune is no tune`);
+  }
+  // One channel tuned leaves the other two alone — that is what "per group" means.
+  const t = { coach: { pitch: 1.4, rate: 0.8 } };
+  sameTone(RV.toneFor("coach", t), { pitch: 1.4, rate: 0.8 }, "coach takes its tune");
+  sameTone(RV.toneFor("control", t), RV.TONE.control, "control is untouched by coach's tune");
+});
+
+test("a junk or out-of-range tune falls back rather than silencing a channel", () => {
+  // Every one of these is reachable: a hand-edited store, a save from a build
+  // with a wider range, a half-written record. None may produce a pitch or rate
+  // the speech API rejects — the card is the floor, the voice is the extra.
+  const bad = [undefined, null, NaN, "loud", Infinity, -1, 0, 99, {}, []];
+  for (const v of bad) {
+    const t = RV.toneFor("radio", { radio: { pitch: v, rate: v } });
+    assert.ok(Number.isFinite(t.pitch) && t.pitch >= RV.PITCH_MIN && t.pitch <= RV.PITCH_MAX,
+      `pitch ${String(v)} produced ${t.pitch}`);
+    assert.ok(Number.isFinite(t.rate) && t.rate >= RV.RATE_MIN && t.rate <= RV.RATE_MAX,
+      `rate ${String(v)} produced ${t.rate}`);
+  }
+  // A partial record keeps the default for the field it omits.
+  assert.equal(RV.toneFor("radio", { radio: { pitch: 1.5 } }).rate, RV.TONE.radio.rate);
+});
+
+test("a tuned rate reaches plan, and the card budget still wins over it", () => {
+  const base = { msg: "box box", life: 3, kind: "box", enabled: true, soundOn: true, state: "race", api: true };
+  assert.equal(RV.plan(base).rate, RV.TONE.radio.rate, "untuned is the shipped rate");
+  assert.equal(RV.plan({ ...base, tune: { radio: { rate: 0.7 } } }).rate, 0.7, "a tuned rate is used");
+  assert.equal(RV.plan({ ...base, tune: { radio: { pitch: 1.3 } } }).pitch, 1.3);
+  // THE BUDGET OVERRIDES THE PREFERENCE, and that is not a bug to report as
+  // "the slider does nothing": a long line at a slow rate outlives its card, so
+  // plan() lifts it to RATE_MAX and refuses only if it STILL will not fit.
+  const long = { ...base, msg: "box box box this lap we are switching to the hard tyre and expect traffic", life: 3 };
+  const slow = RV.plan({ ...long, tune: { radio: { rate: 0.6 } } });
+  assert.ok(slow.rate === RV.RATE_MAX || !slow.speak,
+    `a slow tune on a long line must be sped up or refused, got rate ${slow.rate} speak ${slow.speak}`);
+});
+
+test("the tune cannot reach a channel that does not exist", () => {
+  // SPEAKERS maps every kind onto one of three; a tune keyed by anything else
+  // is a stale save, and must not become a fourth channel by accident.
+  const t = { engineer: { pitch: 1.5, rate: 1.3 } };
+  for (const sp of Object.keys(RV.TONE)) {
+    sameTone(RV.toneFor(sp, t), RV.TONE[sp], `${sp} was moved by a tune for a channel that does not exist`);
+  }
+  // An unknown speaker resolves to the driver's channel, never to undefined.
+  sameTone(RV.toneFor("nobody", null), RV.TONE.radio, "an unknown speaker is the driver's channel");
+});
+
+test("every channel has a preview line, and it survives speakable()", () => {
+  for (const sp of Object.keys(RV.TONE)) {
+    const line = RV.SAMPLE[sp];
+    assert.ok(line && line.length > 10, `${sp}: no sample line to preview with`);
+    const said = RV.speakable(line);
+    assert.ok(said.length > 5, `${sp}: sample normalises to "${said}"`);
+    assert.ok(!/[A-Z]{2,}/.test(said.replace(/\b(DRS|ERS|VSC|SC|MGU|PB|P\d{1,2})\b/g, "")),
+      `${sp}: sample leaves an all-caps token engines spell out: "${said}"`);
+  }
+  // The control sample carries a penalty, which is the speakable() case that
+  // matters most — "+5s" must become words, not be read as punctuation.
+  assert.match(RV.speakable(RV.SAMPLE.control), /plus 5 seconds/);
+});
+
+// The INSTANCE side of tuning — the pure half is above; these are the parts that
+// touch the store and the synth, exercised through the same stub the voice tests
+// use. The VM game harness cannot reach any of this: it has no speechSynthesis,
+// so create() hands back inert() and every setter is a no-op that returns false.
+
+const LOCAL = (name, lang = "en-GB") => ({ name, lang, localService: true });
+
+test("a tune round-trips through the store, per channel, and resets", () => {
+  const { RV, G, saved } = load({ stored: { radioVoice: true } });
+  const r = RV.create(G);
+  assert.equal(r.available(), true, "the stub synth must give a live instance, not inert()");
+
+  assert.equal(r.setTune("coach", { pitch: 1.3, rate: 0.8 }), true);
+  assert.equal(r.tuneFor("coach").pitch, 1.3);
+  assert.equal(r.tuneFor("coach").rate, 0.8);
+  // The OTHER channels are untouched — the whole point of "per group".
+  assert.equal(r.tuneFor("radio").rate, RV.TONE.radio.rate);
+  assert.equal(r.tuneFor("control").pitch, RV.TONE.control.pitch);
+
+  // One key, one object — the store guard wants a key to mean one type.
+  const stored = saved.get("voiceTune");
+  assert.ok(stored && typeof stored === "object", "voiceTune must persist as one record");
+  assert.deepEqual(Object.keys(stored), ["coach"], "only the tuned channel is written");
+
+  assert.equal(r.setTune("coach", null), true, "a null patch resets");
+  assert.equal(r.tuneFor("coach").pitch, RV.TONE.coach.pitch, "reset is the shipped default again");
+  assert.equal(r.setTune("nobody", { pitch: 1.2 }), false, "an unknown channel is refused, not created");
+});
+
+test("a stored tune is read at create() and reaches the utterance", () => {
+  const { RV, G, synth } = load({
+    voices: [LOCAL("Alpha"), LOCAL("Beta")],
+    stored: { radioVoice: true, voiceTune: { radio: { pitch: 1.25, rate: 0.9, name: "Beta" } } },
+  });
+  const r = RV.create(G);
+  r.say("box box", 9, "box");
+  const spoke = synth.calls.filter((c) => c.m === "speak").pop();
+  assert.ok(spoke, "nothing was spoken");
+  assert.equal(spoke.rate, 0.9, "the stored rate must reach the utterance");
+  assert.equal(spoke.voice && spoke.voice.name, "Beta", "the stored voice must be the one chosen");
+});
+
+test("a stored voice that is no longer installed falls back, it does not silence the channel", () => {
+  // The realistic case: the save was made on another machine, or an OS update
+  // removed a voice. Picking by NAME is what makes this recoverable at all — a
+  // stored INDEX would silently become a different voice instead.
+  const { RV, G, synth } = load({
+    voices: [LOCAL("Alpha"), LOCAL("Beta")],
+    stored: { radioVoice: true, voiceTune: { radio: { name: "A Voice That Left" } } },
+  });
+  const r = RV.create(G);
+  assert.equal(r.say("box box", 9, "box"), true, "a missing voice must not stop the line");
+  const spoke = synth.calls.filter((c) => c.m === "speak").pop();
+  assert.ok(spoke.voice && spoke.voice.name, "it fell through to no voice at all");
+  assert.ok(["Alpha", "Beta"].includes(spoke.voice.name), "it must land on an installed voice");
+});
+
+test("preview speaks the channel being tuned, and stays silent when the radio is off", () => {
+  const { RV, G, synth } = load({ voices: [LOCAL("Alpha")], stored: { radioVoice: true } });
+  const r = RV.create(G);
+  assert.equal(r.preview("control"), true);
+  const spoke = synth.calls.filter((c) => c.m === "speak").pop();
+  assert.match(spoke.text, /plus 5 seconds/, "the control sample is the penalty line, spoken");
+  assert.equal(spoke.rate, RV.TONE.control.rate, "…at that channel's prosody");
+
+  // A preview is NOT a say(): plan() refuses everything outside a race on
+  // purpose, and the settings panel is exactly that case. But OFF still means
+  // off — a disabled radio must not talk from the settings screen either.
+  const off = load({ voices: [LOCAL("Alpha")], stored: { radioVoice: false } });
+  assert.equal(off.RV.create(off.G).preview("control"), false);
+});

@@ -81,6 +81,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/parts-distinct-mesh.test.mjs",
   "tests/unit/onboard.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
+  // test-coverage-audit answers "is this file in SOME topical group"; this one
+  // answers the question that actually bites, "does the pre-push gate RUN it" —
+  // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
+  // pre-push command executes. It must be IN the gate to guard the gate.
+  "tests/unit/prepush-gate-coverage.test.mjs",
   "tests/unit/test-groups-generated.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/quick-validate.test.mjs",
@@ -125,6 +130,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/steer-presets.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/settings-export.test.mjs",
+  "tests/unit/settings-defaults.test.mjs",
   // ...and the garage's SIGNS: no prop mounted within half a metre in front of
   // a wall quad. Two shipped cut-off wordmarks and one never-visible live
   // trace were each found by a screenshot; this puts them in the edit loop.

@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateRawSync } from "node:zlib";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -433,6 +434,28 @@ test("garbage and truncated codes are rejected with a usable message", async () 
     "unknown envelopes must not bypass the plain-payload size policy");
 });
 
+test("packed SDP rejects non-object payloads and missing handshake fields as corrupt", async () => {
+  const prior = globalThis.NetSdp;
+  globalThis.NetSdp = { unpack: () => "v=0\r\n" };
+  const packed = (json) => {
+    const rest = Buffer.from(JSON.stringify(json));
+    const joined = Buffer.concat([Buffer.from([0, 1, 7]), rest]);
+    return "APEX1.s." + NetBytes.bytesToB64url(deflateRawSync(joined));
+  };
+  try {
+    for (const payload of [null, "offer", [], { b: 1 }]) {
+      const decoded = await NetHandshake.decodeCode(packed(payload));
+      assert.equal(decoded.ok, false, `packed ${JSON.stringify(payload)} must be corrupt`);
+      assert.equal(decoded.error, "corrupt_code");
+    }
+    globalThis.NetSdp.unpack = () => null;
+    assert.equal((await NetHandshake.decodeCode(packed({ b: 1, k: "offer" }))).error, "corrupt_code",
+      "a packed payload without reconstructable SDP must be corrupt");
+  } finally {
+    globalThis.NetSdp = prior;
+  }
+});
+
 test("invite decoding rejects oversized encoded and plain payloads before use", async () => {
   const tooLong = "APEX1.p." + "A".repeat(512 * 1024 + 1);
   assert.equal((await NetHandshake.decodeCode(tooLong)).ok, false,
@@ -533,6 +556,11 @@ test("the invite link keeps the code in the fragment", () => {
   assert.equal(NetHandshake.inviteFromUrl("https://x.dev/#a=1&vs=" + code), code);
   assert.equal(NetHandshake.inviteFromUrl("https://x.dev/?vs=nope"), null,
     "a query-string code must NOT be honoured — that one does reach the server");
+  assert.equal(
+    NetHandshake.withoutInviteUrl("https://x.dev/play?renderer=glx#keep=1&vs=" + code + "&camera=chase"),
+    "https://x.dev/play?renderer=glx#keep=1&camera=chase",
+    "consuming an invite preserves unrelated query and fragment state",
+  );
 });
 
 // ── round 8: teardown really tears down ──────────────────────────────────────
