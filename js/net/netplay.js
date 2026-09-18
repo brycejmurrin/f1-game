@@ -378,8 +378,20 @@ const NetPlay = (function () {
           if (eventLog.length > 32) eventLog.shift();
           if (name === EV.MODEL) {
             if (!d || d.physics !== modelRevision() || d.strategy !== STRATEGY_VERSION) {
-              if (G.announce) G.announce("GAME VERSIONS DIFFER — RELOAD BOTH GAMES", 4, "info");
-              stop("incompatible_physics"); return;
+              // ONE INCOMPATIBLE PEER IS ONE RIVAL, NOT THE SESSION — the rule
+              // onClose and BYE below already follow. A bare stop() here ended
+              // the whole race for everybody because ONE joiner arrived on an
+              // older build, while the host and the other guests agreed on a
+              // model and were mid-race on it. Close that peer's session and
+              // let onClose hand its car back to the AI, exactly as a drop does.
+              if (role === "host" && sessions.size > 1) {
+                if (G.announce) G.announce("A RIVAL IS ON A DIFFERENT GAME VERSION — DROPPED", 4, "info");
+                try { s.close(); } catch (e) { /* already gone; onClose still runs */ }
+              } else {
+                if (G.announce) G.announce("GAME VERSIONS DIFFER — RELOAD BOTH GAMES", 4, "info");
+                stop("incompatible_physics");
+              }
+              return;
             }
             if (typeof d.epoch === "string" && d.epoch.length <= 64) {
               peerEpochs.set(id, d.epoch); lastStrategy = -Infinity;

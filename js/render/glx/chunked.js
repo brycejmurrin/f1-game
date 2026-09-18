@@ -683,7 +683,13 @@ const GLXChunked = (function () {
           }
         }
       } finally {
-        gl.depthFunc(gl.LESS);
+        // LEQUAL, not LESS: LEQUAL is the value init() sets (glx.js) and the
+        // only one the renderer ever runs with, so restoring LESS here left
+        // every draw after the first occlusion-culling frame testing strictly —
+        // which silently drops coplanar geometry (road markings, decals, the
+        // start line) that is authored to pass at EQUAL depth. These three
+        // calls are the only depthFunc in the backend; they must agree.
+        gl.depthFunc(gl.LEQUAL);
         gl.colorMask(true, true, true, true);
         setDepthMask(true);
         if (prevProg) gl.useProgram(prevProg);

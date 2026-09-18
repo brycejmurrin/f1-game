@@ -16,7 +16,9 @@
 //   js/circuits/  the 52 circuit DEFINITIONS (24 season + 28 classic; one file each)
 //   js/car/       car model, liveries, parts, ghost, teams
 //   js/data/      data hub (api client + tab modules + shell)
-//   js/game/      game-support modules extracted from / loaded before game.js
+//   js/lighting/, js/race/, js/garage/, js/career/, js/physics/, js/fx/,
+//   js/perf/, js/ui/, js/audio/, js/camera/, js/input/, js/net/, js/agent/
+//                 the modules extracted from / loaded before game.js
 //
 // Rules encoded here:
 //  - FULL is every TAGGED js/ file, in the exact index.html <script> order.

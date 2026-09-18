@@ -24,7 +24,15 @@ except Exception:
     print("")
 ')
 [ -z "$CMD" ] && exit 0
-ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+# THE TREE THE COMMIT LANDS IN, NOT THE SESSION'S. $CLAUDE_PROJECT_DIR names
+# the MAIN checkout, so a commit made from a LINKED WORKTREE read the main
+# tree's staged list, gated files the commit does not touch, and `--auto-raise`
+# staged tests/data/ratchets.json into the MAIN index — a write into a tree
+# nobody was looking at. `git rev-parse --show-toplevel` from the hook's own cwd
+# names the worktree actually committing; the old value stays as the fallback
+# for a cwd that is not a work tree at all.
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[ -n "$ROOT" ] || ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 # --- pkill -f / killall on the browser or test tree ---------------------------
 # Command position only (start of line or after ; & | ( ), so a commit message
@@ -58,7 +66,7 @@ if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:spa
   mkdir -p "$ROOT/artifacts"
   LOG="$ROOT/artifacts/pre-commit-guards.log"
   # DOCS-ONLY COMMITS SKIP TO docs-integrity. The deploy branch takes a lot of
-  # note-only commits (one 2026-09-16 session made four), and the 14 guards and
+  # note-only commits (one 2026-09-16 session made four), and the guards and
   # the ratchets have nothing to say about prose — worse, --auto-raise can stage
   # tests/data/ratchets.json into a commit that changed no code at all. The path
   # set is deliberately narrow: docs/, any .md, skills and agents. A GENERATED

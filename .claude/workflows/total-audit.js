@@ -56,9 +56,9 @@ const VERDICTS_SCHEMA = {
 
 const R1 = [
   { k: 'game-core',    scope: 'js/game.js — the entire file, all ~8k lines. Emphases: dead branches, state-machine coherence, G-facade accessors that nothing consumes, comment drift around the extraction seams.' },
-  { k: 'game-mod-abc', scope: 'every js/game/ file whose basename starts with a, b or c (agentview*, apex, ariastate, atmosphere, audio, bodyattitude, cam-*, cameras, career*, carmesh — ls js/game/ to enumerate).' },
-  { k: 'game-mod-dm',  scope: 'every js/game/ file whose basename starts with d through m (debrisworld, hud, incidentsim, input, light-*, lighting, menunav, menus, music-lib — ls js/game/ to enumerate).' },
-  { k: 'game-mod-nz',  scope: 'every js/game/ file whose basename starts with n through z (particles through uilayers — ls js/game/ to enumerate).' },
+  { k: 'game-mod-abc', scope: 'every file under js/agent/, js/audio/, js/camera/, js/car/ and js/career/ (ls each to enumerate). NOTE: there is no js/game/ directory — these modules live in the per-domain directories listed in AGENTS.md §Layout; js/game.js itself is covered by game-core.' },
+  { k: 'game-mod-dm',  scope: 'every file under js/data/, js/fx/, js/garage/, js/input/ and js/lighting/ (ls each to enumerate).' },
+  { k: 'game-mod-nz',  scope: 'every file under js/net/, js/perf/, js/physics/, js/race/ and js/ui/ (ls each to enumerate).' },
   { k: 'track-core',   scope: 'every js/track/ file EXCEPT scenery-*.js (tracks, spline, mesh, geom, graph, space, surface, models, themes, landmark-kit, circuit-kit, maps).' },
   { k: 'track-scenery', scope: 'js/track/scenery/data.js, scenery-nature.js, scenery-city.js, scenery-structures.js, scenery-identity.js — the buildProps split behind the 109-member frozen contract (docs/SCENERY-API.md).' },
   { k: 'circuits-1',   scope: 'the FIRST 20 files of ls js/circuits/ | sort. Emphasis: pattern consistency across circuit defs — same keys used the same way, stale comments, copy-paste residue from a sibling circuit. The 2026-08 audit never line-read ~20 of the 40 circuit scenery(api) callbacks — treat each scenery callback as FIRST-READ: grounding calls, placement args, side/sign conventions (+k = LEFT), s-ranges vs track.total.' },

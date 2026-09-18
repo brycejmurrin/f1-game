@@ -234,6 +234,18 @@ test("resolveLivery and the live preview keep every editor tint", () => {
     assert.equal(fields[1].includes('"' + k + '"'), false,
       `LIVERY_FIELDS must not carry the retired key ${k}`);
   }
+  // …and it is the SAME SET as the published list it copies. Naming the rows
+  // one at a time above could only catch the rows someone thought to name:
+  // `bodySplit` shipped on Cadillac, was listed by the editor and painted by
+  // Car3D, and was absent here for nine days because no assertion compared the
+  // two lists. Every field Liveries.FIELDS publishes reaches the car through
+  // resolveLivery, or it does not reach it at all.
+  const published = listFrom(LIVERIES_SRC, /const FIELDS = \[([\s\S]*?)\];/);
+  const picked = listFrom(GAME, /const LIVERY_FIELDS = \[([\s\S]*?)\];/);
+  const missing = [...published].filter((k) => !picked.has(k)).sort();
+  const extra = [...picked].filter((k) => !published.has(k)).sort();
+  assert.deepEqual(missing, [], "LIVERY_FIELDS drops fields Liveries.FIELDS publishes");
+  assert.deepEqual(extra, [], "LIVERY_FIELDS names fields Liveries.FIELDS does not");
   // …and every read path folds a stored file's retired keys exactly once.
   assert.match(GAME, /return pickLivery\(migrateLivery\(livDraftOverride\.liv\)\)/,
     "draft resolveLivery must migrate, then resolve through pickLivery");

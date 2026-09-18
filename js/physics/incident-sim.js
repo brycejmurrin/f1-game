@@ -408,9 +408,17 @@ const IncidentSim = (function () {
               if (w && fin(w.x) && fin(w.z)) { c.px = w.x; c.pz = w.z; }
             }
           } catch (e) { /* c.px/pz keep their prior value */ }
+          // THE CLAMP IS ON THE MAGNITUDE; THE SIGN IS PHYSICS. c.speed < 0 is
+          // a legal state (REVERSE_MAX / REVERSE_ACCEL in game.js, and the
+          // wrong-way and progress checks both read the sign), so handing a car
+          // back through Math.abs turned a rival that the incident left rolling
+          // backwards into one accelerating forwards at up to RETAIN_MAX of its
+          // entry speed. Clamp the magnitude exactly as before, then restore the
+          // direction the sim actually ended on.
+          const dir = fin(c.speed) && c.speed < 0 ? -1 : 1;
           let outV = fin(c.speed) ? Math.abs(c.speed) : 0;
           if (inV > 0) outV = clamp(outV || inV * RETAIN_FLOOR, inV * RETAIN_FLOOR, inV * RETAIN_MAX);
-          c.speed = fin(outV) ? outV : (inV * RETAIN_FLOOR);
+          c.speed = dir * (fin(outV) ? outV : (inV * RETAIN_FLOOR));
           c.vLat = 0; c.yawRateCur = 0;
           c.wasOnWall = false; c.rescueT = 0;
         }

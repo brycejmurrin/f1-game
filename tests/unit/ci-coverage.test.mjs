@@ -580,8 +580,16 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   assert.deepEqual(report.jobs.filter((j) => !j.deployGate).map((j) => j.name).sort(), ["renderer-filter", "renderer-macos"]);
   // The path filter: every renderer backend plus the lighting modules the
   // gfx specs pin, the spec list DERIVED from package.json, fail-safe to run.
-  for (const p of ["js/render/", "js/game/lighting[^/]*\\.js$", "js/game/track-lights\\.js$", "js/game/frame-lights\\.js$", "js/game/light-presets\\.js$", "js/game/atmosphere\\.js$", "js/game/tuner\\.js$"]) {
+  // DIRECTORY PREFIXES, AND THEY MUST EXIST. This guard used to pin six
+  // `js/game/<file>` patterns; the modules moved to js/lighting/ and both the
+  // filter and this assertion kept naming the old directory, so the guard went
+  // on passing while the filter selected renderer=false for every lighting
+  // edit. Asserting the prefix is a real directory is what makes that
+  // impossible to repeat — a rename now fails here instead of going quiet.
+  for (const p of ["js/render/", "js/lighting/"]) {
     assert.ok(rendererFilter.includes(p), `renderer filter does not route ${p}`);
+    assert.ok(fs.existsSync(new URL("../../" + p, import.meta.url)),
+      `the renderer filter routes ${p}, which is not a directory in the tree`);
   }
   assert.match(rendererFilter, /scripts\["test:gfx"\]/);
   assert.match(rendererFilter, /run_all "git diff failed"/);
