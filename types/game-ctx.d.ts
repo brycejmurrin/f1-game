@@ -449,6 +449,11 @@ interface GameCtx {
   raceTimeOfDay: TimeOfDay;
   /** The FLYBY SHOT EDITOR's saved shot list, or null for the shipped sequence. */
   readonly flybyShots: object[] | null;
+  /** What the LAST rendered frame's projection was built with — near, far, the
+   *  post-cap vertical FOV in radians, the fog multiplier (null = unscaled), the
+   *  cull radius, and whether it was the pre-race cinematic. Read by
+   *  __apex.camState().lens; the object is reused every frame. */
+  readonly lens: { near: number; far: number; fovY: number; fog: number | null; cull: number; cine: boolean };
   raceWeather: Weather;
   sectorBests: [number, number, number];
   readonly fieldSectorBests: [number, number, number];
