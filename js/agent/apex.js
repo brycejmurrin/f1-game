@@ -387,8 +387,12 @@ const api = {
   },
   // flybyShots() — the sequence the flyby is currently playing, as data. The
   // authoring loop is: read this, edit it, hand it back to flybyCam(u, shots).
+  // The EDITOR's saved list when there is one, so this reports what a race would
+  // actually fly rather than what ships — they stopped being the same thing when
+  // the editor learned to save.
   flybyShots() {
-    return typeof FlybySeq === "undefined" ? null : JSON.parse(JSON.stringify(FlybySeq.DEFAULT));
+    if (typeof FlybySeq === "undefined") return null;
+    return JSON.parse(JSON.stringify(G.flybyShots || FlybySeq.DEFAULT));
   },
   // camTune(mode?, obj?) — the CAMERA TUNER's per-camera-mode framing offsets
   // (js/camera/offsets.js), the camera counterpart of lightTune(). With no args

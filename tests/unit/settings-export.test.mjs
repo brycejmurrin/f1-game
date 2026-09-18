@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { readDefaults } from "../../tools/gen/settings-defaults.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -95,7 +96,7 @@ test("a fresh store exports no changes, and ALL lists every key at its default",
 
 test("a changed key carries its value, the default it replaced and the source that owns it", () => {
   const { collect } = boot({ disk: {
-    "apex26.volMusic": "0.8", "apex26.pace": "14", "apex26.difficulty": JSON.stringify("hard"),
+    "apex26.volMusic": "0.8", "apex26.pace": "14", "apex26.difficulty": JSON.stringify("normal"),
     "apex26.cockpitHalo": "0", "apex26.metricsSize": "l",
     "apex26.lightTune": JSON.stringify({ "monza|day|dry": { sunI: 1.2 } }),
     "apex26.camTune": JSON.stringify({ chase: { dist: 2 } }),
@@ -103,7 +104,7 @@ test("a changed key carries its value, the default it replaced and the source th
   const f = collect("changes");
   assert.deepEqual(f.changed.sort(), ["audio.volMusic", "camera.camTune", "camera.cockpitHalo", "driving.difficulty", "lighting.lightTune", "metrics.metricsSize", "steering.pace"]);
   assert.equal(f.settings.audio.volMusic, 0.8);
-  assert.equal(f.defaults.audio.volMusic, 0.9, "music ships at 0.9 since 2026-09-08");
+  assert.equal(f.defaults.audio.volMusic, 0.6, "SPEC mirrors the authoritative SettingsDefaults value");
   assert.equal(f.settings.steering.pace, 14);
   assert.equal(f.defaults.steering.pace, 11);
   // The halo SHIPS on since 2026-09-08, so "0" is what counts as a change now.
@@ -170,11 +171,16 @@ test("unset gfxBackend exports as null on touch and desktop alike", () => {
 // table following would make the file report a change that is none.
 test("SPEC's defaults agree with the store.get reads in their source files", () => {
   const { SettingsExport } = boot();
+  const authoritative = readDefaults().obj;
   let checked = 0;
   for (const row of SettingsExport.SPEC) {
     const file = row.src.split(" ")[0];
     assert.ok(fs.existsSync(path.join(ROOT, file)), row.k + ": " + file + " exists");
     if (row.lane !== "json" || typeof row.def === "function") continue;
+    if (Object.prototype.hasOwnProperty.call(authoritative, row.k)) {
+      assert.deepEqual(row.def, authoritative[row.k], row.k + ": SPEC must mirror SettingsDefaults");
+      continue;
+    }
     const src = read(file);
     // Every read of the key in its file; a migration read (`, null)`) or a
     // named constant is not the boot default, so the literal reads must

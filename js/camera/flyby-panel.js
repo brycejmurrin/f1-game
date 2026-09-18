@@ -146,19 +146,20 @@ function normaliseDurs(list) {
   return out;
 }
 
-/** Every reason this list would not bake, as plain sentences. Empty == good.
- *  The same rules tools/gen/bake-flyby.mjs enforces, stated here so the panel
- *  can refuse to copy a blob the bake step would reject an hour later. */
-function validateShots(list) {
+/** Every reason FlybySeq.solve() could not PLAY this list. Empty == good.
+ *  Split out of validateShots because a SAVED list is read back through this
+ *  half only: solve() normalises by the durations' own total, so a list nobody
+ *  pressed NORMALISE on still plays exactly as the editor previewed it. Holding
+ *  a saved list to the bake step's sum rule would throw away the edit and fall
+ *  back to the shipped sequence — which is the defect this file just fixed. */
+function shotErrors(list) {
   const bad = [];
   if (!Array.isArray(list) || !list.length) return ["the shot list must be a non-empty array"];
-  let sum = 0;
   list.forEach((s, i) => {
     const at = "shot " + i + " (" + ((s && s.id) || "?") + ")";
     if (!s || typeof s !== "object" || Array.isArray(s)) { bad.push(at + " is not an object"); return; }
     if (typeof s.id !== "string" || !s.id) bad.push(at + " has no string id");
     if (typeof s.dur !== "number" || !isFinite(s.dur) || s.dur <= 0) bad.push(at + " has no finite positive dur");
-    else sum += s.dur;
     if (EASES.indexOf(s.ease) === -1) bad.push(at + " ease must be one of " + EASES.join(", "));
     for (const k of ["eye", "look"]) {
       if (!Array.isArray(s[k]) || s[k].length !== 2) { bad.push(at + " " + k + " must be a [from, to] pair"); continue; }
@@ -170,7 +171,17 @@ function validateShots(list) {
     if (!Array.isArray(s.fov) || s.fov.length !== 2 ||
         !s.fov.every((n) => typeof n === "number" && isFinite(n))) bad.push(at + " fov must be [from, to] numbers");
   });
+  return bad;
+}
+
+/** Every reason this list would not BAKE. shotErrors plus the one rule the
+ *  solver does not need but tools/gen/bake-flyby.mjs enforces, stated here so
+ *  the panel can refuse to copy a blob the bake step would reject an hour later. */
+function validateShots(list) {
+  const bad = shotErrors(list);
   if (bad.length) return bad;
+  let sum = 0;
+  for (const s of list) sum += s.dur;
   if (Math.abs(sum - 1) > 0.01) bad.push("durations sum to " + sum.toFixed(4) + ", not 1 — press NORMALISE");
   return bad;
 }
@@ -194,7 +205,7 @@ function toBlob(list) {
 const ops = {
   EASES, AT_KINDS, POSE_FIELDS, FIELD, SLOTS, CORNER_NS, RANKS,
   clone, poseFields, switchPoseAt, uniqueId, blankShot,
-  addShot, duplicateShot, deleteShot, moveShot, normaliseDurs, validateShots, toBlob,
+  addShot, duplicateShot, deleteShot, moveShot, normaliseDurs, shotErrors, validateShots, toBlob,
 };
 
 // ---- the panel ------------------------------------------------------------
@@ -203,10 +214,10 @@ let _refresh = null;
 
 function create(G) {
 Log.info("game", "FlybyPanel.create");
-const { $, els } = G;
+const { $, els, store } = G;
 
-// The edited list. Seeded from the shipped DEFAULT on first open and kept
-// across opens, so closing the panel to look at the scene does not lose an
+// The edited list. Seeded from the SAVED list, or the shipped DEFAULT, and kept
+// across opens so closing the panel to look at the scene does not lose an
 // afternoon of framing.
 let shots = null;
 let sel = 0;
@@ -215,7 +226,45 @@ let u = 0;
 function defaults() {
   return (typeof FlybySeq === "undefined") ? [] : clone(FlybySeq.DEFAULT);
 }
-function ensure() { if (!shots) shots = defaults(); return shots; }
+
+/* THE EDITS ARE SAVED, AND THAT IS THE POINT OF THE PANEL.
+ *
+ * Reported: "once I hit DONE in the editor it doesn't actually change the start
+ * shots." It did not. DONE only closed the sheet; the list lived in this
+ * closure, and js/game.js called FlybySeq.solve(track, progress) with NO third
+ * argument, so the pre-race flyby always played the shipped DEFAULT however long
+ * the author spent framing it. The preview was honest and everything after it
+ * was discarded.
+ *
+ * The list is now the same kind of thing the lighting tuner's profiles are: a
+ * saved edit under apex26., written on every change so DONE, ESCAPE and QUIT all
+ * keep it, and read back by game.js when a run starts. COPY VALUES is still how
+ * an edit becomes the SHIPPED default for everyone — this is one player's.
+ *
+ * NULL MEANS "THE SHIPPED SEQUENCE", never a copy of it: storing the default
+ * would pin this player to today's shots and silently ignore every later change
+ * to them. RESET therefore needs no special case — it restores the default, the
+ * comparison below sees no edit, and the key clears itself. */
+function persist() {
+  const list = shots || [];
+  const pristine = !list.length || JSON.stringify(list) === JSON.stringify(defaults());
+  try { store.set("flybyShots", pristine ? null : list); }
+  catch (e) { Log.warn("game", "flyby shots did not save", e); }
+}
+
+/** The saved list, or null. Held to shotErrors() and not validateShots(): the
+ *  solver normalises by the durations' own total, so a list nobody pressed
+ *  NORMALISE on plays exactly as previewed and must not be thrown away. */
+function loadSaved() {
+  let saved = null;
+  try { saved = store.get("flybyShots", null); } catch (_) { return null; }
+  if (!saved) return null;
+  const bad = shotErrors(saved);
+  if (bad.length) { Log.warn("game", "saved flyby shots unusable: " + bad[0]); return null; }
+  return saved;
+}
+
+function ensure() { if (!shots) shots = loadSaved() || defaults(); return shots; }
 
 /** Cumulative bounds of shot `i` as fractions of the whole run — the same
  *  arithmetic FlybySeq.solve() does, so a scrub position and a shot chip agree. */
@@ -320,7 +369,7 @@ function selectRow(host, id, label, values, onChange) {
   return item;
 }
 
-function edited() { refreshChips(); refreshRows(); preview(); }
+function edited() { persist(); refreshChips(); refreshRows(); preview(); }
 
 function buildRows() {
   const host = $("fb-rows");
@@ -589,7 +638,7 @@ $("fb-copy").onclick = () => {
 };
 
 _refresh = () => { if (isOpen()) { refreshChips(); refreshRows(); } };
-return { openFlyby, closeFlyby, isOpen, setApiLoader, list: () => clone(ensure()) };
+return { openFlyby, closeFlyby, isOpen, setApiLoader, loadSaved, list: () => clone(ensure()) };
 }
 
 return Object.assign({ create, refresh: () => { if (_refresh) _refresh(); } }, ops);
