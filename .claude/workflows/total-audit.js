@@ -55,15 +55,15 @@ const VERDICTS_SCHEMA = {
 }
 
 const R1 = [
-  { k: 'game-core',    scope: 'js/game.js — the entire file, all ~8k lines. Emphases: dead branches, state-machine coherence, G-facade accessors that nothing consumes, comment drift around the extraction seams.' },
-  { k: 'game-mod-abc', scope: 'every js/game/ file whose basename starts with a, b or c (agentview*, apex, ariastate, atmosphere, audio, bodyattitude, cam-*, cameras, career*, carmesh — ls js/game/ to enumerate).' },
-  { k: 'game-mod-dm',  scope: 'every js/game/ file whose basename starts with d through m (debrisworld, hud, incidentsim, input, light-*, lighting, menunav, menus, music-lib — ls js/game/ to enumerate).' },
-  { k: 'game-mod-nz',  scope: 'every js/game/ file whose basename starts with n through z (particles through uilayers — ls js/game/ to enumerate).' },
-  { k: 'track-core',   scope: 'every js/track/ file EXCEPT scenery-*.js (tracks, spline, mesh, geom, graph, space, surface, models, themes, landmark-kit, circuit-kit, maps).' },
-  { k: 'track-scenery', scope: 'js/track/scenery/data.js, scenery-nature.js, scenery-city.js, scenery-structures.js, scenery-identity.js — the buildProps split behind the 109-member frozen contract (docs/SCENERY-API.md).' },
-  { k: 'circuits-1',   scope: 'the FIRST 20 files of ls js/circuits/ | sort. Emphasis: pattern consistency across circuit defs — same keys used the same way, stale comments, copy-paste residue from a sibling circuit. The 2026-08 audit never line-read ~20 of the 40 circuit scenery(api) callbacks — treat each scenery callback as FIRST-READ: grounding calls, placement args, side/sign conventions (+k = LEFT), s-ranges vs track.total.' },
+  { k: 'game-core',    scope: 'js/game.js — the entire file, all ~9.3k lines. Emphases: dead branches, state-machine coherence, G-facade accessors that nothing consumes, comment drift around the extraction seams.' },
+  { k: 'game-mod-abc', scope: 'every file under js/agent/, js/audio/, js/camera/, js/car/ and js/career/ (ls each to enumerate). NOTE: js/game/ was dissolved into these domain directories in the 2026-09 restructure — a scope naming js/game/ reads nothing and reports a clean tree it never opened.' },
+  { k: 'game-mod-dm',  scope: 'every file under js/core/, js/data/, js/fx/, js/garage/, js/input/ and js/lighting/ (ls each to enumerate; js/lighting/presets.js is generated data — skim, do not line-read).' },
+  { k: 'game-mod-nz',  scope: 'every file under js/perf/, js/physics/, js/race/ and js/ui/ (ls each to enumerate).' },
+  { k: 'track-core',   scope: 'js/track/tracks.js, js/track/circuit-elevations.js and everything under js/track/core/ (spline, mesh, geom, space, surface, line, pit).' },
+  { k: 'track-scenery', scope: 'everything under js/track/scenery/ (data, models, graph, themes, landmark-kit, circuit-kit, nature, structures, city, identity, pits) — the buildProps split behind the 112-member frozen contract (docs/SCENERY-API.md).' },
+  { k: 'circuits-1',   scope: 'the FIRST 20 files of ls js/circuits/ | sort. Emphasis: pattern consistency across circuit defs — same keys used the same way, stale comments, copy-paste residue from a sibling circuit. Each circuit is a PAIR: the def js/circuits/<id>.js and its dressing closure js/circuits/scenery/<id>.js — read both. The 2026-08 audit never line-read ~20 of the then-40 scenery(api) callbacks — treat each scenery callback as FIRST-READ: grounding calls, placement args, side/sign conventions (+k = LEFT), s-ranges vs track.total.' },
   { k: 'circuits-2',   scope: 'the LAST 20 files of ls js/circuits/ | sort. Same emphases as circuits-1, including the first-read scenery(api) callback treatment.' },
-  { k: 'render-glx',   scope: 'js/render/gfx.js, glx.js, everything under js/render/glx/ and js/render/shaders/, gltf.js, assets.js. Emphasis: shader-uniform drift, header truth, the Gfx seam contract.' },
+  { k: 'render-glx',   scope: 'js/render/gfx.js, glx.js, everything under js/render/glx/ (including glx/shaders/) and js/render/shared/. Emphasis: shader-uniform drift, header truth, the Gfx seam contract.' },
   { k: 'render-alt',   scope: 'js/render/three/ EXCLUDING vendor/, and js/render/webgpu/. Emphasis: parity claims vs reality, descriptor-copy installation, frozen-backend drift. vendor/three-0.185.1 is vendored — do not audit it.' },
   { k: 'net',          scope: 'every js/net/ file plus worker/. Emphasis: wire-format comments vs code, handshake state machines, the host-authority rules in docs/MULTIPLAYER.md vs implementation.' },
   { k: 'data',         scope: 'every js/data/ file. Emphasis: cache TTLs vs prose, tab lifecycle, API-client error paths, write-only state.' },
