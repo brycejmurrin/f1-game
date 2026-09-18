@@ -10,7 +10,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts } from "../../tools/ci/deploy.mjs";
+import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
+  sweepSuites, touchesGeometry, notCovered } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -138,4 +139,78 @@ test("only GENERATED files cure themselves, and only when their source merged cl
   assert.deepEqual(parts.pkgF, ["package.json"]);
   assert.deepEqual(parts.shellF, ["index.html"]);
   assert.deepEqual(parts.ratchetF, ["tests/data/ratchets.json"]);
+});
+
+/* THE GATE THAT MEASURED NO GEOMETRY. deploy.mjs ran tooling-fast and every
+ * "Pure-node unit suites" script and still knew nothing about circuit geometry,
+ * because ci.yml runs the sweeps in a separate job AFTER the push. On
+ * 2026-09-18 d9ae0ab moved Suzuka, debris-hazard-hint compared a computed float
+ * with assert.equal, the two paths landed one ULP apart, and Pages failed for
+ * hours — past a deploy that had reported green. These cover the filter that
+ * closes it, and the fact that it stays conditional. */
+function geomRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-geom-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
+  const write = (rel, body) => {
+    const f = path.join(dir, rel);
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, body);
+  };
+  g("init", "-q", "-b", "main");
+  g("config", "user.email", "t@t"); g("config", "user.name", "t");
+  write("README.md", "# base\n"); g("add", "-A"); g("commit", "-qm", "base");
+  g("branch", "-q", "base");
+  return { dir, g, write, rm: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("a circuit edit routes the sweeps; a docs-only union does not", () => {
+  const r = geomRepo();
+  try {
+    r.write("README.md", "# more prose\n"); r.g("add", "-A"); r.g("commit", "-qm", "docs");
+    assert.equal(touchesGeometry("base", r.dir), false,
+      "a docs-only union must NOT pay the 10 minutes — the cost is why this is conditional");
+    r.write("js/circuits/suzuka.js", "// moved\n"); r.g("add", "-A"); r.g("commit", "-qm", "suzuka");
+    assert.equal(touchesGeometry("base", r.dir), true,
+      "the exact 2026-09-18 shape: a circuit edit MUST run the sweeps");
+  } finally { r.rm(); }
+});
+
+/* The half ci.yml drifted on: its hand-written alternation omitted
+ * scenery-grounding, so a diff touching only that suite's own file skipped the
+ * sweep it belongs to. Neither copy owns a literal list now — both read
+ * package.json's test:sweeps — and this is what holds that true. */
+test("editing a sweep suite's OWN file routes the sweeps", () => {
+  const suites = sweepSuites();
+  assert.ok(suites.includes("tests/unit/debris-hazard-hint.test.mjs"),
+    "premise: the suite list is really derived from package.json's test:sweeps");
+  const r = geomRepo();
+  try {
+    r.write(suites[0], "// a moved baseline\n"); r.g("add", "-A"); r.g("commit", "-qm", "suite");
+    assert.equal(touchesGeometry("base", r.dir), true,
+      `editing ${suites[0]} must run the sweeps — a moved baseline changes what they measure`);
+  } finally { r.rm(); }
+});
+
+/* FAIL SAFE, NEVER FAIL OPEN. Without this, a filter that silently returned
+ * false on any error would pass every test above and gate nothing. */
+test("an unresolvable diff runs the sweeps rather than skipping them", () => {
+  const r = geomRepo();
+  try {
+    assert.equal(touchesGeometry("no-such-ref-anywhere", r.dir), true,
+      "an unreachable base must FAIL SAFE into running them");
+  } finally { r.rm(); }
+});
+
+/* The other half of the 2026-09-18 fix: tooling-fast reported 207/207 while
+ * knowing nothing about test:sweeps or test:lifecycle-unit. A verdict that
+ * lists only what ran is how that reads as success. */
+test("the verdict names what it did NOT measure", () => {
+  const withSweeps = notCovered(true);
+  const without = notCovered(false);
+  assert.ok(withSweeps.some((x) => /browser/i.test(x)),
+    "the browser groups never run here, so they must be named even on the fullest gate");
+  assert.ok(!withSweeps.some((x) => /test:sweeps/.test(x)),
+    "sweeps that RAN must not be reported as uncovered");
+  assert.ok(without.some((x) => /test:sweeps/.test(x)),
+    "sweeps that were SKIPPED must be named — that silence is the whole defect");
 });

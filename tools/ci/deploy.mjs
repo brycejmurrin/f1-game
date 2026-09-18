@@ -1,12 +1,18 @@
 #!/usr/bin/env node
 // deploy.mjs — the ONE deploy command (2026-09-01).
-// @doc the ONE deploy: fetch → merge → tooling-fast → verify-track → push the deploy branch (or --pr); pages.yml stamps it
+// @doc the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry → verify-track → push the deploy branch (or --pr); pages.yml stamps it
 //
 //   node tools/ci/deploy.mjs --plan        # print the steps + the union diffstat, run nothing
-//   node tools/ci/deploy.mjs               # fetch → merge → tooling-fast → verify-track (touched
-//                                       #   circuits) → push HEAD to the deploy branch (retry ×3)
+//   node tools/ci/deploy.mjs               # fetch → merge → tooling-fast → the Pages gate's node
+//                                       #   suites → test:sweeps (only if the union can move
+//                                       #   geometry) → verify-track (touched circuits) → push
+//                                       #   HEAD to the deploy branch (retry ×3)
 //   node tools/ci/deploy.mjs --pr          # same checks, then push the session branch and open /
 //                                       #   update a PR into the deploy branch (never pushes there)
+//   node tools/ci/deploy.mjs --gate-only   # run the DEPLOY GATE and stop: tooling-fast + ci.yml's
+//                                       #   node suites + verify-track. Pushes nothing, allows a
+//                                       #   dirty tree. THE pre-push check: test:tooling-fast is a
+//                                       #   subset and does not run 69 of the 277 unit files.
 //   node tools/ci/deploy.mjs --json        # machine verdict on stdout, log on stderr
 //
 // What it replaces: the prose protocol in the deploy-merge skill — fetch, look,
@@ -15,8 +21,12 @@
 // What changed underneath it (see pages.yml "Stamp the shell generation"): the
 // build number is stamped by the deploy from the commit count, so there is no
 // union re-bump; version.json/index.html conflicts resolve to EITHER side plus a
-// a `gen-shell` regeneration (tags read ?v=dev; the deploy stamps hashes). Sweeps are CI's (ci.yml runs them on the
-// same diff, conditionally); running them here only duplicated 10 minutes.
+// a `gen-shell` regeneration (tags read ?v=dev; the deploy stamps hashes). Sweeps ran here again from
+// 2026-09-18, conditionally: they are CI's too, but CI runs them AFTER the
+// push, and one float-equality failure that only test:sweeps could catch broke
+// Pages for hours past a green deploy (the reversal is argued at
+// touchesGeometry()). The verdict also carries notCovered[] — what this gate
+// did NOT measure — so a green here stops implying more than it checked.
 // The live check is pages.yml's `verify-live` job — this box cannot reach
 // github.io, the runner can.
 //
@@ -96,6 +106,8 @@ export function plan() {
       ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers)",
       `tools/ci/tooling-fast.mjs ${GATE_JOBS} (the full node gate, two files at a time)`,
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
+      touchesGeometry(tip) ? "test:sweeps (~10 min — this union can move geometry)"
+                           : "test:sweeps SKIPPED (nothing in this union can move geometry)",
       "verify-track for touched circuits",
       flag("--pr") ? "push the session branch and open/update a PR into the deploy branch"
                    : "git push origin HEAD:" + DEPLOY_BRANCH + " (fast-forward, retry ×3)",
@@ -122,6 +134,68 @@ export function gateNodeSuites() {
   const scripts = [...body.matchAll(/^\s+npm run (test:[\w-]+)\s*$/gm)].map((m) => m[1]);
   if (!scripts.length) throw new Error("deploy: the 'Pure-node unit suites' step parsed to ZERO scripts — refusing to push on a gate that measured nothing.");
   return scripts;
+}
+
+/* THE GEOMETRY HALF OF THE GATE — and a REVERSAL, recorded on purpose.
+ *
+ * This file used to say: "Sweeps are CI's (ci.yml runs them on the same diff,
+ * conditionally); running them here only duplicated 10 minutes." That was true
+ * and it was still the wrong call, for a reason the sentence does not contain:
+ * ci.yml runs the sweeps AFTER the push, so the duplication it saves is paid
+ * for by shipping a broken tip to a branch other sessions develop directly on.
+ *
+ * 2026-09-18 is the bill. d9ae0ab moved Suzuka, debris-hazard-hint compared a
+ * computed float with assert.equal, the two paths landed one ULP apart
+ * (4893.275779224587 vs 4893.2757792245875), and Pages failed for HOURS — past
+ * a deploy that had run tooling-fast and all twelve "Pure-node unit suites"
+ * and reported green, because the only suite that could catch it lives in
+ * test:sweeps and nothing here ran test:sweeps.
+ *
+ * The 10 minutes are real, so they are CONDITIONAL: paid only when the union
+ * can actually move geometry, which is the same condition ci.yml applies. What
+ * this does NOT cover is a session pushing straight to the deploy branch
+ * without deploy.mjs — that path still learns from CI after the fact. Hence
+ * notCovered() below: the other half of this fix is that a gate says what it
+ * did not measure instead of reporting a bare green.
+ *
+ * Both halves of the filter are DERIVED, never retyped: the prefixes are
+ * pick-tests.mjs's sweeps RULES, and the suite list is read out of
+ * package.json's test:sweeps by the same match ci.yml uses. ci.yml's own copy
+ * drifted exactly once by being hand-written — scenery-grounding was missing
+ * from it, so a diff touching only that suite skipped the sweep it belongs to.
+ *
+ * FAIL SAFE, NEVER FAIL OPEN: a diff we cannot resolve RUNS them, and a suite
+ * list that parses to nothing THROWS rather than quietly matching nothing. */
+const GEOMETRY_PATHS =
+  /^(?:js\/track\/|js\/circuits\/|tools\/(?:track|lib)\/|js\/car\/|js\/game\.js$|js\/game\/debrisworld\.js$)/;
+
+export function sweepSuites() {
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")); }
+  catch (e) { throw new Error("deploy: cannot read package.json — the sweep suite list is undefined: " + e.message); }
+  const suites = String((pkg.scripts && pkg.scripts["test:sweeps"]) || "").match(/tests\/unit\/[^\s]+/g) || [];
+  if (!suites.length) throw new Error("deploy: package.json's test:sweeps names ZERO suites — refusing to derive a geometry filter from nothing.");
+  return suites;
+}
+
+export function touchesGeometry(base, cwd) {
+  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
+  if (r.code !== 0) return true;                        // unresolvable diff -> run them
+  const files = r.out.split("\n").filter(Boolean);
+  if (files.some((f) => GEOMETRY_PATHS.test(f))) return true;
+  const suites = new Set(sweepSuites());
+  return files.some((f) => suites.has(f));              // a moved baseline counts too
+}
+
+/* What this deploy did NOT measure. A green verdict that lists only what ran
+ * is how both of 2026-09-18's breakages got past a gate: tooling-fast reported
+ * 207/207 while knowing nothing about test:sweeps or test:lifecycle-unit. The
+ * browser groups are never run here (SwiftShader: 10-40 min each) and a
+ * non-geometry union skips the sweeps, so both are named rather than implied. */
+export function notCovered(ranSweeps) {
+  const out = ["browser smoke groups (ci.yml runs them after the push)"];
+  if (!ranSweeps) out.push("test:sweeps (nothing in this union can move geometry)");
+  return out;
 }
 
 // tools/manifest.cjs MOVED (written by tools/gen/move-tree.mjs): old path -> new.
@@ -344,9 +418,73 @@ function openPr(branch) {
   return { pr: url, note: "auto-merge (merge commit) enabled; GitHub creates the merge so the PR is a real record" };
 }
 
+/* THE GATE, WITHOUT THE DEPLOY. `npm run test:tooling-fast` is the documented
+   edit-loop check and it is a SUBSET — 69 of 277 unit files are not on its
+   list — so "tooling-fast is green" has never meant "the deploy gate is
+   green". Two deploys went red on that gap in 2026-09-02 (which is why
+   gateNodeSuites() exists) and another in 2026-09-18, and in every case the
+   only way to learn it was to start a deploy.
+   This runs exactly what main() runs before it pushes, and pushes nothing, so
+   the pre-push answer comes from the same code path as the deploy's — not from
+   a second list that can drift from it. */
+export function gateOnly() {
+  const t0 = Date.now();
+  const verified = [];
+  run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite"); verified.push("tooling-fast");
+  for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verified.push(script); }
+  // Against the deploy tip, same as a real deploy: the circuits OUR side
+  // touched (three-dot), not every circuit that moved on the branch.
+  let circuits = [];
+  try {
+    must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
+    circuits = touchedCircuits(must(git(["rev-parse", `${REMOTE}/${DEPLOY_BRANCH}`]), "rev-parse"));
+  } catch (e) { log(`verify-track skipped: cannot reach ${REMOTE}/${DEPLOY_BRANCH} (${e.message})`); }
+  for (const id of circuits) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verified.push(`verify-track:${id}`); }
+  return { gate: "only", verified, pushed: false, seconds: Math.round((Date.now() - t0) / 1000) };
+}
+
+/* IS THE TRAIN ALREADY RED? A deploy inherits the branch it lands on, and a red
+   tip means your green push still ships nothing: on 2026-09-18 pages.yml runs
+   2416 and 2417 both failed and the branch went ~2 h without publishing, which
+   no session noticed until one read the run list by hand. Two unauthenticated
+   API calls answer it up front, so "my deploy did not go live" is distinguishable
+   from "the train was down before I got here".
+   ADVISORY, never a refusal: the fix for a red train is usually the next push,
+   and this must not stand between a session and it. Any failure to reach the
+   API is silent for the same reason — an offline box still deploys. */
+function trainHealth() {
+  const api = (wf) => {
+    const url = `https://api.github.com/repos/brycejmurrin/f1-game/actions/workflows/${wf}/runs`
+      + `?branch=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1&exclude_pull_requests=true`;
+    const r = spawnSync("curl", ["-sS", "--max-time", "10", "-H", "Accept: application/vnd.github+json", url], { encoding: "utf8" });
+    if (r.status !== 0) return null;
+    try {
+      const run = JSON.parse(r.stdout).workflow_runs?.[0];
+      return run ? { status: run.status, conclusion: run.conclusion, sha: (run.head_sha || "").slice(0, 7), url: run.html_url } : null;
+    } catch { return null; }
+  };
+  for (const [wf, label] of [["ci.yml", "ci"], ["pages.yml", "pages"]]) {
+    const r = api(wf);
+    if (!r) { log(`train ${label}: unknown (no API answer)`); continue; }
+    const state = r.status === "completed" ? r.conclusion : r.status;
+    log(`train ${label}: ${state} @ ${r.sha}${state === "failure" ? "  <- the deploy branch was ALREADY red before this push: " + r.url : ""}`);
+  }
+}
+
 export function main() {
   const t0 = Date.now();
   if (flag("--help") || flag("-h")) { console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 26).join("\n")); return 0; }
+  if (flag("--gate-only")) {
+    // NOT preflight(): that refuses a dirty tree because merging and pushing one
+    // is wrong. Gating one is the entire point — this is the check you run with
+    // the edit still in your working tree. The load and Playwright refusals do
+    // carry over, because they are about whether a verdict means anything.
+    const problems = preflight().filter((x) => !x.startsWith("working tree is dirty"));
+    if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
+    const v = gateOnly();
+    if (JSON_OUT) console.log(JSON.stringify(v, null, 2)); else log(JSON.stringify(v));
+    return 0;
+  }
   const p = plan();
   if (flag("--plan")) {
     if (JSON_OUT) console.log(JSON.stringify(p, null, 2));
@@ -362,6 +500,7 @@ export function main() {
   }
   const problems = preflight();
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
+  trainHealth();
   const verdict = { branch: p.branch, merge: "none", verified: [], pushed: false, pr: null };
   if (!p.fastForward) verdict.merge = mergeDeployTip();
   run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite on the union"); verdict.verified.push("tooling-fast");
@@ -370,6 +509,11 @@ export function main() {
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
   // from ci.yml so the two lists cannot drift apart.
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
+  // Conditional, for the reason recorded above touchesGeometry(): ci.yml runs
+  // the sweeps AFTER the push, so skipping them here buys 10 minutes with a
+  // broken tip on a branch other sessions build on.
+  const ranSweeps = touchesGeometry(p.tip);
+  if (ranSweeps) { run("npm", ["run", "test:sweeps"], "Pages gate: test:sweeps (this union can move geometry)"); verdict.verified.push("test:sweeps"); }
   for (const id of touchedCircuits(p.tip)) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verdict.verified.push(`verify-track:${id}`); }
   if (flag("--pr")) {
     Object.assign(verdict, openPr(p.branch));
@@ -377,6 +521,7 @@ export function main() {
     verdict.pushAttempts = pushWithRetry();
     verdict.pushed = true;
   }
+  verdict.notCovered = notCovered(ranSweeps);
   verdict.next = "the push's FAST ci.yml run is your verdict (minutes) and, when green, pokes pages.yml, which gates the tip, stamps the build (2000 + commit count) and verify-live confirms the CDN serves it — a commit is live once it is an ancestor of the live shell's apex-sha (deploy-research)";
   verdict.seconds = Math.round((Date.now() - t0) / 1000);
   if (JSON_OUT) console.log(JSON.stringify(verdict, null, 2));

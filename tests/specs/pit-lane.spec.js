@@ -125,20 +125,23 @@ test.describe("pit lane", () => {
       // centre moves three metres across the calendar, so a literal would be a
       // Monza-only test).
       //
-      // READ IT FROM INSIDE THE WINDOW. laneX is null outside it — outside it
-      // there is no lane to be in — and 0.93 of the lap is NOT inside it: the
-      // window opens 320 m before the line, which at Monza is 0.945. 0.99 is
-      // in the window on every circuit in the game (it would take a 32 km lap
-      // for 1% of it to exceed 320 m), and it is the box's own end of the lane,
-      // which is the position whose width actually matters.
-      A.jump(0.99, 30, 0);
-      const laneX = A.pit().laneX;
-      // …and START inside the window too, on the lane: the window is 260 m
-      // before the line at most now (TrackPit), so 0.93 of a Monza lap is
-      // before the entry road, and a car dropped on the lane's lateral there
-      // stands on the grass. The first frac from 0.93 that is inside it.
+      // READ IT AT THE ARC POSITION THE CAR IS ACTUALLY AT. laneX is null
+      // outside the window, and 0.93 of the lap is NOT inside it: the window
+      // opens 320 m before the line, which at Monza is 0.945. So find the
+      // first frac from 0.93 that IS inside, and take the lane centre THERE.
+      //
+      // It used to read laneX at 0.99 and drop the car at f0 with that number.
+      // That assumed one lane centre for the whole window, and the lane does
+      // not have one any more: it is narrow at the entry and flares out only
+      // where the bays are, so at Monza the centre is 15.5 m at f0 = 0.96 and
+      // 19.25 at 0.99. The car was placed 3.75 m outside the lane, dropped off
+      // the surface, and crept 5 m in sixty seconds — "the car never reached
+      // the box". The lane centre is a function of arc position, which is what
+      // pit().laneX has always said it is.
       let f0 = 0.93;
       for (const f of [0.93, 0.94, 0.95, 0.96, 0.97]) { A.jump(f, 30, 0); if (A.pit().inWindow && A.pit().laneX != null) { f0 = f; break; } }
+      A.jump(f0, 30, 0);
+      const laneX = A.pit().laneX;
       A.jump(f0, 30, laneX); A.aim(0);
       A.pit({ arm: true });
       let sawBox = false, boxTicks = 0; const states = [];
@@ -155,7 +158,10 @@ test.describe("pit lane", () => {
         // starting in the lane and steering zero for 40 s drifts 6.4 m -> 0.7 m
         // and misses the box. That is the car being right, not the lane being
         // wrong, so the test drives the gesture instead of teleporting into it.
-        A.setInput({ steer: Math.max(-1, Math.min(1, (laneX - ps.x) * 0.35)),
+        // Steer to the lane centre HERE, not to the one we started on: the
+        // flare moves it several metres between the entry and the bays.
+        const aimX = p.laneX != null ? p.laneX : laneX;
+        A.setInput({ steer: Math.max(-1, Math.min(1, (aimX - ps.x) * 0.35)),
                      throttle: ps.speed < want, brake: ps.speed > want * 1.05 });
         A.step(1 / 60, 1);
         if (A.pit().state === "box") { sawBox = true; boxTicks++; }

@@ -176,11 +176,36 @@
       // 4. MOUNT FUJI  [0.120 — 900]
       //    The identifying object of the whole place: ONE very large, very
       //    distant snow-capped cone on the WESTERN skyline, dominating the
-      //    view back down the straight. World XZ, so walk the straight's
-      //    outboard normal out onto the horizon rather than guessing a bearing.
-      const fA = anchor(K(0.120), -1, 0), fB = anchor(K(0.120), -1, 100);
-      const ux = (fB.c[0] - fA.c[0]) / 100, uz = (fB.c[2] - fA.c[2]) / 100;
-      const tx = fA.t[0], tz = fA.t[2];
+      //    view back down the straight.
+      //
+      //    A TRUE COMPASS BEARING, not the straight's outboard normal. The
+      //    normal was the old idiom ("walk it out rather than guess a
+      //    bearing") and it is not a guess that went wrong — it is the wrong
+      //    quantity: it tracks the ROAD's heading, and at K(0.120) that
+      //    points 321.2° (north-west, measured). The circuit is at
+      //    35.3714 N 138.9267 E and the summit at 35.3581 N 138.7311 E, so
+      //    the real mountain sits at 266.1° — 18.2 km almost due west, which
+      //    is why this file's own header says "eastern foothills". 55° out is
+      //    a whole quadrant of sky, and it put the cone off the shoulder of
+      //    the view back down the straight instead of down the middle of it.
+      //    docs/tracks/fuji.md said "due north" and was wrong too; fixed with
+      //    this commit.
+      //
+      //    +X is WEST and +Z is NORTH (tools/track/import-circuit-path.mjs),
+      //    so a bearing θ clockwise from north is (x, z) = (-sin θ, cos θ).
+      const FUJI_BEARING = 266.1 * Math.PI / 180;
+      const ux = -Math.sin(FUJI_BEARING), uz = Math.cos(FUJI_BEARING);
+      // The world perpendicular to that sightline — what "along the range"
+      // means for the Hoei bump and the flanking foothills below. It has to
+      // rotate with the bearing, or they splay off a line the cone no longer
+      // stands on.
+      const tx = -uz, tz = ux;
+      const fA = anchor(K(0.120), -1, 0);
+      // Still short of the real 18.2 km: past ~10 km this circuit's fog
+      // (0.0030) has eaten the cone entirely, so the distance is compressed
+      // and the height with it — 1760 m at 9400 m subtends 10.6°, against
+      // 10.0° for the real 3196 m of relief at 18.2 km. Same silhouette,
+      // through half the fog.
       const FAR = 9400;
       const fx = fA.c[0] + ux * FAR, fz = fA.c[2] + uz * FAR;
       mountain(fx, fz, pyMin - 46, 6400, 1760, {

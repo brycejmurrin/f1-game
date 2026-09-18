@@ -141,6 +141,32 @@ export function gatedNodeFiles() {
   return files;
 }
 
+/** Node test files that belong to a topical group but that NOTHING runs before
+ *  a Pages publish — not tooling-fast, not the Pages gate's own node suites.
+ *
+ *  This set is why the release train sat blocked from 01:44 to past 03:00 on
+ *  2026-09-18. tests/unit/debris-hazard-hint.test.mjs lives only in
+ *  `test:sweeps`, which is neither in tooling-fast nor in ci.yml's "Pure-node
+ *  unit suites" step, so a one-ULP float comparison could fail every Pages
+ *  publish for hours while CI stayed green and every local gate passed. The
+ *  failure was real and the guard was right; what was missing is that nothing
+ *  ran it at the moment it mattered.
+ *
+ *  DERIVED, not listed, for the same reason gatedNodeFiles() is: a hand-kept
+ *  list of "things no gate runs" is exactly the list nobody updates. Add a test
+ *  file to a sweeps-only group tomorrow and it joins this set by itself, and
+ *  tools/ci/deploy.mjs runs it before it pushes. */
+export function ungatedNodeFiles() {
+  const groups = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8"));
+  const gated = gatedNodeFiles();
+  const out = new Set();
+  for (const grp of Object.values(groups.groups || {})) {
+    if ((grp.kind || "node") === "browser") continue;
+    for (const f of grp.files || []) if (!gated.has(f) && !f.startsWith("//")) out.add(f);
+  }
+  return [...out].sort();
+}
+
 /** Every entry: both files present, same declared test count, twin in a group
  *  the gate always runs. Returns the problems; empty means the substitution
  *  still holds. */

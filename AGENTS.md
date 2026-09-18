@@ -11,7 +11,7 @@ their files from `.claude/rules/`. `CLAUDE.md` imports this; Cursor and Codex re
 ## Key commands
 ```sh
 npx serve -l 3456 .                 # run locally (or: python3 -m http.server 3456)
-npm run test:tooling-fast           # the no-browser guard suite (~3 min)
+npm run test:tooling-fast           # edit-loop check (~3 min) — a SUBSET; whole gate: deploy.mjs --gate-only
 node tools/ci/verify-change.mjs     # ONE command: fast gate + batched groups (--wait/--plan/--fast)
 node tools/track/verify-track.cjs <id>    # 2 s headless build check for track edits
 node tools/ci/pick-tests.mjs        # which test GROUPS does this change need? (select-specs.mjs: per-SPEC)
@@ -40,8 +40,9 @@ Session shape — eleven rules that control wall time and waiting:
 2. Make ALL source edits first, then verify ONCE: tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.
-3. `npm run test:guards` (hook-enforced, every commit) is a CURATED 14-file SUBSET of
-   `test:tooling-fast` — not proof CI's "Structural guards" job will be green; run `test:tooling-fast` before a push (incident: `docs/notes/PROCESS-SPEEDUP-2026-09-16.md` §1.1). A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
+3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above:
+   `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (208 of 278 unit files)
+   ⊂ `deploy.mjs --gate-only`, the only pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine). The other 70 have taken deploys red three times — `docs/notes/PREPUSH-GATE-LADDER.md`. A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
 4. Never block the foreground on a test run: background it (log in `artifacts/`). Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs).
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`.
    Anchor on `grep -E '= run (passed|failed|timedout|interrupted)'`, never a
@@ -181,8 +182,7 @@ Work happens on a `claude/<topic>` branch. The deploy branch is
 it, so a deploy is a merge of THEIR work — re-measure on the merged tree, never
 force-push. Catch a branch up with `node tools/ci/sync-pr.mjs <branch>`, never a hand
 merge (ratchets + generated files conflict; it cures both, but leaves you ON `sync-pr-<branch>` and pushes nothing without `--push` — recovery in check-changes). `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge →
-`test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens a
-PR, `--plan` prints the union); it cures GENERATED-file conflicts, stops on any
+`test:tooling-fast` → ci.yml's node suites → `verify-track` → push; it prints the branch's last ci/pages conclusions first, so an INHERITED red is visible before you blame your push; `--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops); it cures GENERATED-file conflicts, stops on any
 other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in
 minutes (your verdict) and, if green, pokes `pages.yml`, which gates the tip
 once and publishes exactly that commit (dispatch = "deploy now"; ≤ ~25 min).
