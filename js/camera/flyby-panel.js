@@ -499,6 +499,10 @@ function openFlyby() {
 }
 
 function closeFlyby(showPauseMenu) {
+  // Resume and QUIT call this blind, the way they call the other two tuners'
+  // closers. Releasing the camera below is a real side effect, so a panel that
+  // was never open stops here rather than snapping a camera nobody parked.
+  if (!isOpen()) return;
   Log.info("game", "FlybyPanel.close");
   $("flyby").hidden = true;
   document.body.classList.remove("lt-open");

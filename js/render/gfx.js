@@ -2,17 +2,17 @@
  * Apex 26 — Gfx: the renderer backend seam.
  *
  * THREE backends stand behind this seam:
- *   GLX  (WebGL2)          the DEFAULT — everyone gets it, no opt-in.
- *   TLX  (three.js/TSL)    opt-in via localStorage apex26.gfxBackend="three".
+ *   GLX  (WebGL2)          explicit pick and fallback backend.
+ *   TLX  (three.js/TSL)    DEFAULT when apex26.gfxBackend is unset; also the
+ *                          explicit apex26.gfxBackend="three" pick.
  *   WGX  (WebGPU)          opt-in via apex26.gfxBackend="webgpu". Ships the
  *                          GLX draw-API surface (gpuTimer, texture arrays,
  *                          lamp shadows, instancing, particles, MSAA 4×).
  *                          pcss() returns true (Poisson-8 + blocker search).
- *                          GLX stays the default.
  *
  * TLX and WGX are DEFERRED backends: they have NO <script> tags. game.js
- * injects their files at boot (manifest DEFERRED via js/roster.js) only when
- * the matching opt-in is set, then calls `Gfx.create()`, which returns a ready
+ * injects their files at boot (manifest DEFERRED via js/roster.js) only for
+ * the resolved pick, then calls `Gfx.create()`, which returns a ready
  * TLX or WGX backend implementing the interface below — or `null` on absence
  * or ANY failure, and THE CALLER falls back to GLX. This module deliberately
  * does NOT reference GLX — keeping the fallback decision in game.js avoids
@@ -182,8 +182,8 @@ const Gfx = (function () {
   /**
    * create(canvas, opts) -> Promise<backend | null>
    *
-   * Resolves to a ready opt-in backend (implementing the interface above):
-   * TLX when apex26.gfxBackend="three", else WGX when WebGPU is present,
+   * Resolves to a ready deferred backend (implementing the interface above):
+   * TLX when apex26.gfxBackend is unset or "three", else WGX when WebGPU is present,
    * permitted, and initialises cleanly. Resolves to `null` on: no opt-in
    * backend available, no navigator.gpu, user opt-out (apex26.gfxBackend=
    * "webgl2"), backend not loaded, or ANY init failure. On null the CALLER
@@ -200,9 +200,10 @@ const Gfx = (function () {
     try {
       let pref = null;
       try { pref = localStorage.getItem(BACKEND_KEY); } catch (_) {}
+      if (pref == null) pref = "three";
 
-      // "three" -> TLX (three.js/TSL backend; WebGPU with automatic WebGL2
-      // fallback inside three, so no navigator.gpu requirement here).
+      // unset / "three" -> TLX (three.js/TSL backend; WebGPU with automatic
+      // WebGL2 fallback inside three, so no navigator.gpu requirement here).
       if (pref === "three") {
         if (typeof TLX === "undefined" || !TLX || typeof TLX.create !== "function") {
           Log.info("gfx", "Gfx.bind fallback webgl2");

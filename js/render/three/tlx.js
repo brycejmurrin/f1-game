@@ -1,4 +1,4 @@
-/* Apex 26 — TLX: three.js/TSL renderer backend. Third backend behind js/render/gfx.js (GLX default, WGX opt-in). Opt-in via apex26.gfxBackend=three. */
+/* Apex 26 — TLX: default three.js/TSL renderer behind js/render/gfx.js. Selected when apex26.gfxBackend is unset or "three"; GLX is the explicit/fallback WebGL2 path and WGX is opt-in. */
 "use strict";
 
 const TLX = (function () {
@@ -1630,7 +1630,7 @@ const TLX = (function () {
       const _fxLast = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
       // M10 façade-wiring probe: how many meshes this backend actually created.
       // tracks.js resolves its gfx handle from Tracks.build's opts.gfx and routes
-      // createMesh/createChunkedMesh through it — so on the TLX opt-in path these
+      // createMesh/createChunkedMesh through it — so on the TLX path these
       // counters prove the track build ran on THIS backend (never a real GLX
       // WebGL2 context, which is never init'd when TLX is active).
       const _meshMade = { mesh: 0, chunked: 0, tex: 0 };

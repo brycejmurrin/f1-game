@@ -226,14 +226,16 @@ test("suzuka crosses itself, and the height test is what keeps the legs apart", 
    * float bit for bit; it is required to land in the same PLACE. The defect
    * this guards is a hint trusted onto the wrong leg, and the test measures
    * that same defect as arcOff > 1000 three lines up — a KILOMETRE. The noise
-   * is 1e-12 m. EPS sits six orders above the noise and nine below the defect,
-   * so this is not a widened tolerance: at 1 mm it would still catch a
-   * cross-leg trust by a factor of a million.
+   * is 1e-12 m, so EPS sits three orders above the noise and twelve below the
+   * defect: this is not a widened tolerance, it is a nanometre.
    *
    * Never turn this back into a bit comparison. It cannot hold across a
    * geometry edit, and the failure it produces names a circuit rather than the
-   * assertion, which is how it cost a day the first time. */
-  const EPS = 1e-3;
+   * assertion, which is how it cost a day the first time. The message prints
+   * RAW values and the delta on purpose — at .toFixed(0) a sub-metre
+   * divergence prints as two identical numbers, which is the other half of why
+   * it cost a day. */
+  const EPS = 1e-9;
   assert.ok(Math.abs(stale.s - bareMid.s) < EPS,
     `a cross-leg hint was TRUSTED (s=${stale.s} instead of the full scan's ` +
     `${bareMid.s}, off by ${Math.abs(stale.s - bareMid.s)}) — the height half ` +

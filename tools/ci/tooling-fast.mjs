@@ -125,6 +125,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/steer-presets.test.mjs",
   "tests/unit/key-binds.test.mjs",
   "tests/unit/settings-export.test.mjs",
+  "tests/unit/settings-defaults.test.mjs",
   // ...and the garage's SIGNS: no prop mounted within half a metre in front of
   // a wall quad. Two shipped cut-off wordmarks and one never-visible live
   // trace were each found by a screenshot; this puts them in the edit loop.
