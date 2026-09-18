@@ -256,3 +256,51 @@ test("buildGrid round-trips a real bake through the cell mapping", () => {
       `cell ${chunks[c].gx},${chunks[c].gz} must name chunk ${c}'s own lamps`);
   }
 });
+
+/* ── blitGrid: the two strides ────────────────────────────────────────────────
+ *
+ * Found by survey, 2026-09-18, in js/render/three/tsl-lit.js — the DEFAULT
+ * renderer. It copied buildGrid()'s data into the 256-wide gridTex linearly,
+ * with a comment asserting the strides matched. They do not: the bake's row
+ * stride is `gw` (the occupied extent — a few dozen cells for a real circuit),
+ * the texture's is 256. The shader reads textureLoad(grid, ivec2(cx, cz)), so
+ * every row but the first landed on a zero pair; count 0 makes `use` false and
+ * the per-chunk lamp path fell back to the global lamp set over almost the whole
+ * grid, with no error, no log and no visible failure mode beyond "night lighting
+ * doesn't look like the knob does anything".
+ *
+ * The copy now lives in LampChunks next to the layout that defines the stride,
+ * so this is testable in node and any future backend gets it right for free.
+ */
+test("blitGrid lands cell (x, z) on texture row z, not on a linear offset", () => {
+  const G = 8;                       // stand-in for the texture width
+  const gw = 3, gh = 3;
+  const data = new Uint32Array(gw * gh * 2);
+  for (let z = 0; z < gh; z++) {
+    for (let x = 0; x < gw; x++) {
+      const o = (z * gw + x) * 2;
+      data[o] = 100 + z * 10 + x;    // "offset"
+      data[o + 1] = z * 10 + x;      // "count"
+    }
+  }
+  const dst = new Float32Array(G * G * 2);
+  assert.equal(LampChunks.blitGrid({ gw, gh, gx0: 0, gz0: 0, data }, dst, G), true);
+  for (let z = 0; z < gh; z++) {
+    for (let x = 0; x < gw; x++) {
+      // Exactly the shader's fetch: texel (x, z) of a G-wide RG texture.
+      assert.equal(dst[(z * G + x) * 2], 100 + z * 10 + x,
+        `cell (${x}, ${z}) must be readable at texel (${x}, ${z}) — a linear copy puts it at column ${z * gw + x}`);
+      assert.equal(dst[(z * G + x) * 2 + 1], z * 10 + x, `count for cell (${x}, ${z})`);
+    }
+  }
+});
+
+test("blitGrid refuses a grid the texture cannot hold, and leaves it untouched", () => {
+  const dst = new Float32Array(4 * 4 * 2).fill(7);
+  // Refusing is the documented fallback: the caller turns the path off and every
+  // fragment keeps the global lamp set, which is a picture rather than a mess.
+  assert.equal(LampChunks.blitGrid({ gw: 5, gh: 1, gx0: 0, gz0: 0, data: new Uint32Array(10) }, dst, 4), false);
+  assert.equal(LampChunks.blitGrid({ gw: 1, gh: 5, gx0: 0, gz0: 0, data: new Uint32Array(10) }, dst, 4), false);
+  assert.equal(LampChunks.blitGrid(null, dst, 4), false);
+  assert.ok(dst.every((v) => v === 7), "a refused blit must not have written anything");
+});
