@@ -1051,6 +1051,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
     "HUD fold is its own row, not under a reprint HUD heading");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
+  assert.equal(decl(css("css/tuner.css"), "#pm-panel-display #pm-visual-tuners", "display"), "contents",
+    "ADVANCED VISUALS flattens into DISPLAY instead of creating a nested layout");
+  assert.equal(decl(css("css/tuner.css"), "#pm-panel-display #pm-visual-tuners > :is(summary, .adv-help)", "grid-column"), "1 / -1",
+    "its heading and explanation span the panel before the three tuner doors");
   assert.doesNotMatch(read("index.html"), /id="pm-hud-h"/);
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);

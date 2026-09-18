@@ -580,6 +580,13 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   background: var(--plate-on); border-color: var(--red); color: var(--text);
 }
 .preset-btn.active small { opacity: 0.85; }
+/* DISPLAY owns these doors, so flatten only this disclosure into that panel's
+   grid. The lighting/camera/flyby editors remain separate sheets; opening
+   ADVANCED VISUALS reveals three ordinary sibling doors instead of a nested
+   mini-layout with its own width rules. */
+#pm-panel-display #pm-visual-tuners { display: contents; }
+#pm-panel-display #pm-visual-tuners > :is(summary, .adv-help) { grid-column: 1 / -1; }
+#pm-panel-display #pm-visual-tuners > button { min-width: 0; }
 /* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
 .opt-row { display: flex; gap: calc(var(--gap) * 0.5); margin-top: calc(var(--gap) / 3); }
 .opt-row .opt-btn {
