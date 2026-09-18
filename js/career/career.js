@@ -280,7 +280,9 @@ function start(opts) {
   setLive();
   armRevision();
   const teamId = o.teamId || (flavour === "myteam" ? "custom" : "haas");
-  const team = teamOf(teamId) || Teams.LIST[Teams.LIST.length - 1];
+  // LIST's tail is whatever booted last — custom-team.js appends MY TEAM and
+  // then LEGENDS, so an unknown id used to hand a career Legends' factory setup.
+  const team = teamOf(teamId) || teamOf("custom") || Teams.LIST[0];
   const factory = Parts.getFactorySetup(team);
 
   career = {
@@ -775,7 +777,7 @@ function settleRound(order, player) {
 function gridSeats() {
   const out = [];
   for (const team of Teams.LIST) {
-    if (team.custom && team.id !== career.team) continue;
+    if (!Teams.isReal(team) && team.id !== career.team) continue;
     gridDrivers(team).forEach((d, i) => {
       const id = seasonDriverId(team.id, i);
       out.push({ id, team, seat: i, driver: seatDriver(team.id, i, d) });
@@ -804,7 +806,7 @@ function driverStandings() {
 }
 function teamStandings() {
   const rows = Teams.LIST
-    .filter((t) => !t.custom || t.id === career.team)
+    .filter((t) => Teams.isReal(t) || t.id === career.team)
     .map((t) => ({ id: t.id, tier: t.tier, pts: career.season.teamPts[t.id] || 0 }));
   rows.sort((a, b) => b.pts - a.pts || a.tier - b.tier || (a.id < b.id ? -1 : 1));
   rows.forEach((r, i) => { r.pos = i + 1; });
@@ -812,7 +814,7 @@ function teamStandings() {
 }
 function expectedConstructor() {
   const m = new Map();
-  Teams.LIST.filter((t) => !t.custom || t.id === career.team)
+  Teams.LIST.filter((t) => Teams.isReal(t) || t.id === career.team)
     .slice().sort((a, b) => a.tier - b.tier)
     .forEach((t, i) => m.set(t.id, i + 1));
   return m;
@@ -873,7 +875,7 @@ function rolloverTeams(tStand) {
   const posOf = new Map(tStand.map((r) => [r.id, r.pos]));
   const expect = expectedConstructor();
   for (const team of Teams.LIST) {
-    if (team.custom && team.id !== career.team) continue;
+    if (!Teams.isReal(team) && team.id !== career.team) continue;
     const shove = clamp(((expect.get(team.id) || 11) - (posOf.get(team.id) || 11)) * 0.5, -2, 2);
     const next = clamp(Math.round((career.tdev[team.id] || 0) * 0.5 + shove), -TDEV_MAX, TDEV_MAX);
     if (next) career.tdev[team.id] = next; else delete career.tdev[team.id];
@@ -891,7 +893,7 @@ function rolloverMarket() {
   career.moves = [];
   const swaps = Math.floor(rnd(career.year, "mkt", "n") * 3);   // 0, 1 or 2
   for (let i = 0; i < swaps; i++) {
-    const seats = gridSeats().filter((s) => !s.team.custom && !isPlayerSeat(s));
+    const seats = gridSeats().filter((s) => Teams.isReal(s.team) && !isPlayerSeat(s));
     const rate = (s) => DriverRatings.overall(ratingOf(s));
     const top = seats.filter((s) => s.team.tier <= TOP_TIER)
       .sort((a, b) => rate(a) - rate(b))[0];
@@ -997,7 +999,7 @@ function makeOffers(mv) {
   const out = [];
   if (mine) out.push(offerFrom(mine, years));
   const willing = Teams.LIST
-    .filter((t) => !t.custom && t.id !== career.team && mv >= offerBar(t.tier))
+    .filter((t) => Teams.isReal(t) && t.id !== career.team && mv >= offerBar(t.tier))
     .sort((a, b) => a.tier - b.tier
       || rnd(career.year, "offer", a.id) - rnd(career.year, "offer", b.id));
   const extra = Math.floor(rnd(career.year, "offer", "n") * 3);   // 0-2 beyond the renewal

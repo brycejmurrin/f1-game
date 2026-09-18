@@ -1008,7 +1008,7 @@ function drawMinimap() {
     const p = at(c.s);
     if (!p) continue;
     const x = 6 + p[0] * (cssW - 16), y = 6 + p[1] * (cssH - 16);
-    mm.fillStyle = c.team._cssColor || (c.team._cssColor = G.cssCol(c.team.color));   // team colours are static — compute once
+    mm.fillStyle = teamCss(c);   // keyed on store.rev: a livery edit repaints the dot
     if (c.human && !c.local) {
       mm.fillRect(x - 1, y - 1, 6, 6);
       // A white ring, because the team colour is the one thing it cannot use to

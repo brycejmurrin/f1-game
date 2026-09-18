@@ -662,7 +662,7 @@ const NetLobby = (function () {
         // Never move somebody INTO a custom team. makeCars() only puts one on
         // the grid for the player who selected it (js/game.js), so the
         // other screens have no such car to pose them in.
-        if (t.custom || !t.drivers) continue;
+        if (!Teams.isReal(t) || !t.drivers) continue;
         for (let i = 0; i < t.drivers.length; i++) {
           if (!heldBy(blocked, t.id, i)) return { team: t.id, driver: i };
         }
@@ -1035,7 +1035,9 @@ const NetLobby = (function () {
       show("joining");
       await readyIce();
       if (!operationCurrent(gen)) return cancelledResult();
-      if (!newTransport("guest")) return;
+      // Typed, like every sibling: a bare `return` handed an awaiting caller
+      // `undefined` where host()/codeHost()/codeJoin() all return a result.
+      if (!newTransport("guest")) return { ok: false, error: "no_transport", message: noConnectionMsg() };
       say("Paste the invite code they sent you.");
       return { ok: true };
     }

@@ -1788,7 +1788,7 @@ function buildPace(built, works) {
 function gridTeams() {
   // MY TEAM and LEGENDS are both "yours" — each enters the grid only when it is
   // the one you picked, so the field grows by one car, never by two teams.
-  return Teams.LIST.filter((t, ti) => (!t.custom && !t.legends) || ti === teamIdx);
+  return Teams.LIST.filter((t, ti) => Teams.isReal(t) || ti === teamIdx);
 }
 // The seats a team actually GRIDS. Everything except LEGENDS is gridDrivers().
 //

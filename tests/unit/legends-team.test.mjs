@@ -159,3 +159,17 @@ test("a legend wears a real marque crest or none — never a borrowed one", () =
     assert.equal(Legends.team(id).crest, null, `${id}: no Lotus/Tyrrell/Vanwall mark exists to wear`);
   }
 });
+
+test("Teams.isReal separates the eleven constructors from the two grid guests", () => {
+  // The predicate every field walk needs. The rules that award points, offer
+  // contracts, develop cars over a winter, move a lobby seat and warm the menu
+  // field all filtered on `custom` ALONE, which Legends is not — so a driver
+  // career at Haas opened with twelve legends in its own standings, and a
+  // winter wrote career.dev["legends:0..11"].
+  for (const t of Teams.LIST) assert.equal(Teams.isReal(t), true, `${t.id} is a real constructor`);
+  assert.equal(Teams.LIST.length, 11, "the base roster is the eleven; the two guests are appended at boot");
+  assert.equal(Teams.isReal(Legends.team("senna")), false, "LEGENDS is grid furniture for one screen");
+  assert.equal(Teams.isReal(Teams.DEFAULT_CUSTOM), false, "MY TEAM enters only as the team you picked");
+  assert.equal(Teams.isReal(null), false, "a missing team is not a real one — callers walk sparse arrays");
+  assert.equal(Teams.isReal(undefined), false);
+});

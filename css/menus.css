@@ -611,7 +611,6 @@ body { --compact-at: 600px; --wide-at: 620px; }
   border-left: none;
   padding-left: calc(var(--gap) * 0.45);
   background: var(--plate-on);
-  box-shadow: var(--plate-on-glow);
 }
 /* .track-row-meta is the FLAG box in the strip (the list rows in season setup
    still use it for the country text — the tile look is scoped here). */
