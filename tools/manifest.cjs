@@ -106,6 +106,11 @@ const FULL = [
   // perf sentinel and the Spotify client go through GameStore.store's raw lane,
   // and spotify.js's init() runs at EVAL when the document is already complete
   // (the game-vm harness; a late-injected script), so the store must precede it.
+  // Shipped preference defaults, as data. Ahead of the store because
+  // GameStore.get/raw consult it on every miss (js/data/settings-defaults.js
+  // header), and ahead of everything that reads a preference for the same
+  // reason. Pure data with no dependencies of its own.
+  "js/data/settings-defaults.js",
   "js/core/store.js",
   "js/ui/dom.js",            // Dom.el / paintFold / fmtLap — the one DOM-helper home (hub, career-ui, season-ui destructure it at eval)
   "js/track/core/geom.js",

@@ -124,7 +124,15 @@ const GLXChunked = (function () {
     // content bucketing does make. The ratio between the last two is the whole
     // claim multi-draw rests on, and it is a count, not a timing.
     const _mdStats = { supported: null, on: false, multiCalls: 0, rangesSubmitted: 0, drawElementsAvoided: 0,
-                       perChunkDraws: 0, consecutiveGroups: 0, setGroups: 0 };
+                       perChunkDraws: 0, consecutiveGroups: 0, setGroups: 0,
+                       // WHY the lamp branch did or did not run. Census 150 asked
+                       // for the night leg, got clock=2:00, and STILL reported
+                       // perChunkDraws 0 — the branch did not execute, and nothing
+                       // in the output said why. The same calls give 358 locally,
+                       // so it is the environment, not the sequence. These three
+                       // are the whole gate (`perChunk` below), so a future reader
+                       // reads the reason instead of inferring it.
+                       lampFrames: 0, plainFrames: 0, perChunkKnob: null, allLightsLen: -1 };
     function _mdInit() {
       if (_mdTried) return !!_mdExt;
       _mdTried = true;
@@ -142,6 +150,7 @@ const GLXChunked = (function () {
       _mdOn = want; _mdStats.on = want;
       if (!want) { _mdStats.multiCalls = _mdStats.rangesSubmitted = _mdStats.drawElementsAvoided = 0; }
       _mdStats.perChunkDraws = _mdStats.consecutiveGroups = _mdStats.setGroups = 0;
+      _mdStats.lampFrames = _mdStats.plainFrames = 0;
       return { on: _mdOn, supported: _mdStats.supported };
     }
     function multiDrawStats() { return Object.assign({}, _mdStats, { on: _mdOn }); }
@@ -378,6 +387,9 @@ const GLXChunked = (function () {
       const perChunk = F.perChunkLights > 0 && F.allLights &&
         !(opts && opts.surfaceId === 16 && !F.roadChunkLamps);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib);
+      _mdStats.perChunkKnob = F.perChunkLights;
+      _mdStats.allLightsLen = F.allLights ? F.allLights.length : -1;
+      if (perChunk) _mdStats.lampFrames++; else _mdStats.plainFrames++;
       if (perChunk) {
         // uLampShadowIdx is a SLOT in the bound set, chosen against the global
         // frame.lights ordering — a per-chunk set reorders lamps, so without a

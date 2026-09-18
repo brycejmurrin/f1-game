@@ -129,11 +129,16 @@ test("the tile's driver line stays one line's worth for a legend", () => {
 });
 
 test("a legend wears a real marque crest or none — never a borrowed one", () => {
-  // js/car/crest-paths.js has eight hand-drawn crests and no others (the PNG
-  // logos were dropped as unusable traces). Putting a live team's badge on a
-  // car that team never built is worse than showing no badge.
-  const HAVE = new Set(["ferrari", "mclaren", "williams", "redbull", "alpine",
-                        "astonmartin", "racingbulls", "cadillac"]);
+  // EVERY team the game ships has a mark, and this list is read from the game
+  // rather than remembered. An earlier version hard-coded the eight in
+  // js/car/crest-paths.js and called them "hand-drawn ... and no others" —
+  // wrong twice: those eight are TRACED, and mercedes/haas/audi carry geometric
+  // constructions in js/car/liverytex.js MARK_PARTS instead. That mistake cost
+  // Fangio his Silver Arrow badge, so the set is derived now and the test would
+  // have caught the omission.
+  const HAVE = new Set(Teams.LIST.map((t) => t.id));
+  assert.ok(HAVE.has("mercedes"), "mercedes must be markable — its star and ring are drawn, not traced");
+  assert.ok(HAVE.size >= 11, `only ${HAVE.size} teams — the roster shrank under this test`);
   let withCrest = 0;
   for (const l of Legends.LIST) {
     if (l.marque == null) continue;
@@ -144,7 +149,13 @@ test("a legend wears a real marque crest or none — never a borrowed one", () =
     const brand = l.marque === "redbull" ? "red bull" : l.marque;
     assert.ok(car.includes(brand), `${l.id}: crest "${l.marque}" against car "${l.car}"`);
   }
-  assert.ok(withCrest >= 7, `only ${withCrest} legends carry a crest — the mapping has regressed`);
-  assert.equal(Legends.team("fangio").crest, null, "a Mercedes W196 has no crest in this game; none is correct");
+  assert.ok(withCrest >= 8, `only ${withCrest} legends carry a crest — the mapping has regressed`);
+  assert.equal(Legends.team("fangio").crest, "mercedes", "the W196 is a Mercedes and the game draws that star");
   assert.equal(Legends.team("senna").crest, "mclaren");
+  // The four with no mark are a SOURCE limit, not a to-do: Lotus, Tyrrell and
+  // Vanwall are typographic and this repo's tracer says memory is the wrong
+  // source for a mark. If one of them ever gains a real crest, flip it here.
+  for (const id of ["clark", "ghill", "stewart", "moss"]) {
+    assert.equal(Legends.team(id).crest, null, `${id}: no Lotus/Tyrrell/Vanwall mark exists to wear`);
+  }
 });

@@ -32,18 +32,34 @@
       { kinds: ["foliage", "lighting"], s0: 0.79, s1: 0.85 },
     ],
     pal: { zenith: [0.35, 0.50, 0.70], horizon: [0.74, 0.74, 0.8], grass: [0.2, 0.44, 0.2], sunDir: [0.8846517369293829, 0.44232586846469146, 0.14744195615489716], sun: [1, 0.90, 0.65], sunColor: [1, 0.82, 0.55] },
-    // Elevations and bridges are authored in source-trace space. These source
-    // fractions map through startFrac=0.9942 to racing s≈0.818, 0.068 and 0.436
-    // (the crossover bridge).
-    // Keeping that contract explicit prevents the crossover lift from landing on
-    // the Esses while its scenery remains at the real figure-8 crossing.
-    // The bridge peak sits exactly on the measured self-crossing (lower road
-    // racing s≈0.226, upper s≈0.817). The lower road there is already lifted to
-    // y≈5.4 by the Esses elevation, so rise must clear it: 13.5 − 5.4 ≈ 8.1 m of
-    // road-to-road daylight — the crossover deck (6.5 m underside + 1.5 m deck)
-    // tucks exactly beneath the upper ribbon instead of clipping through it.
-    elevations: [{ s: 0.8125, halfM: 300, rise: 11 }, { s: 0.0625, halfM: 260, rise: -5 }],
-    bridges: [{ s: 0.4298, halfM: 160, rise: 13.5 }],
+    // THE FIGURE-8 WAS UPSIDE DOWN. Measured self-crossing (both roads within
+    // 7 m in XZ): racing s = 0.437 and s = 0.845. 0.437 is the run from Degner
+    // to the hairpin; 0.845 is the back straight. In reality the BACK STRAIGHT
+    // flies over and the Degner road passes beneath — and the game had 0.437 at
+    // y 13.5 with 0.845 at y 5.0, so the lower road was 8.5 m ABOVE the upper.
+    //
+    // The cause: the crossover DECK is scenery, so it takes _sceneryShift and
+    // lands at racing 0.846 (authored 0.226) — right. `bridges` and
+    // `elevations` do NOT take that shift; they land at the fraction written
+    // here. So the deck sat over the back straight while the lift went to the
+    // other road entirely. The old comment here described 0.226/0.817 as the
+    // crossing, which is the SCENERY frame's version of it, not the racing one.
+    //
+    // The lift is a BRIDGE and not an elevation on purpose: tracks.js raises the
+    // road for `bridges` and leaves ground level alone, which is what a flyover
+    // needs. The old { s: 0.8125, rise: 11 } was an ELEVATION, so it dragged the
+    // terrain up with it at exactly the XZ where the lower road has to pass —
+    // burying the road that is supposed to go underneath.
+    //
+    // THE ESSES now climb, which is the other half of what makes Suzuka read:
+    // T2 through Dunlop gains ~26 m in reality and measured dead flat here
+    // (0.1 m across racing 0.12-0.30). An elevation, not a bridge — it is a real
+    // hill and the terrain should follow it.
+    elevations: [
+      { s: 0.0625, halfM: 260, rise: -5 },
+      { s: 0.240, halfM: 620, rise: 26 },
+    ],
+    bridges: [{ s: 0.845, halfM: 160, rise: 10 }],
     hwZones: [
       { s0: 0.8710, s1: 0.9671, hw: 6.1, ease: 0.012 },  // arc 0.300-0.348 the Esses
     ],

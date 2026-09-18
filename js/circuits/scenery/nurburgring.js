@@ -151,7 +151,17 @@
             stage._mat = 0;
           }, { required: true });
         }
-        const a = anchor(K(0.988), 1, 13);
+        // 38 m, not 13. The tower is declared `required: true` and was being
+        // dropped every single build — models.js writes `required: pit ? false
+        // : required`, so a model the engine's pit complex supersedes is
+        // silently downgraded and verify-track still prints OK. The circuit
+        // shipped with no race-control tower and nobody could see it.
+        //
+        // The six pit bays below it stay superseded, and that is correct: the
+        // engine builds pit garages on that ground, so bespoke bays there are
+        // genuinely redundant. A 44 m tower is not a pit bay, and it only needs
+        // to stand clear of the complex to exist.
+        const a = anchor(K(0.988), 1, 38);
         const b = [a.r, a.u, a.t];
         modelGroup("nurburgring-race-control", {
           center: vadd(a.c, a.u, 19), size: [10, 44, 12], basis: b,

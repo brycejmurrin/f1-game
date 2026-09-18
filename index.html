@@ -1188,6 +1188,20 @@
         <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
           <input id="as-rvol" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
         <p id="as-radio-note" class="as-note"></p>
+
+        <!-- PER-CHANNEL VOICES. js/audio/radio-voice.js already partitions every
+             announcement into three speakers — RACE CONTROL, the COACH and the
+             driver's own TEAM RADIO — and shipped a fixed prosody for each. These
+             let a player pick the voice and tune the pitch and rate per channel,
+             with TEST to hear it without starting a race.
+
+             One group per channel, built by js/audio/panel.js rather than written
+             out three times here: the voice <select> options are the machine's
+             installed voices and cannot be static markup anyway. -->
+        <div id="as-voices" class="as-sub" role="group" aria-labelledby="as-voices-label">
+          <span class="tune-label" id="as-voices-label">VOICES</span>
+        </div>
+        <p id="as-voices-note" class="as-note"></p>
       </details>
 
       <!-- ENGINE TONE: the player's own trim, layered OVER the manufacturer
@@ -2643,6 +2657,7 @@
 <script defer crossorigin="anonymous" src="js/data/driver-ratings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/legends.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/save-migrate.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/data/settings-defaults.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/dom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/geom.js?v=dev"></script>
