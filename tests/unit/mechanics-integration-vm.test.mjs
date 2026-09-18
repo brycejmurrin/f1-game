@@ -454,15 +454,23 @@ test("the radio queue keeps a burst in priority order, and drops only what would
   assert.equal(A("THIRD", "info"), true,
     "a THIRD message of equal priority was the one the single slot ate");
   assert.equal(A("FOURTH", "info"), false,
-    "two deep is the cap: a fourth card would land seven seconds after its event");
-  // A higher priority does not wait behind two reports — it takes the head of
+    "two deep is the cap: under the floor a fourth card would land six seconds after its event");
+  // A higher priority does not wait behind two reports — it takes the HEAD of
   // the queue, and the cost is paid by the oldest LOWEST, not by itself.
   assert.equal(A("LIMITS", "warning"), true, "a warning must never be refused behind two info lines");
   // …and the engineer's pit call outranks the pit lane's own confirmations,
   // which is the whole point of the "box" kind: at "info" it lost to
   // "PIT ENTRY — LIMITER ON", so the confirmation that you HAD pitted beat the
-  // call telling you to. Rank 4 clears the banner instead of queueing.
+  // call telling you to.
   assert.equal(A("BOX BOX BOX — H", "box"), true);
+  // THE FLOOR, and the half of it a return value cannot show. Outranking the
+  // card on screen no longer EVICTS it while it is inside ANN_MIN_S: the
+  // banner still reads FIRST, and every one of those higher-priority lines is
+  // waiting its turn rather than having blinked this one away.
+  const shown = () => vm.runInContext('document.getElementById("announce-text").textContent', h.ctx);
+  assert.equal(shown(), "FIRST", "a card inside its floor was evicted by a higher priority");
+  assert.equal(A("5 SECOND PENALTY", "penalty-hit"), true, "…and the penalty is queued, not refused");
+  assert.equal(shown(), "FIRST", "even a penalty waits out the floor — a card nobody can read is worth less");
   assert.equal(h.G.announceBusy, true);
   } finally { h.close(); }
 });

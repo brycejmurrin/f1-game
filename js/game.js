@@ -1135,22 +1135,36 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 // module-scope so updateCar's per-car binding never allocates.
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
-let announceT = 0;
+let announceT = 0, radioVoice = RadioVoice.inert();   // the real instance lands at the module wires; inert() means no call site needs a guard
 // "box" is the engineer's PIT CALL and nothing else (js/race/engineer.js): an
 // instruction the player has one lap to act on, where every other engineer line
 // is a report. It ranks with the pit-lane messages it belongs to rather than
 // under them — before this it was "info", so the confirmation that you HAD
 // entered the pits outranked the call telling you to.
 const ANN_PRI = { coach: 1, practice: 2, info: 2, warning: 3, "penalty-warn": 3, box: 4, race: 4, "penalty-hit": 5 };
+// THE FLOOR. Every card gets ANN_MIN_S on screen, whatever its caller asked for
+// and whatever arrives next. Callers passed durations from 1.4 s up, and 1.4 s
+// is not a message — it is a flash you notice after it has gone. The floor is
+// enforced at BOTH ends, which is the half easy to miss: showAnnounce lengthens
+// a short card, and announce() below refuses to let even a HIGHER priority evict
+// a card still inside its floor. A penalty therefore waits behind a wear report
+// instead of blinking it away — bounded by the longest duration any caller
+// passes, and a penalty the player could not read is worth less than one that
+// arrives a beat late.
+const ANN_MIN_S = 3;
 // THE QUEUE, which _annQueue now IS rather than holds. One slot meant a THIRD
 // message in a burst was dropped, and so was a second of EQUAL priority — a lap
 // crossing that set a record and earned a medal showed one of them and silently
 // ate the other. Two slots, highest priority first and arrival breaking ties,
 // so a burst plays out in the order it mattered. Two and not more on purpose:
-// each card holds the screen ~2.5 s, so a third would arrive seven seconds
-// after the thing it describes, by which time it is a lie, not a message.
+// under the floor above a third would arrive six seconds after the thing it
+// describes, by which time it is a lie, not a message.
 const ANN_QUEUE_MAX = 2;
-let _annPri = 0, _annQueue = [];
+// _annFloor is what is LEFT of the current card's floor, run down beside
+// announceT in tickBody. One `let` statement on purpose: the ratchet counts
+// column-0 declarations, so splitting these for a comment would raise it
+// without adding any state.
+let _annPri = 0, _annFloor = 0, _annQueue = [];
 // THE RADIO. A banner is a radio message: the WHO line names the channel it
 // came in on — race control for a penalty or a warning, the coach for a tip,
 // otherwise the driver's own pit-wall channel under their name — the words sit
@@ -1177,8 +1191,19 @@ function showAnnounce(msg, dur, kind) {
   if (kind && kind !== "race") els.announce.dataset.kind = kind;
   else delete els.announce.dataset.kind;
   els.announce.hidden = false;
-  // A card of small type takes a beat longer to read than a billboard did.
-  announceT = (dur || 1.6) + 0.5;
+  // A card of small type takes a beat longer to read than a billboard did, and
+  // ANN_MIN_S is the floor under every caller's number — the shortest asked for
+  // was 1.4 s, which nobody reads at racing speed.
+  announceT = Math.max(ANN_MIN_S, (dur || 1.6) + 0.5);
+  _annFloor = ANN_MIN_S;
+  // THE ONLY PLACE THE RADIO SPEAKS. showAnnounce is the one place a line
+  // reaches the screen, so hooking it inherits the whole ANN_PRI / _annQueue
+  // policy for free: a line the cinematic camera dropped never arrives here and
+  // is never spoken, a queued line is spoken when its turn comes, and a preempt
+  // interrupts. There is no second priority table anywhere in the voice.
+  // announceT — the card's ACTUAL life, not a second copy of the expression
+  // above — is the utterance's whole budget.
+  radioVoice.say(msg, announceT, kind);
 }
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
@@ -1273,7 +1298,12 @@ function announce(msg, dur, kind) {
       if (kind === "info" || kind === "coach") return false;
     }
   }
-  if (announceT > 0 && pri <= _annPri) {
+  // `_annFloor > 0` is the other half of the floor: a card still inside its
+  // three seconds is not evicted even by something that outranks it — the
+  // arrival queues at the head instead and takes over the moment the current
+  // one is done. Without this clause the floor would only be a promise to
+  // callers, not to the player, because the very next penalty would break it.
+  if (announceT > 0 && (pri <= _annPri || _annFloor > 0)) {
     // Into the queue, highest priority first, arrival breaking ties. Taking a
     // slot means the line still gets its turn, so that counts as accepted;
     // being pushed off the end means it is gone and the caller must offer it
@@ -2880,6 +2910,7 @@ const G = {
   get ttSessionTs() { return ttSessionTs; },
   get records() { return records; },
   get coach() { return coach; },
+  get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
   recordControls: () => ({ autoThrottle: autoThrottle(), gearsManual: gearsManual(), steerMode, aero: raceAeroMode }),
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
@@ -3206,6 +3237,10 @@ pits = PitLane.create(G);
 // The race engineer (js/race/engineer.js): the voice that makes all of the
 // above legible to a driver who never opens a menu. Reads both, so it is last.
 engineer = RaceEngineer.create(G);
+// The radio's VOICE (js/audio/radio-voice.js) — speechSynthesis over the banner
+// the engineer, the coach and race control already write. Off by default, and
+// inert wherever the API, a voice or the setting is missing.
+radioVoice = RadioVoice.create(G);
 const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
@@ -3385,7 +3420,7 @@ const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 const { closeCamTuner } = CamTunerPanel.create(G);
 // FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
 // shot list; previews through __apex.flybyCam, touches no render-path state.
-FlybyPanel.create(G);
+const flybyPanel = FlybyPanel.create(G);
 // Steering-tuning sliders + presets (js/input/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,
@@ -3528,7 +3563,7 @@ function quitToMenu() {
   setHudUserHidden(false);   // clear clean-screen mode on exit
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
-  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
+  els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
@@ -8155,11 +8190,14 @@ function tickBody(now) {
   }
   if (announceT > 0) {
     announceT -= dt;
+    if (_annFloor > 0) _annFloor -= dt;
     if (announceT <= 0) {
       els.announce.hidden = true;
       els.announce.className = "";
       delete els.announce.dataset.kind;
-      _annPri = 0;
+      _annPri = 0; _annFloor = 0;
+      // showAnnounce re-arms both, so the card taken off the queue gets the
+      // same floor the one before it did.
       if (_annQueue.length) { const q = _annQueue.shift(); showAnnounce(q.msg, q.dur, q.kind); }
     }
   }
@@ -8251,6 +8289,10 @@ function firstGesture() {
   // Tilt permission is requested at race start (rs-go click), not here — so the
   // gyro prompt and button fallback don't appear on the title screen.
   if (soundOn) { GameAudio.init(); GameAudio.startMusic(-1); }
+  // Unconditional, not gated on soundOn: unlock() is silent and idempotent, and
+  // the alternative means a player who turns the radio on from a KEYBOARD-driven
+  // pause menu never gets the priming gesture iOS wants.
+  radioVoice.unlock();
 }
 let gestured = false;
 document.addEventListener("pointerdown", () => {
@@ -9257,6 +9299,11 @@ await bootAgentSurface();
 // fetched until a player actually switches METRICS on.
 if (typeof GameMetrics !== "undefined" && GameMetrics.setTelemetryLoader)
   GameMetrics.setTelemetryLoader(loadAgentSurface);
+// The FLYBY SHOT EDITOR has exactly the same problem for exactly the same
+// reason: it previews every edit through __apex.flybyCam, which is null on a
+// Pages build until something asks. Same remedy — hand it the loader, and it
+// fetches only when a player actually opens the panel.
+if (flybyPanel && flybyPanel.setApiLoader) flybyPanel.setApiLoader(loadAgentSurface);
 
 // THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on
 // purpose: awaiting it here would put the 338 KB straight back on the

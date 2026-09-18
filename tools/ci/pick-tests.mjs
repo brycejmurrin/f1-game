@@ -166,6 +166,7 @@ export const RULES = [
   [/^js\/camera\/cockpit-opts\.js/, ["ui"], "DOM screens"],
   [/^js\/camera\//, ["input"], "camera vantage, offsets and mode switching"],
   [/^js\/audio\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
+  [/^js\/audio\/radio-voice\.js/, ["audio-unit", "ui"], "the spoken radio: its own policy suite, and the mixer panel that toggles it"],
   [/^js\/audio\/panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
   [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
   [/^js\/perf\/governor\.js/, ["hooks", "modes", "state-unit"], ""],
