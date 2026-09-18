@@ -453,8 +453,24 @@
             // The barrel. addCyl extrudes along basis[1], so the roll axis is
             // the shed's LENGTH — the same [r, t, u] basis the museum's
             // repainted T2 roof uses thirty lines below.
+            //
+            // 0.1 m INSIDE EACH GABLE, and that is the whole reason the numbers
+            // below are not LEN and -LEN/2. Placed flush, the cylinder's end
+            // CAPS land on the shed's gable planes at t = +/-LEN/2 and face the
+            // same way as the walls — two drawn faces at 0.0 mm, five sheds,
+            // five new z-fights. It took silverstone's coplanar count 15 -> 20
+            // and held the release train (Pages 2424-2426, 2026-09-18) until it
+            // was measured: hangars off reads 15, barrel off reads 15, doors off
+            // still reads 20, radius - 0.1 still reads 20. Only the caps matter.
+            //
+            // Insetting rather than raising the cap is this file's own
+            // precedent — the start-gantry crossbar was sized 0.1 m inside the
+            // overhead span for exactly this, so the baseline went back down
+            // instead of carrying a real z-fight as a recorded trade. At the
+            // 95-112 m these are built to read at, 0.1 m is nothing; a
+            // shimmering gable end is not.
             stage._mat = MAT.RUST;
-            addCyl(stage, vadd(vadd(c, a.u, EAVE), a.t, -LEN / 2), W / 2, LEN,
+            addCyl(stage, vadd(vadd(c, a.u, EAVE), a.t, -(LEN / 2 - 0.1)), W / 2, LEN - 0.2,
               T2_OLIVE_D, 7, [a.r, a.t, a.u]);
             // Sliding door bays at the trackside gable — the one detail that
             // survives at this range, because it breaks the flat end wall.
