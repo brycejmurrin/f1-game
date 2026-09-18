@@ -30,6 +30,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 
 const SRC = fs.readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
 
@@ -74,4 +75,54 @@ test("startRace still re-applies after its rebuild", () => {
   assert.ok(load > 0 && apply > 0, "startRace must still loadTrack and applyRaceSettings");
   assert.ok(apply > load,
     "startRace must apply the race settings AFTER loadTrack rebuilds the world, or the rebuild ships unlit");
+});
+
+/* ── THE LENS, NOT THE LIGHT ──────────────────────────────────────────────────
+ *
+ * Reported 2026-09-18, with a screenshot of each: "why does the loading flyby
+ * look way more foggy than what's shown in the editor". It was not the lighting
+ * — it was that the same shot was RENDERED two different ways.
+ *
+ * __apex.flybyCam() parks the editor's preview through `dbgCam`, and js/game.js
+ * gives a dbgCam frame photo mode's treatment: far plane 6000 m, fog × 0.15, no
+ * fog-wall cull on the scenery. The live screen sets eye/target/fov directly, so
+ * it got gameplay's numbers instead: 900 m and 100 % fog. From a crane 190 m up
+ * looking down a 5.8 km circuit that is the difference between a vista and a
+ * wall of haze.
+ *
+ * FlybySeq.FAR and FlybySeq.FOG are now the one pair both ends read. These
+ * guards pin that neither end goes back to a literal.
+ */
+
+test("the cinematic's render numbers live in one place, as numbers", () => {
+  // Evaluated, not grepped: an unexported FAR leaves dbgCam.far undefined, which
+  // makes the projection matrix NaN and the preview a black frame — a regex on
+  // the export list would not have caught that.
+  const sb = { Math, JSON, Object, Array, Number, String, isFinite, console };
+  sb.window = sb;
+  vm.runInNewContext(
+    fs.readFileSync(new URL("../../js/camera/flyby-seq.js", import.meta.url), "utf8")
+      .replace(/^const\b/gm, "var"), sb, { filename: "js/camera/flyby-seq.js" });
+  const FS = sb.FlybySeq;
+  assert.ok(FS, "js/camera/flyby-seq.js assigns the FlybySeq global");
+  assert.equal(typeof FS.FAR, "number", "FlybySeq.FAR is the flyby's far plane, and it must be exported");
+  assert.ok(FS.FAR > 2000, "a cinematic far plane has to reach across a circuit, not a corner");
+  assert.equal(typeof FS.FOG, "number", "FlybySeq.FOG is its fog scale, and it must be exported");
+  assert.ok(FS.FOG > 0 && FS.FOG < 1, "the fog is THINNED for the flyby — 0 would flatten it, 1 is the defect");
+});
+
+test("both the live screen and the editor's preview read them", () => {
+  const body = bodyOf("function render(");
+  assert.match(body, /farPlane = FlybySeq\.FAR/,
+    "the live flyby renders at gameplay's 900 m far plane, so a shot the editor framed across a whole " +
+    "circuit arrives as a wall of fog");
+  assert.match(body, /cine \? FlybySeq\.FOG : null/,
+    "the live flyby renders at the session's full fog density while the editor previews it thinned");
+
+  const apex = fs.readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8");
+  const at = apex.indexOf("flybyCam(u, shots)");
+  assert.ok(at > 0, "__apex.flybyCam is gone — this guard is reading the wrong file");
+  const cam = apex.slice(at, apex.indexOf("\n  },", at));
+  assert.match(cam, /far: FlybySeq\.FAR/, "the preview must not pin its own far plane");
+  assert.match(cam, /fog: FlybySeq\.FOG/, "the preview must not fall through to photo mode's fog default");
 });

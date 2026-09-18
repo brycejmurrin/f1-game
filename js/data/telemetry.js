@@ -201,8 +201,9 @@ const DataTelemetry = (function () {
         // Two short lines — a single long ·-joined string was clipped mid-word
         // in the narrow split pane ("drag chart to .").
         info.appendChild(el("div", "dh-live-sub",
-          "Tap up to " + MAX_LANES + " lanes · switch SESSION to compare race vs quali"));
-        info.appendChild(el("div", "dh-live-sub", "Drag the chart to scrub"));
+          "Select one driver for a fastest-lap trace. Select a second to compare; the first is the reference."));
+        info.appendChild(el("div", "dh-live-sub",
+          "A third or fourth driver adds speed markers. Switch SESSION to compare race vs quali."));
         leftPane.appendChild(info);
 
         clear(rightPane);
@@ -218,16 +219,18 @@ const DataTelemetry = (function () {
 
         function syncChips() {
           drivers.forEach(function (d) {
-            chipByNum[d.num].classList.toggle("active", trayHas(d.num, meta.sessionKey));
+            const selected = trayHas(d.num, meta.sessionKey);
+            chipByNum[d.num].classList.toggle("active", selected);
+            chipByNum[d.num].setAttribute("aria-pressed", selected ? "true" : "false");
           });
           clear(detail);
           if (tray.length === 0) {
-            detail.appendChild(emptyMsg("← Pick 1–" + MAX_LANES + " lanes to view a lap. Switch the SESSION above and pick again to line a driver's race lap up against their qualifying lap."));
+            detail.appendChild(emptyMsg("Select one driver to view a fastest lap. Select a second to compare; the first driver is the reference."));
             return;
           }
           const badges = trayNeedsBadges();
           const summary = el("div", "dh-livecard");
-          summary.appendChild(el("h3", "dh-section", tray.length === 1 ? "SELECTED LANE" : "COMPARE LANES (" + tray.length + ")"));
+          summary.appendChild(el("h3", "dh-section", tray.length === 1 ? "SELECTED DRIVER" : "COMPARE DRIVERS (" + tray.length + ")"));
           const laneCols = laneColors(tray);
           tray.forEach(function (e, i) {
             const row = el("div", "dh-row");
@@ -256,7 +259,7 @@ const DataTelemetry = (function () {
               "The first two lanes draw full traces; additional lanes add speed markers."));
           }
           const loadBtn = el("button", "dh-livebtn");
-          loadBtn.textContent = tray.length === 1 ? "LOAD LAP" : "COMPARE " + tray.length + " LANES";
+          loadBtn.textContent = tray.length === 1 ? "LOAD FASTEST LAP" : "COMPARE " + tray.length + " LAPS";
           loadBtn.dataset.block = "full";   // css/data.css .dh-livebtn[data-block]
           loadBtn.type = "button";
           loadBtn.addEventListener("click", function () {
@@ -265,7 +268,7 @@ const DataTelemetry = (function () {
           });
           summary.appendChild(loadBtn);
           if (tray.length > 1) {
-            const clr = el("button", "dh-livebtn dh-lane-clear", "CLEAR LANES");
+            const clr = el("button", "dh-livebtn dh-lane-clear", "CLEAR SELECTION");
             clr.type = "button"; clr.dataset.block = "tight";
             clr.addEventListener("click", function () { tray = []; syncChips(); });
             summary.appendChild(clr);
@@ -273,10 +276,15 @@ const DataTelemetry = (function () {
           detail.appendChild(summary);
         }
 
+        const pickHead = el("h3", "dh-section", "SELECT DRIVERS");
         drivers.forEach(function (d) {
-          const b = el("button", "dh-dchip", dcode(d));
+          const fullName = d.name || dcode(d);
+          const parts = fullName.trim().split(/\s+/);
+          const shortName = parts.length > 1 ? parts[parts.length - 1] : fullName;
+          const b = el("button", "dh-dchip", dcode(d) + " · " + shortName);
           b.type = "button";
           b.style.borderColor = cssColor(driverColor(d));
+          b.setAttribute("aria-label", "Select " + fullName);
           b.addEventListener("click", function () {
             trayToggle(d, meta);
             syncChips();
@@ -287,6 +295,7 @@ const DataTelemetry = (function () {
 
         syncChips();
         // Driver chips → left pane; chart detail → right pane
+        leftPane.appendChild(pickHead);
         leftPane.appendChild(pick);
         rightPane.appendChild(detail);
       });

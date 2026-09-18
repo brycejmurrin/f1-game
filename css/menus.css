@@ -1311,6 +1311,13 @@ h3.sel-label {
   font-size: calc(var(--fs-5) * 1.3);
   line-height: 1;
 }
+/* The help line under the row wraps to its own full-width line (deploy branch,
+   e43f0700e). Kept as-is: the button above is one flex item on the row, so a
+   `flex: 1 0 100%` sibling still breaks the line the same way. */
+#rs-duel-help {
+  flex: 1 0 100%;
+  margin: 0;
+}
 #duel-picker { --sheet-w: 620px; }
 #duel-search {
   width: 100%;

@@ -263,14 +263,14 @@ test("latest telemetry driver response owns the driver chips", async ({ page }) 
       { num: 13, code: "NEW", name: "Latest Driver" }
     ]);
   });
-  await expect(page.locator(".dh-dchip")).toHaveText(["NEW"]);
+  await expect(page.locator(".dh-dchip")).toHaveText(["NEW · Driver"]);
   await page.evaluate(() => {
     window.__life.driverCalls.find((x) => x.sessionKey === 12).resolve([
       { num: 12, code: "OLD", name: "Stale Driver" }
     ]);
   });
 
-  await expect(page.locator(".dh-dchip")).toHaveText(["NEW"]);
+  await expect(page.locator(".dh-dchip")).toHaveText(["NEW · Driver"]);
 });
 
 test("LIVE and TELEMETRY picker requests do not invalidate each other", async ({ page }) => {
@@ -340,15 +340,15 @@ test("deselecting every telemetry driver synchronously restores the empty state"
   const driver = page.locator(".dh-dchip").first();
   await expect(driver).toBeVisible();
 
-  // Current flow: chip click selects; the LOAD LAP button starts the fetch.
+  // Current flow: chip click selects; the LOAD FASTEST LAP button starts the fetch.
   await driver.click();
-  await page.getByRole("button", { name: "LOAD LAP" }).click();
+  await page.getByRole("button", { name: "LOAD FASTEST LAP" }).click();
   await expect.poll(() => page.evaluate(() => window.__life.telemetryCalls.length)).toBe(1);
   await expect(page.locator(".dh-telem-detail .dh-spinner")).toHaveCount(1);
   await driver.click();
 
   await expect(page.locator(".dh-telem-detail .dh-spinner")).toHaveCount(0);
-  await expect(page.locator(".dh-telem-detail")).toContainText("Pick 1");
+  await expect(page.locator(".dh-telem-detail")).toContainText("Select one driver");
 });
 
 test("data hub exposes modal tabs, traps focus, and restores its opener", async ({ page }) => {
@@ -419,10 +419,10 @@ test("telemetry popup is a labelled modal and restores driver focus", async ({ p
     DataHub.open();
   });
   await page.locator(".dh-tab").filter({ hasText: "TELEMETRY" }).click();
-  const driver = page.getByRole("button", { name: "INI" });
+  const driver = page.getByRole("button", { name: "Select Initial Driver" });
   await driver.click();
-  // Current flow: the popup opens from LOAD LAP, not from the chip itself.
-  await page.getByRole("button", { name: "LOAD LAP" }).click();
+  // Current flow: the popup opens from LOAD FASTEST LAP, not from the chip itself.
+  await page.getByRole("button", { name: "LOAD FASTEST LAP" }).click();
 
   const popup = page.getByRole("dialog", { name: /Initial Driver/ });
   // A real <dialog> since round 11: the platform asserts the role and the
