@@ -342,10 +342,26 @@ test("THE DIRECTIONS, FOLLOWED, MAKE THE STOP: every cue fires at the model's ow
   assert.ok(lane, "never reached the lane");
   assert.ok(wrap(lane.ps.s - p.sIn) < 12, `the lane begins at the line (${wrap(lane.ps.s - p.sIn).toFixed(1)} m past it)`);
   assert.equal(lane.c.phase, "lane");
-  assert.equal(lane.c.text, "STAY IN LANE · " + Math.round(lane.q.limitKph) + " LIMIT");
+  // The cue names the number PAINTED ON THE WALL, and the number the speedo
+  // shows while the limiter holds. It used to print `limit() * 3.6` — raw m/s
+  // at the current pace, which read 67 against a board saying 80 (Monaco: 50
+  // against 60). The speedo is `dashKph` (vStd, PACE cancels), so the one
+  // number a driver compares against it was the odd one out.
+  assert.equal(lane.c.text, "STAY IN LANE · " + Math.round(p.limitKph) + " LIMIT",
+    `the cue must name the board's ${p.limitKph} km/h`);
   // (checked early in the lane: past atM 37 the box is inside BOX_CUE_M on Bahrain, and step 6 must see that edge)
   const held = run(a, pits, (ps, q) => ({ x: q.driveX }), (c, q, ps) => ps.speed * 3.6 <= q.limitKph * 1.1 && q.atM > 8, 8);
   assert.ok(held, "the limiter never brought the car to the limit");
+  // 5b. NEITHER BOOST IS A DRIVER'S TO USE BETWEEN THE LINES. `held` is the one
+  //     predicate the speed cap uses, so the gate lifts at the exit and not at
+  //     the box. This car is alone in the lane, so otArmed would be false here
+  //     anyway for want of a car ahead — the leak is measured with a full field
+  //     in scratch/pit-boost-check.cjs (1416 armed ticks ungated, 0 gated). What
+  //     this pins is the wiring: held() true, and neither flag set.
+  assert.equal(pits.held(car), true, "the limiter's own predicate says held");
+  assert.equal(!!car.otArmed, false, "overtake cannot arm in the lane");
+  assert.equal(!!car.xArmed, false, "X-mode cannot arm in the lane");
+  assert.equal((car.otT || 0) > 0, false, "no deployment survives the entry line");
 
   // 6. THE COUNTDOWN IS NOT AN INSTRUCTION. Inside BOX_CUE_M the cue counts
   //    this car's box down, but while the move is not yet due it keeps saying
