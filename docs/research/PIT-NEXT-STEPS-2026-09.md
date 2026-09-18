@@ -176,7 +176,7 @@ this cause, as the 2026-09 window shortening did); one orbit shot of the
 Abu Dhabi and Sochi mouths before/after (`tools/shot/shot.mjs <id> <frac of sA>
 orbit --dist 60 --el 35`). Cost: pit.js +6, a test +25, a baseline re-cut.
 
-## 4b. The EXIT MERGE is in a corner on 11 circuits — measured, not fixed
+## 4b. The EXIT MERGE is in a corner — 7 of 17 now fixed (and §4j says why the rest are not)
 
 Asked: "make sure entry and exit aren't on turns." The entrance was fixed in §4
 (`MOUTH_RUN`). The exit was surveyed the same way and is worse, and the fix was
@@ -548,6 +548,54 @@ order — the pit-loss pricing (§4f), the AI wear calibration (§4h) and this:
 The planner and the sim now agree about when a set is done, which is what the
 whole thread was about: the engineer calls you in on the lap the plan said,
 rather than reacting to rubber that died early.
+
+## 4j. THE EXIT MERGE — the budget is a closed form, and §4b's premise was wrong
+
+§4b concluded "neither can shrink" and asked for the row to be decoupled from
+the window first. That premise does not survive measurement.
+
+**`first` is pinned to the window's ceiling on EVERY circuit.** The row is laid
+between `lo = grow + 20` and `hi = lenM - ROW_END` starting at
+`poleT + GRID_CLEAR`, and that pole-slot anchor never binds — `first = hi - span`
+on all 49 circuits with bays (`scratch/pit-row-window.cjs`). So closing the
+window's tail by X simply moves the row back by X, and the room to do it is a
+closed form:
+
+    budget = lenM - ROW_END - span - grow - 20
+
+**Every circuit has room.** The tightest is Mosport at 21 m; the median is 155 m.
+§4b's attempt did not fail because there was no budget — it failed because it
+was a BLANKET rule. It spent 66 m on Bahrain, whose budget is 55.
+
+**What shipped.** `window()` now pulls the exit line back by the SMALLEST
+multiple of 4 m that puts `MERGE_RUN` (40 m) of straight past the merge, capped
+at that budget. Capped, so no circuit can lose a bay to it by construction —
+which is the failure mode that killed the first attempt.
+
+Surveyed at `PIT_K` before and after (`scratch/pit-exit-budget.cjs`):
+**17 circuits rejoined inside a bend, now 10.** Fixed: abudhabi, interlagos,
+madrid, miami, montreal, sochi, spa.
+
+**Why the other 10 are not, and it is NOT the row.** Five have no straight to
+reach at any pullback (anderstorp, bahrain, brands_hatch, monaco, mosport) —
+their pit straight is simply not long enough. The other five are blocked by
+`EXIT_MIN`, the 40 m floor on how far the window reaches PAST the start line:
+Baku needs 76 m of pullback and the floor allows 70, the Nürburgring needs 92
+and can have 18. That floor governs where the exit line sits relative to the
+GRID, so lowering it is a separate decision with its own risk, not a constant to
+nudge. Also learned: pulling `sOut` back re-runs `straightRun` from the new
+line, so the exit road can LENGTHEN and push the merge forward again — the merge
+does not move back 1:1 with the line, which is why the first estimate of 12
+fixable came out at 7.
+
+**The cost, recorded rather than hidden.** Moving the window reshuffles what the
+pit keep-out suppresses, and through it the procedural scenery stream: madrid's
+coplanar count fell 66 → 65 (lowered, as the stale-baseline test demands) and
+miami's prop interpenetration rose 24 → 25. The four worst Miami spots are
+byte-identical before and after, so the new one is marginal and in the outfield,
+not a new conflict at the pit. One extra prop overlap against seven circuits
+that no longer deliver a car off the limiter into a corner is a trade worth
+making, but it is a baseline RAISE and it is named here for that reason.
 
 ## 5. Smaller loose ends
 
