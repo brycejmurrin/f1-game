@@ -454,10 +454,7 @@
             // the shed's LENGTH — the same [r, t, u] basis the museum's
             // repainted T2 roof uses thirty lines below.
             stage._mat = MAT.RUST;
-            // Overhang both gables: a cap exactly on the body face contributed
-            // one same-facing coplanar spot per hangar.
-            const roofOver = 0.2;
-            addCyl(stage, vadd(vadd(c, a.u, EAVE), a.t, -LEN / 2 - roofOver), W / 2, LEN + roofOver * 2,
+            addCyl(stage, vadd(vadd(c, a.u, EAVE), a.t, -LEN / 2), W / 2, LEN,
               T2_OLIVE_D, 7, [a.r, a.t, a.u]);
             // Sliding door bays at the trackside gable — the one detail that
             // survives at this range, because it breaks the flat end wall.
