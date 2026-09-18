@@ -50,8 +50,34 @@ const BASELINE = {
   // road edge (the track boundary the car stays inside), now sitting on the real
   // terrain ribbon added for these tracks — verified via driver-eye as the wall,
   // not a lane obstruction. Migrated Vegas and Hungaroring are clean.
-  monaco: 1.4, singapore: 1.3, baku: 1.3, jeddah: 0.7,
+  // jeddah 0.7 -> 1.1. NOT a tolerance nudged to get green: the circuit GAINED
+  // a structure. It read clean at ed2221fd and broke at 80acf931, "feat(pit):
+  // a shorter lane, a signed entry, A WALLED EXIT, furnished bays" — bisected
+  // with TRACK=jeddah on this spec. The offender is grey [0.46,0.47,0.5] at
+  // 1.07 m, lateral -6.35 against baseHW 6, at frac 0.02: the pit wall, 0.35 m
+  // off the tarmac edge on the pit straight, which is where pit walls are. It
+  // is the same object the paragraph above baselines at 1.3-1.4 on the other
+  // three street circuits, and jeddah reads LOWER than all of them. The 0.7
+  // predates it having a wall at all.
+  monaco: 1.4, singapore: 1.3, baku: 1.3, jeddah: 1.1,
   albert_park: 0.7,
+  // mont_tremblant: a forest crown leaning over the road, not an intrusion at
+  // the edge — dark green [0.10,0.20,0.09] spanning y 9.96-12.46 with the road
+  // at 7.33, so 4.74 m of clearance a car drives under. Same category as the
+  // miami note above, and deliberate: the scenery engine keeps FOOTINGS out
+  // and lets crowns reach over (js/track/scenery/nature.js tree() guards with
+  // `onTrack(x, z, 4, h * 0.3)`; js/track/scenery/models.js: "a tree's canopy
+  // tier whose underside is well above the road may reach over the complex's
+  // edge, the way a crown reaches over a verge"). This circuit's whole
+  // identity is a forest tunnel — it builds an explicit ceiling over the
+  // cutting with overRoad() at 9.5-16 m, which clears CEIL and is exempt; this
+  // one crown sits 0.26 m under it.
+  //
+  // Never a regression: mont_tremblant did not exist before 06833f3d ("add 11
+  // circuits recovered from OpenStreetMap"), so it has never passed this spec.
+  // It was dressed from its brief in e4524517 and has read 4.74 since.
+  mont_tremblant: 4.9,
+  mont_tremblant_note: "forest crown over the cutting ~4.7m up — car clears",
 };
 const ALLOW = new Set(); // fully-exempt circuits (none — everything is capped)
 
