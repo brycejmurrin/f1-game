@@ -350,6 +350,7 @@ interface GameCtx {
   readonly career: CareerSave;
   readonly careerSettlement: CareerSettlement | null;
   readonly openCareer: () => void;
+  readonly openCareerSlots: () => void;
   seasonMode: boolean;
   /** The championship round in a season/career, else the session race counter. */
   readonly seasonRound: number;
@@ -750,6 +751,7 @@ declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
+declare const TitleMenu: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const SkidMarks: GameModuleFactory;

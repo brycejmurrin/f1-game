@@ -215,28 +215,14 @@ test("garage stacked categories are a horizontal strip", () => {
   const carsetup = css("css/carsetup.css");
   assert.ok(!declares(carsetup, "#cs-tabs", "max-height", "48%"),
     "stacked tabs must not keep the wrapping 48% vertical catalogue");
-  assert.ok(ruleFor(carsetup, /^#cs-inner:not\(\[data-pair="on"\]\) #cs-tabs \.cs-tab\b/),
-    "the strip is keyed on data-pair, not portrait orientation");
-  assert.equal(decl(carsetup, "#cs-tabs", "overflow-x"), "auto", "stacked tabs pan sideways");
-  assert.equal(decl(carsetup, "#cs-tabs", "overflow-y"), "hidden", "…and override .pane overflow-y");
+  assert.ok(ruleFor(carsetup, /^#cs-tabs \.cs-tab-row\b/),
+    "the two named category tiers own their horizontal strips");
+  assert.equal(decl(carsetup, "#cs-tabs .cs-tab-row", "overflow-x"), "auto", "each stacked tier pans sideways");
+  assert.equal(decl(carsetup, "#cs-tabs .cs-tab-row", "overflow-y"), "hidden", "…and never becomes a nested vertical pane");
   assert.equal(decl(carsetup, '#cs-inner[data-pair="on"] #cs-tabs', "overflow-y"), "auto",
     "pair-on rail may still scroll vertically");
-  assert.equal(decl(css("css/components.css"), ".pane-pair", "--pair-compact"), "off",
-    "compact garage / season stack to the horizontal strip via --pair-compact");
-  const packed = '#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs';
-  // THE COLUMN COUNT IS DERIVED, NOT WRITTEN DOWN. This assertion used to pin
-  // the literal `repeat(7, …)` — 14 slots — and that is precisely how the
-  // defect shipped: the roster grew to 15 tabs (TEAM + 12 catalogue categories
-  // + SETUP + LIVERY), the fifteenth landed on an implicit third row that the
-  // two-row max-height clips, and LIVERY rendered 53x6 px with 0 % visible and
-  // no scrollable ancestor at 852x393. A guard that pins a number cannot notice
-  // the number going stale; pin the mechanism instead, and let
-  // garage-interior-gate.test.mjs assert the arithmetic against the real count.
-  assert.equal(decl(carsetup, packed, "grid-template-columns"), "repeat(var(--cs-tab-cols, 7), minmax(0, 1fr))",
-    "short wide stacked garage takes its column count from the tab roster, two rows deep");
-  assert.ok(decl(carsetup, packed, "max-height"), "wrapped play-shape tabs cap at two rows so #cs-options keeps a list");
-  assert.ok(!declares(carsetup, /^#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs$/, "flex-wrap", "wrap"),
-    "tall stacked garage must keep the horizontal strip — wrapping 14 tabs starved options");
+  assert.equal(decl(carsetup, '#cs-inner[data-pair="on"] #cs-tabs .cs-tab-row', "display"), "contents",
+    "pair-on flattens both tiers into one vertical rail");
   assert.match(code("js/garage/setup-sheet.js"), /scrollIntoView\(\s*\{[^}]*\bblock:\s*"nearest"[^}]*\}\s*\)/, "the active tab is scrolled into view (nearest)");
   assert.match(code("js/garage/setup-sheet.js"), /scrollIntoView\(\s*\{[^}]*\binline:\s*"center"[^}]*\}\s*\)/, "…and centred sideways along the strip");
 });
@@ -249,7 +235,7 @@ test("circuit catalogue has a searchable filter toolbar", () => {
   assert.match(js, /function\s+applyTrackSearch\s*\(/);
   assert.match(js, /setAttribute\(\s*"role"\s*,\s*"group"\s*\)/,
     "filters plus search are controls for one list, not a tablist");
-  assert.match(js, /\.tabIndex\s*=\s*trackFilter\s*===\s*id\s*\?\s*0\s*:\s*-1/,
+  assert.match(js, /\.tabIndex\s*=\s*visibleTrackFilter\(\)\s*===\s*id\s*\?\s*0\s*:\s*-1/,
     "filter chips keep a roving tab stop; search is its own");
   assert.equal(decl(css("css/menus.css"), "#sel-track-search", "min-height"), "var(--chip-h)");
 });
@@ -1065,6 +1051,17 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
     "HUD fold is its own row, not under a reprint HUD heading");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
+  assert.match(read("index.html"), /id="pm-visual-tuners" class="pm-renderer-sub"/,
+    "ADVANCED VISUALS joins the same compact Display fold family as RENDERER");
+  const componentsSrc = read("css/components.css");
+  assert.match(componentsSrc,
+    /#pmsettings-inner #pm-panel-display details > summary[\s\S]*?background-color:\s*transparent;[\s\S]*?border:\s*none;/,
+    "ADVANCED VISUALS shares the borderless transparent summary rule");
+  assert.match(componentsSrc,
+    /#pmsettings-inner #pm-panel-display details > summary::after\s*\{\s*content:\s*none;/);
+  assert.match(componentsSrc,
+    /#pmsettings-inner #pm-panel-display details > summary::before\s*\{\s*content:\s*"\\25BE";/,
+    "all four Display folds put the chevron before the label");
   assert.doesNotMatch(read("index.html"), /id="pm-hud-h"/);
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
@@ -1076,8 +1073,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hud-sample"/,
     "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "min-height"), "var(--chip-h)",
-    "METRICS summary is a chip row — slightly shorter than a full --tap door");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "min-height"), "var(--chip-h)",
+    "every Display summary is a compact row, slightly shorter than a full --tap door");
   // The sample carries BOTH sliders now: a readout box for HUD SIZE and a pad
   // for BUTTON SIZE, which has exactly the same no-feedback problem (every real
   // cluster is hidden behind the .dim sheet). The pad divides the block's own
@@ -1099,13 +1096,13 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
   assert.match(read("index.html"), /id="pm-display-adv"/,
     "the RENDERER fold is the shell host; RESET / shots still inject into its body");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-display-adv)', "grid-column"), "1 / -1",
-    "setting rows and ADVANCED span the wide DISPLAY grid; none is a fourth named area");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display > details', "grid-column"), "1 / -1",
+    "every present and future Display disclosure spans the wide grid");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "min-height"), "var(--chip-h)",
-    "RENDERER summary matches the HUD / METRICS chip row");
-  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner #pm-display-adv > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display details > summary", "min-height"), "var(--chip-h)",
+    "every Display summary matches the HUD / METRICS chip row");
+  for (const sel of ["#pmsettings-inner #pm-panel-display details > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
     assert.equal(decl(css("css/components.css"), sel, "height"), "auto", "fold summaries wrap instead of clipping their readout at 150%");
     assert.equal(decl(css("css/components.css"), sel, "flex-wrap"), "wrap");
   }
@@ -1113,9 +1110,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "a summary breaks between readout words, never inside TILT 6");
   // The body is addressed by id (#pm-display-adv-body): RESOLUTION is a chip
   // row inside it, its own role=group, and a descendant match would grid it.
-  assert.equal(decl(css("css/components.css"), "#pm-display-adv-body", "display"), "flex",
-    "ADVANCED body defaults to a column; wide/compact override to a 2-up grid");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv-body/, "display"), "grid",
+  assert.equal(decl(css("css/components.css"), "#pm-display-adv-body, #pm-visual-tuners-body", "display"), "flex",
+    "Display disclosure bodies default to columns; wide/compact override to grids");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] :is\(#pm-display-adv-body, #pm-visual-tuners-body\)/, "display"), "grid",
     "compact ADVANCED packs 2-up via SheetShape density, not a height media");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag)", "background"), "transparent",
     "SCREENSHOTS / SAVE / COPY DIAG are secondary rows, not peer plates of RESET");
@@ -1123,15 +1120,15 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child, #advanced > .pm-group-h:first-child, #audioset > .pm-group-h:first-child", "display"), "none",
     "sheet title already names CONTROLS / DISPLAY / STEERING & ASSISTS / MUSIC; do not reprint the heading");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "color"), "var(--steel)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "opacity"), "1",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "opacity"), "1",
     ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay readable");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "transparent",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "background-color"), "transparent",
     "fold summaries drop the plate so they do not copy HALO / TURN CHASING");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::after/, "content"), "none",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary::after/, "content"), "none",
     "right-side chevron is the dropdown mark — disclosures do not use it");
-  assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::before$/, "content") || "",
+  assert.match(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary::before$/, "content") || "",
     /25BE/,
     "disclosure chevron sits on the left, like a tree, not a select");
   const settingsHtml = read("index.html");
@@ -1280,6 +1277,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "daily chip labels the standard class and circuit; weather/tod/best live in a child span");
   assert.match(selectJs, /bar\.insertBefore\(\s*b\s*,\s*bar\.firstChild\s*\)/,
     "TODAY leads the filter bar so a wrapping sheet paints it as the banner");
+  assert.match(selectJs, /trackFilters[\s\S]*\["daily-open",\s*"DAILY OPEN"\]/,
+    "DAILY OPEN participates in the same filter semantics as ALL / SEASON / CLASSICS");
+  assert.match(selectJs, /G\.daily\.select\(/, "daily controls stage a plan on the picker");
+  assert.doesNotMatch(selectJs, /onclick\s*=\s*\([^)]*\)\s*=>\s*\{[^}]*G\.daily\.open\(/,
+    "a picker chip must never bypass NEXT, Race Settings and RACE!");
   assert.match(code("js/garage/setup-sheet.js"), /rakeOut\.id\s*=\s*"cs-rake-readout"/);
   const resultsJs = code("js/ui/results-sheet.js");
   assert.match(resultsJs, /btn\.id\s*=\s*"res-daily-share"/);

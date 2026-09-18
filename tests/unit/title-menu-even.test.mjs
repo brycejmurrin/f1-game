@@ -84,3 +84,16 @@ test("title overlay columns grow with --vwz instead of a pixel cap", () => {
   assert.doesNotMatch(menus, /minmax\(0, 1\.35fr\)/);
   assert.doesNotMatch(menus, /43vw|53vw/);
 });
+
+test("title hero exposes returning-player and daily doors with explicit names", () => {
+  const html = read("index.html");
+  const title = read("js/ui/title-menu.js");
+  assert.match(html, /id="menu-retention"[\s\S]*id="mb-continue"[\s\S]*id="mb-daily"/);
+  for (const id of ["mb-career", "mb-race", "mb-tt", "mb-vs", "mb-season"]) {
+    assert.match(html, new RegExp(`id="${id}"[^>]*aria-label="[^"]+"`), `${id} has a readable name independent of text-node spacing`);
+  }
+  assert.match(title, /\$\("mb-career"\)\.onclick = \(\) => G\.openCareerSlots\(\)/);
+  assert.match(title, /\$\("mb-continue"\)\.onclick = \(\) => G\.openCareer\(\)/);
+  assert.match(title, /\$\("mb-daily"\)\.onclick = \(\) => \{[\s\S]*\$\("mb-tt"\)\.click\(\)[\s\S]*G\.daily\.select\(\)[\s\S]*G\.buildSelect\(\)/);
+  assert.match(title, /dailySub\.textContent = p\.trackName[\s\S]*STREAK/);
+});
