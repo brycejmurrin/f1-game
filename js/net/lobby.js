@@ -489,8 +489,14 @@ const NetLobby = (function () {
     let selfReady = false;
 
     function openRoom() {
-      selfReady = false;
-      _ready.clear();
+      // ONLY A FRESH ROOM STARTS UNREADY. openRoom() is onConnected()'s last
+      // line, so it runs on EVERY connection — and clearing unconditionally
+      // threw away the READY of everyone already in a 3-4 player room the
+      // moment the next guest arrived. Nothing asks a peer to re-announce, and
+      // peersReady() needs every id truthy, so START could never enable again
+      // unless each earlier guest happened to toggle READY a second time. Two
+      // players never saw it: there is no "already in the room" there.
+      if (sessions.size <= 1) { selfReady = false; _ready.clear(); }
       Log.info("net", "lobby room");
       show("room");
       // The lobby is a dialog over the menu, and the room is where both players

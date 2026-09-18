@@ -173,5 +173,39 @@ const LampChunks = (function () {
     return { gw, gh, gx0, gz0, data };
   }
 
-  return { CAP, capFor, buildTable, resolve, buildGrid };
+  /** Copy a grid from buildGrid() into a fixed-width texture buffer.
+   *
+   * TWO STRIDES, AND THEY ARE NOT THE SAME. `data` is packed at the grid's own
+   * row stride `gw` — the occupied extent, which for a real circuit is a few
+   * dozen cells. A texture row is `dstW` wide (256 on TLX), fixed. A straight
+   * linear copy therefore lands row r of the bake at texel column r*gw instead
+   * of row r, and a shader doing textureLoad(grid, ivec2(cx, cz)) reads every
+   * row but the first from the wrong place — as zeros, so `count` is 0, `use`
+   * is false, and the whole per-chunk lamp path silently falls back to the
+   * global lamp set without a single symptom a log would show.
+   *
+   * THAT IS NOT HYPOTHETICAL: tsl-lit.js did exactly that, with a comment
+   * asserting the strides matched. What misled it is two lines above in the
+   * same function — the INDEX texture packs linearly and is correct, because it
+   * uses its full width, so the shader's (k - row*IDXW, row) is the inverse of
+   * a linear fill. This grid does not use its full width. Hence one shared
+   * helper, next to the layout that defines the stride, rather than a copy loop
+   * in each backend.
+   *
+   * `dst` is float pairs (RG); the caller has already refused a grid too big
+   * for it (gw/gh > dstW), which is the only bound this needs. */
+  function blitGrid(g, dst, dstW) {
+    if (!g || !dst || !(dstW > 0)) return false;
+    if (!(g.gw > 0) || !(g.gh > 0) || g.gw > dstW || g.gh > dstW) return false;
+    for (let r = 0; r < g.gh; r++) {
+      const src = r * g.gw * 2, out = r * dstW * 2;
+      for (let x = 0; x < g.gw; x++) {
+        dst[out + x * 2] = g.data[src + x * 2];
+        dst[out + x * 2 + 1] = g.data[src + x * 2 + 1];
+      }
+    }
+    return true;
+  }
+
+  return { CAP, capFor, buildTable, resolve, buildGrid, blitGrid };
 })();

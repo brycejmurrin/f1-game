@@ -229,6 +229,22 @@ const NetPlay = (function () {
         .sort((a, b) => G.wireId(a) - G.wireId(b));
       if (humans.length < 2) return;
 
+      // A QUALIFYING GRID IS ALREADY RIGHT, AND RE-LAYING IT DESYNCS THE RACE.
+      //
+      // Everything above rests on `first` being the same number on every peer,
+      // and it is — but only on the pace grid, where gridUp() splices THE LOCAL
+      // player to P12, so localCar.gridPos is 12 on all of them. A grid built
+      // from a pre-order takes no such step: every car holds its qualified slot
+      // on every machine, localCar.gridPos is wherever THIS player qualified,
+      // and each peer would lay the human block at a different place and swap a
+      // different set of AI cars out of the way.
+      //
+      // Skipping is not a workaround, it is the correct answer: the collision
+      // this function exists to fix — every peer's own car posed at the same s —
+      // cannot occur when the slots came from qualifying, because qualifying
+      // already gave each car a distinct one.
+      if (G.gridPreOrdered) return;
+
       let first = localCar.gridPos;
       const last = cars.length;                  // gridPos is 1-based
       if (first + humans.length - 1 > last) first = Math.max(1, last - humans.length + 1);

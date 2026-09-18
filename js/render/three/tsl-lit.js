@@ -396,13 +396,17 @@
       for (let k = 0; k < t.concat.length; k++) it[k] = t.concat[k];
       const gt = LGRID.gridTex.image.data;
       gt.fill(0);
-      for (let c = 0; c < g.gw * g.gh; c++) {
-        // gridTex is RG, the bake is (offset, count) pairs — same stride, so a
-        // straight copy. Row r of the bake lands on row r of the texture, which
-        // is why the shader's cz is a plain (cell - gz0).
-        gt[c * 2] = g.data[c * 2];
-        gt[c * 2 + 1] = g.data[c * 2 + 1];
-      }
+      // ROW BY ROW, through the shared helper. This used to be a linear copy
+      // with a comment claiming the strides matched: they do not. The bake's row
+      // stride is g.gw (the occupied extent, a few dozen cells); the texture's
+      // is LGRID.G (256, fixed). The shader below reads ivec2(cx, cz), so every
+      // row but the first read a zero pair — count 0, `use` false — and the
+      // per-chunk lamp path fell back to the global lamp set over almost the
+      // whole grid, silently. See LampChunks.blitGrid for why this lives there.
+      // typeof: this file is evaluated standalone by the node tests, where the
+      // shared island is not loaded. Refusing the path is the documented
+      // fallback (see this function's header); throwing would take the frame.
+      if (typeof LampChunks === "undefined" || !LampChunks.blitGrid(g, gt, LGRID.G)) return off();
       LGRID.lampTex.needsUpdate = LGRID.idxTex.needsUpdate = LGRID.gridTex.needsUpdate = true;
       U.lgOrigin.value.set(g.gx0, g.gz0);
       U.lgSize.value.set(g.gw, g.gh);

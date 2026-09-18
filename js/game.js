@@ -896,6 +896,7 @@ function dirtyAirMul(wake, speed) {
 // ---------- state ----------
 let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
+let gridPreOrdered = false;   // set by gridUp(); read by js/net/netplay.js — see there
 // The field size the painted grid was built for. In the rebuild guard with
 // id and night because the box paint is baked into the start-line decal:
 // racing the same circuit again with MY TEAM selected changes the field
@@ -2009,6 +2010,13 @@ function redFlagRestart() {
   return true;
 }
 function gridUp(preOrder) {
+  // WHERE THIS GRID CAME FROM, and the reason it is worth a variable: the
+  // else-branch below SPLICES THE LOCAL PLAYER TO P12, which is a per-peer
+  // adjustment — car X ends up at a different gridPos on each machine. A
+  // pre-ordered grid (qualifying) takes no such step, so every car holds the
+  // same slot everywhere. js/net/netplay.js's separateGrid() has to know which
+  // it is: the collision it exists to fix can only happen on the P12 branch.
+  gridPreOrdered = !!(preOrder && preOrder.length === cars.length);
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
     // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
     // comparator is inconsistent and its draw count engine-defined.
@@ -3040,6 +3048,10 @@ const G = {
   // The FLYBY SHOT EDITOR's saved list, or null for the shipped sequence.
   // Read-only here: flybyPanel writes it, reloadFlybyShots() reads it back.
   get flybyShots() { return flybyShots; },
+  // True when the last gridUp() laid the grid from a pre-order (qualifying) —
+  // the same slots on every peer — rather than from the pace order, which seats
+  // the LOCAL player at P12 and so differs per machine.
+  get gridPreOrdered() { return gridPreOrdered; },
   get lens() { return _lens; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
