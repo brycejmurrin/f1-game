@@ -13,19 +13,16 @@
 const DebrisOpts = (function () {
   "use strict";
 
-  const KEY = "debris";          // apex26.debris — raw lane, "1"/"0", default ON
+  const KEY = "debris";          // apex26.debris — raw lane, "1"/"0", default OFF
   const store = GameStore.store;
 
-  // The stored value, else the shipped default (ON) — deliberately NOT
+  // The stored value, else SettingsDefaults' shipped default — deliberately NOT
   // DebrisWorld.status().enabled: `_enabled` is false until game.js calls
   // create(), and this row wires on DOMContentLoaded, which can come first, so
   // asking the world painted OFF for a player whose debris was about to start.
-  // Matched to create() EXACTLY (`getItem("apex26.debris") || "1"`, then
-  // `=== "1"`): null and "" fall to the default, every other spelling is off.
-  // A `!== "0"` here would disagree with the world on everything but "0"/"1".
+  // Matched to create() exactly: only the raw string "1" enables the side-world.
   function on() {
-    const raw = store.raw(`apex26.${KEY}`);   // raw() is null when storage is blocked
-    return raw === null || raw === "" || raw === "1";
+    return store.raw(`apex26.${KEY}`) === "1";
   }
 
   function set(want) {

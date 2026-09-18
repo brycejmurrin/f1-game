@@ -9,6 +9,7 @@ const scanSource = await readFile(new URL("../../js/net/scan.js", import.meta.ur
 const musicSource = await readFile(new URL("../../js/audio/music-lib.js", import.meta.url), "utf8");
 const apiSource = await readFile(new URL("../../js/data/api.js", import.meta.url), "utf8");
 const liveSource = await readFile(new URL("../../js/data/live.js", import.meta.url), "utf8");
+const dataCss = await readFile(new URL("../../css/data.css", import.meta.url), "utf8");
 const audioPanelSource = await readFile(new URL("../../js/audio/panel.js", import.meta.url), "utf8");
 
 function deferred() {
@@ -309,10 +310,26 @@ function dataApiHarness(responses, initial = new Map()) {
 }
 
 function liveMergeHelpers() {
-  const context = vm.createContext({ console, Map, Object, Array });
+  const context = vm.createContext({ console, Map, Object, Array, Date });
   vm.runInContext(liveSource + ";globalThis.__live=DataLive", context);
   return context.__live;
 }
+
+test("LIVE labels sessions as upcoming, live, or completed", () => {
+  const live = liveMergeHelpers();
+  const now = Date.parse("2026-09-18T12:00:00Z");
+  assert.equal(live._sessionStatus({ type: "Race", dateStart: "2026-09-18T14:00:00Z" }, now), "UPCOMING");
+  assert.equal(live._sessionStatus({ type: "Race", dateStart: "2026-09-18T10:00:00Z" }, now), "LIVE");
+  assert.equal(live._sessionStatus({ type: "Race", dateStart: "2026-09-13T10:00:00Z" }, now), "COMPLETED");
+});
+
+test("LIVE split panes can shrink without creating modal-wide horizontal overflow", () => {
+  for (const selector of [".dh-split", ".dh-split-L", ".dh-split-R"]) {
+    const block = dataCss.match(new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\{([^}]*)\\}", "s"));
+    assert.ok(block, `${selector} CSS block exists`);
+    assert.match(block[1], /min-width:\s*0/, `${selector} must be allowed to shrink inside the modal`);
+  }
+});
 
 test("LIVE position/interval requests use watermarks and never touch localStorage", async () => {
   const h = dataApiHarness([
