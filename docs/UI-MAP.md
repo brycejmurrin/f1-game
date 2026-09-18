@@ -12,10 +12,11 @@ agent can inspect.
 > `index.html` on `claude/f1-game-project-26h3ng`
 
 The navigation half records what the live Pages build exposed on that date; it
-is observation, not a promise that every action was exercised. Garage's deep
-panels and the in-race pause chrome remain **partial**. The DOM half is
-source-derived and deliberately inventories major regions rather than every
-setting, button and generated row.
+is observation, not a promise that every action was exercised. The Garage and
+pause menu were mapped under the agent API's headless mode so the weak survey
+box did not have to render another frame. The DOM half is source-derived and
+deliberately inventories major regions rather than every setting, button and
+generated row.
 
 ## A. Navigation sitemap and mode web
 
@@ -39,8 +40,8 @@ race
 └─ tools ────────────> #lighting | #camtune | #flyby | #photo-controls
 ```
 
-`?` means optional. The last three race branches are source-backed but were not
-walked in the live pass.
+`?` means optional. Pause was walked headlessly; the race-flow and visual-tuner
+branches remain source-backed rather than end-to-end walkthroughs.
 
 ### Title (`#overlay`)
 
@@ -68,7 +69,7 @@ Settings opens at an index, then pushes one page at a time:
 | Controls | `#pm-open-controls` | `#pm-panel-controls` | CONTROLS |
 | Driving | `#pm-open-driving` | `#pm-panel-driving` | DRIVING |
 | Display | `#pm-open-display` | `#pm-panel-display` | DISPLAY |
-| Steering & Assists | — | `#advanced` | STEERING & ASSISTS |
+| Steering & Assists | `#pm-advanced` | `#advanced` | STEERING & ASSISTS |
 | Music & Sound | `#pm-audio` | `#audioset` | MUSIC & SOUND |
 
 Back pops to the Settings index; Back from the index returns to the title.
@@ -201,30 +202,84 @@ points, fastest-lap point and dropped scores; and add classics. Next opens the
 season variant of Race Settings. Qualifying grid was disabled in the observed
 state. No race was started.
 
-### Garage (`#carsetup` / `#customize`) — partial
+### Garage (`#carsetup` / `#customize`)
 
-Garage is reachable from the title or any `YOUR CAR` action. Opening it
-discarded the Chrome tab before the category rail rendered, so no deep control
-or navigation claim is live-walk evidence. Only the source-derived structure
-in part B — `#carsetup`, `#cs-tabs` and `#cs-options` — is mapped here until a
-lighter walk succeeds.
+Garage is reachable from the title or any `YOUR CAR` action. `#cs-tabs`
+populates only after `#carsetup` opens.
 
-### In-race and end-of-session layers — partial
+| Tab | `data-cs-cat` |
+|---|---|
+| Team | `team` |
+| Engine | `engine` |
+| Aero | `aero` |
+| Susp | `suspension` |
+| Brakes | `brakes` |
+| Tyres | `tyres` |
+| ERS | `ers` |
+| Gearbox | `gearbox` |
+| Fuel | `fuel` |
+| Exhaust | `exhaust` |
+| Floor | `floor` |
+| Cockpit | `cockpit` |
+| Wheels | `wheels` |
+| Setup | `tune` |
+| Livery | `livery` |
 
-The walk reached `RACE!`, but local `127.0.0.1:3456` reported “this game needs
-WebGL2”; no race or pause menu could be opened on this box. Source establishes
-the following roots:
+The camera disclosure `#cs-cam` reveals `#cs-cam-panel`. Its car views are
+Hero, Front, Side, Rear and Top; wing framing also provides Wing Front and Wing
+Rear. `#cs-aero` toggles the live active-aero wing demonstration.
 
-- `#hud` and `#pausebtn`; pause opens `#pausemenu`.
-- `#pmsettings` can be used as the pause/title Settings sheet.
-- `#lighting`, `#camtune` and `#flyby` are tuner docks.
-- `#photo-controls` is the free-camera overlay.
-- `#quali`, `#standings` and `#results` cover session flow.
-- `#rotate-device` blocks portrait race presentation.
+### Pause and in-race layers
 
-The exact pause actions, quit path, nested pause chrome and all
-session-to-session edges remain intentionally undocumented until a successful
-in-race walk replaces this partial section.
+After `await __apex.race("monza")`, `#pausebtn` opens `#pausemenu`.
+
+| Control | ID | Result |
+|---|---|---|
+| Resume | `#pm-resume` | Return to the race |
+| Restart Race | `#pm-restart` | Restart the current race |
+| Settings… | `#pm-settings` | Open the same Settings index used from title |
+| How to Play… | `#pm-howto` | Open the help sheet |
+| Standings | `#pm-standings` | Open championship standings; hidden outside a championship |
+| Quit to Menu | `#pm-quit` | Leave the race for the title |
+
+The pause card also has Previous, Pause and Next track controls in its music
+strip. Pause Settings exposes the same Controls, Driving, Display, Steering &
+Assists and Music & Sound doors documented above.
+
+Other in-race roots are:
+
+- `#lighting`, `#camtune` and `#flyby` — visual tuner docks.
+- `#photo-controls` — free-camera overlay.
+- `#quali`, `#standings` and `#results` — session flow.
+- `#rotate-device` — portrait race blocker.
+
+### Mapping on a weak box
+
+The successful live Pages walk used `?apex=1` and set these preferences before
+the first page script (for example with Playwright `addInitScript`):
+
+```js
+localStorage.setItem("apex26.gfxBackend", "webgl2");
+localStorage.setItem("apex26.gfxPreset", JSON.stringify("low"));
+localStorage.setItem("apex26.resMode", JSON.stringify("low"));
+localStorage.setItem("apex26.forceMobileTier", "1");
+localStorage.setItem("apex26.debris", "0");
+localStorage.setItem("apex26.devApi", "1");
+```
+
+It then called `__apex.headless(true)` before opening Garage or starting the
+race. Headless mode lets runtime DOM populate while skipping the 3D draw path:
+
+```js
+__apex.headless(true);
+await __apex.race("monza");
+```
+
+This is a mapping technique, not a player setting or evidence of a product
+defect. It freezes the canvas, so disable headless mode and await a present
+before any screenshot or pixel assertion. Explicit `webgl2` avoids a deferred
+backend claim on a weak box, but cannot manufacture WebGL2 when the browser has
+no context.
 
 ## B. DOM layer and ID inventory
 
@@ -282,6 +337,12 @@ screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#photo-controls`,
 | `#pausebtn` | race chrome | Opens `#pausemenu` |
 | `#hud-restore` | race chrome | Restores a hidden HUD |
 | `#dlg-pause` | heading | Pause dialog label |
+| `#pm-resume` | pause action | Resume the current race |
+| `#pm-restart` | pause action | Restart the current race |
+| `#pm-settings` | pause action | Open the shared Settings sheet |
+| `#pm-howto` | pause action | Open How to Play |
+| `#pm-standings` | pause action | Championship-only standings |
+| `#pm-quit` | pause action | Quit to the title |
 | `#photo-controls` | overlay | Click-through free-camera controls |
 
 ### Title, Settings and help IDs
@@ -314,7 +375,7 @@ screen/region roots are `#lighting`, `#camtune`, `#flyby`, `#photo-controls`,
 | `#career` | `#cr-inner`, `#cr-body`, `#cr-left`, `#cr-right` |
 | Career dialogs | `#career-offers`, `#career-guide`, `#career-history` |
 | `#vsfriend` | `#vsfriend-inner`, `#vs-body` |
-| `#carsetup` | `#cs-inner`, `#cs-body`, `#cs-tabs`, `#cs-options` |
+| `#carsetup` | `#cs-inner`, `#cs-body`, `#cs-tabs`, `#cs-options`, `#cs-cam`, `#cs-cam-panel`, `#cs-aero` |
 | `#customize` | `#cz-body` |
 
 ### Tuner and data IDs
