@@ -2906,6 +2906,7 @@ const G = {
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
   openCareerSlots: (...a) => openCareerSlots(...a),
+  openDailyPicker: () => openTimeTrial(true),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   // The stateless-draw round, resolved EXACTLY as armReliability() does: the
@@ -8360,14 +8361,18 @@ if ($("mb-vs")) $("mb-vs").onclick = () => {
   ensureNet().then((ok) => { if (ok) netLobby.open(); });
   if (soundOn) GameAudio.uiSelect();
 };
-$("mb-tt").onclick = () => {
+function openTimeTrial(selectDaily) {
   setFlow("gp"); session = "tt";
-  restoreFreePlaySelection();
+  if (selectDaily) daily.select();
+  else restoreFreePlaySelection();
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
-};
+  // Daily selection already names the exact circuit/weather/time. Do not first
+  // arm a free-play scene that is immediately discarded.
+  if (!selectDaily) scheduleFlybyTrack(true);
+}
+$("mb-tt").onclick = () => openTimeTrial(false);
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
   // Replace any career alias with the repaired standalone save; finished stays readable.

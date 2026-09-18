@@ -28,8 +28,10 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const DEBRIS_SRC = readFileSync(join(ROOT, "js/physics/debris-world.js"), "utf8");
 
 // The module declares `const RaceControl`, which lands in the context's global
 // LEXICAL scope rather than on the global object — so it is read back by
@@ -378,6 +380,15 @@ test("one scraping car's settled debris can call a safety car but never a red fl
   assert.equal(rc.info().level, 3);
   assert.equal(rc.info().label, "SAFETY CAR");
   assert.equal(rc.takeRestart(), false);
+});
+
+test("RED eligibility counts attributed shards, never source-less furniture", () => {
+  const src = fnSource(DEBRIS_SRC, "function redHazardTotal(sourceCount, sourcedTotal)");
+  const calc = new Function(src + ";return redHazardTotal;");
+  const redTotal = calc();
+  assert.equal(redTotal(1, 18), 0, "one source cannot make a pile-up");
+  assert.equal(redTotal(2, 7), 7, "two source cars qualify only their seven attributed shards");
+  assert.notEqual(redTotal(2, 7), 20, "thirteen cones/panels in total cannot pad seven shards to RED_MIN");
 });
 
 test("the red procedure: stopping, held, then exactly ONE restart request and a re-arm hold", () => {
