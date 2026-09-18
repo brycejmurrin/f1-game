@@ -106,6 +106,31 @@ test("parked tracks-visual lives under tests/manual and is never a gate", () => 
     "package.json must not expose test:visual while baselines are absent");
 });
 
+test("no rule is dead: each matches a tracked path, and names a test that exists", () => {
+  // The inverse of the orphan check below, and the half the tree move broke.
+  // Three rules pointed where their file no longer was: the track-maps module's
+  // old js/track/ home, slider-effect's old tools/ root home, and a reason
+  // naming a presets.test.mjs that has never existed (presets.spec.js is the
+  // STEERING presets; the lighting suite is light-presets.test.mjs). A dead rule
+  // is silent: it selects nothing, so the routing it was written to guarantee
+  // simply stops happening and every run still looks green. Checked against
+  // `git ls-files` rather than the manifest because most rules name tools/,
+  // tests/, css/ or docs/ paths the manifest never lists.
+  const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }).trim().split("\n");
+  const dead = RULES.filter(([re]) => !tracked.some((f) => re.test(f))).map(([re]) => String(re));
+  assert.deepEqual(dead, [],
+    "a pick-tests rule matches no file in the tree — re-point it at where the file went, or drop it");
+
+  const missing = [];
+  for (const [re, , reason] of RULES) {
+    for (const m of String(reason || "").matchAll(/([\w.-]+\.(?:test\.mjs|spec\.js))/g)) {
+      if (!tracked.some((f) => f.endsWith("/" + m[1]))) missing.push(`${re} names ${m[1]}`);
+    }
+  }
+  assert.deepEqual(missing, [],
+    "a rule's reason names a test file that does not exist — the routing it promises cannot be real");
+});
+
 test("every manifest file matches at least one pick-tests rule", () => {
   // The rules are path REGEXES and the tree is about to move
   // (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2). A file that moves out
@@ -173,9 +198,18 @@ test("a source file's own unit test is in a group that editing it selects", () =
     }
     return out;
   };
+  // A basename can COLLIDE without being a claim, and one does:
+  // tests/specs/presets.spec.js is the STEERING presets (RELAX/STANDARD/PRO,
+  // owned by js/input/steer-tuning.js, which has no same-named source file at
+  // all), not js/lighting/presets.js. Honouring that pairing put a rule in
+  // routing every lighting edit at the `input` BROWSER group, which guarded
+  // nothing it was meant to: the lighting suite is light-presets.test.mjs and
+  // already runs on the fast gate. A same-named file is a claim; a homonym in
+  // another domain is not, and the difference has to be written down somewhere.
+  const HOMONYMS = new Set(["js/lighting/presets.js"]);
   const bad = [];
   for (const src of walk("js")) {
-    if (src.includes("/vendor/")) continue;
+    if (src.includes("/vendor/") || HOMONYMS.has(src)) continue;
     const homes = home.get(path.basename(src, ".js"));
     if (!homes || !homes.length) continue;
     const sel = [...pick([src]).keys()];

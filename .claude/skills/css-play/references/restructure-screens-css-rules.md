@@ -67,9 +67,9 @@ in this repo, `css/components.css`:
 
 One class, fourteen contexts, zero variant classes. *Prevents:* class-family
 growth. **Measured:** Pico CSS ships a complete design system in **2,835 lines /
-16 classes / 251 custom properties**. This repo currently measures **7,833
-lines / 543 classes / 76 custom properties** (re-run the commands at the top
-of this file to refresh) — 33.9x the classes on 2.8x the lines with 0.3x the
+16 classes / 251 custom properties**. This repo measures **11,993 lines /
+565 classes / 142 custom properties** (2026-09-18; re-run the commands at the
+top of this file to refresh) — 35x the classes on 4.2x the lines with 0.6x the
 tokens. The ratio is inverted, and that is the whole finding.
 
 **9. Reject any CSS methodology that renames without reducing.** Require a
@@ -96,17 +96,25 @@ context overrides beats N variant classes.
 
 ## DOM size and height
 
-**13. Do NOT split a monolithic HTML file below ~1,400 body nodes.** Lighthouse
-warns at ~800 and errors at ~1,400; this shell currently measures 1,133 (re-run
-`grep -oE '<[a-zA-Z][a-zA-Z0-9-]*' index.html | wc -l` — it was ~969 when this
-rule was written, still comfortably under the 1,400 error line, so the
-conclusion below is unaffected by the drift). **`display:none` subtrees are not
-in the render tree at all** — they cost parse time and memory, never frames.
+**13. Do not split a monolithic HTML file on node count alone — but this shell
+has now crossed the line it used to sit under.** Lighthouse warns at ~800 body
+nodes and errors at ~1,400; the shell measured ~969 when this rule was written,
+1,133 at the last refresh, and **1,902 on 2026-09-18** (re-run
+`grep -oE '<[a-zA-Z][a-zA-Z0-9-]*' index.html | wc -l`). The original argument
+was "comfortably under the error line, so leave it alone"; that premise is
+gone, and the conclusion has to be re-argued rather than restated.
+
+What has NOT changed is the reasoning that made the rule worth having.
+**`display:none` subtrees are not in the render tree at all** — they cost parse
+time and memory, never frames, so the Lighthouse threshold is a proxy for a
+cost this shell mostly does not pay. On GitHub Pages, fetch-and-inject partials
+still cost an RTT per screen and still break `sw.js`, whose precache is derived
+from the shell's own script tags. So the answer is probably still "leave it
+alone" — but say so on the measurement, not on a stale number, and bring a
+parse-time or memory figure if you want to argue either way.
 *Prevents:* a large cross-cutting refactor bought with a benchmark nobody ran.
-On GitHub Pages, fetch-and-inject partials additionally cost an RTT per screen
-and break `sw.js`, whose precache is derived from the shell's own script tags.
-**Report "leave it alone" when that is the answer** — it usually is. The real
-cost here is CSS selector complexity (543 classes), not node count.
+The dominant cost here is still CSS selector complexity (565 classes), not node
+count.
 
 **14. Express height responsiveness as at most TWO breakpoints, resolved once
 into a single `data-density` attribute.** *Prevents:* N media queries asking the
@@ -163,7 +171,7 @@ entries there — that test is how you prove the count went down.
 - **Fetched HTML partials on a static host** — commonly proposed, actively
   harmful here (RTT per screen, breaks the sw.js precache seed).
 - **Tailwind / Open Props / any token package** — all require a build step or
-  duplicate the 102 tokens this repo already has, and would fight
+  duplicate the 142 tokens this repo already has, and would fight
   `tests/unit/css-tokens.test.mjs`, which asserts every token has a consumer.
 
 ---

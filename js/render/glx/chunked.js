@@ -683,7 +683,14 @@ const GLXChunked = (function () {
           }
         }
       } finally {
-        gl.depthFunc(gl.LESS);
+        // LEQUAL, not LESS — this restores the CONTEXT BASELINE (glx.js sets
+        // LEQUAL once at init and nothing resets it per frame), and the sky is
+        // a fullscreen triangle at depth exactly 1.0 drawn AFTER the opaque
+        // pass, against a depth buffer cleared to 1.0. Under LESS it fails its
+        // own test and the sky goes black for every frame after the first
+        // occlusion pass. Only reachable with apex26.occlusionCull=1, which
+        // ships OFF — which is why nothing caught it.
+        gl.depthFunc(gl.LEQUAL);
         gl.colorMask(true, true, true, true);
         setDepthMask(true);
         if (prevProg) gl.useProgram(prevProg);

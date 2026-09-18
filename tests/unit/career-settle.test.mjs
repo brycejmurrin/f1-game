@@ -39,6 +39,9 @@ function load() {
     },
     Teams: {
       POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+      // Mirrors js/data/teams.js: the predicate every field walk uses to keep
+      // MY TEAM and LEGENDS out of the championship (career-legends.test.mjs).
+      isReal: (t) => !!t && !t.custom && !t.legends,
       LIST: [
         { id: "custom", tier: 2, custom: true, color: 0xff2222,
           drivers: [{ name: "You", code: "YOU", num: 99 }] },
@@ -142,6 +145,7 @@ function loadDriver(ratings, opts = {}) {
     },
     Teams: {
       POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+      isReal: (t) => !!t && !t.custom && !t.legends,   // mirrors js/data/teams.js
       // A real spread of tiers so makeOffers() has a ladder to draw from, each
       // with two seats and a `name` (rolloverMarket reads it when it records a
       // swap — parked here, but present so a future change does not NPE).
@@ -302,6 +306,7 @@ function loadWithSeason(n) {
     },
     Teams: {
       POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+      isReal: (t) => !!t && !t.custom && !t.legends,   // mirrors js/data/teams.js
       LIST: [
         { id: "custom", tier: 2, custom: true, color: 0xff2222,
           drivers: [{ name: "You", code: "YOU", num: 99 }] },

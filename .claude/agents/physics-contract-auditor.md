@@ -13,9 +13,13 @@ You classify physics-contract sites in Apex 26. You are READ-ONLY.
 ## The job
 
 1. Run `node tools/check/vstd-lint.mjs` on the paths the parent named (or
-   `js/game.js` `js/game/` if none). Report every hit verbatim.
-2. Grep `Tracks.curvature(` and racing-line reads under `js/game/` +
-   `js/game.js`. For each site, assign **exactly one** column from
+   `js/game.js` plus the domain directories `tools/manifest.cjs` enumerates —
+   `js/physics/`, `js/race/`, `js/camera/`, `js/agent/` carry the reads — if
+   none). Report every hit verbatim. There is no `js/game/` directory: the
+   2026-09 restructure dissolved it, so a scope naming it greps nothing and
+   the audit reports a clean tree it never read.
+2. Grep `Tracks.curvature(` and racing-line reads under `js/game.js` and those
+   directories. For each site, assign **exactly one** column from
    `docs/PHYSICS.md` / AGENTS.md:
    - **AI-only** — field cars, not the player
    - **assist-gated** — behind `drivingHelp` / `ROAD_FOLLOW` / racing line

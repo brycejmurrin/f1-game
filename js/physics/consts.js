@@ -58,7 +58,11 @@ window.PhysicsConsts = {
   OT_MIN_SPEED: 15,    // m/s (a vStd() threshold) — no overtake at crawl speed
   OFF_GRIP: 0.42,      // fraction of tarmac lateral grip on grass/gravel
 
-  ASSIST_KUS: 0.0008,  // s²/m — speed² term in the DRIVING-HELP steer assist so
+  // s²/m. The speed² term in the DRIVING-HELP steer assist, so the help grows
+  // with speed rather than staying a constant nudge: it reads as an effective
+  // wheelbase (WHEELBASE + ASSIST_KUS*v², game.js's assistDelta), 2.6x stronger
+  // at 80 m/s than at rest. Assist OFF is the shipped default.
+  ASSIST_KUS: 0.0008,
 
   // Gain on the RACING LINE assist's pure-pursuit steer term (see the assist block
   // in updateCar). 1 = textbook pursuit — reach the line in exactly one look-ahead
@@ -114,8 +118,14 @@ window.PhysicsConsts = {
   WHEEL_STEER_VIS: 0.5,  // rad of visible front-wheel steer at full lock
 
   GRASS_V: 18,         // crawl speed on grass
-  KERB_SHAKE: 0.22,    // sustained kerb rumble trauma (was inline 0.3): amt =
-  KERB_CUE_HOLD: 0.10, // s — bridges the ~20 Hz per-node flicker of the raw
+  // Sustained kerb rumble trauma (was inline 0.3): the FLOOR the camera shake
+  // is held at for as long as the cue hold below is running, so riding a kerb
+  // is one continuous rumble rather than a per-node re-arm.
+  KERB_SHAKE: 0.22,
+  // s — bridges the ~20 Hz per-node flicker of the raw TrackMesh.onKerb flag
+  // (a ~4 m node lookup, so it strobes at speed while the car straddles the
+  // kerb line): rumble, shake and haptics run off this sticky hold instead.
+  KERB_CUE_HOLD: 0.10,
 
   DEPLOY_A: 3.0,       // extra accel from electric deploy
   TAPER_LO: 41, TAPER_HI: 53,  // deploy tapers to 0 across this speed band

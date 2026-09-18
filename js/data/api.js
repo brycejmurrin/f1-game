@@ -167,7 +167,9 @@ const F1API = (function () {
     if (/\/car_data/i.test(noQ)) return "car_data";
     if (/\/location/i.test(noQ)) return "location";
     if (/\/stints/i.test(noQ)) return "stints";
-    if (/\/pits/i.test(noQ)) return "pits";
+    // `/pit?session_key=…` is the real OpenF1 path (pits() below); the old
+    // /\/pits/ never matched it, so every pit fetch logged under the generic tail.
+    if (/\/pits?(\/|$)/i.test(noQ)) return "pits";
     if (/\/weather/i.test(noQ)) return "weather";
     if (/\d{4}\.json$/i.test(noQ)) return "schedule";
     const last = noQ.split("/").filter(Boolean).pop() || "api";

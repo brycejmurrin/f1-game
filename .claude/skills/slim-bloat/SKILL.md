@@ -13,8 +13,12 @@ quirk — the measured list is [references/do-not.md](references/do-not.md).
 
 ```sh
 node tools/check/bloat-scan.mjs --json              # size + ratchet slack
-node tools/check/extract-module.mjs js/game.js 100 180   # analyse free refs
+node tools/check/extract-module.mjs js/game.js 181 200   # analyse free refs
 ```
+
+The line range must bracket WHOLE statements — it is parsed, not sliced, so a
+range that opens mid-function exits 1 on a bare `SyntaxError` that reads like a
+broken file rather than a badly chosen range.
 
 Spawn `bloat-auditor` with a **named scope** (one file, one skill, or
 `HEAD` / last-touched). It returns `BLOAT` rows only. The parent edits and

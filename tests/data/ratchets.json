@@ -8,11 +8,11 @@
       "topLets": 157
     },
     "js/agent/apex.js": {
-      "lines": 3138,
-      "codeLines": 2213
+      "lines": 3128,
+      "codeLines": 2207
     },
     "js/agent/agentview.js": {
-      "lines": 2468
+      "lines": 2485
     },
     "js/car/car3d.js": {
       "lines": 4137
@@ -27,7 +27,7 @@
       "lines": 2684
     },
     "js/net/lobby.js": {
-      "lines": 1759
+      "lines": 1761
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1

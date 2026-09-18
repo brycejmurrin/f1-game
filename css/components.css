@@ -1525,7 +1525,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-keys, #pm-pad) .set-row > div > button[data-armed] {
   border-color: var(--red);
   background: var(--plate-on);
-  box-shadow: var(--plate-on-glow);
 }
 :is(#pm-keys-section, #pm-pad-section) { margin-top: var(--gap); }
 :is(#pm-keys-reset, #pm-pad-reset):disabled { opacity: 0.45; cursor: default; }

@@ -25,7 +25,7 @@ localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the
 LIGHTING TUNER drops the current track/tod/weather back to shipped. Legacy
 `"*"` profiles may still win; clear that key if a global override sticks.
 
-**One condition, all 40 circuits.** `__apex.lightCopy()` spreads knobs tuned
+**One condition, all 52 circuits.** `__apex.lightCopy()` spreads knobs tuned
 here (merged); `lightCopy("look")` sends every live value. Both persist and
 return `undo` — `lightCopy({undo})` reverts the fan-out.
 

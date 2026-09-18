@@ -10,8 +10,11 @@ There is **no option called "medium."** Real ids include `standard` (0-cost
 baseline), `regen_plus`, `harvest`, `split_deploy`, `mgu_k_max`, `deploy`,
 `thermal_max`, `torque_fill`, `overtake_focus`, `race_mode`, `full_attack`,
 `overcharge`, `supercapacitor`, `harvest_max`, `conduit_twin`, `burst_map`,
-plus one `SIGNATURE` clone per team (`sig_<team>_ers`, cost/stat-identical to
-its `equivalent`). Do not invent an id — grep `js/car/parts.js`, or point the
+plus one `SIGNATURE` clone per team, cost/stat-identical to its `equivalent`.
+Signature ids are NOT a `sig_<team>_<category>` formula — they are named for
+the thing (`sig_audi_quattro`, `sig_alpine_boost`), and the team segment is not
+always the team id (`sig_rb_street`, `sig_aston_tunnel`).
+Do not invent an id — grep `js/car/parts.js`, or point the
 player at `cost`/`desc` ("cheapest recovery-biased option") instead of a name.
 
 `Parts.ersProfile` only sets the 0..1 axes. Battery dynamics
@@ -61,13 +64,17 @@ resolution.
    list and the walk nests team → paint → parts → view → framing, cheapest
    innermost:
    ```sh
-   node tools/shot/garage-angles.mjs --team=ferrari,mclaren --parts=factory,stock \
-     --livery=default --spine-side=logo,duo --views=hero,side --zoom=0,8 --dry-run
+   node tools/shot/garage-angles.mjs --team=ferrari,mclaren --part.engine=all \
+     --livery=default --spine-side=logo,duo --views=hero,side --zoom=0,8 --plan
    ```
-   `--dry-run` prints the matrix and exits before Chromium — do that first, the
-   product multiplies fast. `--parts` takes `current` / `stock` / `factory` /
-   `cat:opt+cat:opt`; ids are checked against `isOptionAvailable` for the team
-   being shot, because a part locked to another team resolves to the DEFAULT
+   `--plan` prints the matrix as JSON and exits before Chromium — do that
+   first, the product multiplies fast. (It is `--plan`, not `--dry-run`: the
+   parser takes any unknown `--x=y` as a livery-field AXIS, so a misremembered
+   flag does not error, it silently adds a dimension and then launches.)
+   Parts are `--part.<category>=<id>[,<id>]`, one flag per category, with
+   `--part.<category>=all` expanding to the catalog; ids are checked against
+   `isOptionAvailable` for the team being shot, because a part locked to
+   another team resolves to the DEFAULT
    silently (the trap that made an early audit report 100+ dead options).
    A `--spine-side` design is applied on top of the `--livery` it is crossed
    with, so a design can be seen on every paint job, not just the team default.

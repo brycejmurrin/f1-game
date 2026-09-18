@@ -114,7 +114,7 @@ through the merge path above.
 
 3. **Review + syntax-check:**
    ```sh
-   git --no-pager diff js/lighting/presets.js index.html version.json
+   git --no-pager diff js/lighting/presets.js
    node --check js/lighting/presets.js
    ```
    Every key should look like `track|tod|weather`. A typo'd knob id is
@@ -124,7 +124,7 @@ through the merge path above.
 
 5. **Commit + push** to the active feature branch (never `main`):
    ```sh
-   git add js/lighting/presets.js index.html version.json
+   git add js/lighting/presets.js
    git commit -m "Bake lighting presets: <which tracks/conditions>"
    git push -u origin <dev-branch>
    ```

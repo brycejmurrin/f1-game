@@ -6,9 +6,12 @@ alwaysApply: false
 
 # WGX (WebGPU) — loads with js/render/webgpu/
 
-- Opt-in via `apex26.gfxBackend=webgpu`; GLX is the default fallback. The
-  soft-adapter gate refuses Dawn/SwiftShader or empty adapter info unless
-  `apex26.gfxWgxAllowSoftware=1`, so players get GLX rather than a white canvas.
+- Opt-in via `apex26.gfxBackend=webgpu`. TLX (three.js) is the DEFAULT when the
+  key is unset; GLX is the explicit `webgl2` pick and the fallback every
+  backend failure lands on. Software / headless adapters (Dawn, SwiftShader,
+  empty adapter info) now BOOT WGX at MSAA 1 behind the 2D soft-present blit —
+  refusing used to bind GLX silently while SETTINGS still read WEBGPU.
+  `apex26.gfxWgxAllowSoftware` is a legacy no-op that six tools still set.
 - Gate every WGSL or pipeline edit with `node tools/gfx/wgx-validate.mjs`
   (~5 s, real Dawn WGSL + pipeline validation in-container; never ship
   "read-verified" WGSL) plus `tests/unit/webgpu-lifecycle.test.mjs` and

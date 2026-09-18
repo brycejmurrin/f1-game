@@ -241,7 +241,7 @@ const CarDraw = (function () {
         && solo === (deps.isTimeTrial() || deps.isQuali());
       const field = [];
       Teams.LIST.forEach((team, ti) => {
-        if (team.custom && ti !== teamPick) return;
+        if (!Teams.isReal(team) && ti !== teamPick) return;
         Career.gridDrivers(team).forEach((seat, di) => {
           const d = Career.driverOverride(team.id, di) || seat;
           const c = { team, num: d.num, isPlayer: ti === teamPick && di === driverPick };

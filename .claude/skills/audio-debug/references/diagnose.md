@@ -36,8 +36,9 @@ During a race `#soundbtn` is **hidden**. Open pause → MUSIC & SOUND
 
 | Control | DOM ids | Effect |
 |---|---|---|
-| Music ON/OFF | `#as-music-on` / `#as-music-off` | `setMusicEnabled` — soundtrack only |
-| SFX ON/OFF | `#as-sound-on` / `#as-sound-off` | `setSfxEnabled` — engine + effects only |
+| Music ON/OFF | `#as-music-sel` (+ `#as-music-prev` / `-next`) | `setMusicEnabled` — soundtrack only |
+| SFX ON/OFF | `#as-sound-sel` (+ `#as-sound-prev` / `-next`) | `setSfxEnabled` — engine + effects only |
+| Volumes | `#as-mvol` / `#as-svol` | `setMusicVolume` / `setSfxVolume` |
 
 Turning **music** off and expecting silence is the common mistake — the
 engine idle still hums on the **sfx** bus. That is correct.

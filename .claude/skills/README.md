@@ -5,7 +5,8 @@ from its `description`, or via `/<name>`), grounded in `__apex`,
 `tools/track/verify-track.cjs`, and `npm run test:*` groups.
 
 **A skill is when/how, not the command.** The CLI lives under `tools/`. Ten
-CLIs are pinned as `apex_*` MCP tools; most are not. Full map (three MCP
+CLIs are pinned as `apex_*` MCP tools (eleven tools — `apex_garage` is a
+session over one of them); most are not. Full map (three MCP
 servers, wrap table, never-wrap): [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md).
 
 Descriptions say **when** to load the skill; bodies carry the workflow and
@@ -68,5 +69,11 @@ whole-UI review → survey-ui-matrix; a single layout bug → ui-menu-a11y;
 canvas/3D shots → playwright-probe; restructure decisions → css-play; a new
 lighting knob across backends → `../../docs/ARCHITECTURE.md` §Cross-backend
 parity.
+
+Subagents (`../agents/`) take the noisy jobs a skill hands off: **verify-agent**
+(a read-only `verify-change --fast` verdict; `--base <ref>` answers "was it
+already red?"), **bloat-auditor** (BLOAT rows for slim-bloat),
+**deploy-research** (public web / live `version.json`), **track-surveyor** (one
+circuit's def + scenery pair), **physics-contract-auditor** (curvature columns).
 
 See individual `SKILL.md` files under this directory for full workflows.

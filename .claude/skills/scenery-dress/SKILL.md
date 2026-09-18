@@ -5,7 +5,7 @@ description: Use when the user asks to add/edit track scenery, dress a circuit, 
 
 # Dress a circuit's scenery
 
-`buildProps` (`js/track/scenery-*.js`, orchestrated by `js/track/tracks.js`;
+`buildProps` (`js/track/scenery/*.js`, orchestrated by `js/track/tracks.js`;
 the 112-member `api` surface is frozen by
 `tests/unit/scenery-api-contract.test.mjs`) calls `def.scenery(api)` then
 merges one mesh. Full reference: `docs/SCENERY-API.md`.
@@ -19,6 +19,12 @@ Every helper takes `(k, side, dist, …)`:
 - `s` — lap fraction `0 → 1` where helpers take it.
 
 **Forgetting `out` is the #1 crash** — destructure it from `api` first.
+
+`K(s)` is AUTHORED-frame: pass it straight through, never pre-shift it. On a
+shifted circuit two traps are open — a wrapped helper called inside an
+`along()` callback lands a whole `_sceneryShift` away, and `bakedModel` never
+places at all. Read [references/rules.md](references/rules.md) §Frames before
+placing on a circuit with `sceneryStartFrac` or `reverse`.
 
 ## Helper families
 

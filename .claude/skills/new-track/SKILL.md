@@ -8,8 +8,9 @@ description: Use when the user asks to add a track/circuit, edit Monza/Spa/etc. 
 Each circuit is a self-contained IIFE in `js/circuits/<id>.js` that pushes a plain
 data object onto the global `window.TrackDefs` list — **the def is the single home
 of everything about that circuit**: its real centreline (`path`), curated markings
-(`sectors`/`turns`), dressing rows (`barrier`, `furniture`, `kit`, `standSet`,
-`cityStyle`) and its scenery callback. The engine (`js/track/tracks.js`) reads
+(`sectors`/`turns`) and dressing rows (`barrier`, `furniture`, `kit`,
+`standSet`, `cityStyle`); its `scenery(api)` closure is the second file of the
+pair, `js/circuits/scenery/<id>.js`. The engine (`js/track/tracks.js`) reads
 `TrackDefs`, builds a Catmull-Rom spline from `path` (a def without one is a build
 error naming the circuit — there is no hand-authored fallback), and extrudes the
 road, terrain, and prop meshes. **Track files load before `js/track/tracks.js`** in
@@ -58,10 +59,15 @@ road, terrain, and prop meshes. **Track files load before `js/track/tracks.js`**
     bridges:   [{ s: 0.5, halfM: 12, rise: 6 }],   // figure-8 overpass (terrain stays flat under it)
     elevations:[{ s: 0.3, halfM: 40, rise: 8 }],   // real terrain bump (terrain follows)
 
-    scenery: function (api) { /* see the scenery-dress skill */ }
   });
 })();
 ```
+
+The dressing is NOT a def key. It is a second file — the `scenery(api)` closure
+lives in `js/circuits/scenery/<id>.js` as
+`(window.TrackScenery = window.TrackScenery || {})["<id>"] = function (api) {…}`
+and is fetched per build (`LAZY_SCENERY` in `tools/manifest.cjs`). A circuit is
+a PAIR of files; see the scenery-dress skill for the closure itself.
 
 Coordinates are +Y up, arc position `s` in metres (0 → `track.total`), lateral
 `x` in metres (+ = right of centreline). Orient a trace with `reverse` /

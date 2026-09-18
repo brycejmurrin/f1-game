@@ -128,13 +128,18 @@ function loadCareerUi(careerOpts = {}) {
     armConfirm: (btn, txt, act) => { act(); return true; },
   };
   const sb = sandbox(dom, {
-    Career, Teams: { LIST: TEAMS, POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1] },
+    Career,
+    Teams: { LIST: TEAMS, POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+             // Mirrors js/data/teams.js (see career-legends.test.mjs).
+             isReal: (t) => !!t && !t.custom && !t.legends },
     DriverRatings: { get: () => ({ pace: 70, craft: 60 }), AXES: ["pace"] },
     Parts: { CATALOG: [], getCost: () => (careerOpts.fitted != null ? careerOpts.fitted : 0) },
     Tracks: { SEASON: [{ name: "Bahrain", country: "BHR" }, { name: "Jeddah", country: "KSA" },
                        { name: "Melbourne", country: "AUS" }, { name: "Suzuka", country: "JPN" }] },
     GameStore: { seasonDriverId: (t, i) => t + ":" + i },
-    SeasonCal: { hasProgress: () => false, rounds: () => 24 },
+    // resume() repairs a career alias and sanitises the round; career-ui's
+    // return-to-menu goes through it now, as game.js always did.
+    SeasonCal: { hasProgress: () => false, rounds: () => 24, resume: (s) => s },
     Reliability: { REASONS: ["engine"], TIER_RISK: [0.02, 0.06] },
     PhysicsConsts: { DIFF: { EASY: 1 } },
   });
@@ -349,7 +354,7 @@ function loadSetupUi() {
     Parts: { STAT_KEYS: [{ key: "speed", label: "SPEED" }], displayStat: (x) => x,
              getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), CATALOG: [], BUDGET: 780,
              getCost: () => 0, isOptionAvailable: () => true, DEFAULTS: {}, getFactorySetup: () => ({}) },
-    Teams: { LIST: TEAMS }, Car3D: { FINISH_SURFACE: { satin: {}, chrome: {} } },
+    Teams: { LIST: TEAMS, isReal: (t) => !!t && !t.custom && !t.legends }, Car3D: { FINISH_SURFACE: { satin: {}, chrome: {} } },
     SetupTune: { FIELDS: [], RANGE: {}, get: () => ({ rideR: 60, rideF: 25, brakeBias: 56 }), set() {}, reset() {}, isDefault: () => true, mods: () => null, rake: () => 0 },
     LiveryTex: { NUM_FONT_IDS: ["default", "block"], SPONSOR_PACK_IDS: ["default", "clean"] },
     M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },

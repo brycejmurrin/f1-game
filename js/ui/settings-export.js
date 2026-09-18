@@ -75,7 +75,7 @@ const SPEC = [
   // phone is right on its FIRST paint, and js/ui/scale.js mirrors them. null is
   // the honest default to report — a stored number is the change.
   { k: "uiScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 109% on touch)" },
-  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%, or 124% on touch)" },
+  { k: "hudScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = 100%; touch defaults 100 hud / 109 ui, scale.js scaleDefault)" },
   { k: "hudBtnScale", lane: "json", group: "display", def: null, src: "js/ui/scale.js + css/tokens.css (null = follows hudScale)" },
   { k: "hudBtnOpacity", lane: "json", group: "display", def: null, src: "js/ui/scale.js (null = 100%)" },
   { k: "resMode", lane: "json", group: "display", def: (G) => (G && G.gfx && G.gfx.isMobile) ? "low" : "auto", src: "js/ui/scale.js (LOW on a touch device)" },

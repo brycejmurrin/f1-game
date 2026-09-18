@@ -573,7 +573,7 @@ jobs:
           # sweeps build circuits through tools/lib/track-build-vm.cjs and the
           # tools/track/ audits; a bare `tools/` made every CI/gen/ui tool edit
           # pay the 15-minute fleet rebuild for geometry it cannot move.
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/(track|lib)/|js/car/|js/game\.js$|js/game/debrisworld\.js$)' \
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/(track|lib)/|js/car/|js/game\.js$|js/physics/debris-world\.js$)' \
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SUITES_FILE"; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING SWEEPS: the diff touches track engine, circuit data, tools/track|lib or a sweep suite"
@@ -1142,12 +1142,12 @@ jobs:
             || run_all "could not read the gfx spec list out of package.json"
           echo "--- gfx specs ---"; cat "$SPECS_FILE"; echo "-----------------"
           # js/render/** is every backend (GLX, WGX, TLX, gltf, assets); the
-          # js/game/ files are the lighting/atmosphere/tuner modules whose
+          # js/lighting/ files are the lighting/atmosphere/tuner modules whose
           # numbers the lighting-ab / image-grade / tuner-grade specs pin.
           # The two playwright configs carry the launch flags this job depends
           # on, tests/helpers/ is what every spec boots through, and the
           # workflow file is here so an edit to THIS job runs it.
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/game/lighting[^/]*\.js$|js/game/track-lights\.js$|js/game/frame-lights\.js$|js/game/light-presets\.js$|js/game/atmosphere\.js$|js/game/tuner\.js$|playwright(\.gpu)?\.config\.js$|\.github/workflows/ci\.yml$|tests/helpers/)' \
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/lighting/|playwright(\.gpu)?\.config\.js$|\.github/workflows/ci\.yml$|tests/helpers/)' \
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SPECS_FILE"; then
             echo "renderer=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING RENDERER SPECS: the diff touches the renderer, its lighting modules, a gfx spec or the launch config"

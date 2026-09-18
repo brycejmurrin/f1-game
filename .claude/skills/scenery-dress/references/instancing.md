@@ -52,7 +52,7 @@ judging a `graph-parity` mismatch.
    measured reuse, and S2/S3 draw-path notes. If §6 already lists the emitter
    as landed, skip migration and run parity/reuse only.
 
-2. **Migrate one emitter** in `js/track/scenery-*.js` (or a circuit callback if
+2. **Migrate one emitter** in `js/track/scenery/*.js` (or a circuit callback if
    inline):
    - Record ops in `build(rec)` (`rec.box`, `rec.cyl`, …).
    - Call `ctx.instance(key, place, build, meta)` — the buildProps wrapper,

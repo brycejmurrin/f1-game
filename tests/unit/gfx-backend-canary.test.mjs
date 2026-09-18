@@ -4251,7 +4251,7 @@ test("selector car assets yield per driver, preserve simulation, and cancel stal
       { id: "a", drivers: [{ num: 1 }, { num: 2 }] },
       { id: "b", drivers: [{ num: 3 }] },
       { id: "custom", custom: true, drivers: [{ num: 4 }] }
-    ] };
+    ], isReal: (t) => !!t && !t.custom && !t.legends };   // mirrors js/data/teams.js
     const Career = { gridDrivers: t => t.drivers, driverOverride: (id, di) => id === "a" && di === 1 ? { num: 99 } : null };
     const calls = [], CamModes = { CAM_MODES: [{ id: "cockpit" }] };
     const Log = { info() {}, warn() {} }, performance = { now: () => 0 };

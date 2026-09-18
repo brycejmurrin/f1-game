@@ -1,15 +1,19 @@
 ---
 name: track-surveyor
-description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's js/circuits/<id>.js, and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
+description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's pair of files (js/circuits/<id>.js and js/circuits/scenery/<id>.js), and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
 model: inherit
 tools: Bash, Read, Grep, Glob, Edit
 is_background: true
 background: true
 ---
 
-You improve ONE assigned circuit in Apex 26. Your write access is exactly one
-file: `js/circuits/<id>.js` for the circuit you were given. Everything else is
-read-only.
+You improve ONE assigned circuit in Apex 26. Your write access is exactly that
+circuit's PAIR of files: the def `js/circuits/<id>.js` and its dressing closure
+`js/circuits/scenery/<id>.js`. Everything else is read-only.
+
+The pair matters: the `scenery(api)` callback was split out of the def, so the
+def alone carries no props. Scoped to the def only, a surveyor could measure a
+floating tree and not reach the line that places it.
 
 ## The loop
 
@@ -26,9 +30,16 @@ read-only.
    `groundY` / `scan` / `wallStats` are `__apex` hooks, not `agent.mjs`
    commands — use `node tools/shot/apex-eval.mjs <id> "a.groundY(…)"` if the
    survey table is not enough (also Chromium; still not a test group).
-3. Edit `js/circuits/<id>.js` only. Frac-keyed tables MUST respect
-   `def._sceneryShift` — consume via the compensated idiom (`bankingProfile`,
-   `buildCenterline`); a raw `frac` read places things 2/3 of a lap away.
+3. Edit the pair only — `js/circuits/<id>.js` (geometry, metadata, palette) and
+   `js/circuits/scenery/<id>.js` (the `scenery(api)` dressing). Frac-keyed
+   tables MUST respect `def._sceneryShift` — consume via the compensated idiom
+   (`bankingProfile`, `buildCenterline`); a raw `frac` read places things 2/3
+   of a lap away. In the closure, `K(s)` is authored-frame and passes straight
+   through — never pre-shift it. Two engine traps are open: an `along()`
+   callback is handed ENGINE-frame nodes that every `(k, side, …)` helper then
+   shifts AGAIN, and `bakedModel(id, k, …)` is wrapped with the `(k, side, …)`
+   arity so it never places. Do not emit through a wrapped helper inside an
+   `along()` callback, and report a `bakedModel` need to the parent.
 4. After EVERY edit:
    ```sh
    node tools/track/verify-track.cjs <id>

@@ -6,6 +6,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 import { apply, loadMoves, validate, sweep, splitSegmentMentions } from "../../tools/gen/move-tree.mjs";
 
 // Fixture comment markers are built at runtime so the docs-integrity comment
@@ -126,4 +128,22 @@ test("a missing source or an occupied target refuses before touching anything", 
     assert.throws(() => apply(root, [{ from: "js/zzfix/alpha.js", to: "js/zzfix/alphabet.js" }], { git: false, genShell: false }), /target exists/);
     assert.ok(fs.existsSync(path.join(root, "js/zzfix/alpha.js")));
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("the live MOVED table holds only real redirects", () => {
+  // MOVED exists so deploy.mjs can name the NEW path when another session's
+  // branch still edits the old one. Two shapes make an entry useless and both
+  // had accumulated: 46 rows mapping a path to ITSELF (a re-sweep re-recording
+  // files that never moved — the table's own comment calls that out at the
+  // tool level, but nothing checked the result), and 2 pointing at targets
+  // deleted since the move. A row that redirects nowhere is worse than absent:
+  // it reads as a record that the file moved.
+  const { MOVED } = createRequire(import.meta.url)("../../tools/manifest.cjs");
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+  const identity = Object.entries(MOVED).filter(([from, to]) => from === to).map(([from]) => from);
+  assert.deepEqual(identity, [], "a MOVED row maps a path to itself — drop it");
+  const gone = Object.entries(MOVED)
+    .filter(([, to]) => to && !fs.existsSync(path.join(ROOT, to)))
+    .map(([from, to]) => `${from} -> ${to}`);
+  assert.deepEqual(gone, [], "a MOVED row points at a file that no longer exists — drop it or re-point it");
 });

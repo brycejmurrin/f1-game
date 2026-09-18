@@ -59,7 +59,7 @@ function defs() {
 
 function loadPresets() {
   const ctx = vm.createContext({ window: {}, Math, JSON, Object, Array });
-  vm.runInContext(readFileSync(LP, "utf8"), ctx, { filename: "light-presets.js" });
+  vm.runInContext(readFileSync(LP, "utf8"), ctx, { filename: "presets.js" });
   return vm.runInContext("window.LightPresets", ctx);
 }
 
@@ -71,7 +71,7 @@ function loadPresets() {
 //
 // The tuner export is READ WITH vm, not JSON.parse: it is a JS assignment
 // carrying // comments that tell a human which block is which condition, and
-// running it is how loadPresets() already reads light-presets.js.
+// running it is how loadPresets() already reads js/lighting/presets.js.
 function readEdits(text, file) {
   const ctx = vm.createContext({ window: {} });
   try {
@@ -160,7 +160,7 @@ const merged = { ...shipped };
 let wrote = 0, knobs = 0;
 
 // Which ids a per-track key would FALL BACK to if it dropped a knob. The "*"
-// layers are what light-store.js resolves through before the per-condition map,
+// layers are what js/lighting/profiles.js resolves through before the per-condition map,
 // so a knob equal to its slider default is only safely droppable when no "*"
 // layer sets it — otherwise dropping it hands the condition the "*" value and
 // silently reverts a deliberate edit back to default. Matters now that a real

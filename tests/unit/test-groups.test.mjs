@@ -170,6 +170,19 @@ test("docs/TESTING.md's file counts match the files on disk", () => {
   }
 });
 
+test("the guards row's count is the size of the guards group", () => {
+  // "the 14 CROSS-FILE guards" outlived the group by three files, in three
+  // places at once (this row, deploy.mjs's comment, bash-guard.sh's) — a number
+  // repeated in prose is a number nobody re-measures. The row is the one copy
+  // that claims to BE the group's size, so it is the one pinned; the other two
+  // were rewritten to name the group instead of counting it.
+  const want = JSON.parse(read("tests/groups.json")).groups["test:guards"].files.length;
+  const m = /\| `guards` \| the (\d+) CROSS-FILE guards/.exec(read("docs/TESTING.md"));
+  assert.ok(m, "docs/TESTING.md's `guards` row no longer states its count");
+  assert.equal(Number(m[1]), want,
+    `docs/TESTING.md says ${m[1]} cross-file guards; tests/groups.json lists ${want}`);
+});
+
 test("the manual suites stay out of default discovery", () => {
   // tests/manual/ renders hundreds of SwiftShader frames and emits review
   // images. Letting it into the default run would take a 3-minute group to an
