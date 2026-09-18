@@ -4015,8 +4015,8 @@ function updateCar(c, dt, ranked) {
   } else c._bandNow = 0;
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
   // racing speed — humans used to keep race pace while the AI was capped.
-  // Cautions ship OFF (SettingsDefaults); a race with them disabled never
-  // hits lvl≥2. Fraction of pace-scaled top speed, so it rides
+  // Cautions default ON (RaceControl store default true); a race with them
+  // disabled never hits lvl≥2. Fraction of pace-scaled top speed, so it rides
   // OVERALL SPEED like the rest.
   // PIT LANE SPEED LIMIT. Modelled exactly like the caution cap below — a
   // ceiling the car is bled toward — because they are the same kind of rule and

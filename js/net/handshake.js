@@ -108,6 +108,8 @@ const NetHandshake = (function () {
         const sdp = NetSdp.unpack(raw.slice(2, 2 + n));
         if (!sdp) return CORRUPT;
         const payload = JSON.parse(dec().decode(raw.slice(2 + n)));
+        if (!payload || typeof payload !== "object" || Array.isArray(payload) ||
+            typeof payload.k !== "string") return CORRUPT;
         payload.s = sdp;
         return { ok: true, payload };
       }
@@ -296,12 +298,35 @@ const NetHandshake = (function () {
     } catch (e) { return null; }
   }
 
+  // Remove only the consumed signalling secret. Query parameters and any
+  // unrelated fragment state belong to the page that opened the invite and
+  // survive the history replacement.
+  function withoutInviteUrl(href) {
+    try {
+      const url = new URL(href != null ? String(href) : location.href);
+      const kept = String(url.hash || "").replace(/^#/, "").split("&")
+        .filter((part) => part && !/^vs=/.test(part));
+      url.hash = kept.join("&");
+      return url.href;
+    } catch (e) { return null; }
+  }
+
+  function consumeInviteUrl() {
+    try {
+      if (!inviteFromUrl() || typeof history === "undefined" || !history.replaceState) return false;
+      const next = withoutInviteUrl();
+      if (!next) return false;
+      history.replaceState(history.state, "", next);
+      return true;
+    } catch (e) { return false; }
+  }
+
   return {
     MAGIC,
     encodeCode, decodeCode, normaliseSdp,
     localBuild, metaBuild, checkBuild, waitForIce,
     createInvite, acceptInvite, acceptAnswer,
-    inviteUrl, inviteFromUrl,
+    inviteUrl, inviteFromUrl, withoutInviteUrl, consumeInviteUrl,
   };
 })();
 Object.freeze(NetHandshake);

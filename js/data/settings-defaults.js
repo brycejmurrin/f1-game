@@ -53,7 +53,6 @@ const SettingsDefaults = (function () {
     "tyreWear": "real",
     "raceGrid": "random",
     "drivingCoach": true,
-    "caution": false,
     // AUDIO (js/audio/panel.js)
     "volMusic": 0.6,
     "volSfx": 0.2,

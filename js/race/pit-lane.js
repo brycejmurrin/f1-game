@@ -690,7 +690,7 @@ const PitLane = (function () {
         // …AND WHAT WILL BE FITTED. The stop is booked by a gesture, and a
         // driver could not tell a wet stop from a slick stop until the wheels
         // were on. Armed beats the wear gate: a stop that IS called is shown.
-        const next = c.pitNext || pickFor(c);
+        const next = nextFor(c);
         // "BOX BOX" as the engineer says it (see the note in engineer.js): the
         // repeat is the call, and it reads as a radio instruction rather than
         // as a label on the screen.
@@ -1153,7 +1153,7 @@ const PitLane = (function () {
       const commitNow = () => {
         c.pitCommitT = 0; c.pitCommitted = true;
         arm(c, true);
-        const next = pickFor(c);
+        const next = nextFor(c);
         if (G.announce) G.announce("PIT ENTRY — LIMITER ON" + (next ? " — " + next.code : ""), 1.6, "race");
       };
       if (!inWindowOf(c)) {
@@ -1303,6 +1303,16 @@ const PitLane = (function () {
       }, null);
     }
 
+    // A selected compound is a preference, not permission to fit the wrong
+    // tread after the weather changes. Resolve it once for every surface that
+    // names or fits the set, so the entry radio, armed cue and crew agree.
+    function nextFor(c) {
+      const automatic = c && (c.local || c.pitNext) ? pickFor(c) : null;
+      const selected = c && c.pitNext;
+      if (!selected || !automatic) return selected || automatic;
+      return (selected.tread || 0) === (automatic.tread || 0) ? selected : automatic;
+    }
+
     // What a stop actually does. One place, so a player stop, an AI stop and a
     // test-driven stop cannot diverge.
     function serviceCar(c) {
@@ -1311,7 +1321,7 @@ const PitLane = (function () {
       // c.tyreOpt unconditionally — which is what this did — meant a player who
       // stopped in the rain bolted on another slick, the exact loop the AI's
       // weather rule exists to prevent.
-      const next = c.pitNext || (c.local ? pickFor(c) : null);
+      const next = nextFor(c);
       G.tyres.fit(c, next || (c.tyreOpt ? G.tyres.optionRecord(c.tyreOpt) : G.tyres.classRecord(c.tyreClass || "medium")));
       c.pitNext = null;
       // No banner here: this runs as the car STOPS, and "GO GO GO" at the start

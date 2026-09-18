@@ -215,7 +215,7 @@ test("the commitment gesture is deliberate to make and still possible to make", 
 
 // A live session whose track samples a constant half-width. `committing` is the
 // ONE place this module samples the track, so a counting stub proves that too.
-function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
+function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry" } = {}) {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, Float32Array });
   seedLog(ctx);
   ctx.window = ctx;
@@ -223,9 +223,15 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
   ctx.Tracks = { sample: (t, s2, out) => { samples++; out.hw = hw; return out; } };
   // Committing picks the set the crew will fit, which reaches both of these at
   // call time. Minimal stubs: the choice itself is tyre-model.test.mjs's job.
-  ctx.TyreModel = { treadFor: () => 0, classForTread: () => null, lifeLaps: () => 30,
-                    AI_CLASS: { medium: { life: 0.74 } } };
-  ctx.Parts = { CATALOG: [{ id: "tyres", options: [{ id: "medium", cost: 0 }] }] };
+  ctx.TyreModel = {
+    treadFor: (w) => w === "rain" ? 2 : 0,
+    classForTread: (t) => t === 2 ? "wet" : "medium",
+    lifeLaps: () => 30,
+    AI_CLASS: { medium: { life: 0.74 }, wet: { life: 0.72 } },
+  };
+  ctx.Parts = { CATALOG: [{ id: "tyres", options: [
+    { id: "medium", cost: 0 }, { id: "soft", cost: 0 }, { id: "wet", cost: 0 },
+  ] }] };
   // The AI's planner, for think(): the plan fires on its lap and not before.
   ctx.AiDrive = { pitNow: (x) => (x.wrongTread ? "weather" : x.wear >= 1 ? "worn" : x.lapsToStop <= 0 && x.stopsLeft > 0 ? "plan" : ""),
                   compoundFor: () => "medium", STRAT: { CAUTION_REACH: 6 } };
@@ -240,8 +246,14 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
   const Pl = vm.runInContext("PitLane", ctx);
   const track = { total, n: 1346, def: {} };
   const said = [];
+  const fitted = [];
+  const records = {
+    medium: { id: "medium", code: "M", life: 0.74, tread: 0 },
+    soft: { id: "soft", code: "S", life: 0.55, tread: 0 },
+    wet: { id: "wet", code: "W", life: 0.72, tread: 2 },
+  };
   const G = {
-    track, vTop: () => vTop, lapsTarget: 25, raceWeather: "dry",
+    track, vTop: () => vTop, lapsTarget: 25, raceWeather: weather,
     // The speedo's scale (vStd · 3.6, VMAX 72): PACE cancels, so a limit of
     // 22.2 m/s at this stub's vTop 60 still reads the painted 80 km/h. The cue
     // prints this, not raw m/s — see limitKphShown.
@@ -250,9 +262,9 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
     // spent() reads the CAR, not a constant: the cue's whole job is to stay
     // quiet on a fresh set and speak on a used one, and a stub that always
     // says 0 would let a broken cue pass every test below.
-    tyres: { on: () => true, spent: (car) => (car && car.tyreWear) || 0, fit: () => {},
-             classRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
-             optionRecord: () => ({ id: "m", code: "M", life: 0.74, tread: 0 }),
+    tyres: { on: () => true, spent: (car) => (car && car.tyreWear) || 0, fit: (_car, record) => fitted.push(record),
+             classRecord: (id) => records[id] || records.medium,
+             optionRecord: (o) => records[o.id] || records.medium,
              // How long a set lasts AT THE SETTING IN FORCE — what a strategy
              // plans against. The stub stands in for TyreModel's own, which
              // divides the nominal life by LEVELS[level]; this fixture runs at
@@ -269,7 +281,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386 } = {}) {
     x: hw * over * zone.side, offroad: false, wrongWay: false, rescueT: 0,
     tyre: { code: "M", tread: 0 }, pitState: "none",
   });
-  return { Pl, pits, zone, car, said, hw, G, samples: () => samples };
+  return { Pl, pits, zone, car, said, fitted, records, hw, G, samples: () => samples };
 }
 
 test("holding the line into the pits calls the stop", () => {
@@ -527,6 +539,21 @@ test("the armed cue names the compound the crew will fit", () => {
   // …and a stop that IS called is shown, whatever the wear gate thinks.
   c.tyreWear = 0;
   assert.equal(pits.cue(c).phase, "armed");
+});
+
+test("a weather change replaces a stale selected tread and every announcement names the fitted set", () => {
+  const { pits, car, said, fitted, records } = commitSession({ weather: "rain" });
+  const c = car(0.95);
+  c.pitNext = records.soft;                 // selected while the race was dry
+  pits.update(c, P.COMMIT_S + 0.1);
+  assert.match(said.at(-1), / — W$/, `entry radio must name the weather set: ${said.join(" | ")}`);
+  pits.serviceCar(c);
+  assert.equal(fitted.at(-1).code, "W", "a stale slick selection must not be fitted in rain");
+
+  const chosenWet = { id: "wet_alt", code: "WX", life: 0.6, tread: 2 };
+  c.pitNext = chosenWet;
+  pits.serviceCar(c);
+  assert.equal(fitted.at(-1), chosenWet, "a same-tread player selection remains authoritative");
 });
 
 test("the first stop is taught in three lines — the road, the line, the gate — each once", () => {
