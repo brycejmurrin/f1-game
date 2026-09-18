@@ -279,7 +279,10 @@ test('network status reports measured values and clear disconnected guidance', (
   G.netPlay.status = () => ({ active: false, reason: 'closed' }); assert.equal(api.network().connected, false);
 });
 test('ghost speed derives from recorded arc samples and refuses time outside the lap', () => {
-  const ctx = vm.createContext({ Log: { info() {}, warn() {} } });
+  const ctx = vm.createContext({
+    Log: { info() {}, warn() {} },
+    GameStore: { store: { get: () => null, write: () => ({ durable: true }), subscribe: () => () => {} } },
+  });
   vm.runInContext(readFileSync(new URL('../../js/car/ghost.js', import.meta.url), 'utf8'), ctx);
   const g = vm.runInContext('Ghost', ctx); assert.equal(g.speedAt(1), null);
   g.setTrack('test'); g.startLap(); for (let i=0;i<12;i++) g.record(i, 20*i, 0); g.finishLap(12);

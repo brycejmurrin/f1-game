@@ -42,6 +42,23 @@ const FlybySeq = (function () {
   // a crash — the unit test pins them against mesh.js.
   const POLE_BACK = 14, GRID_SPACING = 8, GRID_ROWS = 20;
 
+  /* HOW THE FLYBY IS RENDERED, not where it is pointed — and the reason those
+   * two live in the same file. The shots are VISTAS: a crane 190 m up looking
+   * down a 5.8 km circuit is nothing like a chase cam 8 m behind a car, so the
+   * cinematic renders with the far plane pushed out and the fog thinned, the
+   * way photo mode does.
+   *
+   * BOTH ENDS READ THESE. The live screen (js/game.js's flyby branch) and the
+   * EDITOR's preview (__apex.flybyCam, through dbgCam) used to pick their own:
+   * the preview got photo mode's 6000 m and 15 % fog, the live screen got
+   * gameplay's 900 m and 100 % fog, and the same shot came out clear in the
+   * editor and a wall of haze on the loading screen. Reported as "why does the
+   * loading flyby look way more foggy than what's shown in the editor" — it was
+   * not the lighting, it was the lens. One pair of numbers, so they cannot
+   * disagree again. */
+  const FAR = 6000;               // metres of far clip — a whole circuit, not a corner
+  const FOG = 0.15;               // × the session's fog density (photo mode's value)
+
   /** Props that a camera must not be inside. The registry also records ridges,
    *  bushes and sparse `structure` hulls whose `fill` says they are mostly air
    *  (a 56 m x 1.3 m "structure" at 5 % fill is a run of kerbing, not a wall);
@@ -473,7 +490,7 @@ const FlybySeq = (function () {
     landmarks, bounds, landmarkScore,
     anchorS, posePoint, cornerS,
     DEFAULT, EASE,
-    POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H,
+    POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG,
   };
 })();
 Object.freeze(FlybySeq);

@@ -1949,8 +1949,8 @@
           <button id="rs-duel-open" type="button" aria-haspopup="dialog" aria-controls="duel-picker"
                   aria-describedby="rs-duel-help"><span id="rs-duel-value">OFF</span><span aria-hidden="true">&rsaquo;</span></button>
         </div>
+        <p id="rs-duel-help" class="adv-help">One rival instead of a full grid, with his driver rating lifted. A practice benchmark, not a championship race.</p>
       </div>
-      <p id="rs-duel-help" class="adv-help">One rival instead of a full grid, with his driver rating lifted. A practice benchmark, not a championship race.</p>
       <div id="rs-line" class="set-row" role="group" aria-labelledby="rs-line-label">
         <span class="tune-label" id="rs-line-label">DRIVING LINE</span>
         <div>
@@ -2518,8 +2518,11 @@
      behind it is the live preview — every edit re-solves the sequence through
      __apex.flybyCam(u, editedShots) and parks the camera there, so the panel shows
      the real solver rather than a second copy of it. Rows are generated in
-     js/camera/flyby-panel.js from its own pose-field registry; COPY VALUES emits
-     `window.FlybyShots = [...]` for tools/gen/bake-flyby.mjs. -->
+     js/camera/flyby-panel.js from its own pose-field registry. Every edit is
+     SAVED (apex26.flybyShots) and the next race flies it — DONE used to close the
+     sheet and discard the lot. COPY VALUES still emits `window.FlybyShots = [...]`
+     for tools/gen/bake-flyby.mjs, which is how an edit becomes the shipped
+     default for everyone rather than for this browser. -->
 <div id="flyby" role="region" aria-label="Flyby shot editor" data-esc-close="fb-close" hidden>
   <div id="flyby-inner" class="sheet">
     <!-- #fb-rail mirrors #ct-rail: the wide-and-short RAIL layout in css/tuner.css
@@ -2552,9 +2555,9 @@
     <div id="fb-rows" class="pane" role="tabpanel"></div>
     <textarea id="fb-json" readonly hidden aria-label="Exported flyby shot list"></textarea>
     <div class="sheet-foot balanced-row">
-      <button id="fb-reset" title="Throw away every edit and reload the shipped DEFAULT shot list from js/camera/flyby-seq.js.">RESET</button>
+      <button id="fb-reset" title="Throw away every edit, here and saved, and go back to the shipped DEFAULT shot list from js/camera/flyby-seq.js.">RESET</button>
       <button id="fb-copy">COPY VALUES</button>
-      <button id="fb-close" class="bigbtn">DONE</button>
+      <button id="fb-close" class="bigbtn" title="Close the editor. Every edit is already saved — the next race flies these shots.">DONE</button>
     </div>
   </div>
 </div>

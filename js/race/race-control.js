@@ -83,7 +83,7 @@ const RaceControl = (function () {
     let restartWanted = false;   // one-shot: the red procedure has run its course
     // Last state broadcast to a guest, so only CHANGES are sent.
     let sent = "";
-    const savedCaution = store.get("caution", true);
+    const savedCaution = store.get("caution", false);
     let enabled = !(savedCaution === false || savedCaution === 0 || savedCaution === "0");
 
     function reset() {

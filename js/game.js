@@ -344,6 +344,12 @@ if (!gfx) {
     $("nogl").hidden = false; return;
   }
   gfx = GLX;
+  // Every path above converges here after GLX successfully attaches: an
+  // explicit WEBGL2 pick, claim-fail recovery, a canary first strike, or an
+  // alternate whose create() returned null. Publish what is actually drawing
+  // so SETTINGS and metrics never keep labelling the stored THREE/WGX pick.
+  try { sessionStorage.setItem("apex26.gfxBound", "webgl2"); } catch (_) { /* label stays at the pick */ }
+  try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no window/event surface */ }
   // Live tab, create() refused. Keep the pick and disarm the canary so a
   // refresh retries instead of reverting to WEBGL2. Jetsam during create()
   // never reaches here — the probe stays armed and the next boot reverts.
@@ -2309,6 +2315,16 @@ function flybyProgress() {
   return (loadingScreen && loadingScreen.progress) ? loadingScreen.progress() : 0;
 }
 
+// The shot list the FLYBY SHOT EDITOR saved, or null for the shipped sequence.
+// Read when a run STARTS, not per frame: solve() runs every frame and a store
+// miss parses JSON. flybyPanel owns the reading and the validation (it owns the
+// writing); this is the copy the render path is allowed to touch.
+let flybyShots = null;
+function reloadFlybyShots() {
+  try { flybyShots = flybyPanel.loadSaved(); }
+  catch (e) { flybyShots = null; Log.warn("game", "flyby shots did not load", e); }
+}
+
 // Keep one prepared track, never a cache of whole circuits. A generation
 // prevents late scenery downloads (including A -> B -> A) from committing.
 const _menuGate = { warm: 0, generation: 0, ready: "", track: null };
@@ -2906,6 +2922,7 @@ const G = {
   get careerSettlement() { return careerSettlement; },
   openCareer: (...a) => openCareer(...a),
   openCareerSlots: (...a) => openCareerSlots(...a),
+  openDailyPicker: () => openTimeTrial(true),
   get seasonMode() { return isChampionship(); },
   set seasonMode(v) { setFlow(v ? "season" : "gp"); },
   // The stateless-draw round, resolved EXACTLY as armReliability() does: the
@@ -3020,6 +3037,9 @@ const G = {
   get skyT() { return _skyT; }, set skyT(v) { _skyT = v; },
   get skyHold() { return _skyHold; }, set skyHold(v) { _skyHold = !!v; },
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
+  // The FLYBY SHOT EDITOR's saved list, or null for the shipped sequence.
+  // Read-only here: flybyPanel writes it, reloadFlybyShots() reads it back.
+  get flybyShots() { return flybyShots; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
   get fieldSectorBests() { return fieldSectorBests; },
@@ -3386,6 +3406,18 @@ function menuGridCars() {
 
 function raceIntro(go) {
   menuGridCars();
+  // LIGHT THE FLYBY WITH WHAT THE MENU CHOSE, BEFORE IT STARTS. run() fires `go`
+  // (startRace) "once the card is up", and startRace only reaches
+  // applyRaceSettings() after loadTrack() and makeCars() — so the whole cinematic
+  // played over a world nothing had lit for THIS session yet: pick dawn, watch a
+  // day loading screen. The TIME chip only calls scheduleFlybyTrack(), which
+  // rebuilds geometry and resolves no lighting at all. applyRaceSettings() is
+  // idempotent by construction (every lighting-slider tick re-runs it), so this
+  // costs one pass and startRace still re-applies after its rebuild.
+  if (track) applyRaceSettings();
+  // And fly the shots the EDITOR saved, for the same reason: a list edited in
+  // the pause menu is only read here, so every run picks up the latest one.
+  reloadFlybyShots();
   loadingScreen.run({
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
@@ -3429,6 +3461,7 @@ const { closeCamTuner } = CamTunerPanel.create(G);
 // FLYBY SHOT EDITOR panel UI (js/camera/flyby-panel.js) — authors the pre-race
 // shot list; previews through __apex.flybyCam, touches no render-path state.
 const flybyPanel = FlybyPanel.create(G);
+reloadFlybyShots();          // the menu's warm-up frames fly the saved list too
 // Steering-tuning sliders + presets (js/input/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,
@@ -6753,6 +6786,11 @@ function render(dt) {
 
   // camera
   let eyeT, tgtT, fovT, roadCamRoll = 0;
+  // Is THIS frame the pre-race cinematic? It is rendered like photo mode rather
+  // than like gameplay — far plane out, fog thinned, scenery not culled to the
+  // fog wall — because its shots are whole-circuit vistas from a few hundred
+  // metres up. See FlybySeq.FAR / FlybySeq.FOG for why both numbers live there.
+  let cine = false;
   if (state === "menu") {
     _plOk = false; _plBodyOk = false;
     // THE LOADING SCREEN'S FLYBY IS A SHOT SEQUENCE (js/camera/flyby-seq.js), not
@@ -6763,12 +6801,13 @@ function render(dt) {
     // flew through buildings. The sequencer places every eye against the props
     // registry instead. It is driven by PROGRESS through the flyby phase, so the
     // sequence keeps its shape whatever the phase is retuned to.
-    const fb = FlybySeq.solve(track, flybyProgress());
+    const fb = FlybySeq.solve(track, flybyProgress(), flybyShots);
     eyeT = fb.eye; tgtT = fb.tgt; fovT = fb.fov; camAncNX = null;
     // A shot boundary is a CUT. Without this the λ1.6 menu damping below smears
     // the change of angle into a long swim between two vantages, which reads as
     // one broken move rather than two shots.
     if (fb.cut) camSnapNext = true;
+    cine = true;
   } else {
     if (!player) return;
     // Anchor the camera to the SAME (s, x) the car body samples — playerAnchor
@@ -6936,6 +6975,9 @@ function render(dt) {
     const HFOV_MAX = 86 * Math.PI / 180;
     const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
     fovY = Math.min(fovY, fovYCap);
+    // The cinematic's far plane is FLAT, not scaled by RENDER DISTANCE: the
+    // editor previews one number, so the screen has to render that number.
+    if (cine) farPlane = FlybySeq.FAR;
   }
 
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
@@ -7041,12 +7083,24 @@ function render(dt) {
   // Cull off the density the SHADER renders — glx.js uploads frame.fogDensity *
   // FOG DENSITY. Off the raw base, FOG DENSITY 0 ("off") still culled scenery at
   // 250 m with no fog drawn. (FOG BOOST bakes in upstream; it was unaffected.)
+  // The THINNING the cinematic and the debug camera render through, or null for
+  // an ordinary frame. Read by gfx.begin() far below; named here because the
+  // cull right underneath has to know that this frame's fog wall is not where
+  // frame.fogDensity says it is — thinning the draw while culling scenery at the
+  // unthinned wall is a hard edge of missing world instead of a vista.
+  const _fogMul = dbgCam ? (dbgCam.fog != null ? dbgCam.fog : FlybySeq.FOG)
+    : (cine ? FlybySeq.FOG : null);
   const _fogDens = (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
   const _fogCull = _fogDens > 3 / farPlane ? Math.ceil(3 / _fogDens) : 0;
   // Sphere that contains the perspective frustum (far-plane corners sit
   // farther from the eye than farPlane). Look-identical pre-reject; not 300 m.
   const _farCull = farPlane * Math.hypot(1, Math.tan(fovY * 0.5) * Math.hypot(1, gfx.aspect || 1));
-  frame.cullDist = dbgCam ? (gfx.isMobile ? 700 : 0)
+  // The cinematic takes the debug camera's rule for the same reason it takes its
+  // far plane — and the same MOBILE CAP. loadTrack()'s own comment calls the
+  // build's transient peak "the moment a near-limit phone gets jetsam killed",
+  // and this frame runs seconds after it; framing a whole ~5 M-vert city there
+  // is not a risk worth a nicer horizon.
+  frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0)
     : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : (_fogCull || _farCull));
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
@@ -7424,9 +7478,11 @@ function render(dt) {
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
   let _b;
-  if (dbgCam) {
+  if (_fogMul != null) {
+    // Restored immediately: frame.fogDensity is the SESSION's value, which
+    // applyRaceSettings owns and every other reader expects unscaled.
     const bf = frame.fogDensity;
-    frame.fogDensity = bf * (dbgCam.fog != null ? dbgCam.fog : 0.15);
+    frame.fogDensity = bf * _fogMul;
     _b = gfx.begin(frame);
     frame.fogDensity = bf;
   } else _b = gfx.begin(frame);
@@ -8360,14 +8416,18 @@ if ($("mb-vs")) $("mb-vs").onclick = () => {
   ensureNet().then((ok) => { if (ok) netLobby.open(); });
   if (soundOn) GameAudio.uiSelect();
 };
-$("mb-tt").onclick = () => {
+function openTimeTrial(selectDaily) {
   setFlow("gp"); session = "tt";
-  restoreFreePlaySelection();
+  if (selectDaily) daily.select();
+  else restoreFreePlaySelection();
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
-};
+  // Daily selection already names the exact circuit/weather/time. Do not first
+  // arm a free-play scene that is immediately discarded.
+  if (!selectDaily) scheduleFlybyTrack(true);
+}
+$("mb-tt").onclick = () => openTimeTrial(false);
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
   // Replace any career alias with the repaired standalone save; finished stays readable.

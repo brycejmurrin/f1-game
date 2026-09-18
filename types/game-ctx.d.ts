@@ -351,6 +351,7 @@ interface GameCtx {
   readonly careerSettlement: CareerSettlement | null;
   readonly openCareer: () => void;
   readonly openCareerSlots: () => void;
+  readonly openDailyPicker: () => void;
   seasonMode: boolean;
   /** The championship round in a season/career, else the session race counter. */
   readonly seasonRound: number;
@@ -446,6 +447,8 @@ interface GameCtx {
   skyT: number;
   skyHold: boolean;
   raceTimeOfDay: TimeOfDay;
+  /** The FLYBY SHOT EDITOR's saved shot list, or null for the shipped sequence. */
+  readonly flybyShots: object[] | null;
   raceWeather: Weather;
   sectorBests: [number, number, number];
   readonly fieldSectorBests: [number, number, number];

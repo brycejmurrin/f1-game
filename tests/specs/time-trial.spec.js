@@ -38,6 +38,17 @@ test.describe("Time Trial — mode flags", () => {
 test.describe("Time Trial — daily picker flow", () => {
   test.use({ viewport: LANDSCAPE });
 
+  test("title DAILY stages its picker without arming a discarded free-play scene", async ({ page }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.locator("#mb-daily").click();
+    await expect(page.locator("#select")).toBeVisible();
+    expect(await page.evaluate(() => window.__apex.info().state)).toBe("menu");
+    expect(await page.evaluate(() => window.__apex.info().track)).toBe(null);
+    await expect(page.locator("#sel-daily")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#sel-go")).toBeVisible();
+  });
+
   for (const [name, selector] of [
     ["Daily Standard", "#sel-daily"],
     ["Daily Open", '[data-filter="daily-open"]'],
