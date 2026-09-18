@@ -536,13 +536,13 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
   assert.match(tm, /function onEscape[\s\S]*?getAttribute\("data-esc-close"\)[\s\S]*?btn\.click\(\)/);
 });
 
-test("setting-row chevrons are named controls, never aria-hidden interactive buttons", () => {
+test("setting-row chevrons are pointer-only decoration; the named select owns accessibility", () => {
   const rows = read("js/ui/setting-row.js");
-  assert.doesNotMatch(rows, /setAttribute\("aria-hidden",\s*"true"\)/);
-  assert.doesNotMatch(rows, /tabIndex\s*=\s*-1/);
+  assert.match(rows, /pointerOnly\(p\)/);
+  assert.match(rows, /tabIndex\s*=\s*-1/);
+  assert.match(rows, /setAttribute\("aria-hidden",\s*"true"\)/);
   for (const tag of HTML.matchAll(/<button\b[^>]*\bdata-step="(?:-1|1)"[^>]*>/g)) {
     assert.match(tag[0], /\baria-label="[^"]+"/, tag[0]);
-    assert.doesNotMatch(tag[0], /\baria-hidden=/, tag[0]);
   }
 });
 

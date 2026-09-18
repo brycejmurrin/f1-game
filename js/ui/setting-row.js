@@ -132,8 +132,21 @@ window.SettingRow = (function () {
     const stop = (e) => { if (e && e.stopPropagation) e.stopPropagation(); };
     if (p.prev) p.prev.onclick = (e) => { stop(e); step(p, -1, read, write); };
     if (p.next) p.next.onclick = (e) => { stop(e); step(p, 1, read, write); };
+    pointerOnly(p);
     paint(p.el, read());
     return p.el;
+  }
+
+  /* The chevrons are pointer affordances for the native <select>, not a second
+     pair of controls. The select already exposes the setting's accessible name
+     and owns keyboard/pad Left/Right; duplicate focus targets made the spatial
+     walker promise controls it could never reach. */
+  function pointerOnly(p) {
+    for (const x of [p.prev, p.next]) {
+      if (!x) continue;
+      x.tabIndex = -1;
+      x.setAttribute("aria-hidden", "true");
+    }
   }
 
   /* Build the same row for a setting the JS creates at runtime. Returns
