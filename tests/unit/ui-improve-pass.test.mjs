@@ -1055,12 +1055,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "ADVANCED VISUALS joins the same compact Display fold family as RENDERER");
   const componentsSrc = read("css/components.css");
   assert.match(componentsSrc,
-    /:is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary[\s\S]*?background-color:\s*transparent;[\s\S]*?border:\s*none;/,
+    /#pmsettings-inner #pm-panel-display details > summary[\s\S]*?background-color:\s*transparent;[\s\S]*?border:\s*none;/,
     "ADVANCED VISUALS shares the borderless transparent summary rule");
   assert.match(componentsSrc,
-    /:is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary::after\s*\{\s*content:\s*none;/);
+    /#pmsettings-inner #pm-panel-display details > summary::after\s*\{\s*content:\s*none;/);
   assert.match(componentsSrc,
-    /:is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary::before\s*\{\s*content:\s*"\\25BE";/,
+    /#pmsettings-inner #pm-panel-display details > summary::before\s*\{\s*content:\s*"\\25BE";/,
     "all four Display folds put the chevron before the label");
   assert.doesNotMatch(read("index.html"), /id="pm-hud-h"/);
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
@@ -1073,8 +1073,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hud-sample"/,
     "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "min-height"), "var(--chip-h)",
-    "METRICS summary is a chip row — slightly shorter than a full --tap door");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "min-height"), "var(--chip-h)",
+    "every Display summary is a compact row, slightly shorter than a full --tap door");
   // The sample carries BOTH sliders now: a readout box for HUD SIZE and a pad
   // for BUTTON SIZE, which has exactly the same no-feedback problem (every real
   // cluster is hidden behind the .dim sheet). The pad divides the block's own
@@ -1096,13 +1096,13 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
   assert.match(read("index.html"), /id="pm-display-adv"/,
     "the RENDERER fold is the shell host; RESET / shots still inject into its body");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-display-adv, #pm-visual-tuners)', "grid-column"), "1 / -1",
-    "setting rows and both Display disclosures span the wide grid");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display > details', "grid-column"), "1 / -1",
+    "every present and future Display disclosure spans the wide grid");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner :is(#pm-display-adv, #pm-visual-tuners) > summary", "min-height"), "var(--chip-h)",
-    "RENDERER and ADVANCED VISUALS summaries match the HUD / METRICS chip row");
-  for (const sel of [/#pmsettings-inner #pm-metrics-details > summary/, "#pmsettings-inner :is(#pm-display-adv, #pm-visual-tuners) > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display details > summary", "min-height"), "var(--chip-h)",
+    "every Display summary matches the HUD / METRICS chip row");
+  for (const sel of ["#pmsettings-inner #pm-panel-display details > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
     assert.equal(decl(css("css/components.css"), sel, "height"), "auto", "fold summaries wrap instead of clipping their readout at 150%");
     assert.equal(decl(css("css/components.css"), sel, "flex-wrap"), "wrap");
   }
@@ -1120,15 +1120,15 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child, #advanced > .pm-group-h:first-child, #audioset > .pm-group-h:first-child", "display"), "none",
     "sheet title already names CONTROLS / DISPLAY / STEERING & ASSISTS / MUSIC; do not reprint the heading");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "color"), "var(--steel)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary/, "opacity"), "1",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "opacity"), "1",
     ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay readable");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary/, "background-color"), "transparent",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "background-color"), "transparent",
     "fold summaries drop the plate so they do not copy HALO / TURN CHASING");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary::after/, "content"), "none",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary::after/, "content"), "none",
     "right-side chevron is the dropdown mark — disclosures do not use it");
-  assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details, #pm-visual-tuners\) > summary::before$/, "content") || "",
+  assert.match(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary::before$/, "content") || "",
     /25BE/,
     "disclosure chevron sits on the left, like a tree, not a select");
   const settingsHtml = read("index.html");
