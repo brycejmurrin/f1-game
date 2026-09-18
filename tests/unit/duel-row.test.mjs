@@ -98,8 +98,9 @@ test("race presets are complete, distinct settings bundles", () => {
   const endurance = RS.presetValues("endurance", 57);
   assert.deepEqual({ ...quick }, {
     laps: 5, weather: "dry", mixed: false, time: "day",
-    difficulty: "normal", grid: "tier", caution: true, reliability: "off", tyres: "off",
+    difficulty: "normal", grid: "tier", reliability: "off", tyres: "off",
   });
+  assert.equal("caution" in quick, false, "presets leave the sticky caution preference unchanged");
   assert.equal(weekend.laps, 57);
   assert.equal(weekend.grid, "quali");
   assert.equal(weekend.reliability, "real");
@@ -108,4 +109,10 @@ test("race presets are complete, distinct settings bundles", () => {
   assert.equal(endurance.mixed, true);
   assert.equal(endurance.difficulty, "hard");
   assert.equal(RS.presetValues("unknown", 57), null);
+});
+
+test("championship race settings hide Duel help with the absent Duel row", () => {
+  const src = fs.readFileSync(new URL("../../js/race/race-settings.js", import.meta.url), "utf8");
+  assert.match(src, /\$\("rs-duel-help"\)\.hidden\s*=\s*tt\s*\|\|\s*champ/,
+    "career/season GRID=QUALIFYING must not leave standalone Duel copy visible");
 });

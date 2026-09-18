@@ -194,7 +194,7 @@ A green PR does not prove Pages will pass: Pages calls `ci.yml` with a `before_s
 Poll by `head_sha`, ignore cancelled runs superseded on that SHA, and after merge watch both ship-push CI and Pages.
 On red, read failed-job logs for `Expected`, `Received`, `x FAIL`, `Timeout` and `timed out`.
 Name the exact test title, assertion and lane (`Selected specs`, sweeps, pure-node, smoke, or nested Pages `ci / …`), not just the wrapper.
-Diagnose first: `caution().enabled=false` is the intentional `SettingsDefaults` default, not a reason to pin WebGL2 or raise `BOOT_MS`.
+Diagnose first: `caution().enabled=false` is the listed `SettingsDefaults` default (and the race-control call-site fallback), not a reason to pin WebGL2 or raise `BOOT_MS`.
 A one-ULP Suzuka arc mismatch in sweeps needs an epsilon; `test:tooling-fast` green does not prove Pages suites or sweeps are green.
 Redeploy through `node tools/ci/deploy.mjs` or a Pages dispatch; claim live only after Pages and `version.json` confirm it.
 Report the SHA, run URL, green/red verdict, failing test/assertion when red, train, and next action.

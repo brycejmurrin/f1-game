@@ -178,8 +178,8 @@ function setEnabled(on) {
 function create(ctx) {
   Log.info("game", "DebrisWorld.create");
   G = ctx;
-  // Default ON, as originally intended — and worth recording why it spent
-  // builds 897-902 off.
+  // SettingsDefaults owns the player-facing default; only an explicit raw
+  // "1" starts this optional side-world.
   //
   // Until build 893 this module had never run on the deployed site at all: the
   // Pages workflow staged an allow-list of directories and vendor/ was not on
@@ -195,11 +195,9 @@ function create(ctx) {
   // build 900. Turning this off never moved that number; the two changes only
   // happened to land together.
   //
-  // So it comes back. What remains true is that it has still never run on a
-  // phone, so the escape hatch stays one call wide: apex26.debris = "0", or
+  // The escape hatch stays one call wide: apex26.debris = "0", or
   // __apex.debris(false).
-  let opt = "1";
-  try { opt = localStorage.getItem("apex26.debris") || opt; } catch (e) { /* storage blocked (private mode) — keep the default */ }
+  const opt = GameStore.store.raw("debris");
   // Group B disable flags — default ON, read once at boot (any value but "0" is on).
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
   try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
