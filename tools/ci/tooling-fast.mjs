@@ -81,6 +81,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/parts-distinct-mesh.test.mjs",
   "tests/unit/onboard.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
+  // test-coverage-audit answers "is this file in SOME topical group"; this one
+  // answers the question that actually bites, "does the pre-push gate RUN it" —
+  // two deploys (2026-09-02) and one (2026-09-18) went red on pins that no
+  // pre-push command executes. It must be IN the gate to guard the gate.
+  "tests/unit/prepush-gate-coverage.test.mjs",
   "tests/unit/test-groups-generated.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/quick-validate.test.mjs",
