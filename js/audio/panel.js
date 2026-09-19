@@ -51,6 +51,12 @@ const AudioPanel = (() => {
     // reader user hears every card twice if we default this on.
     let radioOn = store.get("radioVoice", false);
     let radioVol = store.get("volRadio", 0.8);
+    /* The announcer's switch is READ FROM THE MODULE, never mirrored here. It
+     * is the one spoken setting a second surface also flips — the flyby editor
+     * previews it — and a `let annOn` in this closure would have gone stale the
+     * moment it did, which is the exact shape of bug the lighting tuner's
+     * "read the live profile back" rule exists to prevent. */
+    const annOn = () => !!(G.announcer && G.announcer.enabled && G.announcer.enabled());
     function setRadio(b) {
       if (b && !G.soundOn) setSound(true, true);
       radioOn = b; store.set("radioVoice", b);
@@ -129,6 +135,10 @@ const AudioPanel = (() => {
       Dom.paintFold($("as-radio-sum"), [
         ["k", "TEAM RADIO"],
         [radioOn ? "on" : "off", radioOn ? "ON" : "OFF"],
+      ]);
+      Dom.paintFold($("as-ann-sum"), [
+        ["k", "ANNOUNCER"],
+        [annOn() ? "on" : "off", annOn() ? "ON" : "OFF"],
       ]);
       const prof = (typeof GameAudio !== "undefined" && GameAudio.profile) ? GameAudio.profile() : "team";
       Dom.paintFold($("as-engine-sum"), [
@@ -224,6 +234,21 @@ const AudioPanel = (() => {
       if (rnote) rnote.textContent = !radioReady ? "This browser has no speech voices, so the radio stays written."
         : !G.soundOn ? "Master sound is off — TEAM RADIO ON turns it on."
         : "Race control, your engineer and the coach read their messages aloud. The cards are unchanged.";
+      // THE ANNOUNCER, on the same three-part gate and for the same reason: a
+      // greyed row with no sentence is the worst version of this.
+      const annReady = !!(G.announcer && G.announcer.available());
+      const annLive = annOn() && G.soundOn && annReady;
+      SettingRow.paint($("as-ann"), annOn() ? "on" : "off", ONOFF);
+      SettingRow.disable($("as-ann"), !annReady);
+      const ah = $("as-ann-voice");
+      if (ah && ah.classList) ah.classList.toggle("tune-off", !annLive);
+      if (ah && typeof ah.querySelectorAll === "function") {
+        for (const el of ah.querySelectorAll("select,input,button")) el.disabled = !annLive;
+      }
+      const anote = $("as-ann-note");
+      if (anote) anote.textContent = !annReady ? "This browser has no speech voices, so the loading card stays written."
+        : !G.soundOn ? "Master sound is off — ANNOUNCER ON turns it on."
+        : "The welcome is written from the circuit itself, so every track gets one. VOICE VOLUME above sets the level.";
       // The master gate is what silences music when SOUND is off, and the MUSIC
       // switch still reads ON then — so the readout names the gate that is
       // actually shut instead of contradicting the switch beside it. The title
@@ -270,6 +295,18 @@ const AudioPanel = (() => {
     // ticks first, while the bus is still open.
     SettingRow.wire("as-radio", { values: ONOFF, read: () => (radioOn ? "on" : "off"),
       write: (v) => { if (v === "on") { setRadio(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setRadio(false); } } });
+    // THE PRE-RACE ANNOUNCER (js/audio/announcer.js). Same shape, same master
+    // lift — but its own switch, because it speaks on the loading screen and
+    // the radio speaks in the race, and a player who wants one rarely wants
+    // both. The module owns the stored value; this row only asks it.
+    SettingRow.wire("as-ann", { values: ONOFF, read: () => (annOn() ? "on" : "off"),
+      write: (v) => {
+        const want = v === "on";
+        if (want && !G.soundOn) setSound(true, true);
+        if (G.announcer && G.announcer.setEnabled) G.announcer.setEnabled(want);
+        GameAudio.uiTick();
+        syncAudioPanel();
+      } });
     /* THE PER-CHANNEL VOICE ROWS, built rather than written into the shell: the
      * voice list is the machine's installed voices, so the <option>s cannot be
      * static markup. Three groups, one per speaker in RadioVoice.SPEAKERS.
@@ -283,6 +320,13 @@ const AudioPanel = (() => {
       ["coach", "COACH", "Practice drills and driving advice."],
       ["radio", "TEAM RADIO", "Your engineer: box calls, position, tyres."],
     ];
+    /* THE ANNOUNCER'S ROW IS THE SAME ROW, IN A DIFFERENT SECTION. It is a
+     * RadioVoice channel (js/audio/radio-voice.js TONE) so it gets a voice, a
+     * pitch and a rate for free — but it is NOT gated on the TEAM RADIO switch,
+     * so it cannot live under that switch's heading where every other control
+     * greys out with it. Its own <details>, its own host, one shared builder. */
+    const ANN_CHANNEL = ["announcer", "VOICE",
+      "Daniel on a Mac, another British voice elsewhere — or pick your own."];
     let voiceRowsFor = null;   // the voice-list length the rows were built against
 
     function voiceRow(ch, label, blurb) {
@@ -359,9 +403,18 @@ const AudioPanel = (() => {
     }
 
     const setTune = (ch, patch) => { if (G.radio && G.radio.setTune) G.radio.setTune(ch, patch); };
-    const preview = (ch) => { if (G.radio && G.radio.preview) G.radio.preview(ch); };
+    /* WHICH preview. RadioVoice.preview() refuses unless the TEAM RADIO switch
+     * is on — correct for the three race channels, wrong for the announcer,
+     * which is on by default while that switch is off by default. Sending the
+     * announcer's TEST through the radio would have made it the one button on
+     * this sheet that does nothing with its own switch ON. */
+    const preview = (ch) => {
+      if (ch === "announcer") { if (G.announcer && G.announcer.sample) G.announcer.sample(); return; }
+      if (G.radio && G.radio.preview) G.radio.preview(ch);
+    };
 
     function buildVoiceRows() {
+      buildAnnVoiceRow();
       const host = $("as-voices");
       // The same capability guard as the sync block below, and for the same
       // reason: $() answers from a STUB element in the node suites, with only
@@ -382,6 +435,23 @@ const AudioPanel = (() => {
           ? n + " system voices. A long message is sped up to fit its card, so RATE is a floor, not a promise."
           : "This browser does not list its voices, so it picks one itself — PITCH and RATE are what separate the three channels here.";
       }
+    }
+
+    /** The announcer's single voice row, into its own host. Same guards and the
+     *  same rebuild rule as the three above — the voice list is the machine's,
+     *  and Chrome's first getVoices() is empty. Tracked separately because the
+     *  two hosts can be built on different opens. */
+    let annRowFor = null;
+    function buildAnnVoiceRow() {
+      const host = $("as-ann-voice");
+      if (!host || typeof host.appendChild !== "function" || !host.children) return;
+      if (typeof RadioVoice === "undefined" || typeof document === "undefined"
+          || typeof document.createElement !== "function") return;
+      const n = (G.radio && G.radio.voiceList && G.radio.voiceList().length) || 0;
+      if (annRowFor === n && host.children.length > 1) return;
+      annRowFor = n;
+      while (host.children.length > 1) host.removeChild(host.lastChild);
+      host.appendChild(voiceRow.apply(null, ANN_CHANNEL));
     }
 
     $("as-rvol").oninput = (e) => {

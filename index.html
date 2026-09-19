@@ -1206,6 +1206,34 @@
         <p id="as-voices-note" class="as-note"></p>
       </details>
 
+      <!-- THE PRE-RACE ANNOUNCER (js/audio/announcer.js). "Welcome to Apex 26…",
+           read over the loading screen's flyby, with the circuit described from
+           the circuit's own numbers rather than 52 hand-written blurbs.
+
+           ITS OWN SECTION, NOT A ROW UNDER TEAM RADIO. It borrows the radio's
+           voice stack (a RadioVoice channel, so it gets a voice, pitch and rate
+           for free) but not the radio's SWITCH: the radio talks over a race and
+           ships OFF, this talks over a menu and ships ON, and a control that
+           greys out with a switch it does not obey is a lie about the wiring. -->
+      <details id="as-ann-details" class="as-sec">
+        <summary class="adv-more-btn" id="as-ann-sum">ANNOUNCER · ON</summary>
+        <div id="as-ann" class="set-row" role="group" aria-labelledby="as-ann-label">
+          <span class="tune-label" id="as-ann-label">ANNOUNCER</span>
+          <div>
+            <button id="as-ann-prev" type="button" data-step="-1" aria-label="Previous announcer setting">&lsaquo;</button>
+            <select id="as-ann-sel" aria-labelledby="as-ann-label" aria-describedby="as-ann-note"></select>
+            <button id="as-ann-next" type="button" data-step="1" aria-label="Next announcer setting">&rsaquo;</button>
+          </div>
+        </div>
+        <!-- One voice row, built by js/audio/panel.js from the same builder the
+             three radio channels use — the <option>s are the machine's own
+             installed voices and cannot be static markup. -->
+        <div id="as-ann-voice" class="as-sub" role="group" aria-labelledby="as-ann-voice-label">
+          <span class="tune-label" id="as-ann-voice-label">ANNOUNCER VOICE</span>
+        </div>
+        <p id="as-ann-note" class="as-note"></p>
+      </details>
+
       <!-- ENGINE TONE: the player's own trim, layered OVER the manufacturer
            voice that team.engine already picks (js/audio/engine.js ENGINE_VOICES).
            A profile REPLACES the trims; moving any slider afterwards leaves
@@ -2748,6 +2776,7 @@
 <script defer crossorigin="anonymous" src="js/audio/spotify.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/rivals.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/radio-voice.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/audio/announcer.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/panel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/parts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/liveries.js?v=dev"></script>

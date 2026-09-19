@@ -1150,6 +1150,7 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0, radioVoice = RadioVoice.inert();   // the real instance lands at the module wires; inert() means no call site needs a guard
+let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race welcome; same inert() deal
 // "box" is the engineer's PIT CALL and nothing else (js/race/engineer.js): an
 // instruction the player has one lap to act on, where every other engineer line
 // is a report. It ranks with the pit-lane messages it belongs to rather than
@@ -2943,6 +2944,7 @@ const G = {
   get records() { return records; },
   get coach() { return coach; },
   get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
+  get announcer() { return announcer; },   // js/audio/announcer.js — AudioPanel drives its switch and voice
   recordControls: () => ({ autoThrottle: autoThrottle(), gearsManual: gearsManual(), steerMode, aero: raceAeroMode }),
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
@@ -3224,6 +3226,8 @@ const G = {
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   setCamMode: (...a) => setCamMode(...a),   // const from CamModes.create(G) below — defer
   rescuePlayer, setLightTune, setWeatherLive, setTimeOfDay, weather, snapGameCam,
+  loadingInfo,                          // what the loading card describes — the flyby editor previews it
+  get loadingScreen() { return loadingScreen; },   // js/ui/loading-screen.js — the editor drives the card's geometry
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId,                               // stable cross-peer car identity
   setScale: (...a) => setScale(...a),   // const from UiScale.create(G) below — defer
@@ -3281,6 +3285,10 @@ engineer = RaceEngineer.create(G);
 // the engineer, the coach and race control already write. Off by default, and
 // inert wherever the API, a voice or the setting is missing.
 radioVoice = RadioVoice.create(G);
+// The PRE-RACE ANNOUNCER (js/audio/announcer.js) — "Welcome to Apex 26…" over
+// the loading screen's flyby. After the radio: it borrows that module's
+// speakable() and per-channel tune, and nothing else.
+announcer = Announcer.create(G);
 const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
@@ -3379,7 +3387,7 @@ raceSettings = RaceSettings.create({
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
 // over the world scheduleFlybyTrack() already warmed, then holds a static card
 // while the caller's build runs — see that file for why the split matters.
-const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags });
+const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags, store, announcer: () => announcer });
 /** The RACE! button's route into a race. Not folded into startRace(): netplay
  *  and __apex.race() both AWAIT that function, and neither should gain two
  *  seconds of flourish. The button is the only place a human is watching. */
@@ -3431,14 +3439,23 @@ function raceIntro(go) {
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
-  loadingScreen.run({
+  loadingScreen.run(loadingInfo(), go);
+}
+/** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
+ *  session's settings, and whether there is a built world to fly over. Named
+ *  rather than inlined at the one call above because the FLYBY EDITOR asks for
+ *  the same object to preview the card against — and a second literal there
+ *  would be a second description of the same race, free to drift from this one
+ *  the next time a row is added to the card. */
+function loadingInfo() {
+  return {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
     // Only fly over a world that is actually built. A missed pre-build (a
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
     hasWorld: !!track && _menuGate.track === track,
-  }, go);
+  };
 }
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);

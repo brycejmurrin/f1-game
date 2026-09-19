@@ -396,6 +396,16 @@ interface GameCtx {
    * missing, so no caller needs a guard. AudioPanel owns the toggle.
    */
   readonly radio: { setEnabled(b: boolean): void; setVolume(v: number): number; available(): boolean; unlock(): void; stop(): void };
+  /**
+   * The PRE-RACE ANNOUNCER — js/audio/announcer.js. Always an object, on the
+   * same inert() deal as `radio`. AudioPanel owns its switch and voice row;
+   * the loading screen calls play()/stop() and the flyby editor preview().
+   */
+  readonly announcer: { play(info: Record<string, unknown>, budgetMs: number): boolean; preview(info: Record<string, unknown>): boolean; sample(): boolean; scriptFor(info: Record<string, unknown>): string[]; stop(): void; enabled(): boolean; setEnabled(b: boolean): void; available(): boolean };
+  /** What the loading card describes — the flyby editor previews the same object. */
+  readonly loadingInfo: () => Record<string, unknown>;
+  /** js/ui/loading-screen.js, so the flyby editor can hold the card up and move it. */
+  readonly loadingScreen: { run(info: Record<string, unknown>, go: () => void): void; stop(): void; hold(info: Record<string, unknown>): boolean; card(): Record<string, number>; setCard(patch: Record<string, number>): Record<string, number>; resetCard(): Record<string, number>; progress(): number; active(): boolean; phase(): string };
 
   readonly retireCar: (c: CarState, reason?: string) => void;
   readonly ranked: CarState[];
@@ -745,6 +755,7 @@ declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;
 declare const AudioPanel: GameModuleFactory;
 declare const RadioVoice: GameModuleFactory;
+declare const Announcer: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
 declare const BrakeCue: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;
