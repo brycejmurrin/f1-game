@@ -17,6 +17,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+const fs = require("node:fs");
+const path = require("node:path");
 const { buildContext } = require("../../tools/track/verify-track.cjs");
 const MANIFEST = require("../../tools/manifest.cjs");
 
@@ -90,4 +92,33 @@ test("reversed/source-coordinate defs get the same surface (wrapped)", () => {
   assert.ok(keys, "scenery callback was not invoked during Tracks.build");
   // transformSceneryApi must wrap helpers without adding/dropping members.
   assert.deepEqual(keys, CONTRACT);
+});
+
+const landmarkSource = (id) =>
+  fs.readFileSync(path.resolve(`js/circuits/scenery/${id}.js`), "utf8");
+
+const requiredLandmark = (body, id) => {
+  const start = body.indexOf(`modelGroup("${id}"`);
+  assert.notEqual(start, -1, `${id} model group is missing`);
+  assert.match(body.slice(start, start + 2200), /\{\s*required:\s*true\s*\}\s*\)/,
+    `${id} must be structurally required`);
+};
+
+test("BATCH-01 Must landmarks are explicit required scenery assemblies", () => {
+  const expected = {
+    monaco: ["monaco-tabac-shop", "monaco-mirabeau-apartments", "monaco-rascasse-bar"],
+    singapore: ["singapore-parliament-house", "singapore-fullerton-hotel", "singapore-anderson-bridge"],
+    suzuka: ["suzuka-crossover-portal", "suzuka-spoon-terrace", "suzuka-130r-bank"],
+  };
+  for (const [track, ids] of Object.entries(expected)) {
+    const body = landmarkSource(track);
+    for (const id of ids) requiredLandmark(body, id);
+  }
+
+  const monaco = landmarkSource("monaco");
+  assert.match(monaco, /monaco-tabac-shop[\s\S]{0,2200}TABAC/);
+  assert.match(monaco, /monaco-rascasse-bar[\s\S]{0,2200}RASCASSE/);
+  assert.match(monaco, /const harbourStations = \[0\.365, 0\.545, 0\.59\]/);
+  assert.equal((landmarkSource("singapore").match(/\bcityFront\s*\(/g) || []).length, 5,
+    "Must landmarks must not densify cityFront");
 });
