@@ -311,14 +311,18 @@ function buildTTResults() {
   head.append(hl, hv);
   els.resultsTable.appendChild(head);
 
-  // Ghost delta row (shows gap to ghost best)
-  if (Ghost.hasGhost() && isFinite(best)) {
-    const ghostBest = Ghost.bestTime();
+  // A shared guest is the active rival on its circuit; otherwise keep the
+  // personal-best path exactly as before.
+  const guestGhost = GhostShare.hasGuest();
+  const replayGhost = guestGhost ? GhostShare : Ghost;
+  if ((guestGhost || Ghost.hasGhost()) && isFinite(best)) {
+    const ghostBest = replayGhost.bestTime();
     if (isFinite(ghostBest)) {
       const delta = best - ghostBest;
       const gr = document.createElement("div");
       gr.className = "res-row";
-      const gl = document.createElement("span"); gl.className = "res-name"; gl.textContent = "vs Ghost";
+      const gl = document.createElement("span"); gl.className = "res-name";
+      gl.textContent = guestGhost ? "RIVAL GHOST" : "YOUR PB";
       const gv = document.createElement("span"); gv.className = "res-pts"; gv.style.width = "auto";
       gv.style.color = delta <= 0 ? "var(--faster)" : "var(--slower)";
       gv.textContent = `${delta >= 0 ? "+" : ""}${delta.toFixed(3)}s`;
@@ -379,15 +383,76 @@ function buildTTResults() {
     els.resultsTable.appendChild(btn);
   }
 
+  // Portable PB export. The guest slot is deliberately not exported here:
+  // results share the lap this player owns, and installGuest never writes it.
+  const shareGhost = Ghost.snapshot();
+  if (shareGhost) {
+    const activeDaily = G.daily && G.daily.isActive() && G.daily.current ? G.daily.current() : null;
+    const shareOpts = {
+      track: track.def.id,
+      context: Ghost.context(),
+      day: activeDaily && activeDaily.day ? activeDaily.day : null,
+    };
+    const encoded = GhostShare.encode(shareGhost, shareOpts);
+    const fallback = (btn, value, label) => {
+      const box = document.createElement("textarea");
+      box.id = "res-ghost-copy-fallback";
+      box.className = "sel-chip";
+      box.readOnly = true;
+      box.value = value;
+      box.setAttribute("aria-label", label + " — select and copy");
+      btn.insertAdjacentElement ? btn.insertAdjacentElement("afterend", box) : els.resultsTable.appendChild(box);
+      if (box.focus) box.focus();
+      if (box.select) box.select();
+      try { if (document.execCommand) document.execCommand("copy"); } catch (_) { /* selection remains visible */ }
+      btn.textContent = "SELECT & COPY";
+    };
+    const copy = async (btn, field, label) => {
+      const shared = await encoded;
+      if (!shared.ok) {
+        btn.textContent = shared.reason === "too-large" ? "TOO LARGE — DOWNLOAD" : "UNAVAILABLE";
+        return;
+      }
+      const value = shared[field];
+      try {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) throw new Error("clipboard unavailable");
+        await navigator.clipboard.writeText(value);
+        btn.textContent = "COPIED";
+      } catch (_) { fallback(btn, value, label); }
+    };
+    const action = (id, text) => {
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.className = "sel-chip"; btn.id = id; btn.textContent = text;
+      els.resultsTable.appendChild(btn);
+      return btn;
+    };
+    const link = action("res-ghost-copy-link", "COPY LINK");
+    link.onclick = () => copy(link, "url", "Ghost link");
+    const code = action("res-ghost-copy-code", "COPY CODE");
+    code.onclick = () => copy(code, "code", "Ghost code");
+    const download = action("res-ghost-download", "DOWNLOAD");
+    download.onclick = () => {
+      const file = GhostShare.fileExport(shareGhost, shareOpts);
+      if (!file.ok) { download.textContent = "UNAVAILABLE"; return; }
+      const href = URL.createObjectURL(new Blob([file.text], { type: "application/json" }));
+      const a = document.createElement("a");
+      a.href = href; a.download = file.name; a.hidden = true;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 0);
+      download.textContent = "DOWNLOADED";
+    };
+  }
+
   // Ghost clear link
-  if (Ghost.hasGhost()) {
+  if (guestGhost || Ghost.hasGhost()) {
     const clrBtn = document.createElement("button");
     clrBtn.type = "button";
     clrBtn.className = "sel-chip";
     clrBtn.id = "res-ghost-clear";
-    clrBtn.textContent = "✕ CLEAR GHOST";
+    clrBtn.textContent = guestGhost ? "✕ CLEAR RIVAL GHOST" : "✕ CLEAR GHOST";
     clrBtn.onclick = () => {
-      Ghost.clear(track.def.id);
+      if (guestGhost) GhostShare.clearGuest();
+      else Ghost.clear(track.def.id);
       const remaining = G.records.board(track.def.id);
       G.ttRecord = remaining.length ? remaining[0].t : Infinity;
       buildTTResults();
