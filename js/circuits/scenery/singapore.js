@@ -336,12 +336,13 @@
             points.push(top);
             addCyl(target, deck, 0.42, h, STEEL, 6, b);
             if (j > 0) {
-              // Neighbouring sloped chords share the same lateral plane when
-              // their thickness is identical. A subtle alternating gauge keeps
-              // the arch silhouette while separating those fighting faces.
-              beam(points[j - 1], top, j % 2 ? 0.78 : 0.72);
+              beam(points[j - 1], top, 0.75);
               const low = vadd(vadd(a.c, a.t, (t - 0.5) * 48 - 8), a.u, 1.0);
-              beam(j % 2 ? low : vadd(deck, a.u, 1.0), j % 2 ? top : points[j - 1], 0.48);
+              // Neighbouring diagonals share a lateral plane at one gauge.
+              // Alternating by 6 cm keeps the truss silhouette but separates
+              // the same-facing surfaces beyond the 20 mm coplanar threshold.
+              beam(j % 2 ? low : vadd(deck, a.u, 1.0), j % 2 ? top : points[j - 1],
+                j % 2 ? 0.51 : 0.45);
             }
           }
           addBox(target, vadd(a.c, a.u, 1.0), [1.1, 1.0, 52], STEEL, b);
