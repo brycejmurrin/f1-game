@@ -71,6 +71,17 @@ test("cautions ship off and SPEC documents every authoritative default", () => {
   assert.equal(spec.get("caution")?.subsystem, null, "caution is a sticky preference, not an unexportable subsystem");
 });
 
+test("audio call-site fallbacks agree with the shipped defaults", () => {
+  const src = fs.readFileSync(new URL("../../js/audio/panel.js", import.meta.url), "utf8");
+  const { SettingsDefaults } = load();
+  for (const key of ["volMusic", "volSfx"]) {
+    const fallback = src.match(new RegExp(`store\\.get\\("${key}",\\s*([\\d.]+)\\)`));
+    assert.ok(fallback, `${key}: audio panel fallback is missing`);
+    assert.equal(Number(fallback[1]), SettingsDefaults.get(key),
+      `${key}: call-site fallback drifted from SettingsDefaults`);
+  }
+});
+
 test("a stored value still beats the shipped default", () => {
   const { GameStore, SettingsDefaults } = load();
   const store = GameStore.store;
