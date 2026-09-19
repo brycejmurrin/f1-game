@@ -3012,7 +3012,22 @@ const api = {
         ua: safe(() => navigator.userAgent, ""),
         dpr: safe(() => window.devicePixelRatio, 0),
         viewport: safe(() => [innerWidth, innerHeight], []),
-        backend: safe(() => { let b = null; try { b = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { /* no sessionStorage: the pick is the best available answer */ } const p = localStorage.getItem("apex26.gfxBackend") || "webgl2"; return b && b !== p ? b + " (pick: " + p + ")" : p; }, "?"),   // what BOUND, not the pick
+        backend: safe(() => {
+          const raw = localStorage.getItem("apex26.gfxBackend");
+          const p = raw === "webgl2" || raw === "three" || raw === "webgpu"
+            ? raw : (raw == null ? "three" : "webgl2");
+          let live = null;
+          try {
+            if (typeof RendererPicker !== "undefined" && RendererPicker.liveBackend) {
+              live = RendererPicker.liveBackend();
+            }
+          } catch (_) { /* picker not ready: use the session latch or pick */ }
+          if (!live) {
+            try { live = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { /* no sessionStorage */ }
+          }
+          live = live || p;
+          return live !== p ? live + " (pick: " + p + ")" : live;
+        }, "?"),   // what BOUND, not only the pick
         mobile: safe(() => !!(gfx && gfx.isMobile), null),
         mobileTier: safe(() => !!(gfx && gfx.mobileTier), null),
         hdr: safe(() => !!(gfx && gfx.hdrMode && gfx.hdrMode()), null),
