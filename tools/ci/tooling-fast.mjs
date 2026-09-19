@@ -51,6 +51,7 @@ const LOGFILE = path.join(LOGDIR, "tooling-fast-suite.log");
 export const TOOLING_FAST_FILES = Object.freeze([
   // @gen-test-groups:begin — generated from tests/groups.json; do not hand-edit
   "tests/unit/ghost.test.mjs",
+  "tests/unit/ghost-share.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.
@@ -306,6 +307,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // between a pasted blob and the shipped DEFAULT. Pure data, ~0.1 s, and it
   // belongs in the edit loop because tools/gen/bake-flyby.mjs is a FULL REPLACE.
   "tests/unit/flyby-panel.test.mjs",
+  // The LOADING CARD's geometry: the three numbers the flyby editor authors,
+  // clamped out of localStorage before they reach a CSS custom property, where
+  // a NaN is not an error but a silently dropped declaration.
+  "tests/unit/loading-card.test.mjs",
   // The ORDERING that lights the flyby: raceIntro() applies the race settings
   // before the loading screen starts, so a dawn race stops showing a day sky.
   "tests/unit/flyby-lighting.test.mjs",
@@ -359,6 +364,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/driving-coach.test.mjs",
   "tests/unit/ai-corridor.test.mjs",
   "tests/unit/radio-voice.test.mjs",
+  // The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice
+  // ladder on the platforms that do not have Daniel.
+  "tests/unit/announcer.test.mjs",
   // @gen-test-groups:end
 ]);
 

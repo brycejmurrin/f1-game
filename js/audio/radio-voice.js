@@ -25,6 +25,18 @@ const RadioVoice = (function () {
     control: { pitch: 0.9, rate: 1.05 },
     coach: { pitch: 1.0, rate: 0.95 },
     radio: { pitch: 1.05, rate: 1.15 },
+    // The PRE-RACE ANNOUNCER (js/audio/announcer.js). A fourth channel here and
+    // nowhere in SPEAKERS on purpose: SPEAKERS maps a race-time `kind` onto a
+    // voice, and the announcer has no kind — it never goes through say(). What
+    // it does share is the tune: a channel in this table is a channel the
+    // settings panel can give a voice, a pitch and a rate, and that is exactly
+    // what "let the player pick the announcer's voice" needs.
+    //
+    // SLOWEST AND LOWEST of the four. The other three talk over a race and are
+    // budgeted against a card that is already fading; this one reads a scripted
+    // paragraph over a still screen, where an unhurried delivery is the whole
+    // character. 0.92 is under the coach's 0.95 and well under the engineer's.
+    announcer: { pitch: 0.95, rate: 0.92 },
   });
   /* PLAYER TUNING sits OVER those defaults rather than replacing them, which is
    * what makes "reset" a delete and not a second table to keep in step. A tune
@@ -43,6 +55,7 @@ const RadioVoice = (function () {
     control: "Car 44, track limits — +5s penalty",
     coach: "Brake a little earlier here and get the car straight",
     radio: "BOX BOX, P3 on the exit",
+    announcer: "Welcome to Apex 26. This is Silverstone, home of the British Grand Prix",
   });
   const PITCH_MIN = 0.5, PITCH_MAX = 1.6;
   const RATE_MIN = 0.6;
@@ -130,7 +143,7 @@ const RadioVoice = (function () {
       say: () => false, stop: () => {}, unlock: () => {}, preview: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
-      debug: () => ({ available: false, enabled: false, voices: 0, last: null }),
+      debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
     });
   }
 
@@ -154,6 +167,19 @@ const RadioVoice = (function () {
     // the music underneath it. That lands on exactly the lines that preempt:
     // a penalty cutting off the coach is the case this module was built for.
     let voices = null, deadline = null, last = null, current = null;
+    /* DID THE ENGINE ACTUALLY START? `asked` counts the speaks we HANDED to the
+     * platform; `started` counts the ones it actually began (onstart).
+     *
+     * They exist because the difference is invisible from anywhere else, and it
+     * is the difference between two opposite bugs. asked 0 means WE refused —
+     * plan() has a reason and `last` carries it. asked > 0 with started 0 means
+     * the PLATFORM refused: every line was accepted without complaint and none
+     * was ever voiced, which is what an unprimed iOS engine looks like from in
+     * here. A refused speak is not an error, fires no event and logs nothing,
+     * so without this counter the two cases are one silent symptom — which is
+     * exactly how this defect survived three attempts to fix it from the
+     * outside. The audio panel prints the verdict; see js/audio/panel.js. */
+    let asked = 0, started = 0;
     function readTune() {
       const t = G.store.get("voiceTune", null);
       return t && typeof t === "object" ? t : {};
@@ -226,8 +252,10 @@ const RadioVoice = (function () {
       // leave the music down with nothing speaking until the deadline healed it.
       // Down-then-up is also simply the right order for the ear.
       current = u;
+      u.onstart = () => { started++; };
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       try {
+        asked++;
         synth.speak(u);
       } catch (e) {
         current = null;
@@ -318,7 +346,8 @@ const RadioVoice = (function () {
       const u = new Utter(words);
       u.voice = voiceFor(sp);
       u.rate = t.rate; u.pitch = t.pitch; u.volume = volume;
-      try { synth.speak(u); synth.resume(); } catch (e) { return false; }
+      u.onstart = () => { started++; };
+      try { asked++; synth.speak(u); synth.resume(); } catch (e) { return false; }
       return true;
     }
 
@@ -339,7 +368,7 @@ const RadioVoice = (function () {
       setEnabled(b) { enabled = !!b; if (!enabled) stop(); },
       setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
       available: () => true,
-      debug: () => ({ available: true, enabled, voices: voicesFor().length, last }),
+      debug: () => ({ available: true, enabled, voices: voicesFor().length, last, asked, started }),
     };
   }
 

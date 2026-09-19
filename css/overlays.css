@@ -1267,7 +1267,29 @@ body[data-density="compact"] #campicker {
    Building it at reveal time would run layout during the phase whose entire
    job is to be the still thing the synchronous track build stalls behind. */
 #ld-card {
-  width: min(100%, var(--sheet-w, 560px));
+  /* PLAYER GEOMETRY — the three numbers the flyby editor authors and
+     js/ui/loading-screen.js writes here as inline custom properties. The
+     fallbacks in the var()s ARE the shipped card, so a browser that never gets
+     them (no storage, the editor never opened) renders exactly what it always
+     did. --ld-card-scale is a bare number; the two offsets carry their units.
+
+     THE WIDTH DIVIDES BY THE SCALE. `scale` is a paint-time transform: the
+     layout box stays the width the cap gave it and the paint spills past the
+     viewport, so a card at 100% and size 1.6 hung 60% of a phone screen off the
+     right-hand edge with no scrollbar to show it. Dividing the cap gives the
+     scaled card the same "never wider than the screen" guarantee the plain one
+     has, while --sheet-w still caps it on a desktop. */
+  width: min(calc(100% / var(--ld-card-scale, 1)), var(--sheet-w, 560px));
+  /* Individual transform properties, NOT `transform`: the reveal below animates
+     `transform` and would otherwise overwrite the player's placement the frame
+     the card faded in. These compose with it (translate, then scale, then
+     transform) and animate independently. */
+  translate: var(--ld-card-x, 0px) var(--ld-card-y, 0px);
+  scale: var(--ld-card-scale, 1);
+  /* Bottom centre, because that is where the card is ANCHORED (#loading's
+     place-items: end center). Scaling about the default 50% 50% pushed the
+     plate's bottom edge down past its own margin and off the screen. */
+  transform-origin: 50% 100%;
   margin-bottom: clamp(var(--gap), 6vh, calc(4 * var(--pad)));
   padding: var(--gap) var(--pad);
   border: 1px solid var(--card-line);
@@ -1281,7 +1303,13 @@ body[data-density="compact"] #campicker {
 /* Both live phases show the card: "run" is the flyby with the card up, "card"
    is the no-world fallback where the card is all there is. */
 #loading[data-phase="run"] #ld-card,
-#loading[data-phase="card"] #ld-card { opacity: 1; transform: none; }
+#loading[data-phase="card"] #ld-card,
+#loading[data-phase="hold"] #ld-card { opacity: 1; transform: none; }
+/* HOLD is the flyby editor's live preview of the card, shown under the docked
+   panel while its size and position sliders move. It is not a loading screen:
+   the scrim would hide the scene the card is being framed against, and the
+   full-screen click-swallow would eat every click meant for the panel. */
+#loading[data-phase="hold"] { background: none; pointer-events: none; }
 /* The wordmark is #title's recipe at card scale — same italic, same skewed red
    underline — because this IS the title screen's brand arriving on the grid. */
 #ld-wordmark {
