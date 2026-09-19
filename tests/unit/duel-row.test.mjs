@@ -111,6 +111,14 @@ test("race presets are complete, distinct settings bundles", () => {
   assert.equal(RS.presetValues("unknown", 57), null);
 });
 
+test("preset matching does not read the sticky caution preference", () => {
+  const src = fs.readFileSync(new URL("../../js/race/race-settings.js", import.meta.url), "utf8");
+  const fn = src.match(/function currentPresetValues\(\)\s*\{([\s\S]*?)\n    \}/);
+  assert.ok(fn, "currentPresetValues exists");
+  assert.doesNotMatch(fn[1], /caution|getRaceCtl/,
+    "preset matching must not reclaim ownership of caution");
+});
+
 test("championship race settings hide Duel help with the absent Duel row", () => {
   const src = fs.readFileSync(new URL("../../js/race/race-settings.js", import.meta.url), "utf8");
   assert.match(src, /\$\("rs-duel-help"\)\.hidden\s*=\s*tt\s*\|\|\s*champ/,
