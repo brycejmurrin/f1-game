@@ -34,6 +34,12 @@ const DataLive = (function () {
     return at - start <= liveHours * 60 * 60 * 1000 ? "LIVE" : "COMPLETED";
   }
 
+  function sessionTimeLabel(meta, phase, fmtDateTime) {
+    if (!meta || !meta.dateStart) return "";
+    const verb = phase === "UPCOMING" ? "Starts " : "Started ";
+    return verb + fmtDateTime(meta.dateStart);
+  }
+
   function create({
     el, clear, emptyMsg, spinner, ensureSession, sel, buildPicker,
     invalidateOther, fmtDateTime, findTeam, cssColor, textColorOn, NO_LIVE_MSG
@@ -134,7 +140,8 @@ const DataLive = (function () {
       info.appendChild(infoTitle);
       const place = [meta.circuit, meta.country].filter(Boolean).join(" · ");
       if (place) info.appendChild(el("div", "dh-live-sub", place));
-      if (meta.dateStart) info.appendChild(el("div", "dh-live-sub", "Starts " + fmtDateTime(meta.dateStart)));
+      const timeLabel = sessionTimeLabel(meta, phase, fmtDateTime);
+      if (timeLabel) info.appendChild(el("div", "dh-live-sub", timeLabel));
       leftPane.appendChild(info);
 
       const bar = el("div", "dh-livecontrols");
@@ -376,6 +383,12 @@ const DataLive = (function () {
 
     return { loadLive, stopLiveAuto, disarmLiveAuto };
   }
-  return { create, _mergePositionBatch: mergePositionBatch, _mergeIntervalBatch: mergeIntervalBatch, _sessionStatus: sessionStatus };
+  return {
+    create,
+    _mergePositionBatch: mergePositionBatch,
+    _mergeIntervalBatch: mergeIntervalBatch,
+    _sessionStatus: sessionStatus,
+    _sessionTimeLabel: sessionTimeLabel
+  };
 })();
 Object.freeze(DataLive);
