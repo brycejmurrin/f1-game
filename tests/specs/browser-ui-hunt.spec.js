@@ -66,24 +66,43 @@ test("Duel help belongs to the Duel control at every grid width", async ({ page 
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
 
-  const relation = await page.evaluate(() => {
-    const duel = document.getElementById("rs-duel");
-    const help = document.getElementById("rs-duel-help");
-    const caution = document.getElementById("rs-caution");
-    const dr = duel.getBoundingClientRect();
-    const hr = help.getBoundingClientRect();
-    const cr = caution.getBoundingClientRect();
-    const overlap = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
-    return {
-      parent: help.parentElement.id,
-      belowDuel: hr.top >= dr.top && hr.left >= dr.left - 1 && hr.right <= dr.right + 1,
-      duelOverlap: overlap(hr, dr),
-      cautionOverlap: overlap(hr, cr),
-    };
-  });
-  expect(relation.parent).toBe("rs-duel");
-  expect(relation.belowDuel).toBe(true);
-  expect(relation.duelOverlap).toBeGreaterThan(relation.cautionOverlap);
+  await page.locator("#rs-fold-field-sum").click();
+
+  for (const mode of [
+    { width: 1024, height: 525, columns: 2 },
+    { width: 430, height: 800, columns: 1 },
+  ]) {
+    await page.setViewportSize({ width: mode.width, height: mode.height });
+    await expect(page.locator("#rs-duel")).toBeVisible();
+    await expect(page.locator("#rs-duel-help")).toBeVisible();
+    await expect(page.locator("#rs-caution")).toBeVisible();
+
+    const relation = await page.evaluate(() => {
+      const fold = document.getElementById("rs-fold-field");
+      const duel = document.getElementById("rs-duel");
+      const help = document.getElementById("rs-duel-help");
+      const caution = document.getElementById("rs-caution");
+      const dr = duel.getBoundingClientRect();
+      const hr = help.getBoundingClientRect();
+      const cr = caution.getBoundingClientRect();
+      return {
+        open: fold.open,
+        columns: getComputedStyle(fold).gridTemplateColumns.split(" ").filter(Boolean).length,
+        parent: help.parentElement.id,
+        contained:
+          hr.top >= dr.top - 1 && hr.bottom <= dr.bottom + 1 &&
+          hr.left >= dr.left - 1 && hr.right <= dr.right + 1,
+        cautionFollowsHelp: cr.top >= hr.bottom - 1,
+      };
+    });
+    expect(relation).toEqual({
+      open: true,
+      columns: mode.columns,
+      parent: "rs-duel",
+      contained: true,
+      cautionFollowsHelp: true,
+    });
+  }
 });
 
 test("choosing a free Time Trial circuit clears Daily Standard chrome", async ({ page }) => {
