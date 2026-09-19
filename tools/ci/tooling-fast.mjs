@@ -51,6 +51,7 @@ const LOGFILE = path.join(LOGDIR, "tooling-fast-suite.log");
 export const TOOLING_FAST_FILES = Object.freeze([
   // @gen-test-groups:begin — generated from tests/groups.json; do not hand-edit
   "tests/unit/ghost.test.mjs",
+  "tests/unit/ghost-share.test.mjs",
   // The three suites the feature batches added. Each is pure rules over a
   // store or a source string — no DOM, no rasteriser — so all three together
   // cost under a second and belong where the rule they guard is edited.

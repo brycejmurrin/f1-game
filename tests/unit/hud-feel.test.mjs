@@ -63,6 +63,7 @@ function boot(opts = {}) {
     M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
     PhysicsConsts: { IDLE_RPM, MAX_RPM },
     Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
+    GhostShare: { hasGuest: () => false, timeAt: () => null, at: () => null },
     TrackMaps: { drsZones: () => [] },
   };
   sb.window = sb;
