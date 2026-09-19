@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["suzuka"] =
   function (api) {
       const { K, lapBounds, out, track, n, px, py, pz, hw, pyMin, place, every, ferrisWheel,
-              hash, mountain, pine, tree, bush, grandstandEx, spectatorHill,
+              hash, mountain, pine, tree, bush, grandstandEx, spectatorHill, terrace,
               bleacher, cypress, broadleafFall,
               building, tower, billboard,
               marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
@@ -447,12 +447,30 @@
       // to stand on the road below; verify-track rejected all three footprints.
       //
       // Clearance 5.5 + thickness 1.7 puts the deck top at 7.2 m — beneath the
-      // 9.1 m upper ribbon, above the lower road, so it reads as girder
-      // structure under the bridge. Girder green, not turf.
+      // 9.1 m upper ribbon, above the lower road, so it reads as the dark
+      // structural soffit under the bridge.
       overheadSpan({ id: "suzuka-crossover-deck", frac: 0.8172, clearance: 5.5,
         minimumClearance: 4.8, thickness: 1.7, depth: 20, span: hw[Math.round(0.8172 * n) % n] * 2 + 8,
-        supportGap: 2.8, supportWidth: 1.8, color: [0.13, 0.33, 0.21],
+        supportGap: 2.8, supportWidth: 1.8, color: [0.055, 0.075, 0.105],
         required: true });
+      {
+        // The deck above remains the clearance-bearing span.  This deep,
+        // one-sided reveal enlarges the lower-road mouth without moving or
+        // lowering any part of the bridge.
+        const pa = anchor(K(0.8172), -1, 5.2), pb = [pa.r, pa.u, pa.t];
+        const pc = vadd(pa.c, pa.u, 2.65);
+        modelGroup("suzuka-crossover-portal", {
+          center: pc, size: [2.2, 5.3, 25], basis: pb,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, pc, [1.7, 5.3, 24], [0.045, 0.055, 0.075], pb);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(pa.c, pa.r, 0.88), pa.u, 2.65),
+                 [0.18, 5.3, 24.4], [0.12, 0.16, 0.22], pb);
+          addBox(stage, vadd(pa.c, pa.u, 5.12),
+                 [2.0, 0.36, 24.4], [0.08, 0.11, 0.15], pb);
+        }, { required: true });
+      }
       for (const side of [-1, 1]) {
         const ca = anchor(K(0.8172), side, 8.5), cb = [ca.r, ca.u, ca.t];
         const cc = vadd(ca.c, ca.u, 2.6);
@@ -510,10 +528,50 @@
         frameCol: [0.56, 0.58, 0.62], plankCol: [0.64, 0.65, 0.68], density: 0.66 });
 
       const hillHalf = (lenM) => (lenM / 2) / track.total;
-      spectatorHill(0.62 - hillHalf(40), 0.62 + hillHalf(40), -1, 9,
-        { rows: 4, density: 0.55 }); // Spoon
+      terrace(0.611, 0.629, -1, 11, {
+        rows: 4, rise: 0.72, depth: 1.8, density: 0.52, step: 10,
+        conc: [0.50, 0.52, 0.55], concAlt: [0.42, 0.45, 0.50],
+        crowd: [navy, steel, [0.78, 0.34, 0.12], [0.82, 0.82, 0.80]],
+        retainer: true, backWall: true,
+      });
+      {
+        // The shared terrace follows Spoon's arc; this compact rear spine gives
+        // the complete landmark a required, stable diagnostic identity.
+        const sa = anchor(K(0.62), -1, 20.5), sb = [sa.r, sa.u, sa.t];
+        const sc = vadd(sa.c, sa.u, 1.7);
+        modelGroup("suzuka-spoon-terrace", {
+          center: sc, size: [4.4, 3.8, 32], basis: sb,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          addBox(stage, sc, [3.8, 3.4, 30], [0.42, 0.45, 0.50], sb);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(sa.c, sa.u, 3.48), [4.2, 0.28, 31], navy, sb);
+          for (const z of [-12, -4, 4, 12])
+            addBox(stage, vadd(vadd(sa.c, sa.t, z), sa.u, 2.1),
+                   [4.1, 0.16, 0.22], steel, sb);
+        }, { required: true });
+      }
       spectatorHill(0.84 - hillHalf(36), 0.84 + hillHalf(36), 1, 8,
         { rows: 4, density: 0.5 });  // 130R
+      {
+        // A narrow vertical bank sits just behind the existing soft hill so it
+        // reads from the flat-out approach without broadening the footprint.
+        const ba = anchor(K(0.84), 1, 12.5), bb = [ba.r, ba.u, ba.t];
+        const bc = vadd(ba.c, ba.u, 7.2);
+        modelGroup("suzuka-130r-bank", {
+          center: bc, size: [4.8, 14.8, 54], basis: bb,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          addBox(stage, bc, [3.4, 14.4, 52], navy, bb);
+          addBox(stage, vadd(ba.c, ba.u, 14.45), [4.0, 0.45, 53], steel, bb);
+          for (const z of [-21, -14, -7, 0, 7, 14, 21])
+            addBox(stage, vadd(vadd(ba.c, ba.t, z), ba.u, 7.2),
+                   [3.8, 14.4, 0.20], steel, bb);
+          stage._mat = MAT.FABRIC;
+          addBox(stage, vadd(vadd(ba.c, ba.r, -1.78), ba.u, 9.3),
+                 [0.22, 4.6, 49], [0.16, 0.22, 0.38], bb);
+        }, { required: true });
+      }
 
       {
         const CULM   = [0.62, 0.66, 0.36];
