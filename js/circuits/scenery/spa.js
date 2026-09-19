@@ -209,7 +209,7 @@
           addBox(stage, vadd(vadd(a.c, a.r, -1.30), a.u, 9.4),
             [0.38, 7.3, 1.15], FASCIA, b);
           addBox(stage, vadd(vadd(a.c, a.r, -0.05), a.u, 13.1),
-            [3.6, 1.35, 37], FASCIA, b);
+            [3.5, 1.35, 37], FASCIA, b);
           addBox(stage, vadd(vadd(a.c, a.r, -0.15), a.u, 5.7),
             [3.4, 0.65, 35.5], [0.60, 0.42, 0.12], b);
           stage._mat = 0;

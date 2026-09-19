@@ -254,9 +254,6 @@ function run(env, id, opt) {
   const Tracks = env.Tracks;
   const def = Tracks.LIST.find((d) => d.id === id);
   if (!def) throw new Error(`no such track: ${id}`);
-  // #region agent log
-  if (id === "spa") fs.appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "A,B,C,D", location: "tools/track/coplanar-audit.cjs:run-entry", message: "Spa coplanar audit entry", data: { opt }, timestamp: Date.now() }) + "\n");
-  // #endregion
   const from = env.mark();
   const track = Tracks.build(def, {});
   const prims = shipped(env.prims.slice(from), env.liveBufs);
@@ -264,11 +261,7 @@ function run(env, id, opt) {
   // context accumulates every circuit's full mesh buffers for the life of the
   // sweep (measured 4157 MB -> 97 MB for the 40-circuit --all run).
   env.trim(from);
-  const result = Object.assign({ id }, analyse(track, prims, opt));
-  // #region agent log
-  if (id === "spa") fs.appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "A,B,C,D", location: "tools/track/coplanar-audit.cjs:run-exit", message: "Spa coplanar audit result", data: { prims: prims.length, spots: result.spots, pairs: result.pairs, hits: result.hits.map((h) => ({ area: h.area, gap: h.gap, a: { name: h.a.name, q: h.a.q, min: [h.a.minX, h.a.minY, h.a.minZ], max: [h.a.maxX, h.a.maxY, h.a.maxZ] }, b: { name: h.b.name, q: h.b.q, min: [h.b.minX, h.b.minY, h.b.minZ], max: [h.b.maxX, h.b.maxY, h.b.maxZ] } })) }, timestamp: Date.now() }) + "\n");
-  // #endregion
-  return result;
+  return Object.assign({ id }, analyse(track, prims, opt));
 }
 
 // ---------------------------------------------------------------------------
@@ -329,9 +322,6 @@ function main() {
       const r2 = run(env2, id, opt);
       const at = new Map();
       for (const p of env2.prims) if (p.stack) at.set(primKey(p), p.stack);
-      // #region agent log
-      if (id === "spa") fs.appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "A,B,C,D", location: "tools/track/coplanar-audit.cjs:why-sites", message: "Spa flagged primitive call sites", data: { hits: r2.hits.map((h) => ({ area: h.area, gap: h.gap, a: site(at.get(primKey(h.a))), b: site(at.get(primKey(h.b))) })) }, timestamp: Date.now() }) + "\n");
-      // #endregion
       for (const h of r2.hits) {
         const sa = site(at.get(primKey(h.a))), sb = site(at.get(primKey(h.b)));
         const key = sa < sb ? `${sa}  X  ${sb}` : `${sb}  X  ${sa}`;
