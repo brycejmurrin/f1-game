@@ -1,0 +1,315 @@
+/* announcer.test.mjs — the PRE-RACE ANNOUNCER, without a browser.
+ *
+ * Two halves, and only one of them is speech.
+ *
+ *  1. THE SCRIPT IS DERIVED, so it has to hold for circuits nobody wrote it
+ *     for. `script()` is pure — an object in, an array of lines out — and the
+ *     tests hand it the shapes a real def actually takes: a classic with no GP,
+ *     a night race, a 7 km circuit with 10 corners and a 3 km one with 20.
+ *     Every clause it emits has to be TRUE of the numbers it was given, because
+ *     a broadcast opening that describes the wrong circuit is worse than none.
+ *  2. THE VOICE CHAIN IS A FALLBACK LADDER. "Daniel or the British guy" is an
+ *     Apple voice that exists on two platforms out of five, so the interesting
+ *     cases are all the machines that do NOT have it. `pickVoice()` is pure over
+ *     the list for exactly that reason: this file hands it macOS's voices,
+ *     Windows's, a Linux box's and an empty list.
+ *
+ * Run: node --test tests/unit/announcer.test.mjs   (npm run test:tooling-fast)
+ */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+import { seedLog } from "../helpers/seed-log.mjs";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const read = (p) => readFileSync(join(ROOT, p), "utf8");
+
+function synthStub() {
+  const calls = [];
+  return {
+    calls,
+    getVoices() { calls.push({ m: "getVoices" }); return this._voices || []; },
+    speak(u) { calls.push({ m: "speak", text: u.text, voice: u.voice, rate: u.rate, pitch: u.pitch, volume: u.volume }); },
+    cancel() { calls.push({ m: "cancel" }); },
+    resume() { calls.push({ m: "resume" }); },
+  };
+}
+
+/** Both modules in one context: the announcer borrows RadioVoice.speakable()
+ *  and RadioVoice.SAMPLE, so loading it alone would test a different file. */
+function load({ api = true, voices = [], stored = {}, soundOn = true } = {}) {
+  const saved = new Map(Object.entries(stored));
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  seedLog(ctx);
+  const synth = api ? synthStub() : null;
+  if (synth) synth._voices = voices;
+  ctx.window = api ? { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } } : {};
+  ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  vm.runInContext(read("js/audio/announcer.js"), ctx, { filename: "js/audio/announcer.js" });
+  const A = vm.runInContext("Announcer", ctx);
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const G = {
+    soundOn, state: "menu", track: null,
+    store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
+    radio: RV.create({ soundOn, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } }),
+  };
+  return { A, RV, G, synth, saved };
+}
+
+const { A } = load();
+const info = (over = {}) => Object.assign({
+  track: { id: "monza", name: "Monza", gp: "Italian Grand Prix", country: "Italy", lengthKm: 5.793 },
+  laps: 12, turns: 11, relief: 4, weather: "dry", tod: "day",
+}, over);
+const said = (o) => A.script(o).join(" ");
+
+// ── 1. The script says what it opens with, and describes the right circuit ──
+
+test("it opens with the game's own name, every time", () => {
+  // The line the request asked for by name. First, before the venue: it is the
+  // broadcast's identity, and a welcome that starts with the circuit is a
+  // caption rather than an opening.
+  assert.equal(A.script(info())[0], "Welcome to Apex 26.");
+  assert.equal(A.script(info({ track: {} }))[0], "Welcome to Apex 26.");
+  assert.equal(A.script(null)[0], "Welcome to Apex 26.");
+});
+
+test("it names the circuit AND the event — both, because either alone reads as a placeholder", () => {
+  assert.match(said(info()), /This is Monza, home of the Italian Grand Prix\./);
+});
+
+test("\"Bahrain GP\" is SPOKEN as a Grand Prix, not as two letters", () => {
+  // Every `gp` in js/circuits/ ends in "GP" because that is what fits a chip on
+  // the picker, and RadioVoice.speakable() lowercases any token it does not
+  // recognise — so the unexpanded string reached the synth as "italian g p".
+  // Found by printing the script from a live boot, not by reading the code.
+  const { A: An, RV } = load();
+  const line = An.script(info({ track: { name: "MONZA", gp: "Italian GP", lengthKm: 5.793 } }))[1];
+  assert.match(line, /Italian Grand Prix/);
+  assert.ok(!/\bGP\b/.test(RV.speakable(line)), RV.speakable(line));
+});
+
+test("an ALL-CAPS circuit name is title-cased for the printed script, multi-word ones included", () => {
+  // Cosmetic only — speakable() lowercases it either way — but the flyby
+  // editor PRINTS this, and "This is MONZA" reads as a placeholder there.
+  // Whole-string, not per-word: a word-length rule leaves "RED BULL RING" as is.
+  assert.match(said(info({ track: { name: "MONZA", lengthKm: 5.793 } })), /This is Monza/);
+  assert.match(said(info({ track: { name: "RED BULL RING", lengthKm: 4.318 } })), /This is Red Bull Ring/);
+  // A name that is already mixed case is left exactly alone.
+  assert.match(said(info({ track: { name: "Mont-Tremblant", lengthKm: 4.265 } })), /This is Mont-Tremblant/);
+});
+
+test("a circuit with no Grand Prix falls back to the country, not to an empty clause", () => {
+  // Every def carries a name; `gp` is optional and several classics have none.
+  const s = said(info({ track: { name: "Brands Hatch", country: "United Kingdom", lengthKm: 3.908 } }));
+  assert.match(s, /This is Brands Hatch, in the United Kingdom\./);
+  assert.ok(!/home of the \./.test(s), "an empty gp left a dangling clause");
+});
+
+test("no name and no event leaves out the venue line rather than saying 'This is .'", () => {
+  const lines = A.script(info({ track: { lengthKm: 4 } }));
+  assert.ok(!lines.some((l) => /^This is/.test(l)), lines.join(" | "));
+  assert.equal(lines[0], "Welcome to Apex 26.");
+});
+
+test("every number it speaks is the number it was given", () => {
+  const s = said(info({ track: { name: "Spa", gp: "Belgian Grand Prix", lengthKm: 7.004 }, turns: 19, laps: 8 }));
+  assert.match(s, /7\.004 kilometres/);
+  assert.match(s, /19 corners/);
+  assert.match(s, /8 laps\./);
+});
+
+test("a circuit with no built world yet omits the corner count instead of claiming zero", () => {
+  // turns comes from the BUILT track (TrackMaps.corners); before a build it is
+  // 0, and "0 corners" is the one wrong fact this script could state.
+  const s = said(info({ turns: 0 }));
+  assert.ok(!/corners/.test(s), s);
+  assert.match(s, /5\.793 kilometres\./);
+});
+
+// ── 2. The character clause is a claim about the lap, so it must track it ───
+
+test("corner DENSITY separates the circuits, not corner count", () => {
+  // Monaco is 19 corners in 3.337 km and Spa 19 in 7.004. Counting corners alone
+  // calls them the same lap, which is the whole reason this is a ratio.
+  const monaco = said(info({ track: { name: "Monaco", lengthKm: 3.337 }, turns: 19 }));
+  const monza = said(info({ track: { name: "Monza", lengthKm: 5.793 }, turns: 11 }));
+  const spa = said(info({ track: { name: "Spa", lengthKm: 7.004 }, turns: 19 }));
+  assert.match(monaco, /tight, technical lap/);
+  assert.match(monza, /fast, flowing lap/);
+  assert.match(spa, /mixes rhythm/);
+});
+
+test("relief is only mentioned when there is some, and the figure is rounded DOWN into a round number", () => {
+  assert.ok(!/climbs|rolling/.test(said(info({ relief: 3 }))), "flat ground got an elevation clause");
+  assert.match(said(info({ relief: 22 })), /rolling ground/);
+  const hilly = said(info({ relief: 103 }));
+  assert.match(hilly, /climbs and falls more than 100 metres/);
+});
+
+test("night and weather are stated, and only one of them", () => {
+  assert.match(said(info({ track: { name: "Singapore", gp: "Singapore Grand Prix", lengthKm: 4.94, night: true } })), /under the lights/);
+  assert.match(said(info({ tod: "night" })), /under the lights/);
+  const wet = said(info({ weather: "rain" }));
+  assert.match(wet, /weather is against us/);
+  assert.ok(!/under the lights/.test(wet));
+  assert.ok(!/weather is against us/.test(said(info({ weather: "dry" }))));
+});
+
+test("it ends on the same line whatever it found, so the voice never trails off", () => {
+  for (const o of [info(), info({ laps: 0 }), info({ track: {} }), info({ turns: 0, relief: 0 })]) {
+    assert.match(A.script(o).slice(-1)[0], /Let's go racing\.$/);
+  }
+});
+
+test("every line is a sentence — the synth pauses on the full stop, and a missing one runs two facts together", () => {
+  for (const l of A.script(info())) assert.match(l, /\.$/, `"${l}" is not punctuated`);
+});
+
+test("the whole script survives speakable() — it is spoken through the radio's normaliser", () => {
+  const { A: An, RV } = load();
+  const words = RV.speakable(An.script(info()).join(" "));
+  assert.ok(words.length > 40, words);
+  assert.ok(!/undefined|NaN|\[object/.test(words), words);
+});
+
+// ── 3. The voice ladder: Daniel first, then the machines without him ────────
+
+// localService, on every one: RadioVoice.voicesFor() drops REMOTE voices
+// outright (a network round trip before a line lands is not a radio), so a
+// stub without it hands the announcer an empty list and every voice assertion
+// below would pass for the wrong reason.
+const V = (name, lang) => ({ name, lang, localService: true });
+
+test("Daniel in en-GB wins outright — the voice the request named", () => {
+  const mac = [V("Alex", "en-US"), V("Daniel", "en-GB"), V("Karen", "en-AU")];
+  assert.equal(A.pickVoice(mac, "").name, "Daniel");
+});
+
+test("a Daniel in the wrong language still beats a stranger in the right one", () => {
+  // Ordered deliberately: name is the stronger signal for the ONE voice the
+  // request asked for by name, and en-GB has dozens of members.
+  assert.equal(A.pickVoice([V("Serena", "en-GB"), V("Daniel", "en-US")], "").name, "Daniel");
+});
+
+test("no Daniel: another British male, then any en-GB, then any English", () => {
+  assert.equal(A.pickVoice([V("Zira", "en-US"), V("George", "en-GB")], "").name, "George");
+  assert.equal(A.pickVoice([V("Zira", "en-US"), V("Hazel", "en-GB")], "").name, "Hazel");
+  assert.equal(A.pickVoice([V("Zira", "en-US"), V("Amelie", "fr-FR")], "").name, "Zira");
+});
+
+test("an en-GB FEMALE voice is not preferred over an en-GB one whose name says nothing", () => {
+  const list = [V("Google UK English Female", "en-GB"), V("Google UK English", "en-GB")];
+  assert.equal(A.pickVoice(list, "").name, "Google UK English");
+});
+
+test("nothing English at all returns null, and the platform picks — never a throw and never a French announcer", () => {
+  assert.equal(A.pickVoice([V("Amelie", "fr-FR"), V("Yuna", "ko-KR")], ""), null);
+  assert.equal(A.pickVoice([], ""), null);
+  assert.equal(A.pickVoice(null, ""), null);
+  assert.equal(A.pickVoice([null, undefined], ""), null);
+});
+
+test("THE PLAYER'S PICK OUTRANKS THE WHOLE LADDER — that is what the settings row is for", () => {
+  const list = [V("Daniel", "en-GB"), V("Yuna", "ko-KR")];
+  assert.equal(A.pickVoice(list, "Yuna").name, "Yuna");
+  // …but a pick for a voice this machine does not have falls back rather than
+  // silencing the channel: a save made on a Mac opened on a Windows box.
+  assert.equal(A.pickVoice(list, "Samantha").name, "Daniel");
+});
+
+// ── 4. The instance: degradation, gates, and the switch ─────────────────────
+
+test("no speechSynthesis: create() is inert and every method is safe to call", () => {
+  const { A: An, G } = load({ api: false });
+  const a = An.create(G);
+  assert.equal(a.available(), false);
+  assert.equal(a.play(info(), 1000), false);
+  assert.equal(a.preview(info()), false);
+  assert.equal(a.sample(), false);
+  assert.equal(a.scriptFor(info()).length, 0);
+  a.stop(); a.setEnabled(true);
+  assert.equal(An.inert().play(), false);
+});
+
+test("create() never reads the voice list — a speech API on the boot path is the defect radio-voice.js already pins", () => {
+  const { A: An, G, synth } = load({ voices: [V("Daniel", "en-GB")] });
+  An.create(G);
+  assert.equal(synth.calls.filter((c) => c.m === "getVoices").length, 0);
+});
+
+test("ON by default, and the stored OFF is honoured", () => {
+  assert.equal(load().A.create(load().G).enabled(), true);
+  const off = load({ stored: { announcer: false } });
+  assert.equal(off.A.create(off.G).enabled(), false);
+});
+
+test("MASTER SOUND OFF is silence, for play and preview alike — speech is outside the audio graph, so nothing else would stop it", () => {
+  const { A: An, G, synth } = load({ soundOn: false, voices: [V("Daniel", "en-GB")] });
+  const a = An.create(G);
+  assert.equal(a.play(info(), 1000), false);
+  assert.equal(a.preview(info()), false);
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 0);
+});
+
+test("the switch OFF stops play() but not preview() — pressing PLAY in the editor IS the consent", () => {
+  const { A: An, G } = load({ stored: { announcer: false }, voices: [V("Daniel", "en-GB")] });
+  const a = An.create(G);
+  assert.equal(a.play(info(), 1000), false);
+  assert.equal(a.preview(info()), true);
+});
+
+test("setEnabled writes through to the store, so the panel and the editor cannot disagree", () => {
+  const { A: An, G, saved } = load({ voices: [V("Daniel", "en-GB")] });
+  const a = An.create(G);
+  a.setEnabled(false);
+  assert.equal(saved.get("announcer"), false);
+  assert.equal(a.enabled(), false);
+  a.setEnabled(true);
+  assert.equal(saved.get("announcer"), true);
+});
+
+test("speaking picks the voice by name off the live synth, at the announcer channel's prosody", () => {
+  const { A: An, RV, G, synth } = load({ voices: [V("Alex", "en-US"), V("Daniel", "en-GB")] });
+  const a = An.create(G);
+  assert.equal(a.play(info(), 24000), true);
+  const spoke = synth.calls.find((c) => c.m === "speak");
+  assert.ok(spoke, "nothing was spoken");
+  assert.equal(spoke.voice && spoke.voice.name, "Daniel");
+  assert.equal(spoke.rate, RV.TONE.announcer.rate);
+  assert.equal(spoke.pitch, RV.TONE.announcer.pitch);
+  assert.match(spoke.text, /welcome to apex 26/i);
+});
+
+test("a cancel precedes every utterance and a resume follows it — Bugzilla 1522074, the same one the radio documents", () => {
+  const { A: An, G, synth } = load({ voices: [V("Daniel", "en-GB")] });
+  An.create(G).play(info(), 24000);
+  const order = synth.calls.map((c) => c.m).filter((m) => m !== "getVoices");
+  assert.deepEqual(order, ["cancel", "speak", "resume"], order.join(","));
+});
+
+test("VOICE VOLUME reaches it — one slider for everything the game speaks", () => {
+  const { A: An, G, synth } = load({ voices: [V("Daniel", "en-GB")], stored: { volRadio: 0.3 } });
+  An.create(G).play(info(), 24000);
+  assert.equal(synth.calls.find((c) => c.m === "speak").volume, 0.3);
+});
+
+// ── 5. The channel this borrows has to exist ───────────────────────────────
+
+test("`announcer` is a real RadioVoice channel, with prosody and a preview line", () => {
+  // The settings row is a VOICE_CHANNELS entry like any other, which only works
+  // because the channel is in TONE — and setTune() refuses a channel that is
+  // not, so without this the player's pick would be silently dropped.
+  const { RV } = load();
+  assert.ok(RV.TONE[A.CHANNEL], "no prosody for the announcer channel");
+  assert.ok(RV.SAMPLE[A.CHANNEL], "no TEST line for the announcer channel");
+  assert.ok(RV.TONE[A.CHANNEL].rate < RV.TONE.radio.rate,
+    "the announcer reads a paragraph over a still screen; it must not be quicker than the pit call");
+  // …and it is NOT a race-time speaker: nothing may route a `kind` here, or the
+  // gate that keeps menu cards from being read aloud is bypassed.
+  assert.ok(!Object.values(RV.SPEAKERS).includes(A.CHANNEL));
+});
