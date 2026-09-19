@@ -191,6 +191,14 @@ const Ghost = (function () {
 
   function hasGhost() { return !!best; }
   function bestTime() { return best ? best.time : Infinity; }
+  // Export a detached lap for GhostShare. The portable guest path must never
+  // retain or mutate this module's live PB arrays or metadata.
+  function snapshot() {
+    if (!best) return null;
+    const out = { time: best.time, t: best.t.slice(), s: best.s.slice(), x: best.x.slice() };
+    if (best.meta && typeof best.meta === "object") out.meta = Object.assign({}, best.meta);
+    return out;
+  }
   function meta() { return best && best.meta && typeof best.meta === "object" ? best.meta : null; }
   function medal() {
     const m = meta();
@@ -324,7 +332,7 @@ const Ghost = (function () {
   return {
     setTrack, startLap, record, finishLap, at, timeAt, contextKey,
     context: () => context, track: () => trackId,
-    hasGhost, bestTime, meta, medal, clear, speedAt,
+    hasGhost, bestTime, snapshot, meta, medal, clear, speedAt,
   };
 })();
 
