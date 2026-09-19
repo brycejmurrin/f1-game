@@ -25,6 +25,18 @@ const RadioVoice = (function () {
     control: { pitch: 0.9, rate: 1.05 },
     coach: { pitch: 1.0, rate: 0.95 },
     radio: { pitch: 1.05, rate: 1.15 },
+    // The PRE-RACE ANNOUNCER (js/audio/announcer.js). A fourth channel here and
+    // nowhere in SPEAKERS on purpose: SPEAKERS maps a race-time `kind` onto a
+    // voice, and the announcer has no kind — it never goes through say(). What
+    // it does share is the tune: a channel in this table is a channel the
+    // settings panel can give a voice, a pitch and a rate, and that is exactly
+    // what "let the player pick the announcer's voice" needs.
+    //
+    // SLOWEST AND LOWEST of the four. The other three talk over a race and are
+    // budgeted against a card that is already fading; this one reads a scripted
+    // paragraph over a still screen, where an unhurried delivery is the whole
+    // character. 0.92 is under the coach's 0.95 and well under the engineer's.
+    announcer: { pitch: 0.95, rate: 0.92 },
   });
   /* PLAYER TUNING sits OVER those defaults rather than replacing them, which is
    * what makes "reset" a delete and not a second table to keep in step. A tune
@@ -43,6 +55,7 @@ const RadioVoice = (function () {
     control: "Car 44, track limits — +5s penalty",
     coach: "Brake a little earlier here and get the car straight",
     radio: "BOX BOX, P3 on the exit",
+    announcer: "Welcome to Apex 26. This is Silverstone, home of the British Grand Prix",
   });
   const PITCH_MIN = 0.5, PITCH_MAX = 1.6;
   const RATE_MIN = 0.6;
