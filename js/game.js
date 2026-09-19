@@ -8010,7 +8010,8 @@ function render(dt) {
   shadowPass.flushBlobs();
   // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
   if (isTimeTrial() && player && (state === "race" || state === "count")) {
-    const g = Ghost.at(player.lapTime);
+    const replayGhost = GhostShare.hasGuest() ? GhostShare : Ghost;
+    const g = replayGhost.at(player.lapTime);
     // Skip the ghost while it overlaps the player — at the lap start it sits on
     // your exact grid position, and in the cockpit/onboard cams its bodywork
     // fills the camera as a black box until you pull away ("starts dark, clears
@@ -8495,6 +8496,29 @@ function openTimeTrial(selectDaily) {
   if (!selectDaily) scheduleFlybyTrack(true);
 }
 $("mb-tt").onclick = () => openTimeTrial(false);
+async function consumeGhostHash() {
+  const shared = await GhostShare.consumeHash({
+    notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
+  });
+  if (!shared || !shared.ok) return shared;
+  setFlow("gp"); session = "tt";
+  const today = DailyChallenge.dayKey();
+  if (shared.day && shared.day === today) {
+    daily.select(shared.day);
+  } else {
+    daily.stop();
+    restoreFreePlaySelection();
+    const idx = Tracks.LIST.findIndex((entry) => entry.id === shared.track);
+    if (idx < 0) return shared;   // decode already guards this; retain a safe no-op
+    trackIdx = idx;
+  }
+  buildSelect();
+  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
+  scheduleFlybyTrack(true);
+  return shared;
+}
+consumeGhostHash();
+window.addEventListener("hashchange", consumeGhostHash);
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
   // Replace any career alias with the repaired standalone save; finished stays readable.
