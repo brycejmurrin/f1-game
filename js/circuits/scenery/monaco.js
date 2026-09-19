@@ -1168,28 +1168,30 @@
       {
         // Mirabeau Superior apartment identity: one pale slab replaces the
         // four hash-varied balcony masses with a regular residential grid.
-        const k = K(0.315), a = anchor(k, -1, 38), b = [a.r, a.u, a.t];
+        // The 18 m frontage and 44 m setback retain the proven second mass's
+        // footprint; a wider slab reaches Monaco's tightly folded street.
+        const k = K(0.314), a = anchor(k, -1, 44), b = [a.r, a.u, a.t];
         modelGroup("monaco-mirabeau-apartments", {
-          center: vadd(a.c, a.u, 19), size: [24.5, 39, 32], basis: b,
+          center: vadd(a.c, a.u, 19), size: [20.5, 39, 20], basis: b,
         }, (stage) => {
           stage._mat = MAT.STONE;
-          addBox(stage, vadd(a.c, a.u, 18.5), [22, 37, 30], [0.92, 0.89, 0.81], b);
+          addBox(stage, vadd(a.c, a.u, 18.5), [18, 37, 18], [0.92, 0.89, 0.81], b);
           for (let floor = 1; floor <= 7; floor++) {
             const fy = floor * 4.35;
-            addBox(stage, vadd(vadd(a.c, a.r, 11.55), a.u, fy - 1.2), [1.7, 0.34, 28.8], CREAM, b);
+            addBox(stage, vadd(vadd(a.c, a.r, 9.55), a.u, fy - 1.2), [1.7, 0.34, 16.8], CREAM, b);
             stage._mat = MAT.GLASS;
-            for (const z of [-11.5, -6.9, -2.3, 2.3, 6.9, 11.5])
-              addBox(stage, vadd(vadd(vadd(a.c, a.r, 11.12), a.t, z), a.u, fy + 0.25),
-                [0.22, 2.3, 2.7], WIN, b);
+            for (const z of [-6.4, -3.2, 0, 3.2, 6.4])
+              addBox(stage, vadd(vadd(vadd(a.c, a.r, 9.12), a.t, z), a.u, fy + 0.25),
+                [0.22, 2.3, 2.1], WIN, b);
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(vadd(a.c, a.r, 12.1), a.u, fy - 0.45),
-              [0.18, 1.15, 28.5], [0.52, 0.54, 0.55], b);
-            for (const z of [-13.5, -9, -4.5, 0, 4.5, 9, 13.5])
-              addCyl(stage, vadd(vadd(vadd(a.c, a.r, 12.1), a.t, z), a.u, fy - 0.45),
+            addBox(stage, vadd(vadd(a.c, a.r, 10.1), a.u, fy - 0.45),
+              [0.18, 1.15, 16.5], [0.52, 0.54, 0.55], b);
+            for (const z of [-7.8, -5.2, -2.6, 0, 2.6, 5.2, 7.8])
+              addCyl(stage, vadd(vadd(vadd(a.c, a.r, 10.1), a.t, z), a.u, fy - 0.45),
                 0.06, 1.15, [0.52, 0.54, 0.55], 3, b);
             stage._mat = MAT.STONE;
           }
-          addBox(stage, vadd(a.c, a.u, 37.6), [23, 1.2, 31], [0.82, 0.78, 0.70], b);
+          addBox(stage, vadd(a.c, a.u, 37.6), [19, 1.2, 19], [0.82, 0.78, 0.70], b);
           stage._mat = 0;
         }, { required: true });
       }
