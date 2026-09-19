@@ -29,14 +29,26 @@ function defaultBackend() {
 function readBackend() {
   const v = GameStore.store.raw("apex26.gfxBackend");
   if (v == null) return defaultBackend();
-  return v === "webgl2" || v === "webgpu" || v === "three" ? v : "webgl2";
+  if (v === "webgl2" || v === "webgpu" || v === "three") return v;
+  GameStore.store.rawSet("apex26.gfxBackend", "webgl2");
+  return "webgl2";
 }
 function backendLabel(v) { return v === "three" ? "THREE.JS" : String(v).toUpperCase(); }
 // What is actually DRAWING, as opposed to what is stored. readBackend() is the
 // PICK and must stay that way — the select's value, and the value a re-attach
 // restores — but the metrics overlay's `backend` line is a diagnostic, and it
 // reported "three" on a build that cannot load three.
-function liveBackend() { return available(readBackend()) ? readBackend() : "webgl2"; }
+function liveBackend() {
+  if (boundIsGlx()) return "webgl2";
+  if (liveThreeApi()) return "three";
+  try {
+    const s = typeof GLX !== "undefined" && GLX && typeof GLX.backendState === "function"
+      ? GLX.backendState() : null;
+    if (s && s.api === "webgpu") return "webgpu";
+  } catch (_) { /* no live backend yet */ }
+  const pref = readBackend();
+  return available(pref) ? pref : "webgl2";
+}
 function stepBackend(cur, dir) {
   const n = BACKENDS.length;
   const i = BACKENDS.indexOf(cur);
@@ -52,42 +64,39 @@ function isSelect(el) { return !!(el && el.tagName === "SELECT"); }
 function paintRenderer(rb) {
   if (!rb) return;
   const pref = readBackend();
+  const live = liveBackend();
   // Preference is what the picker shows. Live may be GLX after a
   // device.lost / create refuse — saying WEBGPU then was the lie.
-  //
-  // …and it is GLX for a second reason now: a pick whose FILES are gone. That
-  // case cannot reach boundIsGlx(), because the only writers of
-  // apex26.gfxBound were wgx.js and tlx.js and they left with the backends —
-  // nothing in the shipped tree has written that key since the spike-out. So a
-  // returning player still holding apex26.gfxBackend="three" (anyone who tried
-  // the stops before today) read a flat "RENDERER: THREE.JS" while GLX drew
-  // every frame. `available()` is the signal gfxBound used to be.
-  const fallback = (boundIsGlx() || !available(pref)) && (pref === "webgpu" || pref === "three");
+  const fallback = live !== pref;
   if (isSelect(rb)) {
     rb.value = pref;
     const opts = rb.options || [];
     for (let i = 0; i < opts.length; i++) {
       const opt = opts[i];
       let t = backendLabel(opt.value);
-      if (fallback && opt.value === pref) t += " (WEBGL2)";
+      if (fallback && opt.value === pref) t += " (" + backendLabel(live) + ")";
       opt.textContent = t;
     }
-    paintRendererSummary(pref, fallback);
+    paintRendererSummary(pref, fallback ? live : null);
     return;
   }
   rb.textContent = fallback
-    ? ("RENDERER: " + backendLabel(pref) + " (WEBGL2)")
+    ? ("RENDERER: " + backendLabel(pref) + " (" + backendLabel(live) + ")")
     : ("RENDERER: " + backendLabel(pref));
-  paintRendererSummary(pref, fallback);
+  paintRendererSummary(pref, fallback ? live : null);
 }
-function paintRendererSummary(pref, fallback) {
+function paintRendererSummary(pref, liveFallback) {
   const sum = typeof document !== "undefined"
     ? document.getElementById("pm-renderer-details-sum")
     : null;
   if (!sum) return;
+  const fallbackChip = liveFallback === "webgl2"
+    ? '<span data-fold="sep"> · </span><span data-fold="val">WEBGL2</span>'
+    : (liveFallback
+      ? '<span data-fold="sep"> · </span><span data-fold="val">' + backendLabel(liveFallback) + "</span>"
+      : "");
   sum.innerHTML = '<span data-fold="k">RENDERER</span><span data-fold="sep"> · </span><span data-fold="val">' +
-    backendLabel(pref) + "</span>" + (fallback
-      ? '<span data-fold="sep"> · </span><span data-fold="val">WEBGL2</span>' : "");
+    backendLabel(pref) + "</span>" + fallbackChip;
 }
 function markReloading(rb, next) {
   const msg = backendLabel(next) + " — RELOADING…";
@@ -252,7 +261,6 @@ function readThreePath() {
   return "auto";
 }
 function liveThreeApi() {
-  if (readBackend() !== "three") return null;
   try {
     const tlx = typeof GLX !== "undefined" && GLX && GLX.__tlx;
     if (tlx && typeof tlx.backendState === "function") {
@@ -263,6 +271,7 @@ function liveThreeApi() {
   try {
     const g = typeof document !== "undefined" ? document.getElementById("game") : null;
     const eng = g && typeof g.getAttribute === "function" ? g.getAttribute("data-engine") : "";
+    if (!/three\.js/i.test(eng || "")) return null;
     if (/webgl2/i.test(eng || "")) return "webgl2";
     if (/webgpu/i.test(eng || "")) return "webgpu";
   } catch (_) { /* no canvas yet */ }
