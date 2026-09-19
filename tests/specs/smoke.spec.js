@@ -336,7 +336,10 @@ test.describe("Apex 26 — smoke", () => {
     // already answered.
     await page.locator("#cs-done").click();
     await expect(page.locator("#race-settings")).toBeVisible();
-    // DIFFICULTY is here, beside the other per-race choices.
+    // DIFFICULTY is here, in the FIELD fold with the other opponent choices
+    // (2026-09-18: twelve flat rows became presets + the four SESSION rows +
+    // two folds). Opened through its own summary, the way a player opens it.
+    await page.locator("#rs-fold-field-sum").click();
     await expect(page.locator("#rs-diff-sel")).toBeVisible();
     expect(["easy", "normal", "hard"]).toContain(await page.locator("#rs-diff-sel").inputValue());
   });
