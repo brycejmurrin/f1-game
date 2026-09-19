@@ -1211,6 +1211,9 @@ function create(G) {
     close();
     els.overlay.hidden = false;
     G.flow = "gp"; G.session = "race";
+    // ...and the third: a career weekend's qualifying classification must not
+    // follow the player into the standalone SEASON the title screen offers next.
+    G.qualiClear();
     // Same two statements as game.js's own return-to-menu: resume() repairs a
     // career alias and sanitises the round, and the repair is persisted. Reading
     // the raw key handed the menu an unsanitised save.

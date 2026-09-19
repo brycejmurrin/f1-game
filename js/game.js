@@ -2879,6 +2879,11 @@ function endRace(forcedOrder) {
     let fastest = null, fastestT = Infinity;
     for (const c of order) if (!c.retired && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
     const settles = SeasonCal.award(season, order, fastest) === "race";
+    // award() deletes season.qualiOrder when the round scores; the IN-MEMORY
+    // classification is that same weekend and goes with it. Left behind, it kept
+    // qualiResults() truthy for the rest of the championship, so rs-go never
+    // offered the sheet again and every later grid came off round 1's times.
+    if (settles) quali.clear();
     // In career `season` IS career.season (same object, same shape — which is what
     // lets buildResults/buildStandings/the HUD work in career untouched), so it
     // persists through the career save or this would overwrite the standalone
@@ -2969,6 +2974,12 @@ const G = {
   set raceTyreWear(v) {
     if (!TyreModel.isLevel(v)) return;
     raceTyreWear = v; store.set("tyreWear", v);
+    // Keep the live model in step, exactly as gridUp() sets it. Without this the
+    // model kept the PREVIOUS race's level until the next grid, and the STRATEGY
+    // stint bar on the race-settings sheet — which reads planLaps() — planned
+    // against it: on a fresh boot (model "off") a full-length GP at REAL wear
+    // previewed "NO STOP".
+    tyres.setLevel(isTimeTrial() ? "off" : v);
   },
   get tyres() { return tyres; },
   get pits() { return pits; },
@@ -3145,6 +3156,9 @@ const G = {
   updateTrackPreview: (...a) => updateTrackPreview(...a),
   // Read-only qualifying model for the CURRENT track (__apex.qualiSim).
   qualiSim: (playerTime) => quali.preview(playerTime || 0),
+  // Memory only, exactly as quitToMenu's — for a screen that hand-rolls its own
+  // return to the title (CareerUI's cr-back) and must not leak a weekend on.
+  qualiClear: () => quali.clear(),
   refreshCareerButton: (...a) => refreshCareerButton(...a),
   // The R&D gate for the garage LISTING: the option ids the team on screen may fit,
   // or null. Career.owned() answers "career rules apply AND this is the career

@@ -558,6 +558,9 @@ interface GameCtx {
   readonly buildSelect: () => void;
   /** The read-only qualifying model for the CURRENT track (__apex.qualiSim). */
   readonly qualiSim: (playerTime?: number) => QualiRow[] | null;
+  /** Drop the in-memory qualifying classification (the persist stays), for a
+   *  screen that hand-rolls its own return to the title. */
+  readonly qualiClear: () => void;
   readonly refreshCareerButton: () => void;
   /** The R&D gate for the garage listing: fittable option ids, or null. */
   readonly careerOwned: () => Set<string> | null;

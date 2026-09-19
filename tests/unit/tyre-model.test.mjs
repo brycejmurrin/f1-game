@@ -624,3 +624,20 @@ test("the AI's compound classes agree with the same classifier", () => {
     assert.equal(T.codeForLife(cls.life, cls.tread), cls.code,
       `AI_CLASS.${name} codes "${cls.code}" at life ${cls.life}`);
 });
+
+test("the TYRE WEAR setting reaches the live model, not just the store", () => {
+  // planLaps() divides by LEVELS[level], and `level` was written ONLY by
+  // gridUp(). So the race-settings sheet's STRATEGY bar — which calls
+  // pits.planFor() -> planLaps() before any grid exists — planned against the
+  // PREVIOUS race's level, and on a fresh boot against the model's initial
+  // "off": that takes the `Math.max(1, lapsTarget)` branch, so every compound
+  // "lasted" the whole race and a full-length GP at REAL wear previewed
+  // "NO STOP". The G setter is where the two halves are kept in step.
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const setter = src.match(/set raceTyreWear\(v\) \{[\s\S]*?\n  \},/);
+  assert.ok(setter, "could not find the raceTyreWear setter in js/game.js");
+  assert.match(setter[0], /tyres\.setLevel\(/,
+    "setting TYRE WEAR must push the level into the model the STRATEGY preview reads");
+  // gridUp's rule is the one to mirror: a time trial runs the model off.
+  assert.match(setter[0], /isTimeTrial\(\) \? "off" : v/);
+});

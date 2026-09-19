@@ -20,6 +20,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const SRC = fs.readFileSync(path.join(ROOT, "js/race/quali-model.js"), "utf8");
 const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
 const QUALI_NET = fs.readFileSync(path.join(ROOT, "js/race/quali-net.js"), "utf8");
+const CAREER_UI = fs.readFileSync(path.join(ROOT, "js/career/career-ui.js"), "utf8");
 
 function car(id, code, name, team, isPlayer) {
   return {
@@ -39,7 +40,7 @@ function loadQuali(opts = {}) {
       car("p1", "VER", "Verstappen", "rb", true),
       car("p2", "HAM", "Hamilton", "me", false),
     ],
-    track: { n: 80, total: 4000 },
+    track: opts.track || { n: 80, total: 4000, def: { id: "monza" } },
     gripMult: () => 1,
     simSeed: () => 1,
     vTop: () => 90,
@@ -298,4 +299,47 @@ test("the model no longer owns any DOM — build/open/close live on the sheet", 
   assert.doesNotMatch(SRC, /document\.createElement|ScrollFade/, "quali.js is the model: no DOM, no sheet chrome");
   assert.doesNotMatch(SHEET_SRC, /GameStore|G\.store|Career\.|simulate\(|persistOrder|localStorage/,
     "quali-sheet.js is the sheet: no timing, no persist (code tokens, not prose)");
+});
+
+/* ── THE WEEKEND MUST END WITH THE WEEKEND ────────────────────────────────────
+ *
+ * The persist carries a circuit stamp (qualiTrack) and restoreFromSeason
+ * refuses a mismatch — but the IN-MEMORY classification short-circuited that
+ * check on its first line, so it outlived the weekend that made it. award()
+ * deletes season.qualiOrder when a round scores; the memory stayed, so
+ * qualiResults() was still truthy at the next rs-go, race-settings.js's
+ * `!qualiResults()` gate never opened the sheet, and startRace's
+ * `quali.order(cars)` (driverIds are stable all season) gridded round N off
+ * round 1's lap times. From round 2 to the end of a championship you were
+ * never asked to qualify and every grid was the same.
+ */
+
+test("an in-memory classification does not follow the player to another circuit", () => {
+  const { q, G } = loadQuali({
+    season: {
+      qualiOrder: [
+        { id: "p1", t: 69.9, human: true },
+        { id: "p2", t: 70.4, human: false },
+      ],
+      qualiTrack: "monza",
+      round: 0,
+    },
+  });
+  assert.ok(q.results(), "same circuit: the weekend's own order");
+  // award() drops the persist when the round scores. Only the memory is left.
+  delete G.season.qualiOrder;
+  delete G.season.qualiTrack;
+  assert.ok(q.results(), "still this circuit — the memory is legitimately the sheet");
+  G.track = { n: 80, total: 4000, def: { id: "spa" } };
+  assert.equal(q.results(), null, "round 2 at Spa must not read Monza's lap times");
+  assert.equal(q.order(G.cars), null, "and must not grid off them either");
+});
+
+test("award-time clear: game.js drops the memory when the round scores", () => {
+  // The stamp above catches a CHANGE of circuit; this catches a calendar that
+  // visits one twice. Both are needed — neither subsumes the other.
+  assert.match(GAME, /if \(settles\) quali\.clear\(\);/,
+    "a scored round must drop the in-memory classification with the persist award() deletes");
+  assert.match(CAREER_UI, /G\.qualiClear\(\);/,
+    "career's hand-rolled return to the title must clear it too");
 });

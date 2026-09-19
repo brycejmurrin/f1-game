@@ -124,7 +124,7 @@ function loadCareerUi(careerOpts = {}) {
     $: (id) => dom.byId(id), els: { overlay: dom.byId("overlay") },
     soundOn: false, flow: "gp", session: "race", season: null,
     store: { get: (k, d) => d, set() {} },
-    cssCol: () => "#fff", openCareer() {}, openGarage() {}, openRaceSettings() {}, refreshCareerButton() {},
+    cssCol: () => "#fff", openCareer() {}, openGarage() {}, openRaceSettings() {}, refreshCareerButton() {}, qualiClear() {},
     armConfirm: (btn, txt, act) => { act(); return true; },
   };
   const sb = sandbox(dom, {
