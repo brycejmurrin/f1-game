@@ -262,11 +262,28 @@ const RadioVoice = (function () {
       deadline = setTimeout(stop, p.budgetMs);
       return true;
     }
-    // Chrome (M71+) needs sticky activation, which the game's own first-gesture
-    // listener already provides; iOS wants a real utterance inside the gesture.
-    // An empty string is silent and costs nothing.
+    /* THE ONE GESTURE iOS GIVES US, AND IT WAS BEING THROWN AWAY.
+     *
+     * Chrome (M71+) needs sticky activation, which the game's own first-gesture
+     * listener already provides. iOS is stricter: WebKit refuses speak() from
+     * anywhere but a user gesture until the engine has been primed by a speak()
+     * inside one, and this function is the only place that ever happens.
+     *
+     * It used to read `u.volume = 0; synth.speak(u); synth.cancel();`, which
+     * primes nothing on iPhone or iPad. CANCELLING IN THE SAME TURN DISCARDS THE
+     * UTTERANCE BEFORE IT IS PROCESSED — the gesture is spent and the engine is
+     * no more unlocked than before — and a MUTED utterance is not reliably
+     * counted as the audible speak WebKit is looking for. Every later say()
+     * happens in the race loop, outside any gesture, so every one was refused:
+     * on the platform that needs this most, nothing was EVER spoken, which is
+     * exactly how it was reported.
+     *
+     * A single space carries no phonemes, so it is inaudible whatever its
+     * volume; the volume only has to be non-zero to count. Nothing is cancelled
+     * — the utterance ends in milliseconds by itself, and say() clears the queue
+     * with its own cancel() before it speaks anyway. */
     function unlock() {
-      try { const u = new Utter(" "); u.volume = 0; synth.speak(u); synth.cancel(); }
+      try { const u = new Utter(" "); u.volume = 0.01; synth.speak(u); }
       catch (e) { /* a browser that refuses the priming utterance simply does not get primed */ }
     }
     if (typeof document !== "undefined") {

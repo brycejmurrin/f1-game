@@ -263,7 +263,7 @@ const RaceSettings = (function () {
       return {
         laps: getRaceLaps(), weather: getRaceWeather(), mixed: getRaceChangeable(),
         time: getRaceTimeOfDay(), difficulty: getDifficulty(), grid: getRaceGrid(),
-        caution: !!getRaceCtl().enabled, reliability: getRaceReliability(), tyres: getRaceTyreWear(),
+        reliability: getRaceReliability(), tyres: getRaceTyreWear(),
       };
     }
 

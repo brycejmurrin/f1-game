@@ -78,8 +78,8 @@ const AudioPanel = (() => {
       syncAudioPanel();
     }
 
-    let musicVol = GameAudio.setMusicVolume(store.get("volMusic", 0.9));
-    let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", 0.7));
+    let musicVol = GameAudio.setMusicVolume(store.get("volMusic", 0.6));
+    let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", 0.2));
     let sfxOn = store.get("sfx", true);
     GameAudio.setSfxEnabled(sfxOn);
 
