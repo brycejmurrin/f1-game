@@ -143,7 +143,7 @@ const RadioVoice = (function () {
       say: () => false, stop: () => {}, unlock: () => {}, preview: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
-      debug: () => ({ available: false, enabled: false, voices: 0, last: null }),
+      debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
     });
   }
 
@@ -167,6 +167,19 @@ const RadioVoice = (function () {
     // the music underneath it. That lands on exactly the lines that preempt:
     // a penalty cutting off the coach is the case this module was built for.
     let voices = null, deadline = null, last = null, current = null;
+    /* DID THE ENGINE ACTUALLY START? `asked` counts the speaks we HANDED to the
+     * platform; `started` counts the ones it actually began (onstart).
+     *
+     * They exist because the difference is invisible from anywhere else, and it
+     * is the difference between two opposite bugs. asked 0 means WE refused —
+     * plan() has a reason and `last` carries it. asked > 0 with started 0 means
+     * the PLATFORM refused: every line was accepted without complaint and none
+     * was ever voiced, which is what an unprimed iOS engine looks like from in
+     * here. A refused speak is not an error, fires no event and logs nothing,
+     * so without this counter the two cases are one silent symptom — which is
+     * exactly how this defect survived three attempts to fix it from the
+     * outside. The audio panel prints the verdict; see js/audio/panel.js. */
+    let asked = 0, started = 0;
     function readTune() {
       const t = G.store.get("voiceTune", null);
       return t && typeof t === "object" ? t : {};
@@ -239,8 +252,10 @@ const RadioVoice = (function () {
       // leave the music down with nothing speaking until the deadline healed it.
       // Down-then-up is also simply the right order for the ear.
       current = u;
+      u.onstart = () => { started++; };
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       try {
+        asked++;
         synth.speak(u);
       } catch (e) {
         current = null;
@@ -331,7 +346,8 @@ const RadioVoice = (function () {
       const u = new Utter(words);
       u.voice = voiceFor(sp);
       u.rate = t.rate; u.pitch = t.pitch; u.volume = volume;
-      try { synth.speak(u); synth.resume(); } catch (e) { return false; }
+      u.onstart = () => { started++; };
+      try { asked++; synth.speak(u); synth.resume(); } catch (e) { return false; }
       return true;
     }
 
@@ -352,7 +368,7 @@ const RadioVoice = (function () {
       setEnabled(b) { enabled = !!b; if (!enabled) stop(); },
       setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
       available: () => true,
-      debug: () => ({ available: true, enabled, voices: voicesFor().length, last }),
+      debug: () => ({ available: true, enabled, voices: voicesFor().length, last, asked, started }),
     };
   }
 

@@ -230,10 +230,46 @@ const AudioPanel = (() => {
       if (vh && typeof vh.querySelectorAll === "function") {
         for (const el of vh.querySelectorAll("select,input,button")) el.disabled = !radioLive;
       }
+      // WHY IT IS SILENT, IN A SENTENCE THE PLAYER CAN READ.
+      //
+      // The three lines below cover the reasons that are knowable before a
+      // single line is attempted. They were the whole note, and they are not
+      // enough: a device can pass all three and still never voice anything,
+      // because a speech engine that refuses a speak() does so SILENTLY — no
+      // error, no event, nothing logged. That is what an iOS engine that was
+      // never primed by a user gesture looks like, and three attempts to fix it
+      // from the outside all landed blind for want of this sentence.
+      //
+      // debug().asked vs .started is the whole diagnosis. asked 0 means WE
+      // refused and `last.reason` says why; asked without started means the
+      // PLATFORM swallowed them, and the way back is the toggle, because
+      // tapping it is a user gesture and unlock() rides on it.
       const rnote = $("as-radio-note");
-      if (rnote) rnote.textContent = !radioReady ? "This browser has no speech voices, so the radio stays written."
-        : !G.soundOn ? "Master sound is off — TEAM RADIO ON turns it on."
-        : "Race control, your engineer and the coach read their messages aloud. The cards are unchanged.";
+      const dbg = (G.radio && G.radio.debug && G.radio.debug()) || null;
+      const REASON = {
+        off: "TEAM RADIO is off.",
+        "master-off": "Master sound is off.",
+        "no-api": "This browser has no speech synthesiser.",
+        "not-racing": "Nothing is read aloud outside a race — that is on purpose.",
+        empty: "That card had nothing speakable on it.",
+        "too-long": "The last line was too long for the time its card was up.",
+      };
+      if (rnote) {
+        let note = !radioReady ? "This browser has no speech voices, so the radio stays written."
+          : !G.soundOn ? "Master sound is off — TEAM RADIO ON turns it on."
+          : "Race control, your engineer and the coach read their messages aloud. The cards are unchanged.";
+        if (radioLive && dbg) {
+          if (dbg.asked > 0 && dbg.started === 0) {
+            note = "This device accepted " + dbg.asked + " radio line" + (dbg.asked === 1 ? "" : "s") +
+              " and played none. Tap TEAM RADIO off and on — that tap is what lets the voice start.";
+          } else if (dbg.started > 0) {
+            note = "Spoken " + dbg.started + " line" + (dbg.started === 1 ? "" : "s") + " so far. " + note;
+          } else if (dbg.last && dbg.last.reason && dbg.last.reason !== "spoke" && REASON[dbg.last.reason]) {
+            note = "Last card was not read aloud: " + REASON[dbg.last.reason];
+          }
+        }
+        rnote.textContent = note;
+      }
       // THE ANNOUNCER, on the same three-part gate and for the same reason: a
       // greyed row with no sentence is the worst version of this.
       const annReady = !!(G.announcer && G.announcer.available());

@@ -358,10 +358,17 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
   // GRID is a setting row (js/ui/setting-row.js): option 0 is the pace-order
   // grid and option 1 the qualifying lap, picked by index as the chips were.
   const pickGrid = (page, i) => page.locator("#rs-quali-sel").selectOption({ index: i });
+  /* GRID moved into the FIELD fold on 2026-09-18 and folds start closed, so
+     every GRID assertion opens it first — through the summary, not by setting
+     `open`, because the summary is what a player taps. */
+  const openField = async (page) => {
+    await page.locator("#rs-fold-field-sum").click();
+    await expect(page.locator("#rs-quali")).toBeVisible();
+  };
 
   test("OFF goes straight to the lights from P12, as it always has", async ({ page }) => {
     await toSettings(page);
-    await expect(page.locator("#rs-quali")).toBeVisible();
+    await openField(page);
     await pickGrid(page, 0);
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: 60_000 });
@@ -398,7 +405,7 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
     await boot(page);
     await page.locator("#mb-season").click();
     await page.locator("#sel-go").click();
-    await expect(page.locator("#rs-quali")).toBeVisible();
+    await openField(page);
     const sel = page.locator("#rs-quali-sel");
     await expect(sel).toBeDisabled();
     await expect(sel).toHaveValue("quali");

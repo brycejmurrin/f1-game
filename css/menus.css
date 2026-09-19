@@ -1217,6 +1217,32 @@ h3.sel-label {
   margin: 0;
 }
 #rs-presets > .preset-btn { min-height: var(--chip-h); }
+/* THE FOLDS (2026-09-18). Twelve rows all at one weight was a wall: it fit the
+   desktop sheet at 396px and SCROLLED on both phone shapes (373 into 295
+   landscape, 743 into 685 portrait, measured on the deploy tip). The four rows
+   that describe the SESSION — LAPS, WEATHER, CONDITIONS, TIME OF DAY — stay
+   flat behind the presets, and the eight that describe the FIELD and the
+   ASSISTS fold, which is the shape docs/research/PAUSE-SETTINGS-IA.md locked
+   for STEERING & ASSISTS ("presets + … stacked folds. Folds start closed.
+   Summaries … carry the live choice"). A two-row fold was not worth its tap:
+   CONDITIONS and TIME OF DAY belong to the race you are setting up, so they
+   read flat. The summary primitive is the settings one, not a copy: its three
+   duplicate definitions in components.css are now one, and #rs-body joined
+   that. */
+/* The <details> IS the grid — no wrapper div inside it. A fold's rows then sit
+   on the same two-column lattice as LAPS and WEATHER above, rather than
+   starting a new rhythm one indent in, and two folds cost four shell nodes
+   instead of six. */
+#rs-body > details {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: max-content;
+  row-gap: calc(var(--gap) * 0.5);
+}
+#rs-body > details > summary { grid-column: 1 / -1; }
+#rs-body > details[open] > summary { margin-block-end: calc(var(--gap) * 0.25); }
+
 /* DUEL opens a picker instead of stepping a list, so it is one button where
    every other row is `‹ select ›`. It should still READ as the same row: it was
    a lone 7rem control at --fs-micro, so against its neighbours' 197.6px cluster
@@ -1346,6 +1372,7 @@ h3.sel-label {
 .duel-option-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
 @container sheet (min-width: 440px) {
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
+  #rs-body > details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
 /* The Settings pages' steel italic label (css/components.css) restated here:
    that rule is scoped to #pmsettings-inner .pm-group. */
