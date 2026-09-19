@@ -73,17 +73,29 @@ test("Duel help belongs to the Duel control at every grid width", async ({ page 
     const dr = duel.getBoundingClientRect();
     const hr = help.getBoundingClientRect();
     const cr = caution.getBoundingClientRect();
-    const overlap = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+    const vOverlap = (a, b) => Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
     return {
       parent: help.parentElement.id,
       belowDuel: hr.top >= dr.top && hr.left >= dr.left - 1 && hr.right <= dr.right + 1,
-      duelOverlap: overlap(hr, dr),
-      cautionOverlap: overlap(hr, cr),
+      // OWNERSHIP IS VERTICAL IN A STACK. See the note on the assertions below.
+      insideDuel: hr.top >= dr.top - 1 && hr.bottom <= dr.bottom + 1,
+      cautionVOverlap: vOverlap(hr, cr),
     };
   });
   expect(relation.parent).toBe("rs-duel");
   expect(relation.belowDuel).toBe(true);
-  expect(relation.duelOverlap).toBeGreaterThan(relation.cautionOverlap);
+  // THIS USED TO COMPARE HORIZONTAL OVERLAP, and that stopped meaning anything
+  // when the sheet became four flat rows: every control spans the same x, so
+  // help-over-duel and help-over-caution are equal BY CONSTRUCTION. Measured on
+  // the flat layout: 352 and 352, with the help a CHILD of #rs-duel, sitting
+  // inside its box, and #rs-caution a separate row starting exactly where duel
+  // ends. Nothing was wrong with the page; the proxy had stopped discriminating.
+  //
+  // Vertical containment is what a stack expresses, and it is STRICTLY STRONGER
+  // than what it replaces: the old comparison could not see the help drift down
+  // into the Caution row at all, because the x-spans are identical either way.
+  expect(relation.insideDuel).toBe(true);
+  expect(relation.cautionVOverlap).toBe(0);
 });
 
 test("choosing a free Time Trial circuit clears Daily Standard chrome", async ({ page }) => {
