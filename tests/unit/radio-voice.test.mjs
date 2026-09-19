@@ -527,3 +527,53 @@ test("unlock() primes with an audible-volume utterance, not a muted one", () => 
     "WebKit does not reliably count a MUTED utterance as the audible speak that unlocks the engine; a space " +
     "has no phonemes so it stays inaudible whatever the volume says");
 });
+
+/* ── ASKED vs STARTED: the counter that ends the guessing ────────────────────
+ *
+ * Three rounds of "still isn't working" came from one gap: a speech engine that
+ * REFUSES a speak() does it silently — no error, no event, nothing logged — so
+ * "we never asked" and "we asked and the platform swallowed it" are the same
+ * symptom from outside. They need opposite fixes. debug().asked and .started
+ * separate them, and js/audio/panel.js prints the verdict where the player can
+ * read it instead of relaying a feeling.
+ */
+test("debug() separates what we asked for from what the engine started", () => {
+  const calls = [];
+  let pending = null;
+  const synth = {
+    getVoices: () => [], cancel() {}, resume() {},
+    speak(u) { calls.push(u); pending = u; },
+    set onvoiceschanged(fn) { this._vc = fn; },
+    /** The engine actually beginning — what iOS never does when unprimed. */
+    begin() { if (pending && pending.onstart) pending.onstart(); },
+  };
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const voice = RV.create({ soundOn: true, state: "race",
+    store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } });
+
+  assert.deepEqual([voice.debug().asked, voice.debug().started], [0, 0], "nothing attempted yet");
+
+  voice.say("Box", 3, "info");
+  assert.equal(voice.debug().asked, 1, "the speak was handed to the platform");
+  assert.equal(voice.debug().started, 0,
+    "...and the engine has not begun it — which is exactly the state an unprimed iOS engine sits in for ever, " +
+    "reporting nothing, and is what the panel must be able to tell the player");
+
+  synth.begin();
+  assert.equal(voice.debug().started, 1, "onstart is the only proof a line was actually voiced");
+});
+
+test("the settings preview counts too — it speaks directly, bypassing plan()", () => {
+  // The preview is the player's one test button. If it is silent and uncounted,
+  // pressing it teaches them nothing.
+  const { RV, G, synth } = load();
+  const voice = RV.create(Object.assign({}, G, { soundOn: true }));
+  voice.setEnabled(true);
+  voice.preview("control");
+  assert.ok(voice.debug().asked > 0, "a preview must be counted like any other attempt");
+});
