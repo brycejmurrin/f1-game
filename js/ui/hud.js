@@ -35,6 +35,7 @@ function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m)
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 function hAttr(el, name, value) { if (!el) return; const v = String(value); if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
+function replayGhost() { return GhostShare.hasGuest() ? GhostShare : Ghost; }
 let _lastRank = 0, _posFlashT = 0;   // POS box flash state (see the tick)
 // Team colours are static — compute once per team, the minimap's idiom.
 // Keyed on the store revision, exactly as _livResolveCache is (js/game.js):
@@ -754,13 +755,14 @@ function updateHud(force) {
     // own never dropped it — although GHOST +0.123s is the LONGEST spelling the
     // slot ever holds. The format it returns is a race concern (no gaps here).
     gapForm();
-    // no rivals — show ghost delta (or last lap) and the record to chase instead of gaps
-    if (Ghost.hasGhost()) {
-      const ghostT = Ghost.timeAt(player.s);
+    // no field rivals — show the shared rival (or personal best) delta
+    const ghost = replayGhost();
+    if (GhostShare.hasGuest() || Ghost.hasGhost()) {
+      const ghostT = ghost.timeAt(player.s);
       if (ghostT !== null) {
         const delta = player.lapTime - ghostT;
         const sign = delta >= 0 ? "+" : "";
-        hText(els.gapA, "GHOST " + sign + delta.toFixed(3) + "s");
+        hText(els.gapA, (GhostShare.hasGuest() ? "RIVAL GHOST " : "GHOST ") + sign + delta.toFixed(3) + "s");
         hStyle(els.gapA, "color", delta <= 0 ? "var(--faster)" : "var(--slower)");
       } else {
         hText(els.gapA, player.lastLap ? "LAST " + G.fmtTime(player.lastLap) : "");
@@ -1020,9 +1022,10 @@ function drawMinimap() {
       mm.fillRect(x, y, 4, 4);
     }
   }
-  // ghost replay marker (time trial): where your best lap is right now
-  if (timeTrial && Ghost.hasGhost()) {
-    const gh = Ghost.at(player.lapTime);
+  // ghost replay marker (time trial): shared rival first, otherwise your PB
+  const ghost = replayGhost();
+  if (timeTrial && (GhostShare.hasGuest() || Ghost.hasGhost())) {
+    const gh = ghost.at(player.lapTime);
     if (gh) {
       const gp = at(gh.s);   // a persisted ghost is stored input: never trust its s
       // Skip only the GHOST dot on a bad s — returning here would take the
