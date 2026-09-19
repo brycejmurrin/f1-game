@@ -1,6 +1,7 @@
 // @ts-check
 // Regression coverage for the browser-hunt UI defects fixed together in Track B.
 import { test, expect } from "@playwright/test";
+import fs from "node:fs";
 import { BOOT_MS } from "../helpers/fixtures.js";
 
 async function waitReady(page) {
@@ -66,21 +67,63 @@ test("Duel help belongs to the Duel control at every grid width", async ({ page 
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
 
-  const relation = await page.evaluate(() => {
-    const duel = document.getElementById("rs-duel");
-    const help = document.getElementById("rs-duel-help");
-    const caution = document.getElementById("rs-caution");
-    const dr = duel.getBoundingClientRect();
-    const hr = help.getBoundingClientRect();
-    const cr = caution.getBoundingClientRect();
+  const snapshot = () => page.evaluate(() => {
+    const ids = ["rs-body", "rs-fold-field", "rs-fold-field-sum", "rs-duel", "rs-duel-help", "rs-caution"];
+    const fields = Object.fromEntries(ids.map((id) => {
+      const el = document.getElementById(id);
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return [id, {
+        rect: { x: r.x, y: r.y, width: r.width, height: r.height, top: r.top, right: r.right, bottom: r.bottom, left: r.left },
+        display: cs.display,
+        visibility: cs.visibility,
+        opacity: cs.opacity,
+        gridColumn: cs.gridColumn,
+        hidden: el.hidden,
+        checkVisibility: el.checkVisibility(),
+        clientRects: el.getClientRects().length,
+        offsetParent: el.offsetParent?.id || null,
+      }];
+    }));
+    const dr = fields["rs-duel"].rect;
+    const hr = fields["rs-duel-help"].rect;
+    const cr = fields["rs-caution"].rect;
     const overlap = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
     return {
-      parent: help.parentElement.id,
+      viewport: { width: innerWidth, height: innerHeight },
+      fieldOpen: document.getElementById("rs-fold-field").open,
+      fieldAriaExpanded: document.getElementById("rs-fold-field-sum").getAttribute("aria-expanded"),
+      bodyGridTemplateColumns: getComputedStyle(document.getElementById("rs-body")).gridTemplateColumns,
+      foldGridTemplateColumns: getComputedStyle(document.getElementById("rs-fold-field")).gridTemplateColumns,
+      parent: document.getElementById("rs-duel-help").parentElement.id,
       belowDuel: hr.top >= dr.top && hr.left >= dr.left - 1 && hr.right <= dr.right + 1,
       duelOverlap: overlap(hr, dr),
       cautionOverlap: overlap(hr, cr),
+      fields,
     };
   });
+
+  const relation = await snapshot();
+  // #region agent log
+  fs.appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "A,D", location: "tests/specs/browser-ui-hunt.spec.js:duel-closed", message: "Duel relation while FIELD has its default state", data: relation, timestamp: Date.now() }) + "\n");
+  // #endregion
+
+  await page.locator("#rs-fold-field-sum").click();
+  const wideOpen = await snapshot();
+  // #region agent log
+  fs.appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "B,C,D", location: "tests/specs/browser-ui-hunt.spec.js:duel-wide-open", message: "Duel relation with FIELD open above the container breakpoint", data: wideOpen, timestamp: Date.now() }) + "\n");
+  // #endregion
+
+  await page.setViewportSize({ width: 430, height: 800 });
+  const narrowOpen = await snapshot();
+  // #region agent log
+  fs.appendFileSync("/opt/cursor/logs/debug.log", JSON.stringify({ hypothesisId: "B,C", location: "tests/specs/browser-ui-hunt.spec.js:duel-narrow-open", message: "Duel relation with FIELD open below the container breakpoint", data: narrowOpen, timestamp: Date.now() }) + "\n");
+  // #endregion
+
+  // Restore the exact failing state so Playwright's configured failure
+  // screenshot is evidence of the original closed/wide disclosure.
+  await page.setViewportSize({ width: 1024, height: 525 });
+  await page.locator("#rs-fold-field-sum").click();
   expect(relation.parent).toBe("rs-duel");
   expect(relation.belowDuel).toBe(true);
   expect(relation.duelOverlap).toBeGreaterThan(relation.cautionOverlap);
