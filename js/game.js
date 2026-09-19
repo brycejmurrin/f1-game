@@ -222,10 +222,34 @@ function preloadThreeVendor() {
 function backendPreference() {
   try {
     const pref = localStorage.getItem("apex26.gfxBackend");
-    return pref == null ? "three" : pref;
+    const normalized = pref == null ? "three" : pref;
+    if (normalized === "webgl2" || normalized === "three" || normalized === "webgpu") return normalized;
+    localStorage.setItem("apex26.gfxBackend", "webgl2");
+    return "webgl2";
   } catch (_) {
     return "three";
   }
+}
+function showGraphicsUnavailable() {
+  const panel = $("nogl");
+  if (els.hud) { els.hud.hidden = true; els.hud.inert = true; }
+  if (els.overlay) { els.overlay.hidden = true; els.overlay.inert = true; }
+  if (!panel) return;
+  panel.textContent = "";
+  const body = document.createElement("div");
+  const title = document.createElement("h2");
+  const detail = document.createElement("p");
+  const retry = document.createElement("button");
+  title.textContent = "Graphics unavailable";
+  detail.textContent = "Apex 26 could not start a compatible graphics renderer.";
+  retry.type = "button";
+  retry.textContent = "RETRY";
+  retry.onclick = () => { try { location.reload(); } catch (_) { /* embedded host */ } };
+  body.appendChild(title);
+  body.appendChild(detail);
+  body.appendChild(retry);
+  panel.appendChild(body);
+  panel.hidden = false;
 }
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
@@ -310,7 +334,14 @@ try {
       catch (_) { gfx = null; }
       // Bound and live. Title has no track yet (deferred flyby), so present()
       // will not run — disarm here or a refresh on SETTINGS reverts the pick.
-      if (gfx) { _backendBound = true; try { localStorage.removeItem(PROBE_KEY); } catch (_) { /* blocked storage: nothing to disarm */ } }
+      if (gfx) { _backendBound = true;
+        // The descriptor copy is the bind commit point. Clear any GLX latch
+        // left by an earlier same-tab fallback even if a deferred backend
+        // forgets to clear its own failure marker.
+        try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
+        try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no event surface */ }
+        try { localStorage.removeItem(PROBE_KEY); } catch (_) { /* blocked storage: nothing to disarm */ }
+      }
     }
   }
 } catch (_) { gfx = null; }
@@ -341,7 +372,7 @@ if (!gfx) {
       try { location.reload(); } catch (_) {}
       return;
     }
-    $("nogl").hidden = false; return;
+    showGraphicsUnavailable(); return;
   }
   gfx = GLX;
   // Every path above converges here after GLX successfully attaches: an
@@ -7979,7 +8010,8 @@ function render(dt) {
   shadowPass.flushBlobs();
   // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
   if (isTimeTrial() && player && (state === "race" || state === "count")) {
-    const g = Ghost.at(player.lapTime);
+    const replayGhost = GhostShare.hasGuest() ? GhostShare : Ghost;
+    const g = replayGhost.at(player.lapTime);
     // Skip the ghost while it overlaps the player — at the lap start it sits on
     // your exact grid position, and in the cockpit/onboard cams its bodywork
     // fills the camera as a black box until you pull away ("starts dark, clears
@@ -8464,6 +8496,29 @@ function openTimeTrial(selectDaily) {
   if (!selectDaily) scheduleFlybyTrack(true);
 }
 $("mb-tt").onclick = () => openTimeTrial(false);
+async function consumeGhostHash() {
+  const shared = await GhostShare.consumeHash({
+    notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
+  });
+  if (!shared || !shared.ok) return shared;
+  setFlow("gp"); session = "tt";
+  const today = DailyChallenge.dayKey();
+  if (shared.day && shared.day === today) {
+    daily.select(shared.day);
+  } else {
+    daily.stop();
+    restoreFreePlaySelection();
+    const idx = Tracks.LIST.findIndex((entry) => entry.id === shared.track);
+    if (idx < 0) return shared;   // decode already guards this; retain a safe no-op
+    trackIdx = idx;
+  }
+  buildSelect();
+  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
+  scheduleFlybyTrack(true);
+  return shared;
+}
+consumeGhostHash();
+window.addEventListener("hashchange", consumeGhostHash);
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
   // Replace any career alias with the repaired standalone save; finished stays readable.
