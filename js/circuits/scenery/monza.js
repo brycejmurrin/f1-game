@@ -244,14 +244,18 @@
       // the chicane keeps its shaded, enclosed feel.
       grandstandEx(0.30, 1, 20, 52, null, null,
         { livery: "concrete", roof: "flat", endWalls: true, h: 8 });
-      // Thin drifting fog boxes under tree shade (Roggia's signature element).
-      const fogCol = [0.76, 0.74, 0.68];   // warm tan-grey fog
-      for (let i = 0; i < 3; i++) {
-        const sf = 0.28 + i * 0.025;
-        const kf = K(sf);
-        const af = anchor(kf, hash(kf) < 0.5 ? -1 : 1, 25 + hash(kf * 3) * 15);
-        addBox(out, vadd(af.c, af.u, 2.5), [14, 2.4, 22], fogCol, [af.r, af.u, af.t]);
+      // Low, dissipating Roggia mist: shallow wedges hug the ditch and shaded
+      // treeline instead of reading as opaque scenery blocks.
+      out._mat = MAT.FLAT;
+      for (const [sf, side, dist, size, col] of [
+        [0.284, -1, 24, [8.0, 0.28, 24], [0.61, 0.68, 0.66]],
+        [0.298,  1, 30, [6.5, 0.20, 18], [0.66, 0.72, 0.69]],
+        [0.311, -1, 35, [5.0, 0.16, 14], [0.63, 0.70, 0.68]],
+      ]) {
+        const af = anchor(K(sf), side, dist);
+        addPrism(out, af.c, size, col, [af.r, af.u, af.t]);
       }
+      out._mat = 0;
       marshalPost(K(0.31), -1, 9);
       waterBand(0.283, 0.317, -1, 32, 36, 4, [0.30, 0.35, 0.23], { id: "monza-roggia-ditch", required: true });
 
