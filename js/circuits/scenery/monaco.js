@@ -59,6 +59,26 @@
       const CANYON = [CREAM, OCHRE, DUSTY, [0.92, 0.86, 0.72]];
       const { pastelStreetRow } = api;
 
+      // Tiny 3x5 block lettering for the two corner-name sign cues. The shallow
+      // boxes sit proud of the track-facing signboard; only BATCH-01 words use it.
+      const wordCue = (stage, a, b, word, face, y, scale, col) => {
+        const glyph = {
+          A: ["010", "101", "111", "101", "101"], B: ["110", "101", "110", "101", "110"],
+          C: ["011", "100", "100", "100", "011"], E: ["111", "100", "110", "100", "111"],
+          R: ["110", "101", "110", "101", "101"], S: ["011", "100", "010", "001", "110"],
+          T: ["111", "010", "010", "010", "010"],
+        };
+        const pitch = 4 * scale, start = -(word.length - 1) * pitch * 0.5;
+        for (let ch = 0; ch < word.length; ch++) for (let row = 0; row < 5; row++) {
+          const bits = glyph[word[ch]];
+          for (let x = 0; x < 3; x++) if (bits[row][x] === "1") {
+            const c = vadd(vadd(vadd(a.c, a.r, face), a.u, y + (4 - row) * scale), a.t,
+              start + ch * pitch + (x - 1) * scale);
+            addBox(stage, c, [0.16, scale * 0.78, scale * 0.78], col, b);
+          }
+        }
+      };
+
       // ── WHY THE SIX NAMED LANDMARKS ARE `required` MODEL GROUPS ───────────
       // The Casino, the Hôtel de Paris, the Café de Paris, the Massenet, the
       // Casino Square fountain and the Rocher palace used to emit raw
@@ -722,6 +742,27 @@
         });
       }
       {
+        // Tabac namesake shop at T12: a low, tight shopfront beneath the inland
+        // apartment row, with a dark street canopy and literal TABAC block cue.
+        const k = K(0.72), a = anchor(k, 1, 8.5), b = [a.r, a.u, a.t];
+        modelGroup("monaco-tabac-shop", {
+          center: vadd(a.c, a.u, 5.2), size: [11.5, 10.8, 15.5], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(a.c, a.u, 4.5), [10.5, 9, 14], CREAM, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -5.05), a.u, 2.15), [0.35, 3.5, 12.6], OCHRE, b);
+          stage._mat = MAT.GLASS;
+          for (const z of [-4.2, 0, 4.2])
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, -5.28), a.t, z), a.u, 2.35), [0.18, 2.8, 3.2], WINLIT, b);
+          stage._mat = MAT.FABRIC;
+          addBox(stage, vadd(vadd(a.c, a.r, -5.8), a.u, 4.15), [2.0, 0.45, 14.6], [0.16, 0.15, 0.14], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, -5.38), a.u, 6.25), [0.28, 1.65, 7.0], [0.20, 0.18, 0.15], b);
+          wordCue(stage, a, b, "TABAC", -5.57, 5.88, 0.25, [0.98, 0.88, 0.52]);
+          stage._mat = 0;
+        }, { required: true });
+      }
+      {
         const k = KOLD(0.80);
         const gap = hw[k] + 8;
         const rr = [track.rx[k], track.ry[k], track.rz[k]];
@@ -792,23 +833,25 @@
       {
         const k = K(0.905);
         const RASCASSE_WALL = [0.86, 0.80, 0.62];
-        const aBldg = anchor(k, -1, 9);
-        if (!onTrack(aBldg.c[0], aBldg.c[2], 9)) {
-          const b = [aBldg.r, aBldg.u, aBldg.t];
-          addBox(out, vadd(aBldg.c, aBldg.u, 4.0), [11, 8.0, 9], RASCASSE_WALL, b);
-          addBox(out, vadd(aBldg.c, aBldg.u, 8.4), [11.4, 0.8, 9.4], [0.30, 0.28, 0.26], b);
-          addBox(out, vadd(aBldg.c, aBldg.u, 5.6), [11.2, 1.8, 9.2], WIN, b);
-          addBox(out, vadd(aBldg.c, aBldg.u, 6.1), [11.4, 0.9, 9.4], WINLIT, b);
-        }
-        const aBalc = anchor(k, -1, 4.5);
-        if (!onTrack(aBalc.c[0], aBalc.c[2], 4)) {
-          const bb = [aBalc.r, aBalc.u, aBalc.t];
-          addBox(out, vadd(aBalc.c, aBalc.u, 4.4), [7, 0.3, 7], [0.72, 0.70, 0.66], bb);
-          addBox(out, vadd(aBalc.c, aBalc.u, 4.9), [7.1, 0.7, 0.15], [0.65, 0.20, 0.18], bb);
-          for (const o of [-3.2, 3.2])
-            addCyl(out, vadd(vadd(aBalc.c, aBalc.t, o), aBalc.u, 2.2), 0.14, 4.4, [0.55, 0.55, 0.55], 5, bb);
-          addBox(out, vadd(aBalc.c, aBalc.u, 5.6), [7.4, 1.4, 7.4], [0.85, 0.20, 0.18], bb);
-        }
+        const a = anchor(k, -1, 9), b = [a.r, a.u, a.t];
+        modelGroup("monaco-rascasse-bar", {
+          center: vadd(vadd(a.c, a.r, 0.2), a.u, 5.0), size: [12, 10.5, 10.5], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(a.c, a.u, 4.0), [11, 8.0, 9], RASCASSE_WALL, b);
+          stage._mat = MAT.GLASS;
+          for (const z of [-2.8, 0, 2.8])
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, 5.58), a.t, z), a.u, 3.0), [0.18, 2.8, 2.2], WINLIT, b);
+          stage._mat = MAT.FABRIC;
+          for (let i = 0; i < 6; i++)
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, 5.75), a.t, -3.75 + i * 1.5), a.u, 4.65),
+              [2.1, 0.34, 1.5], i & 1 ? CREAM : [0.72, 0.16, 0.17], b);
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, 5.62), a.u, 6.55), [0.24, 1.55, 9.0], [0.46, 0.12, 0.13], b);
+          wordCue(stage, a, b, "RASCASSE", 5.76, 6.18, 0.18, [1.0, 0.90, 0.58]);
+          addBox(stage, vadd(a.c, a.u, 8.4), [11.4, 0.8, 9.4], [0.30, 0.28, 0.26], b);
+          stage._mat = 0;
+        }, { required: true });
       }
 
       {
@@ -1122,27 +1165,35 @@
         });
       }
 
-      for (let i = 0; i < 4; i++) {
-        const k = K(0.285 + i * 0.029);
-        const a = anchor(k, -1, 35 + (i & 1) * 9);
-        const b = [a.r, a.u, a.t];
-        const h = 29 + hash(k * 6.3) * 12;
-        const w = 14 + hash(k * 2.1) * 4;
-        modelGroup(`monaco-mirabeau-balconies-${i}`, {
-          center: vadd(a.c, a.u, h * 0.5), size: [w + 2, h + 2, 13], basis: b,
+      {
+        // Mirabeau Superior apartment identity: one pale slab replaces the
+        // four hash-varied balcony masses with a regular residential grid.
+        // Baseline diagnostics showed only the 0.285 and 0.372 masses emitted;
+        // this keeps the former's proven 17 x 35 x 13 m footprint envelope.
+        const k = K(0.285), a = anchor(k, -1, 35), b = [a.r, a.u, a.t];
+        modelGroup("monaco-mirabeau-apartments", {
+          center: vadd(a.c, a.u, 17), size: [17, 35, 13], basis: b,
         }, (stage) => {
-          const wall = PASTELS[(i + 2) % PASTELS.length];
-          stage._mat = wall[0] > wall[1] + 0.16 ? MAT.BRICK : MAT.STONE;
-          addBox(stage, vadd(a.c, a.u, h * 0.5), [w, h, 11], wall, b);
-          for (let floor = 1; floor * 4.3 < h - 1; floor++) {
-            const fc = vadd(vadd(a.c, a.t, -5.8), a.u, floor * 4.3);
-            stage._mat = MAT.STONE;
-            addBox(stage, fc, [w + 1.2, 0.35, 1.5], [0.84, 0.82, 0.78], b);
+          stage._mat = MAT.STONE;
+          addBox(stage, vadd(a.c, a.u, 16.5), [15, 33, 11], [0.92, 0.89, 0.81], b);
+          for (let floor = 1; floor <= 7; floor++) {
+            const fy = floor * 4.1;
+            addBox(stage, vadd(vadd(a.c, a.r, 7.9), a.u, fy - 1.2), [1.2, 0.34, 10.6], CREAM, b);
+            stage._mat = MAT.GLASS;
+            for (const z of [-3.8, 0, 3.8])
+              addBox(stage, vadd(vadd(vadd(a.c, a.r, 7.62), a.t, z), a.u, fy + 0.15),
+                [0.22, 2.2, 2.4], WIN, b);
             stage._mat = MAT.METAL;
-            addBox(stage, vadd(fc, a.u, 1.0), [w + 0.8, 0.18, 0.25], [0.48, 0.52, 0.54], b);
+            addBox(stage, vadd(vadd(a.c, a.r, 8.4), a.u, fy - 0.45),
+              [0.18, 1.15, 10.4], [0.52, 0.54, 0.55], b);
+            for (const z of [-4.8, -2.4, 0, 2.4, 4.8])
+              addCyl(stage, vadd(vadd(vadd(a.c, a.r, 8.4), a.t, z), a.u, fy - 0.45),
+                0.06, 1.15, [0.52, 0.54, 0.55], 3, b);
+            stage._mat = MAT.STONE;
           }
+          addBox(stage, vadd(a.c, a.u, 33.6), [16, 1.2, 12], [0.82, 0.78, 0.70], b);
           stage._mat = 0;
-        });
+        }, { required: true });
       }
 
       for (const [sf, side] of [[0.515, -1], [0.575, 1]]) {
