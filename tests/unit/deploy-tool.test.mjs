@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
   sweepSuites, touchesGeometry, notCovered, anyGeometry, proseOnly } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
+import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths } from "../../tools/ci/geometry-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -236,6 +237,87 @@ test("anyGeometry answers for a file LIST, so the retry asks what the union aske
   // asked separately from the shipped-code one.
   assert.equal(anyGeometry([sweepSuites()[0]]), true,
     "a sweep suite's own file is geometry for this purpose, though it ships nothing");
+});
+
+/* THE CITATION TEST (2026-09-19). The geometry pattern matched debris-world at
+ * its PRE-RENAME location under js/game/ — tools/manifest.cjs's MOVED map has
+ * the rename to js/physics/debris-world.js, which is what ci.yml's copy named.
+ * So the LOCAL gate skipped test:sweeps on exactly the edit CI runs them for,
+ * and the "verified" line said sweeps were covered.
+ *
+ * A regex over paths is unfalsifiable by construction: a path that no longer
+ * resolves simply never matches, and nothing anywhere says so — which is also
+ * why the rename sweep could not have caught it. These three tests make it
+ * falsifiable — every path the pattern names must be a path on disk, and the
+ * two consumers must read the ONE copy rather than each keeping their own. */
+test("every path the geometry pattern names EXISTS (the debrisworld guard)", () => {
+  const { files, dirs, other } = namedPaths();
+  assert.deepEqual(other, [],
+    "an alternative this test cannot classify is an alternative it cannot check — " +
+    "extend namedPaths() rather than leaving it unproven");
+  assert.ok(files.length && dirs.length, "the pattern names no paths at all");
+
+  for (const f of files) {
+    assert.ok(fs.existsSync(path.join(ROOT, f)) && fs.statSync(path.join(ROOT, f)).isFile(),
+      `the geometry pattern names ${f}, which is not a file in this tree — ` +
+      "a path that cannot match is a sweep that never runs");
+    assert.equal(GEOMETRY_PATHS.test(f), true, `${f} does not match the pattern that names it`);
+  }
+  for (const d of dirs) {
+    assert.ok(fs.existsSync(path.join(ROOT, d)) && fs.statSync(path.join(ROOT, d)).isDirectory(),
+      `the geometry pattern names the directory ${d}, which does not exist`);
+    assert.equal(GEOMETRY_PATHS.test(d + "x.js"), true, `${d} does not match the pattern that names it`);
+  }
+});
+
+test("ci.yml READS the geometry pattern instead of keeping a second copy", () => {
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  assert.match(yml, /node tools\/ci\/geometry-paths\.mjs --ere/,
+    "ci.yml's sweeps filter must derive the path pattern, not retype it");
+  // The exact shape that drifted: the GEOMETRY alternation written inline in
+  // the yaml. Scoped to js/track/|js/circuits/ on purpose — ci.yml carries
+  // other, unrelated inline path filters (the render/lighting spec selector),
+  // and this test is about the one pattern that now has a single source.
+  const inline = yml.split("\n").filter((l) => /grep -qE '\^\([^']*js\/(track|circuits)\//.test(l));
+  assert.deepEqual(inline, [],
+    "a hand-written geometry alternation is back in ci.yml — the last time there were " +
+    "two copies, one kept matching debris-world at its pre-rename path for a day");
+});
+
+/* THE RETRY'S "FULL GATE" WAS NOT THE GATE (2026-09-19).
+ * main() gates on tooling-fast + gateNodeSuites() + verify-track. The push
+ * retry's shipped-code leg ran tooling-fast ALONE and logged "full gate" — so
+ * a lost push silently downgraded the deploy to the subset, on the one leg
+ * that carries another session's just-merged code. Asserted on the source
+ * because reverifyUnion() needs a real rejected push to exercise. */
+test("the push retry's full-gate leg runs the SAME gate main() runs", () => {
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/deploy.mjs"), "utf8");
+  const fn = src.slice(src.indexOf("function reverifyUnion"));
+  // COMMENTS STRIPPED FIRST. Without this the test passed on a leg whose code
+  // no longer called gateNodeSuites() — the comment explaining why it must
+  // matched instead. A source assertion that a comment can satisfy measures
+  // nothing; verified by deleting the call and watching this fail.
+  const leg = fn.slice(0, fn.indexOf("} else {"))
+    .replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+  assert.ok(leg.includes("gateNodeSuites()"),
+    "the re-verify leg must run the Pages gate's node suites — tooling-fast does not");
+  assert.ok(leg.includes("verify-track.cjs"),
+    "the re-verify leg must verify the circuits the re-merge brought");
+  assert.ok(/label = "full gate \(/.test(leg),
+    "if the leg claims a full gate its label must name what it ran");
+});
+
+test("the printed pattern is the pattern deploy.mjs matches with", () => {
+  const out = execFileSync(process.execPath, ["tools/ci/geometry-paths.mjs", "--ere"],
+    { cwd: ROOT, encoding: "utf8" });
+  assert.equal(out, GEOMETRY_ERE, "--ere must print the module's own pattern, unmodified");
+  assert.equal(new RegExp(out).source, GEOMETRY_PATHS.source,
+    "what ci.yml greps with and what deploy.mjs tests with must be one pattern");
+  // Importing must not print: deploy.mjs --json writes a machine verdict to stdout.
+  const quiet = execFileSync(process.execPath,
+    ["-e", 'import("./tools/ci/geometry-paths.mjs").then(()=>{})', "--", "--ere"],
+    { cwd: ROOT, encoding: "utf8" });
+  assert.equal(quiet, "", "the --ere print must be guarded on being the entry module");
 });
 
 /* THE OTHER HALF OF THE RE-VERIFY QUESTION (2026-09-18).
