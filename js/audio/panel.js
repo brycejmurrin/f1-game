@@ -325,7 +325,7 @@ const AudioPanel = (() => {
      * pitch and a rate for free — but it is NOT gated on the TEAM RADIO switch,
      * so it cannot live under that switch's heading where every other control
      * greys out with it. Its own <details>, its own host, one shared builder. */
-    const ANN_CHANNEL = ["announcer", "VOICE",
+    const ANN_CHANNEL = ["announcer", "ANNOUNCER",
       "Daniel on a Mac, another British voice elsewhere — or pick your own."];
     let voiceRowsFor = null;   // the voice-list length the rows were built against
 

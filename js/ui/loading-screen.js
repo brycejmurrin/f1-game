@@ -137,7 +137,7 @@ const LoadingScreen = (function () {
       for (const k in vars) c.style.setProperty(k, vars[k]);
     }
 
-    const WX ={ dry: "DRY", wet: "WET", rain: "RAIN", overcast: "CLOUDY", fog: "FOG" };
+    const WX = { dry: "DRY", wet: "WET", rain: "RAIN", overcast: "CLOUDY", fog: "FOG" };
     const TOD = { dawn: "DAWN", day: "DAY", dusk: "DUSK", night: "NIGHT" };
 
     function root() { return el || (el = $("loading")); }
@@ -297,8 +297,11 @@ const LoadingScreen = (function () {
 
     return {
       run, stop, hold,
-      /** The flyby editor's three sliders. `setCard(null)` is RESET — clampCard
-       *  fills every field from the defaults and the store clears itself. */
+      /** The flyby editor's three sliders. setCard() PATCHES — it merges onto
+       *  what is there, so a size slider does not reset the position. RESET is
+       *  resetCard(), which drops the geometry first: clampCard(null) is every
+       *  shipped default, and storing it then clears the key, because pristine
+       *  is stored as null. */
       card: () => Object.assign({}, cardGeom()),
       setCard: (patch) => setCardGeom(patch),
       resetCard() { geom = clampCard(null); return setCardGeom({}); },
