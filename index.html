@@ -1868,11 +1868,15 @@
 <dialog id="race-settings" class="screen dim" data-esc-close="rs-cancel" aria-labelledby="dlg-racesettings" hidden>
   <div class="sheet">
     <div class="sheet-head"><h2 id="dlg-racesettings">RACE SETTINGS</h2></div>
-    <!-- Nine SETTING ROWS (js/ui/setting-row.js), the same control as pause >
+    <!-- Twelve SETTING ROWS (js/ui/setting-row.js), the same control as pause >
          SETTINGS: LABEL ‹ VALUE ›. This screen was the last one on chips, and
          it needed ~130 lines of shape-and-density grid CSS to fit seven chip
-         groups on a landscape phone; eight rows fit in two columns at every
-         shape without any of it. The OPTIONS are data in game.js
+         groups on a landscape phone; rows fit in two columns at every shape
+         without any of it. Twelve of them at one weight then scrolled on both
+         phone shapes, so the four SESSION rows (LAPS, WEATHER, CONDITIONS,
+         TIME OF DAY) stay flat under the presets and the other eight sit in
+         two closed folds — FIELD and ASSISTS & WEAR — whose summaries carry
+         the live choice (css/menus.css §THE FOLDS). The OPTIONS are data in game.js
          (buildRaceSettings): LAPS follows the circuit's grand-prix distance,
          GRID follows the flow (a qualifying championship pins it and disables
          the row rather than hiding it), and the five race-only rows —
@@ -1919,75 +1923,81 @@
           <button id="rs-time-next" type="button" data-step="1" aria-label="Next time of day">&rsaquo;</button>
         </div>
       </div>
-      <div id="rs-diff" class="set-row" role="group" aria-labelledby="rs-diff-label">
-        <span class="tune-label" id="rs-diff-label">DIFFICULTY</span>
-        <div>
-          <button id="rs-diff-prev" type="button" data-step="-1" aria-label="Previous difficulty">&lsaquo;</button>
-          <select id="rs-diff-sel" aria-labelledby="rs-diff-label"></select>
-          <button id="rs-diff-next" type="button" data-step="1" aria-label="Next difficulty">&rsaquo;</button>
+      <details id="rs-fold-field">
+        <summary class="adv-more-btn" id="rs-fold-field-sum">FIELD</summary>
+        <div id="rs-diff" class="set-row" role="group" aria-labelledby="rs-diff-label">
+          <span class="tune-label" id="rs-diff-label">DIFFICULTY</span>
+          <div>
+            <button id="rs-diff-prev" type="button" data-step="-1" aria-label="Previous difficulty">&lsaquo;</button>
+            <select id="rs-diff-sel" aria-labelledby="rs-diff-label"></select>
+            <button id="rs-diff-next" type="button" data-step="1" aria-label="Next difficulty">&rsaquo;</button>
+          </div>
         </div>
-      </div>
-      <div id="rs-quali" class="set-row" role="group" aria-labelledby="rs-quali-label">
-        <span class="tune-label" id="rs-quali-label">GRID</span>
-        <div>
-          <button id="rs-quali-prev" type="button" data-step="-1" aria-label="Previous grid rule">&lsaquo;</button>
-          <select id="rs-quali-sel" aria-labelledby="rs-quali-label"></select>
-          <button id="rs-quali-next" type="button" data-step="1" aria-label="Next grid rule">&rsaquo;</button>
+        <div id="rs-quali" class="set-row" role="group" aria-labelledby="rs-quali-label">
+          <span class="tune-label" id="rs-quali-label">GRID</span>
+          <div>
+            <button id="rs-quali-prev" type="button" data-step="-1" aria-label="Previous grid rule">&lsaquo;</button>
+            <select id="rs-quali-sel" aria-labelledby="rs-quali-label"></select>
+            <button id="rs-quali-next" type="button" data-step="1" aria-label="Next grid rule">&rsaquo;</button>
+          </div>
         </div>
-      </div>
-      <div id="rs-caution" class="set-row" role="group" aria-labelledby="rs-caution-label">
-        <span class="tune-label" id="rs-caution-label">CAUTIONS</span>
-        <div>
-          <button id="rs-caution-prev" type="button" data-step="-1" aria-label="Previous cautions">&lsaquo;</button>
-          <select id="rs-caution-sel" aria-labelledby="rs-caution-label"></select>
-          <button id="rs-caution-next" type="button" data-step="1" aria-label="Next cautions">&rsaquo;</button>
+        <div id="rs-duel" class="set-row" role="group" aria-labelledby="rs-duel-label">
+          <span class="tune-label" id="rs-duel-label">DUEL</span>
+          <div>
+            <button id="rs-duel-open" type="button" aria-haspopup="dialog" aria-controls="duel-picker"
+                    aria-describedby="rs-duel-help"><span id="rs-duel-value">OFF</span><span aria-hidden="true">&rsaquo;</span></button>
+          </div>
+          <p id="rs-duel-help" class="adv-help">One rival instead of a full grid, with his driver rating lifted. A practice benchmark, not a championship race.</p>
         </div>
-      </div>
-      <div id="rs-duel" class="set-row" role="group" aria-labelledby="rs-duel-label">
-        <span class="tune-label" id="rs-duel-label">DUEL</span>
-        <div>
-          <button id="rs-duel-open" type="button" aria-haspopup="dialog" aria-controls="duel-picker"
-                  aria-describedby="rs-duel-help"><span id="rs-duel-value">OFF</span><span aria-hidden="true">&rsaquo;</span></button>
+        <div id="rs-caution" class="set-row" role="group" aria-labelledby="rs-caution-label">
+          <span class="tune-label" id="rs-caution-label">CAUTIONS</span>
+          <div>
+            <button id="rs-caution-prev" type="button" data-step="-1" aria-label="Previous cautions">&lsaquo;</button>
+            <select id="rs-caution-sel" aria-labelledby="rs-caution-label"></select>
+            <button id="rs-caution-next" type="button" data-step="1" aria-label="Next cautions">&rsaquo;</button>
+          </div>
         </div>
-        <p id="rs-duel-help" class="adv-help">One rival instead of a full grid, with his driver rating lifted. A practice benchmark, not a championship race.</p>
-      </div>
-      <div id="rs-line" class="set-row" role="group" aria-labelledby="rs-line-label">
-        <span class="tune-label" id="rs-line-label">DRIVING LINE</span>
-        <div>
-          <button id="rs-line-prev" type="button" data-step="-1" aria-label="Previous driving line">&lsaquo;</button>
-          <select id="rs-line-sel" aria-labelledby="rs-line-label"></select>
-          <button id="rs-line-next" type="button" data-step="1" aria-label="Next driving line">&rsaquo;</button>
+        <div id="rs-reliab" class="set-row" role="group" aria-labelledby="rs-reliab-label">
+          <span class="tune-label" id="rs-reliab-label">RELIABILITY</span>
+          <div>
+            <button id="rs-reliab-prev" type="button" data-step="-1" aria-label="Previous reliability">&lsaquo;</button>
+            <select id="rs-reliab-sel" aria-labelledby="rs-reliab-label"></select>
+            <button id="rs-reliab-next" type="button" data-step="1" aria-label="Next reliability">&rsaquo;</button>
+          </div>
         </div>
-      </div>
-      <div id="rs-tyres" class="set-row" role="group" aria-labelledby="rs-tyres-label">
-        <span class="tune-label" id="rs-tyres-label">TYRE WEAR</span>
-        <div>
-          <button id="rs-tyres-prev" type="button" data-step="-1" aria-label="Previous tyre wear">&lsaquo;</button>
-          <select id="rs-tyres-sel" aria-labelledby="rs-tyres-label"></select>
-          <button id="rs-tyres-next" type="button" data-step="1" aria-label="Next tyre wear">&rsaquo;</button>
+      </details>
+      <details id="rs-fold-assists">
+        <summary class="adv-more-btn" id="rs-fold-assists-sum">ASSISTS &amp; WEAR</summary>
+        <div id="rs-line" class="set-row" role="group" aria-labelledby="rs-line-label">
+          <span class="tune-label" id="rs-line-label">DRIVING LINE</span>
+          <div>
+            <button id="rs-line-prev" type="button" data-step="-1" aria-label="Previous driving line">&lsaquo;</button>
+            <select id="rs-line-sel" aria-labelledby="rs-line-label"></select>
+            <button id="rs-line-next" type="button" data-step="1" aria-label="Next driving line">&rsaquo;</button>
+          </div>
         </div>
-      </div>
-      <!-- STRATEGY: the player's reference plan for THIS circuit (js/race/pit-lane.js
-           planFor) — AUTO or a pinned stop count, drawn as a stint bar in the
-           compounds' colours with the lane's pit loss beside it. Shown only when
-           TYRE WEAR is on and this is a race, like the row above. -->
-      <div id="rs-plan" class="set-row" role="group" aria-labelledby="rs-plan-label" hidden>
-        <span class="tune-label" id="rs-plan-label">STRATEGY</span>
-        <div>
-          <button id="rs-plan-prev" type="button" data-step="-1" aria-label="Previous strategy">&lsaquo;</button>
-          <select id="rs-plan-sel" aria-labelledby="rs-plan-label"></select>
-          <button id="rs-plan-next" type="button" data-step="1" aria-label="Next strategy">&rsaquo;</button>
+        <div id="rs-tyres" class="set-row" role="group" aria-labelledby="rs-tyres-label">
+          <span class="tune-label" id="rs-tyres-label">TYRE WEAR</span>
+          <div>
+            <button id="rs-tyres-prev" type="button" data-step="-1" aria-label="Previous tyre wear">&lsaquo;</button>
+            <select id="rs-tyres-sel" aria-labelledby="rs-tyres-label"></select>
+            <button id="rs-tyres-next" type="button" data-step="1" aria-label="Next tyre wear">&rsaquo;</button>
+          </div>
         </div>
-      </div>
-      <div id="rs-plan-bar" hidden><div id="rs-plan-stints"></div><span id="rs-plan-loss"></span></div>
-      <div id="rs-reliab" class="set-row" role="group" aria-labelledby="rs-reliab-label">
-        <span class="tune-label" id="rs-reliab-label">RELIABILITY</span>
-        <div>
-          <button id="rs-reliab-prev" type="button" data-step="-1" aria-label="Previous reliability">&lsaquo;</button>
-          <select id="rs-reliab-sel" aria-labelledby="rs-reliab-label"></select>
-          <button id="rs-reliab-next" type="button" data-step="1" aria-label="Next reliability">&rsaquo;</button>
+        <!-- STRATEGY: the player's reference plan for THIS circuit (js/race/pit-lane.js
+             planFor) — AUTO or a pinned stop count, drawn as a stint bar in the
+             compounds' colours with the lane's pit loss beside it. Shown only when
+             TYRE WEAR is on and this is a race, like the row above. -->
+        <div id="rs-plan" class="set-row" role="group" aria-labelledby="rs-plan-label" hidden>
+          <span class="tune-label" id="rs-plan-label">STRATEGY</span>
+          <div>
+            <button id="rs-plan-prev" type="button" data-step="-1" aria-label="Previous strategy">&lsaquo;</button>
+            <select id="rs-plan-sel" aria-labelledby="rs-plan-label"></select>
+            <button id="rs-plan-next" type="button" data-step="1" aria-label="Next strategy">&rsaquo;</button>
+          </div>
         </div>
-      </div>
+        <div id="rs-plan-bar" hidden><div id="rs-plan-stints"></div><span id="rs-plan-loss"></span></div>
+      </details>
     </div>
     <div class="sheet-foot">
       <button id="rs-cancel" autofocus class="bigbtn alt">BACK</button>

@@ -610,6 +610,37 @@ test("variable control clusters use one content-driven balanced-row primitive", 
     assert.match(html, new RegExp(`id="${id}" class="set-row" role="group" aria-labelledby="${id}-label"`), `${id} is a setting row`);
   }
   assert.doesNotMatch(html, /id="rs-[a-z]+" class="chip-row/, "no race-settings chip row survives");
+  /* THE FOLDS (2026-09-18). Twelve rows at one weight fit the desktop sheet and
+     SCROLLED on both phone shapes (373 into 295 landscape, 743 into 685
+     portrait). The four rows that describe the SESSION ITSELF stay flat —
+     LAPS, WEATHER, CONDITIONS, TIME OF DAY — and the other eight fold, which
+     is the shape PAUSE-SETTINGS-IA.md locked for STEERING & ASSISTS. A fold
+     holding one or two rows was not worth its own tap: CONDITIONS and TIME OF
+     DAY read as part of the race you are setting up, not as an option behind a
+     disclosure. Pinned so the wall cannot grow back a row at a time, and so
+     the summaries keep using the shell's own component. */
+  for (const [fold, rows] of [
+    ["rs-fold-field", ["rs-diff", "rs-quali", "rs-duel", "rs-caution", "rs-reliab"]],
+    ["rs-fold-assists", ["rs-line", "rs-tyres", "rs-plan"]],
+  ]) {
+    const body = html.slice(html.indexOf(`<details id="${fold}"`), html.indexOf("</details>", html.indexOf(`<details id="${fold}"`)));
+    assert.ok(body, `${fold} exists`);
+    assert.match(body, new RegExp(`<summary class="adv-more-btn" id="${fold}-sum"`),
+      `${fold} uses the shell's summary component, not a new one`);
+    assert.doesNotMatch(body, /\sopen[\s>]/, `${fold} starts closed`);
+    for (const r of rows) assert.ok(body.includes(`id="${r}"`), `${r} is inside ${fold}`);
+  }
+  // The session rows are NOT in a fold — they are the flat primary.
+  for (const flat of ["rs-laps", "rs-weather", "rs-mixed", "rs-time"]) {
+    const at = html.indexOf(`id="${flat}"`);
+    const firstFold = html.indexOf('<details id="rs-fold-field"');
+    assert.ok(at > 0 && at < firstFold, `${flat} stays flat, above the folds`);
+  }
+  // A fold whose every row is hidden hides itself — in a time trial FIELD is
+  // empty (difficulty, grid, duel, cautions and reliability are all race-only)
+  // and a summary that opens onto nothing is worse than no summary.
+  assert.match(read("js/race/race-settings.js"), /fold\.hidden = rows\.length === 0;/,
+    "an empty fold hides rather than opening onto nothing");
   assert.equal(bootCamModes().open().className, "balanced-row", "the camera picker is a balanced-row too");
   assert.match(html, /class="preset-row balanced-row"/, "STEERING & ASSISTS presets wrap from local space");
   // STEERING / DRIVING HELP / RACING LINE are one-line setting rows now
@@ -1055,12 +1086,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "ADVANCED VISUALS joins the same compact Display fold family as RENDERER");
   const componentsSrc = read("css/components.css");
   assert.match(componentsSrc,
-    /#pmsettings-inner #pm-panel-display details > summary[\s\S]*?background-color:\s*transparent;[\s\S]*?border:\s*none;/,
+    /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary[\s\S]*?background-color:\s*transparent;[\s\S]*?border:\s*none;/,
     "ADVANCED VISUALS shares the borderless transparent summary rule");
   assert.match(componentsSrc,
-    /#pmsettings-inner #pm-panel-display details > summary::after\s*\{\s*content:\s*none;/);
+    /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary::after,\s*\n#rs-body details > summary::after \{ content: none; \}/);
   assert.match(componentsSrc,
-    /#pmsettings-inner #pm-panel-display details > summary::before\s*\{\s*content:\s*"\\25BE";/,
+    /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary::before,\s*\n#rs-body details > summary::before \{ content: "\\25BE";/,
     "all four Display folds put the chevron before the label");
   assert.doesNotMatch(read("index.html"), /id="pm-hud-h"/);
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
@@ -1073,7 +1104,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hud-sample"/,
     "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "min-height"), "var(--chip-h)",
+  // DISPLAY had its own byte-identical copy of this block until 2026-09-18;
+  // it now shares the merged one, so the selector to ask is the merged one.
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "min-height"), "var(--chip-h)",
     "every Display summary is a compact row, slightly shorter than a full --tap door");
   // The sample carries BOTH sliders now: a readout box for HUD SIZE and a pad
   // for BUTTON SIZE, which has exactly the same no-feedback problem (every real
@@ -1100,9 +1133,15 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "every present and future Display disclosure spans the wide grid");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display details > summary", "min-height"), "var(--chip-h)",
-    "every Display summary matches the HUD / METRICS chip row");
-  for (const sel of ["#pmsettings-inner #pm-panel-display details > summary", "#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary"]) {
+  // ONE RULE NOW, not three (2026-09-18). DISPLAY's summary chrome and
+  // STEERING/DRIVING's were byte-identical blocks, so race settings' folds
+  // joined the :is() list rather than adding a fourth copy — which is why
+  // these assertions name the merged selector and #rs-body shares it.
+  // A REGEX, not a string: the merged rule is a comma-joined selector list and
+  // css-rules.mjs keeps it joined (its own note says match with a regex then).
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "min-height"), "var(--chip-h)",
+    "every fold summary matches the HUD / METRICS chip row");
+  for (const sel of [/:is\(#pm-panel-display,[^)]*\) details > summary,/, /#rs-body details > summary/]) {
     assert.equal(decl(css("css/components.css"), sel, "height"), "auto", "fold summaries wrap instead of clipping their readout at 150%");
     assert.equal(decl(css("css/components.css"), sel, "flex-wrap"), "wrap");
   }
@@ -1120,15 +1159,15 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child, #advanced > .pm-group-h:first-child, #audioset > .pm-group-h:first-child", "display"), "none",
     "sheet title already names CONTROLS / DISPLAY / STEERING & ASSISTS / MUSIC; do not reprint the heading");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display,[^)]*\) details > summary,/, "color"), "var(--steel)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "opacity"), "1",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary/, "opacity"), "1",
     ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay readable");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary/, "background-color"), "transparent",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary/, "background-color"), "transparent",
     "fold summaries drop the plate so they do not copy HALO / TURN CHASING");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary::after/, "content"), "none",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none",
     "right-side chevron is the dropdown mark — disclosures do not use it");
-  assert.match(decl(css("css/components.css"), /#pmsettings-inner #pm-panel-display details > summary::before$/, "content") || "",
+  assert.match(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary::before/, "content") || "",
     /25BE/,
     "disclosure chevron sits on the left, like a tree, not a select");
   const settingsHtml = read("index.html");
@@ -1153,9 +1192,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-src" class="set-row"/, "the music SOURCE is a setting row, not four chips");
   assert.match(music, /id="as-p" class="set-row"/, "the engine PROFILE is a setting row");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#advanced-inner, #pm-panel-driving\) details > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary/, "color"), "var(--steel)",
     "STEERING folds use the same disclosure chrome as DISPLAY");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
+  assert.equal(decl(css("css/components.css"), /:is\(#pm-panel-display, #advanced-inner, #pm-panel-driving\) details > summary::after/, "content"), "none");
   assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
     /25BE/,
     "MUSIC fold chevron sits on the left");
