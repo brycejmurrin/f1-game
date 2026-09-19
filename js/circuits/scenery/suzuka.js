@@ -396,6 +396,8 @@
 
       // ── Low shrub clusters at road margin (replaces over-close bush loops) ────
       every(40, (k) => {
+        // The Spoon terrace supersedes this road-margin planting window.
+        if (k >= K(0.611) && k <= K(0.629)) return;
         const s = hash(k * 61);
         if (s < 0.5) return;
         bush(k, s < 0.75 ? -1 : 1, 10 + s * 4, [0.21, 0.41, 0.21]);

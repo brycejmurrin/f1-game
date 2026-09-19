@@ -336,7 +336,10 @@
             points.push(top);
             addCyl(target, deck, 0.42, h, STEEL, 6, b);
             if (j > 0) {
-              beam(points[j - 1], top, 0.75);
+              // Neighbouring sloped chords share the same lateral plane when
+              // their thickness is identical. A subtle alternating gauge keeps
+              // the arch silhouette while separating those fighting faces.
+              beam(points[j - 1], top, j % 2 ? 0.78 : 0.72);
               const low = vadd(vadd(a.c, a.t, (t - 0.5) * 48 - 8), a.u, 1.0);
               beam(j % 2 ? low : vadd(deck, a.u, 1.0), j % 2 ? top : points[j - 1], 0.48);
             }
