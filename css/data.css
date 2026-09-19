@@ -408,6 +408,10 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 }
 .dh-live-state[data-state="live"] { color: var(--faster); }
 .dh-live-state[data-state="upcoming"] { color: var(--gold); }
+.dh-live-state[data-state="completed"] {
+  color: var(--dim);
+  background: color-mix(in srgb, var(--steel) 10%, transparent);
+}
 .dh-live-sub { font-size: var(--fs-2); color: var(--dim); margin-top: calc(var(--gap) / 6); white-space: normal; overflow-wrap: anywhere; }
 .dh-live-team { color: var(--dim); font-size: var(--fs-2); }
 .dh-live-gapwrap { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex: 1; min-width: 100px; justify-content: flex-end; }
