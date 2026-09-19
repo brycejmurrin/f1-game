@@ -415,77 +415,53 @@
       forestEdge(0.18, 0.28,  1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
       forestEdge(0.18, 0.28, -1, 160, { density: 0.08, hMin: 7, hMax: 10, col: COPSE, col2: COPSE2, pineFrac: 0.3 });
 
-      // ── THE HANGARS THE HANGAR STRAIGHT IS NAMED AFTER ───────────────────
-      // The line above has thinned this outfield to 8% density since the
-      // circuit was written, with a comment saying why: to leave sky for the
-      // hangar silhouettes. docs/tracks/silverstone.md asks for them twice
-      // ("barrel WWII hangar silhouettes ~95-112 m", "place barrel hangars at
-      // mid-distance so they read as silhouettes"). They were never placed, so
-      // for as long as this file has existed the Hangar Straight has been a
-      // stretch of thinned trees named after buildings that are not there —
-      // on a circuit whose whole identity is the bomber station underneath it.
-      //
-      // RAF Silverstone flew Wellingtons from 1943 and its hangars were Type
-      // T2s: a 240 x 115 ft steel shed, about 73 x 35 m, ~7.5 m to the eaves
-      // and ~11 m to the ridge, in drab olive-green. They stood in a line off
-      // the perimeter track, which is what this straight used to be — so they
-      // run PARALLEL to it, spaced along the tangent, not scattered.
-      //
-      // Silhouettes, not scenery: no glazing, no detail, one flat colour per
-      // shed at 95-112 m where the eye reads only the outline.
+      // Hangar Straight's RAF T2 halls: three long, shallow barrel silhouettes
+      // parallel to the old perimeter track. Keep the 8%-density fringe above;
+      // open sky around the roofs is more important here than woodland mass.
       {
         const T2_OLIVE = [0.34, 0.36, 0.30], T2_OLIVE_D = [0.28, 0.30, 0.26];
         const T2_DOOR  = [0.24, 0.26, 0.23];
-        // NO HAND-ROLLED onTrack PRE-GUARD. The first cut had one and it
-        // silently ate three of five hangars — modelGroup's own footprint test
-        // reports a rejection by id, a bare `return` does not, and this file
-        // is not the place to reinvent the failure mode.
-        const hangar = (kk, side, dist, tOff, col) => {
+        const hangar = (id, kk, side, dist, col) => {
           const a = anchor(kk, side, dist);
-          const W = 35, LEN = 73, EAVE = 7.5, RIDGE = 3.6;   // 11.1 m to the ridge
-          const c = vadd(a.c, a.t, tOff);
+          const W = 35, LEN = 73, EAVE = 7.5, RISE = 3.6;
+          const c = a.c;
           const b = [a.r, a.u, a.t];
-          modelGroup(`silverstone-t2-hangar-${kk}`, {
-            center: vadd(c, a.u, (EAVE + RIDGE) / 2), size: [W + 2, EAVE + RIDGE + 1, LEN + 2], basis: b,
+          modelGroup(`silverstone-t2-hangar-${id}`, {
+            center: vadd(c, a.u, (EAVE + RISE) / 2),
+            size: [W + 2, EAVE + RISE + 1, LEN + 2], basis: b,
           }, (stage) => {
             stage._mat = MAT.CONCRETE;
             addBox(stage, vadd(c, a.u, EAVE / 2), [W, EAVE, LEN], col, b);
-            // The barrel. addCyl extrudes along basis[1], so the roll axis is
-            // the shed's LENGTH — the same [r, t, u] basis the museum's
-            // repainted T2 roof uses thirty lines below.
-            //
-            // VERGE, and it is not a fudge. Flush with the gable, the cylinder's
-            // END CAP lands on exactly the plane of the shed's end wall, facing
-            // the same way: two faces, one depth, both rasterised, z-fighting at
-            // every distance. That is what coplanar-faces.test.mjs counts, and
-            // five hangars flush took silverstone 15 -> 20 spots and the deploy
-            // branch red (pages 2424-2426). A T2's roof oversails its gable, so
-            // the fix is the real detail rather than a nudge: the caps move 0.3 m
-            // proud of the end walls and share no plane with anything.
-            const VERGE = 0.3;
             stage._mat = MAT.RUST;
-            // RIDGE, NOT W/2. addCyl draws a FULL cylinder, so a radius of W/2
-            // sprang the barrel from the eaves and rose the same 17.5 m again:
-            // each shed built to 25 m against the 11.1 m its own RIDGE, its
-            // comment and its modelGroup box (EAVE + RIDGE + 1) all declare —
-            // a real T2 is ~7.5 m to the eaves and ~11 m to the ridge, so these
-            // stood at twice the building they were measured from.
-            //
-            // A T2's roof is a shallow segmental arch, and addCyl cannot draw
-            // one: the arc through the eaves at +/-W/2 rising RIDGE needs
-            // r = ((W/2)^2 + RIDGE^2) / (2*RIDGE) = 44.3 m centred 33.2 m BELOW
-            // the eaves, and a full cylinder of that radius is 58.7 m wide at
-            // ground level — 11.8 m of it through each side wall. The honest
-            // choices are an arc strip or a gable, and at the 95-112 m these
-            // are built to read at, the ridge HEIGHT is the silhouette and the
-            // profile between eave and ridge is a metre of shading. Gable, and
-            // the 2x height error goes rather than being redrawn in place.
-            //
-            // The oversail survives the swap: sz[2] carries VERGE at both ends,
-            // so the gables still stand 0.3 m proud of the end walls (the
-            // coplanar pair fixed above), and addPrism emits NO base face, so
-            // nothing lands on the shed box's roof plane either.
-            addPrism(stage, vadd(c, a.u, EAVE), [W, RIDGE, LEN + VERGE * 2], T2_OLIVE_D, b);
+            // Seven tangent strips form a shallow segmental barrel. A full
+            // addCyl would double the intended height and protrude through the
+            // walls; this keeps the true 3.6 m rise using existing primitives.
+            const halfW = W / 2;
+            const radius = (halfW * halfW + RISE * RISE) / (2 * RISE);
+            const centerY = EAVE - (radius - RISE);
+            const edgeAng = Math.asin(halfW / radius);
+            const bands = 7, thick = 0.38;
+            for (let i = 0; i < bands; i++) {
+              const a0 = -edgeAng + (2 * edgeAng * i) / bands;
+              const a1 = -edgeAng + (2 * edgeAng * (i + 1)) / bands;
+              const ang = (a0 + a1) / 2;
+              const rr = [
+                a.r[0] * Math.cos(ang) - a.u[0] * Math.sin(ang),
+                a.r[1] * Math.cos(ang) - a.u[1] * Math.sin(ang),
+                a.r[2] * Math.cos(ang) - a.u[2] * Math.sin(ang),
+              ];
+              const uu = [
+                a.r[0] * Math.sin(ang) + a.u[0] * Math.cos(ang),
+                a.r[1] * Math.sin(ang) + a.u[1] * Math.cos(ang),
+                a.r[2] * Math.sin(ang) + a.u[2] * Math.cos(ang),
+              ];
+              let roofC = vadd(c, a.r, radius * Math.sin(ang));
+              roofC = vadd(roofC, a.u, centerY + radius * Math.cos(ang));
+              roofC = vadd(roofC, uu, -thick / 2);
+              addBox(stage, roofC,
+                [radius * (a1 - a0) + 0.18, thick, LEN + 0.6],
+                T2_OLIVE_D, [rr, uu, a.t]);
+            }
             // Sliding door bays at the trackside gable — the one detail that
             // survives at this range, because it breaks the flat end wall.
             stage._mat = MAT.METAL;
@@ -494,21 +470,13 @@
             stage._mat = 0;
           }, { required: true });
         };
-        // ONE rank, on the LEFT only, and that is a measurement rather than a
-        // choice. The brief says "both" sides, but Silverstone folds: the
-        // outfield off the right of the Hangar Straight at 96-108 m is the
-        // Stowe/Vale section of this same lap, 11-18 m away (measured at
-        // s 0.196/0.242 -> road at s 0.36-0.40). A 73 m shed there stands on
-        // the Stowe run-off. The left side clears by 70-112 m all the way
-        // along, and one rank off one side of the old perimeter track is what
-        // an RAF dispersal actually looked like.
-        for (const [s, dist, col] of [
-          [0.185,  98, T2_OLIVE],
-          [0.205, 101, T2_OLIVE_D],
-          [0.228, 104, T2_OLIVE],
-          [0.252, 100, T2_OLIVE_D],
-          [0.272,  96, T2_OLIVE],
-        ]) hangar(k(s), -1, dist, 0, col);
+        // One left-side rank avoids the nearby Stowe/Vale foldback on the
+        // right while preserving clear 95–110 m driver-eye silhouettes.
+        for (const [id, s, dist, col] of [
+          ["west", 0.185,  98, T2_OLIVE],
+          ["centre", 0.228, 104, T2_OLIVE_D],
+          ["east", 0.272,  96, T2_OLIVE],
+        ]) hangar(id, k(s), -1, dist, col);
       }
 
       for (const [s, side, d, w, h, ln] of [
@@ -986,14 +954,14 @@
                 out._mat = 0;
               }
             }
-            // Flagpoles — the campsite banner forest, one per few pitches.
+            // Tall flags carry the campsites above the hedgerow horizon.
             if (hash(kk * 13 + gap) > 0.72) {
               const a = anchor(kk, side, gap - 3);
               if (!onTrack(a.c[0], a.c[2], 22)) {
                 const b = [a.r, a.u, a.t];
-                addCyl(out, a.c, 0.07, 6.2, [0.80, 0.80, 0.82], 4, b);
+                addCyl(out, a.c, 0.09, 9.2, [0.80, 0.80, 0.82], 4, b);
                 out._mat = MAT.FABRIC;
-                addBox(out, vadd(vadd(a.c, a.u, 5.0), a.t, 0.9), [0.06, 0.9, 1.6],
+                addBox(out, vadd(vadd(a.c, a.u, 7.7), a.t, 1.5), [0.08, 1.4, 2.8],
                        TENT[Math.floor(hash(kk * 5) * 997) % TENT.length], b);
                 out._mat = 0;
               }
@@ -1005,11 +973,21 @@
             const mb = [ma.r, ma.u, ma.t];
             out._mat = MAT.FABRIC;
             // Seated on the skirt top (1.0 m) — base-anchored, not centred.
-            addPrism(out, vadd(ma.c, ma.u, 1.0), [14, 4.2, 26],
+            addPrism(out, vadd(ma.c, ma.u, 1.2), [18, 5.8, 30],
                      [0.92, 0.91, 0.87], mb);
             out._mat = 0;
-            addBox(out, vadd(ma.c, ma.u, 0.5), [14.4, 1.0, 26.4],
+            addBox(out, vadd(ma.c, ma.u, 0.6), [18.4, 1.2, 30.4],
                    [0.84, 0.83, 0.79], mb);
+            // Paired event flags flank the marquee and remain legible from
+            // the circuit without pulling any occupied row through a hedge.
+            for (const [off, col] of [[-19, TENT[0]], [19, TENT[1]]]) {
+              const fc = vadd(ma.c, ma.t, off);
+              addCyl(out, fc, 0.11, 11.5, [0.80, 0.80, 0.82], 5, mb);
+              out._mat = MAT.FABRIC;
+              addBox(out, vadd(vadd(fc, ma.u, 9.7), ma.t, 1.8),
+                     [0.10, 1.8, 3.4], col, mb);
+              out._mat = 0;
+            }
           }
         }
       }
