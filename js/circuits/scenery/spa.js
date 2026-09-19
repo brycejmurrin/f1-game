@@ -9,7 +9,7 @@
       const { K, lapBounds, out, MAT, seat, n, px, pz, pyMin, hash, every, place, backdrop, pal,
               addBox, addCyl, addCone, addPrism, addFrustum, addPyramid, vadd, anchor,
               mountain, pine, tree, forestEdge, building, motorhome,
-              marshalPost, gantry, billboard, fence, guardrail, tyreWall, wall,
+              marshalPost, gantry, fence, guardrail, tyreWall, wall,
               modelGroup, overheadSpan, groundPatch, circuitKit, ATM, onTrack,
               grandstandEx, spectatorHill, broadcastCompound, sponsorHoarding,
               waterSurface, terrainYAt, bakedModel, along } = api;
@@ -178,7 +178,43 @@
           { tiers: 2, roof: "cantilever", pylons: true, roofCol: [0.62, 0.63, 0.66], fasciaCol: GOLD4 });
       }
       ardennesTerrace("spa-terrace-raidillon", K(0.105), 1, 16, 7, { rows: 7 });
-      billboard(Math.round(n * 0.085) % n, 1, 14, 18, 10, [0.05, 0.06, 0.09]);
+      {
+        // Gold amphitheatre hero: two unmistakable screen bays in one deep
+        // fascia mass, high enough to read from the Raidillon climb and Kemmel.
+        const a = anchor(K(0.085), 1, 19), b = [a.r, a.u, a.t];
+        const SCREEN = [0.025, 0.035, 0.055], FASCIA = [0.88, 0.52, 0.08];
+        modelGroup("spa-raidillon-gold-dual-jumbotron", {
+          center: vadd(a.c, a.u, 7.2), size: [4.2, 14.4, 37], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.METAL;
+          // Four grounded legs and a deep rear cabinet keep the display from
+          // reading as a thin billboard when seen obliquely from Kemmel.
+          for (const z of [-14.5, 14.5]) {
+            for (const x of [-0.35, 1.05]) {
+              const p = vadd(vadd(a.c, a.t, z), a.r, x);
+              addBox(stage, vadd(p, a.u, 3.0),
+                [0.8, 6.0, 0.8], [0.30, 0.32, 0.34], b);
+            }
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, 0.35), a.u, 9.4),
+            [2.8, 8.0, 35], [0.12, 0.14, 0.16], b);
+          // Separate inset screens plus a bright centre mullion make the
+          // dual-bay arrangement legible at driver-eye distance.
+          stage._mat = MAT.GLASS;
+          for (const z of [-8.3, 8.3]) {
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, -1.10), a.t, z), a.u, 9.4),
+              [0.32, 6.5, 14.8], SCREEN, b);
+          }
+          stage._mat = MAT.METAL;
+          addBox(stage, vadd(vadd(a.c, a.r, -1.30), a.u, 9.4),
+            [0.38, 7.3, 1.15], FASCIA, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -0.05), a.u, 13.1),
+            [3.5, 1.35, 37], FASCIA, b);
+          addBox(stage, vadd(vadd(a.c, a.r, -0.15), a.u, 5.7),
+            [3.4, 0.65, 35.5], [0.60, 0.42, 0.12], b);
+          stage._mat = 0;
+        }, { required: true });
+      }
       // Stepped banking slabs climbing the R hillside behind/beside the stands.
       place(K(0.072), 1, 22, [10, 2.4, 16], GOLD4);
       place(K(0.080), 1, 26, [11, 3.6, 18], [0.44, 0.45, 0.48]);
@@ -215,6 +251,32 @@
         waterSurface(K(0.059), -1, 8, [2.6, 0.14, 22], BROOK, { id: "spa-eau-rouge-brook-a" });
         waterSurface(K(0.067), -1, 8, [2.3, 0.14, 20], BROOK, { id: "spa-eau-rouge-brook-b" });
         waterSurface(K(0.074), -1, 8, [2.0, 0.14, 18], BROOK, { id: "spa-eau-rouge-brook-c" });
+
+        // A short concrete service bridge crosses the middle brook strip.
+        // The raised deck, paired abutments and rails make the Eau Rouge
+        // crossing explicit without inventing an overhead track span.
+        const a = anchor(K(0.067), -1, 8), b = [a.r, a.u, a.t];
+        modelGroup("spa-eau-rouge-brook-crossing", {
+          center: vadd(a.c, a.u, 0.9), size: [7.6, 2.2, 4.8], basis: b,
+        }, (stage) => {
+          stage._mat = MAT.CONCRETE;
+          for (const x of [-3.1, 3.1]) {
+            addBox(stage, vadd(vadd(a.c, a.r, x), a.u, 0.42),
+              [1.0, 0.84, 4.4], [0.48, 0.49, 0.47], b);
+          }
+          addBox(stage, vadd(a.c, a.u, 0.94),
+            [7.5, 0.42, 4.2], [0.60, 0.61, 0.58], b);
+          stage._mat = MAT.METAL;
+          for (const z of [-1.95, 1.95]) {
+            addBox(stage, vadd(vadd(a.c, a.t, z), a.u, 1.38),
+              [7.5, 0.13, 0.13], [0.72, 0.73, 0.70], b);
+            for (const x of [-3.2, 0, 3.2]) {
+              addBox(stage, vadd(vadd(vadd(a.c, a.r, x), a.t, z), a.u, 1.0),
+                [0.13, 1.25, 0.13], [0.62, 0.63, 0.61], b);
+            }
+          }
+          stage._mat = 0;
+        }, { required: true });
       }
 
       // 3b. Stavelot runoff + barriers against the treeline (s≈0.75–0.80 R).
