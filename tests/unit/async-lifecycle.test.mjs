@@ -323,12 +323,29 @@ test("LIVE labels sessions as upcoming, live, or completed", () => {
   assert.equal(live._sessionStatus({ type: "Race", dateStart: "2026-09-13T10:00:00Z" }, now), "COMPLETED");
 });
 
+test("LIVE session time copy agrees with the status badge", () => {
+  const live = liveMergeHelpers();
+  const meta = { dateStart: "2026-09-18T10:00:00Z" };
+  const fmt = (value) => `[${value}]`;
+  assert.equal(live._sessionTimeLabel(meta, "UPCOMING", fmt), "Starts [2026-09-18T10:00:00Z]");
+  assert.equal(live._sessionTimeLabel(meta, "LIVE", fmt), "Started [2026-09-18T10:00:00Z]");
+  assert.equal(live._sessionTimeLabel(meta, "COMPLETED", fmt), "Started [2026-09-18T10:00:00Z]");
+  assert.equal(live._sessionTimeLabel({}, "COMPLETED", fmt), "");
+});
+
 test("LIVE split panes can shrink without creating modal-wide horizontal overflow", () => {
   for (const selector of [".dh-split", ".dh-split-L", ".dh-split-R"]) {
     const block = dataCss.match(new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\{([^}]*)\\}", "s"));
     assert.ok(block, `${selector} CSS block exists`);
     assert.match(block[1], /min-width:\s*0/, `${selector} must be allowed to shrink inside the modal`);
   }
+});
+
+test("LIVE completed badge has a distinct muted treatment", () => {
+  const block = dataCss.match(/\.dh-live-state\[data-state="completed"\]\s*\{([^}]*)\}/s);
+  assert.ok(block, "completed state has its own CSS block");
+  assert.match(block[1], /color:\s*var\(--dim\)/);
+  assert.match(block[1], /background:/);
 });
 
 test("LIVE position/interval requests use watermarks and never touch localStorage", async () => {

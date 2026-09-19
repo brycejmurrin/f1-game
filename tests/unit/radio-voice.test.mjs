@@ -490,3 +490,40 @@ test("an engine that ends an utterance inside speak() still leaves it live", () 
     "the utterance ended, so the duck must be released — a line whose end ran before it was claimed leaves " +
     "the music ducked with nothing speaking");
 });
+
+/* ── THE iOS PRIMING GESTURE ─────────────────────────────────────────────────
+ *
+ * Reported 2026-09-18: on iPhone/iPad, nothing is EVER spoken — not a penalty,
+ * not the coach, not even the settings preview. Two earlier fixes in this file
+ * were both about what happens after a line starts, so neither could have
+ * helped: on iOS no line ever started.
+ *
+ * WebKit refuses speechSynthesis.speak() outside a user gesture until the engine
+ * has been primed by a speak() INSIDE one, and unlock() — called from the game's
+ * first-gesture listener and from the radio toggle's own click — is the only
+ * place that ever happens. It did `u.volume = 0; speak(u); cancel();`, which
+ * primes nothing: cancelling in the same turn discards the utterance before it
+ * is processed, and a muted utterance is not reliably counted. Every later say()
+ * runs in the race loop, outside any gesture, so every one was refused.
+ *
+ * These pin the two halves, because both are invisible on every desktop engine —
+ * which is precisely why it shipped.
+ */
+test("unlock() does not cancel the utterance that primes the engine", () => {
+  const { RV, G, synth } = load();
+  RV.create(G).unlock();
+  const seq = synth.calls.filter((c) => ["speak", "cancel"].includes(c.m)).map((c) => c.m);
+  assert.deepEqual(seq, ["speak"],
+    "a cancel() in the same turn discards the priming utterance before iOS processes it, spending the one " +
+    "gesture the platform gives us and leaving the engine locked for the rest of the session");
+});
+
+test("unlock() primes with an audible-volume utterance, not a muted one", () => {
+  const { RV, G, synth } = load();
+  RV.create(G).unlock();
+  const spoke = synth.calls.find((c) => c.m === "speak");
+  assert.ok(spoke, "unlock must speak");
+  assert.ok(spoke.volume > 0,
+    "WebKit does not reliably count a MUTED utterance as the audible speak that unlocks the engine; a space " +
+    "has no phonemes so it stays inaudible whatever the volume says");
+});
