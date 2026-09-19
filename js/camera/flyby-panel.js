@@ -371,10 +371,153 @@ function selectRow(host, id, label, values, onChange) {
 
 function edited() { persist(); refreshChips(); refreshRows(); preview(); }
 
+// ---- the TRACK CARD and the ANNOUNCER -------------------------------------
+//
+// Both belong to the loading screen (js/ui/loading-screen.js), which is the
+// screen these shots are framed for — and neither can be authored anywhere
+// else. The card's size and position are a judgement about THIS sequence's
+// framing ("the card sits over the pit straight in shot 3"), and the screen
+// only exists for the 24 s between RACE! and the grid. So the editor holds the
+// real card up over the live scene while the sliders move.
+//
+// The loading screen owns the numbers and the clamping; this file owns the
+// rows. Nothing here duplicates a range — LoadingScreen.CARD is the registry,
+// the same way FIELD above is the registry for a pose.
+//
+// READ THROUGH FUNCTIONS, not captured at eval. A `const CARD = LoadingScreen.CARD`
+// at module scope would be a load-order edge between two files that have no
+// other relationship, and it would fail SOFTLY — an empty table builds an empty
+// group, which looks like "the feature is not there yet" rather than a bug.
+const cardDefs = () => (typeof LoadingScreen !== "undefined" && LoadingScreen.CARD) || {};
+const cardKeys = () => (typeof LoadingScreen !== "undefined" && LoadingScreen.CARD_KEYS) || [];
+
+/** The loading card, or null where game.js has not handed one over (the node
+ *  suites drive this file with a stub G). Every card call goes through it. */
+function cardHost() {
+  const ls = G.loadingScreen;
+  return ls && typeof ls.setCard === "function" ? ls : null;
+}
+/** The circuit the card would describe. One object, built by game.js, so the
+ *  preview is the real card and not a second description of the same race. */
+function cardInfo() {
+  try { return typeof G.loadingInfo === "function" ? G.loadingInfo() : null; } catch (_) { return null; }
+}
+
+/** Put the real card on screen, or take it down. `hold` is a phase of its own —
+ *  click-through and unscrimmed — so the panel keeps its clicks and the scene
+ *  the card is being framed against stays visible behind it. */
+function showCard(on) {
+  const ls = cardHost(); if (!ls) return;
+  if (!on) { ls.stop(); return; }
+  const info = cardInfo();
+  if (info) { try { ls.hold(info); } catch (e) { Log.warn("game", "card preview failed", e); } }
+}
+
+function buildCardRows(host) {
+  const ls = cardHost();
+  const defs = cardDefs(), keys = cardKeys();
+  if (!ls || !keys.length) return;
+  const head = document.createElement("h3");
+  head.textContent = "TRACK CARD"; head.className = "fb-group";
+  host.appendChild(head);
+  for (const k of keys) {
+    numberRow(host, "card-" + k, defs[k].label, defs[k], (v) => {
+      // The SLIDER is not the truth — the clamp is. setCard() hands back what
+      // actually took, and writing that straight back into the rows is what
+      // keeps a dragged thumb from reading 1.8 on a card that stopped at 1.6.
+      refreshCard(ls.setCard({ [k]: v }));
+    });
+    // The size and position are CSS custom properties and follow the thumb for
+    // free. The lap outline does NOT: it is a raster sized once, at the scale
+    // the card had when it was painted, so a card dragged from 1.0 to 1.6 shows
+    // a stretched map until something repaints it. On `change`, not `input` — a
+    // full centreline redraw per pixel of thumb travel is not free.
+    const inp = $("fb-in-card-" + k);
+    if (inp) inp.onchange = () => showCard(true);
+  }
+  const item = document.createElement("div");
+  item.className = "adv-item";
+  const btn = document.createElement("button");
+  btn.type = "button"; btn.id = "fb-card-reset";
+  btn.textContent = "RESET CARD";
+  btn.title = "Put the track card back at its shipped size and position. Leaves the shots alone.";
+  btn.onclick = () => { refreshCard(ls.resetCard()); showCard(true); };
+  item.appendChild(btn);
+  host.appendChild(item);
+}
+
+/** Write a geometry into the three sliders. */
+function refreshCard(geom) {
+  const defs = cardDefs();
+  const g = geom || (cardHost() && cardHost().card()) || null;
+  if (!g) return;
+  for (const k of cardKeys()) if (typeof g[k] === "number") setNum("card-" + k, defs[k], g[k]);
+}
+
+/* THE ANNOUNCER'S SCRIPT, SHOWN AS TEXT. It is DERIVED from the circuit
+ * (js/audio/announcer.js), so the only way to know what a given track gets is
+ * to ask — and an author re-framing a 24 s flyby needs to know whether the
+ * voice fills it or stops at second nine. Printing the lines is also the one
+ * review surface for the copy: a wrong clause is obvious written down and easy
+ * to miss spoken over a helicopter shot. */
+function annHost() {
+  const a = G.announcer;
+  return a && typeof a.scriptFor === "function" ? a : null;
+}
+
+function buildAnnRows(host) {
+  const a = annHost(); if (!a) return;
+  const head = document.createElement("h3");
+  head.textContent = "ANNOUNCER"; head.className = "fb-group";
+  host.appendChild(head);
+  const item = document.createElement("div");
+  item.className = "adv-item";
+  const text = document.createElement("p");
+  text.id = "fb-ann-script"; text.className = "as-note";
+  const ops = document.createElement("div");
+  ops.className = "balanced-row";
+  const play = document.createElement("button");
+  play.type = "button"; play.id = "fb-ann-play"; play.textContent = "PLAY";
+  play.title = "Read the script aloud, at the voice, pitch and rate set in SETTINGS → AUDIO.";
+  // RE-RESOLVED IN THE HANDLER, not the `a` captured above: `announcer` in
+  // js/game.js is a `let` that starts at Announcer.inert(), and a captured
+  // inert one would fail silently — preview() returning false is
+  // indistinguishable from "master sound is off", which is what this very
+  // button would then report.
+  play.onclick = () => {
+    const live = annHost(), info = cardInfo();
+    // preview() ignores the player's ANNOUNCER switch — pressing PLAY in an
+    // authoring panel IS the consent — but not master SOUND, which means
+    // silence. Say which of the two refused rather than doing nothing.
+    if (!live || !info || !live.preview(info)) {
+      flash(play, live && live.available() ? "SOUND OFF" : "NO VOICES");
+    }
+  };
+  const stop = document.createElement("button");
+  stop.type = "button"; stop.id = "fb-ann-stop"; stop.textContent = "STOP";
+  stop.onclick = () => { const live = annHost(); if (live) live.stop(); };
+  ops.append(play, stop);
+  item.append(text, ops);
+  host.appendChild(item);
+}
+
+/** Re-derive the script for whatever circuit is loaded now. */
+function refreshAnn() {
+  const a = annHost(), el = $("fb-ann-script");
+  if (!a || !el) return;
+  const info = cardInfo();
+  let lines = [];
+  try { lines = info ? a.scriptFor(info) : []; } catch (_) { lines = []; }
+  el.textContent = lines.length ? lines.join(" ") : "No circuit loaded — start a race, then pause.";
+}
+
 function buildRows() {
   const host = $("fb-rows");
   if (host.dataset.built) return;
   host.dataset.built = "1";
+
+  // ---- the track card ----
+  buildCardRows(host);
 
   // ---- the shot itself ----
   const head = document.createElement("h3");
@@ -384,6 +527,9 @@ function buildRows() {
   selectRow(host, "ease", "EASING", EASES, (v) => { cur().ease = v; edited(); });
   numberRow(host, "fov0", "FOV FROM", FOV, (v) => { cur().fov[0] = v; edited(); });
   numberRow(host, "fov1", "FOV TO", FOV, (v) => { cur().fov[1] = v; edited(); });
+
+  // ---- the announcer ----
+  buildAnnRows(host);
 
   // ---- the four poses ----
   for (const slot of SLOTS) {
@@ -539,6 +685,9 @@ function openFlyby() {
   $("flyby").hidden = false;
   $("fb-json").hidden = true;
   document.body.classList.add("lt-open");    // same dock as the other two tuners
+  refreshCard(null);
+  refreshAnn();
+  showCard(true);
   els.pmsettings.hidden = true;
   // Nested under DISPLAY -> ADVANCED VISUALS: hide that page too, or its own
   // .hidden survives underneath and reappears the moment pmsettings does.
@@ -555,6 +704,12 @@ function closeFlyby(showPauseMenu) {
   Log.info("game", "FlybyPanel.close");
   $("flyby").hidden = true;
   document.body.classList.remove("lt-open");
+  // The held card and any half-spoken script go with the panel. Both outlive it
+  // otherwise: the card is a plain hidden=false div, and speechSynthesis has no
+  // owner at all — closing the editor mid-sentence would leave the voice
+  // reading a circuit description over the pause menu.
+  showCard(false);
+  { const a = annHost(); if (a) a.stop(); }
   // The preview parks the camera through dbgCam; leaving it parked would hand
   // the player back a frozen flyby camera instead of their own car.
   // view("chase") is the release, for two reasons that both matter here.

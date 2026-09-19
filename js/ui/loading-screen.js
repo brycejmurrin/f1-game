@@ -32,14 +32,110 @@ const LoadingScreen = (function () {
   // before the build takes the main thread.
   const CARD_MS = 700;
 
+  /* ── THE CARD'S OWN GEOMETRY ────────────────────────────────────────────
+   * The card is a lower third over a moving camera, and where a lower third
+   * belongs depends on the shot. The shipped placement suits the shipped
+   * sequence; an author who re-frames the flyby (js/camera/flyby-panel.js)
+   * usually has to move the card with it, and a player on a 21:9 monitor or a
+   * phone in portrait wants it somewhere else again. So it is three numbers,
+   * authored in the flyby editor beside the shots they are framed against.
+   *
+   * THREE KNOBS, EACH DOING EXACTLY ONE THING. A width slider AND a size
+   * slider was the first shape and it was two controls for one question — the
+   * author could not tell which one had made the card too big. SIZE scales the
+   * whole plate, type and outline together; X and Y move it. Nothing else.
+   *
+   * The UNITS ARE THE SCREEN'S, not the card's: a translate in percent would be
+   * a percentage of the card, so the same saved number would move a scaled card
+   * further than an unscaled one. vw/vh means "a fifth of the way across",
+   * which is what an author picking a position actually means. */
+  const CARD = Object.freeze({
+    scale: { label: "CARD SIZE", min: 0.6, max: 1.6, step: 0.02, unit: "x", def: 1 },
+    x: { label: "CARD X", min: -40, max: 40, step: 1, unit: " vw", def: 0 },
+    y: { label: "CARD Y", min: -70, max: 6, step: 1, unit: " vh", def: 0 },
+  });
+  const CARD_KEYS = Object.freeze(Object.keys(CARD));
+
+  /** A COMPLETE, in-range geometry from anything at all — a saved object from a
+   *  future build, a hand-edited store, null. Pure, and the only way this
+   *  module ever reads one: a partial geometry reaching the stylesheet would
+   *  put `NaNvw` in a custom property, where CSS drops the declaration and the
+   *  card silently keeps the PREVIOUS value rather than the default. */
+  function clampCard(geom) {
+    const out = {};
+    for (const k of CARD_KEYS) {
+      const d = CARD[k];
+      const v = geom && Number.isFinite(+geom[k]) ? +geom[k] : d.def;
+      out[k] = Math.min(d.max, Math.max(d.min, v));
+    }
+    return out;
+  }
+
+  /** True when every field is the shipped value. NULL IS STORED FOR THIS, never
+   *  a copy of the defaults — the same rule the flyby shot list follows, and for
+   *  the same reason: a stored copy pins the player to today's numbers and
+   *  silently ignores every later change to them. */
+  function cardPristine(geom) {
+    const g = clampCard(geom);
+    return CARD_KEYS.every((k) => g[k] === CARD[k].def);
+  }
+
+  /** The custom properties css/overlays.css reads off #ld-card. */
+  function cardVars(geom) {
+    const g = clampCard(geom);
+    return {
+      "--ld-card-scale": String(g.scale),
+      "--ld-card-x": g.x + "vw",
+      "--ld-card-y": g.y + "vh",
+    };
+  }
+
   function create(hooks) {
-    const { $, Tracks, TrackMaps, Flags } = hooks;
+    const { $, Tracks, TrackMaps, Flags, store } = hooks;
+    /* The announcer may arrive as a THUNK rather than an instance, and js/game.js
+     * passes one. `announcer` there is a `let` that starts at Announcer.inert()
+     * and is reassigned at the module wires; today those wires run before this
+     * screen is created, but that ordering is not a contract anyone maintains,
+     * and a captured inert() would fail SILENTLY — play() returning false is
+     * indistinguishable from the player having turned the announcer off. */
+    const ann = () => {
+      const a = typeof hooks.announcer === "function" ? hooks.announcer() : hooks.announcer;
+      return a && typeof a.play === "function" ? a : null;
+    };
 
     let timer = 0, phase = "", build = null, el = null, flyT0 = 0;
 
     // The map's slot in the card, in CSS px. fitCanvas keeps the circuit's own
     // aspect inside it, so a wide circuit gets the width and a tall one the height.
     const MAP_W = 210, MAP_H = 150;
+
+    // The live geometry, read from the store on first use and kept after.
+    let geom = null;
+    function cardGeom() {
+      if (geom) return geom;
+      let saved = null;
+      try { saved = store && store.get ? store.get("ldCard", null) : null; } catch (_) { saved = null; }
+      geom = clampCard(saved);
+      return geom;
+    }
+    /** Patch the geometry, save it and push it at the card. Returns the clamped
+     *  result so the editor's sliders show what actually took effect rather than
+     *  what they asked for. */
+    function setCardGeom(patch) {
+      geom = clampCard(Object.assign({}, cardGeom(), patch));
+      try { if (store && store.set) store.set("ldCard", cardPristine(geom) ? null : geom); }
+      catch (e) { Log.warn("game", "loading card geometry did not save", e); }
+      applyCard();
+      return Object.assign({}, geom);
+    }
+    /** Write the three custom properties. Inline on the element, not a class:
+     *  the values are continuous and the stylesheet cannot enumerate them. */
+    function applyCard() {
+      const c = $("ld-card");
+      if (!c || !c.style || typeof c.style.setProperty !== "function") return;
+      const vars = cardVars(cardGeom());
+      for (const k in vars) c.style.setProperty(k, vars[k]);
+    }
 
     const WX = { dry: "DRY", wet: "WET", rain: "RAIN", overcast: "CLOUDY", fog: "FOG" };
     const TOD = { dawn: "DAWN", day: "DAY", dusk: "DUSK", night: "NIGHT" };
@@ -89,7 +185,12 @@ const LoadingScreen = (function () {
       if (!cv || !TrackMaps || typeof TrackMaps.draw !== "function") return;
       try {
         const fit = TrackMaps.fitCanvas(cv, MAP_W, MAP_H, t, true);
-        const ratio = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+        // THE CARD'S SCALE IS PART OF THE OVERSAMPLE. A canvas laid out at 210
+        // CSS px and then scaled to 1.6 by the card is a 210 px raster stretched
+        // across 336 — the one element on the card that cannot reflow, and the
+        // one that shows it. Folding the scale in here draws the pixels the
+        // player actually sees. Still capped at 3: the cap is about memory.
+        const ratio = Math.min(3, Math.max(1, (window.devicePixelRatio || 1) * cardGeom().scale));
         if (ratio > 1.01) {
           cv.width = Math.round(fit.w * ratio);
           cv.height = Math.round(fit.h * ratio);
@@ -131,6 +232,7 @@ const LoadingScreen = (function () {
       const r = root();
       if (!r) { fire(); return; }          // no markup: degrade to "just race"
       paint(info);
+      applyCard();
       r.hidden = false;
       addEventListener("pointerdown", onSkip, true);
       addEventListener("keydown", onSkip, true);
@@ -138,7 +240,20 @@ const LoadingScreen = (function () {
       // "run" is the flyby WITH the card up; "card" is the no-world fallback.
       // Both show the card, so the stylesheet reveals it for either.
       setPhase(info.hasWorld ? "run" : "card");
-      timer = setTimeout(fire, info.hasWorld ? FLY_MS : CARD_MS);
+      const life = info.hasWorld ? FLY_MS : CARD_MS;
+      timer = setTimeout(fire, life);
+      /* THE ANNOUNCER (js/audio/announcer.js) reads the card aloud, and it is
+       * given THIS SCREEN'S budget so the skip that ends the flyby ends the
+       * voice too. Without that a skipped 24 s welcome keeps talking over the
+       * formation lap — speechSynthesis is not in the WebAudio graph, so
+       * nothing else would have stopped it.
+       *
+       * ONLY OVER THE FLYBY. The no-world path is a 700 ms fade, and 700 ms of
+       * "Welcome to—" cut off mid-word is worse than silence. */
+      if (info.hasWorld) {
+        const a = ann();
+        if (a) { try { a.play(info, life); } catch (e) { Log.warn("audio", "announcer failed", e); } }
+      }
     }
 
     /** Close and disarm. Called by clearMenuScreens() once the race owns the
@@ -148,14 +263,48 @@ const LoadingScreen = (function () {
       timer = 0;
       build = null;
       phase = "";
+      // The voice outlives the screen unless something cancels it: the screen's
+      // own budget timer is cleared above, and speechSynthesis has no owner.
+      const a = ann();
+      if (a) { try { a.stop(); } catch (_) { /* a synth mid-teardown */ } }
       removeEventListener("pointerdown", onSkip, true);
       removeEventListener("keydown", onSkip, true);
       const r = root();
       if (r) { r.hidden = true; r.dataset.phase = ""; }
     }
 
+    /* THE EDITOR'S HOLD. The card's size and position cannot be authored blind,
+     * and the screen they belong to only exists for the 24 s between RACE! and
+     * the grid — so the flyby editor puts the real card up, over the real
+     * scene, and leaves it there while the sliders move.
+     *
+     * A THIRD PHASE, not `run` with the timer suppressed. "card" and "run" both
+     * arm a skip handler and own the screen; this one is a preview under a
+     * panel, so it must not swallow the clicks the panel is there to receive
+     * (css/overlays.css turns pointer events off for it) and must not report
+     * itself active(), which is what keeps game.js drawing the world for a
+     * loading screen that is genuinely loading. */
+    function hold(info) {
+      stop();
+      const r = root();
+      if (!r || !info || !info.track) return false;
+      paint(info);
+      applyCard();
+      r.hidden = false;
+      setPhase("hold");
+      return true;
+    }
+
     return {
-      run, stop,
+      run, stop, hold,
+      /** The flyby editor's three sliders. setCard() PATCHES — it merges onto
+       *  what is there, so a size slider does not reset the position. RESET is
+       *  resetCard(), which drops the geometry first: clampCard(null) is every
+       *  shipped default, and storing it then clears the key, because pristine
+       *  is stored as null. */
+      card: () => Object.assign({}, cardGeom()),
+      setCard: (patch) => setCardGeom(patch),
+      resetCard() { geom = clampCard(null); return setCardGeom({}); },
       /** How far through the FLYBY the screen is, 0..1. The shot sequencer is
        *  driven by this rather than by the wall clock, so the sequence keeps its
        *  shape when FLY_MS is retuned, and a phase skipped by a keypress does not
@@ -171,6 +320,6 @@ const LoadingScreen = (function () {
     };
   }
 
-  return { create, FLY_MS, CARD_MS };
+  return { create, FLY_MS, CARD_MS, CARD, CARD_KEYS, clampCard, cardPristine, cardVars };
 })();
 Object.freeze(LoadingScreen);
