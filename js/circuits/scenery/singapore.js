@@ -278,43 +278,109 @@
 
       {
         const k = K(0.55);
-        building(k, -1, 18, 48, 26, 34, {
-          wall:   [0.82, 0.74, 0.56],   // warm limestone/cream façade
-          window: WIN_GOLD,              // hotel interior — warm gold windows
-          floor:  5,                     // tall neoclassical storeys
-          lit:    true,
-          arch:   "flat",               // keep the iconic horizontal roofline
-        });
-        {
-          const a = anchor(k, -1, 42);
-          addBox(out, vadd(a.c, a.u, 2.5), [50, 4.5, 36], [1.00, 0.82, 0.50], [a.r, a.u, a.t]);
-          // Upper cornice band — bright cream highlight
-          addBox(out, vadd(a.c, a.u, 26.5), [49, 1.8, 35], [1.00, 0.92, 0.68], [a.r, a.u, a.t]);
-        }
+        const a = anchor(k, -1, 42), b = [a.r, a.u, a.t];
+        const STONE = [0.82, 0.74, 0.56];
+        const TRIM = [1.00, 0.92, 0.68];
+        modelGroup("singapore-fullerton-hotel", {
+          center: vadd(a.c, a.u, 20), size: [52, 40, 38], basis: b,
+        }, (stage) => {
+          // Broad limestone hotel, with a lit classical frontage.
+          addBox(stage, vadd(a.c, a.u, 13), [48, 26, 34], STONE, b);
+          addBox(stage, vadd(a.c, a.u, 2.5), [50, 4.5, 36], [1.00, 0.82, 0.50], b);
+          addBox(stage, vadd(a.c, a.u, 26.5), [49, 1.8, 35], TRIM, b);
+          for (let floor = 0; floor < 4; floor++) {
+            addBox(stage, vadd(vadd(a.c, a.r, 24.1), a.u, 7 + floor * 4.6),
+              [0.5, 1.4, 29], WIN_GOLD, b);
+          }
+          // Road-facing colonnade gives the façade its neoclassical rhythm.
+          for (let i = -4; i <= 4; i++) {
+            const foot = vadd(vadd(a.c, a.r, 25.1), a.t, i * 3.5);
+            addCyl(stage, foot, 0.55, 11.5, TRIM, 8, b);
+          }
+          addBox(stage, vadd(vadd(a.c, a.r, 25.1), a.u, 11.8),
+            [2.2, 1.1, 32], TRIM, b);
+          // Central tower and cupola restore the Fullerton skyline silhouette.
+          addBox(stage, vadd(a.c, a.u, 31), [17, 9, 15], STONE, b);
+          addBox(stage, vadd(a.c, a.u, 35.8), [19, 0.9, 17], TRIM, b);
+          addCyl(stage, vadd(a.c, a.u, 36.2), 5.2, 1.8, TRIM, 12, b);
+          addCone(stage, vadd(a.c, a.u, 38), 4.8, 2.0, STONE, 12, b);
+        }, { required: true });
       }
 
       {
         const k = K(0.62);
-        for (const side of [-1, 1]) {
-          const a = anchor(k, side, 4);
-          for (let j = 0; j < 5; j++) {
-            const c = vadd(a.c, a.t, (j - 2) * 10);  // 10 m spacing — ribs are 2 m wide
-            addPrism(out, vadd(c, a.u, 7),  [2.2, 4.5, 9], [0.88, 0.88, 0.92], [a.r, a.u, a.t]);
-            // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/core/geom.js) — this is the
-            // pier holding the rib up: base at the deck (c), rising the full
-            // height 7 so its top meets the rib's base flush. The old
-            // `vadd(c, a.u, 3.5)` (h/2) floated the pier's own base 3.5 m off
-            // the deck, so it never touched ground.
-            addCyl(out,   c, 0.55, 7, [0.80, 0.80, 0.85], 5, [a.r, a.u, a.t]);
+        const PALE = [0.88, 0.88, 0.92];
+        const STEEL = [0.80, 0.80, 0.85];
+        const emitTruss = (target, a) => {
+          const b = [a.r, a.u, a.t];
+          const points = [];
+          const beam = (p0, p1, thick) => {
+            const dx = p1[0] - p0[0], dy = p1[1] - p0[1], dz = p1[2] - p0[2];
+            const len = Math.hypot(dx, dy, dz);
+            const f = [dx / len, dy / len, dz / len];
+            const u = [
+              f[1] * a.r[2] - f[2] * a.r[1],
+              f[2] * a.r[0] - f[0] * a.r[2],
+              f[0] * a.r[1] - f[1] * a.r[0],
+            ];
+            const ul = Math.hypot(u[0], u[1], u[2]) || 1;
+            addBox(target,
+              [(p0[0] + p1[0]) * 0.5, (p0[1] + p1[1]) * 0.5, (p0[2] + p1[2]) * 0.5],
+              [thick, thick, len], PALE, [a.r, [u[0] / ul, u[1] / ul, u[2] / ul], f]);
+          };
+          for (let j = 0; j < 7; j++) {
+            const t = j / 6;
+            const deck = vadd(a.c, a.t, (t - 0.5) * 48);
+            const h = 5.8 + Math.sin(t * Math.PI) * 5.5;
+            const top = vadd(deck, a.u, h);
+            points.push(top);
+            addCyl(target, deck, 0.42, h, STEEL, 6, b);
+            if (j > 0) {
+              beam(points[j - 1], top, 0.75);
+              const low = vadd(vadd(a.c, a.t, (t - 0.5) * 48 - 8), a.u, 1.0);
+              beam(j % 2 ? low : vadd(deck, a.u, 1.0), j % 2 ? top : points[j - 1], 0.48);
+            }
           }
-          // Decorative bridge-lamp posts on the railing
-          for (let j = 0; j < 3; j++) {
-            const c = vadd(a.c, a.t, (j - 1) * 18);
-            // Base-anchored: post rises from the deck, lamp housing sits on top.
-            addCyl(out, c, 0.12, 4.5, [0.72, 0.72, 0.75], 5, [a.r, a.u, a.t]);
-            addBox(out, vadd(c, a.u, 4.6), [0.6, 0.6, 0.6], WIN_WARM, [a.r, a.u, a.t]);
+          addBox(target, vadd(a.c, a.u, 1.0), [1.1, 1.0, 52], STEEL, b);
+          for (let j = -1; j <= 1; j++) {
+            const c = vadd(a.c, a.t, j * 18);
+            addCyl(target, c, 0.12, 4.5, [0.72, 0.72, 0.75], 5, b);
+            addBox(target, vadd(c, a.u, 4.6), [0.6, 0.6, 0.6], WIN_WARM, b);
           }
-        }
+        };
+        const left = anchor(k, -1, 4);
+        modelGroup("singapore-anderson-bridge", {
+          center: vadd(left.c, left.u, 6.2), size: [3.2, 13, 54],
+          basis: [left.r, left.u, left.t],
+        }, (stage) => emitTruss(stage, left), { required: true });
+        // The opposite rail stays outside the atomic footprint: one combined
+        // ground-level bounds box would cross the live road and be rejected.
+        emitTruss(out, anchor(k, 1, 4));
+      }
+
+      {
+        const a = anchor(K(0.635), -1, 82), b = [a.r, a.u, a.t];
+        const CIVIC = [0.76, 0.75, 0.71];
+        const FRAME = [0.88, 0.87, 0.82];
+        const GLASS = [0.30, 0.42, 0.52];
+        modelGroup("singapore-parliament-house", {
+          center: vadd(a.c, a.u, 13), size: [42, 27, 58], basis: b,
+        }, (stage) => {
+          // A low modern civic block near the river, deliberately unlike the
+          // historic court's dome and the new court's rooftop disc.
+          addBox(stage, vadd(a.c, a.u, 9.5), [38, 19, 54], CIVIC, b);
+          addBox(stage, vadd(vadd(a.c, a.r, 19.1), a.u, 11),
+            [0.5, 12, 46], GLASS, b);
+          for (let i = -5; i <= 5; i++) {
+            addBox(stage, vadd(vadd(vadd(a.c, a.r, 19.5), a.t, i * 4.3), a.u, 11),
+              [0.9, 14, 0.65], FRAME, b);
+          }
+          addBox(stage, vadd(a.c, a.u, 19.8), [41, 1.6, 57], FRAME, b);
+          addBox(stage, vadd(vadd(a.c, a.t, -8), a.u, 23),
+            [20, 6.5, 24], GLASS, b);
+          addBox(stage, vadd(vadd(vadd(a.c, a.r, 10.1), a.t, -8), a.u, 23),
+            [0.8, 6.8, 24], WIN_COOL, b);
+        }, { required: true });
       }
 
       {
