@@ -32,7 +32,7 @@ function synthStub() {
   return {
     calls,
     getVoices() { calls.push({ m: "getVoices" }); return this._voices || []; },
-    speak(u) { calls.push({ m: "speak", text: u.text, voice: u.voice, rate: u.rate, pitch: u.pitch, volume: u.volume }); },
+    speak(u) { calls.push({ m: "speak", u, text: u.text, voice: u.voice, rate: u.rate, pitch: u.pitch, volume: u.volume }); },
     cancel() { calls.push({ m: "cancel" }); },
     resume() { calls.push({ m: "resume" }); },
   };
@@ -312,4 +312,115 @@ test("`announcer` is a real RadioVoice channel, with prosody and a preview line"
   // …and it is NOT a race-time speaker: nothing may route a `kind` here, or the
   // gate that keeps menu cards from being read aloud is bypassed.
   assert.ok(!Object.values(RV.SPEAKERS).includes(A.CHANNEL));
+});
+
+/* ── THE READ IS A CHAIN OF LINES, NOT ONE BLOB ────────────────────────────── */
+
+/** Fire the pending utterance's onend, as a real engine does when it finishes. */
+function finishLine(synth) {
+  const last = synth.calls.filter((c) => c.m === "speak").at(-1);
+  if (last && last.u && last.u.onend) last.u.onend();
+}
+const spoken = (synth) => synth.calls.filter((c) => c.m === "speak").map((c) => c.text);
+
+test("the script is spoken one line per utterance, in order", () => {
+  const { A, G, synth } = load();
+  const ann = A.create(G);
+  // preview() and play() share speak(); preview just skips the player's toggle.
+  ann.preview({ track: { name: "MONZA", gp: "Italian GP", lengthKm: 5.793 }, laps: 53 });
+  assert.equal(spoken(synth).length, 1, "only the FIRST line may be handed over up front");
+  let guard = 0;
+  while (guard++ < 20) { const before = spoken(synth).length; finishLine(synth); if (spoken(synth).length === before) break; }
+  const said = spoken(synth);
+  assert.ok(said.length >= 4, "the whole script must be read, one line at a time: " + said.length);
+  assert.match(said[0], /welcome to apex 26/i, "and in order, opening with the welcome");
+  assert.match(said.at(-1), /racing/i, "…and ending with the last line of the script");
+  assert.ok(said.every((t) => !/welcome to apex 26.*monza/i.test(t)),
+    "no utterance may carry two lines — that is the join() this split replaced");
+});
+
+test("no single utterance can hit Chrome's ~14 s cap", () => {
+  // THE BUG THIS SPLIT EXISTS FOR. Chrome Desktop silently fails an utterance
+  // past roughly fourteen seconds. Joined into one blob, every real script was
+  // over: Silverstone 15.4 s, Monaco 18.1 s, Spa at night 22.2 s, a classic in
+  // the rain 26.3 s. Per line, none of them comes close.
+  const { A, RV, G, synth } = load();
+  const ann = A.create(G);
+  const rate = RV.TONE.announcer.rate;
+  const cases = [
+    { track: { name: "SILVERSTONE", gp: "British GP", lengthKm: 5.891, country: "UK" }, turns: 18, laps: 52, relief: 20 },
+    { track: { name: "SPA-FRANCORCHAMPS", gp: "Belgian GP", lengthKm: 7.004, night: true }, turns: 19, laps: 44, relief: 102 },
+    { track: { name: "BRANDS HATCH", gp: "British GP", lengthKm: 4.207, classic: true }, turns: 19, laps: 60, relief: 45, weather: "rain" },
+  ];
+  for (const info of cases) {
+    synth.calls.length = 0;
+    ann.preview(info);
+    let guard = 0;
+    while (guard++ < 30) { const n = spoken(synth).length; finishLine(synth); if (spoken(synth).length === n) break; }
+    for (const text of spoken(synth)) {
+      const secs = RV.estimate(text, rate);
+      assert.ok(secs < 14, `"${text}" is ${secs.toFixed(1)} s — Chrome drops an utterance past ~14 s`);
+    }
+  }
+});
+
+test("a stopped read does not wake up and carry on talking", () => {
+  // The queued onend of a cancelled line is the hazard: without the generation
+  // check it advances the dead chain over whatever replaced it.
+  const { A, G, synth } = load();
+  const ann = A.create(G);
+  ann.preview({ track: { name: "MONZA", gp: "Italian GP", lengthKm: 5.793 }, laps: 53 });
+  const first = spoken(synth).length;
+  ann.stop();
+  finishLine(synth);
+  finishLine(synth);
+  assert.equal(spoken(synth).length, first, "stop() must end the chain, not pause it");
+});
+
+test("the announcer may use a network voice; the race radio may not", () => {
+  /* The rule that made the announcer worse. A remote voice's lead-in is
+   * unbounded, which is disqualifying for a line budgeted against a card — and
+   * irrelevant to a paragraph read over a loading screen. Every Chrome voice is
+   * remote and every top-tier Microsoft voice is named "… Online (Natural)", so
+   * the local-only filter was removing the GOOD voices, not the risky ones. */
+  const voices = [
+    { name: "Microsoft Ryan Online (Natural) - English (United Kingdom)", lang: "en-GB", localService: false },
+    { name: "Microsoft George - English (United Kingdom)", lang: "en-GB", localService: true },
+  ];
+  const { RV } = load({ voices });
+  const radio = RV.create({ soundOn: true, state: "race", store: { get: (k, d) => d, set() {} } });
+  const forRadio = radio.voiceList("radio").map((v) => v.name);
+  const forAnn = radio.voiceList("announcer").map((v) => v.name);
+  assert.ok(!forRadio.some((n) => /Online \(Natural\)/.test(n)),
+    "a race-radio line cannot wait on a network round trip");
+  assert.ok(forAnn.some((n) => /Online \(Natural\)/.test(n)),
+    "the announcer has no card to miss, and this is the voice the channel is for");
+  assert.ok(forRadio.length < forAnn.length);
+  assert.equal(RV.REMOTE_OK.announcer, true);
+  assert.ok(!RV.REMOTE_OK.radio && !RV.REMOTE_OK.control && !RV.REMOTE_OK.coach);
+});
+
+test("pickVoice prefers the neural and enhanced voices over the compact ones", () => {
+  const { A } = load();
+  // Windows 11 / Edge: the Natural voices are the veryHigh tier of the curated
+  // cross-platform list, and en-GB male is Ryan or Thomas.
+  assert.match(A.pickVoice([
+    { name: "Microsoft George - English (United Kingdom)", lang: "en-GB" },
+    { name: "Microsoft Ryan Online (Natural) - English (United Kingdom)", lang: "en-GB" },
+  ], "").name, /Ryan/);
+  // macOS with the download: same character, a quality the compact voice cannot reach.
+  assert.match(A.pickVoice([
+    { name: "Daniel", lang: "en-GB" },
+    { name: "Daniel (Enhanced)", lang: "en-GB" },
+  ], "").name, /Enhanced/);
+  // Chrome desktop, where the only voices there are are remote.
+  assert.match(A.pickVoice([
+    { name: "Google US English", lang: "en-US" },
+    { name: "Google UK English Male", lang: "en-GB" },
+  ], "").name, /UK English Male/);
+  // The player's explicit pick still outranks the whole ladder.
+  assert.equal(A.pickVoice([
+    { name: "Daniel (Enhanced)", lang: "en-GB" },
+    { name: "Microsoft George - English (United Kingdom)", lang: "en-GB" },
+  ], "Microsoft George - English (United Kingdom)").name, "Microsoft George - English (United Kingdom)");
 });
