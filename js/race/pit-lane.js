@@ -274,6 +274,13 @@ const PitLane = (function () {
   // because js/track/ loads first and has no business knowing what a pit box is.
   const GRID_POLE_M = 14;
   const COMMIT_M = 120;       // the entry road, for the cue's "PIT ENTRY" phase
+  // The pit CUE's two thresholds. Module scope because they are EXPORTED and
+  // the session below is the only other reader: the export list carried its
+  // own copies of both literals, so tuning the cue here would have left
+  // PitLane.CUE_M/CUE_WEAR quietly describing the old behaviour to every
+  // caller that reads them.
+  const CUE_M = 550;          // start the cue counting down this far out
+  const CUE_WEAR = 0.55;      // …or not at all, on a set with life left in it
   // How much lane a car needs in front of it for a commitment to mean anything:
   // arm the limiter closer than this to your own box and there is no room left
   // to slow down for it.
@@ -547,7 +554,6 @@ const PitLane = (function () {
     // driver stops reading it, which is worse than no cue. It appears when a
     // stop is actually worth making: the set is meaningfully used, or the tread
     // is wrong for the conditions, or a caution is out and a stop is cheap.
-    const CUE_M = 550;          // start counting down this far out
     const BOX_CUE_M = 90;       // …and start counting the metres down this far from the box
     // ASK FOR THE WORKING LANE ONLY WHEN IT IS TIME TO TAKE IT. Reported, with
     // a screenshot of the cue reading KEEP RIGHT at the top of the lane: "it's
@@ -559,7 +565,6 @@ const PitLane = (function () {
     // three bay pitches, so it is late enough to mean something and early
     // enough to act on.
     const MOVE_M = 36;
-    const CUE_WEAR = 0.55;      // …or not at all, on a set with life left in it
     const SERVED_S = 1.2;       // "GO GO GO" lasts this long after the release
     const MERGE_S = 3;          // a car this close behind on the exit is CLOSING
     // THE FIRST STOP, TAUGHT. Three lines — the road, the line, the gate — each
@@ -1635,7 +1640,7 @@ const PitLane = (function () {
            ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
            BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V, COMMIT_CLEAR,
            GRID_POLE_M,
-           CUE_M: 550, CUE_WEAR: 0.55, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
+           CUE_M, CUE_WEAR, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
            BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M,
            get BOX_PITCH() { return pitch(); }, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
 })();

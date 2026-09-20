@@ -58,6 +58,12 @@ const FlybySeq = (function () {
    * disagree again. */
   const FAR = 6000;               // metres of far clip — a whole circuit, not a corner
   const FOG = 0.15;               // × the session's fog density (photo mode's value)
+  // Near plane. Pinned rather than inherited: gameplay picks 0.3 for cockpit and
+  // hood (the wheel sits 0.46 m from the eye) and 0.9 for everything else, so a
+  // flyby would have taken whichever camera MODE the player last raced in —
+  // the same shot rendered with two different depth budgets. Nothing is within
+  // a metre of a crane, and 0.9:6000 is the better ratio of the two.
+  const NEAR = 0.9;
 
   /** Props that a camera must not be inside. The registry also records ridges,
    *  bushes and sparse `structure` hulls whose `fill` says they are mostly air
@@ -490,7 +496,7 @@ const FlybySeq = (function () {
     landmarks, bounds, landmarkScore,
     anchorS, posePoint, cornerS,
     DEFAULT, EASE,
-    POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG,
+    POLE_BACK, GRID_SPACING, GRID_ROWS, MIN_FILL, MIN_H, FAR, FOG, NEAR,
   };
 })();
 Object.freeze(FlybySeq);

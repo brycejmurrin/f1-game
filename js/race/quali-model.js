@@ -55,7 +55,17 @@ const Quali = (function () {
     Log.info("game", "Quali.create");
 
     let classification = null;
+    // The circuit `classification` belongs to. The PERSIST carries the same stamp
+    // (s.qualiTrack) and restoreFromSeason() refuses a mismatch — but the in-memory
+    // copy short-circuits that check, so without this stamp a classification
+    // outlived its weekend: award() drops the persist when a round scores and the
+    // memory survived, so from round 2 on qualiResults() stayed truthy, the sheet
+    // was never offered, and every grid came off round 1's times.
+    let classTrack = null;
     let _kCache = new Float64Array(0), _kCacheTrack = null;   // |curvature| per sample; _kCacheTrack is a def ID, never the track (see below)
+
+    // The circuit now loaded, in the same form persistOrder() stamps.
+    function hereId() { return (G.track && G.track.def && G.track.def.id) || null; }
 
     function lapTime(track, vCap, grip) {
       const n = track.n, total = track.total;
@@ -232,14 +242,21 @@ const Quali = (function () {
       }));
       // Stamp the circuit: an order restored onto a different track is a
       // grid drawn from the wrong lap times.
-      s.qualiTrack = (G.track && G.track.def && G.track.def.id) || null;
+      s.qualiTrack = hereId();
       persistSeason(s);
     }
 
     function restoreFromSeason() {
+      // A classification stamped for ANOTHER circuit is this weekend's grid drawn
+      // from the wrong lap times — the same rule qualiTrack applies to the persist
+      // three lines up. Drop it before the short-circuit below, so results(),
+      // order() and begin() all inherit the check.
+      if (classification && classTrack && hereId() && classTrack !== hereId()) {
+        classification = null; classTrack = null;
+      }
       const raw = G.season && G.season.qualiOrder;
       if (classification || !Array.isArray(raw) || !raw.length) return !!classification;
-      const here = (G.track && G.track.def && G.track.def.id) || null;
+      const here = hereId();
       if (G.season.qualiTrack && here && G.season.qualiTrack !== here) return false;
       const byId = new Map();
       if (G.cars) for (const c of G.cars) byId.set(c.driverId, c);
@@ -259,6 +276,7 @@ const Quali = (function () {
           human: !!(obj && entry.human),
         };
       });
+      classTrack = G.season.qualiTrack || here;
       const pole = classification[0] && classification[0].t > 0 ? classification[0].t : 0;
       for (const r of classification) r.gap = pole && r.t > 0 ? +(r.t - pole).toFixed(3) : 0;
       return true;
@@ -266,7 +284,7 @@ const Quali = (function () {
 
     function simulate(driven) {
       const rows = compute(driven);
-      if (rows) { classification = rows; persistOrder(); }
+      if (rows) { classification = rows; classTrack = hereId(); persistOrder(); }
       Log.info("game", "Quali.simulate n=" + (rows ? rows.length : 0));
       return rows;
     }
@@ -315,6 +333,7 @@ const Quali = (function () {
     }
     function clear(forget) {
       classification = null;
+      classTrack = null;
       if (forget) forgetOrder();
     }
 

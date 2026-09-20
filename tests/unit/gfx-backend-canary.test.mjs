@@ -143,6 +143,17 @@ test("boot canary disarms after a successful bind, not only after present()", ()
     "PROBE_KEY must be cleared after Gfx.create() binds, before the first present — title has no track");
 });
 
+test("a successful deferred bind clears a stale GLX live-backend latch", () => {
+  const game = code("js/game.js");
+  const bind = game.search(/Object\.defineProperties\(\s*GLX\s*,\s*Object\.getOwnPropertyDescriptors\(\s*backend\s*\)\s*\)/);
+  const fallback = game.indexOf("if (!gfx) {", bind);
+  const success = game.slice(bind, fallback);
+  assert.match(success, /if\s*\(\s*gfx\s*\)[^]*?sessionStorage\.removeItem\(\s*"apex26\.gfxBound"\s*\)/,
+    "same-tab recovery must not retain a previous GLX fallback after TLX/WGX binds");
+  assert.match(success, /dispatchEvent\(\s*new Event\(\s*"apex-gfx-live"\s*\)\s*\)/,
+    "SETTINGS and diagnostics must repaint after the live bind changes");
+});
+
 test("every successful game.js GLX fallback publishes the live backend", () => {
   const game = code("js/game.js");
   const fallback = game.slice(game.indexOf("if (!gfx) {"), game.indexOf("// Baked asset pack"));
@@ -1483,6 +1494,62 @@ test("the metrics panel reports what is DRAWING, not what is stored", () => {
 
   const back = bootPicker({ ls: { "apex26.gfxBackend": "three" }, gpu: {} });
   assert.equal(back.G.liveBackend(), "three", "a bindable pick is what is drawing");
+
+  const stale = bootPicker({
+    ls: { "apex26.gfxBackend": "three" },
+    ss: { "apex26.gfxBound": "webgl2" },
+    gpu: {},
+  });
+  assert.equal(stale.G.liveBackend(), "webgl2", "the successful GLX bind overrides a still-bindable THREE pick");
+
+  const tlx = bootPicker({
+    ls: { "apex26.gfxBackend": "webgpu" },
+    gpu: {},
+    glx: { __tlx: { backendState: () => ({ api: "webgl2" }) } },
+  });
+  assert.equal(tlx.G.liveBackend(), "three", "the TLX seam overrides a mismatched stored pick");
+  assert.equal(tlx.byId["pm-renderer"].options[2].textContent, "WEBGPU (THREE.JS)",
+    "the picker names the renderer actually bound beside the stored pick");
+});
+
+test("boot and picker normalize invalid renderer preferences to WEBGL2", () => {
+  const game = fnBody(code("js/game.js"), "backendPreference");
+  assert.match(game, /normalized\s*===\s*"webgl2"/);
+  assert.match(game, /normalized\s*===\s*"three"/);
+  assert.match(game, /normalized\s*===\s*"webgpu"/);
+  assert.match(game, /localStorage\.setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/,
+    "boot must scrub invalid persisted values instead of carrying raw garbage");
+
+  const picker = bootPicker({ ls: { "apex26.gfxBackend": "garbage" }, gpu: {} });
+  assert.equal(picker.G.readBackend(), "webgl2");
+  assert.equal(picker.ls.getItem("apex26.gfxBackend"), "webgl2",
+    "SETTINGS must persist the same normalized preference boot consumes");
+});
+
+test("diagnostics use Three as the unset default and report the live bind", () => {
+  const apex = code("js/agent/apex.js");
+  const diag = apex.slice(apex.indexOf("backend: safe("), apex.indexOf("mobile:", apex.indexOf("backend: safe(")));
+  assert.match(diag, /RendererPicker\.liveBackend\(\)/,
+    "__apex.diag must share the picker/metrics live-backend source");
+  assert.match(diag, /raw\s*==\s*null\s*\?\s*"three"/, "unset diagnostic preference is the product default");
+  assert.doesNotMatch(diag, /raw\s*==\s*null\s*\?\s*"webgl2"/);
+
+  const overlay = code("js/perf/gfx-debug-overlay.js");
+  const picks = fnBody(overlay, "picks");
+  assert.match(picks, /RendererPicker\.liveBackend\(\)/,
+    "gfx-debug must print the actual bind, not only the stored pick and latch");
+  assert.match(picks, /"three \(default\)"/);
+  assert.doesNotMatch(picks, /"webgl2 \(default\)"/);
+});
+
+test("terminal graphics failure hides interactive game UI and offers retry", () => {
+  const game = code("js/game.js");
+  const unavailable = fnBody(game, "showGraphicsUnavailable");
+  assert.match(unavailable, /els\.hud\.hidden\s*=\s*true/);
+  assert.match(unavailable, /els\.overlay\.hidden\s*=\s*true/);
+  assert.match(unavailable, /Graphics unavailable/);
+  assert.match(unavailable, /location\.reload\(\)/);
+  assert.match(game, /showGraphicsUnavailable\(\);\s*return/);
 });
 
 test("RENDERER control becomes a select with prev/next, not a one-way cycle", () => {
@@ -4251,7 +4318,7 @@ test("selector car assets yield per driver, preserve simulation, and cancel stal
       { id: "a", drivers: [{ num: 1 }, { num: 2 }] },
       { id: "b", drivers: [{ num: 3 }] },
       { id: "custom", custom: true, drivers: [{ num: 4 }] }
-    ] };
+    ], isReal: (t) => !!t && !t.custom && !t.legends };   // mirrors js/data/teams.js
     const Career = { gridDrivers: t => t.drivers, driverOverride: (id, di) => id === "a" && di === 1 ? { num: 99 } : null };
     const calls = [], CamModes = { CAM_MODES: [{ id: "cockpit" }] };
     const Log = { info() {}, warn() {} }, performance = { now: () => 0 };

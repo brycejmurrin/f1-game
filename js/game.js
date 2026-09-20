@@ -222,10 +222,34 @@ function preloadThreeVendor() {
 function backendPreference() {
   try {
     const pref = localStorage.getItem("apex26.gfxBackend");
-    return pref == null ? "three" : pref;
+    const normalized = pref == null ? "three" : pref;
+    if (normalized === "webgl2" || normalized === "three" || normalized === "webgpu") return normalized;
+    localStorage.setItem("apex26.gfxBackend", "webgl2");
+    return "webgl2";
   } catch (_) {
     return "three";
   }
+}
+function showGraphicsUnavailable() {
+  const panel = $("nogl");
+  if (els.hud) { els.hud.hidden = true; els.hud.inert = true; }
+  if (els.overlay) { els.overlay.hidden = true; els.overlay.inert = true; }
+  if (!panel) return;
+  panel.textContent = "";
+  const body = document.createElement("div");
+  const title = document.createElement("h2");
+  const detail = document.createElement("p");
+  const retry = document.createElement("button");
+  title.textContent = "Graphics unavailable";
+  detail.textContent = "Apex 26 could not start a compatible graphics renderer.";
+  retry.type = "button";
+  retry.textContent = "RETRY";
+  retry.onclick = () => { try { location.reload(); } catch (_) { /* embedded host */ } };
+  body.appendChild(title);
+  body.appendChild(detail);
+  body.appendChild(retry);
+  panel.appendChild(body);
+  panel.hidden = false;
 }
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
@@ -310,7 +334,14 @@ try {
       catch (_) { gfx = null; }
       // Bound and live. Title has no track yet (deferred flyby), so present()
       // will not run — disarm here or a refresh on SETTINGS reverts the pick.
-      if (gfx) { _backendBound = true; try { localStorage.removeItem(PROBE_KEY); } catch (_) { /* blocked storage: nothing to disarm */ } }
+      if (gfx) { _backendBound = true;
+        // The descriptor copy is the bind commit point. Clear any GLX latch
+        // left by an earlier same-tab fallback even if a deferred backend
+        // forgets to clear its own failure marker.
+        try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* blocked storage */ }
+        try { window.dispatchEvent(new Event("apex-gfx-live")); } catch (_) { /* no event surface */ }
+        try { localStorage.removeItem(PROBE_KEY); } catch (_) { /* blocked storage: nothing to disarm */ }
+      }
     }
   }
 } catch (_) { gfx = null; }
@@ -341,7 +372,7 @@ if (!gfx) {
       try { location.reload(); } catch (_) {}
       return;
     }
-    $("nogl").hidden = false; return;
+    showGraphicsUnavailable(); return;
   }
   gfx = GLX;
   // Every path above converges here after GLX successfully attaches: an
@@ -896,6 +927,7 @@ function dirtyAirMul(wake, speed) {
 // ---------- state ----------
 let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
+let gridPreOrdered = false;   // set by gridUp(); read by js/net/netplay.js — see there
 // The field size the painted grid was built for. In the rebuild guard with
 // id and night because the box paint is baked into the start-line decal:
 // racing the same circuit again with MY TEAM selected changes the field
@@ -1149,6 +1181,7 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0, radioVoice = RadioVoice.inert();   // the real instance lands at the module wires; inert() means no call site needs a guard
+let announcer = Announcer.inert();   // js/audio/announcer.js — the pre-race welcome; same inert() deal
 // "box" is the engineer's PIT CALL and nothing else (js/race/engineer.js): an
 // instruction the player has one lap to act on, where every other engineer line
 // is a report. It ranks with the pit-lane messages it belongs to rather than
@@ -1792,7 +1825,7 @@ function buildPace(built, works) {
 function gridTeams() {
   // MY TEAM and LEGENDS are both "yours" — each enters the grid only when it is
   // the one you picked, so the field grows by one car, never by two teams.
-  return Teams.LIST.filter((t, ti) => (!t.custom && !t.legends) || ti === teamIdx);
+  return Teams.LIST.filter((t, ti) => Teams.isReal(t) || ti === teamIdx);
 }
 // The seats a team actually GRIDS. Everything except LEGENDS is gridDrivers().
 //
@@ -2013,6 +2046,13 @@ function redFlagRestart() {
   return true;
 }
 function gridUp(preOrder) {
+  // WHERE THIS GRID CAME FROM, and the reason it is worth a variable: the
+  // else-branch below SPLICES THE LOCAL PLAYER TO P12, which is a per-peer
+  // adjustment — car X ends up at a different gridPos on each machine. A
+  // pre-ordered grid (qualifying) takes no such step, so every car holds the
+  // same slot everywhere. js/net/netplay.js's separateGrid() has to know which
+  // it is: the collision it exists to fix can only happen on the P12 branch.
+  gridPreOrdered = !!(preOrder && preOrder.length === cars.length);
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
     // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
     // comparator is inconsistent and its draw count engine-defined.
@@ -2875,6 +2915,11 @@ function endRace(forcedOrder) {
     let fastest = null, fastestT = Infinity;
     for (const c of order) if (!c.retired && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
     const settles = SeasonCal.award(season, order, fastest) === "race";
+    // award() deletes season.qualiOrder when the round scores; the IN-MEMORY
+    // classification is that same weekend and goes with it. Left behind, it kept
+    // qualiResults() truthy for the rest of the championship, so rs-go never
+    // offered the sheet again and every later grid came off round 1's times.
+    if (settles) quali.clear();
     // In career `season` IS career.season (same object, same shape — which is what
     // lets buildResults/buildStandings/the HUD work in career untouched), so it
     // persists through the career save or this would overwrite the standalone
@@ -2939,6 +2984,7 @@ const G = {
   get records() { return records; },
   get coach() { return coach; },
   get radio() { return radioVoice; },   // js/audio/radio-voice.js — AudioPanel drives its toggle and volume
+  get announcer() { return announcer; },   // js/audio/announcer.js — AudioPanel drives its switch and voice
   recordControls: () => ({ autoThrottle: autoThrottle(), gearsManual: gearsManual(), steerMode, aero: raceAeroMode }),
   get ttRecord() { return ttRecord; }, set ttRecord(v) { ttRecord = v; },
   get timeTrial() { return isTimeTrial(); },
@@ -2965,6 +3011,12 @@ const G = {
   set raceTyreWear(v) {
     if (!TyreModel.isLevel(v)) return;
     raceTyreWear = v; store.set("tyreWear", v);
+    // Keep the live model in step, exactly as gridUp() sets it. Without this the
+    // model kept the PREVIOUS race's level until the next grid, and the STRATEGY
+    // stint bar on the race-settings sheet — which reads planLaps() — planned
+    // against it: on a fresh boot (model "off") a full-length GP at REAL wear
+    // previewed "NO STOP".
+    tyres.setLevel(isTimeTrial() ? "off" : v);
   },
   get tyres() { return tyres; },
   get pits() { return pits; },
@@ -3044,6 +3096,11 @@ const G = {
   // The FLYBY SHOT EDITOR's saved list, or null for the shipped sequence.
   // Read-only here: flybyPanel writes it, reloadFlybyShots() reads it back.
   get flybyShots() { return flybyShots; },
+  // True when the last gridUp() laid the grid from a pre-order (qualifying) —
+  // the same slots on every peer — rather than from the pace order, which seats
+  // the LOCAL player at P12 and so differs per machine.
+  get gridPreOrdered() { return gridPreOrdered; },
+  get lens() { return _lens; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
   get fieldSectorBests() { return fieldSectorBests; },
@@ -3136,6 +3193,9 @@ const G = {
   updateTrackPreview: (...a) => updateTrackPreview(...a),
   // Read-only qualifying model for the CURRENT track (__apex.qualiSim).
   qualiSim: (playerTime) => quali.preview(playerTime || 0),
+  // Memory only, exactly as quitToMenu's — for a screen that hand-rolls its own
+  // return to the title (CareerUI's cr-back) and must not leak a weekend on.
+  qualiClear: () => quali.clear(),
   refreshCareerButton: (...a) => refreshCareerButton(...a),
   // The R&D gate for the garage LISTING: the option ids the team on screen may fit,
   // or null. Career.owned() answers "career rules apply AND this is the career
@@ -3215,6 +3275,8 @@ const G = {
   refreshLightTunePanel: (...a) => refreshLightTunePanel(...a),   // const initialised below — defer
   setCamMode: (...a) => setCamMode(...a),   // const from CamModes.create(G) below — defer
   rescuePlayer, setLightTune, setWeatherLive, setTimeOfDay, weather, snapGameCam,
+  loadingInfo,                          // what the loading card describes — the flyby editor previews it
+  get loadingScreen() { return loadingScreen; },   // js/ui/loading-screen.js — the editor drives the card's geometry
   setCarRole, modsFor, swapGridSlots,   // multiplayer seam — see setCarRole
   wireId,                               // stable cross-peer car identity
   setScale: (...a) => setScale(...a),   // const from UiScale.create(G) below — defer
@@ -3272,6 +3334,10 @@ engineer = RaceEngineer.create(G);
 // the engineer, the coach and race control already write. Off by default, and
 // inert wherever the API, a voice or the setting is missing.
 radioVoice = RadioVoice.create(G);
+// The PRE-RACE ANNOUNCER (js/audio/announcer.js) — "Welcome to Apex 26…" over
+// the loading screen's flyby. After the radio: it borrows that module's
+// speakable() and per-channel tune, and nothing else.
+announcer = Announcer.create(G);
 const records = SessionRecords.create(G);
 const coach = DrivingCoach.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
@@ -3370,7 +3436,7 @@ raceSettings = RaceSettings.create({
 // PRE-RACE LOADING SCREEN (js/ui/loading-screen.js). It plays the cinematic
 // over the world scheduleFlybyTrack() already warmed, then holds a static card
 // while the caller's build runs — see that file for why the split matters.
-const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags });
+const loadingScreen = LoadingScreen.create({ $, Tracks, TrackMaps, Flags, store, announcer: () => announcer });
 /** The RACE! button's route into a race. Not folded into startRace(): netplay
  *  and __apex.race() both AWAIT that function, and neither should gain two
  *  seconds of flourish. The button is the only place a human is watching. */
@@ -3422,14 +3488,23 @@ function raceIntro(go) {
   // And fly the shots the EDITOR saved, for the same reason: a list edited in
   // the pause menu is only read here, so every run picks up the latest one.
   reloadFlybyShots();
-  loadingScreen.run({
+  loadingScreen.run(loadingInfo(), go);
+}
+/** WHAT THE LOADING SCREEN DESCRIBES: the circuit about to be raced, this
+ *  session's settings, and whether there is a built world to fly over. Named
+ *  rather than inlined at the one call above because the FLYBY EDITOR asks for
+ *  the same object to preview the card against — and a second literal there
+ *  would be a second description of the same race, free to drift from this one
+ *  the next time a row is added to the card. */
+function loadingInfo() {
+  return {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
     // Only fly over a world that is actually built. A missed pre-build (a
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
     hasWorld: !!track && _menuGate.track === track,
-  }, go);
+  };
 }
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
@@ -6752,6 +6827,8 @@ let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
+// The lens the last frame was built with — see where it is filled, below.
+const _lens = { near: 0, far: 0, fovY: 0, fog: null, cull: 0, cine: false };
 function render(dt) {
   if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
@@ -6941,10 +7018,19 @@ function render(dt) {
     camSnapNext = false;
   }
 
+  // The EDITOR's preview is the same cinematic, parked (js/agent/apex.js stamps
+  // `cine` on its dbgCam). From here down, everything gated on `cine` is a thing
+  // the live screen and the preview have to do IDENTICALLY — that is the whole
+  // point of the flag, and the reason it is widened here rather than read as two
+  // separate conditions at four sites that can drift apart one at a time.
+  if (dbgCam && dbgCam.cine) cine = true;
+
   // Car-follow cameras counter-rotate by the road bank so the car and asphalt
   // read level while the horizon carries the banking cue. Slip adds a small
-  // dynamic lean on top; broadcast/debug cameras remain world-level.
-  if (dbgCam) {
+  // dynamic lean on top; broadcast/debug and cinematic cameras stay world-level
+  // (the flyby's own roll would otherwise be whatever the last race left behind,
+  // decaying over the first half-second of a shot the editor showed level).
+  if (dbgCam || cine) {
     camRoll = 0;
   } else {
     // Slip source smoothed at λ10 (τ≈0.1 s): vLat/speed are RAW 60 Hz-stepped
@@ -6965,23 +7051,27 @@ function render(dt) {
   // scenery draw-distance cull that derives from it). dbgCam overwrites
   // farPlane with its own value right below, so debug/photo-mode is untouched.
   let fovY, farPlane = 900 * (LT.renderDistMul != null ? LT.renderDistMul : 1);
+  if (cine) farPlane = FlybySeq.FAR;   // flat, not scaled by RENDER DISTANCE: the editor previews ONE number
   if (dbgCam) {
     camEye[0] = dbgCam.eye[0]; camEye[1] = dbgCam.eye[1]; camEye[2] = dbgCam.eye[2];
     camTgt[0] = dbgCam.target[0]; camTgt[1] = dbgCam.target[1]; camTgt[2] = dbgCam.target[2];
     fovY = dbgCam.fov * Math.PI / 180;
-    farPlane = dbgCam.far;
+    if (!cine) farPlane = dbgCam.far;
   } else {
     // camFov is a vertical FOV. On a wide (landscape) screen a fixed vertical FOV
     // blows the horizontal field out past ~100°, which makes the car look tiny and
     // far away. Cap the horizontal FOV so wide screens zoom in and the car stays a
     // readable size; portrait (narrow) is unaffected.
     fovY = camFov * Math.PI / 180;
-    const HFOV_MAX = 86 * Math.PI / 180;
-    const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
-    fovY = Math.min(fovY, fovYCap);
-    // The cinematic's far plane is FLAT, not scaled by RENDER DISTANCE: the
-    // editor previews one number, so the screen has to render that number.
-    if (cine) farPlane = FlybySeq.FAR;
+    // The HFOV cap keeps the CAR a readable size on a wide screen. A crane shot
+    // has no car in it, the editor previews the authored angle uncapped, and a
+    // shot authored at 60° would arrive on a 21:9 screen squeezed to 45° — so
+    // the cinematic takes the number it was framed at.
+    if (!cine) {
+      const HFOV_MAX = 86 * Math.PI / 180;
+      const fovYCap = 2 * Math.atan(Math.tan(HFOV_MAX / 2) / Math.max(gfx.aspect, 0.0001));
+      fovY = Math.min(fovY, fovYCap);
+    }
   }
 
   // Near plane 0.3 (was 0.2): pushing the near distance out sharpens depth-buffer
@@ -7000,7 +7090,8 @@ function render(dt) {
   // of depth resolution for free.
   const _projMode = CAM_MODES[camMode] ? CAM_MODES[camMode].id : "chase";
   const _nearM = (_projMode === "cockpit" || _projMode === "hood") ? 0.3 : 0.9;
-  M4.perspectiveTo(_mProj, fovY, gfx.aspect, dbgCam ? 0.3 : _nearM, farPlane);
+  const _near = cine ? FlybySeq.NEAR : (dbgCam ? 0.3 : _nearM);
+  M4.perspectiveTo(_mProj, fovY, gfx.aspect, _near, farPlane);
   // Tilt the up vector by camRoll to roll the camera into corners. Inlined into
   // module-scope scratch vectors (no per-frame V3 array allocation); same math.
   {
@@ -7092,8 +7183,8 @@ function render(dt) {
   // cull right underneath has to know that this frame's fog wall is not where
   // frame.fogDensity says it is — thinning the draw while culling scenery at the
   // unthinned wall is a hard edge of missing world instead of a vista.
-  const _fogMul = dbgCam ? (dbgCam.fog != null ? dbgCam.fog : FlybySeq.FOG)
-    : (cine ? FlybySeq.FOG : null);
+  const _fogMul = cine ? FlybySeq.FOG
+    : (dbgCam ? (dbgCam.fog != null ? dbgCam.fog : 0.15) : null);
   const _fogDens = (frame.fogDensity || 0) * (LT.fogDensityMul != null ? LT.fogDensityMul : 1);
   const _fogCull = _fogDens > 3 / farPlane ? Math.ceil(3 / _fogDens) : 0;
   // Sphere that contains the perspective frustum (far-plane corners sit
@@ -7106,6 +7197,13 @@ function render(dt) {
   // is not a risk worth a nicer horizon.
   frame.cullDist = (dbgCam || cine) ? (gfx.isMobile ? 700 : 0)
     : (PerfGov.tier() >= 3 ? Math.min(farPlane, _fogCull || farPlane) : (_fogCull || _farCull));
+
+  // WHAT THIS FRAME WAS ACTUALLY BUILT WITH, for __apex.camState().lens. Not a
+  // debug nicety: the live flyby and the EDITOR'S preview of the same shot ran
+  // different lenses for months with nothing able to see it, because every hook
+  // reported where the camera POINTED. Written after all five are resolved.
+  _lens.near = _near; _lens.far = farPlane; _lens.fovY = fovY;
+  _lens.fog = _fogMul; _lens.cull = frame.cullDist; _lens.cine = cine;
 
   // Clear-night moon factor for cast shadows (0..1): 1 under a bright clear
   // moon, fading out as cloud rolls in or the road gets wet, forced 0 in fog.
@@ -7947,7 +8045,8 @@ function render(dt) {
   shadowPass.flushBlobs();
   // Ghost car (time trial): replay best-lap position as a bright emissive silhouette
   if (isTimeTrial() && player && (state === "race" || state === "count")) {
-    const g = Ghost.at(player.lapTime);
+    const replayGhost = GhostShare.hasGuest() ? GhostShare : Ghost;
+    const g = replayGhost.at(player.lapTime);
     // Skip the ghost while it overlaps the player — at the lap start it sits on
     // your exact grid position, and in the cockpit/onboard cams its bodywork
     // fills the camera as a black box until you pull away ("starts dark, clears
@@ -8432,6 +8531,29 @@ function openTimeTrial(selectDaily) {
   if (!selectDaily) scheduleFlybyTrack(true);
 }
 $("mb-tt").onclick = () => openTimeTrial(false);
+async function consumeGhostHash() {
+  const shared = await GhostShare.consumeHash({
+    notify: (message, result) => announce(message, result && result.ok ? 3 : 4, result && result.ok ? "info" : "warning"),
+  });
+  if (!shared || !shared.ok) return shared;
+  setFlow("gp"); session = "tt";
+  const today = DailyChallenge.dayKey();
+  if (shared.day && shared.day === today) {
+    daily.select(shared.day);
+  } else {
+    daily.stop();
+    restoreFreePlaySelection();
+    const idx = Tracks.LIST.findIndex((entry) => entry.id === shared.track);
+    if (idx < 0) return shared;   // decode already guards this; retain a safe no-op
+    trackIdx = idx;
+  }
+  buildSelect();
+  vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
+  scheduleFlybyTrack(true);
+  return shared;
+}
+consumeGhostHash();
+window.addEventListener("hashchange", consumeGhostHash);
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
   // Replace any career alias with the repaired standalone save; finished stays readable.

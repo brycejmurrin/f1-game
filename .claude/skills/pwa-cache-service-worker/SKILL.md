@@ -40,7 +40,8 @@ during a Playwright run.
 
 | Asset class | Install | Fetch |
 |---|---|---|
-| Shell + tagged js/css | Essential (404 = fail) | Network-first |
+| Shell (navigations) | Essential (404 = fail) | Network-first (3 s race) |
+| Tagged `?v=` js/css | Essential (404 = fail) | Cache-first |
 | `version.json` | Essential | Network-first (no-store) |
 | `?v=<sha256>` assets | Essential if tagged | Cache-first |
 | DEFERRED / vendor / fonts | Optional (fail OK) | Cache-first on first use |
@@ -48,7 +49,7 @@ during a Playwright run.
 ```sh
 npm run test:service-worker
 npm run test:tooling-fast
-node tools/check/offline-precache-check.cjs   # offline precache contract (no browser)
+node tools/check/offline-precache-check.cjs   # offline precache contract — LAUNCHES CHROMIUM (Playwright), ~1 min
 ```
 
 Related: `node tools/gen/gen-shell.mjs --check`, **check-changes**.

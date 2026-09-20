@@ -25,6 +25,18 @@ const RadioVoice = (function () {
     control: { pitch: 0.9, rate: 1.05 },
     coach: { pitch: 1.0, rate: 0.95 },
     radio: { pitch: 1.05, rate: 1.15 },
+    // The PRE-RACE ANNOUNCER (js/audio/announcer.js). A fourth channel here and
+    // nowhere in SPEAKERS on purpose: SPEAKERS maps a race-time `kind` onto a
+    // voice, and the announcer has no kind — it never goes through say(). What
+    // it does share is the tune: a channel in this table is a channel the
+    // settings panel can give a voice, a pitch and a rate, and that is exactly
+    // what "let the player pick the announcer's voice" needs.
+    //
+    // SLOWEST AND LOWEST of the four. The other three talk over a race and are
+    // budgeted against a card that is already fading; this one reads a scripted
+    // paragraph over a still screen, where an unhurried delivery is the whole
+    // character. 0.92 is under the coach's 0.95 and well under the engineer's.
+    announcer: { pitch: 0.95, rate: 0.92 },
   });
   /* PLAYER TUNING sits OVER those defaults rather than replacing them, which is
    * what makes "reset" a delete and not a second table to keep in step. A tune
@@ -43,6 +55,7 @@ const RadioVoice = (function () {
     control: "Car 44, track limits — +5s penalty",
     coach: "Brake a little earlier here and get the car straight",
     radio: "BOX BOX, P3 on the exit",
+    announcer: "Welcome to Apex 26. This is Silverstone, home of the British Grand Prix",
   });
   const PITCH_MIN = 0.5, PITCH_MAX = 1.6;
   const RATE_MIN = 0.6;
@@ -130,7 +143,7 @@ const RadioVoice = (function () {
       say: () => false, stop: () => {}, unlock: () => {}, preview: () => false,
       voiceList: () => [], tuneFor: (sp) => Object.assign(toneFor(sp, null), { name: "" }), setTune: () => false,
       setEnabled: () => {}, setVolume: (v) => v, available: () => false,
-      debug: () => ({ available: false, enabled: false, voices: 0, last: null }),
+      debug: () => ({ available: false, enabled: false, voices: 0, last: null, asked: 0, started: 0 }),
     });
   }
 
@@ -146,7 +159,27 @@ const RadioVoice = (function () {
     // is naturally a record. Absent keys and absent channels both mean "the
     // shipped default", so a fresh save and a reset are the same state.
     let tune = readTune();
-    let voices = null, deadline = null, last = null;
+    // `current` is the utterance THIS instance is speaking, and it exists because
+    // every utterance shares one handler over module state (`deadline`, the music
+    // duck). speechSynthesis fires a cancelled line's end/error ASYNCHRONOUSLY —
+    // after the replacement has already started — so without an identity check
+    // the dead line's callback cleared the LIVE line's hard stop and un-ducked
+    // the music underneath it. That lands on exactly the lines that preempt:
+    // a penalty cutting off the coach is the case this module was built for.
+    let voices = null, deadline = null, last = null, current = null;
+    /* DID THE ENGINE ACTUALLY START? `asked` counts the speaks we HANDED to the
+     * platform; `started` counts the ones it actually began (onstart).
+     *
+     * They exist because the difference is invisible from anywhere else, and it
+     * is the difference between two opposite bugs. asked 0 means WE refused —
+     * plan() has a reason and `last` carries it. asked > 0 with started 0 means
+     * the PLATFORM refused: every line was accepted without complaint and none
+     * was ever voiced, which is what an unprimed iOS engine looks like from in
+     * here. A refused speak is not an error, fires no event and logs nothing,
+     * so without this counter the two cases are one silent symptom — which is
+     * exactly how this defect survived three attempts to fix it from the
+     * outside. The audio panel prints the verdict; see js/audio/panel.js. */
+    let asked = 0, started = 0;
     function readTune() {
       const t = G.store.get("voiceTune", null);
       return t && typeof t === "object" ? t : {};
@@ -191,6 +224,9 @@ const RadioVoice = (function () {
     function clearDeadline() { if (deadline != null) { clearTimeout(deadline); deadline = null; } }
     function stop() {
       clearDeadline();
+      // Before cancel(): the callback it triggers must already see itself as
+      // stale, whether the engine fires it synchronously or a turn later.
+      current = null;
       try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
     }
@@ -202,8 +238,31 @@ const RadioVoice = (function () {
       const u = new Utter(p.text);
       u.voice = voiceFor(p.speaker);
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
-      u.onend = u.onerror = () => { clearDeadline(); if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false); };
-      try { synth.speak(u); } catch (e) { Log.info("audio", "RadioVoice speak failed"); return false; }
+      // Only the LIVE line may release the duck and the deadline — see `current`.
+      u.onend = u.onerror = () => {
+        if (u !== current) return;
+        current = null;
+        clearDeadline();
+        if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+      };
+      // CLAIMED AND DUCKED BEFORE speak(), both for the same reason: an engine
+      // may end — or refuse — an utterance synchronously from inside speak().
+      // Claiming after it would make the line's own end run as a stranger;
+      // ducking after it would overwrite the release that end just performed and
+      // leave the music down with nothing speaking until the deadline healed it.
+      // Down-then-up is also simply the right order for the ear.
+      current = u;
+      u.onstart = () => { started++; };
+      if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
+      try {
+        asked++;
+        synth.speak(u);
+      } catch (e) {
+        current = null;
+        if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+        Log.info("audio", "RadioVoice speak failed");
+        return false;
+      }
       // Bugzilla 1522074 (open, Firefox AND Chrome): a speak() directly after a
       // cancel() is silently dropped, and resume() is the reporter's fix. We
       // take that rather than the 500 ms delay also suggested there — 500 ms is
@@ -212,18 +271,34 @@ const RadioVoice = (function () {
       // preempt path is exactly a cancel-then-speak, so without this the line
       // that goes missing is the PENALTY that interrupted, not the wear report.
       try { synth.resume(); } catch (e) { /* nothing was paused; harmless */ }
-      if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       // The hard stop, armed from the card's ACTUAL remaining life rather than a
       // second copy of showAnnounce's expression. A duplicated constant is how
       // "spoken after it left the screen" gets reintroduced by a later edit.
       deadline = setTimeout(stop, p.budgetMs);
       return true;
     }
-    // Chrome (M71+) needs sticky activation, which the game's own first-gesture
-    // listener already provides; iOS wants a real utterance inside the gesture.
-    // An empty string is silent and costs nothing.
+    /* THE ONE GESTURE iOS GIVES US, AND IT WAS BEING THROWN AWAY.
+     *
+     * Chrome (M71+) needs sticky activation, which the game's own first-gesture
+     * listener already provides. iOS is stricter: WebKit refuses speak() from
+     * anywhere but a user gesture until the engine has been primed by a speak()
+     * inside one, and this function is the only place that ever happens.
+     *
+     * It used to read `u.volume = 0; synth.speak(u); synth.cancel();`, which
+     * primes nothing on iPhone or iPad. CANCELLING IN THE SAME TURN DISCARDS THE
+     * UTTERANCE BEFORE IT IS PROCESSED — the gesture is spent and the engine is
+     * no more unlocked than before — and a MUTED utterance is not reliably
+     * counted as the audible speak WebKit is looking for. Every later say()
+     * happens in the race loop, outside any gesture, so every one was refused:
+     * on the platform that needs this most, nothing was EVER spoken, which is
+     * exactly how it was reported.
+     *
+     * A single space carries no phonemes, so it is inaudible whatever its
+     * volume; the volume only has to be non-zero to count. Nothing is cancelled
+     * — the utterance ends in milliseconds by itself, and say() clears the queue
+     * with its own cancel() before it speaks anyway. */
     function unlock() {
-      try { const u = new Utter(" "); u.volume = 0; synth.speak(u); synth.cancel(); }
+      try { const u = new Utter(" "); u.volume = 0.01; synth.speak(u); }
       catch (e) { /* a browser that refuses the priming utterance simply does not get primed */ }
     }
     if (typeof document !== "undefined") {
@@ -271,7 +346,8 @@ const RadioVoice = (function () {
       const u = new Utter(words);
       u.voice = voiceFor(sp);
       u.rate = t.rate; u.pitch = t.pitch; u.volume = volume;
-      try { synth.speak(u); synth.resume(); } catch (e) { return false; }
+      u.onstart = () => { started++; };
+      try { asked++; synth.speak(u); synth.resume(); } catch (e) { return false; }
       return true;
     }
 
@@ -292,7 +368,7 @@ const RadioVoice = (function () {
       setEnabled(b) { enabled = !!b; if (!enabled) stop(); },
       setVolume(v) { volume = Math.max(0, Math.min(1, +v || 0)); return volume; },
       available: () => true,
-      debug: () => ({ available: true, enabled, voices: voicesFor().length, last }),
+      debug: () => ({ available: true, enabled, voices: voicesFor().length, last, asked, started }),
     };
   }
 

@@ -39,6 +39,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { GEOMETRY_PATHS } from "./geometry-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -158,16 +159,19 @@ export function gateNodeSuites() {
  * notCovered() below: the other half of this fix is that a gate says what it
  * did not measure instead of reporting a bare green.
  *
- * Both halves of the filter are DERIVED, never retyped: the prefixes are
- * pick-tests.mjs's sweeps RULES, and the suite list is read out of
- * package.json's test:sweeps by the same match ci.yml uses. ci.yml's own copy
- * drifted exactly once by being hand-written — scenery-grounding was missing
- * from it, so a diff touching only that suite skipped the sweep it belongs to.
+ * Both halves of the filter are DERIVED, never retyped: the path pattern is
+ * geometry-paths.mjs, the ONE copy ci.yml's grep also reads, and the suite list
+ * is read out of package.json's test:sweeps by the same match ci.yml uses.
+ * Each half drifted exactly once by being hand-written — ci.yml's suite list
+ * was missing scenery-grounding, and this file's path list still matched
+ * debris-world's PRE-RENAME location under js/game/ (tools/manifest.cjs's
+ * MOVED map records the rename to js/physics/debris-world.js), so the local
+ * gate skipped the sweeps on the one edit CI runs them for. A path inside a
+ * regex literal is invisible to a rename sweep; deploy-tool.test.mjs now
+ * proves every path the pattern names is a path on disk.
  *
  * FAIL SAFE, NEVER FAIL OPEN: a diff we cannot resolve RUNS them, and a suite
  * list that parses to nothing THROWS rather than quietly matching nothing. */
-const GEOMETRY_PATHS =
-  /^(?:js\/track\/|js\/circuits\/|tools\/(?:track|lib)\/|js\/car\/|js\/game\.js$|js\/game\/debrisworld\.js$)/;
 
 export function sweepSuites() {
   let pkg;
@@ -351,7 +355,7 @@ export function mergeDeployTip() {
 // joined. A physics suite cannot newly fail because someone else's docs commit
 // landed. Read from tests/groups.json rather than listed here: a second copy of
 // a registry is the class of problem this whole change is about, and
-// `npm run test:guards` is the same file list for a human before a commit.
+// `npm run test:guards` is that same group for a human before a commit.
 const MERGE_GUARDS = Object.freeze(
   JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups["test:guards"].files);
 
@@ -416,9 +420,18 @@ function reverifyUnion(before, oursProse) {
   const geom = !oursProse && anyGeometry(changed);
   let label;
   if (ships.length) {
+    // "In full" must mean what main()'s gate means. It did not: this leg ran
+    // tooling-fast ALONE and called itself the full gate, dropping the very
+    // suites gateNodeSuites() exists for — the pins that took two deploys red
+    // (run 1889) and that tooling-fast never runs. The retry path is the WORSE
+    // place to skip them: it is the leg carrying another session's code, merged
+    // seconds ago, that nothing in this process has yet measured.
+    const why = `${ships.slice(0, 3).join(", ")}${ships.length > 3 ? ` +${ships.length - 3}` : ""}`;
     run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS],
-        `re-verify the new union in full — it brings shipped code (${ships.slice(0, 3).join(", ")}${ships.length > 3 ? ` +${ships.length - 3}` : ""})`);
-    label = "full gate";
+        `re-verify the new union in full — it brings shipped code (${why})`);
+    for (const script of gateNodeSuites()) run("npm", ["run", script], `re-verify: Pages gate ${script}`);
+    for (const id of touchedCircuits(before)) run("node", ["tools/track/verify-track.cjs", id], `re-verify: verify-track ${id}`);
+    label = "full gate (tooling-fast + the Pages gate's node suites + verify-track)";
   } else {
     run("node", ["tools/ci/tooling-fast.mjs", ...MERGE_GUARDS],
         `re-verify the new union: ${changed.length} file(s), ` +

@@ -380,3 +380,200 @@ test("preview speaks the channel being tuned, and stays silent when the radio is
   const off = load({ voices: [LOCAL("Alpha")], stored: { radioVoice: false } });
   assert.equal(off.RV.create(off.G).preview("control"), false);
 });
+
+/* ── A PREEMPTED LINE MUST NOT TURN OFF THE ONE THAT REPLACED IT ─────────────
+ *
+ * Found by survey 2026-09-18, and it lands on exactly the lines this module was
+ * built for. `deadline` and the music duck are instance state, and every
+ * utterance shared ONE handler. speechSynthesis fires a cancelled line's
+ * end/error ASYNCHRONOUSLY — after the replacement has started — so the dead
+ * line's callback ran against the live one: it released the music duck under a
+ * penalty call that was still speaking, and cleared that call's hard stop, the
+ * one guarantee this module documents itself as providing ("spoken after it
+ * left the screen").
+ *
+ * The stub below models the ONE behaviour the existing synthStub does not: a
+ * cancel() ends the utterance that was speaking, on a later turn. That is not
+ * embellishment — it is the whole bug.
+ */
+function lateCancelSynth() {
+  const calls = [];
+  let speaking = null;
+  const pendingEnds = [];
+  return {
+    calls,
+    getVoices() { return []; },
+    speak(u) { calls.push({ m: "speak", text: u.text }); speaking = u; },
+    cancel() {
+      calls.push({ m: "cancel" });
+      // The browser does not call this synchronously; queue it for the test to
+      // release once the replacement line is already under way.
+      if (speaking) { pendingEnds.push(speaking); speaking = null; }
+    },
+    resume() { calls.push({ m: "resume" }); },
+    set onvoiceschanged(fn) { this._vc = fn; },
+    /** Fire every queued end/error, the way the engine eventually does. */
+    flushEnds() { const q = pendingEnds.splice(0); for (const u of q) if (u.onend) u.onend(); return q.length; },
+  };
+}
+
+function loadWithSynth(synth) {
+  const ducks = [];
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const G = { soundOn: true, state: "race", store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } };
+  return { voice: RV.create(G), ducks };
+}
+
+test("a cancelled line's late end does not un-duck the line that replaced it", () => {
+  const synth = lateCancelSynth();
+  const { voice, ducks } = loadWithSynth(synth);
+  assert.equal(voice.say("Brake a little earlier here", 3, "coach"), true, "the coach line speaks");
+  assert.equal(voice.say("Car 44, track limits — +5s penalty", 3, "penalty-hit"), true, "the penalty preempts it");
+  const duckedBefore = ducks[ducks.length - 1];
+  assert.equal(duckedBefore, true, "the penalty is speaking, so the music is ducked");
+
+  assert.equal(synth.flushEnds(), 1, "the cancelled coach line reports its end, late");
+  assert.equal(ducks[ducks.length - 1], true,
+    "the DEAD coach line released the duck while the penalty was still speaking — the music jumps back up " +
+    "underneath the one line the player most needs to hear");
+});
+
+test("a cancelled line's late end does not disarm the replacement's hard stop", async () => {
+  const synth = lateCancelSynth();
+  const { voice } = loadWithSynth(synth);
+  voice.say("Brake a little earlier here", 3, "coach");
+  // ONE word and a 0.6 s life: budget = life - LEAD_RESERVE(0.25) = 0.35 s, which
+  // beats estimate("box") at RATE_MAX (1 / (2.4 * 1.35) = 0.31 s) so the line is
+  // actually spoken, and puts the hard stop 350 ms out — inside this test rather
+  // than behind a fake clock. A first draft asked for a 100 ms budget and plan()
+  // rightly refused to speak a 2.5 s penalty call into it, so nothing armed.
+  assert.equal(voice.say("Box", 0.6, "penalty-hit"), true, "the preempting line must actually speak");
+  synth.flushEnds();                       // the dead coach line, arriving late
+  const cancelsBefore = synth.calls.filter((c) => c.m === "cancel").length;
+  await new Promise((r) => setTimeout(r, 520));
+  const cancelsAfter = synth.calls.filter((c) => c.m === "cancel").length;
+  assert.ok(cancelsAfter > cancelsBefore,
+    "the penalty's hard stop never fired: a stale handler had cleared it, so a line whose end event never " +
+    "arrives keeps the radio open and the music ducked for the rest of the race");
+});
+
+test("an engine that ends an utterance inside speak() still leaves it live", () => {
+  // Claiming `current` BEFORE speak() rather than after. Some engines report a
+  // refused utterance immediately, synchronously, from inside speak() — and if
+  // the line has not been claimed yet, its OWN end runs as a stranger: the duck
+  // it just raised is never released and the radio stays open over the music
+  // for the rest of the session. Mutation-checked: move the claim after speak()
+  // and this is the test that fails.
+  const ducks = [];
+  const calls = [];
+  const synth = {
+    calls, getVoices: () => [], cancel() { calls.push({ m: "cancel" }); }, resume() {},
+    speak(u) { calls.push({ m: "speak" }); if (u.onend) u.onend(); },   // ends where it starts
+    set onvoiceschanged(fn) { this._vc = fn; },
+  };
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck(on) { ducks.push(!!on); } };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const voice = RV.create({ soundOn: true, state: "race",
+    store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } });
+
+  assert.equal(voice.say("Box", 3, "info"), true);
+  assert.equal(ducks[ducks.length - 1], false,
+    "the utterance ended, so the duck must be released — a line whose end ran before it was claimed leaves " +
+    "the music ducked with nothing speaking");
+});
+
+/* ── THE iOS PRIMING GESTURE ─────────────────────────────────────────────────
+ *
+ * Reported 2026-09-18: on iPhone/iPad, nothing is EVER spoken — not a penalty,
+ * not the coach, not even the settings preview. Two earlier fixes in this file
+ * were both about what happens after a line starts, so neither could have
+ * helped: on iOS no line ever started.
+ *
+ * WebKit refuses speechSynthesis.speak() outside a user gesture until the engine
+ * has been primed by a speak() INSIDE one, and unlock() — called from the game's
+ * first-gesture listener and from the radio toggle's own click — is the only
+ * place that ever happens. It did `u.volume = 0; speak(u); cancel();`, which
+ * primes nothing: cancelling in the same turn discards the utterance before it
+ * is processed, and a muted utterance is not reliably counted. Every later say()
+ * runs in the race loop, outside any gesture, so every one was refused.
+ *
+ * These pin the two halves, because both are invisible on every desktop engine —
+ * which is precisely why it shipped.
+ */
+test("unlock() does not cancel the utterance that primes the engine", () => {
+  const { RV, G, synth } = load();
+  RV.create(G).unlock();
+  const seq = synth.calls.filter((c) => ["speak", "cancel"].includes(c.m)).map((c) => c.m);
+  assert.deepEqual(seq, ["speak"],
+    "a cancel() in the same turn discards the priming utterance before iOS processes it, spending the one " +
+    "gesture the platform gives us and leaving the engine locked for the rest of the session");
+});
+
+test("unlock() primes with an audible-volume utterance, not a muted one", () => {
+  const { RV, G, synth } = load();
+  RV.create(G).unlock();
+  const spoke = synth.calls.find((c) => c.m === "speak");
+  assert.ok(spoke, "unlock must speak");
+  assert.ok(spoke.volume > 0,
+    "WebKit does not reliably count a MUTED utterance as the audible speak that unlocks the engine; a space " +
+    "has no phonemes so it stays inaudible whatever the volume says");
+});
+
+/* ── ASKED vs STARTED: the counter that ends the guessing ────────────────────
+ *
+ * Three rounds of "still isn't working" came from one gap: a speech engine that
+ * REFUSES a speak() does it silently — no error, no event, nothing logged — so
+ * "we never asked" and "we asked and the platform swallowed it" are the same
+ * symptom from outside. They need opposite fixes. debug().asked and .started
+ * separate them, and js/audio/panel.js prints the verdict where the player can
+ * read it instead of relaying a feeling.
+ */
+test("debug() separates what we asked for from what the engine started", () => {
+  const calls = [];
+  let pending = null;
+  const synth = {
+    getVoices: () => [], cancel() {}, resume() {},
+    speak(u) { calls.push(u); pending = u; },
+    set onvoiceschanged(fn) { this._vc = fn; },
+    /** The engine actually beginning — what iOS never does when unprimed. */
+    begin() { if (pending && pending.onstart) pending.onstart(); },
+  };
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
+  seedLog(ctx);
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const RV = vm.runInContext("RadioVoice", ctx);
+  const voice = RV.create({ soundOn: true, state: "race",
+    store: { get: (k, d) => (k === "radioVoice" ? true : d), set: () => {} } });
+
+  assert.deepEqual([voice.debug().asked, voice.debug().started], [0, 0], "nothing attempted yet");
+
+  voice.say("Box", 3, "info");
+  assert.equal(voice.debug().asked, 1, "the speak was handed to the platform");
+  assert.equal(voice.debug().started, 0,
+    "...and the engine has not begun it — which is exactly the state an unprimed iOS engine sits in for ever, " +
+    "reporting nothing, and is what the panel must be able to tell the player");
+
+  synth.begin();
+  assert.equal(voice.debug().started, 1, "onstart is the only proof a line was actually voiced");
+});
+
+test("the settings preview counts too — it speaks directly, bypassing plan()", () => {
+  // The preview is the player's one test button. If it is silent and uncounted,
+  // pressing it teaches them nothing.
+  const { RV, G, synth } = load();
+  const voice = RV.create(Object.assign({}, G, { soundOn: true }));
+  voice.setEnabled(true);
+  voice.preview("control");
+  assert.ok(voice.debug().asked > 0, "a preview must be counted like any other attempt");
+});

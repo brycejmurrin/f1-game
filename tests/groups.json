@@ -10,6 +10,7 @@
   ],
   "toolingFast": [
     "tests/unit/ghost.test.mjs",
+    "tests/unit/ghost-share.test.mjs",
     "// The three suites the feature batches added. Each is pure rules over a",
     "// store or a source string \u2014 no DOM, no rasteriser \u2014 so all three together",
     "// cost under a second and belong where the rule they guard is edited.",
@@ -253,6 +254,7 @@
     "tests/unit/brake-cue.test.mjs",
     "tests/unit/factory-ai-setup.test.mjs",
     "tests/unit/career-settle.test.mjs",
+    "tests/unit/career-legends.test.mjs",
     "tests/unit/career-seat-rollover.test.mjs",
     "tests/unit/season-cal.test.mjs",
     "tests/unit/setup-screens-state.test.mjs",
@@ -264,6 +266,10 @@
     "// between a pasted blob and the shipped DEFAULT. Pure data, ~0.1 s, and it",
     "// belongs in the edit loop because tools/gen/bake-flyby.mjs is a FULL REPLACE.",
     "tests/unit/flyby-panel.test.mjs",
+    "// The LOADING CARD's geometry: the three numbers the flyby editor authors,",
+    "// clamped out of localStorage before they reach a CSS custom property, where",
+    "// a NaN is not an error but a silently dropped declaration.",
+    "tests/unit/loading-card.test.mjs",
     "// The ORDERING that lights the flyby: raceIntro() applies the race settings",
     "// before the loading screen starts, so a dawn race stops showing a day sky.",
     "tests/unit/flyby-lighting.test.mjs",
@@ -316,7 +322,10 @@
     "tests/unit/race-insights.test.mjs",
     "tests/unit/driving-coach.test.mjs",
     "tests/unit/ai-corridor.test.mjs",
-    "tests/unit/radio-voice.test.mjs"
+    "tests/unit/radio-voice.test.mjs",
+    "// The PRE-RACE ANNOUNCER: the derived script, and the Daniel-first voice",
+    "// ladder on the platforms that do not have Daniel.",
+    "tests/unit/announcer.test.mjs"
   ],
   "groups": {
     "test": {
@@ -503,7 +512,8 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
-        "tests/unit/radio-voice.test.mjs"
+        "tests/unit/radio-voice.test.mjs",
+        "tests/unit/announcer.test.mjs"
       ]
     },
     "test:modes": {
@@ -547,6 +557,7 @@
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-authority.test.mjs",
+    "tests/unit/net-grid-separation.test.mjs",
         "tests/unit/net-roster.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/net-stub-surface.test.mjs"
@@ -564,6 +575,7 @@
         "tests/unit/season-cal.test.mjs",
         "tests/unit/daily-challenge.test.mjs",
         "tests/unit/career-settle.test.mjs",
+        "tests/unit/career-legends.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
@@ -612,6 +624,7 @@
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/agent-anchors-vm.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collision-ai-fixes-vm.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",
@@ -653,6 +666,7 @@
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/determinism-replay-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/agent-anchors-vm.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collision-ai-fixes-vm.test.mjs",
         "tests/unit/collision-contact-vm.test.mjs",

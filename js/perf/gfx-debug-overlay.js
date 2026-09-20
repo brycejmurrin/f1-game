@@ -46,12 +46,16 @@ const GfxDebug = (() => {
   function picks() {
     const out = {};
     try {
-      out.pick = localStorage.getItem("apex26.gfxBackend") || "webgl2 (default)";
+      out.pick = localStorage.getItem("apex26.gfxBackend") || "three (default)";
       out.threePath = localStorage.getItem("apex26.tlxForceGL");
       out.bound = sessionStorage.getItem("apex26.gfxBound") || "";
       out.tlxFail = localStorage.getItem("apex26.gfxTlxFail") || "";
       out.wgxFail = localStorage.getItem("apex26.gfxWgxFail") || "";
     } catch (_) { /* blocked storage: the live label below still answers */ }
+    try {
+      out.live = typeof RendererPicker !== "undefined" && RendererPicker.liveBackend
+        ? RendererPicker.liveBackend() : (out.bound || "");
+    } catch (_) { out.live = out.bound || ""; }
     return out;
   }
 
@@ -157,7 +161,7 @@ const GfxDebug = (() => {
 
     const canvas = document.getElementById("game");
     const engine = canvas ? (canvas.getAttribute("data-engine") || "") : "no #game";
-    lines.push(`pick=${p.pick}  threePath=${threePathName(p.threePath)}` +
+    lines.push(`pick=${p.pick}  live=${p.live || "unknown"}  threePath=${threePathName(p.threePath)}` +
       (p.bound ? `  bound=${p.bound}` : ""));
     lines.push(`engine=${engine || "(unstamped)"}`);
     if (p.tlxFail) lines.push(`TLX REFUSED: ${p.tlxFail}`);

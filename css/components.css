@@ -1525,7 +1525,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-keys, #pm-pad) .set-row > div > button[data-armed] {
   border-color: var(--red);
   background: var(--plate-on);
-  box-shadow: var(--plate-on-glow);
 }
 :is(#pm-keys-section, #pm-pad-section) { margin-top: var(--gap); }
 :is(#pm-keys-reset, #pm-pad-reset):disabled { opacity: 0.45; cursor: default; }
@@ -1695,20 +1694,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    GAPS off the right edge (layout-audit + css-play 393x852@150). Each
    [data-fold] span stays whole (nowrap below), so the line breaks between
    words, never inside "TILT 6". */
-#pmsettings-inner #pm-panel-display details > summary {
-  height: auto;
-  min-height: var(--chip-h);
-  flex-wrap: wrap;
-  row-gap: 0;
-  box-sizing: border-box;
-  cursor: pointer;
-  justify-content: flex-start;
-  font-size: clamp(var(--fs-2), calc(1.8 * var(--vwz)), var(--fs-4));
-  font-weight: 700;
-  letter-spacing: var(--ls-2);
-  opacity: 1;
-  padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
-}
 #pmsettings-inner #pm-metrics-details > [role="group"] > button {
   background: transparent;
   border: none;
@@ -1752,8 +1737,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 /* Fold summaries are disclosures, not plates: steel + rule + left chevron
    (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate made
    HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
-#pmsettings-inner #pm-panel-display details > summary,
-#pmsettings-inner #pm-panel-display details > summary:active {
+:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary,
+:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary:active,
+#rs-body details > summary,
+#rs-body details > summary:active {
   color: var(--steel);
   font-style: italic;
   opacity: 1;
@@ -1767,7 +1754,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   box-shadow: none;
 }
 @media (hover: hover) {
-  #pmsettings-inner #pm-panel-display details > summary:hover {
+  :is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary:hover,
+  #rs-body details > summary:hover {
     color: var(--text);
     background-color: transparent;
     background-image: var(--grad-rule);
@@ -1778,45 +1766,14 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     box-shadow: none;
   }
 }
-#pmsettings-inner #pm-panel-display details > summary::after {
-  content: none;
-}
-#pmsettings-inner #pm-panel-display details > summary::before {
-  content: "\25BE";
-}
-#pmsettings-inner #pm-panel-display details[open] > summary::before {
-  content: "\25B4";
-}
-#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary,
-#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary:active {
-  color: var(--steel);
-  font-style: italic;
-  opacity: 1;
-  background-color: transparent;
-  background-image: var(--grad-rule);
-  background-position: bottom left;
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-}
-@media (hover: hover) {
-  #pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary:hover {
-    color: var(--text);
-    background-color: transparent;
-    background-image: var(--grad-rule);
-    background-position: bottom left;
-    background-size: 100% 1px;
-    background-repeat: no-repeat;
-    border: none;
-    box-shadow: none;
-  }
-}
-#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary::after { content: none; }
-#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary::before { content: "\25BE"; }
-#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details[open] > summary::before { content: "\25B4"; }
-#pmsettings-inner :is(#advanced-inner, #pm-panel-driving) details > summary {
+:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary::after,
+#rs-body details > summary::after { content: none; }
+:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary::before,
+#rs-body details > summary::before { content: "\25BE"; }
+:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details[open] > summary::before,
+#rs-body details[open] > summary::before { content: "\25B4"; }
+:is(#pm-panel-display, #advanced-inner, #pm-panel-driving) details > summary,
+#rs-body details > summary {
   height: auto;
   min-height: var(--chip-h);
   flex-wrap: wrap;

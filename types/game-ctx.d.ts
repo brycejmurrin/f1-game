@@ -134,7 +134,9 @@ interface StoreApi {
   /** Parsed value for `k`, or `d` when absent/unreadable. */
   get<T>(k: string, d: T): T;
   get(k: string, d?: unknown): unknown;
-  set(k: string, v: unknown): void;
+  /** `false` when the value is cached for this session but did not reach
+      localStorage (write() returns `.durable`; store.js). Most callers ignore it. */
+  set(k: string, v: unknown): boolean;
   /** The raw string lane: bare "1"/"0" flags and ids, read live (no cache), key with or without the prefix. */
   raw(k: string): string | null;
   rawSet(k: string, v: string): boolean;
@@ -238,12 +240,15 @@ interface GameEls {
   hud: HTMLElement; pos: HTMLElement; lap: HTMLElement; time: HTMLElement;
   best: HTMLElement; speed: HTMLElement; energy: HTMLElement;
   ot: HTMLElement; aero: HTMLElement;
+  tyre: HTMLElement; tyreCode: HTMLElement; tyreFill: HTMLElement; plan: HTMLElement;
+  pitCue: HTMLElement; pitCueArrow: HTMLElement; pitCueText: HTMLElement; workBtn: HTMLElement;
   gapA: HTMLElement; gapB: HTMLElement;
   hudSectors: HTMLElement; hudLimits: HTMLElement;
   flag: HTMLElement; minimap: HTMLElement;
   lights: HTMLElement; announce: HTMLElement;
+  announceNum: HTMLElement; announceWho: HTMLElement; announceText: HTMLElement;
   overlay: HTMLElement; subtitle: HTMLElement; audiostate: HTMLElement;
-  lighting: HTMLElement; camtune: HTMLElement;
+  lighting: HTMLElement; camtune: HTMLElement; flyby: HTMLElement;
   select: HTMLElement; selTitle: HTMLElement; selTeams: HTMLElement;
   selTracks: HTMLElement;
   selPreviewMap: HTMLElement; selPreviewName: HTMLElement;
@@ -272,7 +277,7 @@ type GameState = string;
 type FlowMode = string;
 /** "race" | "tt" — session is the authority, timeTrial a derived view. */
 type SessionMode = string;
-/** "dry" | "wet" | "rain". */
+/** "dry" | "overcast" | "wet" | "rain" | "fog" — game.js `_WX_VALID`. */
 type Weather = string;
 /** "default" | "day" | "dusk" | "dawn" | "night". */
 type TimeOfDay = string;
@@ -391,6 +396,16 @@ interface GameCtx {
    * missing, so no caller needs a guard. AudioPanel owns the toggle.
    */
   readonly radio: { setEnabled(b: boolean): void; setVolume(v: number): number; available(): boolean; unlock(): void; stop(): void };
+  /**
+   * The PRE-RACE ANNOUNCER — js/audio/announcer.js. Always an object, on the
+   * same inert() deal as `radio`. AudioPanel owns its switch and voice row;
+   * the loading screen calls play()/stop() and the flyby editor preview().
+   */
+  readonly announcer: { play(info: Record<string, unknown>, budgetMs: number): boolean; preview(info: Record<string, unknown>): boolean; sample(): boolean; scriptFor(info: Record<string, unknown>): string[]; stop(): void; enabled(): boolean; setEnabled(b: boolean): void; available(): boolean };
+  /** What the loading card describes — the flyby editor previews the same object. */
+  readonly loadingInfo: () => Record<string, unknown>;
+  /** js/ui/loading-screen.js, so the flyby editor can hold the card up and move it. */
+  readonly loadingScreen: { run(info: Record<string, unknown>, go: () => void): void; stop(): void; hold(info: Record<string, unknown>): boolean; card(): Record<string, number>; setCard(patch: Record<string, number>): Record<string, number>; resetCard(): Record<string, number>; progress(): number; active(): boolean; phase(): string };
 
   readonly retireCar: (c: CarState, reason?: string) => void;
   readonly ranked: CarState[];
@@ -449,6 +464,15 @@ interface GameCtx {
   raceTimeOfDay: TimeOfDay;
   /** The FLYBY SHOT EDITOR's saved shot list, or null for the shipped sequence. */
   readonly flybyShots: object[] | null;
+  /** True when the last gridUp() laid the grid from a pre-order (qualifying),
+   *  which is peer-identical — false for the pace grid, which seats the LOCAL
+   *  player at P12 and so differs per machine. js/net/netplay.js reads it. */
+  readonly gridPreOrdered: boolean;
+  /** What the LAST rendered frame's projection was built with — near, far, the
+   *  post-cap vertical FOV in radians, the fog multiplier (null = unscaled), the
+   *  cull radius, and whether it was the pre-race cinematic. Read by
+   *  __apex.camState().lens; the object is reused every frame. */
+  readonly lens: { near: number; far: number; fovY: number; fog: number | null; cull: number; cine: boolean };
   raceWeather: Weather;
   sectorBests: [number, number, number];
   readonly fieldSectorBests: [number, number, number];
@@ -544,6 +568,9 @@ interface GameCtx {
   readonly buildSelect: () => void;
   /** The read-only qualifying model for the CURRENT track (__apex.qualiSim). */
   readonly qualiSim: (playerTime?: number) => QualiRow[] | null;
+  /** Drop the in-memory qualifying classification (the persist stays), for a
+   *  screen that hand-rolls its own return to the title. */
+  readonly qualiClear: () => void;
   readonly refreshCareerButton: () => void;
   /** The R&D gate for the garage listing: fittable option ids, or null. */
   readonly careerOwned: () => Set<string> | null;
@@ -731,6 +758,7 @@ declare const ApexApi: GameModuleFactory;
 declare const Atmosphere: GameModuleFactory;
 declare const AudioPanel: GameModuleFactory;
 declare const RadioVoice: GameModuleFactory;
+declare const Announcer: GameModuleFactory;
 declare const BodyAttitude: GameModuleFactory;
 declare const BrakeCue: GameModuleFactory;
 declare const TyreModel: GameModuleFactory;

@@ -40,7 +40,7 @@ terrain-over-road class.
 
 ### 3 · Edit
 
-- **Props / dressing** — `js/circuits/<id>.js` `scenery(api)` (**scenery-dress**,
+- **Props / dressing** — `js/circuits/scenery/<id>.js` `scenery(api)` (**scenery-dress**,
   `docs/SCENERY-API.md`). Anchor with `anchor()` (rendered ribbon), not raw
   `groundYAt`.
 - **The ground itself** — `buildTerrain` in `js/track/`, driven by

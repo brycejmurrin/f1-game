@@ -337,7 +337,11 @@ window.SpotifyMusic = (function () {
         expires_at: Date.now() + (j.expires_in || 3600) * 1000,
         scope: j.scope || "",
       });
-      if (j.scope && j.scope.indexOf("streaming") < 0) {
+      // `streaming` is the Web Playback SDK's scope, and REMOTE mode never loads
+      // the SDK (it drives a device you already have open through the Web API,
+      // connectRemote() below). Failing the sign-in on it regardless left a
+      // remote user holding a perfectly good token with the transport dead.
+      if (mode() === "browser" && j.scope && j.scope.indexOf("streaming") < 0) {
         setStatus("error", "Signed in, but Spotify did not grant playback " +
           "permission. In your app's settings tick \"Web Playback SDK\", then " +
           "remove the app at spotify.com/account/apps and press CONNECT again.");
@@ -697,12 +701,29 @@ window.SpotifyMusic = (function () {
     api("/me/player/repeat?state=" + next +
         (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(afterCommand);
   }
+  // Volume is DRAGGED, not clicked: both sliders fire per `oninput`, so one
+  // sweep across the track used to send one PUT /me/player/volume per pixel —
+  // dozens of requests into a rate-limited endpoint that answers out of order,
+  // which can leave the device on a level the slider only passed through.
+  // Coalesce on the trailing edge: the last value inside the window is the one
+  // the user let go on, and it is the only one worth a request.
+  const VOL_PUT_MS = 250;
+  let volTimer = null, volPend = null;
+  function putDeviceVolume(pct) {
+    volPend = Math.max(0, Math.min(100, Math.round(pct)));
+    if (volTimer !== null) return;
+    volTimer = setTimeout(() => {
+      volTimer = null;
+      const v = volPend; volPend = null;
+      api("/me/player/volume?volume_percent=" + v +
+          (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" });
+    }, VOL_PUT_MS);
+  }
   function setDeviceVolume(pct) {
     if (!BACKEND.active() || mode() !== "remote") return;
     const v = Math.max(0, Math.min(100, Math.round(pct)));
     devVol = v;
-    api("/me/player/volume?volume_percent=" + v +
-        (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" });
+    putDeviceVolume(v);
   }
   function searchPlaylists(q) {
     const term = (q || "").trim();
@@ -766,10 +787,7 @@ window.SpotifyMusic = (function () {
     setVolume(v01) {
       vol = Math.max(0, Math.min(1, typeof v01 === "number" ? v01 : 0.5));
       if (mode() === "remote") {
-        if (BACKEND.active()) {
-          api("/me/player/volume?volume_percent=" + Math.round(vol * 100) +
-              (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" });
-        }
+        if (BACKEND.active()) putDeviceVolume(vol * 100);   // coalesced — see putDeviceVolume
         return vol;
       }
       if (player) { try { player.setVolume(vol); } catch (e) { /* a broken SDK call must not take the transport down */ } }

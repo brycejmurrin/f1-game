@@ -226,7 +226,6 @@ function create(ctx) {
 // side-world is bit-identical to before.
 function rapierReady() { return _loadState === 2 && !!world; }
 function worldGen() { return _worldGen; }
-function isCarDynamic(i) { return _dynCars.has(i); }
 
 function promoteCarDynamic(i, lin, ang) {
   if (!world || !RAPIER || i < 0 || i >= _mirrors.length) return false;
@@ -1278,5 +1277,5 @@ function _panelLive() { let n = 0; for (const p of _panels) if (p.live) n++; ret
 
 return { create, active, prime, step, draw, wallImpact, carImpact, status, setEnabled, reset, burst, positions,
          registerFurniture, tyreMarble, hazards, promoteBarrier, marbleGrip, groupBFlags,
-         rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose, isCarDynamic };
+         rapierReady, worldGen, promoteCarDynamic, demoteCarKinematic, carBodyPose };
 })();

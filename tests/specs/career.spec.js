@@ -1604,6 +1604,8 @@ test.describe("Career — reliability", () => {
     await startCareer(page);
     await page.locator("#cr-go").click();
     // A setting row (js/ui/setting-row.js): the options are the select's.
+    // It sits in the FIELD fold since 2026-09-18, and folds start closed.
+    await page.locator("#rs-fold-field-sum").click();
     const sel = page.locator("#rs-reliab-sel");
     await expect(sel.locator("option")).toHaveCount(3);
     await sel.selectOption("real");

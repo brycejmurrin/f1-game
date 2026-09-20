@@ -102,6 +102,23 @@ test("Ghost lap recording and playback basics", () => {
   assert.equal(atNeg.done, false);
 });
 
+test("Ghost.snapshot returns a defensive shareable copy of the current PB", () => {
+  const { Ghost } = createHarness();
+  Ghost.setTrack("monza");
+  Ghost.startLap();
+  for (let i = 0; i < 10; i++) Ghost.record(i * 0.1, i * 20, i * 0.2);
+  Ghost.finishLap(1, { medal: "gold" });
+
+  const snap = Ghost.snapshot();
+  assert.equal(snap.time, 1);
+  assert.equal(snap.t.length, 10);
+  assert.equal(snap.meta.medal, "gold");
+  snap.t[0] = 999;
+  snap.meta.medal = "bronze";
+  assert.equal(Ghost.at(0).s, 0, "mutating an export cannot alter live replay data");
+  assert.equal(Ghost.medal(), "gold");
+});
+
 test("Ghost.timeAt(s) inverse lookup with bounds protection", () => {
   const { Ghost } = createHarness();
   Ghost.setTrack("spa");

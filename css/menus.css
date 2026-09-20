@@ -611,7 +611,6 @@ body { --compact-at: 600px; --wide-at: 620px; }
   border-left: none;
   padding-left: calc(var(--gap) * 0.45);
   background: var(--plate-on);
-  box-shadow: var(--plate-on-glow);
 }
 /* .track-row-meta is the FLAG box in the strip (the list rows in season setup
    still use it for the country text — the tile look is scoped here). */
@@ -1218,18 +1217,128 @@ h3.sel-label {
   margin: 0;
 }
 #rs-presets > .preset-btn { min-height: var(--chip-h); }
+/* THE FOLDS (2026-09-18). Twelve rows all at one weight was a wall: it fit the
+   desktop sheet at 396px and SCROLLED on both phone shapes (373 into 295
+   landscape, 743 into 685 portrait, measured on the deploy tip). The four rows
+   that describe the SESSION — LAPS, WEATHER, CONDITIONS, TIME OF DAY — stay
+   flat behind the presets, and the eight that describe the FIELD and the
+   ASSISTS fold, which is the shape docs/research/PAUSE-SETTINGS-IA.md locked
+   for STEERING & ASSISTS ("presets + … stacked folds. Folds start closed.
+   Summaries … carry the live choice"). A two-row fold was not worth its tap:
+   CONDITIONS and TIME OF DAY belong to the race you are setting up, so they
+   read flat. The summary primitive is the settings one, not a copy: its three
+   duplicate definitions in components.css are now one, and #rs-body joined
+   that. */
+/* The <details> IS the grid — no wrapper div inside it. A fold's rows then sit
+   on the same two-column lattice as LAPS and WEATHER above, rather than
+   starting a new rhythm one indent in, and two folds cost four shell nodes
+   instead of six. */
+#rs-body > details {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: max-content;
+  row-gap: calc(var(--gap) * 0.5);
+}
+#rs-body > details > summary { grid-column: 1 / -1; }
+#rs-body > details[open] > summary { margin-block-end: calc(var(--gap) * 0.25); }
+
+/* DUEL opens a picker instead of stepping a list, so it is one button where
+   every other row is `‹ select ›`. It should still READ as the same row: it was
+   a lone 7rem control at --fs-micro, so against its neighbours' 197.6px cluster
+   it started 85.6px further right and its value was two rungs smaller
+   (measured 844px wide, 2026-09-18).
+   So the button is built out of the cluster's own parts rather than a width:
+   a ::before phantom stands in for the `‹` chip, #rs-duel-value sits on the
+   select's 7rem column, and the trailing glyph carries the `›` chip's terms.
+   NOT a fixed `calc(...)` width, and not rigid padding for the phantom: the
+   selects are 7rem here (the #rs-body override further down), and at UI SIZE
+   200% on a 393px phone the cluster's chips shrink to their --tap-min floor —
+   a constant width matches at one viewport and rigid padding put the value
+   12.8px off at that zoom (both measured 2026-09-18).
+
+   Swept 393 / 600 / 760 / 844 / 1024 / 1440 and three UI sizes, and all 14 DUEL
+   values: both plate edges and the `›` column land within 1px everywhere, and
+   the value's centre on the selects' everywhere except a 393px phone at UI SIZE
+   >= 150%, where the real chips are at --tap-min and the value's 7rem floor
+   cannot follow them down (-6.7px at 150%, -26.6px at 200%). Edges and the
+   glyph column still hold there, so it still reads as the same row. And the
+   wider column pays for the bigger type twice over: 11 of the 14 values
+   ellipsised in the old 7rem button, 2 do now — only MICHAEL SCHUMACHER (179px)
+   and JUAN MANUEL FANGIO (170px). */
 #rs-body #rs-duel-open {
-  flex: 0 0 7rem;
-  width: 7rem;
-  padding-inline: calc(var(--gap) * 0.7);
-  justify-content: space-between;
-  gap: calc(var(--gap) * 0.5);
-  font-size: var(--fs-micro);
-  letter-spacing: var(--ls-3);
+  /* display, not just the flex terms: the base button rule leaves this
+     `block`, and an inline value + chevron then centre as one run of text —
+     which is how the value ended up 15.6px right of the selects' centre. */
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  /* The cluster's natural total as a BASIS, not a width: it is the same number
+     the three real boxes add up to, so the button meets row pressure exactly as
+     they do — but a long value then squeezes ::before instead of pushing the
+     plate's left edge out past the column (it ran 43px wide on the longest
+     legend name before this basis was pinned). */
+  flex: 0 1 calc(7rem + 2 * var(--chip-h) + var(--gap) * 0.7);
+  /* The shared chip rule's `width: var(--chip-h)` still applies here and the
+     button collapsed to one 40px square without this. */
+  width: auto;
+  padding: 0;
+  /* The plate's own border, named rather than a literal: the tree's rawSpacing
+     ratchet asserts exact equality on px inside padding/margin/gap, and a bare
+     `- 1px` here is precisely the un-tokenised spacing it is counting. */
+  --duel-edge: 1px;
+  /* One edge off each gap: the cluster is three bordered boxes and this is one,
+     so the 2px the other two borders would have spent has to come back out of
+     the run or the plate sits 2px wider than its column. */
+  gap: calc(var(--gap) * 0.35 - var(--duel-edge));
+  /* The select's type, not the chevrons': this button IS the value. */
+  font-size: var(--fs-3);
+  letter-spacing: var(--ls-2);
   white-space: nowrap;
   overflow: hidden;
 }
-#rs-duel-value { overflow: hidden; text-overflow: ellipsis; }
+/* The `‹` chip's square, with nothing drawn in it: DUEL has no step-back, but
+   the column it would sit in is what puts the value under the selects. It is
+   also the row's SLACK — shrink 200 against the value's 0, so a label too long
+   for a 7rem column eats this square instead of an ellipsis. Its floor is the
+   select's own padding-inline, so the text never touches the plate edge. */
+#rs-body #rs-duel-open::before {
+  content: "";
+  flex: 0 200 var(--chip-h);
+  width: var(--chip-h);
+  min-width: calc(var(--gap) * 0.3);
+}
+#rs-duel-value {
+  /* 7rem is the floor and the common case — matching the #rs-body select
+     override further down this file, NOT the shared component's 8rem — so OFF
+     sits dead centre of the selects' column. The basis is the CONTENT above
+     that, capped at one borrowed chip square: FASTEST RIVAL, the ON label, is
+     115px against a 112px column and was the one value the row shows most
+     (measured 2026-09-18). Shrink 0, capped at exactly what ::before can
+     release (its square less its floor): flex shrink is PROPORTIONAL, so even
+     at 1-against-200 the text still gave up its last 0.9px and ellipsised while
+     the blank square had 37px in hand. A cap plus no shrink orders it properly
+     — the square empties first, and only a value too long for even that
+     truncates. */
+  flex: 0 0 auto;
+  min-width: 7rem;
+  max-width: calc(7rem + var(--chip-h) - var(--gap) * 0.3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+/* …and the trailing chevron matches the `›` chip it stands in for. */
+#rs-duel-open > [aria-hidden="true"] {
+  flex: 0 1 var(--chip-h);
+  width: var(--chip-h);
+  min-width: var(--tap-min);
+  text-align: center;
+  font-size: calc(var(--fs-5) * 1.3);
+  line-height: 1;
+}
+/* The help line under the row wraps to its own full-width line (deploy branch,
+   e43f0700e). Kept as-is: the button above is one flex item on the row, so a
+   `flex: 1 0 100%` sibling still breaks the line the same way. */
 #rs-duel-help {
   flex: 1 0 100%;
   margin: 0;
@@ -1263,6 +1372,7 @@ h3.sel-label {
 .duel-option-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-4); }
 @container sheet (min-width: 440px) {
   #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
+  #rs-body > details { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
 /* The Settings pages' steel italic label (css/components.css) restated here:
    that rule is scoped to #pmsettings-inner .pm-group. */

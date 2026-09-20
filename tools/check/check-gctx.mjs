@@ -175,6 +175,54 @@ export function scanDts() {
   return { members, errors };
 }
 
+/** Members of `const els = {…}` in js/game.js: name -> {line}. */
+export function scanGameEls() {
+  const ast = parseFile(GAME);
+  let obj = null;
+  walk(ast, (n) => {
+    if (n.type === "VariableDeclarator" && n.id.type === "Identifier" && n.id.name === "els"
+        && n.init && n.init.type === "ObjectExpression" && !obj) obj = n.init;
+  });
+  if (!obj) throw new Error(`${GAME}: no \`const els = { … }\` object literal found`);
+  const members = new Map();
+  for (const p of obj.properties) {
+    if (p.type !== "Property") continue;             // a spread would be a shell bug, not a member
+    const name = p.key.type === "Identifier" ? p.key.name : String(p.key.value);
+    if (!members.has(name)) members.set(name, { name, line: p.loc.start.line });
+  }
+  return { members, line: obj.loc.start.line };
+}
+
+// GameEls packs several declarations per line (`hud: HTMLElement; pos: …;`), so
+// it cannot use GameCtx's one-member-per-line MEMBER_RE. Split on `;` instead —
+// the interface is all one-line `name: Type` members, no methods, no generics.
+const ELS_MEMBER_RE = /^([A-Za-z_$][A-Za-z0-9_$]*)\??:\s*[A-Za-z_$][\w.<>[\]|\s]*$/;
+
+/** Members of `interface GameEls {…}` in the .d.ts: name -> {line}. */
+export function scanDtsEls() {
+  const lines = read(DTS).split("\n");
+  const start = lines.findIndex((l) => l.startsWith("interface GameEls {"));
+  if (start < 0) throw new Error(`${DTS}: no \`interface GameEls {\` at column 0`);
+  const members = new Map();
+  const errors = [];
+  let end = -1;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i] === "}") { end = i; break; }
+    const t = lines[i].trim();
+    if (!t || t.startsWith("//") || t.startsWith("/*") || t.startsWith("*")) continue;
+    for (const part of t.split(";")) {
+      const decl = part.trim();
+      if (!decl) continue;
+      const m = ELS_MEMBER_RE.exec(decl);
+      if (!m) { errors.push(`${DTS}:${i + 1}: not a \`name: Type\` member: ${decl.slice(0, 60)}`); continue; }
+      if (members.has(m[1])) errors.push(`${DTS}:${i + 1}: duplicate member "${m[1]}"`);
+      members.set(m[1], { name: m[1], line: i + 1 });
+    }
+  }
+  if (end < 0) throw new Error(`${DTS}: \`interface GameEls {\` is never closed by a \`}\` at column 0`);
+  return { members, errors };
+}
+
 /** The `declare const X: GameModuleFactory;` roster. */
 export function scanDeclaredFactories() {
   const out = new Set();
@@ -445,6 +493,21 @@ export function checkParity() {
   for (const [name, d] of dts.members) {
     if (!real.members.has(name)) problems.push(`${DTS}:${d.line}: "${name}" is declared but is not a member of \`const G\` at ${GAME}:${real.line}`);
   }
+  // The SAME parity, one level down. GameCtx's check never reached els: the
+  // usage leg records `G.els` and stops there (`G.els.pausemenu` collapses to
+  // `els`), so eleven ids game.js resolves and hud.js/engineer.js read — the
+  // tyre block, the pit cue, the announce trio — were simply absent from the
+  // declared shell, and adding a twelfth would have been just as quiet.
+  const realEls = scanGameEls();
+  const dtsEls = scanDtsEls();
+  problems.push(...dtsEls.errors);
+  for (const [name, m] of realEls.members) {
+    if (!dtsEls.members.has(name)) problems.push(`${GAME}:${m.line}: els id "${name}" is not declared in ${DTS}'s GameEls`);
+  }
+  for (const [name, d] of dtsEls.members) {
+    if (!realEls.members.has(name)) problems.push(`${DTS}:${d.line}: GameEls declares "${name}", which is not a member of \`const els\` at ${GAME}:${realEls.line}`);
+  }
+
   const declared = scanDeclaredFactories();
   const realFac = scanRealFactories();
   for (const [g, at] of realFac) if (!declared.has(g)) problems.push(`${at}: \`${g}.create(ctx)\` is called but ${DTS} has no \`declare const ${g}: GameModuleFactory;\``);

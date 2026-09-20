@@ -589,3 +589,55 @@ test("a mid-grid AI on a clean lap scores about one, like the player's path", ()
   // …and going off is still the most expensive thing a car can do.
   assert.ok(T.aiLoad({ consistency: 0.75, accSm: 0, offroad: true }, aTop) > ragged, "off-track outweighs a ragged lap");
 });
+
+// ── The HUD letter, over the whole catalog ──────────────────────────────────
+// There used to be two ladders. AI_CLASS codes its soft at life 0.48 "S";
+// optionRecord's own inline ternary cut at 0.40, so EVERY soft a player can
+// buy — Soft 0.67, Super Soft 0.50, Sprint Soft 0.44, C5 0.52, P Zero Red 0.56
+// — printed "M" on the HUD and the stint strip, while an AI running a
+// longer-lived compound printed "S". Only the two one-lap specials fell under
+// the old cut. One classifier now, checked against the catalog it describes.
+test("every catalog compound prints the letter its life says", () => {
+  const WANT = {
+    hard: "H", endurance_tyre: "H", compound_c3: "M", medium: "M",
+    slick_track: "M", compound_c4: "M", soft: "S", compound_c5: "S",
+    supersoft: "S", p_zero_red: "S", qualigum: "S", hypersoft: "S",
+    sprint_soft: "S", intermediate: "I", wet_full: "W",
+  };
+  const seen = [];
+  for (const opt of TYRES) {
+    const rec = T.optionRecord(opt);
+    seen.push(opt.id);
+    const want = WANT[opt.id];
+    if (want == null) continue;               // signature clones follow their base
+    assert.equal(rec.code, want,
+      `${opt.id} (life ${rec.life}) prints ${rec.code}, expected ${want}`);
+  }
+  // The softs are the rows the old ladder got wrong — make sure they were here.
+  for (const id of ["soft", "supersoft", "sprint_soft", "compound_c5", "p_zero_red"])
+    assert.ok(seen.includes(id), `${id} must be in the catalog for this test to mean anything`);
+});
+
+test("the AI's compound classes agree with the same classifier", () => {
+  // Two ladders is the defect; this is the assertion that keeps it one.
+  for (const [name, cls] of Object.entries(T.AI_CLASS))
+    assert.equal(T.codeForLife(cls.life, cls.tread), cls.code,
+      `AI_CLASS.${name} codes "${cls.code}" at life ${cls.life}`);
+});
+
+test("the TYRE WEAR setting reaches the live model, not just the store", () => {
+  // planLaps() divides by LEVELS[level], and `level` was written ONLY by
+  // gridUp(). So the race-settings sheet's STRATEGY bar — which calls
+  // pits.planFor() -> planLaps() before any grid exists — planned against the
+  // PREVIOUS race's level, and on a fresh boot against the model's initial
+  // "off": that takes the `Math.max(1, lapsTarget)` branch, so every compound
+  // "lasted" the whole race and a full-length GP at REAL wear previewed
+  // "NO STOP". The G setter is where the two halves are kept in step.
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  const setter = src.match(/set raceTyreWear\(v\) \{[\s\S]*?\n  \},/);
+  assert.ok(setter, "could not find the raceTyreWear setter in js/game.js");
+  assert.match(setter[0], /tyres\.setLevel\(/,
+    "setting TYRE WEAR must push the level into the model the STRATEGY preview reads");
+  // gridUp's rule is the one to mirror: a time trial runs the model off.
+  assert.match(setter[0], /isTimeTrial\(\) \? "off" : v/);
+});

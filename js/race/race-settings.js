@@ -131,6 +131,49 @@ const RaceSettings = (function () {
       SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
       paintPlan(tt, raceLaps);
       paintPresetState(full);
+      paintFolds();
+    }
+
+    /** ONE ROW'S LIVE VALUE, read off the control rather than recomputed.
+     *  Every row above already paints its own select; asking the select what it
+     *  says cannot drift from what the player sees, whereas a second lookup
+     *  table for the summaries would be a copy to keep in step. DUEL is the one
+     *  row whose control is a button, and it keeps its value in a span. */
+    function foldValue(row) {
+      const sel = row.querySelector("select");
+      if (sel) return sel.selectedOptions[0] ? sel.selectedOptions[0].textContent.trim() : "";
+      const v = row.querySelector("#rs-duel-value");
+      return v ? v.textContent.trim() : "";
+    }
+
+    /** A fold's summary carries the live choice — "FIELD · HARD · RANDOM" — the
+     *  shape docs/research/PAUSE-SETTINGS-IA.md locked for the settings folds,
+     *  so a closed fold still says what is inside it.
+     *  AND A FOLD WITH NOTHING VISIBLE HIDES ITSELF. This is not defensive: in a
+     *  time trial every row of FIELD is hidden (difficulty, grid, duel, cautions
+     *  and reliability are all race-only), so without this the player gets a
+     *  summary that opens onto nothing. */
+    function paintFold(fold, sum, name) {
+      if (!fold || !sum) return;
+      const rows = Array.prototype.filter.call(fold.querySelectorAll(".set-row"), (r) => !r.hidden);
+      fold.hidden = rows.length === 0;
+      // THREE VALUES, not all of them. FIELD holds five rows and four of them
+      // read OFF on the shipped defaults, so the whole state was "HARD · RANDOM
+      // · OFF · OFF · OFF" — a summary that is mostly padding stops being read.
+      // The locked examples are the same length: "FEEL · NORMAL · TILT 6",
+      // "MUSIC · ON · ALL". Opening the fold is what shows the rest.
+      const vals = rows.map(foldValue).filter(Boolean).slice(0, 3);
+      // ONE STRING, like every other summary in the shell ("HUD · ON · STANDARD",
+      // "FEEL · NORMAL"). Not a name span plus a value span: the component is
+      // .adv-more-btn and it already reads and announces as one line.
+      sum.textContent = name + (vals.length ? " · " + vals.join(" · ") : "");
+    }
+
+    /** Literal ids only — getElementById never takes a computed argument here
+     *  (the dynamicIdReads ratchet). */
+    function paintFolds() {
+      paintFold($("rs-fold-field"), $("rs-fold-field-sum"), "FIELD");
+      paintFold($("rs-fold-assists"), $("rs-fold-assists-sum"), "ASSISTS & WEAR");
     }
 
     /** The STRATEGY row and its stint bar. Hidden with TYRE WEAR (a plan is a
@@ -263,7 +306,7 @@ const RaceSettings = (function () {
       return {
         laps: getRaceLaps(), weather: getRaceWeather(), mixed: getRaceChangeable(),
         time: getRaceTimeOfDay(), difficulty: getDifficulty(), grid: getRaceGrid(),
-        caution: !!getRaceCtl().enabled, reliability: getRaceReliability(), tyres: getRaceTyreWear(),
+        reliability: getRaceReliability(), tyres: getRaceTyreWear(),
       };
     }
 

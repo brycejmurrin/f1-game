@@ -106,9 +106,31 @@ if rel in ("index.html", "sw.js") and touches_generated_block(file):
     block(f"{rel}: the edit touches a @gen-shell block, which node tools/gen/gen-shell.mjs "
           "writes from tools/manifest.cjs. Edit the manifest and regenerate.")
 
-if rel == "package.json" and tool in ("Edit", "MultiEdit"):
-    edits = ti.get("edits") or [ti]
-    if any(re.search(r'"test:[A-Za-z0-9_-]*"\s*:', e.get("old_string") or "") for e in edits):
+if rel == "package.json":
+    # A whole-file Write carries no old_string to match, so the Edit branch's
+    # pattern saw nothing and a Write rewrote the generated block unguarded.
+    # Compare the test:* map itself instead: any add, drop or reword is the
+    # same edit the Edit branch refuses. Unparseable new content is refused
+    # too — gen-test-groups is the only thing that should be writing here.
+    def test_scripts(text):
+        try:
+            return {k: v for k, v in (json.loads(text).get("scripts") or {}).items()
+                    if k.startswith("test:")}
+        except Exception:
+            return None
+    if tool in ("Edit", "MultiEdit"):
+        edits = ti.get("edits") or [ti]
+        hit = any(re.search(r'"test:[A-Za-z0-9_-]*"\s*:', e.get("old_string") or "") for e in edits)
+    elif tool == "Write":
+        try:
+            cur_scripts = test_scripts(open(file, encoding="utf8").read())
+        except Exception:
+            cur_scripts = None
+        new_scripts = test_scripts(ti.get("content") or "")
+        hit = new_scripts is None or (cur_scripts is not None and new_scripts != cur_scripts)
+    else:
+        hit = False
+    if hit:
         block("package.json test:* scripts are GENERATED from tests/groups.json by "
               "node tools/gen/gen-test-groups.mjs. Edit groups.json (add a new key to "
               "package.json first) and regenerate.")

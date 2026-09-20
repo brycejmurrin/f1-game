@@ -46,8 +46,8 @@ order dependence — `docs/TESTING.md` §Field notes has the worked example.
 - ONE Playwright process. `verify-change.mjs` batches at **one browser
   group** (padded with node-only groups). `test-bg.mjs` caps total groups
   at `floor(CORES/WORKERS)` with no browser/node split — `smoke` +
-  `physics` is allowed on 4 cores. Browser+browser pairing is the measured
-  source of the entire 120 s class.
+  `physics-core` is allowed on 4 cores. Browser+browser pairing is the
+  measured source of the entire 120 s class.
 - Everything long runs in the BACKGROUND with a log (`AGENTS.md`); check
   `node tools/ci/test-bg.mjs --status` and `/proc/loadavg < 3` before starting.
 - Verdicts come from the log's terminal line `= run <status>  (N/M done,

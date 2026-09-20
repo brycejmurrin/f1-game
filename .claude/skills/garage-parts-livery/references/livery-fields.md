@@ -4,7 +4,7 @@ Load from the garage skill when editing paint,
 fin/spine/cover fields, or the draft lockstep.
 
 The GARAGE (`#carsetup`, `js/garage/setup-sheet.js`) is who you are, what you drive
-(12 categories + 600 cr), and how it looks. Catalog: `js/car/parts.js`. Paint:
+(12 categories + 780 cr, `Parts.BUDGET`), and how it looks. Catalog: `js/car/parts.js`. Paint:
 `js/car/liveries.js` + `js/car/liverytex.js`. Geometry: `js/car/car3d.js`.
 
 `Parts.CATALOG` is an **ordered array**, not a keyed map. `Parts.getMods`
@@ -27,7 +27,7 @@ drives the fin panel ONLY — the crown's gradient wash was removed, so every
 SPINE TOP now stands on bare paint with hard edges; `drawTailGraphic` is called
 on `REGIONS.fin` alone, which is why the garage greys TAIL STYLE under FIN
 SHAPE `none`), `finBadge` (`logo|number|code|none`) and
-`spineLogo` (SPINE TOP: `logo|none|wrap|bigmark|saddle|panel|stripe|twin|chevron|wedge|rungs|tricolour|wordmark|carbon|number` —
+`spineLogo` (SPINE TOP, the 19 ids in `SPINE_LOGO_IDS`: `logo|none|wrap|bigmark|saddle|panel|stripe|streaks|twin|chevron|wedge|rungs|tricolour|wordmark|carbon|number|cap|ridge|fade` —
 `wedge` tapers airbox→tail and `rungs` runs bars ACROSS the crown, the one direction nothing else does;
 `wrap` paints one car-space shape into `REGIONS.crest` AND `REGIONS.spineSide` via
 `drawSunWrap`, so a graphic crosses the shoulder — the region↔car maps are documented there;
@@ -69,7 +69,7 @@ it — place side details with `coverFlankX(c, y)` and crown details with
 lights are draw-time, not livery: `CarMesh.ersLightCode` (pure) and
 `drawMirrorLights` at `Car3D.mirrorLightAnchors` under 20 km/h.
 **THE PAINT SHEET HAS ONE FIELD LIST, and adding a field means touching it in
-exactly two places.** The editor's 28 keys live in `LIV_DRAFT_COLORS` +
+exactly two places.** The editor's 35 keys (20 colours + 15 pills) live in `LIV_DRAFT_COLORS` +
 `LIV_DRAFT_PILLS` (js/garage/setup-sheet.js); `livDraftFrom(liv, name)` builds a
 draft for all three doors (new / edit / "customize a copy") and
 `livDraftTo(d, keepNull)` converts back for BOTH the save and the live preview

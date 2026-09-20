@@ -566,14 +566,19 @@ jobs:
           node -e 'const s=require("./package.json").scripts["test:sweeps"]||"";const m=s.match(/tests\/unit\/[^\s]+/g)||[];if(!m.length)process.exit(1);process.stdout.write(m.join("\n")+"\n")' > "$SUITES_FILE" \
             || run_all "could not read the sweep suite list out of package.json"
           echo "--- sweep suites ---"; cat "$SUITES_FILE"; echo "--------------------"
-          # js/car, js/game.js and debrisworld are here because four sweep suites
-          # load them (parts-visual-distinctness, car-front-wing-width, grid-boxes,
-          # debris-hazard-hint) — a wing-width regression in car3d.js used to skip.
-          # tools/ is NARROWED to tools/track/ and tools/lib/ (2026-09-10): the
-          # sweeps build circuits through tools/lib/track-build-vm.cjs and the
-          # tools/track/ audits; a bare `tools/` made every CI/gen/ui tool edit
-          # pay the 15-minute fleet rebuild for geometry it cannot move.
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/track/|js/circuits/|tools/(track|lib)/|js/car/|js/game\.js$|js/physics/debris-world\.js$)' \
+          # The path half is DERIVED too, from tools/ci/geometry-paths.mjs — the
+          # same module tools/ci/deploy.mjs imports for its local sweeps gate.
+          # It was hand-written on both sides until 2026-09-19, and deploy.mjs's
+          # copy still matched debris-world at its PRE-RENAME path under
+          # js/game/, so the LOCAL gate skipped the sweeps on the edit this job
+          # runs them for. Why those entries are in the pattern (js/car,
+          # js/game.js, debris-world: four sweep suites load them; tools/ is
+          # narrowed to track|lib) is documented in that module.
+          GEO_ERE="$(node tools/ci/geometry-paths.mjs --ere)" \
+            || run_all "could not read the geometry path pattern out of tools/ci/geometry-paths.mjs"
+          [ -n "$GEO_ERE" ] || run_all "tools/ci/geometry-paths.mjs printed an EMPTY pattern"
+          echo "--- geometry paths --- $GEO_ERE"
+          if printf '%s\n' "$CHANGED" | grep -qE "$GEO_ERE" \
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SUITES_FILE"; then
             echo "geometry=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING SWEEPS: the diff touches track engine, circuit data, tools/track|lib or a sweep suite"
@@ -1141,13 +1146,9 @@ jobs:
           node -e 'const s=require("./package.json").scripts["test:gfx"]||"";const m=s.match(/tests\/specs\/[^\s]+/g)||[];if(!m.length)process.exit(1);process.stdout.write(m.join("\n")+"\n")' > "$SPECS_FILE" \
             || run_all "could not read the gfx spec list out of package.json"
           echo "--- gfx specs ---"; cat "$SPECS_FILE"; echo "-----------------"
-          # js/render/** is every backend (GLX, WGX, TLX, gltf, assets);
-          # js/lighting/** is the lighting/atmosphere/tuner modules whose
+          # js/render/** is every backend (GLX, WGX, TLX, gltf, assets); the
+          # js/lighting/ files are the lighting/atmosphere/tuner modules whose
           # numbers the lighting-ab / image-grade / tuner-grade specs pin.
-          # NAME THE DIRECTORY, NOT THE FILES: these were six `js/game/<file>`
-          # patterns naming a directory that no longer exists, so every edit to
-          # a lighting module selected renderer=false and the specs that pin its
-          # numbers never ran. A directory prefix cannot rot the same way.
           # The two playwright configs carry the launch flags this job depends
           # on, tests/helpers/ is what every spec boots through, and the
           # workflow file is here so an edit to THIS job runs it.
