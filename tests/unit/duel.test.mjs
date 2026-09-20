@@ -94,3 +94,43 @@ test("every legend in the roster is duel-ready", () => {
     }
   }
 });
+
+/* THE RIVAL RACES THE LEGEND'S CAR, not the grid slot's. This shipped broken:
+   asLegend swapped the name and the five axes and stopped there, so a duel
+   against Schumacher was a 2026 Red Bull with MSC on the timing screen. */
+test("asLegend hands the rival the legend's own team, paint and number", () => {
+  const t = Legends.raceTeam("schumacher");
+  const c = Duel.asLegend(car(), { id: "schumacher", code: "MSC", name: "Michael Schumacher",
+                                   ratings: Legends.ratings("schumacher"), team: t }, DR);
+  assert.equal(c.team, t, "the rival flies the legend's team object");
+  assert.equal(c.color, t.color, "…and the timing screen / minimap colour follows the paint");
+  assert.equal(c.num, t.drivers[0].num);
+  // NO TEAM, NO SWAP: a caller that omits it still gets the ratings-only duel,
+  // which is what keeps js/race/duel.js ignorant of the legend table.
+  const bare = Duel.asLegend(car(), { id: "senna", code: "SEN", name: "A", ratings: Legends.ratings("senna") }, DR);
+  assert.equal(bare.team, undefined, "no team handed over means the grid slot's car is kept");
+});
+
+/* ONE KEY PER LEGEND. car-draw.js caches the decal atlas and every mesh under
+   team.id, and the PLAYER may be in the legends slot at the same time — two
+   cars keyed "legends" would share one atlas and read the player's stored
+   `livery.legends` for the rival's paint. */
+test("a duel rival's team id is unique per legend and never the player's slot", () => {
+  const ids = Legends.LIST.map((l) => Legends.raceTeam(l.id).id);
+  assert.equal(new Set(ids).size, ids.length, "every legend needs its own cache key");
+  assert.ok(!ids.includes(Legends.team("schumacher").id), "…and none may collide with the player's legends slot");
+  assert.equal(Legends.raceTeam("nobody"), null);
+});
+
+/* The era's SILHOUETTE. An AI car has no garage sheet, so its shape comes from
+   Parts.getFactorySetup(team) — which knows nothing of a runtime-minted id and
+   would hand Fangio a 2026 chassis. raceTeam carries the period setup instead. */
+test("every legend's duel car carries his period setup and his own paint", () => {
+  for (const l of Legends.LIST) {
+    const t = Legends.raceTeam(l.id);
+    assert.deepEqual(t.factory, Legends.PERIOD[l.era], `${l.id}: the era's setup rides on the team`);
+    assert.deepEqual(t.color, l.livery.c1, `${l.id}: paints in his tribute colours`);
+    assert.equal(t.drivers.length, 1, `${l.id}: a rival is already cast — one seat, not twelve`);
+    assert.equal(t.drivers[0].code, l.code);
+  }
+});
