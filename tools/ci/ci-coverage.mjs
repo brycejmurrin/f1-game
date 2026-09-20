@@ -28,7 +28,7 @@ function expand(token) {
 
 const scripts = JSON.parse(read("package.json")).scripts || {};
 // A group script resolves to the spec tokens on its command line. Groups that
-// name no spec (test:render / test:headless drive whole PROJECTS) resolve to
+// name no spec (test:render drives a whole PROJECT) resolve to
 // nothing here and are reported as such rather than silently counted.
 const groupSpecs = (name) => {
   const cmd = scripts[name];

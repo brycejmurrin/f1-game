@@ -300,8 +300,9 @@ test("no test:* group pins a --project that excludes one of the specs it names",
   // WHY the input set is empty matters more than the output set being empty.
   //
   // This guard is DORMANT today, measured: the only scripts carrying
-  // `--project=` are test:render and test:headless, and both run a whole
-  // project without naming a single spec, so `matched` is 0. That is the RIGHT
+  // `--project=` is test:render, which runs a whole project without naming a
+  // single spec, so `matched` is 0. (test:headless was its twin until it was
+  // dropped on 2026-09-10.) That is the RIGHT
   // reason to find nothing — the bug in the header was fixed by removing
   // test:tiny's pin, and the guard is here for the shape's return.
   //
