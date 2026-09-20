@@ -363,16 +363,27 @@ const Tracks = (function () {
     const SIDE = (side) => def.reverse ? -side : side;
     const w = Object.assign({}, api);
     // (k, side, ...rest): index + side based
-    // bakedModel is here too: it replaces a wrapped procedural fallback at the
-    // same authored (k, side), so it must move (origin shift, reverse flip)
-    // exactly as the fallback does — unwrapped, the baked asset stood 2/3 of
-    // a lap away on every shifted circuit that ships one.
-    for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree", "bakedModel",
+    for (const name of ["place", "prop", "backdrop", "groundPlane", "anchor", "pine", "tree",
                         "palm", "conifer", "building", "house", "motorhome", "tower", "billboard",
                         "marshalPost", "bush", "signBoard", "ferrisWheel", "floodMast", "runoffApron",
                         "cameraTower", "broadcastCompound", "waterSurface",
                         "cypress", "stonePine", "broadleafFall", "acacia", "plane"]) {
       const f = api[name]; if (f) w[name] = (k, side, ...r) => f(RK(k), SIDE(side), ...r);
+    }
+    /* bakedModel is (id, k, side, …) — the ONE emitter whose first argument is
+       not a position. It still has to move exactly like the procedural call it
+       stands in for (origin shift, reverse flip), so it needs the same RK/SIDE
+       treatment one argument to the right; it was in the (k, side) group above,
+       which fed the MODEL-ID STRING to RK(). Math.round("kenney_…") is NaN, so
+       Assets.modelSync(NaN) missed, bakedModel returned false, and every call
+       site read that as "no baked asset" and drew the procedural fallback —
+       silently, on all five circuits that ship baked geometry. Measured on a
+       live Monza build: 56 modelSync calls, every id NaN, zero hits, against
+       36 models resident. Nothing logged, because falling back IS the
+       documented behaviour of a false return. */
+    {
+      const f = api.bakedModel;
+      if (f) w.bakedModel = (id, k, side, ...r) => f(id, RK(k), SIDE(side), ...r);
     }
     // (s, side, ...rest): single fraction + side
     for (const name of ["grandstand", "grandstandEx"]) {

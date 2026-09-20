@@ -40,16 +40,37 @@ test("billboards with a normal gap are built: Qatar and Monaco lose none to the 
   }
 });
 
-test("bakedModel rides the scenery transform like the fallback it replaces", () => {
-  // A baked asset stands in for a WRAPPED procedural call at the same (k, side),
-  // so it must take the same origin shift and reverse flip; unwrapped it stood
-  // 2/3 of a lap away on every shifted circuit that ships one.
+test("bakedModel rides the scenery transform, ONE ARGUMENT RIGHT of the others", () => {
+  /* A baked asset stands in for a WRAPPED procedural call at the same (k, side),
+     so it must take the same origin shift and reverse flip; unwrapped it stood
+     2/3 of a lap away on every shifted circuit that ships one.
+
+     THIS TEST USED TO ASSERT THE BUG. It required "bakedModel" to be IN the
+     (k, side) name list — but bakedModel is (id, k, side, …), the one emitter
+     whose first argument is not a position. In that list its wrapper handed the
+     MODEL-ID STRING to RK(), Math.round("kenney_…") gave NaN, modelSync(NaN)
+     missed, and bakedModel returned false — which every call site reads as "no
+     baked asset, draw the procedural box". So all five circuits that ship baked
+     geometry silently drew fallbacks, and this assertion held the wiring in
+     place. Measured on a live Monza build before the fix: 56 modelSync calls,
+     every id NaN, zero hits, 36 models resident.
+
+     The rule the comment always meant is still asserted, and now correctly:
+     bakedModel is NOT in the (k, side) group, and it HAS a wrapper of its own
+     that passes id through untouched while giving k and side the same RK/SIDE
+     treatment every other emitter gets. */
   const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
   const i = src.indexOf("function transformSceneryApi(");
   assert.ok(i >= 0);
-  const kSide = src.slice(i).match(/for \(const name of \[([^\]]*)\]\) \{\s*const f = api\[name\]; if \(f\) w\[name\] = \(k, side, \.\.\.r\)/);
+  const body = src.slice(i);
+  const kSide = body.match(/for \(const name of \[([^\]]*)\]\) \{\s*const f = api\[name\]; if \(f\) w\[name\] = \(k, side, \.\.\.r\)/);
   assert.ok(kSide, "the (k, side) wrapper list exists");
-  assert.match(kSide[1], /"bakedModel"/);
+  assert.ok(!/"bakedModel"/.test(kSide[1]),
+    "bakedModel is (id, k, side, …); in the (k, side) group its wrapper feeds the model-ID string to RK()");
+  // …and it is wrapped, not merely excluded: an UNwrapped bakedModel is the
+  // 2/3-of-a-lap defect the original comment was written about.
+  assert.match(body, /w\.bakedModel = \(id, k, side, \.\.\.r\) => f\(id, RK\(k\), SIDE\(side\), \.\.\.r\)/,
+    "bakedModel needs its own wrapper: id straight through, k and side transformed");
 });
 
 test("the backdrop guard RECORDS its drops — it was the one emitter that did not", () => {
