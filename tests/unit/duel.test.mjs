@@ -58,24 +58,67 @@ test("the bump lifts racecraft harder than pace, and leaves awareness alone", ()
   assert.equal(c.code, "XXX", "an ordinary duel keeps the rival's identity");
 });
 
-test("asLegend replaces the driver with the legend's own ratings — no bump on top", () => {
+test("asLegend takes the legend's own ratings and lifts them with LEGEND_BUMP", () => {
   const r = Legends.ratings("fangio");
   // Compare against a SNAPSHOT, not against the object asLegend was handed: an
   // implementation that bumped the ratings in place would otherwise be measured
   // against its own mutation and pass. (Both mutants of that shape survived an
   // earlier version of this test.)
   const want = Object.assign({}, r);
+  const B = Duel.LEGEND_BUMP;
   const c = Duel.asLegend(car(), { id: "fangio", name: "Juan Manuel Fangio", code: "FAN", ratings: r }, DR);
   assert.equal(c.name, "Juan Manuel Fangio");
   assert.equal(c.code, "FAN");
   assert.equal(c.legendId, "fangio");
   assert.equal(c.duelRival, true);
-  // The legend's numbers arrive INTACT: /100, not bumped and then divided.
-  assert.equal(c.craft, want.craft / 100);
-  assert.equal(c.awareness, want.awareness / 100);
-  assert.equal(c.consistency, want.consistency / 100);
-  assert.equal(c.experience, want.experience / 100);
-  assert.equal(c.skill, DR.skill(want, 0.5), "skill comes from the legend's axes, not a tier draw");
+  // The legend's ABSOLUTE axes, lifted and clamped at 100, as 0..1 fractions.
+  const upv = (v, d) => Math.min(100, v + d) / 100;
+  assert.equal(c.craft, upv(want.craft, B.craft));
+  assert.equal(c.awareness, upv(want.awareness, B.awareness));
+  assert.equal(c.consistency, upv(want.consistency, B.consistency));
+  assert.equal(c.experience, upv(want.experience, B.experience));
+  assert.equal(c.skill, DR.skill(Object.assign({}, want, { pace: Math.min(100, want.pace + B.pace) }), 0.5));
+  // FANGIO IS ALREADY AT THE CEILING on four axes, so the clamp is the whole
+  // behaviour for him — a lift must not wrap him past 100.
+  for (const k of ["craft", "awareness", "consistency", "experience"]) {
+    assert.ok(c[k] <= 1, `${k} = ${c[k]} went past the 100 clamp`);
+  }
+});
+
+/* AWARENESS STAYS 0, and this is the assertion that keeps the lift from making
+   a legend EASIER. In ai-drive.js awareness is the caution axis and runs
+   backwards: letPassDelay lerps 4.2 -> 1.8 and awareMul 1.25 -> 0.7, so a
+   higher value concedes sooner and pulls the trigger less often. */
+test("the legend lift raises racecraft, never caution, and pace least of all", () => {
+  const B = Duel.LEGEND_BUMP;
+  assert.equal(B.awareness, 0, "lifting awareness buys a rival that yields quicker");
+  assert.ok(B.craft > B.pace, `craft ${B.craft} must outweigh pace ${B.pace}`);
+  assert.ok(B.consistency > B.pace && B.experience > B.pace);
+  // …and it must be a LIFT, or the legend duel is just the ordinary one.
+  assert.ok(B.craft >= Duel.BUMP.craft, "a legend is at least as hard as a bumped midfielder");
+});
+
+/* THE CAR. A legend now out-drags the player, which reverses DIFF.hard's rule
+   that the straight stays the player's — so it is pinned, with the reason, and
+   scoped to a legend alone. */
+test("a legend rival's car is lifted, and only his", () => {
+  assert.ok(Duel.LEGEND_CAR > 1, "the lift must actually lift");
+  const c = Duel.asLegend(Object.assign(car(), { tierV: 0.9695 }),
+    { id: "senna", name: "Ayrton Senna", code: "SEN", ratings: Legends.ratings("senna") }, DR);
+  assert.equal(c.tierV, 0.9695 * Duel.LEGEND_CAR, "tierV is scaled, not replaced");
+  // On hard (dd.ai 1.030) that must clear a stock player's mods.speed of 1.0,
+  // which is the whole point of the reversal. Measured with the REAL skill
+  // curve, not the stub above: SKILL_SPAN is only 0.0232 across the whole pace
+  // range, so a stub that maps pace to skill more generously would report a
+  // lift this change does not actually deliver.
+  const realDR = load(["js/core/mat4.js", "js/core/hash32.js", "js/data/driver-ratings.js"])("DriverRatings");
+  const real = Duel.asLegend(Object.assign(car(), { tierV: 0.9695 }),
+    { id: "senna", name: "Ayrton Senna", code: "SEN", ratings: Legends.ratings("senna") }, realDR);
+  assert.ok(real.tierV * real.skill * 1.030 > 1,
+    `a legend must out-drag a stock player on hard (got ${(real.tierV * real.skill * 1.030).toFixed(4)})`);
+  // THE ORDINARY DUEL RIVAL IS UNTOUCHED: bump() must not touch the car.
+  const o = Duel.bump(Object.assign(car(), { tierV: 0.9695 }), DR);
+  assert.equal(o.tierV, 0.9695, "a non-legend duel rival keeps his own car");
 });
 
 test("asLegend degrades to the ordinary duel when the legend has no ratings", () => {

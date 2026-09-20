@@ -1344,11 +1344,6 @@ h3.sel-label {
   margin: 0;
 }
 #duel-picker { --sheet-w: 620px; }
-#duel-search {
-  width: 100%;
-  min-height: var(--chip-h);
-  margin-bottom: var(--gap);
-}
 #duel-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));

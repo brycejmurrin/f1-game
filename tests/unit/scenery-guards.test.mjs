@@ -44,12 +44,48 @@ test("bakedModel rides the scenery transform like the fallback it replaces", () 
   // A baked asset stands in for a WRAPPED procedural call at the same (k, side),
   // so it must take the same origin shift and reverse flip; unwrapped it stood
   // 2/3 of a lap away on every shifted circuit that ships one.
+  //
+  // But it CANNOT ride the (k, side) list, which remaps argument 0: bakedModel's
+  // argument 0 is the model ID. It sat in that list from the day it was written,
+  // so RK() was handed a string and the real k was read as the side — see the
+  // behavioural test below for what that cost. This guard now pins the shape the
+  // signature actually needs: out of the list, and its own wrapper.
   const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
   const i = src.indexOf("function transformSceneryApi(");
   assert.ok(i >= 0);
   const kSide = src.slice(i).match(/for \(const name of \[([^\]]*)\]\) \{\s*const f = api\[name\]; if \(f\) w\[name\] = \(k, side, \.\.\.r\)/);
   assert.ok(kSide, "the (k, side) wrapper list exists");
-  assert.match(kSide[1], /"bakedModel"/);
+  assert.doesNotMatch(kSide[1], /"bakedModel"/,
+    "bakedModel takes (id, k, side, …): in the (k, side) list its ID is remapped as a node");
+  assert.match(src.slice(i), /w\.bakedModel = \(id, k, side, \.\.\.r\) => api\.bakedModel\(id, RK\(k\), SIDE\(side\), \.\.\.r\)/,
+    "bakedModel still needs the shift and the reverse flip — on its own k, not on its id");
+});
+
+test("every bakedModel call reaches Assets with the model id it asked for", () => {
+  // The source guard above is the mechanism; this is the consequence, measured
+  // on the real circuits. Before the dedicated wrapper, all 152 calls across the
+  // five circuits that ship baked props arrived at Assets.modelSync as NaN — or,
+  // on a source-space def like monaco, as a node number coerced out of the id.
+  // modelSync matched nothing, bakedModel returned false every time, and the
+  // whole baked pack was dead on every circuit that asks for one. It was
+  // invisible because the documented `if (!bakedModel(…)) procedural(…)` shape
+  // quietly drew the fallback — and the sweeps cannot see it either, since no
+  // node harness defines Assets at all, so this test defines one.
+  const { buildContext: vmContext } = require("../../tools/lib/track-build-vm.cjs");
+  const ctx = vmContext();
+  const seen = [];
+  ctx.sandbox.Assets = { modelSync: (id) => { seen.push(id); return null; } };
+  const bad = [];
+  for (const id of ["vegas", "monaco", "spa", "monza", "silverstone"]) {
+    const from = seen.length, mark = ctx.mark();
+    ctx.Tracks.build(ctx.Tracks.LIST.find((d) => d.id === id), 1200);
+    ctx.trim(mark);
+    const mine = seen.slice(from);
+    assert.ok(mine.length > 0, `${id} ships baked props — it must reach Assets at all`);
+    for (const got of mine) if (typeof got !== "string") bad.push(`${id}: ${String(got)}`);
+  }
+  assert.deepEqual(bad.slice(0, 8), [],
+    `${bad.length} bakedModel calls reached Assets.modelSync with something other than a model id`);
 });
 
 test("the backdrop guard RECORDS its drops — it was the one emitter that did not", () => {

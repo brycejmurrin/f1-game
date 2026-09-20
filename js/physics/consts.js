@@ -201,6 +201,11 @@ window.PhysicsConsts = {
     // even the quickest AI just under the player's own top-speed scale. A
     // same-spec car out-dragging the player down a straight is the one cheat
     // players reliably catch, so the straight stays theirs.
+    // ONE FORMAT OPTS OUT, by request: a LEGEND duel scales the rival's tierV
+    // (js/race/duel.js LEGEND_CAR) so the benchmark can out-drag the player on
+    // the straight too. It is scoped to that one rival — every other AI car on
+    // every grid, including an ordinary duel's, still sits under the ceiling
+    // this comment describes.
     hard:   { ai: 1.030, band: 0.02, corner: 1.00 },  // band was 0.03 — smarter OT/ERS/brake cuts rubber-band need
   },
 };

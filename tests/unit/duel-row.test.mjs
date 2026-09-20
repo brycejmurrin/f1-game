@@ -77,19 +77,28 @@ test("a stale legend left in the store still reads as ON, never as OFF", () => {
   assert.equal(RS.duelValue(() => true, null), "on", "no getter at all is the plain duel");
 });
 
-test("the duel control opens a searchable rival sheet instead of a mega select", () => {
+test("the duel control opens a rival sheet instead of a mega select", () => {
   assert.doesNotMatch(HTML, /id="rs-duel-sel"/);
   assert.match(HTML, /id="rs-duel-open"[^>]*aria-haspopup="dialog"[^>]*aria-controls="duel-picker"/);
   assert.match(HTML, /<dialog id="duel-picker"[^>]*aria-labelledby="duel-picker-title"/);
-  assert.match(HTML, /id="duel-search"[^>]*type="search"[^>]*aria-label="Search duel rivals"/);
   assert.match(HTML, /id="duel-list"[^>]*role="listbox"/);
 });
 
-test("duel search matches legends without dropping OFF or fastest-rival choices", () => {
-  assert.deepEqual(flat(RS.duelMatches("")), flat(RS.duelOpts()));
-  assert.deepEqual(flat(RS.duelMatches("senna")), ["senna:AYRTON SENNA"]);
-  assert.deepEqual(flat(RS.duelMatches("fastest")), ["on:FASTEST RIVAL"]);
-  assert.deepEqual(flat(RS.duelMatches("off")), ["off:OFF"]);
+/* NO SEARCH FIELD. Fourteen options — OFF, FASTEST RIVAL and the twelve
+   legends — is a list you read, not one you filter, and the field cost a row
+   of sheet height plus an empty state that could only ever be reached by
+   typing. The whole list is always rendered, so `duel-empty` has no reachable
+   case either and both are gone. */
+test("the rival sheet shows the whole roster, with nothing to type into", () => {
+  assert.doesNotMatch(HTML, /id="duel-search"/, "the search field is gone");
+  assert.doesNotMatch(HTML, /id="duel-empty"/, "…and so is the no-matches line it fed");
+  assert.equal(RS.duelMatches, undefined, "the filter goes with it");
+  // OFF and FASTEST RIVAL still lead the list, then every legend.
+  const opts = flat(RS.duelOpts());
+  assert.equal(opts[0], "off:OFF");
+  assert.equal(opts[1], "on:FASTEST RIVAL");
+  assert.equal(opts.length, 2 + Legends.LIST.length);
+  assert.ok(opts.includes("senna:AYRTON SENNA"));
 });
 
 test("race presets are complete, distinct settings bundles", () => {
