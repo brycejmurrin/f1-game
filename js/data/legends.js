@@ -67,6 +67,19 @@ const Legends = (function () {
       years: "1950–1958", teams: "Alfa Romeo, Maserati, Mercedes, Ferrari", car: "Mercedes-Benz W196",
       record: { starts: 51, wins: 24, poles: 29, podiums: 35, titles: 5 },
       trait: "Won at the slowest speed that still won — the car always finished.",
+      /* W196, NOT the Vanwall the era alone gave him. SOURCED (en.wikipedia.org
+         Mercedes-Benz W196; rmsothebys.com W196 R Stromlinienwagen lot):
+         longitudinal TORSION BARS front and rear, run inside the frame tubes —
+         so `torsion_bar`, where Moss's coil-sprung Vanwall keeps `comfort`.
+         Brakes stay `standard`: the W196's were DRUMS, mounted INBOARD because
+         they were too large to fit inside a 16-inch rim, and a drum is the one
+         thing the catalog's brake ladder starts below.
+         NOT the streamliner. The closed-wheel Type Monza ran only four times —
+         Reims and Silverstone 1954, Monza 1954 and 1955 — and after Silverstone,
+         where Fangio hit the course markers because he could not place the
+         hidden front wheels, the open-wheel car took over. The monoposto is the
+         car he actually raced, so no `le_mans` bodywork here. */
+      parts: { suspension: "torsion_bar" },
       // VERIFIED: the W196 ran ultra-light Elektron magnesium-alloy bodywork —
       // the bare metal IS the colour, hence "Silver Arrow" and the brushed finish.
       livery: { name: "Silver Arrow '55", c1: [0.78, 0.79, 0.82], c2: [0.16, 0.17, 0.19],
@@ -89,6 +102,15 @@ const Legends = (function () {
       years: "1971–1985", teams: "March, BRM, Ferrari, Brabham, McLaren", car: "Ferrari 312T",
       record: { starts: 171, wins: 25, poles: 24, podiums: 54, titles: 3 },
       trait: "Engineer first: tested more than he raced and drove to the number.",
+      /* 312T, which shared wing70 with Stewart's Tyrrell and came out identical.
+         SOURCED (formula1.com "Under the bodywork of Mauro Forghieri's
+         masterpiece"; f1technical.net Ferrari 312T): long ROCKER ARMS out to
+         the wheels with INBOARD dampers, which `sport` carries (rocker: 1) and
+         Stewart's outboard-sprung 003 does not — so the era keeps `sport` here.
+         The flat-12's power let Ferrari run MORE WING than the Cosworth cars,
+         so `medium` (one rung up from the era's `low`) rather than matching the
+         Tyrrell. It is also free, which is how both halves of this pair fit. */
+      parts: { aero: "medium" },
       // The ORIGINAL rosso corsa (#E4002B), deepened: the source notes it "may
       // appear almost dark brown" on a period television, which is the memory
       // this tribute is for — and it keeps the 1975 car off the 2004 car's red.
@@ -111,6 +133,14 @@ const Legends = (function () {
       years: "1965–1973", teams: "BRM, Matra, Tyrrell", car: "Tyrrell 003",
       record: { starts: 99, wins: 27, poles: 17, podiums: 43, titles: 3 },
       trait: "Ruthless in the wet, and the reason half the safety rules exist.",
+      /* 003, the other half of wing70. SOURCED (primotipo.com, Derek Gardner):
+         OUTBOARD coil spring/damper units front and rear — split upper and
+         wide-based lower wishbones at the front, a single top link with twin
+         parallel lower links and radius rods at the rear. No rocker arms, so
+         `standard` against the 312T's `sport`. The era's `mag_forged` wheels
+         are already right for him and stay: 003 ran centre-lock MAGNESIUM
+         alloys by Aeroplane & Motor on Goodyears. */
+      parts: { suspension: "standard" },
       // VERIFIED: Tyrrell ran French Racing Blue under the Elf fuel sponsorship.
       livery: { name: "Tartan Blue '71", c1: [0.04, 0.24, 0.70], c2: [0.93, 0.94, 0.96],
                 stripe: [0.90, 0.20, 0.20], accent: [0.96, 0.96, 0.98],
@@ -125,6 +155,14 @@ const Legends = (function () {
       noTitle: "runner-up four years running; lost 1958 by one point having won four races to Hawthorn's one",
       record: { starts: 66, wins: 16, poles: 16, podiums: 24, titles: 0 },
       trait: "The best never to win it — and he defended the rival who beat him.",
+      /* VW5, which shared front50 with Fangio's W196 and came out the same car.
+         SOURCED (en.wikipedia.org Vanwall; revsinstitute.org 1958 Vanwall):
+         DISC brakes all round, built in-house by Vandervell from aeronautical
+         practice and a Vanwall hallmark from 1954 — against the W196's inboard
+         drums, this is the pair's clearest hardware split, so `drilled`.
+         Suspension stays `comfort`: coil springs over dampers at the front and
+         a de Dion rear, not Mercedes' torsion bars. */
+      parts: { brakes: "drilled" },
       // Vanwall green. The BRG source is explicit that no exact hue exists and
       // that 1950s British teams each ran their own shade, so this is a
       // brighter green than Clark's Lotus and is meant to be.
@@ -251,6 +289,16 @@ const Legends = (function () {
       // parts sheet are all keyed by it (js/car/liverytex.js), so "legends" is
       // what keeps a legend's car from overwriting the player's own.
       id: "legends", legends: true, legend: l.id,
+      /* THE PERIOD CAR IS THE TEAM'S FACTORY BUILD, for the player's slot as
+         well as a rival's. Nothing ever seeded it: parts() had no caller until
+         raceTeam, so picking Fangio in the garage handed you a 2026 chassis in
+         Silver Arrow paint while DUELLING him produced the 1954 car — spoked
+         wheels, no wings, a bare floor. Same legend, two different machines,
+         depending on which side of the grid you stood on.
+         Safe as a FACTORY value: a saved sheet still wins (getTeamParts), and
+         every period setup fits the 780 budget, which is the whole reason this
+         file spends on silhouette rather than stats. */
+      factory: parts(l.id),
       /* THE MARQUE CREST, where the game has one — so a legend wears the badge of
        * the car he is: Ferrari, McLaren, Williams, Red Bull, Mercedes.
        *
@@ -312,7 +360,7 @@ const Legends = (function () {
     const t = team(l && l.id);
     if (!t) return null;
     t.id = `legend_${l.id}`;
-    t.factory = PERIOD[l.era] ? Object.assign({}, PERIOD[l.era]) : null;
+    t.factory = parts(l.id);
     // ONE SEAT, HIS OWN. team() lists all twelve so the driver picker can seat
     // any of them; a rival is already cast, and drivers[0] is what the atlas
     // reads for his number (carDecalNum).
@@ -376,6 +424,18 @@ const Legends = (function () {
                exhaust: "twin_gate", floor: "stripped", cockpit: "standard", wheels: "dished" },
     // Williams FW14B / FW15C — ACTIVE SUSPENSION, the car's whole identity,
     // and the tallest wings before the 1994 rule cut.
+    // THE ONE PAIR THAT STAYS SHARED, and deliberately. Mansell's FW14B and
+    // Prost's FW15C both ran active suspension, the same 6-speed transverse
+    // semi-auto and the same Renault V10 family, so the era is honest for
+    // both. What separated them does not exist in this catalog: the FW14B was
+    // a passive car CONVERTED to active (hence the bulges over its front
+    // pushrods), the FW15C was designed active from the start — a 210 L tank
+    // against 230 L, ABS as standard rather than briefly, ~12 % better
+    // downforce/drag from a narrower nose and sleeker cover. Tank size and ABS
+    // have no part to fit, and the aero lever costs 65 against 35 of headroom
+    // here. A split on a part nobody sourced would be a guess wearing a
+    // citation, so this pair waits for a catalog that can say it.
+    // (en.wikipedia.org Williams FW14 / FW15C; f1technical.net FW14B / FW15C.)
     active92: { engine: "highrev", aero: "high", suspension: "active", brakes: "carbon",
                 tyres: "soft", ers: "standard", gearbox: "sequential_pro", fuel: "standard",
                 exhaust: "free_flow", floor: "standard", cockpit: "standard", wheels: "dished" },
@@ -389,8 +449,15 @@ const Legends = (function () {
     vten04: { engine: "race", aero: "diffuser", suspension: "triple_damper", brakes: "carbon",
               tyres: "medium", ers: "standard", gearbox: "close_ratio", fuel: "standard",
               exhaust: "inconel", floor: "step_plank", cockpit: "twin_cam", wheels: "taped_dish" },
-    // Red Bull RB9 — DRS (aero "active_aero" sets drs: 1), KERS harvesting and
-    // the blown-diffuser exhaust. Still no halo: that is 2018.
+    // Red Bull RB9 — DRS (aero "active_aero" sets drs: 1) and KERS harvesting.
+    // NOT a blown diffuser, which this said before and is wrong: off-throttle
+    // blowing was banned for 2012 by engine-mapping directives plus a mandated
+    // exhaust exit (final 100 mm circular, 75 mm across, high on the sidepod).
+    // What the RB9 actually ran is the RB8's COANDA ramp — a semi-blown floor
+    // that drags the plume down a sidepod channel onto the diffuser edge to
+    // seal it. Still no halo: that is 2018.
+    // (autosport.com "Under the skin of the Red Bull RB9"; autosport.com
+    //  "No off-throttle blowing allowed in 2012".)
     blown13: { engine: "performance", aero: "active_aero", suspension: "carbon_pushrods", brakes: "drilled",
                tyres: "medium", ers: "harvest", gearbox: "close_ratio", fuel: "standard",
                exhaust: "tri_exit", floor: "gurney_edge", cockpit: "twin_cam", wheels: "aero_disc" },
@@ -411,7 +478,13 @@ const Legends = (function () {
   function parts(idOrCode) {
     const l = byId(idOrCode) || byCode(idOrCode);
     const p = l && PERIOD[l.era];
-    return p ? Object.assign({}, p) : null;
+    // THE ERA IS THE CAR'S DECADE; `parts` IS THE CAR. An era is shared — nine
+    // of them carry twelve legends — so on its own it built ONE machine for
+    // each pair who happened to race in the same years: Fangio's W196 and
+    // Moss's Vanwall came out identical, as did Lauda's 312T and Stewart's
+    // Tyrrell. The override is where a car says what made it itself, and
+    // every line of it is sourced in the entry above.
+    return p ? Object.assign({}, p, l.parts || {}) : null;
   }
 
   /** Livery picker entries: `legend_<id>`, so an id can never collide with the
