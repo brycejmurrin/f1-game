@@ -82,6 +82,10 @@ const AudioPanel = (() => {
     let sfxVol = GameAudio.setSfxVolume(store.get("volSfx", 0.2));
     let sfxOn = store.get("sfx", true);
     GameAudio.setSfxEnabled(sfxOn);
+    // Restored here with the other levels rather than inside the engine: the
+    // engine owns the chain, the panel owns the persistence, and radioSting is
+    // reachable from showAnnounce before this panel is ever opened.
+    GameAudio.setRadioFx(store.get("radioFx", 1));
 
     function setSfx(b) {
       if (b && !G.soundOn) { setSound(true, true); }
@@ -214,6 +218,13 @@ const AudioPanel = (() => {
       $("as-rvol").closest(".tune-row").classList.toggle("tune-off", !radioLive);
       $("as-rvol").value = String(Math.round(radioVol * 10));
       $("as-rvol-v").textContent = String(Math.round(radioVol * 10));
+      // SFX, not voice: it rides the sfx bus, so it follows the SFX switch and
+      // has nothing to do with whether a voice is installed.
+      const fx = GameAudio.radioFxLevel();
+      $("as-rfx").disabled = !(sfxOn && G.soundOn);
+      $("as-rfx").closest(".tune-row").classList.toggle("tune-off", !(sfxOn && G.soundOn));
+      $("as-rfx").value = String(Math.round(fx * 10));
+      $("as-rfx-v").textContent = String(Math.round(fx * 10));
       // The voice rows follow the same live gate as the volume: tuning a voice
       // that cannot speak is a control that does nothing. Built here rather than
       // at wire time because getVoices() is empty on Chrome's first read and
@@ -490,6 +501,14 @@ const AudioPanel = (() => {
       host.appendChild(voiceRow.apply(null, ANN_CHANNEL));
     }
 
+    // Sliders speak in TENTHS here, so 10 is the shipped 1.0 and the top of
+    // the range is 1.5 — an exact integer lands on the default, the one value
+    // the panel must always be able to return to.
+    $("as-rfx").oninput = (e) => {
+      const lvl = GameAudio.setRadioFx((+e.target.value || 0) / 10);
+      store.set("radioFx", lvl);
+      $("as-rfx-v").textContent = String(Math.round(lvl * 10));
+    };
     $("as-rvol").oninput = (e) => {
       radioVol = G.radio ? G.radio.setVolume((+e.target.value || 0) / 10) : (+e.target.value || 0) / 10;
       store.set("volRadio", radioVol);

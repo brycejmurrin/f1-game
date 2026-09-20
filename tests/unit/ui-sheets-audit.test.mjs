@@ -378,7 +378,7 @@ function bootAudio({ soundOn, musicEnabled }) {
   const dom = makeDom();
   // Every volume slider the panel syncs, each inside its own .tune-row the way
   // index.html has them — the panel toggles "tune-off" on that ancestor.
-  for (const id of ["as-mvol", "as-svol", "as-rvol"]) {
+  for (const id of ["as-mvol", "as-svol", "as-rvol", "as-rfx"]) {
     const row = dom.makeElement("label"); row.className = "tune-row";
     row.appendChild(dom.byId(id)); dom.body.appendChild(row);
   }
@@ -398,6 +398,11 @@ function bootAudio({ soundOn, musicEnabled }) {
     profile: () => "team",
     grain: () => ({ on: true, ready: true, active: true, period: 80 }),
     setGrain: (v) => v,
+    // RADIO FX reads its level back from the engine on every sync, like the
+    // tone section above — the catch-all arm returns undefined and the panel
+    // would print NaN into the slider.
+    radioFxLevel: () => 1,
+    setRadioFx: (v) => v,
   };
   const GameAudio = new Proxy({}, { get: (_, k) => (k === "trackName" ? () => "Song A" : k === "musicSource" ? () => "builtin"
     : k === "sourceCounts" ? () => ({ builtin: 4, user: 0 }) : k === "setMusicSource" ? (v) => v

@@ -1462,7 +1462,13 @@ const PitLane = (function () {
       const lapsLeft = G.lapsTarget - lap + 1;
       const oldNext = plan.lapsAt[done];
       if (lapsLeft < 2 || oldNext == null) return false;
-      const lifeLaps = (cls) => TyreModel.lifeLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
+      // planLaps, not lifeLaps: the level-free nominal is only right at `real`
+      // (1.0), and the SHIPPED DEFAULT is `light` (0.55), where a set lasts
+      // 1.82x longer. The first plan (plan(), above) and the pit-now compound
+      // pick both learned this; the per-lap re-cut did not, so every replan
+      // argued against the plan it was revising and pulled the next stop
+      // earlier on tyres the car had not used. See TyreModel.planLaps.
+      const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
       const cls = c.tyre.id && TyreModel.AI_CLASS[c.tyre.id] ? c.tyre.id : (c.tyreClass || "medium");
       const firstLife = Math.max(1, lifeLaps(cls) * (1 - G.tyres.spent(c)));
       const stops = plan.pin != null ? Math.max(0, plan.pin - done) : null;

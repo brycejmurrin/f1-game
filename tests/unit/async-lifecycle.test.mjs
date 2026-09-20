@@ -66,6 +66,10 @@ function audioPanelHarness() {
     granular() { return { on: true, ready: false, active: false, period: 0 }; },
     setGranular(v) { return v; },
     grain() { return { on: true, ready: false, active: false, period: 0 }; }, setGrain(v) { return v; },
+    // TEAM RADIO FX. create() restores the stored level before any panel is
+    // opened — radioSting is reachable from showAnnounce long before that —
+    // so a stub without it takes the whole panel down at construction.
+    setRadioFx(v) { return v; }, radioFxLevel() { return 1; },
   };
   const G = {
     $, els: { soundbtn: $("soundbtn") },

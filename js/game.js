@@ -1250,6 +1250,13 @@ function showAnnounce(msg, dur, kind) {
   // announceT — the card's ACTUAL life, not a second copy of the expression
   // above — is the utterance's whole budget.
   radioVoice.say(msg, announceT, kind);
+  // ...and the RADIO around it — click, hiss, squelch (engine.js radioSting).
+  // On the CARD, not the utterance: the spoken radio ships off, and here it
+  // inherits this function's ANN_PRI queue instead of needing a second one.
+  // Gated on the session for the same reason plan() is: showAnnounce also draws
+  // menu cards, and a squelch under "SAVE CONFLICT" on the title screen claims
+  // a radio that is not running.
+  if (state === "race" || state === "count") GameAudio.radioSting(RadioVoice.SPEAKERS[kind] || "radio", announceT);
 }
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
@@ -1560,11 +1567,15 @@ function resolveLivery(team) {
 // Optional detail colours are additive. Every live LIV_DRAFT_COLORS tint must be
 // listed. Dead keys (crestInk / plateInk / ridgeTint / airboxTint) are stripped
 // by Liveries.migratePaint before this runs — do not put them back.
+// A COPY of `Liveries.FIELDS` that had drifted by one row: `bodySplit`
+// (Cadillac's L/R body) was published and painted but missing here, so every
+// resolveLivery came back single-colour. team-livery.test.mjs now asserts the
+// two lists are the same set — the only thing that keeps a copy honest.
 const LIVERY_FIELDS = ["stripe", "accent", "nose", "pod", "wing", "halo", "fin", "finArt", "logo", "logo2",
   "logo3", "noseStripe", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape",
   "tcam", "coverVents", "spineHeight", "spineSide", "rearWing", "wingCarbon", "cover", "spineTint", "sideTint",
   "sunTint", "bandTint2", "plateTint",
-  "saddleTint", "coverBind", "finHandoff"];
+  "saddleTint", "coverBind", "finHandoff", "bodySplit"];
 // A stored garage file may still carry the four RETIRED keys, so every read
 // path folds them once, here, and the list above never mentions them again:
 // RIDGE was the crown's centreline only and is now the BAND it always fell

@@ -1189,6 +1189,14 @@
         </div>
         <label class="tune-row"><span class="tune-label">VOICE VOLUME <b id="as-rvol-v">8</b></span>
           <input id="as-rvol" type="range" min="0" max="10" step="1" value="8" aria-label="Radio voice volume"></label>
+        <!-- RADIO FX — the key click, the hiss under the line and the squelch
+             tail (js/audio/engine.js radioSting). NOT gated on the TEAM RADIO
+             switch above and deliberately so: that switch is the SPOKEN radio,
+             which ships off, while these fire on the card every player already
+             sees. They are ordinary SFX-bus nodes, so the SFX slider does reach
+             them — which is exactly what the voice volume above cannot do. -->
+        <label class="tune-row"><span class="tune-label">RADIO FX <b id="as-rfx-v">10</b></span>
+          <input id="as-rfx" type="range" min="0" max="15" step="1" value="10" aria-label="Team radio effect level"></label>
         <p id="as-radio-note" class="as-note"></p>
 
         <!-- PER-CHANNEL VOICES. js/audio/radio-voice.js already partitions every

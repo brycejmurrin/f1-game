@@ -1102,3 +1102,64 @@ test("the braking cue is silent on the pace, tightens with urgency, and banks no
   GameAudio.brakeCue(1);
   assert.equal(fired() - t0, 1, "exactly one blip on resume, not a banked burst");
 });
+
+/* ── TEAM RADIO FX ──────────────────────────────────────────────────────────
+ *
+ * The one thing this chain must never become is a filter on the voice, because
+ * it cannot be one: speechSynthesis has no node in this graph and no browser
+ * exposes its output as a stream. What it IS — a click, a band-limited hiss
+ * bed and a squelch tail around the card — is ordinary Web Audio, and these
+ * are the parts of it that are worth asserting rather than listening to.
+ */
+
+/** Fire every pending onended, as a real context does once a source stops. */
+function endAll() { for (const n of [...live]) if (n.onended) { const f = n.onended; n.onended = null; f(); } }
+const band = () => [...live].filter((n) => n.kind === "biquad")
+  .map((n) => `${n.type}@${Math.round(n.frequency.value)}`);
+
+test("a transmission is band-limited to the voice-radio band at both ends", async () => {
+  const GameAudio = await sampleEngine();
+  assert.equal(GameAudio.radioSting("radio", 1.5), true);
+  const f = band();
+  // 300 Hz – 3.4 kHz is what analogue and digital voice radio both carry, and
+  // why every handheld sounds alike. A chain missing the HIGHPASS is the easy
+  // regression: it still hisses, but it hisses like weather, not like a mic.
+  assert.ok(f.includes("highpass@300"), "no 300 Hz highpass — the hiss keeps a bottom end no radio has: " + f.join(" "));
+  assert.ok(f.includes("lowpass@3400"), "no 3.4 kHz lowpass on the engineer's channel: " + f.join(" "));
+});
+
+test("the driving coach is not on a radio, and says so by making no sound", async () => {
+  const GameAudio = await sampleEngine();
+  endAll();
+  const before = live.size;
+  assert.equal(GameAudio.radioSting("coach", 1.5), false,
+    "a squelch on the coach is a lie about where the line comes from");
+  assert.equal(live.size, before, "...and it must not have built a graph either");
+  assert.equal(GameAudio.radioSting("nonsense-kind", 1.5), false,
+    "an unknown channel is silent by construction — the kind arrives as a string from js/game.js");
+});
+
+test("the level clamps, and zero is properly off", async () => {
+  const GameAudio = await sampleEngine();
+  assert.equal(GameAudio.setRadioFx(99), GameAudio.radioFxMax(), "a hand-edited store must not blow the level out");
+  assert.equal(GameAudio.setRadioFx(-1), 0);
+  assert.equal(GameAudio.setRadioFx(NaN), 1, "a NaN from localStorage falls back to the shipped level");
+  endAll();
+  const before = live.size;
+  GameAudio.setRadioFx(0);
+  assert.equal(GameAudio.radioSting("radio", 1.5), false, "off means off, not quiet");
+  assert.equal(live.size, before);
+});
+
+test("a preempted transmission leaves nothing rendering", async () => {
+  const GameAudio = await sampleEngine();
+  endAll();
+  const before = live.size;
+  // A penalty cutting off the engineer is a case the game produces on its own,
+  // so re-entry is the normal path and not an edge one.
+  for (let i = 0; i < 12; i++) GameAudio.radioSting("radio", 2);
+  GameAudio.radioStingStop();
+  endAll();
+  assert.equal(live.size, before,
+    "twelve preempts left " + (live.size - before) + " nodes wired into sfxBus — a Gain still connected keeps rendering for ever");
+});

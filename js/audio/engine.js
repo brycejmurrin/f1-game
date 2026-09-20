@@ -582,6 +582,7 @@ const GameAudio = (function () {
     musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
     engBuf = null; samplesReady = false;                    // ctx-bound; reload for new ctx
     _irCache.clear();                                       // AudioBuffers are ctx-bound too
+    radioBed = null;        // its nodes died with the old ctx; stopping them would throw
     noisePoolBuf = null;                                    // ctx-bound too — a buffer from the
                                                             // old ctx throws on the new one
     dbgAnalyser = null;    // ctx-bound; stopEngine() nulls it but this path inlines its own
@@ -2193,6 +2194,125 @@ const GameAudio = (function () {
   // musicGain, because that expression is recomputed every frame and would stomp
   // an external write within 16 ms. The engine deliberately does NOT duck: the
   // engine is the game.
+  /* ── TEAM RADIO FX: THE FRAME AROUND THE VOICE ──────────────────────────
+   *
+   * THE WORDS THEMSELVES ARE OUT OF REACH, and everything below is built
+   * around that one fact. speechSynthesis has no node in this graph (the
+   * header of js/audio/radio-voice.js says why it lives outside GameAudio at
+   * all), and no browser exposes its output as a capturable stream — the Web
+   * Speech API has carried an open request for exactly that since 2019 and
+   * nothing implements it. So a band-pass ON the voice, which is how every
+   * other medium makes a radio sound like a radio, is not available here at
+   * any price short of shipping a WASM speech model — and a game with no
+   * build step that boots from static files is the wrong shape to pay a
+   * 300 MB model for one effect.
+   *
+   * So the radio character is the FRAME: the key-up click, the band-limited
+   * hiss that runs under the line, and the squelch tail when the mic closes.
+   * That is also the part the ear actually identifies. The words in a real
+   * team radio are what you strain to hear THROUGH those three things.
+   *
+   * THE BAND IS MEASURED, NOT PICKED. Analogue and digital voice radio alike
+   * carry 300 Hz – 3.4 kHz, and that shared band is why every handheld on
+   * earth sounds like the same device. The hiss is shaped to it so the bed
+   * and the (unshapeable) voice read as one source rather than two.
+   *
+   * IT FIRES ON THE CARD, NOT ON THE UTTERANCE. showAnnounce is the one place
+   * a line reaches the screen, and the SPOKEN radio ships OFF — hanging this
+   * on the utterance would have meant almost nobody ever heard it. On the
+   * card it inherits the same ANN_PRI queue the voice does, and a player who
+   * never turns speech on still gets a race that sounds like team radio.
+   */
+  const RADIO_LO = 300, RADIO_HI = 3400;
+  /* Per channel, because they are not the same source. `control` is a race
+     control feed: clean, brief, no tail. `radio` is the engineer talking to a
+     car at 300 km/h and gets the full treatment. `coach` gets NOTHING — the
+     driving coach is not on a radio, and a squelch on it would be a lie about
+     where the line comes from. A channel missing from this table is silent by
+     construction, which is the safe direction for a table keyed by a string
+     that arrives from js/game.js. */
+  const RADIO_CH = Object.freeze({
+    control: { click: 0.05, hiss: 0.012, tail: 0,    hi: 4200 },
+    radio:   { click: 0.09, hiss: 0.030, tail: 0.13, hi: RADIO_HI },
+  });
+  const RADIO_FX_MAX = 1.5;
+  let radioFx = 1;        // the player's level; 0 is off
+  let radioBed = null;    // the live hiss, or null
+
+  /** One band-limited noise transient — the key click and the squelch tail.
+   *  Both ends of the band, unlike the plain noise() one-shots above: a click
+   *  with its bottom left in reads as a thud off the car, not a mic. */
+  function radioBurst(peak, decay, hi, at) {
+    if (!(peak > 0)) return;
+    const src = ctx.createBufferSource();
+    const off = bindNoise(src, decay + 0.15);
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = RADIO_LO;
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = hi;
+    const g = ctx.createGain();
+    env(g, at, peak, 0.004, decay);
+    src.connect(hp).connect(lp).connect(g).connect(sfxBus);
+    src.start(at, off);
+    src.stop(at + decay + 0.1);
+    src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
+  }
+
+  /** Cut a transmission short — the card was hidden, the game was paused, or
+   *  a higher-priority line preempted this one. */
+  function radioStingStop() {
+    if (!radioBed) return;
+    const b = radioBed;
+    radioBed = null;
+    const t = now();
+    try {
+      b.gain.gain.cancelScheduledValues(t);
+      b.gain.gain.setValueAtTime(b.gain.gain.value, t);
+      b.gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+      b.src.stop(t + 0.08);
+    } catch (e) { /* already stopped, or a ctx torn down under us */ }
+  }
+
+  /** One transmission: key-up, a hiss bed held for `seconds`, then squelch.
+   *
+   *  SELF-TERMINATING — the bed carries its own stop time — so a caller that
+   *  never closes cannot leak a looping noise source into the race. Re-entrant
+   *  for the same reason showAnnounce is: a penalty cutting off the engineer
+   *  is a case this game produces on its own. */
+  function radioSting(channel, seconds) {
+    radioStingStop();
+    const ch = RADIO_CH[channel];
+    if (!sfxOk() || !ch || radioFx <= 0) return false;
+    const hold = Math.max(0.25, Math.min(8, +seconds || 1.5));
+    const t0 = now();
+    radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
+    const src = ctx.createBufferSource();
+    src.loop = true;
+    src.buffer = noisePool();
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = RADIO_LO;
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = ch.hi;
+    const g = ctx.createGain();
+    const peak = ch.hiss * radioFx;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(peak, t0 + 0.03);
+    g.gain.setValueAtTime(peak, t0 + hold);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + hold + 0.12);
+    src.connect(hp).connect(lp).connect(g).connect(sfxBus);
+    src.start(t0, Math.random() * (NOISE_POOL_S - 0.5));
+    src.stop(t0 + hold + 0.2);
+    src.onended = () => { src.disconnect(); hp.disconnect(); lp.disconnect(); g.disconnect(); };
+    radioBed = { src, gain: g };
+    // The tail is the single most recognisable part of a two-way radio: the
+    // burst you hear AFTER the talking stops, when the mic un-keys.
+    if (ch.tail > 0) radioBurst(ch.tail * radioFx, 0.07, ch.hi, t0 + hold);
+    return true;
+  }
+
+  function setRadioFx(v) {
+    const n = +v;
+    radioFx = Number.isFinite(n) ? Math.max(0, Math.min(RADIO_FX_MAX, n)) : 1;
+    if (radioFx <= 0) radioStingStop();
+    return radioFx;
+  }
+
   let radioDuck = 1;
   function setRadioDuck(on) {
     const want = on ? 0.35 : 1;
@@ -2342,6 +2462,12 @@ const GameAudio = (function () {
   return {
     init,
     setRadioDuck,
+    radioSting,
+    radioStingStop,
+    setRadioFx,
+    radioFxLevel: () => radioFx,
+    radioFxMax: () => RADIO_FX_MAX,
+    radioChannels: () => Object.keys(RADIO_CH),
     setEnabled,
     enabled,
     startEngine,

@@ -22,6 +22,10 @@ exception: the commands below (they write only to `artifacts/`, and the
    `batches` as **notRun** — the parent starts those.
 3. Report the JSON verdict VERBATIM. If a fast-gate phase failed, include
    the last 30 log lines for that phase.
+4. Say in one line that a green verdict here is **rung 2 of AGENTS.md rule 3**,
+   not a pre-push pass: `--fast` runs `test:tooling-fast` (208 of 278 unit
+   files), and only `node tools/ci/deploy.mjs --gate-only` runs what the
+   deploy runs. The parent decides whether to climb; do not run it yourself.
 
 ## `--base <ref>` mode — is this failure pre-existing?
 
