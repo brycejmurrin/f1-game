@@ -688,7 +688,12 @@ const Parts = (function () {
     const key = `${id}|${team && team.engine || ""}`;
     let resolved = factoryCache.get(key);
     if (!resolved) {
-      resolved = resolveSetup(FACTORY_PRESETS[id] || DEFAULTS, team);
+      // A TEAM MAY CARRY ITS OWN FACTORY SETUP. FACTORY_PRESETS is keyed by a
+      // team id this file knows, so a team minted at runtime — a legend duel
+      // rival (js/data/legends.js raceTeam) — silently took DEFAULTS and raced a
+      // modern chassis. `team.factory` lets the team state its own build; the
+      // preset table stays the answer for everyone who does not.
+      resolved = resolveSetup((team && team.factory) || FACTORY_PRESETS[id] || DEFAULTS, team);
       factoryCache.set(key, resolved);
     }
     return resolved;

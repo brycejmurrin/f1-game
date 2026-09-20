@@ -29,7 +29,7 @@ const FILE_SCHEMA = {
 
 phase('Audit')
 const allFiles = await agent(`${COMMON}
-List every test file: run ls tests/*.spec.js tests/*.test.mjs tests/*.test.cjs (plus tests/manual/*.spec.js). Return them as JSON.`,
+List every test file: run ls tests/specs/*.spec.js tests/unit/*.test.mjs tests/unit/*.test.cjs tests/manual/*.spec.js (the suites live in tests/specs/ and tests/unit/ — a bare tests/*.spec.js glob matches nothing and returned an empty inventory). Return them as JSON.`,
   { label: 'inventory', phase: 'Audit', effort: 'low', schema: { type: 'object', required: ['files'], properties: { files: { type: 'array', items: { type: 'string' } } } } })
 
 const files = allFiles.files

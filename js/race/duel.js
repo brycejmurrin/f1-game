@@ -71,11 +71,22 @@ const Duel = (function () {
    * tier-relative draw, so no BUMP is applied on top. Fangio arrives at his own
    * numbers, not at a midfielder's plus ten.
    *
-   * The rival keeps his CAR. Swapping the team object would change the id every
-   * decal atlas and mesh cache is keyed by (js/car/liverytex.js), so a legend
-   * rival races in the machinery he was given, with his name on the timing
-   * screen. Giving him his own livery is a caching change, not a data one, and
-   * is deliberately not smuggled in here. */
+   * AND HIS CAR, when the caller hands one over. This used to stop at the name:
+   * Schumacher arrived in whatever machine the grid slot held, so a duel against
+   * him was a 2026 Red Bull with MSC on the timing screen — the first thing a
+   * player notices and the reason it is fixed here.
+   *
+   * `legend.team` is the rival's own team object (js/data/legends.js raceTeam):
+   * a per-legend id nothing else is keyed by, his tribute palette and the period
+   * setup that gives the era's silhouette. The caller builds it, so this file
+   * keeps knowing nothing about the legend table.
+   *
+   * ONLY THE LOOK MOVES. tierV, aeroLoad and the ERS profile are baked from the
+   * team in makeCars(), which has already run by the time a duel is trimmed, so
+   * reassigning `team` cannot reach them. That is deliberate and worth keeping:
+   * the benchmark's pace stays exactly what the five axes above say it is, and a
+   * tribute livery can never become a performance change. `color` is the same
+   * bake, but it is UI (timing screen, minimap), so it follows the paint. */
   function asLegend(c, legend, DriverRatings) {
     if (!c || !legend) return c;
     const r = legend.ratings || null;
@@ -84,6 +95,11 @@ const Duel = (function () {
     c.craft = (r.craft || 75) / 100; c.awareness = (r.awareness || 75) / 100;
     c.experience = (r.experience || 75) / 100; c.consistency = (r.consistency || 75) / 100;
     c.name = legend.name; c.code = legend.code;
+    if (legend.team) {
+      c.team = legend.team;
+      c.color = legend.team.color;
+      if (legend.team.drivers[0].num != null) c.num = legend.team.drivers[0].num;
+    }
     c.duelRival = true; c.legendId = legend.id;
     return c;
   }

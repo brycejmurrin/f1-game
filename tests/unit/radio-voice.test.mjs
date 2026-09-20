@@ -577,3 +577,31 @@ test("the settings preview counts too — it speaks directly, bypassing plan()",
   voice.preview("control");
   assert.ok(voice.debug().asked > 0, "a preview must be counted like any other attempt");
 });
+
+test("every channel the radio partitions into is a considered decision in the engine", () => {
+  // TWO TABLES, ONE FACT. RadioVoice.SPEAKERS maps a `kind` onto a channel and
+  // js/audio/engine.js RADIO_CH gives that channel its click, hiss and squelch.
+  // A channel added to one and forgotten in the other is silent — which is the
+  // right default, and exactly why it would never be noticed. This is what makes
+  // the silence deliberate.
+  const RV = load().RV;
+  const engine = read("js/audio/engine.js");
+  const table = engine.match(/const RADIO_CH = Object\.freeze\(\{([\s\S]*?)\}\);/);
+  assert.ok(table, "could not find RADIO_CH in js/audio/engine.js");
+  const voiced = new Set([...table[1].matchAll(/^\s*(\w[\w-]*):/gm)].map((m) => m[1]));
+  // `coach` is the deliberate omission: the driving coach is not on a radio.
+  const SILENT = new Set(["coach"]);
+  for (const ch of new Set(Object.values(RV.SPEAKERS)))
+    assert.ok(voiced.has(ch) || SILENT.has(ch),
+      `channel "${ch}" has no entry in RADIO_CH and is not in this test's silent set — decide which`);
+  for (const ch of voiced)
+    assert.ok(!SILENT.has(ch), `"${ch}" is listed as silent here but RADIO_CH gives it a sound`);
+});
+
+test("the sting is gated on the session, exactly as plan() is", () => {
+  // showAnnounce draws MENU cards too — the title screen's save-conflict card is
+  // the one plan() names. A radio squelch under it claims a transmission that is
+  // not happening, on a screen where no car is running.
+  const game = read("js/game.js");
+  assert.match(game, /if \(state === "race" \|\| state === "count"\) GameAudio\.radioSting\(/);
+});

@@ -8,6 +8,12 @@
 //   node tools/shot/apex-eval.mjs spa    "a.corners().length"
 //   node tools/shot/apex-eval.mjs monza  "(a.go(), a.jump(0.2,55), a.physState())"
 //   node tools/shot/apex-eval.mjs monza  "a.trackProfile(6)" --raw     # full JSON, no shape-compaction
+//   node tools/shot/apex-eval.mjs monza  "a.info()" --backend webgl2       # GLX, not the TLX default
+//
+// --backend three|webgl2|webgpu pins apex26.gfxBackend (default: three, the
+// shipped default). ALWAYS pass it when the expr names a backend global:
+// the pick is descriptor-copied onto `GLX`, so `GLX.x()` under the default
+// returns TLX's answer. The resolved pin is echoed on stderr.
 //
 // `a` is window.__apex inside the expr. Async expr is awaited. Default output
 // is shape-compacted (keys + sampled types + rounded numbers); --raw dumps the
@@ -24,7 +30,26 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, 
 
 const argv = process.argv.slice(2);
 const raw = argv.includes("--raw");
-const rest = argv.filter((a) => a !== "--raw");
+// WHICH RENDERER ANSWERED. This tool pinned no backend, so it booted whatever
+// `backendPreference()` defaults to — and that default is now THREE (TLX), not
+// GLX. Because a backend is descriptor-copied ONTO the `GLX` global, an expr
+// reading `GLX.hdrMode()` gets TLX's answer under GLX's name and reports it as
+// verified GLX. Pin the backend explicitly and print the pin, so a recipe can
+// never silently measure a renderer it did not ask for.
+const BACKENDS = ["three", "webgl2", "webgpu"];
+let backend = "three";
+const rest = [];
+for (let i = 0; i < argv.length; i++) {
+  const a = argv[i];
+  if (a === "--raw") continue;
+  const m = /^--backend(?:=(.*))?$/.exec(a);
+  if (m) { backend = m[1] != null ? m[1] : argv[++i]; continue; }
+  rest.push(a);
+}
+if (!BACKENDS.includes(backend)) {
+  console.error(`apex-eval: --backend must be one of ${BACKENDS.join(" | ")} (got "${backend}")`);
+  process.exit(2);
+}
 const track = rest[0] || "monza";
 const expr = rest[1] || "a.info()";
 
@@ -56,6 +81,14 @@ const SHAPE = function () {
       args: ["--use-angle=swiftshader", "--enable-unsafe-webgpu", "--disable-background-timer-throttling"],
     });
     const page = await browser.newPage({ viewport: { width: 844, height: 390 } });
+    await page.addInitScript((be) => {
+      try {
+        localStorage.setItem("apex26.gfxBackend", be);
+        if (be === "three") localStorage.setItem("apex26.tlxForceGL", "1");
+        if (be === "webgpu") localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
+      } catch (_) { /* blocked storage: the page falls back to its own default */ }
+    }, backend);
+    console.error(`apex-eval: backend=${backend} track=${track}`);
     await page.goto(srv.url);
     await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
     await page.evaluate(SHAPE);
