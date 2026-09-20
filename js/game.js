@@ -2629,7 +2629,7 @@ async function startRace() {
     const rival = Duel.pick(cars);
     if (rival) {
       const lg = (duelLegend && typeof Legends !== "undefined") ? Legends.byId(duelLegend) : null;
-      if (lg) Duel.asLegend(rival, { id: lg.id, name: lg.name, code: lg.code, ratings: Legends.ratings(lg.id) }, DriverRatings);
+      if (lg) Duel.asLegend(rival, { id: lg.id, name: lg.name, code: lg.code, ratings: Legends.ratings(lg.id), team: Legends.raceTeam(lg.id) }, DriverRatings);
       else Duel.bump(rival, DriverRatings);
       cars = [player, rival];
     }

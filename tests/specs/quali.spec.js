@@ -379,6 +379,7 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
   test("ON runs the session and the grid comes out of it", async ({ page }) => {
     test.slow();   // stages a circuit twice over software GL
     await toSettings(page);
+    await openField(page);
     await pickGrid(page, 1);
     await page.locator("#rs-go").click();
     await expect(page.locator("#quali")).toBeVisible({ timeout: 60_000 });
