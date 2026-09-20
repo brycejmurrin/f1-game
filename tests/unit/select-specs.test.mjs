@@ -17,6 +17,7 @@ import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity, declaredTests } from "../../tools/ci/select-budget.mjs";
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -116,6 +117,29 @@ test("TRACKED covers the paths that make a selection meaningless", () => {
   for (const f of ["js/game.js", "js/track/tracks.js", "tests/specs/smoke.spec.js",
                    "css/hud.css", "docs/TESTING.md"])
     assert.ok(!TRACKED.some((re) => re.test(f)), `${f} must NOT be tracked`);
+  // ...and the four tools that MOVED to tools/ci/, which is the drift this list
+  // actually suffered: the entry named them at the tools/ root, so each matched
+  // nothing and a selector edit stopped flagging itself as infra.
+  for (const f of ["tools/ci/pick-tests.mjs", "tools/ci/select-specs.mjs",
+                   "tools/ci/select-budget.mjs", "tools/ci/run-playwright.mjs"])
+    assert.ok(TRACKED.some((re) => re.test(f)), `${f} must be a tracked path`);
+});
+
+test("every TRACKED pattern matches a file that exists", () => {
+  // THE LINT THAT WOULD HAVE CAUGHT IT, and the reason pick-tests has no dead
+  // rules: tests/unit/pick-tests.test.mjs:120 has run exactly this check over
+  // RULES for months. TRACKED never had it, so four dead alternatives sat in
+  // one regex, silently, while the hand-listed examples above all passed —
+  // they only ever probed the members someone thought to name.
+  //
+  // A dead pattern here FAILS OPEN: it selects nothing, flags nothing, and
+  // every run still looks green. Checked against `git ls-files` because these
+  // patterns name workflows, tests/data and the shell, which no manifest lists.
+  const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" })
+    .trim().split("\n");
+  const dead = TRACKED.filter((re) => !tracked.some((f) => re.test(f))).map(String);
+  assert.deepEqual(dead, [],
+    "a TRACKED pattern matches no file in the tree — re-point it at where the file went, or drop it");
 });
 
 test("the import graph finds specs a path RULE cannot — helper -> spec", () => {

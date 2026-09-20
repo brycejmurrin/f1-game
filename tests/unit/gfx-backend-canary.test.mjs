@@ -36,6 +36,40 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 // Comment-stripped source: a pin can only match code, and a comment can
 // neither fail nor satisfy it.
 const code = (p) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+/** The span between two source needles, ASSERTING BOTH EXIST FIRST.
+ *
+ * `src.slice(src.indexOf(a), src.indexOf(b))` is the shape that disarmed this
+ * file: `indexOf` answers -1 for a needle that moved, `slice(-1, -1)` is "",
+ * and every assertion on an empty span passes. Measured 2026-09-20 — the
+ * adapter-verdict pin below sliced on `_softAdapter = !!(` while tlx.js had
+ * long since become `_softAdapter = !isMobile && !!(`, so two named guards
+ * ("must not treat headless as software", "empty adapter.info must not be a
+ * software verdict") had never checked anything. They were green the whole
+ * time, which is worse than absent: the file reported coverage it did not have.
+ *
+ * Prefer fnBody() when the span IS a function. Use this when it is not, and
+ * never reach for a bare indexOf again — a pin that cannot fail is not a pin.
+ */
+function span(src, from, to, what) {
+  const a = src.indexOf(from);
+  assert.ok(a >= 0, `${what}: the start needle moved — ${JSON.stringify(from)} is no longer in the source`);
+  const b = src.indexOf(to, a + 1);
+  assert.ok(b > a, `${what}: the end needle moved — ${JSON.stringify(to)} is not after the start`);
+  return src.slice(a, b);
+}
+/** Like span(), but anchored from the END: the LAST `from` before `to`.
+ *
+ * For a name that is declared once and assigned later, a forward indexOf finds
+ * the DECLARATION — a span that is technically non-empty and still the wrong
+ * region, which is the quieter half of the same trap.
+ */
+function spanBack(src, from, to, what) {
+  const b = src.indexOf(to);
+  assert.ok(b >= 0, `${what}: the end needle moved — ${JSON.stringify(to)} is no longer in the source`);
+  const a = src.lastIndexOf(from, b - 1);
+  assert.ok(a >= 0, `${what}: no ${JSON.stringify(from)} before the end needle`);
+  return src.slice(a, b);
+}
 /** Brace-matched body of `function name(` (or `name(args) {` for a method). */
 function fnBody(src, name) {
   const m = src.match(new RegExp(`(?:function\\s+)?${name}\\s*\\([^)]*\\)\\s*\\{`));
@@ -696,7 +730,7 @@ test("applyBackend clears session renderer latches before reload", () => {
   // Switching WEBGL2 ↔ THREE ↔ WEBGPU must not inherit wgxHoldPresent /
   // tlxAutoGL from the previous path; RESET already wiped them, a pick did not.
   const src = read("js/perf/renderer-picker.js");
-  const fn = src.slice(src.indexOf("function applyBackend("), src.indexOf("function rendererSlot("));
+  const fn = span(src, "function applyBackend(", "function rendererSlot(", "applyBackend");
   assert.match(fn, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
     "applyBackend must clear every RENDERER_SS_KEYS latch, not only gfxBound");
   assert.doesNotMatch(fn, /clearRendererStorage\(\)/,
@@ -705,10 +739,10 @@ test("applyBackend clears session renderer latches before reload", () => {
 
 test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () => {
   const src = read("js/perf/renderer-picker.js");
-  const three = src.slice(src.indexOf("function applyThreePath("), src.indexOf("function readShotMode("));
+  const three = span(src, "function applyThreePath(", "function readShotMode(", "applyThreePath");
   assert.match(three, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
     "THREE PATH reload must wipe the same session latches as applyBackend");
-  const shot = src.slice(src.indexOf("function applyShotMode("), src.indexOf("function presentStatus("));
+  const shot = span(src, "function applyShotMode(", "function presentStatus(", "applyShotMode");
   assert.match(shot, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
     "SCREENSHOTS reload must drop inherited hold/claim latches before writeShotMode");
 });
@@ -1999,7 +2033,7 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "snapCam calls gfx.invalidateSoftPresent — GLX must define it (WGX already does)");
   assert.match(src, /invalidateSoftPresent,/,
     "invalidateSoftPresent must be on the GLX export surface");
-  const awaitFn = src.slice(src.indexOf("function awaitSoftPresent"), src.indexOf("function init(canvasEl)"));
+  const awaitFn = span(src, "function awaitSoftPresent", "function init(canvasEl)", "awaitSoftPresent");
   assert.match(awaitFn, /const start = _softBlitGen/,
     "GLX must wait for a newer blit, not return the last gen already on the overlay");
   assert.doesNotMatch(awaitFn, /_softLastMaxPx\s*>=\s*8\s*&&\s*_softBlitGen\s*>\s*0/,
@@ -2018,7 +2052,7 @@ test("menuBlank hides #game-soft with #game", () => {
 
 test("SAVE SCREENSHOT reads #game-soft when the overlay exists", () => {
   const src = read("js/perf/renderer-picker.js");
-  const fn = src.slice(src.indexOf("function saveScreenshot()"), src.indexOf("function ensureAdvHost()"));
+  const fn = span(src, "function saveScreenshot()", "function ensureAdvHost()", "saveScreenshot");
   assert.match(fn, /getElementById\("game-soft"\)/,
     "HeadlessChrome GLX hides #game; the PNG must come from the 2D overlay");
   assert.match(fn, /hrefFromPixels/,
@@ -2308,13 +2342,21 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // Apple/Metal runner, the project's only real GPU, take the software half of
   // every content skip. It belongs to _softBlit, which exists precisely because
   // a headless swapchain does not composite.
-  const sniff = src.slice(src.indexOf("let _softAdapter = false;"),
-    src.indexOf("let forceWebGL"));
+  const sniff = span(src, "let _softAdapter = false;", "let forceWebGL", "adapter sniff block");
   // The VERDICT expression itself, not the surrounding block: _headless is
   // declared in this region on purpose (the blit needs it), so slicing wider
   // would assert against its own definition.
-  const verdict = src.slice(src.indexOf("_softAdapter = !!("),
-    src.indexOf("} catch (_) { _softAdapter = false;"));
+  // The start needle is the ASSIGNMENT, not the expression that follows it:
+  // pinning `_softAdapter = !!(` broke the moment a `!isMobile &&` guard was
+  // inserted ahead of the `!!(`, and took both assertions below with it.
+  const verdict = spanBack(src, "_softAdapter =", "} catch (_) { _softAdapter = false;",
+    "adapter verdict expression");
+  // ANTI-VACUITY. The span must be the ASSIGNMENT, not the `let _softAdapter =
+  // false;` declaration a forward search lands on — both contain the needle,
+  // and only one is the verdict. If this stops matching, the two pins below
+  // are asserting about the wrong region and must be re-anchored, not deleted.
+  assert.match(verdict, /!!\s*\(/,
+    "the adapter verdict must be the sniff EXPRESSION — re-anchor this span, the pins below depend on it");
   assert.doesNotMatch(verdict, /HeadlessChrome/,
     "the adapter verdict must not treat headless as software — that is a presentation fact");
   assert.match(src, /_softBlit\s*=\s*!forceWebGL\s*&&\s*_capPref\s*!==\s*"0"\s*&&\s*!!\s*\(\s*_softAdapter\s*\|\|\s*_headless\s*\|\|\s*_capPref\s*===\s*"1"\s*\)/,
