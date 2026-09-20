@@ -225,6 +225,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // the one-seat rule — drivers.length is 12, so anything counting seats by
   // it puts twelve legends on the grid.
   "tests/unit/legends-team.test.mjs",
+  // …and the PERIOD CAR reaching the garage SHEET, not just the team
+  // record. Twelve legends share one `legends` id, so the write policy is
+  // the behaviour: seed an empty sheet, reseed on a real switch, never on a
+  // boot or a same-seat re-sync (that would wipe a paid-for build).
+  "tests/unit/legend-parts-seed.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
   // The duration HISTORY behind the budget: junit/live-reporter merge,
