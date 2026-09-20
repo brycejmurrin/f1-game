@@ -22,12 +22,25 @@ const Announcer = (function () {
   // macOS/iOS, so on every other platform the name is worthless and the LANGUAGE
   // is what carries the character. Ordered, first match wins, and a player's
   // explicit pick in settings always outranks the whole list.
+  const GB = (v) => /^en[-_]?GB/i.test(v.lang || "");
   const PREFERRED = Object.freeze([
-    (v) => /^daniel\b/i.test(v.name) && /^en[-_]?GB/i.test(v.lang || ""),
+    // APPLE'S DOWNLOADABLE VARIANTS OF THE SAME VOICE. The compact "Daniel" is
+    // what ships; Enhanced and Premium are the same character at a quality the
+    // compact one cannot reach, and a player who has downloaded one should hear
+    // it rather than the version that happens to sort first.
+    (v) => /^daniel\b/i.test(v.name) && /\((enhanced|premium)\)/i.test(v.name),
+    // MICROSOFT'S NEURAL VOICES — the top quality tier of the curated
+    // cross-platform list (readium/speech), and en-GB male is Ryan or Thomas.
+    // "Online" is in the NAME, which is exactly why these were unreachable
+    // while this channel inherited the radio's localService filter.
+    (v) => /\b(ryan|thomas)\b/i.test(v.name) && /\(natural\)/i.test(v.name) && GB(v),
+    (v) => /\(natural\)/i.test(v.name) && GB(v) && !/\b(sonia|libby|maisie)\b/i.test(v.name),
+    (v) => /^google uk english male/i.test(v.name),   // Chrome's own, also remote
+    (v) => /^daniel\b/i.test(v.name) && GB(v),
     (v) => /^daniel\b/i.test(v.name),
     (v) => /^(arthur|oliver|george|malcolm)\b/i.test(v.name),   // other en-GB males across platforms
-    (v) => /^en[-_]?GB/i.test(v.lang || "") && !/female/i.test(v.name),
-    (v) => /^en[-_]?GB/i.test(v.lang || ""),
+    (v) => GB(v) && !/female/i.test(v.name),
+    (v) => GB(v),
     (v) => /^en/i.test(v.lang || ""),
   ]);
 
@@ -164,6 +177,11 @@ const Announcer = (function () {
       return inert();
     }
     let speaking = null;
+    /* THE CHAIN'S IDENTITY. The script is spoken one LINE per utterance (see
+     * speak), so a cancelled read has a queued onend that would otherwise wake
+     * up and carry on talking over whatever replaced it. Bumped by stop(), and
+     * captured by each chain, so exactly one chain is ever live. */
+    let generation = 0;
     // ON by default: this is the feature's whole point, and the player has a
     // row to turn it off. The radio defaults OFF because it interrupts a race;
     // this one talks over a screen whose entire job is to be waited through.
@@ -179,6 +197,7 @@ const Announcer = (function () {
     }
 
     function stop() {
+      generation++;            // before cancel(): a queued onend must already see itself as stale
       speaking = null;
       try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
     }
@@ -212,32 +231,62 @@ const Announcer = (function () {
     /** Speak `lines` now. `budgetMs` is the loading screen's own window, so the
      *  announcer is cut off by the same skip that ends the flyby rather than
      *  talking over the grid. */
+    /* ONE UTTERANCE PER LINE, chained — not one blob for the whole script.
+     *
+     * TWO REASONS, AND THE FIRST IS A BUG. Chrome Desktop silently fails an
+     * utterance past roughly fourteen seconds; it is the long-standing defect
+     * every "speech synthesis stops on long text" workaround exists for. MEASURED
+     * against the real scripts at this channel's own rate: Silverstone 15.4 s,
+     * Monaco 18.1 s, Spa at night 22.2 s, a classic circuit in the rain 26.3 s.
+     * Not one of them fits, so on Chrome the welcome was being cut off mid-read.
+     *
+     * The second is that it simply sounds better. Phrasing — where the pauses
+     * fall — is the main thing separating a read from a recital, and script()
+     * already returns one SENTENCE per entry (its own comment says the array is
+     * so a caller can drop the tail). The old join(" ") threw that structure
+     * away and asked the engine to re-derive it from punctuation.
+     */
     function speak(lines, budgetMs) {
       // MASTER SOUND gates this like everything else. speechSynthesis is not in
       // the WebAudio graph, so nothing else silences it — a player who turned
       // sound off and then heard a voice would have found a bug, not a feature.
       if (!G.soundOn) return false;
-      const text = Array.isArray(lines) ? lines.join(" ") : String(lines || "");
-      const said = RadioVoice.speakable ? RadioVoice.speakable(text) : text;
-      if (!said) return false;
+      const parts = (Array.isArray(lines) ? lines : [lines])
+        .map((l) => { const t = String(l == null ? "" : l); return RadioVoice.speakable ? RadioVoice.speakable(t) : t; })
+        .filter(Boolean);
+      if (!parts.length) return false;
       stop();
       const tune = (G.radio && G.radio.tuneFor && G.radio.tuneFor(CHANNEL)) || { pitch: 1, rate: 1, name: "" };
-      const list = (G.radio && G.radio.voiceList && G.radio.voiceList()) || [];
+      // The ANNOUNCER's list, which includes network voices — this channel has no
+      // card to miss, and the good voices are all remote (RadioVoice.REMOTE_OK).
+      const list = (G.radio && G.radio.voiceList && G.radio.voiceList(CHANNEL)) || [];
       const want = pickVoice(list, tune.name);
-      const u = new Utter(said);
       // voiceList() reports {name, lang}; the live SpeechSynthesisVoice has to
-      // come from the synth itself, matched by name.
+      // come from the synth itself, matched by name. Resolved ONCE for the whole
+      // script rather than per line.
+      let voice = null;
       if (want) {
-        try { u.voice = (synth.getVoices() || []).find((v) => v.name === want.name) || null; } catch (_) { /* mid-teardown */ }
+        try { voice = (synth.getVoices() || []).find((v) => v.name === want.name) || null; } catch (_) { /* mid-teardown */ }
       }
-      u.pitch = tune.pitch; u.rate = tune.rate; u.volume = volume();
-      u.onend = u.onerror = () => { speaking = null; };
-      try { synth.speak(u); } catch (e) { Log.info("audio", "Announcer speak failed"); return false; }
-      // Bugzilla 1522074, the same one radio-voice.js documents: a speak()
-      // straight after a cancel() is silently dropped, and resume() is the fix.
-      try { synth.resume(); } catch (e) { /* nothing was paused */ }
-      speaking = u;
-      if (budgetMs > 0) setTimeout(() => { if (speaking === u) stop(); }, budgetMs);
+      const vol = volume();
+      const gen = ++generation;
+      let i = 0;
+      const next = () => {
+        if (gen !== generation) return;              // a newer read, or stop(), owns the synth now
+        if (i >= parts.length) { speaking = null; return; }
+        const u = new Utter(parts[i++]);
+        u.voice = voice; u.pitch = tune.pitch; u.rate = tune.rate; u.volume = vol;
+        u.onend = u.onerror = () => { if (gen === generation) next(); };
+        speaking = u;
+        try { synth.speak(u); } catch (e) { Log.info("audio", "Announcer speak failed"); speaking = null; return; }
+        // Bugzilla 1522074, the same one radio-voice.js documents: a speak()
+        // straight after a cancel() is silently dropped, and resume() is the fix.
+        try { synth.resume(); } catch (e) { /* nothing was paused */ }
+      };
+      next();
+      // The loading screen's window still cuts the WHOLE read, not just the line
+      // in progress — the flyby ending is what ends the announcer.
+      if (budgetMs > 0) setTimeout(() => { if (gen === generation) stop(); }, budgetMs);
       return true;
     }
 

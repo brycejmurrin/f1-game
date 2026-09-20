@@ -40,37 +40,52 @@ test("billboards with a normal gap are built: Qatar and Monaco lose none to the 
   }
 });
 
-test("bakedModel rides the scenery transform, ONE ARGUMENT RIGHT of the others", () => {
-  /* A baked asset stands in for a WRAPPED procedural call at the same (k, side),
-     so it must take the same origin shift and reverse flip; unwrapped it stood
-     2/3 of a lap away on every shifted circuit that ships one.
-
-     THIS TEST USED TO ASSERT THE BUG. It required "bakedModel" to be IN the
-     (k, side) name list — but bakedModel is (id, k, side, …), the one emitter
-     whose first argument is not a position. In that list its wrapper handed the
-     MODEL-ID STRING to RK(), Math.round("kenney_…") gave NaN, modelSync(NaN)
-     missed, and bakedModel returned false — which every call site reads as "no
-     baked asset, draw the procedural box". So all five circuits that ship baked
-     geometry silently drew fallbacks, and this assertion held the wiring in
-     place. Measured on a live Monza build before the fix: 56 modelSync calls,
-     every id NaN, zero hits, 36 models resident.
-
-     The rule the comment always meant is still asserted, and now correctly:
-     bakedModel is NOT in the (k, side) group, and it HAS a wrapper of its own
-     that passes id through untouched while giving k and side the same RK/SIDE
-     treatment every other emitter gets. */
+test("bakedModel rides the scenery transform like the fallback it replaces", () => {
+  // A baked asset stands in for a WRAPPED procedural call at the same (k, side),
+  // so it must take the same origin shift and reverse flip; unwrapped it stood
+  // 2/3 of a lap away on every shifted circuit that ships one.
+  //
+  // But it CANNOT ride the (k, side) list, which remaps argument 0: bakedModel's
+  // argument 0 is the model ID. It sat in that list from the day it was written,
+  // so RK() was handed a string and the real k was read as the side — see the
+  // behavioural test below for what that cost. This guard now pins the shape the
+  // signature actually needs: out of the list, and its own wrapper.
   const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
   const i = src.indexOf("function transformSceneryApi(");
   assert.ok(i >= 0);
-  const body = src.slice(i);
-  const kSide = body.match(/for \(const name of \[([^\]]*)\]\) \{\s*const f = api\[name\]; if \(f\) w\[name\] = \(k, side, \.\.\.r\)/);
+  const kSide = src.slice(i).match(/for \(const name of \[([^\]]*)\]\) \{\s*const f = api\[name\]; if \(f\) w\[name\] = \(k, side, \.\.\.r\)/);
   assert.ok(kSide, "the (k, side) wrapper list exists");
-  assert.ok(!/"bakedModel"/.test(kSide[1]),
-    "bakedModel is (id, k, side, …); in the (k, side) group its wrapper feeds the model-ID string to RK()");
-  // …and it is wrapped, not merely excluded: an UNwrapped bakedModel is the
-  // 2/3-of-a-lap defect the original comment was written about.
-  assert.match(body, /w\.bakedModel = \(id, k, side, \.\.\.r\) => f\(id, RK\(k\), SIDE\(side\), \.\.\.r\)/,
-    "bakedModel needs its own wrapper: id straight through, k and side transformed");
+  assert.doesNotMatch(kSide[1], /"bakedModel"/,
+    "bakedModel takes (id, k, side, …): in the (k, side) list its ID is remapped as a node");
+  assert.match(src.slice(i), /w\.bakedModel = \(id, k, side, \.\.\.r\) => api\.bakedModel\(id, RK\(k\), SIDE\(side\), \.\.\.r\)/,
+    "bakedModel still needs the shift and the reverse flip — on its own k, not on its id");
+});
+
+test("every bakedModel call reaches Assets with the model id it asked for", () => {
+  // The source guard above is the mechanism; this is the consequence, measured
+  // on the real circuits. Before the dedicated wrapper, all 152 calls across the
+  // five circuits that ship baked props arrived at Assets.modelSync as NaN — or,
+  // on a source-space def like monaco, as a node number coerced out of the id.
+  // modelSync matched nothing, bakedModel returned false every time, and the
+  // whole baked pack was dead on every circuit that asks for one. It was
+  // invisible because the documented `if (!bakedModel(…)) procedural(…)` shape
+  // quietly drew the fallback — and the sweeps cannot see it either, since no
+  // node harness defines Assets at all, so this test defines one.
+  const { buildContext: vmContext } = require("../../tools/lib/track-build-vm.cjs");
+  const ctx = vmContext();
+  const seen = [];
+  ctx.sandbox.Assets = { modelSync: (id) => { seen.push(id); return null; } };
+  const bad = [];
+  for (const id of ["vegas", "monaco", "spa", "monza", "silverstone"]) {
+    const from = seen.length, mark = ctx.mark();
+    ctx.Tracks.build(ctx.Tracks.LIST.find((d) => d.id === id), 1200);
+    ctx.trim(mark);
+    const mine = seen.slice(from);
+    assert.ok(mine.length > 0, `${id} ships baked props — it must reach Assets at all`);
+    for (const got of mine) if (typeof got !== "string") bad.push(`${id}: ${String(got)}`);
+  }
+  assert.deepEqual(bad.slice(0, 8), [],
+    `${bad.length} bakedModel calls reached Assets.modelSync with something other than a model id`);
 });
 
 test("the backdrop guard RECORDS its drops — it was the one emitter that did not", () => {

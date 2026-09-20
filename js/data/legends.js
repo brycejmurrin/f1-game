@@ -289,6 +289,16 @@ const Legends = (function () {
       // parts sheet are all keyed by it (js/car/liverytex.js), so "legends" is
       // what keeps a legend's car from overwriting the player's own.
       id: "legends", legends: true, legend: l.id,
+      /* THE PERIOD CAR IS THE TEAM'S FACTORY BUILD, for the player's slot as
+         well as a rival's. Nothing ever seeded it: parts() had no caller until
+         raceTeam, so picking Fangio in the garage handed you a 2026 chassis in
+         Silver Arrow paint while DUELLING him produced the 1954 car — spoked
+         wheels, no wings, a bare floor. Same legend, two different machines,
+         depending on which side of the grid you stood on.
+         Safe as a FACTORY value: a saved sheet still wins (getTeamParts), and
+         every period setup fits the 780 budget, which is the whole reason this
+         file spends on silhouette rather than stats. */
+      factory: parts(l.id),
       /* THE MARQUE CREST, where the game has one — so a legend wears the badge of
        * the car he is: Ferrari, McLaren, Williams, Red Bull, Mercedes.
        *

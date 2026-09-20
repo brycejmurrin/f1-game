@@ -2239,12 +2239,74 @@ const GameAudio = (function () {
      construction, which is the safe direction for a table keyed by a string
      that arrives from js/game.js. */
   const RADIO_CH = Object.freeze({
-    control: { click: 0.05, hiss: 0.012, tail: 0,    hi: 4200 },
-    radio:   { click: 0.09, hiss: 0.030, tail: 0.13, hi: RADIO_HI },
+    control: { click: 0.05, hiss: 0.012, tail: 0,    hi: 4200,    tone: 1000, toneS: 0.15, toneAmp: 0.030 },
+    radio:   { click: 0.09, hiss: 0.030, tail: 0.13, hi: RADIO_HI, tone: 800,  toneS: 0.17, toneAmp: 0.038 },
   });
   const RADIO_FX_MAX = 1.5;
   let radioFx = 1;        // the player's level; 0 is off
   let radioBed = null;    // the live hiss, or null
+
+  /* THE COURTESY TONE — the beep before the message.
+   *
+   * THIS CODE USED TO ARGUE ITSELF OUT OF EXISTING. The key-up below carried a
+   * comment saying a tone "reads as a beep, and a beep is a walkie-talkie
+   * convention F1 does not have". That is simply wrong: F1 team radio has one,
+   * it is called a COURTESY TONE, and to anyone who watches the sport it is the
+   * most recognisable thing about team radio — you hear the beep, then the
+   * driver.
+   *
+   * GENERIC, NOT A COPY, for two reasons that point the same way. F1's own tone
+   * is not published — the one public thread asking for its frequency has no
+   * answer — so an "exact" number here would be invented and dressed up as
+   * research. And a distinctive broadcast signature is the kind of thing sound
+   * trademarks exist for, which an unofficial fan game should not be cloning.
+   * So this is a tone in the documented tradition rather than a reproduction.
+   *
+   * THE TRADITION IS WELL SPECIFIED even where F1's instance is not — but only
+   * half of it transfers, and the first cut of this shipped the wrong half.
+   *
+   * NASA's Quindar tones marked the start and end of a transmission at 2525 Hz
+   * and 2475 Hz for 250 ms. Those are the numbers everyone quotes, and they are
+   * the answer to a problem THIS TONE DOES NOT HAVE: Quindar was IN-BAND
+   * SIGNALLING. Its tones rode the same telephone line as live speech and had
+   * to key a remote transmitter without ever being mistaken for a voice, which
+   * is what pins them just above where speech has its energy. A broadcast
+   * courtesy tone plays BEFORE the clip, sharing the channel with nothing, so
+   * it is free to sit lower and warmer — and at 2.4-2.6 kHz it lands exactly
+   * where the ear is most sensitive and reads thin and piercing instead.
+   *
+   * WHAT DOES TRANSFER is the shape: a short, near-pure sine, inside the
+   * 300 Hz-3.4 kHz voice band. That last part is also why these need no filter
+   * of their own — they are already inside the band the hiss is shaped to, so
+   * filtering would add three nodes and change nothing you can hear.
+   *
+   * THE REGISTER IS MEASURED, not guessed. The one CC0 recreation of the F1
+   * beep on Freesound (a synthesiser imitation, not a broadcast rip) FFTs to a
+   * near-pure 786 Hz, 22 dB clear of anything else — below 1 kHz, and well
+   * below where this code first put it. Its own description says "around
+   * 1-2 kHz", so even the author under-described it. Treat the REGISTER as the
+   * finding and not the number: 786 Hz is 2 Hz off G5, which means somebody
+   * played a note on a keyboard rather than matching a frequency. Hence a round
+   * 800 Hz for the engineer and 1000 Hz for race control, which keeps the two
+   * channels apart without either becoming a musical interval.
+   *
+   * Still shorter than Quindar's 250 ms, because this fires on every card
+   * rather than once per transmission, and still quiet.
+   */
+  function radioTone(hz, secs, peak, at) {
+    if (!(peak > 0) || !(hz > 0)) return;
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = hz;
+    // A softer attack than the click's 4 ms: a sine snapped on at full level
+    // clicks on its own, and two clicks is not what this is.
+    env(g, at, peak, 0.012, secs);
+    osc.connect(g).connect(sfxBus);
+    osc.start(at);
+    osc.stop(at + secs + 0.05);
+    osc.onended = () => { osc.disconnect(); g.disconnect(); };
+  }
 
   /** One band-limited noise transient — the key click and the squelch tail.
    *  Both ends of the band, unlike the plain noise() one-shots above: a click
@@ -2290,7 +2352,11 @@ const GameAudio = (function () {
     if (!sfxOk() || !ch || radioFx <= 0) return false;
     const hold = Math.max(0.25, Math.min(8, +seconds || 1.5));
     const t0 = now();
+    // KEY, THEN BEEP, THEN THE LINE — the order the ear expects: the mic opens
+    // (a click, which is a noise burst and not an oscillator), and the courtesy
+    // tone follows it a hair later rather than landing on top of it.
     radioBurst(ch.click * radioFx, 0.045, ch.hi, t0);
+    radioTone(ch.tone, ch.toneS, ch.toneAmp * radioFx, t0 + 0.03);
     const src = ctx.createBufferSource();
     src.loop = true;
     src.buffer = noisePool();

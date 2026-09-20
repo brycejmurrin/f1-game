@@ -30,10 +30,6 @@
       const k = (s) => Math.round(s * n) % n;
 
       if (circuitKit) {
-        circuitKit.pitBuilding({
-          id: "kit:silverstone:pit-building", frac: 0.97,
-          side: 1, gap: 180, size: [18, 10, 72], garages: 12, required: true,
-        });
         circuitKit.hospitality({
           id: "kit:silverstone:wing-hospitality", frac: 0.465,
           side: 1, gap: 76, size: [20, 9, 58], modules: 6,

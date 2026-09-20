@@ -220,3 +220,24 @@ test("no legend's car exceeds the parts budget", () => {
     assert.ok(cost <= P.BUDGET, `${l.id}: ${cost} over the ${P.BUDGET} budget`);
   }
 });
+
+/* THE SAME LEGEND IS THE SAME CAR ON BOTH SIDES OF THE GRID. team() is the
+   slot the player drives and raceTeam() is the rival he duels, and only the
+   second one carried the period build: parts() had no caller until raceTeam,
+   so picking Fangio in the garage gave you a 2026 chassis in Silver Arrow
+   paint while duelling him produced the 1954 car. */
+test("a legend's period car reaches the player's slot as well as a rival's", () => {
+  const P = loadParts();
+  for (const l of Legends.LIST) {
+    const per = Legends.parts(l.id);
+    for (const [who, t] of [["player", Legends.team(l.id)], ["rival", Legends.raceTeam(l.id)]]) {
+      const fs = P.getFactorySetup(t);
+      for (const k of Object.keys(per)) {
+        assert.equal(fs[k], per[k], `${l.id}: the ${who}'s ${k} must be the period part`);
+      }
+      // A FACTORY value, not a sheet — so it must still fit the garage budget,
+      // which is what stops a legend pick showing a negative balance.
+      assert.ok(P.getCost(per, t) <= P.BUDGET, `${l.id}: ${who} over the ${P.BUDGET} budget`);
+    }
+  }
+});
