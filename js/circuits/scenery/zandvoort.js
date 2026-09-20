@@ -12,8 +12,7 @@
               modelGroup, waterSurface, waterBand, groundPatch,
               mountain, peak, bush, hedge, grandstand, grandstandEx, tower, ferrisWheel,
               pine, tree, forestEdge,
-              fence, guardrail, tyreWall, billboard, gantry, marshalPost, recordBarrier,
-              circuitKit } = api;
+              fence, guardrail, tyreWall, billboard, gantry, marshalPost, recordBarrier } = api;
 
       const sand      = [0.81, 0.75, 0.58];
       const sandDk    = [0.71, 0.65, 0.48];
@@ -369,43 +368,6 @@
           addBox(stage, vadd(a.c, a.u, 0.20), [46, 0.35, 2.2], [0.86, 0.91, 0.91], b);
           addBox(stage, vadd(vadd(a.c, a.u, 0.12), a.r, 4.5),
                  [38, 0.22, 1.2], [0.72, 0.84, 0.87], b);
-        });
-      }
-
-      (() => {
-        const a = anchor(K(0.00), -1, 12), b = [a.r, a.u, a.t];
-        modelGroup("pit-building", {
-          center: vadd(a.c, a.u, 4.6),
-          size: [11, 12, 67],
-          basis: b,
-        }, (stage) => {
-          stage._mat = MAT.STONE;
-          addBox(stage, vadd(a.c, a.u, 0.45), [7.6, 0.9, 64.6], [0.52, 0.32, 0.26], b);
-          stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(a.c, a.u, 3.4), [7, 5.2, 64], [0.86, 0.87, 0.90], b);
-          for (let i = -3; i <= 3; i++)
-            addBox(stage, vadd(vadd(a.c, a.u, 3), a.t, i * 8),
-                   [7.4, 4, 1.2], [0.30, 0.32, 0.36], b);
-          stage._mat = MAT.METAL;
-          addBox(stage, vadd(a.c, a.u, 6.3), [8.5, 0.5, 66], [0.80, 0.81, 0.84], b);
-          const rc = vadd(vadd(a.c, a.t, 26), a.r, 1.6);
-          stage._mat = MAT.CONCRETE;
-          addBox(stage, vadd(rc, a.u, 8.2), [9.5, 3.4, 12], [0.90, 0.91, 0.93], b);
-          stage._mat = 0;
-          addBox(stage, vadd(vadd(rc, a.r, -4.7), a.u, 8.4), [0.25, 2.2, 11], [0.30, 0.53, 0.63], b);
-          stage._mat = MAT.METAL;
-          addBox(stage, vadd(rc, a.u, 10.1), [10.4, 0.4, 13], [0.78, 0.79, 0.82], b);
-          for (const off of [-5, 5])
-            addCyl(stage, vadd(vadd(vadd(rc, a.t, off), a.r, -4.2), a.u, 0.2), 0.2, 6.4,
-                   [0.46, 0.48, 0.52], 6, b);
-          stage._mat = 0;
-        }, { required: true });
-      })();
-
-      if (circuitKit) {
-        circuitKit.hospitality({
-          id: "kit:zandvoort:paddock-club", frac: 0.005, side: -1, gap: 30,
-          size: [16, 9, 56], modules: 6, required: true,
         });
       }
 

@@ -15,10 +15,6 @@
         circuitKit } = api;
 
       if (circuitKit) {
-        circuitKit.pitBuilding({
-          id: "kit:bahrain:pit-operations", frac: 0.992, side: -1, gap: 24,
-          size: [18, 11, 72], garages: 18, required: true,
-        });
         circuitKit.hospitality({
           id: "kit:bahrain:hospitality", frac: 0.955, side: -1, gap: 100,
           size: [18, 9, 34], modules: 4, required: true,
