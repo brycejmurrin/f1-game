@@ -279,6 +279,12 @@ if (!flag("--wait")) {
 
 const results = {};
 let allOk = true;
+// The batches the chain never reached. A red batch BREAKS the loop, and the
+// final finish() reported only `groups` — so the batches behind the break were
+// neither "pass" nor "fail" nor named anywhere, and a reader of the verdict
+// could not tell an unrun group from a green one. Every other finish() in this
+// file already carries notRun; this was the one path that dropped it.
+let notRun = [];
 for (let i = 0; i < batches.length; i++) {
   const batch = batches[i];
   say(`batch START ${i + 1}/${batches.length}: ${batch.join(" ")} at=${new Date().toISOString()} ${loadavgLine()}`);
@@ -304,7 +310,7 @@ for (let i = 0; i < batches.length; i++) {
   const dur = ((Date.now() - t0) / 1000).toFixed(1);
   say(`batch END ${i + 1}/${batches.length}: ${batch.join(" ")} duration=${dur}s ` +
     `${batch.map((g) => `${g}=${results[g]}`).join(" ")} ${loadavgLine()}`);
-  if (waited.status !== 0 && !flag("--keep-going")) break;
+  if (waited.status !== 0 && !flag("--keep-going")) { notRun = batches.slice(i + 1).flat(); break; }
 }
 
-finish(allOk ? "pass" : "fail", { groups: results });
+finish(allOk ? "pass" : "fail", { groups: results, notRun });

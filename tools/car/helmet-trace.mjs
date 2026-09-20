@@ -429,7 +429,11 @@ if (flag("fit", "")) {
         case "spot": return `z.spot(${z.az}, ${n(z.t)}, ${z.r}, ${c})`;
         case "patch": return `z.patch(${z.az}, ${z.w}, ${n(z.t0)}, ${n(z.t1)}, ${c})`;
         case "flash": return `z.flash(${z.az}, ${z.w0}, ${z.w1}, ${n(z.t0)}, ${n(z.t1)}, ${z.sweep}, ${c})`;
-        case "fleck": return `z.fleck(${n(z.t0)}, ${n(z.t1)}, ${z.n}, ${z.m}, ${z.d}, ${z.seed}, ${c})`;
+        // `fleck` was renamed `mottle` and re-signed (t0, t1, sc, w, seed, c) —
+        // this case kept the old name AND the old argument list, so every
+        // mottled design (NOR, GAS, HUL) re-emitted as a bare `/* mottle */`
+        // comment and lost its doodles on the round trip.
+        case "mottle": return `z.mottle(${n(z.t0)}, ${n(z.t1)}, ${z.sc}, ${z.w}, ${z.seed}, ${c})`;
         default: return `/* ${z.k} */`;
       }
     };

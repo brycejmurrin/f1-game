@@ -134,8 +134,13 @@ export const MAX_OVERSIZE_SHARDS = 3;
 // per-test timeout, plus setup (npm ci + chromium, ~4 min) and margin. A killed
 // job reads as "0 failures" in the aggregate, which this file's history shows
 // hiding a dead deploy, so the cap is derived, never guessed.
-export const shardTimeoutMin = (tests) =>
-  Math.min(90, Math.ceil((tests * SELECTED_GATE.perTestTimeoutSec) / 60) + 6);
+// `perTestSec` defaults to the gate's budget, but an OVER-BUDGET spec running
+// in its own shard is billed at ITS OWN declared timeout — billing a 420 s spec
+// at 180 s derives a cap below what the spec already said it needs, and a
+// killed job reads as "0 failures", which is the exact hiding this cap exists
+// to prevent.
+export const shardTimeoutMin = (tests, perTestSec = SELECTED_GATE.perTestTimeoutSec) =>
+  Math.min(90, Math.ceil((tests * perTestSec) / 60) + 6);
 
 /** Cut the spec list to what fits `budgetMin` surviving one timeout.
  *  `rank(file)` orders the cut: lower ranks fill the budget first (prioritise()
@@ -146,9 +151,15 @@ export function fit(specs, budgetMin, { rank = () => 3 } = {}) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
   const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByVmTwin = [];
+  const unreadable = [];
   for (const file of specs) {
     const tests = declaredTests(file);
-    if (tests == null) continue;
+    // A SPEC THIS TOOL CANNOT READ IS NOT A SPEC IT MAY IGNORE. This used to
+    // `continue` into no bucket at all, so a path that is missing, renamed or
+    // unparseable left the selection with no trace anywhere in the report —
+    // in a file whose whole contract is that nothing is dropped silently.
+    // Reachable today: hand fit() a path that does not exist and it disappears.
+    if (tests == null) { unreadable.push({ file, tests: null }); continue; }
     if (FIXED_GATE_SPECS.has(file)) {
       coveredByFixedGates.push({ file, tests });
       continue;
@@ -177,8 +188,20 @@ export function fit(specs, budgetMin, { rank = () => 3 } = {}) {
     // boot-heavy and previously excluded. audio-smoke measures 115.5 s SOLO on
     // an idle 4-core. Raising a gate must never enrol specs that opted out of
     // the lower one; with `>=` the boundary moves with the gate instead.
+    // OVER BUDGET IS NOT THE SAME ANSWER FOR AN EDITED SPEC AS FOR A ROUTED ONE,
+    // and this used to `continue` before either had a rank. 56 of 119 specs
+    // declare >= the gate, so 47% of the suite could never be selected — not
+    // even by a diff that edits the spec itself. Four of the five changes
+    // select-recall.mjs records as CAUGHT are in that 56, so the harness was
+    // measuring a selector the gate does not run.
+    //
+    // The `>=` reasoning below is untouched and still right: a spec that
+    // declares the whole budget has opted out of the BUDGETED shard, and
+    // raising the gate must never enrol it. What it may not do is opt out of
+    // running when you just edited it — that case has its own shard already
+    // (oversize), and it is billed at the spec's own declared figure.
     if (own >= SELECTED_GATE.perTestTimeoutSec * 1000) {
-      overBudgetSpecs.push({ file, tests, ownTimeoutSec: own / 1000 });
+      counted.push({ file, tests, overBudget: true, ownTimeoutSec: own / 1000 });
       continue;
     }
     counted.push({ file, tests });
@@ -193,6 +216,14 @@ export function fit(specs, budgetMin, { rank = () => 3 } = {}) {
   const selected = [], skipped = [], unreachable = [], oversize = [];
   let used = 0;
   for (const r of counted) {
+    // An over-budget spec never joins the budgeted shard. Affected (rank < 3)
+    // it runs alone, billed at its own declared timeout; merely routed, it is
+    // reported as over budget exactly as before.
+    if (r.overBudget) {
+      if (r.rank < 3) oversize.push(r);
+      else overBudgetSpecs.push({ file: r.file, tests: r.tests, ownTimeoutSec: r.ownTimeoutSec });
+      continue;
+    }
     // A spec bigger than the WHOLE cap can never be selected into the main
     // shard — not "did not fit today", but "cannot fit on any change, ever".
     // Naming it as merely skipped is what let multiplayer-session.spec.js (19
@@ -209,6 +240,7 @@ export function fit(specs, budgetMin, { rank = () => 3 } = {}) {
   const oversizeRun = oversize.slice(0, MAX_OVERSIZE_SHARDS);
   for (const r of oversize.slice(MAX_OVERSIZE_SHARDS)) skipped.push(r);
   return { selected, skipped, unreachable, oversize: oversizeRun, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
+    unreadable,
     testsSelected: used, testsFit: cap.tests, cap };
 }
 
@@ -219,7 +251,8 @@ export function shards(r) {
   if (r.selected.length) out.push({ name: "selected", specs: r.selected.map((s) => s.file).join(" "),
     tests: r.testsSelected, timeout: shardTimeoutMin(r.testsFit) });
   for (const s of r.oversize || []) out.push({ name: `oversize-${path.basename(s.file, ".spec.js")}`,
-    specs: s.file, tests: s.tests, timeout: shardTimeoutMin(s.tests) });
+    specs: s.file, tests: s.tests,
+    timeout: shardTimeoutMin(s.tests, s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec) });
   return out;
 }
 
@@ -237,7 +270,13 @@ export function shards(r) {
 export const TRACKED = [
   /^package(-lock)?\.json$/,          // scripts + dependency versions
   /^playwright\.config\.js$/,         // projects, timeouts, the reporter
-  /^tools\/(manifest\.cjs|pick-tests\.mjs|select-specs\.mjs|select-budget\.mjs|run-playwright\.mjs)$/,
+  // THE SELECTION MACHINERY ITSELF. These four moved from tools/ to tools/ci/
+  // and this list kept the OLD paths, so editing the selector matched no rule,
+  // selected ZERO browser specs, and printed no "SELECTION NARROWER THAN THE
+  // CHANGE" warning — the silent-when-everything-is-affected failure this whole
+  // list exists to prevent, aimed at itself. manifest.cjs is still at tools/.
+  /^tools\/manifest\.cjs$/,
+  /^tools\/ci\/(pick-tests|select-specs|select-budget|run-playwright)\.mjs$/,
   /^tests\/helpers\/(fixtures|global-setup|live-reporter)\.js$/,  // EVERY spec's plumbing
   /^\.github\//,                      // the job that runs the selection
   /^(index\.html|sw\.js|version\.json)$/,   // the shell, its precache, its cache key
@@ -421,7 +460,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `NEVER run it): ${s.file}`);
   for (const s of r.skipped) console.error(`SKIPPED (over budget): ${s.file} (${s.tests} tests)`);
   for (const s of r.oversize) console.error(
-    `OVERSIZE (affected by this change, runs in its own shard, ${shardTimeoutMin(s.tests)} min cap): ${s.file} (${s.tests} tests)`);
+    `OVERSIZE (affected by this change, runs in its own shard, ` +
+    `${shardTimeoutMin(s.tests, s.ownTimeoutSec || SELECTED_GATE.perTestTimeoutSec)} min cap` +
+    `${s.overBudget ? `, billed at its own ${s.ownTimeoutSec}s/test` : ""}): ${s.file} (${s.tests} tests)`);
+  // Printed LAST and loudly: this is the bucket that means the tool could not
+  // read a candidate at all, which is the one state its report must never omit.
+  for (const s of r.unreadable || []) console.error(
+    `UNREADABLE (missing, renamed or unparseable — NOT selected and NOT covered): ${s.file}`);
   for (const s of r.selected) console.log(s.file);
   for (const s of r.oversize) console.log(s.file);
 }
