@@ -18,6 +18,8 @@ function load(files) {
 }
 const get = load(["js/core/mat4.js", "js/data/legends.js"]);
 const Legends = get("Legends");
+// parts.js only where a test needs the catalog — it is the heavy load of the two.
+const loadParts = () => load(["js/core/log.js", "js/core/mat4.js", "js/car/parts.js"])("Parts");
 const Teams = load(["js/core/mat4.js", "js/data/teams.js"])("Teams");
 
 test("the Legends team is its own id, not the custom slot", () => {
@@ -172,4 +174,49 @@ test("Teams.isReal separates the eleven constructors from the two grid guests", 
   assert.equal(Teams.isReal(Teams.DEFAULT_CUSTOM), false, "MY TEAM enters only as the team you picked");
   assert.equal(Teams.isReal(null), false, "a missing team is not a real one — callers walk sparse arrays");
   assert.equal(Teams.isReal(undefined), false);
+});
+
+/* ONE ERA, TWO CARS. Nine PERIOD entries carry twelve legends, so three pairs
+   share a decade — and before the per-legend override they shared a CAR: the
+   factory key that builds an AI mesh came straight off the era, so Fangio's
+   W196 and Moss's Vanwall were the same machine, as were Lauda's 312T and
+   Stewart's Tyrrell. The override is what makes a shared era still build two
+   cars, and each one is sourced in its entry. */
+test("a legend's parts override the era, so a shared decade is not a shared car", () => {
+  const P = loadParts();
+  const key = (id) => P.factoryKey(Legends.raceTeam(id));
+  for (const [a, b] of [["fangio", "moss"], ["lauda", "stewart"]]) {
+    assert.equal(Legends.LIST.find((l) => l.id === a).era,
+                 Legends.LIST.find((l) => l.id === b).era, `${a}/${b} share an era`);
+    assert.notEqual(key(a), key(b), `${a} and ${b} must not build the same car`);
+  }
+  // The override MERGES onto the era rather than replacing it: Fangio's entry
+  // names only `suspension`, and everything else is still 1950s.
+  const f = Legends.parts("fangio");
+  assert.equal(f.suspension, "torsion_bar", "the W196's torsion bars win");
+  assert.equal(f.wheels, Legends.PERIOD.front50.wheels, "…and the rest is still the era");
+  assert.equal(f.aero, "minimal");
+  // An era with no override is the era, untouched.
+  assert.deepEqual(Legends.parts("clark"), Legends.PERIOD.slim60);
+  assert.equal(Legends.parts("nobody"), null);
+});
+
+/* raceTeam must carry the MERGED setup. It read PERIOD directly once, which
+   would have handed an AI rival the era's car while the player's garage sheet
+   got the legend's — the same car wrong in two different ways. */
+test("a duel rival's factory setup is the legend's, not the bare era", () => {
+  for (const id of ["fangio", "moss", "lauda", "stewart"]) {
+    assert.deepEqual(Legends.raceTeam(id).factory, Legends.parts(id), `${id}: rival races his own car`);
+  }
+});
+
+/* EVERY LEGEND FITS THE GARAGE. parts.custom IS the player's sheet, so an
+   over-budget legend shows a negative balance and refuses every new fit. The
+   override spends, so this has to hold after it, not just before. */
+test("no legend's car exceeds the parts budget", () => {
+  const P = loadParts();
+  for (const l of Legends.LIST) {
+    const cost = P.getCost(Legends.parts(l.id), Legends.raceTeam(l.id));
+    assert.ok(cost <= P.BUDGET, `${l.id}: ${cost} over the ${P.BUDGET} budget`);
+  }
 });

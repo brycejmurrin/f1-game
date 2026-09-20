@@ -128,7 +128,10 @@ test("a duel rival's team id is unique per legend and never the player's slot", 
 test("every legend's duel car carries his period setup and his own paint", () => {
   for (const l of Legends.LIST) {
     const t = Legends.raceTeam(l.id);
-    assert.deepEqual(t.factory, Legends.PERIOD[l.era], `${l.id}: the era's setup rides on the team`);
+    // parts(), not PERIOD — a legend may override the era with what made HIS
+    // car itself (Fangio's torsion bars, Moss's discs), and the rival must
+    // race that, not the decade's generic machine.
+    assert.deepEqual(t.factory, Legends.parts(l.id), `${l.id}: his own car's setup rides on the team`);
     assert.deepEqual(t.color, l.livery.c1, `${l.id}: paints in his tribute colours`);
     assert.equal(t.drivers.length, 1, `${l.id}: a rival is already cast — one seat, not twelve`);
     assert.equal(t.drivers[0].code, l.code);
