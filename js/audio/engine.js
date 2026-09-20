@@ -2232,8 +2232,8 @@ const GameAudio = (function () {
      construction, which is the safe direction for a table keyed by a string
      that arrives from js/game.js. */
   const RADIO_CH = Object.freeze({
-    control: { click: 0.05, hiss: 0.012, tail: 0,    hi: 4200,    tone: 2600, toneS: 0.11, toneAmp: 0.035 },
-    radio:   { click: 0.09, hiss: 0.030, tail: 0.13, hi: RADIO_HI, tone: 2400, toneS: 0.13, toneAmp: 0.045 },
+    control: { click: 0.05, hiss: 0.012, tail: 0,    hi: 4200,    tone: 1000, toneS: 0.15, toneAmp: 0.030 },
+    radio:   { click: 0.09, hiss: 0.030, tail: 0.13, hi: RADIO_HI, tone: 800,  toneS: 0.17, toneAmp: 0.038 },
   });
   const RADIO_FX_MAX = 1.5;
   let radioFx = 1;        // the player's level; 0 is off
@@ -2255,16 +2255,36 @@ const GameAudio = (function () {
    * trademarks exist for, which an unofficial fan game should not be cloning.
    * So this is a tone in the documented tradition rather than a reproduction.
    *
-   * THE TRADITION IS WELL SPECIFIED even where F1's instance is not. NASA's
-   * Quindar tones marked the start and end of a transmission at 2525 Hz and
-   * 2475 Hz for 250 ms — pure sines placed deliberately INSIDE the 300 Hz-3 kHz
-   * voice passband so they would survive the same channel as speech. These sit
-   * in the same place for the same reason, which is also why they need no
-   * filter of their own: at 2.4-2.6 kHz they are already inside the band the
-   * hiss is shaped to, so filtering them would add three nodes and change
-   * nothing you can hear. Shorter than Quindar's 250 ms because this fires on
-   * every card rather than once per transmission, and quiet because the ear is
-   * at its most sensitive right here.
+   * THE TRADITION IS WELL SPECIFIED even where F1's instance is not — but only
+   * half of it transfers, and the first cut of this shipped the wrong half.
+   *
+   * NASA's Quindar tones marked the start and end of a transmission at 2525 Hz
+   * and 2475 Hz for 250 ms. Those are the numbers everyone quotes, and they are
+   * the answer to a problem THIS TONE DOES NOT HAVE: Quindar was IN-BAND
+   * SIGNALLING. Its tones rode the same telephone line as live speech and had
+   * to key a remote transmitter without ever being mistaken for a voice, which
+   * is what pins them just above where speech has its energy. A broadcast
+   * courtesy tone plays BEFORE the clip, sharing the channel with nothing, so
+   * it is free to sit lower and warmer — and at 2.4-2.6 kHz it lands exactly
+   * where the ear is most sensitive and reads thin and piercing instead.
+   *
+   * WHAT DOES TRANSFER is the shape: a short, near-pure sine, inside the
+   * 300 Hz-3.4 kHz voice band. That last part is also why these need no filter
+   * of their own — they are already inside the band the hiss is shaped to, so
+   * filtering would add three nodes and change nothing you can hear.
+   *
+   * THE REGISTER IS MEASURED, not guessed. The one CC0 recreation of the F1
+   * beep on Freesound (a synthesiser imitation, not a broadcast rip) FFTs to a
+   * near-pure 786 Hz, 22 dB clear of anything else — below 1 kHz, and well
+   * below where this code first put it. Its own description says "around
+   * 1-2 kHz", so even the author under-described it. Treat the REGISTER as the
+   * finding and not the number: 786 Hz is 2 Hz off G5, which means somebody
+   * played a note on a keyboard rather than matching a frequency. Hence a round
+   * 800 Hz for the engineer and 1000 Hz for race control, which keeps the two
+   * channels apart without either becoming a musical interval.
+   *
+   * Still shorter than Quindar's 250 ms, because this fires on every card
+   * rather than once per transmission, and still quiet.
    */
   function radioTone(hz, secs, peak, at) {
     if (!(peak > 0) || !(hz > 0)) return;

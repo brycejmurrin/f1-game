@@ -1185,9 +1185,16 @@ test("a transmission opens with a courtesy tone, inside the voice band", async (
   const hz = newTones(before);
   assert.equal(hz.length, 1, "exactly one tone per transmission, not a melody: " + hz.join(","));
   // Inside 300 Hz-3.4 kHz, the band the hiss is shaped to and the band every
-  // voice radio carries — which is why Quindar put its tones there too. A tone
-  // above it would be the one part of the frame the channel could not pass.
+  // voice radio carries. A tone above it would be the one part of the frame the
+  // channel could not pass.
   assert.ok(hz[0] > 300 && hz[0] < 3400, `${hz[0]} Hz is outside the voice band this frame lives in`);
+  // AND IN THE LOWER HALF OF IT, which the band check alone does not protect.
+  // This first shipped at 2400 Hz, taken from Quindar's 2525 Hz — a number that
+  // answers an IN-BAND SIGNALLING problem this tone does not have, and which
+  // lands right where the ear is most sensitive. The one CC0 recreation of the
+  // F1 beep measures a near-pure 786 Hz. The register is the finding; a tone
+  // back up at 2.4 kHz would read thin and piercing and pass the line above.
+  assert.ok(hz[0] < 1500, `${hz[0]} Hz is back up in the piercing register — see RADIO_CH in js/audio/engine.js`);
 });
 
 test("the courtesy tone obeys the same gates as the rest of the frame", async () => {
