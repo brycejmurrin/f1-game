@@ -24,7 +24,15 @@ except Exception:
     print("")
 ')
 [ -z "$CMD" ] && exit 0
-ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
+# THE TREE THE COMMIT LANDS IN, NOT THE SESSION'S. $CLAUDE_PROJECT_DIR names
+# the MAIN checkout, so a commit made from a LINKED WORKTREE read the main
+# tree's staged list, gated files the commit does not touch, and `--auto-raise`
+# staged tests/data/ratchets.json into the MAIN index — a write into a tree
+# nobody was looking at. `git rev-parse --show-toplevel` from the hook's own cwd
+# names the worktree actually committing; the old value stays as the fallback
+# for a cwd that is not a work tree at all.
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[ -n "$ROOT" ] || ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 # --- pkill -f / killall on the browser or test tree ---------------------------
 # Command position only (start of line or after ; & | ( ), so a commit message

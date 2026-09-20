@@ -24,6 +24,19 @@ node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the par
 # Optional Playwright smoke only — do NOT fork the pre-push path onto quick-validate.mjs
 ```
 
+**BEFORE A PUSH, `--fast` IS NOT THE TOP RUNG.** AGENTS.md rule 3 is a ladder
+and `verify-change` sits on rung 2: `test:tooling-fast` is 208 of 278 unit
+files, and the other 70 have taken deploys red three times. The only pre-push
+check that runs what the deploy runs is
+
+```sh
+node tools/ci/deploy.mjs --gate-only         # pushes NOTHING; a dirty tree is fine
+```
+
+Use `verify-change --fast` in the edit loop and for a subagent verdict; run
+`--gate-only` once before you push. Green on rung 2 never means green on
+rung 3 (`docs/notes/PREPUSH-GATE-LADDER.md`).
+
 `--wait` blocks for the full queue. Subagents and the default loop use
 `--fast` or a single started batch, then read `artifacts/logs/*.log` for the
 reporter's terminal line `= run <status>  (N/M done, K failed)` — match it with

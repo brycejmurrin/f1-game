@@ -113,6 +113,16 @@ const ALLOWED = [
     why: "sign test — the direction of travel, which flips the steer term of the front slip angle",
   },
   {
+    file: "js/physics/incident-sim.js", expr: "c.speed < 0",
+    code: "const dir = fin(c.speed) && c.speed < 0 ? -1 : 1;",
+    // The magnitude beside it is clamped into [inV*RETAIN_FLOOR, inV*RETAIN_MAX],
+    // both fractions of the car's own entry speed and so already pace-relative.
+    // This line reads nothing but the sign: the handback used to run the whole
+    // value through Math.abs, which turned a car the incident left rolling
+    // backwards into one accelerating forwards.
+    why: "sign test — the direction the incident sim ended on, restored to a magnitude clamped relative to entry speed",
+  },
+  {
     file: "js/game.js", expr: "c.speed > 0",
     code: "if (c.speed > 0) c.speed = Math.max(0, c.speed - scrub);",
     why: "sign test — wall scrub bleeds toward zero from the positive side",
