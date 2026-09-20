@@ -3511,6 +3511,10 @@ function loadingInfo() {
   return {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
+    // WHAT SESSION THIS IS, for the announcer (js/audio/announcer.js). It read
+    // the same paragraph before a qualifying hour, a duel with a legend and a
+    // Grand Prix, because none of this reached it.
+    session, practice: isPractice(), duel: duelMode, duelLegend, flow,
     // Only fly over a world that is actually built. A missed pre-build (a
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.

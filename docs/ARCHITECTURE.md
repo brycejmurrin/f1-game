@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_190 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_191 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -134,6 +134,7 @@ _190 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `driver-ratings.js` | `DriverRatings` | tag | DRIVER RATINGS: the five-axis skill table for the 2026 grid. |
 | `legends.js` | `Legends` | tag | LEGENDS: twelve historic drivers, their record, a tribute livery and the period car each of them raced. |
 | `settings-defaults.js` | `SettingsDefaults` | tag | SettingsDefaults: the SHIPPED DEFAULT for any player preference, in one file, as data. |
+| `circuit-lore.js` | `CircuitLore` | tag | CIRCUIT LORE: the thing about each circuit a broadcast would say. |
 | `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica (Ergast) + OpenF1 clients. |
 | `telemetry.js` | `DataTelemetry` | LAZY_DATA | the data hub's TELEMETRY tab (trace viewer, delta, map, playback). |
 | `export.js` | `DataExport` | LAZY_DATA | the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… |

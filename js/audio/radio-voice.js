@@ -361,9 +361,21 @@ const RadioVoice = (function () {
      *
      * The RATE you hear is the one you chose. In a race a long line is sped up
      * to RATE_MAX to fit its card and dropped if it still will not fit, so the
-     * preview is the floor of what you get, never the ceiling. */
+     * preview is the floor of what you get, never the ceiling.
+     *
+     * THE TEAM RADIO SWITCH DOES NOT GATE THIS, and it used to. That switch
+     * ships OFF — it decides whether the radio talks over a RACE — so three of
+     * the four TEST buttons on the settings sheet did nothing at all in the
+     * shipped state, while the copy beside them promises "TEST to hear it
+     * without starting a race". Nothing told the player why; the button simply
+     * had no effect, which reads as broken because it is. The announcer's own
+     * TEST has always worked this way, and its comment is the argument:
+     * pressing play in a settings panel IS the consent. `enabled` keeps the one
+     * meaning that matters — say() refuses on it, so a radio turned off stays
+     * silent for the whole race, which is what a player turning it off asked
+     * for. MASTER SOUND still gates this, because that switch means silence. */
     function preview(speaker, text) {
-      if (!enabled || !G.soundOn) return false;
+      if (!G.soundOn) return false;
       const sp = TONE[speaker] ? speaker : "radio";
       const t = toneFor(sp, tune);
       const words = speakable(text || SAMPLE[sp] || SAMPLE.radio);
