@@ -1250,6 +1250,13 @@ function showAnnounce(msg, dur, kind) {
   // announceT — the card's ACTUAL life, not a second copy of the expression
   // above — is the utterance's whole budget.
   radioVoice.say(msg, announceT, kind);
+  // ...and the RADIO around it — click, hiss, squelch (engine.js radioSting).
+  // On the CARD, not the utterance: the spoken radio ships off, and here it
+  // inherits this function's ANN_PRI queue instead of needing a second one.
+  // Gated on the session for the same reason plan() is: showAnnounce also draws
+  // menu cards, and a squelch under "SAVE CONFLICT" on the title screen claims
+  // a radio that is not running.
+  if (state === "race" || state === "count") GameAudio.radioSting(RadioVoice.SPEAKERS[kind] || "radio", announceT);
 }
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the

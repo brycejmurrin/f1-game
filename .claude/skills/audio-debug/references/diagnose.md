@@ -20,6 +20,7 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 | Wind / tyre screech / sub | Speed² bandpass noise / slip-driven bandpass noise / sine an octave under `f0` |
 | Collision thud | White-noise burst scaled to impact `dv` |
 | Rivals / space | Panned, Doppler-shifted voice pool / generated-IR convolver per venue (desktop only) |
+| Team radio FX | `radioSting(channel, seconds)` — key click, a 300 Hz–3.4 kHz hiss bed held for the card's life, squelch tail. Fired from `showAnnounce` (race/count only), channel from `RadioVoice.SPEAKERS`; `coach` is deliberately silent. Level `setRadioFx` / `radioFxLevel()`, store `apex26.radioFx`. NOT a filter on the voice — speechSynthesis has no node in this graph and no browser exposes its output |
 | Music | Streamed CC0 tracks (`assets/music/`) via `startMusic()` / `stopMusic()` |
 
 Every tune knob is a constant multiplier, never a function of rev: pitch stays
@@ -39,6 +40,7 @@ During a race `#soundbtn` is **hidden**. Open pause → MUSIC & SOUND
 | Music ON/OFF | `#as-music-sel` (+ `#as-music-prev` / `-next`) | `setMusicEnabled` — soundtrack only |
 | SFX ON/OFF | `#as-sound-sel` (+ `#as-sound-prev` / `-next`) | `setSfxEnabled` — engine + effects only |
 | Volumes | `#as-mvol` / `#as-svol` | `setMusicVolume` / `setSfxVolume` |
+| Radio FX | `#as-rfx` | `setRadioFx` — sfx bus, so it is independent of the TEAM RADIO voice switch |
 
 Turning **music** off and expecting silence is the common mistake — the
 engine idle still hums on the **sfx** bus. That is correct.

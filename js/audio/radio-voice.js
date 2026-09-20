@@ -229,6 +229,10 @@ const RadioVoice = (function () {
       current = null;
       try { synth.cancel(); } catch (e) { /* nothing queued, or a synth mid-teardown */ }
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(false);
+      // The hiss bed belongs to the line, so it goes when the line does —
+      // the card-hidden and paused observers below are what stop a
+      // transmission early for a player who never turned speech on.
+      if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
     }
     function say(msg, life, kind) {
       const p = plan({ msg, life, kind, enabled, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
