@@ -550,8 +550,16 @@ test("bloat-scan reports ratchet slack and skill sizes as JSON", () => {
   const game = j.files.find((f) => f.path === "js/game.js");
   assert.ok(game, "scan missed js/game.js");
   assert.equal(game.kind, "ratchet");
-  assert.ok(Number.isInteger(game.lines) && game.lines > 0);
-  assert.ok(Number.isInteger(game.ceiling) && game.ceiling >= game.lines);
+  assert.ok(Number.isInteger(game.lines) && game.lines > 0, "game.lines is not a line count: " + JSON.stringify(game));
+  // SHAPE, NOT HEALTH. This asserted `ceiling >= lines` — which is not a
+  // property of the REPORTER but of the repo, and js/game.js normally sits
+  // exactly at its ceiling. So every edit that grew it by one line failed this
+  // test too, with no message ("the expression evaluated to a falsy value") and
+  // under a name about JSON, which reads as a flake and cost a session's
+  // misdiagnosis. tests/unit/ratchets.test.mjs owns that verdict and explains
+  // the remedy; a scan whose whole job is to REPORT slack must be able to
+  // report negative slack without failing.
+  assert.ok(Number.isInteger(game.ceiling) && game.ceiling > 0, "game.ceiling is not a ceiling: " + JSON.stringify(game));
   const skill = j.files.find((f) => f.path === ".claude/skills/slim-bloat/SKILL.md");
   assert.ok(skill, "scan missed slim-bloat SKILL.md");
   assert.equal(skill.kind, "skill");
