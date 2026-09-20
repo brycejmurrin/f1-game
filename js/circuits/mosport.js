@@ -23,6 +23,8 @@
   (window.TrackDefs = window.TrackDefs || []).push(
   {
     id: "mosport",
+    // Keep the short pit exit's wall outside Turn 1's widened road envelope.
+    pit: { side: 1, bands: { verge: 4 } },
     classic: true,
     // Projected trace winding is CCW for a clockwise circuit — the x axis is
     // negated by the projection, so it mirrors handedness. Calibrated against
