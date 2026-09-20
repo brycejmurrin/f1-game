@@ -822,7 +822,14 @@ const WGX = (function () {
       _wgxEscalate("runtime output black (GPU drew nothing)");
     }
     function _queueOutputProbe() {
+      // _outProbePending is cleared in _readOutputProbe BEFORE its mapAsync
+      // resolves, so the pending flag alone does not say "this buffer is free".
+      // Without the mapState test the next frame re-encoded a
+      // copyTextureToBuffer into a buffer that is still mapped — a validation
+      // error on every device that enforces it, on the probe whose whole job
+      // is deciding whether WGX surrenders to GLX.
       if (!_sceneProbeOn || _lost || _outProbePending || _outProbeN >= OUT_PROBE_MAX || _drawSlot < 1) return;
+      if (_outProbeBuf && _outProbeBuf.mapState !== "unmapped") return;
       if (!sceneTex || !encoder || typeof encoder.copyTextureToBuffer !== "function") return;
       try {
         if (!_outProbeBuf) {

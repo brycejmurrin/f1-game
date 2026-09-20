@@ -1022,8 +1022,13 @@ const GLXPost = (function () {
       msaa: () => msaaSamples,
       // SGSR1 linked — glx wantSpatialUpscale() also requires this so a failed
       // shader never leaves a present-size canvas with a render-size viewport.
+      // …AND post must be ON: reporting ready on the link alone let glx size the
+      // canvas to PRESENT size on frames that never run the upscale, so with
+      // post disabled the scene was drawn at render size into a present-size
+      // canvas and letterboxed. (These two stay adjacent — a unit test reads
+      // the pair to prove SGSR links lazily.)
       ensureSpatial,
-      spatialOk: () => !!sgsrProg,
+      spatialOk: () => !!sgsrProg && postEnabled,
       createTargets,
       bindSceneTarget,
       present,
