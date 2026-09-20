@@ -1163,3 +1163,56 @@ test("a preempted transmission leaves nothing rendering", async () => {
   assert.equal(live.size, before,
     "twelve preempts left " + (live.size - before) + " nodes wired into sfxBus — a Gain still connected keeps rendering for ever");
 });
+
+/* The engine keeps its own oscillators running (gravel, whine, sub, limiter),
+ * so the courtesy tone has to be measured as a DELTA around the sting rather
+ * than as the contents of the graph. */
+const oscSet = () => new Set([...live].filter((n) => n.kind === "osc"));
+function newTones(before) {
+  return [...live].filter((n) => n.kind === "osc" && !before.has(n)).map((n) => Math.round(n.frequency.value));
+}
+
+test("a transmission opens with a courtesy tone, inside the voice band", async () => {
+  // THE BEEP BEFORE THE MESSAGE. This chain shipped without one, on a comment
+  // asserting F1 has no such convention — it does, it is called a courtesy
+  // tone, and it is the most recognisable thing about team radio. Generic by
+  // design: F1's own frequency is unpublished, and a distinctive broadcast
+  // signature is not something an unofficial game should reproduce.
+  const GameAudio = await sampleEngine();
+  endAll();
+  const before = oscSet();
+  assert.equal(GameAudio.radioSting("radio", 1.5), true);
+  const hz = newTones(before);
+  assert.equal(hz.length, 1, "exactly one tone per transmission, not a melody: " + hz.join(","));
+  // Inside 300 Hz-3.4 kHz, the band the hiss is shaped to and the band every
+  // voice radio carries. A tone above it would be the one part of the frame the
+  // channel could not pass.
+  assert.ok(hz[0] > 300 && hz[0] < 3400, `${hz[0]} Hz is outside the voice band this frame lives in`);
+  // AND IN THE LOWER HALF OF IT, which the band check alone does not protect.
+  // This first shipped at 2400 Hz, taken from Quindar's 2525 Hz — a number that
+  // answers an IN-BAND SIGNALLING problem this tone does not have, and which
+  // lands right where the ear is most sensitive. The one CC0 recreation of the
+  // F1 beep measures a near-pure 786 Hz. The register is the finding; a tone
+  // back up at 2.4 kHz would read thin and piercing and pass the line above.
+  assert.ok(hz[0] < 1500, `${hz[0]} Hz is back up in the piercing register — see RADIO_CH in js/audio/engine.js`);
+});
+
+test("the courtesy tone obeys the same gates as the rest of the frame", async () => {
+  const GameAudio = await sampleEngine();
+  endAll();
+  let before = oscSet();
+  assert.equal(GameAudio.radioSting("coach", 1.5), false);
+  assert.equal(newTones(before).length, 0, "the coach is not on a radio, so there is nothing to key");
+  GameAudio.setRadioFx(0);
+  before = oscSet();
+  GameAudio.radioSting("radio", 1.5);
+  assert.equal(newTones(before).length, 0, "off means off — the tone is part of the frame, not beside it");
+  GameAudio.setRadioFx(1);
+  // Race control and the engineer are different sources and do not share a beep.
+  before = oscSet();
+  GameAudio.radioSting("control", 1.5);
+  const ctl = newTones(before)[0];
+  before = oscSet();
+  GameAudio.radioSting("radio", 1.5);
+  assert.notEqual(ctl, newTones(before)[0], "two channels, two tones");
+});
