@@ -548,6 +548,9 @@ test("race settings uses a searchable duel rival sheet", async ({ page }) => {
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
   await expect(page.locator("#race-settings")).toBeVisible();
+  // DUEL lives in the FIELD fold (2026-09-18), and folds start closed — opened
+  // through its summary, the way a player opens it.
+  await page.locator("#rs-fold-field-sum").click();
   await page.locator("#rs-duel-open").click();
   await expect(page.locator("#duel-picker")).toBeVisible();
   await expect(page.locator("#duel-list .duel-option")).toHaveCount(14);

@@ -289,6 +289,37 @@ const Legends = (function () {
     };
   }
 
+  /* THE SAME CAR, BUT AS AN OPPONENT. team() above is the slot the PLAYER drives,
+   * so every legend shares its id: the player races one at a time and the parts
+   * sheet, the decal atlas and the mesh caches all want one stable key.
+   *
+   * A duel rival cannot share that key. He is on track WITH the player, who may
+   * himself be in the legends slot, and two cars keyed "legends" would collide in
+   * every cache car-draw.js keeps — same atlas, same mesh, and the store's
+   * `livery.legends` (the PLAYER's pick) deciding the rival's paint. So the rival
+   * gets a key of his own, `legend_<id>`, which is unique per legend and matches
+   * no stored livery: resolveLivery then falls to Liveries.forTeam's "default",
+   * built from the `livery` block below — his tribute palette, by the ordinary
+   * path, with nothing to invalidate.
+   *
+   * `factory` carries the PERIOD setup, because an opponent has no garage sheet
+   * to read one from: an AI car's silhouette comes from Parts.getFactorySetup(team),
+   * which has no entry for an id it has never seen and would hand Schumacher a
+   * 2026 chassis. This is the same PERIOD table the player's sheet is seeded from
+   * — one source for the era, two ways in. */
+  function raceTeam(idOrCode) {
+    const l = byId(idOrCode) || byCode(idOrCode);
+    const t = team(l && l.id);
+    if (!t) return null;
+    t.id = `legend_${l.id}`;
+    t.factory = PERIOD[l.era] ? Object.assign({}, PERIOD[l.era]) : null;
+    // ONE SEAT, HIS OWN. team() lists all twelve so the driver picker can seat
+    // any of them; a rival is already cast, and drivers[0] is what the atlas
+    // reads for his number (carDecalNum).
+    t.drivers = [{ name: l.name, code: l.code, num: l.num || 1 }];
+    return t;
+  }
+
   /** The roster index of a legend id, for seating the driver picker. -1 if unknown. */
   function seatOf(idOrCode) {
     const l = byId(idOrCode) || byCode(idOrCode);
@@ -389,6 +420,6 @@ const Legends = (function () {
     return LIST.map((l) => Object.assign({ id: `legend_${l.id}`, legend: l.id }, l.livery));
   }
 
-  return { LIST, PERIOD, ERA_YEAR, seatOf, ratings, ratingsFor, statsFor, team, parts, liveries, byId, byCode };
+  return { LIST, PERIOD, ERA_YEAR, seatOf, ratings, ratingsFor, statsFor, team, raceTeam, parts, liveries, byId, byCode };
 })();
 Object.freeze(Legends);
