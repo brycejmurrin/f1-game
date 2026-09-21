@@ -341,8 +341,13 @@ const Collide = (() => {
           if (a.human || b.human) a.contactT = b.contactT = 0.22;
           if (AiDrive.sideYieldsA(dProg, a.x, b.x)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }
           else { if (last) b.speed = Math.max(0, b.speed - rubScrub); b.contactT = 0.22; }
+          // INSIDE the guard, like everything else in this branch. It was the
+          // one statement outside it, so a settled side-by-side rub — two cars
+          // touching with no correction left to apply — re-fired audio, shake
+          // and hit-stop every frame and banked a career `hits` count of ~14 in
+          // five seconds of contact that the solver had already resolved.
+          if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
         }
-        if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
       } else {
         // rear-end: separate along the track and nudge speeds together (gentle,
         // so hitting a car ahead doesn't slam you to a stop — you bump and tuck in)

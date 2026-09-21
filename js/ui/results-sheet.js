@@ -438,7 +438,9 @@ function buildTTResults() {
       const a = document.createElement("a");
       a.href = href; a.download = file.name; a.hidden = true;
       document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(href), 0);
+      // 10 s, the house idiom — see js/ui/settings-export.js. A 0 ms revoke can
+      // kill the object URL before the browser has finished reading it.
+      setTimeout(() => URL.revokeObjectURL(href), 10000);
       download.textContent = "DOWNLOADED";
     };
   }

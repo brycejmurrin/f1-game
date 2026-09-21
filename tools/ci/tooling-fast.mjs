@@ -316,6 +316,11 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // clamped out of localStorage before they reach a CSS custom property, where
   // a NaN is not an error but a silently dropped declaration.
   "tests/unit/loading-card.test.mjs",
+  // Every AUTHORED activation-zone turn table resolves against the BUILT
+  // centreline. One unresolvable pair discards a circuit's whole table and
+  // falls through to ZONE_COUNT — silently, which is how monza shipped a
+  // table nobody read. Node-side via verify-track.cjs, so it is cheap.
+  "tests/unit/aero-zone-tables.test.mjs",
   // The ORDERING that lights the flyby: raceIntro() applies the race settings
   // before the loading screen starts, so a dawn race stops showing a day sky.
   "tests/unit/flyby-lighting.test.mjs",

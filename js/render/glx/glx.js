@@ -1224,7 +1224,12 @@ const GLX = (function () {
     // unit 0 active, and unit 0 must stay bound to the shadow map (see
     // drawDecal) — a bare null unbind here left every later lit draw sampling
     // an empty unit as uShadowMap for one frame. Restore the invariant.
-    gl.bindTexture(gl.TEXTURE_2D, (SHD && SHD.enabled && SHD.mapTex) || null);
+    // …and when the shadow subsystem is absent, the 1x1 DEPTH dummy rather than
+    // `null`: three sampler2DShadow uniforms point at unit 0, and a null there
+    // leaves them sampling an INCOMPLETE unit, which is undefined behaviour on
+    // the drivers ensureShadowDummy() was written for. The dummy reads "lit".
+    if (!(SHD && SHD.enabled && SHD.mapTex)) ensureShadowDummy();
+    gl.bindTexture(gl.TEXTURE_2D, (SHD && SHD.enabled && SHD.mapTex) || shadowDummyTex);
     // Dimensions come off the source the upload just consumed — a canvas,
     // ImageBitmap or ImageData all carry width/height.
     return _texNote(tex, "content2D", src && src.width, src && src.height, 1);

@@ -72,8 +72,20 @@ export function replay(changed, budgetMin = 15) {
   const changedSpecs = changed.filter((f) => /^tests\/specs\/.+\.spec\.js$/.test(f));
   const imported = specsImporting(changed);
   const candidates = [...new Set([...changedSpecs, ...imported, ...specsOf(groups, scripts)])];
-  const cut = fit(candidates, budgetMin);
+  /* THE SAME RANK THE GATE USES. This called fit() with no `rank` at all, so
+     every candidate defaulted to 3 — "merely routed by a path rule" — while the
+     real gate ranks 0 edited / 1 previously failed / 2 imports a changed helper
+     / 3 routed (see select-specs.mjs main()). A harness that models a DIFFERENT
+     selector is not evidence about the one that ships, and it is the reason
+     every one of these five cases read "MISSED but NAMED": at rank 3 an
+     over-budget spec can only ever be excluded. */
+  const rank = (f) => changedSpecs.includes(f) ? 0 : imported.includes(f) ? 2 : 3;
+  const cut = fit(candidates, budgetMin, { rank });
   return { reason: "matched", groups,
+    // Oversize is a RUN, not a miss: an affected spec that will not fit the
+    // budgeted shard gets one of its own. Counting it as "named" would score a
+    // spec that actually executes as a miss.
+    oversize: (cut.oversize || []).map((s) => s.file),
     selected: prioritise(cut.selected, { changedSpecs, imported }).map((s) => s.file),
     skipped: cut.skipped.map((s) => s.file),
     // `unreachable` is the third NAMED bucket (a spec bigger than the whole
@@ -86,14 +98,16 @@ export function replay(changed, budgetMin = 15) {
 export function recall(cases = CASES) {
   return cases.map((c) => {
     const r = replay(c.changed);
-    const hit = r.selected.includes(c.catches);
+    const hit = r.selected.includes(c.catches) || (r.oversize || []).includes(c.catches);
     // A case is "reported" when the selector either picked the catching spec or
     // said plainly that it could not help (infra) / could not afford it. Silence
     // is the only real failure: a selection that omits the spec with no word.
     const named = r.reason === "infra"
       || (r.skipped || []).includes(c.catches) || (r.overBudget || []).includes(c.catches)
       || (r.unreachable || []).includes(c.catches);
-    return { ...c, reason: r.reason, hit, named, rank: r.selected.indexOf(c.catches), n: r.selected.length };
+    const inOversize = (r.oversize || []).includes(c.catches);
+    return { ...c, reason: r.reason, hit, named, oversize: inOversize,
+             rank: r.selected.indexOf(c.catches), n: r.selected.length };
   });
 }
 
@@ -109,6 +123,23 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       : "SILENTLY MISSED";
     console.log(`  ${r.hit ? "+" : r.named || r.reason === "infra" ? "~" : "x"} ${r.name}`);
     console.log(`      catches ${r.catches}  ->  ${verdict}`);
+  }
+  /* A RATCHET, NOT A TARGET. Before 2026-09-20 this printed 0/5 and exited 0,
+     and it was scoring a selector the gate does not run (replay() passed no
+     rank, so every candidate looked "merely routed"). Fixed, it catches 1 of 5
+     outright; the other four are specs a PATH RULE routes, which declare >= the
+     gate's per-test budget and are excluded by the deliberate `>=` policy in
+     select-specs.mjs — a real limit of the selected gate, and one that should
+     be read rather than buried under a routine line.
+
+     Raise this when the selector genuinely improves. Never lower it to make a
+     red go away: below the floor means recall REGRESSED, which is the whole
+     point of keeping five reproductions of faults that actually shipped. */
+  const RECALL_FLOOR = 1;
+  if (hits < RECALL_FLOOR) {
+    console.log(`\nRECALL REGRESSED: ${hits}/${rows.length} caught, floor is ${RECALL_FLOOR}.`);
+    console.log("A change made the selector worse at the faults it is known to catch.");
+    process.exitCode = 1;
   }
   const silent = rows.filter((r) => !r.hit && !r.named && r.reason !== "infra");
   if (silent.length) {

@@ -369,14 +369,23 @@ const NetPlay = (function () {
         sessions.delete(id);
         const carFor = remoteFor(id);
         armedPeers.delete(id);
-        if (carFor != null && sessions.size && role === "host") {
-          handBackToAI(why, carFor);
+        /* A PEER WITH NO GRID SLOT MUST NOT END THE RACE FOR EVERYONE. The
+           `carFor != null` term used to gate this whole branch, so a session
+           that dropped before it was seated — a spectator, a joiner still
+           negotiating, a peer that left the lobby — fell through to the
+           `stop()` below and tore the session down for every remaining player.
+           Whether we keep running is a question about the HOST still having
+           peers; what we do about a car is a separate question inside it. */
+        if (sessions.size && role === "host") {
+          if (carFor != null) handBackToAI(why, carFor);
           // Star, not mesh: the other guests only ever learned this rival
           // existed through the host's relay, and the relay simply stops
           // naming a dropped wire id. Nothing told them it was gone, so their
           // slot stayed net-owned — updateCar never simulated it and the car
           // sat frozen on the track for the rest of the race. Say so.
-          broadcast(EV.LEFT, { wire: carFor, why: why || "peer_closed" });
+          if (carFor != null) broadcast(EV.LEFT, { wire: carFor, why: why || "peer_closed" });
+          // Still worth asking: a slotless peer leaving can be the one the
+          // arm deadline was waiting on.
           if (armDeadline && allArmed()) nameTheMoment();
         }
         // "peer_closed", never a bare stop(): stop() defaults an absent reason

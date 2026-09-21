@@ -135,6 +135,21 @@ if (dropped.length && !args.includes("--list")) {
   console.error(`[playwright] VM twin(s) passed (${passed}) — the browser half follows`);
 }
 
+/* --list AND NOTHING LEFT TO LIST. `--list` deliberately skips RUNNING the
+   twins above, but the twinned specs were still REMOVED from args — so for a
+   fully twinned group (collisions is 32/32) Playwright is handed a bare
+   `test --list` with no spec paths and lists the ENTIRE suite. The answer is
+   not "every spec in the repo"; it is "this group's specs are covered in node".
+   No in-repo consumer passes --list through here, so the cost is a wrong
+   answer at the CLI rather than a wrong gate — but a listing tool that reports
+   119 specs for a group of 32 is the kind of wrong answer the next reader
+   builds on. */
+if (nothingToRun && args.includes("--list")) {
+  for (const d of dropped) console.error(`[playwright] ${d.spec} → ${d.twin} (node)`);
+  console.error(`[playwright] --list: every spec in this group has a VM twin; nothing runs in a browser`);
+  process.exit(0);
+}
+
 const managed = process.env.APEX_PORT ? null : await startStaticServer();
 const port = process.env.APEX_PORT || String(managed.port);
 // `--last-failed` reads <outputDir>/.last-run.json, and outputDir is suffixed

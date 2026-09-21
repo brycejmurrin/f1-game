@@ -1105,6 +1105,10 @@ let _ltBase = null;           // { ambientSky, ambientGround, exposure } saved a
 let _ltFlash = 0;             // 0..1 current flash intensity (decays each frame)
 let _ltNextT = 0;             // seconds until the next lightning strike
 let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
+// …and the delay it was DRAWN with, which is what says how far away the strike
+// was. _thunderT itself is ~0 at the tick thunder fires — that is what firing
+// means — so deriving loudness from it gave every strike the same near-crack.
+let _thunderDelay = 0;
 // Cloud cover target for the current session: set once in applyRaceSettings()
 // and held constant so the sky doesn't shift mid-race (only the shader animates).
 let _cloudBase = 0.4;
@@ -3507,6 +3511,10 @@ function loadingInfo() {
   return {
     track: Tracks.LIST[trackIdx], laps: raceLaps,
     weather: raceWeather, tod: raceTimeOfDay,
+    // WHAT SESSION THIS IS, for the announcer (js/audio/announcer.js). It read
+    // the same paragraph before a qualifying hour, a duel with a legend and a
+    // Grand Prix, because none of this reached it.
+    session, practice: isPractice(), duel: duelMode, duelLegend, flow,
     // Only fly over a world that is actually built. A missed pre-build (a
     // circuit switched a moment ago, scenery still downloading) would put a
     // black hold where the cinematic should be, which reads as a hang.
@@ -4865,7 +4873,17 @@ function updateCar(c, dt, ranked) {
         c.passOf = null;
         if (!po.human && !po.retired) {
           po.passFailOf = c;
-          po.passFailT = Math.max(po.passFailT || 0, 2 * AiDrive.passCooldown(AiDrive.traits(po)));
+          /* traits() HANDS BACK A SHARED SCRATCH (ai-drive.js _traits), and the
+             `aiT` bound at the top of this car's update still aliases it — so
+             reading the PASSED car's ratings here overwrote this car's for the
+             rest of the tick, and every AiDrive.passCooldown(aiT) below then
+             cooled the overtaker on the overtaken driver's craft. The module's
+             own comment states the contract ("callers must read fields before
+             the next traits() call"); this was the one site that broke it.
+             Take po's number, then put c's ratings back. */
+          const poCool = 2 * AiDrive.passCooldown(AiDrive.traits(po));
+          if (!c.human) AiDrive.traits(c);
+          po.passFailT = Math.max(po.passFailT || 0, poCool);
           if (po.passOf === c) { po.passOf = null; po.passCool = po.passFailT; }
         }
       }
@@ -6441,6 +6459,15 @@ function resetSetupCam() {
   setupPreviewEl = SP_EL_DEF;
   setupPreviewDist = SP_DIST_DEF;
   setupPreviewPan[0] = setupPreviewPan[1] = setupPreviewPan[2] = 0;
+  // …and the FRAMING, which az/el/dist do not carry. A WING or BRAKES preset
+  // aims the camera by moving the orbit point and the look-at (setSetupAim /
+  // garageFrame) and tightens minDist; resetting only the three angles left the
+  // turntable spinning about the wing with a close-up minimum, which is exactly
+  // the "reopened on somebody's last drag" state this reset exists to prevent.
+  setupPreviewOrbit = SP_ORBIT_DEF.slice();
+  setupPreviewTgt = SP_TGT_DEF.slice();
+  setupPreviewMinDist = 0;
+  setupPreviewFree = false;
   setSetupSpin(true);
 }
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
@@ -7321,12 +7348,18 @@ function render(dt) {
       _ltNextT = (4 + Math.random() * 8) / LT.lightning;
       // Queue thunder to lag the flash (sound travels slower than light): a
       // near strike cracks ~0.3 s later, a distant one rumbles up to ~2 s later.
-      _thunderT = 0.3 + Math.random() * 1.7;
+      _thunderT = _thunderDelay = 0.3 + Math.random() * 1.7;
     }
     if (_thunderT >= 0) {
       _thunderT -= dt;
       if (_thunderT < 0 && typeof GameAudio !== "undefined" && GameAudio.thunder) {
-        GameAudio.thunder(clamp(1.0 - (_thunderT + dt) / 2.0, 0.15, 1.0));
+        // The DRAWN delay, not the countdown's remainder. `_thunderT + dt` is
+        // whatever was left before this frame's decrement — between 0 and one
+        // frame — so the old form was always ~1.0 - 0.008 and clamped to full
+        // volume: a 2 s distant rumble cracked exactly as loud as a 0.3 s
+        // overhead strike, and the lag the comment above describes was the only
+        // thing that ever varied.
+        GameAudio.thunder(clamp(1.0 - _thunderDelay / 2.0, 0.15, 1.0));
       }
     }
     if (_ltFlash > 0.001) {
@@ -8961,10 +8994,10 @@ function openGarage(from) {
   // dragged to — nose-down, zoomed into a wheel — reads as broken rather than
   // as remembered. The turntable is the front door; the controls are there for
   // anyone who wants off it.
-  setupPreviewAz = 0.6;
-  setupPreviewEl = SP_EL_DEF;
-  setupPreviewDist = SP_DIST_DEF;
-  setSetupSpin(true);
+  // ONE reset, shared with #cs-view-reset. This used to inline three of the five
+  // fields, so the two doors to "fresh camera" disagreed and both missed the
+  // framing.
+  resetSetupCam();
   setSetupCamPanel(false);   // same reasoning: the front door is the turntable
   // vt at the CALL site: SetupUI.create runs before Menus.create at boot, so
   // the module cannot hold the helper itself. The build runs inside the

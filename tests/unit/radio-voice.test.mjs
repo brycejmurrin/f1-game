@@ -366,7 +366,7 @@ test("a stored voice that is no longer installed falls back, it does not silence
   assert.ok(["Alpha", "Beta"].includes(spoke.voice.name), "it must land on an installed voice");
 });
 
-test("preview speaks the channel being tuned, and stays silent when the radio is off", () => {
+test("preview speaks the channel being tuned, with the TEAM RADIO switch either way", () => {
   const { RV, G, synth } = load({ voices: [LOCAL("Alpha")], stored: { radioVoice: true } });
   const r = RV.create(G);
   assert.equal(r.preview("control"), true);
@@ -375,10 +375,25 @@ test("preview speaks the channel being tuned, and stays silent when the radio is
   assert.equal(spoke.rate, RV.TONE.control.rate, "…at that channel's prosody");
 
   // A preview is NOT a say(): plan() refuses everything outside a race on
-  // purpose, and the settings panel is exactly that case. But OFF still means
-  // off — a disabled radio must not talk from the settings screen either.
+  // purpose, and the settings panel is exactly that case.
+  //
+  // IT IS ALSO NOT GATED ON THE SWITCH, and it was until 2026-09-20. TEAM RADIO
+  // ships OFF, so in the shipped state every TEST button on the settings sheet
+  // did nothing while the copy beside them promised "TEST to hear it without
+  // starting a race" — a dead control with no explanation. Pressing TEST is the
+  // consent; the switch keeps the meaning that matters, below.
   const off = load({ voices: [LOCAL("Alpha")], stored: { radioVoice: false } });
-  assert.equal(off.RV.create(off.G).preview("control"), false);
+  const silent = off.RV.create(off.G);
+  assert.equal(silent.preview("control"), true, "TEST must work on the sheet that offers it");
+  assert.equal(silent.say("box box", 9, "box"), false,
+    "…and OFF still means off where it counts: the radio stays silent through the race");
+});
+
+test("master sound silences a preview — that switch means silence", () => {
+  // speechSynthesis is not in the WebAudio graph, so nothing else stops it.
+  const q = load({ voices: [LOCAL("Alpha")], stored: { radioVoice: true } });
+  q.G.soundOn = false;
+  assert.equal(q.RV.create(q.G).preview("control"), false);
 });
 
 /* ── A PREEMPTED LINE MUST NOT TURN OFF THE ONE THAT REPLACED IT ─────────────

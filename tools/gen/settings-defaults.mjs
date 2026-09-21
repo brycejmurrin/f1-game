@@ -76,10 +76,18 @@ export function readSpec(root = ROOT) {
   // `(any value but \"1\" is off)` — so the src capture has to skip \X pairs
   // rather than stop at the first quote. A naive [^"]* dropped that row from
   // the parse entirely and the file's own key then read as "not in SPEC".
-  const re = /\{ k: "([^"]+)", lane: "(\w+)", group: "(\w+)", def: (.*?), src: "((?:[^"\\]|\\.)*)"(,\s*\n?\s*subsystem: "((?:[^"\\]|\\.)*)")?\s*\}/g;
+  // …and `changed:` is a THIRD optional trailing property (a predicate, on the
+  // two controls rows whose value is a whole key/pad binding map). It had no
+  // branch here, so `keys` and `pad` were dropped from the parse — 84 rows of
+  // 86 — and apply() then refused both as "not in SPEC". A trailing-property
+  // TAIL rather than a third named alternative: the next optional property
+  // must not be a fourth silent drop.
+  const re = /\{ k: "([^"]+)", lane: "(\w+)", group: "(\w+)", def: (.*?), src: "((?:[^"\\]|\\.)*)"((?:,\s*\n?\s*\w+: [^\n]*?)*)\s*\}/g;
   let m;
   while ((m = re.exec(src))) {
-    const [, k, lane, group, def, , , subsystem] = m;
+    const [, k, lane, group, def, , tail] = m;
+    const sub = /subsystem: "((?:[^"\\]|\\.)*)"/.exec(tail || "");
+    const subsystem = sub ? sub[1] : null;
     rows.push({ k, lane, group, def: def.trim(), subsystem: subsystem || null,
                 adaptive: def.trim() === "null" || def.trim().startsWith("(") });
   }

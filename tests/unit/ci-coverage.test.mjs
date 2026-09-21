@@ -74,9 +74,17 @@ test("smoke and the driving-model gate are both seen", () => {
 test("it does not claim to cover what it cannot", () => {
   // test:render / test:headless drive whole PROJECTS and name no spec, so they
   // must resolve to nothing rather than being counted as blanket coverage.
-  for (const g of ["test:render", "test:headless"]) {
+  // NAME ONLY LIVE GROUPS, AND PROVE THEY ARE LIVE. This read
+  // `["test:render", "test:headless"]` behind `if (specs !== null)`.
+  // test:headless was dropped on 2026-09-10 (docs/TESTING.md), so groupSpecs
+  // returned null, the `if` swallowed it, and half this guard was unreachable —
+  // green because it checked nothing. A dead name in a list must fail, not skip:
+  // that is the same fail-open shape as a regex that matches no path.
+  for (const g of ["test:render"]) {
     const specs = groupSpecs(g);
-    if (specs !== null) assert.deepEqual(specs, [],
+    assert.notEqual(specs, null,
+      `${g} is named here but no longer resolves to a group — drop the name or restore the script`);
+    assert.deepEqual(specs, [],
       `${g} names no spec on its command line, so it must not contribute specs`);
   }
 });

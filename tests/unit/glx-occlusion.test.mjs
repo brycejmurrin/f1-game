@@ -14,6 +14,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedFrustum } from "../helpers/seed-frustum.mjs";
+import { stateRecorder, snapshot, diff } from "../helpers/gl-state.mjs";
 
 const SRC = new URL("../../js/render/glx/chunked.js", import.meta.url);
 const PACK_SRC = new URL("../../js/render/shared/vertex-pack.js", import.meta.url);
@@ -67,18 +68,18 @@ function makeGL(opts) {
   return gl;
 }
 
-function load(gl, frame) {
+function load(gl, frame, over) {
   const ctx = { console };
   vm.createContext(ctx);
   seedLog(ctx); seedFrustum(ctx);
   vm.runInContext(fs.readFileSync(PACK_SRC, "utf8") + "\n;globalThis.VertexPack = VertexPack;", ctx);
   vm.runInContext(fs.readFileSync(SRC, "utf8") + "\n;globalThis.__C = GLXChunked;", ctx);
-  return ctx.__C.init({
+  return ctx.__C.init(Object.assign({
     gl, frame, bindVAO: () => {}, setBlend: () => {}, setDepthMask: () => {}, setCull: () => {},
     setPolyOffset: () => {}, toF32: (a) => (a instanceof Float32Array ? a : new Float32Array(a)),
     createMesh: (d) => ({ plain: true, data: d }), litMaterial: () => 1,
     invalidateVAO: () => {}, unbindVAOIf: () => {}, ctxGone: () => false,
-  });
+  }, over || null));
 }
 
 // Separated quads, one cell each, over the 2000-triangle floor that
@@ -183,4 +184,46 @@ test("the occlusion pass hands the context back at LEQUAL", () => {
   C.occlusionPass();
   assert.equal(gl._depthFunc, gl.LEQUAL,
     "the pass must leave the context on the baseline depth test, not on LESS");
+});
+
+test("the occlusion pass restores EVERY piece of context state it touched", () => {
+  // The generalisation of the test above, and the reason it is worth having
+  // both: that one pins the enum somebody already debugged. This one pins the
+  // INVARIANT — a pass borrows global state and gives it back — so the next
+  // leak is caught by a test nobody had to think to write. It reports the
+  // offending key by name rather than "something rendered wrong".
+  //
+  // No GPU required, and that is not a compromise: this is GL state, not
+  // pixels, so the answer is driver-independent. ANGLE validates its own
+  // replays exactly this way and runs it under SwiftShader (tests/helpers/
+  // gl-state.mjs has the references).
+  const frame = { viewProj: WIDE_VP, eye: [0, 0, 0], cullDist: 0, perChunkLights: 0 };
+  // The enum map lets the recorder ANSWER getParameter from the same state the
+  // setters write, so the pass's save/restore of CURRENT_PROGRAM behaves as it
+  // does in a real context. Without it the restore reads null, skips, and the
+  // diff reports a leak the shipped renderer does not have.
+  const rec = stateRecorder(null, { program: 0x8b8d });
+  // The context baseline GLX.init() establishes, so "restored" means "back to
+  // what the renderer runs with", not merely "back to whatever it was".
+  const gl = Object.assign(makeGL(), rec);
+  gl.depthFunc(gl.LEQUAL);
+  gl.colorMask(true, true, true, true);
+  gl.useProgram({ id: "lit" });
+  // drawChunked/occlusionPass reach depthMask, blend and cull through the
+  // injected setters rather than the raw context, so those route into the same
+  // snapshot — otherwise a leak in the half GLX wraps would be invisible here.
+  const C = load(gl, frame, {
+    setBlend: (on) => { rec.__state.blend = !!on; },
+    setDepthMask: (on) => { rec.__state.depthMask = !!on; },
+    setCull: (on) => { rec.__state.cull = !!on; },
+  });
+  const mesh = C.createChunkedMesh(grid(6, 400), 72);
+  C.occlusionCull(true);
+  C.drawChunked(mesh, null, {});
+
+  const before = snapshot(gl);
+  C.occlusionPass();
+  const changed = diff(before, snapshot(gl));
+  assert.deepEqual(changed, {},
+    "the occlusion pass leaked context state: " + JSON.stringify(changed));
 });

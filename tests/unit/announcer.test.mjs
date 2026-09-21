@@ -18,7 +18,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
@@ -40,7 +40,7 @@ function synthStub() {
 
 /** Both modules in one context: the announcer borrows RadioVoice.speakable()
  *  and RadioVoice.SAMPLE, so loading it alone would test a different file. */
-function load({ api = true, voices = [], stored = {}, soundOn = true } = {}) {
+function load({ api = true, voices = [], stored = {}, soundOn = true, lore = true } = {}) {
   const saved = new Map(Object.entries(stored));
   const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console, setTimeout, clearTimeout });
   seedLog(ctx);
@@ -49,6 +49,10 @@ function load({ api = true, voices = [], stored = {}, soundOn = true } = {}) {
   ctx.window = api ? { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } } : {};
   ctx.GameAudio = { setRadioDuck() {} };
   vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  // The authored half. Loaded by default because the shipped game always has
+  // it; `lore: false` is how a test asks for the derived-only floor, which is
+  // what a circuit with no row still gets.
+  if (lore) vm.runInContext(read("js/data/circuit-lore.js"), ctx, { filename: "js/data/circuit-lore.js" });
   vm.runInContext(read("js/audio/announcer.js"), ctx, { filename: "js/audio/announcer.js" });
   const A = vm.runInContext("Announcer", ctx);
   const RV = vm.runInContext("RadioVoice", ctx);
@@ -57,7 +61,7 @@ function load({ api = true, voices = [], stored = {}, soundOn = true } = {}) {
     store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) },
     radio: RV.create({ soundOn, state: "race", store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, v) => saved.set(k, v) } }),
   };
-  return { A, RV, G, synth, saved };
+  return { A, RV, G, synth, saved, CircuitLore: lore ? vm.runInContext("CircuitLore", ctx) : null };
 }
 
 const { A } = load();
@@ -155,9 +159,22 @@ test("night and weather are stated, and only one of them", () => {
   assert.match(said(info({ track: { name: "Singapore", gp: "Singapore Grand Prix", lengthKm: 4.94, night: true } })), /under the lights/);
   assert.match(said(info({ tod: "night" })), /under the lights/);
   const wet = said(info({ weather: "rain" }));
-  assert.match(wet, /weather is against us/);
-  assert.ok(!/under the lights/.test(wet));
-  assert.ok(!/weather is against us/.test(said(info({ weather: "dry" }))));
+  assert.ok(!/under the lights/.test(wet), "a wet night is about the water, not the floodlights");
+  assert.equal(/rain|wet|grey|fog/i.test(said(info({ weather: "dry" }))), false,
+    "a dry day says nothing about the weather at all");
+});
+
+test("each weather state gets its OWN line — one clause for five conditions said nothing", () => {
+  // Before 2026-09-20 every non-dry state read "And the weather is against us",
+  // so fog, drizzle and a downpour were one sentence, and `overcast` — which is
+  // about TYRE TEMPERATURE, not adversity — read as a threat.
+  const lines = ["overcast", "wet", "rain", "fog"].map((w) => {
+    const rows = A.rows(info({ weather: w })).map((r) => r.text);
+    const hit = rows.find((l) => /rain|wet|grey|fog|water|dry part/i.test(l));
+    assert.ok(hit, `weather "${w}" produced no conditions line: ${rows.join(" | ")}`);
+    return hit;
+  });
+  assert.equal(new Set(lines).size, 4, "two weather states share a line: " + lines.join(" / "));
 });
 
 test("it ends on the same line whatever it found, so the voice never trails off", () => {
@@ -423,4 +440,117 @@ test("pickVoice prefers the neural and enhanced voices over the compact ones", (
     { name: "Daniel (Enhanced)", lang: "en-GB" },
     { name: "Microsoft George - English (United Kingdom)", lang: "en-GB" },
   ], "Microsoft George - English (United Kingdom)").name, "Microsoft George - English (United Kingdom)");
+});
+
+/* ── 6. THE SESSION, which never reached this script before ──────────────── */
+
+// Until 2026-09-20 the welcome ended "12 laps. Let's go racing." whatever was
+// about to happen: a qualifying hour, a duel with a legend, an unscored
+// practice run. js/game.js tracks every one of these; loadingInfo() simply did
+// not pass them on.
+
+const tail = (o) => A.script(o).slice(-1)[0];
+
+test("the last line names the session — and it IS the last line, whatever else was said", () => {
+  assert.match(tail(info()), /^12 laps\. Let's go racing\.$/);
+  assert.match(tail(info({ session: "quali" })), /Qualifying\./);
+  assert.match(tail(info({ session: "quali", practice: true })), /Qualifying practice\./);
+  assert.match(tail(info({ session: "tt" })), /Time trial\./);
+  assert.match(tail(info({ practice: true })), /^Practice\./);
+  assert.match(tail(info({ duel: true })), /^A duel\. Just the two of you/);
+});
+
+test("a duel names the rival when there is one to name", () => {
+  const withLegend = tail(info({ duel: true, duelLegend: "SENNA" }));
+  assert.match(withLegend, /A duel with Senna\./,
+    "the legend id is shouted for the picker's chip; a broadcast says the name");
+  assert.ok(!/SENNA/.test(withLegend), "all-caps reaches the synth as spelled-out letters");
+});
+
+test("the session outranks the laps, so a quali read never promises a race", () => {
+  const q = said(info({ session: "quali" }));
+  assert.ok(!/12 laps/.test(q), "qualifying is one lap — the race distance is not part of it");
+});
+
+/* ── 7. THE AUTHORED HALF (js/data/circuit-lore.js) ──────────────────────── */
+
+test("every circuit has a lore row, and every lore row has a circuit", () => {
+  // The failure js/audio/announcer.js's original header predicted, guarded:
+  // "written for the six somebody bothered and missing on the rest". Both
+  // directions, so a retired circuit cannot leave a dangling entry either.
+  const { CircuitLore } = load();
+  const onDisk = readdirSync(join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.replace(/\.js$/, "")).sort();
+  const lore = CircuitLore.ids().sort();
+  assert.deepEqual(lore.filter((id) => !onDisk.includes(id)), [], "a lore row names no circuit");
+  assert.deepEqual(onDisk.filter((id) => !lore.includes(id)), [], "a circuit has no lore row");
+});
+
+test("every lore line is one spoken sentence the synth can read", () => {
+  const { CircuitLore } = load();
+  for (const [id, row] of Object.entries(CircuitLore.LORE)) {
+    assert.ok(row.line, `${id} has no identity line`);
+    for (const [slot, text] of Object.entries(row)) {
+      const where = `${id}.${slot}`;
+      assert.match(text, /[.!?]$/, `${where} is not punctuated — the synth runs it into the next line`);
+      assert.ok(!/\bGP\b/.test(text), `${where} says "GP"; speakable() reads that as two letters`);
+      // RadioVoice keeps a short closed set of initialisms and lowercases the
+      // rest, which several engines then spell out letter by letter.
+      const shouty = text.match(/\b[A-Z]{2,}\b/g) || [];
+      assert.deepEqual(shouty, [], `${where} carries ALL-CAPS ${shouty.join(", ")}`);
+      assert.ok(text.length < 160, `${where} is ${text.length} chars — one sentence, not a paragraph`);
+    }
+  }
+});
+
+test("the circuit's own line is spoken, and outranks the numbers when the budget is tight", () => {
+  const spa = info({ track: { id: "spa", name: "Spa", gp: "Belgian Grand Prix", lengthKm: 7.004 }, turns: 19 });
+  assert.match(said(spa), /Ardennes/, "Spa's identity line never reached the script");
+  assert.match(said(spa), /Eau Rouge/, "…nor the corner it is known for");
+  // The ORDERING, swept rather than asserted at one budget: for every budget
+  // that still has room for the length, the circuit's own line is there too.
+  // A listener who hears one sentence about Spa should hear the Ardennes one.
+  for (let ms = 4000; ms <= 30000; ms += 500) {
+    const kept = A.script(spa, ms).join(" ");
+    if (/7\.004 kilometres/.test(kept)) {
+      assert.match(kept, /Ardennes/, `at ${ms} ms the length survived and the circuit's own line did not`);
+    }
+  }
+});
+
+test("a wet circuit reads its OWN wet line, not the generic one", () => {
+  const spa = { id: "spa", name: "Spa", gp: "Belgian Grand Prix", lengthKm: 7.004 };
+  assert.match(said(info({ track: spa, weather: "rain" })), /rain on one half of this circuit/i);
+  // …and a circuit whose row has no wet line still gets the floor.
+  const plain = info({ track: { id: "catalunya", name: "Barcelona", gp: "Spanish Grand Prix", lengthKm: 4.7 }, weather: "rain" });
+  assert.match(said(plain), /Heavy rain/);
+});
+
+/* ── 8. THE BUDGET — the read is cut to fit, not cut off ─────────────────── */
+
+test("the script fits the flyby, and never loses the line that ends it", () => {
+  // The flyby is 24 s (js/ui/loading-screen.js FLY_MS) and the longest reads
+  // were already over it before the authored lines existed — measured at this
+  // channel's rate: a classic circuit in the rain, 26.3 s.
+  const RATE = 0.92;
+  const worst = info({
+    track: { id: "spa", name: "Spa", gp: "Belgian Grand Prix", country: "Belgium", lengthKm: 7.004, classic: true },
+    turns: 19, relief: 103, weather: "rain", laps: 44,
+  });
+  const full = A.script(worst);
+  const fitted = A.script(worst, 24000, RATE);
+  assert.ok(fitted.length < full.length, "the worst case already fits — this test is not measuring anything");
+  const secs = fitted.reduce((n, l) => n + A.seconds(l, RATE), 0);
+  assert.ok(secs <= 24, `the fitted read is ${secs.toFixed(1)} s against a 24 s flyby`);
+  assert.match(fitted.slice(-1)[0], /Let's go racing\.$/, "the cue the player waits for was dropped");
+  assert.match(fitted[0], /^Welcome to Apex 26\.$/);
+});
+
+test("an impossible budget keeps the must-haves rather than falling silent", () => {
+  // Array.from: script() builds its array inside the VM realm, so it carries
+  // that context's Array.prototype and deepStrictEqual rejects it against a
+  // host [] even when every element matches.
+  const fitted = Array.from(A.script(info(), 1), (l) => l.replace(/ .*/, ""));
+  assert.deepEqual(fitted, ["Welcome", "This", "12"],
+    "welcome, venue and session are priority 0 — a one-millisecond budget still says them");
 });

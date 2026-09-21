@@ -148,6 +148,9 @@ const FULL = [
   "js/audio/spotify.js",
   "js/audio/rivals.js",
   "js/audio/radio-voice.js",
+  // The announcer's authored half. Data only, read at CALL time and guarded on
+  // the global, so the order is for tidiness rather than correctness.
+  "js/data/circuit-lore.js",
   "js/audio/announcer.js",
   "js/audio/panel.js",
   "js/car/parts.js",

@@ -732,7 +732,14 @@ const GameAudio = (function () {
     engFilter = ctx.createBiquadFilter();
     engGain = ctx.createGain();
     // Rev-limiter gate (see setEngine): a 13 Hz square into engGain.gain.
-    limOsc = ctx.createOscillator(); limOsc.type = "square"; limOsc.frequency.value = 13;
+    // 13 Hz is the stock rate at limRate 1 — FOLD THE TRIM IN HERE, like the
+    // detune and sub folds beside it. setVoice() applies limRate "once per tune
+    // change, not per frame" (see its setTargetAtTime), and it runs BEFORE this
+    // oscillator exists, so a fresh engine chopped at a flat 13 Hz until the
+    // next voice change: LIM RATE did nothing, and the V10 profile's 1.30 was
+    // inaudible on the car you actually started the race in.
+    limOsc = ctx.createOscillator(); limOsc.type = "square";
+    limOsc.frequency.value = 13 * (tune.limRate != null ? tune.limRate : 1);
     limGain = ctx.createGain(); limGain.gain.value = 0;
     limOsc.connect(limGain).connect(engGain.gain);
     // The cut's PITCH SAG: the same square, in cents, into the core's detune —

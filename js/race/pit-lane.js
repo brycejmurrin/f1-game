@@ -1469,8 +1469,21 @@ const PitLane = (function () {
       // argued against the plan it was revising and pulled the next stop
       // earlier on tyres the car had not used. See TyreModel.planLaps.
       const lifeLaps = (cls) => G.tyres.planLaps(TyreModel.AI_CLASS[cls].life, G.lapsTarget);
+      // `start` must be one of the planner's THREE classes — that is the
+      // alphabet AiDrive.stintPlan sequences future stints in — so a player's
+      // catalog compound still rounds to the nearest of them here.
       const cls = c.tyre.id && TyreModel.AI_CLASS[c.tyre.id] ? c.tyre.id : (c.tyreClass || "medium");
-      const firstLife = Math.max(1, lifeLaps(cls) * (1 - G.tyres.spent(c)));
+      /* firstLife DOES NOT ROUND. stintPlan's own contract calls it "the laps
+         that set has left — the first stint is run on what is on the car, not
+         on a fresh set's life", and it was being derived from `cls`, which for
+         every human is the "medium" fallback: a catalog id is not an AI_CLASS
+         key and c.tyreClass is null for humans. So a player on any compound had
+         the re-cut priced on 0.74 life. A hypersoft (0.30) was planned for
+         2.47x the laps it has, and every per-lap replan argued the stop later
+         than the tyre could reach. The fitted record carries its own life —
+         read that. */
+      const fittedLife = Number.isFinite(c.tyre.life) ? c.tyre.life : TyreModel.AI_CLASS[cls].life;
+      const firstLife = Math.max(1, G.tyres.planLaps(fittedLife, G.lapsTarget) * (1 - G.tyres.spent(c)));
       const stops = plan.pin != null ? Math.max(0, plan.pin - done) : null;
       const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || 0.18, roll: 0.5,
                                       start: cls, firstLife, stops });
