@@ -73,6 +73,11 @@ const SHAPE = function () {
   };
 };
 
+// How long a track build may take before this is a real failure. Sized off a
+// MEASURED TLX build (16.6 s) with room for a loaded box, not off a round
+// number: too short reads as "the game is broken" when the game is fine.
+const TRACK_MS = 45000;
+
 (async () => {
   const srv = await startStaticServer(ROOT);
 
@@ -93,7 +98,13 @@ const SHAPE = function () {
     await page.waitForFunction(() => window.__apex != null, null, { timeout: 15000 });
     await page.evaluate(SHAPE);
     await page.evaluate((t) => window.__apex.race(t), track);
-    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: 15000 });
+    // TRACK_MS, not 15 s. A TLX build of monza on this container's SwiftShader
+    // measures 16.6 s (2026-09-21, idle box, both with and without
+    // `polling: 100` — rAF is not starved here, the budget was simply under
+    // the build). TLX became the DEFAULT backend on 2026-09-18, so from that
+    // day this tool failed on its own default while every sibling kept
+    // working: agent.mjs already budgets 20 s, shot.mjs 120 s, ssr-probe 120 s.
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { timeout: TRACK_MS });
     await sleep(1600); // mesh build
 
     const result = await page.evaluate(async ({ expr, raw }) => {
