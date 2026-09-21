@@ -136,6 +136,14 @@
    presentation attributes, which take a plain number and so need no rule of
    their own) -- tops catch the sky, flanks sit back, rubber stays darkest. */
 #title-car g[data-tone] { fill: var(--steel); }
+/* THE TRAILS HAVE TO BE PAINTED FROM CSS. Carrying fill="url(#tc-trail)" as a
+   presentation attribute does not work here: `#title-car g` above sets fill on
+   the very same element, and a CSS rule beats a presentation attribute, which
+   carries specificity 0. The tyre marks rendered in --carbon for their whole
+   life because of it -- dark smears rather than the red they were written to
+   be. Anything painting a <g> that `#title-car g` also matches has to come
+   from a rule, not an attribute. */
+#title-car g[data-trail] { fill: url(#tc-trail); }
 /* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
    contrast one — the difference matters, because the first measurement looked
    like a legibility problem and was not.
