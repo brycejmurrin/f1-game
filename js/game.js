@@ -1253,14 +1253,16 @@ function showAnnounce(msg, dur, kind) {
   // interrupts. There is no second priority table anywhere in the voice.
   // announceT — the card's ACTUAL life, not a second copy of the expression
   // above — is the utterance's whole budget.
-  radioVoice.say(msg, announceT, kind);
+  const _annCh = RadioVoice.SPEAKERS[kind] || "radio";
+  const _annLead = state === "race" || state === "count" ? GameAudio.radioLeadS(_annCh) : 0;
+  radioVoice.say(msg, announceT, kind, _annLead);
   // ...and the RADIO around it — click, hiss, squelch (engine.js radioSting).
   // On the CARD, not the utterance: the spoken radio ships off, and here it
   // inherits this function's ANN_PRI queue instead of needing a second one.
   // Gated on the session for the same reason plan() is: showAnnounce also draws
   // menu cards, and a squelch under "SAVE CONFLICT" on the title screen claims
   // a radio that is not running.
-  if (state === "race" || state === "count") GameAudio.radioSting(RadioVoice.SPEAKERS[kind] || "radio", announceT);
+  if (state === "race" || state === "count") GameAudio.radioSting(_annCh, announceT);
 }
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
@@ -3699,6 +3701,12 @@ function quitToMenu() {
   els.hud.hidden = true; els.lights.hidden = true; els.pausebtn.hidden = true;
   if (els.btnCam) els.btnCam.hidden = true;
   els.pausemenu.hidden = true; els.results.hidden = true; els.announce.hidden = true; announceT = 0; _annPri = 0; _annFloor = 0; _annQueue.length = 0;   // the announce drain has no state gate: a queued race message re-showed itself over the title screen
+  // ...and the RADIO around that card. Its bed was stopped only by RadioVoice's
+  // #announce observer, which is the VOICE's teardown and does not exist at all
+  // on a browser with no speechSynthesis — so quitting mid-transmission left the
+  // hiss running over the title screen. The sting is GameAudio's, so it ends here
+  // with everything else rather than borrowing another module's lifetime.
+  GameAudio.radioStingStop();
   $("advanced").hidden = true; $("lighting").hidden = true; $("audioset").hidden = true;
   els.overlay.hidden = false;
   $("race-settings").hidden = true;
