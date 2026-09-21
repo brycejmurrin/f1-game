@@ -130,6 +130,12 @@
    read as one tangle rather than as two cars. An attribute hook, not a class,
    so cssClasses stays where it was. */
 #title-car g[data-ink] { fill: var(--steel); stroke: var(--steel); }
+/* VOLUME. The silhouette alone reads flat because every panel takes the same
+   tone, yet the geometry already knows which faces point up and which fall
+   away. These carry the light: one ink at three fill-opacities (set as
+   presentation attributes, which take a plain number and so need no rule of
+   their own) -- tops catch the sky, flanks sit back, rubber stays darkest. */
+#title-car g[data-tone] { fill: var(--steel); }
 /* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
    contrast one — the difference matters, because the first measurement looked
    like a legibility problem and was not.
