@@ -1445,20 +1445,21 @@
         <stop offset="1" stop-color="currentColor" stop-opacity="0"/>
       </linearGradient>
     </defs>
-    <!-- LOW 3/4 FROM THE FRONT RIGHT: nose toward you at the lower left, the
-         car receding up and away to the right, clear of the button column.
-         THE PERSPECTIVE IS PROJECTED, NOT DRAWN BY EYE. Four drafts foreshortened
-         panels by hand and each came out wrong -- the last put the far-side wheels
-         BETWEEN the near ones (in a front-right three-quarter they belong up and
-         to the LEFT) and drew the body a third of the length the wheel size
-         implied. So real F1 dimensions go through one fixed axonometric: L metres
-         rearward of the front axle, W metres left of the right wheel plane, H
-         metres up. 26 units of rise per 160 of run is a 9.2 deg camera, and that
-         is the whole of the low angle. Every number below came out of that
-         projection rather than off a pencil, which is the only reason the
-         wheels sit where they do. To MOVE the camera, change those five
-         constants and re-derive -- nudging a coordinate by hand puts the part
-         somewhere the rest of the car does not agree with.
+    <!-- THE GAME'S OWN CAMERA, NOT AN INVENTED ONE. tools/shot/garage-angles.mjs
+         shot the real car in the garage and its sidecar recorded the orbit that
+         produced the frame: az 0.942 rad, el 0.06 rad, dist 4.6 m. Those two
+         angles give the screen projection of the car's three axes in closed
+         form, and THAT is where every number below comes from -- not a pencil.
+         It also settled an argument the eye had lost four times: the drawing had
+         been sitting at a 9.2 deg camera while the garage angle is 3.4 deg,
+         nearly three times too high, which is why the car kept reading as seen
+         from above rather than from the floor. A low camera is what makes the
+         top faces collapse to slivers and the whole car a long, flat band.
+         L is metres rearward of the front axle, W metres left of the right wheel
+         plane, H metres up, fed real F1 dimensions (3.6 m wheelbase, 1.8 m
+         track, 0.72 m wheels). To MOVE the camera, change az/el and re-derive --
+         nudging a coordinate by hand puts a part somewhere the rest of the car
+         does not agree with.
          MASSES, NOT STROKES. Each part is a CLOSED path (flank + top face) so the
          CSS `fill` gives it a body that hides what is behind it, and that
          occlusion is the depth. The fade therefore rides on STROKE-OPACITY, never
@@ -1469,47 +1470,47 @@
          Weight rides on each group as PRESENTATION ATTRIBUTES (specificity 0), so
          the layer needs no classes; `fill="none"` sits on the open-line paths
          because a direct declaration beats an inherited one. -->
-    <g transform="translate(190 400) scale(0.6)">
+    <g transform="translate(223 464) scale(0.526)">
       <!-- FAR SIDE: left-hand wheels and the far endplates, up and to the LEFT
            of their near partners. That offset is the camera angle. -->
       <g stroke-opacity="0.34" stroke-width="4">
-        <ellipse transform="rotate(-9.2 587 462)" cx="587" cy="462" rx="35" ry="43"/><ellipse transform="rotate(-9.2 587 462)" cx="587" cy="462" rx="20" ry="24"/>
-        <ellipse transform="rotate(-9.2 11 556)" cx="11" cy="556" rx="47" ry="58"/><ellipse transform="rotate(-9.2 11 556)" cx="11" cy="556" rx="27" ry="33"/>
-        <path d="M605 420 L695 417 L695 321 L605 324 Z"/>
-        <path d="M-280 671 L-178 655 L-178 591 L-280 583 Z"/>
+        <ellipse transform="rotate(-9.2 596 577)" cx="596" cy="577" rx="35" ry="43"/><ellipse transform="rotate(-9.2 596 577)" cx="596" cy="577" rx="20" ry="24"/>
+        <ellipse transform="rotate(-9.2 -26 604)" cx="-26" cy="604" rx="47" ry="58"/><ellipse transform="rotate(-9.2 -26 604)" cx="-26" cy="604" rx="27" ry="33"/>
+        <path d="M617 531 L714 539 L714 437 L617 428 Z"/>
+        <path d="M-380 695 L-241 689 L-241 627 L-380 603 Z"/>
       </g>
       <!-- THE CAR, rear to front. A wing only reads as a wing once it has
            endplates, so each gets the pair the eye is looking for. -->
       <g stroke-opacity="0.72" stroke-width="5">
-        <path d="M726 514 L790 512 L790 488 L726 490 Z M726 490 L611 446 L675 444 L790 488 Z"/>
-        <path d="M777 486 L867 483 L867 387 L777 390 Z"/>
-        <path d="M785 451 L855 456 L855 408 L785 409 Z M785 409 L617 345 L687 344 L855 408 Z"/>
-        <path d="M669 472 L742 445 L742 401 L669 420 Z"/>
-        <path d="M423 516 L714 514 L714 442 L423 420 Z M423 420 L364 398 L681 429 L714 442 Z"/>
-        <path d="M373 625 L625 569 L625 485 L373 513 Z M373 513 L238 462 L562 461 L625 485 Z"/>
-        <path d="M721 590 L796 565 L796 497 L721 522 Z M721 522 L626 486 L701 461 L796 497 Z"/>
-        <path d="M116 694 L780 586 L780 564 L116 672 Z M116 672 L-1 627 L663 520 L780 564 Z"/>
-        <path d="M198 653 L468 616 L468 460 L198 509 Z M198 509 L109 475 L367 422 L468 460 Z"/>
-        <path d="M-82 649 L198 641 L198 509 L-82 601 Z M-82 601 L-107 592 L109 475 L198 509 Z"/>
-        <path fill="none" d="M357 407 L331 403 L295 404 L253 411 L211 423 L177 440 L155 459 L148 480 L158 499 M186 633 L233 581 M186 601 L241 544 M756 541 L635 516 M756 509 L642 483"/>
-        <path d="M314 470 L295 467 L265 466 L230 468 L194 472 L163 479 L141 486 L132 493 L138 499 L156 502 L186 503 L221 501 L257 496 L288 490 L310 483 L319 476 L314 470 Z"/>
-        <path d="M381 600 L384 531 L455 523 L449 584 Z"/>
+        <path d="M765 584 L834 590 L834 564 L765 559 Z M765 559 L627 547 L696 553 L834 564 Z"/>
+        <path d="M823 548 L920 556 L920 454 L823 445 Z"/>
+        <path d="M831 513 L908 527 L908 475 L831 468 Z M831 468 L630 451 L706 459 L908 475 Z"/>
+        <path d="M696 557 L776 537 L776 490 L696 502 Z"/>
+        <path d="M434 560 L747 600 L747 523 L434 458 Z M434 458 L363 452 L707 520 L747 523 Z"/>
+        <path d="M384 654 L652 641 L652 551 L384 534 Z M384 534 L222 521 L577 545 L652 551 Z"/>
+        <path d="M758 669 L839 652 L839 580 L758 596 Z M758 596 L645 587 L726 570 L839 580 Z"/>
+        <path d="M62 701 L824 667 L824 646 L62 679 Z M62 679 L-79 668 L683 634 L824 646 Z"/>
+        <path d="M191 671 L485 664 L485 497 L191 518 Z M191 518 L86 509 L364 487 L485 497 Z"/>
+        <path d="M-169 661 L203 663 L203 522 L-169 618 Z M-169 618 L-194 616 L92 513 L203 522 Z"/>
+        <path fill="none" d="M358 448 L329 448 L288 451 L241 458 L196 467 L159 479 L136 492 L131 507 L144 522 M183 634 L230 601 M183 600 L238 562 M800 607 L664 585 M800 573 L671 551"/>
+        <path d="M312 510 L290 509 L257 509 L218 510 L179 511 L145 513 L122 515 L114 517 L121 518 L143 519 L176 519 L215 519 L254 517 L288 515 L311 513 L319 511 L312 510 Z"/>
+        <path d="M392 628 L396 555 L473 555 L466 620 Z"/>
       </g>
       <!-- NEAR WHEELS: right-hand side, at a low oblique so the RIM FACE comes
            into view. A wheel is only unmistakably a wheel when you can see its
            face -- a head-on draft lost them and looked like a gate. -->
       <g stroke-opacity="0.85" stroke-width="6">
-        <ellipse transform="rotate(-9.2 776 534)" cx="776" cy="534" rx="43" ry="53"/><ellipse transform="rotate(-9.2 776 534)" cx="776" cy="534" rx="24" ry="29"/>
-        <ellipse transform="rotate(-9.2 200 628)" cx="200" cy="628" rx="58" ry="71"/><ellipse transform="rotate(-9.2 200 628)" cx="200" cy="628" rx="33" ry="40"/>
-        <path fill="none" d="M142 628 L258 628 M158 577 L241 678 M200 556 L200 699 M241 577 L158 678 M733 534 L819 534 M745 496 L806 572 M776 481 L776 587 M806 496 L745 572"/>
+        <ellipse transform="rotate(-9.2 823 595)" cx="823" cy="595" rx="43" ry="53"/><ellipse transform="rotate(-9.2 823 595)" cx="823" cy="595" rx="24" ry="29"/>
+        <ellipse transform="rotate(-9.2 200 623)" cx="200" cy="623" rx="58" ry="71"/><ellipse transform="rotate(-9.2 200 623)" cx="200" cy="623" rx="33" ry="40"/>
+        <path fill="none" d="M142 623 L258 623 M158 572 L241 673 M200 551 L200 695 M241 572 L158 673 M780 595 L866 595 M792 558 L853 633 M823 542 L823 649 M853 558 L792 633"/>
         <!-- Front wing and its near endplate last: ahead of the front axle. -->
-        <path d="M-85 734 L2 724 L2 684 L-85 686 Z M-85 686 L-274 614 L-187 612 L2 684 Z"/>
-        <path d="M-91 743 L11 727 L11 663 L-91 655 Z"/>
+        <path d="M-146 704 L-25 703 L-25 667 L-146 660 Z M-146 660 L-373 641 L-252 648 L-25 667 Z"/>
+        <path d="M-153 713 L-15 707 L-15 645 L-153 621 Z"/>
       </g>
       <!-- Rim light where a low sky catches the leading edges. A stroke, not a
            filter: an SVG filter costs ~35 % more paint and its own layer. -->
       <g stroke="url(#tc-edge)" stroke-width="4">
-        <path fill="none" d="M-82 601 L-107 592 L109 475 L198 509"/>
+        <path fill="none" d="M-169 618 L-194 616 L92 513 L203 522"/>
       </g>
     </g>
   </svg>
