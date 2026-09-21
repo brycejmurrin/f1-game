@@ -323,6 +323,7 @@ function start(opts) {
     const hired = FREE_AGENTS.find((a) => a.code === o.hire) || FREE_AGENTS[FREE_AGENTS.length - 3];
     career.roster = [rosterEntry(hired, 1)];
   }
+  career.amb = ambIdx(o.amb);
   career.deal = newDeal(team, 1);
   Log.info("game", `Career.start flavour=${flavour} team=${teamId}`);
   return save();
@@ -331,18 +332,70 @@ function start(opts) {
 function salaryFor(team, rep) {
   return Math.round(20 + rep * 1.2 + team.tier * 15);
 }
-const GOAL_REP = 5;
-const GOAL_MV = 12;
+// THE PROMISE YOU MAKE WHEN YOU SIGN. A contract's season goal used to be one
+// number the game chose for you — expectedFinish(team) — so the only lever on a
+// career that felt too easy or too hard was the AI difficulty race setting,
+// which is per-race and blunt. Ambition is the same dial taken from the other
+// end: you tell the team where you will finish, and the paddock prices it.
+//
+// THE MIDDLE RUNG IS WHAT EVERY CONTRACT ALREADY WAS — delta 0, rep 5, mv 12,
+// the old GOAL_REP/GOAL_MV exactly — so a deal signed before this existed
+// carries no `ambition`, reads as index 1 through ambIdx(), and resolves
+// byte-identically. That is why this table is ordered and indexed rather than
+// keyed, and why no CAREER_V rung is owed for the new field.
+//
+// PAID IN REPUTATION, NOT CREDITS, and deliberately. The settlement comment in
+// rollover() has always said a per-season cash bonus would go stale against
+// tools/car/career-economy.mjs and every figure in docs/CAREER.md. Reputation
+// and market value are the better currency anyway: they are what decides which
+// seats offerBar() opens next winter, so promising more buys a better car
+// sooner, and missing costs you rungs on the ladder the hub shows all season.
+const AMBITION = [
+  { key: "modest", name: "PLAY IT SAFE", delta: 3, rep: 3, mv: 6,
+    blurb: "A softer target. The paddock shrugs either way." },
+  { key: "expected", name: "WHAT THEY ASK", delta: 0, rep: 5, mv: 12,
+    blurb: "The finish this team expects from this car." },
+  { key: "ambitious", name: "PROMISE MORE", delta: -3, rep: 8, mv: 20,
+    blurb: "Beat the car. Worth more if you manage it, and costlier if you do not." },
+];
+const AMBITION_DEF = 1;
+function ambIdx(i) {
+  return Number.isInteger(i) && i >= 0 && i < AMBITION.length ? i : AMBITION_DEF;
+}
+function ambitionOf(deal) { return ambIdx(deal && deal.ambition); }
+// The PENDING pick — what the NEXT contract gets signed at. It lives on the
+// career rather than the deal so the choice survives a winter and the picker
+// opens where you left it; the deal stores what was actually signed, because
+// resolving a season against a promise you changed in March is not a promise.
+function ambition() { return career ? ambIdx(career.amb) : AMBITION_DEF; }
+function goalValueFor(team, amb) {
+  return clamp(expectedFinish(team) + AMBITION[ambIdx(amb)].delta, 1, 22);
+}
+function setAmbition(i) {
+  if (!career || careerConflict) return ambition();
+  career.amb = ambIdx(clamp(i | 0, 0, AMBITION.length - 1));
+  // RE-STAMP THE OFFERS ON THE TABLE. The sheet prints o.goal.value, and offers
+  // are drawn at rollover — before this pick exists. Leaving them alone would
+  // put one number on the button and sign the contract at another.
+  for (const o of career.offers || []) {
+    const t = teamOf(o.teamId);
+    if (t) o.goal = { type: "champPos", value: goalValueFor(t, career.amb) };
+  }
+  save();
+  return career.amb;
+}
 
 function bonusPtFor(team) { return 8 + (4 - team.tier) * 4; }
 function newDeal(team, years) {
+  const amb = ambition();
   return {
     team: team.id,
     seat: career ? career.seat : 0,
     years, left: years,
     salary: salaryFor(team, career ? career.rep : 30),
     bonusPt: bonusPtFor(team),
-    goal: { type: "champPos", value: expectedFinish(team) },
+    ambition: amb,
+    goal: { type: "champPos", value: goalValueFor(team, amb) },
   };
 }
 function tierFinish(team) { return 2 + team.tier * 4; }
@@ -989,7 +1042,7 @@ function offerFrom(team, years) {
   return {
     teamId: team.id, years,
     salary: salaryFor(team, career.rep),
-    goal: { type: "champPos", value: expectedFinish(team) },
+    goal: { type: "champPos", value: goalValueFor(team, ambition()) },
   };
 }
 function makeOffers(mv) {
@@ -1028,11 +1081,17 @@ function acceptOffer(i) {
     career.owned = Object.values(factory);
     career.fitted = Object.assign({}, factory);
   }
+  // THE GOAL IS RECOMPUTED, not copied off the offer. setAmbition() re-stamps
+  // every offer it can reach, but a move also re-seats you (weakerSeat above),
+  // and expectedFinish() reads career.rep — so the only number that is certainly
+  // right is the one derived at the moment of signing.
+  const amb = ambition();
   career.deal = {
     team: team.id, seat: career.seat,
     years: o.years, left: o.years, salary: o.salary,
     bonusPt: bonusPtFor(team),
-    goal: o.goal,
+    ambition: amb,
+    goal: { type: "champPos", value: goalValueFor(team, amb) },
   };
   career.offers = [];
   save();
@@ -1086,11 +1145,15 @@ function rollover() {
   // figure in docs/CAREER.md would go stale. MY TEAM has nobody to promise to.
   if (career.flavour !== "myteam" && career.deal && career.deal.goal) {
     const met = entry.pos <= career.deal.goal.value;
-    career.rep = clamp(career.rep + (met ? GOAL_REP : -GOAL_REP), 0, 100);
-    if (!met) mv = Math.max(0, mv - GOAL_MV);
+    // Priced by the promise that was SIGNED (deal.ambition), never by whatever
+    // the picker happens to show now — career.amb is the pick for the NEXT deal.
+    const A = AMBITION[ambitionOf(career.deal)];
+    career.rep = clamp(career.rep + (met ? A.rep : -A.rep), 0, 100);
+    if (!met) mv = Math.max(0, mv - A.mv);
     // Transient, like career.moves: drawn once on the end-of-season sheet, absent
     // on an older save (the sheet skips the line), so no CAREER_V rung is owed.
-    career.goalResult = { value: career.deal.goal.value, pos: entry.pos, met };
+    career.goalResult = { value: career.deal.goal.value, pos: entry.pos, met,
+                          ambition: ambitionOf(career.deal) };
   } else {
     career.goalResult = null;
   }
@@ -1149,6 +1212,10 @@ function state() {
     facilityDiscount: facilityDiscount(),
     owned: career.owned.length,
     deal: career.deal, obj: objective(),
+    // The PENDING pick (what the next contract signs at). What the CURRENT deal
+    // was signed at is deal.ambition, one line up — the two differ for a whole
+    // season whenever the player moves the picker mid-term.
+    amb: ambition(),
     dnfs: career.results.filter((r) => r.dnf).length,
     // Season race-craft average, or null before the first race. Rounds saved
     // before craft existed have no `craft` key and are skipped rather than
@@ -1176,6 +1243,7 @@ return {
   upgradeFacility, SPONSOR_KINDS,
   renewHire, hireDriver, hirePending, HIRE_MIN,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
+  AMBITION, ambition, ambitionOf, setAmbition, goalValueFor,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats,
   owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,

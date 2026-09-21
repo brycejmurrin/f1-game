@@ -1361,6 +1361,17 @@ const api = {
     return { level: Career.facility(), max: Career.FACILITY_MAX,
              cost: Career.facilityCost(), discount: Career.facilityDiscount() };
   },
+  // The contract's season target as a RUNG the player picks, not a number the
+  // game chose. No argument reads; an index sets what the NEXT deal signs at
+  // (and re-stamps any offers on the table). `signed` is what the CURRENT deal
+  // was signed at, which differs whenever the pick moved mid-term.
+  careerAmbition(i) {
+    if (i !== undefined) Career.setAmbition(i);
+    const c = Career.data();
+    return { pick: Career.ambition(), signed: c && c.deal ? Career.ambitionOf(c.deal) : null,
+             target: c && c.deal ? c.deal.goal.value : null,
+             rungs: Career.AMBITION.map((a) => a.key) };
+  },
   careerHire(what) {
     if (what === "renew") Career.renewHire(1);
     else if (typeof what === "string") Career.hireDriver(what, 1);
