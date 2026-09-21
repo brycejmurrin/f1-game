@@ -139,11 +139,14 @@
 /* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
    contrast one — the difference matters, because the first measurement looked
    like a legibility problem and was not.
-   Max channel delta under the button plates, art on vs off: 13 at 1280, 59 at
-   844, 210 at 393. But the worst pixel is at a button's right EDGE every time
-   (mb-race 200 of 201 wide, mb-career 395 of 397, mb-data 102 of 103) — the
-   rounded corner where the plate is transparent. Never over a label. So text
-   contrast is untouched at every size and no scrim is owed.
+   Max channel delta over the labels and plates, art on vs off, re-measured
+   after the art was lightened: 12 at 1280 (a trail under a button, x 869),
+   60 at 844, and 0 at 393 because the layer is display:none there. The
+   lightening cost nothing because the ≤1000px fade absorbs it — the figures
+   are within a point of the 13/59 measured when the art was much darker.
+   The worst pixel is at a button's rounded EDGE, where the plate is
+   transparent, never over a label. So text contrast is untouched at every
+   size and no scrim is owed.
    What IS true is that on a narrow screen the button column takes the whole
    width, so the art has nowhere to be: it crosses the stack and reads as
    clutter. It fades as the column closes in and leaves when there is no room
