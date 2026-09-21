@@ -1435,7 +1435,7 @@
        aria-hidden + focusable=false keep it out of the accessibility tree, and
        it is a SIBLING of the UI, never a wrapper, because aria-hidden inherits
        and must never cover a focusable element. -->
-  <svg id="title-car" viewBox="0 0 1400 900" preserveAspectRatio="xMinYMax slice" aria-hidden="true" focusable="false">
+  <svg id="title-car" viewBox="0 0 1400 900" preserveAspectRatio="xMinYMax meet" aria-hidden="true" focusable="false">
     <defs>
       <!-- Fades drop ALPHA and repeat the colour. SVG gradients are not
            premultiplied, so a stop of `transparent` is transparent BLACK and

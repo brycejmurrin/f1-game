@@ -162,17 +162,19 @@
    left to compose into. */
 @media (max-width: 1000px) { #title-car { opacity: 0.4; } }
 @media (max-width: 700px)  { #title-car { display: none; } }
-/* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER. preserveAspectRatio slice
-   scales to COVER, so on a viewport narrower than the viewBox's 1400/900
-   (1.556) it scales by HEIGHT and runs off the sides: measured on a 834x1194
-   iPad the 1400-unit viewBox blows out to ~1857px, and on a rotated 1080x1920
-   monitor the art is full opacity (it is wider than 1000px, so the fade above
-   never fires) with a front wing across the whole lower third, behind every
-   button. The width queries cannot see either case.
-   The composition is a bottom-left BAND, and portrait has no such band free --
-   the button stack owns the lower half. So below 13/10 the layer leaves.
-   Measured keeps: iPad landscape 1.43 and a 860x560 window 1.54 both stay. */
-@media (max-aspect-ratio: 13/10) { #title-car { display: none; } }
+/* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is on the <svg>:
+   preserveAspectRatio MEET, not SLICE. Slice scales to COVER, so on a viewport
+   narrower than the viewBox's 1400/900 (1.556) it scales by HEIGHT and runs off
+   the sides — measured, a 834x1194 iPad blew the 1400-unit viewBox out to
+   ~1857px, and a rotated 1080x1920 monitor got a front wing across the whole
+   lower third at FULL opacity, because it is wider than 1000px so the fade
+   above never fires. Neither width query can see either case.
+   Meet scales to FIT, so the same two land at 834x536 and 1080x694 — a band at
+   the foot of the screen instead of a blow-up — while landscape barely moves
+   (1280x800 loses 2.7%, an 860x560 window 1.3%). The layer adapts rather than
+   leaving, which is why this is an opacity step and not display:none.
+   Portrait still has the button stack down its middle, so the art yields. */
+@media (max-aspect-ratio: 13/10) { #title-car { opacity: 0.26; } }
 /* Transparency is a preference, and this layer is the most transparent thing on
    the screen. prefers-reduced-transparency is not Baseline yet, so it is a
    progressive enhancement on a design that is already legible without it. */
