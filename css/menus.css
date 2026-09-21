@@ -139,14 +139,15 @@
 /* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
    contrast one — the difference matters, because the first measurement looked
    like a legibility problem and was not.
-   Max channel delta over the labels and plates, art on vs off, re-measured
-   after the art was lightened: 12 at 1280 (a trail under a button, x 869),
-   60 at 844, and 0 at 393 because the layer is display:none there. The
-   lightening cost nothing because the ≤1000px fade absorbs it — the figures
-   are within a point of the 13/59 measured when the art was much darker.
-   The worst pixel is at a button's rounded EDGE, where the plate is
-   transparent, never over a label. So text contrast is untouched at every
-   size and no scrim is owed.
+   MEASURE THE RATIO, NOT THE DELTA. Sampling art on vs off: over the button
+   plates the worst pixel is 10 at 1280 and 0 at 844, and it always lands on a
+   rounded EDGE where the plate is transparent, never on a label. Over text it
+   is 0 at 1280, 0 at 393 (display:none), and 60 at 844 — behind the
+   disclaimer, which sounds alarming and is not. Measured as WCAG SC 1.4.3
+   asks: that 14px line runs 14.55:1 with the art off and 12.62:1 with it on,
+   against a 4.5:1 requirement. Light text on a near-black ground has that much
+   headroom, so no scrim is owed at any size. A channel delta was the wrong
+   instrument; it says the pixels moved, not whether anyone can read them.
    What IS true is that on a narrow screen the button column takes the whole
    width, so the art has nowhere to be: it crosses the stack and reads as
    clutter. It fades as the column closes in and leaves when there is no room
