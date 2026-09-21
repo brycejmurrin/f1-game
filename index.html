@@ -1456,40 +1456,69 @@
          more strokes, and at background weight more lines read as scaffolding.
          Depth and weight ride on each group as PRESENTATION ATTRIBUTES, which
          carry specificity 0, so the layer needs no classes at all. -->
-    <g opacity="0.34" stroke-width="5">
-      <!-- FAR FRONT WHEEL: same two ellipses, smaller and dimmer. The depth cue
-           that sells the angle. -->
-      <ellipse cx="548" cy="640" rx="84" ry="100"/>
-      <ellipse cx="548" cy="640" rx="46" ry="58"/>
-      <!-- airbox above the cockpit -->
-      <path d="M404 596 L430 556 L470 560 L466 600"/>
-    </g>
-    <g opacity="0.46" stroke-width="6">
-      <!-- halo over the cockpit -->
-      <path d="M382 606 C412 560 476 558 506 598"/>
-      <!-- CHASSIS: the mass that ties the two wheels together. Without it they
-           float and the whole thing reads as two wheels and some sticks. -->
-      <path d="M214 690 L392 600 L536 596 L560 664 L300 742 Z"/>
-      <!-- nose dropping from the chassis to the wing -->
-      <path d="M214 690 L120 742 L156 768 L300 742"/>
-    </g>
-    <g opacity="0.62" stroke-width="7">
-      <!-- NEAR FRONT WHEEL. TWO CONCENTRIC ELLIPSES — tread and rim face — is
-           what makes a wheel read. Every draft that drew a rounded rectangle
-           instead came out as a tombstone with an oval in it. -->
-      <ellipse cx="152" cy="636" rx="132" ry="158"/>
-      <ellipse cx="152" cy="636" rx="78" ry="100"/>
-      <circle cx="152" cy="636" r="15"/>
-      <!-- FRONT WING crossing in front of the near wheel, with the endplate
-           square to us because we are almost ahead of it -->
-      <path d="M8 754 L466 706 L478 756 L20 804 Z"/>
-      <path d="M-30 708 L34 700 L42 812 L-22 822 Z"/>
-    </g>
-    <!-- Rim light where a low sky catches the leading edges. A stroke, not a
-         filter: an SVG filter costs ~35 % more paint and its own layer. -->
-    <g stroke="url(#tc-edge)" stroke-width="4">
-      <path d="M20 636 C20 548 79 478 152 478 C225 478 284 548 284 636"/>
-      <path d="M8 754 L466 706"/>
+    <!-- THE WHOLE CAR, IN FRAME. It used to run off the left and bottom edges;
+         this fits nose to diffuser inside the art area instead. One transform
+         does it, so the path data below stays in the coordinates it was drawn
+         in — scaling by hand would have meant re-deriving every point and
+         losing the correspondence to the render it was traced from. -->
+    <g transform="translate(90 200) scale(0.75)">
+      <!-- FAR END. One path carries many subpaths (repeated M), so the drawing
+           can be detailed without one element per line — the shell's node count
+           is ratcheted, and a technical illustration would otherwise cost forty
+           elements instead of four. -->
+      <g opacity="0.3" stroke-width="4">
+        <ellipse cx="628" cy="652" rx="78" ry="96"/>
+        <ellipse cx="628" cy="652" rx="44" ry="56"/>
+        <path d="M566 540 L700 524 L702 558 L568 574 Z
+                 M570 512 L698 496 L700 518 L572 534 Z
+                 M562 506 L578 504 L582 590 L566 592 Z
+                 M688 490 L704 488 L708 572 L692 574 Z
+                 M616 572 L608 620
+                 M584 598 L676 586
+                 M572 700 L664 686 L668 716 L576 730 Z
+                 M440 600 L556 584 L586 626 L470 642
+                 M556 596 L582 620 M590 606 L610 600
+                 M596 616 L640 636 M600 676 L648 668"/>
+      </g>
+      <!-- BODY AND COCKPIT. -->
+      <g opacity="0.42" stroke-width="5">
+        <ellipse cx="452" cy="634" rx="68" ry="82"/>
+        <ellipse cx="452" cy="634" rx="36" ry="46"/>
+        <path d="M338 646 L452 626 L556 636 L566 716 L352 742 Z
+                 M346 656 L346 706 L382 700 L382 650
+                 M360 724 L548 706
+                 M318 752 L592 726
+                 M300 690 L332 676 L336 716 L304 726 Z
+                 M212 694 L330 606 L430 598
+                 M232 742 L360 710 L470 690
+                 M330 606 L392 598 L400 620 L338 628 Z
+                 M318 608 C348 560 412 558 440 598
+                 M378 562 L376 606
+                 M316 622 L286 630 M432 596 L462 604
+                 M165 614 L258 640 M165 614 L268 668
+                 M165 664 L262 700 M165 664 L272 712
+                 M182 668 L252 624
+                 M440 600 L466 560 L506 564 L500 606"/>
+      </g>
+      <!-- NEAR CORNER: the wheel you are looking past, and the wing. -->
+      <g opacity="0.62" stroke-width="6">
+        <ellipse cx="165" cy="628" rx="108" ry="132"/>
+        <ellipse cx="165" cy="628" rx="64" ry="82"/>
+        <circle cx="165" cy="628" r="12"/>
+        <path d="M165 552 L165 704 M108 582 L222 674 M108 674 L222 582 M103 628 L227 628
+                 M-80 786 L300 742 L308 772 L-72 816 Z
+                 M-78 748 L296 706 L302 732 L-74 774 Z
+                 M-76 716 L292 676 L296 696 L-74 736 Z
+                 M-80 690 L-16 682 L-6 826 L-70 834 Z
+                 M120 730 L152 694 M198 718 L214 686
+                 M-40 762 L212 694"/>
+      </g>
+      <!-- Rim light where a low sky catches the leading edges. A stroke, not a
+           filter: an SVG filter costs ~35 % more paint and its own layer. -->
+      <g stroke="url(#tc-edge)" stroke-width="4">
+        <path d="M57 628 C57 555 105 496 165 496 C225 496 273 555 273 628"/>
+        <path d="M-78 748 L296 706"/>
+      </g>
     </g>
   </svg>
   <!-- Branding and small print are ONE block, in ONE grid row.
