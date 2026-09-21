@@ -2848,7 +2848,10 @@ function netOrder(order) {
   // the guest is waiting on.
   if (!Array.isArray(verdict) || !verdict.length) return order;   // never arrived
   const byId = new Map(cars.map((c) => [c.driverId, c]));
-  const sorted = verdict.map((e) => byId.get(e.d)).filter(Boolean);
+  // …and each ELEMENT, not only the container. The Array.isArray note above is
+  // about the payload's shape; `[null]` and `[{}]` both pass it and then throw
+  // on e.d — into the same error overlay, eating the same classification.
+  const sorted = verdict.filter((e) => e && e.d != null).map((e) => byId.get(e.d)).filter(Boolean);
   // Only adopt an order accounting for the WHOLE grid; a partial one would
   // silently drop cars off the results screen. An order we cannot fully resolve
   // now fails this the same way a truncated one always did.

@@ -1171,7 +1171,14 @@ const PitLane = (function () {
         // car's commitment is per pass: a stop it did not make is not carried
         // to the next lap, where the limiter would meet it at the line. An
         // AI's plan (pitArmed) is, by design — it comes in next time round.
-        if (st !== "none") { c.pitState = "none"; c.pitT = 0; if (c.local) { c.pitArmed = false; c.pitCommitted = false; } }
+        if (st !== "none") { c.pitState = "none"; c.pitT = 0; }
+        // THE LOCAL CLEAR IS NOT CONDITIONAL ON HAVING HAD A STATE. "A local
+        // car's commitment is per pass" (above) — but this sat inside the
+        // `st !== "none"` guard, so a car that ARMED on the entry road and then
+        // left the window without ever reaching "lane" kept pitArmed and
+        // pitCommitted, and the limiter met it at the line next lap for a stop
+        // it had already abandoned. An AI's plan is still carried by design.
+        if (c.local) { c.pitArmed = false; c.pitCommitted = false; }
         // THE ENTRY ROAD, before the entry line: where a LOCAL car commits —
         // holding the lane's tarmac arms the stop, and the limiter waits for
         // the line — and where it can still change its mind, by holding the

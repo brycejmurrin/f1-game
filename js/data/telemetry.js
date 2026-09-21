@@ -1369,7 +1369,12 @@ const DataTelemetry = (function () {
       });
       g.fillStyle = "rgba(255,255,255,0.45)"; g.font = "9px system-ui, sans-serif";
       g.textBaseline = "top";
-      g.fillText(series.length === 1 ? "GAP TO " + dcode(view.compare.d) + " (s)" : "GAP TO " + dcode(view.primary.d) + " (s) · +behind", PADL + 2, 2);
+      // ONE LABEL, NAMING THE PRIMARY, whether there is one compare lane or
+      // five. `series` is view.laps.slice(1) and every lane's delta is measured
+      // against view.primary — so the single-lane branch naming the COMPARE car
+      // described the reference backwards, and a reader taking the axis at its
+      // word read every sign the wrong way round.
+      g.fillText("GAP TO " + dcode(view.primary.d) + " (s) · +behind", PADL + 2, 2);
     }
 
     // screen transform for the track map (from the primary lap's x/y bounds)

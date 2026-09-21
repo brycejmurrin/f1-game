@@ -108,7 +108,10 @@ function buildResults(order) {
   const np = G.netPlay;
   const guest = np && np.active && np.active() && !np.ownsClassification();
   const verdict = guest && np.peerResult();
-  const hostRow = new Map(Array.isArray(verdict) ? verdict.map((e) => [e.d, e]) : []);
+  // Element-guarded, like the adopt path in js/game.js: a wire payload of
+  // [null] satisfies Array.isArray and throws on e.d.
+  const hostRow = new Map(Array.isArray(verdict)
+    ? verdict.filter((e) => e && e.d != null).map((e) => [e.d, e]) : []);
   const hasCanonicalHost = Array.isArray(verdict) && verdict.length === order.length && order.length > 0
     && hostRow.size === order.length && order.every((c, i) => verdict[i] && verdict[i].d === c.driverId);
   const dnfOf = (c) => {
