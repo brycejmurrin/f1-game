@@ -237,7 +237,8 @@ function create(G) {
 
   return {
     create, zonesFor, X_ZONE_K, X_ZONE_MIN, X_ZONE_VREF, X_STRAIGHT_T,
-    ZONE_COUNT, AERO_ZONE_TURNS, turnsBounding, runForTurnPair,
+    // turnsBounding is internal to runForTurnPair; it had no external reader.
+    ZONE_COUNT, AERO_ZONE_TURNS, runForTurnPair,
   };
 })();
 Object.freeze(AeroZones);

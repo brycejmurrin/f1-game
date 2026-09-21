@@ -571,7 +571,9 @@ const Collide = (() => {
       }
     }
 
-    return { resolveCollisions, shiftLong, pairContact, sepShares };
+    // shiftLong and sepShares were on this API with no reader anywhere;
+    // both are still used INSIDE resolveCollisions, which is the contract.
+    return { resolveCollisions, pairContact };
   }
 
   return { create, LCAR, WCAR };

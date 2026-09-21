@@ -1171,6 +1171,14 @@ const PitLane = (function () {
         // car's commitment is per pass: a stop it did not make is not carried
         // to the next lap, where the limiter would meet it at the line. An
         // AI's plan (pitArmed) is, by design — it comes in next time round.
+        // THE `st !== "none"` GUARD IS LOAD-BEARING, and a 2026-09-20 survey
+        // finding that called the local clear "wrongly conditional" is wrong.
+        // THE ENTRY ROAD IS OUTSIDE THE WINDOW — that is why the commit logic
+        // below lives in this branch — so this runs every tick while a car
+        // approaches. Clearing pitArmed/pitCommitted unconditionally here wipes
+        // the commitment made on the previous tick before the block below can
+        // read it, and the commit/abort state machine never advances.
+        // tests/unit/pit-lane-vm.test.mjs:101 catches it in one assertion.
         if (st !== "none") { c.pitState = "none"; c.pitT = 0; if (c.local) { c.pitArmed = false; c.pitCommitted = false; } }
         // THE ENTRY ROAD, before the entry line: where a LOCAL car commits —
         // holding the lane's tarmac arms the stop, and the limiter waits for
@@ -1485,7 +1493,7 @@ const PitLane = (function () {
       const fittedLife = Number.isFinite(c.tyre.life) ? c.tyre.life : TyreModel.AI_CLASS[cls].life;
       const firstLife = Math.max(1, G.tyres.planLaps(fittedLife, G.lapsTarget) * (1 - G.tyres.spent(c)));
       const stops = plan.pin != null ? Math.max(0, plan.pin - done) : null;
-      const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || 0.18, roll: 0.5,
+      const rel = AiDrive.stintPlan({ laps: lapsLeft, lifeLaps, pitLossLaps: plan.pitLossLaps || AiDrive.STRAT.PIT_LOSS_FALLBACK, roll: 0.5,
                                       start: cls, firstLife, stops });
       if (!rel) return false;
       const newNext = rel.stops > 0 ? lap - 1 + rel.lapsAt[0] : null;
@@ -1546,7 +1554,6 @@ const PitLane = (function () {
       return why;
     }
 
-    function resetCommit(c) { if (c) c.pitCommitT = 0; }
 
     // ── THE STOP, SEEN: the jacks and the wheels ─────────────────────────
     // Render-only numbers for a car HELD in its box, read off the hold's own
@@ -1637,7 +1644,7 @@ const PitLane = (function () {
 
     return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
-             pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
+             pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S, boxBusy,
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
              boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,

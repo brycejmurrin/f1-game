@@ -129,11 +129,75 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
   test.slow();
 
 
-  test("enabled by default: rapier loads and the side-world runs", async ({ page }) => {
+  // OFF IS THE SHIPPED DEFAULT, and this test is the one that says so.
+  //
+  // It used to be called "enabled by default" and it waited on rapier. That
+  // stopped being true on 2026-09-18, when ab1a334b7 ("Your settings as the
+  // shipped defaults") wrote "debris": "0" into js/data/settings-defaults.js.
+  // create() only arms on an explicit raw "1", so from that commit the wait
+  // could never resolve: measured here, the state sits at
+  // {enabled:false, loadState:0} forever and the 60 s RAPIER_MS below is spent
+  // in full before the timeout. It is not a slow load — nothing is loading.
+  //
+  // ci.yml never caught it because the change-aware selector picks specs by
+  // diff, and no commit since has touched a file that routes to this one.
+  //
+  // The swap with the test below is deliberate: proving the default is off has
+  // to be done from the default, and proving the OPT-IN works has to set the
+  // key. Testing "0" from a build that is already off asserts nothing, which is
+  // exactly what the old pair had degraded into.
+  test("off by the shipped default: inert, no rapier fetch", async ({ page }) => {
     await boot(page);
     await startRace(page, "monza");
-    // Default-on: create() enables at boot; the lazy rapier import resolves
-    // shortly after. Wait for it (or a load failure) rather than a fixed sleep.
+    const r = await page.evaluate(() => {
+      window.__apex.jump(0.1, 40, 0);
+      // NO burst here, unlike the opt-in test below: a burst is a request to
+      // spawn, and asking an inert world to do something is not how a player
+      // reaches it. The claim is that an untouched build stays inert through
+      // real physics ticks.
+      window.__apex.step(1 / 60, 30);   // pump real physics ticks
+      const st = window.__apex.debris();
+      return {
+        active: DebrisWorld.active(),
+        enabled: st.enabled,
+        ready: st.ready,
+        error: st.error,
+        stepped: st.stepped,
+        live: st.live,
+        rapierFetches: performance.getEntriesByType("resource")
+          .filter((e) => e.name.includes("rapier")).length,
+        // For the failure message: a resource-timing buffer that FILLED is the
+        // difference between "rapier never loaded" and "we stopped watching".
+        resourceCount: performance.getEntriesByType("resource").length,
+      };
+    });
+    expect(r.active).toBe(false);       // the one boolean game.js reads
+    expect(r.enabled).toBe(false);
+    expect(r.ready).toBe(false);
+    expect(r.stepped).toBe(0);          // step() never ran — zero cost when off
+    expect(r.live).toBe(0);
+    expect(r.rapierFetches,
+      `a rapier resource entry among ${r.resourceCount} recorded — the default build `
+      + "must not fetch 2.2 MB of WASM for a side-world nobody asked for")
+      .toBe(0);
+  });
+
+  // THE OPT-IN, through the same boot path a player takes. This is the half the
+  // old pair lost: it used to set "0" against a build that already shipped ON,
+  // which was a real assertion then and became a tautology the moment the
+  // default flipped. Setting "1" is now the direction that can actually fail,
+  // and it is the only test here that exercises create()'s idle kick — the
+  // three below reach rapier through __apex.debris(true), which takes the
+  // prime() path instead.
+  test("opt in via apex26.debris='1': rapier loads and the side-world runs", async ({ page }) => {
+    await page.addInitScript(() => {
+      try { localStorage.setItem("apex26.debris", "1"); } catch (e) {}
+    });
+    await boot(page);
+    await startRace(page, "monza");
+    // create() armed at boot and kicked the lazy rapier import on the first
+    // idle slice; prime() starts it at once when a race arrives first. Wait for
+    // it (or a load failure) rather than a fixed sleep.
     await awaitRapier(page);
     const r = await page.evaluate(() => {
       window.__apex.jump(0.1, 40, 0);
@@ -158,7 +222,7 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
       };
     });
     if (!r.ready) throw new Error("rapier load failed: " + r.error);
-    expect(r.active).toBe(true);        // the one boolean game.js reads — on by default
+    expect(r.active).toBe(true);        // the one boolean game.js reads
     expect(r.enabled).toBe(true);
     expect(r.ready).toBe(true);
     expect(r.stepped).toBeGreaterThan(0);   // the burst made the side-world step
@@ -167,34 +231,6 @@ test.describe("Apex 26 — Rapier debris side-world (R0+R1)", () => {
       `no rapier resource entry among ${r.resourceCount} recorded — if that number is at the `
       + "buffer cap the entry was dropped, not the fetch (boot() raises it to 3000)")
       .toBeGreaterThan(0);
-  });
-
-  test("can be disabled via apex26.debris='0': inert, no rapier fetch", async ({ page }) => {
-    await page.addInitScript(() => {
-      try { localStorage.setItem("apex26.debris", "0"); } catch (e) {}
-    });
-    await boot(page);
-    await startRace(page, "monza");
-    const r = await page.evaluate(() => {
-      window.__apex.jump(0.1, 40, 0);
-      window.__apex.step(1 / 60, 30);   // pump real physics ticks
-      const st = window.__apex.debris();
-      return {
-        active: DebrisWorld.active(),
-        enabled: st.enabled,
-        ready: st.ready,
-        stepped: st.stepped,
-        live: st.live,
-        rapierFetches: performance.getEntriesByType("resource")
-          .filter((e) => e.name.includes("rapier")).length,
-      };
-    });
-    expect(r.active).toBe(false);       // the one boolean game.js reads
-    expect(r.enabled).toBe(false);
-    expect(r.ready).toBe(false);
-    expect(r.stepped).toBe(0);          // step() never ran — zero cost when off
-    expect(r.live).toBe(0);
-    expect(r.rapierFetches).toBe(0);    // opted-out users fetch nothing
   });
 
   test("enable + wall hit spawns debris (lastImpact fires, live > 0)", async ({ page }) => {

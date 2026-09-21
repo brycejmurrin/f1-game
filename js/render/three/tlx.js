@@ -1266,7 +1266,6 @@ const TLX = (function () {
         m.set(model);
         return m;
       }
-      const _instMat = new THREE.Matrix4();
       const _instAlive = new Set();   // InstancedMesh objects shown this frame
       const _instRegistry = [];       // all live InstancedMeshes (hide undrawn)
 

@@ -335,7 +335,15 @@ const RaceInsights = (function () {
       // wrong by the same factor in any test that ticks at its own rate.
       const step = Math.max(0, now - (drill.lastT != null ? drill.lastT : drill.time));
       drill.lastT = now;
-      if (r.retired || r.finished) { failDrill("the rival dropped out"); finishDrill(current, c); return; }
+      // BACKMARKERS is scored against a LIST of slower cars (see the target-list
+      // precondition above and the cleared-count branch below), so the car that
+      // happens to be stashed in drill.rival is not what it measures — and
+      // failing the whole drill because that arbitrary car retired ended a run
+      // the player was still completing. Every other rival mode does score
+      // against exactly this car, so the guard stays for them.
+      if (mode !== "backmarkers" && (r.retired || r.finished)) {
+        failDrill("the rival dropped out"); finishDrill(current, c); return;
+      }
       if (G.cautionInfo && G.cautionInfo().level > 0) { failDrill("a caution neutralised the fight"); finishDrill(current, c); return; }
       const gap = gapTo(r, c);
       if (gap == null) return;

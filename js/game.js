@@ -1404,7 +1404,9 @@ function lerpS(prev, cur, a) {
 // the last two physics poses only (renderAlpha).
 // Writes world X/Z into _rp; the caller still samples the road for HEIGHT.
 const _rp = { x: 0, z: 0, world: false };
-function renderPosOf(c, cS, renderX) {
+// (c) only: `cS` and `renderX` were declared and never read — a signature
+// that invites a caller to compute two values for nothing.
+function renderPosOf(c) {
   if (c.px != null && c.rPrevPx !== undefined) {
     _rp.x = c.rPrevPx + (c.px - c.rPrevPx) * renderAlpha;
     _rp.z = c.rPrevPz + (c.pz - c.rPrevPz) * renderAlpha;
@@ -2207,7 +2209,8 @@ function cameraFollowsBank(mode) {
 // car loop runs later, after shadow maps are already consumed by the lit shader,
 // so the player matrix must be resolved here instead of reusing last frame's
 // pooled transform (which trails by speed × frame time on slower devices).
-function currentCarGroundMat(c, out, dt) {
+// No `dt`: it was declared and never read.
+function currentCarGroundMat(c, out) {
   // Player (s,x) already resolved once this frame for the camera — reuse it.
   let cS, cX;
   if (_plOk && c.isPlayer) { cS = _plCS; cX = _plCX; }
@@ -2227,7 +2230,7 @@ function currentCarGroundMat(c, out, dt) {
     S.r[0] = r[0]; S.r[1] = r[1]; S.r[2] = r[2]; S.hw = smp2.hw;
     _bankPlayer.dy = bankC ? bankC.dy : 0; _bankPlayer.roll = bankC ? bankC.roll : 0; _plBodyOk = true;
   }
-  const rp = renderPosOf(c, cS, renderX);   // player: exact world position
+  const rp = renderPosOf(c);   // player: exact world position
   tmpP[0] = rp.world ? rp.x : smp2.p[0] + smp2.r[0] * renderX;
   tmpP[1] = smp2.p[1] + (bankC ? bankC.dy : 0);   // road SURFACE height: legit
   tmpP[2] = rp.world ? rp.z : smp2.p[2] + smp2.r[2] * renderX;
@@ -2850,7 +2853,10 @@ function netOrder(order) {
   // the guest is waiting on.
   if (!Array.isArray(verdict) || !verdict.length) return order;   // never arrived
   const byId = new Map(cars.map((c) => [c.driverId, c]));
-  const sorted = verdict.map((e) => byId.get(e.d)).filter(Boolean);
+  // …and each ELEMENT, not only the container. The Array.isArray note above is
+  // about the payload's shape; `[null]` and `[{}]` both pass it and then throw
+  // on e.d — into the same error overlay, eating the same classification.
+  const sorted = verdict.filter((e) => e && e.d != null).map((e) => byId.get(e.d)).filter(Boolean);
   // Only adopt an order accounting for the WHOLE grid; a partial one would
   // silently drop cars off the results screen. An order we cannot fully resolve
   // now fails this the same way a truncated one always did.
@@ -5817,9 +5823,13 @@ function updateCar(c, dt, ranked) {
           const prevSector = sectorIdx;
           const prevBest = sectorBests[prevSector];
           sectorLast[prevSector] = elapsed;
-          // Delta is measured against the PREVIOUS best, before this split updates it,
-          // so a new personal best shows the actual improvement (not 0.000).
-          const delta = elapsed - (prevBest < Infinity ? prevBest : elapsed);
+          // A `delta` against the previous best was computed here and never
+          // read by anything — the split it was meant to show was never wired
+          // up. Removed rather than left looking like live plumbing; the
+          // ordering note it carried still matters, so it stays: this compares
+          // against the PREVIOUS best, before the line below updates it, which
+          // is what would let a new personal best show a real improvement
+          // rather than 0.000 if that readout is ever built.
           if (elapsed < prevBest) sectorBests[prevSector] = elapsed;
           if (elapsed >= 2 && c.isPlayer) hud.flashSector(prevSector);
         }
@@ -6962,7 +6972,7 @@ function render(dt) {
     // reads as a held-then-jump stutter whose size scales with speed × dt —
     // "vibrates, worse the faster I go". renderPosOf/headInterp are the same
     // interpolation the car body and playerAnchor already use.
-    const rpCam = renderPosOf(player, pS, px);
+    const rpCam = renderPosOf(player);
     camAncNX = rpCam.world ? rpCam.x : null; camAncNZ = rpCam.world ? rpCam.z : 0;   // anchor for the car-frame camera damping below
     _vantExtra.bankDy = bankDy; _vantExtra.deploy = player.deploying;
     _vantExtra.slipLat = player.vLat || 0; _vantExtra.att = player;
@@ -7277,7 +7287,7 @@ function render(dt) {
   // pooled matrices from the preceding frame; only the player's high-speed,
   // chase-camera shadow makes that latency visible.
   const _hasLivePlayerShadow = !!(player && state !== "menu");
-  if (_hasLivePlayerShadow) currentCarGroundMat(player, shadowPass.livePlayerMat, dt);
+  if (_hasLivePlayerShadow) currentCarGroundMat(player, shadowPass.livePlayerMat);
 
   // Sun / car shadow maps: js/render/shared/shadow-pass.js (snap-cached static map,
   // per-frame car map). The live player matrix was resolved above.
@@ -7724,7 +7734,7 @@ function render(dt) {
     else { const pa = playerAnchor(c); cS = pa.cS; cX = pa.cX; }
     c.xVis = cX;   // dump/net field only — pose comes from interpolated px/pz
     const renderX = cX;
-    const rp = renderPosOf(c, cS, renderX);
+    const rp = renderPosOf(c);
     let bankC;
     if (c.isPlayer && _plBodyOk) {
       // Shadow already sampled/banked the player — restore (env probe may clobber smp2).

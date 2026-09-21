@@ -195,8 +195,11 @@ function create(ctx) {
   // build 900. Turning this off never moved that number; the two changes only
   // happened to land together.
   //
-  // The escape hatch stays one call wide: apex26.debris = "0", or
-  // __apex.debris(false).
+  // Both directions stay one call wide: apex26.debris = "1" (or
+  // __apex.debris(true)) to opt IN, "0" / __apex.debris(false) to opt back out.
+  // This comment used to say only the "0" half, which was left over from the
+  // build-893 era when this shipped ON; ab1a334b7 made "0" the SettingsDefaults
+  // value and the opt-IN is now the interesting direction.
   const opt = GameStore.store.raw("debris");
   // Group B disable flags — default ON, read once at boot (any value but "0" is on).
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) { /* storage blocked — default ON */ }
@@ -206,7 +209,8 @@ function create(ctx) {
   // side-world nothing needs before a race is primed. It now waits for the
   // first idle slice (Safari has no requestIdleCallback: a plain timer there);
   // prime() starts it at once if a race arrives first, and step() builds the
-  // world lazily when the load lands after prime. Set "0" to disable.
+  // world lazily when the load lands after prime. Nothing below runs at all
+  // unless the player has opted in — the shipped default is "0".
   if (opt === "1") {
     _enabled = true;
     const kick = () => { if (_enabled) _load(); };
@@ -317,10 +321,24 @@ function destroyWorld() {
   _panels = []; _panelHandles = null;   // B2 — bodies die with the world
 }
 
-function capFor() {
+// MEMOISED ON THE STORE'S REVISION. draw() calls this every frame, so the
+// override read was a localStorage hit per frame for a dev knob that changes
+// approximately never — and a synchronous storage read is not free on a phone.
+// GameStore bumps `rev` on every set(), so the cache self-invalidates the frame
+// after somebody changes the knob; with no store reachable it reads once.
+let _capOverride = null, _capRev = -1;
+function capOverride() {
+  const rev = (G.store && G.store.rev) != null ? G.store.rev : 0;
+  if (_capRev === rev) return _capOverride;
+  _capRev = rev;
   let o = 0;
   try { o = parseInt(localStorage.getItem("apex26.debrisCap") || "", 10); } catch (e) { /* storage blocked — fall through to the tier default */ }
-  if (Number.isFinite(o) && o > 0) return Math.min(o, 256);
+  _capOverride = (Number.isFinite(o) && o > 0) ? Math.min(o, 256) : null;
+  return _capOverride;
+}
+function capFor() {
+  const o = capOverride();
+  if (o != null) return o;
   return (G.gfx && G.gfx.mobileTier) ? CAP_MOBILE : CAP_DESKTOP;
 }
 function marbleCapFor() { return (G.gfx && G.gfx.mobileTier) ? MARBLE_CAP_MOBILE : MARBLE_CAP_DESKTOP; }
