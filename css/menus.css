@@ -123,6 +123,13 @@
    cssClasses stays where it was. A CSS rule would otherwise WIN over that
    presentation attribute, which carries specificity 0. */
 #title-car g:not([stroke]) { stroke: var(--steel); }
+/* ONE CONTOUR, NOT THIRTY. The car's outline is a DILATE-AND-KNOCKOUT, not an
+   SVG filter: every panel is drawn once swollen and inked (this rule), then
+   again in the body colour on top, so what survives is the outer edge of their
+   union. Thirty individual panel outlines is what made two cars side by side
+   read as one tangle rather than as two cars. An attribute hook, not a class,
+   so cssClasses stays where it was. */
+#title-car g[data-ink] { fill: var(--steel); stroke: var(--steel); }
 /* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
    contrast one — the difference matters, because the first measurement looked
    like a legibility problem and was not.
