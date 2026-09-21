@@ -111,7 +111,13 @@
    Depth and weight ride on the groups as PRESENTATION ATTRIBUTES rather than
    classes: they carry specificity 0, so any rule here still wins, and the
    layer costs one class instead of four (cssClasses is ratcheted too). */
-#title-car g { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+/* FILLED, not hollow. The panels are closed paths so that each one HIDES what
+   is behind it -- that occlusion is the only thing giving the car depth. This
+   read `fill: none` for six drafts while the markup was being built around the
+   opposite assumption, and the car rendered as a wireframe every time. The
+   open-line paths carry their own fill="none" attribute, which beats this
+   inherited value. */
+#title-car g { fill: var(--carbon); stroke-linecap: round; stroke-linejoin: round; }
 /* :not([stroke]) rather than a class — the glow group is the only one that
    names its own paint (the gradient), so the art needs no class at all, and
    cssClasses stays where it was. A CSS rule would otherwise WIN over that
