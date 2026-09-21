@@ -73,6 +73,70 @@
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
+/* THE TITLE CAR. A decorative art layer, NOT a grid item: #overlay is a grid,
+   so an in-flow child would open a third row and move the composition. Absolute
+   takes it out of flow and fills the fixed parent instead.
+
+   zoom: normal is LOAD-BEARING. `#overlay > *` above sets zoom: var(--ui-scale),
+   and zoom affects LAYOUT (unlike transform) and compounds down the flat tree —
+   so without this the UI SIZE slider would rescale the artwork's box and re-crop
+   it, which is not what a player asking for bigger TEXT is asking for.
+
+   preserveAspectRatio="xMinYMax slice" is the SVG spelling of
+   `background-size: cover; background-position: left bottom` — xMin pins the
+   left edge, YMax pins the BOTTOM (SVG's +y runs down), slice fills the viewport
+   and crops the overflow. On a portrait phone that leaves only the leftmost
+   ~28 % of the viewBox on screen, hugely magnified, which is exactly why the car
+   is drawn left: the crop makes it loom instead of vanishing. */
+#title-car {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  zoom: normal;
+  pointer-events: none;
+  z-index: -1;
+  color: var(--red);                 /* the ONE declaration that themes every
+                                        currentColor stroke and gradient stop */
+}
+/* Literal colours live on the elements as presentation attributes, which carry
+   specificity 0 — so these rules win without !important and a theme can win
+   over these. */
+/* Stroke language matched to the menu icons: round caps and joins, no fill.
+   AERIAL PERSPECTIVE does the composition work — the near tyre is brightest,
+   the far end fades — so the art thins out exactly where the button column
+   begins instead of being dimmed there afterwards. */
+/* --steel is the app's own line colour (it resolves to --dim), and DEPTH comes
+   from opacity rather than three hand-mixed greys — so the art costs the
+   palette no new colours, which rawColorDistinct ratchets and three hex
+   literals tripped.
+   Depth and weight ride on the groups as PRESENTATION ATTRIBUTES rather than
+   classes: they carry specificity 0, so any rule here still wins, and the
+   layer costs one class instead of four (cssClasses is ratcheted too). */
+#title-car g { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+/* :not([stroke]) rather than a class — the glow group is the only one that
+   names its own paint (the gradient), so the art needs no class at all, and
+   cssClasses stays where it was. A CSS rule would otherwise WIN over that
+   presentation attribute, which carries specificity 0. */
+#title-car g:not([stroke]) { stroke: var(--steel); }
+/* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
+   contrast one — the difference matters, because the first measurement looked
+   like a legibility problem and was not.
+   Max channel delta under the button plates, art on vs off: 13 at 1280, 59 at
+   844, 210 at 393. But the worst pixel is at a button's right EDGE every time
+   (mb-race 200 of 201 wide, mb-career 395 of 397, mb-data 102 of 103) — the
+   rounded corner where the plate is transparent. Never over a label. So text
+   contrast is untouched at every size and no scrim is owed.
+   What IS true is that on a narrow screen the button column takes the whole
+   width, so the art has nowhere to be: it crosses the stack and reads as
+   clutter. It fades as the column closes in and leaves when there is no room
+   left to compose into. */
+@media (max-width: 1000px) { #title-car { opacity: 0.4; } }
+@media (max-width: 700px)  { #title-car { display: none; } }
+/* Transparency is a preference, and this layer is the most transparent thing on
+   the screen. prefers-reduced-transparency is not Baseline yet, so it is a
+   progressive enhancement on a design that is already legible without it. */
+@media (prefers-reduced-transparency: reduce) {
+  #title-car { display: none; }
+}
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
   font-weight: 700; font-style: italic;
