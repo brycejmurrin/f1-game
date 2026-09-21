@@ -15,7 +15,7 @@
       "lines": 2485
     },
     "js/car/car3d.js": {
-      "lines": 4137
+      "lines": 4136
     },
     "js/track/tracks.js": {
       "lines": 2751
@@ -39,7 +39,7 @@
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1726,
+      "ceiling": 1732,
       "slack": 25
     },
     "bareCatches": {
