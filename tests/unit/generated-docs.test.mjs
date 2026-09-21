@@ -135,6 +135,31 @@ test("docs/DEBUG-HOOKS.md: the hook index names every __apex hook plus the agent
   assert.match(doc, /^## Agent world view/m);
 });
 
+test("the consumer column credits a slider to files that read the TUNE, not to homonyms", () => {
+  // The column tallied every `.id` member read regardless of what it was read
+  // OFF. `LiveryTex.contrast(logo, field)` is a WCAG contrast RATIO and has
+  // nothing to do with the CONTRAST slider, so the shipped row read
+  // "scene.js×4, setup-sheet.js×3" for files that have never touched it — and
+  // a HUD needing a contrast ratio of its own would have made it four.
+  //
+  // A module is a global this repo assigns at column 0; a tune is a plain
+  // record passed as LT or T. The rows below are the two shapes that used to
+  // slip through, checked against the generated doc itself.
+  const doc = read("docs/LIGHTING-TUNER-SLIDERS.md");
+  const row = (id) => {
+    const m = new RegExp("^\\| `" + id + "` \\|(.*)$", "m").exec(doc);
+    assert.ok(m, `no row for ${id}`);
+    return m[1];
+  };
+  assert.ok(!/scene\.js|setup-sheet\.js/.test(row("contrast")),
+    "the garage files read LiveryTex.contrast — a ratio, not the slider: " + row("contrast"));
+  // …and the fix must not have thrown out the true reads with them. These two
+  // are read as `LightTune.LT.particleMul` and `LT.glareStr`: a CHAINED read
+  // off a tune, and a plain one, both real.
+  assert.match(row("particleMul"), /particles\.js/, "a chained tune read was lost");
+  assert.match(row("glareStr"), /game\.js/, "a plain tune read was lost");
+});
+
 test("a slider's help text states ITS OWN ceiling, not a bound it no longer has", () => {
   // The repo's convention: "Ceiling is N" / "Tops out at N" in a slider's help
   // means that slider's `max`. It held for 8 of the 10 sliders that use the
