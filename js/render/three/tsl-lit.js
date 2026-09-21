@@ -90,7 +90,6 @@
     // lights (colorNode is the whole shader). A stable key + lights=false
     // lets the node-builder cache hit across every mesh that shares a
     // program family (lit vs lit-chunked).
-    const _pinKeys = Object.create(null);
     function pinProgram(m, key) {
       m.lights = false;
       // Lit already does its own fog / albedo. three's NodeMaterial fog

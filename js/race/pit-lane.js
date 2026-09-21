@@ -1553,7 +1553,6 @@ const PitLane = (function () {
       return why;
     }
 
-    function resetCommit(c) { if (c) c.pitCommitT = 0; }
 
     // ── THE STOP, SEEN: the jacks and the wheels ─────────────────────────
     // Render-only numbers for a car HELD in its box, read off the hold's own
@@ -1644,7 +1643,7 @@ const PitLane = (function () {
 
     return { zoneOf: () => z(), limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
              arm, update, reset, info, setNext, serviceCar, planFor, think,
-             pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, resetCommit, toEntry, cue,
+             pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, toEntry, cue,
              worthStopping, canWork, addWork, workS: WORK_S, boxBusy,
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
              boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,

@@ -3645,7 +3645,6 @@ const Car3D = (function () {
 
     part("rearAssembly");
     if (!ckpt) {
-      const aN     = aLvl / 4;                  // 0..1 normalized downforce level
       const rwLift = (aLvl - 2) * 0.045;        // gentler vertical shift (beam-wing ref)
       const _ep    = endplateGeom(aLvl);
       const epSY   = _ep.sy;   // lvl0 0.28 → lvl2 0.47 → lvl4 0.58 (capped)

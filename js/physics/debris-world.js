@@ -317,10 +317,24 @@ function destroyWorld() {
   _panels = []; _panelHandles = null;   // B2 — bodies die with the world
 }
 
-function capFor() {
+// MEMOISED ON THE STORE'S REVISION. draw() calls this every frame, so the
+// override read was a localStorage hit per frame for a dev knob that changes
+// approximately never — and a synchronous storage read is not free on a phone.
+// GameStore bumps `rev` on every set(), so the cache self-invalidates the frame
+// after somebody changes the knob; with no store reachable it reads once.
+let _capOverride = null, _capRev = -1;
+function capOverride() {
+  const rev = (G.store && G.store.rev) != null ? G.store.rev : 0;
+  if (_capRev === rev) return _capOverride;
+  _capRev = rev;
   let o = 0;
   try { o = parseInt(localStorage.getItem("apex26.debrisCap") || "", 10); } catch (e) { /* storage blocked — fall through to the tier default */ }
-  if (Number.isFinite(o) && o > 0) return Math.min(o, 256);
+  _capOverride = (Number.isFinite(o) && o > 0) ? Math.min(o, 256) : null;
+  return _capOverride;
+}
+function capFor() {
+  const o = capOverride();
+  if (o != null) return o;
   return (G.gfx && G.gfx.mobileTier) ? CAP_MOBILE : CAP_DESKTOP;
 }
 function marbleCapFor() { return (G.gfx && G.gfx.mobileTier) ? MARBLE_CAP_MOBILE : MARBLE_CAP_DESKTOP; }
