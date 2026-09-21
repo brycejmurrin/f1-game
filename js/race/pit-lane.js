@@ -1171,14 +1171,15 @@ const PitLane = (function () {
         // car's commitment is per pass: a stop it did not make is not carried
         // to the next lap, where the limiter would meet it at the line. An
         // AI's plan (pitArmed) is, by design — it comes in next time round.
-        if (st !== "none") { c.pitState = "none"; c.pitT = 0; }
-        // THE LOCAL CLEAR IS NOT CONDITIONAL ON HAVING HAD A STATE. "A local
-        // car's commitment is per pass" (above) — but this sat inside the
-        // `st !== "none"` guard, so a car that ARMED on the entry road and then
-        // left the window without ever reaching "lane" kept pitArmed and
-        // pitCommitted, and the limiter met it at the line next lap for a stop
-        // it had already abandoned. An AI's plan is still carried by design.
-        if (c.local) { c.pitArmed = false; c.pitCommitted = false; }
+        // THE `st !== "none"` GUARD IS LOAD-BEARING, and a 2026-09-20 survey
+        // finding that called the local clear "wrongly conditional" is wrong.
+        // THE ENTRY ROAD IS OUTSIDE THE WINDOW — that is why the commit logic
+        // below lives in this branch — so this runs every tick while a car
+        // approaches. Clearing pitArmed/pitCommitted unconditionally here wipes
+        // the commitment made on the previous tick before the block below can
+        // read it, and the commit/abort state machine never advances.
+        // tests/unit/pit-lane-vm.test.mjs:101 catches it in one assertion.
+        if (st !== "none") { c.pitState = "none"; c.pitT = 0; if (c.local) { c.pitArmed = false; c.pitCommitted = false; } }
         // THE ENTRY ROAD, before the entry line: where a LOCAL car commits —
         // holding the lane's tarmac arms the stop, and the limiter waits for
         // the line — and where it can still change its mind, by holding the
