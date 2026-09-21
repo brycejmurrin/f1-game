@@ -26,6 +26,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(join(ROOT, p), "utf8");
@@ -619,4 +620,91 @@ test("the sting is gated on the session, exactly as plan() is", () => {
   // not happening, on a screen where no car is running.
   const game = read("js/game.js");
   assert.match(game, /if \(state === "race" \|\| state === "count"\) GameAudio\.radioSting\(/);
+  // ...and the VOICE gets the same channel's cue length as its lead, from the
+  // engine rather than a second copy of the note table, so the words start when
+  // the figure ends instead of underneath it.
+  assert.match(game, /GameAudio\.radioLeadS\(_annCh\)/);
+  assert.match(game, /radioVoice\.say\(msg, announceT, kind, _annLead\)/);
+});
+
+test("waiting for the courtesy figure costs no shipped line its voice", () => {
+  /* THE WORDS NOW START AFTER THE CUE, which means the cue comes out of the
+   * budget — and a budget that shrinks can silence a line that used to fit.
+   * This is the measurement that says it does not. The engineer's figure is
+   * four notes (~0.425 s) and race control's is two (~0.25 s); the lead is read
+   * from js/audio/engine.js so the two cannot drift.
+   *
+   * A NEW entry here means the cue just took a line off the air, and the
+   * trade has to be made deliberately rather than discovered by a player. */
+  const src = read("js/audio/engine.js");
+  const table = src.match(/const RADIO_CH = Object\.freeze\(\{([\s\S]*?)\n  \}\);/);
+  assert.ok(table, "could not find RADIO_CH");
+  const leadOf = (speaker) => {
+    // up to the figure's closing "]]" — the notes are themselves arrays, so a
+    // lazy [^\]] scan stops inside the first note instead of after the last.
+    const row = table[1].match(new RegExp(speaker + ":[\\s\\S]*?tune: \\[([\\s\\S]*?\\]\\])"));
+    if (!row) return 0;
+    return 0.03 + [...row[1].matchAll(/\[\s*[\d.]+\s*,\s*([\d.]+)/g)].reduce((a, m) => a + +m[1], 0);
+  };
+  const leads = { control: leadOf("control"), radio: leadOf("radio"), coach: 0 };
+  assert.ok(leads.radio > 0.3, "the engineer's figure should be four notes: " + leads.radio);
+  assert.ok(leads.control > 0.1 && leads.control < leads.radio, "race control's is shorter: " + leads.control);
+
+  const files = ["js/game.js", "js/race/engineer.js", "js/race/pit-lane.js", "js/race/driving-coach.js",
+    "js/race/race-insights.js", "js/race/session-records.js"];
+  let checked = 0; const newlyMute = [];
+  for (const f of files) {
+    for (const m of read(f).matchAll(/announce\(\s*"([^"]{4,})"\s*,\s*([\d.]+)\s*(?:,\s*"([a-z-]+)")?\s*\)/g)) {
+      const [, msg, dur, kind0] = m, kind = kind0 || "race";
+      const life = Math.max(3, (+dur || 1.6) + 0.5);
+      const lead = leads[RV.SPEAKERS[kind] || "radio"] || 0;
+      checked++;
+      if (P({ msg, life, kind, lead: 0 }).speak && !P({ msg, life, kind, lead }).speak)
+        newlyMute.push(`${f}: "${msg}" (${life.toFixed(1)} s card, ${lead.toFixed(3)} s cue)`);
+    }
+  }
+  assert.ok(checked >= 10, `expected to find the shipped lines, found ${checked}`);
+  assert.deepEqual(newlyMute, [], "the courtesy figure silenced these lines");
+});
+
+test("a preempt during the cue cancels the line waiting behind it", () => {
+  /* The lead is a window where a speak is SCHEDULED but not yet handed over.
+   * Without clearing it, the line that was interrupted arrives on top of the
+   * line that interrupted it — the same inversion `current` prevents one step
+   * later, and the case this game produces every time a penalty cuts in.
+   *
+   * ITS OWN CLOCK, because a real setTimeout fires long after a synchronous
+   * test has returned: with the platform timer this passed whether or not
+   * stop() cancelled anything, which is a test that cannot fail. */
+  const timers = [];
+  const ctx = vm.createContext({ Math, JSON, Object, Array, Number, String, Set, console,
+    setTimeout: (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; },
+    clearTimeout: (id) => { const t = timers[id - 1]; if (t) t.live = false; } });
+  seedLog(ctx);
+  const synth = synthStub({ voices: [{ name: "A", lang: "en-GB", localService: true }] });
+  ctx.window = { speechSynthesis: synth, SpeechSynthesisUtterance: function (t) { this.text = t; } };
+  ctx.GameAudio = { setRadioDuck() {} };
+  vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: "js/audio/radio-voice.js" });
+  const saved = new Map([["radioVoice", true]]);
+  const v = vm.runInContext("RadioVoice", ctx).create({
+    soundOn: true, state: "race",
+    store: { get: (k, d) => (saved.has(k) ? saved.get(k) : d), set: (k, x) => saved.set(k, x) },
+  });
+  const spoke = () => synth.calls.filter((c) => c.m === "speak").length;
+  assert.equal(v.say("TYRES AT 50%", 3, "info", 0.4), true, "the wear report is scheduled behind its cue");
+  assert.equal(spoke(), 0, "...and has not been handed over yet");
+  v.stop();
+  for (const t of timers) if (t.live) t.fn();          // the clock runs on regardless
+  assert.equal(spoke(), 0, "a stop during the lead must cancel the pending speak, not let it fire");
+});
+
+test("quitting to the title ends the radio, not just the card", () => {
+  // The hiss bed was torn down only by RadioVoice's #announce observer — the
+  // VOICE's teardown, which is never registered at all on a browser without
+  // speechSynthesis. Quitting mid-transmission then left the radio running over
+  // the title screen. quitToMenu already ends every other session thing.
+  const quit = fnSource(read("js/game.js"), "function quitToMenu()");
+  assert.match(quit, /GameAudio\.radioStingStop\(\)/,
+    "quitToMenu must end the sting itself rather than borrow the voice's observer");
+  assert.match(quit, /_annQueue\.length = 0/, "…on the same pass that empties the announce queue");
 });

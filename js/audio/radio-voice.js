@@ -136,7 +136,7 @@ const RadioVoice = (function () {
    */
   function plan(o) {
     const kind = o.kind || "race";
-    const out = { speak: false, reason: "", text: "", speaker: "radio", rate: 1, pitch: 1, volume: o.volume == null ? 1 : o.volume, budgetMs: 0 };
+    const out = { speak: false, reason: "", text: "", speaker: "radio", rate: 1, pitch: 1, volume: o.volume == null ? 1 : o.volume, budgetMs: 0, leadMs: 0 };
     if (!o.enabled) { out.reason = "off"; return out; }
     if (!o.soundOn) { out.reason = "master-off"; return out; }
     if (!o.api) { out.reason = "no-api"; return out; }
@@ -148,7 +148,15 @@ const RadioVoice = (function () {
     const tone = toneFor(speaker, o.tune);
     const text = speakable(o.msg);
     if (!text) { out.reason = "empty"; return out; }
-    const budget = (o.life || 0) - LEAD_RESERVE_S;
+    // THE CUE COMES FIRST, SO IT COMES OUT OF THE BUDGET. The radio frame opens
+    // with a courtesy figure (js/audio/engine.js radioSting) and the words
+    // belong AFTER it, the way a broadcast plays it — not over the top of it,
+    // which is what happened while the two started together. `lead` is that
+    // figure's real length, handed in by the caller rather than duplicated
+    // here, and the line has the card MINUS it to fit in.
+    const lead = Math.max(0, Math.min(1, +o.lead || 0));
+    out.leadMs = lead * 1000;
+    const budget = (o.life || 0) - LEAD_RESERVE_S - lead;
     let rate = tone.rate;
     if (estimate(text, rate) > budget) rate = RATE_MAX;
     if (estimate(text, rate) > budget) { out.reason = "too-long"; out.text = text; return out; }
@@ -187,6 +195,11 @@ const RadioVoice = (function () {
     // the music underneath it. That lands on exactly the lines that preempt:
     // a penalty cutting off the coach is the case this module was built for.
     let voices = null, voicesAny = null, deadline = null, last = null, current = null;
+    // The speak waiting out the courtesy figure. A preempt during that window
+    // must cancel it, or the line it interrupted arrives on top of the line
+    // that interrupted it — the exact inversion `current` exists to prevent,
+    // one step earlier in the chain.
+    let pending = null;
     /* DID THE ENGINE ACTUALLY START? `asked` counts the speaks we HANDED to the
      * platform; `started` counts the ones it actually began (onstart).
      *
@@ -244,7 +257,9 @@ const RadioVoice = (function () {
       return v[i % v.length];
     }
     function clearDeadline() { if (deadline != null) { clearTimeout(deadline); deadline = null; } }
+    function clearPending() { if (pending != null) { clearTimeout(pending); pending = null; } }
     function stop() {
+      clearPending();
       clearDeadline();
       // Before cancel(): the callback it triggers must already see itself as
       // stale, whether the engine fires it synchronously or a turn later.
@@ -256,11 +271,17 @@ const RadioVoice = (function () {
       // transmission early for a player who never turned speech on.
       if (GameAudio && GameAudio.radioStingStop) GameAudio.radioStingStop();
     }
-    function say(msg, life, kind) {
-      const p = plan({ msg, life, kind, enabled, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
-      last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs };
+    function say(msg, life, kind, lead) {
+      const p = plan({ msg, life, kind, lead, enabled, soundOn: !!G.soundOn, state: G.state, api: true, volume, tune });
+      last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs };
       if (!p.speak) return false;
       stop();
+      // AFTER THE CUE, NOT UNDER IT. Deferred rather than shortened: the words
+      // keep their own rate and simply start when the figure has finished.
+      if (p.leadMs > 0) { pending = setTimeout(() => { pending = null; speakPlanned(p); }, p.leadMs); return true; }
+      return speakPlanned(p);
+    }
+    function speakPlanned(p) {
       const u = new Utter(p.text);
       u.voice = voiceFor(p.speaker);
       u.rate = p.rate; u.pitch = p.pitch; u.volume = p.volume;
