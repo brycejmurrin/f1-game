@@ -1445,44 +1445,51 @@
         <stop offset="1" stop-color="currentColor" stop-opacity="0"/>
       </linearGradient>
     </defs>
-    <!-- LINE ART, not filled masses. Three filled attempts read as one dark
-         blob: this screen is dark, so a dark silhouette has nothing to sit
-         against. Stroke is also the app's own language — every menu icon above
-         is a lucide-style outline — so the car belongs to the same family
-         instead of arriving as a foreign illustration.
-         ONE-TWO-THREE: the near TYRE is the dominant form, the WING blade and
-         NOSE are the mediums, the halo / airbox / rear wing are accents, and
-         they fade with distance so the far end never crowds the buttons. -->
-    <g opacity="0.5" stroke-width="7">
-      <!-- NEAR FRONT TYRE. Drawn as an ellipse, not an arch: a wheel is only a
-           wheel if it closes. Ratio ~0.85 w/h, measured off the garage render;
-           at 0.6 it read as a tombstone. -->
-      <ellipse cx="196" cy="648" rx="152" ry="178"/>
-      <ellipse cx="196" cy="648" rx="84" ry="104"/>
-      <circle cx="196" cy="648" r="18"/>
+    <!-- LINE ART, not filled masses. A dark silhouette on a dark screen reads as
+         one blob; stroke is also the app's own language — every menu icon above
+         is a lucide-style outline — so the car joins that family.
+         FRONT-RIGHT, 0.85 m up, traced off a garage render from 4.2 m out. That
+         height is what makes it read: the RIM FACES come into view, and a wheel
+         is only unmistakably a wheel when you can see its face. A head-on draft
+         lost them and came out looking like a gate.
+         FEW SHAPES ON PURPOSE. The failed drafts answered "draw more of it" with
+         more strokes, and at background weight more lines read as scaffolding.
+         Depth and weight ride on each group as PRESENTATION ATTRIBUTES, which
+         carry specificity 0, so the layer needs no classes at all. -->
+    <g opacity="0.34" stroke-width="5">
+      <!-- FAR FRONT WHEEL: same two ellipses, smaller and dimmer. The depth cue
+           that sells the angle. -->
+      <ellipse cx="548" cy="640" rx="84" ry="100"/>
+      <ellipse cx="548" cy="640" rx="46" ry="58"/>
+      <!-- airbox above the cockpit -->
+      <path d="M404 596 L430 556 L470 560 L466 600"/>
     </g>
-    <g opacity="0.34" stroke-width="6">
-      <!-- FRONT WING, the widest and closest thing: one shallow plane crossing
-           the whole frame, which is what actually says "formula car". -->
-      <path d="M-40 806 L636 708 L640 754 L-40 852 Z"/>
-      <path d="M636 708 L676 702 L682 790 L640 796"/>
-      <!-- nose wedge, rising between the wheels -->
-      <path d="M318 726 L486 604 L534 600 L540 640 L372 752"/>
+    <g opacity="0.46" stroke-width="6">
+      <!-- halo over the cockpit -->
+      <path d="M382 606 C412 560 476 558 506 598"/>
+      <!-- CHASSIS: the mass that ties the two wheels together. Without it they
+           float and the whole thing reads as two wheels and some sticks. -->
+      <path d="M214 690 L392 600 L536 596 L560 664 L300 742 Z"/>
+      <!-- nose dropping from the chassis to the wing -->
+      <path d="M214 690 L120 742 L156 768 L300 742"/>
     </g>
-    <g opacity="0.22" stroke-width="5">
-      <!-- FAR TYRE: same shape, smaller and fainter — the one cue that sells
-           depth without drawing a whole second wheel. -->
-      <ellipse cx="596" cy="632" rx="98" ry="116"/>
-      <!-- halo over the cockpit, landing on the nose -->
-      <path d="M470 592 C502 552 556 550 586 582"/>
-      <!-- airbox spine -->
-      <path d="M478 590 L524 550 L552 556 L546 596"/>
+    <g opacity="0.62" stroke-width="7">
+      <!-- NEAR FRONT WHEEL. TWO CONCENTRIC ELLIPSES — tread and rim face — is
+           what makes a wheel read. Every draft that drew a rounded rectangle
+           instead came out as a tombstone with an oval in it. -->
+      <ellipse cx="152" cy="636" rx="132" ry="158"/>
+      <ellipse cx="152" cy="636" rx="78" ry="100"/>
+      <circle cx="152" cy="636" r="15"/>
+      <!-- FRONT WING crossing in front of the near wheel, with the endplate
+           square to us because we are almost ahead of it -->
+      <path d="M8 754 L466 706 L478 756 L20 804 Z"/>
+      <path d="M-30 708 L34 700 L42 812 L-22 822 Z"/>
     </g>
     <!-- Rim light where a low sky catches the leading edges. A stroke, not a
          filter: an SVG filter costs ~35 % more paint and its own layer. -->
     <g stroke="url(#tc-edge)" stroke-width="4">
-      <path d="M44 648 C44 550 112 470 196 470 C280 470 348 550 348 648"/>
-      <path d="M-40 806 L636 708"/>
+      <path d="M20 636 C20 548 79 478 152 478 C225 478 284 548 284 636"/>
+      <path d="M8 754 L466 706"/>
     </g>
   </svg>
   <!-- Branding and small print are ONE block, in ONE grid row.
