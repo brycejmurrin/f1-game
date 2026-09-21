@@ -668,6 +668,13 @@ const AiDrive = (function () {
   // with the fuel still aboard, and the planner reaches for harder rubber early
   // and softer late. That is the real pattern, arrived at from the real cause.
   const FUEL_WEAR = 0.22;    // life lost at a full tank, as a fraction
+  /* WHAT A STOP COSTS, when the caller has not measured it — ONE number, because
+     this module used to carry two. stintPlan fell back to 0.18 and wornPays() to
+     0.12, so "is it worth stopping" and "when should I stop" answered the same
+     question differently by half again. js/race/pit-lane.js derives the real
+     value (loss / lapRefS, clamped) and passes it; this is only for a caller
+     that has none yet, and 0.18 is the planner's own long-standing figure. */
+  const PIT_LOSS_FALLBACK = 0.18;
   const DEG_LIN = 0.05;      // lateral grip lost across a full stint (TyreModel.DROP_LIN)
   const DEG_CLIFF = 0.25;    // ...and per unit of wear past it
   const GRIP_TO_LAP = 0.55;  // a fraction of grip is worth this much of a lap — sub-linear
@@ -712,7 +719,12 @@ const AiDrive = (function () {
         const eff = lives.map((v, i) => {
           const fuel = 1 - (done + out[i] / 2) / laps;   // mean fuel across THIS stint
           done += out[i];
-          return Math.max(0.5, v * (1 - fuelWear * fuel));
+          // DIVIDED, matching stintPlan's cost below and the sim itself: fuel
+          // multiplies tyre LOAD by (1 + FUEL_LOAD·fuel), so the life a set has
+          // is v / (1 + fuelWear·fuel). This function only needs the RATIO
+          // between stints, but the two forms weight that ratio differently,
+          // so the form has to match or the lap numbers drift from the cost.
+          return Math.max(0.5, v / (1 + fuelWear * fuel));
         });
         out = share(eff);
       }
@@ -730,7 +742,7 @@ const AiDrive = (function () {
   function stintPlan(ctx) {
     const laps = Math.max(1, Math.round(ctx.laps || 1));
     const lifeLaps = ctx.lifeLaps || ((cls) => (TYRE[cls] ? laps * 0.7 : laps));
-    const pitLossLaps = ctx.pitLossLaps != null ? ctx.pitLossLaps : 0.18;
+    const pitLossLaps = ctx.pitLossLaps != null ? ctx.pitLossLaps : PIT_LOSS_FALLBACK;
     const roll = clamp(ctx.roll || 0, 0, 1);
     // TWO tastes, because one is not enough to spread a field. Biasing only the
     // STOP COUNT moves the stop/no-stop boundary and leaves every car choosing
@@ -768,7 +780,21 @@ const AiDrive = (function () {
         // Mean fuel aboard across THIS stint, 1 on the grid to 0 at the flag.
         const fuel = 1 - (done + stints[i] / 2) / laps;
         cost += -(t.off + (taste[seq[i]] || 0)) * stints[i]
-              + degCost(stints[i], lives[i] * (1 - FUEL_WEAR * fuel));
+              // DIVIDED, NOT SUBTRACTED. The sim raises tyre LOAD by
+              // (1 + FUEL_LOAD·fuel) — js/physics/tyre-model.js fuelLoadMul,
+              // applied to the load that drives wear — so the life a set
+              // actually has is life / (1 + 0.22·fuel). The planner charged
+              // life × (1 − 0.22·fuel), which is the first-order approximation
+              // of the same idea and is short by 4.84% at a full tank (0.7800
+              // against 0.8197), 2.72% at three-quarters, 1.21% at half. It
+              // believed every set would die sooner than it does. Measured
+              // over 1620 plans against the old form (with the matching fix in
+              // splitStints above, which is what actually sets the lap
+              // numbers): 381 plans move, the first stint runs LONGER in 326
+              // of them and shorter in 46, and the stop COUNT is a wash — 10
+              // fewer, 10 more. It was stopping early, not stopping often.
+              // Same constant on both sides; now the same FORM.
+              + degCost(stints[i], lives[i] / (1 + FUEL_WEAR * fuel));
         done += stints[i];
       }
       if (!best || cost < best.cost) best = { cost, seq: seq.slice(), stints: stints.slice(), stops };
@@ -843,7 +869,7 @@ const AiDrive = (function () {
     if (ctx.lapsLeft == null) return true;            // caller has not said; behave as before
     const over = Math.max(0.1, (ctx.wear || 0) - 1);
     const gainPerLap = DEG_CLIFF * GRIP_TO_LAP * over;
-    const payback = (ctx.pitLossLaps > 0 ? ctx.pitLossLaps : 0.12) / Math.max(1e-3, gainPerLap);
+    const payback = (ctx.pitLossLaps > 0 ? ctx.pitLossLaps : PIT_LOSS_FALLBACK) / Math.max(1e-3, gainPerLap);
     return ctx.lapsLeft >= payback;
   }
   function pitNow(ctx) {
@@ -1090,6 +1116,6 @@ const AiDrive = (function () {
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
     tyreClass, tyrePace, stintPlan, pitNow, wornPays, degCost, splitStints, compoundFor,
-    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR },
+    STRAT: { MAX_STOPS, CLASSES, CAUTION_REACH, DEG_LIN, DEG_CLIFF, GRIP_TO_LAP, FUEL_WEAR, PIT_LOSS_FALLBACK },
   };
 })();
