@@ -11,6 +11,97 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 — a baked BUILDING was stamped across monza's racing line, because
+`bakedModel()` was the one prop emitter with no road guard. FIXED.**
+`props-over-road.spec.js` reported `monza PROP 0.75m over road (cap 0.2)` at
+frac 0.115: a flat 2.22 x 0.20 m face at y 0.70 over a road at y -0.05, lateral
+-4.78, colour `[0.25,0.25,0.29]`. Reproduce the old failure in 22 s with
+`TRACK=monza npm test -- tests/specs/props-over-road.spec.js`; it passes now.
+
+**What it was.** `assets/pack/models/kenney_ind_building-d.bin`, a
+10 x 18 x 15 m industrial building. `js/circuits/scenery/monza.js`'s `yards`
+table places it at `["kenney_ind_building-d", 0.012, -1, 60]` — 60 m off node
+17, which `_sceneryShift` resolves to node 142, the exit of the Variante del
+Rettifilo. **The track turns about 90 degrees there**, so 60 m "outward" from
+node 142 lands back ON the road at node ~165, two corners along. The building
+is also sunk 2.1 m (its anchor takes the terrain height 60 m out), which is why
+only one window band of it broke the surface. The colour is not a source
+constant at all: `0.255,0.255,0.286` is baked into the model's vertex colours,
+which is why grepping `js/` for it found nothing.
+
+**Why nothing stopped it.** `addBox`, `addCyl`, `addCone`, `addFrustum`,
+`addPrism` and `addPyramid` all go through `GUARDED` in `js/track/tracks.js`,
+which rejects a primitive whose footprint is on the tarmac. `addMesh` was not
+in that set and `bakedModel()` called it raw, so the one emitter that stamps
+whole buildings was the one with no guard. Fixed by giving it the same
+`rejBox` test, on the mesh's own extent scaled and yawed exactly as `addMesh`
+transforms its vertices. Callers write `if (!bakedModel(...)) building(...)`
+and that fallback is itself guarded, so a rejected stamp degrades to nothing.
+
+**Why no test caught it, which is the more general defect.** Two independent
+reasons, and both still hold for everything except monza:
+
+1. `props-over-road.spec.js` declares `test.setTimeout(1500000)`, over the
+   change-aware gate's 180 s per-test cap, so `select-specs.mjs` excludes it on
+   every `js/track` and `js/circuits` diff. Its only schedule is the nightly
+   rota, one night in eleven. It surfaced by accident, when an unrelated edit
+   to the file made the selector rank it 0 and give it a shard of its own.
+2. **Every node audit is blind to the whole asset pack.**
+   `js/render/shared/assets.js` is in the manifest's `FULL` list and not in
+   `TRACK_VM`, so `Assets` is undefined inside `tools/lib/track-build-vm.cjs`
+   and `bakedModel()` returns false at its first line. All 36 baked models are
+   invisible to `prop-clipping`, `scenery-grounding`, `coplanar-faces`,
+   `road-under-floor` and `props-over-road.test.mjs` alike. OPEN: teaching the
+   harness to supply `Assets` would close it, and
+   `tests/unit/baked-model-road-guard.test.mjs` shows the shape — it carries
+   its own pack loader because the harness has none.
+
+**Measured with the pack made visible**: 15 of 52 circuits read over the
+tolerance without the guard, 14 with it. Monza is the one the guard fixes. The
+other 14 are the overhang class — a model anchored legally off-track whose
+upper parts reach over it, which a footprint test cannot reject and this guard
+does not claim to. Eight of those 14 (donington, istanbul, jerez, korea,
+nurburgring, sepang, suzuka, vegas) are only visible at all once the pack is
+loaded, and none of them is baselined anywhere. OPEN.
+
+**2026-09-22 — the ~1.07 m reading on four circuits IS the pit wall's top cap,
+and the specs sample past the tarmac to reach it. IDENTIFIED; the sampling is
+OPEN.** jeddah, mosport, zandvoort and singapore all read 1.07 m over the road.
+`js/track/scenery/pits.js:300` and `:319` sweep the pit wall's cap with the
+profile `[[-0.07,1.0],[0.32,1.0],[0.32,1.07],[-0.07,1.07]]` in `WALL_TOP`
+`[0.46,0.47,0.50]` — a 0.39 x 0.07 m section topping out at exactly 1.07. The
+offending piece measures 1.91 x 0.09 x 3.84 m at y 1.03-1.12 in that colour, so
+the identification is the geometry's own, not an inference.
+
+**Two retractions, in order, because both were published.** The first
+identification said "the pit wall", which was right. I then retracted it on the
+grounds that the wall's inner edge stands 8.2-13.0 m out while the specs sample
+at 6.15-6.9 m — but that measured `track.hw + pit.off.fastIn`, the FAST LANE's
+inner edge at the garage row. This cap is the ENTRY/EXIT wall, whose lateral is
+`hw + profile[0] + shift(k)` and which runs right at the tarmac edge: on
+zandvoort it sits at 6.81 m against a 7.0 m half-width. So the retraction was
+wrong and the original name was right. The lesson is the one the first mistake
+should have taught: measure the object, not something that shares its colour.
+
+**The real defect underneath is the sampling.** Both `props-over-road.spec.js`
+and the foundation specs scale their lateral ladder by a half-width derived
+from the ROAD MESH, which runs 1.2-1.3x the engine's `track.hw` because the
+mesh carries verge and run-off out to 13 m. Their outermost sample lands OFF
+the racing surface by construction, on whatever boundary structure lives there
+— here, the pit wall a car is meant to stay inside. Baselined at 1.1 in
+`props-over-road.spec.js` (jeddah, mosport, zandvoort, singapore),
+`props-over-road.test.mjs` and `zandvoort-foundation.spec.js`, all citing each
+other. Scaling by `track.hw` instead would let every one of those baselines go
+back to `TOL`, and is the fix worth making. OPEN.
+
+**And it is why no primitive covers the geometry.** `sweep()` in `pits.js` is a
+local extrusion that builds its quads directly rather than through a
+`TrackGeom` emitter, so `tools/lib/track-build-vm.cjs`'s wrappers record
+nothing for it. Measured on zandvoort: 9,456 of 639,333 prop vertices (1.5 %)
+belong to no captured primitive even after `shipped()`'s remap, in 9 gaps, and
+the largest — 9,392 vertices, 1,174 eight-vertex pieces — is this sweep. No
+audit that reasons about primitives can attribute any of it. OPEN, and the same
+class as the asset-pack blindness above.
 **2026-09-22 (wave 4/5) — `DIFF[difficulty]` had three siblings, and a garage
 FILE could reach two of them. FIXED.** The 2026-09-22 crash was a persisted
 string used as a table key with nothing validating it. Hunting the SHAPE rather
