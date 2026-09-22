@@ -100,62 +100,108 @@ function throwToRoad(L, o, track) {
   return best;
 }
 
+// Coverage thresholds for the third guard below (hoisted so the fleet pass can
+// take its verdict): % of centreline samples inside some light's radius, and
+// the DARK-GAP FILL knob's own default threshold for a single unlit run.
+const MIN_LIT = 95, MAX_DARK_M = 60;
+
+/** ONE fleet pass, three verdicts.
+ *
+ * The three whole-field guards below each walked `Tracks().LIST` and called
+ * nightLights() themselves, so this file rebuilt the fleet THREE TIMES over:
+ * 156 night builds at 1217 ms each, 186 s for the file, and `test:sweeps` runs
+ * it on every geometry diff. They ask three different questions of the same two
+ * objects, so they share one pass now — each circuit is built once, all three
+ * verdicts are taken from it, and the build goes out of scope before the next.
+ *
+ * Memoised rather than run at import time so `--test-name-pattern` on a single
+ * guard still pays for one pass, and a build failure is still reported by the
+ * guard that needed it rather than by the module loading. */
+const survey = (() => {
+  let out = null;
+  return () => {
+    if (out) return out;
+    out = { orphans: [], shortPools: [], darkRuns: [] };
+    for (const def of Tracks().LIST) {
+      const { track, L } = nightLights(def.id);
+      const posts = track.lampPosts || [];
+      const n = (L.length / STRIDE) | 0;
+
+      // 1. A light with glareW > 0 draws a halo billboard, so something must be
+      //    holding it up.
+      let orphans = 0, worstOrphan = 0;
+      for (let o = 0; o < L.length; o += STRIDE) {
+        if (!(L[o + I_GLARE] > 0)) continue;      // fixture-less lights must be here
+        const d = nearestFixture(L, o, posts);
+        if (d > ON_FIXTURE_M) { orphans++; worstOrphan = Math.max(worstOrphan, d); }
+      }
+      if (orphans) {
+        out.orphans.push(`${def.id}: ${orphans} halo(s) with no fixture ` +
+                         `(nearest one ${worstOrphan.toFixed(1)} m away)`);
+      }
+
+      // 2. And that fixture's pool has to reach the road it stands beside.
+      if (posts.length) {
+        let short = 0, worst = 0;
+        for (let o = 0; o < L.length; o += STRIDE) {
+          const post = posts.find((p) => Math.hypot(p.x - L[o], p.y - L[o + 1], p.z - L[o + 2]) <= ON_FIXTURE_M);
+          if (!post) continue;                                         // not a fixture light
+          // A fixture that names the point it lights (`aimAt`: the pit canopy
+          // luminaires over the working lane) must reach THAT, not the centreline.
+          const throwM = post.aimAt
+            ? Math.hypot(L[o] - post.aimAt[0], L[o + 1] - post.aimAt[1], L[o + 2] - post.aimAt[2])
+            : throwToRoad(L, o, track);
+          const gap = throwM - L[o + I_RAD];
+          if (gap > 0) { short++; worst = Math.max(worst, gap); }
+        }
+        if (short) {
+          out.shortPools.push(`${def.id}: ${short} fixture(s) whose radius stops short of ` +
+                              `the road by up to ${worst.toFixed(1)} m`);
+        }
+      }
+
+      // 3. Every light can sit on a fixture and every fixture can reach the
+      //    road while the road itself is still dark — the lamps are all
+      //    somewhere else.
+      const ds = track.total / track.n;
+      let lit = 0, run = 0, worstRun = 0, worstAt = 0;
+      for (let k = 0; k < track.n; k++) {
+        let any = false;
+        for (let i = 0; i < n && !any; i++) {
+          const o = i * STRIDE;
+          const dx = L[o] - track.px[k], dy = L[o + 1] - track.py[k], dz = L[o + 2] - track.pz[k];
+          if (dx * dx + dy * dy + dz * dz < L[o + I_RAD] * L[o + I_RAD]) any = true;
+        }
+        if (any) { lit++; run = 0; }
+        else { run++; if (run > worstRun) { worstRun = run; worstAt = k; } }
+      }
+      const cov = 100 * lit / track.n, darkM = worstRun * ds;
+      if (cov < MIN_LIT || darkM > MAX_DARK_M) {
+        out.darkRuns.push(`${def.id}: ${cov.toFixed(1)}% of the lap lit, longest dark run ` +
+                          `${Math.round(darkM)} m at frac ${(worstAt / track.n).toFixed(3)}`);
+      }
+    }
+    return out;
+  };
+})();
+
 test("no circuit paints a lens halo with no fixture under it", () => {
-  const offenders = [];
-  for (const def of Tracks().LIST) {
-    const { track, L } = nightLights(def.id);
-    const posts = track.lampPosts || [];
-    let orphans = 0, worst = 0;
-    for (let o = 0; o < L.length; o += STRIDE) {
-      if (!(L[o + I_GLARE] > 0)) continue;      // fixture-less lights must be here
-      const d = nearestFixture(L, o, posts);
-      if (d > ON_FIXTURE_M) { orphans++; worst = Math.max(worst, d); }
-    }
-    if (orphans) {
-      offenders.push(`${def.id}: ${orphans} halo(s) with no fixture ` +
-                     `(nearest one ${worst.toFixed(1)} m away)`);
-    }
-  }
-  assert.deepEqual(offenders, [],
+  assert.deepEqual(survey().orphans, [],
     "a light with glareW > 0 draws a halo billboard, so it MUST sit on a drawn " +
     "fixture. Give the light a fixture, or push it with glareW 0:\n  " +
-    offenders.join("\n  "));
+    survey().orphans.join("\n  "));
 });
 
 test("every registered fixture's pool reaches the road", () => {
-  const offenders = [];
-  for (const def of Tracks().LIST) {
-    const { track, L } = nightLights(def.id);
-    const posts = track.lampPosts || [];
-    if (!posts.length) continue;               // covered by the test above
-    let short = 0, worst = 0;
-    for (let o = 0; o < L.length; o += STRIDE) {
-      const post = posts.find((p) => Math.hypot(p.x - L[o], p.y - L[o + 1], p.z - L[o + 2]) <= ON_FIXTURE_M);
-      if (!post) continue;                                         // not a fixture light
-      // A fixture that names the point it lights (`aimAt`: the pit canopy
-      // luminaires over the working lane) must reach THAT, not the centreline.
-      const throwM = post.aimAt
-        ? Math.hypot(L[o] - post.aimAt[0], L[o + 1] - post.aimAt[1], L[o + 2] - post.aimAt[2])
-        : throwToRoad(L, o, track);
-      const gap = throwM - L[o + I_RAD];
-      if (gap > 0) { short++; worst = Math.max(worst, gap); }
-    }
-    if (short) {
-      offenders.push(`${def.id}: ${short} fixture(s) whose radius stops short of ` +
-                     `the road by up to ${worst.toFixed(1)} m`);
-    }
-  }
-  assert.deepEqual(offenders, [],
+  assert.deepEqual(survey().shortPools, [],
     "the pool window (1-(d/r)^4)^2 is exactly 0 past r, so a fixture whose lens " +
     "is further from the road than its radius lights nothing at all. Tall masts " +
     "carry their real throw as minRadius (js/track/scenery/identity.js):\n  " +
-    offenders.join("\n  "));
+    survey().shortPools.join("\n  "));
 });
 
 test("no circuit races through an unlit stretch of road", () => {
-  // The third failure mode, and the one the two guards above cannot see: every
-  // light can sit on a fixture, and every fixture can reach the road, while the
-  // road itself is still dark — because the lamps are all somewhere else.
+  // The third failure mode, and the one the two guards above cannot see.
   //
   // That is what a wrong `k` does. `lampPosts.k` says which bit of road a
   // fixture is beside, and the gap-fill/density walk measures spans in node
@@ -166,36 +212,13 @@ test("no circuit races through an unlit stretch of road", () => {
   // and hungaroring 96/96 (431 m). Imola ran 716 m of unlit road at frac 0.46
   // with no light within 200 m, on a circuit carrying 74 lamp posts.
   //
-  // Assert the OBSERVABLE property rather than the internal index, so this
+  // Asserts the OBSERVABLE property rather than the internal index, so this
   // holds whatever future route a fixture takes to get registered.
-  const MIN_LIT = 95;          // %, of centreline samples inside some light radius
-  const MAX_DARK_M = 60;       // the DARK-GAP FILL knob's own default threshold
-  const offenders = [];
-  for (const def of Tracks().LIST) {
-    const { track, L } = nightLights(def.id);
-    const n = (L.length / STRIDE) | 0;
-    const ds = track.total / track.n;
-    let lit = 0, run = 0, worstRun = 0, worstAt = 0;
-    for (let k = 0; k < track.n; k++) {
-      let any = false;
-      for (let i = 0; i < n && !any; i++) {
-        const o = i * STRIDE;
-        const dx = L[o] - track.px[k], dy = L[o + 1] - track.py[k], dz = L[o + 2] - track.pz[k];
-        if (dx * dx + dy * dy + dz * dz < L[o + I_RAD] * L[o + I_RAD]) any = true;
-      }
-      if (any) { lit++; run = 0; }
-      else { run++; if (run > worstRun) { worstRun = run; worstAt = k; } }
-    }
-    const cov = 100 * lit / track.n, darkM = worstRun * ds;
-    if (cov < MIN_LIT || darkM > MAX_DARK_M) {
-      offenders.push(`${def.id}: ${cov.toFixed(1)}% of the lap lit, longest dark run ` +
-                     `${Math.round(darkM)} m at frac ${(worstAt / track.n).toFixed(3)}`);
-    }
-  }
-  assert.deepEqual(offenders, [],
+  assert.deepEqual(survey().darkRuns, [],
     "a night circuit has road no lamp reaches. Check that each fixture's `k` " +
     "names the node it actually stands beside (resolvePostNodes in " +
-    "js/lighting/track-lights.js) before adding more lamps:\n  " + offenders.join("\n  "));
+    "js/lighting/track-lights.js) before adding more lamps:\n  " +
+    survey().darkRuns.join("\n  "));
 });
 
 test("the start-gantry downlights stay fixture-less AND invisible", () => {
