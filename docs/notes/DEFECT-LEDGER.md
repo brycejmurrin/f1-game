@@ -2330,6 +2330,39 @@ The measurement above describes a different corner set from the one that fails.
 Any fix derived from it is guesswork, which is exactly what the two attempts
 were.
 
+**A REAL ISOLATION LEAK WAS FOUND AND FIXED HERE, and it is NOT what makes
+road-follow fail.** Both halves matter.
+
+The quarantine commit's own CI run is what exposed it. On `e66f1e406`, where
+`road-follow` was `test.fixme`'d and did not run at all, the `oversize-steering`
+shard STILL failed — on a different test, `racing-line assist: PULL eases toward
+the line, PUSH sends it wider` (run 35769571096, 13/13 done, 1 failed). Locally
+the same pattern appeared whenever `road-follow`'s behaviour was perturbed:
+
+| what road-follow did | racing-line assist |
+|---|---|
+| ran as-is (failing at 0.1528) | passes |
+| skipped entirely (`test.fixme`) | FAILS on CI |
+| ran with throttle held (car ~2 km downrange) | FAILS, 8.066 |
+| ran checking fewer corners (filter 0.014) | FAILS, 5.773 |
+
+The cause was a one-line bug in `steering has authority to fight the curvature
+drift`: it restored `roadFollow` to **0.7** when the shipped default is **0** —
+which "by default nothing steers the car" two tests earlier pins explicitly.
+`sharedTest` keeps ONE page per worker, so that wrong restore left the
+DRIVING-HELP assist switched on for every later test landing on the same worker,
+and which tests those are moves with the shard's worker assignment. A
+deterministic suite whose result changes between runs, from one wrong constant.
+`road-follow` restored to 0 correctly; this was the only site that did not.
+
+Fixed, and verified: with the restore corrected the full file goes from two
+failures to one — `racing-line assist` passes and only `road-follow` remains.
+
+**But road-follow itself is unchanged by it**, still failing at the same
+`0.15284059935810101`. So the leak was a genuine second defect that the
+investigation surfaced, not the explanation for the first. Two things were wrong;
+one is fixed.
+
 **The experiment that is actually owed:** reproduce WITHOUT changing the loop's
 control flow. Leave the `continue` in place, add only a write of `frac`, `k`,
 `dxOff` and the diff for the corners the test itself checks, and give the test

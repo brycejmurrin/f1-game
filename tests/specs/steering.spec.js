@@ -289,7 +289,15 @@ test.describe("Apex 26 — steering", () => {
     const lockDir = -Math.sign(k0);
     const zero = await run(page, { frac, speed: 22, steer: 0, throttle: false, ticks: 45 });
     const held = await run(page, { frac, speed: 22, steer: lockDir, throttle: false, ticks: 45 });
-    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0.7 }));
+    // RESTORE TO 0, THE SHIPPED DEFAULT — not 0.7. This line read 0.7, which is
+    // not what the game ships: "by default nothing steers the car" two tests up
+    // pins `tuning().roadFollow` at 0. sharedTest keeps ONE page per worker, so
+    // a wrong restore here leaves the DRIVING-HELP assist switched on at 0.7 for
+    // every later test that lands on the same worker — and which tests those are
+    // moves with the shard's worker assignment, which is how a deterministic
+    // suite produces a result that changes between runs. `road-follow` above
+    // restores to 0 correctly; this was the one site that did not.
+    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
 
     // ANTI-VACUITY, and the whole reason this test went unread for five days: the
     // number below only means "steering authority" while the car is on the
