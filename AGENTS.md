@@ -132,6 +132,10 @@ Full reference `docs/PHYSICS.md`. Two rules bind everywhere:
 
 - `PACE` is a ground-speed scale, not a cap: compare speeds through
   `vTop()`/`vStd()`/`aStd()` (`tools/check/vstd-lint.mjs` enforces it).
+- The arc must not reach the driver: nothing derived from track curvature or
+  the racing line may affect the player with assists off; a new
+  `Tracks.curvature()` read goes in a legitimate column (AI-only,
+  assist-gated, broadcast-only, surface — table in docs/PHYSICS.md).
 
 Read `c.aeroX` (or `aeroDfMult(c)`), never `c.xOn`. Immutable numbers live in
 `js/physics/consts.js`; tunables stay `let`s in game.js.
@@ -155,32 +159,21 @@ Available workflows are skills (`.claude/skills/`, index
 matched. Subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURFACE.md`
 maps which CLIs are wrapped as `apex_*`. Routes: live canvas → `mcp-probe`;
 pre-push or deploy → `check-changes` (spawns `verify-agent`; `--base <ref>` is
-`the was-it-already-red?` check); live `version.json` → `deploy-research`;
+the "was it already red?" check); live `version.json` → `deploy-research`;
 dead code / fat skill → `slim-bloat` and `bloat-auditor`.
 
-Hooks (`.claude/hooks/`): `session-start.sh` installs deps;
-`protect-files.sh` blocks generated-file edits and source edits during a live browser run;
+Hooks (`.claude/hooks/`): `session-start.sh` installs deps; `protect-files.sh`
+blocks generated-file edits and source edits during a live browser run;
 `bash-guard.sh` runs the guards before `git commit` and blocks `pkill -f` and PID
 kills of a test-bg run; `post-edit.sh` (PostToolUse, advisory) says at once when an
 edit staled a generated file or broke a circuit build; `touch .claude/allow-protected` lifts the generated-file rule only. Never duplicate skills or agents under `.cursor/`.
 
 ## Cursor Cloud specific instructions
-`.cursor/environment.json` bootstraps every Cloud VM (`tools/env/cloud-agent-install.sh``,
+`.cursor/environment.json` bootstraps every Cloud VM (`tools/env/cloud-agent-install.sh`,
 Chromium at `/opt/pw-browsers/chromium`, `mcpServerAllowlist` = `.mcp.json`'s three
 servers). Cursor enters via `.cursor/rules/apex-shared.mdc`; Codex reads this file with
 `.codex/config.toml` and the tracked `.agents/skills/` symlinks (`tools/env/mirror-skills.sh`
 repairs them). Checklist: `docs/AGENT-SURFACE.md` §Bootstrap.
-
-### Watching CI and Pages
-Do not conflate PR CI (`ci.yml`, PR head), ship-push CI (`ci.yml`, deploy head), and Pages (`pages.yml`, workflow `295002043`).
-A green PR does not prove Pages will pass: Pages calls `ci.yml` with a `before_sha` (often the last live tip) and may select different specs.
-Poll by `head_sha`, ignore cancelled runs superseded on that SHA, and after merge watch both ship-push CI and Pages.
-On red, read failed-job logs for `Expected`, `Received`, `x FAIL`, `Timeout` and `timed out`.
-Name the exact test title, assertion and lane (`Selected specs`, sweeps, pure-node, smoke, or nested Pages `ci / …`), not just the wrapper.
-Diagnose first: `caution().enabled=false` is the listed `SettingsDefaults` default (and the race-control call-site fallback), not a reason to pin WebGL2 or raise `BOOT_MS`.
-A one-ULP Suzuka arc mismatch in sweeps needs an epsilon; `test:tooling-fast` green does not prove Pages suites or sweeps are green.
-Redeploy through `node tools/ci/deploy.mjs` or a Pages dispatch; claim live only after Pages and `version.json` confirm it.
-Report the SHA, run URL, green/red verdict, failing test/assertion when red, train, and next action.
 
 ## Git branch & deploy
 Work happens on a `claude/<topic>` branch. The deploy branch is
@@ -199,3 +192,14 @@ other. Shipping is a RELEASE TRAIN: your push gets `ci.yml`'s FAST tier in
 minutes (your verdict) and, if green, pokes `pages.yml`, which gates the tip
 once and publishes exactly that commit (dispatch = "deploy now"; ≤ ~25 min).
 "Live?" = ancestor of the live `apex-sha` (deploy-research; `docs/TESTING.md` §Release train).
+
+### Watching CI and Pages
+Do not conflate PR CI (`ci.yml`, PR head), ship-push CI (`ci.yml`, deploy head), and Pages (`pages.yml`, workflow `295002043`).
+A green PR does not prove Pages will pass: Pages calls `ci.yml` with a `before_sha` (often the last live tip) and may select different specs.
+Poll by `head_sha`, ignore cancelled runs superseded on that SHA, and after merge watch both ship-push CI and Pages.
+On red, read failed-job logs for `Expected`, `Received`, `x FAIL`, `Timeout` and `timed out`.
+Name the exact test title, assertion and lane (`Selected specs`, sweeps, pure-node, smoke, or nested Pages `ci / …`), not just the wrapper.
+Diagnose first: `caution().enabled=false` is the listed `SettingsDefaults` default (and the race-control call-site fallback), not a reason to pin WebGL2 or raise `BOOT_MS`.
+A one-ULP Suzuka arc mismatch in sweeps needs an epsilon; `test:tooling-fast` green does not prove Pages suites or sweeps are green.
+Redeploy through `node tools/ci/deploy.mjs` or a Pages dispatch; claim live only after Pages and `version.json` confirm it.
+Report the SHA, run URL, green/red verdict, failing test/assertion when red, train, and next action.
