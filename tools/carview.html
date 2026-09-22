@@ -22,6 +22,9 @@
   Headless API (window.CARVIEW):
     CARVIEW.set({team,livery,num,parts,az,el,dist,tod,studio,bg})  -> rebuilds + renders
     CARVIEW.angle(az,el,dist)                                       -> just re-aims camera
+    CARVIEW.set({hideCar:true})  (also ?hidecar=1)                  -> EMPTY-STAGE PLATE: same
+        camera, same light, no car. Shoot it against the normal frame and every pixel that
+        DIFFERS is car — an exact matte, with no colour key to fool black bodywork.
     CARVIEW.ready  (bool)                                           -> first frame drawn
 -->
 <style>
@@ -67,6 +70,7 @@
 <script src="../js/render/glx/shaders/glsl-fx.js"></script>
 <script src="../js/render/glx/shaders/glsl-post.js"></script>
 <script src="../js/render/shared/light-budget.js"></script>
+<script src="../js/lighting/knobs.js"></script>
 <script src="../js/render/shared/post-common.js"></script>
 <script src="../js/render/glx/post.js"></script>
 <script src="../js/render/glx/shadow.js"></script>
@@ -186,6 +190,13 @@
     refl: parseFloat(qp("refl", "0.2")),   // env-mirror strength 0..1 (0 = matte paint, no chrome). Low default so renders read as team paint, not chrome.
     lights: plights,                                                       // extra movable point lights
     bg: qp("bg", null),
+    // THE EMPTY-STAGE PLATE. Draw everything except the car, so a capture tool
+    // can shoot the same camera twice and DIFFERENCE the two frames into an
+    // exact matte. Keying a background colour cannot do this: the tonemap,
+    // vignette and env reflections all touch the backdrop, and the car's own
+    // black bodywork keys out with it — which is precisely how every traced
+    // drawing so far arrived with its wings missing.
+    hideCar: qp("hidecar", "0") !== "0",
     hud: qp("hud", "1") !== "0",
     spin: qp("spin", "0") !== "0",
     sweep: qp("sweep", "0") !== "0",     // a bright point light orbiting the car (reflection test)
@@ -410,9 +421,11 @@
     if (pk !== _probedKey) { probeEnv(frameParams, t); _probedKey = pk; }
     GLX.begin(frameParams);
     if (paint) Object.assign(paint, paintFromRefl(S.refl));   // live reflection strength (sparkle/doubleSided untouched by draw, harmless to reassign)
-    if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
-    drawFlaps();
-    if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
+    if (!S.hideCar) {
+      if (carMesh) GLX.draw(carMesh, REFLECT_X, paint);
+      drawFlaps();
+      if (decalMesh && decalTex) GLX.drawDecal(decalMesh, REFLECT_X, decalTex, { glow: (S.tod === "night" || S.tod === "dusk") ? 0.35 : 0 });
+    }
     const effectWorld = (y, z, x) => {
       const W = new Float32Array(REFLECT_X);
       W[12] += W[0] * (x || 0) + W[4] * y + W[8] * z;
@@ -420,16 +433,23 @@
       W[14] += W[2] * (x || 0) + W[6] * y + W[10] * z;
       return W;
     };
-    if (S.effects.brakeGlow) for (const x of [-0.985, 0.985])
+    if (!S.hideCar && S.effects.brakeGlow) for (const x of [-0.985, 0.985])
       GLX.draw(CarMesh.getBrakeRing(), effectWorld(0.34, 1.70, x),
         { emissive: 1, roughness: 0.9, specular: 0, alpha: 0.9, noAlphaWrite: true });
-    if (S.effects.exhaustFlame)
+    if (!S.hideCar && S.effects.exhaustFlame)
       GLX.draw(CarMesh.getExhaustFlame(), effectWorld(0.40, -2.63, 0),
         { emissive: 1, roughness: 1, specular: 0, alpha: 0.85, noAlphaWrite: true });
-    if (S.effects.ersDeploy)
+    if (!S.hideCar && S.effects.ersDeploy)
       GLX.draw(CarMesh.getErsLight(), effectWorld(0.605, -2.615, 0),
         { emissive: 1, roughness: 1, specular: 0, alpha: 0.9, noAlphaWrite: true });
     GLX.present({ exposure: S.exp });
+    // THE SOFT OVERLAY HAS TO BE FED, OR IT IS A BLACK LID. Under a headless
+    // UA, GLX.init creates #game-soft — a fixed, inset-0, opaque 2D canvas at
+    // z-index 1 — and blits into it ONLY when something is waiting. The game
+    // arms that from snapCam()/park(); this page never did, so every capture of
+    // the studio came back black and the whole tool read as "renders nothing".
+    // The real frame was on #view underneath the lid the entire time.
+    if (GLX.softPresent && GLX.softPresent() && GLX.invalidateSoftPresent) GLX.invalidateSoftPresent();
     frameSeq++;
     ready = true;
     requestAnimationFrame(frame);
@@ -529,7 +549,7 @@
         buildUI();
       }
       if (o.lights !== undefined) S.lights = o.lights || [];
-      for (const k of ["az", "el", "dist", "look", "lookX", "lookY", "tod", "rig", "intensity", "exp", "refl", "bg", "spin", "sweep"]) if (o[k] !== undefined) S[k] = o[k];
+      for (const k of ["az", "el", "dist", "look", "lookX", "lookY", "tod", "rig", "intensity", "exp", "refl", "bg", "spin", "sweep", "hideCar"]) if (o[k] !== undefined) S[k] = o[k];
       if (reb) { buildUI(); rebuild(); }
       return true;
     },
