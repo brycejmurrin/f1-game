@@ -143,7 +143,9 @@ if (import.meta.url === `file://${process.argv[1]}`) await main();
 async function main() {
   const srv = await startStaticServer(ROOT);
   const args = ["--disable-background-timer-throttling", "--disable-renderer-backgrounding",
-    "--disable-backgrounding-occluded-windows"];
+    "--disable-backgrounding-occluded-windows",
+    // Exposes window.gc() so the heap sample can be forced to RETAINED bytes.
+    "--js-flags=--expose-gc"];
   if (opts.backend === "webgpu" || opts.tlxWebgpu) args.push(...WEBGPU_CHROMIUM_ARGS);
   else args.push("--use-angle=swiftshader");
   const browser = await launchChromium({ args });
@@ -263,7 +265,12 @@ async function main() {
       // valid in a container with no GPU.
       let mem0 = null;
       function snapMem() {
-        const o = { heapMB: null };
+        const o = { heapMB: null, gcForced: false };
+        // Collect first, THEN read: usedJSHeapSize counts garbage, so an
+        // un-forced sample says nothing about retention.
+        try {
+          if (typeof window.gc === "function") { window.gc(); window.gc(); o.gcForced = true; }
+        } catch (_) { /* no --expose-gc: the reading stays garbage-inclusive and says so */ }
         try {
           if (performance.memory) o.heapMB = +(performance.memory.usedJSHeapSize / 1048576).toFixed(1);
         } catch (_) { /* Chrome-only; absent is reported as absent */ }

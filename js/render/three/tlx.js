@@ -3832,7 +3832,33 @@ const TLX = (function () {
             o.sharedUniforms = !!(lit && lit.sharedUniforms);
             o.presentMs = +_presentMs.toFixed(3);
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
-            try { const b = renderer && renderer.backend; if (b && b.data && b.data.size != null) o.backendData = b.data.size; } catch (_) { /* DataMap may be a WeakMap */ }
+            // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
+            // WeakMap, which has no `.size`, so the guard never passed and the
+            // one counter closest to real device-side retention silently
+            // reported nothing — an instrument that measures nothing is worse
+            // than none, because its absence reads as "flat". Report what the
+            // shape actually offers, and say which shape it was.
+            try {
+              const b = renderer && renderer.backend;
+              const dm = b && b.data;
+              if (dm) {
+                o.backendData = (typeof dm.size === "number") ? dm.size : null;
+                o.backendDataKind = (typeof dm.size === "number") ? "Map" : (dm instanceof WeakMap ? "WeakMap" : typeof dm);
+              }
+            } catch (_) { o.backendData = null; }
+            // Live geometries by kind: names WHICH producer is growing.
+            try {
+              const kinds = {};
+              let live = 0;
+              for (const ref of _geoReg) {
+                const g = ref && ref.deref();
+                if (!g) continue;
+                live++;
+                const k = g.__tlxKind || "?";
+                kinds[k] = (kinds[k] || 0) + 1;
+              }
+              o.geoLive = live; o.geoKinds = kinds; o.geoRegLen = _geoReg.length;
+            } catch (_) { /* no WeakRef: the census degrades, nothing leaks */ }
             return o;
           },
           async shader(idx = 0) {
