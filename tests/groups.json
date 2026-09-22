@@ -198,6 +198,18 @@
     "// rewritten by a tool, so drift shows up as a commit nobody meant to make.",
     "tests/unit/spec-timings.test.mjs",
     "tests/unit/twinned-specs.test.mjs",
+    "// coverage-merge is the only consumer of the raw V8 lists a flagged run",
+    "// writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops",
+    "// mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.",
+    "tests/unit/coverage-merge.test.mjs",
+    "// The physics baseline's provenance stamp (_blessed): reason, data hash,",
+    "// blessing commit. One file read and one git call, well under a second, and",
+    "// it must fail where the baseline is edited, not on a nightly.",
+    "tests/unit/physics-baseline-provenance.test.mjs",
+    "// Pure-VM physics/career suites added 2026-09-22 (the coverage census's",
+    "// zero-reference module and the two thin spots): each under a second.",
+    "tests/unit/body-attitude.test.mjs",
+    "tests/unit/save-migrate.test.mjs",
     "tests/unit/wait-polling.test.mjs",
     "tests/unit/gallery-capture-draws.test.mjs",
     "tests/unit/track-graph.test.mjs",
@@ -618,6 +630,12 @@
     "test:tooling-fast": {
       "kind": "command",
       "cmd": "node tools/ci/tooling-fast.mjs"
+    },
+    "test:vm-page": {
+      "kind": "node",
+      "files": [
+        "tests/unit/adapted-specs.test.mjs"
+      ]
     },
     "test:game-vm": {
       "kind": "node",

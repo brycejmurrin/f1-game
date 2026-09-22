@@ -10,11 +10,11 @@ subset of the next:
 
 | command | unit files it runs | when |
 |---|---|---|
-| `npm run test:guards` | 14 (curated) | hook-enforced, every `git commit` |
-| `npm run test:tooling-fast` | 208 of 278 | the documented edit-loop check |
-| `node tools/ci/deploy.mjs --gate-only` | 263 of 278 | the whole gate; what a deploy runs |
+| `npm run test:guards` | 19 (curated) | hook-enforced, every `git commit` |
+| `npm run test:tooling-fast` | 223 of 296 | the documented edit-loop check |
+| `node tools/ci/deploy.mjs --gate-only` | 281 of 296 | the whole gate; what a deploy runs |
 
-The remaining 15 are the per-circuit geometry and parts sweeps. `ci.yml` gives
+The remaining 15 are the per-circuit geometry and parts sweeps (counts re-measured 2026-09-22; `tests/unit/docs-integrity.test.mjs` pins the `N of M unit files` phrasing). `ci.yml` gives
 those their own jobs rather than putting them in the "Pure-node unit suites"
 step the gate derives from, and deploy.mjs's header is explicit that sweeps are
 CI's — running them in the deploy duplicated ten minutes. They are enumerated in

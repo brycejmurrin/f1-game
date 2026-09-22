@@ -12,6 +12,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -245,6 +246,42 @@ export function zeroSpacingSheets() {
     .sort();
 }
 
+/** Manifest modules (every js/ file tools/manifest.cjs loads, circuits and
+ *  scenery excluded — they are data, gated per circuit by verify-track and the
+ *  sweeps) that NOTHING under tests/ names: not by path, not by basename, not
+ *  by the global the file declares. A module with zero references has zero
+ *  tests by construction; the 2026-09 census found one (js/physics/body-attitude.js).
+ *  `corpus` is injectable so the measurement itself can be tested. */
+export function zeroRefModulesReport(corpus) {
+  const manifest = createRequire(import.meta.url)("../manifest.cjs");
+  const mods = new Set();
+  for (const list of [manifest.FULL, ...Object.values(manifest.DEFERRED), manifest.LAZY_AGENT,
+    manifest.LAZY_RACE, manifest.LAZY_DATA, manifest.LAZY_NET])
+    for (const f of list) if (typeof f === "string" && f.startsWith("js/") && !f.startsWith("js/circuits/")) mods.add(f);
+  if (corpus === undefined) {
+    const files = [];
+    (function walk(dir) {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (/\.(m?js|cjs)$/.test(e.name)) files.push(p);
+      }
+    })(path.join(ROOT, "tests"));
+    corpus = files.map((f) => fs.readFileSync(f, "utf8")).join("\n");
+  }
+  const out = [];
+  for (const f of [...mods].sort()) {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    const g = (src.match(/^(?:const|var|let)\s+([A-Za-z_$][\w$]*)\s*=/m) || [])[1]
+           || (src.match(/window\.([A-Za-z_$][\w$]*)\s*=/) || [])[1] || null;
+    const named = corpus.includes(f) || corpus.includes(path.basename(f))
+      || (g && new RegExp(`\\b${g.replace(/\$/g, "\\$")}\\b`).test(corpus));
+    if (!named) out.push({ file: f, global: g });
+  }
+  return out;
+}
+export const zeroRefModules = () => zeroRefModulesReport().length;
+
 /** file -> count, for a failure message that says WHERE. */
 export const byFile = (rows) => rows.reduce((m, r) => (m[r.file] = (m[r.file] || 0) + 1, m), {});
 
@@ -260,6 +297,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       rawColor: byFile(colorLiterals()),
       colourForks: forks.slice(0, 12).map(([n, s]) => `${n} <- ${[...s].join(" | ")}`),
       zeroSpacingSheets: zeroSpacingSheets(),
+      zeroRefModules: zeroRefModulesReport().map((r) => `${r.file} (${r.global || "no global"})`),
     }, null, 2));
     process.exit(0);
   }
@@ -273,5 +311,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     rawSpacing: rawSpacing(),
     rawColor: rawColor(),
     rawColorDistinct: rawColorDistinct(),
+    zeroRefModules: zeroRefModules(),
   }, null, 2));
 }

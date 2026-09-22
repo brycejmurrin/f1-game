@@ -232,3 +232,55 @@ test("MCP descriptions state tree vs browser", () => {
       `${name} description must start with ${kind === "browser" ? "Browser (lock first)" : "Tree"}`);
   }
 });
+
+/* ── FRONTMATTER KEYS THE HOSTS ACTUALLY READ ──────────────────────────────
+   Every key in an agent's or a skill's frontmatter is read by Claude Code, by
+   Cursor, or by the Agent Skills spec — or by nothing, silently. `readonly` and
+   `is_background` are Cursor's (Claude Code enforces read-only through `tools:`
+   and background through `background:`); `paths:` is Claude Code's file-scoped
+   auto-load. A key outside these lists is a typo or a field the docs never had,
+   and it fails here instead of being ignored forever (2026-09-22, from the
+   agent-config study: code.claude.com/docs/en/sub-agents, /skills,
+   cursor.com/docs/subagents, agentskills.io/specification). */
+const AGENT_KEYS = new Set([
+  // Claude Code sub-agents
+  "name", "description", "tools", "disallowedTools", "model", "permissionMode", "maxTurns",
+  "skills", "mcpServers", "hooks", "memory", "background", "omitClaudeMd", "effort", "isolation", "color",
+  // Cursor subagents
+  "readonly", "is_background",
+]);
+const SKILL_KEYS = new Set([
+  // Claude Code skills
+  "name", "description", "allowed-tools", "model", "context", "agent", "hooks", "paths",
+  "user-invocable", "disable-model-invocation", "when_to_use", "argument-hint",
+  // Agent Skills spec (agentskills.io)
+  "license", "compatibility", "metadata",
+]);
+const frontmatterKeys = (text) => {
+  const m = /^---\n([\s\S]*?)\n---/.exec(text);
+  assert.ok(m, "missing YAML frontmatter");
+  return m[1].split("\n").filter((l) => /^[A-Za-z_-]+\s*:/.test(l)).map((l) => l.split(":")[0].trim());
+};
+
+test("every agent and skill frontmatter key is one a host documents", () => {
+  const bad = [];
+  for (const f of fs.readdirSync(path.join(ROOT, ".claude/agents")).filter((n) => n.endsWith(".md") && n !== "README.md")) {
+    for (const k of frontmatterKeys(fs.readFileSync(path.join(ROOT, ".claude/agents", f), "utf8")))
+      if (!AGENT_KEYS.has(k)) bad.push(`.claude/agents/${f}: ${k}`);
+  }
+  for (const d of fs.readdirSync(SKILLS).filter((n) => fs.existsSync(path.join(SKILLS, n, "SKILL.md")))) {
+    for (const k of frontmatterKeys(fs.readFileSync(path.join(SKILLS, d, "SKILL.md"), "utf8")))
+      if (!SKILL_KEYS.has(k)) bad.push(`.claude/skills/${d}/SKILL.md: ${k}`);
+  }
+  assert.deepEqual(bad, [], "a frontmatter key no host documents is silently ignored — fix the key or add it here with its source");
+});
+
+test("the file-scoped skills declare paths:, so they load on file access and not only on prompt words", () => {
+  for (const [skill, glob] of [["webgl-debug", "js/render/glx/**"], ["webgpu-debug", "js/render/webgpu/**"],
+                               ["css-play", "css/**"], ["lighting-tuner", "js/lighting/**"]]) {
+    const text = fs.readFileSync(path.join(SKILLS, skill, "SKILL.md"), "utf8");
+    const fm = /^---\n([\s\S]*?)\n---/.exec(text)[1];
+    assert.match(fm, /^paths: \[.+\]$/m, `${skill}: paths: missing (inline list form, which both hosts' one-line frontmatter readers accept)`);
+    assert.ok(fm.includes(`"${glob}"`), `${skill}: paths must name ${glob}`);
+  }
+});

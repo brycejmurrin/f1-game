@@ -459,10 +459,11 @@ test("apex-shared.mdc stays a pointer, not a second AGENTS.md", () => {
 test("file-family skills keep their file anchors in the body, and `paths` stays a list if set", () => {
   // Claude Code and Cursor both honour a `paths` glob list on a skill
   // (auto-attach only when matching files are in play; the user can always
-  // invoke it). Until 2026-09 four file-family skills carried it and were
-  // invisible to a chat-only ask ("why is WGX black?" with no file open), so
-  // none use it today — but a skill that does must give a real glob list,
-  // not a bare string the parser would treat as one pattern.
+  // invoke it). Four file-family skills carried it until 2026-09, were read
+  // as invisible to a chat-only ask, and dropped it; PR #172 (2026-09-22) put
+  // it back on four skills as an ADDITIVE file-access trigger and pins that in
+  // agent-surface.test.mjs. Either way a skill that sets it must give a real
+  // glob list, not a bare string the parser would treat as one pattern.
   const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
   for (const d of dirs) {
     const file = path.join(SKILLS, d.name, "SKILL.md");

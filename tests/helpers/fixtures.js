@@ -86,6 +86,8 @@ export async function clickLive(page, id) {
  */
 import { test as base, expect } from "@playwright/test";
 import { makeVmTest } from "./vm-page.js";
+// Opt-in V8 coverage (APEX_JS_COVERAGE=1); both are no-ops otherwise.
+import { COVERAGE, startCoverage, stopCoverage } from "./js-coverage.js";
 
 /* APEX_VM_PAGE=1 swaps the BACKEND, not the specs: `test` then comes from
  * tests/helpers/vm-page.js and the same spec file runs under
@@ -169,6 +171,10 @@ const pwTest = base.extend({
     await installMocks(context);
     context.on("page", captureConsole);
     for (const p of context.pages()) captureConsole(p);
+    if (COVERAGE) {
+      context.on("page", (p) => { startCoverage(p); });
+      for (const p of context.pages()) await startCoverage(p);
+    }
     await use(context);
   },
 
@@ -249,6 +255,15 @@ const pwTest = base.extend({
 //                   `info`, INCLUDING the ones that were never printed
 //   page-console  — what the page actually said, in order
 // All three are free on a passing test — they are only collected when red.
+// Coverage first (flag-gated): the per-test page is closed by Playwright right
+// after the hooks, so the raw list must be pulled out here, on every test,
+// green or red. Under the shared page this hook does not run (sharedTest
+// stops once per worker, at context.close()).
+if (!VM_PAGE && COVERAGE) pwTest.afterEach(async ({ page }, testInfo) => {
+  const r = await stopCoverage(page, `w${testInfo.workerIndex}-${testInfo.testId}`);
+  if (!r.startsWith("/")) testInfo.annotations.push({ type: "coverage", description: r });
+});
+
 if (!VM_PAGE) pwTest.afterEach(async ({ page }, testInfo) => {
   if (testInfo.status === testInfo.expectedStatus) return;
   const lines = consoleByPage.get(page);
@@ -398,7 +413,11 @@ const pwSharedTest = pwTest.extend({
     // that boots quickly any slower, so the ten specs already on sharedTest are
     // unaffected.
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 60_000 });
+    // Coverage (flag-gated) spans the worker's whole life on this one page:
+    // started after boot so the list is one contiguous run, stopped once here.
+    if (COVERAGE) await startCoverage(page);
     await use(page);
+    if (COVERAGE) await stopCoverage(page, `w${workerInfo.workerIndex}-shared`);
     await context.close();
   }, { scope: "worker" }],
 

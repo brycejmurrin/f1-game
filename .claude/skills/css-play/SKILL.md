@@ -1,6 +1,7 @@
 ---
 name: css-play
 description: Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots without a full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. A single screen that is cramped, clips, or misbehaves on Escape/focus is ui-menu-a11y.
+paths: ["css/**", "index.html"]
 ---
 
 # Playing with menu / HUD CSS

@@ -160,13 +160,18 @@ if printf '%s' "$CMD" | grep -Eq '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:spa
   # on the command line, stages at commit time, and nothing staged must never
   # read as "nothing to check").
   STAGED=$(cd "$ROOT" && git diff --cached --name-only 2>/dev/null)
+  GENERATED_DOCS=$(cd "$ROOT" && node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ')
+  [ -n "$GENERATED_DOCS" ] || GENERATED_DOCS="tools/README.md docs/DEBUG-HOOKS.md docs/ARCHITECTURE.md docs/LIGHTING-TUNER-SLIDERS.md"
   DOCS_ONLY=0
   if [ -n "$STAGED" ] && ! printf '%s' "$CMD" | grep -Eq -- '(^|[[:space:]])-[a-zA-Z]*a|--all'; then
     DOCS_ONLY=1
     while IFS= read -r f; do
       [ -z "$f" ] && continue
-      case "$f" in
-        tools/README.md|docs/DEBUG-HOOKS.md|docs/ARCHITECTURE.md|docs/LIGHTING-TUNER-SLIDERS.md) DOCS_ONLY=0; break ;;
+      # The generated-doc list comes from the generators themselves
+      # (tools/gen/targets.mjs prints each gen-*.mjs TARGET); the literal
+      # list is the fallback for a box where node cannot run.
+      case " $GENERATED_DOCS " in
+        *" $f "*) DOCS_ONLY=0; break ;;
       esac
       printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$' || { DOCS_ONLY=0; break; }
     done <<EOF

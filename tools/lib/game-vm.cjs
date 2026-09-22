@@ -512,7 +512,10 @@ function stubCarMeshes(ctx, record) {
 function runFile(ctx, relPath, record) {
   const src = fs.readFileSync(path.join(ROOT, relPath), "utf8");
   const t0 = performance.now();
-  const r = vm.runInContext(src.replace(/^const\b/gm, "var"), ctx, { filename: relPath });
+  // Absolute filename: Node's V8 coverage (NODE_V8_COVERAGE / --experimental-test-coverage)
+  // silently drops scripts whose name is not an absolute path, so a relative
+  // name made every twin report 0 % for the game sources it ran.
+  const r = vm.runInContext(src.replace(/^const\b/gm, "var"), ctx, { filename: path.join(ROOT, relPath) });
   record.scripts.push({ file: relPath, ms: +(performance.now() - t0).toFixed(1) });
   return r;
 }

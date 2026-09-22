@@ -13,8 +13,9 @@
 #     package.json, package-lock.json, playwright.config.js.
 #
 # Escape hatch for a deliberately assigned edit: `touch .claude/allow-protected`
-# at the repo root and retry (remove it when done). Exit 2 blocks; the reason
-# on stderr reaches the model.
+# at the repo root and retry (remove it when done). It lifts rules 1 and 3
+# only — rule 2 (a live Playwright run) holds regardless. Exit 2 blocks; the
+# reason on stderr reaches the model.
 
 INPUT=$(cat)
 export INPUT
@@ -41,15 +42,19 @@ d_ = os.path.dirname(file) or "."
 root = git("rev-parse", "--show-toplevel", cwd=d_) if os.path.isdir(d_) else ""
 if not root:
     sys.exit(0)
-if os.path.exists(os.path.join(root, ".claude", "allow-protected")):
-    sys.exit(0)
+# The escape hatch covers rules 1 and 3 (an ASSIGNED edit to a generated or
+# shared-contract file). It never covers rule 2: a source edit under a live
+# Playwright run corrupts the run whoever assigned it, so that check runs
+# first, flag or no flag (2026-09-22; before, the flag skipped every rule).
+allow = os.path.exists(os.path.join(root, ".claude", "allow-protected"))
 
 rel = os.path.relpath(file, root)
 base = os.path.basename(file)
 
-def block(msg):
-    sys.stderr.write("BLOCKED: " + msg + " If this edit was explicitly assigned, run: touch "
-                     + os.path.join(root, ".claude/allow-protected") + " and retry.\n")
+def block(msg, hatch=True):
+    tail = (" If this edit was explicitly assigned, run: touch "
+            + os.path.join(root, ".claude/allow-protected") + " and retry.") if hatch else ""
+    sys.stderr.write("BLOCKED: " + msg + tail + "\n")
     sys.exit(2)
 
 GENERATED = {
@@ -63,7 +68,7 @@ GENERATED = {
     # §Critical conventions). Unguarded until 2026-09-22.
     "tests/data/ratchets.json": "node tools/check/ratchets.mjs --update (or the commit hook's --auto-raise) writes it",
 }
-if rel in GENERATED:
+if rel in GENERATED and not allow:
     block(f"{rel} is GENERATED — {GENERATED[rel]}. Edit the source and run the generator.")
 
 # --- generated BLOCKS inside hand-edited files -------------------------------
@@ -107,7 +112,7 @@ def touches_generated_block(path):
         return cur_blocks != new_blocks
     return False
 
-if rel in ("index.html", "sw.js") and touches_generated_block(file):
+if rel in ("index.html", "sw.js") and not allow and touches_generated_block(file):
     block(f"{rel}: the edit touches a @gen-shell block. gen-shell.mjs writes the script "
           "tags from tools/manifest.cjs and title-art.mjs writes @gen-shell:title-art from "
           "js/car/car3d.js. Edit the SOURCE and run `npm run gen`.")
@@ -136,21 +141,54 @@ if rel == "package.json":
         hit = new_scripts is None or (cur_scripts is not None and new_scripts != cur_scripts)
     else:
         hit = False
-    if hit:
+    if hit and not allow:
         block("package.json test:* scripts are GENERATED from tests/groups.json by "
               "node tools/gen/gen-test-groups.mjs. Edit groups.json (add a new key to "
               "package.json first) and regenerate.")
 
 # --- no source edits during a live browser run --------------------------------
-if re.match(r"(js|css)/", rel) or rel == "index.html":
+def live_playwright_in(root):
+    """A `playwright test` / run-playwright.mjs process whose cwd is under THIS
+    checkout. Scoped (2026-09-22): a substring match on the whole process table
+    also fired on another worktree's run, on an editor grepping for the word,
+    and on this hook's own shell when the command line quoted it. argv is
+    split on NULs and matched token-wise; cwd comes from /proc."""
     try:
-        ps = subprocess.run(["ps", "-eo", "args"], capture_output=True, text=True).stdout
+        pids = [p for p in os.listdir("/proc") if p.isdigit()]
     except Exception:
-        ps = ""
-    if re.search(r"playwright(?:\.js)?\s+test\b", ps) or "run-playwright.mjs" in ps:
+        return False
+    for pid in pids:
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                argv = fh.read().split(b"\0")
+        except Exception:
+            continue
+        argv = [a.decode("utf8", "replace") for a in argv if a]
+        if not argv:
+            continue
+        basenames = [os.path.basename(a) for a in argv]
+        is_pw = ("run-playwright.mjs" in basenames
+                 or any(b in ("playwright", "playwright.js", "cli.js") and "test" in argv[i + 1:i + 3]
+                        for i, b in enumerate(basenames)))
+        if not is_pw:
+            continue
+        try:
+            cwd = os.readlink(f"/proc/{pid}/cwd")
+        except Exception:
+            continue
+        if cwd == root or cwd.startswith(root + os.sep):
+            return True
+    return False
+
+if re.match(r"(js|css)/", rel) or rel == "index.html":
+    if live_playwright_in(root):
         block(f"{rel}: a Playwright run is live and tests serve js/, css/ and index.html from the "
               "working tree (AGENTS.md §Verification 2). Wait for the reporter's "
-              "'= run …' line or `node tools/ci/test-bg.mjs --stop`, then retry.")
+              "'= run …' line or `node tools/ci/test-bg.mjs --stop`, then retry.", hatch=False)
+
+# Everything below is what the escape hatch is FOR.
+if allow:
+    sys.exit(0)
 
 # --- linked worktree: shared-contract files belong to the main session --------
 gitdir = git("rev-parse", "--git-dir", cwd=d_)

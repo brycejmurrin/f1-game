@@ -130,8 +130,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.sh\"",
-            "timeout": 30
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit.sh\"",
+            "timeout": 90
           }
         ]
       }

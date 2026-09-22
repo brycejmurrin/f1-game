@@ -101,6 +101,10 @@ if (dropped.length && !args.includes("--list")) {
   // reproducing the very 0/0 it exists to forbid.
   const env = { ...process.env };
   delete env.NODE_TEST_CONTEXT;
+  // An ADAPTED spec's "twin" is the spec itself under tests/helpers/vm-page.js,
+  // which fixtures.js selects by this variable. Harmless to the hand twins:
+  // they load tools/lib/game-vm.cjs directly and never import fixtures.js.
+  if (dropped.some((d) => d.adapted)) env.APEX_VM_PAGE = "1";
   const r = spawnSync(process.execPath, ["--test", "--test-reporter=tap", ...twins],
     { cwd: ROOT, encoding: "utf8", env });
   process.stdout.write(r.stdout || "");

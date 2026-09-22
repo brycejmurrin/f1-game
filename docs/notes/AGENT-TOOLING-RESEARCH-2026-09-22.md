@@ -717,6 +717,25 @@ keeps prompting; the deploy branch is a hard stop by name. The `deny` list
 is a guardrail against a slip, not a security boundary (`node -e` and `awk`
 are general execution) — the hooks are the enforcement layer.
 
+**Collision, measured.** While this branch's deploy train ran its gate, three
+pushes landed on the deploy branch: PR #170 (CI hardening), a career merge,
+and PR #172 — another session's agent-surface pass, done in the same hour
+from the same 09-16 backlog. The train re-verified twice (about 12 minutes
+each) and stopped on real conflicts in `settings.json`, `AGENTS.md` and two
+skill files. Hand-merged here. Where the two sessions decided differently:
+
+| Item | This branch | PR #172 | Merged |
+|---|---|---|---|
+| PostToolUse after an edit | `post-edit-check.sh`, blocking (exit 2), `node --check` + `verify-track` | `post-edit.sh`, advisory (exit 0, debounced), gen `--check` + `verify-track` | theirs, with the syntax check folded in |
+| `paths:` on skills | withdrawn on the skill-progressive comment | added to four skills as an additive file-access trigger, test-pinned | theirs (the pin wins; the comment now records both readings) |
+| Ladder counts in AGENTS.md | replaced by the list's name, to stop rotting | kept as `N of M`, pinned live by `docs-integrity` | theirs (a pinned number beats a vague one) |
+| Frontmatter keys | `disallowed-tools` on check-changes | an allow-list test of host-documented keys, without it | theirs; the key is dropped |
+| `protect-files.sh` | `ratchets.json` guarded | the escape hatch narrowed to rules 1 and 3; the live-run check scoped to this checkout | both, auto-merged |
+
+The lesson is the one §3.3 predicted: `who-is-on-it` would have shown PR
+#172's branch active before this pass started, had it existed then. It
+exists now; run it first.
+
 ### 6.1 Skill fold provenance (moved here from `.claude/skills/README.md`)
 
 44 skills until 2026-09, 26 after. The folded ones and the rows that absorbed
