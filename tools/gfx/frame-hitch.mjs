@@ -42,7 +42,7 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function parseArgs(argv) {
-  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false, capture: false, selftestKb: 0 };
+  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false, capture: false, selftestKb: 0, ablate: "" };
   const skip = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const next = () => argv[++i];
@@ -65,6 +65,10 @@ function parseArgs(argv) {
     // (sawtooth 256 KB/frame, sampling profiler 0.5), and no amount of reading
     // V8 source settles which one is wrong — a known input does.
     else if (a === "--selftest-kb") { o.selftestKb = +next(); }
+    // ABLATION is how short-lived garbage gets attributed here, because the
+    // sampling profiler cannot (see analyseAlloc: it reports what SURVIVES).
+    // Turn one thing off, re-run, read the allocation rate.
+    else if (a === "--ablate") { o.ablate = next(); }
     else if (a === "--quiet") o.quiet = true;
     else if (!a.startsWith("--") && !skip.has(a)) o.track = a;
   }
@@ -663,6 +667,21 @@ async function main() {
     // Let boot-time work AND the working set finish filling: a cache
     // reaching its high-water mark is not a leak, and a baseline taken
     // during the fill turns ordinary warm-up into a fake slope.
+    // The ablation goes on BEFORE the settle, so the working set settles in
+    // the configuration being measured rather than in the one being removed.
+    if (opts.ablate) {
+      out.ablate = opts.ablate;
+      out.ablateApplied = await page.evaluate((name) => {
+        const A = window.__apex;
+        try {
+          // headless: stops the render path and leaves the simulation running,
+          // which splits "the renderer allocates it" from "the game does".
+          if (name === "headless") { A.headless(true); return A.headless() === true; }
+          return "unknown ablation: " + name;
+        } catch (e) { return "failed: " + String((e && e.message) || e).slice(0, 80); }
+      }, opts.ablate);
+      log(`ablation ${opts.ablate}: ${out.ablateApplied}`);
+    }
     log(`settling ${opts.settle}s before the baseline`);
     await sleep(opts.settle * 1000);
     // WHO ALLOCATES, sampled over exactly the window analyseHeap() measures.
