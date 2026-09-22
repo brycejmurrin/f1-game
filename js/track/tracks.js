@@ -2033,6 +2033,22 @@ const Tracks = (function () {
     //
     // Never async: Assets prefetches every model at boot precisely so that prop
     // placement cannot vary with network timing (js/render/shared/assets.js modelSync).
+    // A baked mesh's axis-aligned extent in its own space, cached on the mesh:
+    // Assets hands back the same object for every stamp of an id, and the pack
+    // is 36 models, so this runs a few dozen times per build at most.
+    function meshBox(mesh) {
+      if (mesh.__aabb) return mesh.__aabb;
+      const p = mesh.pos;
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let i = 0; i < p.length; i += 3) {
+        if (p[i] < x0) x0 = p[i];         if (p[i] > x1) x1 = p[i];
+        if (p[i + 1] < y0) y0 = p[i + 1]; if (p[i + 1] > y1) y1 = p[i + 1];
+        if (p[i + 2] < z0) z0 = p[i + 2]; if (p[i + 2] > z1) z1 = p[i + 2];
+      }
+      return (mesh.__aabb = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, cz: (z0 + z1) / 2,
+                              w: x1 - x0, h: y1 - y0, d: z1 - z0 });
+    }
+
     function bakedModel(id, k, side, dist, opts) {
       if (typeof Assets === "undefined" || !Assets.modelSync) return false;
       const mesh = Assets.modelSync(id);
@@ -2042,6 +2058,30 @@ const Tracks = (function () {
       if (!a || !isFinite(a.c[0]) || !isFinite(a.c[1]) || !isFinite(a.c[2])) return false;
       const yaw = o.rotY != null ? o.rotY
                 : Math.atan2(a.t[0], a.t[2]) + (side < 0 ? Math.PI / 2 : -Math.PI / 2);
+      // THE ONE PROP EMITTER WITH NO ROAD GUARD, until now. addBox, addCyl,
+      // addCone, addFrustum, addPrism and addPyramid all go through GUARDED,
+      // which rejects anything standing on the racing surface; addMesh never
+      // did, so a baked model could be stamped straight across the track, and
+      // one was. Monza's kenney_ind_building-d is anchored 60 m off node 17 at
+      // the Variante del Rettifilo, where the track turns ~90 degrees, so 60 m
+      // "outward" lands back ON the road two corners along: its window band,
+      // 2.22 x 0.20 m in baked colour [0.25,0.25,0.29], sat 0.75 m over the
+      // racing line (docs/notes/DEFECT-LEDGER.md).
+      //
+      // The box is the mesh's own extent, scaled and yawed exactly as addMesh
+      // transforms its vertices (geom.js: x' = x*cs + z*sn + X, z' = -x*sn +
+      // z*cs + Z), so the guard measures what ships. Callers write
+      // `if (!bakedModel(...)) building(...)` and that fallback is itself
+      // guarded, so a rejected stamp degrades to nothing, not to a raw box.
+      const bb = meshBox(mesh), sc = o.scale != null ? o.scale : 1;
+      const cs = __M.cos(yaw), sn = __M.sin(yaw);
+      const cx = bb.cx * sc, cz = bb.cz * sc;
+      const wc = [a.c[0] + cx * cs + cz * sn,
+                  a.c[1] + (o.lift || 0) + bb.cy * sc,
+                  a.c[2] - cx * sn + cz * cs];
+      const wsz = [(bb.w * __M.abs(cs) + bb.d * __M.abs(sn)) * sc, bb.h * sc,
+                   (bb.w * __M.abs(sn) + bb.d * __M.abs(cs)) * sc];
+      if (rejBox(wc, wsz)) { _culled++; return false; }
       return TrackGeom.addMesh(out, mesh, {
         x: a.c[0], y: a.c[1] + (o.lift || 0), z: a.c[2],
         rotY: yaw, scale: o.scale != null ? o.scale : 1,
