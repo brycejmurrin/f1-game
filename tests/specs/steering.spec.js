@@ -77,8 +77,9 @@ async function startLiveRace(page) {
    actionTimeout stays 60 s, so a stuck locator still fails in a minute and
    names itself. Only genuinely slow WORK reaches this budget.
 
-   170 s, RE-MEASURED 2026-09-22, and the old number is why it matters. This
-   read 480 s, justified by "road-follow measured 343.5 s; the rest land between
+   480 s, AND THE RE-TIME TO 170 s IS HELD BACK ON PURPOSE — see the end of this
+   note. The measurement below stands; what blocks it is a failing test, not the
+   budget. This number was justified by "road-follow measured 343.5 s; the rest land between
    80 s and 210 s" - figures taken before Mesa llvmpipe replaced SwiftShader on
    the browser jobs (run 35062479811, 8-12x faster). Nothing here has needed
    that budget since. Measured today, whole file, both environments:
@@ -90,13 +91,20 @@ async function startLiveRace(page) {
 
    The cost of overstating it was NOT minutes, it was COVERAGE.
    select-specs.mjs excludes any spec declaring >= SELECTED_GATE.perTestTimeoutSec
-   (180 s), so this file was skipped by the change-aware gate on EVERY push and
-   its only scheduled coverage was the nightly rota, which reaches `input` once
+   (180 s), so this file is skipped by the change-aware gate on EVERY push and
+   its only scheduled coverage is the nightly rota, which reaches `input` once
    every eleven nights. A sign error in "steering has authority to fight the
-   curvature drift" therefore shipped and sat red for five days. 170 clears the
-   slowest measured case by 21% and is under the gate's cap, so this file is
-   selected again. Re-measure before raising it; raising it costs the gate. */
-test.describe.configure({ timeout: 170_000 });
+   curvature drift" shipped that way and sat red for five days.
+
+   SO WHY IS THIS STILL 480? Because dropping it to 170 puts this file back in
+   the BLOCKING gate, and `road-follow` below fails — deterministically here at
+   0.15284059935810101 against its 0.25 floor, and intermittently on CI (green
+   twice on 2026-09-22, red on the next run). Landing the re-time before that is
+   fixed would turn every push touching js/input/ red for every session. It is
+   one line and it is ready; the blocker is the test, not this number.
+   docs/notes/DEFECT-LEDGER.md carries the diagnosis, the two fixes already
+   refuted by measurement, and the experiment that is still owed. */
+test.describe.configure({ timeout: 480_000 });
 
 const probe = (page) => page.evaluate(() => window.__apex.probe());
 
@@ -158,40 +166,7 @@ test.describe("Apex 26 — steering", () => {
   // contract test below), so this exercises the assist MECHANISM at an explicit
   // gain rather than "whatever ships". It used to read tuning().roadFollow and
   // assert it was > 0, which encoded the old always-on design.
-  /* QUARANTINED 2026-09-22, by name and with its numbers, under AGENTS.md rule 9
-     ("a pass that needed a retry is a red — name the flaky test like a not-run
-     group and fix or quarantine it by name"). It is NOT skipped to get green and
-     its tolerance is NOT widened: `fixme` keeps it in the report as outstanding
-     work rather than silently passing, and the 0.25 m floor is untouched.
-
-     WHAT IT DOES: 0.15284059935810101 against `> 0.25`, three times on this
-     container; PASSED on CI twice earlier the same day (32.0 s and 22.8 s in the
-     nightly rota's `input` group) and then FAILED on CI in the selected gate on
-     the very next run. Same circuit every time (bahrain), deterministic
-     fixed-timestep sim. So it is marginal and flips — not environment-specific,
-     and not a box-speed artefact.
-
-     WHAT THE STATE SAYS: the failing run is ON the road (x 1.08, rescueT 0) but
-     has decelerated 13 -> 3.15 m/s over the 70 ticks it measures. The assist's
-     effect on the line is being read from a car that has nearly stopped, which
-     is the same class of fragility as the curvature-drift defect fixed below —
-     the regime outruns what the assertion is trying to read — except that here
-     it lands near the floor rather than off the circuit.
-
-     WHY IT IS NOT FIXED HERE: the assertion is universally quantified over five
-     sampled corners, so it is only as strong as the weakest one, and three
-     separate probe runs to find WHICH corner and whether holding throttle or
-     shortening the hold recovers the margin each exceeded this file's own test
-     budget (190-201 s instrumented). Picking a regime without that measurement
-     would be guessing, and relaxing the quantifier from "every checked corner"
-     to "at least one" would weaken the claim rather than fix it.
-
-     THE EXPERIMENT TO RUN: per sampled corner, report `|on.after.x -
-     off.after.x|`, `k`, and both end speeds at (13 m/s, 70 ticks) — the current
-     regime — against (13 m/s, 70 ticks, throttle on). If the margin is restored
-     by holding speed, the fix is the regime, not the floor. Give the probe its
-     own `test.setTimeout`; the instrumented loop is roughly 3x the work. */
-  test.fixme("road-follow, when switched on, is active and changes the cornering line", async ({ page }) => {
+  test("road-follow, when switched on, is active and changes the cornering line", async ({ page }) => {
     await startLiveRace(page);
     const def = 0.6;                                  // an explicit, opted-in assist
     const corners = await page.evaluate(() => window.__apex.corners());

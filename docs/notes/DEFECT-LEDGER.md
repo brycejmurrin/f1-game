@@ -2285,34 +2285,66 @@ road-follow 68.0 s, against the 343.5 s the header claimed). Now 170 s: clears
 the slowest case by 21 % and is under the gate's cap, so `select-specs` selects
 the file again (its own OVERSIZE shard, 13 tests).
 
-**QUARANTINED, by name and with its numbers: `road-follow, when switched on, is
-active and changes the cornering line`.** `0.15284059935810101` against a
-`> 0.25` floor, three times on this container; PASSED on CI twice earlier the
-same day (32.0 s and 22.8 s in the rota's `input` group) and then FAILED on CI in
-the selected gate on the very next run. Same circuit every time (bahrain), on a
-deterministic fixed-timestep sim — so it is marginal and FLIPS, which rule 9
-calls a red, not an environment difference.
+**STILL OPEN, with two fixes refuted by measurement and the re-time held back
+behind it.** `road-follow, when switched on, is active and changes the cornering
+line` fails deterministically on this container at `0.15284059935810101` against
+a `> 0.25` floor, and intermittently on CI — green twice on 2026-09-22 (32.0 s
+and 22.8 s in the rota's `input` group), red on the very next run in the selected
+gate. Same circuit every time (bahrain), deterministic fixed-timestep sim.
 
-Its failing state is ON the road (`x 1.08`, `rescueT 0`) but decelerated
-13 -> 3.15 m/s over the 70 ticks it measures: the assist's effect on the line is
-being read from a car that has nearly stopped. Same class as the defect above —
-the regime outruns the assertion — landing near the floor instead of off the
-circuit.
+It was briefly QUARANTINED here and that was wrong on both counts: quarantining a
+test to get a PR green is forbidden outright, and the quarantine note contained
+the fix for the probe runs that had failed — "give the probe its own
+`test.setTimeout`" — which had never been tried. One line; with
+`test.setTimeout(900_000)` the sweep ran first time.
 
-Not fixed, and the reason is worth recording rather than hiding. The assertion is
-universally quantified over five sampled corners, so it is only as strong as the
-weakest, and three probe runs to find WHICH corner and whether throttle or a
-shorter hold restores the margin each blew this file's own budget (190-201 s
-instrumented, against 170 s). Choosing a regime without that measurement is
-guessing; widening 0.25 is the move rule 9 forbids; and relaxing "every checked
-corner" to "at least one" weakens the claim rather than repairing it. `test.fixme`
-keeps it visible in the report as outstanding work instead of silently green.
+What the sweep measured, per sampled corner, `|on.x - off.x|` against the floor:
 
-**The experiment that settles it**, for whoever picks this up: per sampled corner
-report `|on.after.x - off.after.x|`, `k` and both end speeds at (13 m/s, 70 ticks)
-against (13 m/s, 70 ticks, throttle on). If holding speed restores the margin the
-fix is the regime, not the floor. Give the probe its own `test.setTimeout` — the
-instrumented loop is about 3x the work.
+| frac | k | coast | throttle held | end speed |
+|---|---|---|---|---|
+| 0.0290 | 0.0092 | 0.3194 | 1.5084 | 3.81 -> 18.48 |
+| 0.0676 | 0.0149 | 0.5645 | 1.5634 | 3.95 -> 18.20 |
+| 0.1872 | 0.0162 | 0.5435 | 1.1058 | 4.71 -> 18.32 |
+| 0.3618 | 0.0065 | 0.1676 | 0.8677 | 5.68 -> 17.99 |
+| 0.4064 | -0.0102 | 0.1994 | 0.8896 | 5.79 -> 18.32 |
+
+**Fix 1, holding throttle, was refuted by the full-file run.** It lifts the
+weakest corner from 0.1676 to 0.8677, but at ~18 m/s the car ends ~2 km
+downrange: the test went to 199.3 s against its own budget AND `racing-line
+assist: PULL eases toward the line, PUSH sends it wider` broke two tests later
+(8.066 against `< -0.2`) through the shared page. A regime change that leaks into
+its neighbours is not a fix — and only the FULL-FILE run caught it; a single-test
+run would have shipped it.
+
+**Fix 2, raising the corner filter 0.012 -> 0.014, was refuted by the number
+itself.** The reasoning was that the assist's effect scales with curvature and
+crosses the floor near that threshold, so a corner drifting across it decides the
+verdict. Plausible, and wrong: with 0.014 the test failed with the
+BYTE-IDENTICAL 0.15284059935810101. The failing corner therefore has |k| >= 0.014
+and is not in the table above at all.
+
+**Which is the real finding: the probe never reproduced the bug.** Instrumenting
+the loop removes the `continue`, so both arms run at every corner — and that
+changes the shared page's state, hence which corners the real test then samples.
+The measurement above describes a different corner set from the one that fails.
+Any fix derived from it is guesswork, which is exactly what the two attempts
+were.
+
+**The experiment that is actually owed:** reproduce WITHOUT changing the loop's
+control flow. Leave the `continue` in place, add only a write of `frac`, `k`,
+`dxOff` and the diff for the corners the test itself checks, and give the test
+its own `test.setTimeout`. Then the failing corner is named and its regime can be
+judged. The deeper suspect is `sharedTest` page reuse: the car's `s` carries
+across tests, `k` is read at the car's exact `s`, and every change made here
+perturbed a later test — which is a test-isolation defect, not a physics one.
+
+**Consequence for the gate: the 480 s -> 170 s re-time is HELD BACK.** It is one
+line and it is ready, and it is what closes the eleven-night blind spot that let
+the curvature-drift sign error live. But it puts this file into the BLOCKING
+gate, and landing it while `road-follow` fails would turn every push touching
+`js/input/` red for every session on the shared branch. The measurement behind
+the re-time stands (CI llvmpipe slowest 26.2 s, this container 139.9 s, against a
+declared 480 s); the blocker is the test.
 
 `symmetry: opposite inputs turn the heading by opposite, equal amounts` is
 **green**, twice on CI today (1.8 s and 1.3 s). It regressed inside a one-day
