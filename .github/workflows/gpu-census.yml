@@ -442,6 +442,19 @@ jobs:
                   (_p.wideCostRatio != null ? `  cost ${_p.wideCostRatio}x normal (${_p.wideMeanMs} vs ${_p.normalMeanMs}ms) spikeEnrich ${_p.spikeEnrichmentOnWide}x` : ""));
               }
               if (_pk && _pk.verdict) rows.push(`${" ".repeat(8)}kinds: ${_pk.verdict}`);
+              // PIPELINE COMPILES, which decide what the race-start burst
+              // actually IS. Run 197 watched the uniform buffer count go
+              // 90 -> 558 in one second as the race started and fps halve,
+              // with 258/346/441/556 ms frames in that window. A new uniform
+              // buffer is a new RenderObject either way; only a compile count
+              // separates "allocate faster" from "warm the programs".
+              const _w = g.gpuWork;
+              if (_w && !_w.note) {
+                const keys = Object.keys(_w).sort((a, b) => _w[b] - _w[a]).slice(0, 6);
+                rows.push(`${" ".repeat(8)}work:  ${keys.map((k) => `${k}=${_w[k]}`).join(" ")}`);
+              } else if (_w && _w.note) {
+                rows.push(`${" ".repeat(8)}work:  ${_w.note}`);
+              }
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
                 // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,

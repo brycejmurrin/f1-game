@@ -160,6 +160,33 @@ try {
     // size a player renders it — sixteen times the pixels the container
     // measured. Resolution is the fingerprint; GPUTextureView carries no size,
     // so tag the view as it is created from a texture that does.
+    // WHAT THE RESOURCE BURST IS MADE OF. Run 197's beats showed the uniform
+    // buffer count go 90 -> 558 in one second as the race started, then climb
+    // to 755 while groupVer went 3 -> 190 and fps halved, with frames of 258,
+    // 346, 441 and 556 ms landing in that window. A new uniform buffer is a
+    // new three RenderObject; whether it also cost a PIPELINE COMPILE is the
+    // difference between "allocate faster" and "warm the programs", and the
+    // beats cannot tell them apart. Count the calls: they are exact even
+    // where milliseconds are not.
+    const _hWork = new Map();
+    const _bumpWork = (k) => { if (_hArmed) _hWork.set(k, (_hWork.get(k) || 0) + 1); };
+    try {
+      const wrapCall = (proto, name, kind) => {
+        if (!proto || typeof proto[name] !== "function") return;
+        const orig = proto[name];
+        proto[name] = function () { _bumpWork(kind); return orig.apply(this, arguments); };
+      };
+      const GD = window.GPUDevice && window.GPUDevice.prototype;
+      wrapCall(GD, "createRenderPipeline", "gpu.createRenderPipeline");
+      wrapCall(GD, "createRenderPipelineAsync", "gpu.createRenderPipelineAsync");
+      wrapCall(GD, "createShaderModule", "gpu.createShaderModule");
+      wrapCall(GD, "createBindGroup", "gpu.createBindGroup");
+      wrapCall(GD, "createBuffer", "gpu.createBuffer");
+      const G2 = window.WebGL2RenderingContext && window.WebGL2RenderingContext.prototype;
+      wrapCall(G2, "linkProgram", "gl.linkProgram");
+      wrapCall(G2, "compileShader", "gl.compileShader");
+      wrapCall(G2, "getProgramParameter", "gl.getProgramParameter");
+    } catch (_) { /* a frozen prototype leaves this column absent, not zero */ }
     try {
       const TP = window.GPUTexture && window.GPUTexture.prototype;
       if (TP && typeof TP.createView === "function") {
@@ -214,9 +241,10 @@ try {
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; },
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); },
         dump: () => ({ t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
-                       passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig }),
+                       passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
+                       work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]) }),
       };
     } catch (_) { /* a frozen rAF just means this leg reports no hitch series */ }
     try {
@@ -414,6 +442,10 @@ try {
     // The pass census rides the same series: same frames, same window, so
     // "wide frames cost Nx" compares like with like.
     out.passes = analysePasses(d.passes || [], d.t0 || [], d.dur || [], a.spikeThresholdMs);
+    // Absent, never zero: a leg whose prototypes could not be wrapped has not
+    // proved that nothing compiled.
+    out.gpuWork = (d.work && d.work.length) ? Object.fromEntries(d.work)
+      : { note: "no resource calls observed — wrapping failed, or this leg creates none" };
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
     return a;
   }, 30000, "hitch-series").catch((e) => ({ note: "hitch read failed: " + String((e && e.message) || e).slice(0, 80) }));
