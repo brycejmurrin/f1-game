@@ -5171,12 +5171,39 @@ is its own Scene). `build` is still 720 ms in the window because those 37 are st
 generated on the main thread, chunked by patch 8 but chunked into 150-390 ms
 frames. WGX on the same run: 1 spike, 14 ms.
 
-The fix in flight: the cap is exempt until the first warm has completed (the
-lights are a frozen picture; minting everything there costs nothing visible), the
-post warm compiles the live `quad` with each job's material (a same-object hit
-whatever the key contains), and `tlx-shadow.js` exports `warm()` over `castScene`
-into `sunRT` plus the blocker, called after the post warm. If those 37 build during
-the lights, the race window has no codegen left in it.
+The fix: the cap is exempt until the first warm has completed (the lights are a
+frozen picture; minting everything there costs nothing visible), the post warm
+compiles the live `quad` with each job's material (a same-object hit whatever the
+key contains), and `tlx-shadow.js` exports `warm()` over `castScene` into `sunRT`
+plus the blocker, called after the post warm.
+
+### Census 206: two of three warms land, and the post miss is the render context
+
+Census 206 on that tree: **scene ×0 and sun-shadow ×0 lazy** — ×23 shader modules
+tagged the scene warm, ×13 + ×2 the caster warm, and nothing in the race window
+asked for either again. **Post ×16 still lazy**, and ×16 ALSO tagged the post
+warm: the warm compiled the live quad with the live materials and the race built
+the same sixteen again anyway. 9 spikes / 538 frames, worst 308 ms; `build` still
+671 ms in the window — sixteen programs at ~35 ms plus the helpers. WGX on the
+same run: 1 spike, 25 ms.
+
+So the miss was never the object or the material. It is the **render context**.
+`present()` sets the ssrTag MRT node for the scene pass and runs `post.present()`
+BEFORE restoring it, so every live post quad draws with that node set. three keys
+its `RenderContext` on the render target's attachment state plus the MRT node's id
+(`RenderContexts.get`), and folds `context.id` into every render object's material
+cache key — a different MRT is a different context is a different program key, and
+`NodeMaterial.setup` really does emit a different fragment output for it. The warm
+nulled the MRT before `post.warm()`, and `post.warm()` nulled it again: sixteen
+programs built for a context the race never uses.
+
+Fix D is an ordering change. `startProgramWarm` holds the scene MRT through the
+post warm, nulls it after, and warms the casters under null (`sunPass` runs before
+`present()`, with the MRT restored); `post.warm()` no longer touches the MRT at
+all and compiles under whatever its caller set. The two sandboxed warm tests
+encoded the old assumption (MRT null during the post warm); they now assert the
+order and pin it in the source — exactly one `setMRT(null)` in `startProgramWarm`,
+between the two warms, none in `post.warm`. Census 207: _pending_.
 
 ### What the instruments had to become first
 
