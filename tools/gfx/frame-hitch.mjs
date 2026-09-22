@@ -716,7 +716,10 @@ async function main() {
       // grep). Capture a bounded sample of call stacks per kind and aggregate
       // by signature, so the answer is a function name, not a theory.
       const stacks = new Map();
-      const STACK_KINDS = { "gpu.createBindGroup": 1, "gpu.createBuffer": 1, "gpu.createTexture": 1, "gpu.createRenderPipeline": 1 };
+      // createShaderModule is exactly one per NEW PROGRAM on both the sync and
+      // the async pipeline path, created right after the codegen — so its stack
+      // names which draw asked for a program the warm never built.
+      const STACK_KINDS = { "gpu.createBindGroup": 1, "gpu.createBuffer": 1, "gpu.createTexture": 1, "gpu.createRenderPipeline": 1, "gpu.createShaderModule": 1 };
       let stackBudget = 400;
       function note(kind) {
         if (!STACK_KINDS[kind] || stackBudget <= 0) return;
@@ -728,7 +731,8 @@ async function main() {
           // Deep enough to walk THROUGH three's own frames and reach the
           // Apex caller: three's binding path is 4-5 frames on its own, and
           // the name that matters is ours, below it.
-          const raw = (new Error().stack || "").split("\n").slice(3, 16);
+          const prevLimit = Error.stackTraceLimit; Error.stackTraceLimit = 80;
+          let raw; try { raw = (new Error().stack || "").split("\n").slice(3); } finally { Error.stackTraceLimit = prevLimit; }
           const fr = raw.map((l) => l.trim().replace(/^at\s+/, "").replace(/\?v=[a-z0-9]+/g, "").replace(/https?:\/\/[^\s)]*\//g, ""));
           // three's minified frames are noise once we have one of them; the
           // ANSWER is the first frames that live in our own files.
