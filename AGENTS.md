@@ -42,7 +42,7 @@ Session shape — eleven rules that control wall time and waiting:
    from the working tree, so a run in flight forbids source edits (the edit
    hook blocks them). `test:tooling-fast` is the edit-loop check.
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above:
-   `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (234 of 311 unit files)
+   `test:guards` (hook-enforced, every commit) ⊂ `test:tooling-fast` (235 of 312 unit files)
    ⊂ `deploy.mjs --gate-only`, the only pre-push check that runs what the deploy runs (pushes nothing, dirty tree fine). The other 77 have taken deploys red three times — `docs/notes/PREPUSH-GATE-LADDER.md`. A commit whose every staged path is prose (`docs/`, `*.md`, skills, agents — no generated doc) runs only `docs-integrity`, and no ratchet raise.
 4. Never block the foreground on a test run: background it (log in `artifacts/`). Push once per VERIFIED BATCH: a push over a live run cancels it, and a killed job runs no `if: always()` step, so its failures are lost (9 of 59 sampled runs). Wait on it with `until [ -z "$(pgrep -f 'nam[e]')" ]; do sleep 15; done` and TEST THE ABSENT CASE — `[ ! -e /proc/$(pgrep …) ]` never exits and sat out a 30-minute budget (`docs/notes/TESTING-FIELD-NOTES.md` 2026-09-22); the verdict is still rule 5's, never the waiter's.
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`
@@ -193,4 +193,4 @@ once and publishes exactly that commit (dispatch = "deploy now"; ≤ ~25 min).
 "Live?" = ancestor of the live `apex-sha` (deploy-research; `docs/TESTING.md` §Release train).
 
 ### Watching CI and Pages
-Do not conflate PR CI, ship-push CI, and Pages (`pages.yml` `295002043`). Poll by `head_sha`; a green PR does not prove Pages. On red, name the exact test, assertion and lane. Procedure and diagnosis notes: `docs/notes/` (SHARED-BRANCH-COORDINATION, deploy-research). Claim live only after Pages and `version.json` confirm.
+Do not conflate PR CI, ship-push CI, and Pages (`pages.yml` `295002043`). Poll by `head_sha`; a green PR does not prove Pages. On red, name the exact test, assertion and lane. Procedure and diagnosis notes: `docs/notes/` (SHARED-BRANCH-COORDINATION, deploy-research). Claim live only after Pages and `version.json` confirm. `deploy.mjs --train` prints the branch's last ci/pages conclusions AND the nightly rota BY JOB (a `cancelled` run hides a FAILED one — that is how a red sat unread for five days); the rota is the only scheduled coverage for the 61 specs `select-specs` never picks.

@@ -1480,7 +1480,7 @@ const PitLane = (function () {
       const oldNext = plan.lapsAt[done];
       if (lapsLeft < 2 || oldNext == null) return false;
       // planLaps, not lifeLaps: the level-free nominal is only right at `real`
-      // (1.0), and the SHIPPED DEFAULT is `light` (0.55), where a set lasts
+      // (1.0), the shipped default; at `light` (0.55) a set lasts
       // 1.82x longer. The first plan (plan(), above) and the pit-now compound
       // pick both learned this; the per-lap re-cut did not, so every replan
       // argued against the plan it was revising and pulled the next stop

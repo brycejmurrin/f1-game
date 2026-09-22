@@ -380,7 +380,7 @@ const RaceSettings = (function () {
         // Same gesture, same reason: Chromium needs user activation before
         // navigator.vibrate will fire and no longer accepts touchstart as one,
         // so arm it from this click or the first in-race brake cue is dropped.
-        if (window.Input && Input.primeHaptics) Input.primeHaptics();
+        if ((typeof Input !== "undefined") && Input.primeHaptics) Input.primeHaptics();
         const season = G.season;
         // QUALIFYING goes straight through: that path opens another SHEET, and a
         // cinematic between two menus is a wait, not an arrival. Only the route
