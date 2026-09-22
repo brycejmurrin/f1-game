@@ -94,8 +94,31 @@
           stage._mat = 0;
         }, { required: true });
       };
-      pitBlock("estoril-pit-terrace-a", 0.960, 7);
-      pitBlock("estoril-pit-terrace-b", 0.996, 7);
+      // ── THE FRAC YOU WRITE IS NOT WHERE IT LANDS ──────────────────────────
+      // `sceneryStartFrac: 0.96` in the def gives `_sceneryShift` 0.85616, and
+      // EVERY emitter here — K(s) and the (s0, s1) range helpers alike — is
+      // remapped by it: engine_frac = wrap01(authored + 0.85616). Verified
+      // against `track.props.spans`, which reports emitted engine fracs:
+      // tyreWall(0.880,0.925) -> 0.7360,0.7810; fence(0.95,0.06) ->
+      // 0.8060,0.9160; guardrail(0.94,0.06) -> 0.7960,0.9160, all matching
+      // prediction to four decimals.
+      //
+      // The ids below were RENAMED 2026-09-22 to the feature each one actually
+      // lands on, because none of them matched: the "pit terraces" emit onto
+      // the Parabolica (T14), the "t1 gravel" and "esses stand" land in the pit
+      // complex and are SUPERSEDED — they never render at all — and the widest
+      // gravel apron dresses T13, not the Parabolica it was named for.
+      //
+      // DO NOT "correct" this by dropping sceneryStartFrac. Measured
+      // 2026-09-22: it fixes the names (pit emitters land in pitLaneSpan to the
+      // metre, superseded as a hand-placed pit block should be) and takes
+      // coplanar 5 -> 0, but it also takes float 0 -> 1 and clip 1 -> 3 severe,
+      // including a 4.00 m / 1261 m3 collision at frac 0.000 that survives
+      // retiring the pit grandstand, and drops `estoril-aldeia` on the road.
+      // The dressing was tuned where it sits. Moving it is a full pass with a
+      // rendered lap, not a one-line def edit — docs/notes/DEFECT-LEDGER.md.
+      pitBlock("estoril-parabolica-terrace-a", 0.960, 7);
+      pitBlock("estoril-parabolica-terrace-b", 0.996, 7);
       {
         const a = anchor(K(0.978), 1, 22), b = [a.r, a.u, a.t];
         modelGroup("estoril-timing-tower", {
@@ -189,25 +212,25 @@
           stage._mat = 0;
         });
       };
-      scaffoldStand("estoril-stand-pit", K(0.005), -1, 13, 18, { rows: 5, awning: true });
-      scaffoldStand("estoril-stand-t1", K(0.078), -1, 22, 11, { rows: 4 });
-      scaffoldStand("estoril-stand-esses", K(0.140), 1, 20, 9, { rows: 4 });
-      scaffoldStand("estoril-stand-parabolica", K(0.900), 1, 18, 14, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-parabolica-exit", K(0.005), -1, 13, 18, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-main-straight", K(0.078), -1, 22, 11, { rows: 4 });
+      scaffoldStand("estoril-stand-pitlane-superseded", K(0.140), 1, 20, 9, { rows: 4 });
+      scaffoldStand("estoril-stand-t13", K(0.900), 1, 18, 14, { rows: 5, awning: true });
       grandstandEx(0.955, -1, 12, 78, null, null,
         { livery: "terracotta", roof: "none", endWalls: true, h: 8 });
 
       groundPatch(K(0.078), 1, 5, [30, 0.18, 40], GRAVEL,
-        { id: "estoril-t1-gravel", samples: 7 });
+        { id: "estoril-pit-entry-gravel-superseded", samples: 7 });
       tyreWall(0.062, 0.096, 1, 4, [0.86, 0.20, 0.18]);
       marshalPost(K(0.072), -1, 9);
 
       groundPatch(K(0.420), -1, 5, [26, 0.18, 34], GRAVEL,
-        { id: "estoril-esses-gravel", samples: 6 });
+        { id: "estoril-t5-gravel", samples: 6 });
       tyreWall(0.406, 0.436, -1, 4, [0.20, 0.40, 0.85]);
       marshalPost(K(0.424), 1, 9);
 
       groundPatch(K(0.780), 1, 5, [24, 0.18, 32], GRAVEL,
-        { id: "estoril-t12-gravel", samples: 6 });
+        { id: "estoril-t11-gravel", samples: 6 });
       marshalPost(K(0.775), -1, 9);
 
       // EST-M2: Parabolica owns both superlatives on the lap: the widest
@@ -227,7 +250,7 @@
       // and follow the arc, which is what the apron actually is.
       for (const [g, id] of [[0.884, "a"], [0.900, "b"], [0.916, "c"]])
         groundPatch(K(g), -1, 10, [44, 0.18, 34], GRAVEL,
-          { id: "estoril-parabolica-gravel-" + id, samples: 9 });
+          { id: "estoril-t13-gravel-" + id, samples: 9 });
       tyreWall(0.880, 0.925, -1, 5, [0.85, 0.78, 0.20]);
       spectatorHill(0.865, 0.935, 1, 32, { rows: 4, rise: 1.2, depth: 1.9, density: 0.68, step: 7 });
       marshalPost(K(0.895), 1, 10);

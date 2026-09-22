@@ -16,6 +16,20 @@ function initPhotoCam() {
   photoCam.yaw = Math.atan2(dx, -dz);
   photoCam.fov = G.camFov;
   const fv = $("pc-fov"); if (fv) fv.value = Math.round(G.camFov);
+  releasePhotoInput();
+}
+// EVERY HELD CONTROL, RELEASED — and nothing about where the camera IS.
+// js/input/input.js wires `window "blur"` to reset() for exactly this reason
+// ("any pointer that lifts or is captured elsewhere"), and the two virtual
+// sticks and two hold buttons below already handle pointerup/pointercancel/
+// lostpointercapture citing the same class of bug. What none of them covered
+// is focus simply going away — an alt-tab, an OS notification, a permission
+// prompt — which fires no pointer or key event at all, so a held W or a
+// finger down on the move stick left that axis pinned and the free camera
+// flew off in that direction until the player pressed the same control again.
+// Split out of initPhotoCam so blur can release the input WITHOUT also
+// re-deriving the pose from the game camera, which would teleport the shot.
+function releasePhotoInput() {
   photoMove.x = photoMove.y = photoLook.x = photoLook.y = 0;
   photoMouse.dx = photoMouse.dy = 0; photoMouse.drag = false; photoMouse.pid = null;
   G.photoAlt = 0; G.photoVertT = 0;
@@ -69,6 +83,7 @@ function enterPhotoMode() {
   const t = $("pc-toggle"); if (t) { t.classList.add("on"); t.innerHTML = "● FREE CAMERA"; }
   window.addEventListener("keydown", photoKeyHandler, true);
   window.addEventListener("keyup", photoKeyHandler, true);
+  window.addEventListener("blur", releasePhotoInput);
 }
 function exitPhotoMode() {
   if (!G.photoMode) return;
@@ -82,6 +97,7 @@ function exitPhotoMode() {
   const t = $("pc-toggle"); if (t) { t.classList.remove("on"); t.innerHTML = "📷 FREE CAMERA"; }
   window.removeEventListener("keydown", photoKeyHandler, true);
   window.removeEventListener("keyup", photoKeyHandler, true);
+  window.removeEventListener("blur", releasePhotoInput);
   if (gfx.setRenderScale) gfx.setRenderScale(G._photoPrevScale || 1);
   applyResMode();
 }

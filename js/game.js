@@ -2040,6 +2040,12 @@ function redFlagRestart() {
     c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null;
     c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.otT = 0; c.otCool = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
+    // A STOP IN FLIGHT IS SCRATCH, not strategy, and it was the kind this list
+    // missed: the grid boxes sit INSIDE the pit window on most circuits, so a
+    // car holding the lane when the flag flew restarted still reading inLane()
+    // — pinned at the pit limiter for ~12 s on Monza. pitStops/pitNext/pitPlan
+    // are untouched: same race. Ledger 2026-09-22.
+    pits.clearArm(c);
     // AND IT IS A STANDING START: re-plan the launch. gridUp arms this once,
     // launchDone disarms it when the first getaway ends, and nothing re-armed
     // it — so the restart the countdown calls "a real second start" was the
@@ -3721,6 +3727,12 @@ function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); flybyPanel.closeFlyby(false); exitPhotoMode();
+  // THE PRE-RACE SCREEN OUTLIVES A FAILED START without this: its only other
+  // stop is clearMenuScreens(), which startRaceBody() reaches near the END of
+  // its work, so a throw before that lands in startRace()'s `.catch` here and
+  // left the flyby active() for the session — capture listeners attached, and
+  // menuBlank and the per-car draw break both gate on !active(). Idempotent.
+  loadingScreen.stop();
   state = "menu"; paused = false; raceCtl.reset(); weatherArc = null; endChangeable(); daily.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
@@ -3963,6 +3975,13 @@ function update(dt) {
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
       netStart = null;              // consumed; never carry it into the next race
+      // LOWERED BEFORE THE THROWABLE WORK BELOW, read from a local afterwards:
+      // lightsOut() builds WebAudio nodes behind a guard that checks `ctx`
+      // exists but not `ctx.state`, so a context the browser closed under us
+      // threw and latched the flag — and stuck true it skips `raceT = 0` on
+      // every later race and suppresses quali flying laps. Ledger 2026-09-22.
+      const wasRestart = restartPending;
+      restartPending = false;
       announce("LIGHTS OUT!", 1.4, "race");
       if (soundOn) GameAudio.lightsOut();
       // ONE STANDING LAP, from the line. It used to launch at racing speed
@@ -3971,14 +3990,22 @@ function update(dt) {
       // That is fixed on the other side now — quali.js charges every modelled
       // lap the same standing start — so both begin from rest and stay on one
       // scale, and the session reads like the thing it is named after.
-      if (isQuali() && !restartPending) launchFlyingLap();
-      restartPending = false;
+      if (isQuali() && !wasRestart) launchFlyingLap();
     }
     return;
   }
   if (state !== "race") return;
   raceT += dt;
-  if (raceCtl.takeRestart() && redFlagRestart()) return;   // the red procedure ended: re-grid, lights re-armed
+  // THE RED PROCEDURE ENDS EXACTLY ONCE, so its clean-up cannot ride on the
+  // re-grid alone: takeRestart() consumes the request either way, and
+  // redFlagRestart() declines once any car has finished — ordinary, not exotic.
+  // That combination froze the field for RED_STOP+RED_HOLD, dropped to green
+  // with the debris still there, and (finished never clears) raised the same
+  // dead red every CAP_REARM_HOLD for the rest of the race. Ledger 2026-09-22.
+  if (raceCtl.takeRestart()) {
+    if (redFlagRestart()) return;   // re-gridded, lights re-armed
+    IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
+  }
   tickWeatherArc(dt);   // dynamic weather progression (no-op unless an arc is armed)
   checkRetirements();
   // ranks by progress (reuse module-scope buffer, no per-step allocation).
@@ -4415,7 +4442,10 @@ function updateCar(c, dt, ranked) {
   let throttleLvl = 1;
   if (c.human) {
     braking = inp ? !!inp.brake : Input.braking();
-    brakeLvl = inp ? 1 : Math.max(0.15, Input.brakeLevel());
+    // `?? 1`, symmetric with throttleLevel below — the rule the comment under
+    // it states was only ever implemented on the throttle arm. Nothing sets
+    // brakeLevel today: this is for the next caller, not a live regression.
+    brakeLvl = inp ? (inp.brakeLevel ?? 1) : Math.max(0.15, Input.brakeLevel());
     // A replicated or scripted input is a boolean by construction, so it means
     // FULL travel unless it says otherwise — which keeps every __apex.setInput
     // caller (and every physics spec built on one) exactly as it was.
@@ -7226,12 +7256,20 @@ function render(dt) {
     const _envInv = gfx.envFaceBegin(_envFace, [_pex, smp2.p[1] + 0.9, _pez], frame);
     if (_envInv) {
       frameSky.invViewProj = _envInv;
+      // THE `finally` IS LOAD-BEARING: it prevents a frozen game, not a lost
+      // reflection. envFaceBegin raises GLX's `_envActive`, begin() branches on
+      // it every frame, and envFaceEnd is its ONLY lowering — so a throw below
+      // left the whole game rendering into a 64-pixel cubemap for the life of
+      // the tab, under a canvas stuck on its last good frame. Ledger 2026-09-22.
       // Same early-Z order as the main camera (opaque → sky). The 64² face
       // is ~200× smaller, but the sky still filled every pixel the world
       // then overwrote. Glow stays off on the probe (`false` below).
-      drawWorldMeshes(frame, night, wet, _floodEmit, false);
-      gfx.drawSky(frameSky);
-      gfx.envFaceEnd(_envFace);
+      try {
+        drawWorldMeshes(frame, night, wet, _floodEmit, false);
+        gfx.drawSky(frameSky);
+      } finally {
+        gfx.envFaceEnd(_envFace);
+      }
     }
   } else if (PerfGov.tier() >= 1 && gfx.envProbeReady && gfx.envProbeReady()) gfx.envProbeReset();   // tier 1 sheds the PRODUCER, but envReady LATCHES — without this the paint mirrors a frozen cube. See glx.js envProbeReset.
   let _b;

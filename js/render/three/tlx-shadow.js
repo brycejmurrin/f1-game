@@ -307,6 +307,15 @@
     // The seam members (game.js call order: Begin -> cast* -> End).
     function shadowBegin(lightVP) {
       if (!S.enabled) return;
+      // The SUN pass owns the whole shadow box, so a castCullVP still up is a
+      // leftover from the car or lamp pass — and tlx.js resolves
+      // `castCullVP || lightVP` for every chunked and instanced caster, so a
+      // stale one culls the sun's map to a ±42 m car box. The Ends clear it on
+      // the normal path and on their early returns (see the note at
+      // lampShadowEnd); what they cannot cover is a THROW out of a caster draw
+      // between Begin and End. Same one-line guard as GLX's shadow.js — this is
+      // the DEFAULT backend, so it needs it at least as much.
+      S.castCullVP = null;
       beginPass(sunRT, lightVP, S.lightVP);
     }
 
@@ -385,6 +394,16 @@
       S,
       carShadowKeep, lampShadowKeep,
       sunSize: SUN_SIZE,
+      // EXPORTED FOR THE SAME REASON sunSize IS: tsl-lit's PCF taps are offsets
+      // in UV space, so they have to be derived from the map that is actually
+      // allocated. The sun map has always done that (U.shadowTexel =
+      // 1 / SHD.sunSize); the car and lamp maps shrink to 256² under software
+      // GL while staying ENABLED (unlike the mobile path, which nulls them),
+      // and their taps were hardcoded to the desktop 1024/512 — so on a
+      // software-GL context the filter collapsed to a fraction of a texel and
+      // both shadows went hard and aliased while the sun's stayed soft.
+      carSize: CAR_SIZE,
+      lampSize: LAMP_SIZE,
       sunTex: sunRT ? sunRT.depthTexture : null,
       carTex: carRT ? carRT.depthTexture : null,
       lampTex: lampRT ? lampRT.depthTexture : null,
