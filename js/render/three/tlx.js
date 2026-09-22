@@ -1925,9 +1925,12 @@ const TLX = (function () {
       // ~20 presents, a third of a second of distant scenery filling in, for a
       // worst case near 25 ms instead of 500. Cars are never affected in
       // practice: their meshes are minted during the lights, before any
-      // streaming, and a car that appears later is a handful of draws. The
-      // env-face path keeps its own unbudgeted call — six 64 px faces are not
-      // where a burst lands.
+      // streaming, and a car that appears later is a handful of draws. Both
+      // present paths — the main one and the env-face one — reset the cap at
+      // the top of their draw loop and tolerate the null; the first cut of
+      // this guarded only the env-face loop (the one carrying the "64px cube"
+      // comment) and the main present dereferenced null on its 25th new mesh,
+      // which stopped the game loop on Metal (gpu-census 204, frame-fault cap).
       const NEW_MESH_BUDGET = 24;
       let _newMeshLeft = NEW_MESH_BUDGET, _newMeshDeferred = 0;
       function acquireMesh(geo, matrixArr, material) {
@@ -3386,6 +3389,7 @@ const TLX = (function () {
             }
           }
 
+          _newMeshLeft = NEW_MESH_BUDGET; _newMeshDeferred = 0;
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
@@ -3400,7 +3404,7 @@ const TLX = (function () {
               // one's grid and only the last survived.
               const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist);
               const vis = chunkedSys.visList;
-              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat).renderOrder = i;
+              for (let j = 0; j < n; j++) { const pm = acquireMesh(vis[j].geo, rec.m, rec.mat); if (pm) pm.renderOrder = i; }
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
               // Hold the release until the env probe has LATCHED.
@@ -3441,7 +3445,8 @@ const TLX = (function () {
                 _mirrorRelease.push(rec.chunked);
               continue;
             }
-            acquireMesh(rec.geo, rec.m, rec.mat).renderOrder = i;
+            const pm = acquireMesh(rec.geo, rec.m, rec.mat);
+            if (pm) pm.renderOrder = i;
           }
           for (let i = 0; i < meshPool.length; i++) { const pm = meshPool[i]; if (pm.__tlxBatch !== _poolBatch) pm.visible = false; }
           // Hide InstancedMeshes that were not drawn this frame (still in scene).

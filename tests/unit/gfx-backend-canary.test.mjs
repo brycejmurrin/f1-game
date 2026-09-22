@@ -2099,10 +2099,20 @@ test("TLX caps new pool meshes per present and warms the post chain regardless o
     "acquireMesh no longer returns null past the cap (and must un-count the slot it did not fill)");
   assert.match(TLX, /_newMeshLeft = NEW_MESH_BUDGET; _newMeshDeferred = 0;\n\s+for \(let i = 0; i < drawList\.length; i\+\+\) \{/,
     "the budget is not reset at the top of the present draw loop");
-  assert.match(TLX, /const pm = acquireMesh\(vis\[j\]\.geo, rec\.m, rec\.mat\); if \(pm\) pm\.renderOrder = i;/,
-    "the chunked present call does not tolerate a null from acquireMesh");
-  assert.match(TLX, /const pm = acquireMesh\(rec\.geo, rec\.m, rec\.mat\);\n\s+if \(pm\) pm\.renderOrder = i;/,
-    "the plain present call does not tolerate a null from acquireMesh");
+  // AT THE MAIN PRESENT, not merely somewhere. The first cut of this pin
+  // matched the guarded form wherever it sat, and it sat in the env-face loop
+  // (the one with the "64px cube" comment) while the main present kept the
+  // unguarded call and dereferenced null on its 25th new mesh — a frame-fault
+  // cap and a stopped game loop on Metal (gpu-census 204). _chunkFrame.total
+  // and the meshPool hide loop belong to the main present only.
+  assert.match(TLX, /const pm = acquireMesh\(vis\[j\]\.geo, rec\.m, rec\.mat\); if \(pm\) pm\.renderOrder = i; \}\n\s+_chunkFrame\.total \+= rec\.chunked\.chunks\.length;/,
+    "the MAIN present's chunked call does not tolerate a null from acquireMesh");
+  assert.match(TLX, /const pm = acquireMesh\(rec\.geo, rec\.m, rec\.mat\);\n\s+if \(pm\) pm\.renderOrder = i;\n\s+\}\n\s+for \(let i = 0; i < meshPool\.length; i\+\+\) \{ const pm = meshPool\[i\]; if \(pm\.__tlxBatch !== _poolBatch\) pm\.visible = false; \}/,
+    "the MAIN present's plain call does not tolerate a null from acquireMesh");
+  assert.match(TLX, /_newMeshLeft = NEW_MESH_BUDGET; _newMeshDeferred = 0;\n\s+for \(let i = 0; i < drawList\.length; i\+\+\) \{\n\s+const rec = drawList\[i\];\n\s+if \(rec\.instanced\) \{\n\s+_showInstanced\(rec, i\);\n\s+continue;\n\s+\}\n\s+if \(rec\.chunked\) \{\n\s+\/\/ PER-CHUNK LAMPS/,
+    "the budget is not reset at the top of the MAIN present draw loop");
+  // And no unguarded dereference of acquireMesh's result survives anywhere.
+  assert.doesNotMatch(TLX, /acquireMesh\([^)]*\)\.renderOrder/, "an unguarded acquireMesh(...).renderOrder survives");
   // THE POST WARM. The 3 s gate was measured against the scene warm's own
   // elapsed time and lost: census 203 attributed 16 of 50 shader modules to
   // tlx-post.js runPass, built on the first visible present. With patch 8 a
