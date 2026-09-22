@@ -109,14 +109,30 @@
       // complex and are SUPERSEDED — they never render at all — and the widest
       // gravel apron dresses T13, not the Parabolica it was named for.
       //
-      // DO NOT "correct" this by dropping sceneryStartFrac. Measured
-      // 2026-09-22: it fixes the names (pit emitters land in pitLaneSpan to the
-      // metre, superseded as a hand-placed pit block should be) and takes
-      // coplanar 5 -> 0, but it also takes float 0 -> 1 and clip 1 -> 3 severe,
-      // including a 4.00 m / 1261 m3 collision at frac 0.000 that survives
-      // retiring the pit grandstand, and drops `estoril-aldeia` on the road.
-      // The dressing was tuned where it sits. Moving it is a full pass with a
-      // rendered lap, not a one-line def edit — docs/notes/DEFECT-LEDGER.md.
+      // THE PLACEMENT IS WRONG, NOT MERELY MISNAMED. A probe settles what the
+      // audits cannot see (`agent.mjs estoril scene --at <frac>`): at frac 0.82,
+      // the Parabolica, stand 14 structures, a gantry, a grandstand and FIVE
+      // MOTORHOMES — the paddock, on a fast corner — while frac 0.97, the pit
+      // straight, reads 11 trees and 22 pines. `float 0` and `clip 1` say
+      // nothing about this: props auto-ground wherever they are and a building
+      // in open air hits nothing. An earlier pass read that silence as "tuned
+      // in place" and corrected only the names; that was wrong.
+      //
+      // DO NOT fix it by dropping sceneryStartFrac. `_sceneryShift` is not a
+      // scenery offset — the ENGINE consumes it too, in four readers in
+      // js/track/tracks.js: `dress` in buildCenterline (bridges and
+      // elevations), `shiftS` in transformSceneryApi, the inverse `HKSHIFT`
+      // beside indexSolidAt, and the sceneryCoordinates guard in bakedModel.
+      // With the whole
+      // scenery callback stubbed out so no circuit prop emits at all, shift
+      // 0.85616 gives 0 severe clips and shift 0 gives a 4.00 m / 1261 m3
+      // engine-side collision at frac 0.000. Removing motorhome,
+      // broadcastCompound, grandstandEx, both pitBlocks or the pit stand does
+      // not touch it. The terrain moves with the same constant.
+      //
+      // The real fix needs the four consumers understood together —
+      // docs/notes/DEFECT-LEDGER.md carries the measurements and the probe A/B
+      // that is its acceptance test.
       pitBlock("estoril-parabolica-terrace-a", 0.960, 7);
       pitBlock("estoril-parabolica-terrace-b", 0.996, 7);
       {
