@@ -4007,7 +4007,7 @@ pair is a new RenderObject, and building its pipeline calls
 _getVertexFormat(e){const{itemSize:t,normalized:r}=e,s=e.array.constructor, ...
 ```
 
-— `vendor/three-0.185.1/three.webgpu.min.js`, no null guard.
+— the r185 vendored `three.webgpu.min.js` (now `vendor/three-0.186.0/`), no null guard.
 `createShaderVertexBuffers` reads `s.array.constructor` on the same object.
 So `null.constructor` throws, both rungs burn in one frame, and the ladder
 lands on `refuseTab()`.

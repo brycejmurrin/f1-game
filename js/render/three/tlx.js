@@ -44,7 +44,7 @@ const TLX = (function () {
 
       // The vendored bundle carries TWO local patches (swizzle omission for
       // Chromium 141, the #33952 bind-group-leak backport) — recipe and
-      // rationale in vendor/three-0.185.1/PATCHES.md, guarded by
+      // rationale in vendor/three-0.186.0/PATCHES.md, guarded by
       // gfx-backend-canary. Re-apply both on any vendor bump.
 
       // WHICH three BACKEND: apex26.tlxForceGL "1" = pin WebGL2, "0" =

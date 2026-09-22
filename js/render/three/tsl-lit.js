@@ -670,7 +670,7 @@
       // call — 5.2 KB and ~25 node variables each, 31 KB of the 99 KB lit
       // fragment. Pure: no uniform, texture, varying or derivative read (the
       // fwidth widths are the caller's, passed in), which is what makes the
-      // layout legal at all — see vendor/three-0.185.1/PATCHES.md §4 and
+      // layout legal at all — see vendor/three-0.186.0/PATCHES.md §4 and
       // tsl-chunks.js. WGX declares the same helper as a real WGSL function
       // (wgsl-chunks.js `fn matBumpHeight`), so this is parity, not novelty.
       // `mid` stays float: TSL compares it with .equal(1.0), never as an int.
@@ -778,7 +778,7 @@
      * per draw; WGX passes (offset, count) in a per-draw uniform. Three has
      * neither: every visible chunk is drawn from one pooled mesh sharing ONE
      * material, and a uniform belongs to the material. `drawIndex` looks like
-     * the way out and is not — in vendor/three-0.185.1 both the declaration of
+     * the way out and is not — in vendor/three-0.186.0 both the declaration of
      * `nodeUniformDrawId` and its only assignment are gated on
      * `object.isBatchedMesh`, so a plain Mesh reads nothing.
      *
