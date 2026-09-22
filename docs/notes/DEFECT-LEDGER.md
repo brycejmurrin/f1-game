@@ -11,6 +11,54 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 — `DIFF[difficulty]` undefined took every physics tick down. FIXED.**
+`js/game.js` `updateCar()` read `DIFF[difficulty]` unguarded and dereferenced
+`dd.ai` on the first AI car; `js/race/quali-model.js` already fell back to
+`DIFF.normal`. The store held whatever string an imported settings file
+carried — `js/ui/settings-export.js` `typeOk()` only compares `typeof`, so
+`"difficulty": "medium"` passed and the next race threw a `TypeError` per
+tick, human car included (the main loop has no try/catch around `updateCar`).
+Fix: the game.js read falls back to `DIFF.normal`, and the SPEC row carries
+`oneOf: ["easy", "normal", "hard"]`, which `applySettings` enforces (skipped,
+not written). Pinned by `tests/unit/settings-export.test.mjs` (the allowlist
+equals `Object.keys(PhysicsConsts.DIFF)`).
+
+**2026-09-22 — the AI braked on slicks in the rain. FIXED.** Player braking
+carries `gripMult(c) / gripMult()` (the tread's credit over a slick,
+`docs/PHYSICS.md` §Braking) in both the speed step and `axEstTarget`; the AI
+arm of the same expression did not, and its planner's `_aiBr.brake` never did.
+An AI car's `tread: null` resolves to the right compound for CORNERING, so in
+the rain the field cornered on wets and stopped on slicks, and a player on full
+wets out-braked it by the whole ratio (~27 % at full wet). Fix: the ratio
+applies to every car in both sites; it is exactly 1 in the dry, so dry pace is
+untouched by construction (`ai-race.mjs pace --diff normal` identical
+before/after).
+
+**2026-09-22 — the ratchet-vs-base CI step was a no-op on deploy-branch
+pushes. FIXED.** `ci.yml`'s "Ratchet ceilings vs the base" diffed against
+`origin/claude/f1-game-project-26h3ng` on every non-PR event; on a push TO that
+branch the remote ref already is the pushed tip, so every ceiling compared with
+itself (zero rows, every run since PR #170). Fix: the push's `github.event.before`
+on the deploy branch, with a `git cat-file` fallback to the remote ref when the
+clone cannot show it (force-push, first push).
+
+**2026-09-22 — a `startRace()` rejection left a half-torn screen. FIXED.**
+`startRaceBody()` does its DOM/state work after `await ensureScenery`; the six
+fire-and-forget callers (the un-awaited family below) never look at the
+promise, so a throw there — e.g. `closeQualiToGrid` had already closed the
+quali sheet and set `session = "race"` — left no HUD and no race under the
+`unhandledrejection` overlay, and dismissing the overlay restored nothing. Fix:
+the wrapper's `.catch` logs, calls `quitToMenu()` and rethrows, so awaited
+callers still see the failure while the screen is the menu. Pinned by
+`tests/unit/start-race-latch.test.mjs` (a stubbed `Tracks.build` throw →
+rejection, `info().state === "menu"`, latch released).
+
+**2026-09-22 — not a defect, recorded so it is not re-reported:** `RESET
+RENDERER` leaves `apex26.gfxHigh` in place. `tests/unit/gfx-backend-canary.test.mjs`
+pins this on purpose ("GRAPHICS quality is a player pref, not renderer crash
+state"); a crash-looping phone on ULTRA is asked to change GRAPHICS, not reset
+the renderer.
+
 **2026-09-22 — the boot canary never armed on a pre-present crash. FIXED.**
 `js/game.js` arms `apex26.gfxBackendProbe` (the boot canary the next-boot
 strike logic near `backendPreference()` reads) only in one place: right
@@ -83,7 +131,9 @@ shifted by adding or removing an action (checked: removing the PIT bind is not
 the cause).
 
 **2026-09-14 — `career.spec.js` is 14 red and `time-trial.spec.js`'s two ghost
-tests are red, on a CLEAN tree. OPEN.** Found while gating the tyre phases, and
+tests are red, on a CLEAN tree. OPEN → FIXED at the test layer (re-verified
+2026-09-22: every `__apex.race(` in `career.spec.js` goes through its `armRace()`
+helper, and `time-trial.spec.js` polls `ghostSaved()` for the deferred write).** Found while gating the tyre phases, and
 proven pre-existing rather than assumed: the same specs were run alone on a
 quiet box against this tree and against a worktree at `a28b77d`, the commit
 before any of the tyre work.
@@ -703,7 +753,9 @@ on the 08-18 perf-hunt board, not this register.
   non-default HUD SIZE. Portrait `.hud-top`/`#pausebtn` overlap stays
   excluded — it sits behind `#rotate-device`.
 - **`menu-keyboard` › "left/right move along a chip row without leaving it" is
-  red** (`tests/specs/menu-keyboard.spec.js`, the desktop keyboard/trackpad
+  red — FIXED** (`js/ui/menu-nav.js` `step()` gained the `.chip-row` special case
+  in d13a123a, 2026-09-16; re-verified against the tree 2026-09-22)
+  (`tests/specs/menu-keyboard.spec.js`, the desktop keyboard/trackpad
   block). Confirmed PRE-EXISTING at `d7a1158` by a quiet-box A/B, both sides via
   `tools/ci/test-solo.mjs` and both started at load 1.24: `HEAD` fails in 20.6 s,
   base fails in 18.4 s. No timeout on either side, so it is an assertion, not
@@ -1332,7 +1384,10 @@ most-load-bearing first.
   round-2 items that were verified still-open and deliberately left out of the
   fix-now batches are worth naming because they are small and near-miss:
   `js/net/handshake.js` `payload.k` null-deref and its missing deflate-bomb cap,
-  `js/net/sdp.js` ascii CR/LF handling, `js/data/telemetry.js`'s sprint badge,
+  `js/net/sdp.js` ascii CR/LF handling (these three are FIXED in the tree as of
+  2026-09-22: `decodeCode()` shape-checks `payload.k`, `inflateBytes()` caps at
+  `MAX_DECODED_BYTES`, `sdp.js` `unpack()` joins with CR LF and `strBytes()`
+  refuses non-printable bytes), `js/data/telemetry.js`'s sprint badge,
   `js/render/glx/post.js` `hdrOk`, `js/render/three/tlx.js` `boxScale` (and a
   stale comment in `js/render/three/tlx-post.js`), and a lobby branch in
   `js/net/lobby.js`.

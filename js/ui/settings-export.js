@@ -127,7 +127,9 @@ const SPEC = [
   { k: "drivingLinePalette", lane: "json", group: "driving", def: "f1", src: "js/ui/driving-line-opts.js" },
   { k: "drivingLineOpacity", lane: "json", group: "driving", def: "normal", src: "js/ui/driving-line-opts.js" },
   { k: "lineBrakeCue", lane: "json", group: "driving", def: "off", src: "js/ui/driving-line-opts.js" },
-  { k: "difficulty", lane: "json", group: "driving", def: "hard", src: "js/game.js" },
+  // `oneOf`: the file is player input and game.js reads DIFF[difficulty] — a
+  // string the ladder does not name is skipped here rather than stored.
+  { k: "difficulty", lane: "json", group: "driving", def: "hard", src: "js/game.js", oneOf: ["easy", "normal", "hard"] },
   // Four keys real UI writes that this registry did not carry, so a settings
   // file round-tripped everything EXCEPT them (found 2026-09-16 by reading the
   // registry against every store.set call site). They are player preferences by
@@ -317,7 +319,7 @@ function applySettings(file, G) {
     const g = groups[row.group];
     if (!g || !Object.prototype.hasOwnProperty.call(g, row.k)) continue;
     const v = g[row.k];
-    if (!typeOk(v, defaultOf(row, G))) { skipped++; continue; }
+    if (!typeOk(v, defaultOf(row, G)) || (row.oneOf && !row.oneOf.includes(v))) { skipped++; continue; }
     try {
       if (row.lane === "raw") {
         if (v === null) GameStore.store.rawDel(`apex26.${row.k}`);

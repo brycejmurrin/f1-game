@@ -406,6 +406,16 @@ test("TLX frame uniforms share one render-group buffer (setGroup loop after the 
   const tlx = read("js/render/three/tlx.js");
   assert.match(tlx, /apex26\.tlxSharedUniforms/, "the A/B pin is read in tlx.js");
   assert.match(tlx, /sharedUniforms:\s*_sharedUniforms/, "the pin reaches the lit factory ctx");
+  // The decal frame block (tsl-fx.js U: sunDir/sunColor/ambSky/ambGround) is
+  // the same defect one file over — ~22 decal render objects per frame each
+  // carried a copy — under the same pin, so one off-arm covers both.
+  const fx = read("js/render/three/tsl-fx.js");
+  assert.match(fx, /function fx\(THREE, TSL, opts\)/, "the fx factory takes the options tlx.js already passes");
+  assert.match(fx, /\bmrt, renderGroup,/, "renderGroup is destructured from TSL in tsl-fx.js");
+  const fxLast = fx.indexOf("ambGround: uniform(");
+  const fxLoop = fx.indexOf("if (!(opts && opts.sharedUniforms === false)) for (const k in U) U[k].setGroup(renderGroup);");
+  assert.ok(fxLast > 0 && fxLoop > fxLast, "the decal setGroup loop follows the last U member");
+  assert.match(tlx, /TLXShaders\.fx\(THREE, TSL, \{ chunks, sharedUniforms: _sharedUniforms \}\)/, "the pin reaches the fx factory too");
 });
 
 test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
@@ -1831,8 +1841,8 @@ test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => 
 });
 
 test("setup preview passes explicit view for garage off-axis backends", () => {
-  const game = code("js/game.js");
-  assert.match(game, /viewProj:\s*_spVP,\s*view:\s*_spView/);
+  const cam = code("js/garage/setup-camera.js");
+  assert.match(cam, /viewProj:\s*_spVP,\s*view:\s*_spView/);
 });
 
 test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () => {

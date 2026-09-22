@@ -1,8 +1,8 @@
 // The garage turntable's framing hull is cached across colour-only rebuilds
-// (js/game.js getSetupPreviewMesh). That cache is only correct while its
-// SP_HULL_GEOM_FIELDS list names EVERY livery field whose presence can move a
-// vertex — so this test does not pin the list, it re-derives it from the real
-// Car3D.build and compares.
+// (js/garage/setup-camera.js getSetupPreviewMesh). That cache is only correct
+// while its SP_HULL_GEOM_FIELDS list names EVERY livery field whose presence
+// can move a vertex — so this test does not pin the list, it re-derives it
+// from the real Car3D.build and compares.
 //
 // Why it matters: livePreviewDraft busts _spMeshKey on every distinct colour
 // value, and an <input type=color> emits those continuously while dragged. The
@@ -37,7 +37,7 @@ const ENUM_GEOM = { finShape: ["swept", "stub"], coverVents: ["gills", "spine"],
 const ENUM_PAINT = { tcam: ["black", "yellow"] };
 
 function declaredGeomFields() {
-  const src = readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  const src = readFileSync(path.join(ROOT, "js/garage/setup-camera.js"), "utf8");
   const m = /const SP_HULL_GEOM_FIELDS = \[([^\]]*)\]/.exec(src);
   assert.ok(m, "SP_HULL_GEOM_FIELDS not found — getSetupPreviewMesh moved");
   return m[1].split(",").map((s) => s.trim().replace(/^"|"$/g, "")).filter(Boolean);
@@ -80,7 +80,7 @@ test("SP_HULL_GEOM_FIELDS names exactly the fields whose PRESENCE moves a vertex
   const measured = fields.filter((k) => !samePos(base, build(withField(k, onValue(k)))));
   const declared = declaredGeomFields();
   assert.deepEqual(measured.slice().sort(), declared.slice().sort(),
-    `js/game.js SP_HULL_GEOM_FIELDS is [${declared}] but Car3D.build moves geometry for ` +
+    `js/garage/setup-camera.js SP_HULL_GEOM_FIELDS is [${declared}] but Car3D.build moves geometry for ` +
     `[${measured}]. A field that is MISSING makes the garage turntable re-centre against a ` +
     `stale silhouette; an extra one only costs a needless hull rebuild.`);
 });
@@ -108,7 +108,7 @@ test("SP_HULL_GEOM_FIELDS names exactly the fields whose PRESENCE moves a vertex
 // Only the pinned cases move: the cap cannot touch a viewport that was already
 // framing correctly, which is the property that makes it safe.
 test("the garage auto-fit is capped below the manual zoom ceiling", () => {
-  const src = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../../js/garage/setup-camera.js", import.meta.url), "utf8");
 
   const fitMax = /const SP_FIT_DIST_MAX = (\d+(?:\.\d+)?)/.exec(src);
   const distMax = /SP_DIST_MIN = [\d.]+, SP_DIST_MAX = (\d+(?:\.\d+)?)/.exec(src);
@@ -149,7 +149,7 @@ test("__apex.garageCam reports the effective distance, not just the stored zoom"
   }
   // fitD is the fit BEFORE the clamp, so a test can see the fit diverge rather
   // than only its clamped symptom. It must not be the same source as effDist.
-  const game = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
+  const game = readFileSync(new URL("../../js/garage/setup-camera.js", import.meta.url), "utf8");
   assert.match(game, /_spEffDist = spDist; _spEffFit = spFitD;/,
     "the effective distance and the raw fit must be published from the render path");
 });
