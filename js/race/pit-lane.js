@@ -1152,7 +1152,11 @@ const PitLane = (function () {
       // flag is serviced and released, one on the lane keeps its state to the
       // exit (game.js coasts it down the lane). They used to freeze in
       // whatever state the flag found them and pile up in the lane.
-      if (!c || !enabled() || c.retired) return;
+      if (!c || c.retired) return;
+      // Disabling tyre wear closes the pit feature, but a car already owned by
+      // its state machine must first be released. Returning with `box`/`lane`
+      // intact leaves game.js applying zero speed/the limiter forever.
+      if (!enabled()) { clearArm(c); c.pitNext = null; return; }
       const st = c.pitState || "none";
       const zz = z(), L = G.track.total;
       if (st === "out" && c.pitOutT > 0) c.pitOutT = Math.max(0, c.pitOutT - dt);   // the GO chip's clock

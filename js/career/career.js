@@ -139,12 +139,20 @@ const readSlot = (f, i) => migrateCareer(store.get(slotKey(f, i), null));
 
 if (store.subscribe) store.subscribe((change) => {
   if (!change.foreign) return;
-  // A durable-mirror restore (js/core/store.js) lands AFTER the synchronous boot
-  // load() and can bring back the careerSlot POINTER as well as the slot it
-  // names — so outside a session, re-resolve the pointer. The live-key guard
-  // below rejected every restored key, the pointer included, and a save the
-  // mirror had just put back read as "no career" until the next reload.
-  if (change.restored && !engaged) { resolve(); return; }
+  if (change.restoredBatch) {
+    const keys = Array.isArray(change.keys) ? change.keys : [];
+    if (!keys.some((k) => k === "careerSlot" || k.indexOf("career.") === 0)) return;
+    // Mirror restoration writes the whole batch before this notification. A
+    // non-default slot and its pointer can therefore be loaded coherently now;
+    // the per-key notifications above cannot do that because careerSlot is not
+    // itself the live save key. Never switch an engaged career underneath play.
+    if (engaged && career) {
+      if (keys.indexOf("careerSlot") !== -1 || keys.indexOf(liveSlotKey()) !== -1) careerConflict = true;
+      return;
+    }
+    load();
+    return;
+  }
   if (!change.clear && change.key !== liveSlotKey()) return;
   if (engaged && career) {
     careerConflict = true;
@@ -154,9 +162,8 @@ if (store.subscribe) store.subscribe((change) => {
   armRevision();
 });
 
-// The careerSlot pointer, else the first slot that holds a save (re-pointing
-// careerSlot at it). Boot and a mirror restore both resolve through here.
-function resolve() {
+function load() {
+  migrateSlots();
   const live = String(store.get("careerSlot", "driver:0")).split(":");
   slotFlavour = flavourIn(live[0]);
   slotIdx = slotIn(live[1]);
@@ -168,10 +175,6 @@ function resolve() {
         if (c) { slotFlavour = f; slotIdx = i; career = c; setLive(); break outer; }
       }
   armRevision();
-}
-function load() {
-  migrateSlots();
-  resolve();
   // migrateCareer() is pure (it must not write, or reading a slot would rewrite
   // the key it was migrated FROM), so persisting the climbed shape is this
   // function's job — otherwise a v0 save would migrate in memory on every boot

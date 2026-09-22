@@ -23,6 +23,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/physics/incident-sim.js"), "utf8");
+const RACE_SRC = readFileSync(join(ROOT, "js/race/race-control.js"), "utf8");
 
 function load(over = {}) {
   const promoted = [];
@@ -47,6 +48,7 @@ function load(over = {}) {
   seedLog(ctx);
   // js/core/mat4.js first — the shared scalar helpers (M4.clamp) incidentsim.js binds at eval.
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(RACE_SRC, ctx, { filename: "js/race/race-control.js" });
   vm.runInContext(SRC, ctx, { filename: "js/physics/incident-sim.js" });
   const IncidentSim = vm.runInContext("IncidentSim", ctx);
   const mkCar = (s) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0,
@@ -121,6 +123,21 @@ test("incident window scales with time, not car count", () => {
   assert.equal(sim.status().owned, 2);
   for (let i = 0; i < 120; i++) sim.postStep(1 / 60);
   assert.equal(sim.status().owned, 2, "two-car window still open at 2 s");
+});
+
+test("an incident-owned lapped car takes the existing chequered flag at the line", () => {
+  const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 10, vz: 0 };
+  const { sim, cars, G } = load({ pose, trackFrom: () => ({ s: 5, x: 0 }) });
+  cars[0].s = 4995; cars[0].prog = 4995; cars[0].lap = 4; cars[0].lapTime = 78;
+  cars[1].s = 100; cars[1].prog = 100; cars[1].lap = 4;
+  G.lapsTarget = 5; G.raceT = 420;
+  G.cars.push({ finished: true, retired: false, lap: 6 });
+  sim.notifyCar(cars[0], cars[1], 30);
+  sim.preStep(1 / 60);
+  sim.postStep(1 / 60);
+  assert.equal(cars[0].lap, 5);
+  assert.equal(cars[0].finished, true, "the incident path must honor the flag already out");
+  assert.equal(cars[0].finishT, 420);
 });
 
 test("postStep clamps lateral x to wallAt during takeover", () => {

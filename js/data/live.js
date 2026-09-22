@@ -172,21 +172,14 @@ const DataLive = (function () {
         if (refreshPromise) return refreshPromise;
         if (liveOpts.auto) stopLiveAuto();
         const myGen = ++liveRefreshGen;
-        clear(dataEl);
-        dataEl.appendChild(spinner());
-        let gateErr = null;
-        function catchLive(err) {
-          if (!err) return null;
-          const msg = err.message || "";
-          const status = err.status;
-          if (status === 401 || status === 403 ||
-              msg.indexOf("Live F1 session") !== -1 ||
-              msg.indexOf("HTTP 401") !== -1 ||
-              msg.indexOf("HTTP 403") !== -1) {
-            gateErr = err;
-          }
-          return null;
-        }
+        const priorState = dataEl.getAttribute("data-state");
+        const hadData = priorState === "ready" || priorState === "empty" || priorState === "partial" || priorState === "stale";
+        if (!hadData) { clear(dataEl); dataEl.appendChild(spinner()); }
+        dataEl.setAttribute("aria-busy", "true");
+        const settle = (promise) => promise.then(
+          (value) => ({ ok: true, value }),
+          (error) => ({ ok: false, error })
+        );
         // AUTO (and manual refresh) must not hit the 10 min TTL_LATEST cache —
         // otherwise a 30 s loop silently re-serves the same payload. ttl:0
         // bypasses the read (api.js request) while still writing on success.
@@ -198,21 +191,55 @@ const DataLive = (function () {
           ? F1API.liveIntervals(meta.sessionKey, liveState.intervalCursor)
           : F1API.intervals(meta.sessionKey, ttl);
         refreshPromise = Promise.all([
-          F1API.weather(meta.sessionKey, ttl).catch(catchLive),
-          positionReq.catch(catchLive),
-          F1API.sessionDrivers(meta.sessionKey).catch(catchLive),
-          intervalReq.catch(catchLive)
-        ]).then(res => {
+          settle(F1API.weather(meta.sessionKey, ttl)),
+          settle(positionReq),
+          settle(F1API.sessionDrivers(meta.sessionKey)),
+          settle(intervalReq)
+        ]).then(batch => {
           if (myGen !== liveRefreshGen) return;
-          clear(dataEl);
-          if (gateErr) {
-            dataEl.appendChild(emptyMsg(gateErr.message));
-            liveOpts.auto = false;
-            autoBtn.classList.remove("active");
-            autoBtn.setAttribute("aria-pressed", "false");
-            stopLiveAuto();
+          dataEl.setAttribute("aria-busy", "false");
+          const failed = batch.filter((x) => !x.ok);
+          const gate = failed.find((x) => {
+            const err = x.error || {};
+            const msg = err.message || "";
+            return err.status === 401 || err.status === 403 ||
+              msg.indexOf("Live F1 session") !== -1 ||
+              msg.indexOf("HTTP 401") !== -1 || msg.indexOf("HTTP 403") !== -1;
+          });
+          if (failed.length === batch.length || gate) {
+            if (!hadData) clear(dataEl);
+            else {
+              const oldFailure = dataEl.querySelector && dataEl.querySelector(".dh-error[data-refresh-error]");
+              if (oldFailure && oldFailure.parentNode) oldFailure.parentNode.removeChild(oldFailure);
+            }
+            const failure = el("div", "dh-error");
+            failure.setAttribute("role", "status");
+            failure.setAttribute("data-refresh-error", "");
+            failure.setAttribute("data-state", hadData ? "stale" : "failed");
+            failure.appendChild(el("div", "dh-error-msg", gate
+              ? ((gate.error && gate.error.message) || "Live data is unavailable.")
+              : (hadData ? "Couldn't refresh live data. Showing the last update."
+                : "Couldn't load live data. Try again.")));
+            if (hadData && dataEl.firstChild) dataEl.insertBefore(failure, dataEl.firstChild);
+            else dataEl.appendChild(failure);
+            dataEl.setAttribute("data-state", hadData ? "stale" : "failed");
+            if (gate) {
+              liveOpts.auto = false;
+              autoBtn.classList.remove("active");
+              autoBtn.setAttribute("aria-pressed", "false");
+              stopLiveAuto();
+            }
             return;
           }
+          clear(dataEl);
+          if (failed.length) {
+            const partial = el("div", "dh-error");
+            partial.setAttribute("role", "status");
+            partial.setAttribute("data-state", "partial");
+            partial.appendChild(el("div", "dh-error-msg", "Some live data couldn't refresh."));
+            dataEl.appendChild(partial);
+          }
+          const res = batch.map((x) => x.ok ? x.value : null);
           const positions = mergePositionBatch(liveState, res[1]);
           const gaps = mergeIntervalBatch(liveState, res[3]);
           if (positions && gaps) {
@@ -223,10 +250,13 @@ const DataLive = (function () {
             });
           }
           fillLive(dataEl, res[0], positions, res[2]);
+          dataEl.setAttribute("data-state", failed.length ? "partial"
+            : (positions && positions.length ? "ready" : "empty"));
           const fetchedAt = lastFetchedAt(meta.sessionKey);
           stamp.textContent = "updated " + new Date(fetchedAt || Date.now())
             .toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
         }).finally(() => {
+          dataEl.setAttribute("aria-busy", "false");
           refreshPromise = null;
           // Settlement-driven scheduling: the 30 seconds starts after this
           // batch finishes, never while it is still occupying F1API's queue.

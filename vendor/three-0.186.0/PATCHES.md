@@ -31,7 +31,7 @@ discards the edit. Change `patches.mjs` and re-run the tool; update this file by
    release that retires it.
 2. `grep -rn "three-0\.<old>"` outside `docs/notes` — the import map in `index.html`,
    `sw.js`'s optional precache, `js/game.js`'s `preloadThreeVendor()`, the spike
-   harness, `tools/moves/spike-backends.json`, the tests and docs all name the
+   harness, `docs/archive/moves/spike-backends.json`, the tests and docs all name the
    directory. `git rm -r` the old directory.
 3. `node --test tests/unit/gfx-backend-canary.test.mjs`, `npm run test:service-worker`,
    `npm run test:tooling-fast`, then the render-tlx rule gate (`gfx-probe` on Lavapipe

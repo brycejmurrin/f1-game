@@ -179,18 +179,21 @@ const GameStore = (function () {
   // back from the mirror. Restoration lands AFTER the first read when the first
   // read is synchronous at boot (Career.load()), so a restored key is announced
   // through the same foreign-write notification a second tab's write gets,
-  // flagged `restored` — career.js re-resolves its careerSlot pointer on that
-  // and game.js repaints the title on mirror.ready — and every later boot is whole.
+  // flagged `restored`, then once more as a `restoredBatch` naming every key —
+  // career.js reloads its slot and pointer together on that, and the title menu
+  // repaints — and every later boot is whole.
   const MIRROR_KEY = /^apex26\.(career|season)/;
   const MIRROR_DB = "apex26-store";
   const MIRROR_STORE = "kv";
   const MIRROR_VERSION = 1;
   const MIRROR_OPEN_MS = 4000;      // a blocked/never-settling open() degrades to "no mirror"
   const MIRROR_FLUSH_MS = 500;      // settleRound() writes the slot and the season back to back
+  const MIRROR_RETRY_MS = 2000;     // one automatic retry; a later write/pagehide retries retained failures again
   const mirror = { supported: false, restored: 0, flushed: 0, failed: 0, pending: 0, ready: null };
   let _mirrorDb = null;             // memoised open (a failure is never memoised)
   let _mirrorPending = new Map();   // full key -> JSON string, or null for a delete
   let _mirrorTimer = null;
+  let _mirrorFlight = null;         // serialize bursts so an older transaction cannot finish last
 
   function mirrorKey(key) { return MIRROR_KEY.test(key); }
 
@@ -236,13 +239,25 @@ const GameStore = (function () {
 
   // One readwrite transaction per burst. Resolves on `oncomplete`, not on the
   // requests' success: a quota failure surfaces when the transaction commits.
-  function mirrorFlush() {
+  function mirrorFlush(retryOnFailure = true) {
+    // A manual/pagehide flush supersedes the debounce or retry already armed.
+    // Without the clear, that stale callback wakes later and performs a second,
+    // empty flush (and keeps a Node VM alive for the whole delay in unit tests).
+    if (_mirrorTimer !== null && typeof clearTimeout === "function") clearTimeout(_mirrorTimer);
     _mirrorTimer = null;
+    // IndexedDB normally queues overlapping readwrite transactions for the same
+    // object store, but this owner must not depend on backend scheduling for its
+    // newest-value guarantee. Wait before taking the next batch so a failed old
+    // write can merge back without hiding a newer pending value for the key.
+    if (_mirrorFlight) {
+      const prior = _mirrorFlight;
+      return prior.then(() => mirrorFlush(retryOnFailure), () => mirrorFlush(retryOnFailure));
+    }
     const batch = _mirrorPending;
     _mirrorPending = new Map();
     mirror.pending = 0;
     if (!batch.size) return Promise.resolve(false);
-    return mirrorOpen().then((db) => new Promise((res) => {
+    const work = mirrorOpen().then((db) => new Promise((res) => {
       if (!db) { res(false); return; }
       let t;
       try { t = db.transaction(MIRROR_STORE, "readwrite"); } catch (e) { res(false); return; }
@@ -255,10 +270,26 @@ const GameStore = (function () {
     })).then((ok) => {
       if (!ok && batch.size) {
         mirror.failed += batch.size;
+        // The batch stopped being pending before the transaction opened. Put it
+        // back on failure, but never replace a newer value queued for the same
+        // key while this transaction was in flight. Otherwise a transient IDB
+        // abort is permanent data loss precisely when localStorage also refused
+        // the write and the mirror is the only durable route left.
+        for (const [k, v] of batch) if (!_mirrorPending.has(k)) _mirrorPending.set(k, v);
+        mirror.pending = _mirrorPending.size;
         Log.warn("game", "durable mirror write failed for " + batch.size + " key(s)");
+        // Retry once automatically. If storage remains unavailable, retain the
+        // batch for the next write or pagehide instead of spinning forever.
+        if (retryOnFailure && typeof setTimeout === "function" && _mirrorTimer === null) {
+          _mirrorTimer = setTimeout(() => mirrorFlush(false), MIRROR_RETRY_MS);
+        }
       }
       return ok;
     });
+    let flight;
+    flight = work.finally(() => { if (_mirrorFlight === flight) _mirrorFlight = null; });
+    _mirrorFlight = flight;
+    return flight;
   }
 
   // Boot: fill in whatever localStorage lacks. A key the disk already holds is
@@ -288,7 +319,18 @@ const GameStore = (function () {
         store.rev++;
         mirror.restored += restored.length;
         Log.info("game", "durable mirror restored " + restored.length + " key(s): " + restored.join(", "));
-        for (const k of restored) store._notify({ key: k.slice("apex26.".length), fullKey: k, foreign: true, clear: false, restored: true });
+        const restoredKeys = restored.map((k) => k.slice("apex26.".length));
+        for (let i = 0; i < restored.length; i++) store._notify({
+          key: restoredKeys[i], fullKey: restored[i], foreign: true, clear: false, restored: true,
+        });
+        // Every row is already back on disk before notifications begin. The
+        // batch event lets owners reconcile related keys atomically — notably a
+        // career slot and the careerSlot pointer that selects it — rather than
+        // trying to infer completeness from IndexedDB's key order.
+        store._notify({
+          key: null, keys: restoredKeys.slice(), foreign: true, clear: false,
+          restored: true, restoredBatch: true,
+        });
       }
       return restored.length;
     }).catch((e) => {

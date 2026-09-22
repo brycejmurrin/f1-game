@@ -102,6 +102,13 @@ test("tools/README.md: one row per tool, every row within the @doc cap, no undef
   }
 });
 
+test("tools data-file readers cover specs and CommonJS unit tests", async () => {
+  const { testReaderFiles } = await import("../../tools/gen/gen-tools-readme.mjs");
+  const files = testReaderFiles();
+  assert.ok(files.includes("tests/specs/f1-track-accuracy.spec.js"), "browser specs fell outside the scan");
+  assert.ok(files.includes("tests/unit/shared-track-foundation-characterization.test.cjs"), "CommonJS unit tests fell outside the scan");
+});
+
 test("docs/LIGHTING-TUNER-SLIDERS.md: the generated block lists every TUNE_DEFS knob", () => {
   const doc = read("docs/LIGHTING-TUNER-SLIDERS.md");
   const b = block(doc, "tune-defs");

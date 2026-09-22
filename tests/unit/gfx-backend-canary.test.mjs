@@ -458,7 +458,7 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   const latchBody = game.slice(latch, latch + 400);
   assert.match(latchBody, /setItem\(\s*"apex26\.gfxClaimFail"\s*,\s*"1"\s*\)/);
   assert.match(latchBody, /skipped\s*=\s*sessionStorage\.getItem\(\s*"apex26\.gfxClaimFail"\s*\)\s*===\s*"1"/, "the skip is read back before the reload");
-  const refused = game.search(/gfxClaimFail/);
+  const refused = game.search(/if\s*\(\s*!_claimSkipped\s*\)/);
   assert.ok(refused > 0);
   assert.match(game.slice(refused, refused + 3000), /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/, "a refused create disarms the probe");
   assert.doesNotMatch(game, /create\(\)\s*refused[\s\S]{0,250}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
@@ -1615,14 +1615,140 @@ test("diagnostics use Three as the unset default and report the live bind", () =
   assert.doesNotMatch(picks, /"webgl2 \(default\)"/);
 });
 
-test("terminal graphics failure hides interactive game UI and offers retry", () => {
+test("terminal graphics failure hides interactive game UI and offers recovery controls", () => {
   const game = code("js/game.js");
   const unavailable = fnBody(game, "showGraphicsUnavailable");
-  assert.match(unavailable, /els\.hud\.hidden\s*=\s*true/);
-  assert.match(unavailable, /els\.overlay\.hidden\s*=\s*true/);
-  assert.match(unavailable, /Graphics unavailable/);
-  assert.match(unavailable, /location\.reload\(\)/);
+  const recovery = fnBody(code("js/perf/renderer-picker.js"), "showUnavailable");
+  assert.match(unavailable, /RendererPicker\.showUnavailable/);
+  assert.match(unavailable, /hud:\s*els\.hud/);
+  assert.match(unavailable, /overlay:\s*els\.overlay/);
+  assert.match(unavailable, /ensureDataHub/);
+  assert.match(recovery, /Graphics unavailable/);
+  assert.match(recovery, /USE WEBGL2/);
+  assert.match(recovery, /COPY DIAGNOSTICS/);
+  assert.match(recovery, /location\.reload\(\)/);
+  const recoveryCss = code("css/overlays.css");
+  assert.match(recoveryCss, /#nogl \[data-gfx-recovery-actions\] button[^}]*min-height:\s*var\(--tap\)/);
+  assert.match(recoveryCss, /@media\s*\(max-width:\s*480px\)[^{]*\{[^}]*data-gfx-recovery-actions[^}]*grid-template-columns:\s*1fr/);
   assert.match(game, /showGraphicsUnavailable\(\);\s*return/);
+});
+
+test("terminal graphics recovery works before the late menu wiring", async () => {
+  const src = read("js/game.js");
+  const from = src.indexOf("function showGraphicsUnavailable()");
+  const to = src.indexOf("let _claimSkipped", from);
+  assert.ok(from >= 0 && to > from, "early graphics-recovery block found");
+
+  function element(tag, id) {
+    const listeners = {};
+    return {
+      tagName: tag.toUpperCase(), id: id || "", hidden: true, inert: false, open: false,
+      disabled: false, children: [], style: {}, attributes: {}, textContent: "", value: "",
+      appendChild(child) { this.children.push(child); child.parentNode = this; return child; },
+      append(...children) { for (const child of children) this.appendChild(child); },
+      setAttribute(name, value) { this.attributes[name] = String(value); },
+      addEventListener(type, fn) { (listeners[type] || (listeners[type] = [])).push(fn); },
+      async click() {
+        let result;
+        if (this.onclick) result = this.onclick();
+        for (const fn of (listeners.click || [])) fn({ target: this });
+        return result;
+      },
+      dispatch(type, event) { for (const fn of (listeners[type] || [])) fn(event || {}); },
+      focus() { this.focused = true; },
+      showModal() { this.open = true; },
+      close() { this.open = false; },
+      select() { this.selected = true; },
+      remove() { this.removed = true; },
+    };
+  }
+  const byId = {
+    nogl: element("div", "nogl"),
+    "htp-close": element("button", "htp-close"),
+    "dh-close-btn": element("button", "dh-close-btn"),
+  };
+  const helpDialog = element("dialog", "howtoplay");
+  const dataDialog = element("dialog", "datahub");
+  const hud = element("div", "hud"), overlay = element("div", "overlay");
+  const body = element("body", "body");
+  const stored = new Map(), session = new Map([
+    ["apex26.gfxClaimFail", "1"], ["apex26.gfxBound", "three"]
+  ]);
+  let reloads = 0, copied = "", dataLoads = 0, dataOpens = 0;
+  const storage = (map) => ({
+    getItem: key => map.has(key) ? map.get(key) : null,
+    setItem: (key, value) => map.set(key, String(value)),
+    removeItem: key => map.delete(key),
+  });
+  const document = {
+    body, readyState: "loading",
+    createElement: tag => element(tag),
+    execCommand: () => true,
+    addEventListener() {},
+  };
+  const ctx = vm.createContext({
+    document,
+    localStorage: storage(stored), sessionStorage: storage(session),
+    navigator: { gpu: {}, clipboard: { async writeText(text) { copied = text; } } },
+    window: { isSecureContext: true },
+    WebGL2RenderingContext: function () {},
+    location: { reload() { reloads++; } },
+    queueMicrotask,
+    $: id => byId[id] || null,
+    els: { hud, overlay, howtoplay: helpDialog, datahub: dataDialog },
+    async ensureDataHub() {
+      dataLoads++;
+      byId["dh-close-btn"].onclick = () => { dataDialog.hidden = true; };
+      return true;
+    },
+    DataHub: { open() { dataOpens++; dataDialog.hidden = false; } },
+  });
+  vm.runInContext(read("js/perf/renderer-picker.js"), ctx, { filename: "js/perf/renderer-picker.js" });
+  ctx.RendererPicker = vm.runInContext("RendererPicker", ctx);
+  vm.runInContext(src.slice(from, to) + "\nglobalThis.__showGraphicsUnavailable = showGraphicsUnavailable;", ctx);
+  ctx.__showGraphicsUnavailable();
+
+  const descendants = (node) => [node, ...node.children.flatMap(descendants)];
+  const controls = descendants(byId.nogl).filter(node => node.tagName === "BUTTON");
+  const button = text => controls.find(node => node.textContent === text);
+  assert.deepEqual(controls.map(node => node.textContent),
+    ["RETRY", "USE WEBGL2", "COPY DIAGNOSTICS", "HELP", "DATA HUB"]);
+  assert.equal(byId.nogl.hidden, false);
+  assert.equal(hud.hidden, true); assert.equal(hud.inert, true);
+  assert.equal(overlay.hidden, true); assert.equal(overlay.inert, true);
+  assert.equal(button("RETRY").focused, true, "keyboard focus starts on the primary recovery action");
+
+  await button("COPY DIAGNOSTICS").click();
+  const diagnostic = JSON.parse(copied);
+  assert.deepEqual(Object.keys(diagnostic), ["renderer", "browser"]);
+  assert.deepEqual(diagnostic.renderer, { stored: null, requested: "three" });
+  assert.deepEqual(diagnostic.browser, { webgl2API: true, webgpuAPI: true });
+  assert.doesNotMatch(copied, /userAgent|language|platform|location/i,
+    "the recovery payload is capability/preference only");
+
+  await button("HELP").click();
+  assert.equal(helpDialog.hidden, false); assert.equal(helpDialog.open, true);
+  await byId["htp-close"].click(); await Promise.resolve();
+  assert.equal(helpDialog.hidden, true); assert.equal(helpDialog.open, false);
+  await button("HELP").click();
+  let prevented = false;
+  helpDialog.dispatch("cancel", { preventDefault() { prevented = true; } });
+  await Promise.resolve();
+  assert.equal(prevented, true); assert.equal(helpDialog.open, false, "Escape closes early help");
+
+  await button("DATA HUB").click();
+  assert.equal(dataLoads, 1); assert.equal(dataOpens, 1);
+  assert.equal(dataDialog.hidden, false); assert.equal(dataDialog.open, true);
+  await byId["dh-close-btn"].click(); await Promise.resolve();
+  assert.equal(dataDialog.hidden, true); assert.equal(dataDialog.open, false);
+
+  await button("USE WEBGL2").click();
+  assert.equal(stored.get("apex26.gfxBackend"), "webgl2");
+  assert.equal(session.has("apex26.gfxClaimFail"), false);
+  assert.equal(session.has("apex26.gfxBound"), false);
+  assert.equal(reloads, 1);
+  await button("RETRY").click();
+  assert.equal(reloads, 2);
 });
 
 test("RENDERER control becomes a select with prev/next, not a one-way cycle", () => {
@@ -3212,7 +3338,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
     "opening race settings schedules the flyby of the chosen circuit (120 ms)");
   // The TIME OF DAY row's write (js/ui/setting-row.js): every write repaints the
   // screen through wireRaceSettings' `after`, so only the flyby call is pinned.
-  assert.match(raceSettings, /wire\("rs-time", getRaceTimeOfDay, \(v\) => \{ setRaceTimeOfDay\(v\); scheduleFlybyTrack\(\); \}\)/,
+  assert.match(raceSettings, /wire\("rs-time", \(\) => G\.raceTimeOfDay, \(v\) => \{ G\.raceTimeOfDay = v; scheduleFlybyTrack\(\); \}\)/,
     "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
   assert.match(menus, /scheduleFlybyTrack\(true\)/,
     "a circuit tile pre-builds after the settle delay, never on the tap itself");
@@ -3921,8 +4047,8 @@ test("the attribute packer proves its precondition instead of assuming it", () =
     "tlx.js buildGeometry must pass fmt24 to every _pk call — the non-chunked meshes refused on Metal too");
   assert.match(tlxSrc, /const fmt24 = !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\);/,
     "buildGeometry's fmt24 must read the live backend");
-  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*\}\)/,
-    "tlx.js must hand the chunked factory its isWebGPU so the pack knows the vertex-format rule");
+  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*releaseGeometry,\s*\}\)/,
+    "tlx.js must hand the chunked factory its format rule and geometry-owner release callback");
 
   // The shared zero buffer is only safe while nothing writes it.
   assert.match(ch, /function _zeros\(len\)/, "the shared zero buffer is gone — absent trk goes back to 5.88 MB of per-mesh zeros");
@@ -4301,13 +4427,20 @@ test("GPU verdict rejects captured compilation errors even with zero uncaptured 
 });
 
 test("TLX defers resize during compilation and applies the latest requested size afterward", () => {
-  let _warmPending = {}, cssDirty = false, cssVW = 1136, cssVH = 524, cssRecheck = 0;
+  let _warmPending = {}, cssDirty = false;
   let cssW = 1136, cssH = 524, presentW = 1704, presentH = 786, W = 852, H = 393;
   let renderScale = 0.5, _softReadEpoch = 0, _softReadQueued = null;
   let _gpuLastResize = null, _gpuLastOperation = "compile-scene";
-  const CSS_RECHECK_FRAMES = 3, DPR_CAP = 1.5;
+  const DPR_CAP = 1.5;
   const window = { innerWidth: 1100, innerHeight: 500, devicePixelRatio: 3 };
   const _layoutCanvas = { clientWidth: 1100, clientHeight: 500 }, _displayCanvas = null;
+  const cssSizeCache = {
+    markDirty() { cssDirty = true; },
+    read() {
+      if (cssDirty) { cssW = _layoutCanvas.clientWidth; cssH = _layoutCanvas.clientHeight; cssDirty = false; }
+      return { width: cssW, height: cssH };
+    },
+  };
   const wantSpatialUpscale = () => false, calls = [];
   const renderer = { domElement: { width: 852, height: 393 }, setSize(w, h) {
     calls.push(["canvas", w, h]); this.domElement.width = w; this.domElement.height = h;

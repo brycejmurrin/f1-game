@@ -32,7 +32,8 @@ function makeGL(opts) {
     VERTEX_SHADER: 0x8b31, FRAGMENT_SHADER: 0x8b30,
     COMPILE_STATUS: 0x8b81, LINK_STATUS: 0x8b82, CURRENT_PROGRAM: 0x8b8d, LESS: 0x201, LEQUAL: 0x203,
     ANY_SAMPLES_PASSED_CONSERVATIVE: 0x8d6a, QUERY_RESULT: 0x8866, QUERY_RESULT_AVAILABLE: 0x8867,
-    _elem: null, _array: null, _draws: 0, _queries: 0, _boxDraws: 0, _inQuery: false,
+    _elem: null, _array: null, _draws: 0, _queries: 0, _queryMade: 0,
+    _queryDeletes: 0, _boxDraws: 0, _inQuery: false,
     createVertexArray: () => ({}), bindVertexArray: () => {},
     createBuffer() { return { bytes: null }; },
     bindBuffer(t, b) { if (t === this.ELEMENT_ARRAY_BUFFER) this._elem = b; else this._array = b; },
@@ -55,7 +56,8 @@ function makeGL(opts) {
     getUniformLocation: () => ({}), useProgram() {}, uniformMatrix4fv() {}, uniform3f() {},
     getParameter() { return null; },
     colorMask() {}, depthFunc(f) { this._depthFunc = f; },
-    createQuery() { return { n: 0 }; },
+    createQuery() { return o.queryFails ? null : { n: ++this._queryMade }; },
+    deleteQuery() { this._queryDeletes++; },
     beginQuery() { this._inQuery = true; this._queries++; },
     endQuery() { this._inQuery = false; },
     // `available` and `result` are the two knobs every test below turns.
@@ -131,6 +133,46 @@ test("a query that says HIDDEN culls the chunk — and only after it has answere
   C.drawChunked(mesh, null, {});
   assert.equal(gl._draws, 0, "chunks a query called hidden must stop being drawn");
   assert.ok(C.occlusionStats().culled > 0, "the counted oracle reported no culling");
+});
+
+test("query ownership is released on toggle and mesh free", () => {
+  const { gl, C, mesh } = setup();
+  C.occlusionCull(true);
+  C.drawChunked(mesh, null, {});
+  C.occlusionPass();
+  const first = gl._queryMade;
+  assert.ok(first > 0, "precondition: the pass allocated query handles");
+
+  C.occlusionCull(false);
+  assert.equal(gl._queryDeletes, first, "toggle reset deletes every owned query");
+
+  C.occlusionCull(true);
+  C.drawChunked(mesh, null, {});
+  C.occlusionPass();
+  const second = gl._queryMade - first;
+  assert.ok(second > 0, "the fresh state allocated a new query generation");
+  C.freeChunkedMesh(mesh);
+  assert.equal(gl._queryDeletes, first + second, "mesh free deletes its current query generation");
+});
+
+test("query allocation failure remains fail-visible and never begins a null query", () => {
+  const { gl, C, mesh } = setup({ queryFails: true });
+  C.occlusionCull(true);
+  C.drawChunked(mesh, null, {});
+  C.occlusionPass();
+  assert.equal(gl._queries, 0, "beginQuery must not receive a null handle");
+  gl._draws = 0;
+  C.drawChunked(mesh, null, {});
+  assert.ok(gl._draws > 0, "allocation failure keeps every chunk visible");
+});
+
+test("free removes a mesh queued for the next occlusion pass", () => {
+  const { gl, C, mesh } = setup();
+  C.occlusionCull(true);
+  C.drawChunked(mesh, null, {});             // queues the mesh, but issues no query yet
+  C.freeChunkedMesh(mesh);
+  C.occlusionPass();
+  assert.equal(gl._queryMade, 0, "a freed mesh must not recreate query state from the pass queue");
 });
 
 test("every way of not knowing resolves to VISIBLE", async (t) => {

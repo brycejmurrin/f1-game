@@ -148,6 +148,37 @@ test("cancelAll() aborts the in-flight fetch, drops the queued one, and frees th
   assert.match(closeBody, /for \(const k in gen\)/, "close() bumps every tab generation so the cancelled rejections are ignored");
 });
 
+test("same-resource callers share one fetch, then cancelAll detaches the next generation", async () => {
+  const h = cancelHarness();
+  const first = h.api.weather(1, 0).catch((e) => e);
+  const duplicate = h.api.weather(1, 0).catch((e) => e);
+  await h.settle();
+  assert.equal(h.calls.length, 1, "duplicate URL is coalesced before the shared queue");
+
+  h.api.cancelAll();
+  const [e1, e2] = await Promise.all([first, duplicate]);
+  assert.equal(e1.cancelled, true);
+  assert.equal(e2.cancelled, true);
+
+  const reopened = h.api.weather(1, 0);
+  await h.settle();
+  await h.fireTimers();
+  assert.equal(h.calls.length, 2, "the reopened hub owns a fresh request generation");
+  assert.equal((await reopened).rainfall, 3);
+});
+
+test("Data Hub, LIVE, and telemetry keep failed state distinct from a valid empty response", async () => {
+  assert.match(hubSource, /status:\s*node[^\n]+dh-empty[^\n]+\?\s*"empty"\s*:\s*"ready"/);
+  assert.match(hubSource, /status:\s*"failed",\s*error:\s*err/);
+  const liveSource = await readFile(new URL("../../js/data/live.js", import.meta.url), "utf8");
+  const telemetrySource = await readFile(new URL("../../js/data/telemetry.js", import.meta.url), "utf8");
+  assert.match(liveSource, /failed\.length === batch\.length/);
+  assert.match(liveSource, /data-state", hadData \? "stale" : "failed"/);
+  assert.match(telemetrySource, /Couldn't load telemetry drivers/);
+  assert.doesNotMatch(telemetrySource, /F1API\.sessionDrivers\([^)]*\)\.catch\(function \(\) \{ return null; \}\)/);
+  assert.match(telemetrySource, /F1API\.carData\([\s\S]{0,180}F1API\.locationData/);
+});
+
 // 429 fixture: `retryAfter` is the header value; timers are collected so the
 // backoff sleep is observable instead of slept.
 function retryHarness(retryAfter) {

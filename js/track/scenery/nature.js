@@ -86,9 +86,13 @@ const SceneryNature = (function () {
     // hit this by walking two treelines that overlap, or by an `every()` step
     // landing on a node a hand-placed tree already took (okayama 2026-09-22:
     // 243 coincident primitives after the barrier guard, all of them trees).
-    // 25 cm cells: finer than any real planting distance, coarse enough that a
-    // deliberate copse is untouched.
-    const planted = new Set();
+    // A RADIUS, not a cell: the 25 cm cell this used to be let two trunks 0.3-
+    // 0.7 m apart through (mont_tremblant, 2026-09-22: 15 same-facing coplanar
+    // trunk/cone pairs from overlapping forest ranks, --why --raw), and no two
+    // real trunks stand closer than TREE_GAP. Still far below any deliberate
+    // copse spacing.
+    const TREE_GAP = 1.0;
+    const planted = new Map();   // 1 m cell -> [[x, z], …]
     // LAYERED-BANK SLOT. spectatorHill is called in layered pairs (a tall pale
     // cut and a short red one over the same span at the same gap); the slot is
     // what keeps the two apart. It counts CALLS, not heights: a hash of
@@ -99,9 +103,15 @@ const SceneryNature = (function () {
     // always adjacent, so consecutive slots is exactly the guarantee needed.
     let hillSeq = 0;
     const spotTaken = (x, z) => {
-      const key = `${Math.round(x * 4)}|${Math.round(z * 4)}`;
-      if (planted.has(key)) return true;
-      planted.add(key);
+      const cx = Math.floor(x / TREE_GAP), cz = Math.floor(z / TREE_GAP);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+        const cell = planted.get(`${cx + i}|${cz + j}`);
+        if (cell) for (const q of cell)
+          if (Math.hypot(q[0] - x, q[1] - z) < TREE_GAP) return true;
+      }
+      const key = `${cx}|${cz}`;
+      if (!planted.has(key)) planted.set(key, []);
+      planted.get(key).push([x, z]);
       return false;
     };
     const pine = (k, side, dist, h, col, opts) => {

@@ -223,7 +223,7 @@ test("every scroll container contains its overscroll (no chaining into the page 
   assert.deepEqual(missing, [], "declare overscroll-behavior(-x/-y) beside the overflow that scrolls");
 });
 
-test("double-tap zoom is refused on every layer, and driving owns its gestures", () => {
+test("double-tap zoom is refused while menu pinch remains native and driving owns its gestures", () => {
   const html = read("index.html");
   const meta = /<meta name="viewport" content="([^"]+)">/.exec(html);
   assert.ok(meta, "index.html has a viewport meta");
@@ -237,10 +237,13 @@ test("double-tap zoom is refused on every layer, and driving owns its gestures",
   // has found the "Force enable zoom" opt-in. Keeping one cap while dropping
   // the other for an a11y reason only ever cost Android users their pinch.
   // Nothing about DRIVING relaxed: #game and .touchbtn stay touch-action:none
-  // below, and the two cancellers kill double-tap and iOS gestures page-wide.
+  // below; the touchend canceller kills double-tap, while Safari's gesture
+  // canceller is scoped to the driving surface so menus still pinch-zoom.
   assert.ok(!meta[1].includes("user-scalable=no"), "viewport meta must not disable user scaling (docs/PLATFORM.md)");
   assert.ok(!/maximum-scale/.test(meta[1]), "viewport meta must not cap zoom at all (W3C ACT b4f0c3 / WCAG 1.4.4)");
-  assert.match(html, /addEventListener\("gesturestart"/, "iOS pinch GestureEvents are cancelled");
+  assert.match(html, /function killDriveGesture[\s\S]*closest\("#game,#hud"\)/,
+    "iOS pinch GestureEvents are cancelled only for driving");
+  assert.match(html, /addEventListener\("gesturestart", killDriveGesture/);
   assert.match(html, /addEventListener\("touchend", function/, "the same-spot second tap is cancelled");
   const tk = css("css/tokens.css");
   assert.equal(decl(tk, "*", "touch-action"), "manipulation", "the reset drops double-tap-to-zoom everywhere");
@@ -276,6 +279,29 @@ test("rapid control taps keep their native click while background double taps ar
   }
   assert.equal(tap(background), false, "a control tap resets the background gesture");
   assert.equal(tap(background, 1), false, "another driving finger remains down");
+});
+
+test("Safari GestureEvents keep menu pinch zoom and are cancelled on the game and HUD", () => {
+  const { document } = makeDom();
+  const script = read("index.html").match(/<script>([\s\S]*?)<\/script>/)[1];
+  vm.runInNewContext(script, { document, Date });
+  const gesture = (type, target) => {
+    const event = { type, target, defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true; } };
+    document.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const menu = document.createElement("div"); menu.id = "howtoplay"; document.body.appendChild(menu);
+  const game = document.createElement("canvas"); game.id = "game"; document.body.appendChild(game);
+  const hud = document.createElement("div"); hud.id = "hud"; document.body.appendChild(hud);
+  const hudChild = document.createElement("button"); hud.appendChild(hudChild);
+  assert.equal(gesture("gesturestart", menu), false, "Help/settings keep Safari's page pinch default");
+  assert.equal(gesture("gesturechange", game), false, "a menu pinch stays native after fingers cross the canvas");
+  gesture("gestureend", menu);
+  assert.equal(gesture("gesturestart", game), true, "the driving canvas refuses page pinch");
+  assert.equal(gesture("gesturechange", menu), true, "a driving pinch stays owned after fingers cross a menu");
+  gesture("gestureend", menu);
+  assert.equal(gesture("gesturestart", hudChild), true, "HUD descendants refuse page pinch too");
 });
 
 test("in-race chrome and the blocker are anchored inside the safe area", () => {

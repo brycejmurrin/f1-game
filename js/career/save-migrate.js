@@ -143,10 +143,9 @@ const SaveMigrate = (function () {
     return career;
   }
 
-  function migrateSeasonPoints(store, season) {
+  function migrateSeasonPoints(_store, season) {
     if (!season) return season;
     remapPoints(season);
-    store.set("season", season);
     return season;
   }
 
