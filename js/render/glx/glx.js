@@ -433,8 +433,17 @@ const GLX = (function () {
     // Same box as #game (tokens.css: fixed inset 0). Sit above the WebGL
     // canvas and below menu sheets (carsetup z-index 35) so CDP/page shots
     // see the blit while the garage UI still covers the right edge.
+    // HIDDEN UNTIL IT HAS SOMETHING TO SHOW. This canvas is opaque (alpha:false)
+    // and covers the viewport at z-index 1, and the blit below only runs when a
+    // capture is waiting — so on any page that never calls awaitSoftPresent /
+    // invalidateSoftPresent it is a BLACK LID over a renderer that is working
+    // perfectly. tools/carview.html read as "draws nothing" for exactly this
+    // reason. OPACITY, not visibility or display: several capture tools call
+    // locator("#game-soft").screenshot(), and Playwright's actionability check
+    // fails a visibility:hidden element but passes an opacity:0 one — so the
+    // box stays screenshot-able while it is still see-through.
     _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;"
-      + "display:block;pointer-events:none;z-index:1;touch-action:none";
+      + "display:block;opacity:0;pointer-events:none;z-index:1;touch-action:none";
     if (canvas.parentNode) canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
     else if (document.body) document.body.appendChild(_displayCanvas);
     _displayCtx = _displayCanvas.getContext("2d", { alpha: false });
@@ -497,6 +506,9 @@ const GLX = (function () {
     if (maxPx < 8) return;
     try {
       _displayCtx.putImageData(_softImg, 0, 0);
+      // First real frame: reveal the overlay. Before this it held nothing but
+      // opaque black, and showing that hid the live canvas underneath.
+      if (_displayCanvas.style.opacity !== "1") _displayCanvas.style.opacity = "1";
       _softCaptureDue = false;
       softBlitNotify();
     } catch (_) { /* 2D blit failed */ }
@@ -962,88 +974,14 @@ const GLX = (function () {
     // render-size viewport letterboxes the 3D view into the corner.
     return spatialUpscale && renderScale < 0.98 && !!(PST && PST.spatialOk && PST.spatialOk());
   }
-  // CACHED CSS SIZE. resize() is the first statement of every render() — and
-  // clientWidth/clientHeight are LAYOUT reads, so asking for them there forces a
-  // synchronous reflow of anything dirtied since the last frame. The HUD dirties
-  // layout constantly (textContent, style and classList writes, plus a dataset
-  // write on documentElement), so the frame loop was paying a forced reflow every
-  // time the 10 Hz HUD tick, an announce, or a lights change landed. The CSS box
-  // only changes on a viewport/orientation change or a rotation of the device, so
-  // read it when the browser tells us it moved and cache it in between.
-  let cssW = 0, cssH = 0, cssDirty = true;
-  let canWatchCss = false;
-  // The viewport this cache was last taken against, and how long to keep
-  // distrusting it. See cssSize().
-  let cssVW = -1, cssVH = -1, cssRecheck = 0;
-  // 8, not 30: iOS Safari's toolbar collapse changes innerHeight on every
-  // scroll-bar gesture, and each change bought 30 forced layouts. The latch
-  // bug this countdown exists for (§2u) resolves in a handful of frames.
-  const CSS_RECHECK_FRAMES = 8;
-  const markCssDirty = () => { cssDirty = true; };
-  // Wired from init(), NOT at IIFE eval: `canvas` is still null up here, so an
-  // observer attached at module scope would silently observe nothing.
+  // CSS-box observation is shared; this backend still owns DPR, the driver
+  // clamp and every render-target allocation below.
+  let cssSizeCache = null;
   function watchCanvasSize() {
-    if (typeof window === "undefined" || !window.addEventListener) return;
-    window.addEventListener("resize", markCssDirty);
-    window.addEventListener("orientationchange", markCssDirty);
-    canWatchCss = true;
-    // Covers what a window resize never fires for: a layout change that moves
-    // the canvas alone (entering photo mode, a rotated phone that keeps the same
-    // window size). Feature-detected — without it the two listeners above still
-    // cover the common cases, and cssSize()'s zero-guard covers first layout.
-    if (typeof ResizeObserver === "function" && canvas) {
-      try { new ResizeObserver(markCssDirty).observe(canvas); } catch (_) {}
-    }
+    cssSizeCache = CanvasCssSize.create(canvas, { settleFrames: 8 });
   }
   function cssSize() {
-    // THE DIRTY FLAG ALONE IS NOT ENOUGH — measured, not reasoned. It is
-    // edge-triggered and consumed unconditionally, so ONE read that lands before
-    // the canvas box has reflowed caches the old box, clears the flag, and
-    // nothing ever sets it again: GLX.aspect then reports the PREVIOUS
-    // viewport's ratio for the rest of the session. In the garage that held a
-    // landscape 1.7778 through a whole portrait session and a hand-called
-    // resize() could not shift it, while dispatching one synthetic "resize"
-    // corrected it on the very next call (artifacts/aspect-verdict.log,
-    // artifacts/aspect-why.log; docs/PERF-FINDINGS.md §2u). A stale aspect is
-    // not cosmetic — it feeds the main projection matrix, the FOV cap
-    // and the FRUSTUM CULL RADIUS (6310), so geometry pops out of the world.
-    // window.innerWidth/innerHeight are VIEWPORT metrics, not element layout:
-    // reading them here does not force the reflow this cache exists to avoid.
-    // A change in either arms a countdown of FRAMES during which the box is
-    // re-read, so a read that was too early self-corrects on the next one.
-    // A countdown rather than a one-shot re-mark, because a one-shot caches the
-    // old box AND records the new viewport — after which nothing differs and
-    // the staleness latches exactly as before.
-    // FRAMES, not milliseconds: a 500 ms wall-clock window was tried first and
-    // measured LEAVING one rotation stale (artifacts/r16-accept.log), because
-    // on a box where a frame can take seconds the window expired before the
-    // loop ran a single frame. N calls is N frames however slow they are, and
-    // at 60fps it is the same half second the window was.
-    if (typeof window !== "undefined") {
-      const vw = window.innerWidth | 0, vh = window.innerHeight | 0;
-      if (vw !== cssVW || vh !== cssVH) {
-        // First observation has nothing to differ FROM, so it records without
-        // arming: re-reading the frames right after init would spend exactly
-        // the reflow this cache exists to avoid (webgpu-lifecycle.test.mjs
-        // pins that for WGX).
-        const first = cssVW < 0;
-        cssVW = vw; cssVH = vh;
-        if (!first) cssRecheck = CSS_RECHECK_FRAMES;
-      }
-    }
-    // A zero is never a real size — it means the canvas has not been laid out
-    // yet (init before first layout, a display:none ancestor). Keep re-reading
-    // until it is real, so this can't latch a 1x1 backbuffer the way a plain
-    // cache would; the old read-every-frame code self-corrected for free.
-    // canWatchCss: with no listeners attached at all there is no signal left,
-    // so never trust the cache (WGX has always done this; GLX did not, and
-    // latched the first non-zero size forever).
-    if (cssDirty || cssW <= 0 || cssH <= 0 || cssRecheck > 0 || !canWatchCss) {
-      if (cssRecheck > 0) cssRecheck--;
-      cssW = canvas.clientWidth;
-      cssH = canvas.clientHeight;
-      cssDirty = false;
-    }
+    return cssSizeCache ? cssSizeCache.read() : { width: 0, height: 0 };
   }
   function resize() {
     if (ctxGone()) return;
@@ -1051,9 +989,9 @@ const GLX = (function () {
     // square of this; 1.5 is 56% of the pixels of 2 with little visible loss on
     // a ~6" screen, and it multiplies with every other saving.
     const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
-    cssSize();
-    presentW = Math.max(1, Math.round(cssW * dpr));
-    presentH = Math.max(1, Math.round(cssH * dpr));
+    const css = cssSize();
+    presentW = Math.max(1, Math.round(css.width * dpr));
+    presentH = Math.max(1, Math.round(css.height * dpr));
     // CLAMP UNIFORMLY to the driver's ceiling (maxDim, queried in init): one
     // factor for both axes keeps `aspect`, and every projection built on it,
     // correct — just smaller. It sits BEFORE rw/rh on purpose: post.js

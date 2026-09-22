@@ -317,15 +317,21 @@ test("Input.activeInputSource follows real activity, not connected-device presen
 function bootUi(desktop, helpSlots = {}) {
   const { Input, key, sb, fire } = boot();
   const nodes = {};
-  const mk = () => {
-    const n = { hidden: false, textContent: "", dataset: {}, disabled: false, style: {}, kids: [],
+  const mk = (tag = "div") => {
+    let text = "";
+    const n = { tagName: tag.toUpperCase(), hidden: false, dataset: {}, disabled: false, style: {}, kids: [], clears: 0,
       setAttribute() {}, append(...a) { this.kids.push(...a); }, appendChild(a) { this.kids.push(a); },
-      addEventListener() {}, removeEventListener() {} };
+      addEventListener() {}, removeEventListener() {},
+      focus() { sb.document.activeElement = this; } };
+    Object.defineProperty(n, "textContent", { get: () => text, set(v) {
+      text = String(v);
+      if (v === "") { n.kids = []; n.clears++; }
+    } });
     return n;
   };
   sb.document.getElementById = (id) => (nodes[id] ||= mk());
   sb.document.querySelectorAll = (sel) => helpSlots[sel] || [];
-  sb.document.createElement = () => mk();
+  sb.document.createElement = (tag) => mk(tag);
   sb.document.body.classList.contains = (c) => c === "desktop" && desktop;
   sb.document.readyState = "complete";
   const winListeners = {};
@@ -339,7 +345,12 @@ function bootUi(desktop, helpSlots = {}) {
   const G = { $: sb.document.getElementById, store, soundOn: false };
   const kb = KeyBinds.create(G);
   // A physical key: Input's window listener sets the latch, then the module's.
-  const press = (code) => { key(code, true); (winListeners.keydown || []).forEach((f) => f({ code, isTrusted: true })); key(code, false); };
+  const press = (code) => {
+    key(code, true);
+    [...(winListeners.keydown || [])].forEach((f) => f({ code, isTrusted: true, repeat: false,
+      preventDefault() {}, stopPropagation() {} }));
+    key(code, false);
+  };
   // Input's listeners were registered before the swap above, the module's after.
   const fireAll = (t, e) => { fire(t, e); (winListeners[t] || []).forEach((f) => f(e || {})); };
   return { Input, kb, press, fire: fireAll, sb, $: sb.document.getElementById };
@@ -410,6 +421,29 @@ test("How to Play binding slots are painted from the live key and pad tables", (
   assert.equal($("htp-inputs").dataset.activeInput, "keyboard", "help records the current input kind");
 });
 
+test("a successful key capture rebuilds once, restores the changed slot's focus, and reports through a status", () => {
+  const { $, press, sb } = bootUi(true);
+  const host = $("pm-keys");
+  const find = (node, action, slot) => {
+    if (node.dataset && node.dataset.action === action && node.dataset.slot === String(slot)) return node;
+    for (const child of node.kids || []) { const hit = find(child, action, slot); if (hit) return hit; }
+    return null;
+  };
+  const before = find(host, "recover", 0);
+  assert.ok(before, "the RECOVER primary slot is rendered");
+  before.focus(); before.onclick();
+  const clears = host.clears;
+  press("KeyF");
+  const after = find(host, "recover", 0);
+  assert.notEqual(after, before, "capture replaces the rendered button");
+  assert.equal(host.clears, clears + 1, "successful capture performs one render, not disarm + render");
+  assert.equal(sb.document.activeElement, after, "focus follows the same logical slot onto its replacement");
+  assert.equal(after.textContent, "F");
+  assert.match($("pm-keys-note").textContent, /Tap a key slot/);
+  assert.match(read("index.html"), /id="pm-keys-note"[^>]*role="status"/,
+    "the capture result is exposed as a polite status update");
+});
+
 // ---- the pad in a menu: value controls --------------------------------------
 
 test("a D-pad direction is dispatched at the FOCUSED control, so an element's own key handler runs", () => {
@@ -436,19 +470,20 @@ test("a D-pad direction is dispatched at the FOCUSED control, so an element's ow
   assert.equal(dispatched[0].target, undefined, "dispatched at the document");
 });
 
-test("D-pad Left/Right on a focused <select> steps its value and fires change; Up/Down are the ordinary row move", () => {
+test("D-pad Left/Right on a focused <select> wraps past disabled options and fires change; Up/Down move rows", () => {
   const { Input, sb, fire, dispatched, navOpen } = boot();
   const { press, release } = fakePad(sb, fire);
   navOpen.on = true;
   const events = [], keys = [];
-  const sel = { tagName: "SELECT", disabled: false, options: { length: 3 }, selectedIndex: 0, dispatchEvent: (e) => { events.push(e.type); if (e.type === "keydown") keys.push(e); return true; } };
+  const sel = { tagName: "SELECT", disabled: false,
+    options: [{ disabled: false }, { disabled: false }, { disabled: true }], selectedIndex: 0,
+    dispatchEvent: (e) => { events.push(e.type); if (e.type === "keydown") keys.push(e); return true; } };
   sb.document.activeElement = sel;
   press(15); Input.poll(); release(15); Input.poll();         // D-pad right
   assert.equal(sel.selectedIndex, 1, "the pad stepped the select itself — a synthetic ArrowRight has no UA default");
   assert.deepEqual(events, ["input", "change"], "the row's change listener hears it");
   press(15); Input.poll(); release(15); Input.poll();
-  press(15); Input.poll(); release(15); Input.poll();
-  assert.equal(sel.selectedIndex, 2, "clamped at the last option, no wrap");
+  assert.equal(sel.selectedIndex, 0, "disabled last option is skipped and the row wraps");
   press(14); Input.poll(); release(14); Input.poll();         // D-pad left
   assert.equal(sel.selectedIndex, 1);
   assert.equal(events.filter((t) => t === "keydown").length, 0, "no keydown was dispatched for the owned axis");

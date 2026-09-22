@@ -1179,6 +1179,7 @@ const TLX = (function () {
           // packAttr `fmt24`): WebGPU has no 1- or 3-wide 8/16-bit formats.
           chunkedSys = TLXShaders.chunked(THREE, {
             isWebGPU: () => !!(renderer.backend && renderer.backend.isWebGPUBackend),
+            releaseGeometry,
           });
         }
       } catch (e) {
@@ -1836,6 +1837,29 @@ const TLX = (function () {
         meshPool.length = w;
       }
 
+      // Caller frees are ownership boundaries, not idle hints. Waiting for the
+      // pool's 20-second idle sweep keeps a disposed track's BufferGeometry
+      // attributes strongly reachable while the replacement track is built —
+      // exactly the synchronous peak game.js frees the old track to avoid.
+      function releaseGeometry(geo) {
+        if (!geo) return;
+        let w = 0;
+        for (let i = 0; i < meshPool.length; i++) {
+          const m = meshPool[i];
+          if (m.geometry !== geo) { meshPool[w++] = m; continue; }
+          try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
+          m.geometry = null; m.material = null;
+        }
+        meshPool.length = w;
+        meshByGeo.delete(geo);
+      }
+
+      function disposeGeometry(geo) {
+        if (!geo) return;
+        releaseGeometry(geo);
+        geo.dispose();
+      }
+
       // (geometry, material, OCCURRENCE) — not (geometry, material). One
       // wrapper per pair handed every same-pair draw of a batch the SAME
       // Mesh, each overwriting the last one's matrix: 21 of 22 blob shadows,
@@ -2124,55 +2148,19 @@ const TLX = (function () {
         return filled;
       }
 
-      let cssW = 0, cssH = 0, cssDirty = true;
-      // The viewport this cache was last taken against, and how long to keep
-      // distrusting it. See the settle block in resize().
-      let cssVW = -1, cssVH = -1, cssRecheck = 0;
-      const CSS_RECHECK_FRAMES = 30;
-      const markCssDirty = () => { cssDirty = true; };
-      if (typeof window !== "undefined" && window.addEventListener) {
-        window.addEventListener("resize", markCssDirty);
-        window.addEventListener("orientationchange", markCssDirty);
-      }
-      // Registered OUTSIDE the addEventListener check, as GLX and WGX both do:
-      // an engine with ResizeObserver but no addEventListener would otherwise
-      // get no invalidation signal at all.
-      if (typeof ResizeObserver === "function" && _layoutCanvas) {
-        try { new ResizeObserver(markCssDirty).observe(_layoutCanvas); } catch (_) {}
-      }
+      // CSS-box observation is shared; TLX still owns renderer.setSize(),
+      // backend limits and post-target allocation.
+      const cssSizeCache = CanvasCssSize.create(_layoutCanvas, { settleFrames: 30 });
       function resize() {
         // Window/settings callbacks also reach here while the frame loop waits
         // for compilation. Keep its targets alive; the next frame applies the
         // latest CSS size and settings once the warm task releases ownership.
-        if (_warmPending) { cssDirty = true; return; }
-        // CSS size only — NEVER fall back to canvas.width/.height. setSize() below
-        // writes the backing store, so reading it back here fed the previous frame's
-        // size into the DPR multiply: a hidden/detached canvas (clientWidth 0) then
-        // doubled its render target every begin() until allocation failed. GLX and
-        // WGX both read clientWidth with a floor of 1 for the same reason.
-        // Soft-present: the hidden GPU canvas is 1×1 CSS — layout is #game.
-        // Same settle window as GLX cssSize(): the dirty flag is edge-triggered
-        // and consumed unconditionally, so one read that lands before the box
-        // has reflowed latches the PREVIOUS viewport's size for the rest of the
-        // session (docs/PERF-FINDINGS.md §2u). innerWidth/innerHeight are
-        // viewport metrics, not element layout, so this costs no reflow.
-        if (typeof window !== "undefined") {
-          const vw = window.innerWidth | 0, vh = window.innerHeight | 0;
-          if (vw !== cssVW || vh !== cssVH) {
-            // First observation records without arming — see GLX cssSize().
-            const first = cssVW < 0;
-            cssVW = vw; cssVH = vh;
-            if (!first) cssRecheck = CSS_RECHECK_FRAMES;
-          }
-        }
-        if (cssDirty || cssW <= 0 || cssH <= 0 || cssRecheck > 0) {
-          if (cssRecheck > 0) cssRecheck--;
-          cssW = _layoutCanvas.clientWidth;
-          cssH = _layoutCanvas.clientHeight;
-          cssDirty = false;
-        }
-        const cw = cssW || 1;
-        const ch = cssH || 1;
+        if (_warmPending) { cssSizeCache.markDirty(); return; }
+        // CSS size only — NEVER fall back to the backing store. Hidden canvases
+        // stay at the 1px floor while the shared cache keeps probing for reveal.
+        const css = cssSizeCache.read();
+        const cw = css.width || 1;
+        const ch = css.height || 1;
         const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
         presentW = Math.max(1, Math.round(cw * dpr));
         presentH = Math.max(1, Math.round(ch * dpr));
@@ -2509,10 +2497,10 @@ const TLX = (function () {
           t.needsUpdate = true;
           return { __tlx: true, tex: t };
         },
-        freeMesh(m) { if (m && m.geo) { m.geo.dispose(); m.geo = null; } },
+        freeMesh(m) { if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; } },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
-          if (m && m.geo) { m.geo.dispose(); m.geo = null; }
+          if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
         },
         freeTexture(t) {
           if (t && t.tex) { t.tex.dispose(); t.tex = null; return; }

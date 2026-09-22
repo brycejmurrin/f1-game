@@ -453,6 +453,13 @@ function sentinelArm(on) {
   // the probation reset with it for the same reason: a new race is a fresh
   // device, and neither half may carry a verdict into it.
   if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; _openN = 0; _openMax = 0; _openSlow = 0;
+            // Evaluation and verification state is race-local too. A quality
+            // change late in the previous race can leave a five-second
+            // cooldown behind; carrying it across the menu spends the next
+            // race's only opening window while the derived floor catches the
+            // slow frame cost. A provisional verdict from the old circuit is
+            // equally invalid against the new race's reset averages.
+            _govT = 0; _govCool = 0; _govCoolMs = 0; _pendingVerify = null;
             _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS;
             _scaleMoves = 0; _degradeArm = 0; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;

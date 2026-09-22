@@ -44,13 +44,25 @@ function trackDefs() {
 function load(stored0) {
   const stored = new Map(Object.entries(stored0 || {}));
   const subscribers = [];
+  const revisions = new Map();
+  let clearRevision = 0;
   const tracks = trackDefs();
+  const notify = (change) => subscribers.forEach((fn) => fn(change));
+  const bump = (key) => revisions.set(key, (revisions.get(key) || 0) + 1);
+  const write = (k, v) => {
+    stored.set(k, v);
+    bump(k);
+    notify({ key: k, local: true, durable: true });
+    return { ok: true, durable: true, reason: null };
+  };
   const ctx = vm.createContext({
     Math, JSON, Object, Array, String, Number, Set, Map, isNaN, isFinite, parseInt, console,
     GameStore: {
       store: {
         get: (k, d) => (stored.has(k) ? stored.get(k) : d),
-        set: (k, v) => stored.set(k, v),
+        set: (k, v) => write(k, v).durable,
+        write,
+        keyRevision: (k) => clearRevision + ":" + (revisions.get(k) || 0),
         subscribe: (fn) => { subscribers.push(fn); return () => {}; },
       },
     },
@@ -62,7 +74,11 @@ function load(stored0) {
   vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx);
   return {
     S: vm.runInContext("SeasonCal", ctx), stored, tracks,
-    foreign: (key) => subscribers.forEach((fn) => fn({ key, foreign: true, clear: key == null })),
+    foreign: (key) => {
+      if (key == null) clearRevision++;
+      else bump(key);
+      notify({ key, foreign: true, clear: key == null });
+    },
   };
 }
 
@@ -121,6 +137,62 @@ test("a foreign calendar write invalidates SeasonCal's own resolved cache", () =
   stored.set("seasonCfg", { trackIds: ["kyalami"] });
   foreign("seasonCfg");
   assert.equal(S.track(0).id, "kyalami");
+});
+
+test("an active season keeps its saved rules when seasonCfg changes elsewhere", () => {
+  const { S, stored, foreign } = load({
+    seasonCfg: { trackIds: ["kyalami"], points: "modern", sprint: false },
+    season: {
+      round: 0, pts: {}, teamPts: {}, driverCodes: {},
+      config: { trackIds: ["monza"], points: "classic", sprint: true, laps: 10 },
+    },
+  });
+  S.engage("season");
+  const season = S.load();
+  assert.equal(S.track(0).id, "monza");
+  assert.deepEqual(S.pointsTable(), S.CLASSIC_POINTS);
+  assert.equal(S.sprintOn(), true);
+  assert.equal(Object.isFrozen(season.config), true);
+  assert.equal(Object.isFrozen(season.config.trackIds), true);
+
+  stored.set("seasonCfg", { trackIds: ["suzuka"], points: "modern", sprint: false });
+  foreign("seasonCfg");
+  assert.equal(S.track(0).id, "monza", "the in-progress calendar is a save property");
+  assert.deepEqual(S.pointsTable(), S.CLASSIC_POINTS, "scoring cannot change under banked points");
+  assert.equal(S.sprintOn(), true);
+});
+
+test("load migrates a legacy season by snapshotting and persisting its current config", () => {
+  const { S, stored } = load({
+    seasonCfg: { trackIds: ["monza", "monaco"], points: "classic", drop: 2 },
+    season: { round: 1, pts: { d0: 10 }, teamPts: {}, driverCodes: {} },
+  });
+  S.engage("season");
+  const season = S.load();
+  assert.deepEqual(Array.from(season.config.trackIds), ["monza", "monaco"]);
+  assert.equal(season.config.points, "classic");
+  assert.equal(season.config.drop, 2);
+  assert.equal(stored.get("season").config, season.config,
+    "the one-time migration is durable, not repeated on every reload");
+});
+
+test("a foreign season save conflicts before standings mutate or stale data writes", () => {
+  const { S, stored, foreign } = load({
+    seasonCfg: { trackIds: ["monza", "monaco"] },
+    season: { round: 0, pts: {}, teamPts: {}, driverCodes: {} },
+  });
+  S.engage("season");
+  const local = S.load();
+  const winner = { round: 1, pts: { d0: 25 }, teamPts: { t0: 25 }, driverCodes: { d0: "D0" }, config: local.config };
+  stored.set("season", winner);
+  foreign("season");
+
+  assert.equal(S.conflicted(), true);
+  assert.equal(S.award(local, field(2)), null);
+  assert.equal(local.round, 0, "a result that cannot be saved must not enter RAM");
+  assert.equal(S.save(local).reason, "conflict");
+  assert.equal(S.clear().reason, "conflict", "finishing locally cannot delete the other tab's winner");
+  assert.equal(stored.get("season"), winner);
 });
 
 // ── the calendar gate ─────────────────────────────────────────────────────────

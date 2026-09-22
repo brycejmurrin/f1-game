@@ -163,6 +163,22 @@ test("brakeDecision soft-pedals small excess and full-pedals big excess", () => 
   assert.equal(hard.brakeLvl, 1);
 });
 
+test("brakeDecision gives the same pedal for the same pace-normalised overspeed", () => {
+  const samples = [
+    { d: 40, k: 0.02, bank: 0 },
+    { d: 80, k: 0.01, bank: 0 },
+  ];
+  const decisions = [1, 0.84, 0.5].map((pace) => {
+    const base = { traits: mid, samples, latMax: 22, brake: 22, grip: 1, pace, vmax: 72 };
+    const lim = A.brakeTarget(base);
+    return Object.assign({}, A.brakeDecision({ ...base, speed: lim + 2 * pace }));
+  });
+  for (const d of decisions) {
+    assert.equal(d.braking, true);
+    assert.equal(d.brakeLvl, decisions[0].brakeLvl);
+  }
+});
+
 test("craft late-brake raises the limit when attacking with room", () => {
   const samples = [{ d: 50, k: 0.018, bank: 0 }];
   const plain = A.brakeTarget({
@@ -371,8 +387,18 @@ test("passTarget is a position beside the passed car, inside the road", () => {
   assert.equal(A.passTarget(-1.5, -1, 2.8, 7), -4.3);
   // Clamped to the drivable width, never past the edge.
   assert.equal(A.passTarget(5.5, 1, 2.8, 7), 6.4);
-  // Independent of where WE are — that is the anti-mirror property.
-  assert.equal(A.passTarget(1, 1, 2.8, 7), A.passTarget(1, 1, 2.8, 7));
+  // Independent of where WE are — that is the anti-mirror property. This line
+  // used to compare passTarget(1,1,2.8,7) WITH ITSELF, which is 3.8 === 3.8 and
+  // cannot fail: proven 2026-09-22 by scaling the body's offset, after which
+  // the call returned 6.4 and this assertion still passed. The named property
+  // was never asserted, and could not be — the signature carries no "our x".
+  // What it can assert is that the target is built from the OPPONENT's line
+  // plus a fixed side offset, identically at two different opponent positions.
+  assert.equal(A.passTarget(1, 1, 2.8, 7), 3.8);
+  // -1 + 2.8 is 1.7999999999999998 in binary floating point, so this one needs
+  // a tolerance where its exact-valued neighbours above do not.
+  assert.ok(Math.abs(A.passTarget(-1, 1, 2.8, 7) - 1.8) < 1e-9,
+    "same side, same clearance — the offset must not vary with where the opponent sits");
 });
 
 test("pass patience and cooldown are per-car and bounded", () => {

@@ -58,6 +58,19 @@ function create(G) {
     let armed = null;   // { id, slot, btn } while a slot waits for input
     const setNote = (t) => { if (note) note.textContent = t; };
     const save = () => store.set(dev.key, dev.get());
+    // Stop capture without rebuilding. Successful capture needs one render,
+    // followed by focus on the replacement for the slot the player changed.
+    function clearArmed() {
+      if (!armed) return null;
+      const out = { id: armed.id, slot: armed.slot };
+      const { btn } = armed;
+      armed = null;
+      delete btn.dataset.armed;
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("blur", disarmOnBlur);
+      if (!dev.keys) Input.padCapture(null);
+      return out;
+    }
     // An armed slot is only armed while the player can SEE it. Leaving by
     // BACK, CLOSE or RESUME never disarmed it, so the first key pressed in the
     // race was swallowed and rebound (W could steal throttle's own binding)
@@ -65,7 +78,7 @@ function create(G) {
     const onScreen = () => !(host.closest && host.closest("[hidden]"));
     // A captured key code or button index lands here.
     function accept(v) {
-      if (!onScreen()) { disarm(true); return; }
+      if (!onScreen()) { disarm(true, false); return; }
       const { id, slot } = armed;
       const r = dev.set(id, slot, v);
       if (!r.ok) {
@@ -73,10 +86,10 @@ function create(G) {
         setNote(`${prefix}press another, or Esc.`);
         return;
       }
-      disarm(true);
+      const focus = clearArmed();
       save();
       tick();
-      render();
+      render(focus);
       const from = r.conflict && dev.list().find((a) => a.id === r.conflict);
       setNote(from ? `${dev.label(v)} moved here from ${from.label}.` : dev.idle);
     }
@@ -88,7 +101,7 @@ function create(G) {
     // controller section takes only Escape from the keyboard (cancel).
     function onKey(e) {
       if (!armed || !e.isTrusted) return;
-      if (!onScreen()) { disarm(true); return; }   // not consumed: the key is the race's
+      if (!onScreen()) { disarm(true, false); return; }   // not consumed: the key is the race's
       /* AN IME IS TYPING, NOT BINDING. While a composition is active the
          browser reports keyCode 229 and a `key` of "Process" instead of the
          real key, so a player with a CJK input method active captured garbage
@@ -104,7 +117,7 @@ function create(G) {
     }
     function arm(id, slot, btn) {
       if (armed && armed.btn === btn) { disarm(); return; }
-      for (const s of sections) s.disarm(true);
+      for (const s of sections) s.disarm(true, false);
       armed = { id, slot, btn };
       btn.dataset.armed = "1";
       btn.textContent = dev.keys ? "PRESS A KEY" : "PRESS A BUTTON";
@@ -113,18 +126,13 @@ function create(G) {
       window.addEventListener("blur", disarmOnBlur);
       if (!dev.keys) Input.padCapture(accept);
     }
-    function disarm(quiet) {
-      if (!armed) return;
-      const { btn } = armed;
-      armed = null;
-      delete btn.dataset.armed;
-      window.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("blur", disarmOnBlur);
-      if (!dev.keys) Input.padCapture(null);
-      render();
+    function disarm(quiet, restoreFocus = true) {
+      const focus = clearArmed();
+      if (!focus) return;
+      render(restoreFocus ? focus : null);
       if (!quiet) setNote(dev.idle);
     }
-    function disarmOnBlur() { disarm(); }
+    function disarmOnBlur() { disarm(false, false); }
 
     function slotButton(a, i) {
       const b = document.createElement("button");
@@ -142,14 +150,9 @@ function create(G) {
     }
     // The rows follow the CONTROLS page's setting-row grammar (label left, the
     // control cluster right, one line at every UI SIZE): label, then two chips.
-    function render() {
-      // Rebuilding drops the focused chip with it; put focus back on the SAME
-      // slot, or every rebind left keyboard/pad users at <body> (their place
-      // in a 12-row list lost after each one).
-      const had = document.activeElement && host.contains && host.contains(document.activeElement)
-        ? { id: document.activeElement.dataset && document.activeElement.dataset.action,
-            slot: document.activeElement.dataset && document.activeElement.dataset.slot } : null;
+    function render(focus) {
       host.textContent = "";
+      let focusBtn = null;
       for (const a of dev.list()) {
         const row = document.createElement("div");
         row.className = "set-row";
@@ -159,13 +162,11 @@ function create(G) {
         lbl.className = "tune-label";
         lbl.textContent = a.label;
         const cluster = document.createElement("div");
-        cluster.append(slotButton(a, 0), slotButton(a, 1));
+        const first = slotButton(a, 0), second = slotButton(a, 1);
+        cluster.append(first, second);
+        if (focus && focus.id === a.id) focusBtn = focus.slot === 1 ? second : first;
         row.append(lbl, cluster);
         host.appendChild(row);
-      }
-      if (had && had.id != null && host.querySelector) {
-        const back = host.querySelector(`[data-action="${had.id}"][data-slot="${had.slot}"]`);
-        if (back && back.focus) back.focus();
       }
       if (resetBtn) resetBtn.disabled = dev.isDefault();
       if (wrap && dev.show) wrap.hidden = !dev.show();
@@ -173,6 +174,9 @@ function create(G) {
       renderHelp();
       markHelpInput();
       prioritizeHelpInput();
+      if (focusBtn && typeof focusBtn.focus === "function") {
+        try { focusBtn.focus({ preventScroll: true }); } catch (_) { focusBtn.focus(); }
+      }
     }
     // Both the complete input guide and in-prose binding references use the
     // live table. A group whose ids is a string is fixed text (the
@@ -410,7 +414,7 @@ function create(G) {
   if (keys || pad) Log.info("ui", "KeyBinds.create");
   return {
     render() { for (const s of sections) s.render(); },
-    disarmAll() { for (const s of sections) s.disarm(true); },   // closeSettings: nothing stays armed into a race
+    disarmAll() { for (const s of sections) s.disarm(true, false); },   // closeSettings: nothing stays armed into a race
   };
 }
 
