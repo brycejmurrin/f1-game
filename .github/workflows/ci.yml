@@ -348,15 +348,22 @@ jobs:
       # workflow_call is a dispatch on that branch, already gated by its push run).
       # A `before` the clone cannot show (force-push, first push) falls back to
       # the remote ref rather than failing the step.
+      # A raise past the absorb needs its reason in the PR BODY, so only the
+      # pull_request run can judge it. On a push there is no body: the step
+      # used to fail anyway, and 10 of the 14 reds on 2026-09-22 were that one
+      # message repeated on branch pushes (8 on one branch) — a red no push
+      # can clear. `--advisory` keeps the annotation and drops the failure on
+      # push events; the PR run for the same commits still blocks.
       - name: Ratchet ceilings vs the base
         env:
           RATCHET_BASE: ${{ github.event.pull_request.base.sha || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && github.event.before) || 'origin/claude/f1-game-project-26h3ng' }}
+          RATCHET_MODE: ${{ github.event_name == 'push' && '--advisory' || '' }}
         run: |
           base="$RATCHET_BASE"
           case "$base" in 0000000000000000000000000000000000000000|"") base=origin/claude/f1-game-project-26h3ng ;; esac
           git cat-file -e "$base^{commit}" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng
-          echo "ratchet base: $base"
-          node tools/check/ratchets.mjs --base "$base"
+          echo "ratchet base: $base ${RATCHET_MODE:+(push: advisory)}"
+          node tools/check/ratchets.mjs --base "$base" $RATCHET_MODE
       - name: Every test file belongs to a topical group
         run: npm run test:audit
       # WHAT DOES THIS GATE ACTUALLY EXECUTE? A report, never a gate.

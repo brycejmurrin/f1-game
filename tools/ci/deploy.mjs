@@ -9,6 +9,8 @@
 //                                       #   it — geometry-paths.mjs) → verify-track (touched
 //                                       #   circuits) → push
 //                                       #   HEAD to the deploy branch (retry ×3)
+//   node tools/ci/deploy.mjs --pr-on-race  # direct push, but after TWO fast-forward losses open a
+//                                       #   PR instead of a third ~50-min re-verify (busy branch)
 //   node tools/ci/deploy.mjs --pr          # same checks, then push the session branch and open /
 //                                       #   update a PR into the deploy branch (never pushes there)
 //   node tools/ci/deploy.mjs --gate-only   # run the DEPLOY GATE and stop: tooling-fast + ci.yml's
@@ -535,6 +537,16 @@ function pushWithRetry(oursProse = false) {
     const r = git(["push", REMOTE, `HEAD:${DEPLOY_BRANCH}`]);
     if (r.code === 0) return { attempts: attempt, swept };
     log(`push rejected (attempt ${attempt}): ${r.err.split("\n").pop()}`);
+    // A BUSY BRANCH CANNOT BE WON BY RE-VERIFYING. One full pass here is ~50
+    // min and on 2026-09-22 the deploy tip took a PR merge every ~30 min, so
+    // a direct push lost the fast-forward race three times in 2.5 h and the
+    // fourth pass had to be killed by hand. A PR runs the identical gate on
+    // GitHub with no race at all. With --pr-on-race the SECOND rejection
+    // (one re-verify already lost) switches to that path instead of a third.
+    if (attempt >= 2 && flag("--pr-on-race")) {
+      log("push rejected twice — the branch is busy; opening a PR instead of a third re-verify (--pr-on-race)");
+      return { attempts: attempt, swept, race: true };
+    }
     const before = git(["rev-parse", "HEAD"]).out.trim();
     must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
     mergeDeployTip();
@@ -608,7 +620,12 @@ export function openPrRest(branch, token) {
   // deploy merges the base tip before it opens the PR, so HEAD is almost
   // always "Merge remote-tracking branch …", which is what PR #182 was called
   // until this line existed. `--no-merges` walks back to the work itself.
-  const head = git(["log", "-1", "--no-merges", "--format=%s%x00%b", `${DEPLOY_BRANCH}..HEAD`]).out
+  // ORIGIN/, not the local branch name: the session's local copy of the
+  // deploy branch is whatever it was when the session started, so a range
+  // from it spans every session's commits since — and PR #211 opened titled
+  // with another session's commit. The fetch above just refreshed origin/.
+  const head = git(["log", "-1", "--no-merges", "--format=%s%x00%b", `origin/${DEPLOY_BRANCH}..HEAD`]).out
+            || git(["log", "-1", "--no-merges", "--format=%s%x00%b", `${DEPLOY_BRANCH}..HEAD`]).out
             || git(["log", "-1", "--no-merges", "--format=%s%x00%b"]).out;
   const [title, body] = head.split("\0");
   const pr = ghApi(token, "POST", `${api}/pulls`, { title, body, head: branch, base: DEPLOY_BRANCH }).json;
@@ -812,7 +829,11 @@ export function main() {
     if (oursProse) log("our side is prose only — a lost race re-verifies the cross-file guards, not the whole gate");
     const push = pushWithRetry(oursProse);
     verdict.pushAttempts = push.attempts;
-    verdict.pushed = true;
+    if (push.race) {
+      // The gate already passed on this union; the PR carries it to GitHub's
+      // copy of the same gate, where nothing can out-race it.
+      Object.assign(verdict, openPr(p.branch), { pushed: false, race: "opened a PR after two fast-forward losses (--pr-on-race)" });
+    } else verdict.pushed = true;
     // A retry can sweep a union main() never saw, so the verdict learns it here
     // rather than reporting the answer it computed before the re-merge.
     if (push.swept && !verdict.verified.includes("test:sweeps")) verdict.verified.push("test:sweeps");

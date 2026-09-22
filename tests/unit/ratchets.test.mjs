@@ -129,6 +129,14 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   const big = [];
   assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => big.push(l) }), 1);
   assert.ok(big.some((l) => /past the 40-line commit-hook absorb/.test(l)));
+  // ADVISORY (a push run): the same raise is still named, and still says it
+  // needs a reason, but the exit is 0 — a push has no PR body to carry the
+  // reason, so failing there is a red that no push can clear. The PR run
+  // for the same commits calls without --advisory and blocks as above.
+  const adv = [];
+  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => adv.push(l), advisory: true }), 0);
+  assert.ok(adv.some((l) => /past the 40-line commit-hook absorb.*advisory on a push/.test(l)), adv.join("\n"));
+  assert.match(adv.at(-1), /1 past the 40-line absorb \(advisory\)/);
   // An unreachable ref is a distinct exit, not a crash and not a pass.
   const nope = [];
   assert.equal(compareToBase("0000000000000000000000000000000000000000", { print: (l) => nope.push(l) }), 2);
