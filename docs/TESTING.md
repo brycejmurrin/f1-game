@@ -1,6 +1,6 @@
 # Testing reference
 
-120 root Playwright spec files (`tests/specs/*.spec.js`) + 300+ `node --test` unit suites
+122 root Playwright spec files (`tests/specs/*.spec.js`) + 300+ `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1111,7 +1111,9 @@ what it covers.
 | `autopilot.spec.js` | a closed-loop driver that actually completes laps (monza, suzuka) |
 | `presets.spec.js` | RELAX / STANDARD / PRO each push the sliders somewhere distinct |
 | `sliders.spec.js` | every pause-menu slider is wired and persists |
-| `touch-steer.spec.js` | canvas touch steering as an anchored DRAG (proportional, relative, ramped on release, most-recently-MOVED finger wins), the on-screen arrows ramping like a key, and pedal TRAVEL on the touch pedals reaching the physics |
+| `touch-steer.spec.js` | canvas touch steering as an anchored DRAG: proportional to travel, relative so the gesture works anywhere on the glass, ramped on release rather than snapped, and the most-recently-MOVED finger winning. Split out of the 25-test original so each part fits the change-aware gate's 10-test capacity |
+| `touch-buttons.spec.js` | the on-screen STEERING BUTTONS: arrows ramping like a key rather than switching, GAS surviving a turn-arrow tap, and the adaptive buttons behaving as analog triggers (a tap at speed is a correction, sliding back eases off, the Advanced slider persists) |
+| `touch-pedals.spec.js` | on-screen PEDAL travel — a plain press is still full travel, sliding eases off, a tremor does not modulate, a keyboard press outranks a part-open pedal — plus the pair that may never disagree: auto-throttle ON while a GAS button is still on screen |
 | `tilt-pipeline.spec.js` | the tilt chain end to end — dead zone (subtracted, so no step at its edge), the `MAX_TILT` map and its `steerToTilt` inverse, the 1.6x release/tighten slew asymmetry, calibrating out a held grip offset, One-Euro smoothing as lag rather than gain, and the LIVE `deviceorientation` path pinned to the harness |
 | `understeer-cue.spec.js` | the front-axle saturation haptic: it fires when the front stops answering the steering, stays quiet under gentle input, below the 1.5 m/s floor and off-track, repeats no faster than its cooldown allows, tightens with saturation depth, and at the same DEPTH in the grip envelope responds identically at any PACE |
 | `brake-cue.test.mjs` | braking CUE math in `js/physics/brake-cue.js`: slider 1 is OFF, urgency is 0 when the apex is already made, braking already done cuts the pulse, and the function returns 0..1 never a brake command |
