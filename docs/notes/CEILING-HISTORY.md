@@ -11,6 +11,18 @@ The live numbers are in `ratchets.json`; nothing here is asserted.
 under Settings, removing duplicate pause controls and simplifying Help markup.
 The newer practice goals and session review remain. Shell slack is tightened to 25.
 
+2026-09-22 the portrait drawing: `shellNodes` 1751 → **1794**, a second SVG and
+the groups of a second picture. The title art is now TWO drawings: the
+landscape one is the car mesh through the garage orbit, the portrait one is the
+same pair from behind, driving up the frame with their marks trailing down it.
+A tall phone had been getting the landscape drawing cropped or shrunk to a
+strip, which is the shape problem no crop solves — the subject is 3.3x wider
+than it is tall and the slot is the other way round. The portrait half is
+TRACED off a real render rather than projected (the reason is on sceneTop), so
+it costs far fewer groups than the projected attempt it replaced. Only one of
+the two is ever rendered (display:none, not opacity), so the cost is bytes in
+the shell, not paint on the phone.
+
 2026-09-22 title framing: `shellNodes` 1750 → **1751**, one `<g id="tc-frame">`
 around the generated title art. The phone shapes need different framing of the
 same drawing — portrait off the left edge, landscape smaller and lower so the
