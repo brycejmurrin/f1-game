@@ -2097,8 +2097,8 @@ test("TLX caps new pool meshes per present and warms the post chain regardless o
   assert.ok(budget >= 8 && budget <= 64, `NEW_MESH_BUDGET ${budget} is outside the 8..64 band the measurement justifies (~1 ms per object)`);
   assert.match(TLX, /if \(_newMeshLeft <= 0\) \{ list\.n--; _newMeshDeferred\+\+; return null; \}/,
     "acquireMesh no longer returns null past the cap (and must un-count the slot it did not fill)");
-  assert.match(TLX, /_newMeshLeft = NEW_MESH_BUDGET; _newMeshDeferred = 0;\n\s+for \(let i = 0; i < drawList\.length; i\+\+\) \{/,
-    "the budget is not reset at the top of the present draw loop");
+  assert.match(TLX, /_newMeshLeft = _warmDone \? NEW_MESH_BUDGET : Infinity; _newMeshDeferred = 0;\n\s+for \(let i = 0; i < drawList\.length; i\+\+\) \{/,
+    "the budget is not reset (exempt until the first warm) at the top of the present draw loop");
   // AT THE MAIN PRESENT, not merely somewhere. The first cut of this pin
   // matched the guarded form wherever it sat, and it sat in the env-face loop
   // (the one with the "64px cube" comment) while the main present kept the
@@ -2109,8 +2109,8 @@ test("TLX caps new pool meshes per present and warms the post chain regardless o
     "the MAIN present's chunked call does not tolerate a null from acquireMesh");
   assert.match(TLX, /const pm = acquireMesh\(rec\.geo, rec\.m, rec\.mat\);\n\s+if \(pm\) pm\.renderOrder = i;\n\s+\}\n\s+for \(let i = 0; i < meshPool\.length; i\+\+\) \{ const pm = meshPool\[i\]; if \(pm\.__tlxBatch !== _poolBatch\) pm\.visible = false; \}/,
     "the MAIN present's plain call does not tolerate a null from acquireMesh");
-  assert.match(TLX, /_newMeshLeft = NEW_MESH_BUDGET; _newMeshDeferred = 0;\n\s+for \(let i = 0; i < drawList\.length; i\+\+\) \{\n\s+const rec = drawList\[i\];\n\s+if \(rec\.instanced\) \{\n\s+_showInstanced\(rec, i\);\n\s+continue;\n\s+\}\n\s+if \(rec\.chunked\) \{\n\s+\/\/ PER-CHUNK LAMPS/,
-    "the budget is not reset at the top of the MAIN present draw loop");
+  assert.match(TLX, /_newMeshLeft = _warmDone \? NEW_MESH_BUDGET : Infinity; _newMeshDeferred = 0;\n\s+for \(let i = 0; i < drawList\.length; i\+\+\) \{\n\s+const rec = drawList\[i\];\n\s+if \(rec\.instanced\) \{\n\s+_showInstanced\(rec, i\);\n\s+continue;\n\s+\}\n\s+if \(rec\.chunked\) \{\n\s+\/\/ PER-CHUNK LAMPS/,
+    "the budget is not reset (exempt until the first warm) at the top of the MAIN present draw loop");
   // And no unguarded dereference of acquireMesh's result survives anywhere.
   assert.doesNotMatch(TLX, /acquireMesh\([^)]*\)\.renderOrder/, "an unguarded acquireMesh(...).renderOrder survives");
   // THE POST WARM. The 3 s gate was measured against the scene warm's own
@@ -2121,6 +2121,30 @@ test("TLX caps new pool meshes per present and warms the post chain regardless o
   assert.doesNotMatch(TLX, /post\.warm && performance\.now\(\) - _warmAt < 3000/, "the 3 s gate on post.warm is back");
   assert.match(TLX, /if \(usePost && post\.warm\) \{\n\s+_gpuLastOperation = "compile-post"; await post\.warm\(opts, _postF\);/,
     "post.warm is no longer called from startProgramWarm");
+});
+test("the program warm covers the scene, the post chain AND the casters, and the mesh cap waits for it", () => {
+  // WARM COVERAGE, which gpu-census 205 showed was the whole of what remained:
+  // every lazy program in the race window was one the warm never built —
+  // scene x12 (the cap starved compileAsync(scene) on the first present),
+  // post x16 (a fresh QuadMesh per job never shared a cache key with the quad
+  // present() draws), sun-shadow x9 (castScene is its own Scene). Three pins.
+  const POST = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
+  const SHADOW = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-shadow.js"), "utf8");
+  // 1. The cap is exempt until the first warm has completed, at BOTH loops.
+  assert.equal((TLX.match(/_newMeshLeft = _warmDone \? NEW_MESH_BUDGET : Infinity; _newMeshDeferred = 0;/g) || []).length, 2,
+    "the mesh cap must be exempt until _warmDone at both present loops");
+  assert.match(TLX, /\.finally\(\(\) => \{ _warmPending = null; _warmDone = true; \}\)/, "_warmDone is never set");
+  assert.doesNotMatch(TLX, /_newMeshLeft = NEW_MESH_BUDGET; _newMeshDeferred = 0;/, "an unexempted cap reset survives");
+  // 2. The post warm compiles the live quad, never a snapshot.
+  assert.match(POST, /quad\.material = job\.mat;\n\s+await renderer\.compileAsync\(quad, quad\.camera\);/,
+    "post.warm must compile the live quad with the job's material");
+  assert.doesNotMatch(POST, /new THREE\.QuadMesh\(job\.mat\)/, "the per-job snapshot QuadMesh is back");
+  // 3. The casters are warmed: tlx-shadow exports warm() over castScene into
+  //    sunRT (and the blocker), and startProgramWarm calls it after the post warm.
+  assert.match(SHADOW, /async warm\(\) \{[\s\S]{0,400}renderer\.setRenderTarget\(sunRT\); await renderer\.compileAsync\(castScene, shadowCam\);/,
+    "tlx-shadow warm() must compile castScene into sunRT");
+  assert.match(TLX, /await post\.warm\(opts, _postF\);\n\s+\}[\s\S]{0,900}if \(shadowSys && shadowSys\.warm\) \{ _gpuLastOperation = "compile-shadow"; await shadowSys\.warm\(\); \}/,
+    "startProgramWarm must call shadowSys.warm() after the post warm");
 });
 test("the vendored three matches its MANIFEST.json — generated by tools/gen/vendor-three.mjs, never hand-edited", () => {
   // The .min.js files are terser output of the PATCHED readable build; a hand
@@ -4352,7 +4376,10 @@ test("TLX registry pruning preserves live refs and is independent of mirror rele
 });
 
 test("TLX warm holds renderer state across awaits and restores it on rejection", async () => {
-  let _warmRequested = true, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
+  let _warmRequested = true, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
+  // Fix C: the warm's finally sets _warmDone and the try calls the caster warm when
+  // the shadow module offers one; a null module must simply be skipped.
+  const shadowSys = null;
   let _gpuLastOperation = "boot";
   const _postF = { proj: [] }, vizMat = null, scene = {}, camera = {};
   let target = "canvas", mrt = "previous", tag = false, postCalls = 0, rejectMain;
@@ -4386,6 +4413,10 @@ test("TLX post warm compiles serially and holds each target across awaits", asyn
   let compileJobs = null, target = "scene", mrt = "tag", active = 0, calls = 0;
   const _last = { pass: "live" }; let _lastPresentRT = "liveRT", _vizDest = "viz";
   const THREE = { QuadMesh: class { constructor(mat) { this.material = mat; this.camera = {}; } } };
+  // Fix C: warm() compiles the module's own `quad` with each job's material rather
+  // than a snapshot per job, so the sandbox owns one — the pairing assertion below
+  // (target === q.material) is unchanged and now checks the live object.
+  const quad = new THREE.QuadMesh(null);
   const renderer = {
     getRenderTarget: () => target, getMRT: () => mrt,
     setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },

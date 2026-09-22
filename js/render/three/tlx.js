@@ -84,7 +84,7 @@ const TLX = (function () {
       let _gpuErrors = 0, _gpuFirstError = null;
       const _gpuRecentErrors = [];
       let _gpuLastResize = null, _gpuLastOperation = "boot";
-      let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0;
+      let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -1810,6 +1810,14 @@ const TLX = (function () {
             if (usePost && post.warm) {
               _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
             }
+            // The casters live in their own Scene (tlx-shadow.js castScene), so
+            // compileAsync(scene) never sees them and the first sun pass of the
+            // race built 9 programs — 7 for the caster render, 2 for the PCSS
+            // blocker — on the main thread (gpu-census 203/205 stacks, via
+            // endPass). sunPass runs before present() on the same frame, so by
+            // now castScene holds the grid's casters and the warm compiles the
+            // real ones.
+            if (shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
           } catch (e) {
             _warmRequested = _warmAttempts < 2;
             try { Log.warn("gfx", "TLX program warm failed", String(e)); } catch (_) { /* logging is optional */ }
@@ -1818,7 +1826,7 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
           }
-        })().finally(() => { _warmPending = null; });
+        })().finally(() => { _warmPending = null; _warmDone = true; });
       }
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
@@ -2838,7 +2846,15 @@ const TLX = (function () {
             return;
           }
           _poolBatch++;
-          _newMeshLeft = NEW_MESH_BUDGET; _newMeshDeferred = 0;
+          // UNBUDGETED UNTIL THE FIRST WARM HAS RUN. startProgramWarm() is
+          // consumed AFTER this loop on the same present, and compileAsync(scene)
+          // sees only the meshes that exist by then: with the cap live on the
+          // first present it saw 24 of the grid's ~300 and the race then built
+          // 12 scene programs lazily where it had built 1 (gpu-census 205 vs
+          // 203). The lights are a frozen picture anyway, so minting everything
+          // there costs nothing visible; the cap is for streaming, which starts
+          // after them.
+          _newMeshLeft = _warmDone ? NEW_MESH_BUDGET : Infinity; _newMeshDeferred = 0;
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
@@ -3389,7 +3405,15 @@ const TLX = (function () {
             }
           }
 
-          _newMeshLeft = NEW_MESH_BUDGET; _newMeshDeferred = 0;
+          // UNBUDGETED UNTIL THE FIRST WARM HAS RUN. startProgramWarm() is
+          // consumed AFTER this loop on the same present, and compileAsync(scene)
+          // sees only the meshes that exist by then: with the cap live on the
+          // first present it saw 24 of the grid's ~300 and the race then built
+          // 12 scene programs lazily where it had built 1 (gpu-census 205 vs
+          // 203). The lights are a frozen picture anyway, so minting everything
+          // there costs nothing visible; the cap is for streaming, which starts
+          // after them.
+          _newMeshLeft = _warmDone ? NEW_MESH_BUDGET : Infinity; _newMeshDeferred = 0;
           for (let i = 0; i < drawList.length; i++) {
             const rec = drawList[i];
             if (rec.instanced) {
