@@ -5,7 +5,7 @@
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, diffRatchets, compareToBase } from "../../tools/check/ratchets.mjs";
+import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
   const v = verdict(await measure());
@@ -113,16 +113,21 @@ test("--base names every ceiling that moved, and only a raise past the hook's ab
   assert.equal(by("(tree)", "cssClasses"), undefined, "an unchanged ceiling is not a row");
   assert.equal(rows.length, 6);
 
-  // Against HEAD the committed file is its own base: nothing moved, exit 0.
+  // HEAD's committed file against itself: nothing moved, exit 0. The current
+  // side is pinned to HEAD's copy, not the working tree's: this test runs from
+  // the commit hook, where a staged auto-raise or a merge of the deploy tip
+  // legitimately leaves the tree's ratchets.json ahead of HEAD.
+  const head = loadAt("HEAD");
   const lines = [];
-  assert.equal(compareToBase("HEAD", { print: (l) => lines.push(l) }), 0);
+  assert.equal(compareToBase("HEAD", { current: head, print: (l) => lines.push(l) }), 0);
   assert.match(lines.at(-1), /0 ceiling\(s\) moved/);
   // A raise within the absorb is reported, not fatal; past it, fatal.
+  const raised = (n) => ({ ...head, files: { ...head.files, "js/game.js": { ...head.files["js/game.js"], lines: head.files["js/game.js"].lines + n } } });
   const out = [];
-  assert.equal(compareToBase("HEAD", { current: { ...load(), files: { ...load().files, "js/game.js": { ...load().files["js/game.js"], lines: load().files["js/game.js"].lines + 40 } } }, print: (l) => out.push(l) }), 0);
+  assert.equal(compareToBase("HEAD", { current: raised(40), print: (l) => out.push(l) }), 0);
   assert.ok(out.some((l) => /RAISE  js\/game\.js lines: \d+ -> \d+ \(\+40\)/.test(l)), out.join("\n"));
   const big = [];
-  assert.equal(compareToBase("HEAD", { current: { ...load(), files: { ...load().files, "js/game.js": { ...load().files["js/game.js"], lines: load().files["js/game.js"].lines + 41 } } }, print: (l) => big.push(l) }), 1);
+  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => big.push(l) }), 1);
   assert.ok(big.some((l) => /past the 40-line commit-hook absorb/.test(l)));
   // An unreachable ref is a distinct exit, not a crash and not a pass.
   const nope = [];
