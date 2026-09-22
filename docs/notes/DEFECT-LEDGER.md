@@ -37,6 +37,15 @@ game-vm before its fix. FIXED.** (`tests/unit/race-flow-fixes-vm.test.mjs`,
   MERGE cue uses the wrapped track gap (it never named a lapping leader), and
   per-AI-per-tick `cautionInfo()` objects / an unused `Tracks.sample` are gone.
 
+**2026-09-22 (bug hunt) — prop guards paid the pit keep-out everywhere.
+FIXED (perf).** `onRoadHit` / `onTrack` widened every query by `pitMax`
+(~30 m), which only exists in the pit window, and were the top self-time of a
+track build. The wide radius now applies only when the query circle (+ a
+node-grid cell diagonal, 15 m) reaches the pit nodes' bounding box; nowhere
+else can a pit node be a candidate. Measured: all 52 circuits byte-identical
+(every mesh/instance buffer, diagnostics, superseded record, props counts),
+props phase 36.3 s → 30.1 s summed over the fleet.
+
 **2026-09-22 (bug hunt, 12 hunters + 8 validators) — `window.X` guards on a
 top-level `const` are always false in a browser. FIXED.** A classic script's
 top-level `const BrakeCue = …` is a global LEXICAL binding, not a window
