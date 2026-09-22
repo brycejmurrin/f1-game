@@ -19,7 +19,7 @@
 // to contain the thing, and the right verdict about one built not to.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analyse, analyseHeap, analyseAlloc } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -199,4 +199,42 @@ test("analyseAlloc says on every result that it measures RETENTION, not allocati
   assert.match(withSamples.means, /RETAINED/);
   const noSamples = analyseAlloc({ head: node(1, "(root)", "", 0, 0, [node(2, "f", "u", 1, 9, [])]) }, 100, 6000, 16384);
   assert.match(noSamples.means, /RETAINED/);
+});
+
+// A CDP Profiler.Profile: nodes with callFrames, `samples` naming the node
+// hit at each tick, `timeDeltas` in MICROseconds between ticks.
+function cpuNode(id, fn, url, line, children) {
+  return { id, callFrame: { functionName: fn, url, lineNumber: line }, children: children || [] };
+}
+
+test("analyseCpu ranks by exact self time and folds a function reached two ways", () => {
+  // getNodeBuilderState reached from two parents (ids 3 and 5) with 300 ms
+  // between them; createBindings 100 ms; the root itself 10 ms. Self time is
+  // the sum of the deltas of the samples that hit a node, not a hit count,
+  // so unequal sample spacing must be respected.
+  const profile = {
+    nodes: [
+      cpuNode(1, "(root)", "", 0, [2, 4]),
+      cpuNode(2, "render", "http://x/js/render/three/tlx.js?v=abc", 3400, [3]),
+      cpuNode(3, "getNodeBuilderState", "http://x/vendor/three-0.186.0/three.webgpu.min.js", 5, []),
+      cpuNode(4, "endPass", "http://x/js/render/three/tlx-shadow.js?v=abc", 260, [5, 6]),
+      cpuNode(5, "getNodeBuilderState", "http://x/vendor/three-0.186.0/three.webgpu.min.js", 5, []),
+      cpuNode(6, "createBindings", "http://x/vendor/three-0.186.0/three.webgpu.min.js", 5, []),
+    ],
+    samples:    [3,      3,      5,       6,      1,     6],
+    timeDeltas: [100000, 50000,  150000,  40000,  10000, 60000],
+  };
+  const a = analyseCpu(profile);
+  assert.equal(a.totalMs, 410, "total is the sum of the deltas");
+  assert.match(a.verdict, /TOP SELF TIME: getNodeBuilderState/);
+  assert.equal(a.rows[0].ms, 300, "two parents fold into one 300 ms row");
+  assert.equal(a.rows[1].site, "createBindings @ vendor/three-0.186.0/three.webgpu.min.js:6");
+  assert.equal(a.rows[1].ms, 100);
+  assert.equal(a.files[0].file, "vendor/three-0.186.0/three.webgpu.min.js");
+  assert.ok(a.files[0].share > 0.97, "the per-file fold attributes 400 of 410 ms to the bundle");
+});
+
+test("analyseCpu reports an absent profile as absent, never as an empty ranking", () => {
+  assert.match(analyseCpu(null).note, /no CPU profile/);
+  assert.match(analyseCpu({ nodes: [] }).note, /no CPU profile/);
 });

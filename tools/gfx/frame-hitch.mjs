@@ -42,7 +42,7 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 
 function parseArgs(argv) {
-  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false, capture: false, selftestKb: 0, ablate: "" };
+  const o = { track: "montreal", backend: "three", tlxWebgpu: false, seconds: 30, settle: 6, steerHz: 0, ls: [], json: null, quiet: false, capture: false, selftestKb: 0, ablate: "", cpuProfile: 0 };
   const skip = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]; const next = () => argv[++i];
@@ -69,6 +69,16 @@ function parseArgs(argv) {
     // sampling profiler cannot (see analyseAlloc: it reports what SURVIVES).
     // Turn one thing off, re-run, read the allocation rate.
     else if (a === "--ablate") { o.ablate = next(); }
+    // CPU PROFILE OF THE RACE START. Census 201 moved every lazy pipeline
+    // compile off the main thread (createRenderPipeline 26 -> 1) and the
+    // 18-25 s spikes stayed, so the stall is somewhere else in the same
+    // first-draw path — node-graph codegen, per-object bind-group cloning,
+    // uniform-buffer allocation — and those are CPU time, which a sampling
+    // profiler measures honestly (unlike garbage; see analyseAlloc). Arms
+    // V8's profiler from race() for N seconds, no settle, and ranks
+    // functions by SELF time. three's property names survive minification,
+    // so getNodeBuilderState / createBindings / build name themselves.
+    else if (a === "--cpu-profile") { o.cpuProfile = +next(); }
     else if (a === "--quiet") o.quiet = true;
     else if (!a.startsWith("--") && !skip.has(a)) o.track = a;
   }
@@ -117,6 +127,49 @@ export function analyse(t0, dur, { minSpikes = 4 } = {}) {
       ? `PERIODIC hitch: ${spikes.length} spikes, every ~${gapMed.toFixed(1)} s (CV ${cv.toFixed(2)})`
       : spikes.length ? `${spikes.length} spikes, irregular (CV ${cv.toFixed(2)})` : "no spikes",
   };
+}
+
+// WHERE THE CPU TIME GOES, by function, over the race start.
+//
+// A CDP Profiler.Profile: nodes carry a callFrame and an id, `samples` is
+// the node id hit at each sample and `timeDeltas` the microseconds between
+// samples. Self time per node is the sum of the deltas of the samples that
+// hit it — exact, not scaled, which is what makes this the right instrument
+// for CPU cost where the heap sampler was the wrong one for garbage.
+export function analyseCpu(profile, topN = 28) {
+  if (!profile || !profile.nodes || !profile.samples) return { note: "no CPU profile" };
+  const byId = new Map();
+  for (const n of profile.nodes) byId.set(n.id, n);
+  const self = new Map();
+  let total = 0;
+  const samples = profile.samples, deltas = profile.timeDeltas || [];
+  for (let i = 0; i < samples.length; i++) {
+    const dt = (deltas[i] || 0) / 1000;   // ms
+    total += dt;
+    self.set(samples[i], (self.get(samples[i]) || 0) + dt);
+  }
+  // Fold by (function, file:line): the same function reached from several
+  // parents is one row, as analyseAlloc learned the hard way.
+  const bySite = new Map();
+  for (const [id, ms] of self) {
+    const f = (byId.get(id) || {}).callFrame || {};
+    const url = String(f.url || "").replace(/\?v=[a-z0-9]+/g, "").replace(/^https?:\/\/[^/]+\//, "");
+    const k = `${f.functionName || "(anonymous)"} @ ${url}:${f.lineNumber != null ? f.lineNumber + 1 : "?"}`;
+    bySite.set(k, (bySite.get(k) || 0) + ms);
+  }
+  const rows = [...bySite.entries()].sort((a, b) => b[1] - a[1]).slice(0, topN)
+    .map(([site, ms]) => ({ site, ms: +ms.toFixed(1), share: +(ms / Math.max(1e-9, total)).toFixed(3) }));
+  // Also fold by FILE, which is the coarse answer: three's bundle vs ours vs
+  // the browser's own (garbage collector, program) rows.
+  const byFile = new Map();
+  for (const [site, ms] of bySite) {
+    const file = (site.split(" @ ")[1] || "").replace(/:\d+$/, "") || "(native)";
+    byFile.set(file, (byFile.get(file) || 0) + ms);
+  }
+  const files = [...byFile.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
+    .map(([file, ms]) => ({ file, ms: +ms.toFixed(1), share: +(ms / Math.max(1e-9, total)).toFixed(3) }));
+  return { totalMs: +total.toFixed(1), samples: samples.length, rows, files,
+    verdict: rows.length ? `TOP SELF TIME: ${rows[0].site} — ${(rows[0].share * 100).toFixed(0)}% of ${total.toFixed(0)} ms` : "empty profile" };
 }
 
 // FORCED SYNCHRONOUS LAYOUT, and whether it is the stall.
@@ -926,6 +979,17 @@ async function main() {
     await page.evaluate(async () => {
       if (typeof Assets !== "undefined" && Assets.loadModels) { try { await Assets.loadModels(); } catch (_) { /* pack optional */ } }
     });
+    let cpuCdp = null;
+    if (opts.cpuProfile > 0) {
+      // Armed BEFORE race(): the stall under test is the race start itself,
+      // and a settle would skip exactly the window that matters.
+      try {
+        cpuCdp = await page.context().newCDPSession(page);
+        await cpuCdp.send("Profiler.enable");
+        await cpuCdp.send("Profiler.setSamplingInterval", { interval: 500 });
+        await cpuCdp.send("Profiler.start");
+      } catch (e) { out.cpuProfileError = String((e && e.message) || e).slice(0, 120); cpuCdp = null; }
+    }
     await page.evaluate((t) => window.__apex.race(t), opts.track);
     await page.waitForFunction((t) => window.__apex.info().track === t, opts.track, { polling: 100, timeout: 60000 });
     await page.evaluate((hz) => {
@@ -954,6 +1018,14 @@ async function main() {
         } catch (e) { return "failed: " + String((e && e.message) || e).slice(0, 80); }
       }, opts.ablate);
       log(`ablation ${opts.ablate}: ${out.ablateApplied}`);
+    }
+    if (cpuCdp) {
+      log(`cpu-profiling the race start for ${opts.cpuProfile}s`);
+      await sleep(opts.cpuProfile * 1000);
+      try {
+        const { profile } = await cpuCdp.send("Profiler.stop");
+        out.cpu = analyseCpu(profile);
+      } catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
     }
     log(`settling ${opts.settle}s before the baseline`);
     await sleep(opts.settle * 1000);
