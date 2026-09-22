@@ -38,6 +38,9 @@ test("red flag: laps step back one, prog sits behind the line, the player faces 
   // Leave something a re-grid must clear on an AI car.
   const ai = G.cars.find((c) => !c.human && !c.retired);
   ai.passOf = player; ai.defendSide = 1; ai.zoneKey = 3; ai.errT = 1.5;
+  // ...and something it must NOT clear: errCount counts the car's mistakes for
+  // the RACE, and a red flag does not start a new one (as energy/tyreClass show).
+  ai.errCount = 4; player.errCount = 2;
 
   const r = a.redFlag();
   assert.ok(r && r.state === "count", "redFlag() should re-arm the lights");
@@ -49,6 +52,8 @@ test("red flag: laps step back one, prog sits behind the line, the player faces 
     assert.equal(c.speed, 0, `${c.code}: stationary on the box`);
   }
   assert.equal(ai.passOf, null); assert.equal(ai.defendSide, 0); assert.equal(ai.zoneKey, -1); assert.equal(ai.errT, 0);
+  assert.equal(ai.errCount, 4, "a red flag is the same race: the AI mistake count survives it");
+  assert.equal(player.errCount, 2, "same for the player's row of the instrument");
   // The player's heading follows the grid tangent (gridUp's rule), not world +Z.
   g.sandbox.Tracks.sample(G.track, player.s, SCR);
   const want = Math.atan2(SCR.t[0], SCR.t[2]);
@@ -68,4 +73,11 @@ test("after the restart the first crossing puts the field back on the lap it was
   assert.ok(crossed, "never re-crossed the line after the restart");
   assert.equal(player.lap, lapAtFlag, "the restart crossing re-enters the same lap");
   assert.equal(player.finished, false);
+});
+
+test("a fresh grid-up still zeroes errCount — only a NEW race resets the instrument", () => {
+  const G = g.G;
+  for (const c of G.cars) c.errCount = 7;
+  G.gridUp();
+  for (const c of G.cars) assert.equal(c.errCount, 0, `${c.code}: a new race starts at zero mistakes`);
 });
