@@ -266,6 +266,16 @@ const DataHub = (function () {
     if (contentEl) contentEl.classList.toggle("dh-has-split", id === "live" || id === "telemetry");
     const st = state[id];
     const maxAge = MAX_AGE[id] || 60 * MINUTE;
+    if (st && st.status === "failed") {
+      clear(contentEl);
+      contentEl.appendChild(errorBlock(id, st.error, !!st.node));
+      if (st.node) {
+        contentEl.appendChild(st.node);
+        contentEl.appendChild(footnote(st.at));
+      }
+      contentEl.scrollTop = 0;
+      return;
+    }
     if (st && st.node && (Date.now() - st.at) < maxAge) {
       // loadTab calls showTab to paint the fresh node; only log reuse on a later visit.
       if (Date.now() - st.at > 1000) Log.info("data", "tab " + id + " cached");
@@ -288,7 +298,14 @@ const DataHub = (function () {
     tabDef(id).load().then(function (node) {
       if (gen[id] !== myGen) return;
       Log.info("data", "tab " + id + " done");
-      state[id] = { node: node, at: Date.now() };
+      state[id] = {
+        node: node,
+        at: Date.now(),
+        // Empty is a successful API answer and gets the normal freshness
+        // window. Failed is recorded only in the rejection arm below.
+        status: node && node.querySelector && node.querySelector(".dh-empty") ? "empty" : "ready",
+        error: null
+      };
       if (openFlag && active === id) showTab(id);
     }, function (err) {
       if (gen[id] !== myGen) return;
@@ -300,6 +317,9 @@ const DataHub = (function () {
       // footnote already says how old a view is, and errorBlock now says the
       // refresh failed rather than pretending there is nothing to show.
       const st = state[id];
+      state[id] = st && st.node
+        ? { node: st.node, at: st.at, status: "failed", error: err }
+        : { node: null, at: 0, status: "failed", error: err };
       if (openFlag && active === id) {
         clear(contentEl);
         contentEl.appendChild(errorBlock(id, err, !!(st && st.node)));
@@ -308,9 +328,9 @@ const DataHub = (function () {
           contentEl.appendChild(footnote(st.at));
         }
       }
-      // A stale node is only worth keeping while it can still be shown; with
-      // nothing cached the tab stays empty and the next visit re-loads.
-      if (!st || !st.node) state[id] = null;
+      // Keep the failed state even without a stale node. Switching away and
+      // back must not relabel a failed request as an empty successful tab;
+      // RETRY is the explicit next attempt.
     });
   }
 

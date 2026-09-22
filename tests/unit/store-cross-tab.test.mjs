@@ -184,6 +184,10 @@ test("a write this tab made still wins its own cache — no self-invalidation lo
  * transaction's oncomplete on a macrotask, like the real thing. */
 function fakeIndexedDb(seed = []) {
   const rows = new Map(seed);
+  let writeFailures = 0;
+  let writeHolds = 0;
+  let writeTransactions = 0;
+  const heldWrites = [];
   const request = (result) => {
     const r = { result, error: null, onsuccess: null, onerror: null };
     queueMicrotask(() => { if (r.onsuccess) r.onsuccess(); });
@@ -192,19 +196,38 @@ function fakeIndexedDb(seed = []) {
   const db = {
     objectStoreNames: { contains: () => true },
     close() {},
-    transaction(_name, _mode) {
+    transaction(_name, mode) {
+      const fail = mode === "readwrite" && writeFailures > 0;
+      if (fail) writeFailures--;
+      if (mode === "readwrite") writeTransactions++;
+      const writes = [];
       const t = { error: null, oncomplete: null, onerror: null, onabort: null };
       t.objectStore = () => ({
-        put(row) { rows.set(row.k, row.v); return request(row.k); },
-        delete(k) { rows.delete(k); return request(undefined); },
+        put(row) { writes.push(() => rows.set(row.k, row.v)); return request(row.k); },
+        delete(k) { writes.push(() => rows.delete(k)); return request(undefined); },
         getAll() { return request(Array.from(rows, ([k, v]) => ({ k, v }))); },
       });
-      setTimeout(() => { if (t.oncomplete) t.oncomplete(); }, 0);
+      const settle = () => {
+        if (fail) { if (t.onabort) t.onabort(); }
+        else {
+          writes.forEach((write) => write());
+          if (t.oncomplete) t.oncomplete();
+        }
+      };
+      if (mode === "readwrite" && writeHolds > 0) {
+        writeHolds--;
+        heldWrites.push(settle);
+      } else setTimeout(settle, 0);
       return t;
     },
   };
   return {
     rows,
+    failNextWrite() { writeFailures++; },
+    holdNextWrite() { writeHolds++; },
+    releaseNextWrite() { const settle = heldWrites.shift(); if (settle) settle(); },
+    get heldWrites() { return heldWrites.length; },
+    get writeTransactions() { return writeTransactions; },
     open() {
       const r = { result: db, onupgradeneeded: null, onsuccess: null, onerror: null, onblocked: null };
       queueMicrotask(() => { if (r.onupgradeneeded) r.onupgradeneeded(); if (r.onsuccess) r.onsuccess(); });
@@ -286,9 +309,65 @@ test("at boot the mirror restores only what localStorage lacks, and announces it
   assert.equal(store.get("career.myteam.0").money, 55, "the cached miss was dropped so the restore is read");
   assert.equal(store.get("season").round, 9);
   assert.equal(disk.has("apex26.musicSource"), false);
-  assert.deepEqual(changes.map((c) => c.key).sort(), ["career.myteam.0", "season"]);
+  const keyChanges = changes.filter((c) => !c.restoredBatch);
+  assert.deepEqual(keyChanges.map((c) => c.key).sort(), ["career.myteam.0", "season"]);
   assert.ok(changes.every((c) => c.foreign && c.restored), "announced like a second tab's write, flagged restored");
+  const batch = changes.find((c) => c.restoredBatch);
+  assert.deepEqual(Array.from(batch.keys).sort(), ["career.myteam.0", "season"],
+    "owners get one coherent notification after every restored row is on disk");
   assert.equal(store.mirror.restored, 2);
+});
+
+test("a failed mirror transaction retains its batch and a later flush retries it", async () => {
+  const { store, idb } = loadMirrored({ writeError: "QuotaExceededError" });
+  await store.mirror.ready;
+  idb.failNextWrite();
+  store.write("career.driver.0", { money: 321 });
+
+  assert.equal(await store.mirrorFlush(), false);
+  assert.equal(store.mirror.pending, 1, "an aborted transaction must remain pending");
+  assert.equal(idb.rows.has("apex26.career.driver.0"), false);
+
+  assert.equal(await store.mirrorFlush(), true, "the retained batch is retryable");
+  assert.equal(store.mirror.pending, 0);
+  assert.equal(JSON.parse(idb.rows.get("apex26.career.driver.0")).money, 321);
+});
+
+test("a failed mirror batch never replaces a newer pending value for the same key", async () => {
+  const { store, idb } = loadMirrored();
+  await store.mirror.ready;
+  idb.failNextWrite();
+  store.set("season", { round: 1 });
+  const failed = store.mirrorFlush();
+  store.set("season", { round: 2 });
+  assert.equal(await failed, false);
+
+  assert.equal(await store.mirrorFlush(), true);
+  assert.equal(JSON.parse(idb.rows.get("apex26.season")).round, 2,
+    "the write queued during the failed transaction is the one that survives");
+});
+
+test("overlapping mirror flushes serialize so an older value cannot commit last", async () => {
+  const { store, idb } = loadMirrored();
+  await store.mirror.ready;
+  idb.holdNextWrite();
+  store.set("season", { round: 1 });
+  const older = store.mirrorFlush();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(idb.heldWrites, 1, "the older transaction is in flight");
+
+  store.set("season", { round: 2 });
+  const newer = store.mirrorFlush();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(idb.writeTransactions, 1,
+    "the newer burst must wait instead of opening a competing transaction");
+
+  idb.releaseNextWrite();
+  assert.equal(await older, true);
+  assert.equal(await newer, true);
+  assert.equal(idb.writeTransactions, 2);
+  assert.equal(JSON.parse(idb.rows.get("apex26.season")).round, 2,
+    "transaction completion order cannot roll the durable mirror back");
 });
 
 test("without indexedDB the mirror is inert and the store is unchanged", async () => {

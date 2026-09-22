@@ -88,6 +88,34 @@ test("a winner never ends the race while a human is still driving", () => {
     "the first multiplayer human finishing must not remove the other human");
 });
 
+test("lineTransition gives normal and incident motion the same chequered-flag rule", () => {
+  const R = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const winner = { finished: true, retired: false };
+  const c = { lap: 4, lapTime: 73.2, finished: false };
+  const cross = R.lineTransition(c, 995, 5, 10, 1000, 5, [winner, c], 411.5);
+  assert.equal(cross.direction, 1);
+  assert.equal(cross.flagged, true, "a lapped car takes the flag at its next crossing");
+  assert.equal(c.lap, 5);
+  assert.equal(c.finished, true);
+  assert.equal(c.finishT, 411.5);
+  assert.equal(cross.lapDone, 73.2);
+  assert.equal(c.lapTime, 0);
+});
+
+test("lineTransition undoes a backward crossing and restores the lap clock", () => {
+  const R = load({ active: () => false, hazards: () => hazards(0, 0) });
+  const c = { lap: 3, lapTime: 0.4, _lapTimeAtLine: 81.7, finished: false };
+  const back = R.lineTransition(c, 5, 995, -10, 1000, 5, [c], 0);
+  assert.equal(back.direction, -1);
+  assert.equal(back.changed, true);
+  assert.equal(c.lap, 2);
+  assert.equal(c.lapTime, 81.7);
+
+  const forward = R.lineTransition(c, 995, 5, 10, 1000, 5, [c], 0);
+  assert.equal(forward.direction, 1);
+  assert.equal(c.lap, 3, "re-crossing advances the same lap instead of gifting one");
+});
+
 test("the finish policy closes completed human races and bounded edge cases", () => {
   const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
   assert.equal(finishDelay([
