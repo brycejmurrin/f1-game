@@ -112,3 +112,17 @@ test("a REFUSED arm is reported as not armed — the exact lie #182 and #184 wer
     assert.match(r.note, /WATCH this PR and merge it yourself/);
   });
 });
+
+test("the gh path obeys the same rule as the REST path: arming is not armed", () => {
+  // openPr()'s gh branch used to discard `gh pr merge --auto`'s result and
+  // return "enabled" unconditionally — the identical lie this file's REST
+  // cases exist to prevent, left in the path a box WITH gh installed takes.
+  // Pinned by source because the gh path needs a real gh to exercise.
+  const src = fs.readFileSync(new URL("../../tools/ci/deploy.mjs", import.meta.url), "utf8");
+  const openPr = src.slice(src.indexOf("function openPr(branch)"));
+  const body = openPr.slice(0, openPr.indexOf("\n}"));
+  assert.doesNotMatch(body, /spawnSync\("gh", \["pr", "merge"[\s\S]{0,120}?\n\s*return \{ pr: url, note: "auto-merge \(merge commit\) enabled/,
+    "the gh path must not return 'enabled' straight after firing the merge command");
+  assert.match(body, /"pr", "view"[\s\S]*autoMergeRequest/, "the gh path must read the PR back to confirm");
+  assert.match(body, /autoMerge: false[\s\S]*NOT armed/, "and must report NOT armed when the readback says so");
+});

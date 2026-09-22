@@ -169,7 +169,17 @@ export function main(argv = process.argv.slice(2)) {
   if (!live.length) console.log("(none)");
   for (const r of live) console.log(`${ago(Math.round((Date.now() / 1000 - r.t) / 60)).padStart(7)} ago  ${r.sha}  ${r.ref}${r.ref === DEPLOY ? "  [deploy]" : ""}  — ${r.author}: ${r.subject}`);
   console.log(`\n# claims (${CLAIMS_PREFIX}*; stale after ${STALE_MIN} min — informs, never blocks)`);
-  if (!active.length) console.log('(none — nobody has claimed anything; --claim "<text>" to say what you are on)');
+  // "No claims" and "could not look" are OPPOSITE answers and must never print
+  // the same. A failed fetch reads every list here off stale local refs, and
+  // this tool exists precisely so a session does not start fixing what someone
+  // else already claimed — so say the list is UNTRUSTWORTHY, not empty.
+  if (!fetched) console.log("  !! FETCH FAILED (or --no-fetch): every list below is stale local state.");
+  if (!fetched) console.log("     An empty claim list here means NOTHING WAS READ, not that nobody is on it.");
+  if (!active.length) {
+    console.log(fetched
+      ? '(none — nobody has claimed anything; --claim "<text>" to say what you are on)'
+      : "(no claims in stale local refs — re-run with the network up before trusting this)");
+  }
   const mine = claimSlug(branch);
   for (const c of active) console.log(`${ago(c.ageMin).padStart(7)} ago  ${c.stale ? "STALE " : "      "}${c.slug}${c.slug === mine ? "  [you]" : ""}  — ${c.who}: ${c.text}`);
   if (paths.length) {

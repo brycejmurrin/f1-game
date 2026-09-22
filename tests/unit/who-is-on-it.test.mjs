@@ -8,6 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseClaims, claimCommit, claimSlug, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
@@ -84,4 +85,18 @@ test("a claim commit is the empty tree carrying the text, the branch and the ses
   assert.match(show, new RegExp(`^tree ${EMPTY_TREE}$`, "m"), "the empty tree — a claim never carries files");
   assert.match(show, /unit-test claim  \[claude\/unit; session sess1234\]/);
   assert.notEqual(claimCommit("x", "claude/unit"), sha, "the text is the message, so different text is a different commit");
+});
+
+test("a FAILED fetch must not print as an empty claim list", () => {
+  // The whole point of this tool is that a session does not start fixing what
+  // someone else already claimed. Reading stale local refs after a failed
+  // fetch and printing "nobody has claimed anything" is the 2026-09-18
+  // collision with extra steps, so the two answers must never look alike.
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/who-is-on-it.mjs"), "utf8");
+  assert.match(src, /FETCH FAILED/, "an unfetched run must say so in the CLAIMS section, not only the branch header");
+  assert.match(src, /means NOTHING WAS READ, not that nobody is on it/);
+  // and the reassuring "(none — nobody has claimed anything…)" line must be
+  // reachable ONLY when the fetch actually succeeded.
+  const empty = /if \(!active\.length\) \{\s*console\.log\(fetched\s*\?/;
+  assert.match(src, empty, "the empty-claims wording must branch on `fetched`");
 });

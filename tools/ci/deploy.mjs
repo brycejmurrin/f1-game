@@ -613,8 +613,18 @@ function openPr(branch) {
   const created = spawnSync("gh", ["pr", "create", "--base", DEPLOY_BRANCH, "--head", branch, "--fill"], { cwd: ROOT, encoding: "utf8" });
   if (created.status !== 0) throw new Error("gh pr create failed: " + created.stderr);
   const url = created.stdout.trim().split("\n").pop();
-  spawnSync("gh", ["pr", "merge", "--auto", "--merge", url], { cwd: ROOT, encoding: "utf8" });
-  return { pr: url, note: "auto-merge (merge commit) enabled; GitHub creates the merge so the PR is a real record" };
+  // The SAME rule as the REST path above: arming is not evidence of armed.
+  // This line used to discard `gh pr merge --auto`'s status and return
+  // "enabled" unconditionally, so a box WITH gh got the identical lie the REST
+  // path was fixed for — and on this repo the call always fails, because the
+  // deploy branch has no protected branch rules. Read the PR back instead.
+  const armed = spawnSync("gh", ["pr", "merge", "--auto", "--merge", url], { cwd: ROOT, encoding: "utf8" });
+  const back = spawnSync("gh", ["pr", "view", url, "--json", "autoMergeRequest", "-q", ".autoMergeRequest"],
+    { cwd: ROOT, encoding: "utf8" });
+  const on = back.status === 0 && back.stdout.trim() && back.stdout.trim() !== "null";
+  if (on) return { pr: url, autoMerge: true, note: "auto-merge (merge commit) armed and CONFIRMED on the PR; GitHub creates the merge so the PR is a real record" };
+  const why = (armed.stderr || armed.stdout || "").trim().split("\n")[0] || `gh exit ${armed.status}`;
+  return { pr: url, autoMerge: false, note: `auto-merge NOT armed (${why.slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green` };
 }
 
 /* THE GATE, WITHOUT THE DEPLOY. `npm run test:tooling-fast` is the documented
