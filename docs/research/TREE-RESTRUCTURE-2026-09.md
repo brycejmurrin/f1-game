@@ -359,9 +359,8 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       once js/game/ emptied); blanket-only routing 33 -> 1, and the guard
       behind it became a COUNT ratchet in ratchets.json instead of a frozen
       16-path array that would have needed a hand edit per move.
-      STILL TO DO in this phase: the WGX/TLX spike-out (map + checklist are
-      committed and validated, `tools/moves/spike-backends.json` +
-      `docs/notes/SPIKE-BACKENDS-CHECKLIST.md`), then the deploy ⚑.
+      The WGX/TLX spike-out later ran and was reversed; its non-executable map
+      is archived at `docs/archive/moves/spike-backends.json`.
 - [ ] **Phase 1 — test taxonomy + one ratchet mechanism** (no js change):
       `tests/{guards,tools,node,node/twins,sweeps,browser/<group>,manual}/`,
       `tests/groups.json` generating npm scripts / tooling-fast list /
@@ -417,8 +416,8 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       is the only genuine zero, CLEANUP-SWEEP and SURVEY-BUGS-PERF had one live
       citer each (dropped, then archived), PERF-HUNT is cited by PERF-FINDINGS
       §3 (→ notes/, not the attic), RENDERER-PERF-AUDIT has five citers
-      including `spike/backends/README.md` and `tools/moves/spike-backends.json`
-      and stays at its research/ path until the spike-out lands. `docs/research/`
+      including `spike/backends/README.md`; it stayed at its research path, and
+      the later spike-out was reversed. `docs/research/`
       itself could not be emptied: twelve of its files are cited by path from
       `js/`/`tests/`/`tools/`. `look-survey/` stays (written by
       `tools/lighting/look-survey-sheet.py`, pinned by `cdmcp-measure.test.mjs`);

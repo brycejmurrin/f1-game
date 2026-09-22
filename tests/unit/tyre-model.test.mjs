@@ -42,6 +42,45 @@ function load() {
 const { T, Parts } = load();
 const TYRES = Parts.CATALOG.find((c) => c.id === "tyres").options;
 
+test("fitting a set owns explicit tread and rebuilds modifiers without accumulation", () => {
+  const s = ctxFor();
+  const base = { speed: 1.1, accel: 0.9, cornering: 1.05, braking: 1.02 };
+  const car = { lap: 3, tread: 0, tyreBaseMods: base, mods: {} };
+  const wet = T.optionRecord(TYRES.find((o) => o.id === "wet_full"));
+  const soft = T.optionRecord(TYRES.find((o) => o.id === "soft"));
+
+  s.fit(car, wet);
+  assert.equal(car.tread, 2, "the fitted set, not the garage choice, owns weather grip");
+  assert.equal(car.mods.speed, base.speed * 0.88);
+  assert.equal(car.mods.cornering, base.cornering * 0.90);
+
+  s.fit(car, soft);
+  const once = { ...car.mods };
+  s.fit(car, soft);
+  assert.deepEqual(car.mods, once, "refitting must rebuild from the tyre-free base");
+  assert.equal(car.mods.speed, base.speed * 0.97);
+  assert.equal(car.mods.cornering, base.cornering * 1.12);
+});
+
+test("fitting preserves the ordinary AI null-tread competent-field sentinel", () => {
+  const s = ctxFor();
+  const car = { lap: 1, tread: null };
+  s.fit(car, T.classRecord("hard"));
+  assert.equal(car.tread, null);
+  assert.equal(car.tyre.tread, 0);
+});
+
+test("an AI plan overrides a MY TEAM mate's saved starting tyre", () => {
+  const savedWet = TYRES.find((o) => o.id === "wet_full");
+  const mate = { human: false, tyreOpt: savedWet, pitPlan: { start: "hard" }, tyreClass: "soft" };
+  const rec = T.startRecord(mate);
+  assert.equal(rec.id, "hard");
+  assert.equal(rec.tread, 0);
+
+  const player = { human: true, tyreOpt: savedWet, pitPlan: { start: "hard" } };
+  assert.equal(T.startRecord(player).id, "wet_full", "a player's reference plan must not choose their set");
+});
+
 // A minimal G stand-in: the model only reads lapsTarget, track.total, the two
 // physics constants and (through severity) the circuit def.
 function ctxFor({ laps = 25, total = 5386, severity = null } = {}) {

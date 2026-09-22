@@ -854,6 +854,24 @@ test("a GRAPHICS change made in the menu does not spend the next race's opening 
   assert.ok(scale() < 1, `the second race must shed within 3 s, scale is ${scale()}`);
 });
 
+test("a cooldown armed in the previous race cannot spend the next race's opening window", () => {
+  // The menu-time case above starts clean. This is the other boundary: a
+  // preset change while race one is live arms VERIFY_COOL, then the player
+  // exits before tick() can count it down. sentinelArm(false) used to leave
+  // that cooldown intact, so race two reset its averages but returned early
+  // while the floor caught up with a slow-from-lights-out frame cost.
+  const { PerfGov, scale } = makeGov();
+  PerfGov.sentinelArm(true);
+  feed(PerfGov, () => 16.7, 10);
+  PerfGov.setUserTier(2);                    // live: arms the five-second cooldown
+  PerfGov.sentinelArm(false);                // quit before it expires
+  PerfGov.setUserTier(0);                    // next race asks for HIGH
+  PerfGov.sentinelArm(true);
+  feed(PerfGov, () => 16.7 + 10 * scale() * scale(), 180);
+  assert.ok(scale() < 1,
+    `race start must clear the old cooldown and degrade inside the opening window, scale is ${scale()}`);
+});
+
 test("a cooldown armed DURING a race still holds (only the pre-race arm is skipped)", () => {
   // The fix must not disarm the in-race meaning of the cooldown: a preset
   // change one evaluation into a race still buys the EMA time to settle

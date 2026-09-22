@@ -563,8 +563,13 @@ body { --compact-at: 600px; --wide-at: 620px; }
 /* Slightly tighter wordmark on tall so the leftover row starts higher.
    Doors and the disclaimer stay; only brand chrome shrinks. */
 :where(body[data-shape="tall"]) #title { font-size: clamp(30px, calc(8 * var(--vwz)), 72px); }
-:where(body[data-shape="tall"]) #title::after { margin: calc(var(--gap) * 0.5) 0 0; }
-:where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.85); gap: calc(var(--gap) / 3); }
+/* THE BRAND BLOCK RIDES UP, so the drawing gets the height instead. Portrait
+   is the shape where the art has least room, and every unit the wordmark, the
+   sound button and the disclaimer give back at the top is a unit the cars gain
+   at the foot. The rule is one door-gutter of air between them, not two. */
+:where(body[data-shape="tall"]) #title::after { margin: calc(var(--gap) * 0.28) 0 0; }
+:where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.42); gap: calc(var(--gap) / 4); }
+:where(body[data-shape="tall"]) #overlay { padding-block-start: calc(var(--gap) * 0.5); }
 /* THE PORTRAIT PHONE, measured on a 393x852 iPhone 2026-09-22: the wordmark
    painted 31px while each play door was a ~130px card (icon over label over
    sub), the four rooms broke into DATA / HUB and HOW / TO / PLAY, and the whole
@@ -684,7 +689,18 @@ body { --compact-at: 600px; --wide-at: 620px; }
    judgement no luminance number catches (the two sizes measure the same
    litMean, 84.9 vs 84.6). Going smaller again needs a reason bigger than
    the trail. */
-:where(body[data-shape="wide"][data-density="compact"]) #tc-frame { transform: translate(150px, -80px) scale(1.15); }
+/* SIZED TO THE GAP, NOT TO TASTE. The pair has to start inside the left edge
+   and stop before the button column, and where that column starts is a
+   FRACTION of the width, so one scale cannot serve every landscape phone: at
+   1.15 a 740px phone had the cars sprawling under the doors with the front
+   wing off the left edge, while the same number looked right at 1000px.
+   0.90 puts the cars in viewBox x 60..760 of the 829 the column starts at. */
+:where(body[data-shape="wide"][data-density="compact"]) #tc-frame { transform: translate(69px, 145px) scale(0.902); }
+/* The column takes a bigger share of a narrow phone, so the drawing gives way:
+   at 740x360 the 0.90 pair reaches x 402 against doors starting at 399. */
+@media (max-width: 860px) {
+  :where(body[data-shape="wide"][data-density="compact"]) #tc-frame { transform: translate(68px, 178px) scale(0.78); }
+}
 /* THE TWO PHONE SHAPES CARRY THE SAME 0.9, which is what makes the art read the
    same in the hand. The 0.4 step this shape used to inherit from the tablet
    width left it well under portrait once the frame above scaled it down.

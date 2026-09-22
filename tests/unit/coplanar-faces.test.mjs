@@ -31,6 +31,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const { overlapArea } = createRequire(import.meta.url)("../../tools/track/coplanar-audit.cjs");
 
 // SPOTS = distinct 40 m locations carrying at least one same-facing coplanar
 // pair. Spots, not pairs, for the same reason prop-clipping uses them: a pair
@@ -144,6 +145,34 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // the same class as the six above, no pit prim among them; and the count read
 // 48 on both sweeps of that commit, before and after the entrance lamps moved
 // from the mouth to the entry line, so the lamps are not in it.
+//
+// EVERY cap lowered on 2026-09-22 (fleet 541 -> 321 spots, 30 circuits down,
+// none up) when overlapArea stopped measuring in-plane bounding rectangles and
+// started intersecting the real convex hulls — see the metric tests at the foot
+// of this file. Nothing moved in js/; the old numbers counted pairs whose faces
+// never overlapped. The biggest corrections are the circuits richest in rotated
+// faces: hockenheim 48 -> 5, madrid 65 -> 25, sochi 42 -> 12, dijon 33 -> 4,
+// hungaroring 20 -> 1. The tail that survives the honest metric is real
+// geometry, and the notes above still describe how each circuit earned it.
+//
+// 2026-09-22, second pass — 321 -> 199 fleet spots, 12 circuits down, ONE up:
+//   * spectatorHill's layered banks get a per-CALL slot (nature.js), not a hash
+//     of opts.h: okayama 25 -> 1, and the three clayCut() pairs that owned 400
+//     of its coplanar pairs are gone.
+//   * along() carries a seam TAG (structures.js): abutting runs share their end
+//     node and the second, byte-identical panel there is dropped. jeddah's
+//     six-block canyon, silverstone 12 -> 4, donington 5 -> 2.
+//   * jeddah's canyon moved from gap 3.50 to 4.35 — at 3.50 it stood inside the
+//     engine's own street barrier. 56 -> 3.
+//   * madrid's arcade openings and ifema stand tiers no longer share a plane
+//     with the facade / with each other. 25 -> 5.
+//   * indianapolis's oval retaining wall uses along()'s pitch, not a padded
+//     9.6 m constant that overlapped its neighbour by 0.6 m. 9 -> 2.
+// spa 1 -> 2 is the one RAISE and it is paid for: the hill slot slides a bank
+// 3-43 mm outward, and on spa one tread's face lands 1.8 mm from a place()
+// prop it used to clear. Two pairs, fighting from 96 m, against 122 spots
+// removed everywhere else. Measured, not assumed — coplanar-audit --why names
+// the prop (js/track/tracks.js:1946).
 const BASELINE = JSON.parse(
   readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );
@@ -180,4 +209,43 @@ test("baseline has no stale entries — a cap above the measured count is a lie"
     if (now < cap) slack.push(`${id}: baseline ${cap} but measured ${now} — lower it`);
   }
   assert.deepEqual(slack, [], `stale baseline entries:\n  ${slack.join("\n  ")}`);
+});
+
+// --- the overlap metric itself (2026-09-22) --------------------------------
+//
+// `spots` above is only as honest as the area that gates them: AREA_MIN drops a
+// pair under 2 m2, and until this was fixed the area was the intersection of the
+// two faces' in-plane BOUNDING RECTANGLES. A face rotated within its own plane —
+// a ferris-wheel spoke, a diagonal brace, a canted panel — has an in-plane AABB
+// far larger than itself, so two 0.28 m bars crossing near a hub reported
+// 1052 m2 (vegas). The pair was real; the number was fiction, and it sorted a
+// lattice above a genuinely flush wall. overlapArea now intersects the two
+// convex hulls, which is exact for every face the emitters produce.
+const rect = (x0, y0, x1, y1) => ({ u1: [x0, x1], u2: [y0, y1], pts: [x0, y0, x1, y0, x1, y1, x0, y1] });
+
+test("overlapArea is the real overlap, exact on the shapes the emitters emit", () => {
+  const near = (got, want, msg) => assert.ok(Math.abs(got - want) < 1e-9, `${msg}: got ${got}, want ${want}`);
+  near(overlapArea(rect(0, 0, 1, 1), rect(0, 0, 1, 1)), 1, "identical unit squares");
+  near(overlapArea(rect(0, 0, 1, 1), rect(0.5, 0, 1.5, 1)), 0.5, "half-offset squares");
+  near(overlapArea(rect(0, 0, 1, 1), rect(2, 2, 3, 3)), 0, "disjoint squares");
+  // A cross: two 0.1 m bars at right angles meet in one 0.1 x 0.1 square.
+  near(overlapArea(rect(0, 0.45, 1, 0.55), rect(0.45, 0, 0.55, 1)), 0.01, "crossed bars");
+});
+
+test("two crossing diagonal bars report their crossing, not their bounding boxes", () => {
+  // The vegas ferris-wheel case, reduced: 10 m x 0.28 m members at +-0.4 rad.
+  const bar = (ang) => {
+    const c = Math.cos(ang), s = Math.sin(ang);
+    const pts = [];
+    for (const [x, y] of [[-5, -0.14], [5, -0.14], [5, 0.14], [-5, 0.14]])
+      pts.push(x * c - y * s, x * s + y * c);
+    const xs = pts.filter((_, i) => i % 2 === 0), ys = pts.filter((_, i) => i % 2 === 1);
+    return { u1: [Math.min(...xs), Math.max(...xs)], u2: [Math.min(...ys), Math.max(...ys)], pts };
+  };
+  const a = bar(0.4), b = bar(-0.4);
+  const boxProduct = (a.u1[1] - a.u1[0]) * (a.u2[1] - a.u2[0]);
+  const real = overlapArea(a, b);
+  assert.ok(real > 0.05 && real < 0.2, `a 0.28 m crossing is ~0.1 m2, got ${real}`);
+  assert.ok(boxProduct > 30, "the in-plane bounding box really is that much bigger");
+  assert.ok(real < boxProduct / 100, "the old metric over-reported this by two orders of magnitude");
 });

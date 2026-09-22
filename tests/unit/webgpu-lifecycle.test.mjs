@@ -6,6 +6,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = new URL("../..", import.meta.url);
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
+const CSS_SIZE_SOURCE = await readFile(new URL("js/render/shared/canvas-css-size.js", ROOT), "utf8");
 const [CHUNKS_SOURCE, POST_SOURCE, FX_SOURCE, FRUSTUM_SOURCE, WGX_SOURCE,
        LIGHT_BUDGET_SOURCE, POST_COMMON_SOURCE, KNOBS_SOURCE,
        VERTEX_PACK_SOURCE] = await Promise.all([
@@ -306,6 +307,7 @@ function makeGpuHarness(opts = {}) {
   vm.runInContext(`${KNOBS_SOURCE.replace(/^const\b/gm, "var")}\nwindow.LightKnobs = LightKnobs;`, context);
   vm.runInContext(`${POST_COMMON_SOURCE.replace(/^const\b/gm, "var")}\nwindow.PostCommon = PostCommon;`, context);
   vm.runInContext(`${VERTEX_PACK_SOURCE.replace(/^const\b/gm, "var")}\nwindow.VertexPack = VertexPack;`, context);
+  vm.runInContext(`${CSS_SIZE_SOURCE.replace(/^const\b/gm, "var")}\nwindow.CanvasCssSize = CanvasCssSize;`, context);
   vm.runInContext(`${WGX_SOURCE}\nwindow.WGX = WGX;`, context);
 
   return {
@@ -2130,7 +2132,7 @@ test("per-chunk lamps: a device loss while visible writes the crash latch", () =
   // Mirrors GLX webglcontextlost (glx.js) and TLX onDeviceLost: a real WGX
   // device loss while the tab is visible must disarm the per-chunk opt-in so
   // the next boot does not repeat the configuration that killed the device.
-  const lost = WGX_SOURCE.match(/device\.lost\.then\(function \(info\)[\s\S]*?\n    \}\);/);
+  const lost = WGX_SOURCE.match(/device\.lost\.then\(function \(info\) \{\n[\s\S]*?\n    \}\);/);
   assert.ok(lost, "device.lost handler exists");
   assert.match(lost[0], /apex26\.perChunkOff/, "device.lost writes the perChunkOff latch");
   assert.match(lost[0], /document\.hidden/, "the latch keeps the visibility guard");

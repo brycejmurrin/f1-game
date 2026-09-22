@@ -38,6 +38,34 @@ const RaceControl = (function () {
     for (const c of cars || []) if (c && c.finished && !c.retired) return true;
     return false;
   }
+
+  // One line-crossing transition for every motion owner. updateCar normally
+  // advances a car, but IncidentSim temporarily owns the same (s, lap, clock,
+  // finish) state; keeping a smaller copy there lost the chequered-flag rule and
+  // the backward undo. Presentation/timing side effects stay with each caller.
+  function lineTransition(c, oldS, newS, ds, total, lapsTarget, cars, raceT) {
+    if (!c || c.finished || !(total > 0)) return null;
+    if (ds > 0 && oldS > total * 0.5 && newS < total * 0.5) {
+      const lapDone = c.lapTime || 0;
+      c.lap = (c.lap || 0) + 1;
+      c._lapTimeAtLine = lapDone;
+      c.lapTime = 0;
+      const target = Number(lapsTarget);
+      const flagged = target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars)));
+      if (flagged) {
+        c.finished = true;
+        c.finishT = Number.isFinite(raceT) ? raceT : 0;
+      }
+      return { direction: 1, changed: true, lapDone, flagged };
+    }
+    if (ds < 0 && oldS < total * 0.5 && newS > total * 0.5) {
+      if (!(c.lap > 0)) return { direction: -1, changed: false, lapDone: null, flagged: false };
+      c.lap--;
+      c.lapTime = c._lapTimeAtLine != null ? c._lapTimeAtLine : c.lapTime;
+      return { direction: -1, changed: true, lapDone: null, flagged: false };
+    }
+    return null;
+  }
   // Classification comparator for finishers: more laps first, then the clock
   // (finishT + penalty). `lap` counts crossings, so it is the same metric for
   // the winner (lapsTarget + 1) and a car flagged a lap down.
@@ -289,6 +317,6 @@ const RaceControl = (function () {
       get enabled() { return enabled; },
     };
   }
-  return { create, finishDelay, flagOut, finishOrder };
+  return { create, finishDelay, flagOut, lineTransition, finishOrder };
 })();
 Object.freeze(RaceControl);

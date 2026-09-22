@@ -426,10 +426,15 @@
       for (let s = 0.030; s < 0.072; s += 0.0075) {
         const k = K(s);
         const h = hash(k * 61);
-        place(k, 1, 30 + h * 6, [3.6, 4.1, 15], h > 0.5 ? CHALK : STEEL); // transporter
-        place(k, 1, 35 + h * 4, [2.6, 3.0, 7], DKGREY);                   // tractor unit
+        // Laterally CLEAR of one another: the old 30+6h / 35+4h / 41 offsets
+        // stood the tractor inside the awning (and the trailer), and on this
+        // hill their tops met on one plane — brands_hatch's worst coplanar
+        // pairs (2026-09-22, coplanar-audit --why --raw). One shared shift
+        // keeps a >= 0.3 m gap between each for every h.
+        place(k, 1, 30 + h * 2.5, [3.6, 4.1, 15], h > 0.5 ? CHALK : STEEL);   // transporter
+        place(k, 1, 33.4 + h * 2.5, [2.6, 3.0, 7], DKGREY);                   // tractor unit
         if (h > 0.45) building(k, 1, 48, 12, 5.5, 11, {});
-        place(k, 1, 41, [9, 3.4, 7], h > 0.5 ? RENDER : CHALK);   // awnings
+        place(k, 1, 42, [9, 3.4, 7], h > 0.5 ? RENDER : CHALK);   // awnings
       }
       // Second paddock rank, stepping further down the hill: proper motorhomes
       // and team units rather than more boxes, plus the paddock hardstanding.

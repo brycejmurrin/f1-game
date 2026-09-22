@@ -245,9 +245,13 @@
         guardrail(s0, s1,  1, 6, [0.80, 0.81, 0.83]);
       }
       // Oval retaining wall — a continuous white concrete barrier, not armco.
-      along(0.80, 0.22, 9, (k) => {
+      // The slab length is along()'s own pitch, not a padded constant: 9.6 m
+      // against a 9 m walk made every slab overlap its neighbour by 0.6 m, and
+      // on the oval's straights the two inner faces are one plane — 20
+      // same-facing coplanar pairs (2026-09-22). The pitch tiles exactly.
+      along(0.80, 0.22, 9, (k, spacing) => {
         const a = anchor(k, 1, 1.4);
-        addBox(out, vadd(a.c, a.u, 1.05), [0.6, 2.1, 9.6], [0.93, 0.93, 0.92], [a.r, a.u, a.t]);
+        addBox(out, vadd(a.c, a.u, 1.05), [0.6, 2.1, spacing], [0.93, 0.93, 0.92], [a.r, a.u, a.t]);
       });
       fence(0.86, 0.18, 1, 12, 5, [0.74, 0.76, 0.80]);
       for (const s of [0.28, 0.36, 0.44, 0.58, 0.66, 0.74]) {

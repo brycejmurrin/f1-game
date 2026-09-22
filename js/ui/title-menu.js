@@ -47,6 +47,18 @@ const TitleMenu = (function () {
       }
     }
 
+    // IndexedDB restoration finishes after the synchronous boot refresh.
+    // Career owns selection reconciliation; this module owns the buttons that
+    // expose it, so repaint after the complete batch has selected its live slot.
+    if (G.store && G.store.subscribe) G.store.subscribe((change) => {
+      if (!change || !change.restoredBatch || !Array.isArray(change.keys)) return;
+      const careerBack = change.keys.some((k) => k === "careerSlot" || k.indexOf("career.") === 0);
+      if (careerBack) refresh();
+      const seasonBack = change.keys.indexOf("season") !== -1;
+      if (seasonBack && !G.seasonMode && !(Career.inCareer && Career.inCareer())) G.season = SeasonCal.load();
+      if (seasonBack) G.refreshCareerButton();
+    });
+
     const careerBtn = $("mb-career");
     if (careerBtn) careerBtn.onclick = () => G.openCareerSlots();
     const continueBtn = $("mb-continue");

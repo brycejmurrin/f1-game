@@ -524,6 +524,15 @@ const NetPlay = (function () {
 
     function start(opts) {
       opts = opts || {};
+      // start() ADOPTS the supplied sessions. Calling it again while a race is
+      // live cannot silently replace that ownership: sessions.clear() used to
+      // orphan the first race's sockets and remotes without closing them or
+      // handing their cars back to AI. The caller still owns the new sessions
+      // when adoption is refused, exactly as for no_transport / no_track.
+      if (active) {
+        Log.warn("net", "play start fail already_active");
+        return { ok: false, error: "already_active", message: "A network race is already active." };
+      }
       peerLaps = [];
       peerResult = null;
       resultWaitFrom = null;
