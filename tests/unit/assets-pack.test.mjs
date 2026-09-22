@@ -101,6 +101,85 @@ for (const failFallback of [true, false]) {
   });
 }
 
+test("unload invalidates an in-flight pack upload and frees its partial texture", async () => {
+  let releaseNormal, normalStarted;
+  const normalGate = new Promise(resolve => { releaseNormal = resolve; });
+  const started = new Promise(resolve => { normalStarted = resolve; });
+  const bitmaps = [];
+  let decodes = 0, uploads = 0;
+  const maps = [], freed = [];
+  const assets = assetLoader({
+    async fetch(url) {
+      return url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: {
+            size: 4, albedo: "a.png", normal: "n.png", layers: [{ mat: 1, scale: 1 }]
+          } }) }
+        : { ok: true, blob: async () => ({ size: 16 }) };
+    },
+    async createImageBitmap() {
+      const b = { closed: 0, close() { this.closed++; } };
+      bitmaps.push(b);
+      if (++decodes === 2) { normalStarted(); await normalGate; }
+      return b;
+    },
+  });
+  assets.init({
+    createTextureArray() { return { id: ++uploads }; },
+    freeTexture(t) { freed.push(t.id); },
+    setMaterialMaps(v) { maps.push(v ? "maps" : "null"); },
+  });
+
+  const pending = assets.load({ tier: "high" });
+  await started;                              // albedo uploaded; normal still decoding
+  assets.unload();
+  releaseNormal();
+
+  assert.equal(await pending, false, "the invalidated generation cannot report live");
+  assert.equal(assets.state().uploaded, false);
+  assert.equal(assets.state().tier, "off");
+  assert.deepEqual(maps, ["null"], "the stale generation must not reinstall maps after unload");
+  assert.deepEqual(freed, [1], "the partial albedo upload is released exactly once");
+  assert.deepEqual(bitmaps.map(b => b.closed), [1, 1], "both decoded strips are closed exactly once");
+});
+
+test("adopt owns the latest generation when an older pack decode finishes later", async () => {
+  let releaseDecode, decodeStarted;
+  const decodeGate = new Promise(resolve => { releaseDecode = resolve; });
+  const started = new Promise(resolve => { decodeStarted = resolve; });
+  const installed = [];
+  let uploads = 0;
+  const assets = assetLoader({
+    async fetch(url) {
+      return url.endsWith("manifest.json")
+        ? { ok: true, json: async () => ({ materials: {
+            size: 4, albedo: "a.png", layers: [{ mat: 1, scale: 1 }]
+          } }) }
+        : { ok: true, blob: async () => ({ size: 16 }) };
+    },
+    async createImageBitmap() {
+      decodeStarted();
+      await decodeGate;
+      return { close() {} };
+    },
+  });
+  assets.init({
+    createTextureArray() { return { id: ++uploads }; },
+    freeTexture() {},
+    setMaterialMaps(v) { installed.push(v && v.albedo.id); },
+  });
+
+  const pending = assets.load({ tier: "high" });
+  await started;
+  const adopted = assets.adopt(4, [{}], null, []);
+  assert.equal(adopted.tier, "browser-bake");
+  releaseDecode();
+
+  assert.equal(await pending, false);
+  assert.equal(assets.state().tier, "browser-bake");
+  assert.deepEqual(installed, [1], "the late pack load cannot replace the adopted maps");
+  assert.equal(uploads, 1, "a stale decode is rejected before it allocates a texture");
+});
+
 // TrackGeom.MAT, read out of the REAL module rather than a copy. geom.js is
 // documented as loading under a bare VM sandbox (it is stateless and
 // renderer-free), so this is the actual shipping table, not a transcription.

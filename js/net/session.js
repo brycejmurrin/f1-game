@@ -34,8 +34,6 @@ const NetSession = (function () {
     dv.setFloat64(5, t0); dv.setFloat64(13, t1);
     return new Uint8Array(dv.buffer);
   }
-  const view = (data) => NetSnapshot.toView(data);
-
   function create(opts) {
     opts = opts || {};
     const transport = opts.transport;
@@ -104,7 +102,7 @@ const NetSession = (function () {
     const localToPeer = (tLocal) => tLocal + offset();
 
     function onStateBytes(data, now) {
-      const dv = view(data);
+      const dv = NetSnapshot.toView(data);
       if (!dv || !dv.byteLength) return;
       const type = dv.getUint8(0);
 
@@ -144,7 +142,7 @@ const NetSession = (function () {
 
     function onEventJson(data) {
       let msg;
-      try { msg = JSON.parse(typeof data === "string" ? data : new TextDecoder().decode(view(data))); }
+      try { msg = JSON.parse(typeof data === "string" ? data : new TextDecoder().decode(NetSnapshot.toView(data))); }
       catch (e) { return; }            // malformed event: drop, never throw
       if (!msg || typeof msg.t !== "string") return;
       const list = eventHandlers.get(msg.t);
@@ -284,7 +282,7 @@ const NetSession = (function () {
     if (pump) transport.pump = function (now) { lastNow = now; return pump.call(transport, now); };
     transport.onMessage((channel, data, at) => {
       if (channel !== NetTransport.STATE) return;
-      const dv = view(data);
+      const dv = NetSnapshot.toView(data);
       if (!dv || dv.byteLength < PING_BYTES || dv.getUint8(0) !== PING) return;
       transport.send(NetTransport.STATE,
         encodePong(dv.getUint32(1), dv.getFloat64(5), at != null ? at : lastNow));

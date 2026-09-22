@@ -91,7 +91,7 @@ test("__APEX_BUILD is derived, not a stale literal", () => {
     "index.html must not hardcode window.__APEX_BUILD = <number> (the ?v= bump sed does not touch it)");
 });
 
-test("shell leaves pinch-zoom to the user and cancels iOS double-tap / gesture zoom", () => {
+test("shell leaves menu pinch-zoom to the user and cancels iOS double-tap / driving gestures", () => {
   // The viewport meta carries NO zoom cap — neither `user-scalable=no` nor
   // `maximum-scale`. Both fail WCAG 1.4.4 (Resize text) the same way: W3C ACT
   // rule b4f0c3 fails any `maximum-scale` under 2, iOS has ignored it since
@@ -100,7 +100,8 @@ test("shell leaves pinch-zoom to the user and cancels iOS double-tap / gesture z
   // first; `maximum-scale=1` survived by oversight and only ever cost Android
   // low-vision players their pinch. Nothing about the DRIVING surface changed:
   // `#game` and the in-race HUD chrome set `touch-action: none` in CSS, and the
-  // two cancellers below kill double-tap and iOS GestureEvents page-wide. If a
+  // cancellers below kill double-tap page-wide and iOS GestureEvents only on
+  // the driving surface. If a
   // zoom cap ever comes back, it needs an a11y argument in index.html, not a
   // relaxed assertion here.
   const m = indexHtml.match(/<meta\s+name="viewport"\s+content="([^"]+)"/);
@@ -116,8 +117,9 @@ test("shell leaves pinch-zoom to the user and cancels iOS double-tap / gesture z
   const hasTouchEnd = /addEventListener\("touchend"/.test(indexHtml);
   console.log("[load-order] gesturestart listener present:", hasGesture);
   console.log("[load-order] touchend listener present:", hasTouchEnd);
-  assert.match(indexHtml, /addEventListener\("gesturestart"/,
-    "shell must cancel iOS GestureEvents (page pinch-zoom)");
+  assert.match(indexHtml, /function killDriveGesture[\s\S]*closest\("#game,#hud"\)/,
+    "iOS GestureEvents are cancelled only on the driving surface");
+  assert.match(indexHtml, /addEventListener\("gesturestart", killDriveGesture/);
   assert.match(indexHtml, /addEventListener\("touchend"/,
     "shell must cancel same-spot double-tap zoom");
   // The driving surface opts out in CSS, not in the meta tag — that is what
@@ -125,7 +127,7 @@ test("shell leaves pinch-zoom to the user and cancels iOS double-tap / gesture z
   const tokens = readFileSync(join(ROOT, "css/tokens.css"), "utf8");
   assert.match(tokens, /#game\s*\{[^}]*touch-action:\s*none/,
     "#game must keep `touch-action: none` — driving owns its gestures");
-  console.log("[load-order] iOS zoom cancel: OK");
+  console.log("[load-order] scoped iOS zoom cancel: OK");
 });
 
 test("service-worker registration derives the shell build", () => {

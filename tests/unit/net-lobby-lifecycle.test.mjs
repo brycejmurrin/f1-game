@@ -157,6 +157,21 @@ test("a newer join operation prevents a late host continuation", async () => {
   h.lobby.cancel();
 });
 
+test("cancel then reopen prevents the prior lobby generation from attaching", async () => {
+  const ice = deferred();
+  const h = harness({ prefetchIce: () => ice.promise, scanFactory: () => ({ stop() {}, start() {} }) });
+  const staleHost = h.lobby.host();
+  h.lobby.cancel();
+  h.lobby.open();
+  const currentJoin = h.lobby.join();
+  ice.resolve();
+
+  assert.equal((await staleHost).error, "cancelled");
+  assert.equal((await currentJoin).ok, true);
+  assert.deepEqual(h.transports, ["guest"], "only the reopened generation may create a transport");
+  h.lobby.cancel();
+});
+
 test("scanner completion is guarded by scanner identity and generation", async () => {
   const starts = [deferred(), deferred()];
   const scanners = starts.map((start) => ({

@@ -298,6 +298,24 @@ test("holding the line into the pits calls the stop", () => {
     `with no button to press, the limiter needs saying: ${said.join(" | ")}`);
 });
 
+test("turning tyre wear off releases every pit-owned state", () => {
+  const { pits, G } = commitSession();
+  G.tyres.on = () => false;
+  for (const state of ["lane", "box", "out"]) {
+    const c = {
+      pitState: state, pitArmed: true, pitCommitted: true, pitT: 2,
+      pitOutT: 1, pitNext: { id: "soft" }, pitPos0: 4, pitWorked: 15,
+    };
+    pits.update(c, 1 / 60);
+    assert.equal(c.pitState, "none", `${state} survived after the feature was disabled`);
+    assert.equal(c.pitArmed, false);
+    assert.equal(c.pitT, 0);
+    assert.equal(c.pitNext, null);
+    assert.equal(pits.inLane(c), false);
+    assert.equal(pits.held(c), false);
+  }
+});
+
 test("a car that merely RUNS WIDE at the entry does not get pitted", () => {
   // The failure that killed the half-plane test, refused three ways over.
   const { pits, car } = commitSession();

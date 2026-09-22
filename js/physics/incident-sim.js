@@ -359,30 +359,11 @@ const IncidentSim = (function () {
   // clock and can never be a PB/ghost; updateCar's own crossing clears it
   // once the player has driven a whole lap.
   function _lapCross(c, ds, newS, L) {
-    // BACKWARD over the line (a car thrown back past it): give the lap back,
-    // as updateCar's backward branch does. Handback seeds _prevS = c.s, so
-    // updateCar never sees this crossing — without it the next forward
-    // crossing counted the same lap twice.
-    if (ds < 0 && c.s < L * 0.5 && newS > L * 0.5) {
-      if (c.lap > 0) {
-        c.lap--;
-        if (c._lapTimeAtLine != null) c.lapTime = c._lapTimeAtLine;
-      }
-      return;
-    }
-    if (!(ds > 0) || !(c.s > L * 0.5 && newS < L * 0.5)) return;
-    c.lap++;
-    c._lapTimeAtLine = c.lapTime;
-    c.lapTime = 0;
-    if (c.isPlayer) { G.sectorIdx = 0; G.sectorStartT = 0; }
-    const target = G.lapsTarget;
-    // The same flag rule as updateCar: the distance, or the leader already
-    // home (a lapped car is flagged at its next crossing).
-    const flagOut = c.lap > 1 && G.cars && typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars);
-    if ((fin(target) && target > 0 && c.lap > target) || flagOut) {
-      c.finished = true;
-      c.finishT = fin(G.raceT) ? G.raceT : 0;
-    }
+    const cross = RaceControl.lineTransition(c, c.s, newS, ds, L,
+      G.lapsTarget, G.cars, G.raceT);
+    if (!cross) return;
+    if (G.onIncidentLineCross) G.onIncidentLineCross(c, cross, newS);
+    else if (cross.direction > 0 && c.isPlayer) { G.sectorIdx = 0; G.sectorStartT = 0; }
   }
 
   function yawOf(pose) {

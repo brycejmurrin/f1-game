@@ -28,7 +28,9 @@ game-vm before its fix. FIXED.** (`tests/unit/race-flow-fixes-vm.test.mjs`,
   the surface on the tick it takes the restart, so it now calls
   `raceCtl.clearHold()` there.
 - `IncidentSim._lapCross` missed the chequered flag for a lapped car and had
-  no backward branch (a car thrown back over the line gained a lap).
+  no backward branch (a car thrown back over the line gained a lap). Found
+  here, but fixed on the deploy branch first (PR #215,
+  `RaceControl.lineTransition`); this batch takes that fix.
 - The only human RETIRING ended the race 2.2 s later (by design) but scored
   AI whose failure was already drawn from the mid-race snapshot; those
   retire now. Plus: camera `shake`/`hitStop` reset per race, the pit-exit

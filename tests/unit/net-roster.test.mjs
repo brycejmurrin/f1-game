@@ -156,6 +156,25 @@ test("a local stop() says BYE before closing the sessions", () => {
   assert.equal(s2.sent.some((m) => m.t === "bye"), false);
 });
 
+test("a repeated start cannot abandon the active race's owned session", () => {
+  const G = stubG(3);
+  const net = NetPlay.create(G);
+  const first = fakeSession(), second = fakeSession();
+  assert.equal(net.start({ role: "guest", session: first }).ok, true);
+  const owned = G.cars.find((c) => net.owns(c));
+
+  const again = net.start({ role: "guest", session: second });
+
+  assert.equal(again.error, "already_active");
+  assert.equal(net.active(), true);
+  assert.equal(net.owns(owned), true, "the first race keeps its remote car");
+  assert.equal(first.closed, 0, "the first transport remains owned and live");
+  assert.equal(second.closed, 0, "the refused transport remains caller-owned");
+  net.stop("local");
+  assert.equal(first.closed, 1, "normal teardown still closes the adopted session");
+  assert.equal(second.closed, 0);
+});
+
 // ── round 2: the finish is the OWNER's crossing, not a pose ─────────────────
 test("host: the owner's LAP `fin` becomes the rival's finishT, sender-bound", () => {
   const G = stubG(3);
