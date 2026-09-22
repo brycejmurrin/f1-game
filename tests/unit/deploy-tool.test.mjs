@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts,
-  sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly } from "../../tools/ci/deploy.mjs";
+  sweepSuites, touchesGeometry, targetedFor, notCovered, anyGeometry, proseOnly, changedPaths } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 import { GEOMETRY_ERE, GEOMETRY_PATHS, namedPaths, fleetFiles, TARGETED, targetedSuites } from "../../tools/ci/geometry-paths.mjs";
 import { createRequire } from "node:module";
@@ -190,6 +190,42 @@ test("editing a sweep suite's OWN file routes the sweeps", () => {
     r.write(suites[0], "// a moved baseline\n"); r.g("add", "-A"); r.g("commit", "-qm", "suite");
     assert.equal(touchesGeometry("base", r.dir), true,
       `editing ${suites[0]} must run the sweeps — a moved baseline changes what they measure`);
+  } finally { r.rm(); }
+});
+
+/* THE UNCOMMITTED EDIT. --gate-only waives the dirty-tree refusal because it is
+ * the check you run with the edit still in your working tree — and every suite
+ * it runs reads that tree. But change detection read `base...HEAD`, commits
+ * only: on 2026-09-22 an uncommitted Portimão def + scenery edit (three
+ * baselines moved) got "test:sweeps (nothing in this union can move geometry)"
+ * and no verify-track. Staged, unstaged and untracked-not-ignored all count. */
+test("the working tree is part of the union: unstaged, staged and untracked edits route the gate", () => {
+  const r = geomRepo();
+  try {
+    r.write("js/circuits/portimao.js", "// def\n");
+    r.write(".gitignore", "artifacts/\n");
+    r.g("add", "-A"); r.g("commit", "-qm", "def"); r.g("branch", "-qf", "base");
+    assert.equal(touchesGeometry("base", r.dir), false, "premise: a clean tree at base moves nothing");
+
+    r.write("artifacts/js/circuits/ignored.js", "// ignored\n");
+    assert.deepEqual(changedPaths("base", r.dir), [], "an ignored file is not a change");
+
+    r.write("js/circuits/portimao.js", "// unstaged edit\n");
+    assert.equal(touchesGeometry("base", r.dir), true, "an UNSTAGED circuit edit must run the sweeps");
+    assert.deepEqual(touchedCircuits("base", r.dir), ["portimao"], "…and verify-track for it");
+
+    r.g("add", "-A");
+    assert.equal(touchesGeometry("base", r.dir), true, "a STAGED circuit edit must run the sweeps");
+
+    r.g("reset", "-q", "--hard");
+    r.write("js/circuits/scenery/estoril.js", "// new file\n");
+    assert.deepEqual(touchedCircuits("base", r.dir), ["estoril"], "an UNTRACKED scenery file is a touched circuit");
+
+    r.g("clean", "-qfd", "js");
+    r.write("js/car/parts.js", "// car\n");
+    assert.equal(touchesGeometry("base", r.dir), false, "an untracked car file moves no circuit");
+    assert.deepEqual(targetedFor("base", r.dir), ["tests/unit/car-front-wing-width.test.mjs"],
+      "…but still routes the targeted sweep that reads it");
   } finally { r.rm(); }
 });
 

@@ -15,6 +15,9 @@
 //                                       #   node suites + verify-track. Pushes nothing, allows a
 //                                       #   dirty tree. THE pre-push check: test:tooling-fast is a
 //                                       #   subset and does not run 69 of the 277 unit files.
+//                                       #   Its union is commits + staged + unstaged + untracked
+//                                       #   (changedPaths), so an uncommitted circuit edit still
+//                                       #   gets the sweeps and its verify-track.
 //   node tools/ci/deploy.mjs --json        # machine verdict on stdout, log on stderr
 //
 // What it replaces: the prose protocol in the deploy-merge skill — fetch, look,
@@ -83,9 +86,29 @@ export function preflight() {
 // reads it pre-merge and the run reads it post-merge, where the two forms agree
 // because the tip is an ancestor by then. Same idiom `theirDiffstat` already
 // uses in the other direction.
+//
+// PLUS THE WORKING TREE (2026-09-22). `base...HEAD` sees commits only, but
+// --gate-only exists to gate an UNCOMMITTED edit (it waives preflight's dirty
+// refusal for exactly that), and every suite it runs reads the working tree.
+// Change detection read HEAD: a session that edited js/circuits/portimao.js and
+// its scenery, uncommitted, got "test:sweeps (nothing in this union can move
+// geometry)" and no verify-track at all, on a diff that moved three baselines.
+// So the union is committed + staged + unstaged + untracked-not-ignored. A real
+// deploy refuses a dirty tree, so for it the extra terms are empty.
+// null (never []) when any of the three git reads fails: callers fail SAFE.
+export function changedPaths(base, cwd) {
+  const o = cwd ? { cwd } : {};
+  const reads = [
+    git(["diff", "--name-only", `${base}...HEAD`], o),      // our commits
+    git(["diff", "--name-only", "HEAD"], o),                 // staged + unstaged
+    git(["ls-files", "--others", "--exclude-standard"], o),  // new, not ignored
+  ];
+  if (reads.some((r) => r.code !== 0)) return null;
+  return [...new Set(reads.flatMap((r) => r.out.split("\n")).filter(Boolean))];
+}
+
 export function touchedCircuits(base, cwd) {
-  const out = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {}).out;
-  return [...new Set(out.split("\n")
+  return [...new Set((changedPaths(base, cwd) || [])
     .map((f) => /^js\/circuits\/(?:scenery\/)?([a-z_]+)\.js$/.exec(f))
     .filter(Boolean).map((m) => m[1]))];
 }
@@ -196,9 +219,9 @@ export function anyGeometry(files) {
 }
 
 export function touchesGeometry(base, cwd) {
-  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
-  if (r.code !== 0) return true;                        // unresolvable diff -> run them
-  return anyGeometry(r.out.split("\n").filter(Boolean));
+  const files = changedPaths(base, cwd);
+  if (!files) return true;                              // unresolvable diff -> run them
+  return anyGeometry(files);
 }
 
 /* THE TARGETED TIER (2026-09-22). Ten of the fourteen sweep suites measure the
@@ -212,9 +235,9 @@ export function touchesGeometry(base, cwd) {
  * union run, and a game.js-only union runs none. Asked only after
  * touchesGeometry() said no: an unresolvable diff already ran everything. */
 export function targetedFor(base, cwd) {
-  const r = git(["diff", "--name-only", `${base}...HEAD`], cwd ? { cwd } : {});
-  if (r.code !== 0) return [];
-  return targetedSuites(r.out.split("\n").filter(Boolean));
+  const files = changedPaths(base, cwd);
+  if (!files) return [];
+  return targetedSuites(files);
 }
 
 function runTargeted(suites, why) {
