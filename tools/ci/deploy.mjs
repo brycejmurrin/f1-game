@@ -525,12 +525,21 @@ function pushWithRetry(oursProse = false) {
 /* --pr without the gh CLI. The remote containers have GH_TOKEN/GITHUB_TOKEN and
    curl (through the agent proxy) but no gh, which left --pr printing a compare
    URL and the session merging by hand (PR #178, 2026-09-22). Same three steps
-   as the gh path — find an open PR for the head, create one from the HEAD
-   commit's subject/body, enable auto-merge — over the REST and GraphQL APIs.
-   The token travels as a curl config on stdin, never on the argv. */
+   as the gh path — find an open PR for the head, create one from the branch's
+   last real commit, enable auto-merge — over REST only.
+   The token travels as a curl config on stdin, never on the argv.
+
+   NOT GraphQL (2026-09-22, measured): `api.github.com/graphql` is refused from
+   Claude Code sessions, and the refusal is a plain `{"message": …}` with NO
+   `errors` array — so the first version of this function read it as success
+   and told two PRs (#182, #184) that auto-merge was armed when no
+   `auto_merge_enabled` event ever reached either timeline, and both were
+   merged by hand. Auto-merge goes through the session's CCR REST route
+   instead, and the result is VERIFIED by reading the PR back rather than
+   inferred from the absence of an error. */
 const REPO = "brycejmurrin/f1-game";
 function ghApi(token, method, url, body) {
-  const args = ["-sS", "--max-time", "30", "-K", "-", "-X", method,
+  const args = ["-sS", "--max-time", "30", "-K", "-", "-X", method, "-w", "\n%{http_code}",
     "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28", url];
   // `-K -` reads a curl config from stdin: the auth header and the JSON body
   // both ride there (curl's quoted-value escapes are JSON's \" and \\).
@@ -540,13 +549,19 @@ function ghApi(token, method, url, body) {
   }
   const r = spawnSync("curl", args, { encoding: "utf8", input });
   if (r.status !== 0) throw new Error(`curl ${method} ${url}: ${(r.stderr || "").trim()}`);
-  try { return JSON.parse(r.stdout || "null"); }
-  catch { throw new Error(`${method} ${url}: not JSON: ${r.stdout.slice(0, 200)}`); }
+  // -w appended the status on its own last line; everything before it is body.
+  const out = (r.stdout || "").split("\n");
+  const status = Number(out.pop().trim());
+  const text = out.join("\n").trim();
+  let json = null;
+  if (text) { try { json = JSON.parse(text); } catch { json = null; } }
+  if (json === null && text) throw new Error(`${method} ${url}: not JSON (${status}): ${text.slice(0, 200)}`);
+  return { status, json, ok: status >= 200 && status < 300 };
 }
 export function openPrRest(branch, token) {
   const [owner] = REPO.split("/");
   const api = `https://api.github.com/repos/${REPO}`;
-  const open = ghApi(token, "GET", `${api}/pulls?state=open&head=${owner}:${encodeURIComponent(branch)}&base=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1`);
+  const open = ghApi(token, "GET", `${api}/pulls?state=open&head=${owner}:${encodeURIComponent(branch)}&base=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1`).json;
   if (Array.isArray(open) && open[0]?.html_url) return { pr: open[0].html_url, note: "PR already open; the push updated it" };
   // The title comes from the branch's last REAL commit, not from HEAD: a
   // deploy merges the base tip before it opens the PR, so HEAD is almost
@@ -555,17 +570,25 @@ export function openPrRest(branch, token) {
   const head = git(["log", "-1", "--no-merges", "--format=%s%x00%b", `${DEPLOY_BRANCH}..HEAD`]).out
             || git(["log", "-1", "--no-merges", "--format=%s%x00%b"]).out;
   const [title, body] = head.split("\0");
-  const pr = ghApi(token, "POST", `${api}/pulls`, { title, body, head: branch, base: DEPLOY_BRANCH });
+  const pr = ghApi(token, "POST", `${api}/pulls`, { title, body, head: branch, base: DEPLOY_BRANCH }).json;
   if (!pr?.html_url) throw new Error("REST pr create failed: " + JSON.stringify(pr).slice(0, 300));
-  const gql = ghApi(token, "POST", "https://api.github.com/graphql", {
-    query: "mutation($id: ID!) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: MERGE}) { clientMutationId } }",
-    variables: { id: pr.node_id },
-  });
-  const err = Array.isArray(gql?.errors) ? gql.errors.map((e) => e.message).join("; ") : "";
+  return { pr: pr.html_url, ...autoMerge(token, api, pr.number) };
+}
+
+/** Arm auto-merge and CONFIRM it, because "no error" is not evidence: the
+ *  GraphQL refusal that fooled #182 and #184 was a 200-shaped message body.
+ *  The session's CCR route is the one that works here; a plain-REST caller
+ *  (a runner with a real token) falls back to GitHub's own merge-queue API. */
+export function autoMerge(token, api, number) {
+  const put = ghApi(token, "PUT", `${api}/pulls/${number}/ccr/auto_merge`, { merge_method: "merge" });
+  const back = ghApi(token, "GET", `${api}/pulls/${number}`).json;
+  if (back?.auto_merge) {
+    return { autoMerge: true, note: "auto-merge (merge commit) armed and CONFIRMED on the PR; GitHub creates the merge so the PR is a real record" };
+  }
+  const why = (put.json && (put.json.message || put.json.error)) || `HTTP ${put.status}`;
   return {
-    pr: pr.html_url,
-    note: err ? `auto-merge NOT enabled (${err}) — enable it on the PR or merge by hand once green`
-              : "auto-merge (merge commit) enabled via the API; GitHub creates the merge so the PR is a real record",
+    autoMerge: false,
+    note: `auto-merge NOT armed (${String(why).slice(0, 160)}) — WATCH this PR and merge it yourself once CI is green`,
   };
 }
 function openPr(branch) {
