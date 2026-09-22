@@ -4902,6 +4902,7 @@ and all (`tests/unit/perf-governor.test.mjs`).
 | device | before | after |
 |---|---|---|
 | one heavy section per lap | **30 reallocations**, median gap **8.1 s**, clusters at **4.7 s**, ends at scale 1.00 | **2**, both inside the first 8 s, settles at 0.80 |
+| slow ONLY at full scale (0.9 holds, 1.0 misses) | **12**, seven of them in the opening minute (1.0, 11.3, 16.0, 21.1, 31.3, 36.4, 56.4 s) | **9**, three in the opening minute, then probes 30 s → 41 s → 81 s apart |
 | genuinely too slow throughout | 11, gaps 10.6 → 80.4 s | 9, gaps 30.5 → 80.7 s (the pre-existing backoff, unchanged) |
 | one 6 s transient, healthy after | 2, back to 1.00 | 2, back to 1.00 |
 | thermal ramp / healthy / marginal | 0 | 0 |
@@ -4946,6 +4947,42 @@ A 100 s stretch of flawless frames still restores full resolution.
   (`_envOptOut`), and on completion it mutates `envCubeNode.value` and reuses a
   stable `CubeRenderTarget` rather than replacing identities, so it does not
   invalidate three's RenderObject cache the way three.js #33685 describes.
+
+### Round two: the first fix was a no-op on the commonest device
+
+An adversarial review of the first commit found that `_scaleCap` was
+initialised to 1 and tested with `>= 1`, so "nothing refused yet" and "scale
+1.0 missed the budget" were the same state — and 1.0 is where a first cut
+almost always comes FROM. On a device that holds the budget at 0.9 and misses
+only at full resolution — the shape this file's own header names, "a phone on
+GRAPHICS: HIGH ... sits right at that edge" — the cap was never established at
+all. The review proved it the only way that settles it: the fixed and unfixed
+governors produced **byte-identical reallocation timestamps** on that input.
+
+The sentinel is `Infinity` now, which no cut and no refused climb can produce,
+so `> 1` means exactly "no measurement yet". Two smaller things came with it:
+
+- `sentinelResume()` (a tab un-hide mid-race, not a race start) left `_sinceUp`
+  frozen, because it only ages inside `tick()` and a hidden tab ticks none. A
+  climb accepted before a ten-minute background stint came back reading as
+  seconds old, and the first cut after the resume charged it the full doubling
+  penalty for load it was never tested against. A tab return is not evidence —
+  the same reason this function already refuses to reset the EMAs — so the
+  probation is dropped rather than charged.
+- The snap threshold moved from 0.09 to 0.12, because it has to clear the width
+  of a CUT (0.1) or the commonest climb there is, undoing a single cut from 0.9
+  back to 1.0, costs two reallocations instead of one. Smallest snap delta the
+  wider band admits is 0.05, still far outside `setRenderScale`'s 0.02 dead
+  zone (brute-forced over every reachable scale and ceiling: 210 pairs, no
+  spin, nothing pinned short of its ceiling, floor → full still lands on
+  exactly 1.0 in four steps).
+
+The lesson is the one this register keeps relearning: **a test that passes on
+the unfixed code is not coverage.** The first commit shipped with two tests
+that both passed, and neither constructed the slow-only-at-full-scale shape;
+the pre-existing "a refused climb backs off" test lives in exactly that
+scenario and produced an identical event sequence either way. The third test
+now pins it, and it fails on the unfixed governor AND on the first commit.
 
 ### The acceptance test stays: COUNT THE MOVES, not the frame time
 

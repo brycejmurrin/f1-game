@@ -1094,3 +1094,40 @@ test("a genuine recovery still gets ALL its resolution back, ceiling or not", ()
   feed(PerfGov, () => 16.7, 6000);   // 100 s of flawless frames
   assert.equal(scale(), 1, "a device that genuinely recovered must reach full resolution again");
 });
+
+test("a device slow ONLY at full resolution settles, instead of re-probing it every few seconds", () => {
+  // THE SHAPE THE FIRST ATTEMPT MISSED, and the commonest one there is: the
+  // frame holds the budget at 0.9 and misses it at 1.0. This file's header
+  // already names it — "a phone on GRAPHICS: HIGH ... sits right at that edge".
+  //
+  // The first version of the ceiling stored "nothing refused yet" as 1 and
+  // tested it with `>= 1`, so a cut FROM full scale — which is where a first
+  // cut almost always comes from — wrote a cap that was indistinguishable from
+  // no cap at all. The ladder climbed straight back into the resolution that
+  // had just missed, got cut, and repeated: byte-identical reallocation
+  // timestamps to the unfixed governor. The sentinel is Infinity now, which no
+  // cut and no refused climb can produce.
+  //
+  // Asserted on SPACING first, because that is the symptom. The unfixed
+  // governor puts 7 reallocations in the opening minute (1.0, 11.3, 16.0,
+  // 21.1, 31.3, 36.4, 56.4 s); a governor that keeps the measurement puts 3
+  // (1.0, 31.6, 36.6 s) and then backs off to 30 s, 41 s, 81 s between probes.
+  const { PerfGov, scale } = makeGov();
+  let t = 0, last = scale();
+  const at = [];
+  while (t < 300000) {
+    // 0.9 holds; 1.0 misses by 6 ms. Nothing else about the device changes.
+    const dt = Math.max(16.7, scale() >= 0.99 ? 22.7 : 16.7);
+    PerfGov.tick(dt); t += dt;
+    if (scale() !== last) { last = scale(); at.push(t / 1000); }
+  }
+  const opening = at.filter((x) => x <= 60).length;
+  assert.ok(opening <= 4,
+    `the opening minute took ${opening} render-target reallocations (unfixed: 7) at ${at.filter((x) => x <= 60).map((x) => x.toFixed(1)).join(", ")} s`);
+  assert.ok(at.length <= 10,
+    `a 300 s race took ${at.length} reallocations (unfixed: 12): ${at.map((x) => x.toFixed(1)).join(", ")}`);
+  // And the ceiling must actually bite: the scale that missed is never
+  // re-entered until the probe window has run, so the first cut has to hold.
+  assert.ok(at.length >= 2 && at[1] - at[0] > 25,
+    `the cut must hold for the probe window before anything climbs again: first two at ${at.slice(0, 2).map((x) => x.toFixed(1)).join(", ")} s`);
+});

@@ -97,7 +97,18 @@ const CLIMB_SURVIVE_MS = 30000;
 // again, and the pair repeated for the whole race. Patience alone cannot fix
 // that — it only spaces the same wrong climb further apart. Keeping the
 // ceiling ends it: never climb to within one down-step of a scale that missed.
-let _scaleCap = 1;
+// THE SENTINEL MUST NOT BE A VALUE THE MEASUREMENT CAN PRODUCE. This was
+// initialised to 1 and compared with `>= 1`, which made "nothing refused yet"
+// and "scale 1.0 missed the budget" the same state — and 1.0 is the scale a
+// cut most often comes FROM. So on the single most common shape, a device
+// that holds the budget at 0.9 and misses only at full resolution (this
+// file's own header example: "a phone on GRAPHICS: HIGH... sits right at that
+// edge"), the ceiling stayed 1, the ladder climbed straight back into the
+// resolution that had just missed, and the cap contributed nothing. Verified
+// against the unfixed code: byte-identical reallocation timestamps. Infinity
+// is unreachable by any cut or refused climb, so `> 1` now means exactly
+// "no measurement yet".
+let _scaleCap = Infinity;
 // The ceiling EXPIRES, or a device that was slower for one stretch — a weather
 // effect, a full field on lap one, a thermal excursion that passed — could
 // never have its resolution back. UNBROKEN headroom is the whole
@@ -407,6 +418,14 @@ function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 // re-allocs per app switch — and it made __apex.perf().open describe the last
 // un-hide instead of the race start. This only re-arms the sentinel.
 function sentinelResume() {
+  // A CLIMB CANNOT BE ON PROBATION ACROSS TIME NOBODY MEASURED. `_sinceUp`
+  // ages only inside tick(), which never runs while the tab is hidden, so a
+  // climb accepted before a ten-minute background stint came back reading as
+  // seconds old — and the first cut after the resume then charged it the full
+  // doubling penalty for load the climb was never tested against. That is the
+  // same reasoning that keeps this function from resetting the EMAs: a tab
+  // return is not evidence. Drop the probation instead of charging it.
+  _sinceUp = -1;
   if (!_gfx || !_gfx.isMobile) return;
   GameStore.store.rawSet(SENT_ACTIVE, "1");
 }
@@ -415,7 +434,7 @@ function sentinelArm(on) {
   // at `_live` — both averages restart from their shared 16.7 so the EMA can
   // outrun the floor once more. Desktop too (above the mobile-only guard):
   // the governor runs everywhere, only the sentinel is mobile.
-  if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; _openN = 0; _openMax = 0; _openSlow = 0; _sinceUp = -1; _scaleCap = 1; _capProbeMs = CLIMB_SURVIVE_MS; } else _live = false;
+  if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; _openN = 0; _openMax = 0; _openSlow = 0; _sinceUp = -1; _scaleCap = Infinity; _capProbeMs = CLIMB_SURVIVE_MS; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
   if (on) GameStore.store.rawSet(SENT_ACTIVE, "1"); else GameStore.store.rawDel(SENT_ACTIVE);
 }
@@ -533,9 +552,9 @@ function tick(dtMs) {
   // Headroom has to be UNBROKEN to age the ceiling: any frame back over the
   // restore threshold restarts the two minutes, so a device that is merely
   // between heavy sections never probes its way back up.
-  if (_scaleCap < 1) {
+  if (_scaleCap <= 1) {
     if (_frameEMA < _floorMs + RESTORE_WITHIN) {
-      if ((_capProbeMs -= stepMs) <= 0) { _scaleCap = 1; _armCapProbe(); }
+      if ((_capProbeMs -= stepMs) <= 0) { _scaleCap = Infinity; _armCapProbe(); }
     } else _armCapProbe();
   }
   if (_govCoolMs > 0) { _govCoolMs = Math.max(0, _govCoolMs - stepMs); return; }
@@ -647,7 +666,7 @@ function tick(dtMs) {
       // off for the session on one old measurement. The measured ceiling was
       // taken against the OLD feature set and stops meaning anything here too.
       _scaleFutile = false;
-      _scaleCap = 1; _armCapProbe();
+      _scaleCap = Infinity; _armCapProbe();
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
@@ -682,7 +701,7 @@ function tick(dtMs) {
     // that gap only hands the next heavy section something to take back. The
     // margin belongs to a measurement, never to the default — subtracting it
     // from an untouched ceiling would pin every healthy device at 0.9.
-    const ceil = _scaleCap >= 1 ? 1 : Math.max(0.5, _scaleCap - 0.1);
+    const ceil = _scaleCap > 1 ? 1 : Math.max(0.5, _scaleCap - 0.1);
     if (_autoRes && cur < ceil - 1e-9) {
       // HALVE THE GAP, don't crawl it. A fixed +0.06 needs eight steps to get
       // from the 0.5 floor back to full — eight target reallocations, eight
@@ -692,8 +711,14 @@ function tick(dtMs) {
       // the SAFER one: it converges on the ceiling in four, and a step that
       // does overshoot is reverted by the same verify and lowers the ceiling
       // onto the rung it refused, which a crawl never learned to do.
+      // SNAP FROM ONE DOWN-STEP OUT, not from 0.09. The threshold has to clear
+      // the width of a CUT (0.1) or the commonest climb there is — undoing a
+      // single cut, 0.9 back to 1.0 — costs two reallocations instead of one:
+      // 0.1 is not under 0.09, so it stepped to 0.96 and snapped from there.
+      // Every snap delta this admits is at least 0.03, still far outside
+      // setRenderScale's 0.02 dead zone.
       const gap = ceil - cur;
-      const next = gap < 0.09 ? ceil : Math.min(ceil, cur + Math.max(0.06, gap / 2));
+      const next = gap < 0.12 ? ceil : Math.min(ceil, cur + Math.max(0.06, gap / 2));
       stepped = !!_gfx.setRenderScale(next);
       if (stepped) {
         _pendingVerify = { kind: "scale", prev: cur, next, ema: _frameEMA, up: true };
@@ -767,7 +792,7 @@ return {
     const prev = _userTier;
     _userTier = t;
     _tierFutile = false;   // a new preset changes what a step means
-    _scaleCap = 1; _armCapProbe();   // ...and what the frame costs, so the measured ceiling expires with it
+    _scaleCap = Infinity; _armCapProbe();   // ...and what the frame costs, so the measured ceiling expires with it
     // RAISING QUALITY MUST RELEASE WHAT THE OLD PRESET CAUSED. The degrade
     // branch steps from _floorTier(), which folds in _userTier, so a shed taken
     // while the player sat on MEDIUM wrote _perfTier = 3 — the governor adopted
