@@ -5203,7 +5203,37 @@ post warm, nulls it after, and warms the casters under null (`sunPass` runs befo
 all and compiles under whatever its caller set. The two sandboxed warm tests
 encoded the old assumption (MRT null during the post warm); they now assert the
 order and pin it in the source — exactly one `setMRT(null)` in `startProgramWarm`,
-between the two warms, none in `post.warm`. Census 207: _pending_.
+between the two warms, none in `post.warm`.
+
+### Census 207: the leg never reached the race — and neither had the others
+
+Census 207 on fix D printed the best three.js/WebGPU row this branch has seen —
+**0 spikes / 750 frames, worst callback 6.7 ms**, every one of the 53 shader
+modules tagged by a warm (23 scene, 14 post, 15 casters, 1 mipmap), no lazy
+program at all — and it is a non-result. The beats say why: `memState.presentMs`
+0 and `groupVer` 0 on all fifteen, the governor ring at n=1 the whole window
+(`game.js tickBody` returns while `gfx.warming()`, so the ring holds the one tick
+before the warm), and the uniform-buffer count climbing 2 → 596 — the warm's own
+bindings. The window closed at s=26.3 with the warm still pending. Nothing raced.
+
+Tabulating the same beats across 200–207 (`s : uniform buffers : groupVer`)
+shows the pre-race phase — race entry, `park(0.1)`, the warm — taking 10–15 s on
+`macos-latest`, against a 15-beat window that opens at `arm()` **with the car
+parked**: the race began at beat 12 (206), 11 (205), 13 (203), 15 (200) or never
+(207). Every hitch row this note has quoted from the census was the lights plus
+0–5 s of a parked race; the 39 → 507 uniform-buffer "burst" is the scene warm's
+object loop, not streaming. The lazy-program stacks were still real (they are
+tagged by the live `render()` frame), and patches 7/8 apply to any lazy compile
+wherever it lands, but "the car reaching new track" was never in the window.
+
+The instrument is now what the report needs: `gpu-game-check.mjs` waits for
+`state === "race"` with no warm pending (bounded), starts a rAF autopilot lifted
+from `tests/specs/autopilot.spec.js` (braking envelope over `scan()`, pure
+pursuit on `probe()`, `setInput()` only — bound to the raw rAF so the hitch
+recorder does not count its callbacks), THEN arms the recorder, the CPU profile
+and `--beats` beats (the census passes 20). `memState().warm` reports the warm by
+stage, and the `race:` row prints the gate time, the warm stages and how far the
+car drove — or NOT REACHED, loudly. Census 208: _pending_.
 
 ### What the instruments had to become first
 

@@ -85,6 +85,10 @@ const TLX = (function () {
       const _gpuRecentErrors = [];
       let _gpuLastResize = null, _gpuLastOperation = "boot";
       let _warmRequested = false, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
+      // The warm's stage timeline, read by memState().warm: the lights hold for
+      // exactly this long on a player's GPU, and the census beats sample it —
+      // gpu-census 207 spent its whole window inside the warm and no row said so.
+      const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
       const GPU_ERR_LOG_CAP = 8;
       // Heal-gate counters live HERE, not by the gate: the error hooks install
       // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
@@ -1781,6 +1785,7 @@ const TLX = (function () {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
         _warmAt = performance.now(); _warmAttempts++;
+        _warmStages.at = Math.round(_warmAt); _warmStages.attempts = _warmAttempts;
         const target = renderer.getRenderTarget(), mrt = renderer.getMRT();
         const usePost = !!(post && post.enabled() && _postF.proj && !vizMat);
         // r185 reads renderer target/MRT again AFTER awaits while building nodes.
@@ -1792,8 +1797,10 @@ const TLX = (function () {
             if (fx && fx.setSsrMrt) fx.setSsrMrt(usePost);
             renderer.setMRT(usePost ? _ssrMrtNode() : null);
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
+            let _tStage = performance.now();
             _gpuLastOperation = "compile-scene";
             await renderer.compileAsync(scene, camera);
+            _warmStages.scene = Math.round(performance.now() - _tStage); _tStage = performance.now();
             // MRT STAYS SET THROUGH THE POST WARM. present() sets the ssrTag MRT
             // node for the scene pass and calls post.present() BEFORE restoring
             // it, so every live post quad compiles with that node in its render
@@ -1820,6 +1827,7 @@ const TLX = (function () {
             if (usePost && post.warm) {
               _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
             }
+            _warmStages.post = Math.round(performance.now() - _tStage); _tStage = performance.now();
             renderer.setMRT(null);
             // The casters live in their own Scene (tlx-shadow.js castScene), so
             // compileAsync(scene) never sees them and the first sun pass of the
@@ -1829,10 +1837,13 @@ const TLX = (function () {
             // now castScene holds the grid's casters and the warm compiles the
             // real ones.
             if (shadowSys && shadowSys.warm) { _gpuLastOperation = "compile-shadow"; await shadowSys.warm(); }
+            _warmStages.shadow = Math.round(performance.now() - _tStage);
           } catch (e) {
+            _warmStages.failed++;
             _warmRequested = _warmAttempts < 2;
             try { Log.warn("gfx", "TLX program warm failed", String(e)); } catch (_) { /* logging is optional */ }
           } finally {
+            _warmStages.total = Math.round(performance.now() - _warmAt);
             if (lit && lit.setSsrMrt) lit.setSsrMrt(false);
             if (fx && fx.setSsrMrt) fx.setSsrMrt(false);
             renderer.setMRT(mrt); renderer.setRenderTarget(target);
@@ -3960,6 +3971,11 @@ const TLX = (function () {
             o.sharedUniforms = !!(lit && lit.sharedUniforms);
             o.matHit = _matHit; o.matMiss = _matMiss; o.matEvict = _matEvict;
             o.presentMs = +_presentMs.toFixed(3);
+            // The warm timeline: how long the lights held on THIS GPU, by stage;
+            // pending/done say whether a census beat is inside it (207 was, all 15).
+            o.warm = { at: _warmStages.at, scene: _warmStages.scene, post: _warmStages.post, shadow: _warmStages.shadow,
+                       total: _warmStages.total, attempts: _warmStages.attempts, failed: _warmStages.failed,
+                       pending: !!_warmPending, done: _warmDone };
             o.presents = _presentN;   // frames presented — a spec samples both flag arms at the same count
             // THIS WAS ALWAYS undefined. `renderer.backend.data` is a
             // WeakMap, which has no `.size`, so the guard never passed and the

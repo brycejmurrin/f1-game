@@ -58,6 +58,17 @@ const backend = flag("--backend", "three");
 // real-GPU content path is reproduced on a software adapter.
 const extraLs = argv.reduce((acc, a2, i) => (a2 === "--ls" && argv[i + 1] ? acc.concat(argv[i + 1]) : acc), []);
 const path3 = flag("--path", "webgpu");
+// --beats N: the measured window, one beat a second (default 15). The window
+// used to open at arm() with the car PARKED at the lights, and the pre-race
+// phase (race entry + the TLX program warm) takes 10-15 s on macos-latest
+// (census 200-207, beats: memState.presentMs=0 and the governor ring at n=1
+// until the race), so fifteen beats held 0-5 s of a parked race. The race
+// gate below waits for the race itself; --beats sizes what it then measures.
+const beats = Math.max(1, Math.round(Number(flag("--beats", 15))) || 15);
+// --no-drive keeps the car parked for the window (the pre-2026-09-22 census).
+// The default DRIVES: a parked car streams nothing, and the hitch this tool
+// exists to find is scenery reaching a moving car.
+const drive = !process.argv.includes("--no-drive");
 
 function serve() {
   // A server rooted at the wrong directory answers 404 to everything, which is
@@ -267,6 +278,65 @@ try {
       }
     } catch (_) { /* WebGL2 legs have no GPUCommandEncoder; the timing still runs */ }
     try {
+      // THE DRIVER. tests/specs/autopilot.spec.js's closed-loop law — a braking
+      // envelope over scan() (v_now^2 = v_corner^2 + 2 a d for every look-ahead
+      // point), pure pursuit on probe() — run from the RAW rAF against the live
+      // loop: setInput() only, the game steps itself. It binds the un-wrapped
+      // requestAnimationFrame on purpose: the hitch recorder below wraps every
+      // callback, and a second callback per frame would halve every per-frame
+      // statistic it reports.
+      const _rawRaf = window.requestAnimationFrame.bind(window), _rawCaf = window.cancelAnimationFrame.bind(window);
+      const DISTS = []; for (let d = 5; d <= 160; d += 6) DISTS.push(d);
+      const VMAX = 94, A_LAT = 13, A_BRAKE = 24, KP = 2.4;
+      let _dOn = false, _dRaf = 0, _dPrev = 0, _dHold = 30, _dStalled = 0, _dLastProg = null, _dLastS = null;
+      let _dFrames = 0, _dDist = 0, _dSpeedSum = 0, _dOff = 0, _dErr = null;
+      const tick = (ts) => {
+        if (!_dOn) return;
+        _dRaf = _rawRaf(tick);
+        const A = window.__apex;
+        if (!A || !A.probe || !A.scan || !A.setInput) return;
+        const dt = _dPrev ? Math.min(0.1, Math.max(0.001, (ts - _dPrev) / 1000)) : 1 / 60; _dPrev = ts;
+        let p = null, pts = null;
+        try { p = A.probe(); pts = p ? A.scan(DISTS) : null; } catch (e) { _dErr = String(e && e.message).slice(0, 80); return; }
+        if (!p || !pts) return;
+        let kSteer = p.k; const steerLook = Math.max(9, p.speed * 0.4);
+        let vT = Math.abs(p.k) > 1e-4 ? Math.sqrt(A_LAT / Math.abs(p.k)) : VMAX;
+        for (let j = 0; j < pts.length; j++) {
+          const d = DISTS[j], k = Math.abs(pts[j].k);
+          if (d <= steerLook) kSteer = pts[j].k;
+          const vCorner = k > 1e-4 ? Math.sqrt(A_LAT / k) : VMAX;
+          const vAllow = Math.sqrt(vCorner * vCorner + 2 * A_BRAKE * d);
+          if (vAllow < vT) vT = vAllow;
+        }
+        vT = Math.max(11, Math.min(VMAX, vT));
+        _dHold = Math.min(vT, _dHold + 30 * dt); vT = _dHold;
+        const L = Math.max(8, Math.min(38, p.speed * 0.6));
+        const latTarget = kSteer * L * L * 0.5;
+        let steer = KP * (Math.atan2(latTarget - p.x, L) - p.angle);
+        steer = Math.max(-1, Math.min(1, steer));
+        const offRoad = Math.abs(p.x) - p.hw > 0.4;
+        if (_dLastProg != null && p.s - _dLastProg < 0.05 && p.speed < 3) _dStalled++; else _dStalled = 0;
+        _dLastProg = p.s;
+        let throttle = p.speed < vT, brake = p.speed > vT * 1.04;
+        if (_dStalled > 10) { steer = Math.max(-0.4, Math.min(0.4, steer)); throttle = true; brake = false; }
+        else if (offRoad) { throttle = false; }
+        try { A.setInput({ steer, throttle, brake }); } catch (e) { _dErr = String(e && e.message).slice(0, 80); }
+        _dFrames++; _dSpeedSum += p.speed; if (offRoad) _dOff++;
+        if (_dLastS != null) { const ds = p.s - _dLastS; if (ds > 0 && ds < 50) _dDist += ds; }
+        _dLastS = p.s;
+      };
+      window.__gcDrive = {
+        start() { if (_dOn) return; _dOn = true; _dPrev = 0; _dRaf = _rawRaf(tick); },
+        stop() {
+          _dOn = false;
+          try { _rawCaf(_dRaf); } catch (_) { /* already fired */ }
+          try { if (window.__apex && window.__apex.clearInput) window.__apex.clearInput(); } catch (_) { /* input hook absent */ }
+        },
+        stats: () => ({ frames: _dFrames, distM: Math.round(_dDist), meanSpeed: _dFrames ? +(_dSpeedSum / _dFrames).toFixed(1) : 0,
+                        offRoadFrames: _dOff, error: _dErr }),
+      };
+    } catch (_) { /* no driver: the window measures a parked car, and the race: row says PARKED */ }
+    try {
       const _raf = window.requestAnimationFrame.bind(window);
       window.requestAnimationFrame = function (cb) {
         return _raf(function (ts) {
@@ -401,6 +471,46 @@ try {
   // scales with pixel count is fragment-bound.
   out.gpuTimerStart = await bounded(() => page.evaluate(() => window.__apex.gpuTimer(true)), 20000, "gpu-timer-on");
   checkpoint("racing", { track });
+  // THE RACE GATE. park() sits the car at the lights and the TLX program warm
+  // holds the whole loop (game.js tickBody returns while gfx.warming()) — 10 to
+  // 15 s on macos-latest, measured across census 200-207 — so a window armed
+  // here timed the lights and 0-5 s of a parked race, whatever it reported.
+  // Wait for state "race" with no warm pending, then drive, THEN arm.
+  const _gateT0 = Date.now();
+  out.race = { beats, drive, reached: false };
+  try {
+    await page.waitForFunction(() => {
+      const A = window.__apex; const i = A && A.info ? A.info() : null;
+      const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+      // TLX requests its warm at race start and STARTS it on the next present,
+      // so "not warming" alone is true in the gap before it begins (the local
+      // dry run passed the gate at +0.1 s and then timed the warm anyway). A
+      // leg that has a warm must have FINISHED one; GLX/WGX report no warm.
+      const m = t && t.memState ? t.memState() : null;
+      const w = m && m.warm ? m.warm : null;
+      const warming = !!(t && t.warming && t.warming());
+      const warmDone = !w || w.done === true;
+      return !!(i && i.state === "race" && !warming && warmDone);
+    }, null, { polling: 100, timeout: Number(flag("--race-timeout", 90000)) });
+    out.race.reached = true;
+  } catch (e) {
+    out.race.note = "RACE NOT REACHED: " + String((e && e.message) || e).slice(0, 100);
+  }
+  out.race.gateMs = Date.now() - _gateT0;
+  // The warm's own timeline (tlx.js memState().warm): how long the lights held
+  // for a player on this GPU, by stage. Absent on GLX/WGX, which have no warm.
+  out.race.warm = await bounded(() => page.evaluate(() => {
+    const t = (typeof GLX !== "undefined" && GLX) ? GLX.__tlx : null;
+    const m = t && t.memState ? t.memState() : null;
+    return m && m.warm ? m.warm : null;
+  }), 10000, "warm-read").catch(() => null);
+  if (drive && out.race.reached) {
+    out.race.driver = await bounded(() => page.evaluate(() => {
+      if (!window.__gcDrive) return "absent";
+      window.__gcDrive.start(); return "started";
+    }), 10000, "drive-start").catch((e) => "failed: " + String((e && e.message) || e).slice(0, 60));
+  }
+  checkpoint("race-gate", out.race);
   // Poll instead of one blind sleep. The question after park() is whether the
   // page is STILL ANSWERING, and a single waitForTimeout cannot tell a healthy
   // wait from a wedged renderer — on Apple Metal both three paths went silent
@@ -441,7 +551,7 @@ try {
     await _cpu.send("Profiler.start");
   } catch (e) { out.cpuProfileError = String((e && e.message) || e).slice(0, 120); _cpu = null; }
   let missed = 0;
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < beats; i++) {
     if (out.crashed || out.browserGone) break;
     try {
       const beat = await Promise.race([
@@ -497,6 +607,14 @@ try {
     catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
   } else {
     out.cpu = { note: "no CPU profile: " + (out.cpuProfileError || "CDP unavailable") };
+  }
+  // The driver stops HERE, before the A/B phases below pin the clock and
+  // freeze the sim; stop() also clears the input override it held.
+  if (out.race && out.race.driver === "started") {
+    out.race.driven = await bounded(() => page.evaluate(() => {
+      const d = window.__gcDrive; if (!d) return null;
+      const st = d.stats(); d.stop(); return st;
+    }), 10000, "drive-stop").catch((e) => ({ error: String((e && e.message) || e).slice(0, 80) }));
   }
   // THE PERIOD OF THE TAIL, from the raw per-callback series rather than from
   // aggregated per-beat percentiles. bounded() because a leg whose renderer

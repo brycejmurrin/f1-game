@@ -4384,6 +4384,9 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   // nulled only after it, and the casters compile under null (sunPass runs before
   // present(), with the MRT restored).
   let shadowCalls = 0, postCalls = 0;
+  // The stage timeline memState().warm reports (census 207 spent its window
+  // inside the warm with no row saying so): the sandbox owns the record.
+  const _warmStages = { at: 0, scene: null, post: null, shadow: null, total: null, attempts: 0, failed: 0 };
   const shadowSys = { warm: async () => {
     shadowCalls++; await Promise.resolve();
     assert.equal(postCalls, 1, "the caster warm runs after the post warm");
@@ -4427,6 +4430,10 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   warm({}); await _warmPending;
   assert.equal(_warmRequested, false); assert.equal(postCalls, 1); assert.equal(shadowCalls, 1);
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
+  // Two attempts, one failed; every stage of the successful one is a number.
+  assert.equal(_warmStages.attempts, 2); assert.equal(_warmStages.failed, 1);
+  for (const k of ["scene", "post", "shadow", "total"]) assert.ok(Number.isFinite(_warmStages[k]) && _warmStages[k] >= 0, k + " stage timed");
+  assert.ok(_warmStages.at > 0, "warm start stamped");
 });
 
 test("TLX post warm compiles serially and holds each target across awaits", async () => {

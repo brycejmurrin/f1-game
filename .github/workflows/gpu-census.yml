@@ -256,7 +256,7 @@ jobs:
           # swapchain; the `path:` row below prints softBlit so a regression
           # here is visible rather than silently re-measured.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --backend three --path webgpu --ls apex26.wgxCapture=0 \
+            --backend three --path webgpu --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
@@ -274,7 +274,7 @@ jobs:
           # in exactly ONE variable — the three path — which is the only thing
           # that makes this a control.
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --backend three --path webgl2 --ls apex26.wgxCapture=0 \
+            --backend three --path webgl2 --ls apex26.wgxCapture=0 --beats 20 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
             --shot "game-webgl2-${{ matrix.image }}.png"
@@ -292,7 +292,7 @@ jobs:
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --backend webgl2 $LS \
+            --beats 20 --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
 
@@ -312,7 +312,7 @@ jobs:
         run: |
           LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
           node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" --clock "${CENSUS_CLOCK:-12}" ${CENSUS_TOD:+--tod "$CENSUS_TOD"} \
-            --backend webgpu $LS \
+            --beats 20 --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
 
@@ -404,6 +404,25 @@ jobs:
               // beside out.gfx, and the first wiring read gfx.frameTail — so
               // the row silently never printed on run 35748268014, the one run
               // that finally had the real present path to measure.
+              // THE WINDOW ITSELF. Census 207 reported 0 spikes on the three.js /
+              // WebGPU leg and every one of its fifteen beats sat inside the
+              // program warm (presentMs 0, governor ring n=1): the pre-race phase
+              // takes 10-15 s on this runner and the old window opened at arm()
+              // with the car parked. The gate now waits for the race and the
+              // driver moves the car; this row says whether that happened, how
+              // long the lights held by warm stage, and how far the car went.
+              const _rc = g.race;
+              if (_rc && _rc.reached === false) {
+                rows.push(`${" ".repeat(8)}race:  NOT REACHED in ${_rc.gateMs} ms — every row below timed the LIGHTS, not the race` +
+                  (_rc.warm ? `  (warm: scene=${_rc.warm.scene} post=${_rc.warm.post} shadow=${_rc.warm.shadow} total=${_rc.warm.total} ms, pending=${_rc.warm.pending})` : ""));
+              } else if (_rc) {
+                const _w = _rc.warm, _d = _rc.driven;
+                rows.push(`${" ".repeat(8)}race:  gate=${_rc.gateMs}ms beats=${_rc.beats}` +
+                  (_w ? `  warm scene=${_w.scene} post=${_w.post} shadow=${_w.shadow} total=${_w.total} ms attempts=${_w.attempts} failed=${_w.failed}` : "  warm: none (no TLX warm on this leg)") +
+                  (_d ? `  | driven ${_d.frames}f ${_d.distM} m mean ${_d.meanSpeed} m/s offRoad=${_d.offRoadFrames}f${_d.error ? " driverError=" + _d.error : ""}` : _rc.drive ? `  | driver ${_rc.driver || "not started"}` : "  | PARKED (--no-drive)"));
+              } else {
+                rows.push(`${" ".repeat(8)}race:  no race gate in this build — the window opened at arm(), car parked`);
+              }
               const _ft = g.frameTail;
               if (_ft && _ft.p99 != null) {
                 rows.push(`${" ".repeat(8)}tail:  p50=${_ft.p50} p95=${_ft.p95} p99=${_ft.p99} max=${_ft.max} p99/p50=${_ft.p99OverP50}x` +
