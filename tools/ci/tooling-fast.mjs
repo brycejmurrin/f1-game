@@ -96,6 +96,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-preview-plan.test.mjs",
   "tests/unit/circuit-axis.test.mjs",
   "tests/unit/circuit-def-fields.test.mjs",
+  // ...and the same question one level down: a def may name a tree species or
+  // a grandstand livery the engine has no entry for, and every lookup has a
+  // fallback, so the circuit renders as something else in silence. ~0.2 s.
+  "tests/unit/circuit-vocab.test.mjs",
   "tests/unit/backend-surface-parity.test.mjs",
   "tests/unit/surface-id-parity.test.mjs",
   "tests/unit/godray-keep-nearest.test.mjs",
@@ -174,6 +178,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",
   "tests/unit/track-build-vm-release.test.mjs",
+  "tests/unit/baked-model-road-guard.test.mjs",
   "tests/unit/floodmast-lamp-register.test.mjs",
   "tests/unit/cdmcp-measure.test.mjs",
   "tests/unit/tools-runnable.test.mjs",
@@ -261,6 +266,22 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/body-attitude.test.mjs",
   "tests/unit/save-migrate.test.mjs",
   "tests/unit/wait-polling.test.mjs",
+  // ...and its sibling over js/: a try/catch cannot swallow a promise
+  // REJECTION, and index.html turns an unhandled one into a full-screen
+  // overlay over the running race. Pure source scan, well under a second.
+  "tests/unit/reject-lint.test.mjs",
+  // ...and a third of the same family: two widgets keyed on ONE sign convention
+  // were painted opposite colours. Neither half is wrong alone, so only a test
+  // comparing the PAIR can see it. Pure text, well under a second.
+  "tests/unit/delta-sign-colour.test.mjs",
+  // ...and the fourth: the component inventory only ever guarded DEFINED-
+  // but-unapplied. This is the mirror — a class the markup wears that no rule
+  // matches, which reads as styled and is not. Pure source scan, ~0.3 s.
+  "tests/unit/class-usage.test.mjs",
+  // ...and the DIFF[difficulty] family, one door further out: three readers
+  // that took a stored index or object on trust. Executes the shipped source
+  // (idxOr, loadCustomTeam, DebrisWorld.reset), no browser. Well under a second.
+  "tests/unit/boot-input-shape.test.mjs",
   "tests/unit/gallery-capture-draws.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/lighting-campaign.test.mjs",

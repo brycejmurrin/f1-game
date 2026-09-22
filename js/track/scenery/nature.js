@@ -80,9 +80,25 @@ const SceneryNature = (function () {
       // unwrapped node query (groundYAt) must read the node from here.
       return { c: [cx, base - 0.3, cz], r, u, t, k };
     };
+    // ONE TREE PER SPOT. Two trees planted at the same point are the same tree
+    // drawn twice: every trunk cylinder and canopy cone is coincident, so the
+    // whole crown z-fights with itself and costs double the vertices. Circuits
+    // hit this by walking two treelines that overlap, or by an `every()` step
+    // landing on a node a hand-placed tree already took (okayama 2026-09-22:
+    // 243 coincident primitives after the barrier guard, all of them trees).
+    // 25 cm cells: finer than any real planting distance, coarse enough that a
+    // deliberate copse is untouched.
+    const planted = new Set();
+    const spotTaken = (x, z) => {
+      const key = `${Math.round(x * 4)}|${Math.round(z * 4)}`;
+      if (planted.has(key)) return true;
+      planted.add(key);
+      return false;
+    };
     const pine = (k, side, dist, h, col, opts) => {
       opts = opts || {};
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      if (spotTaken(a.c[0], a.c[2])) return;
       // The CROWN's radius from the pit complex, not the trunk's: crown tiers
       // may overhang the complex (js/track/tracks.js onRoadHit), so a pine a
       // def plants just behind the garages — Monza's poplars at the row —
@@ -131,6 +147,7 @@ const SceneryNature = (function () {
       const crown = (opts && opts.crown) || "round";
       const sp = (opts && opts.spread) || 1;
       const a = anchor(k, side, dist), b = [a.r, a.u, a.t];
+      if (spotTaken(a.c[0], a.c[2])) return;   // one tree per spot — see the note on `planted`
       if (onTrack(a.c[0], a.c[2], 4, Math.max(0.5, h * 0.3 * sp))) {   // the crown's radius from the pit complex — see pine()
         ctx.noteSuppressed("tree", `tree SUPPRESSED at k=${k} side=${side}: dist=${dist}`);
         return;
@@ -670,6 +687,22 @@ const SceneryNature = (function () {
 
     const spectatorHill = (s0, s1, side, gap, opts) => {
       opts = opts || {};
+      // LAYERED BANKS MUST NOT COINCIDE. Circuits paint a two-tone cut by
+      // calling this twice over almost the same span at the SAME gap — a tall
+      // pale bank and a shorter redder one (okayama 0.100/0.102, 0.320/0.322,
+      // 0.614/0.616). Wherever the two row ladders line up the treads come out
+      // BYTE-IDENTICAL: same centre, same size, same basis — 340 coincident
+      // pairs on okayama alone (2026-09-22), the purest z-fight there is.
+      // A deterministic nudge derived from the call's own height separates
+      // them: stable across builds (no hash of position, no RNG), strictly
+      // OUTWARD so it can only increase clearance from the tarmac, and at most
+      // 12 mm — past 1 cm of plane gap the fight starts beyond 220 m, which is
+      // past this tool's 150 m horizon (coplanar-audit's own depth model).
+      // The spread is 4 cm, not 1 cm, because what has to clear the horizon is
+      // the DIFFERENCE between two layered calls, not each nudge: a 1 cm spread
+      // put okayama's pair 5.4 mm apart, which fights from 165 m and sat right
+      // on the gate. 4 cm outward at a 9 m clearance is invisible.
+      gap += ((Math.abs(opts.h || 0) * 7.3) % 1) * 0.04;
       const rows = Math.max(2, Math.min(8, Math.round(opts.rows || 4)));
       const rise = opts.rise != null ? opts.rise : 1.15;      // per-row height gain
       const depth = opts.depth != null ? opts.depth : 2.0;    // per-row setback

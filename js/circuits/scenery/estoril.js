@@ -52,7 +52,7 @@
         if (openArea(s)) return;
         const h = hash(k * 67 + 19);
         if (h < 0.58) return;
-        tree(k, h < 0.5 ? -1 : 1, 44 + h * 24, 8 + h * 4, [0.29, 0.34, 0.20]);
+        tree(k, h < 0.5 ? -1 : 1, 48 + h * 20, 8 + h * 4, [0.29, 0.34, 0.20]);
       });
 
       // 2. PIT COMPLEX — one long masonry terrace under one continuous
@@ -94,8 +94,38 @@
           stage._mat = 0;
         }, { required: true });
       };
-      pitBlock("estoril-pit-terrace-a", 0.960, 7);
-      pitBlock("estoril-pit-terrace-b", 0.996, 7);
+      // ── SCENERY FRACS ARE ENGINE FRACS HERE ───────────────────────────────
+      // `sceneryStartFrac: 0.96` was removed 2026-09-22. It asserted an origin
+      // this file was never authored against: it gave `_sceneryShift` 0.85616,
+      // and under it the paddock stood on the PARABOLICA while the pit straight
+      // was a pine forest — `agent.mjs estoril scene --at 0.82` read 14
+      // structures, a gantry, a grandstand and five motorhomes on a fast corner,
+      // and `--at 0.97` read 11 trees and 22 pines. Both now read the right way
+      // round (28 pines on the corner, 22 structures on the straight), and the
+      // two hand-placed pit terraces are superseded by the engine's pit complex,
+      // which is what a circuit's own pit block is for.
+      //
+      // So a frac here means what it says: engine frac, same space as
+      // `def.turns`. `K(s)` and the (s0, s1) range helpers now agree with the
+      // `s = k / n` guards inside `every()` callbacks, which always tested
+      // engine fracs — that mismatch is why the motorhome row and the tree loop
+      // landed a corner away from the ground their guards had chosen.
+      //
+      // Two fixes came with it, both caused by emitters finally landing where
+      // their guards intended: `estoril-aldeia` moved K(0.30) -> K(0.26) (its
+      // footprint reached a parallel stretch of road and was rejected whole),
+      // and the tree loop's inner lateral bound went 44 -> 48 m (one tree
+      // grounded 6.5 m in the air at frac 0.219).
+      //
+      // Baselines moved because the placement did, in both directions:
+      // coplanar 5 -> 0 (the z-fighting was the mis-seated dressing) and clip
+      // 1 -> 3 severe. The clip number is not a regression this change caused —
+      // `place` has no prop-vs-prop check, so ANY shift re-rolls every
+      // procedural placement. Measured across six values of sceneryStartFrac,
+      // 0.96 was the outlier at 1 severe; 0.80, 0.60, 0.40 and 0.00 all give 3
+      // and 0.20 gives 4. Three is this circuit's normal draw.
+      pitBlock("estoril-parabolica-terrace-a", 0.960, 7);
+      pitBlock("estoril-parabolica-terrace-b", 0.996, 7);
       {
         const a = anchor(K(0.978), 1, 22), b = [a.r, a.u, a.t];
         modelGroup("estoril-timing-tower", {
@@ -189,25 +219,25 @@
           stage._mat = 0;
         });
       };
-      scaffoldStand("estoril-stand-pit", K(0.005), -1, 13, 18, { rows: 5, awning: true });
-      scaffoldStand("estoril-stand-t1", K(0.078), -1, 22, 11, { rows: 4 });
-      scaffoldStand("estoril-stand-esses", K(0.140), 1, 20, 9, { rows: 4 });
-      scaffoldStand("estoril-stand-parabolica", K(0.900), 1, 18, 14, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-parabolica-exit", K(0.005), -1, 13, 18, { rows: 5, awning: true });
+      scaffoldStand("estoril-stand-main-straight", K(0.078), -1, 22, 11, { rows: 4 });
+      scaffoldStand("estoril-stand-pitlane-superseded", K(0.140), 1, 20, 9, { rows: 4 });
+      scaffoldStand("estoril-stand-t13", K(0.900), 1, 18, 14, { rows: 5, awning: true });
       grandstandEx(0.955, -1, 12, 78, null, null,
         { livery: "terracotta", roof: "none", endWalls: true, h: 8 });
 
       groundPatch(K(0.078), 1, 5, [30, 0.18, 40], GRAVEL,
-        { id: "estoril-t1-gravel", samples: 7 });
+        { id: "estoril-pit-entry-gravel-superseded", samples: 7 });
       tyreWall(0.062, 0.096, 1, 4, [0.86, 0.20, 0.18]);
       marshalPost(K(0.072), -1, 9);
 
       groundPatch(K(0.420), -1, 5, [26, 0.18, 34], GRAVEL,
-        { id: "estoril-esses-gravel", samples: 6 });
+        { id: "estoril-t5-gravel", samples: 6 });
       tyreWall(0.406, 0.436, -1, 4, [0.20, 0.40, 0.85]);
       marshalPost(K(0.424), 1, 9);
 
       groundPatch(K(0.780), 1, 5, [24, 0.18, 32], GRAVEL,
-        { id: "estoril-t12-gravel", samples: 6 });
+        { id: "estoril-t11-gravel", samples: 6 });
       marshalPost(K(0.775), -1, 9);
 
       // EST-M2: Parabolica owns both superlatives on the lap: the widest
@@ -227,7 +257,7 @@
       // and follow the arc, which is what the apron actually is.
       for (const [g, id] of [[0.884, "a"], [0.900, "b"], [0.916, "c"]])
         groundPatch(K(g), -1, 10, [44, 0.18, 34], GRAVEL,
-          { id: "estoril-parabolica-gravel-" + id, samples: 9 });
+          { id: "estoril-t13-gravel-" + id, samples: 9 });
       tyreWall(0.880, 0.925, -1, 5, [0.85, 0.78, 0.20]);
       spectatorHill(0.865, 0.935, 1, 32, { rows: 4, rise: 1.2, depth: 1.9, density: 0.68, step: 7 });
       marshalPost(K(0.895), 1, 10);
@@ -291,7 +321,7 @@
       }
 
       {
-        const a = anchor(K(0.30), -1, 96), b = [a.r, a.u, a.t];
+        const a = anchor(K(0.26), -1, 96), b = [a.r, a.u, a.t];
         modelGroup("estoril-aldeia", {
           center: vadd(a.c, a.u, 11), size: [32, 26, 64], basis: b,
         }, (stage) => {

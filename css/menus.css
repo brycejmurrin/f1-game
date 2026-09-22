@@ -108,6 +108,26 @@
   color: var(--red);                 /* the ONE declaration that themes every
                                         currentColor stroke and gradient stop */
 }
+/* THE PORTRAIT DRAWING IS A SECOND PICTURE, NOT A SECOND CROP. It sits in the
+   same slot on the same terms — bottom-anchored, behind everything, its own
+   aspect on the box so cover and fit agree — but its viewBox is 900/1600,
+   because a high-and-behind view of two cars is taller than it is wide and a
+   tall phone has nothing else to put in that shape.
+   Exactly one of the two is ever rendered: display:none, not opacity, so the
+   one that is not on screen costs no paint at all. */
+#title-car-top {
+  position: absolute;
+  left: 0; right: 0; bottom: 0; top: auto;
+  width: 100%; height: auto;
+  aspect-ratio: 900 / 1600;
+  zoom: normal;
+  pointer-events: none;
+  z-index: -1;
+  color: var(--red);
+  display: none;
+}
+:where(body[data-shape="tall"]) #title-car { display: none; }
+:where(body[data-shape="tall"]) #title-car-top { display: block; }
 /* Literal colours live on the elements as presentation attributes, which carry
    specificity 0 — so these rules win without !important and a theme can win
    over these. */
@@ -128,25 +148,25 @@
    opposite assumption, and the car rendered as a wireframe every time. The
    open-line paths carry their own fill="none" attribute, which beats this
    inherited value. */
-#title-car g { fill: var(--carbon); stroke-linecap: round; stroke-linejoin: round; }
+:is(#title-car, #title-car-top) g { fill: var(--carbon); stroke-linecap: round; stroke-linejoin: round; }
 /* :not([stroke]) rather than a class — the glow group is the only one that
    names its own paint (the gradient), so the art needs no class at all, and
    cssClasses stays where it was. A CSS rule would otherwise WIN over that
    presentation attribute, which carries specificity 0. */
-#title-car g:not([stroke]) { stroke: var(--steel); }
+:is(#title-car, #title-car-top) g:not([stroke]) { stroke: var(--steel); }
 /* ONE CONTOUR, NOT THIRTY. The car's outline is a DILATE-AND-KNOCKOUT, not an
    SVG filter: every panel is drawn once swollen and inked (this rule), then
    again in the body colour on top, so what survives is the outer edge of their
    union. Thirty individual panel outlines is what made two cars side by side
    read as one tangle rather than as two cars. An attribute hook, not a class,
    so cssClasses stays where it was. */
-#title-car g[data-ink] { fill: var(--steel); stroke: var(--steel); }
+:is(#title-car, #title-car-top) g[data-ink] { fill: var(--steel); stroke: var(--steel); }
 /* VOLUME. The silhouette alone reads flat because every panel takes the same
    tone, yet the geometry already knows which faces point up and which fall
    away. These carry the light: one ink at three fill-opacities (set as
    presentation attributes, which take a plain number and so need no rule of
    their own) -- tops catch the sky, flanks sit back, rubber stays darkest. */
-#title-car g[data-tone] { fill: var(--steel); }
+:is(#title-car, #title-car-top) g[data-tone] { fill: var(--steel); }
 /* THE TRAILS HAVE TO BE PAINTED FROM CSS. Carrying fill="url(#tc-trail)" as a
    presentation attribute does not work here: `#title-car g` above sets fill on
    the very same element, and a CSS rule beats a presentation attribute, which
@@ -154,7 +174,11 @@
    life because of it -- dark smears rather than the red they were written to
    be. Anything painting a <g> that `#title-car g` also matches has to come
    from a rule, not an attribute. */
-#title-car g[data-trail] { fill: url(#tc-trail); }
+:is(#title-car, #title-car-top) g[data-trail] { fill: url(#tc-trail); }
+/* The portrait marks take the vertical ramp defined in their own svg. Same
+   reason the rule above exists — a presentation attribute loses to `g` — plus
+   the paint server has to live in the svg that is actually displayed. */
+#title-car-top g[data-trail] { fill: url(#tc-trail-v); }
 /* COPY SPACE IS A FUNCTION OF WIDTH, and this is a COMPOSITION rule, not a
    contrast one — the difference matters, because the first measurement looked
    like a legibility problem and was not.
@@ -195,17 +219,12 @@
      box wider than its scroll container still counts toward scrollWidth,
      overflow-x:hidden only hides the bar, and overflow-x:clip cannot pair with
      overflow-y:auto (it computes back to hidden). 1170/900 is 1.3x the meet
-     height — it was 1620 (1.8x), which framed the cars big enough to bury the
-     track behind them — and with preserveAspectRatio="xMinYMax slice" the art
-     scales by HEIGHT to cover it, pins the bottom-left, and clips the trails
-     inside the SVG viewport, where no scrollWidth can see them. Everywhere
-     else the box is 1400/900, where slice and meet are the same scale. */
-  :where(body[data-shape="tall"]) #title-car { aspect-ratio: 1400 / 1170; opacity: 0.9; }
-  /* Off the left edge. The crop above pins the art bottom-LEFT, which put the
-     front wing hard against the bezel; +70 viewBox units is ~25px on a 393px
-     phone, enough to read as a margin. The trail's tail leaves the crop at the
-     right, which is what the gradient is for. */
-  :where(body[data-shape="tall"]) #tc-frame { transform: translate(70px, 0); }
+     height. THAT WHOLE APPROACH IS RETIRED on a portrait phone: the box now
+     carries a drawing composed for it (#title-car-top, 900/1600), so there is
+     no crop to tune. What is left here is its weight. 0.9 is the value the
+     landscape drawing also carries, measured, so neither shape reads darker
+     than the other. */
+  :where(body[data-shape="tall"]) #title-car-top { opacity: 0.9; }
 }
 /* #tc-frame frames the ONE placement tools/gen/title-art.mjs writes. A CSS
    transform on an SVG element defaults to transform-origin 50% 50% of the
@@ -232,7 +251,7 @@
    the screen. prefers-reduced-transparency is not Baseline yet, so it is a
    progressive enhancement on a design that is already legible without it. */
 @media (prefers-reduced-transparency: reduce) {
-  #title-car { display: none; }
+  #title-car, #title-car-top { display: none; }
 }
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
@@ -570,6 +589,19 @@ body { --compact-at: 600px; --wide-at: 620px; }
   :where(body[data-shape="tall"]) #menu-secondary { width: 100%; }
   :where(body[data-shape="tall"]) #menu-buttons { align-content: start; }
   :where(body[data-shape="tall"]) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 0.6); }
+  /* THE DOORS TAKE BACK THE SLACK THEY LEFT. Starting them at the top of the
+     leftover row was right, but on a 430x932 phone the three groups measured
+     379px inside a 690px row: 311px of nothing between the last room and the
+     cars. So the row-gap and the door padding grow to spend about half of it,
+     which reads as a fuller stack rather than a gappy one — align-content:
+     space-between spends ALL of it and pushed the rooms onto the cars
+     (measured, same phone).
+     Two guards, because the slack is not universal. data-density compact is
+     the phone already short for its own UI SIZE — at 200% a 393x852 phone is
+     426 zoom-corrected — and min-height keeps the small phones out: measured,
+     a 375x667 went from a 2px internal scroll to 183px with this growth on,
+     while 393x852 and 430x932 stay at zero.
+     No px in any value here: rawSpacing is ratcheted at zero slack. */
   /* The disclaimer is the one line long enough to wrap on a 393px phone, and a
      wrapped block in a centred column is centred as a BOX while its text stays
      left-ragged — measured: line one flush left, "Formula 1" under it. */
@@ -587,6 +619,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
     --balance-basis: calc(50% - 0.5em);
     --balance-min: calc(50% - 0.5em);
   }
+}
+/* The growth itself, behind both guards (the reasoning is on the row-gap note
+   in the block above). A phone shorter than 780px keeps the tight stack. */
+@media (max-width: 699px) and (min-height: 780px) {
+  :where(body[data-shape="tall"]:not([data-density="compact"])) #menu-buttons { row-gap: calc(var(--gap) * 2.2); }
+  :where(body[data-shape="tall"]:not([data-density="compact"])) #menu-hero .bigbtn { padding-block: calc(var(--gap) * 1.1); }
+  :where(body[data-shape="tall"]:not([data-density="compact"])) #menu-primary .bigbtn { padding-block: calc(var(--gap) * 1.2); }
+  :where(body[data-shape="tall"]:not([data-density="compact"])) #menu-secondary .bigbtn { padding-block: calc(var(--gap) * 1.0); }
 }
 /* LANDSCAPE COMPACT: side-by-side brand + buttons.
    Uses body[data-shape="wide"] (zoom-corrected, set by SheetShape classifyBody)
@@ -628,7 +668,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
      rooms. Same compact floor family the pause stack already uses. */
   gap: calc(var(--gap) * 0.35);
 }
-:where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(32px, calc(9 * var(--vwz)), 64px); }
+/* The wordmark is the only thing in the brand column tall enough to answer the
+   button stack beside it. At the old 64px cap a 1000x444 phone put it in
+   y 85..197 of 444 and left the whole top third of the screen empty. */
+:where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(32px, calc(11 * var(--vwz)), 84px); }
 /* LOWER, AND ONLY AS SMALL AS THE TRAIL NEEDS. The landscape phone puts the
    button column over viewBox x > ~770, which is exactly where the trail runs
    once it leaves the cars, so at the full placement the whole ribbon was behind
@@ -641,7 +684,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
    judgement no luminance number catches (the two sizes measure the same
    litMean, 84.9 vs 84.6). Going smaller again needs a reason bigger than
    the trail. */
-:where(body[data-shape="wide"][data-density="compact"]) #tc-frame { transform: translate(28px, 242px) scale(0.808); }
+:where(body[data-shape="wide"][data-density="compact"]) #tc-frame { transform: translate(150px, -80px) scale(1.15); }
 /* THE TWO PHONE SHAPES CARRY THE SAME 0.9, which is what makes the art read the
    same in the hand. The 0.4 step this shape used to inherit from the tablet
    width left it well under portrait once the frame above scaled it down.

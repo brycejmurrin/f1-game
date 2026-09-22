@@ -145,7 +145,6 @@ test("broadcast cameras carry per-mode cut ease durations", () => {
 
 test("HUD applies camera/profile body classes", () => {
   const src = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
-  assert.match(src, /hud-onboard/);
   assert.match(src, /hud-bcam/);
   assert.match(src, /hud-hide-map/);
   assert.match(src, /hud-prof-minimal/);
@@ -153,6 +152,39 @@ test("HUD applies camera/profile body classes", () => {
   assert.match(css, /body\.hud-bcam #hud-gearbox/);
   assert.match(css, /body\.hud-hide-map #minimap/);
   assert.match(css, /body\.hud-map-low #minimap/);
+});
+
+// THE ASSERTION THIS REPLACED WAS THE BUG'S ONLY GUARD. It read
+// `assert.match(src, /hud-onboard/)` — the class name still appears in hud.js —
+// while the CSS rule that gave the class meaning had been deleted the same day
+// it shipped (2026-09-04: `aaa4954f3` replaced the onboard minimap/gaps strip
+// with the per-widget MAP/GAPS settings and left the write behind). A test that
+// only proves a string is still typed passes forever over a toggle nobody reads.
+//
+// So assert the RELATION instead: a body class hud.js toggles must be one some
+// stylesheet keys a rule on. `hud-met-full` is the one exemption and a real one
+// — AUTO is defined as the layout that hides nothing, so its class exists only
+// to keep exactly one hud-met-* present, and a rule for it would be a bug.
+test("every body class the HUD toggles has a rule that reads it", () => {
+  const src = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
+  const css = fs.readdirSync(path.join(root, "css"))
+    .filter((f) => f.endsWith(".css"))
+    .map((f) => fs.readFileSync(path.join(root, "css", f), "utf8")).join("\n");
+  const NO_RULE_BY_DESIGN = new Set(["hud-met-full"]);
+  const toggled = [...src.matchAll(/body\.classList\.toggle\(\s*"([\w-]+)"/g)].map((m) => m[1]);
+  // The layout classes are built as "hud-met-" + name; take the names from the
+  // list the resolver iterates so a new layout cannot slip past this.
+  const layouts = (src.match(/const MET_LAYOUTS = \[([^\]]*)\]/) || [, ""])[1]
+    .split(",").map((x) => x.trim().replace(/"/g, "")).filter(Boolean)
+    .map((x) => "hud-met-" + x);
+  assert.ok(layouts.length >= 4, "MET_LAYOUTS did not parse — this guard is measuring nothing");
+  const orphans = [...new Set([...toggled, ...layouts])]
+    .filter((c) => !NO_RULE_BY_DESIGN.has(c))
+    .filter((c) => !new RegExp("\\." + c + "\\b").test(css))
+    .sort();
+  assert.deepStrictEqual(orphans, [],
+    "js/ui/hud.js toggles these body classes and no css/ rule reads them — a " +
+    "write with no reader, which is what hud-onboard was: " + orphans.join(", "));
 });
 
 test("CamTune exports player edits as window.CameraEdits", () => {
