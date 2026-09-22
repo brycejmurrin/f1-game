@@ -211,7 +211,7 @@ function wantAgentSurface() {
 // Warm the vendored three island for the default or a stored THREE pick, so TLX is not
 // waiting on a cold module fetch after the roster injects it.
 function preloadThreeVendor() {
-  for (const href of ["vendor/three-0.185.1/three.webgpu.min.js", "vendor/three-0.185.1/three.tsl.min.js"]) {
+  for (const href of ["vendor/three-0.186.0/three.webgpu.min.js", "vendor/three-0.186.0/three.tsl.min.js"]) {
     const el = document.createElement("link");
     el.rel = "modulepreload";
     el.href = href;
@@ -368,8 +368,8 @@ if (!gfx) {
         skipped = sessionStorage.getItem("apex26.gfxClaimFail") === "1"; } } catch (_) { /* blocked storage: no skip, no reload */ }
     }
     if (skipped) {
-      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
-      try { location.reload(); } catch (_) {}
+      try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* storage blocked (private mode): the probe just stays armed */ }
+      try { location.reload(); } catch (_) { /* a reload that throws leaves the page as it is; nothing to recover */ }
       return;
     }
     showGraphicsUnavailable(); return;
@@ -2595,7 +2595,13 @@ function dropRaceWake() {
 // is aimed at a quarter of the problem.
 let _raceProfile = [];
 function raceProfile() { return _raceProfile; }
-async function startRace() {
+// DEFECT-LEDGER's un-awaited-startRace family: six fire-and-forget callers
+// (closeQualiToGrid, q-drive, pm-restart, the season/quali continue button,
+// RaceSettings' RACE! route, DailyChallenge.open) never awaited this, so a double-click or a second
+// trigger while a start was still in flight could re-enter it mid-build. The
+// startRace() wrapper below latches concurrent calls onto the one in-flight
+// promise instead of starting a second race build on top of the first.
+async function startRaceBody() {
   _raceProfile = []; let _rt = performance.now();
   const rlap = (n) => { const t = performance.now(); _raceProfile.push({ n, ms: +(t - _rt).toFixed(2) }); _rt = t; };
   await ensureScenery(trackIdx);
@@ -2748,6 +2754,12 @@ async function startRace() {
   if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
   warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
+}
+let _startRaceP = null;
+function startRace() {
+  if (_startRaceP) return _startRaceP;   // a concurrent caller shares the in-flight start
+  _startRaceP = startRaceBody().finally(() => { _startRaceP = null; });
+  return _startRaceP;
 }
 
 function showTouchControls(show) {
@@ -3048,6 +3060,11 @@ const G = {
   // that could draw from it documents that it deliberately must not.)
   get seed() { return simSeed(); }, set seed(v) { simSeed(v); },
   simSeed,
+  // The race counter the reliability and weather draws hash on. A BARE
+  // passthrough on purpose (unlike `seed`, whose setter rewinds the stream):
+  // in VS FRIEND the host publishes it pre-increment and both peers then
+  // increment in startRace, so the draws agree — js/net/lobby.js publishSettings.
+  get raceRound() { return raceIndex; }, set raceRound(v) { raceIndex = Math.max(0, v | 0); },
   get DRIFT() { return DRIFT; }, set DRIFT(v) { DRIFT = v; },
   get FRONT_GRIP() { return FRONT_GRIP; }, set FRONT_GRIP(v) { FRONT_GRIP = v; },
   // Cameras normalise speed against an injected vmax, so re-inject on every pace
@@ -4856,7 +4873,7 @@ function updateCar(c, dt, ranked) {
       const zk = Math.round(c.s + _atk.toTurnIn);
       if (zk !== c.zoneKey) {
         c.zoneKey = zk;
-        if (!c.errT && !alongO && DriverRatings.hash32(simSeed() + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
+        if (!c.errT && !alongO && DriverRatings.hash32(simSeed() + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
       }
     } else c.zoneKey = -1;
     c.wheelLock = AiDrive.mistakePhase(c.errT) === 1 && braking ? 1 : 0;   // the render freezes the fronts
@@ -6881,6 +6898,15 @@ const _hazeOpts = { u: 0, v: 0, str: 0 };
 let _softEl = null;                    // #game-soft, the soft-present overlay canvas
 // The lens the last frame was built with — see where it is filled, below.
 const _lens = { near: 0, far: 0, fovY: 0, fog: null, cull: 0, cine: false };
+// Extracted: tick()'s fatal catch also arms it when render() throws before
+// reaching its own present() call below.
+function armBackendProbe() {
+  if (!_backendProved && _backendBound && !_probeArmed) {
+    try { const p = backendPreference();
+      if (p === "three" || p === "webgpu") { localStorage.setItem("apex26.gfxBackendProbe", p); _probeArmed = true; } }
+    catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
+  }
+}
 function render(dt) {
   if (headlessMode || (gfx.warming && gfx.warming())) return;
   // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
@@ -7866,7 +7892,7 @@ function render(dt) {
     // smoke/sparks/kickup/spray. Camera-independent: none of these is a draw.
     if (c.isPlayer && state === "race") {
       const skid = c.skidIntensity || 0;
-      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10);
+      skids.stamp(tmpMat, (skid > 0.25 || c.offroad) && c.speed > 10, dt);
     }
     // EXHAUST HEAT HAZE: remember the player tailpipe's world position + plume
     // strength for this frame (projected to screen UV just before present()).
@@ -8334,13 +8360,7 @@ function render(dt) {
       }
     }
   }
-  // Re-arm around the first world present so a jetsam mid-frame still reverts.
-  // Title already disarmed after bind; this window is only the first flyby/race.
-  if (!_backendProved && _backendBound && !_probeArmed) {
-    try { const p = backendPreference();
-      if (p === "three" || p === "webgpu") { localStorage.setItem("apex26.gfxBackendProbe", p); _probeArmed = true; } }
-    catch (_) { /* no probe: a jetsam in the arming window will not auto-revert */ }
-  }
+  armBackendProbe();
   gfx.present(po);
   // Boot canary disarmed once the backend has presented a RUN of world frames,
   // not one. Until then the probe stays armed in storage and a load that dies
@@ -8376,7 +8396,7 @@ let renderAlpha = 1;             // leftover-step fraction (0..1) for render int
 // sentinel live in js/perf/governor.js (PerfGov, initialised at boot with gfx).
 // render() gates features on PerfGov.tier(); tickBody feeds PerfGov.tick(ms).
 PerfGov.init(gfx);
-const PHYS_DT = 1 / 60;          // fixed physics step
+const PHYS_DT = PhysicsConsts.FIXED_DT;   // fixed physics step — js/physics/consts.js
 function tick(now) {
   try { tickBody(now); LoopHealth.clean(); requestAnimationFrame(tick); }
   catch (e) {
@@ -8393,6 +8413,9 @@ function tick(now) {
     if (!tick._reported && typeof window.__apexReportError === "function") {
       tick._reported = true; window.__apexReportError("tick", e);
     }
+    // Arm here too: a fatal render() may throw before its own present() call
+    // ever reaches armBackendProbe().
+    if (_backendBound && !_backendProved) armBackendProbe();
     throw e;
   }
 }
@@ -8485,7 +8508,7 @@ function tickBody(now) {
   }
   renderAlpha = clamp(physAcc / PHYS_DT, 0, 1);   // 0..1 leftover fraction for render interp
   render(Math.min(dt, 1 / 20));               // camera/visual damping at (clamped) frame dt
-  if (state === "race" || state === "count") updateHud(false);
+  if (state === "race" || state === "count") updateHud(false, _dtMs);
 }
 
 // ---------- car setup panel ----------
@@ -8922,7 +8945,7 @@ function holdSetupCtl(id, rates, step) {
     // Capture so a finger sliding off the chip still releases here. NOT
     // pointerleave for the release: setPointerCapture fires a boundary event as
     // it retargets, which would stop the motion on its very first frame.
-    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    try { el.setPointerCapture(e.pointerId); } catch (_) { /* capture can refuse (pointer already gone); the drag still runs on move events */ }
     // One discrete step up front, THEN the held rate. Without the step a quick
     // tap moved by whatever fraction of a frame it happened to span — i.e.
     // visibly nothing — so the buttons only worked if you knew to hold them.

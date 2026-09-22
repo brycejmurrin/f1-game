@@ -39,7 +39,7 @@
       // 1. PALETTE — dry summer Burgundy. Pale limestone, bleached grass,
       //    hedgerow much darker than the open slope. Nothing here is glossy:
       //    the facility is spartan and everything else is farmland.
-      const K = (s) => Math.round(s * n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       const LIME   = [0.82, 0.78, 0.66];   // exposed limestone cutting
       const LIME2  = [0.86, 0.82, 0.70];   // fresh spoil, brighter
       const GRAVEL = [0.74, 0.71, 0.61];   // hardstanding / run-off

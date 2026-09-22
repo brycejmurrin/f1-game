@@ -887,9 +887,15 @@ const AiDrive = (function () {
     return "";
   }
 
-  function mistakeChance(t, pressure) {
+  // errMul is the difficulty-ladder rate scale (PhysicsConsts.DIFF[d].err) —
+  // NOT the render-time brakeTarget multiplier of the same short name in
+  // ctx.errMul (that one scales the braking limit once a mistake has already
+  // fired; this one scales whether it fires at all). >0 multiplies the base
+  // rate; undefined/0/negative leaves it at 1 so every existing caller and
+  // test is unchanged.
+  function mistakeChance(t, pressure, errMul) {
     const cons = t && t.consistency != null ? t.consistency : 0.75;
-    return 0.004 * (1 + 2 * clamp(pressure || 0, 0, 1)) * (1.3 - cons);
+    return 0.004 * (1 + 2 * clamp(pressure || 0, 0, 1)) * (1.3 - cons) * (errMul > 0 ? errMul : 1);
   }
   const ERR_LATE = 1.2, ERR_GATHER = 1.8;
   function mistakeTotal() { return ERR_LATE + ERR_GATHER; }

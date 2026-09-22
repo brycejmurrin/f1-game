@@ -543,16 +543,54 @@ the numbers):
   strategy — gating them left every 0-stop car circulating on slicks in the rain.
 - **Mistakes, under pressure most of all** (`AiDrive.mistakeChance`). Once per
   braking point a car may miss it: base 0.4% × (1 + 2 × pressure) × (1.3 −
-  consistency), pressure being the share of the last six seconds spent with a
-  car within 0.6 s behind. A metronome unpressured errs once in ~80 laps, a
-  rookie under sustained pressure once in ~10. The error is a LATE phase
-  (1.2 s: brakes 5% later, runs most of the way to the outside edge, fronts
-  locked for the render) then a GATHER phase (1.8 s at 85% pace) — half a
-  second to a second and a half lost, never while alongside another car, and
-  rolled from a hash of the seed, grid slot, lap and braking point, never from
-  the seeded stream. This is rFactor 2's Composure-scheduled "bad driving
-  zones" and AMS2's forced-mistake channel; F1 22's two or three lock-ups a
-  race was what players called too many, so the rates sit well under it.
+  consistency) × `err`, pressure being the share of the last six seconds spent
+  with a car within 0.6 s behind and `err` the difficulty-ladder rate scale
+  (`PhysicsConsts.DIFF[d].err`). A metronome unpressured errs once in ~80 laps
+  on HARD, a rookie under sustained pressure once in ~10. The error is a LATE
+  phase (1.2 s: brakes 5% later, runs most of the way to the outside edge,
+  fronts locked for the render) then a GATHER phase (1.8 s at 85% pace) —
+  half a second to a second and a half lost, never while alongside another
+  car, and rolled from a hash of the seed, grid slot, lap and braking point,
+  never from the seeded stream. This is rFactor 2's Composure-scheduled "bad
+  driving zones" and AMS2's forced-mistake channel; F1 22's two or three
+  lock-ups a race was what players called too many, so HARD's rate — the one
+  this reasoning was written for — is unchanged (`err: 1.0`).
+  2026-09-22, by request: at the shipped (pre-`err`) rate every level read the
+  same, and `tools/check/ai-field.mjs` measured under one mistake for the
+  WHOLE FIELD over a default 3-lap race — invisible even on EASY, where a
+  visible mistake or two is wanted. `err` scales ONLY the rate (never the
+  mistake's shape, and never the rubber band — the ladder is a rate axis of
+  its own: easy ≥ normal ≥ hard = 1, `tests/unit/mechanics-coherence.test.mjs`
+  and `tests/unit/ai-drive.test.mjs` both hold it). Measured at Monza, 21 AI
+  cars, wear off (`tools/check/ai-race.mjs field`), converted to expected
+  field mistakes over a default 3-lap race via
+  `mistakesPer100s × cars × raceDuration` (raceDuration from `ai-race.mjs
+  pace`'s median lap × 3 laps: easy 425 s, normal 398 s, hard 374 s):
+
+  | level  | `err` | mistakesPer100s before → after | ~field mistakes / 3-lap race before → after |
+  |--------|-------|----------------------------------|-----------------------------------------------|
+  | easy   | 3.5   | 0.020 → 0.040 (median, n=15)     | ~1.8 → ~3.6 |
+  | normal | 1.8   | 0.020 → 0.040 (median, n=5)      | ~1.7 → ~3.3 |
+  | hard   | 1.0   | 0.020 → 0.020 (byte-identical run) | ~1.6 → ~1.6 (unchanged) |
+
+  At n=5 the "mistakes" count per run is a small integer (0–4), so the MEDIAN
+  is too coarse to resolve a shift reliably at that sample: EASY at 5 runs
+  first showed no median movement at all under a straight 2.5× (the same
+  1.4× gap NORMAL:HARD implies), even though its own max moved 0.02→0.079 and
+  its unit-level formula test confirmed the multiplication was exact. Going to
+  n=15 explained why: EASY's median STAYED at 1 even at 2.5×, meaning its
+  PRE-scaling base rate is lower than NORMAL's (a slower, looser field draws
+  less following pressure, so it earns less of `mistakeChance`'s pressure
+  term) — both had rounded to the same 0.020/100s at n=5 by coincidence, not
+  because the underlying rates matched. EASY's multiplier was raised to 3.5 to
+  compensate; re-measured at n=15 it now shows the same clean 2× median move
+  NORMAL showed at n=5 (0.020→0.040), landing at ~3.6/race. NORMAL's clean 2×
+  at n=5 and HARD's exact no-op (confirming `errMul` is wired correctly) were
+  the load-bearing evidence for those two; `tests/unit/ai-drive.test.mjs`'s
+  `mistakeChance(t, p, errMul)` unit tests pin the multiplication itself
+  (errMul 2 doubles the rate exactly, independent of sampling noise). Full
+  artifacts: `artifacts/ai-mistakes-baseline/` (before) and
+  `artifacts/ai-mistakes-after/` (after, including the n=15 easy runs).
 - **The aim, not the contact** (`AiDrive.aimIntrudes`, 2026-09-16). Every
   side-by-side rule keyed on where the cars ARE — the clear-gap election and
   the rub clamp began when the boxes were 0.8 m apart, and against a human

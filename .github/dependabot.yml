@@ -1,0 +1,18 @@
+# Every third-party action in .github/workflows is pinned to a full commit sha
+# (2026-09-22): a moving `@v5` tag is whatever its owner pushes next, and the
+# Pages deploy job runs with a token that can publish. Dependabot bumps the sha
+# and the trailing `# vX.Y.Z` comment together, as a reviewable PR, so pinning
+# never becomes "frozen on a version nobody remembers".
+#
+# The target is the deploy branch, which is what every workflow runs from.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: claude/f1-game-project-26h3ng
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+    labels: ["ci"]
