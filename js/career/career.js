@@ -286,6 +286,18 @@ function start(opts) {
   // LIST's tail is whatever booted last — custom-team.js appends MY TEAM and
   // then LEGENDS, so an unknown id used to hand a career Legends' factory setup.
   const team = teamOf(teamId) || teamOf("custom") || Teams.LIST[0];
+  // CLEAR THE RULESET BEFORE RESOLVING THE FACTORY. getFactorySetup() runs the
+  // whole legality chain, and at this point `career` is still the career being
+  // LEFT — so starting a new one while another sat in a restricted era resolved
+  // the new team's works build against the old save's bans, and wrote the
+  // DEFAULTS fallback into `owned`/`fitted` for every banned category. A new
+  // career is always season 0, which is the unrestricted opening era, so
+  // clearing is not merely safe here: it is the correct ruleset.
+  //
+  // The menu path never hit this (useSlot() on an empty slot clears it first),
+  // which is exactly why it needed finding by reading rather than by playing:
+  // __apex.career() calls start() directly.
+  if (typeof Parts !== "undefined" && Parts.setLegality) Parts.setLegality(null, "");
   const factory = Parts.getFactorySetup(team);
 
   career = {
@@ -591,16 +603,24 @@ function seasonsElapsed() {
   if (!career) return 0;
   return Math.max(0, (career.year | 0) - ((career.year0 | 0) || YEAR0));
 }
-// NULL WITHOUT A CAREER, not the opening era. Describing a ruleset when there is
-// no career to rule reads as "a Grand Prix is under OPEN REGULATIONS", which is
-// a category error — nothing outside a career is regulated at all, which is why
-// applyRegs() installs no predicate there either.
+// NULL UNLESS A CAREER IS THE THING BEING PLAYED, not merely loaded. Describing
+// a ruleset when nothing is ruled reads as "a Grand Prix is under OPEN
+// REGULATIONS", which is a category error.
+//
+// THE GUARD IS inCareer(), NOT `career != null`, and the difference is a real
+// desync rather than pedantry. load() runs at boot and populates `career`
+// whatever the flow, so a save parked in a restricted era made this report that
+// era from the main menu — while applyRegs(), correctly gated on inCareer(),
+// had installed NO predicate and the Grand Prix you were actually playing
+// resolved unrestricted. The readout said "banned" and the resolution said
+// "legal". An earlier pass fixed the open-era-vs-null half of this and left the
+// guard one condition short.
 function era() {
-  if (!career || typeof Regulations === "undefined") return null;
+  if (!inCareer() || typeof Regulations === "undefined") return null;
   return Regulations.eraFor(seasonsElapsed());
 }
 function eraSeasonsLeft() {
-  if (!career || typeof Regulations === "undefined") return 0;
+  if (!inCareer() || typeof Regulations === "undefined") return 0;
   return Regulations.seasonsLeft(seasonsElapsed());
 }
 // Installed on engage and after any change to the year or the loaded save;
@@ -1224,12 +1244,24 @@ function acceptOffer(i) {
   // and expectedFinish() reads career.rep — so the only number that is certainly
   // right is the one derived at the moment of signing.
   const amb = ambition();
+  // THE KIND COMES FROM THE OFFER, exactly as setAmbition() re-stamps it, and
+  // for exactly the same reason — which I wrote there and then failed to apply
+  // here. rollover() draws the offers BEFORE `career.year++`, and the kind is
+  // seeded on the year, so re-deriving it at accept time reads a DIFFERENT year
+  // than the draw did: measured over 200 seeds x 10 seasons it changed the kind
+  // 67% of the time. The button said "Finish the season ahead of your
+  // team-mate" and the contract it signed said "Finish P18 or better".
+  //
+  // Only the TARGET is recomputed, because a move re-seats you (weakerSeat
+  // above) and expectedFinish() reads career.rep, so the offer's stored value
+  // can be stale in a way its kind cannot.
+  const kind = o.goal && o.goal.type ? o.goal.type : "champPos";
   career.deal = {
     team: team.id, seat: career.seat,
     years: o.years, left: o.years, salary: o.salary,
     bonusPt: bonusPtFor(team),
     ambition: amb,
-    goal: goalFor(team, amb, career.year),
+    goal: { type: kind, value: goalKind(kind).value(team, amb) },
   };
   career.offers = [];
   save();

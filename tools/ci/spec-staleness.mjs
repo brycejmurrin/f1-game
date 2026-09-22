@@ -28,6 +28,15 @@
 // being selected. The point is to make the distinction cheap to check, so the
 // list is ordered by risk and the tail is the place to look first.
 //
+// WHAT IT MEASURED, 2026-09-22, over 651 replayed commits (2026-09-10 .. 09-22):
+//   119 specs · 61 selected at least once · 58 never
+//   skipped 51 · coveredByVmTwin 14 · unreachable 8 · no bucket 3 · fixedGates 2
+// The 8 unreachable are the sharp end — their declared test count exceeds the
+// whole budget cap, so no diff can ever select them however directly it edits
+// them: touch-steer, tilt-pipeline, parts-setup-ids, parts-catalog,
+// multiplayer-session, multiplayer-lobby, dev-tools, camera-driving-hooks. All
+// eight were run by hand and all eight passed.
+//
 // RUN THE RESULT AT --workers=1. Measured 2026-09-22: the first sweep of the 12
 // unreachable specs used --workers=4 on this 4-core box, Playwright spawned
 // more than that, SwiftShader made every one CPU-bound, and loadavg hit 22. It
@@ -64,6 +73,11 @@ const allSpecs = fs.readdirSync(path.join(ROOT, "tests/specs"))
   .filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`).sort();
 
 // Newest first, so the first commit that runs a spec is its most recent run.
+// A SHALLOW CLONE SILENTLY TRUNCATES THE WINDOW. `git log --since` stops at the
+// grafted boundary without saying so, so "30 days" can quietly mean "as far
+// back as this checkout goes". Measure the real span and report it.
+const shallow = (() => { try { return git("rev-parse", "--is-shallow-repository") === "true"; }
+                         catch { return false; } })();
 const log = git("log", `--since=${DAYS}.days.ago`, "--format=%H\t%cs\t%s", "--no-merges");
 const commits = log ? log.split("\n").map((l) => {
   const [sha, date, ...rest] = l.split("\t");
@@ -78,7 +92,16 @@ for (const c of commits) {
   let r;
   try { r = select(`${c.sha}~1..${c.sha}`, 15); } catch { failed++; continue; }
   replayed++;
-  const ran = [...new Set([...(r.selected || []), ...((r.oversize || []).map((o) => o.file))])];
+  // BOTH BUCKETS ARE ARRAYS OF OBJECTS — {file, tests, rank}. Mapping .file on
+  // `oversize` and not on `selected` keyed lastRun by OBJECTS for every
+  // ordinarily-selected spec, and every lookup below is by filename STRING, so
+  // none of them ever matched: a spec only counted as "run" if it happened to
+  // land in the rare oversize shard. That inflated "never selected" from 58 to
+  // 78 and branded abudhabi-foundation (selected 180 times) and menu-baseline
+  // (99) as unreachable. A type mismatch that silently answers "never" is the
+  // worst shape of bug for a tool whose whole output is "never".
+  const ran = [...new Set([...(r.selected || []), ...(r.oversize || [])]
+    .map((e) => (typeof e === "string" ? e : e && e.file)).filter(Boolean))];
   for (const f of ran) if (!lastRun.has(f)) lastRun.set(f, { ...c, how: "run" });
   for (const bucket of ["skipped", "unreachable", "coveredByFixedGates", "coveredByVmTwin"]) {
     for (const e of r[bucket] || []) {
@@ -102,8 +125,12 @@ if (JSON_OUT) {
   console.log(JSON.stringify({ days: DAYS, commits: commits.length, replayed, failed, rows }, null, 1));
 } else {
   const never = rows.filter((r) => r.ageDays == null);
-  console.log(`spec staleness — ${replayed} of ${commits.length} commits replayed over ${DAYS} days`
+  const span = commits.length
+    ? `${commits[commits.length - 1].date} .. ${commits[0].date}` : "(no commits)";
+  console.log(`spec staleness — ${replayed} of ${commits.length} commits replayed, ${span}`
     + (failed ? ` (${failed} unreplayable)` : ""));
+  if (shallow) console.log(`NOTE: shallow clone — the ${DAYS}-day window is truncated at the `
+    + `grafted boundary, and the unreplayable commits are its parentless tips.`);
   console.log(`${allSpecs.length} specs · ${allSpecs.length - never.length} selected at least once · `
     + `${never.length} NEVER selected in the window\n`);
   console.log("age  last run    spec                                              why not, if named");
