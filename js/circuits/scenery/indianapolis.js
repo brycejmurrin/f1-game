@@ -7,7 +7,7 @@
 (window.TrackScenery = window.TrackScenery || {})["indianapolis"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
-        px, pz, tree, bush, ridge, building, grandstandEx, spectatorHill,
+        px, pz, hw, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, prop,
         floodMast, cameraTower, sponsorHoarding, signDigit,
@@ -20,10 +20,13 @@
 
       const OUTER_BAYS = 40, OUTER_SPAN = 0.3396;   // 12 x 0.0283 — unchanged run
       const OUTER_RUN = 1384;                       // metres of wall the span covers
+      const OUTER_BAY_LEN = OUTER_RUN / OUTER_BAYS;
       for (let i = 0; i < OUTER_BAYS; i++) {
         const s = 0.86 + i * (OUTER_SPAN / OUTER_BAYS);  // wraps through 0 across the front straight
         const g = Math.floor(i * 12 / OUTER_BAYS);       // original 12-bay index — keeps the banding
-        grandstandEx(s % 1, 1, 13, OUTER_RUN / OUTER_BAYS * 0.93, null, null, {
+        // Slight overlap closes the chord gap between independently oriented
+        // bays, so the oval reads as one stadium wall through the corners.
+        grandstandEx(s % 1, 1, 13, OUTER_BAY_LEN * 1.035, null, null, {
           livery: g % 3 === 0 ? "alu" : (g % 3 === 1 ? "concrete" : "darkSteel"),
           tiers: 3, roof: g % 4 === 0 ? "cantilever" : null,
           endWalls: false, pylons: g % 4 === 0,
@@ -39,7 +42,7 @@
       for (let i = 0; i < SEAT_BAYS; i++) {
         const s = (0.86 + i * (OUTER_SPAN / SEAT_BAYS)) % 1;
         const a = anchor(K(s), 1, 16);
-        const len = OUTER_RUN / SEAT_BAYS * 0.88;
+        const len = OUTER_RUN / SEAT_BAYS * 1.01;
         out._mat = MAT.FABRIC;
         for (let t = 0; t < 3; t++) {
           addBox(out, vadd(vadd(a.c, a.r, t * 2.2), a.u, 4 + t * 2.6),
@@ -59,9 +62,13 @@
           for (let t = 0; t < 5; t++) {
             const w = 17 - t * 2.2, d = 21 - t * 2.6;
             const y = 12 + t * 6.85;
-            addBox(stage, vadd(a.c, a.u, y), [w, 6, d], [0.34, 0.44, 0.54], b);          // glazing
+            // Each storey steps inward beneath a shallow blue-glass band.
+            addBox(stage, vadd(a.c, a.u, y), [w - 1.2, 5.4, d - 1.2],
+              [0.76, 0.77, 0.79], b);
+            addBox(stage, vadd(vadd(a.c, a.r, w * 0.48), a.u, y + 0.2),
+              [0.45, 2.2, d - 2.0], [0.26, 0.39, 0.52], b);
             addBox(stage, vadd(a.c, a.u, y + 3.6), [w + 3, 0.9, d + 3.4],
-              [0.86, 0.86, 0.88], b);                                                    // eave
+              [0.86, 0.86, 0.88], b);                                      // diminishing eave
           }
           addCyl(stage, vadd(a.c, a.u, 43.25), 0.5, 10, [0.90, 0.90, 0.92], 8, b);
         }, { required: true });
@@ -126,10 +133,13 @@
       gantry(0.955, 9, [0.15, 0.15, 0.18]);
 
       {
-        const a = anchor(K(0.0), 0, 0);
-        for (let i = 0; i < 14; i++) {
-          const off = (i - 6.5) * 1.15;
-          addBox(out, vadd(vadd(a.c, a.r, off), a.u, 0.03), [1.05, 0.06, 1.0],
+        const lineK = K(0.0), a = anchor(lineK, 0, 0);
+        const fullWidth = hw[lineK] * 2;
+        const brickCount = Math.ceil(fullWidth);
+        const brickWidth = fullWidth / brickCount;
+        for (let i = 0; i < brickCount; i++) {
+          const off = -fullWidth * 0.5 + brickWidth * (i + 0.5);
+          addBox(out, vadd(vadd(a.c, a.r, off), a.u, 0.03), [brickWidth + 0.02, 0.06, 1.0],
             i % 2 ? [0.52, 0.28, 0.22] : [0.44, 0.24, 0.19], [a.r, a.u, a.t]);
         }
       }
