@@ -5,7 +5,8 @@
 //   node tools/check/ratchets.mjs --update   # rewrite ratchets.json with the current values (after an extraction,
 //                                      #   or on a merged tree — the deploy-merge rule)
 //   node tools/check/ratchets.mjs --json     # {ok, rows:[{file, metric, value, ceiling, over, slack}]}
-//   node tools/check/ratchets.mjs --base <ref> [--max-raise=40]
+//   node tools/check/ratchets.mjs --base <ref> [--max-raise=40] [--advisory]   # --advisory: a raise past the absorb
+//                                      #   annotates instead of failing — for PUSH runs, where no PR body can carry the reason
 //                                      # every ceiling that moved since <ref> (git show); raises are
 //                                      #   warnings, a raise past the commit hook's absorb fails —
 //                                      #   ci.yml's guards job runs this against the PR base / deploy tip
@@ -228,7 +229,7 @@ export function loadAt(ref) {
  *  (GitHub `::warning::` annotations on CI, plain lines elsewhere); a raise
  *  past `maxRaise` — the commit hook's own absorb, so only APEX_SKIP_GUARDS
  *  could have produced it — fails. Returns the exit code. */
-export function compareToBase(ref, { maxRaise = 40, current = load(), print = console.log } = {}) {
+export function compareToBase(ref, { maxRaise = 40, current = load(), print = console.log, advisory = false } = {}) {
   let base;
   try { base = loadAt(ref); }
   catch (e) { print(`ratchets --base: cannot read tests/data/ratchets.json at ${ref} (${String(e.stderr || e.message).trim().split("\n")[0]}) — is the checkout deep enough (fetch-depth: 0)?`); return 2; }
@@ -240,15 +241,23 @@ export function compareToBase(ref, { maxRaise = 40, current = load(), print = co
     if (r.kind === "raise") {
       const over = r.delta > maxRaise;
       if (over) blocked++;
-      const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` : "");
-      print(gh ? `::${over ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
+      const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over
+        ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` + (advisory ? " (advisory on a push: the PR run is the gate)" : "")
+        : "");
+      print(gh ? `::${over && !advisory ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
     } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
     else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
     else print(`GONE   ${where}: was ${r.base}`);
   }
   const raises = rows.filter((r) => r.kind === "raise").length;
-  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb` : ""));
-  return blocked ? 1 : 0;
+  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb${advisory ? " (advisory)" : ""}` : ""));
+  // ADVISORY ON A PUSH. The reason for a raise past the absorb lives in a PR
+  // body, and a push run has no PR — so failing there is a red that cannot
+  // be cleared by pushing again. Ten of the fourteen ci.yml failures on
+  // 2026-09-22 were this one message repeated on the same branch's pushes
+  // (eight of them on one branch), each a wasted run and a re-push into the
+  // same wall. The push run now annotates; the pull_request run still fails.
+  return blocked && !advisory ? 1 : 0;
 }
 
 async function main() {
@@ -258,7 +267,7 @@ async function main() {
     const ref = argv[baseAt + 1];
     if (!ref || ref.startsWith("-")) { console.error("ratchets: --base needs a ref"); process.exitCode = 2; return; }
     const mr = argv.find((a) => a.startsWith("--max-raise="));
-    process.exitCode = compareToBase(ref, { maxRaise: mr ? Number(mr.split("=")[1]) || 40 : 40 });
+    process.exitCode = compareToBase(ref, { maxRaise: mr ? Number(mr.split("=")[1]) || 40 : 40, advisory: argv.includes("--advisory") });
     return;
   }
   if (argv.includes("--update")) {

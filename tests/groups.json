@@ -137,6 +137,8 @@
     "tests/unit/data-api-status.test.mjs",
     "tests/unit/scenery-api-contract.test.mjs",
     "tests/unit/scenery-guards.test.mjs",
+    "tests/unit/track-build-vm-release.test.mjs",
+    "tests/unit/baked-model-road-guard.test.mjs",
     "tests/unit/floodmast-lamp-register.test.mjs",
     "tests/unit/cdmcp-measure.test.mjs",
     "tests/unit/tools-runnable.test.mjs",
@@ -233,7 +235,7 @@
     "// comparing the PAIR can see it. Pure text, well under a second.",
     "tests/unit/delta-sign-colour.test.mjs",
     "// ...and the fourth: the component inventory only ever guarded DEFINED-",
-    "// but-unapplied. This is the mirror — a class the markup wears that no rule",
+    "// but-unapplied. This is the mirror \u2014 a class the markup wears that no rule",
     "// matches, which reads as styled and is not. Pure source scan, ~0.3 s.",
     "tests/unit/class-usage.test.mjs",
     "// ...and the DIFF[difficulty] family, one door further out: three readers",
@@ -404,6 +406,7 @@
     "test:gfx": {
       "kind": "browser",
       "files": [
+        "tests/specs/render-boot.spec.js",
         "tests/specs/instanced-draw.spec.js",
         "tests/specs/webgl-probes.spec.js",
         "tests/specs/lighting-ab.spec.js",
@@ -791,6 +794,9 @@
         "tests/unit/grid-boxes.test.mjs",
         "tests/unit/pit-complex.test.mjs",
         "tests/unit/pit-signs.test.mjs",
+        "tests/unit/track-build-vm-release.test.mjs",
+        "tests/unit/props-over-road.test.mjs",
+        "tests/unit/baked-model-road-guard.test.mjs",
         "tests/unit/driving-line.test.mjs",
         "tests/unit/driving-line-opts.test.mjs"
       ]

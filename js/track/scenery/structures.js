@@ -57,7 +57,19 @@ const SceneryStructures = (function () {
       laid.set(key, runs);
       return false;
     };
-    const along = (s0, s1, stepM, fn) => {
+    // ABUTTING SPANS SHARE THEIR SEAM NODE. `along` is closed at BOTH ends —
+    // it must be, or an isolated run would visibly stop one panel short — so a
+    // circuit that paints a continuous wall as a chain of coloured blocks
+    // ([0,.16],[.16,.31],…) emits the seam node TWICE, and the two panels are
+    // byte-identical: same anchor, same size, same basis. Jeddah's six-block
+    // Saudi canyon alone measured 73 same-facing coplanar pairs that way
+    // (2026-09-22, coplanar-audit --why: twelve duplicate slabs, six faces
+    // each). `tag` is the emitter's geometric identity — everything that would
+    // make two panels at one node differ. Same tag, same node, already drawn:
+    // skip. A different colour, height, gap or side is a different tag and
+    // still emits, because there the second panel is not a duplicate.
+    const walked = new Map();
+    const along = (s0, s1, stepM, fn, tag) => {
       const k0 = ((Math.round(s0 * n) % n) + n) % n, k1 = ((Math.round(s1 * n) % n) + n) % n;
       const wrapped = ((k1 - k0) + n) % n;
       // Full lap = endpoints ~a whole lap apart that round to one node. Walk
@@ -68,7 +80,19 @@ const SceneryStructures = (function () {
       // that now stays a single emission at its own node.
       const span = wrapped === 0 && Math.abs(s1 - s0) > 0.5 ? n - 1 : wrapped;
       const step = Math.max(1, Math.round(stepM / ds));
-      for (let i = 0; i <= span; i += step) fn((k0 + i) % n, step * ds);
+      let seen = null;
+      if (tag) {
+        seen = walked.get(tag);
+        if (!seen) walked.set(tag, seen = new Set());
+      }
+      for (let i = 0; i <= span; i += step) {
+        const k = (k0 + i) % n;
+        if (seen) {
+          if (seen.has(k)) continue;
+          seen.add(k);
+        }
+        fn(k, step * ds);
+      }
     };
     // Continuous solid wall (concrete / pit wall) at clearance `gap` beyond the edge.
     const wall = (s0, s1, side, gap, h, col, thick) => {
@@ -91,7 +115,7 @@ const SceneryStructures = (function () {
             rec.box([0, h, 0], [a * 1.1, 0.16, 1], capCol);            // coping rail on top
           },
           { kind: "wall", k, side });
-      });
+      }, `wall|${side}|${gap}|${a}|${h}|${(col || []).join(",")}`);
     };
     const kitOf = ctx.kitOf;
 
@@ -160,7 +184,7 @@ const SceneryStructures = (function () {
             }
           },
           { kind: "fence", k, side });
-      });
+      }, `fence|${side}|${gap}|${postKey}|${meshKey}`);
     };
     const guardrail = (s0, s1, side, gap, col, opts) => {
       const st = (opts && opts.style) || kitOf("rail", "armco");
@@ -213,7 +237,7 @@ const SceneryStructures = (function () {
             }
           },
           { kind: "guardrail", k, side });
-      });
+      }, `guardrail|${side}|${gap}|${postKey}|${railKey}`);
     };
     // Stacked-tyre barrier with a coloured conveyor-belt cap.
     //   opts: { style: "stack"(default) | "double" | "pyramid" | "tecpro"
@@ -268,7 +292,7 @@ const SceneryStructures = (function () {
             else rec.box([0, 0.95, 0], [2.0, 0.3, 1], cap);                     // stack (default)
           },
           { kind: "tyreWall", k, side });
-      });
+      }, `tyreWall|${side}|${gap}|${stackKey}|${capKey}`);
     };
     const gantry = (s, h, col, opts) => {
       const st = (opts && opts.style) || kitOf("gantry", "box");
@@ -492,7 +516,7 @@ const SceneryStructures = (function () {
                    [0.13, 0.9, 0.14], postCol, b);
         }
         idx++;
-      });
+      }, `hoarding|${side}|${gap}|${h}|${hst}|${step}`);
     };
 
     // crowdBand(): the ONE crowd primitive these stands share. A crowd is a
@@ -600,7 +624,7 @@ const SceneryStructures = (function () {
                  [0.18, 0.16, seg], frameCol, b);
         }
         out._mat = 0;
-      });
+      }, `bleacher|${side}|${gap}|${rows}|${rise}|${setback}|${lift}|${step}`);
     };
 
     const scaffoldStand = (s0, s1, side, gap, opts) => {
@@ -657,7 +681,7 @@ const SceneryStructures = (function () {
         }
         out._mat = 0;
         bay++;
-      });
+      }, `scaffold|${side}|${gap}|${rows}|${rise}|${setback}|${step}`);
     };
 
     const terrace = (s0, s1, side, gap, opts) => {
@@ -701,7 +725,7 @@ const SceneryStructures = (function () {
                    [6, 3.4, seg], opts.cutCol || [0.52, 0.32, 0.22], b);
         }
         out._mat = 0;
-      });
+      }, `terrace|${side}|${gap}|${rows}|${rise}|${dep}|${step}`);
     };
 
     const tieredBowl = (s0, s1, side, gap, opts) => {
@@ -744,7 +768,7 @@ const SceneryStructures = (function () {
           }
         }
         out._mat = 0;
-      });
+      }, `bowl|${side}|${gap}|${tiers}|${rise}|${tierDepth}|${step}`);
     };
 
     const signDigit = (c, r, u, t, w, h, proud, col, digit) => {

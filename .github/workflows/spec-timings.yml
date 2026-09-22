@@ -1,0 +1,135 @@
+name: Spec timings
+
+# MERGE THE DURATIONS CI ALREADY MEASURED, instead of discarding them.
+#
+# `tools/ci/select-budget.mjs` bills every spec in the tree at ONE number — a
+# mean taken from run 31197770813 on 2026-08-07 — and that single figure is
+# what excludes ~66 % of the suite from the change-aware gate. The tool to do
+# better, `tools/ci/spec-timings.mjs`, has existed the whole time with nothing
+# to merge: junit.xml was uploaded `if: failure()` only, so a PASSING run threw
+# its timings away. ci.yml now uploads it on every run; this workflow is the
+# other half.
+#
+# WHY IT IS NOT A JOB IN ci.yml, which is where it belongs by subject matter:
+# it needs `contents: write` to push, and pages.yml calls ci.yml as a REUSABLE
+# workflow granting only `contents: read` + `actions: write`. GitHub validates
+# every declared job's permissions at STARTUP, skipped jobs included — a called
+# workflow may not request more than its caller passes. Train #2241 died
+# `startup_failure` on exactly that, and a `contents: write` job in ci.yml would
+# kill every train the same way. A separate workflow has its own permissions and
+# cannot do that.
+#
+# IT NEVER PUSHES TO THE DEPLOY BRANCH. Same rule as import-models.yml: the
+# merged file lands on a side branch for a human or agent to read and merge.
+# Timings are evidence, and evidence that edits the branch it describes without
+# anyone looking is how a budget drifts silently in the other direction.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  workflow_dispatch:
+
+# Read the triggering run's artifacts; write only the side branch below.
+permissions:
+  contents: write
+  actions: read
+
+# One merge at a time: two runs racing would both read the same committed file
+# and the later push would drop the earlier one's samples.
+concurrency:
+  group: spec-timings
+  cancel-in-progress: false
+
+env:
+  # `bot/`, NOT `claude/`, and the prefix is load-bearing. This branch is FORCE
+  # PUSHED on every merge, and `claude/*` is where sessions do their work — a
+  # bot that force-pushes into that namespace will one day land on an open PR's
+  # head. import-models.yml pushes `bot/model-import` for the same reason.
+  TIMINGS_BRANCH: bot/spec-timings
+
+jobs:
+  merge:
+    name: Merge junit durations into the rolling record
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only the deploy branch's runs. A feature branch measures the same specs on
+    # the same runners, but it may also be measuring a spec mid-edit, and the
+    # record is meant to describe what ships. A dispatch is always allowed.
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch'
+          || github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: claude/f1-game-project-26h3ng
+          fetch-depth: 0
+      - uses: ./.github/actions/setup-apex   # Node 22 + npm ci
+
+      # `gh run download`, not actions/download-artifact: C1 SHA-pins every
+      # third-party action, and gh is already how poke-train talks to Actions.
+      # No artifacts is the NORMAL case (a docs push runs no browser job), so it
+      # exits the job cleanly rather than failing.
+      - name: Fetch this run's junit artifacts
+        id: fetch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -u
+          mkdir -p junit-in
+          if [ -z "${RUN_ID:-}" ]; then
+            # A dispatch has no triggering run: take the newest successful CI
+            # run on the deploy branch instead.
+            RUN_ID=$(gh run list --workflow=ci.yml --branch=claude/f1-game-project-26h3ng \
+                       --status=success --limit=1 --json databaseId --jq '.[0].databaseId' || true)
+            echo "dispatch: newest successful CI run is ${RUN_ID:-none}"
+          fi
+          case "${RUN_ID:-}" in "") echo "found=false" >> "$GITHUB_OUTPUT"; exit 0 ;; esac
+          gh run download "$RUN_ID" --pattern 'spec-timings-junit-*' --dir junit-in || true
+          COUNT=$(find junit-in -name junit.xml | wc -l)
+          echo "junit files: $COUNT"
+          [ "$COUNT" -gt 0 ] && echo "found=true" >> "$GITHUB_OUTPUT" || echo "found=false" >> "$GITHUB_OUTPUT"
+
+      # APEX_GL decides the env bucket (spec-timings.mjs envBucket()), and it
+      # must match the stack that PRODUCED these numbers, not this runner: the
+      # browser jobs run llvmpipe. Mixing buckets is the one thing that module's
+      # header forbids, because it turns a renderer swap into a fake regression.
+      - name: Merge into tests/data/spec-timings.json
+        if: steps.fetch.outputs.found == 'true'
+        env:
+          CI: "1"
+          APEX_GL: llvmpipe
+        run: |
+          set -eu
+          node tools/ci/spec-timings.mjs $(find junit-in -name junit.xml | sort)
+          node tools/ci/spec-timings.mjs --check || true
+          git --no-pager diff --stat tests/data/spec-timings.json || true
+
+      - name: Push the record to its side branch
+        if: steps.fetch.outputs.found == 'true'
+        run: |
+          set -eu
+          # NEVER the deploy branch. import-models.yml refuses it by name and so
+          # does this; the branch is a proposal, not a decision.
+          case "$TIMINGS_BRANCH" in
+            claude/f1-game-project-26h3ng|""|*[!a-z0-9._/-]*)
+              echo "::error::unsafe timings branch"; exit 2 ;;
+          esac
+          if git diff --quiet -- tests/data/spec-timings.json; then
+            echo "no new samples — the run contributed nothing this file did not have"
+            exit 0
+          fi
+          git config user.name "apex-timings-bot"
+          git config user.email "noreply@anthropic.com"
+          git checkout -B "$TIMINGS_BRANCH"
+          git add tests/data/spec-timings.json
+          git commit -m "chore(timings): merge junit durations from CI run ${{ github.event.workflow_run.id || 'dispatch' }}
+
+          Bounded rolling record (KEEP samples per key, per env bucket), written
+          by tools/ci/spec-timings.mjs. Merge this branch to let
+          select-budget.mjs bill specs from measurements instead of one 2026-08-07
+          mean; nothing reads it until then."
+          # force-with-lease is wrong here: the branch is a rolling proposal this
+          # bot owns, and a plain -f keeps it at exactly the latest merge.
+          git push -f origin "$TIMINGS_BRANCH"
+          echo "pushed $TIMINGS_BRANCH — merge it to adopt the new samples" >> "$GITHUB_STEP_SUMMARY"
