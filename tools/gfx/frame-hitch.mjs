@@ -119,6 +119,56 @@ export function analyse(t0, dur, { minSpikes = 4 } = {}) {
   };
 }
 
+// WHICH passes the wide frames carry, not how many.
+//
+// analysePasses() found the shape: about once a second a frame issues up to
+// nine more render passes than the median, on a fairly regular beat (CV 0.73).
+// That is the reported hitch's shape and it is a GPU question, not an
+// allocation one — and a count cannot say which nine.
+//
+// Resolution is the fingerprint. A shadow atlas, a 64 px env-probe cube face,
+// each bloom mip, the SSAO target and the full-size HDR scene target all have
+// different dimensions, so the difference between a wide frame's composition
+// and a normal frame's NAMES the periodic work.
+export function analysePassKinds(passSig, passes) {
+  if (!passSig || passSig.length < 30) return { note: "no per-frame pass composition recorded" };
+  const n = passSig.length;
+  const counts = passes.slice(0, n);
+  const sorted = counts.slice().sort((a, b) => a - b);
+  const med = sorted[Math.floor(sorted.length / 2)];
+  const normal = [], wide = [];
+  for (let i = 0; i < n; i++) (counts[i] > med ? wide : normal).push(passSig[i]);
+  if (!wide.length) return { medianPasses: med, note: "no frame exceeded the median — nothing periodic to name" };
+  const tally = (frames) => {
+    const m = new Map();
+    for (const f of frames) for (const sig of f) m.set(sig, (m.get(sig) || 0) + 1);
+    return m;
+  };
+  const tn = tally(normal), tw = tally(wide);
+  const keys = new Set([...tn.keys(), ...tw.keys()]);
+  const rows = [];
+  for (const k of keys) {
+    const perNormal = normal.length ? (tn.get(k) || 0) / normal.length : 0;
+    const perWide = wide.length ? (tw.get(k) || 0) / wide.length : 0;
+    rows.push({ pass: k, perNormalFrame: +perNormal.toFixed(2), perWideFrame: +perWide.toFixed(2),
+      extra: +(perWide - perNormal).toFixed(2) });
+  }
+  rows.sort((a, b) => b.extra - a.extra);
+  const added = rows.filter((r) => r.extra >= 0.25);
+  const extraTotal = +rows.reduce((a, r) => a + Math.max(0, r.extra), 0).toFixed(1);
+  return {
+    frames: n, medianPasses: med, normalFrames: normal.length, wideFrames: wide.length,
+    extraPassesPerWideFrame: extraTotal,
+    rows: rows.slice(0, 16),
+    // A NAME, or an honest refusal. If the extra passes are spread thinly over
+    // many signatures there is no single periodic job to point at, and saying
+    // so beats pointing at whichever row sorted first.
+    verdict: added.length
+      ? `WIDE FRAMES ADD: ${added.slice(0, 4).map((r) => `${r.extra}x ${r.pass}`).join(", ")}`
+      : `no pass kind is reliably added on a wide frame (largest delta ${rows.length ? rows[0].extra : 0})`,
+  };
+}
+
 // WHAT SURVIVES, by call stack — and NOT where the garbage comes from.
 //
 // This function was built to answer "who allocates the 255 KB a frame", and it
@@ -467,8 +517,13 @@ async function main() {
               // are attributing to it, or the drop lands one frame late and
               // the correlation reads as zero.
               try { heap[n] = performance.memory ? performance.memory.usedJSHeapSize / 1048576 : 0; } catch (_) { heap[n] = 0; }
-              if (n < PASS_CAP) passPerFrame[n] = passCur > 32767 ? 32767 : passCur;
-              passCur = 0;
+              if (n < PASS_CAP) {
+                passPerFrame[n] = passCur > 32767 ? 32767 : passCur;
+                // Bounded: only the first 4,000 frames keep their composition,
+                // which is ~35 s of racing and plenty of both kinds of frame.
+                if (n < 4000) passSig.push(sigCur);
+              }
+              passCur = 0; sigCur = [];
               n++;
             }
           }
@@ -575,11 +630,54 @@ async function main() {
       const PASS_CAP = 60000;
       const passPerFrame = new Int16Array(PASS_CAP);
       let passCur = 0;
+      // ...AND WHICH PASSES THEY ARE. A count said about once a second a frame
+      // issues up to nine more passes than the median, on a fairly regular
+      // beat — which is the shape of the reported hitch and is not a JS
+      // allocation question at all. A count cannot say WHICH nine.
+      //
+      // Resolution is the fingerprint. A shadow atlas, a 64px env-probe cube
+      // face, each bloom mip, the SSAO target and the full-size HDR scene
+      // target all have different dimensions, so "1024x1024/depth32float" names
+      // a pass without needing three to label anything. GPUTextureView carries
+      // no size, so tag the view when it is created from a texture that does.
+      const passSig = [];            // parallel to passPerFrame: signatures per frame
+      let sigCur = [];
+      try {
+        const TP = window.GPUTexture && window.GPUTexture.prototype;
+        if (TP && typeof TP.createView === "function") {
+          const origCV = TP.createView;
+          TP.createView = function () {
+            const v = origCV.apply(this, arguments);
+            try { v.__sig = this.width + "x" + this.height + "/" + this.format; } catch (_) { /* expando refused */ }
+            return v;
+          };
+        }
+      } catch (_) { /* untagged views degrade to "?" rather than to silence */ }
+      function sigOf(desc) {
+        try {
+          const ca = (desc && desc.colorAttachments) || [];
+          let out = "";
+          for (let i = 0; i < ca.length; i++) {
+            const v = ca[i] && (ca[i].view || ca[i].resolveTarget);
+            out += (i ? "+" : "") + ((v && v.__sig) || "?");
+          }
+          if (!ca.length) out = "depth-only";
+          if (desc && desc.depthStencilAttachment) out += "|d";
+          // The load op separates a clear from a draw into the same target,
+          // which is how a shadow atlas rebuild reads against a reuse.
+          const lo = ca.length && ca[0] ? ca[0].loadOp : (desc && desc.depthStencilAttachment && desc.depthStencilAttachment.depthLoadOp);
+          if (lo) out += ":" + lo;
+          return out;
+        } catch (_) { return "?"; }
+      }
       try {
         const CE = window.GPUCommandEncoder && window.GPUCommandEncoder.prototype;
         if (CE && typeof CE.beginRenderPass === "function") {
           const origBRP = CE.beginRenderPass;
-          CE.beginRenderPass = function () { if (armed) passCur++; return origBRP.apply(this, arguments); };
+          CE.beginRenderPass = function (desc) {
+            if (armed) { passCur++; if (sigCur.length < 64) sigCur.push(sigOf(desc)); }
+            return origBRP.apply(this, arguments);
+          };
         }
       } catch (_) { /* no WebGPU in this context: the pass series stays empty */ }
 
@@ -639,6 +737,7 @@ async function main() {
           mem0, mem1: snapMem(),
           stacks: [...stacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25),
           passes: Array.from(passPerFrame.subarray(0, Math.min(n, PASS_CAP))),
+          passSig,
           backend: (() => {
             // eslint-disable-next-line no-undef
             try { const t = (typeof GLX !== "undefined") && GLX && GLX.__tlx; return t && t.backendState ? t.backendState() : null; }
@@ -709,6 +808,7 @@ async function main() {
     out.work = analyseWork(d.work || [], d.bucketMs || 250, out.frames);
     out.backend = d.backend;
     out.passes = analysePasses(d.passes || [], d.t0 || []);
+    out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
     out.heap = analyseHeap(d.heap || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.alloc = allocProfile
       ? analyseAlloc(allocProfile, out.heap && out.heap.elapsedS, out.frames, 16384)
