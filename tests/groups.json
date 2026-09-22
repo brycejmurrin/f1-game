@@ -497,6 +497,8 @@
         "tests/specs/steering.spec.js",
         "tests/specs/gamepad.spec.js",
         "tests/specs/touch-steer.spec.js",
+        "tests/specs/touch-buttons.spec.js",
+        "tests/specs/touch-pedals.spec.js",
         "tests/specs/tilt-pipeline.spec.js",
         "tests/specs/steer-migration.spec.js",
         "tests/specs/camera.spec.js",

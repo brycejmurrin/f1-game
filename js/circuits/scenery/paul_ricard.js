@@ -95,8 +95,20 @@
         tree(k, h < 0.5 ? -1 : 1, 64 + h * 30, 7 + h * 4, [0.26, 0.36, 0.20]);
       });
 
+      // THE PIT STRAIGHT IS MIRRORED FROM WHAT SHIPPED. The paddock side is the
+      // RIGHT of the straight in the racing direction (the pit exit rejoins on
+      // the right; this is a clockwise lap, so the paddock is the infield), and
+      // it is where the engine's pit complex (TrackPit, `pit.side` default 1)
+      // builds lane, wall and garages. This file had the whole paddock on the
+      // left and the main stand, fence and boards on the right, so the stand
+      // stood in the complex and the hand-built bays faced it across the road.
+      // Here `side: -1` lands on the right and `side: 1` on the left (reversed
+      // def: transformSceneryApi negates side). The bays and race control now
+      // stand where the complex stands and are superseded by it, which is the
+      // intent: they are the fallback for a build without one.
+      // docs/notes/DEFECT-LEDGER.md § paul_ricard.
       for (const [i, s] of [0.950, 0.970, 0.990, 0.010].entries()) {
-        const a = anchor(K(s), 1, 20);
+        const a = anchor(K(s), -1, 20);
         const b = [a.r, a.u, a.t];
         modelGroup(`paul-ricard-pit-bay-${i + 1}`, {
           center: vadd(a.c, a.u, 6), size: [22, 12, 38], basis: b,
@@ -126,7 +138,7 @@
         }, { required: true });
       }
       {
-        const a = anchor(K(0.992), 1, 26);
+        const a = anchor(K(0.992), -1, 26);
         const b = [a.r, a.u, a.t];
         modelGroup("paul-ricard-race-control", {
           center: vadd(a.c, a.u, 10), size: [16, 22, 20], basis: b,
@@ -150,19 +162,20 @@
       // on is clear, and 4 m along a 5.8 km lap is invisible.
       gantry(0.004, 9, [0.15, 0.15, 0.18]);
       gantry(0.965, 8.5, [0.15, 0.15, 0.18]);
-      grandstandEx(0.005, -1, 12, 150, null, null,
+      grandstandEx(0.005, 1, 12, 150, null, null,
         { livery: "alu", tiers: 2, roof: "flat", suites: true, endWalls: true, pylons: true });
       for (let i = 0; i < 4; i++) {
-        building(K(0.918 + i * 0.013), 1, 40, 30, 9, 15,
+        building(K(0.944 + i * 0.013), -1, 40, 30, 9, 15,
           { kind: "slab", wall: [0.87, 0.87, 0.86], window: [0.30, 0.34, 0.42], floor: 4.5 });
       }
       every(46, (k) => {
         const s = k / n, h = hash(k * 71 + 31);
-        if (!(s > 0.90 || s < 0.05) || h < 0.52) return;
-        motorhome(k, 1, 58 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
+        // From 0.94: on the right, 0.90-0.94 is the inside of the Tour hairpin.
+        if (!(s > 0.94 || s < 0.05) || h < 0.52) return;
+        motorhome(k, -1, 58 + h * 10, 10, 4, 6, { wall: [0.66 + h * 0.24, 0.66, 0.68] });
       });
-      broadcastCompound(K(0.908), 1, 76, { vans: 3, dishes: 2, mastH: 9 });
-      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), -1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
+      broadcastCompound(K(0.908), -1, 76, { vans: 3, dishes: 2, mastH: 9 });
+      for (const s of [0.975, 0.01, 0.03]) billboard(K(s), 1, 8, 12, 4.5, [0.20, 0.34, 0.70]);
 
       const bleacher = (s0, s1, side, gap, opts) => {
         opts = opts || {};
@@ -183,11 +196,12 @@
             [0.62, 0.64, 0.68], b);
           for (let r = 0; r < rows; r++) {
             const back = r * depth, up = 0.5 + r * rise;
-            addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
+            const tier = addBox(out, vadd(vadd(a.c, a.r, side * back), a.u, up),
               [depth, rise + 0.14, seg], r & 1 ? ALU : [0.71, 0.73, 0.76], b);
             // Thin, scattered crowd — a Paul Ricard grandstand is rarely full.
+            // Never on a tier the road guard dropped: the figure floats (0.937).
             const h = hash(k * 13 + r * 7);
-            if (h < 0.70) continue;
+            if (h < 0.70 || tier === false) continue;
             out._mat = MAT.FABRIC;
             addBox(out, vadd(vadd(vadd(a.c, a.r, side * back),
               a.t, (h - 0.5) * seg * 0.8), a.u, up + 0.55),
@@ -212,7 +226,7 @@
         guardrail(s0, s1,  1, 12, [0.80, 0.81, 0.83]);
       }
       guardrail(0.94, 0.06, 1, 5.0, [0.85, 0.85, 0.88]);
-      fence(0.95, 0.05, -1, 10, 4, [0.74, 0.76, 0.80]);
+      fence(0.95, 0.05, 1, 10, 4, [0.74, 0.76, 0.80]);
       for (const s of [0.15, 0.26, 0.34, 0.50, 0.64, 0.82]) {
         marshalPost(K(s), hash(K(s)) < 0.5 ? -1 : 1, 14);
       }
@@ -361,10 +375,13 @@
         ["pr-turbine-9", 0.905, -1, 158, 50],
       ]) windTurbine(id, s, side, dist, h);
 
-      groundPatch(K(0.955), 1, 44, [76, 0.16, 200], [0.56, 0.56, 0.55],
+      // Paddock apron behind the complex (right, see the pit-straight note).
+      // Its lane lines are raw boxes, not guarded, so they are centred on the
+      // apron (44 + 76/2) rather than at 52, where they would cross the garages.
+      groundPatch(K(0.955), -1, 44, [76, 0.16, 200], [0.56, 0.56, 0.55],
         { id: "paul-ricard-paddock-apron", samples: 10 });
       for (let i = 0; i < 14; i++) {
-        const a = anchor(K(0.925 + i * 0.008), 1, 52);
+        const a = anchor(K(0.925 + i * 0.008), -1, 82);
         addBox(out, vadd(a.c, a.u, 0.22), [64, 0.09, 0.5], LINE, [a.r, a.u, a.t]);
       }
       groundPatch(K(0.885), 1, 92, [40, 0.16, 40], [0.50, 0.50, 0.50],
@@ -443,7 +460,10 @@
             }
           }
         }
-        const a = anchor(K(0.235), -1, 90);
+        // 120, not 90: at 90 the hut stood on the far leg of the hairpin at
+        // 0.26 (1.4 m off its centreline, footprint rejected); 120 is the
+        // nearest gap that seats hut and wall both, 23 m clear of that road.
+        const a = anchor(K(0.235), -1, 120);
         const b = [a.r, a.u, a.t];
         const DRY = [0.72, 0.68, 0.58], DRY_D = [0.62, 0.58, 0.49];
         modelGroup("paul-ricard-cabanon", {
