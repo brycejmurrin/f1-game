@@ -4877,7 +4877,19 @@ section — WebGPU meanLuma 51.4, WebGL2 (Metal ANGLE) 51.1, GLX 45.7, WGX 58.9.
 That is the revert criteria clear on hardware for the decal block as well; the
 fps and JS-ms columns are single samples and are not read (§2w).
 
-## 2aa. "It lags every few seconds" was the governor chasing the track layout (2026-09-22)
+## 2aa. The governor was chasing the track layout — but that was NOT the reported hitch (2026-09-22)
+
+> **CORRECTED THE SAME DAY.** This section was first written as *"it lags every
+> few seconds" WAS the governor chasing the track layout*, and that claim is
+> withdrawn. The governor defect below is real, the fix is real, and it shipped
+> and was verified live (`apex-sha 49c3206f0`, `governor.js?v=262de1b1e1a0`,
+> build 9866). The player then reported the hitch **unchanged**. So the move
+> count was a true measurement of a true bug and a FALSE answer to the
+> question asked, and nothing in the evidence below ever said otherwise: a
+> reallocation count is not a frame time, and §2aa's own closing rule says this
+> container cannot turn one into the other. Reading "35-83 reallocations per ten
+> minutes, gaps of 1-5 s" as "therefore this is the reported hitch" was the
+> step that had no evidence under it. The hunt continues in §2ab.
 
 The report was about three.js/WebGPU. The cause is in `js/perf/governor.js` and
 is backend-wide; TLX shows it first because it is the backend that sits nearest
