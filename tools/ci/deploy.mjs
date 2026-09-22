@@ -522,11 +522,54 @@ function pushWithRetry(oursProse = false) {
   throw new Error("push rejected three times — another session keeps landing; stop and look");
 }
 
+/* --pr without the gh CLI. The remote containers have GH_TOKEN/GITHUB_TOKEN and
+   curl (through the agent proxy) but no gh, which left --pr printing a compare
+   URL and the session merging by hand (PR #178, 2026-09-22). Same three steps
+   as the gh path — find an open PR for the head, create one from the HEAD
+   commit's subject/body, enable auto-merge — over the REST and GraphQL APIs.
+   The token travels as a curl config on stdin, never on the argv. */
+const REPO = "brycejmurrin/f1-game";
+function ghApi(token, method, url, body) {
+  const args = ["-sS", "--max-time", "30", "-K", "-", "-X", method,
+    "-H", "Accept: application/vnd.github+json", "-H", "X-GitHub-Api-Version: 2022-11-28", url];
+  // `-K -` reads a curl config from stdin: the auth header and the JSON body
+  // both ride there (curl's quoted-value escapes are JSON's \" and \\).
+  let input = `header = "Authorization: Bearer ${token}"\n`;
+  if (body !== undefined) {
+    input += `header = "Content-Type: application/json"\ndata-binary = ${JSON.stringify(JSON.stringify(body))}\n`;
+  }
+  const r = spawnSync("curl", args, { encoding: "utf8", input });
+  if (r.status !== 0) throw new Error(`curl ${method} ${url}: ${(r.stderr || "").trim()}`);
+  try { return JSON.parse(r.stdout || "null"); }
+  catch { throw new Error(`${method} ${url}: not JSON: ${r.stdout.slice(0, 200)}`); }
+}
+export function openPrRest(branch, token) {
+  const [owner] = REPO.split("/");
+  const api = `https://api.github.com/repos/${REPO}`;
+  const open = ghApi(token, "GET", `${api}/pulls?state=open&head=${owner}:${encodeURIComponent(branch)}&base=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1`);
+  if (Array.isArray(open) && open[0]?.html_url) return { pr: open[0].html_url, note: "PR already open; the push updated it" };
+  const title = git(["log", "-1", "--format=%s"]).out;
+  const body = git(["log", "-1", "--format=%b"]).out;
+  const pr = ghApi(token, "POST", `${api}/pulls`, { title, body, head: branch, base: DEPLOY_BRANCH });
+  if (!pr?.html_url) throw new Error("REST pr create failed: " + JSON.stringify(pr).slice(0, 300));
+  const gql = ghApi(token, "POST", "https://api.github.com/graphql", {
+    query: "mutation($id: ID!) { enablePullRequestAutoMerge(input: {pullRequestId: $id, mergeMethod: MERGE}) { clientMutationId } }",
+    variables: { id: pr.node_id },
+  });
+  const err = Array.isArray(gql?.errors) ? gql.errors.map((e) => e.message).join("; ") : "";
+  return {
+    pr: pr.html_url,
+    note: err ? `auto-merge NOT enabled (${err}) — enable it on the PR or merge by hand once green`
+              : "auto-merge (merge commit) enabled via the API; GitHub creates the merge so the PR is a real record",
+  };
+}
 function openPr(branch) {
   must(git(["push", "-u", REMOTE, branch]), "push session branch");
   const gh = spawnSync("gh", ["--version"], { encoding: "utf8" });
   if (gh.status !== 0) {
-    return { pr: null, note: `gh not installed — open https://github.com/brycejmurrin/f1-game/compare/${DEPLOY_BRANCH}...${branch}?expand=1` };
+    const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+    if (token) return openPrRest(branch, token);
+    return { pr: null, note: `gh not installed and no GH_TOKEN/GITHUB_TOKEN — open https://github.com/${REPO}/compare/${DEPLOY_BRANCH}...${branch}?expand=1` };
   }
   const existing = spawnSync("gh", ["pr", "list", "--head", branch, "--base", DEPLOY_BRANCH, "--json", "url", "-q", ".[0].url"], { cwd: ROOT, encoding: "utf8" }).stdout.trim();
   if (existing) return { pr: existing, note: "PR already open; the push updated it" };
