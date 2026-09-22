@@ -2058,3 +2058,48 @@ spec file, so assertions about that feature filed under an unrelated name are th
 ones left behind.** Two selection-screen cases were sitting in a file named for
 button/touch steering. When a screen is reworked, grep the id across all of
 `tests/`, not just the spec that owns the screen.
+
+## 2026-09-22 — a watcher that can never fire looks exactly like a run that never finishes
+
+Waiting on `deploy.mjs --gate-only`, the watcher was armed as:
+
+```sh
+until [ ! -e /proc/$(pgrep -f 'deploy.mj[s]' | head -1) ]; do sleep 20; done
+```
+
+It burned its entire 30-minute budget and reported "expired with no events". The
+gate had in fact passed 14 minutes in.
+
+The defect is in the absent case, which is the ONLY case the loop exists to
+detect. When the process is gone `pgrep` prints nothing, `$(...)` expands to the
+empty string, and the test becomes `[ ! -e /proc/ ]` — `/proc` exists, so the
+condition is false forever. The loop is correct exactly while the thing it
+watches is alive and broken exactly when it is not. Reproduced directly:
+
+```
+$ P=$(pgrep -f 'nosuchproc_xyz[1]' | head -1); [ ! -e /proc/$P ] && echo exit || echo loop
+loop
+```
+
+The form that works tests the string, not a path built from it:
+
+```sh
+until [ -z "$(pgrep -f 'deploy.mj[s]')" ]; do sleep 15; done
+```
+
+Both edges checked before trusting it: empty pattern exits, live pattern waits.
+The `[s]` bracket keeps the waiter's own command line from matching its pattern
+(`deploy.mj` followed by `[` is not `deploy.mjs`); it does NOT stop the wrapping
+`/bin/bash -c` of the watched command from matching, which is harmless because
+the wrapper and its child die together.
+
+Two rules come out of this, both now in AGENTS.md §Verification 4:
+
+1. **Test the absent case.** A waiter is a predicate about something NOT being
+   there, and every bug in one hides on that side. "It didn't fire" and "it
+   isn't finished yet" are the same observation from outside.
+2. **The waiter is not the verdict.** The result was still read correctly here
+   only because it was taken from the run's own log line (§Verification 5), not
+   from the watcher. A vanished process says something exited, never that it
+   passed — and a waiter that silently cannot fire will otherwise stretch a
+   finished run into an apparently hung one for as long as its timeout allows.
