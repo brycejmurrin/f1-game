@@ -1947,7 +1947,7 @@ Deferred with reasoning, none lost:
   the other hardcoded positions in the same file before closing it — two of the
   three here were fixed and the third was left, which is how it survived.
 
-## OPEN — estoril scenery emitters do not land where their names say (2026-09-22)
+## NAMES FIXED, GEOMETRY OPEN — estoril scenery emitters do not land where their names say (2026-09-22)
 
 Found while fixing the Parabolica's bank and gravel apron (PR #188). The
 apron fix is landed and correct; this is the larger thing underneath it, left
@@ -1997,3 +1997,52 @@ every emitter in `js/circuits/scenery/estoril.js` through those two, compare
 each against the feature its id names, and only then decide per emitter. The
 sweeps' three baselines (coplanar 5, float 0, clip 1 severe) are the guard that
 such a pass has not made things worse.
+
+### Resolution, same day: the names were corrected, the props were not
+
+The per-emitter enumeration this entry asked for was done. Under the shift, the
+result is worse than "some emitters are off" — **not one of the twelve lands on
+the feature its id names**, and two never render at all:
+
+| id (before) | authored | engine | actually lands on | renamed to |
+|---|---|---|---|---|
+| `pit-terrace-a` | 0.960 | 0.8162 | T14, 26 m, R 110 | `parabolica-terrace-a` |
+| `pit-terrace-b` | 0.996 | 0.8522 | T14, 123 m | `parabolica-terrace-b` |
+| `stand-pit` | 0.005 | 0.8612 | T14 exit, R 76 | `stand-parabolica-exit` |
+| `stand-t1` | 0.078 | 0.9342 | main straight | `stand-main-straight` |
+| `stand-esses` | 0.140 | 0.9962 | PIT LANE — **suppressed** | `stand-pitlane-superseded` |
+| `stand-parabolica` | 0.900 | 0.7562 | T13, 31 m | `stand-t13` |
+| `t1-gravel` | 0.078 | 0.9342 | pit complex — **suppressed** | `pit-entry-gravel-superseded` |
+| `esses-gravel` | 0.420 | 0.2762 | T5, 54 m | `t5-gravel` |
+| `t12-gravel` | 0.780 | 0.6362 | T11, 72 m | `t11-gravel` |
+| `parabolica-gravel-a/b/c` | 0.884-0.916 | 0.740-0.772 | T13 | `t13-gravel-a/b/c` |
+
+**The obvious correction was tried and measured, and it is not a one-line def
+edit.** Dropping `sceneryStartFrac` (shift -> 0) does fix the semantics
+exactly: the three pit emitters land inside `pitLaneSpan` to the metre and the
+terraces become "superseded by the pit complex", which is what a circuit's
+hand-placed pit block is FOR, while `t1-gravel` and `stand-esses` come alive at
+their own features. It also takes **coplanar 5 -> 0**. But it costs:
+
+- **float 0 -> 1** (one elevated cluster)
+- **clip 1 -> 3 severe**, including a **4.00 m / 1261 m3** collision at frac
+  0.000 that SURVIVES retiring the hand-placed pit grandstand — so at least one
+  more structure collides with the engine's pit complex underneath it
+- **`estoril-aldeia` footprint rejected** — the village lands on the road
+
+Best-fit analysis over the unambiguous emitters confirms no single constant
+rescues it: shift 0 scores 195 m mean name-to-feature error, 0.938 scores
+136 m, and the current 0.85616 scores **397 m** — worst of the three, yet the
+one the geometry was tuned against. The dressing was settled where it sits;
+`float 0` and `clip 1` at the current positions are the evidence.
+
+So the names were corrected in place (zero geometric change — 192483 verts and
+all three baselines identical before and after) and a banner at the top of
+`js/circuits/scenery/estoril.js` records the arithmetic and the measured cost
+of the move, so the next author neither places by name nor repeats the
+experiment blind.
+
+**Still open:** moving the dressing onto the features it names. That needs the
+pit-complex collisions resolved emitter by emitter and a rendered lap to judge
+it — a dressing pass, which is what this entry originally said and what the
+attempt confirmed.
