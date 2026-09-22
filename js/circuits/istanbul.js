@@ -13,8 +13,13 @@
     // Start/finish line. Snapped to the real one: v0 convention; T1 measured LEFT, matches the real T1.
     // Was 0.98, which put the line inside a corner — a start line is
     // always on a straight. See docs/tracks/START-LINES.md.
+    // No sceneryStartFrac: the scenery is authored against this line (pit bays
+    // 0.948-0.990, T1 gravel 0.055, T8 amphitheatre 0.34-0.46, T13 gravel
+    // 0.905); the old 0.98 shifted all of it 0.925 and put the paddock on T12.
     startFrac: 0.0000,
-    sceneryStartFrac: 0.98,
+    // The main grandstand (scenery grandstandEx 0.005, -1) is this circuit's own
+    // pit-straight stand; the engine's generic 7-box one stood inside it.
+    ownPitStraight: true,
     name: "ISTANBUL",
     gp: "Turkish GP",
     country: "Turkey",
