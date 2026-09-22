@@ -4377,12 +4377,22 @@ test("TLX registry pruning preserves live refs and is independent of mirror rele
 
 test("TLX warm holds renderer state across awaits and restores it on rejection", async () => {
   let _warmRequested = true, _warmPending = null, _warmAttempts = 0, _warmAt = 0, _warmDone = false;
-  // Fix C: the warm's finally sets _warmDone and the try calls the caster warm when
-  // the shadow module offers one; a null module must simply be skipped.
-  const shadowSys = null;
+  // Fix C: the warm's finally sets _warmDone and the try calls the caster warm.
+  // Fix D: the ORDER is the contract — the post chain compiles under the scene
+  // MRT (present() runs post.present() before restoring it, and three keys the
+  // render context, hence the program cache, on the MRT node's id), the MRT is
+  // nulled only after it, and the casters compile under null (sunPass runs before
+  // present(), with the MRT restored).
+  let shadowCalls = 0, postCalls = 0;
+  const shadowSys = { warm: async () => {
+    shadowCalls++; await Promise.resolve();
+    assert.equal(postCalls, 1, "the caster warm runs after the post warm");
+    assert.equal(mrt, null, "the caster warm runs with the MRT nulled");
+    assert.equal(target, "HDR");
+  } };
   let _gpuLastOperation = "boot";
   const _postF = { proj: [] }, vizMat = null, scene = {}, camera = {};
-  let target = "canvas", mrt = "previous", tag = false, postCalls = 0, rejectMain;
+  let target = "canvas", mrt = "previous", tag = false, rejectMain;
   const renderer = {
     getRenderTarget: () => target, getMRT: () => mrt,
     setRenderTarget: v => { target = v; }, setMRT: v => { mrt = v; },
@@ -4393,11 +4403,21 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
     },
   };
   const post = { enabled: () => true, sceneTarget: () => "HDR", warm: async () => {
-    postCalls++; await Promise.resolve(); assert.equal(mrt, null); assert.equal(target, "HDR");
+    postCalls++; await Promise.resolve();
+    assert.equal(shadowCalls, 0, "the post warm runs before the caster warm");
+    assert.equal(mrt, "tag", "the post warm runs under the scene MRT, the variant present() draws");
+    assert.equal(target, "HDR");
   } };
   const lit = { setSsrMrt: v => { tag = v; } }, fx = null;
   const pinSkyMaterial = () => {}, _ssrMrtNode = () => "tag", softOutRT = () => null, Log = { warn() {} };
   const body = fnBody(code("js/render/three/tlx.js"), "startProgramWarm");
+  // Source pins for the same order: exactly one setMRT(null), between the post
+  // warm and the caster warm, and the caster warm still guarded on the module.
+  const iPost = body.indexOf("await post.warm(opts, _postF)"), iNull = body.indexOf("renderer.setMRT(null)"),
+    iShadow = body.indexOf("shadowSys.warm()");
+  assert.ok(iPost > 0 && iNull > iPost && iShadow > iNull, "setMRT(null) must sit between the post warm and the caster warm");
+  assert.equal(body.indexOf("renderer.setMRT(null)", iNull + 1), -1, "startProgramWarm nulls the MRT exactly once");
+  assert.match(body, /if \(shadowSys && shadowSys\.warm\)/, "the caster warm is skipped when the module offers none");
   const warm = eval("(function(opts){" + body + "})");
   warm({}); await Promise.resolve();
   assert.equal(target, "HDR"); assert.equal(mrt, "tag"); assert.equal(postCalls, 0);
@@ -4405,7 +4425,7 @@ test("TLX warm holds renderer state across awaits and restores it on rejection",
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
   assert.equal(_warmRequested, true); assert.equal(_warmPending, null);
   warm({}); await _warmPending;
-  assert.equal(_warmRequested, false); assert.equal(postCalls, 1);
+  assert.equal(_warmRequested, false); assert.equal(postCalls, 1); assert.equal(shadowCalls, 1);
   assert.equal(target, "canvas"); assert.equal(mrt, "previous"); assert.equal(tag, false);
 });
 
@@ -4423,7 +4443,8 @@ test("TLX post warm compiles serially and holds each target across awaits", asyn
     compileAsync: async q => {
       assert.equal(++active, 1); calls++;
       await Promise.resolve();
-      assert.equal(target, q.material); assert.equal(mrt, null);
+      assert.equal(target, q.material);
+      assert.equal(mrt, "tag", "the post warm compiles under whatever MRT the caller set — never nulls it");
       active--;
       if (q.material === "blur") throw new Error("compile failed");
     },
@@ -4433,6 +4454,10 @@ test("TLX post warm compiles serially and holds each target across awaits", asyn
     _last.pass = "warm"; _lastPresentRT = "warmRT"; _vizDest = null;
   };
   const body = fnBody(code("js/render/three/tlx-post.js"), "warm");
+  // Fix D: three keys the render context (and so the program cache) on the MRT
+  // node's id, and present() runs the post chain under the scene MRT; a warm
+  // that nulled it built sixteen programs the race never drew (gpu-census 206).
+  assert.doesNotMatch(body, /setMRT\(\s*null\s*\)/, "post.warm must not null the MRT — it compiles the variant present() draws");
   const warm = eval("(async function(opts, frame){" + body + "})");
   await assert.rejects(warm({}, {}), /compile failed/);
   assert.equal(calls, 2); assert.equal(compileJobs, null);

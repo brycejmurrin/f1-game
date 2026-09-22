@@ -605,7 +605,11 @@
       try {
         compileJobs = jobs;
         try { present(opts, frame); } finally { compileJobs = null; }
-        renderer.setMRT(null);
+        // The caller's MRT is the LIVE one: present() runs the post chain with
+        // the scene pass's ssrTag MRT node still set, so compiling these quads
+        // under a null MRT built sixteen programs the race never used
+        // (gpu-census 206). Whatever startProgramWarm has set is what runPass
+        // will see; do not touch it here.
         const deadline = performance.now() + 3000;
         for (const job of jobs) {
           renderer.setRenderTarget(job.target);

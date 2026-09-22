@@ -1794,7 +1794,17 @@ const TLX = (function () {
             renderer.setRenderTarget(usePost ? post.sceneTarget() : softOutRT());
             _gpuLastOperation = "compile-scene";
             await renderer.compileAsync(scene, camera);
-            renderer.setMRT(null);
+            // MRT STAYS SET THROUGH THE POST WARM. present() sets the ssrTag MRT
+            // node for the scene pass and calls post.present() BEFORE restoring
+            // it, so every live post quad compiles with that node in its render
+            // context — a different fragment-output struct, a different program.
+            // This warm used to null the MRT here, and post.warm() nulled it
+            // again, so the sixteen post programs it built were the no-MRT
+            // variants and the race rebuilt all sixteen on its first visible
+            // present (gpu-census 206: 56 warm-tagged modules, and x2 lazy at
+            // each of the eight runPass sites regardless). The casters render
+            // BEFORE present(), with the MRT restored to null, so their warm
+            // runs after the null below.
             // THE POST CHAIN IS WARMED UNCONDITIONALLY. The 3 s gate this used
             // to sit behind was measured against the scene warm's own elapsed
             // time, which on macos-latest Metal consumes it: gpu-census 203
@@ -1810,6 +1820,7 @@ const TLX = (function () {
             if (usePost && post.warm) {
               _gpuLastOperation = "compile-post"; await post.warm(opts, _postF);
             }
+            renderer.setMRT(null);
             // The casters live in their own Scene (tlx-shadow.js castScene), so
             // compileAsync(scene) never sees them and the first sun pass of the
             // race built 9 programs — 7 for the caster render, 2 for the PCSS
