@@ -57,6 +57,11 @@ GENERATED = {
     "js/roster.js": "node tools/gen/gen-shell.mjs writes it from tools/manifest.cjs",
     "tools/carview.html": "node tools/gen/gen-shell.mjs writes it from tools/manifest.cjs",
     "tools/README.md": "node tools/gen/gen-tools-readme.mjs writes it from the tools' @doc headers",
+    # Not generated, but never hand-edited: a ceiling moves through the tool
+    # (--auto-raise in the commit hook, --update with a reason in the commit),
+    # so the number in the diff is a measurement, not a wish (AGENTS.md
+    # §Critical conventions). Unguarded until 2026-09-22.
+    "tests/data/ratchets.json": "node tools/check/ratchets.mjs --update (or the commit hook's --auto-raise) writes it",
 }
 if rel in GENERATED:
     block(f"{rel} is GENERATED — {GENERATED[rel]}. Edit the source and run the generator.")

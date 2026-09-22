@@ -23,7 +23,7 @@ broken file rather than a badly chosen range.
 Spawn `bloat-auditor` with a **named scope** (one file, one skill, or
 `HEAD` / last-touched). It returns `BLOAT` rows only. The parent edits and
 locksteps; if `tools/manifest.cjs` changed, run `node tools/gen/gen-shell.mjs`
-(committed tags stay `?v=dev` — no cache bump).
+([shell/cache](../check-changes/references/bump.md)).
 
 ## Hard don'ts (always)
 

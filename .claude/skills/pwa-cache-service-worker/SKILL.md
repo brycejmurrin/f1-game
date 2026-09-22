@@ -22,7 +22,7 @@ swallowed.
 
 **Fetch.** Navigation + `version.json` = network-first (3 s → cache).
 Everything else = cache-first. Always refresh **content hashes AND the
-shell generation** together (`node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md): `?v=dev`, no bump)). Never bump `version.json`
+shell generation** together (`node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md))). Never bump `version.json`
 during a Playwright run.
 
 ## When to Use

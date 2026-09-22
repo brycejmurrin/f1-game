@@ -1,6 +1,6 @@
 ---
 name: css-play
-description: Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots without a full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting.
+description: Use when iterating on one menu/HUD stylesheet or screen (a token or class change, before/after screenshots without a full layout audit), and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, splitting index.html, height-responsive layout, or judging whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. A single screen that is cramped, clips, or misbehaves on Escape/focus is ui-menu-a11y.
 ---
 
 # Playing with menu / HUD CSS
@@ -40,7 +40,7 @@ Unknown screen: `--click "#mb-foo" --root "#id"`. Catalog ids are a subset of
    once, last edit before commit, when the look ships.
 2. **Hide `#game`.** A live canvas starves the compositor (survey-ui-matrix).
 3. **Open through the app's buttons**, never `hidden = false` on a dialog.
-4. **Park / close Playwright** before `test-bg` or Chrome MCP.
+4. **One browser at a time** — [mcp-probe traps](../mcp-probe/references/traps-chrome.md).
 5. **Do not run `layout-audit` for one screen.** That is the matrix.
 6. **A change to TYPE METRICS invalidates a pixel golden — re-bless in the SAME
    commit.** `tests/specs/menu-baseline.spec.js` holds six blessed PNGs; the

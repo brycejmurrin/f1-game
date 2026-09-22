@@ -24,7 +24,8 @@ const frontmatter = (text) => {
   assert.ok(m, "missing YAML frontmatter");
   const out = {};
   for (const line of m[1].split("\n")) {
-    const kv = line.match(/^([a-z_]+):\s*(.*)$/);
+    // Keys may carry a hyphen or a capital (disable-model-invocation, maxTurns).
+    const kv = line.match(/^([A-Za-z_-]+):\s*(.*)$/);
     if (kv) out[kv[1]] = kv[2].trim();
   }
   return out;
@@ -295,9 +296,15 @@ test("every custom subagent declares name, description, and model", () => {
   // does not silently pick a different model; readonly / is_background optional.
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
-    "bloat-auditor.md", "deploy-research.md", "physics-contract-auditor.md",
+    "bloat-auditor.md", "ci-red-triage.md", "deploy-research.md", "physics-contract-auditor.md",
     "track-surveyor.md", "verify-agent.md",
-  ], "five agents since 2026-09 (worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+  ], "six agents since 2026-09-22 (ci-red-triage added; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+  // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
+  // tier; judgement stays on the session's model. Anything else is a typo.
+  const TIER = {
+    "bloat-auditor.md": "haiku", "deploy-research.md": "haiku", "verify-agent.md": "haiku",
+    "ci-red-triage.md": "sonnet", "physics-contract-auditor.md": "inherit", "track-surveyor.md": "inherit",
+  };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
     const text = fs.readFileSync(path.join(AGENTS, f), "utf8");
@@ -305,7 +312,8 @@ test("every custom subagent declares name, description, and model", () => {
     const id = f.replace(/\.md$/, "");
     assert.equal(fm.name, id, `${f}: name must match the filename`);
     assert.ok(fm.description, `${f}: description is required`);
-    assert.ok(fm.model, `${f}: model is required (use inherit unless a specific model is justified)`);
+    assert.equal(fm.model, TIER[f], `${f}: model must be the documented tier (${TIER[f]})`);
+    assert.match(fm.maxturns || fm.maxTurns || "", /^[0-9]+$/, `${f}: maxTurns bounds a runaway agent`);
     // Cursor reads is_background, Claude Code reads background — both or neither.
     assert.equal(fm.background, fm.is_background, `${f}: background and is_background must agree`);
     // One prohibition line replaces the five verbatim blocks (2026-09).
@@ -387,7 +395,7 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
 });
 
 test("readonly review agents stay --fast and never start Playwright", () => {
-  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research"]) {
+  for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);
     const text = fs.readFileSync(file, "utf8");
@@ -396,7 +404,7 @@ test("readonly review agents stay --fast and never start Playwright", () => {
     assert.equal(fm.readonly, "true", `${id} must be readonly`);
     assert.doesNotMatch(fm.tools || "", /\b(Write|Edit|MultiEdit|NotebookEdit)\b/,
       `${id}: readonly is Cursor's field; Claude Code enforces it through tools:`);
-    assert.equal(fm.model, "inherit");
+    assert.match(fm.model, /^(inherit|haiku|sonnet)$/);
     assert.doesNotMatch(text, /verify-change\.mjs --wait/);
     assert.doesNotMatch(text, /test-solo\.mjs/);
     assert.doesNotMatch(text, /npx playwright test/);

@@ -571,11 +571,10 @@ loses the keyword race.
    `tests/data/ratchets.json` is unprotected in `protect-files.sh`;
    `no-bare-console` is absent from `test:guards`. Each is a one-line
    change and each is a rule the repo already believes is enforced.
-1. **Skill frontmatter extensions** — `paths:` on the file-triggered skills
-   (webgl-debug, webgpu-debug, new-track, scenery-dress),
-   `disable-model-invocation` on anything that pushes or bakes,
-   `context: fork` where a skill is really a subagent job. Additive; other
-   hosts ignore the fields.
+1. **Skill frontmatter extensions** — WITHDRAWN for `paths:` and
+   `disable-model-invocation` (§6: both restrict activation, and the tree
+   had already measured that for `paths`); `context: fork` remains open where
+   a skill is really a subagent job.
 2. **Agent frontmatter** — `model: sonnet`/`haiku` on bloat-auditor and
    deploy-research; `memory: project` on the repeat auditors;
    `isolation: worktree` + `worktree.baseRef: "head"` to retire the
@@ -608,6 +607,128 @@ loses the keyword race.
 10. **Not worth doing** — agent teams for coding work (15× tokens for
     coupled tasks), a merge queue (unavailable), `merge=union` on ratchets
     (corrupts them), retries above 1.
+
+## 6. Landed the same day (branch `claude/project-understanding-research-87a711`)
+
+Applied after the research above, on this date, with the test that pins each
+change. Two items the reviews recommended were **withdrawn on evidence in the
+tree**, recorded here so they are not re-proposed.
+
+| Item | Landed | Pinned by |
+|---|---|---|
+| `bash-guard.sh`: the `sh -c` and absolute-path bypasses closed, the quoted-`&&` false positive removed (quoted strings blanked, heredoc bodies dropped, a shell `-c` body unwrapped) | yes | `agent-config.test.mjs` "every shape of the kill" (13 block, 6 allow) |
+| `bash-guard.sh`: a browser run is refused inside a subagent (hook input carries `agent_id` / `agent_type` or a transcript under `subagents/`, which this session's own transcripts confirmed) | yes | `agent-config.test.mjs` "refuses a browser run from inside a subagent" |
+| `protect-files.sh`: `tests/data/ratchets.json` joins the never-hand-edited list | yes | `agent-config.test.mjs` "treats ratchets.json as tool-written" |
+| `no-bare-console` joins `test:guards` (was `toolingFast` only) | yes | `tests/groups.json`, regenerated `package.json` |
+| `AGENTS.md`: the "208 of 278" triple replaced by the list it names; `~3 min` → `~2 min`; the `llvmpipe` line; rule 5 marked tool-enforced; rule 9 gains the flaky-pass rule; rule 10 names the hook; the derivable directory prose cut; the hooks paragraph names all five; the who-is-on-it line in §Git | yes, 200 lines | `agent-config.test.mjs` line cap |
+| Five description rewrites + four redirect clauses (§4.2, §4.4) | yes | `skill-progressive.test.mjs` trigger regexes |
+| `?v=dev` restatements in seven skill bodies → bare links; css-play and slim-bloat Chrome-MCP lines → links; skills README fold history → §4.2 here; the Cursor entry's restated browser rules → a pointer | yes | `skill-progressive.test.mjs` "skills README says … ?v=dev" (kept its one sentence) |
+| Agents: `model: haiku` on verify-agent, deploy-research, bloat-auditor; `maxTurns` on all; `memory: project` on verify-agent and bloat-auditor with seeded `MEMORY.md`; verify-agent's `DELTA:` token; bloat-auditor's 140-char row cap | yes | `skill-progressive.test.mjs` TIER table |
+| New subagent `ci-red-triage` (sonnet, read-only, the AGENTS.md status line) | yes | six-agent list in `skill-progressive.test.mjs` |
+| New hooks `post-edit-check.sh` (PostToolUse: `node --check`, `verify-track` for a circuit) and `stop-guard.sh` (Stop: one nudge per live run, `stop_hook_active` and `.claude/allow-stop` respected) | scripts yes; **registration pending** (below) | `agent-config.test.mjs` once registered |
+| `run-playwright.mjs`: `APEX_FAIL_ON_FLAKY=1` passes `--fail-on-flaky-tests` | yes, opt-in | — (flip it on the gate once the known flakes are named) |
+| `tools/ci/who-is-on-it.mjs`: recent pushes per branch, commits touching named paths | yes | `tools-runnable`, `tools/README.md` row |
+| `.gitignore`: `!.claude/agent-memory/` | yes | — |
+
+**Withdrawn.** `paths:` on the file-scoped skills: the tree already tried it —
+`skill-progressive.test.mjs` "file-family skills…" records that four skills
+carried `paths` until 2026-09 and were invisible to a chat-only ask ("why is
+WGX black?" with no file open), so the field restricts activation rather than
+adding it. `disable-model-invocation: true` on lighting-tuner: it hides the
+description from the model entirely, so "night looks washed out" would stop
+routing; only the bake reference is destructive, and that stays a
+user-initiated step inside the body.
+
+**Pending a human.** The `.claude/settings.json` write was refused by the
+session's permission classifier as self-modification, as it was on 09-16. The
+file below is the whole file to paste: it keeps every existing entry, adds
+`permissions.deny` (force-push, the deploy branch by name, `bump-cache
+--apply`, `assets.mjs bake`, `rotate-markings --write`), the wider read-only
+`allow` list, `worktree.baseRef: "head"`, and the two new hook rows. Until
+it lands, `post-edit-check.sh` and `stop-guard.sh` exist but never fire, and
+`AGENTS.md`'s hooks paragraph describes the registered state.
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run test:*)", "Bash(npm test *)", "Bash(npm run gen)", "Bash(npm run gen:*)",
+      "Bash(npm install *)", "Bash(npm ci)", "Bash(npx playwright install *)", "Bash(npx serve *)",
+      "Bash(node --test *)", "Bash(node --check *)", "Bash(node -e *)",
+      "Bash(node tools/ci/verify-change.mjs *)", "Bash(node tools/ci/pick-tests.mjs *)",
+      "Bash(node tools/ci/select-specs.mjs *)", "Bash(node tools/ci/test-bg.mjs *)",
+      "Bash(node tools/ci/test-solo.mjs *)", "Bash(node tools/ci/tooling-fast.mjs *)",
+      "Bash(node tools/ci/twinned-specs.mjs *)", "Bash(node tools/ci/bump-cache.mjs *)",
+      "Bash(node tools/ci/deploy.mjs --plan*)", "Bash(node tools/ci/deploy.mjs --gate-only*)",
+      "Bash(node tools/ci/sync-pr.mjs * --plan*)", "Bash(node tools/ci/who-is-on-it.mjs *)",
+      "Bash(node tools/track/verify-track.cjs *)", "Bash(node tools/track/graph-parity.cjs *)",
+      "Bash(node tools/gen/gen-shell.mjs *)", "Bash(node tools/gen/gen-test-groups.mjs *)",
+      "Bash(node tools/gen/gen-*.mjs *)", "Bash(node tools/gen/assets.mjs verify)",
+      "Bash(node tools/check/*)", "Bash(node tools/shot/*)", "Bash(node tools/ui/*)",
+      "Bash(node tools/gfx/wgx-validate.mjs *)", "Bash(node tools/gfx/gfx-probe.mjs *)",
+      "Bash(bash tools/env/cloud-agent-install.sh)", "Bash(bash tools/env/mirror-skills.sh *)",
+      "Bash(tools/mcp/apex-tools-mcp.sh call *)",
+      "Bash(git status *)", "Bash(git diff *)", "Bash(git log *)", "Bash(git branch *)",
+      "Bash(git show *)", "Bash(git add *)", "Bash(git commit *)", "Bash(git fetch *)",
+      "Bash(git checkout *)", "Bash(git switch *)", "Bash(git stash *)", "Bash(git worktree *)",
+      "Bash(git merge *)", "Bash(git rev-parse *)", "Bash(git ls-files *)", "Bash(git remote *)",
+      "Bash(git for-each-ref *)",
+      "Bash(grep *)", "Bash(rg *)", "Bash(cat *)", "Bash(ls *)", "Bash(wc *)", "Bash(find *)",
+      "Bash(head *)", "Bash(tail *)", "Bash(sed -n *)", "Bash(awk *)", "Bash(sort *)", "Bash(jq *)",
+      "Bash(diff *)", "Bash(cat /proc/loadavg)", "Bash(ps *)",
+      "Bash(curl http://127.0.0.1*)", "Bash(curl http://localhost*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git push * claude/f1-game-project-26h3ng*)",
+      "Bash(git push *:claude/f1-game-project-26h3ng*)",
+      "Bash(node tools/ci/bump-cache.mjs --apply*)",
+      "Bash(node tools/gen/assets.mjs bake*)",
+      "Bash(node tools/track/rotate-markings.cjs --write*)"
+    ]
+  },
+  "worktree": { "baseRef": "head" },
+  "enabledMcpjsonServers": ["apex-tools", "playwright-official", "chrome-devtools"],
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\"", "timeout": 300 } ] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh\"" } ] },
+      { "matcher": "Bash",
+        "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"", "timeout": 180 } ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Write|Edit|MultiEdit",
+        "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-check.sh\"", "timeout": 30 } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-guard.sh\"", "timeout": 10 } ] }
+    ]
+  }
+}
+```
+
+Plain `git push` (no target) is deliberately absent from both lists so it
+keeps prompting; the deploy branch is a hard stop by name. The `deny` list
+is a guardrail against a slip, not a security boundary (`node -e` and `awk`
+are general execution) — the hooks are the enforcement layer.
+
+### 6.1 Skill fold provenance (moved here from `.claude/skills/README.md`)
+
+44 skills until 2026-09, 26 after. The folded ones and the rows that absorbed
+them: `bump-cache`, `deploy-merge`, `test-timeout-triage` → check-changes;
+`motion-capture`, `perf-profile`, `car-viewer`, `debug-cameras` →
+playwright-probe; `bake-lighting` → lighting-tuner; `scene-graph-instancing`
+→ scenery-dress; `debug-state`, `debug-tracks` → agent-view; `game-feel` →
+tune-physics; `restructure-screens-css` → css-play; `cross-backend-parity` →
+`docs/ARCHITECTURE.md` §Cross-backend parity. Deleted outright:
+`apex-env-setup`, `pixel-perfect`, `webapp-testing`, `webgpu-inspector` (env
+setup is AGENTS.md §Verification 1 + `tools/env/cloud-agent-install.sh`).
+`tests/unit/skill-progressive.test.mjs` pins the folds and the trigger words
+each hub had to absorb.
 
 ## Sources
 

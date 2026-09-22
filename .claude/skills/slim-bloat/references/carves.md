@@ -55,7 +55,7 @@ before/after counts (`bloat-scan.mjs --json`).
 row. Grep the symbol; check `hooks-documented`, `global-registry`,
 `scenery-api-contract`, `css-tokens`. A suspected dead `__apex` hook is
 **unverified** until the parent pokes `agentHelp()` via **mcp-probe**
-(`chrome-start` only when Playwright is down; `chrome-stop` after).
+(one browser at a time: `mcp-probe/references/traps-chrome.md`).
 
 **Duplicate:** keep one seam. Shared scalars already live on `M4`
 (`clamp`/`lerp`/`wrapDelta`) — do not add a private copy
