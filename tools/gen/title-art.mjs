@@ -457,7 +457,14 @@ function scene() {
 const PLACE = process.env.TA_PLACE || "202 675";
 const SCALE = process.env.TA_SCALE || "0.99";
 const argv = process.argv.slice(2);
-const want = `${OPEN}\n    <g transform="translate(${PLACE}) scale(${SCALE})">\n${scene()}\n    </g>\n${CLOSE}`;
+// #tc-frame is the per-SHAPE framing that css/menus.css puts on top of that one
+// placement: a phone in portrait wants the pair nudged off the left edge, a
+// phone in landscape wants it smaller and lower so the trail clears the button
+// column. The transform has to live INSIDE the svg — an offset on #title-car
+// itself counts toward #overlay's scrollWidth and took `ui-scale > portrait`
+// red — and whatever it moves off the viewport, the svg viewport clips.
+const want = `${OPEN}\n    <g id="tc-frame">\n    <g transform="translate(${PLACE}) scale(${SCALE})">\n` +
+             `${scene()}\n    </g>\n    </g>\n${CLOSE}`;
 const shell = fs.readFileSync(SHELL, "utf8");
 const a = shell.indexOf(OPEN), b = shell.indexOf(CLOSE);
 if (a < 0 || b < 0) {

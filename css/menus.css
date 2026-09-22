@@ -180,9 +180,10 @@
 /* A PORTRAIT PHONE GETS THE CARS, NOT A STRIP. At 100% width the 1400/900 box
    is 393x253 on a 393px phone — the pair drawn in the left 55% of the viewBox
    lands 216px wide under the last row of rooms, at 0.22, which measured as
-   invisible on a real device. The cars occupy viewBox x 0..770, so scaled 1.8x
-   from the bottom-left the pair spans exactly the phone (0.55 * 1.8 = 0.99 of
-   the width); HOW that scale is produced is the note on the rule itself. The
+   invisible on a real device. The cars occupy viewBox x 0..770, so scaled 1.3x
+   from the bottom-left the pair spans ~70% of the phone and the trail's first
+   run is still in the crop; HOW that scale is produced is the note on the rule
+   itself, and the +70-unit nudge under it is the left margin. The
    doors sit at the top of their row (the tall block below), so the lower
    third of the screen is the cars' alone and the opacity can come up to
    landscape's.
@@ -193,13 +194,24 @@
      portrait size with "#overlay scrolls sideways": an absolutely positioned
      box wider than its scroll container still counts toward scrollWidth,
      overflow-x:hidden only hides the bar, and overflow-x:clip cannot pair with
-     overflow-y:auto (it computes back to hidden). 1620/900 is 1.8x the meet
-     height, and with preserveAspectRatio="xMinYMax slice" on the <svg> the art
+     overflow-y:auto (it computes back to hidden). 1170/900 is 1.3x the meet
+     height — it was 1620 (1.8x), which framed the cars big enough to bury the
+     track behind them — and with preserveAspectRatio="xMinYMax slice" the art
      scales by HEIGHT to cover it, pins the bottom-left, and clips the trails
      inside the SVG viewport, where no scrollWidth can see them. Everywhere
      else the box is 1400/900, where slice and meet are the same scale. */
-  :where(body[data-shape="tall"]) #title-car { aspect-ratio: 1400 / 1620; opacity: 0.42; }
+  :where(body[data-shape="tall"]) #title-car { aspect-ratio: 1400 / 1170; opacity: 0.9; }
+  /* Off the left edge. The crop above pins the art bottom-LEFT, which put the
+     front wing hard against the bezel; +70 viewBox units is ~25px on a 393px
+     phone, enough to read as a margin. The trail's tail leaves the crop at the
+     right, which is what the gradient is for. */
+  :where(body[data-shape="tall"]) #tc-frame { transform: translate(70px, 0); }
 }
+/* #tc-frame frames the ONE placement tools/gen/title-art.mjs writes. A CSS
+   transform on an SVG element defaults to transform-origin 50% 50% of the
+   view-box, which would scale the art about (700,450) and move it as a side
+   effect; 0 0 is what makes these read as the translate/scale they say. */
+#tc-frame { transform-box: view-box; transform-origin: 0 0; }
 /* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is the BOX: the
    element carries aspect-ratio 1400/900 itself, so `slice` and `meet` compute
    the same scale and the attribute only matters on the tall phone, where a
@@ -616,7 +628,31 @@ body { --compact-at: 600px; --wide-at: 620px; }
      rooms. Same compact floor family the pause stack already uses. */
   gap: calc(var(--gap) * 0.35);
 }
-:where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
+:where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(32px, calc(9 * var(--vwz)), 64px); }
+/* LOWER, AND ONLY AS SMALL AS THE TRAIL NEEDS. The landscape phone puts the
+   button column over viewBox x > ~770, which is exactly where the trail runs
+   once it leaves the cars, so at the full placement the whole ribbon was behind
+   the buttons and the art read as two cars and nothing else. Composed with the
+   generator's translate(202 675) scale(0.99) this is an effective scale 0.80
+   with the cars ending near x 650, which leaves ~120 units — 75px — of trail in
+   the clear before the column, and drops the pair under the disclaimer box
+   instead of through it. It was 0.66 first: that cleared more trail but shrank
+   the drawing until it read washed-out beside the buttons, which is a contrast
+   judgement no luminance number catches (the two sizes measure the same
+   litMean, 84.9 vs 84.6). Going smaller again needs a reason bigger than
+   the trail. */
+:where(body[data-shape="wide"][data-density="compact"]) #tc-frame { transform: translate(28px, 242px) scale(0.808); }
+/* THE TWO PHONE SHAPES CARRY THE SAME 0.9, which is what makes the art read the
+   same in the hand. The 0.4 step this shape used to inherit from the tablet
+   width left it well under portrait once the frame above scaled it down.
+   Measured over each shape's OWN art region (landscape x 0..460 y 276..393,
+   portrait x 0..393 y 690..852, at 852x393 and 393x852): portrait 0.9 reads
+   litMean 84.4 peak 140, and landscape reaches litMean 84.9 peak 140 only at
+   0.9 — 0.55 stops at 68.0 / 92, which is the "still darker" this replaces.
+   Measuring the ELEMENT's rect instead says nothing: it spans the viewport, so
+   the buttons and the wordmark dominate it and the whole 0.4 -> 0.7 sweep moves
+   the mean by one unit. */
+:where(body[data-shape="wide"][data-density="compact"]) #title-car { opacity: 0.9; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-meta { margin-top: calc(var(--gap) * 1.5); gap: calc(var(--gap) / 2); }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary,

@@ -4858,3 +4858,9 @@ the render calls, 3245 vs 1513, so its material cache had grown), the bytes are 
 3 KB is what 22 x ~140 B copies come to. gpuErrors 0 on every leg, meanLuma 46.5
 unchanged. What this instrument cannot see: the per-draw upload cost on the WebGL2
 path, where each copy was a full `bufferData`; that is the phone measurement above.
+
+Real GPU, census run 184 on the shipped commit 209af188 (macos-latest, montreal,
+night, clock pinned): all four legs `phase=done ok=true gpuErrors=0`, no FAILED
+section — WebGPU meanLuma 51.4, WebGL2 (Metal ANGLE) 51.1, GLX 45.7, WGX 58.9.
+That is the revert criteria clear on hardware for the decal block as well; the
+fps and JS-ms columns are single samples and are not read (§2w).
