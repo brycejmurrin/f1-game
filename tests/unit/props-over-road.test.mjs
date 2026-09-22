@@ -27,17 +27,19 @@
 //
 // IT FOUND THE SPEC WAS RED. mosport and zandvoort read 1.07 m, which under the
 // spec's own rule ("a track NOT in this map must read <= TOL") is a failure,
-// and neither is in its map. The offender is the object the spec baselines on
-// jeddah, identified by the same colour byte for byte: the pit wall, ~0.35 m
-// off the tarmac edge on the pit straight. jeddah's note records it arriving
-// with "a shorter lane, a signed entry, A WALLED EXIT, furnished bays"; that
-// redesign gave every circuit the wall, and the map was written when only
-// jeddah had it, so the red is as old as the redesign. A browser run confirmed
-// both. Baselined below at jeddah's 1.1, for jeddah's stated reason, and NOT by
-// widening TOL. The SPEC's own map is deliberately left alone: editing it makes
-// the selector rank it 0 and actually run it, which is how monza's undiagnosed
-// reading (below) came to light, and capping that one to get a green is exactly
-// the move AGENTS.md rule 9 forbids.
+// and neither is in its map. It is the same object the spec baselines on
+// jeddah — same colour byte for byte, grey [0.46,0.47,0.5] — but WHAT that
+// object is, is not known. The jeddah paragraph calls it the pit wall and this
+// file said so too; that is retracted. The wall's inner edge stands 8.2-13.0 m
+// out on these circuits while the ladder below samples at 6.15-6.9 m, and on
+// zandvoort the reading sits at lateral -6.81 against an engine half-width of
+// 7.0, i.e. ON the tarmac. It also belongs to no captured primitive, so nothing
+// can yet name its emitter. docs/notes/DEFECT-LEDGER.md carries the table.
+// Baselined below at jeddah's 1.1, matching what the spec already accepts on
+// jeddah, and NOT by widening TOL. The SPEC's own map is deliberately left
+// alone: editing it makes the selector rank it 0 and actually run it, which is
+// how monza's undiagnosed reading (below) came to light, and capping that one
+// to get a green is exactly the move AGENTS.md rule 9 forbids.
 //
 // THIS IS NOT A REPLACEMENT FOR THE SPEC, and the difference is measured, not
 // assumed. The sample ladder, the tolerance band, the barycentric test and its
@@ -47,7 +49,7 @@
 // to the centimetre: jeddah's "grey [0.46,0.47,0.5] at 1.07 m, lateral -6.35"
 // and mont_tremblant's "has read 4.74 since". It also reads mosport and
 // zandvoort at 1.07, which the spec never baselined, and a browser run
-// confirmed both — the same pit wall, unnoticed because the spec does not run.
+// confirmed both — the same edge object, unnoticed because the spec never runs.
 //
 // But the VM build is NOT the browser's geometry. On monza the browser reports
 // 0.75 m at frac 0.115 from a flat 2.2 x 0.2 m face at y 0.70, and the VM build
@@ -102,16 +104,18 @@ const LADDER = [-0.75, -0.4, 0, 0.4, 0.75];
 // here; their entries are dropped rather than kept as dead ceilings. Both are
 // held to TOL now, which is stricter.
 const BASELINE = {
-  // Street circuits: the ~1.1-1.3 m readings are the edge BARRIER wall and the
-  // pit wall at the road edge — the track boundary the car stays inside —
-  // verified from driver-eye as the wall, not a lane obstruction.
+  // Street circuits: the ~1.1-1.3 m readings sit at the road edge, where the
+  // track boundary a car stays inside lives. Verified from driver-eye as
+  // boundary, not a lane obstruction; the object itself is unidentified.
   monaco: 1.4, singapore: 1.3, baku: 1.3,
-  // The pit wall, on the four circuits that read it. All four are the same
-  // object: grey [0.46,0.47,0.5], 1.07 m over the road, 6.2-6.8 m lateral
-  // against a base half-width of 8.2-8.8. jeddah is the one the spec bisected
-  // (clean at ed2221fd, over at 80acf931, the walled-exit pit redesign); the
-  // other three were never baselined because the spec that would have caught
-  // them does not run on the gate. It is where a pit wall goes.
+  // ONE UNIDENTIFIED OBJECT, on the four circuits that read it: grey
+  // [0.46,0.47,0.5], 1.07 m over the road, 6.2-6.8 m lateral against a base
+  // half-width of 8.2-8.8. jeddah is the one the spec bisected (clean at
+  // ed2221fd, over at 80acf931, the walled-exit pit redesign) and the only one
+  // it baselines; the other three were never baselined because the spec that
+  // would have caught them does not run on the gate. Do NOT call it the pit
+  // wall — that was measured and retracted (DEFECT-LEDGER): the wall stands
+  // 8.2-13.0 m out and this ladder samples at 6.15-6.9 m.
   jeddah: 1.1, mosport: 1.1, zandvoort: 1.1,
   // A forest crown leaning over the road, not an intrusion at the edge: dark
   // green spanning y 9.96-12.46 with the road at 7.33, so 4.74 m of clearance
@@ -195,7 +199,7 @@ function grid(xs, zs, items) {
 
 /** The audit, on one built track. Returns the worst intrusion in metres, the
  *  worst few lap fractions, and the offending triangle's identity — colour and
- *  lateral offset, which is how the spec told a pit wall from a grandstand. */
+ *  lateral offset, which is how the spec told an edge object from a stand. */
 function auditProps(t) {
   const caps = { road: t.roadGeo, props: t.propsGeo, glass: t.glassGeo };
   if (!caps.road || !caps.road.pos || caps.road.pos.length / 3 <= 1000) return { err: "no road mesh" };
@@ -320,7 +324,7 @@ test("no prop geometry on or above the racing line, on any circuit", () => {
   }
   assert.deepEqual(offenders, [],
     "props on or above the racing line. A reading at the road EDGE with a base " +
-    "half-width beside it is usually the barrier or the pit wall (compare the " +
+    "half-width beside it is usually a boundary structure (compare the " +
     "colour against the baselines above before baselining it); a reading in the " +
     "middle of the lap is a prop reaching in, and belongs in that circuit's " +
     "scenery file, not in the map above:\n  " + offenders.join("\n  "));
@@ -336,18 +340,18 @@ test("shanghai's track-owned props stay at the shared clean tolerance", () => {
     `${JSON.stringify(r.worst)}`);
 });
 
-test("the audit still measures: the known pit wall and forest crown are found", () => {
+test("the audit still measures: the known edge object and forest crown are found", () => {
   // ANTI-VACUITY. Every assertion above is "nothing over the cap", which an
   // audit that silently stopped finding anything would pass forever. These two
   // readings are documented objects at documented heights, so they pin that the
-  // thing still works: the pit wall the spec bisected on jeddah, and
+  // thing still works: the edge object the spec bisected on jeddah, and
   // mont_tremblant's crown over the cutting.
   const jeddah = fleet().get("jeddah"), mt = fleet().get("mont_tremblant");
   assert.ok(jeddah.max >= 1.0 && jeddah.max <= 1.1,
-    `jeddah's pit wall should read ~1.07 m; got ${jeddah.max}. If the wall moved, ` +
+    `jeddah's edge object should read ~1.07 m; got ${jeddah.max}. If it moved, ` +
     "re-measure and update the baseline; if the audit stopped finding it, fix the audit.");
   assert.deepEqual(jeddah.worst.color, [0.46, 0.47, 0.5],
-    `jeddah's worst offender should be the grey pit wall; got ${JSON.stringify(jeddah.worst)}`);
+    `jeddah's worst offender should be the grey edge object; got ${JSON.stringify(jeddah.worst)}`);
   assert.ok(mt.max >= 4.7 && mt.max <= 4.8,
     `mont_tremblant's crown should read ~4.74 m; got ${mt.max}`);
 });

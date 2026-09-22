@@ -42,35 +42,61 @@ lateral ladder is scaled by reads 7.47 m from the engine's own `track.hw`,
 reading — and its samples sit ~4.8 m apart along the arc against a 0.2 m wide
 object, so whether that object is sampled at all depends on which build you ask.
 
-**2026-09-22 — `props-over-road.spec.js` is RED on mosport and zandvoort. OPEN
-in the spec, guarded in node.** Both read 1.07 m with no `BASELINE` entry, which
-under that spec's rule is a failure. The offender is the object it baselines on
-jeddah, identified by the same colour byte for byte: the pit wall, ~0.35 m off
-the tarmac edge on the pit straight, lateral +6.75 and -6.67 against base
-half-widths of 8.7 and 8.81 against jeddah's -6.35. jeddah's note records it
-arriving with the walled-exit pit redesign; that redesign gave every circuit the
-wall and the map was written when only jeddah had it, so the red is as old as the
-redesign. Found by the node suite, then confirmed by a browser run of the spec.
-Baselined in the node suite at jeddah's 1.1 for jeddah's stated reason; the
-spec's own map is left alone, because editing that file is what makes the
-selector run it, and it would then fail on monza above.
+**2026-09-22 — an unidentified ~1.07 m object stands at the edge of the racing
+surface on at least four circuits, with three specs red. OPEN.** jeddah,
+mosport, zandvoort and singapore all read 1.07 m; only jeddah is baselined, so
+under `props-over-road.spec.js`'s own rule ("a track NOT in this map must read
+<= TOL") the other three are failures. Found by
+`tests/unit/props-over-road.test.mjs`, then confirmed by a browser run of the
+spec, which reported monza and nothing else — so with the node suite's 1.1
+baselines, mosport and zandvoort are confirmed at their measured values.
 
-**It is also red in a spec the gate DOES select.**
+**It is NOT the pit wall. That identification, made here and on PRs #187 and
+#192 on 2026-09-22, was wrong and is retracted.** It rested on a colour match
+to the jeddah paragraph's documented offender, grey `[0.46,0.47,0.5]`. Two
+measurements disprove it — the wall is nowhere near the band these specs
+sample:
+
+| circuit | engine `track.hw` (tarmac) | mesh half-width | sampled at 0.75 x mesh | pit wall's inner edge |
+|---|---|---|---|---|
+| zandvoort | 7.0 | 9.2 | 6.9 | 13.0 |
+| mosport | 6.5 | 8.7 | 6.52 | 12.5 |
+| jeddah | 6.0 | 8.2 | 6.15 | 8.2 |
+| singapore | 6.0 | 8.2 | 6.15 | 8.2 |
+| monza | 8.0 | 10.2 | 7.65 | 12.0 |
+
+The wall's inner edge (`track.hw + pit.off.fastIn`) stands 8.2-13.0 m out; the
+specs sample at 6.15-6.9 m. Moving the wall outward would change all 52
+circuits' pit lanes and leave every one of these specs red. The jeddah
+paragraph's own identification is therefore suspect too.
+
+**What is measured about the real object.** On zandvoort it sits at lateral
+-6.81 against an engine half-width of 7.0 — ON the tarmac, 0.19 m inside the
+edge — and stands 1.08 m proud of the road. And **no recorded primitive
+contains it**: zero of the 24,020 primitives `tools/lib/track-build-vm.cjs`
+captures for zandvoort have a bounding box containing that triangle, raw or
+`shipped()`-filtered. So it reaches `propsGeo` by a path the harness's emitter
+wrappers do not wrap. Until that capture gap is closed (see the entry above),
+no audit can name what builds it, which is why this entry says "unidentified"
+rather than guessing a second time.
+
+**It is red in a spec the gate DOES select.**
 `tests/specs/zandvoort-foundation.spec.js` › "has explicit coordinates, safe
-models, and clean road clearance" reports `Expected <= 0.2, Received 1.07` —
-the same wall, the same figure. Reproduce in 18.5 s with
-`npm test -- tests/specs/zandvoort-foundation.spec.js`. Foundation specs are
-rank 2 whenever a diff touches a helper they import, so they land in `oversize`
-and get a shard each: this one surfaces on ordinary PRs, unlike
-`props-over-road`, and it took PR #187 red without that branch touching a
-single shipped file.
+models, and clean road clearance" reports `Expected <= 0.2, Received 1.07`.
+Reproduce in 18.5 s with `npm test -- tests/specs/zandvoort-foundation.spec.js`.
+Foundation specs are rank 2 whenever a diff touches a helper they import, so
+they land in `oversize` and get a shard each: this one surfaces on ordinary
+PRs, unlike `props-over-road`, and it took PR #187 red without that branch
+touching a single shipped file.
 
-So one object has three specs red, and the call it needs is a judgement, not a
-measurement: is a ~1 m pit wall standing beside the tarmac a road-clearance
-failure at all? `props-over-road.spec.js`'s jeddah paragraph argues it is not —
-"it is where pit walls are" — and baselines it. The same reasoning would
-baseline it in the foundation specs, or the wall's offset moves. Whoever takes
-it should settle all three together; the measurements are above.
+**Also worth settling with it: the band these specs sample is not the tarmac.**
+Both scale their lateral ladder by a half-width derived from the road MESH,
+which runs 1.2-1.3x the engine's `track.hw` because the mesh includes verge and
+run-off out to 13 m. So the outermost samples land off the racing surface by
+design, on whatever boundary structures live there. On zandvoort the object is
+on the tarmac and the sample is right to hit it; on other circuits the same
+ladder reaches well past it. Whoever takes this should settle the object, the
+three specs and the band together.
 
 **2026-09-22 — `DIFF[difficulty]` undefined took every physics tick down. FIXED.**
 `js/game.js` `updateCar()` read `DIFF[difficulty]` unguarded and dereferenced
