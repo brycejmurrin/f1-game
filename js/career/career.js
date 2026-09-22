@@ -376,6 +376,88 @@ function ambition() { return career ? ambIdx(career.amb) : AMBITION_DEF; }
 function goalValueFor(team, amb) {
   return clamp(expectedFinish(team) + AMBITION[ambIdx(amb)].delta, 1, 22);
 }
+
+// THE GOAL IS A KIND, NOT ONE RULE. A contract used to promise exactly one
+// thing — a championship position — so the ambition rungs above had a single
+// sentence to scale and five seasons at a team read identically. Each kind
+// derives its target from an expectation THAT ALREADY EXISTS, and the ambition
+// delta shifts it the same way it shifts champPos: no invented balance numbers.
+//
+// `met` takes (value, result) where result is assembled at rollover from the
+// season entry, so a kind can only ask about things the archive already knows.
+// `now` is the same question against the LIVE season, for the hub's progress
+// line — null when a kind cannot be read mid-season.
+//
+// CHAMPPOS IS FIRST AND IS THE FALLBACK. Every deal signed before this existed
+// carries `type: "champPos"`, and an unknown type resolves as champPos rather
+// than silently passing, so no save changes meaning.
+const GOAL_KINDS = {
+  champPos: {
+    value: (team, amb) => goalValueFor(team, amb),
+    met: (v, r) => r.pos <= v,
+    label: (v) => `Finish P${v} or better in the championship`,
+    now: (c) => { const r = myStandingRow(); return r ? `P${r.pos}` : null; },
+    onTrack: (v) => { const r = myStandingRow(); return r ? r.pos <= v : null; },
+  },
+  teamPos: {
+    // expectedConstructor() ranks every real team by tier; that IS the
+    // expectation rolloverTeams develops against, so the goal and the
+    // development model agree about what a team was supposed to do.
+    value: (team, amb) => clamp((expectedConstructor().get(team.id) || 11)
+                                + AMBITION[ambIdx(amb)].delta, 1, 11),
+    met: (v, r) => r.cPos <= v,
+    label: (v) => `Take the team to P${v} or better in the constructors'`,
+    now: () => { const r = myTeamStandingRow(); return r ? `P${r.pos}` : null; },
+    onTrack: (v) => { const r = myTeamStandingRow(); return r ? r.pos <= v : null; },
+  },
+  beatMate: {
+    // No value to derive: the benchmark is the other side of the garage, which
+    // is what most of the per-round briefs already measure against.
+    value: () => 0,
+    met: (v, r) => r.matePos == null || r.pos < r.matePos,
+    label: () => "Finish the season ahead of your team-mate",
+    now: () => {
+      const me = myStandingRow(), mate = mateStandingRow();
+      return me && mate ? `P${me.pos} to their P${mate.pos}` : null;
+    },
+    onTrack: () => {
+      const me = myStandingRow(), mate = mateStandingRow();
+      return me && mate ? me.pos < mate.pos : null;
+    },
+  },
+};
+const GOAL_ORDER = ["champPos", "teamPos", "beatMate"];
+function goalKind(type) { return GOAL_KINDS[type] || GOAL_KINDS.champPos; }
+// Drawn from the career seed and the YEAR, so a career is not the same promise
+// five seasons running and a reload cannot reroll it.
+function goalTypeFor(year) {
+  const i = Math.floor(rnd(year, "goalkind") * GOAL_ORDER.length);
+  return GOAL_ORDER[clamp(i, 0, GOAL_ORDER.length - 1)];
+}
+function goalFor(team, amb, year) {
+  const type = goalTypeFor(year);
+  return { type, value: goalKind(type).value(team, amb) };
+}
+function goalLabel(goal) {
+  if (!goal) return "";
+  return goalKind(goal.type).label(goal.value);
+}
+// Live standings helpers — the hub asks these every build, the resolution does not.
+function myStandingRow() {
+  if (!career) return null;
+  return driverStandings().find((r) => r.team === career.team && r.seat === career.seat) || null;
+}
+function mateStandingRow() {
+  if (!career) return null;
+  return driverStandings()
+    .find((r) => r.team === career.team && r.seat === (career.seat === 0 ? 1 : 0)) || null;
+}
+function myTeamStandingRow() {
+  if (!career) return null;
+  return teamStandings().find((r) => r.id === career.team) || null;
+}
+function goalNow(goal) { return goal ? goalKind(goal.type).now(career) : null; }
+function goalOnTrack(goal) { return goal ? goalKind(goal.type).onTrack(goal.value) : null; }
 function setAmbition(i) {
   if (!career || careerConflict) return ambition();
   career.amb = ambIdx(clamp(i | 0, 0, AMBITION.length - 1));
@@ -384,7 +466,13 @@ function setAmbition(i) {
   // put one number on the button and sign the contract at another.
   for (const o of career.offers || []) {
     const t = teamOf(o.teamId);
-    if (t) o.goal = { type: "champPos", value: goalValueFor(t, career.amb) };
+    // THE KIND IS PART OF THE OFFER, only the TARGET moves with the rung.
+    // Re-drawing it here changed a seat's promise out from under the player:
+    // rollover() draws the offers BEFORE `career.year++`, so a re-stamp that
+    // re-derived the kind read a different year than the draw did and turned a
+    // beatMate seat into a champPos one between looking and signing.
+    if (t && o.goal) o.goal = { type: o.goal.type,
+                                value: goalKind(o.goal.type).value(t, career.amb) };
   }
   save();
   return career.amb;
@@ -400,7 +488,7 @@ function newDeal(team, years) {
     salary: salaryFor(team, career ? career.rep : 30),
     bonusPt: bonusPtFor(team),
     ambition: amb,
-    goal: { type: "champPos", value: goalValueFor(team, amb) },
+    goal: goalFor(team, amb, career ? career.year : 2026),
   };
 }
 function tierFinish(team) { return 2 + team.tier * 4; }
@@ -1092,7 +1180,7 @@ function offerFrom(team, years) {
   return {
     teamId: team.id, years,
     salary: salaryFor(team, career.rep),
-    goal: { type: "champPos", value: goalValueFor(team, ambition()) },
+    goal: goalFor(team, ambition(), career.year),
   };
 }
 function makeOffers(mv) {
@@ -1141,7 +1229,7 @@ function acceptOffer(i) {
     years: o.years, left: o.years, salary: o.salary,
     bonusPt: bonusPtFor(team),
     ambition: amb,
-    goal: { type: "champPos", value: goalValueFor(team, amb) },
+    goal: goalFor(team, amb, career.year),
   };
   career.offers = [];
   save();
@@ -1194,7 +1282,14 @@ function rollover() {
   // tools/car/career-economy.mjs does not model a per-season bonus and every
   // figure in docs/CAREER.md would go stale. MY TEAM has nobody to promise to.
   if (career.flavour !== "myteam" && career.deal && career.deal.goal) {
-    const met = entry.pos <= career.deal.goal.value;
+    // ASSEMBLED FROM THE ARCHIVE, so a kind can only ask what the season entry
+    // already knows. matePos is the one extra: the other side of your own
+    // garage, which `entry` has no reason to carry.
+    const mateId = seasonDriverId(career.team, career.seat === 0 ? 1 : 0);
+    const mateRow = dStand.find((r) => r.id === mateId);
+    const res = { pos: entry.pos, cPos: entry.cPos, wins: entry.wins,
+                  podiums: entry.podiums, matePos: mateRow ? mateRow.pos : null };
+    const met = goalKind(career.deal.goal.type).met(career.deal.goal.value, res);
     // Priced by the promise that was SIGNED (deal.ambition), never by whatever
     // the picker happens to show now — career.amb is the pick for the NEXT deal.
     const A = AMBITION[ambitionOf(career.deal)];
@@ -1203,6 +1298,8 @@ function rollover() {
     // Transient, like career.moves: drawn once on the end-of-season sheet, absent
     // on an older save (the sheet skips the line), so no CAREER_V rung is owed.
     career.goalResult = { value: career.deal.goal.value, pos: entry.pos, met,
+                          type: career.deal.goal.type,
+                          label: goalLabel(career.deal.goal),
                           ambition: ambitionOf(career.deal) };
   } else {
     career.goalResult = null;
@@ -1305,6 +1402,7 @@ return {
   renewHire, hireDriver, hirePending, HIRE_MIN,
   salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
   AMBITION, ambition, ambitionOf, setAmbition, goalValueFor,
+  GOAL_KINDS, GOAL_ORDER, goalFor, goalLabel, goalNow, goalOnTrack, goalTypeFor,
   era, eraSeasonsLeft, seasonsElapsed, applyRegs,
   gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats,
