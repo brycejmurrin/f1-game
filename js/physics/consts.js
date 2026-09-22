@@ -193,9 +193,26 @@ window.PhysicsConsts = {
   // further from the limit instead of just being slower down the straight.
   // At or below 1.0 by policy: the AI never corners faster than its own grip
   // model says it can.
+  // `err` scales AiDrive.mistakeChance (2026-09-22, by request): the shipped
+  // rate was under one mistake for the WHOLE FIELD over a default 3-lap race
+  // (docs/notes/AI-FIELD-RESEARCH.md), which reads as "the AI never messes
+  // up" — true at every level including hard, where that low rate is
+  // deliberate (docs/PHYSICS.md "F1 22's two or three lock-ups a race was
+  // what players called too many"). TARGET: normal ~2-3 field mistakes per
+  // 3-lap race, easy ~3-4, hard unchanged (~1) — measured before/after in
+  // docs/PHYSICS.md. The rubber band (`band`, above) must NOT touch `err`:
+  // mistakes are a difficulty-ladder axis on their own, not a banded one, so
+  // this stays monotonic (easy >= normal >= hard = 1) independent of band.
+  // EASY needed more than a straight ratio of its rank to NORMAL: a slower,
+  // looser field (lower `ai`/`corner`) draws less following pressure, so its
+  // PRE-scaling base rate measured lower than normal's even though both
+  // rounded to the same 0.020/100s at n=5 (docs/PHYSICS.md's before/after
+  // table) — 2.5x left EASY's median mistake count at n=15 exactly where
+  // NORMAL's unscaled baseline sat, so EASY's multiplier compensates for that
+  // lower base, not just for the same 1.4x gap NORMAL:HARD implies.
   DIFF: {
-    easy:   { ai: 0.851, band: 0.18, corner: 0.93 },
-    normal: { ai: 0.911, band: 0.08, corner: 0.97 },
+    easy:   { ai: 0.851, band: 0.18, corner: 0.93, err: 3.5 },
+    normal: { ai: 0.911, band: 0.08, corner: 0.97, err: 1.8 },
     // 1.030 is a ceiling, not a taste: the fastest team's TIER_V is 0.9695 and
     // the best driver's skill clamps at 1.0, so 0.9695 x 1.030 = 0.9986 keeps
     // even the quickest AI just under the player's own top-speed scale. A
@@ -206,7 +223,7 @@ window.PhysicsConsts = {
     // the straight too. It is scoped to that one rival — every other AI car on
     // every grid, including an ordinary duel's, still sits under the ceiling
     // this comment describes.
-    hard:   { ai: 1.030, band: 0.02, corner: 1.00 },  // band was 0.03 — smarter OT/ERS/brake cuts rubber-band need
+    hard:   { ai: 1.030, band: 0.02, corner: 1.00, err: 1.0 },  // band was 0.03 — smarter OT/ERS/brake cuts rubber-band need
   },
 };
 // The top of that ladder: the fastest pace scale ANY level reaches with its

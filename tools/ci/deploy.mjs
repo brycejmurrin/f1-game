@@ -499,6 +499,12 @@ export function gateOnly() {
   const verified = [];
   run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite"); verified.push("tooling-fast");
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verified.push(script); }
+  // ci.yml's "Parts option-resolution census" job runs test:sweeps-parts
+  // UNCONDITIONALLY on every push (no path filter), so a red in either of its
+  // two files takes the deploy red — and until 2026-09-22 nothing before a
+  // push ran them (tests/unit/prepush-gate-coverage.test.mjs listed both as
+  // SWEEPS_ONLY). ~40 s; the geometry sweeps stay conditional (touchesGeometry).
+  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts (unconditional on CI)"); verified.push("test:sweeps-parts");
   // Against the deploy tip, same as a real deploy: the circuits OUR side
   // touched (three-dot), not every circuit that moved on the branch.
   let circuits = [];
@@ -576,6 +582,7 @@ export function main() {
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
   // from ci.yml so the two lists cannot drift apart.
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
+  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts (unconditional on CI)"); verdict.verified.push("test:sweeps-parts");
   // Conditional, for the reason recorded above touchesGeometry(): ci.yml runs
   // the sweeps AFTER the push, so skipping them here buys 10 minutes with a
   // broken tip on a branch other sessions build on.

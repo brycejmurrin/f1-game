@@ -252,7 +252,9 @@ test("a Pages run publishes EXACTLY the commit it tested, and never moves the si
   // site" in prose, and a loose indexOf once reported the steps out of order).
   const recheck = deploy.indexOf("- name: Confirm this commit may still be published (under the Pages lock)");
   const stage = deploy.indexOf("- name: Stage site");
-  const publish = deploy.indexOf("uses: actions/deploy-pages@v4");
+  // Pinned to a commit sha since 2026-09-22 (`@<sha> # v4.x.y`), so match the
+  // action name, not the moving tag.
+  const publish = deploy.search(/uses: actions\/deploy-pages@/);
   assert.ok(recheck >= 0 && stage > recheck, "the in-lock check must precede staging");
   assert.ok(publish > stage, "staging must precede publication");
 
@@ -417,17 +419,27 @@ test("every ROOT html page is named in the Stage site whitelist", () => {
 });
 
 test("cached browser jobs never enter apt through --with-deps", () => {
+  // Since 2026-09-22 the cache-then-install contract lives ONCE, in the
+  // composite action; each browser job takes it by `uses:`. The action is
+  // pinned here exactly as the inline steps were, and every browser job must
+  // go through it rather than carrying its own copy.
+  const action = fs.readFileSync(new URL("../../.github/actions/playwright-chromium/action.yml", import.meta.url), "utf8");
+  assert.match(action, /id: pwcache/, "the cache must expose cache-hit");
+  assert.match(action,
+    /if: steps\.pwcache\.outputs\.cache-hit != 'true'[\s\S]*?run: npx playwright install \$\{\{ inputs\.with-deps == 'true' && '--with-deps' \|\| '' \}\} chromium/,
+    "apt (--with-deps) only on a cache miss, and only when the caller asks");
+  assert.doesNotMatch(action, /if: .*cache-hit == 'true'[\s\S]{0,160}playwright install/, "the cache-hit path must stay network-free");
+  assert.match(action, /key: pw-\$\{\{ runner\.os \}\}-\$\{\{ hashFiles\('package-lock\.json'\) \}\}/,
+    "keyed on the lock file so a Playwright bump misses the cache");
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
   const driving = ciWorkflow.split("\n  driving-model:")[1].split("\n  renderer-filter:")[0];
-  for (const [name, job] of [["smoke", smoke], ["driving-model", driving]]) {
-    assert.match(job, /id: pwcache/, `${name} cache must expose cache-hit`);
-    assert.match(job,
-      /if: .*steps\.pwcache\.outputs\.cache-hit != 'true'[\s\S]*?run: npx playwright install --with-deps chromium/,
-      `${name} may use apt only on a cache miss`);
-    assert.doesNotMatch(job,
-      /if: .*cache-hit == 'true'[\s\S]{0,160}run: npx playwright install --with-deps chromium/,
-      `${name} cache-hit path must stay network-free`);
+  const goldens = ciWorkflow.split("\n  baseline-trial:")[1].split("\n  poke-train:")[0];
+  for (const [name, job] of [["smoke", smoke], ["driving-model", driving], ["selected", selectedJob], ["baseline-trial", goldens]]) {
+    assert.match(job, /uses: \.\/\.github\/actions\/playwright-chromium/, `${name} must take Chromium from the composite action`);
+    assert.doesNotMatch(job.replace(/^\s*#.*$/gm, ""), /playwright install/, `${name} carries its own install step — use the action`);
   }
+  // smoke's copy stays behind the ship filter: a run that ships nothing installs nothing.
+  assert.match(smoke, /if: steps\.shipfilter\.outputs\.ships != 'false'\n\s+uses: \.\/\.github\/actions\/playwright-chromium/);
 });
 
 test("ship filter chooses a successful active deployment, not merely the newest record", () => {
@@ -512,11 +524,14 @@ test("every browser gate but the parity anchor runs on Mesa llvmpipe, and `gl: s
   // pairing is the thing YAML cannot state and this test can.
   const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
   const drivingJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  driving-model:\n"), ciWorkflow.indexOf("\n  renderer-filter:\n"));
+  // The apt + Xvfb + DISPLAY recipe is one composite action since 2026-09-22;
+  // each job keeps the step NAME and the opt-out `if:` and takes the body by `uses:`.
+  const mesa = fs.readFileSync(new URL("../../.github/actions/mesa-xvfb/action.yml", import.meta.url), "utf8");
+  assert.match(mesa, /Xvfb :99 -screen 0 1280x800x24[^\n]*&\n\s+echo "DISPLAY=:99" >> "\$GITHUB_ENV"/,
+    "the action's Xvfb must export DISPLAY so the pinned test command line is unchanged");
   for (const [name, job] of [["smoke", smokeJob], ["selected", selectedJob]]) {
-    assert.match(job, /- name: Mesa llvmpipe \+ Xvfb\n\s+if: [^\n]*inputs\.gl != 'swiftshader'/,
-      `${name} must install Mesa + Xvfb, and skip it on the \`gl: swiftshader\` opt-out`);
-    assert.match(job, /Xvfb :99 -screen 0 1280x800x24[^\n]*&\n\s+echo "DISPLAY=:99" >> "\$GITHUB_ENV"/,
-      `${name}'s Xvfb must export DISPLAY so the pinned test command line is unchanged`);
+    assert.match(job, /- name: Mesa llvmpipe \+ Xvfb\n\s+if: [^\n]*inputs\.gl != 'swiftshader'\n\s+uses: \.\/\.github\/actions\/mesa-xvfb/,
+      `${name} must install Mesa + Xvfb through the action, and skip it on the \`gl: swiftshader\` opt-out`);
     assert.match(job, /APEX_GL: (llvmpipe|\$\{\{ \(?inputs\.gl != 'swiftshader'[^\n]*\}\})/,
       `${name} installs llvmpipe but never asks the browser for it`);
   }
@@ -589,12 +604,12 @@ test("the renderer job proves the adapter before trusting the run, and uploads i
   // the retry leaves the job green, and a green job uploaded nothing — the
   // frames image-grade "shadows" attaches were unretrievable on run 3495
   // exactly when they were the next step (docs/notes/DEFECT-LEDGER.md).
-  assert.match(rendererJob, /if: always\(\)\s*\n\s*uses: actions\/upload-artifact@v5/);
+  assert.match(rendererJob, /if: always\(\)\s*\n\s*uses: actions\/upload-artifact@/);
   assert.match(rendererJob, /name: playwright-artifacts-renderer-macos/);
-  // The full browser, cached at macOS's path; never apt.
-  assert.match(rendererJob, /id: pwcache/);
-  assert.match(rendererJob, /path: ~\/Library\/Caches\/ms-playwright/);
-  assert.match(rendererJob, /if: steps\.pwcache\.outputs\.cache-hit != 'true'\s*\n\s*run: npx playwright install chromium$/m);
+  // The full browser, cached at macOS's path; never apt: the composite action
+  // with the macOS browser dir and with-deps off (the cache-hit contract itself
+  // is pinned on the action by the --with-deps test above).
+  assert.match(rendererJob, /uses: \.\/\.github\/actions\/playwright-chromium\n\s+with:\n\s+browsers-path: ~\/Library\/Caches\/ms-playwright\n\s+with-deps: "false"/);
   assert.doesNotMatch(rendererJob.replace(/^\s*#.*$/gm, ""), /--with-deps/, "--with-deps is apt; the comment may name it, the step may not");
 });
 

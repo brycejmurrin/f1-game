@@ -11,6 +11,37 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-22 — the boot canary never armed on a pre-present crash. FIXED.**
+`js/game.js` arms `apex26.gfxBackendProbe` (the boot canary the next-boot
+strike logic near `backendPreference()` reads) only in one place: right
+before `render()`'s own `gfx.present(po)` call, at the very end of the
+function. If `render()` throws BEFORE reaching that line — a deterministic
+fault, not the transient kind `LoopHealth.fault()` absorbs in `tick()` — the
+probe was never written, so a crash that killed the loop on its very first
+frame left no trace for the strike logic to find on the next cold boot. Fix:
+the arm body is extracted into `armBackendProbe()` (same guard, same
+try/catch — `!_backendProved && _backendBound && !_probeArmed`), called both
+at the original render() site and from `tick()`'s fatal catch, just before
+its `throw e`. Verified: `node --test tests/unit/gfx-backend-canary.test.mjs`
+(174 pass, including a new pin that the fatal branch calls
+`armBackendProbe(` before rethrowing) and `tests/unit/source-integrity.test.mjs`.
+
+**2026-09-22 — `startRace()` had no re-entrancy guard. FIXED.** Six
+fire-and-forget callers (`js/game.js:8799`, `:8805`, `:9157`, the pm-restart
+handler, `js/race/daily-challenge.js:76`, `js/race/race-settings.js:393` —
+the same un-awaited-`startRace` family the `career.spec.js` and
+`quick-validate.mjs` entries above already describe from the OTHER side, a
+caller that does not wait for it) could re-enter the function mid-build: a
+double-click or a second trigger while a start was still awaiting
+`ensureScenery()` began a second race build on top of the first, rather than
+sharing it. Fix: the existing body is renamed `startRaceBody()`; `startRace()`
+is now a thin latch that returns the SAME in-flight promise to a concurrent
+caller and clears once it settles. Verified live (not a source pin): a new
+`tests/unit/start-race-latch.test.mjs` boots the real game.js in the Node VM
+harness (`tools/lib/game-vm.cjs`, ~3 s) and calls the actual `G.startRace()`
+twice synchronously, asserting `p2 === p1`, then that a call after settling
+gets a fresh promise.
+
 **2026-09-14 — `test:input` was 20 red; 3 are now FIXED, 15 are pre-existing,
 2 remain OPEN as real defects.** The whole group, accounted for, because a
 partial account is what let the RELAX drift below sit for a week.
@@ -1173,6 +1204,15 @@ four suites' own sources. What remains:
   by `tools/gen/bake-elevation.mjs`, is in no manifest entry, so every circuit's
   elevation today is the synthetic `def.elevations` cosine bumps. Either wire
   the bake into `TRACK_VM` + the shell or delete the ~20 lines.
+  > Errata (2026-09-22): this claim is stale. `js/track/circuit-elevations.js`
+  > IS in `tools/manifest.cjs` (both `FULL` at :140 and `TRACK_VM` at :351,
+  > ordered before `tracks.js` as its own comment there requires) and has its
+  > own `<script>` tag in `index.html`; it currently ships real SRTM profiles
+  > for 11 circuits (fuji, okayama, jerez, donington, anderstorp, brands_hatch,
+  > zolder, dijon, buddh, mont_tremblant, mosport), each of which takes the
+  > `real` arm in `tracks.js`. Every OTHER circuit still falls through to the
+  > synthetic bumps, which may be the observation this entry was really
+  > reaching for — but "dead branch, in no manifest entry" is not it.
 - **Jeddah `startFrac` is in a corner** (`startline-probe`: mean |k| 0.0173
   over 120 m, first apex 1064 m later). Acknowledged in-file as known-wrong
   with no usable source; 39/40 pass.
