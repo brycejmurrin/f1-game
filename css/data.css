@@ -557,8 +557,15 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-gbar2 { height: 5px; margin-top: calc(var(--gap) * 0.25); }
 .dh-gfill2 { opacity: 0.6; }
 .dh-gdrs-pill.dh-gdrs2 { font-size: var(--fs-2); opacity: 0.85; }
-.dh-gdelta.dh-pos { color: var(--faster); }
-.dh-gdelta.dh-neg { color: var(--slower); }
+/* SIGN CONVENTION, shared with the lane board below. The telemetry module
+   computes both deltas as `timeAtDist(other, d) - t` and comments both
+   ">0: … is behind", so dh-pos is the SLOWER side on each. These two were the
+   wrong way round — the TELEMETRY tab's compare gauge painted the trailing
+   driver green and the leading one red — while the lane-board pair fifty lines
+   down, keyed on the identical expression, had it right. Keep them matched;
+   delta-sign-colour asserts it. */
+.dh-gdelta.dh-pos { color: var(--slower); }   /* behind the compare reference */
+.dh-gdelta.dh-neg { color: var(--faster); }   /* ahead of it */
 
 /* ---------- live controls + sortable classification ---------- */
 .dh-livecontrols { gap: calc(var(--gap) * 2 / 3); margin-bottom: 10px; }
