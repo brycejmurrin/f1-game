@@ -56,6 +56,11 @@ function load() {
   seedLog(ctx);
   seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  // The REAL ratings table, because the goal draw now reaches it: beatRival ranks
+  // the grid by DriverRatings.overall(). The driver loader below keeps its own
+  // stub instead — its market tests pin overall() per code on purpose.
+  vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx,
+    { filename: "js/data/driver-ratings.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });
   return vm.runInContext("Career", ctx);
@@ -336,6 +341,11 @@ function loadWithSeason(n) {
   seedLog(ctx);
   seedHash32(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  // The REAL ratings table, because the goal draw now reaches it: beatRival ranks
+  // the grid by DriverRatings.overall(). The driver loader below keeps its own
+  // stub instead — its market tests pin overall() per code on purpose.
+  vm.runInContext(readFileSync(join(ROOT, "js/data/driver-ratings.js"), "utf8"), ctx,
+    { filename: "js/data/driver-ratings.js" });
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
     { filename: "js/career/career.js" });
   return vm.runInContext("Career", ctx);
@@ -781,7 +791,12 @@ test("every declared kind derives a target and labels it", () => {
   for (const type of Career.GOAL_ORDER) {
     const kind = Career.GOAL_KINDS[type];
     const v = kind.value(team, 1);
-    assert.ok(Number.isFinite(v), `${type} must derive a finite target`);
+    // A TARGET IS NOT ALWAYS A NUMBER. champPos/teamPos derive a position and
+    // beatMate derives 0, but beatRival's target is WHO — a seasonDriverId, kept
+    // in `value` precisely because every site that rebuilds a goal writes
+    // `{ type, value }` and would drop a field beside it.
+    assert.ok(Number.isFinite(v) || (typeof v === "string" && v.length > 0),
+      `${type} must derive a target: a finite position, or an id naming one`);
     const label = Career.goalLabel({ type, value: v });
     assert.ok(label && label.length > 4, `${type} must label itself`);
   }
@@ -924,4 +939,78 @@ test("the era advances on seasons ELAPSED, which survives the archive cap", () =
   // career would otherwise stop advancing its era entirely.
   c.year = (c.year0 || 2026) + 30;
   assert.equal(Career.seasonsElapsed(), 30, "and thirty seasons still counts thirty");
+});
+
+// ── BEATRIVAL ───────────────────────────────────────────────────────────────
+// A named cross-grid benchmark. The contract ladder terminates at the top
+// otherwise: docs/notes/CAREER-CEILING-FIX-2026-09-22.md measures five of eleven
+// teams converging on the same capped build, so "which seat you hold" stops
+// changing your car. Who you are measured against still can.
+
+test("the rival is never your own garage — that is what beatMate already promises", () => {
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const c = Career.data();
+  for (let amb = 0; amb < Career.AMBITION.length; amb++) {
+    const id = Career.GOAL_KINDS.beatRival.value({ id: "haas", tier: 4 }, amb);
+    assert.ok(id && typeof id === "string", `ambition ${amb} names a rival`);
+    assert.notEqual(id.split(":")[0], c.team,
+      `ambition ${amb} picked ${id}, which is your own team`);
+  }
+});
+
+test("the rival rides in `value`, so a goal rebuilt as {type,value} keeps it", () => {
+  // The defect this guards shipped once already: acceptOffer rebuilt the goal as
+  // `{ type, value }` and dropped everything else. A rival stored beside those
+  // two fields would be lost on signing, and the contract would silently become
+  // a different promise than the offer showed.
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+  Career.engage(true);
+  const id = Career.GOAL_KINDS.beatRival.value({ id: "haas", tier: 4 }, 1);
+  const rebuilt = { type: "beatRival", value: id };
+  assert.equal(rebuilt.value, id, "the rival survives a {type,value} round trip");
+  assert.ok(Career.goalLabel(rebuilt).length > 4, "and the rebuilt goal still labels");
+});
+
+test("a rival who finished ahead MISSES the goal, and one behind MEETS it", () => {
+  for (const [rivalPos, want] of [[1, false], [20, true]]) {
+    const Career = loadDriver(undefined, { rounds: 0 });
+    Career.start({ flavour: "driver", teamId: "haas", seat: 1, seed: 7 });
+    Career.engage(true);
+    const c = Career.data();
+    c.rep = 50;
+    const kind = Career.GOAL_KINDS.beatRival;
+    // met() is pure over the assembled result, so drive it directly rather than
+    // staging a whole season: pos is the player's, rivalPos the rival's.
+    assert.equal(kind.met("x:0", { pos: 5, rivalPos }), want,
+      `player P5 vs rival P${rivalPos}`);
+  }
+});
+
+test("an unresolvable rival cannot fail the player", () => {
+  // Same leniency beatMate has: if the seat is not in the standings at all
+  // (a grid that changed under the contract), the promise is not held against
+  // you. Silently missing a goal you had no way to measure is worse than a
+  // goal that quietly passes.
+  const Career = loadDriver();
+  assert.equal(Career.GOAL_KINDS.beatRival.met("nobody:9", { pos: 18, rivalPos: null }), true,
+    "no rival row means the goal cannot be failed");
+});
+
+test("ambition moves WHO the rival is, in the direction it moves every other kind", () => {
+  // champPos shifts its target position by AMBITION.delta; beatRival walks the
+  // same delta along the rating-ranked grid. Ambitious must never name someone
+  // slower than modest does.
+  const Career = loadDriver();
+  Career.start({ flavour: "driver", teamId: "mclaren", seat: 1, seed: 11 });
+  Career.engage(true);
+  const team = { id: "mclaren", tier: 1 };
+  const ids = Career.AMBITION.map((_, i) => Career.GOAL_KINDS.beatRival.value(team, i));
+  assert.equal(new Set(ids).size >= 1, true, "every rung names someone");
+  // The rungs are ordered modest -> ambitious, and delta runs +3 -> -3, so the
+  // ambitious pick sits at or above the modest one in the ranked pool.
+  assert.ok(Career.AMBITION[0].delta > Career.AMBITION[Career.AMBITION.length - 1].delta,
+    "the ambition table still runs modest-high to ambitious-low");
 });
