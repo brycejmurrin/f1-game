@@ -680,12 +680,19 @@ export function gateOnly() {
   const verified = [];
   run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite"); verified.push("tooling-fast");
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verified.push(script); }
-  // ci.yml's "Parts option-resolution census" job runs test:sweeps-parts
-  // UNCONDITIONALLY on every push (no path filter), so a red in either of its
-  // two files takes the deploy red — and until 2026-09-22 nothing before a
-  // push ran them (tests/unit/prepush-gate-coverage.test.mjs listed both as
-  // SWEEPS_ONLY). ~40 s; the geometry sweeps stay conditional (touchesGeometry).
-  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts (unconditional on CI)"); verified.push("test:sweeps-parts");
+  // ci.yml's "Parts option-resolution census" job runs test:sweeps-parts, so a
+  // red in either of its two files takes the deploy red — and until 2026-09-22
+  // nothing before a push ran them (tests/unit/prepush-gate-coverage.test.mjs
+  // listed both as SWEEPS_ONLY).
+  //
+  // UNCONDITIONAL HERE, CONDITIONAL THERE, on purpose. That job took a path
+  // filter on 2026-09-22 (geometry-paths.mjs PARTS_ERE), so CI now skips the
+  // census on a diff that cannot move the car. This gate does not: it costs
+  // ~40 s, it is the last check before a push to a branch several sessions
+  // build on, and running a cheap suite CI would skip is the safe direction —
+  // the reverse (skipping one CI runs) is what a pre-push gate may never do.
+  // The geometry sweeps stay conditional because they are 8-15 minutes, not 40 s.
+  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verified.push("test:sweeps-parts");
   // Against the deploy tip, same as a real deploy: the circuits OUR side
   // touched (three-dot), not every circuit that moved on the branch.
   let circuits = [];
@@ -787,7 +794,7 @@ export function main() {
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
   // from ci.yml so the two lists cannot drift apart.
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
-  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts (unconditional on CI)"); verdict.verified.push("test:sweeps-parts");
+  run("npm", ["run", "test:sweeps-parts"], "Pages gate: test:sweeps-parts"); verdict.verified.push("test:sweeps-parts");
   // Conditional, for the reason recorded above touchesGeometry(): ci.yml runs
   // the sweeps AFTER the push, so skipping them here buys 10 minutes with a
   // broken tip on a branch other sessions build on.
