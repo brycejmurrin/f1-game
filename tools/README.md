@@ -49,8 +49,8 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | Tool | Does | Paired skill |
 |---|---|---|
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
-| **ci/deploy.mjs** | the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry →… | — |
-| **ci/geometry-paths.mjs** | Single source for "can this diff move circuit geometry?" | — |
+| **ci/deploy.mjs** | the ONE deploy: fetch → merge → tooling-fast → the Pages gate's node suites → sweeps if the union moves geometry (else… | — |
+| **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?" — the fleet trigger (derived from the track VM's own module… | — |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy — the MCP lock oracle; an idle server is not busy. | check-changes |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
@@ -109,6 +109,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/move-tree.mjs** | Tree mover: renames from a JSON old→new map, sweeps every citing path, records MOVED, regenerates the shell; `--plan`. | — |
 | **gen/settings-defaults.mjs** | Apply an exported SETTINGS file to the shipped defaults in `js/data/settings-defaults.js`; `--check` reports drift. | — |
 | **gen/synth-models.mjs** | Procedural AX26 model catalog for `assets.mjs bake-synthetic-models` — buildings, grandstands, industrial; no network. | asset-pack |
+| **gen/targets.mjs** | Prints the GENERATED doc paths (`TARGET` of every gen-*.mjs doc generator), one per line; the hooks derive their block… | — |
 | **gen/title-art.mjs** | Draws index.html's #title-car from js/car/car3d.js through the garage camera; --check fails on drift. | — |
 | **gen/track-stills.mjs** | One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only/--frac/--force`). | playwright-probe |
 | **gen/vendor-three.mjs** | Vendors three.js: patches the readable npm build (vendor/three-patches), minifies with the pinned terser, writes… | check-changes |
@@ -294,6 +295,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **ci/ci-coverage.mjs** | What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs. |
 | **ci/ci-resolve-before.sh** | Resolves the base SHA for the selected-specs CI gate from `EVENT` / `PUSH_BEFORE` / `PR_BASE` (falls back to `HEAD~1`). |
 | **ci/ci-select-specs-step.sh** | The CI "select specs for this change" step body: base via `ci-resolve-before.sh`, then `select-specs.mjs --since`. |
+| **ci/coverage-merge.mjs** | Merges raw V8 coverage (APEX_JS_COVERAGE browser runs + NODE_V8_COVERAGE) into one lcov/html report. |
 | **ci/fixture-consumer-audit.mjs** | RATCHET on `tests/helpers/fixtures.js` adoption: `FLOOR` only rises, and fails when it lags adoption by > `FLOOR_SLACK`. |
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |

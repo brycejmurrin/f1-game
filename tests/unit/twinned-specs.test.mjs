@@ -34,6 +34,38 @@ test("the selected gate actually skips them, and says so", () => {
     assert.ok(row.twin && row.tests > 0, `${row.file} must report its twin and its test count, not vanish quietly`);
 });
 
+test("an ADAPTED spec is its own twin: skipped on the gate, dropped locally, run under APEX_VM_PAGE=1", async () => {
+  const { ADAPTED, ADAPTED_RUNNER, BROWSER_ONLY, twinOf, isAdapted, partitionArgs, gatedNodeFiles } =
+    await import("../../tools/ci/twinned-specs.mjs");
+  const specs = Object.keys(ADAPTED);
+  assert.ok(specs.length > 0, "the first ADAPTED batch landed 2026-09-22 — an empty map means the substitution is gone");
+  for (const spec of specs) {
+    assert.ok(fs.existsSync(path.join(ROOT, spec)), `${spec} is gone`);
+    assert.equal(twinOf(spec), spec, "the twin IS the spec");
+    assert.ok(isTwinned(spec) && isAdapted(spec));
+    assert.ok(!(spec in TWINNED), `${spec} cannot be both hand-twinned and adapted`);
+    assert.ok(!(spec in BROWSER_ONLY), `${spec} is listed as BROWSER_ONLY and ADAPTED at once`);
+    assert.ok(typeof ADAPTED[spec] === "string" && ADAPTED[spec].length > 20, `${spec}: say WHY it is sound without a renderer`);
+    assert.ok(!/from "@playwright\/test"/.test(fs.readFileSync(path.join(ROOT, spec), "utf8")),
+      `${spec} imports from @playwright/test and cannot see the APEX_VM_PAGE switch`);
+  }
+  // The selected gate skips them and names the spec itself as the twin.
+  const r = fit(specs, 15);
+  assert.deepEqual(r.selected, []);
+  assert.deepEqual(r.coveredByVmTwin.map((x) => x.file).sort(), specs.sort());
+  for (const row of r.coveredByVmTwin) assert.equal(row.twin, row.file);
+  // The local runner drops them, flags them adapted (run-playwright sets APEX_VM_PAGE=1 on that flag).
+  const [one] = specs;
+  assert.deepEqual(partitionArgs([one], {}).dropped, [{ spec: one, twin: one, adapted: true }]);
+  assert.equal(partitionArgs([one], {}).nothingToRun, true);
+  assert.deepEqual(partitionArgs([one], { APEX_WITH_TWINNED: "1" }).dropped, []);
+  // And the runner that executes them is on the unconditional node gate.
+  assert.ok(gatedNodeFiles().has(ADAPTED_RUNNER), `${ADAPTED_RUNNER} must be in a group ci.yml's pure-node step runs`);
+  const runner = fs.readFileSync(path.join(ROOT, ADAPTED_RUNNER), "utf8");
+  assert.match(runner, /APEX_VM_PAGE: "1"/, "the runner must select the adapter for every child");
+  assert.match(runner, /delete env\.NODE_TEST_CONTEXT/, "the nested-runner trap run-playwright hit");
+});
+
 test("a twin that loses a test is caught", async () => {
   // The failure this exists for: the count check is the only thing standing
   // between "the browser copy is redundant" and "nobody runs these assertions".
