@@ -33,6 +33,8 @@ const GENERATORS = [
   { tool: "tools/gen/gen-tools-readme.mjs", target: "tools/README.md" },
   { tool: "tools/gen/gen-slider-doc.mjs", target: "docs/LIGHTING-TUNER-SLIDERS.md" },
   { tool: "tools/gen/gen-hooks-table.mjs", target: "docs/DEBUG-HOOKS.md" },
+  // One --check covers its registered TARGET and the two docs it rewrites in place.
+  { tool: "tools/gen/gen-ladder-figures.mjs", target: "docs/notes/PREPUSH-GATE-LADDER.md" },
 ];
 
 function check(tool) {
@@ -164,4 +166,23 @@ test("a slider's help text states ITS OWN ceiling, not a bound it no longer has"
   assert.ok(checked >= 8, `expected the convention on several sliders, saw ${checked}`);
   assert.deepEqual(bad, [],
     "a slider's stated ceiling must equal its max — re-derive the help when you re-derive the bound");
+});
+
+/* THE LADDER FIGURES (2026-09-22). "N of M unit files" sat in three docs and
+ * went red on every added unit file until all three were hand-edited; two
+ * green PRs made the deploy tip red on their union. The generator owns every
+ * figure now; this guards the generator (an empty table would pass --check). */
+test("gen-ladder-figures: the ladder block is three real rows and the figures form a ladder", async () => {
+  const { figures, renderBlock, TARGET, SECONDARY, BLOCK } = await import("../../tools/gen/gen-ladder-figures.mjs");
+  const f = figures();
+  const groups = JSON.parse(read("tests/groups.json"));
+  assert.equal(f.guards, groups.groups["test:guards"].files.length);
+  assert.ok(f.fast < f.gate && f.gate <= f.disk, `not a ladder: ${JSON.stringify(f)}`);
+  assert.equal(f.fastLeft, f.disk - f.fast); assert.equal(f.gateLeft, f.disk - f.gate);
+  const table = block(read(TARGET), BLOCK);
+  const rows = table.split("\n").filter((l) => /^\| `/.test(l));
+  assert.equal(rows.length, 3, "guards, tooling-fast, whole gate");
+  assert.doesNotMatch(table, /undefined|NaN/);
+  assert.ok(table.includes(renderBlock(f).split("\n")[2]), "the committed block is the generator's");
+  for (const rel of SECONDARY) assert.doesNotMatch(read(rel), /GENERATED: ladder/, `${rel} is patched in place, never a marker block`);
 });

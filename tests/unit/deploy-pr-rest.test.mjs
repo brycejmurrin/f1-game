@@ -60,7 +60,9 @@ test("no open PR: create one from HEAD, enable auto-merge, and keep the token of
     const body = JSON.parse(JSON.parse(/^data-binary = (".*")$/m.exec(c[1].stdin)[1]));
     assert.equal(body.head, "claude/unit-branch");
     assert.equal(body.base, DEPLOY_BRANCH);
-    assert.ok(body.title.length > 0, "the HEAD commit's subject is the title");
+    assert.ok(body.title.length > 0, "a title is always sent");
+    assert.ok(!/^Merge /.test(body.title),
+      "the title must come from the branch's last NON-MERGE commit: a deploy merges the base tip before it opens the PR, so HEAD is a merge commit (PR #182 shipped titled 'Merge remote-tracking branch …')");
     const gql = JSON.parse(JSON.parse(/^data-binary = (".*")$/m.exec(c[2].stdin)[1]));
     assert.match(gql.query, /enablePullRequestAutoMerge/);
     assert.equal(gql.variables.id, "PR_kwDO1");

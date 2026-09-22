@@ -548,8 +548,13 @@ export function openPrRest(branch, token) {
   const api = `https://api.github.com/repos/${REPO}`;
   const open = ghApi(token, "GET", `${api}/pulls?state=open&head=${owner}:${encodeURIComponent(branch)}&base=${encodeURIComponent(DEPLOY_BRANCH)}&per_page=1`);
   if (Array.isArray(open) && open[0]?.html_url) return { pr: open[0].html_url, note: "PR already open; the push updated it" };
-  const title = git(["log", "-1", "--format=%s"]).out;
-  const body = git(["log", "-1", "--format=%b"]).out;
+  // The title comes from the branch's last REAL commit, not from HEAD: a
+  // deploy merges the base tip before it opens the PR, so HEAD is almost
+  // always "Merge remote-tracking branch …", which is what PR #182 was called
+  // until this line existed. `--no-merges` walks back to the work itself.
+  const head = git(["log", "-1", "--no-merges", "--format=%s%x00%b", `${DEPLOY_BRANCH}..HEAD`]).out
+            || git(["log", "-1", "--no-merges", "--format=%s%x00%b"]).out;
+  const [title, body] = head.split("\0");
   const pr = ghApi(token, "POST", `${api}/pulls`, { title, body, head: branch, base: DEPLOY_BRANCH });
   if (!pr?.html_url) throw new Error("REST pr create failed: " + JSON.stringify(pr).slice(0, 300));
   const gql = ghApi(token, "POST", "https://api.github.com/graphql", {
