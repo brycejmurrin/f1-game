@@ -236,22 +236,34 @@ test("the renderer's blocking spec stays inside the gate it was written for", ()
 
 test("each missed case is attributed to the bucket that actually excluded it", () => {
   /* The footer of select-recall.mjs attributed all four misses to the
-     deliberate `>=` per-test budget policy. That is right for three of them and
-     WRONG for touch-steer.spec.js, which declares 120 s — comfortably under the
-     180 s cap — and is excluded because it declares 25 tests against a 10-test
-     capacity. It lands in `unreachable`, not `overBudget`, and no budget this
-     gate could be handed would admit it; only splitting the file would.
+     deliberate `>=` per-test budget policy. That was right for three of them
+     and WRONG for touch-steer.spec.js, which declares 120 s — comfortably under
+     the 180 s cap — and was excluded because it declared 25 tests against a
+     10-test capacity. It landed in `unreachable`, and no budget this gate could
+     be handed would have admitted it; only splitting the file could.
+
+     THE FILE HAS SINCE BEEN SPLIT (touch-steer / touch-buttons / touch-pedals,
+     9 / 9 / 7), which is why this test no longer expects `unreachable` for it.
+     That is the fix landing, not the assertion being relaxed: the two lines
+     below are stricter than what they replaced, because they say NO spec in the
+     tree is unreachable by count rather than merely naming the one that was.
 
      A wrong attribution is worse than none: it points the fix at the knob that
-     cannot move the number. So the bucket is machine-checked here rather than
-     described in prose that drifts. */
-  const by = Object.fromEntries(recall().map((r) => [r.catches, r]));
+     cannot move the number. So the bucket stays machine-checked here rather
+     than described in prose that drifts. */
+  const rows = recall();
+  const by = Object.fromEntries(rows.map((r) => [r.catches, r]));
   const touch = by["tests/specs/touch-steer.spec.js"];
   assert.ok(touch, "the touch-steer case left the history");
-  assert.equal(touch.hit, false);
-  assert.equal(touch.named, true);
-  assert.match(touch.why, /^unreachable/,
-    `touch-steer is excluded by test COUNT, not by the >= budget policy; got "${touch.why}"`);
+  assert.doesNotMatch(touch.why, /^unreachable/,
+    `touch-steer was split to get it under the 10-test cap; "${touch.why}" says it is still over`);
+  // The stronger form: nothing in the tree may be bigger than the whole
+  // capacity. A spec that is reads as "not affected by this change" in the
+  // plan, which is indistinguishable from being genuinely irrelevant — the
+  // exact confusion the 2026-09-22 audit was about.
+  const unreachable = rows.filter((r) => /^unreachable/.test(r.why || "")).map((r) => r.catches);
+  assert.deepEqual(unreachable, [],
+    `spec(s) declare more tests than the gate's whole capacity: ${unreachable.join(", ")}`);
   // The three that ARE the `>=` policy, so a future change that makes them
   // unreachable (or selectable) has to say so here.
   for (const f of ["tests/specs/terrain-over-road.spec.js", "tests/specs/props-over-road.spec.js",
