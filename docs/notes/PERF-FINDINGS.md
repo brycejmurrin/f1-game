@@ -4813,3 +4813,36 @@ control); read its `ubo` beats for the counts and treat `gms`/fps per §2w — n
 single-shot. The 48 MB iPhone TLX-vs-GLX memory gap (§2r) is a separate question; 5 MB
 of uniform buffers on a 1200-draw desktop frame is a bound on what this can have been
 worth there, not an answer.
+
+### 2y, the real GPU (macos-latest / Metal, census runs 170 = ON and 171 = control, 2026-09-22)
+
+Both runs green on the Verdict step, `gpuErrors=0` on all four backend legs of both.
+`ubo` is the census beat added for this entry (`gpu-game-check.mjs`), read from the LAST
+beat of the 600-frame race window; the first beats (track still building, 73 buffers) are
+the same on both arms, which is the control behaving as a control.
+
+| leg (montreal, night, clock 2, resMode high) | shared | uniform buffers | KB | JS ms in render calls (EMA) | meanLuma | fps median |
+|---|---|---|---|---|---|---|
+| three.js / WebGPU (Metal, headless soft-blit) | off | **3689** | **2416** | **7.14** | 3.3 † | 60 |
+| three.js / WebGPU | on | **661** | **166** | **0.46** | 44.6 | 54 |
+| three.js / WebGL2 (Metal ANGLE) | off | **3726** | **2494** | 8.52 | 50.4 | 36 |
+| three.js / WebGL2 | on | **812** | **266** | 9.94 | 51.5 | 33 |
+
+WebGPU: 5.6x fewer uniform buffers, 14.6x fewer uniform bytes, and the JS time inside
+`renderer.render()` fell from 7.1 ms to 0.5 ms a frame — that is the per-object
+`setBindGroup`/`writeBuffer` walk three.js issue #30560 describes, gone. WebGL2: 4.6x and
+9.4x on the counts; the JS EMA did not move outside noise on this single sample (the
+WebGL2 backend's per-object cost was the `bufferData` itself, which lands in the driver,
+not in JS — the counts are the evidence there). fps is reported, not read: §2w (54 %
+swing on identical code), and the WebGL2 control's governor line says "fps UNFED".
+
+† The control arm's headless-WebGPU frame read 3.3 mean luma with the occlusion A/B
+floor at 90 % of pixels differing between two identical states — the bimodal dark mode
+of that leg recorded on 2026-09-14 ("a 2.9 with the probe NEVER STARTED"), on the code
+path that shipped before this change. It is not the flag: the ON arm's leg read 44.6 on
+the same runner, and the in-container Lavapipe pair above read 46.5 / 46.9.
+
+**Verdict.** Shipped ON. Revert criteria (gpuErrors, luma divergence, frozen groupVer,
+< 5x buffer drop) all clear on software and on Metal. Next measurement that would add
+information: a HEADED Metal run (the census is headless and soft-blits on WebGPU), and a
+phone — the 48 MB TLX-vs-GLX gap (§2r) has a 2.4 MB bound from this, no more.
