@@ -1,10 +1,14 @@
 // ratchets.mjs — ONE ratchet mechanism for the numbers that only ever grow.
-// @doc Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update` snaps every ceiling down, `--json`.
+// @doc Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update` snaps ceilings down, `--json`, `--base <ref>` names raises.
 //
 //   node tools/check/ratchets.mjs            # check: every metric <= its ceiling, no ceiling far above its value
 //   node tools/check/ratchets.mjs --update   # rewrite ratchets.json with the current values (after an extraction,
 //                                      #   or on a merged tree — the deploy-merge rule)
 //   node tools/check/ratchets.mjs --json     # {ok, rows:[{file, metric, value, ceiling, over, slack}]}
+//   node tools/check/ratchets.mjs --base <ref> [--max-raise=40]
+//                                      # every ceiling that moved since <ref> (git show); raises are
+//                                      #   warnings, a raise past the commit hook's absorb fails —
+//                                      #   ci.yml's guards job runs this against the PR base / deploy tip
 //
 // Replaced the module-size unit test on 2026-09-03 (Phase 1-lite of
 // docs/research/TREE-RESTRUCTURE-2026-09.md). The idiom is unchanged — a number
@@ -34,6 +38,7 @@
 // computed default is refused, because folding five mechanisms into one must
 // not quietly widen any of them.
 import fs from "node:fs";
+import cp from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -186,8 +191,76 @@ export async function autoRaise({ maxRaise = 40, dryRun = false } = {}) {
   return { ok: true, raised, lowered, blocked: [] };
 }
 
+/** The ceiling of a raw entry (a bare number or {ceiling, slack}). */
+const ceilingOf = (raw) => (typeof raw === "number" ? raw : raw.ceiling);
+
+/** Every ceiling that differs between two ratchets.json documents, as rows
+ *  {file, metric, base, now, delta, kind: "raise"|"lower"|"new"|"gone"}.
+ *  PURE — the CI step and its test both go through here. */
+export function diffRatchets(base, current) {
+  const rows = [];
+  const walk = (bagBase, bagNow, file) => {
+    for (const [metric, raw] of Object.entries(bagNow || {})) {
+      const now = ceilingOf(raw);
+      if (!bagBase || !(metric in bagBase)) { rows.push({ file, metric, base: null, now, delta: null, kind: "new" }); continue; }
+      const b = ceilingOf(bagBase[metric]);
+      if (now !== b) rows.push({ file, metric, base: b, now, delta: now - b, kind: now > b ? "raise" : "lower" });
+    }
+    for (const metric of Object.keys(bagBase || {})) if (!bagNow || !(metric in bagNow))
+      rows.push({ file, metric, base: ceilingOf(bagBase[metric]), now: null, delta: null, kind: "gone" });
+  };
+  const files = new Set([...Object.keys(base.files || {}), ...Object.keys(current.files || {})]);
+  for (const f of [...files].sort()) walk(base.files?.[f], current.files?.[f], f);
+  walk(base.tree, current.tree, "(tree)");
+  return rows;
+}
+
+/** `git show <ref>:tests/data/ratchets.json`, parsed. Throws with the git
+ *  message when the ref (or the file at that ref) is unreachable — a shallow
+ *  clone is the usual cause, and the caller's exit code says so. */
+export function loadAt(ref) {
+  const out = cp.execFileSync("git", ["show", `${ref}:${path.relative(ROOT, DATA).split(path.sep).join("/")}`],
+    { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return JSON.parse(out);
+}
+
+/** `--base <ref>`: every ceiling that moved since <ref>. Raises are warnings
+ *  (GitHub `::warning::` annotations on CI, plain lines elsewhere); a raise
+ *  past `maxRaise` — the commit hook's own absorb, so only APEX_SKIP_GUARDS
+ *  could have produced it — fails. Returns the exit code. */
+export function compareToBase(ref, { maxRaise = 40, current = load(), print = console.log } = {}) {
+  let base;
+  try { base = loadAt(ref); }
+  catch (e) { print(`ratchets --base: cannot read tests/data/ratchets.json at ${ref} (${String(e.stderr || e.message).trim().split("\n")[0]}) — is the checkout deep enough (fetch-depth: 0)?`); return 2; }
+  const rows = diffRatchets(base, current);
+  const gh = process.env.GITHUB_ACTIONS === "true";
+  let blocked = 0;
+  for (const r of rows) {
+    const where = `${r.file} ${r.metric}`;
+    if (r.kind === "raise") {
+      const over = r.delta > maxRaise;
+      if (over) blocked++;
+      const msg = `RAISE  ${where}: ${r.base} -> ${r.now} (+${r.delta})` + (over ? ` — past the ${maxRaise}-line commit-hook absorb: this needs a reason in the PR` : "");
+      print(gh ? `::${over ? "error" : "warning"} file=tests/data/ratchets.json,title=ratchet raised::${msg}` : msg);
+    } else if (r.kind === "lower") print(`LOWER  ${where}: ${r.base} -> ${r.now} (${r.delta})`);
+    else if (r.kind === "new") print(`NEW    ${where}: ${r.now}`);
+    else print(`GONE   ${where}: was ${r.base}`);
+  }
+  const raises = rows.filter((r) => r.kind === "raise").length;
+  print(`ratchets --base ${ref}: ${rows.length} ceiling(s) moved (${raises} raised, ${rows.filter((r) => r.kind === "lower").length} lowered, ${rows.filter((r) => r.kind === "new").length} new, ${rows.filter((r) => r.kind === "gone").length} gone)` + (blocked ? ` — ${blocked} past the ${maxRaise}-line absorb` : ""));
+  return blocked ? 1 : 0;
+}
+
 async function main() {
   const argv = process.argv.slice(2);
+  const baseAt = argv.indexOf("--base");
+  if (baseAt >= 0) {
+    const ref = argv[baseAt + 1];
+    if (!ref || ref.startsWith("-")) { console.error("ratchets: --base needs a ref"); process.exitCode = 2; return; }
+    const mr = argv.find((a) => a.startsWith("--max-raise="));
+    process.exitCode = compareToBase(ref, { maxRaise: mr ? Number(mr.split("=")[1]) || 40 : 40 });
+    return;
+  }
   if (argv.includes("--update")) {
     const rows = await update();
     for (const r of rows) console.log(`${r.file} ${r.metric}: ${r.ceiling} -> ${r.value}`);

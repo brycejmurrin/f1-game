@@ -759,6 +759,26 @@ test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-
   assert.ok(A.mistakeGatherMul() < 1 && A.mistakeGatherMul() > 0.7);
 });
 
+test("mistakeChance: errMul is the difficulty-ladder rate scale, default 1", () => {
+  const top = { consistency: 1.0 };
+  const base = A.mistakeChance(top, 0);
+  assert.equal(A.mistakeChance(top, 0, 1), base, "errMul 1 keeps the old value");
+  assert.ok(Math.abs(A.mistakeChance(top, 0, 2) - base * 2) < 1e-9, "errMul 2 doubles it");
+  assert.equal(A.mistakeChance(top, 0, undefined), base, "errMul undefined falls back to 1");
+  assert.equal(A.mistakeChance(top, 0, 0), base, "errMul 0 falls back to 1 (never zeroes the rate)");
+  assert.equal(A.mistakeChance(top, 0), base, "the old 2-arg call is unchanged");
+});
+
+test("PhysicsConsts.DIFF.err is a monotonic ladder: easy >= normal >= hard = 1", () => {
+  const src = readFileSync(join(ROOT, "js/physics/consts.js"), "utf8");
+  const ctx = vm.createContext({ window: {} });
+  vm.runInContext(src, ctx, { filename: "js/physics/consts.js" });
+  const DIFF = ctx.window.PhysicsConsts.DIFF;
+  assert.ok(DIFF.easy.err >= DIFF.normal.err, "easy errs at least as often as normal");
+  assert.ok(DIFF.normal.err >= DIFF.hard.err, "normal errs at least as often as hard");
+  assert.equal(DIFF.hard.err, 1, "hard stays the unscaled baseline rate");
+});
+
 test("tyres: sprints start on softs, long races mix; a soft is up and fades, a hard is down and lasts", () => {
   assert.equal(A.tyreClass(0.5, 3), "soft"); assert.equal(A.tyreClass(0.9, 3), "medium");
   assert.equal(A.tyreClass(0.9, 25), "hard"); assert.equal(A.tyreClass(0.1, 25), "soft");

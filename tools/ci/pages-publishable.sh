@@ -13,6 +13,13 @@
 #   live sha unreadable        -> true  (warned; a CDN hiccup must not wedge
 #                                 deploys, and the check runs again under the
 #                                 Pages lock before anything is published)
+#                                 With --strict: false. The SECOND call, under
+#                                 the Pages lock, is the last thing between a
+#                                 stale run and a live rollback, so there an
+#                                 unreadable live sha is a refusal, not a pass
+#                                 (2026-09-22). The unlocked first call stays
+#                                 fail-open: it only decides whether to enter
+#                                 the environment, never whether to publish.
 #   live sha == commit         -> false (already live)
 #   live sha ancestor of commit-> true  (publishing moves the site forward)
 #   anything else              -> false (a newer build is live, or history
@@ -23,6 +30,9 @@
 # $GITHUB_OUTPUT; the reasoning goes to stderr, where the job log shows it.
 # Needs a checkout deep enough to hold the live commit (fetch-depth: 0).
 set -eu
+STRICT=0
+for a in "$@"; do [ "$a" = "--strict" ] && STRICT=1; done
+set -- $(for a in "$@"; do [ "$a" = "--strict" ] || printf '%s\n' "$a"; done)
 SHA="${1:?commit sha}"
 SITE_URL="${2:?site url}"
 
@@ -30,6 +40,10 @@ live_html="$(curl -fsS --max-time 20 "${SITE_URL%/}/index.html?_=$$" 2>/dev/null
 live_sha="$(printf '%s' "$live_html" | sed -n 's/.*<meta name="apex-sha" content="\([0-9a-f]\{40\}\)".*/\1/p' | head -n 1)"
 
 if [ -z "$live_sha" ]; then
+  if [ "$STRICT" = 1 ]; then
+    echo "::error::live apex-sha unreadable at ${SITE_URL} under the Pages lock; refusing to publish $SHA blind (--strict)" >&2
+    echo false; exit 0
+  fi
   echo "::warning::live apex-sha unreadable at ${SITE_URL}; publishing $SHA without the monotonic check" >&2
   echo true; exit 0
 fi

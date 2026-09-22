@@ -559,6 +559,44 @@ test.describe("TLX — boot", () => {
     expect(errors).toEqual([]);
   });
 
+  test("the lit frame block is ONE shared uniform buffer per program, not one per draw", async ({ page }) => {
+    // tsl-lit.js puts every frame-level uniform in three's renderGroup. Before
+    // that, three cloned the block per RENDER OBJECT (NodeBuilderState
+    // .createBindings), so info.memory.uniformBuffers scaled with the draw
+    // count. Two structural facts are asserted, neither of which needs a real
+    // GPU: the shared arm holds several times FEWER uniform buffers than the
+    // per-object arm (apex26.tlxSharedUniforms=0, the same boot otherwise —
+    // 5-8x on every probe in PERF-FINDINGS 2y), and the render group's
+    // version advances across present() calls (a frozen version would mean
+    // the shared block uploaded once and never again — a stuck sun).
+    const errors = [];
+    page.on("console", (m) => { if (m.type() === "error" && !/favicon/i.test(m.text())) errors.push(m.text()); });
+    const sample = async () => {
+      await page.goto("/");
+      await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+      await page.evaluate(() => window.__apex.race("monza"));
+      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: 60_000 });
+      await page.evaluate(() => window.__apex.park(0.1));
+      // World frames are live once three's per-frame draw-call count is (the
+      // retained drawList is emptied by present(), so it reads 0 between frames).
+      await page.waitForFunction(() => { const m = GLX.__tlx.memState(); return m.calls > 50 && m.rUbo != null; }, null, { polling: 100, timeout: 60_000 });
+      // Sample both arms the same number of presented frames later, so the
+      // lazily compiled program set behind the count is comparable.
+      const p0 = await page.evaluate(() => GLX.__tlx.memState().presents);
+      await page.waitForFunction((p) => GLX.__tlx.memState().presents >= p + 5, p0, { polling: 100, timeout: 60_000 });
+      return page.evaluate(() => GLX.__tlx.memState());
+    };
+    const on = await sample();
+    expect(on.sharedUniforms).toBe(true);
+    await page.waitForFunction((v) => GLX.__tlx.memState().groupVer > v, on.groupVer, { polling: 100, timeout: 60_000 });
+    // The control arm: the per-object layout, everything else identical.
+    await page.addInitScript(() => { try { localStorage.setItem("apex26.tlxSharedUniforms", "0"); } catch (_) {} });
+    const off = await sample();
+    expect(off.sharedUniforms).toBe(false);
+    expect(off.rUbo).toBeGreaterThan(on.rUbo * 3);
+    expect(errors).toEqual([]);
+  });
+
   test("menu is reachable and canvas is sized (no-track begin/present path)", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });

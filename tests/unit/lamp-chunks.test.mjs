@@ -195,7 +195,7 @@ test("a full drag costs ONE bake, not one per input event", () => {
  * GLX binds a chunk's list per draw and WGX passes (offset, count) in a
  * per-draw uniform. THREE HAS NEITHER — every visible chunk is drawn from one
  * pooled mesh sharing ONE material, so there is nowhere to put a per-chunk
- * value. (Checked in vendor/three-0.185.1 rather than assumed:
+ * value. (Checked in vendor/three-0.186.0 rather than assumed:
  * `nodeUniformDrawId` is declared only when `object.isBatchedMesh` and set only
  * in the BatchedMesh branch of WebGLBackend._draw, so `drawIndex` reads nothing
  * from a plain Mesh.) What three CAN read is positionWorld — and the chunks are

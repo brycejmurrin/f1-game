@@ -51,7 +51,7 @@
       //    Overcast English green: desaturated, cool, low contrast. Nothing
       //    here climbs above ~0.8 in any channel.
       // ---------------------------------------------------------------------
-      const K = (s) => Math.round(s * n) % n;
+      const { K } = api;            // the contract's frac -> node index (normalised for negatives)
 
       const LEAF      = [0.20, 0.33, 0.17];   // mature broadleaf, damp
       const LEAF_D    = [0.15, 0.26, 0.14];   // shaded side of the wood
@@ -164,7 +164,11 @@
       //    stays in the authoring frame on purpose.
       //    sl() wraps past 1 above f = 0.097, so keep every argument below it.
       // ---------------------------------------------------------------------
-      const SL = 0.9027;                       // = 1 - def._sceneryShift
+      // 1 - def._sceneryShift, baked by buildCenterline before scenery() runs, at
+      // the 4 dp the props were placed against (a literal 0.9027 until 2026-09-22:
+      // the unrounded value flips a few K() nodes at Brands Hatch, so the rounding
+      // keeps today's geometry while a retuned startFrac still moves the props).
+      const SL = Math.round((1 - api.def._sceneryShift) * 1e4) / 1e4;
       const sl = (f) => (f + SL) % 1;
       building(K(sl(0.968)), 1, 15, 14, 6.5, 108, { col: WALL, roof: ROOF });
       building(K(sl(0.032)), 1, 19, 12, 5.5, 34, { col: WALL_2, roof: ROOF });

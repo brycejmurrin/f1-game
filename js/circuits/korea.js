@@ -18,6 +18,13 @@
     // negated by the projection, so it mirrors handedness. Calibrated against
     // monza/suzuka/zandvoort (all real-CW, all projected CCW, all reverse:false).
     reverse: false,
+    // Yeongam is reclaimed tidal flat at sea level: the SRTM bake
+    // (node tools/gen/bake-elevation.mjs korea) measured 0.00 m of relief over
+    // the whole lap and correctly declined to write a profile. So this is the
+    // one circuit that takes the engine's undulation opt-out — without it
+    // buildCenterline still laid its 0.14 m procedural ripple under a scenery
+    // header that says "dead flat".
+    undulate: false,
     // v0 sits mid the longest straight, placed by the stitcher. Not yet checked
     // against the real start/finish line — see docs/tracks/START-LINES.md.
     startFrac: 0.0000,

@@ -5,7 +5,7 @@
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT } from "../../tools/check/ratchets.mjs";
+import { load, measure, verdict, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, diffRatchets, compareToBase, loadAt } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
   const v = verdict(await measure());
@@ -92,4 +92,45 @@ test("the commit hook's auto-raise absorbs small growth and blocks big growth", 
     assert.equal(tight.ok, false);
     assert.ok(tight.blocked.length >= 1);
   }
+});
+
+test("--base names every ceiling that moved, and only a raise past the hook's absorb fails", () => {
+  // The CI step (ci.yml guards: "Ratchet ceilings vs the base") exists because
+  // the commit hook's auto-raise rides into the diff as one changed number
+  // that nothing names. The diff is pure; the CLI wraps it with git show.
+  const base = { files: { "fixture-a": { lines: 100, codeLines: { ceiling: 50, slack: 5 } }, "fixture-gone": { lines: 1 } },
+                 tree: { bareCatches: { ceiling: 40, slack: 15 }, cssClasses: 500 } };
+  const now  = { files: { "fixture-a": { lines: 130, codeLines: { ceiling: 45, slack: 5 }, topLets: 3 }, "fixture-new": { lines: 9 } },
+                 tree: { bareCatches: { ceiling: 41, slack: 15 }, cssClasses: 500 } };
+  const rows = diffRatchets(base, now);
+  const by = (f, m) => rows.find((r) => r.file === f && r.metric === m);
+  assert.deepEqual(by("fixture-a", "lines"), { file: "fixture-a", metric: "lines", base: 100, now: 130, delta: 30, kind: "raise" });
+  assert.equal(by("fixture-a", "codeLines").kind, "lower");
+  assert.equal(by("fixture-a", "topLets").kind, "new");
+  assert.equal(by("fixture-new", "lines").kind, "new");
+  assert.equal(by("fixture-gone", "lines").kind, "gone");
+  assert.deepEqual(by("(tree)", "bareCatches"), { file: "(tree)", metric: "bareCatches", base: 40, now: 41, delta: 1, kind: "raise" });
+  assert.equal(by("(tree)", "cssClasses"), undefined, "an unchanged ceiling is not a row");
+  assert.equal(rows.length, 6);
+
+  // HEAD's committed file against itself: nothing moved, exit 0. The current
+  // side is pinned to HEAD's copy, not the working tree's: this test runs from
+  // the commit hook, where a staged auto-raise or a merge of the deploy tip
+  // legitimately leaves the tree's ratchets.json ahead of HEAD.
+  const head = loadAt("HEAD");
+  const lines = [];
+  assert.equal(compareToBase("HEAD", { current: head, print: (l) => lines.push(l) }), 0);
+  assert.match(lines.at(-1), /0 ceiling\(s\) moved/);
+  // A raise within the absorb is reported, not fatal; past it, fatal.
+  const raised = (n) => ({ ...head, files: { ...head.files, "js/game.js": { ...head.files["js/game.js"], lines: head.files["js/game.js"].lines + n } } });
+  const out = [];
+  assert.equal(compareToBase("HEAD", { current: raised(40), print: (l) => out.push(l) }), 0);
+  assert.ok(out.some((l) => /RAISE  js\/game\.js lines: \d+ -> \d+ \(\+40\)/.test(l)), out.join("\n"));
+  const big = [];
+  assert.equal(compareToBase("HEAD", { current: raised(41), print: (l) => big.push(l) }), 1);
+  assert.ok(big.some((l) => /past the 40-line commit-hook absorb/.test(l)));
+  // An unreachable ref is a distinct exit, not a crash and not a pass.
+  const nope = [];
+  assert.equal(compareToBase("0000000000000000000000000000000000000000", { print: (l) => nope.push(l) }), 2);
+  assert.match(nope[0], /cannot read tests\/data\/ratchets\.json at 0{40}/);
 });

@@ -298,3 +298,30 @@ test("TLX picks its backend on what three will BIND, not on navigator.gpu existi
   assert.match(src, /canvasAlpha:/,
     "backendState must report the LIVE canvas alpha so a report can name this defect");
 });
+
+// ── the drawing buffer is clamped to the driver's ceiling on EVERY backend ──
+// WGX clamped presentW/H to maxTextureDimension2D; GLX never queried a limit,
+// so a 6K panel at DPR 2 (or a window across two 4K monitors) asked the driver
+// for a ~12000 px backing store and every post target with it. The clamp has
+// to land BEFORE rw/rh: post.js createTargets() allocates from getSize() (the
+// render size), not from canvas.width, so a clamp on the canvas alone would
+// leave the scene, bloom and SSAO targets oversized.
+test("GLX and TLX clamp the present size to the driver limit before deriving the render size", () => {
+  const glx = read("js/render/glx/glx.js");
+  assert.match(glx, /gl\.getParameter\(gl\.MAX_TEXTURE_SIZE\)/, "GLX queries MAX_TEXTURE_SIZE");
+  assert.match(glx, /gl\.getParameter\(gl\.MAX_RENDERBUFFER_SIZE\)/, "GLX queries MAX_RENDERBUFFER_SIZE");
+  const resize = glx.slice(glx.indexOf("  function resize() {"), glx.indexOf("  function setRenderScale("));
+  assert.ok(resize.length > 0, "found GLX resize()");
+  const clampAt = resize.search(/if \(maxDim > 0 && \(presentW > maxDim \|\| presentH > maxDim\)\)/);
+  const rwAt = resize.indexOf("const rw = Math.max(1, Math.round(presentW * renderScale));");
+  assert.ok(clampAt > 0 && rwAt > 0 && clampAt < rwAt, "the uniform clamp precedes the rw/rh derivation");
+  assert.match(resize, /const k = Math\.min\(maxDim \/ presentW, maxDim \/ presentH\);/, "one factor for both axes keeps aspect");
+
+  const tlx = read("js/render/three/tlx.js");
+  const tresize = tlx.slice(tlx.indexOf("      function resize() {"), tlx.indexOf("      function resize() {") + 4000);
+  assert.match(tresize, /_gl\.getParameter\(_gl\.MAX_TEXTURE_SIZE\)/, "TLX's WebGL2 leg asks its driver, as GLX does");
+  assert.match(tresize, /maxTextureDimension2D/, "TLX's WebGPU leg keeps the device limit");
+
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.doesNotMatch(wgx, /GLX and TLX do not clamp at all/, "the WGX comment must not describe a gap that is closed");
+});

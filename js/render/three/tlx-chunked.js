@@ -376,7 +376,7 @@
      * A ZERO-LENGTH VIEW, NOT null. Every three site that touches .array after
      * upload wants a PROPERTY OF THE TYPE, never the data, and each one is a
      * null dereference away from taking the renderer down (all four verified
-     * against vendor/three-0.185.1/three.webgpu.min.js):
+     * against vendor/three-0.186.0/three.webgpu.min.js):
      *
      *   node builder      attribute.array.constructor, on every pass it has not
      *                     compiled before — the env probe threw on 41 WebGL2 /

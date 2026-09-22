@@ -2,6 +2,10 @@
 const DebrisWorld = (function () {
   "use strict";
 
+  // The loop's fixed step (js/physics/consts.js FIXED_DT); the literal is the
+  // fallback for a bare test VM that loads this file without PhysicsConsts.
+  const FIXED_DT = (typeof PhysicsConsts !== "undefined" && PhysicsConsts.FIXED_DT) || 1 / 60;
+
 const RAPIER_URL = (() => {
   const src = (document.currentScript && document.currentScript.src) || location.href;
   return new URL("../../vendor/rapier-0.19.3/rapier.mjs", src).href;
@@ -346,7 +350,7 @@ function furnCapFor() { return (G.gfx && G.gfx.mobileTier) ? FURN_CAP_MOBILE : F
 
 function buildWorld(track, cars) {
   world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
-  world.timestep = 1 / 60;
+  world.timestep = FIXED_DT;
   _events = new RAPIER.EventQueue(true);
   _colliderCar = new Map();
   _furnHandles = new Set();
