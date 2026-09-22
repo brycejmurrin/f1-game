@@ -34,7 +34,7 @@ import { loadGroups, filesOnly } from "./gen-test-groups.mjs";
 import { gateNodeSuites } from "../ci/deploy.mjs";
 
 export const TARGET = "docs/notes/PREPUSH-GATE-LADDER.md";
-export const SECONDARY = ["AGENTS.md", "docs/TESTING.md"];
+export const SECONDARY = ["AGENTS.md", "docs/TESTING.md", ".claude/agents/verify-agent.md"];
 export const BLOCK = "ladder";
 
 const UNIT = /\.test\.(mjs|cjs)$/;
@@ -87,6 +87,12 @@ export const REWRITES = {
   "AGENTS.md": [
     { re: /(`test:tooling-fast` \()(\d+) of (\d+)( unit files\))/, value: (f) => [f.fast, f.disk] },
     { re: /(\bThe other )(\d+)( have taken deploys red)/, value: (f) => f.fastLeft },
+  ],
+  // verify-agent quotes the pair to its parent on EVERY run, and drifted to
+  // "208 of 278" unnoticed while the three prose docs were pinned (2026-09-22).
+  // Its copy wraps the line, so the pair straddles a newline + indent.
+  ".claude/agents/verify-agent.md": [
+    { re: /(`test:tooling-fast` \()(\d+) of (\d+)( unit\n   files\))/, value: (f) => [f.fast, f.disk] },
   ],
   "docs/TESTING.md": [
     { re: /(`npm run test:tooling-fast` \(structural, no browser; )(\d+) of (\d+)( unit files)/, value: (f) => [f.fast, f.disk] },

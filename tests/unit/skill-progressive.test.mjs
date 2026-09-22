@@ -421,7 +421,13 @@ test("readonly review agents stay --fast and never start Playwright", () => {
   // deploy-research: host fetch, never the egress-blocked in-repo wrapper.
   const deploy = fs.readFileSync(path.join(AGENTS, "deploy-research.md"), "utf8");
   assert.match(deploy, /WebFetch/);
-  assert.match(deploy, /origin\/claude\/f1-game-project-26h3ng:version\.json/);
+  // The tip anchor stays pinned; the COMMAND carrying it changed (2026-09-22).
+  // `git show <tip>:version.json` was the old liveness compare, and since
+  // pages.yml stamps the build instead of committing it, that committed number
+  // is a placeholder "never current" — comparing it to the live build called a
+  // correctly-published tip an ANOMALY. The verdict is the published apex-sha.
+  assert.match(deploy, /origin\/claude\/f1-game-project-26h3ng/, "must compare against the deploy TIP, not the working tree");
+  assert.match(deploy, /pages-live-sha\.sh/, "liveness reads the published <meta name=\"apex-sha\">");
   assert.doesNotMatch(deploy, /tinyfish-mcp\.sh (ensure|deploy-check|deploy-js|fetch|search)/,
     "deploy-research must not run the in-repo tinyfish wrapper");
   assert.doesNotMatch(deploy, /probe-mcp\.py call tinyfish_/);

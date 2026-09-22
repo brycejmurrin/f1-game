@@ -2,7 +2,7 @@
 name: deploy-research
 description: Public-web and post-deploy research — `curl` for the deployed artifact (it reaches github.io from this container and is the only way to read a `<meta>` tag), the host fetch/search tools for prose pages and search. Use proactively for live apex-sha / version.json / shipped JS markers, deploy lag checks, and external track or reference gathering that would flood the main context. Never Chrome DevTools, never Playwright, never the in-repo tinyfish wrapper.
 model: haiku
-maxTurns: 10
+maxTurns: 18
 readonly: true
 is_background: true
 background: true
@@ -25,26 +25,37 @@ return a short summary with citations (URLs + live vs local build numbers).
 
 ## Recipes
 
-1. **Post-deploy liveness.** Fetch
-   `https://brycejmurrin.github.io/f1-game/version.json` (plain JSON,
-   `{"build": N}`) with the host fetch tool. Compare `N` to the deploy tip:
+1. **Post-deploy liveness. THE VERDICT IS THE SHA, NOT THE BUILD NUMBER.**
+   The live shell's `<meta name="apex-sha">` is the one thing that knows what
+   is published. `tools/ci/pages-live-sha.sh` prints it (curl + sed, never
+   fails, empty on an unreadable site):
    ```sh
+   LIVE=$(bash tools/ci/pages-live-sha.sh https://brycejmurrin.github.io/f1-game/)
    git fetch origin claude/f1-game-project-26h3ng
-   git show origin/claude/f1-game-project-26h3ng:version.json
+   TIP=$(git rev-parse origin/claude/f1-game-project-26h3ng)
+   [ "$LIVE" = "$TIP" ] && echo OK          # live IS the tip
+   git merge-base --is-ancestor <my sha> "$LIVE"   # is MY commit live?
    ```
-   Verdict: **OK** when live == tip; **STALE** when live < tip. Pages is a
-   RELEASE TRAIN (poked by each green fast-tier `ci.yml` run, ~6 min after
-   the push, then a ~10-15 min gate unless the tree was already gated; the
-   :07/:27/:47 cron is only a backstop and GitHub runs it hours late on this
-   repo), so a tip under ~25 min old being behind is the train, not a miss;
-   past that, read `pages.yml`'s latest run. A behind WORKING TREE is not a Pages miss —
-   compare to the tip, not to `version.json` on disk. The exact question "is
-   MY commit live?" is answered by the shell, not the build number:
-   ```sh
-   curl -sS https://brycejmurrin.github.io/f1-game/index.html \
-     | grep -oE '<meta name="apex-(sha|build)" content="[^"]*">'
-   git merge-base --is-ancestor <my sha> <apex-sha>
-   ```
+   Verdict: **OK** when `LIVE` == tip; **STALE** when `LIVE` is an older
+   ancestor of it. Pages is a RELEASE TRAIN (poked by each green fast-tier
+   `ci.yml` run, ~6 min after the push, then a ~10-15 min gate unless the tree
+   was already gated; the :07/:27/:47 cron is only a backstop and GitHub runs
+   it hours late on this repo), so a tip under ~25 min old not being live yet
+   is the train, not a miss; past that, read `pages.yml`'s latest run. A behind
+   WORKING TREE is not a Pages miss — compare to the tip, not to disk.
+
+   **NEVER VERDICT ON A `version.json` BUILD NUMBER.** Since 2026-09-01 the
+   shell generation is STAMPED, NOT COMMITTED (`pages.yml` §"Stamp the shell
+   generation"): the deploy computes `BUILD=$(( 2000 + $(git rev-list --count
+   HEAD) ))`, and the committed `version.json` is a placeholder that workflow's
+   own comment calls "consistent, never current". A live build of 9760 against
+   a committed 1695 is the NORMAL state, not a finding — comparing the two
+   called a correctly-published tip an ANOMALY on 2026-09-22. Nor can you
+   recompute the expected build here: this container's clone is SHALLOW
+   (`git rev-parse --is-shallow-repository` -> true), so `git rev-list --count`
+   returns the clone depth (647 that day), not real history (7760). Report the
+   live build as evidence; never as the verdict.
+
    **USE `curl` FOR THE SHELL, NOT THE FETCH TOOL.** The fetch tool renders the
    page to markdown and DROPS EVERY `<meta>` TAG, silently — asked for
    `apex-sha` on 2026-09-18 it answered "NO META TAGS VISIBLE" about a page
