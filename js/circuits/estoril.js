@@ -57,7 +57,12 @@
       { frac: 0.075, angleDeg: 3.5, widthM: 110 },
       { frac: 0.420, angleDeg: 3.0, widthM: 110 },
       // Parabolica Ayrton Senna — the long final right onto the pit straight.
-      { frac: 0.900, angleDeg: 5.0, widthM: 200 },
+      // ANCHORED BY TURN, not frac: authored 0.900 compensates to engine 0.7562,
+      // which is T13's entry (R 161 m), one corner early — and mesh.js's re-seat
+      // guard deliberately leaves it there because it IS on a corner, so nothing
+      // caught it. `turn:` resolves straight off the curated apex table and
+      // cannot drift when the start line moves again.
+      { turn: 14, angleDeg: 5.0, widthM: 200 },
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
@@ -66,7 +71,17 @@
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
-    turns: [0.1132, 0.1752, 0.2322, 0.2417, 0.2892, 0.3062, 0.4922, 0.4997, 0.5187, 0.6117, 0.6187, 0.6902, 0.7637],
+    // T14 (0.8225) is the Parabolica Ayrton Senna, the final right onto the pit
+    // straight, and it was MISSING: the peak-picker ranks by peak curvature, and a
+    // 337 m constant-radius corner (R 122 m at its middle, 69 m at its tightest
+    // kink at 0.8605) never out-peaks a tight one, so the table stopped at the
+    // Esses exit and every consumer read the last 337 m of corner as straight
+    // (`straightAfterM` 1370 m against a real ~1019 m to T1). Seated at the
+    // CURVATURE-WEIGHTED CENTROID rather than the kink: the kink is 28 m from the
+    // straight and would mark the exit, not the corner. Measured on this
+    // centreline; the straight it leads onto is 1019 m to T1's apex against a
+    // researched ~986 m, which is what anchors the window.
+    turns: [0.1132, 0.1752, 0.2322, 0.2417, 0.2892, 0.3062, 0.4922, 0.4997, 0.5187, 0.6117, 0.6187, 0.6902, 0.7637, 0.8225],
     furniture: { tree: "broad", fol: [0.29, 0.36, 0.19], lamp: "none", sparse: true, treeCrown: "vase" },  // grey-olive cork oak between the parasol pines
     kit: { marshal: "cabin",     rail: "armco",       fence: "mesh",      tyre: "stack",   board: "trivision", gantry: "box",        camera: "scaffold",  hoarding: "panel" },
     standSet: ["scaffold", "terracotta", "pastel"],  // period tube stands + one masonry terrace

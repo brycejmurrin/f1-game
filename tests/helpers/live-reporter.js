@@ -21,6 +21,8 @@
  * identified. Interval: APEX_HEARTBEAT seconds (default 30, `0` disables).
  */
 
+import { loadQuarantine, flakyVerdict, armed } from "./flaky-policy.mjs";
+
 const ts = () => new Date().toISOString().slice(11, 19);
 const HEARTBEAT_S = (() => {
   const v = Number.parseInt(process.env.APEX_HEARTBEAT || "", 10);
@@ -33,7 +35,7 @@ class LiveReporter {
     this.done = 0;
     this.failed = 0;       // running failure count — lets you abort a tailed run early
     this.durations = [];   // {name, dur} per completed test — for the slowest-N summary
-    this.flaky = 0;        // tests that FAILED then PASSED on retry (hidden flakiness)
+    this.flakyTests = [];  // {spec,title} of tests that FAILED then PASSED on retry (hidden flakiness)
     this.failures = [];    // names of tests that ended red — replayed as an end summary
     this.inflight = new Map();   // test -> {name, start, worker}
     // The run's START, which is also what Playwright stamps on each junit
@@ -116,7 +118,7 @@ class LiveReporter {
     if (result.status === "passed" || result.status === "skipped" ||
         test.results.length > test.retries) {
       this.durations.push({ name: this.name(test), dur: result.duration, ...this.key(test) });
-      if (test.outcome && test.outcome() === "flaky") this.flaky++;
+      if (test.outcome && test.outcome() === "flaky") this.flakyTests.push(this.key(test));
     }
     // On-failure diagnostics, echoed inline so a tailed log shows WHY without a
     // trip to the HTML report. tests/helpers/fixtures.js attaches all three (see its
@@ -183,15 +185,33 @@ class LiveReporter {
       this.write(`[${ts()}] = FAILURES ${this.failures.length}:`);
       for (const f of this.failures) this.write(`             ${f}`);
     }
-    if (this.flaky) this.write(`[${ts()}] = FLAKY: ${this.flaky} test(s) passed only on retry (deterministic suite — investigate)`);
-    this.write(`[${ts()}] = run ${result.status}  (${this.done}/${this.total} done, ${this.failures.length} failed)`);
+    // A pass that needed a retry is a red (AGENTS.md §Verification 9). Under
+    // APEX_FAIL_ON_FLAKY=1 (ci.yml sets it on every browser job) a flaky test
+    // whose spec is NOT in tests/data/flaky-quarantine.json turns the run's
+    // status to failed — the reporter's return value is Playwright's override
+    // hook, so the exit code follows. Quarantined flakes still print, by name.
+    let status = result.status;
+    if (this.flakyTests.length) {
+      const verdict = flakyVerdict(this.flakyTests, loadQuarantine());
+      const on = armed();
+      this.write(`[${ts()}] = FLAKY: ${this.flakyTests.length} test(s) passed only on retry (deterministic suite — investigate)`);
+      for (const t of verdict.quarantined) this.write(`             quarantined  ${t.spec} › ${t.title}`);
+      for (const t of verdict.blocking) this.write(`             ${on ? "BLOCKING   " : "unlisted   "}  ${t.spec} › ${t.title}`);
+      if (on && verdict.fail && status === "passed") {
+        status = "failed";
+        this.write(`[${ts()}] = APEX_FAIL_ON_FLAKY=1: ${verdict.blocking.length} flaky test(s) not in tests/data/flaky-quarantine.json — the run is RED`);
+      }
+    }
+    this.write(`[${ts()}] = run ${status}  (${this.done}/${this.total} done, ${this.failures.length} failed)`);
     // LAST, and only under the flag: the verdict line above is what every
     // `grep -E '= run (passed|failed…)'` anchors on (AGENTS.md rule 5) and must
     // not move behind an await.
+    const override = status !== result.status ? { status } : undefined;
     const after = [];
     if (process.env.APEX_SPEC_TIMINGS === "1") after.push(() => this.saveTimings());
     if (process.env.APEX_JS_COVERAGE === "1") after.push(() => this.mergeCoverage());
-    if (after.length) return after.reduce((p, f) => p.then(f), Promise.resolve());
+    if (after.length) return after.reduce((p, f) => p.then(f), Promise.resolve()).then(() => override);
+    return override;
   }
 
   name(test) {
@@ -209,8 +229,18 @@ class LiveReporter {
   key(test) {
     const parts = test.titlePath().filter(Boolean);
     const i = parts.findIndex((p) => /\.spec\.js$/.test(p));
+    // `location.file` is where test() was CALLED, not the spec that owns the
+    // test: Playwright reads it off the caller's stack frame. A spec that
+    // factors its cases into a helper (tests/helpers/track-helpers.js does
+    // exactly this) therefore keyed `spec` to the helper while `title` came
+    // from the spec — two halves of one key naming different files, which
+    // breaks the "junit's own shape" contract above AND makes such a test
+    // impossible to quarantine, since the quarantine holds spec paths. Prefer
+    // the spec from titlePath(); fall back to the call site when there is none.
+    const fromPath = i >= 0 ? parts[i] : "";
+    const fromFile = test.location?.file?.replace(/^.*\/(tests\/)/, "$1") || "";
     return {
-      spec: test.location?.file?.replace(/^.*\/(tests\/)/, "$1") || "",
+      spec: fromPath ? (fromFile.endsWith(fromPath) ? fromFile : `tests/${fromPath}`.replace(/^tests\/tests\//, "tests/")) : fromFile,
       title: (i >= 0 ? parts.slice(i + 1) : parts.slice(-1)).join(" › "),
     };
   }

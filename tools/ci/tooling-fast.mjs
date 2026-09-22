@@ -239,6 +239,14 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // ~1 s — and it belongs in the edit loop because the file it guards is
   // rewritten by a tool, so drift shows up as a commit nobody meant to make.
   "tests/unit/spec-timings.test.mjs",
+  // The flaky policy behind APEX_FAIL_ON_FLAKY=1: quarantine rows are a ledger
+  // (spec exists, owner, date, why) and the verdict is pure; < 1 s.
+  "tests/unit/flaky-quarantine.test.mjs",
+  // The claim half of who-is-on-it (pure parse + the empty-tree commit shape)
+  // and deploy --pr's REST fallback against a fake curl; both < 1 s, both
+  // guard the two tools a session reaches for at push time.
+  "tests/unit/who-is-on-it.test.mjs",
+  "tests/unit/deploy-pr-rest.test.mjs",
   "tests/unit/twinned-specs.test.mjs",
   // coverage-merge is the only consumer of the raw V8 lists a flagged run
   // writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops

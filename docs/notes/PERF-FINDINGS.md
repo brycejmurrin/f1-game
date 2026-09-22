@@ -4846,3 +4846,21 @@ the same runner, and the in-container Lavapipe pair above read 46.5 / 46.9.
 < 5x buffer drop) all clear on software and on Metal. Next measurement that would add
 information: a HEADED Metal run (the census is headless and soft-blits on WebGPU), and a
 phone — the 48 MB TLX-vs-GLX gap (§2r) has a 2.4 MB bound from this, no more.
+
+**Addendum, the decal block (2026-09-22, same day).** `tsl-fx.js`'s frame block
+(`U`: sunDir/sunColor/ambSky/ambGround, four vec3) was the same defect one file over:
+a plain `uniform()`, so each of the ~22 decal render objects per frame (one
+`drawDecal` per car, `js/car/car-draw.js`) carried its own copy, re-uploaded per draw.
+Same loop, same pin (`apex26.tlxSharedUniforms`), so the spec's off-arm covers both.
+Like-for-like Lavapipe WebGPU leg (montreal, park): uniform-buffer BYTES 174.6 -> 171.5
+KB with the count 816 -> 823 — the count is frame-dependent (the second run took twice
+the render calls, 3245 vs 1513, so its material cache had grown), the bytes are not, and
+3 KB is what 22 x ~140 B copies come to. gpuErrors 0 on every leg, meanLuma 46.5
+unchanged. What this instrument cannot see: the per-draw upload cost on the WebGL2
+path, where each copy was a full `bufferData`; that is the phone measurement above.
+
+Real GPU, census run 184 on the shipped commit 209af188 (macos-latest, montreal,
+night, clock pinned): all four legs `phase=done ok=true gpuErrors=0`, no FAILED
+section — WebGPU meanLuma 51.4, WebGL2 (Metal ANGLE) 51.1, GLX 45.7, WGX 58.9.
+That is the revert criteria clear on hardware for the decal block as well; the
+fps and JS-ms columns are single samples and are not read (§2w).

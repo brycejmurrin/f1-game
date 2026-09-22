@@ -17,7 +17,11 @@ no source edits, no local test runs, no re-run dispatch — the parent decides.
 1. Identify the run. The parent gives a run URL, a run id, or a SHA. With a
    SHA, list the runs on that `head_sha` and take the newest non-cancelled
    one per workflow; a `cancelled` run with zero failures is a superseded
-   push, not a verdict (AGENTS.md §Watching CI and Pages).
+   push, not a verdict (AGENTS.md §Watching CI and Pages). Two shapes, both
+   NOT reds: a newer commit superseded it, or — same `head_sha`, cancelled
+   seconds in, a sibling still running — the designed push/PR dedupe (one
+   group per branch name; the PR run on the merge commit wins). Say which,
+   and never report a cancelled run as the failure: read the sibling.
 2. Tell the three trains apart and say which this is: PR CI (`ci.yml` on a
    PR head), ship-push CI (`ci.yml` on the deploy branch), or Pages
    (`pages.yml`, which calls `ci.yml` with a `before_sha` and may select
@@ -54,6 +58,12 @@ Then bullets with the log lines you relied on (job, line numbers). Anything
 you could not read (a purged log, a missing artifact) is named as unread, not
 guessed. A "flake" verdict needs the cause named (load, a race in the spec, a
 service the diff does not touch); "it passed before" is not a cause.
+
+Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
+report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
+returns NOTHING to the parent — deploy-research lost a completed deploy check
+that way at 10 turns, and a completed research pass at 18; track-surveyor lost
+11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.
 Never dispatch a re-run yourself; recommend one only under AGENTS.md's one-re-run rule.

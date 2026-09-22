@@ -29,18 +29,29 @@ against a greedy best-build under each team's cap) gives the number that matters
 
 | | |
 |---|---|
-| `Career.budgetCap()` | **2105 cr** — a hard constant derived from the catalog |
-| research for an optimal capped build | ~18,900–22,800 cr |
+| `Career.budgetCap()` | **2105 cr** — derived from the catalog (per-category dearest summed = 2335, minus the dearest single option, `ers/overcharge` at 230) |
+| research for an optimal capped build | 2,424 – 6,315 cr (fitted cost × `RESEARCH_MULT` 3) |
 | the full budget ladder | 16,500 cr (2500 + 5000 + 9000) |
+| **total to finish the car** | **18,924 – 22,815 cr** (the two rows above, summed) |
 | income | ~6,100–8,100 cr a season |
 | **seasons until the car is finished** | **2.6 – 3.7** |
+
+**Corrected 2026-09-22 after an independent check.** The research row previously
+read "~18,900–22,800", which was the research cost **with the budget ladder
+already added** — sitting directly above a separate ladder row that invited
+adding it again. Anyone re-deriving the headline from the table as written got
+~35,400 cr and 4.4–6.4 seasons. The rows are now disjoint and the total is
+explicit. The headline itself was right; its arithmetic was not reproducible.
 
 A career is unbounded (`career.year++`, no cap). The car is finished before
 season four. After that there is no development decision left in the mode.
 
 **And a second defect the brainstorm missed entirely: at the cap, the teams
-converge.** Six of eleven — mercedes, ferrari, mclaren, redbull, astonmartin,
-cadillac — all reach `budgetCap` and land on materially the same optimal build:
+converge.** **Five** of eleven — ferrari, mclaren, redbull, astonmartin,
+cadillac — reach `budgetCap` exactly. Mercedes was listed here as a sixth and
+should not have been: `1305 × 1.6 = 2088`, seventeen credits short of the cap.
+The four numbers below still read alike, for a reason worth stating precisely
+rather than as "the same build":
 
 ```
 YOU at cap:  0.88 / 2.30 / 3.69 / 2.10      (mercedes)
@@ -49,11 +60,26 @@ YOU at cap:  0.88 / 2.30 / 3.69 / 2.10      (mercedes)
              0.88 / 2.30 / 3.69 / 2.09      (redbull)
 ```
 
+**WHY they read alike, checked rather than assumed.** In all eleven non-engine
+categories every team's option set is identical bar one team-locked SIGNATURE,
+and `js/car/parts.js` states that a signature clones its `equivalent`'s cost and
+all four stat multipliers exactly — so an optimiser under a shared budget picks
+the same option for every team by construction. `engine` is the only category
+with real supplier variance, and the five capped teams run four different
+suppliers whose top units sit within ~9% of each other on summed stats. So the
+accurate claim is **the same build except a supplier-locked, deliberately
+balanced engine** — not literally the same car.
+
 Only the low-works teams stay differentiated (haas capped at 808, williams 1080,
 alpine 1456) — and those are the seats you leave. So once you are near the top,
 **which seat you hold stops changing your car**, which quietly guts the contract
 ladder that the rest of career mode is built around. Two progressions terminate,
 not one.
+
+The original wording here — "six of eleven ... materially the same optimal
+build" — came from a greedy optimiser maximising one objective I chose, and
+overstated both the count and the sameness. The count is exactly checkable and
+was wrong; the sameness is real but has a specific cause, recorded above.
 
 **AI cars never leave their factory build.** `js/game.js:1871` resolves every AI
 from `Parts.getFactorySetup(team)`; only the player and the MY TEAM mate read

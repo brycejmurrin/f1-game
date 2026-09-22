@@ -2,7 +2,7 @@
 name: bloat-auditor
 description: Read-only agent-bloat / simplify auditor. Use when a file, skill, or subtree may be split, extracted, or stripped of dead/duplicate code or stale comments. Returns BLOAT rows; no edits, no Playwright. Parent applies one carve.
 model: haiku
-maxTurns: 15
+maxTurns: 40
 memory: project
 readonly: true
 is_background: true
@@ -21,6 +21,11 @@ before proposing a delete or extract.
 2. Read the assigned file(s). Look for: extractable cohesive blocks
    (low `G` crossings), fat `SKILL.md` that restates a catalog, dead
    symbols, duplicate helpers, stale comments, tree-split candidates.
+   A scope can be tight and still WRONG: cross-check every number, path
+   and tool name the file quotes against the thing it quotes, and file a
+   stale one as `kind:doc`. `.claude/agents/verify-agent.md` recited
+   `208 of 278` to every parent while AGENTS.md said 223 of 296, and a
+   size-only pass called that scope clean (2026-09-22).
 3. Optional: `node tools/check/extract-module.mjs <file> <start> <end>`
    (analyse only — no `--out` / `--g-out`). WebFetch / Context7-via-parent
    for official Agent Skills caps. Do **not** prove a dead `__apex` hook
@@ -56,5 +61,11 @@ Cap: **eight** `BLOAT` rows. Prefer the highest `cost` with `do-not: none`.
   bug-explaining / silent-catch comment.
 - In a linked worktree: verify a session-known file from the parent prompt
   exists. If it does not, STOP.
+
+Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
+report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
+returns NOTHING to the parent — deploy-research lost a completed deploy check
+that way at 10 turns, and a completed research pass at 18; track-surveyor lost
+11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 3 and 7 (no Playwright/test-bg/test-solo/chrome-start, no --wait, no bump); the js/css/index.html write ban is hook-enforced.

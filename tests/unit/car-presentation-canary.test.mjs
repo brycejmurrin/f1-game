@@ -133,7 +133,7 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.doesNotMatch(custom, /setLivDraftOverride\(\{ teamId: "custom", liv: \{ c1:/,
     "bare {c1,c2} override regrows the shark fin while customize is open");
   assert.match(cd, /function cockpitBodyMesh\(team, car, visualKey = playerVisualKey\)/);
-  assert.match(game, /function garageSeat\(\)/);
+  assert.match(read("js/garage/setup-camera.js"), /function garageSeat\(\)/);
   const draw = game.match(
     /const body = carDraw\.modelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
   );
