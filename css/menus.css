@@ -187,9 +187,11 @@
    which #overlay's overflow-x:hidden already clips. right:auto so the width
    is not over-constrained against the base rule's left:0; right:0. The doors
    sit at the top of their row (the tall block below), so the lower third of
-   the screen is the cars' alone and the opacity can come up to landscape's. */
-@media (orientation: portrait) and (max-width: 699px) {
-  #title-car { width: 180%; right: auto; opacity: 0.42; }
+   the screen is the cars' alone and the opacity can come up to landscape's.
+   Portrait is body[data-shape="tall"] (zoom-corrected, js/game/sheetshape.js),
+   never an orientation media query — tests/unit/ui-improve-pass pins that. */
+@media (max-width: 699px) {
+  :where(body[data-shape="tall"]) #title-car { width: 180%; right: auto; opacity: 0.42; }
 }
 /* ASPECT, NOT WIDTH, IS WHAT BREAKS THIS LAYER, and the fix is on the <svg>:
    preserveAspectRatio MEET, not SLICE. Slice scales to COVER, so on a viewport
@@ -401,7 +403,21 @@
 /* Brighter than bare --dim: the judges flagged the unofficial-fan-game line
    as below comfortable reading contrast over the bright sky. Token-mix only
    (no raw literal); still clearly quieter than body text. */
-#disclaimer { color: color-mix(in oklab, var(--text) 75%, var(--dim)); font-size: var(--fs-micro); margin: 0; }
+/* ON A PLATE, like #soundbtn beside it. The title art now runs under the brand
+   column on every phone shape (and the desktop), and a 14px line of small
+   print painted straight onto two cars' worth of strokes was the one thing
+   a real device found hard to read. Same --plate-opaque and hairline the
+   sound chip uses, so the two read as one row of chrome; padding in --gap
+   only (rawSpacing is at zero slack); width: fit-content so the plate hugs
+   the text whether the column centres or left-aligns it. */
+#disclaimer {
+  color: color-mix(in oklab, var(--text) 75%, var(--dim)); font-size: var(--fs-micro); margin: 0;
+  width: fit-content; max-width: 100%;
+  padding: calc(var(--gap) * 0.4) calc(var(--gap) * 0.8);
+  border-radius: var(--r-sm);
+  background: var(--plate-opaque);
+  border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+}
 /* Build number in the pause menu. Deliberately quiet — it is a diagnostic for
    "which version am I running", not a label anyone should read while racing. */
 .build-tag { color: var(--dim); font-size: var(--fs-micro); margin: 4px 0 0; text-align: center; }
