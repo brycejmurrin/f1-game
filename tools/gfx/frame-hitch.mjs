@@ -387,7 +387,7 @@ export function analyseWork(work, bucketMs, frames) {
 // than its neighbours, so classify frames by pass count and measure the
 // spacing between the wide ones — the same coefficient-of-variation test
 // analyse() uses for time spikes.
-export function analysePasses(passes, t0) {
+export function analysePasses(passes, t0, dur, threshMs) {
   const n = passes.length;
   if (n < 50) return { frames: n, ok: false, reason: "too few frames" };
   // Only frames that ENCODED something are frames for this purpose. Including
@@ -398,7 +398,13 @@ export function analysePasses(passes, t0) {
   const sorted = drew.slice().sort((a, b) => a - b);
   const med = sorted[Math.floor(sorted.length / 2)];
   const wideAt = [];
-  for (let i = 0; i < n; i++) if (passes[i] > med) wideAt.push(t0[i] / 1000);
+  // Indices as well as times: the gap statistics want seconds, the cost
+  // comparison below wants to look each frame up in dur[].
+  const wideIdx = [], drewAt = [];
+  for (let i = 0; i < n; i++) {
+    if (passes[i] > 0) drewAt.push(i);
+    if (passes[i] > med) { wideAt.push(t0[i] / 1000); wideIdx.push(i); }
+  }
   const gaps = wideAt.slice(1).map((x, i) => x - wideAt[i]);
   const mean = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
   const sd = gaps.length > 1
@@ -417,6 +423,34 @@ export function analysePasses(passes, t0) {
     gapMedianS: gs.length ? +gs[Math.floor(gs.length / 2)].toFixed(3) : null,
     gapMeanS: +mean.toFixed(3),
     gapCV: mean > 0 ? +(sd / mean).toFixed(3) : null,
+    // DO THE WIDE FRAMES COST MORE? Without this the pass census is a curio:
+    // "about once a second a frame issues nine more passes" is only a lead if
+    // those are the frames that stall. Compared against RENDERING frames only,
+    // because a callback that presented nothing has neither passes nor cost and
+    // would flatter both arms.
+    ...(function cost() {
+      if (!dur || !dur.length) return {};
+      const wide = new Set(wideIdx);
+      let wn = 0, ws = 0, nn = 0, ns = 0, wSpike = 0, nSpike = 0;
+      for (const i of drewAt) {
+        const d = dur[i];
+        if (d == null) continue;
+        if (wide.has(i)) { wn++; ws += d; if (threshMs && d > threshMs) wSpike++; }
+        else { nn++; ns += d; if (threshMs && d > threshMs) nSpike++; }
+      }
+      if (!wn || !nn) return {};
+      const wMean = ws / wn, nMean = ns / nn;
+      const wRate = wSpike / wn, nRate = nSpike / nn;
+      return {
+        wideMeanMs: +wMean.toFixed(2), normalMeanMs: +nMean.toFixed(2),
+        wideCostRatio: nMean > 0 ? +(wMean / nMean).toFixed(2) : null,
+        wideSpikeRate: +wRate.toFixed(3), normalSpikeRate: +nRate.toFixed(3),
+        spikeEnrichmentOnWide: nRate > 0 ? +(wRate / nRate).toFixed(2) : null,
+        costVerdict: nMean > 0 && wMean / nMean >= 1.5
+          ? `WIDE FRAMES COST ${(wMean / nMean).toFixed(1)}x a normal rendering frame (${wMean.toFixed(1)} vs ${nMean.toFixed(1)} ms)`
+          : `wide frames cost about the same as normal ones (${wMean.toFixed(1)} vs ${nMean.toFixed(1)} ms) — the extra passes are not the stall`,
+      };
+    })(),
   };
 }
 
@@ -807,7 +841,7 @@ async function main() {
     Object.assign(out, analyse(d.t0, d.dur));
     out.work = analyseWork(d.work || [], d.bucketMs || 250, out.frames);
     out.backend = d.backend;
-    out.passes = analysePasses(d.passes || [], d.t0 || []);
+    out.passes = analysePasses(d.passes || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
     out.heap = analyseHeap(d.heap || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.alloc = allocProfile
