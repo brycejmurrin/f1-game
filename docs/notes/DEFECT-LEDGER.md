@@ -2251,6 +2251,22 @@ off, which the physics reference makes a product defect, not a test one.
 > against a different base, and on a shared deploy branch the cost of losing that
 > coin flip is everyone's, not just the author's. "Green by luck" is not green,
 > and saying so in the merge message does not make merging it sound.
+>
+> **Two more isolation defects to re-land with them** (found on PR #207's CI,
+> 2026-09-22; the edits were withdrawn from that PR for the same train reason):
+> 1. `road-follow` resets `roadFollow` to 0 only AFTER its loop, so a failed
+>    expect leaves the assist at 0.6 on the worker-scoped page for every later
+>    test (PR #207 run 35782782159: `racing-line assist off by default` 0.92 m
+>    and `curvature drift` failed behind it). Fix: the reset in a `finally`.
+> 2. `racing-line assist off by default` compares two identical runs, but
+>    `jump()` resets only the player: the live field reaches the first corner
+>    between them (0.92 m, a pass, then 1.52 m on one commit). Probed on
+>    bahrain: a car within ~10 m moves the result; with every AI car
+>    `aiPlace(i, frac + 0.5 + i * 0.004, 0, 0)`d before EACH run, 24/24 runs
+>    were identical, and the file then passed that test and PULL/PUSH on CI
+>    (run 35789365205). `curvature drift` runs unfrozen in the same corner and
+>    ended in the wall (x -8.1, speed 0.96 → 1.81 < 2): it wants the same
+>    freeze + field clear.
 
 
 `steering has authority to fight the curvature drift` held lock with

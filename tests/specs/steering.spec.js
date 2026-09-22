@@ -123,18 +123,6 @@ async function firstCorner(page, min = 0.02) {
   return { frac: corners[0], k: 0 };
 }
 
-// Park the whole AI field at rest half a lap from `frac`. jump() resets only
-// the player, so two "identical" runs otherwise meet the live field at
-// different places: a car passing within ~10 m moved the result, and contact
-// pushed the car wide by 0.9-1.5 m on CI (2026-09-22). Placing the field before
-// EACH run gives both runs the same empty corner (24/24 identical, probed).
-async function clearField(page, frac) {
-  await page.evaluate((f) => {
-    const n = window.__apex.carState().length;
-    for (let i = 0; i < n; i++) window.__apex.aiPlace(i, f + 0.5 + i * 0.004, 0, 0);   // false for the player
-  }, frac);
-}
-
 // A reasonably straight stretch: the lap fraction with the smallest |k|.
 async function findStraight(page) {
   return page.evaluate(() => {
@@ -163,35 +151,29 @@ test.describe("Apex 26 — steering", () => {
     // Sample several distinct corners across the lap.
     const sample = corners.filter((_, i) => i % 4 === 0).slice(0, 5);
     let checked = 0;
-    // The page is worker-scoped: a failed expect below used to skip the reset
-    // and leave roadFollow at 0.6 for every later test in the file, which then
-    // failed too ("off by default", the curvature-drift authority test).
-    try {
-      for (const frac of sample) {
-        // Road-follow OFF = pure world-space: with no input the car holds a straight
-        // heading and runs wide to the OUTSIDE (+sign(k)). This is the baseline the
-        // DRIVING-HELP assist exists to counter.
-        await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
-        const off = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
-        if (Math.abs(off.before.k) < 0.012) continue;   // skip near-straight false peaks
-        checked++;
-        const dxOff = off.after.x - off.before.x;
-        expect(Math.sign(dxOff)).toBe(Math.sign(off.before.k));   // off-model runs wide
-        expect(Math.abs(dxOff)).toBeGreaterThan(0.6);             // a real slide, not a wobble
-        // Road-follow, once opted into, steers into the bend through the tyres,
-        // so the car takes a MEASURABLY different line than with the assist off. (We
-        // assert the assist is active and alters the corner rather than a fragile
-        // "stays nearer the line": with a real slip model, steering into a corner also
-        // develops body slip, so the lateral effect is more nuanced than the old
-        // kinematic model — that quality is covered by the on-device feel + the
-        // autopilot driving safely, not this unit check.)
-        await page.evaluate((rf) => window.__apex.setPhysics({ roadFollow: rf }), def);
-        const on = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
-        expect(Math.abs(on.after.x - off.after.x)).toBeGreaterThan(0.25);
-      }
-    } finally {
+    for (const frac of sample) {
+      // Road-follow OFF = pure world-space: with no input the car holds a straight
+      // heading and runs wide to the OUTSIDE (+sign(k)). This is the baseline the
+      // DRIVING-HELP assist exists to counter.
       await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
+      const off = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
+      if (Math.abs(off.before.k) < 0.012) continue;   // skip near-straight false peaks
+      checked++;
+      const dxOff = off.after.x - off.before.x;
+      expect(Math.sign(dxOff)).toBe(Math.sign(off.before.k));   // off-model runs wide
+      expect(Math.abs(dxOff)).toBeGreaterThan(0.6);             // a real slide, not a wobble
+      // Road-follow, once opted into, steers into the bend through the tyres,
+      // so the car takes a MEASURABLY different line than with the assist off. (We
+      // assert the assist is active and alters the corner rather than a fragile
+      // "stays nearer the line": with a real slip model, steering into a corner also
+      // develops body slip, so the lateral effect is more nuanced than the old
+      // kinematic model — that quality is covered by the on-device feel + the
+      // autopilot driving safely, not this unit check.)
+      await page.evaluate((rf) => window.__apex.setPhysics({ roadFollow: rf }), def);
+      const on = await run(page, { frac, speed: 13, throttle: false, ticks: 70 });
+      expect(Math.abs(on.after.x - off.after.x)).toBeGreaterThan(0.25);
     }
+    await page.evaluate(() => window.__apex.setPhysics({ roadFollow: 0 }));
     expect(checked).toBeGreaterThan(0);
   });
 
@@ -340,23 +322,10 @@ test.describe("Apex 26 — steering", () => {
     // Slow enough that the car stays mid-track (away from the edges, where the
     // projection is non-linear and amplifies tiny float differences): the two
     // identical-config runs must then land in the same place.
-    // FREEZE THE LIVE LOOP for the two runs. run() jumps, then steps in
-    // separate page.evaluate() calls, and between them the rAF loop kept
-    // advancing the car in real time — so the two "identical" runs differed by
-    // however many live frames landed in each gap, and this read 0.55-0.64 m on
-    // a loaded box after the file's earlier tests (2026-09-22; 3/3 green alone).
-    // step() drives update() directly, so frozen runs are fully deterministic.
-    await page.evaluate(() => window.__apex.freeze(true));
-    try {
-      await clearField(page, frac);
-      const a = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
-      await setRaceLine(page, 0);
-      await clearField(page, frac);
-      const b = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
-      expect(Math.abs((a.after.x - a.before.x) - (b.after.x - b.before.x))).toBeLessThan(0.5);
-    } finally {
-      await page.evaluate(() => window.__apex.freeze(false));
-    }
+    const a = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
+    await setRaceLine(page, 0);
+    const b = await run(page, { frac, speed: 16, steer: 0, ticks: 60 });
+    expect(Math.abs((a.after.x - a.before.x) - (b.after.x - b.before.x))).toBeLessThan(0.5);
   });
 
   test("racing-line assist: PULL eases toward the line, PUSH sends it wider", async ({ page }) => {
