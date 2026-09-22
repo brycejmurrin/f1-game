@@ -231,8 +231,23 @@ test("the edit guard refuses a generated package.json block through Write as wel
     "a Write that rewrites a test:* script must be blocked");
   assert.equal(run({ tool_name: "Edit", tool_input: { file_path: pkg, old_string: '"test:guards":', new_string: '"test:guards":' } }).status, 2,
     "the Edit path must still be blocked");
-  assert.equal(run({ tool_name: "Write", tool_input: { file_path: pkg, content: current } }).status, 0,
-    "a Write that leaves the generated block alone is not the guard's business");
+  // A LINKED WORKTREE has a second, wider rule in front of this one: the hook
+  // makes package.json (and index.html, manifest.cjs, sw.js) main-session-only,
+  // so an unchanged Write is refused there too — for a reason that has nothing
+  // to do with the generated block. Asserting status 0 flat made this test fail
+  // for every worktree agent on every diff (two hit it on 2026-09-22). Assert
+  // the DISTINCTION instead: outside a worktree the guard stays out of the way,
+  // inside one it says worktree, never "generated".
+  const untouched = run({ tool_name: "Write", tool_input: { file_path: pkg, content: current } });
+  const linkedWorktree = fs.statSync(path.join(ROOT, ".git")).isFile();
+  if (linkedWorktree) {
+    assert.equal(untouched.status, 2, "a worktree agent is refused package.json outright");
+    assert.match(`${untouched.stdout}${untouched.stderr}`, /worktree/i,
+      "and the refusal must be the worktree rule, not the generated-block one");
+  } else {
+    assert.equal(untouched.status, 0,
+      "a Write that leaves the generated block alone is not the guard's business");
+  }
 });
 
 test("the commit guard's docs-only fast path keeps its two exclusions", () => {

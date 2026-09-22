@@ -16,6 +16,7 @@ const Assets = (function () {
   let _manifest = null;
   let _manifestPromise = null;
   let _loadPromise = null;
+  let _loadGeneration = 0;                 // unload/adopt invalidate older async uploads
   let _uploaded = false;
   let _err = null;                       // last failure reason, for __apex.assets()
   let _bytes = 0;                        // bytes fetched for the material arrays
@@ -103,21 +104,32 @@ const Assets = (function () {
     for (const b of imgs) { if (b && b.close) { try { b.close(); } catch (_) {} } }
   }
 
+  function _freeTexture(t) {
+    if (t && _gfx && _gfx.freeTexture) _gfx.freeTexture(t);
+  }
+
+  function _discardLoad(albedo, normal, albedoTex, normalTex) {
+    _freeTexture(albedoTex); _freeTexture(normalTex);
+    _releaseStrip(albedo); _releaseStrip(normal);
+  }
+
   // Load + upload the baked material arrays. Resolves to true only when the
   // arrays are actually live on the GPU; false (never a rejection) otherwise.
   // Safe to call repeatedly — concurrent calls share one in-flight promise.
   function load(opts) {
     if (_loadPromise) return _loadPromise;
-    _loadPromise = _load(opts || {}).catch((e) => {
-      _err = (e && e.message) || "load-failed";
+    const generation = _loadGeneration;
+    _loadPromise = _load(opts || {}, generation).catch((e) => {
+      if (generation === _loadGeneration) _err = (e && e.message) || "load-failed";
       return false;
     });
     return _loadPromise;
   }
 
-  async function _load(opts) {
+  async function _load(opts, generation) {
     if (!supported()) { _err = "backend"; _tier = "off"; return false; }
     const m = await manifest();
+    if (generation !== _loadGeneration) return false;
     if (!m || !m.materials) { _tier = "off"; return false; }
     const mats = m.materials;
 
@@ -141,22 +153,34 @@ const Assets = (function () {
     let albedo = null, normal = null, albedoTex = null, normalTex = null;
     try {
       albedo = await _decodeStrip(variant.albedo, size, present);
+      if (generation !== _loadGeneration) {
+        _discardLoad(albedo, normal, albedoTex, normalTex);
+        return false;
+      }
       albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
       if (!albedoTex) throw new Error("albedo-upload");
       if (variant.normal) {
         normal = await _decodeStrip(variant.normal, size, present);
+        if (generation !== _loadGeneration) {
+          _discardLoad(albedo, normal, albedoTex, normalTex);
+          return false;
+        }
         normalTex = _gfx.createTextureArray(size, normal, MAT_LAYERS);
         // A missing normal array is survivable — albedo alone still helps.
       }
     } catch (e) {
-      if (albedoTex && _gfx.freeTexture) _gfx.freeTexture(albedoTex);
-      if (normalTex && _gfx.freeTexture) _gfx.freeTexture(normalTex);
-      _releaseStrip(albedo); _releaseStrip(normal);
-      _err = (e && e.message) || "decode-failed";
-      _tier = "off";
+      _discardLoad(albedo, normal, albedoTex, normalTex);
+      if (generation === _loadGeneration) {
+        _err = (e && e.message) || "decode-failed";
+        _tier = "off";
+      }
       return false;
     }
     _releaseStrip(albedo); _releaseStrip(normal);
+    if (generation !== _loadGeneration) {
+      _freeTexture(albedoTex); _freeTexture(normalTex);
+      return false;
+    }
 
     _gfx.setMaterialMaps({ albedo: albedoTex, normal: normalTex, scales: scales });
     _uploaded = true;
@@ -179,6 +203,10 @@ const Assets = (function () {
   // throws, and a failure leaves the previous arrays untouched.
   function adopt(size, albedoImgs, normalImgs, scales) {
     if (!supported() || !size || !albedoImgs) { _err = "adopt-unsupported"; return state(); }
+    // A browser bake is a new owner, even if its upload fails: an older pack
+    // load must not finish later and silently replace the requested result.
+    _loadGeneration++;
+    _loadPromise = null;
     let a = null, n = null;
     try {
       a = _gfx.createTextureArray(size, albedoImgs, MAT_LAYERS);
@@ -198,6 +226,7 @@ const Assets = (function () {
   }
 
   function unload() {
+    _loadGeneration++;
     if (_gfx && _gfx.setMaterialMaps) _gfx.setMaterialMaps(null);
     _uploaded = false;
     _tier = "off";

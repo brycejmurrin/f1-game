@@ -28,8 +28,30 @@ function load(options = {}) {
     id: "haas", tier: 4, stats: {},
     drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }],
   };
+  const mirrorRows = options.mirrorRows || [];
+  const mirrorDb = {
+    objectStoreNames: { contains: () => true }, close() {},
+    transaction(_name, mode) {
+      if (mode === "readonly") return { objectStore: () => ({
+        getAll() {
+          const request = {};
+          queueMicrotask(() => { request.result = mirrorRows; if (request.onsuccess) request.onsuccess(); });
+          return request;
+        },
+      }) };
+      const transaction = { objectStore: () => ({ put() {}, delete() {} }) };
+      queueMicrotask(() => { if (transaction.oncomplete) transaction.oncomplete(); });
+      return transaction;
+    },
+  };
+  const indexedDB = options.mirrorRows ? { open() {
+    const request = {};
+    queueMicrotask(() => { request.result = mirrorDb; if (request.onsuccess) request.onsuccess(); });
+    return request;
+  } } : undefined;
   const ctx = vm.createContext({
-    Math, JSON, Object, Array, String, Number, Date, Set, Map, isNaN, isFinite, parseInt, console,
+    Math, JSON, Object, Array, String, Number, Date, Set, Map, Promise,
+    isNaN, isFinite, parseInt, console, setTimeout, clearTimeout, queueMicrotask, indexedDB,
     localStorage: {
       getItem: (k) => disk.has(k) ? disk.get(k) : null,
       setItem: (k, v) => options.setItem
@@ -53,6 +75,7 @@ function load(options = {}) {
   vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx);
   return {
     Career: vm.runInContext("Career", ctx), disk,
+    store: vm.runInContext("GameStore.store", ctx),
     SaveMigrate: vm.runInContext("SaveMigrate", ctx),
     foreign: (key) => listeners.get("storage")({ key, newValue: disk.get(key) }),
   };
@@ -218,4 +241,29 @@ test("outside active play a foreign live-slot save refreshes Career's object", (
   assert.equal(Career.conflicted(), false);
   assert.equal(Career.data().season.round, 7);
   assert.equal(Career.data().money, 700);
+});
+
+test("a restored non-default career and its pointer reconcile in the current boot", async () => {
+  const disk = new Map();
+  const recovered = { ...save(4, 444), flavour: "myteam" };
+  const { Career, store } = load({
+    disk,
+    mirrorRows: [
+      { k: "apex26.career.myteam.2", v: JSON.stringify(recovered) },
+      { k: "apex26.careerSlot", v: JSON.stringify("myteam:2") },
+    ],
+  });
+
+  assert.equal(Career.load(), null, "the synchronous boot read predates IndexedDB");
+  await store.mirror.ready;
+  assert.equal(Career.active(), true);
+  assert.equal(Career.slot().flavour, "myteam");
+  assert.equal(Career.slot().i, 2);
+  assert.equal(Career.data().money, 444);
+  assert.equal(Career.data().season.round, 4);
+});
+
+test("the title menu refreshes after a restored career batch selects its slot", () => {
+  const title = readFileSync(join(ROOT, "js/ui/title-menu.js"), "utf8");
+  assert.match(title, /restoredBatch[\s\S]{0,300}refresh\(\)/);
 });

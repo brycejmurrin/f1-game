@@ -726,60 +726,14 @@ const WGX = (function () {
       try { if (device && typeof device.destroy === "function") device.destroy(); } catch (_) { /* already lost */ }
       return _fail(reason);
     }
-    // CACHED CSS SIZE. resize() runs every frame, but clientWidth/clientHeight
-    // are layout reads. Mirror GLX/TLX: invalidate only when the visible canvas
-    // box or viewport changes, then reuse the last real size between events.
+    // CSS-box observation is shared; WGX still owns DPR, jitter suppression,
+    // swapchain configuration and target allocation.
     const _layoutCanvas = (_softGpu && _displayCanvas) ? _displayCanvas : canvas;
-    let _cssW = 0, _cssH = 0, _cssDirty = true;
-    // Setting canvas.width fires ResizeObserver on this same node. Ignore
-    // those callbacks or a 1px layout loop reconfigures the swapchain every
-    // frame (white page / black clear flash — measured on the deploy tip).
     let _cssApplying = false;
-    const _markCssDirty = function () { if (!_cssApplying) _cssDirty = true; };
-    let _canWatchCss = false;
-    // The viewport this cache was last taken against, and how long to keep
-    // distrusting it. See _cssSize().
-    let _cssVW = -1, _cssVH = -1, _cssRecheck = 0;
-    const CSS_RECHECK_FRAMES = 30;
-    if (typeof window !== "undefined" && window.addEventListener) {
-      window.addEventListener("resize", _markCssDirty);
-      window.addEventListener("orientationchange", _markCssDirty);
-      _canWatchCss = true;
-    }
-    if (typeof ResizeObserver === "function" && _layoutCanvas) {
-      try {
-        new ResizeObserver(_markCssDirty).observe(_layoutCanvas);
-        _canWatchCss = true;
-      } catch (_) { /* optional */ }
-    }
-    function _cssSize() {
-      // Zero means the canvas is not laid out yet; keep probing until real.
-      if (!_canWatchCss) _cssDirty = true;
-      // Same settle window as GLX cssSize(), for the same measured reason: the
-      // dirty flag is edge-triggered and consumed unconditionally, so a single
-      // read that lands before the box has reflowed latches the PREVIOUS
-      // viewport's size for good (docs/PERF-FINDINGS.md §2u). innerWidth /
-      // innerHeight are viewport metrics, not element layout, so this costs no
-      // reflow; a change opens a window during which the box is re-read every
-      // frame. Runs BEFORE resize()'s `_cssApplying = true` bracket, so it
-      // cannot defeat the ResizeObserver suppression, and a re-read inside the
-      // 1px jitter clamp still resolves to the same w/h.
-      if (typeof window !== "undefined") {
-        const vw = window.innerWidth | 0, vh = window.innerHeight | 0;
-        if (vw !== _cssVW || vh !== _cssVH) {
-          // First observation records without arming — see GLX cssSize().
-          const first = _cssVW < 0;
-          _cssVW = vw; _cssVH = vh;
-          if (!first) _cssRecheck = CSS_RECHECK_FRAMES;
-        }
-      }
-      if (_cssDirty || _cssW <= 0 || _cssH <= 0 || _cssRecheck > 0) {
-          if (_cssRecheck > 0) _cssRecheck--;
-        _cssW = _layoutCanvas.clientWidth;
-        _cssH = _layoutCanvas.clientHeight;
-        _cssDirty = false;
-      }
-    }
+    const _cssSizeCache = CanvasCssSize.create(_layoutCanvas, {
+      settleFrames: 30,
+      ignore: () => _cssApplying,
+    });
     function _wgxEscalate(why) {
       if (_outProbeOff) {
         try { Log.warn("gfx", "WGX capture mode — suppressed escalate:", why); } catch (_) { /* harness */ }
@@ -2260,9 +2214,9 @@ const WGX = (function () {
       // past the 8192 default, and every ensureTargets() alloc (and the
       // swapchain itself) then fails into a silent per-frame retry loop.
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
-      _cssSize();
-      let pw = Math.max(1, Math.round(_cssW * dpr));
-      let ph = Math.max(1, Math.round(_cssH * dpr));
+      const css = _cssSizeCache.read();
+      let pw = Math.max(1, Math.round(css.width * dpr));
+      let ph = Math.max(1, Math.round(css.height * dpr));
       // CLAMP UNIFORMLY. Clamping each axis on its own changed the RATIO, not
       // just the resolution, and `aspect = w / h` below feeds every projection
       // matrix and the frustum cull distance. The ceiling is lower than it

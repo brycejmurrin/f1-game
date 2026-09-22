@@ -51,7 +51,7 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   // nothing, so it leaked here silently — a short rollout rarely trips a
   // mistake, which is why the guard above never caught it. It counts mistakes
   // within ONE race, so a cold car has none.
-  "errCount",
+  "errCount", "pitWorked",
   // 2026-09-16: found by tools/check/episode-diff.mjs, not a live repro — the
   // lazy `c.passPlan || (c.passPlan = {})` cache in game.js's overtake-attempt
   // block survives reset() untouched, and `!c.passPlan || c.passPlan.side`
