@@ -152,3 +152,58 @@ with the tab backgrounded before the call resolves. Downstream reference:
 Apex 26 (`brycejmurrin/f1-game`), `vendor/three-0.186.0/PATCHES.md` §5.
 
 **three.js version:** r184–r186, `dev` (2026-09-22).
+
+## 4. WebGPUBackend: a render pipeline first needed outside `compileAsync()` is built with the synchronous `device.createRenderPipeline`, so every new material/geometry/context combination stalls the frame that introduces it
+
+**Title:** WebGPURenderer: use `createRenderPipelineAsync` on the lazy path too, and skip the draw until the pipeline lands
+
+**Description**
+
+`src/renderers/common/Pipelines.js` reaches the backend with `promises = null` on
+every path except `Renderer.compileAsync()`, and
+`src/renderers/webgpu/utils/WebGPUPipelineUtils.js` then takes the blocking form:
+
+```js
+if ( promises === null ) {
+	pipelineData.pipeline = device.createRenderPipeline( _renderPipelineDescriptor );
+	...
+} else {
+	const p = new Promise( async ( resolve ) => {
+		pipelinePromise = device.createRenderPipelineAsync( _renderPipelineDescriptor );
+		...
+	} );
+	promises.push( p );
+}
+```
+
+So an application that warms with `compileAsync()` once still pays a synchronous
+compile on the first draw of any (material, geometry layout, render context)
+combination the warm did not contain — and in a scene that streams content, most
+combinations arrive after the warm. `compileAsync()` cannot be re-run mid-scene
+without the renderer refusing to draw over the in-flight build.
+
+**Evidence** (racing game, three r186, macOS Metal, headless Chromium, real
+present path; counts from wrapping `GPUDevice.prototype.createRenderPipeline`):
+in a ~30 s window after the start of a race, **25–26 synchronous
+`createRenderPipeline` calls** alongside the 23 async ones the warm issued, and
+10–16 rAF callbacks costing **258–556 ms** — each one a compile. The same scene
+on a hand-rolled WebGPU backend that builds its pipelines up front: 1 compile,
+1 spike, 11.5 ms. The WebGL backend shows the same shape through `linkProgram`
+plus a blocking `getProgramParameter( LINK_STATUS )`, at 6–7 s worst case.
+
+**Proposed fix** (carried locally as vendor patch 7, three edits):
+
+1. Take the `createRenderPipelineAsync` branch when `promises === null` as well;
+   null-guard the trailing `promises.push( p )`.
+2. In `WebGPUBackend.draw()`, return early while `pipelineData.pipeline` is
+   still `undefined`, next to the existing `pipelineData.error` skip and before
+   any encoder state is touched. The object draws a frame or two late instead
+   of the frame stalling; `setPipeline( undefined )` is never reached.
+
+Caveat for the general case: a render bundle recorded while a pipeline was
+still building would omit that object for the bundle's lifetime, so a bundle
+path needs either to wait or to invalidate the bundle when a pending pipeline
+resolves. This application records no bundles.
+
+Related: #34632 / PR #34506 made `compileAsync()` itself non-blocking (r184);
+this is the same request for the default path.
