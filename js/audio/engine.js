@@ -563,7 +563,15 @@ const GameAudio = (function () {
     const wasEngine = engineOn;
     if (musicOn) stopMusic();
     engineOn = false;               // old nodes died with the old context
-    try { ctx.close(); } catch (e) { /* already closed */ }
+    // A TRY/CATCH CANNOT SWALLOW A REJECTION, and close() returns a Promise.
+    // The "already closed" this catch was written for is exactly the case the
+    // spec makes REJECT (InvalidStateError), not throw — and index.html's
+    // `unhandledrejection` handler paints a full-screen overlay over the race
+    // on any rejection that reaches it. Worse, this is the one path where it is
+    // LIKELY: rebuildCtx() is only ever reached after a resume already failed,
+    // i.e. with the context in exactly the state close() refuses. Same shape as
+    // the resume() sites below, which have always chained .catch.
+    try { const p = ctx.close(); if (p && p.catch) p.catch(() => {}); } catch (e) { /* already closed */ }
     ctx = null;
     master = null;
     sfxBus = null;
@@ -623,7 +631,16 @@ const GameAudio = (function () {
       //
       // The stops above are still right: they are what makes the resume a clean
       // restart rather than a graph re-entering mid-note.
-      try { if (ctx && ctx.state === "running" && ctx.suspend) ctx.suspend(); } catch (_) { /* a context mid-teardown must not break the hide path */ }
+      // suspend() returns a Promise, so the catch below sees only a synchronous
+      // throw. The `state === "running"` read cannot close the race it looks
+      // like it closes — iOS interrupts or closes the context on lock, which is
+      // precisely when this branch runs — and a rejection here reaches
+      // index.html's unhandledrejection overlay. Swallow both forms.
+      try {
+        if (ctx && ctx.state === "running" && ctx.suspend) {
+          const p = ctx.suspend(); if (p && p.catch) p.catch(() => {});
+        }
+      } catch (_) { /* a context mid-teardown must not break the hide path */ }
     } else {
       resumeIfNeeded();
       if (resumeMusic) startMusic(lastTrackIdx); // restarts re-synced to the clock
@@ -722,8 +739,7 @@ const GameAudio = (function () {
     src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
   }
 
-  function startEngine() {
-    if (!ctx || engineOn) return;
+  function startEngineBody() {
     flushDying();   // kill the fading previous graph before building another
 
     // shared lowpass + master gain for the engine core (samples or synth).
@@ -1063,7 +1079,27 @@ const GameAudio = (function () {
     pullT = 0;
     overrunT = 0;   // an AudioContext stamp: a rebuilt ctx restarts near 0, and a
                     // stale future value both silences the crackle and blocks its re-arm
+  }
+  // THE FLAG GATES ITS OWN TEARDOWN, so it cannot be the LAST thing the build
+  // sets. startEngine() creates and start()s ~ten nodes; stopEngine() opens with
+  // `if (!engineOn) return;`. A throw partway (createOscillator on a context the
+  // browser closed under us — the guard above checks `ctx` exists, not its
+  // state) left every node created so far connected and audible with the flag
+  // still false: stopEngine() no-opped against them forever, and the NEXT
+  // startEngine() saw false and built a second full set over the module-scope
+  // references, losing the only handle on the first. The drone compounded once
+  // per menu-race cycle. Arming first and tearing down on the way out makes a
+  // partial build cost silence instead of a permanent one.
+  function startEngine() {
+    if (!ctx || engineOn) return;
     engineOn = true;
+    try { startEngineBody(); }
+    // ...and the flag comes back down even if the teardown ITSELF throws on the
+    // half-built graph (stopEngine touches engGain/whineGain, either of which
+    // the throw may have pre-empted). Leaving it up would trade a compounding
+    // drone for permanent silence, because every later startEngine() would
+    // early-return on it; down, the next one is free to retry.
+    catch (e) { try { stopEngine(); } catch (_) { /* teardown of a half-graph */ } engineOn = false; throw e; }
   }
 
   function stopEngine() {
