@@ -93,7 +93,7 @@ function syncHudVisClasses(modeId) {
   const key = (G.hudMapVis || "auto") + "|" + (G.hudGapsVis || "auto") + "|" + modeId + "|" + prof + "|" + hideMap + "|" + hideGaps + "|" + mapLow;
   if (key === _hudVisKey) return;
   _hudVisKey = key;
-  _fitKey = "";
+  _fitKey = ""; _cssRootKey = "";
   const body = document.body;
   body.classList.toggle("hud-hide-map", hideMap);
   body.classList.toggle("hud-hide-gaps", hideGaps);
@@ -106,7 +106,7 @@ function syncHudLayoutClasses() {
   const key = resolved + "|" + want;
   if (key === _hudLayoutKey) return;
   _hudLayoutKey = key;
-  _fitKey = "";
+  _fitKey = ""; _cssRootKey = "";
   const body = document.body;
   for (let i = 0; i < MET_LAYOUTS.length; i++) {
     body.classList.toggle("hud-met-" + MET_LAYOUTS[i], resolved === MET_LAYOUTS[i]);
@@ -286,6 +286,43 @@ const _gapFormLong = (arrow, code, t) => arrow + " " + code + " +" + t + "s";
 // the zoom by the same factor, so the next measurement returns the same number.
 const FIT_AIR = 10;              // px of daylight required between two clusters
 let _fitKey = "", _fitWait = 0, _fitRetry = 0;   // _fitRetry: ticks spent re-measuring while nothing is laid out
+// THE TWO READS THE FIT MEMO NEVER COVERED. Both getComputedStyle(root) calls
+// in fitHud sat ABOVE its `_fitWait` early return, so the 3 s same-key backoff
+// paced the getBoundingClientRect pass and nothing else: these ran at the full
+// ~10 Hz HUD tick, in every race, for every player. And the computed read is
+// the DEFAULT path rather than the exceptional one — root.style is empty until
+// the player touches HUD SIZE, so an untouched slider means both reads every
+// tick forever.
+//
+// getComputedStyle itself is cheap; getPropertyValue against a dirty tree is
+// not, and the tree is dirty by construction — syncHudLayoutClasses() runs
+// immediately before fitHud() and updateHud writes DOM either side of it.
+//
+// What they read are STYLESHEET defaults, from `@media (pointer: coarse)` and
+// the viewport, so they can only change when the viewport or the body classes
+// change. That is the same layout-free pair already in the fit key, so cache on
+// it: one flush per real change instead of twenty a second. Measured on this
+// project's own instrument before and after at 0.1 ms/s of accessor time in a
+// container whose tree stays clean — so this is a structural fix, not a
+// measured win, and the honest claim is that it removes a per-tick flush whose
+// cost depends on a tree this box does not reproduce.
+let _cssRootKey = "", _cssScale = 1, _cssMult = 1;
+function syncComputedRootVars() {
+  const k = window.innerWidth + "x" + window.innerHeight + "|" + document.body.className;
+  if (k === _cssRootKey) return;
+  _cssRootKey = k;
+  // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
+  // which has no getComputedStyle — the same guard the reads below carried.
+  if (typeof getComputedStyle !== "function") { _cssScale = 1; _cssMult = 1; return; }
+  // ONE CSSStyleDeclaration for both: the flush happens on first access, so two
+  // getComputedStyle calls were two chances to pay for it.
+  const cs = getComputedStyle(document.documentElement);
+  _cssScale = +cs.getPropertyValue("--hud-scale") || 1;
+  // calc() in a custom property is not reduced at computed-value time — the
+  // token reads back as a literal string and coerces to NaN — so --hud-btn-mult
+  // is resolved from its own factor rather than parsed out of the calc.
+  _cssMult = +cs.getPropertyValue("--hud-btn-mult") || 1;
+}
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
 function fitHud() {
   // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
@@ -303,9 +340,10 @@ function fitHud() {
   // tests/unit/scale-defaults.test.mjs pins), and exactly the defect that sized
   // the dock cap 25% small when --hud-btn-scale grew a ratio — same shape, same
   // fix. typeof-guarded for the mini-dom VM, as the btnScale read is.
-  const scale = +root.style.getPropertyValue("--hud-scale")
-    || (typeof getComputedStyle === "function"
-        ? (+getComputedStyle(root).getPropertyValue("--hud-scale") || 1) : 1);
+  // Both computed-root reads, once, behind a layout-free key — see
+  // _cssRootKey above for why they could not stay where they were.
+  syncComputedRootVars();
+  const scale = +root.style.getPropertyValue("--hud-scale") || _cssScale;
   // body.className is part of the key: cycling STEERING MODE re-parents the
   // dock groups (layoutDocks), so the tallest column's height changes while
   // viewport and scale do not — and the old key held the stale dock cap for
@@ -337,8 +375,7 @@ function fitHud() {
   // cap 25% small on every touch device the moment the ratio stopped being 1.
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
   // which has no getComputedStyle — the same guard metrics-overlay.js carries.
-  const mult = typeof getComputedStyle === "function"
-    ? (+getComputedStyle(root).getPropertyValue("--hud-btn-mult") || 1) : 1;
+  const mult = _cssMult;
   const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale * mult;
   const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;

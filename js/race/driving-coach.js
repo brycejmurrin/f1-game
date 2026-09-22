@@ -268,11 +268,49 @@ const DrivingCoach = (function () {
     // explicit list would rot silently — see EPISODE_TRANSIENTS in
     // js/agent/apex.js, which had to be built by measurement rather than
     // inspection for exactly that reason. Never a career or a remote car.
+    // A DEEP COPY WITHOUT THE STRING IN THE MIDDLE. The round trip through
+    // JSON.stringify/parse built and reparsed a text representation of three
+    // objects per car — 20 cars at 2 Hz is 120 serialisations a minute whose
+    // only product is a copy. This walks the value directly.
+    //
+    // JSON-FAITHFUL ON PURPOSE, because restore() reads what capture() wrote
+    // and a semantic change here is a silently wrong rewind: a non-finite
+    // number becomes null (JSON.stringify writes `null` for NaN and Infinity),
+    // an undefined property is dropped from an object but becomes null in an
+    // array, and functions go the same way. tests/unit/coach-clone.test.mjs
+    // pins every one of those against the round trip it replaces.
+    function jsonClone(v) {
+      if (v === null) return null;
+      const t = typeof v;
+      // -0 is the subtle one: JSON.stringify writes "0", so the round trip
+      // this replaces returns +0 and a walk that passes -0 through would be a
+      // value the original never round-tripped to. `v === 0` is true for both
+      // zeroes, so this normalises exactly the one case.
+      if (t === "number") return Number.isFinite(v) ? (v === 0 ? 0 : v) : null;
+      if (t !== "object") return t === "function" || t === "undefined" ? undefined : v;
+      if (Array.isArray(v)) {
+        const out = new Array(v.length);
+        for (let i = 0; i < v.length; i++) {
+          const x = jsonClone(v[i]);
+          out[i] = x === undefined ? null : x;   // JSON writes null for a hole
+        }
+        return out;
+      }
+      // toJSON is what makes a Date serialise as a string; honour it rather
+      // than copying the object's own (empty) enumerable properties.
+      if (typeof v.toJSON === "function") return jsonClone(v.toJSON());
+      const out = {};
+      for (const k of Object.keys(v)) {
+        const x = jsonClone(v[k]);
+        if (x !== undefined) out[k] = x;
+      }
+      return out;
+    }
     function captureCar(c) {
       const fields = {};
       for (const k of Object.keys(c)) if (PRIM(c[k])) fields[k] = c[k];
       const objects = {};
-      for (const k of DEEP) objects[k] = c[k] == null ? c[k] : JSON.parse(JSON.stringify(c[k]));
+      for (const k of DEEP) objects[k] = c[k] == null ? c[k] : jsonClone(c[k]);
       return { fields, objects };
     }
     // PENALTIES AND CUTS DO NOT REWIND. They are ordinary primitives on the car,
@@ -297,7 +335,7 @@ const DrivingCoach = (function () {
       if (keepForward) for (const k of KEEP_FORWARD) if (Object.hasOwn(c, k)) keep[k] = c[k];
       for (const k of Object.keys(c)) if (PRIM(c[k]) && !Object.hasOwn(snap.fields, k)) delete c[k];
       Object.assign(c, snap.fields, keep);
-      for (const [k, v] of Object.entries(snap.objects)) c[k] = v == null ? v : JSON.parse(JSON.stringify(v));
+      for (const [k, v] of Object.entries(snap.objects)) c[k] = v == null ? v : jsonClone(v);
       // The interpolator must not tween the car across the gap it just jumped —
       // it would draw a streak from where the car was to where it now is.
       c._prevS = c.s;
