@@ -458,6 +458,19 @@ jobs:
               // The compile stacks, one row per signature: which draw asked
               // for a program the warm never built. The OURS half is the part
               // that names a fix; the frames from three only say it compiled.
+              // WHERE THE CPU TIME GOES, by function, over the race window.
+              // Self time from timeDeltas, folded by (function, file:line)
+              // and by file. Property names survive minification, so the
+              // rows from three name themselves.
+              const _cpu = g.cpu;
+              if (_cpu && !_cpu.note) {
+                rows.push(`${" ".repeat(8)}cpu:   ${_cpu.totalMs} ms sampled — ${(_cpu.files || []).slice(0, 4).map((f) => `${f.file}=${(f.share * 100).toFixed(0)}%`).join(" ")}`);
+                for (const r of (_cpu.rows || []).slice(0, 14)) {
+                  rows.push(`${" ".repeat(8)}  ${String((r.share * 100).toFixed(1)).padStart(5)}%  ${String(r.ms).padStart(8)} ms  ${r.site}`);
+                }
+              } else if (_cpu && _cpu.note) {
+                rows.push(`${" ".repeat(8)}cpu:   ${_cpu.note}`);
+              }
               const _cs = g.compileStacks || [];
               for (const [sig, count] of _cs.slice(0, 12)) {
                 rows.push(`${" ".repeat(8)}stack: x${count}  ${String(sig).slice(0, 300)}`);

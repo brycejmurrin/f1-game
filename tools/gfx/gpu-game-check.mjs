@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu } from "./frame-hitch.mjs";
 
 // fileURLToPath, NOT `new URL(..).pathname`. On Windows that pathname is
 // `/D:/a/f1-game/f1-game/` and resolve() prefixes the cwd's drive, giving a
@@ -418,6 +418,23 @@ try {
   // different report (out.raceProfile answers that one) and counting it here
   // would put one 1.4 s frame in the spike list and call the run periodic.
   try { await page.evaluate(() => window.__gcHitch && window.__gcHitch.arm()); } catch (_) { /* no recorder on this leg */ }
+  // WHERE THE CPU TIME GOES over the same window, by function. Census 201
+  // moved every lazy pipeline compile off the main thread (createRenderPipeline
+  // 26 -> 1) and the 18-25 s spikes stayed, so the stall is one step upstream
+  // in the same first-draw path — node-graph codegen, per-object bind-group
+  // cloning, uniform-buffer allocation, or something not yet named. Those are
+  // CPU time, which V8's sampling profiler measures honestly (the heap sampler
+  // was the wrong tool for garbage; this one has no such gap). And it has to
+  // run HERE: the burst is scenery streaming into view as the car reaches new
+  // track, and the container's car drives into the first wall, so its
+  // profile is flat — 40% idle, no function above 2.3%.
+  let _cpu = null;
+  try {
+    _cpu = await page.context().newCDPSession(page);
+    await _cpu.send("Profiler.enable");
+    await _cpu.send("Profiler.setSamplingInterval", { interval: 500 });
+    await _cpu.send("Profiler.start");
+  } catch (e) { out.cpuProfileError = String((e && e.message) || e).slice(0, 120); _cpu = null; }
   let missed = 0;
   for (let i = 0; i < 15; i++) {
     if (out.crashed || out.browserGone) break;
@@ -469,6 +486,12 @@ try {
       if (missed >= 2) { checkpoint("page-stopped-answering"); break; }
     }
     await new Promise((r) => setTimeout(r, 1000));
+  }
+  if (_cpu) {
+    try { const { profile } = await _cpu.send("Profiler.stop"); out.cpu = analyseCpu(profile, 24); }
+    catch (e) { out.cpu = { note: "profile stop failed: " + String((e && e.message) || e).slice(0, 120) }; }
+  } else {
+    out.cpu = { note: "no CPU profile: " + (out.cpuProfileError || "CDP unavailable") };
   }
   // THE PERIOD OF THE TAIL, from the raw per-callback series rather than from
   // aggregated per-beat percentiles. bounded() because a leg whose renderer
