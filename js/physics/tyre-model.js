@@ -35,10 +35,15 @@ const TyreModel = (function () {
   // What the TYRE WEAR race setting means, as a scale on the wear rate. OFF is
   // a TRUE no-op: gripMul/tractionMul/fuelMul all return exactly 1, so
   // tests/specs/physics-characterization.spec.js stays bit-identical with it
-  // selected. It is NOT the shipped default any more — js/game.js ships
-  // `store.get("tyreWear", "light")`, and the source assertion at the foot of
-  // tests/unit/tyre-model.test.mjs exists to stop it going back to OFF, which
-  // would switch the whole pit lane off for every new player. The browser
+  // selected. It is NOT the shipped default any more — the default is "real",
+  // and it lives in js/data/settings-defaults.js, NOT at the call site:
+  // store.get's _def() makes SettingsDefaults outrank the fallback argument, so
+  // the `store.get("tyreWear", ...)` literal in js/game.js decides nothing.
+  // This comment claimed "light" for four days after the owner file moved to
+  // "real" — 1/0.55 = 1.82x the wear it documented — because the two landed 75
+  // minutes apart from parallel sessions on the shared deploy branch. The
+  // assertion at the foot of tests/unit/tyre-model.test.mjs does NOT guard this:
+  // it checks that the setter calls tyres.setLevel, not what ships. The browser
   // fixtures still pin OFF so a physics baseline measures the driving model
   // rather than this month's default, which is why no spec would notice.
   // A set's life is nominal / LEVELS[level] laps — see planLaps().
